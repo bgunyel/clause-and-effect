@@ -1,0 +1,41 @@
+<svg width="1200" height="400" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="400" fill="transparent"/>
+  
+  <!-- Opening Bracket -->
+  <text x="50" y="240" 
+        font-family="Inter, sans-serif" 
+        font-weight="700" 
+        font-size="120" 
+        fill="#1a2332">
+    {
+  </text>
+  
+  <!-- Brand Name -->
+  <text x="170" y="240" 
+        font-family="Inter, sans-serif" 
+        font-weight="600" 
+        font-size="120" 
+        fill="#3b82f6">
+    Clause &amp; Effect
+  </text>
+  
+  <!-- Closing Bracket -->
+  <text x="1140" y="240" 
+        font-family="Inter, sans-serif" 
+        font-weight="700" 
+        font-size="120" 
+        fill="#1a2332">
+    }
+  </text>
+  
+  <!-- Tagline -->
+  <text x="600" y="310" 
+        font-family="Inter, sans-serif" 
+        font-weight="400" 
+        font-size="32" 
+        fill="#64748b"
+        text-anchor="middle">
+    Where Regulations Meet AI Reasoning
+  </text>
+</svg>

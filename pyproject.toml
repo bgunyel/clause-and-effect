@@ -1,0 +1,17 @@
+[project]
+name = "clause-and-effect"
+version = "0.1.0"
+description = "Where Regulations Meet AI Reasoning"
+readme = "README.md"
+authors = [
+    { name = "Bertan Günyel", email = "bertan.gunyel@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "ai-common @ git+https://github.com/bgunyel/ai-common.git@main",
+    "docling>=2.68.0",
+    "langchain>=1.2.0",
+    "pydantic-settings>=2.12.0",
+    "pypdf>=6.6.0",
+    "rich>=14.2.0",
+]
