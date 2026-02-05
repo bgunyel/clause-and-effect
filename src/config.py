@@ -14,10 +14,18 @@ class Settings(BaseSettings):
     IDENTITY_EMAIL: SecretStr = "bertan.gunyel@gmail.com"
 
     # AI related
+    EMBEDDING_MODEL: str = "text-embedding-3-small" # OpenAI
     GROQ_API_KEY: SecretStr = ""
-    TAVILY_API_KEY: SecretStr = ""
     LANGSMITH_API_KEY: SecretStr = ""
     LANGSMITH_TRACING: str = "true"
+    OPENAI_API_KEY: SecretStr = ""
+    TAVILY_API_KEY: SecretStr = ""
+
+    # Vector Database
+    QDRANT_API_KEY: SecretStr = ""
+    QDRANT_URL: SecretStr = ""
+    QDRANT_PORT: int = 6333
+    VECTOR_DB_COLLECTION_NAME: str = "compliance_docs"
 
     # Paths
     INPUT_FOLDER: Path = os.path.join(ENV_FILE_DIR, 'input')

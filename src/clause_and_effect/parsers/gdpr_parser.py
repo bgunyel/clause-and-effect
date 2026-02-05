@@ -2,7 +2,13 @@ import re
 from pathlib import Path
 from typing import List, Dict, Any
 import pypdf
-from docling.document_converter import DocumentConverter
+
+from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+from docling.datamodel.base_models import ConversionStatus, InputFormat
+from docling.datamodel.pipeline_options import RapidOcrOptions, ThreadedPdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.pipeline.threaded_standard_pdf_pipeline import ThreadedStandardPdfPipeline
+from docling.utils.profiling import ProfilingItem
 
 from .base_parser import BaseParser, Chunk
 from src.config import get_settings
@@ -48,9 +54,28 @@ class GDPRParser(BaseParser):
         # text = self._extract_text_from_pdf(file_path)
 
         document_converter = DocumentConverter()
+
+        pipeline_options = ThreadedPdfPipelineOptions(
+            accelerator_options = AcceleratorOptions(device=AcceleratorDevice.CUDA),
+            ocr_options = RapidOcrOptions(backend="openvino"),
+            ocr_batch_size = 4,
+            layout_batch_size = 64,
+            table_batch_size = 4,
+        )
+
+        doc_converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(
+                    pipeline_cls=ThreadedStandardPdfPipeline,
+                    pipeline_options=pipeline_options,
+                )
+            }
+        )
+
+        doc_converter.initialize_pipeline(InputFormat.PDF)
+
         document = document_converter.convert(file_path)
-
-
+        assert document.status == ConversionStatus.SUCCESS
 
         # Extract articles
         articles = self._extract_articles(text=document.document.export_to_markdown())
