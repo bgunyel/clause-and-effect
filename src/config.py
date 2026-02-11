@@ -4,6 +4,8 @@ from pydantic import SecretStr
 from functools import lru_cache
 from pathlib import Path
 
+from ai_common import LlmServers, ModelNames
+
 FILE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE_DIR = os.path.abspath(os.path.join(FILE_DIR, os.pardir))
 
@@ -43,3 +45,34 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
+def get_llm_config():
+    settings = get_settings()
+
+    llm_config = {
+        'language_model': {
+            'model': 'llama-3.3-70b-versatile',
+            'model_provider': LlmServers.GROQ,
+            'api_key': settings.GROQ_API_KEY,
+            'max_llm_retries': 3,
+            'model_args': {
+                'temperature': 0,
+                'max_tokens': 131_072,
+                'top_p': 0.95,
+                }
+            },
+        'reasoning_model': {
+            'model': ModelNames.GPT_OSS_120B,
+            'model_provider': LlmServers.GROQ,
+            'api_key': settings.GROQ_API_KEY,
+            'max_llm_retries': 3,
+            'model_args': {
+                'temperature': 0,
+                #'max_tokens': 131_072,
+                'reasoning_effort': 'high', # only for gpt-oss models: ['high', 'medium', 'low']
+                'top_p': 0.95,
+                }
+            }
+        }
+
+    return llm_config

@@ -11,7 +11,6 @@ from docling.pipeline.threaded_standard_pdf_pipeline import ThreadedStandardPdfP
 from docling.utils.profiling import ProfilingItem
 
 from .base_parser import BaseParser, Chunk
-from src.config import get_settings
 
 
 class GDPRParser(BaseParser):
@@ -227,36 +226,3 @@ class GDPRParser(BaseParser):
         paragraphs = re.split(paragraph_pattern, content)
         # Remove empty strings and clean up
         return [p.strip() for p in paragraphs if p.strip()]
-
-
-# Example usage function
-def demo_gdpr_parser():
-    """Demonstrate GDPR parser functionality"""
-    settings = get_settings()
-
-    parser = GDPRParser()
-    gdpr_path = settings.regulations_dir / "gdpr.pdf"
-
-    if gdpr_path.exists():
-        chunks = parser.parse(gdpr_path)
-
-        # Display sample chunks
-        print("\n" + "=" * 60)
-        print("SAMPLE CHUNKS")
-        print("=" * 60)
-
-        for chunk in chunks[:3]:  # Show first 3 chunks
-            print(f"\n📄 {chunk.id}")
-            print(f"Metadata: {chunk.metadata}")
-            print(f"Text preview: {chunk.text[:200]}...")
-            print("-" * 60)
-    else:
-        print(f"❌ GDPR file not found at {gdpr_path}")
-        print("Run: bash scripts/download_regulations.sh")
-        chunks = None
-
-    return chunks
-
-
-if __name__ == "__main__":
-    demo_gdpr_parser()
