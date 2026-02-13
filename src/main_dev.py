@@ -18,7 +18,7 @@ def main():
     os.environ['LANGSMITH_PROJECT'] = settings.APPLICATION_NAME.lower()
 
 
-    query = "What is the timeline for responding to a data erasure request?"
+    query = "What types of processing of personal data does this Regulation apply to?"
 
     compliance_agent = ComplianceAgent(
         llm_config = llm_config,

@@ -62,9 +62,9 @@ def get_llm_config():
                 }
             },
         'reasoning_model': {
-            'model': ModelNames.GPT_OSS_120B,
-            'model_provider': LlmServers.GROQ,
-            'api_key': settings.GROQ_API_KEY,
+            'model': ModelNames.GPT_5_MINI,
+            'model_provider': LlmServers.OPENAI,
+            'api_key': settings.OPENAI_API_KEY,
             'max_llm_retries': 3,
             'model_args': {
                 'temperature': 0,

@@ -84,10 +84,10 @@ class Generator:
             input = [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user",   "content": query},
-            ]
+            ],
         )
 
-        answer_text  = response.content
+        answer_text  = response.content_blocks[-1]['text']
         total_tokens = 0
 
         return GeneratedAnswer(
