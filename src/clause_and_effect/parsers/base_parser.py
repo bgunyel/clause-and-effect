@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from typing import List, Dict, Any
 from pathlib import Path
 
+from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+from docling.datamodel.base_models import ConversionStatus, InputFormat
+from docling.datamodel.pipeline_options import RapidOcrOptions, ThreadedPdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.pipeline.threaded_standard_pdf_pipeline import ThreadedStandardPdfPipeline
+
 
 @dataclass
 class Chunk:
@@ -36,6 +42,35 @@ class BaseParser(ABC):
             List of Chunk objects with text and metadata
         """
         pass
+
+    @staticmethod
+    def _extract_text_from_pdf(file_path: Path) -> str:
+        """Extract all text from PDF"""
+        # document_converter = DocumentConverter()
+
+        pipeline_options = ThreadedPdfPipelineOptions(
+            accelerator_options=AcceleratorOptions(device=AcceleratorDevice.CUDA),
+            ocr_options=RapidOcrOptions(backend="openvino"),
+            ocr_batch_size=4,
+            layout_batch_size=64,
+            table_batch_size=4,
+        )
+
+        doc_converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(
+                    pipeline_cls=ThreadedStandardPdfPipeline,
+                    pipeline_options=pipeline_options,
+                )
+            }
+        )
+
+        doc_converter.initialize_pipeline(InputFormat.PDF)
+
+        document = doc_converter.convert(file_path)  # TODO: important
+        assert document.status == ConversionStatus.SUCCESS
+        text = document.document.export_to_markdown()
+        return text
 
     def _create_chunk_id(self, article_num: str, paragraph: str | None = None) -> str:
         """Generate a unique chunk ID"""

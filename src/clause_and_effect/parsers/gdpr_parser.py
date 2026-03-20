@@ -48,37 +48,7 @@ class GDPRParser(BaseParser):
             List of Chunk objects, one per article (or paragraph for long articles)
         """
         print(f"📖 Parsing GDPR from {file_path}")
-
-        # Extract text from PDF
-        # text = self._extract_text_from_pdf(file_path)
-
-        document_converter = DocumentConverter()
-
-        pipeline_options = ThreadedPdfPipelineOptions(
-            accelerator_options = AcceleratorOptions(device=AcceleratorDevice.CUDA),
-            ocr_options = RapidOcrOptions(backend="openvino"),
-            ocr_batch_size = 4,
-            layout_batch_size = 64,
-            table_batch_size = 4,
-        )
-
-        doc_converter = DocumentConverter(
-            format_options={
-                InputFormat.PDF: PdfFormatOption(
-                    pipeline_cls=ThreadedStandardPdfPipeline,
-                    pipeline_options=pipeline_options,
-                )
-            }
-        )
-
-        doc_converter.initialize_pipeline(InputFormat.PDF)
-
-        document = document_converter.convert(file_path)
-        assert document.status == ConversionStatus.SUCCESS
-
-        # Extract articles
-        articles = self._extract_articles(text=document.document.export_to_markdown())
-
+        articles = self.get_articles(file_path=file_path)
         print(f"✅ Extracted {len(articles)} articles from GDPR")
 
         # Convert to chunks
@@ -91,14 +61,14 @@ class GDPRParser(BaseParser):
 
         return chunks
 
-    @staticmethod
-    def _extract_text_from_pdf(file_path: Path) -> str:
-        """Extract all text from PDF"""
-        reader = pypdf.PdfReader(file_path)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text()
-        return text
+    def get_articles(self, file_path: Path) -> List[Dict[str, Any]]:
+        # Extract text from PDF
+        text = self._extract_text_from_pdf(file_path)
+
+        # Extract articles
+        articles = self._extract_articles(text=text)
+        return articles
+
 
     def _extract_articles(self, text: str) -> List[Dict[str, Any]]:
         """

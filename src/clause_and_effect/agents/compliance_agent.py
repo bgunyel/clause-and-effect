@@ -21,7 +21,7 @@ class ComplianceAgent:
                  collection_name: str,
                  embedding_model: str,
                  embedding_model_api_key: SecretStr):
-        self.models = list({*[v['model'] for k, v in llm_config.items()]})
+        # self.models = list({*[v['model'] for k, v in llm_config.items()]})
 
         self.vector_db = VectorDatabase(
             vector_db_url=vector_db_url,
@@ -31,10 +31,10 @@ class ComplianceAgent:
             embedding_model=embedding_model,
             embedding_model_api_key=embedding_model_api_key,
         )
-        self.generator = Generator(model_params=llm_config['reasoning_model'])
+        self.generator = Generator(model_params=llm_config['writer_model'][0])
 
 
-    def ask(self, query: str, top_k: int = 3) -> Dict[str, Any]:
+    def ask(self, query: str, top_k: int = 5) -> Dict[str, Any]:
         """
         Ask a compliance question
 
