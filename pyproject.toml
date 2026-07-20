@@ -18,3 +18,8 @@ dependencies = [
     "rich>=14.2.0",
     "typer>=0.17.0",
 ]
+
+[dependency-groups]
+test = [
+    "pytest>=8.0.0",
+]
