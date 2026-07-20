@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     LANGSMITH_TRACING: str = "true"
     OLLAMA_API_KEY: SecretStr = ""
     OPENAI_API_KEY: SecretStr = ""
+    OPENROUTER_API_KEY: SecretStr = ""
     TAVILY_API_KEY: SecretStr = ""
 
     # Vector Database

@@ -1,3 +1,11 @@
+"""
+* This file is for active development of the package and hence,  it is a living file.
+
+* At any time, you can consult this file for the usage of package components.
+* However, the contents of this file may change  abruptly, at any time.
+* For permanent usage examples, please see the <tests> folder
+"""
+
 import datetime
 import os
 import rich
@@ -18,7 +26,8 @@ def main():
     os.environ['LANGSMITH_PROJECT'] = settings.APPLICATION_NAME.lower()
 
 
-    query = "What types of processing of personal data does this Regulation apply to?"
+#    query = "What types of processing of personal data does this Regulation apply to?"
+    query = "Does GDPR apply to a person's personal or household data processing activities?"
 
     compliance_agent = ComplianceAgent(
         llm_config = llm_config,
