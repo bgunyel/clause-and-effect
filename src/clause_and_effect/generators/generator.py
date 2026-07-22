@@ -37,6 +37,10 @@ Instructions:
 - End with a "Citations:" section listing every article referenced.
 """
 
+class GeneratedAnswer(BaseModel):
+    answer_text: str = Field(description="Answer text.")
+    citations: List[str] = Field(description="Citations used in generating the answer.")
+
 
 class Generator:
     """Generates grounded answers from retrieved regulation chunks."""
@@ -48,6 +52,9 @@ class Generator:
                                 api_key=model_params['api_key'],
                                 model_args=model_params['model_args'])
         self.model_name = model_params['model']
+        self.structured_llm = self.base_llm.with_structured_output(
+            schema=GeneratedAnswer
+        )
 
 
     def generate(self,
@@ -88,6 +95,15 @@ class Generator:
             'citations': self._extract_citations(answer_text),
             'model': self.model_name,
         }
+
+        structured_response = self.structured_llm.invoke(
+            input=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": query},
+            ],
+        )
+
+
 
         return output
 

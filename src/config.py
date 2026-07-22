@@ -54,68 +54,13 @@ def get_llm_config():
     llm_config = {
         'orchestrator_model': [
             {
-                'model': ModelNames.MINIMAX_M_2_7,
-                'model_provider': LlmServers.OLLAMA,
-                'api_key': settings.OLLAMA_API_KEY,
+                'model': ModelNames.DEEPSEEK_V_4_FLASH,
+                'model_provider': LlmServers.OPENROUTER,
+                'api_key': settings.OPENROUTER_API_KEY,
                 'max_llm_retries': 3,
                 'model_args': {
                     'temperature': 0,
-                    # 'reasoning_effort': 'high',  # only for gpt-oss models: ['high', 'medium', 'low']
-                    'top_p': 0.95,
-                }
-            },
-            {
-                'model': ModelNames.GLM_5,
-                'model_provider': LlmServers.OLLAMA,
-                'api_key': settings.OLLAMA_API_KEY,
-                'max_llm_retries': 3,
-                'model_args': {
-                    'temperature': 0,
-                    # 'reasoning_effort': 'high',  # only for gpt-oss models: ['high', 'medium', 'low']
-                    'top_p': 0.95,
-                }
-            },
-            {
-                'model': ModelNames.KIMI_K_2_5,
-                'model_provider': LlmServers.OLLAMA,
-                'api_key': settings.OLLAMA_API_KEY,
-                'max_llm_retries': 3,
-                'model_args': {
-                    'temperature': 0,
-                    # 'reasoning_effort': 'high',  # only for gpt-oss models: ['high', 'medium', 'low']
-                    'top_p': 0.95,
-                }
-            },
-            {
-                'model': ModelNames.QWEN_3_5,
-                'model_provider': LlmServers.OLLAMA,
-                'api_key': settings.OLLAMA_API_KEY,
-                'max_llm_retries': 3,
-                'model_args': {
-                    'temperature': 0,
-                    # 'reasoning_effort': 'high',  # only for gpt-oss models: ['high', 'medium', 'low']
-                    'top_p': 0.95,
-                }
-            },
-            {
-                'model': ModelNames.MINIMAX_M_2_5,
-                'model_provider': LlmServers.OLLAMA,
-                'api_key': settings.OLLAMA_API_KEY,
-                'max_llm_retries': 3,
-                'model_args': {
-                    'temperature': 0,
-                    # 'reasoning_effort': 'high',  # only for gpt-oss models: ['high', 'medium', 'low']
-                    'top_p': 0.95,
-                }
-            },
-            {
-                'model': ModelNames.DEEPSEEK_V_3_2,
-                'model_provider': LlmServers.OLLAMA,
-                'api_key': settings.OLLAMA_API_KEY,
-                'max_llm_retries': 3,
-                'model_args': {
-                    'temperature': 0,
-                    # 'reasoning_effort': 'high',  # only for gpt-oss models: ['high', 'medium', 'low']
+                    'reasoning_effort': 'high',
                     'top_p': 0.95,
                 }
             },
@@ -123,24 +68,24 @@ def get_llm_config():
         ],
         'writer_model': [
             {
-                'model': ModelNames.NEMOTRON_3_SUPER,
-                'model_provider': LlmServers.OLLAMA,
-                'api_key': settings.OLLAMA_API_KEY,
+                'model': ModelNames.DEEPSEEK_V_4_FLASH,
+                'model_provider': LlmServers.OPENROUTER,
+                'api_key': settings.OPENROUTER_API_KEY,
                 'max_llm_retries': 3,
                 'model_args': {
                     'temperature': 0,
-                    'reasoning_effort': 'high',  # only for gpt-oss models: ['high', 'medium', 'low']
+                    'reasoning_effort': 'high',
                     'top_p': 0.95,
                 }
             },
             {
                 'model': ModelNames.GPT_OSS_120B,
-                'model_provider': LlmServers.OLLAMA,
-                'api_key': settings.OLLAMA_API_KEY,
+                'model_provider': LlmServers.OPENROUTER,
+                'api_key': settings.OPENROUTER_API_KEY,
                 'max_llm_retries': 3,
                 'model_args': {
                     'temperature': 0,
-                    'reasoning_effort': 'high',  # only for gpt-oss models: ['high', 'medium', 'low']
+                    'reasoning_effort': 'high',
                     'top_p': 0.95,
                 }
             },

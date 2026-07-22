@@ -26,8 +26,8 @@ def main():
     os.environ['LANGSMITH_PROJECT'] = settings.APPLICATION_NAME.lower()
 
 
-#    query = "What types of processing of personal data does this Regulation apply to?"
-    query = "Does GDPR apply to a person's personal or household data processing activities?"
+    query = "What types of processing of personal data does this Regulation apply to?"
+    # query = "Does GDPR apply to a person's personal or household data processing activities?"
 
     compliance_agent = ComplianceAgent(
         llm_config = llm_config,
