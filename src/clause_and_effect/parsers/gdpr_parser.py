@@ -54,7 +54,7 @@ class GDPRParser(BaseParser):
         # Convert to chunks
         chunks = []
         for article in articles:
-            article_chunks = self._article_to_chunks(article)
+            article_chunks = self.article_to_chunks(article)
             chunks.extend(article_chunks)
 
         print(f"✅ Created {len(chunks)} chunks from GDPR")
@@ -128,7 +128,7 @@ class GDPRParser(BaseParser):
         else:
             return "11"
 
-    def _article_to_chunks(self, article: Dict[str, Any]) -> List[Chunk]:
+    def article_to_chunks(self, article: Dict[str, Any]) -> List[Chunk]:
         """
         Convert an article to one or more chunks
 
