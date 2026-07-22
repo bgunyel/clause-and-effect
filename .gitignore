@@ -13,7 +13,6 @@ __pycache__/
 # Input/Output folders
 input/
 out/
-docs/
 data/
 
 # Environment Variables
