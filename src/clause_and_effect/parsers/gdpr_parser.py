@@ -70,24 +70,42 @@ class GDPRParser(BaseParser):
         return articles
 
 
+    # A *real* article header: "Article N" alone on its own line (MULTILINE
+    # anchors ^ to line starts; the number must be followed only by optional
+    # spaces and a line break). This deliberately does NOT match inline
+    # cross-references such as "... as referred to in Article 6 ...", which sit
+    # mid-line. Keying article boundaries off inline references was the previous
+    # implementation's bug: a tempered-token regex stopped each article's
+    # content at the first inline "Article N", silently truncating ~3/4 of the
+    # articles (and dropping everything after the reference).
+    _ARTICLE_HEADER = re.compile(r'^Article\s+(\d+)[ \t]*$', re.MULTILINE)
+
     def _extract_articles(self, text: str) -> List[Dict[str, Any]]:
         """
-        Extract individual articles from GDPR text
+        Split the GDPR document into one record per article.
 
-        GDPR articles follow pattern: "Article X\n[Title]\n[Content]"
+        Articles are delimited by *line-anchored* headers ("Article N" on its
+        own line). Everything from one header up to the next header — or the end
+        of the document for the final article — belongs to that article. The
+        first line of that block is the title; the remainder is the content.
+
+        Because boundaries key off line-anchored headers only, inline
+        cross-references between articles are kept as content instead of
+        prematurely ending an article.
         """
         articles = []
+        headers = list(self._ARTICLE_HEADER.finditer(text))
 
-        # Pattern to match "Article N" followed by title and content
-        # This is a simplified pattern - real implementation needs refinement
-        article_pattern = r'Article\s+(\d+)\s*\n([^\n]+)\n((?:(?!Article\s+\d+).)+)'
+        for i, header in enumerate(headers):
+            article_num = header.group(1)
+            body_start = header.end()
+            body_end = headers[i + 1].start() if i + 1 < len(headers) else len(text)
 
-        matches = re.finditer(article_pattern, text, re.DOTALL)
-
-        for match in matches:
-            article_num = match.group(1)
-            title = match.group(2).strip()
-            content = match.group(3).strip()
+            block = text[body_start:body_end].strip('\n')
+            # First (non-empty) line is the title; the rest is the content.
+            first_line, _, rest = block.partition('\n')
+            title = self._clean_title(first_line)
+            content = self._clean_content(rest)
 
             # Extract chapter (approximation based on article number)
             chapter = self._get_chapter_for_article(int(article_num))
@@ -100,6 +118,28 @@ class GDPRParser(BaseParser):
             })
 
         return articles
+
+    @staticmethod
+    def _clean_title(line: str) -> str:
+        """Strip leading markdown heading markers ('## ') and whitespace."""
+        return re.sub(r'^#+\s*', '', line.strip())
+
+    @staticmethod
+    def _clean_content(content: str) -> str:
+        """
+        Tidy extracted article content.
+
+        - Drop a dangling markdown heading the next section may have bled in
+          (a trailing line that is only '## ...' with no body following it).
+        - Collapse OCR double-spacing (runs of spaces/tabs) to single spaces,
+          while preserving line breaks and paragraph structure.
+        """
+        lines = content.rstrip().split('\n')
+        while lines and re.match(r'#+\s', lines[-1].lstrip()):
+            lines.pop()
+        cleaned = '\n'.join(lines)
+        cleaned = re.sub(r'[ \t]{2,}', ' ', cleaned)
+        return cleaned.strip()
 
     @staticmethod
     def _get_chapter_for_article(article_num: int) -> str:
