@@ -1,0 +1,45 @@
+{
+  "article_number": "98",
+  "article_title": "Review of other Union legal acts on data protection",
+  "test_cases": [
+    {
+      "question": "What is the Commission's responsibility regarding other EU data protection laws?",
+      "answer": "The Commission shall, if appropriate, submit legislative proposals with a view to amending other Union legal acts on the protection of personal data, in order to ensure uniform and consistent protection of natural persons with regard to processing.",
+      "answer_type": "definition",
+      "supporting_quote": "The Commission shall, if appropriate, submit legislative proposals with a view to amending other Union legal acts on the protection of personal data, in order to ensure uniform and consistent protection of natural persons with regard to processing",
+      "key_phrases": [
+        "submit legislative proposals",
+        "amending other Union legal acts",
+        "uniform and consistent protection"
+      ]
+    },
+    {
+      "question": "Which specific areas does the Commission prioritize for alignment with GDPR?",
+      "answer": "This shall in particular concern the rules relating to the protection of natural persons with regard to processing by Union institutions, bodies, offices and agencies and on the free movement of such data.",
+      "answer_type": "scope",
+      "supporting_quote": "This shall in particular concern the rules relating to the protection of natural persons with regard to processing by Union institutions, bodies, offices and agencies and on the free movement of such data",
+      "key_phrases": [
+        "Union institutions, bodies, offices and agencies",
+        "free movement of such data",
+        "in particular concern"
+      ]
+    },
+    {
+      "question": "Under what condition does the Commission propose amendments to other EU data protection laws?",
+      "answer": "The Commission proposes amendments only when it is appropriate to do so ('if appropriate'). The discretion lies with the Commission, but the goal is always to ensure uniform and consistent protection of natural persons regarding processing.",
+      "answer_type": "conditional",
+      "supporting_quote": "The Commission shall, if appropriate, submit legislative proposals",
+      "key_phrases": [
+        "if appropriate",
+        "submit legislative proposals",
+        "uniform and consistent protection"
+      ]
+    }
+  ],
+  "coverage": {
+    "98 responsibility": "Test case 1 - Commission submits proposals to amend other DP laws",
+    "98 scope": "Test case 2 - EU institutions + free movement of data",
+    "98 condition": "Test case 3 - 'If appropriate' discretion"
+  },
+  "b2b_relevance": "LOW - Article 98 is about harmonizing EU-level data protection laws, particularly Regulation (EU) 2018/1725 (which governs EU institutions). B2B SaaS companies typically don't process data on behalf of EU institutions, but if you do (e.g., contracted by EU agencies), alignment between GDPR and Regulation 2018/1725 simplifies compliance. This article ensures GDPR standards propagate to other EU data protection frameworks."
+}

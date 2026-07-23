@@ -1,0 +1,62 @@
+{
+  "article_number": "65",
+  "article_title": "Dispute resolution by the Board",
+  "test_cases": [
+    {
+      "question": "What is the purpose of the Board's binding decision under Article 65?",
+      "answer": "In order to ensure the correct and consistent application of GDPR in individual cases, the Board shall adopt a binding decision. This is the dispute resolution mechanism when SAs cannot agree.",
+      "answer_type": "definition",
+      "supporting_quote": "In order to ensure the correct and consistent application of this Regulation in individual cases, the Board shall adopt a binding decision in the following cases",
+      "key_phrases": [
+        "correct and consistent application",
+        "individual cases",
+        "binding decision"
+      ]
+    },
+    {
+      "question": "In what circumstances does the Board adopt a binding decision?",
+      "answer": "The Board adopts a binding decision when: (a) a concerned SA has raised a relevant and reasoned objection to the lead SA's draft decision, and the lead SA rejected it or doesn't follow the objection; (b) there are conflicting views on which SA is competent for the main establishment; (c) a competent SA does not request the Board opinion when required under Article 64(1), or does not follow the Board's opinion issued under Article 64.",
+      "answer_type": "conditional",
+      "supporting_quote": "where, in a case referred to in Article 60(4), a concerned supervisory authority has raised a relevant and reasoned objection to a draft decision of the lead authority or the lead authority has rejected such an objection as being not relevant or reasoned... where there are conflicting views on which of the supervisory authorities concerned is competent for the main establishment... where a competent supervisory authority does not request the opinion of the Board in a case where it is required to do so pursuant to Article 64(1), or does not follow the opinion of the Board issued under Article 64",
+      "key_phrases": [
+        "relevant and reasoned objection",
+        "conflicting views",
+        "competent for the main establishment",
+        "does not follow the opinion"
+      ]
+    },
+    {
+      "question": "What is the timeline for the Board to adopt a binding decision?",
+      "answer": "The binding decision shall be adopted within one month after the Chair notifies that the matter is referred to the Board. That period may be extended by a further month on account of the complexity of the subject matter. The decision is adopted by a two-thirds majority of the members of the Board.",
+      "answer_type": "timeline",
+      "supporting_quote": "The decision referred to in paragraph 1 shall be adopted within one month from the referral of the subject-matter by a two-thirds majority of the members of the Board. That period may be extended by a further month on account of the complexity of the subject-matter",
+      "key_phrases": [
+        "one month",
+        "extended by a further month",
+        "two-thirds majority",
+        "complexity"
+      ]
+    },
+    {
+      "question": "What must the lead supervisory authority do after the Board adopts a binding decision?",
+      "answer": "The lead supervisory authority shall adopt its final decision based on the Board's binding decision. If the dispute concerns an action by a controller or processor, the lead SA shall adopt a decision addressed to the main establishment of the controller or processor without undue delay and at the latest one month after the Board has notified its decision. The lead SA notifies the decision to the controller/processor and informs the Board and Commission, including a summary of facts and grounds.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where the dispute referred to in paragraph 1(a) concerns processing by a controller or processor... the lead supervisory authority shall adopt its decision addressed to the main establishment or single establishment of the controller or processor, as the case may be, and notify the decision to the controller or processor concerned without undue delay and at the latest one month after the Board has notified its decision. It shall inform the Board and the Commission of the decision including a summary of the relevant facts and grounds",
+      "key_phrases": [
+        "adopt its decision",
+        "main establishment",
+        "at the latest one month",
+        "inform the Board and Commission"
+      ]
+    }
+  ],
+  "coverage": {
+    "65(1)": "Test case 1 + 2 - Purpose + three triggers for binding decision",
+    "65(1)(a)": "Test case 2 - Objection dispute",
+    "65(1)(b)": "Test case 2 - Competence dispute",
+    "65(1)(c)": "Test case 2 - SA doesn't follow Art 64 opinion",
+    "65(2)": "Test case 3 - NEW - 1-month timeline (+ 1 month for complex) + 2/3 majority",
+    "65(4)-(5)": "Test case 4 - NEW - Lead SA adopts final decision based on Board's binding decision"
+  },
+  "b2b_relevance": "VERY HIGH - Article 65 is the EDPB's ultimate enforcement mechanism. Key for B2B: (1) If your case involves SA dispute, EDPB decides, (2) EDPB's binding decision becomes basis for final decision against you, (3) 2-month maximum timeline from referral to binding decision, (4) Lead SA must implement within 1 month. This is how major cross-border cases get resolved."
+}

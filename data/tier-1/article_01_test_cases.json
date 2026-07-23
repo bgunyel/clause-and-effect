@@ -1,0 +1,48 @@
+{
+  "article_number": "1",
+  "article_title": "Subject-matter and objectives",
+  "test_cases": [
+    {
+      "question": "What is the main goal of the GDPR?",
+      "answer": "The GDPR has two primary objectives: to protect the fundamental rights and freedoms of natural persons, specifically their right to personal data protection, and to ensure the free movement of personal data within the European Union.",
+      "answer_type": "definition",
+      "supporting_quote": "This Regulation lays down rules relating to the protection of natural persons with regard to the processing of personal data and rules relating to the free movement of personal data. This Regulation protects fundamental rights and freedoms of natural persons and in particular their right to the protection of personal data.",
+      "key_phrases": [
+        "protection of natural persons",
+        "free movement of personal data",
+        "fundamental rights and freedoms",
+        "right to the protection of personal data"
+      ]
+    },
+    {
+      "question": "Does GDPR apply to companies or only to individuals?",
+      "answer": "GDPR protects natural persons, which means individual human beings, not legal entities like companies or organizations. The regulation specifically addresses the protection of individuals with regard to their personal data.",
+      "answer_type": "scope",
+      "supporting_quote": "protection of natural persons with regard to the processing of personal data",
+      "key_phrases": [
+        "natural persons",
+        "individual human beings",
+        "personal data"
+      ]
+    },
+    {
+      "question": "Can an EU member state restrict data transfers between countries to strengthen data protection?",
+      "answer": "No. The free movement of personal data within the Union cannot be restricted or prohibited for reasons connected with the protection of natural persons regarding data processing. This means data protection concerns cannot be used as justification to limit cross-border data flows.",
+      "answer_type": "conditional",
+      "supporting_quote": "The free movement of personal data within the Union shall be neither restricted nor prohibited for reasons connected with the protection of natural persons with regard to the processing of personal data",
+      "key_phrases": [
+        "free movement of personal data",
+        "neither restricted nor prohibited",
+        "within the Union",
+        "reasons connected with"
+      ]
+    }
+  ],
+  "coverage": {
+    "1(1) purpose 1": "Test case 1 - Rules for protection of natural persons regarding data processing",
+    "1(1) purpose 2": "Test case 1 - Rules for free movement of personal data",
+    "1(2)": "Test cases 1 and 2 - Fundamental rights and freedoms, right to personal data protection, natural persons only",
+    "1(3)": "Test case 3 - Free movement cannot be restricted for data protection reasons"
+  },
+  "b2b_relevance": "FOUNDATIONAL - Article 1 establishes that GDPR protects individuals (not companies) and ensures data can flow freely within the EU. Important for: understanding regulatory scope, cross-border data transfers within EU, and clarifying that B2B company data itself is not protected (only personal data of individuals)."
+}

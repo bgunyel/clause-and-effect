@@ -1,0 +1,46 @@
+{
+  "article_number": "96",
+  "article_title": "Relationship with previously concluded Agreements",
+  "test_cases": [
+    {
+      "question": "What is the cutoff date for international data transfer agreements to remain in force under this provision?",
+      "answer": "International agreements involving the transfer of personal data to third countries or international organisations which were concluded by Member States prior to 24 May 2016, and which comply with Union law as applicable prior to that date, shall remain in force until amended, replaced or revoked.",
+      "answer_type": "timeline",
+      "supporting_quote": "International agreements involving the transfer of personal data to third countries or international organisations which were concluded by Member States prior to 24 May 2016, and which comply with Union law as applicable prior to that date, shall remain in force until amended, replaced or revoked",
+      "key_phrases": [
+        "prior to 24 May 2016",
+        "concluded by Member States",
+        "remain in force"
+      ]
+    },
+    {
+      "question": "What types of agreements does Article 96 cover?",
+      "answer": "Article 96 covers international agreements involving the transfer of personal data to third countries or international organisations. These must be agreements concluded by Member States (national governments), not private contracts between companies or agreements made by the EU itself.",
+      "answer_type": "definition",
+      "supporting_quote": "International agreements involving the transfer of personal data to third countries or international organisations which were concluded by Member States",
+      "key_phrases": [
+        "international agreements",
+        "transfer of personal data",
+        "third countries or international organisations",
+        "concluded by Member States"
+      ]
+    },
+    {
+      "question": "Under what conditions do pre-2016 international data transfer agreements remain valid?",
+      "answer": "Pre-2016 agreements remain valid if: (1) they were concluded by Member States prior to 24 May 2016; (2) they comply with Union law as applicable prior to that date; and (3) they have not been amended, replaced, or revoked. Once any of these conditions changes, the grandfather protection ends.",
+      "answer_type": "conditional",
+      "supporting_quote": "which comply with Union law as applicable prior to that date, shall remain in force until amended, replaced or revoked",
+      "key_phrases": [
+        "comply with Union law",
+        "prior to that date",
+        "until amended, replaced or revoked"
+      ]
+    }
+  ],
+  "coverage": {
+    "96 timeline": "Test case 1 - Prior to 24 May 2016 cutoff",
+    "96 scope": "Test case 2 - International agreements by MS (not private contracts)",
+    "96 conditions": "Test case 3 - Comply with Union law + until amended/replaced/revoked"
+  },
+  "b2b_relevance": "LOW - Article 96 governs Member State international agreements, not private company contracts. B2B SaaS companies cannot rely on this provision for their own data transfer arrangements. Your contracts (SCCs, BCRs, etc.) are governed by GDPR Chapter V, not this grandfathering clause. This only applies to government-to-government agreements like mutual legal assistance treaties."
+}

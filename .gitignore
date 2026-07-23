@@ -13,7 +13,10 @@ __pycache__/
 # Input/Output folders
 input/
 out/
-data/
+
+# Specific data entities are kept local
+data/regulations/gdpr.pdf
+data/tier-1/raw/
 
 # Environment Variables
 .env

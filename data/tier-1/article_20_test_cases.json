@@ -1,0 +1,70 @@
+{
+  "article_number": "20",
+  "article_title": "Right to data portability",
+  "test_cases": [
+    {
+      "question": "When does a user have the right to get their data in a portable format?",
+      "answer": "A user has this right when the processing of their data is based on their consent or on a contract, and when the processing is carried out by automated means. Both conditions must be met.",
+      "answer_type": "conditional",
+      "supporting_quote": "the processing is based on consent pursuant to point (a) of Article 6(1) or point (a) of Article 9(2) or on a contract pursuant to point (b) of Article 6(1); and the processing is carried out by automated means",
+      "key_phrases": [
+        "based on consent",
+        "on a contract",
+        "carried out by automated means"
+      ]
+    },
+    {
+      "question": "In what format must a company provide personal data when a user exercises their portability right?",
+      "answer": "The controller must provide the personal data in a structured, commonly used and machine-readable format, allowing the data subject to easily transfer or reuse the data across different services.",
+      "answer_type": "definition",
+      "supporting_quote": "in a structured, commonly used and machine-readable format",
+      "key_phrases": [
+        "structured",
+        "commonly used",
+        "machine-readable format"
+      ]
+    },
+    {
+      "question": "Does the right to data portability cover all personal data a company holds about someone?",
+      "answer": "No. The right only covers personal data that the data subject has provided to the controller. It does not cover data that was inferred or generated about the data subject by the controller, such as behavioral analytics or credit scores.",
+      "answer_type": "scope",
+      "supporting_quote": "the personal data concerning him or her, which he or she has provided to a controller",
+      "key_phrases": [
+        "provided to a controller",
+        "data subject has provided"
+      ]
+    },
+    {
+      "question": "Can a user request that their data be sent directly from one company to another?",
+      "answer": "Yes, the data subject has the right to have the personal data transmitted directly from one controller to another, where technically feasible. The original controller cannot prevent this direct transmission.",
+      "answer_type": "conditional",
+      "supporting_quote": "The data subject shall have the right to have the personal data transmitted directly from one controller to another, where technically feasible",
+      "key_phrases": [
+        "transmitted directly",
+        "from one controller to another",
+        "where technically feasible"
+      ]
+    },
+    {
+      "question": "Does the right to data portability apply when processing is carried out for public interest purposes?",
+      "answer": "No. The right to data portability does not apply to processing necessary for the performance of a task carried out in the public interest or in the exercise of official authority vested in the controller.",
+      "answer_type": "scope",
+      "supporting_quote": "That right shall not apply to processing necessary for the performance of a task carried out in the public interest or in the exercise of official authority vested in the controller",
+      "key_phrases": [
+        "shall not apply",
+        "public interest",
+        "official authority"
+      ]
+    }
+  ],
+  "coverage": {
+    "20(1) intro": "Test case 2 - Format requirements (structured, commonly used, machine-readable)",
+    "20(1)(a)": "Test case 1 - Consent or contract basis",
+    "20(1)(b)": "Test case 1 - Automated means requirement",
+    "20(1) data scope": "Test case 3 - Only data 'provided to' the controller",
+    "20(2)": "Test case 4 - NEW - Direct controller-to-controller transmission where technically feasible",
+    "20(3)": "Test case 5 - NEW - Public interest/official authority exclusion",
+    "20(4)": "NOT DEDICATED - Rights of others mentioned but not primary focus"
+  },
+  "b2b_relevance": "HIGH - Article 20 affects customer switching and data migration. Essential for: API design for data export, supporting customer transitions to competitors, understanding what data must be provided (only 'provided to' not inferred), and technical feasibility assessments for direct transfers. Key takeaways: (1) Only applies to consent/contract + automated processing, (2) Only data 'provided to' controller (not inferred/generated), (3) Must offer direct transfer where technically feasible."
+}

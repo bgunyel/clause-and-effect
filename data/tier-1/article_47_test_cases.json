@@ -1,0 +1,79 @@
+{
+  "article_number": "47",
+  "article_title": "Binding corporate rules",
+  "test_cases": [
+    {
+      "question": "Who approves binding corporate rules and what process must be followed?",
+      "answer": "The competent supervisory authority shall approve binding corporate rules in accordance with the consistency mechanism set out in Article 63. This ensures harmonized approval across different supervisory authorities within the EU.",
+      "answer_type": "scope",
+      "supporting_quote": "The competent supervisory authority shall approve binding corporate rules in accordance with the consistency mechanism set out in Article 63",
+      "key_phrases": [
+        "competent supervisory authority",
+        "approve binding corporate rules",
+        "consistency mechanism",
+        "Article 63"
+      ]
+    },
+    {
+      "question": "What three conditions must binding corporate rules meet to be approved?",
+      "answer": "BCRs must: (a) be legally binding and apply to and be enforced by every member of the group of undertakings or enterprises engaged in joint economic activity, including their employees; (b) expressly confer enforceable rights on data subjects with regard to the processing of their personal data; and (c) fulfil the detailed requirements laid down in paragraph 2.",
+      "answer_type": "conditional",
+      "supporting_quote": "The binding corporate rules referred to in paragraph 1 shall specify at least: provided that they: (a) are legally binding and apply to and are enforced by every member concerned of the group of undertakings, or group of enterprises engaged in a joint economic activity, including their employees; (b) expressly confer enforceable rights on data subjects with regard to the processing of their personal data; and (c) fulfil the requirements laid down in paragraph 2",
+      "key_phrases": [
+        "legally binding",
+        "every member",
+        "including their employees",
+        "enforceable rights on data subjects"
+      ]
+    },
+    {
+      "question": "What must binding corporate rules specify about the data transfers?",
+      "answer": "BCRs must specify: (a) the structure and contact details of the group and each of its members; (b) the data transfers or set of transfers, including the categories of personal data, the type of processing and its purposes, the type of data subjects affected, and the identification of the third country or countries; (c) their legally binding nature, both internally and externally; and (d) the application of the general data protection principles, particularly purpose limitation, data minimisation, limited storage periods, data quality, data protection by design and by default, legal basis, special categories processing, security measures, and onward transfer requirements.",
+      "answer_type": "definition",
+      "supporting_quote": "The binding corporate rules referred to in paragraph 1 shall specify at least: (a) the structure and contact details of the group of undertakings, or group of enterprises engaged in a joint economic activity and of each of its members; (b) the data transfers or set of transfers, including the categories of personal data, the type of processing and its purposes, the type of data subjects affected and the identification of the third country or countries in question; (c) their legally binding nature, both internally and externally; (d) the application of the general data protection principles, in particular purpose limitation, data minimisation, limited storage periods, data quality, data protection by design and by default, legal basis for processing, processing of special categories of personal data, measures to ensure data security, and the requirements in respect of onward transfers to bodies not bound by the binding corporate rules",
+      "key_phrases": [
+        "structure and contact details",
+        "data transfers",
+        "categories of personal data",
+        "general data protection principles",
+        "onward transfers"
+      ]
+    },
+    {
+      "question": "What mechanisms must binding corporate rules include for data subject rights and complaints?",
+      "answer": "BCRs must specify: the rights of data subjects and means to exercise those rights (including the right not to be subject to solely automated decisions and the right to lodge complaints with the competent SA and courts); the acceptance by the member established in the EU of liability for breaches by any non-EU member; how information on the BCRs shall be provided to data subjects (including via Articles 13 and 14); the complaint procedures; and the mechanisms within the group for ensuring verification of compliance with the BCRs.",
+      "answer_type": "definition",
+      "supporting_quote": "the rights of data subjects in regard to processing and the means to exercise those rights, including the right not to be subject to decisions based solely on automated processing, including profiling in accordance with Article 22, the right to lodge a complaint with the competent supervisory authority and before the competent courts of the Member States... the acceptance by the controller or processor established on the territory of a Member State of liability for any breaches of the binding corporate rules by any member concerned not established in the Union... the complaint procedures... the mechanisms within the group of undertakings, or group of enterprises engaged in a joint economic activity for ensuring the verification of compliance with the binding corporate rules",
+      "key_phrases": [
+        "rights of data subjects",
+        "complaint procedures",
+        "acceptance of liability",
+        "verification of compliance"
+      ]
+    },
+    {
+      "question": "What training and cooperation requirements must binding corporate rules include?",
+      "answer": "BCRs must specify: the tasks of any data protection officer designated in accordance with Article 37 or any other person or entity in charge of BCR compliance monitoring; the mechanisms for cooperation with supervisory authorities; the mechanisms for reporting and recording changes to the rules and reporting those changes to the supervisory authority; and appropriate data protection training to personnel having permanent or regular access to personal data.",
+      "answer_type": "definition",
+      "supporting_quote": "the tasks of any data protection officer designated in accordance with Article 37 or any other person or entity in charge of the monitoring compliance with the binding corporate rules within the group of undertakings, or group of enterprises engaged in a joint economic activity, as well as monitoring training and complaint-handling; the cooperation mechanism with the supervisory authority to ensure compliance by any member of the group of undertakings, or group of enterprises engaged in a joint economic activity; the mechanisms for reporting and recording changes to the rules and reporting those changes to the supervisory authority; the appropriate data protection training to personnel having permanent or regular access to personal data",
+      "key_phrases": [
+        "data protection officer",
+        "cooperation mechanism",
+        "reporting changes",
+        "data protection training"
+      ]
+    }
+  ],
+  "coverage": {
+    "47(1)": "Test case 1 - SA approval via consistency mechanism (Article 63)",
+    "47(1)(a)": "Test case 2 - Legally binding on all members including employees",
+    "47(1)(b)": "Test case 2 - Enforceable data subject rights",
+    "47(1)(c)": "Test case 2 - Must fulfil paragraph 2 requirements",
+    "47(2)(a)(b)": "Test case 3 - Structure, transfers, categories",
+    "47(2)(c)(d)": "Test case 3 - Legally binding nature, data protection principles",
+    "47(2)(e)(f)": "Test case 4 - Rights and complaint procedures",
+    "47(2)(g)(h)": "Test case 4 - Liability acceptance and compliance verification",
+    "47(2)(i)(j)(k)(l)": "Test case 5 - DPO tasks, cooperation, reporting, training"
+  },
+  "b2b_relevance": "HIGH - Article 47 governs BCRs for intra-group transfers. Essential for: multinational corporations, group companies with shared data processing, and alternative to SCCs for related entities. Key takeaways: (1) Must be legally binding on ALL group members INCLUDING employees, (2) Must confer enforceable rights to data subjects, (3) EU member accepts liability for non-EU member breaches, (4) Requires training and compliance monitoring, (5) Approved via consistency mechanism."
+}

@@ -1,0 +1,47 @@
+{
+  "article_number": "11",
+  "article_title": "Processing which does not require identification",
+  "test_cases": [
+    {
+      "question": "Does a company need to collect additional information just to identify users for GDPR compliance if their processing doesn't require identification?",
+      "answer": "No, if the purposes for processing do not require identification, the controller is not obliged to maintain, acquire, or process additional information solely to identify the data subject for GDPR compliance purposes.",
+      "answer_type": "scope",
+      "supporting_quote": "the controller shall not be obliged to maintain, acquire or process additional information in order to identify the data subject for the sole purpose of complying with this Regulation",
+      "key_phrases": [
+        "not be obliged",
+        "additional information",
+        "sole purpose of complying"
+      ]
+    },
+    {
+      "question": "What must a company tell users when it cannot identify them?",
+      "answer": "The controller must inform the data subject that it is not in a position to identify them, if possible. This notification requirement applies when the controller can demonstrate it cannot identify the data subject.",
+      "answer_type": "conditional",
+      "supporting_quote": "the controller shall inform the data subject accordingly, if possible",
+      "key_phrases": [
+        "inform the data subject accordingly",
+        "if possible",
+        "not in a position to identify"
+      ]
+    },
+    {
+      "question": "Do data subject rights apply when the controller cannot identify the individual?",
+      "answer": "Articles 15 to 20 do not apply if the controller can demonstrate they are not in a position to identify the data subject. However, these rights become exercisable again if the data subject provides additional information enabling their identification.",
+      "answer_type": "scope",
+      "supporting_quote": "Articles 15 to 20 shall not apply except where the data subject, for the purpose of exercising his or her rights under those articles, provides additional information enabling his or her identification",
+      "key_phrases": [
+        "Articles 15 to 20",
+        "shall not apply",
+        "provides additional information",
+        "enabling his or her identification"
+      ]
+    }
+  ],
+  "coverage": {
+    "11(1)": "Test case 1 - No obligation to maintain/acquire/process additional info for identification when processing purposes don't require it",
+    "11(2) notification": "Test case 2 - Must inform data subject when cannot identify them (if possible)",
+    "11(2) exemption": "Test case 3 - Articles 15-20 don't apply when cannot identify",
+    "11(2) reinstatement": "Test case 3 - Rights reinstated if data subject provides additional identifying information"
+  },
+  "b2b_relevance": "MEDIUM - Article 11 is relevant for B2B companies processing anonymized or pseudonymized data where re-identification isn't needed. Key takeaways: (1) You don't need to collect extra identifying info just for GDPR compliance, (2) If you can't identify someone, tell them (if possible), (3) Data subject rights (access, rectification, erasure, etc.) are suspended when you can't identify the person—but they can provide additional info to re-enable those rights."
+}

@@ -1,0 +1,44 @@
+{
+  "article_number": "99",
+  "article_title": "Entry into force and application",
+  "test_cases": [
+    {
+      "question": "When did the GDPR enter into force?",
+      "answer": "This Regulation shall enter into force on the twentieth day following that of its publication in the Official Journal of the European Union. The GDPR was published on 4 May 2016, so it entered into force on 24 May 2016.",
+      "answer_type": "timeline",
+      "supporting_quote": "This Regulation shall enter into force on the twentieth day following that of its publication in the Official Journal of the European Union",
+      "key_phrases": [
+        "enter into force",
+        "twentieth day",
+        "publication in the Official Journal"
+      ]
+    },
+    {
+      "question": "When did the GDPR become applicable and enforceable?",
+      "answer": "It shall apply from 25 May 2018. This is the date from which organizations were required to comply with GDPR requirements and when enforcement began.",
+      "answer_type": "timeline",
+      "supporting_quote": "It shall apply from 25 May 2018",
+      "key_phrases": [
+        "apply from",
+        "25 May 2018"
+      ]
+    },
+    {
+      "question": "Does GDPR require Member States to pass national legislation to implement it?",
+      "answer": "No. This Regulation shall be binding in its entirety and directly applicable in all Member States. As an EU Regulation (not a Directive), it takes effect as law in each country without requiring separate national implementing legislation.",
+      "answer_type": "definition",
+      "supporting_quote": "This Regulation shall be binding in its entirety and directly applicable in all Member States",
+      "key_phrases": [
+        "binding in its entirety",
+        "directly applicable",
+        "all Member States"
+      ]
+    }
+  ],
+  "coverage": {
+    "99(1)": "Test case 1 - Entry into force: 20th day after OJ publication",
+    "99(2)": "Test case 2 - Application date: 25 May 2018",
+    "99 final clause": "Test case 3 - Binding in entirety, directly applicable in all MS"
+  },
+  "b2b_relevance": "HIGH - Article 99 establishes the fundamental legal effect of GDPR. Key implications for B2B SaaS: (1) GDPR is directly applicable - no need to check 27 different national implementations for core rules, (2) The 25 May 2018 application date is when compliance became mandatory and enforcement began, (3) 'Binding in its entirety' means you cannot cherry-pick which provisions to follow. All GDPR obligations apply to your business if you're in scope."
+}

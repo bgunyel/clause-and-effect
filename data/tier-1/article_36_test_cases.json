@@ -1,0 +1,63 @@
+{
+  "article_number": "36",
+  "article_title": "Prior consultation",
+  "test_cases": [
+    {
+      "question": "What triggers the requirement for a controller to consult with the supervisory authority before starting processing?",
+      "answer": "A controller must consult the supervisory authority prior to processing when a data protection impact assessment under Article 35 indicates that the processing would result in a high risk in the absence of measures taken by the controller to mitigate the risk. In other words, consultation is required when even after mitigation measures, residual high risk remains.",
+      "answer_type": "conditional",
+      "supporting_quote": "The controller shall consult the supervisory authority prior to processing where a data protection impact assessment under Article 35 indicates that the processing would result in a high risk in the absence of measures taken by the controller to mitigate the risk",
+      "key_phrases": [
+        "high risk",
+        "data protection impact assessment",
+        "mitigate the risk",
+        "prior to processing"
+      ]
+    },
+    {
+      "question": "What information must a controller provide to the supervisory authority when requesting prior consultation?",
+      "answer": "When consulting the supervisory authority, the controller must provide: (a) the respective responsibilities of the controller, joint controllers, and processors involved; (b) the purposes and means of the intended processing; (c) the measures and safeguards to protect data subjects' rights and freedoms; (d) the contact details of the data protection officer; (e) the data protection impact assessment; and (f) any other information requested by the supervisory authority.",
+      "answer_type": "definition",
+      "supporting_quote": "When consulting the supervisory authority pursuant to paragraph 1, the controller shall provide the supervisory authority with: (a) where applicable, the respective responsibilities of the controller, joint controllers and processors involved in the processing; (b) the purposes and means of the intended processing; (c) the measures and safeguards provided to protect the rights and freedoms of data subjects; (d) where applicable, the contact details of the data protection officer; (e) the data protection impact assessment provided for in Article 35; and (f) any other information requested by the supervisory authority",
+      "key_phrases": [
+        "respective responsibilities",
+        "purposes and means",
+        "measures and safeguards",
+        "data protection officer",
+        "data protection impact assessment"
+      ]
+    },
+    {
+      "question": "How long does the supervisory authority have to respond to a prior consultation request?",
+      "answer": "The supervisory authority must provide written advice within eight weeks of receiving the request. This period may be extended by six additional weeks, taking into account the complexity of the intended processing. The supervisory authority must inform the controller and, where applicable, the processor of any such extension within one month of receipt of the request, together with the reasons for the delay.",
+      "answer_type": "timeline",
+      "supporting_quote": "The supervisory authority shall, within period of up to eight weeks of receipt of the request for consultation, provide written advice to the controller and, where applicable, to the processor... That period may be extended by six weeks, taking into account the complexity of the intended processing. The supervisory authority shall inform the controller and, where applicable, the processor, of any such extension within one month of receipt of the request together with the reasons for the delay",
+      "key_phrases": [
+        "eight weeks",
+        "extended by six weeks",
+        "complexity",
+        "inform the controller",
+        "reasons for the delay"
+      ]
+    },
+    {
+      "question": "What actions can a supervisory authority take after a prior consultation?",
+      "answer": "If the supervisory authority believes the intended processing would infringe GDPR, it shall provide written advice to the controller and, where applicable, the processor. The supervisory authority may also use any of its corrective powers under Article 58, which can include imposing a ban on processing, issuing warnings, or ordering specific actions.",
+      "answer_type": "scope",
+      "supporting_quote": "Where the supervisory authority is of the opinion that the intended processing referred to in paragraph 1 would infringe this Regulation, in particular where the controller has insufficiently identified or mitigated the risk, the supervisory authority shall, within period of up to eight weeks of receipt of the request for consultation, provide written advice to the controller and, where applicable, to the processor, and may use any of its powers referred to in Article 58",
+      "key_phrases": [
+        "infringe this Regulation",
+        "written advice",
+        "powers referred to in Article 58",
+        "insufficiently identified or mitigated"
+      ]
+    }
+  ],
+  "coverage": {
+    "36(1)": "Test case 1 - When required: DPIA shows high risk that can't be mitigated",
+    "36(2)": "Test case 2 - NEW - Information to provide to SA (6 items)",
+    "36(3) timeline": "Test case 3 - 8 weeks + 6 weeks extension, with notification requirement",
+    "36(3) powers": "Test case 4 - SA can give advice and use Article 58 corrective powers"
+  },
+  "b2b_relevance": "HIGH - Article 36 is the escalation path when DPIA identifies residual high risk. Essential for: understanding regulatory approval timelines, preparing consultation packages, and planning for potential SA intervention. Key takeaways: (1) Required when DPIA shows HIGH risk that controller CAN'T mitigate, (2) 8+6 week timeline, (3) Must provide comprehensive info package, (4) SA can use full corrective powers including processing bans."
+}

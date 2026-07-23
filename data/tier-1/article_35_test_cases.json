@@ -1,0 +1,69 @@
+{
+  "article_number": "35",
+  "article_title": "Data protection impact assessment",
+  "test_cases": [
+    {
+      "question": "When does a company need to carry out a Data Protection Impact Assessment?",
+      "answer": "A Data Protection Impact Assessment must be conducted prior to processing when the processing, particularly using new technologies and taking into account its nature, scope, context, and purposes, is likely to result in a high risk to the rights and freedoms of natural persons. A single assessment may address a set of similar processing operations that present similar high risks.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where a type of processing in particular using new technologies, and taking into account the nature, scope, context and purposes of the processing, is likely to result in a high risk to the rights and freedoms of natural persons, the controller shall, prior to the processing, carry out an assessment of the impact of the envisaged processing operations on the protection of personal data. A single assessment may address a set of similar processing operations that present similar high risks",
+      "key_phrases": [
+        "high risk",
+        "prior to the processing",
+        "new technologies",
+        "nature, scope, context and purposes",
+        "single assessment"
+      ]
+    },
+    {
+      "question": "What specific types of processing definitely require a Data Protection Impact Assessment?",
+      "answer": "A DPIA is specifically required for: (a) systematic and extensive evaluation of personal aspects based on automated processing, including profiling, where decisions produce legal effects or similarly significantly affect the person; (b) processing on a large scale of special categories of data (Article 9) or criminal conviction data (Article 10); and (c) systematic monitoring of a publicly accessible area on a large scale.",
+      "answer_type": "definition",
+      "supporting_quote": "A data protection impact assessment referred to in paragraph 1 shall in particular be required in the case of: (a) a systematic and extensive evaluation of personal aspects relating to natural persons which is based on automated processing, including profiling, and on which decisions are based that produce legal effects concerning the natural person or similarly significantly affect the natural person; (b) processing on a large scale of special categories of data referred to in Article 9(1), or of personal data relating to criminal convictions and offences referred to in Article 10; or (c) a systematic monitoring of a publicly accessible area on a large scale",
+      "key_phrases": [
+        "systematic and extensive evaluation",
+        "automated processing",
+        "profiling",
+        "large scale",
+        "special categories of data",
+        "publicly accessible area"
+      ]
+    },
+    {
+      "question": "What must be included in a Data Protection Impact Assessment?",
+      "answer": "The assessment must contain at minimum: (a) a systematic description of the envisaged processing operations and the purposes of the processing, including where applicable the legitimate interest pursued by the controller; (b) an assessment of the necessity and proportionality of the processing operations in relation to the purposes; (c) an assessment of the risks to the rights and freedoms of data subjects; and (d) the measures envisaged to address the risks, including safeguards, security measures, and mechanisms to ensure protection of personal data and demonstrate compliance.",
+      "answer_type": "definition",
+      "supporting_quote": "The assessment shall contain at least: (a) a systematic description of the envisaged processing operations and the purposes of the processing, including, where applicable, the legitimate interest pursued by the controller; (b) an assessment of the necessity and proportionality of the processing operations in relation to the purposes; (c) an assessment of the risks to the rights and freedoms of data subjects referred to in paragraph 1; and (d) the measures envisaged to address the risks, including safeguards, security measures and mechanisms to ensure the protection of personal data and to demonstrate compliance with this Regulation",
+      "key_phrases": [
+        "systematic description",
+        "necessity and proportionality",
+        "assessment of the risks",
+        "measures envisaged",
+        "safeguards",
+        "security measures"
+      ]
+    },
+    {
+      "question": "Who must a company consult when carrying out a Data Protection Impact Assessment?",
+      "answer": "The controller must seek the advice of the Data Protection Officer, where one has been designated, when carrying out a DPIA. Additionally, where appropriate, the controller shall seek the views of data subjects or their representatives on the intended processing, without prejudice to the protection of commercial or public interests or the security of processing operations.",
+      "answer_type": "scope",
+      "supporting_quote": "The controller shall seek the advice of the data protection officer, where designated, when carrying out a data protection impact assessment... Where appropriate, the controller shall seek the views of data subjects or their representatives on the intended processing",
+      "key_phrases": [
+        "seek the advice",
+        "data protection officer",
+        "where designated",
+        "views of data subjects"
+      ]
+    }
+  ],
+  "coverage": {
+    "35(1)": "Test case 1 - High risk trigger, prior to processing, new technologies, single assessment",
+    "35(2)": "Test case 4 - Seek DPO advice where designated",
+    "35(3)(a)": "Test case 2 - Systematic automated evaluation with legal effects",
+    "35(3)(b)": "Test case 2 - Large-scale special categories or criminal data",
+    "35(3)(c)": "Test case 2 - NEW - Systematic monitoring of publicly accessible area",
+    "35(7)": "Test case 3 - NEW - Assessment content (4 required elements)",
+    "35(9)": "Test case 4 - NEW - Seek views of data subjects where appropriate"
+  },
+  "b2b_relevance": "CRITICAL - Article 35 is mandatory for high-risk processing common in B2B SaaS. Essential for: product launches, new feature development, AI/ML implementations, and large-scale customer data processing. Key takeaways: (1) Must be PRIOR to processing, (2) Three specific triggers: automated profiling with legal effects, large-scale special categories, public monitoring, (3) Four required content elements, (4) Must consult DPO if designated."
+}

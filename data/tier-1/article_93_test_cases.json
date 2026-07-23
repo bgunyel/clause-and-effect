@@ -1,0 +1,43 @@
+{
+  "article_number": "93",
+  "article_title": "Committee procedure",
+  "test_cases": [
+    {
+      "question": "What type of committee assists the Commission under the GDPR?",
+      "answer": "The Commission shall be assisted by a committee. That committee shall be a committee within the meaning of Regulation (EU) No 182/2011, which is the EU regulation governing comitology (committee) procedures.",
+      "answer_type": "definition",
+      "supporting_quote": "The Commission shall be assisted by a committee. That committee shall be a committee within the meaning of Regulation (EU) No 182/2011",
+      "key_phrases": [
+        "assisted by a committee",
+        "within the meaning of Regulation (EU) No 182/2011"
+      ]
+    },
+    {
+      "question": "When does the examination procedure under Article 93(2) apply?",
+      "answer": "Where reference is made to this paragraph, the examination procedure referred to in Article 5 of Regulation (EU) No 182/2011 shall apply. This procedure is triggered when other GDPR provisions explicitly reference Article 93(2) for adopting implementing acts.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where reference is made to this paragraph, the examination procedure referred to in Article 5 of Regulation (EU) No 182/2011 shall apply",
+      "key_phrases": [
+        "Where reference is made to this paragraph",
+        "examination procedure",
+        "Article 5 of Regulation (EU) No 182/2011"
+      ]
+    },
+    {
+      "question": "Does Article 93 deal with data protection supervision or administrative procedures?",
+      "answer": "Article 93 deals only with administrative and procedural matters concerning how the Commission is assisted by a committee for adopting implementing acts under the GDPR. It does not address data protection supervision, which is handled by supervisory authorities and the European Data Protection Board under other articles.",
+      "answer_type": "scope",
+      "supporting_quote": "The Commission shall be assisted by a committee. That committee shall be a committee within the meaning of Regulation (EU) No 182/2011",
+      "key_phrases": [
+        "Commission",
+        "assisted by a committee",
+        "Regulation (EU) No 182/2011"
+      ]
+    }
+  ],
+  "coverage": {
+    "93(1)": "Test cases 1 and 3 - Committee within meaning of Regulation 182/2011",
+    "93(2)": "Test case 2 - Examination procedure (Art 5 of Reg 182/2011) when referenced"
+  },
+  "b2b_relevance": "LOW - Article 93 is purely procedural, establishing the comitology framework for implementing acts. B2B SaaS companies won't directly interact with this process. However, implementing acts adopted through this procedure (e.g., on adequacy decisions, standard contractual clauses) will affect your international data transfers and compliance obligations."
+}

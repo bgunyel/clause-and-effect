@@ -1,0 +1,44 @@
+{
+  "article_number": "67",
+  "article_title": "Exchange of information",
+  "test_cases": [
+    {
+      "question": "Who has authority to specify arrangements for electronic information exchange between data protection authorities?",
+      "answer": "The Commission may adopt implementing acts of general scope in order to specify the arrangements for the exchange of information by electronic means between supervisory authorities, and between supervisory authorities and the Board.",
+      "answer_type": "definition",
+      "supporting_quote": "The Commission may adopt implementing acts of general scope in order to specify the arrangements for the exchange of information by electronic means between supervisory authorities, and between supervisory authorities and the Board",
+      "key_phrases": [
+        "Commission",
+        "implementing acts",
+        "general scope",
+        "specify the arrangements"
+      ]
+    },
+    {
+      "question": "Which entities are covered by the electronic information exchange arrangements?",
+      "answer": "The arrangements cover information exchange by electronic means in two categories: (1) between supervisory authorities themselves; and (2) between supervisory authorities and the Board (EDPB).",
+      "answer_type": "scope",
+      "supporting_quote": "the exchange of information by electronic means between supervisory authorities, and between supervisory authorities and the Board",
+      "key_phrases": [
+        "between supervisory authorities",
+        "supervisory authorities and the Board",
+        "electronic means"
+      ]
+    },
+    {
+      "question": "What specific technical aspect can the Commission standardize for information exchange?",
+      "answer": "The Commission can specify the standardised format for the exchange of information by electronic means. This ensures uniform technical standards for data exchange across all supervisory authorities and with the Board.",
+      "answer_type": "definition",
+      "supporting_quote": "in particular the standardised format",
+      "key_phrases": [
+        "standardised format",
+        "electronic means",
+        "implementing acts"
+      ]
+    }
+  ],
+  "coverage": {
+    "67 full": "All three test cases cover the complete article - Commission's power, participants, and standardized format"
+  },
+  "b2b_relevance": "LOW - Article 67 is purely about how SAs exchange information with each other and the EDPB. No direct business obligations. However, understanding that SAs share information electronically in standardized formats explains how cross-border cooperation works quickly."
+}

@@ -1,0 +1,75 @@
+{
+  "article_number": "30",
+  "article_title": "Records of processing activities",
+  "test_cases": [
+    {
+      "question": "What information must be included in a controller's record of processing activities?",
+      "answer": "The controller's record must contain: (a) name and contact details of the controller, joint controller, representative, and DPO; (b) the purposes of processing; (c) categories of data subjects and personal data; (d) categories of recipients including those in third countries; (e) transfers to third countries including identification and safeguards; (f) where applicable, time limits for erasure of different categories of data; and (g) a general description of technical and organisational security measures.",
+      "answer_type": "definition",
+      "supporting_quote": "That record shall contain all of the following information: (a) the name and contact details of the controller and, where applicable, the joint controller, the controller's representative and the data protection officer; (b) the purposes of the processing; (c) a description of the categories of data subjects and of the categories of personal data; (d) the categories of recipients... (e) where applicable, transfers of personal data to a third country... (f) where possible, the envisaged time limits for erasure of the different categories of data; (g) where possible, a general description of the technical and organisational security measures",
+      "key_phrases": [
+        "name and contact details",
+        "purposes of processing",
+        "categories of data subjects",
+        "categories of recipients",
+        "time limits for erasure",
+        "security measures"
+      ]
+    },
+    {
+      "question": "Does a data processor also have to keep a record of processing activities, and what must it contain?",
+      "answer": "Yes, each processor must maintain a record of all categories of processing activities carried out on behalf of a controller. The processor's record must contain: (a) name and contact details of the processor(s), each controller on whose behalf the processor acts, representative, and DPO; (b) the categories of processing carried out on behalf of each controller; (c) transfers to third countries including identification and safeguards; and (d) a general description of technical and organisational security measures.",
+      "answer_type": "scope",
+      "supporting_quote": "Each processor and, where applicable, the processor's representative shall maintain a record of all categories of processing activities carried out on behalf of a controller, containing: (a) the name and contact details of the processor or processors and of each controller on whose behalf the processor is acting... (b) the categories of processing carried out on behalf of each controller; (c) where applicable, transfers of personal data to a third country... (d) where possible, a general description of the technical and organisational security measures",
+      "key_phrases": [
+        "each processor",
+        "categories of processing",
+        "on behalf of a controller",
+        "transfers",
+        "security measures"
+      ]
+    },
+    {
+      "question": "In what format must records of processing activities be maintained?",
+      "answer": "The records must be in writing, including in electronic form. This applies to both controller and processor records.",
+      "answer_type": "definition",
+      "supporting_quote": "The records referred to in paragraphs 1 and 2 shall be in writing, including in electronic form",
+      "key_phrases": [
+        "in writing",
+        "including in electronic form"
+      ]
+    },
+    {
+      "question": "Must companies make their records of processing activities available to regulators?",
+      "answer": "Yes. The controller or processor, and where applicable their representative, must make the records available to the supervisory authority on request.",
+      "answer_type": "conditional",
+      "supporting_quote": "The controller or the processor and, where applicable, the controller's or the processor's representative, shall make the record available to the supervisory authority on request",
+      "key_phrases": [
+        "make the record available",
+        "supervisory authority",
+        "on request"
+      ]
+    },
+    {
+      "question": "Are small companies exempt from maintaining records of processing activities?",
+      "answer": "The record-keeping obligation does not apply to an enterprise or organisation employing fewer than 250 persons, UNLESS: (1) the processing is likely to result in a risk to the rights and freedoms of data subjects, (2) the processing is not occasional, or (3) the processing includes special categories of data (Article 9(1)) or data relating to criminal convictions and offences (Article 10).",
+      "answer_type": "conditional",
+      "supporting_quote": "The obligations referred to in paragraphs 1 and 2 shall not apply to an enterprise or an organisation employing fewer than 250 persons unless the processing it carries out is likely to result in a risk to the rights and freedoms of data subjects, the processing is not occasional, or the processing includes special categories of data as referred to in Article 9(1) or personal data relating to criminal convictions and offences referred to in Article 10",
+      "key_phrases": [
+        "fewer than 250 persons",
+        "likely to result in a risk",
+        "not occasional",
+        "special categories of data",
+        "criminal convictions"
+      ]
+    }
+  ],
+  "coverage": {
+    "30(1)": "Test case 1 - Controller record contents (all 7 items a-g)",
+    "30(2)": "Test case 2 - NEW - Processor record contents (4 items a-d)",
+    "30(3)": "Test case 3 - NEW - Written/electronic form requirement",
+    "30(4)": "Test case 4 - NEW - Make available to supervisory authority on request",
+    "30(5)": "Test case 5 - NEW - SME exemption with three exceptions"
+  },
+  "b2b_relevance": "CRITICAL - Article 30 is a core compliance requirement. Essential for: compliance audits, DPA negotiations (showing you maintain records), responding to supervisory authority requests, and demonstrating accountability. Key takeaways: (1) Controllers and processors have DIFFERENT record requirements, (2) SME exemption has significant exceptions that often apply to B2B SaaS, (3) Must be available to regulators ON REQUEST."
+}

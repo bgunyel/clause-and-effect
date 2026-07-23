@@ -1,0 +1,58 @@
+{
+  "article_number": "84",
+  "article_title": "Penalties",
+  "test_cases": [
+    {
+      "question": "Who is responsible for establishing penalties for GDPR violations not covered by administrative fines?",
+      "answer": "Member States shall lay down the rules on other penalties applicable to infringements of this Regulation in particular for infringements which are not subject to administrative fines pursuant to Article 83, and shall take all measures necessary to ensure that they are implemented.",
+      "answer_type": "scope",
+      "supporting_quote": "Member States shall lay down the rules on other penalties applicable to infringements of this Regulation in particular for infringements which are not subject to administrative fines pursuant to Article 83, and shall take all measures necessary to ensure that they are implemented",
+      "key_phrases": [
+        "Member States",
+        "lay down the rules",
+        "other penalties",
+        "not subject to administrative fines"
+      ]
+    },
+    {
+      "question": "What standards must the 'other penalties' established by Member States meet?",
+      "answer": "Such penalties shall be effective, proportionate and dissuasive. This mirrors the same standard required for administrative fines under Article 83, ensuring consistent enforcement quality across all penalty types.",
+      "answer_type": "definition",
+      "supporting_quote": "Such penalties shall be effective, proportionate and dissuasive",
+      "key_phrases": [
+        "effective",
+        "proportionate",
+        "dissuasive"
+      ]
+    },
+    {
+      "question": "What notification obligation do Member States have regarding their penalty laws?",
+      "answer": "Each Member State shall notify to the Commission the provisions of its law which it adopts pursuant to paragraph 1, by 25 May 2018 and, without delay, any subsequent amendment affecting them.",
+      "answer_type": "timeline",
+      "supporting_quote": "Each Member State shall notify to the Commission the provisions of its law which it adopts pursuant to paragraph 1, by 25 May 2018 and, without delay, any subsequent amendment affecting them",
+      "key_phrases": [
+        "notify to the Commission",
+        "25 May 2018",
+        "without delay",
+        "any subsequent amendment"
+      ]
+    },
+    {
+      "question": "Does GDPR define all penalties, or can Member States add additional penalty types?",
+      "answer": "GDPR does not define all penalties. Member States must establish rules for 'other penalties' beyond administrative fines, particularly for infringements not subject to fines under Article 83. This allows for criminal penalties and other sanctions at the national level.",
+      "answer_type": "scope",
+      "supporting_quote": "Member States shall lay down the rules on other penalties applicable to infringements of this Regulation",
+      "key_phrases": [
+        "other penalties",
+        "Member States",
+        "infringements"
+      ]
+    }
+  ],
+  "coverage": {
+    "84(1) responsibility": "Test cases 1 and 4 - Member States establish other penalties",
+    "84(1) standard": "Test case 2 - NEW - Effective, proportionate, dissuasive",
+    "84(2)": "Test case 3 - NEW - Notify Commission by 25 May 2018 + amendments"
+  },
+  "b2b_relevance": "MEDIUM - Article 84 allows Member States to add penalties beyond GDPR fines. Key implications: (1) Criminal penalties possible in some countries (e.g., UK, Germany), (2) Other sanctions like data processing bans, (3) Varies by country - check local law. For B2B SaaS operating across EU, understand that enforcement varies by Member State beyond the harmonized fines in Article 83."
+}

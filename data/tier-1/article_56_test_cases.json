@@ -1,0 +1,73 @@
+{
+  "article_number": "56",
+  "article_title": "Competence of the lead supervisory authority",
+  "test_cases": [
+    {
+      "question": "Which supervisory authority acts as the lead authority for cross-border processing?",
+      "answer": "Without prejudice to Article 55, the supervisory authority of the main establishment or of the single establishment of the controller or processor shall be competent to act as lead supervisory authority for the cross-border processing carried out by that controller or processor. This is the 'one-stop-shop' mechanism.",
+      "answer_type": "definition",
+      "supporting_quote": "Without prejudice to Article 55, the supervisory authority of the main establishment or of the single establishment of the controller or processor shall be competent to act as lead supervisory authority for the cross-border processing carried out by that controller or processor",
+      "key_phrases": [
+        "lead supervisory authority",
+        "main establishment",
+        "single establishment",
+        "cross-border processing"
+      ]
+    },
+    {
+      "question": "When can a supervisory authority other than the lead authority handle a complaint or infringement?",
+      "answer": "By derogation from paragraph 1, each supervisory authority shall be competent to handle a complaint lodged with it or a possible infringement of GDPR if: (a) the subject matter relates only to an establishment in its Member State; or (b) the matter substantially affects data subjects only in its Member State.",
+      "answer_type": "conditional",
+      "supporting_quote": "By way of derogation from paragraph 1, each supervisory authority shall be competent to handle a complaint lodged with it or a possible infringement of this Regulation, if the subject matter relates only to an establishment in its Member State or substantially affects data subjects only in its Member State",
+      "key_phrases": [
+        "derogation",
+        "relates only to an establishment",
+        "substantially affects data subjects only"
+      ]
+    },
+    {
+      "question": "What must a local supervisory authority do if it believes it is competent to handle a cross-border matter?",
+      "answer": "In cases under paragraph 2, the supervisory authority shall inform the lead supervisory authority without delay. Within three weeks of being informed, the lead supervisory authority shall decide whether it will handle the case in accordance with Article 60, taking into account whether an establishment in the Member State of the informing SA is involved.",
+      "answer_type": "conditional",
+      "supporting_quote": "In the cases referred to in paragraph 2, the supervisory authority shall inform the lead supervisory authority without delay. Within a period of three weeks after being informed the lead supervisory authority shall decide whether or not it will handle the case",
+      "key_phrases": [
+        "inform the lead supervisory authority",
+        "without delay",
+        "three weeks",
+        "decide whether it will handle"
+      ]
+    },
+    {
+      "question": "What happens if the lead supervisory authority decides to handle a case that was reported by another SA?",
+      "answer": "If the lead supervisory authority decides to handle the case, the procedure in Article 60 (cooperation between lead and concerned SAs) applies. The supervisory authority that informed the lead SA may submit a draft decision, which the lead SA shall take utmost account of when preparing its draft decision.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where the lead supervisory authority decides to handle the case, the procedure provided for in Article 60 shall apply. The supervisory authority which informed the lead supervisory authority may submit to the lead supervisory authority a draft for a decision",
+      "key_phrases": [
+        "decides to handle",
+        "Article 60",
+        "submit a draft",
+        "take utmost account"
+      ]
+    },
+    {
+      "question": "Who is the primary contact point for a controller or processor regarding their cross-border processing?",
+      "answer": "The lead supervisory authority shall be the sole interlocutor of the controller or processor for the cross-border processing carried out by that controller or processor. This is the 'one-stop-shop' principle - one SA to deal with for cross-border matters.",
+      "answer_type": "scope",
+      "supporting_quote": "The lead supervisory authority shall be the sole interlocutor of the controller or processor for the cross-border processing carried out by that controller or processor",
+      "key_phrases": [
+        "sole interlocutor",
+        "cross-border processing",
+        "one-stop-shop"
+      ]
+    }
+  ],
+  "coverage": {
+    "56(1)": "Test case 1 - Lead SA for cross-border = SA of main/single establishment",
+    "56(2)": "Test case 2 - Local SA exceptions (relates only to / substantially affects only)",
+    "56(3)": "Test case 3 - Inform lead SA + 3-week decision window",
+    "56(4)": "Test case 3 - Lead SA decides to handle or defer",
+    "56(5)": "Test case 4 - NEW - Article 60 procedure when lead handles + draft decision",
+    "56(6)": "Test case 5 - Lead SA as sole interlocutor (one-stop-shop)"
+  },
+  "b2b_relevance": "VERY HIGH - Article 56 establishes the 'one-stop-shop' mechanism, critical for B2B SaaS operating across EU. Key takeaways: (1) One lead SA for all cross-border processing, (2) Lead SA determined by main establishment, (3) Lead SA is sole interlocutor for your company, (4) Local SAs can still act if matter affects only their territory, (5) 3-week window for lead SA to claim jurisdiction."
+}

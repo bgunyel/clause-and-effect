@@ -1,0 +1,47 @@
+{
+  "article_number": "90",
+  "article_title": "Obligations of secrecy",
+  "test_cases": [
+    {
+      "question": "What powers of supervisory authorities can Member States limit through secrecy rules?",
+      "answer": "Member States may adopt specific rules to set out the powers of the supervisory authorities laid down in points (e) and (f) of Article 58(1). These are: (e) power to obtain access to personal data and all information necessary for SA tasks; and (f) power to obtain access to any premises of the controller and processor, including data processing equipment and means.",
+      "answer_type": "definition",
+      "supporting_quote": "Member States may adopt specific rules to set out the powers of the supervisory authorities laid down in points (e) and (f) of Article 58(1)",
+      "key_phrases": [
+        "points (e) and (f) of Article 58(1)",
+        "powers of the supervisory authorities",
+        "specific rules"
+      ]
+    },
+    {
+      "question": "To which controllers and processors does Article 90 apply?",
+      "answer": "Article 90 applies to controllers or processors that are subject, under Union or Member State law or rules established by national competent bodies, to an obligation of professional secrecy or other equivalent obligations of secrecy.",
+      "answer_type": "scope",
+      "supporting_quote": "with regard to controllers or processors that are subject, under Union or Member State law or rules established by national competent bodies, to an obligation of professional secrecy or other equivalent obligations of secrecy",
+      "key_phrases": [
+        "controllers or processors",
+        "obligation of professional secrecy",
+        "equivalent obligations of secrecy",
+        "national competent bodies"
+      ]
+    },
+    {
+      "question": "Under what conditions can Member States adopt specific rules limiting SA powers for secrecy?",
+      "answer": "Such rules may only be adopted where they are necessary to reconcile the right to the protection of personal data with the obligation of secrecy. The rules apply only in relation to personal data which the controller or processor has received as a result of or has obtained in an activity covered by that obligation of secrecy.",
+      "answer_type": "conditional",
+      "supporting_quote": "where necessary to reconcile the right to the protection of personal data with the obligation of secrecy. Those rules shall only apply with regard to personal data which the controller or processor has received as a result of or has obtained in an activity covered by that obligation of secrecy",
+      "key_phrases": [
+        "necessary to reconcile",
+        "right to the protection of personal data",
+        "obligation of secrecy",
+        "activity covered by that obligation"
+      ]
+    }
+  ],
+  "coverage": {
+    "90 SA powers": "Test case 1 - Art 58(1)(e) and (f) powers can be limited",
+    "90 scope": "Test case 2 - Controllers/processors subject to professional secrecy",
+    "90 conditions": "Test case 3 - Necessary to reconcile + only secrecy-covered data"
+  },
+  "b2b_relevance": "LOW-MEDIUM - Article 90 is relevant if your B2B SaaS serves professionals bound by secrecy obligations: lawyers, doctors, accountants, auditors, notaries. Key implications: (1) Your clients may have legitimate grounds to limit SA access to their data, (2) Only applies to data obtained WITHIN the secrecy-covered activity, (3) Rules must be necessary to reconcile DP with secrecy. Useful to understand when helping professional services clients with GDPR compliance."
+}

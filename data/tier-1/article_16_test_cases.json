@@ -1,0 +1,45 @@
+{
+  "article_number": "16",
+  "article_title": "Right to rectification",
+  "test_cases": [
+    {
+      "question": "How quickly must a controller respond to a request to rectify inaccurate personal data?",
+      "answer": "The controller must rectify the inaccurate personal data without undue delay. The article does not specify an exact timeframe, but requires action promptly once the data subject makes the request.",
+      "answer_type": "timeline",
+      "supporting_quote": "the data subject shall have the right to obtain from the controller without undue delay the rectification of inaccurate personal data",
+      "key_phrases": [
+        "without undue delay",
+        "controller",
+        "rectification",
+        "inaccurate personal data"
+      ]
+    },
+    {
+      "question": "Does the right to rectification only apply to fixing factual errors in data?",
+      "answer": "No, the right to rectification is broader. It applies to rectifying inaccurate personal data, but it also specifically grants the right to have incomplete personal data completed.",
+      "answer_type": "scope",
+      "supporting_quote": "The data subject shall have the right to obtain from the controller without undue delay the rectification of inaccurate personal data concerning him or her. Taking into account the purposes of the processing, the data subject shall have the right to have incomplete personal data completed",
+      "key_phrases": [
+        "rectification of inaccurate personal data",
+        "right to have incomplete personal data completed"
+      ]
+    },
+    {
+      "question": "What can someone ask a company to do if they believe their personal data is incomplete?",
+      "answer": "A data subject can request that incomplete personal data be completed, which may be done by providing a supplementary statement. However, this must take into account the purposes of the processing, meaning the additional information must be relevant to why the data is being processed.",
+      "answer_type": "conditional",
+      "supporting_quote": "Taking into account the purposes of the processing, the data subject shall have the right to have incomplete personal data completed, including by means of providing a supplementary statement",
+      "key_phrases": [
+        "purposes of the processing",
+        "incomplete personal data completed",
+        "supplementary statement"
+      ]
+    }
+  ],
+  "coverage": {
+    "rectification of inaccurate": "Test case 1 - Without undue delay from controller",
+    "scope": "Test case 2 - Covers both inaccurate AND incomplete data",
+    "completion of incomplete": "Test case 3 - Purpose condition + supplementary statement method"
+  },
+  "b2b_relevance": "HIGH - Article 16 is frequently exercised by customers and employees. Essential for: customer profile management, CRM data quality, employee record corrections, and ensuring data accuracy across systems. Key takeaways: (1) 'Without undue delay' means act promptly, (2) Covers both fixing errors AND adding missing info, (3) Completion must be relevant to processing purpose."
+}

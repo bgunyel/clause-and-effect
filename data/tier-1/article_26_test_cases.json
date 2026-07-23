@@ -1,0 +1,63 @@
+{
+  "article_number": "26",
+  "article_title": "Joint controllers",
+  "test_cases": [
+    {
+      "question": "What makes two or more organizations joint controllers under GDPR?",
+      "answer": "Two or more organizations become joint controllers when they jointly determine the purposes and means of processing personal data. In such cases, they must transparently determine their respective responsibilities for compliance with the Regulation, particularly regarding data subject rights and their duties to provide information under Articles 13 and 14. The arrangement may also designate a contact point for data subjects.",
+      "answer_type": "definition",
+      "supporting_quote": "Where two or more controllers jointly determine the purposes and means of processing, they shall be joint controllers. They shall in a transparent manner determine their respective responsibilities for compliance with the obligations under this Regulation, in particular as regards the exercising of the rights of the data subject and their respective duties to provide the information referred to in Articles 13 and 14",
+      "key_phrases": [
+        "jointly determine",
+        "purposes and means",
+        "transparent manner",
+        "respective responsibilities",
+        "contact point"
+      ]
+    },
+    {
+      "question": "Must joint controllers inform data subjects about their internal arrangement?",
+      "answer": "Yes. The arrangement between joint controllers must duly reflect their respective roles and relationships vis-à-vis the data subjects, and the essence of that arrangement must be made available to the data subject.",
+      "answer_type": "scope",
+      "supporting_quote": "The arrangement referred to in paragraph 1 shall duly reflect the respective roles and relationships of the joint controllers vis-à-vis the data subjects. The essence of the arrangement shall be made available to the data subject.",
+      "key_phrases": [
+        "duly reflect",
+        "roles and relationships",
+        "essence of the arrangement",
+        "made available to the data subject"
+      ]
+    },
+    {
+      "question": "If two companies have an internal agreement about who handles data subject requests, does that limit which controller a data subject can contact?",
+      "answer": "No. Regardless of any arrangement between the joint controllers, the data subject may exercise their GDPR rights in respect of and against each of the controllers. The internal agreement does not restrict the data subject's ability to invoke their rights against any joint controller.",
+      "answer_type": "conditional",
+      "supporting_quote": "Irrespective of the terms of the arrangement referred to in paragraph 1, the data subject may exercise his or her rights under this Regulation in respect of and against each of the controllers",
+      "key_phrases": [
+        "irrespective of the terms",
+        "each of the controllers",
+        "exercise his or her rights",
+        "in respect of and against"
+      ]
+    },
+    {
+      "question": "When are joint controllers allowed to skip creating their own arrangement and rely on existing law instead?",
+      "answer": "Controllers may rely on Union or Member State law to determine their respective responsibilities instead of creating their own arrangement, but only when such law already applies to the controllers and specifies how their responsibilities should be allocated. Otherwise, they must establish their own transparent arrangement.",
+      "answer_type": "conditional",
+      "supporting_quote": "unless, and in so far as, the respective responsibilities of the controllers are determined by Union or Member State law to which the controllers are subject",
+      "key_phrases": [
+        "Union or Member State law",
+        "respective responsibilities",
+        "determined by",
+        "unless"
+      ]
+    }
+  ],
+  "coverage": {
+    "26(1) definition": "Test case 1 - Jointly determine purposes and means",
+    "26(1) arrangement": "Test case 1 - Transparent manner, allocate responsibilities, Articles 13/14 duties, contact point",
+    "26(1) law exception": "Test case 4 - Union or Member State law may determine responsibilities",
+    "26(2)": "Test case 2 - Arrangement must reflect roles/relationships; essence available to data subject",
+    "26(3)": "Test case 3 - Rights exercisable against each controller regardless of arrangement"
+  },
+  "b2b_relevance": "CRITICAL - Article 26 governs partnerships, integrations, and shared platforms. Essential for: partnership agreements, platform operator relationships, API/data sharing arrangements, and determining who responds to data subject requests. Key takeaways: (1) 'Jointly determine purposes and means' is the test, (2) Essence of arrangement must be public, (3) Data subjects can go after ANY joint controller, (4) Internal allocation doesn't protect you externally."
+}

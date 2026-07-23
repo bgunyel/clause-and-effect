@@ -1,0 +1,75 @@
+{
+  "article_number": "37",
+  "article_title": "Designation of the data protection officer",
+  "test_cases": [
+    {
+      "question": "When is a company or organization required to appoint a data protection officer?",
+      "answer": "A data protection officer must be designated when the controller or processor meets any of three conditions: (1) processing is carried out by a public authority or body (except courts acting in their judicial capacity), (2) the core activities involve regular and systematic monitoring of data subjects on a large scale, or (3) the core activities involve processing special categories of data (Article 9) or criminal conviction data (Article 10) on a large scale.",
+      "answer_type": "conditional",
+      "supporting_quote": "The controller and the processor shall designate a data protection officer in any case where: (a) the processing is carried out by a public authority or body, except for courts acting in their judicial capacity; (b) the core activities of the controller or the processor consist of processing operations which, by virtue of their nature, their scope and/or their purposes, require regular and systematic monitoring of data subjects on a large scale; or (c) the core activities of the controller or the processor consist of processing on a large scale of special categories of data pursuant to Article 9 or personal data relating to criminal convictions and offences referred to in Article 10",
+      "key_phrases": [
+        "public authority or body",
+        "regular and systematic monitoring",
+        "large scale",
+        "special categories of data",
+        "core activities"
+      ]
+    },
+    {
+      "question": "Can a group of companies share a single Data Protection Officer?",
+      "answer": "Yes. A group of undertakings may appoint a single data protection officer, provided that the DPO is easily accessible from each establishment. This allows corporate groups to centralize the DPO function while ensuring availability across all entities.",
+      "answer_type": "scope",
+      "supporting_quote": "A group of undertakings may appoint a single data protection officer provided that a data protection officer is easily accessible from each establishment",
+      "key_phrases": [
+        "group of undertakings",
+        "single data protection officer",
+        "easily accessible",
+        "each establishment"
+      ]
+    },
+    {
+      "question": "What qualifications must a Data Protection Officer have?",
+      "answer": "The DPO must be designated on the basis of professional qualities and, in particular, expert knowledge of data protection law and practices. The DPO must also have the ability to fulfil the tasks referred to in Article 39 (which covers the DPO's specific duties).",
+      "answer_type": "definition",
+      "supporting_quote": "The data protection officer shall be designated on the basis of professional qualities and, in particular, expert knowledge of data protection law and practices and the ability to fulfil the tasks referred to in Article 39",
+      "key_phrases": [
+        "professional qualities",
+        "expert knowledge",
+        "data protection law and practices",
+        "ability to fulfil the tasks"
+      ]
+    },
+    {
+      "question": "Can a company hire an external consultant as their Data Protection Officer?",
+      "answer": "Yes. The data protection officer may be a staff member of the controller or processor, or may fulfil the tasks on the basis of a service contract. This means organizations can either appoint an internal employee or engage an external DPO service provider.",
+      "answer_type": "scope",
+      "supporting_quote": "The data protection officer may be a staff member of the controller or processor, or fulfil the tasks on the basis of a service contract",
+      "key_phrases": [
+        "staff member",
+        "service contract",
+        "fulfil the tasks"
+      ]
+    },
+    {
+      "question": "What must an organization do with the DPO's contact details?",
+      "answer": "The controller or processor must publish the contact details of the data protection officer and communicate them to the supervisory authority. This ensures both the public and regulators can contact the DPO.",
+      "answer_type": "definition",
+      "supporting_quote": "The controller or the processor shall publish the contact details of the data protection officer and communicate them to the supervisory authority",
+      "key_phrases": [
+        "publish the contact details",
+        "communicate",
+        "supervisory authority"
+      ]
+    }
+  ],
+  "coverage": {
+    "37(1)(a)": "Test case 1 - Public authority (except courts in judicial capacity)",
+    "37(1)(b)": "Test case 1 - Core activities = systematic monitoring on large scale",
+    "37(1)(c)": "Test case 1 - Core activities = large-scale special categories/criminal data",
+    "37(2)": "Test case 2 - NEW - Group of undertakings can share single DPO",
+    "37(5)": "Test case 3 - NEW - DPO qualifications (professional qualities, expert knowledge)",
+    "37(6)": "Test case 4 - NEW - Staff member or service contract",
+    "37(7)": "Test case 5 - NEW - Publish contact details and communicate to SA"
+  },
+  "b2b_relevance": "HIGH - Article 37 determines if your organization needs a DPO. Essential for: organizational compliance planning, DPO hiring/contracting decisions, and group-wide DPO structures. Key takeaways: (1) Three triggers: public authority, systematic monitoring, special categories - all on LARGE SCALE, (2) Groups can share one DPO, (3) Can be internal or external, (4) Must publish contact details."
+}

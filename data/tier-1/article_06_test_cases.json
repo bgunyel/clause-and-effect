@@ -1,0 +1,84 @@
+{
+  "article_number": "6",
+  "article_title": "Lawfulness of processing",
+  "test_cases": [
+    {
+      "question": "What are the six legal grounds that allow an organization to process personal data under GDPR?",
+      "answer": "Processing is lawful when at least one of the following applies: the data subject has given consent; processing is necessary for a contract or pre-contractual steps; processing is necessary for a legal obligation; processing is necessary to protect vital interests; processing is necessary for a public interest task or official authority; or processing is necessary for the controller's or third party's legitimate interests, unless those are overridden by the data subject's rights and freedoms.",
+      "answer_type": "definition",
+      "supporting_quote": "Processing shall be lawful only if and to the extent that at least one of the following applies: (a) the data subject has given consent... (b) necessary for performance of a contract... (c) necessary for compliance with a legal obligation... (d) necessary to protect vital interests... (e) necessary for public interest or official authority... (f) necessary for legitimate interests",
+      "key_phrases": [
+        "lawful only if",
+        "at least one of the following applies",
+        "consent",
+        "contract",
+        "legal obligation",
+        "vital interests",
+        "public interest",
+        "legitimate interests"
+      ]
+    },
+    {
+      "question": "Under what conditions can a private company use legitimate interests as the legal basis for processing personal data?",
+      "answer": "A private company can use legitimate interests when processing is necessary for purposes pursued by the controller or a third party, provided those interests are not overridden by the data subject's interests, fundamental rights, or freedoms. This is particularly important when the data subject is a child and requires additional protection.",
+      "answer_type": "conditional",
+      "supporting_quote": "processing is necessary for the purposes of the legitimate interests pursued by the controller or by a third party, except where such interests are overridden by the interests or fundamental rights and freedoms of the data subject which require protection of personal data, in particular where the data subject is a child",
+      "key_phrases": [
+        "legitimate interests",
+        "overridden by",
+        "fundamental rights and freedoms",
+        "data subject is a child"
+      ]
+    },
+    {
+      "question": "Can a government agency rely on the legitimate interests legal basis when carrying out its official duties?",
+      "answer": "No. The legitimate interests legal basis explicitly does not apply to processing carried out by public authorities in the performance of their tasks. Government agencies must use a different legal basis such as public interest or official authority when performing their official functions.",
+      "answer_type": "scope",
+      "supporting_quote": "Point (f) of the first subparagraph shall not apply to processing carried out by public authorities in the performance of their tasks",
+      "key_phrases": [
+        "shall not apply",
+        "public authorities",
+        "in the performance of their tasks"
+      ]
+    },
+    {
+      "question": "Which types of processing require their legal basis to be established by Union or Member State law?",
+      "answer": "Processing that is necessary for compliance with a legal obligation and processing necessary for the performance of a task carried out in the public interest or in the exercise of official authority must have their basis laid down by Union law or Member State law to which the controller is subject.",
+      "answer_type": "scope",
+      "supporting_quote": "The basis for the processing referred to in point (c) and (e) of paragraph 1 shall be laid down by: (a) Union law; or (b) Member State law to which the controller is subject.",
+      "key_phrases": [
+        "basis for the processing",
+        "point (c) and (e)",
+        "laid down by",
+        "Union law",
+        "Member State law"
+      ]
+    },
+    {
+      "question": "How should we assess whether processing personal data for a new purpose is compatible with the original purpose?",
+      "answer": "When considering whether processing for a new purpose is compatible with the original purpose, you must consider: the link between the original and new purposes; the context of collection and data subject relationship; the nature of the data, especially if special categories; the possible consequences for data subjects; and the existence of appropriate safeguards such as encryption or pseudonymisation.",
+      "answer_type": "conditional",
+      "supporting_quote": "In order to ascertain whether processing for another purpose is compatible with the purpose for which the personal data are initially collected, the controller shall take into account, inter alia: (a) any link between the purposes... (b) the context in which the personal data have been collected... (c) the nature of the personal data... (d) the possible consequences of the intended further processing... (e) the existence of appropriate safeguards",
+      "key_phrases": [
+        "compatible with the purpose",
+        "link between the purposes",
+        "context",
+        "nature of the personal data",
+        "possible consequences",
+        "appropriate safeguards"
+      ]
+    }
+  ],
+  "coverage": {
+    "6(1)(a)": "Test case 1 - Consent",
+    "6(1)(b)": "Test case 1 - Contract necessity",
+    "6(1)(c)": "Test case 1 - Legal obligation",
+    "6(1)(d)": "Test case 1 - Vital interests",
+    "6(1)(e)": "Test case 1 - Public interest/official authority",
+    "6(1)(f)": "Test cases 1 and 2 - Legitimate interests with balancing test",
+    "6(1) second subparagraph": "Test case 3 - Public authorities cannot use legitimate interests",
+    "6(3)": "Test case 4 - Union/Member State law requirement for (c) and (e)",
+    "6(4)": "Test case 5 - NEW - Compatibility test for further processing"
+  },
+  "b2b_relevance": "CRITICAL - Article 6 determines the legal basis for all processing. Most B2B SaaS companies rely on: (a) consent for marketing, (b) contract for service delivery, and (f) legitimate interests for various business purposes. Understanding the legitimate interests balancing test and the compatibility assessment for new purposes is essential for product development and feature expansion."
+}

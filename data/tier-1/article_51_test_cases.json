@@ -1,0 +1,63 @@
+{
+  "article_number": "51",
+  "article_title": "Supervisory authority",
+  "test_cases": [
+    {
+      "question": "What is a supervisory authority under GDPR?",
+      "answer": "A supervisory authority is an independent public authority established by each Member State. Its responsibilities include: (1) monitoring the application of GDPR; (2) protecting the fundamental rights and freedoms of natural persons in relation to processing; and (3) facilitating the free flow of personal data within the Union. Member States may establish one or more such authorities.",
+      "answer_type": "definition",
+      "supporting_quote": "Each Member State shall provide for one or more independent public authorities to be responsible for monitoring the application of this Regulation, in order to protect the fundamental rights and freedoms of natural persons in relation to processing and to facilitate the free flow of personal data within the Union ('supervisory authority')",
+      "key_phrases": [
+        "independent public authorities",
+        "monitoring the application",
+        "protect fundamental rights and freedoms",
+        "free flow of personal data",
+        "one or more"
+      ]
+    },
+    {
+      "question": "What must supervisory authorities do to ensure GDPR is applied consistently across the EU?",
+      "answer": "Each supervisory authority shall contribute to the consistent application of GDPR throughout the Union. For that purpose, the supervisory authorities shall cooperate with each other and the Commission in accordance with Chapter VII (Cooperation and consistency).",
+      "answer_type": "scope",
+      "supporting_quote": "Each supervisory authority shall contribute to the consistent application of this Regulation throughout the Union. For that purpose, the supervisory authorities shall cooperate with each other and the Commission in accordance with Chapter VII",
+      "key_phrases": [
+        "consistent application",
+        "throughout the Union",
+        "cooperate with each other",
+        "Commission",
+        "Chapter VII"
+      ]
+    },
+    {
+      "question": "What must a Member State do if it establishes more than one supervisory authority?",
+      "answer": "When more than one supervisory authority is established in a Member State, that Member State shall: (1) designate the supervisory authority which is to represent those authorities in the Board (EDPB); and (2) set out the mechanism to ensure compliance by the other authorities with the rules relating to the consistency mechanism referred to in Chapter VII.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where more than one supervisory authority is established in a Member State, that Member State shall designate the supervisory authority which is to represent those authorities in the Board and shall set out the mechanism to ensure compliance by the other authorities with the rules relating to the consistency mechanism referred to in Chapter VII",
+      "key_phrases": [
+        "more than one supervisory authority",
+        "designate",
+        "represent those authorities in the Board",
+        "consistency mechanism"
+      ]
+    },
+    {
+      "question": "What notification must Member States provide to the Commission regarding their supervisory authorities?",
+      "answer": "Each Member State shall notify to the Commission the provisions of law which it adopts pursuant to Chapter VI (the chapter on supervisory authorities), and without delay, any subsequent amendment affecting them. This ensures the Commission is informed of how Member States have implemented the supervisory authority requirements.",
+      "answer_type": "conditional",
+      "supporting_quote": "Each Member State shall notify to the Commission the provisions of law which it adopts pursuant to this Chapter, and, without delay, any subsequent amendment affecting them",
+      "key_phrases": [
+        "notify to the Commission",
+        "provisions of law",
+        "without delay",
+        "subsequent amendment"
+      ]
+    }
+  ],
+  "coverage": {
+    "51(1)": "Test case 1 - Definition: independent public authority, one or more per Member State",
+    "51(2)": "Test case 2 - Consistent application + cooperate with each other and Commission (Chapter VII)",
+    "51(3)": "Test case 3 - Multiple SAs: designate one for Board + consistency mechanism",
+    "51(4)": "Test case 4 - NEW - Notify Commission of adopted laws and amendments"
+  },
+  "b2b_relevance": "MEDIUM - Article 51 establishes what supervisory authorities are. Key for: understanding the regulatory landscape, knowing who enforces GDPR, and recognizing that SAs must cooperate. Key takeaways: (1) Independent public authorities, (2) One or more per Member State, (3) Must cooperate for consistent EU-wide application."
+}

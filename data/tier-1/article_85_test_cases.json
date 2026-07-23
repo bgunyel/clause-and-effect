@@ -1,0 +1,63 @@
+{
+  "article_number": "85",
+  "article_title": "Processing and freedom of expression and information",
+  "test_cases": [
+    {
+      "question": "What types of processing activities qualify for exemptions related to freedom of expression?",
+      "answer": "Processing for journalistic purposes and the purposes of academic, artistic, or literary expression qualify for exemptions. Member States shall by law reconcile the right to the protection of personal data with the right to freedom of expression and information.",
+      "answer_type": "definition",
+      "supporting_quote": "Member States shall by law reconcile the right to the protection of personal data pursuant to this Regulation with the right to freedom of expression and information, including processing for journalistic purposes and the purposes of academic, artistic or literary expression",
+      "key_phrases": [
+        "journalistic purposes",
+        "academic, artistic or literary expression",
+        "by law",
+        "reconcile"
+      ]
+    },
+    {
+      "question": "Which GDPR chapters can Member States exempt for journalistic or artistic processing?",
+      "answer": "Member States shall provide for exemptions or derogations from Chapter II (principles), Chapter III (rights of the data subject), Chapter IV (controller and processor), Chapter V (transfer of personal data to third countries or international organisations), Chapter VI (independent supervisory authorities), Chapter VII (cooperation and consistency) and Chapter IX (specific data processing situations).",
+      "answer_type": "scope",
+      "supporting_quote": "Member States shall provide for exemptions or derogations from Chapter II (principles), Chapter III (rights of the data subject), Chapter IV (controller and processor), Chapter V (transfer of personal data to third countries or international organisations), Chapter VI (independent supervisory authorities), Chapter VII (cooperation and consistency) and Chapter IX (specific data processing situations)",
+      "key_phrases": [
+        "exemptions or derogations",
+        "Chapter II",
+        "Chapter III",
+        "Chapter IV",
+        "Chapter V",
+        "Chapter VI",
+        "Chapter VII",
+        "Chapter IX"
+      ]
+    },
+    {
+      "question": "Under what condition can Member States grant exemptions from GDPR for freedom of expression?",
+      "answer": "Member States can provide exemptions or derogations only if they are necessary to reconcile the right to the protection of personal data with the freedom of expression and information. This necessity test is the gatekeeper for exemptions.",
+      "answer_type": "conditional",
+      "supporting_quote": "if they are necessary to reconcile the right to the protection of personal data with the freedom of expression and information",
+      "key_phrases": [
+        "necessary to reconcile",
+        "right to the protection of personal data",
+        "freedom of expression and information"
+      ]
+    },
+    {
+      "question": "What notification obligations do Member States have regarding their freedom of expression laws?",
+      "answer": "Each Member State shall notify to the Commission the provisions of its law which it has adopted pursuant to paragraph 2 and, without delay, any subsequent amendment law or amendment affecting them.",
+      "answer_type": "timeline",
+      "supporting_quote": "Each Member State shall notify to the Commission the provisions of its law which it has adopted pursuant to paragraph 2 and, without delay, any subsequent amendment law or amendment affecting them",
+      "key_phrases": [
+        "notify to the Commission",
+        "without delay",
+        "subsequent amendment"
+      ]
+    }
+  ],
+  "coverage": {
+    "85(1)": "Test case 1 - Reconcile by law, expression types",
+    "85(2) chapters": "Test case 2 - Exemptions from Chapters II-VII, IX",
+    "85(2) condition": "Test case 3 - Necessary to reconcile",
+    "85(3)": "Test case 4 - Notify Commission, without delay for amendments"
+  },
+  "b2b_relevance": "LOW-MEDIUM - Article 85 primarily affects media, publishers, and academic institutions. However, B2B SaaS companies should note: (1) If processing data for journalism/academic clients, exemptions may apply, (2) Content platforms hosting user-generated content may claim some exemptions, (3) Each MS implements differently - check local law. Key: these exemptions are for expression purposes, not business-as-usual data processing."
+}

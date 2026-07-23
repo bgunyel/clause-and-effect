@@ -1,0 +1,45 @@
+{
+  "article_number": "69",
+  "article_title": "Independence",
+  "test_cases": [
+    {
+      "question": "What standard of independence must the European Data Protection Board maintain?",
+      "answer": "The Board shall act independently when performing its tasks or exercising its powers pursuant to Articles 70 and 71. This independence requirement applies without prejudice to requests by the Commission referred to in point (b) of Article 70(1) and in Article 70(2).",
+      "answer_type": "definition",
+      "supporting_quote": "Without prejudice to requests by the Commission referred to in point (b) of Article 70(1) and in Article 70(2), the Board shall act independently when performing its tasks or exercising its powers pursuant to Articles 70 and 71",
+      "key_phrases": [
+        "act independently",
+        "performing its tasks",
+        "exercising its powers",
+        "Articles 70 and 71"
+      ]
+    },
+    {
+      "question": "Does the Board's independence apply to all its activities under GDPR?",
+      "answer": "The Board's independence requirement applies specifically when performing tasks or exercising powers pursuant to Articles 70 (tasks) and 71 (reports). The independence is subject to the exception that the Commission may make requests under Article 70(1)(b) and 70(2).",
+      "answer_type": "scope",
+      "supporting_quote": "the Board shall act independently when performing its tasks or exercising its powers pursuant to Articles 70 and 71",
+      "key_phrases": [
+        "pursuant to Articles 70 and 71",
+        "tasks or exercising its powers",
+        "act independently"
+      ]
+    },
+    {
+      "question": "Are there any exceptions to the Board's independence?",
+      "answer": "Yes. The Board's independence is expressed as being 'without prejudice to requests by the Commission referred to in point (b) of Article 70(1) and in Article 70(2).' This means the Commission can make certain requests that the Board must consider, even while acting independently.",
+      "answer_type": "conditional",
+      "supporting_quote": "Without prejudice to requests by the Commission referred to in point (b) of Article 70(1) and in Article 70(2)",
+      "key_phrases": [
+        "without prejudice",
+        "requests by the Commission",
+        "Article 70(1)(b)",
+        "Article 70(2)"
+      ]
+    }
+  ],
+  "coverage": {
+    "69 full": "All three test cases cover the complete article - independence requirement, scope (Arts 70-71), and Commission exception"
+  },
+  "b2b_relevance": "MEDIUM - Article 69 ensures EDPB acts independently from political pressure. This matters because: (1) EDPB guidance reflects independent legal analysis, not political compromise, (2) Binding decisions are based on GDPR interpretation, not lobbying, (3) Commission can request opinions but cannot direct outcomes."
+}

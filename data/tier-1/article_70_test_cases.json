@@ -1,0 +1,72 @@
+{
+  "article_number": "70",
+  "article_title": "Tasks of the Board",
+  "test_cases": [
+    {
+      "question": "What is the primary mandate of the European Data Protection Board?",
+      "answer": "The Board shall ensure the consistent application of this Regulation. To that end, the Board shall, on its own initiative or, where relevant, at the request of the Commission, perform a wide range of tasks including monitoring, advising, issuing guidelines, and maintaining registers.",
+      "answer_type": "definition",
+      "supporting_quote": "The Board shall ensure the consistent application of this Regulation. To that end, the Board shall, on its own initiative or, where relevant, at the request of the Commission",
+      "key_phrases": [
+        "ensure the consistent application",
+        "on its own initiative",
+        "at the request of the Commission"
+      ]
+    },
+    {
+      "question": "Does the Board's monitoring replace the duties of national supervisory authorities?",
+      "answer": "No. The Board monitors and ensures the correct application of GDPR in the cases provided for in Articles 64 and 65 without prejudice to the tasks of national supervisory authorities. National SAs retain their independent responsibilities.",
+      "answer_type": "scope",
+      "supporting_quote": "monitor and ensure the correct application of this Regulation in the cases provided for in Articles 64 and 65 without prejudice to the tasks of national supervisory authorities",
+      "key_phrases": [
+        "without prejudice",
+        "national supervisory authorities",
+        "Articles 64 and 65"
+      ]
+    },
+    {
+      "question": "What types of advice does the Board provide to the Commission?",
+      "answer": "The Board advises the Commission on: any issue related to personal data protection in the Union including proposed amendments to GDPR; the format and procedures for electronic information exchange between controllers, processors and SAs; the format and procedures for binding corporate rules; and the format for notification of codes of conduct.",
+      "answer_type": "scope",
+      "supporting_quote": "advise the Commission on any issue related to the protection of personal data in the Union, including on any proposed amendment of this Regulation; advise the Commission on the format and procedures for the exchange of information between controllers, processors and supervisory authorities for binding corporate rules",
+      "key_phrases": [
+        "advise the Commission",
+        "personal data protection",
+        "proposed amendment",
+        "binding corporate rules"
+      ]
+    },
+    {
+      "question": "What guidelines and recommendations can the Board issue?",
+      "answer": "The Board can issue guidelines, recommendations, and best practices on: procedures for erasing links, copies, or replications of personal data from publicly available communication services (right to be forgotten); common procedures for reporting infringements by natural persons; transfers based on derogations; and data protection certification mechanisms, seals and marks.",
+      "answer_type": "definition",
+      "supporting_quote": "issue guidelines, recommendations, and best practices on procedures for erasing links, copies or replications of personal data from publicly available communication services as referred to in Article 17(2); issue guidelines, recommendations and best practices in accordance with point (e) of this paragraph for further specifying the criteria and conditions for transfers based on Article 49(1)",
+      "key_phrases": [
+        "guidelines, recommendations, and best practices",
+        "erasing links",
+        "publicly available communication services",
+        "transfers based on derogations"
+      ]
+    },
+    {
+      "question": "What registers does the Board maintain?",
+      "answer": "The Board maintains: (1) a register of certification mechanisms and data protection seals and marks pursuant to Article 42(8); and (2) a public register of Board decisions and decisions of SAs in cross-border cases, pursuant to Article 70(1)(y) together with Article 65.",
+      "answer_type": "definition",
+      "supporting_quote": "carry out the accreditation of certification bodies and its periodic review pursuant to Article 43 and maintain a public register of accredited bodies pursuant to Article 43(6) and of the accredited controllers or processors established in third countries pursuant to Article 42(7)",
+      "key_phrases": [
+        "register",
+        "certification mechanisms",
+        "accredited bodies",
+        "public register"
+      ]
+    }
+  ],
+  "coverage": {
+    "70(1) intro": "Test case 1 - Consistent application mandate + own initiative or Commission request",
+    "70(1)(a)": "Test case 2 - Monitor Arts 64/65 without prejudice to SAs",
+    "70(1)(b)(c)(e)(f)": "Test case 3 - Advisory role to Commission",
+    "70(1)(d)(h)(q)": "Test case 4 - Guidelines, recommendations, best practices",
+    "70(1)(j)(n)(y)": "Test case 5 - NEW - Registers (certification, decisions)"
+  },
+  "b2b_relevance": "HIGH - Article 70 defines what EDPB actually does. Key for B2B: (1) EDPB issues guidelines that shape how GDPR is interpreted, (2) EDPB advises on BCRs your company might use, (3) EDPB maintains certification registers, (4) EDPB issues guidance on right to be forgotten and international transfers. Following EDPB guidelines is de facto standard of care."
+}

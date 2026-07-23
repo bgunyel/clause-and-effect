@@ -1,0 +1,63 @@
+{
+  "article_number": "22",
+  "article_title": "Automated individual decision-making, including profiling",
+  "test_cases": [
+    {
+      "question": "What type of decisions does GDPR protect people from when they are made entirely by automated systems?",
+      "answer": "GDPR protects data subjects from decisions based solely on automated processing (including profiling) that either produce legal effects concerning them or similarly significantly affect them. This means decisions made without any human involvement that have important consequences for the individual.",
+      "answer_type": "definition",
+      "supporting_quote": "The data subject shall have the right not to be subject to a decision based solely on automated processing, including profiling, which produces legal effects concerning him or her or similarly significantly affects him or her.",
+      "key_phrases": [
+        "solely on automated processing",
+        "profiling",
+        "legal effects",
+        "similarly significantly affects"
+      ]
+    },
+    {
+      "question": "Under what three circumstances can an organization make automated decisions about someone without violating this article?",
+      "answer": "Automated decisions are permitted when: (1) the decision is necessary for entering into or performing a contract between the data subject and the controller; (2) the decision is authorized by Union or Member State law that includes suitable safeguards for the data subject's rights; or (3) the decision is based on the data subject's explicit consent.",
+      "answer_type": "conditional",
+      "supporting_quote": "Paragraph 1 shall not apply if the decision: (a) is necessary for entering into, or performance of, a contract between the data subject and a data controller; (b) is authorised by Union or Member State law to which the controller is subject and which also lays down suitable measures to safeguard the data subject's rights and freedoms and legitimate interests; or (c) is based on the data subject's explicit consent.",
+      "key_phrases": [
+        "necessary for contract",
+        "authorised by Union or Member State law",
+        "explicit consent"
+      ]
+    },
+    {
+      "question": "What safeguards must a company provide when they make an automated decision based on a contract or someone's consent?",
+      "answer": "When making automated decisions based on contract necessity or explicit consent, the controller must implement suitable measures to protect the data subject's rights, freedoms, and legitimate interests. These measures must include at minimum: the right to obtain human intervention from the controller, the right to express their point of view, and the right to contest the decision.",
+      "answer_type": "scope",
+      "supporting_quote": "In the cases referred to in points (a) and (c) of paragraph 2, the data controller shall implement suitable measures to safeguard the data subject's rights and freedoms and legitimate interests, at least the right to obtain human intervention on the part of the controller, to express his or her point of view and to contest the decision.",
+      "key_phrases": [
+        "suitable measures",
+        "human intervention",
+        "express point of view",
+        "contest the decision"
+      ]
+    },
+    {
+      "question": "Can automated decision-making be used with special category data like health information or racial origin?",
+      "answer": "Automated decisions based on special categories of personal data (Article 9) are only permitted in two situations: when the data subject has given explicit consent for one or more specified purposes, or when processing is necessary for reasons of substantial public interest based on Union or Member State law. In both cases, suitable measures to safeguard the data subject's rights and freedoms and legitimate interests must be in place.",
+      "answer_type": "conditional",
+      "supporting_quote": "Decisions referred to in paragraph 2 shall not be based on special categories of personal data referred to in Article 9(1), unless point (a) or (g) of Article 9(2) applies and suitable measures to safeguard the data subject's rights and freedoms and legitimate interests are in place",
+      "key_phrases": [
+        "special categories of personal data",
+        "Article 9",
+        "explicit consent",
+        "substantial public interest",
+        "suitable measures"
+      ]
+    }
+  ],
+  "coverage": {
+    "22(1)": "Test case 1 - Definition: solely automated + legal/significant effects",
+    "22(2)(a)": "Test case 2 - Exception: necessary for contract",
+    "22(2)(b)": "Test case 2 - Exception: authorized by law with safeguards",
+    "22(2)(c)": "Test case 2 - Exception: explicit consent",
+    "22(3)": "Test case 3 - Safeguards for (a) and (c): human intervention, express view, contest",
+    "22(4)": "Test case 4 - NEW - Special categories restriction"
+  },
+  "b2b_relevance": "CRITICAL - Article 22 affects AI/ML systems, credit scoring, automated hiring, fraud detection, and algorithmic pricing. Essential for: AI governance policies, automated decision system design, human-in-the-loop requirements, and appeals processes. Key takeaways: (1) 'Solely automated' is the trigger - partial human involvement may avoid this, (2) Three safeguards REQUIRED: human intervention, express view, contest, (3) Extra restrictions for special category data."
+}

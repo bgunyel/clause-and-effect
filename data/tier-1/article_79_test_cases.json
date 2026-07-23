@@ -1,0 +1,60 @@
+{
+  "article_number": "79",
+  "article_title": "Right to an effective judicial remedy against a controller or processor",
+  "test_cases": [
+    {
+      "question": "Who has the right to sue a data controller or processor under GDPR?",
+      "answer": "Each data subject shall have the right to an effective judicial remedy where he or she considers that his or her rights under this Regulation have been infringed as a result of the processing of his or her personal data in non-compliance with this Regulation.",
+      "answer_type": "definition",
+      "supporting_quote": "each data subject shall have the right to an effective judicial remedy where he or she considers that his or her rights under this Regulation have been infringed as a result of the processing of his or her personal data in non-compliance with this Regulation",
+      "key_phrases": [
+        "each data subject",
+        "effective judicial remedy",
+        "considers that his or her rights... have been infringed",
+        "non-compliance"
+      ]
+    },
+    {
+      "question": "Does pursuing a lawsuit against a controller or processor prevent using other remedies?",
+      "answer": "No. The right to an effective judicial remedy exists without prejudice to any available administrative or non-judicial remedy, including the right to lodge a complaint with a supervisory authority pursuant to Article 77. Data subjects can pursue multiple remedies simultaneously.",
+      "answer_type": "conditional",
+      "supporting_quote": "Without prejudice to any available administrative or non-judicial remedy, including the right to lodge a complaint with a supervisory authority pursuant to Article 77",
+      "key_phrases": [
+        "without prejudice",
+        "administrative or non-judicial remedy",
+        "right to lodge a complaint",
+        "Article 77"
+      ]
+    },
+    {
+      "question": "Where can a data subject bring proceedings against a controller or processor?",
+      "answer": "Proceedings against a controller or a processor shall be brought before the courts of the Member State where the controller or processor has an establishment. Alternatively, such proceedings may be brought before the courts of the Member State where the data subject has his or her habitual residence.",
+      "answer_type": "scope",
+      "supporting_quote": "Proceedings against a controller or a processor shall be brought before the courts of the Member State where the controller or processor has an establishment. Alternatively, such proceedings may be brought before the courts of the Member State where the data subject has his or her habitual residence",
+      "key_phrases": [
+        "courts of the Member State",
+        "where the controller or processor has an establishment",
+        "habitual residence"
+      ]
+    },
+    {
+      "question": "Is there any exception to suing a controller in the data subject's home country?",
+      "answer": "Yes. The option to bring proceedings where the data subject has habitual residence does NOT apply if the controller or processor is a public authority of a Member State acting in the exercise of its public powers. In that case, proceedings must be in the Member State where the public authority is established.",
+      "answer_type": "conditional",
+      "supporting_quote": "unless the controller or processor is a public authority of a Member State acting in the exercise of its public powers",
+      "key_phrases": [
+        "unless",
+        "public authority",
+        "Member State",
+        "exercise of its public powers"
+      ]
+    }
+  ],
+  "coverage": {
+    "79(1) right": "Test case 1 - Data subject right when considers rights infringed",
+    "79(1) other remedies": "Test case 2 - Without prejudice to admin/SA remedies",
+    "79(2) jurisdiction": "Test case 3 - Two options: controller's establishment OR data subject's residence",
+    "79(2) exception": "Test case 4 - Public authority exception"
+  },
+  "b2b_relevance": "HIGH - Article 79 is critical for B2B SaaS. Key implications: (1) Data subjects can sue your company directly in court, (2) They can sue WHERE YOU HAVE AN ESTABLISHMENT or where THEY LIVE - forum shopping risk, (3) Lawsuits don't block SA complaints (dual exposure), (4) If you're processing for a government client, different rules apply. Prepare for litigation in multiple EU jurisdictions."
+}

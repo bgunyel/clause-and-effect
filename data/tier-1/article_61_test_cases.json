@@ -1,0 +1,75 @@
+{
+  "article_number": "61",
+  "article_title": "Mutual assistance",
+  "test_cases": [
+    {
+      "question": "What types of cooperation activities are covered under mutual assistance between supervisory authorities?",
+      "answer": "Mutual assistance shall cover, in particular, information requests and supervisory measures, such as requests to carry out prior authorisations and consultations, inspections and investigations. All information exchanged shall only be used for the purpose for which it was requested.",
+      "answer_type": "definition",
+      "supporting_quote": "Mutual assistance shall cover, in particular, information requests and supervisory measures, such as requests to carry out prior authorisations and consultations, inspections and investigations",
+      "key_phrases": [
+        "information requests",
+        "supervisory measures",
+        "prior authorisations",
+        "inspections and investigations"
+      ]
+    },
+    {
+      "question": "How long does a supervisory authority have to respond to a mutual assistance request?",
+      "answer": "Each supervisory authority shall take all appropriate measures required to reply to a request of another supervisory authority without undue delay and no later than one month after receiving the request.",
+      "answer_type": "timeline",
+      "supporting_quote": "Each supervisory authority shall take all appropriate measures required to reply to a request of another supervisory authority without undue delay and no later than one month after receiving the request",
+      "key_phrases": [
+        "without undue delay",
+        "no later than one month",
+        "reply to a request"
+      ]
+    },
+    {
+      "question": "Under what circumstances can a supervisory authority refuse to comply with a mutual assistance request?",
+      "answer": "The requested supervisory authority shall not refuse to comply with the request unless: (a) it is not competent for the subject-matter of the request or for the measures it is requested to execute; or (b) compliance with the request would infringe GDPR or Union or Member State law to which the supervisory authority receiving the request is subject. The requested authority must inform the requesting authority of the reasons for any refusal.",
+      "answer_type": "conditional",
+      "supporting_quote": "the requested supervisory authority shall not refuse to comply with the request unless: (a) it is not competent for the subject-matter of the request or for the measures it is requested to execute; or (b) compliance with the request would infringe this Regulation or Union or Member State law to which the supervisory authority receiving the request is subject",
+      "key_phrases": [
+        "shall not refuse",
+        "not competent",
+        "would infringe",
+        "inform the requesting authority"
+      ]
+    },
+    {
+      "question": "What can a supervisory authority do if another authority fails to respond within the required timeframe?",
+      "answer": "Where the requested supervisory authority does not provide the information within one month, the requesting supervisory authority may adopt a provisional measure on the territory of its Member State in accordance with Article 55(1). The requesting authority may then bring the matter to the attention of the Board, which may issue an opinion or a binding decision.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where the requested supervisory authority does not provide the information referred to in this paragraph within one month of receiving the request of another supervisory authority, the requesting supervisory authority may adopt a provisional measure on the territory of its Member State",
+      "key_phrases": [
+        "does not provide",
+        "within one month",
+        "provisional measure",
+        "bring the matter to the Board"
+      ]
+    },
+    {
+      "question": "Are supervisory authorities allowed to charge fees for providing mutual assistance?",
+      "answer": "No. Requested supervisory authorities shall not charge a fee for any action taken by them pursuant to a request for mutual assistance. However, supervisory authorities may agree on rules to indemnify each other for specific expenditures arising from the provision of mutual assistance in exceptional circumstances.",
+      "answer_type": "scope",
+      "supporting_quote": "Requested supervisory authorities shall not charge a fee for any action taken by them pursuant to a request for mutual assistance. Supervisory authorities may agree on rules to indemnify each other for specific expenditures arising from the provision of mutual assistance in exceptional circumstances",
+      "key_phrases": [
+        "shall not charge a fee",
+        "mutual assistance",
+        "indemnify each other",
+        "exceptional circumstances"
+      ]
+    }
+  ],
+  "coverage": {
+    "61(1)": "Test case 1 - Mutual assistance obligation",
+    "61(2)": "Test case 1 - What mutual assistance covers",
+    "61(3)": "Test case 3 - Grounds for refusal (not competent OR would infringe law)",
+    "61(4)": "Test case 2 - 1-month response deadline",
+    "61(5)": "Test case 4 - Provisional measures if no response",
+    "61(7)": "Test case 5 - No fees + indemnification exception",
+    "61(8)": "Test case 4 - NEW - Board opinion/decision if matter brought"
+  },
+  "b2b_relevance": "MEDIUM - Article 61 is SA-to-SA cooperation, but affects you if: (1) Investigation spans multiple countries, (2) Your local SA requests info from another SA about your activities, (3) Inspections may be carried out by requested SA. Key timeline: SA has 1 month to respond to assistance requests."
+}

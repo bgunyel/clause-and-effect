@@ -1,0 +1,45 @@
+{
+  "article_number": "91",
+  "article_title": "Existing data protection rules of churches and religious associations",
+  "test_cases": [
+    {
+      "question": "Under what conditions can churches continue applying their existing data protection rules?",
+      "answer": "Where in a Member State, churches and religious associations or communities apply, at the time of entry into force of this Regulation, comprehensive rules relating to the protection of natural persons with regard to processing, such rules may continue to apply, provided that they are brought into line with this Regulation. Two conditions must be met: (1) the rules must have been comprehensive and in place when GDPR entered into force, and (2) they must be updated to align with GDPR.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where in a Member State, churches and religious associations or communities apply, at the time of entry into force of this Regulation, comprehensive rules relating to the protection of natural persons with regard to processing, such rules may continue to apply, provided that they are brought into line with this Regulation",
+      "key_phrases": [
+        "at the time of entry into force",
+        "comprehensive rules",
+        "may continue to apply",
+        "brought into line with this Regulation"
+      ]
+    },
+    {
+      "question": "What supervision requirements apply to churches using their own data protection rules?",
+      "answer": "Churches and religious associations which apply comprehensive rules in accordance with paragraph 1 of this Article shall be subject to the supervision of an independent supervisory authority, which may be specific, provided that it fulfils the conditions laid down in Chapter VI of this Regulation. The authority can be dedicated to overseeing that religious group but must meet GDPR's SA independence and operational standards.",
+      "answer_type": "definition",
+      "supporting_quote": "Churches and religious associations which apply comprehensive rules in accordance with paragraph 1 of this Article shall be subject to the supervision of an independent supervisory authority, which may be specific, provided that it fulfils the conditions laid down in Chapter VI of this Regulation",
+      "key_phrases": [
+        "independent supervisory authority",
+        "which may be specific",
+        "conditions laid down in Chapter VI"
+      ]
+    },
+    {
+      "question": "Does Article 91 allow all religious organizations to create their own data protection rules?",
+      "answer": "No. Article 91 only applies to churches and religious associations that already had comprehensive data protection rules in place at the time GDPR entered into force (25 May 2018). Religious organizations that did not have such comprehensive rules at that time must comply with the full GDPR requirements and cannot create new separate rules after the fact.",
+      "answer_type": "scope",
+      "supporting_quote": "Where in a Member State, churches and religious associations or communities apply, at the time of entry into force of this Regulation, comprehensive rules",
+      "key_phrases": [
+        "at the time of entry into force",
+        "comprehensive rules",
+        "churches and religious associations"
+      ]
+    }
+  ],
+  "coverage": {
+    "91(1)": "Test cases 1 and 3 - Conditions for continuing existing rules + scope limitation",
+    "91(2)": "Test case 2 - Independent supervisory authority (may be specific) fulfilling Chapter VI"
+  },
+  "b2b_relevance": "LOW - Article 91 is a narrow exception for established religious organizations with pre-existing data protection frameworks. B2B SaaS implications: (1) If you serve churches as clients (e.g., church management software), some may operate under their own DP rules rather than standard GDPR, (2) Still supervised by an independent authority, (3) Rules must align with GDPR anyway. Main example: Catholic Church in Germany has its own data protection law (KDG) supervised by church-specific authorities."
+}

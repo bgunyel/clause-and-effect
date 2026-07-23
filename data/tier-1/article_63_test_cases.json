@@ -1,0 +1,42 @@
+{
+  "article_number": "63",
+  "article_title": "Consistency mechanism",
+  "test_cases": [
+    {
+      "question": "What is the purpose of the consistency mechanism under GDPR?",
+      "answer": "The consistency mechanism is designed to contribute to the consistent application of GDPR throughout the Union. It is the framework through which supervisory authorities cooperate with each other and, where relevant, with the Commission, as set out in this Section (Articles 64-65).",
+      "answer_type": "definition",
+      "supporting_quote": "In order to contribute to the consistent application of this Regulation throughout the Union, the supervisory authorities shall cooperate with each other and, where relevant, with the Commission, through the consistency mechanism as set out in this Section",
+      "key_phrases": [
+        "consistent application",
+        "throughout the Union",
+        "consistency mechanism"
+      ]
+    },
+    {
+      "question": "Which entities participate in the consistency mechanism?",
+      "answer": "The supervisory authorities of Member States are the primary participants - they shall cooperate with each other through the consistency mechanism. Additionally, the Commission participates where relevant.",
+      "answer_type": "scope",
+      "supporting_quote": "the supervisory authorities shall cooperate with each other and, where relevant, with the Commission, through the consistency mechanism",
+      "key_phrases": [
+        "supervisory authorities",
+        "cooperate with each other",
+        "Commission"
+      ]
+    },
+    {
+      "question": "When should the Commission be involved in the consistency mechanism?",
+      "answer": "The Commission should be involved only 'where relevant' - its participation is conditional and not required in all cases. The Commission's involvement is appropriate when matters require Union-wide coordination or where its input would contribute to consistent application.",
+      "answer_type": "conditional",
+      "supporting_quote": "and, where relevant, with the Commission",
+      "key_phrases": [
+        "where relevant",
+        "with the Commission"
+      ]
+    }
+  ],
+  "coverage": {
+    "63 full": "All three test cases cover the complete article - purpose, participants, and Commission involvement"
+  },
+  "b2b_relevance": "MEDIUM - Article 63 introduces the consistency mechanism framework, which matters when: (1) Your case involves cross-border processing and SAs disagree, (2) EDPB issues binding decisions affecting you, (3) Understanding why SA decisions should be consistent across EU. The actual mechanics are in Articles 64-65."
+}

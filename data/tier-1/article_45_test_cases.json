@@ -1,0 +1,76 @@
+{
+  "article_number": "45",
+  "article_title": "Transfers on the basis of an adequacy decision",
+  "test_cases": [
+    {
+      "question": "When can a company transfer personal data to a third country without obtaining specific authorization?",
+      "answer": "A transfer may take place without any specific authorization when the Commission has decided that the third country, a territory, one or more specified sectors within that country, or the international organization ensures an adequate level of protection. The implementing act specifies the territorial and sectoral scope of application.",
+      "answer_type": "conditional",
+      "supporting_quote": "A transfer of personal data to a third country or an international organisation may take place where the Commission has decided that the third country, a territory or one or more specified sectors within that third country, or the international organisation in question ensures an adequate level of protection. Such a transfer shall not require any specific authorisation",
+      "key_phrases": [
+        "adequate level of protection",
+        "Commission has decided",
+        "shall not require any specific authorisation",
+        "specified sectors"
+      ]
+    },
+    {
+      "question": "What factors does the Commission evaluate when assessing whether a third country provides adequate data protection?",
+      "answer": "The Commission must assess: (a) the rule of law, respect for human rights, and relevant legislation including public security, defence, national security, and criminal law provisions, plus rules for onward transfers; (b) the existence and effective functioning of one or more independent supervisory authorities with adequate enforcement powers and accessible administrative and judicial redress for data subjects; and (c) the international commitments the country has entered into regarding personal data protection.",
+      "answer_type": "definition",
+      "supporting_quote": "When assessing the adequacy of the level of protection, the Commission shall, in particular, take account of the following elements: (a) the rule of law, respect for human rights and fundamental freedoms, relevant legislation, both general and sectoral, including concerning public security, defence, national security and criminal law and the access of public authorities to personal data, as well as the implementation of such legislation, data protection rules, professional rules and security measures, including rules for the onward transfer of personal data to another third country or international organisation which are complied with in that country or international organisation, case-law, as well as effective and enforceable data subject rights and effective administrative and judicial redress for the data subjects whose personal data are being transferred; (b) the existence and effective functioning of one or more independent supervisory authorities in the third country or to which an international organisation is subject, with responsibility for ensuring and enforcing compliance with the data protection rules, including adequate enforcement powers, for assisting and advising the data subjects in exercising their rights and for cooperation with the supervisory authorities of the Member States; and (c) the international commitments the third country or international organisation concerned has entered into",
+      "key_phrases": [
+        "rule of law",
+        "human rights",
+        "independent supervisory authorities",
+        "enforcement powers",
+        "international commitments",
+        "onward transfer"
+      ]
+    },
+    {
+      "question": "How frequently must the Commission review adequacy decisions?",
+      "answer": "The implementing act must provide for a mechanism for periodic review at least every four years, taking into account all relevant developments in the third country or international organization. The Commission must also monitor developments that could affect the functioning of adequacy decisions on an ongoing basis.",
+      "answer_type": "timeline",
+      "supporting_quote": "The implementing act shall provide for a mechanism for a periodic review, at least every four years, which shall take into account all relevant developments in the third country or international organisation. The Commission shall, on an ongoing basis, monitor developments in third countries and international organisations that could affect the functioning of decisions adopted pursuant to paragraph 3",
+      "key_phrases": [
+        "periodic review",
+        "at least every four years",
+        "relevant developments",
+        "ongoing basis",
+        "monitor developments"
+      ]
+    },
+    {
+      "question": "What can the Commission do if a third country no longer ensures adequate data protection?",
+      "answer": "Where available information, in particular following the periodic review, reveals that a third country, territory, sector, or international organization no longer ensures an adequate level of protection, the Commission shall to the extent necessary repeal, amend, or suspend the adequacy decision. The Commission may also adopt such decisions where the country or organization fails to cooperate.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where available information, in particular following the review referred to in paragraph 3 of this Article, reveals that a third country, a territory or one or more specified sectors within a third country, or an international organisation no longer ensures an adequate level of protection within the meaning of paragraph 2 of this Article, the Commission shall, to the extent necessary, repeal, amend or suspend the decision referred to in paragraph 3 of this Article by means of implementing acts without retro-active effect",
+      "key_phrases": [
+        "repeal, amend or suspend",
+        "no longer ensures",
+        "without retro-active effect"
+      ]
+    },
+    {
+      "question": "Where can companies find the official list of countries with adequacy decisions?",
+      "answer": "The Commission must publish in the Official Journal of the European Union and on its website a list of third countries, territories, and specified sectors within a third country, and international organizations for which it has decided that an adequate level of protection is or is no longer ensured.",
+      "answer_type": "definition",
+      "supporting_quote": "The Commission shall publish in the Official Journal of the European Union and on its website a list of the third countries, territories and specified sectors within a third country and international organisations for which it has decided that an adequate level of protection is or is no longer ensured",
+      "key_phrases": [
+        "Official Journal of the European Union",
+        "website",
+        "list",
+        "publish"
+      ]
+    }
+  ],
+  "coverage": {
+    "45(1)": "Test case 1 - Transfer without authorization if adequacy decision exists",
+    "45(2)": "Test case 2 - Assessment factors (rule of law, SA, commitments)",
+    "45(3)": "Test case 3 - 4-year review + ongoing monitoring",
+    "45(4)": "Test case 4 - NEW - Commission can repeal/amend/suspend",
+    "45(9)": "Test case 5 - NEW - Published list in OJ and website"
+  },
+  "b2b_relevance": "HIGH - Article 45 provides the easiest path for international transfers. Key for: transfers to adequacy countries (UK, Japan, Switzerland, Canada commercial, etc.), understanding that adequacy can be sector-specific, and knowing decisions can be revoked. Key takeaways: (1) No authorization needed for adequacy countries, (2) Adequacy can cover entire country OR specific sectors, (3) Decisions reviewed every 4 years, (4) Decisions can be suspended/revoked."
+}

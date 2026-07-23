@@ -1,0 +1,65 @@
+{
+  "article_number": "34",
+  "article_title": "Communication of a personal data breach to the data subject",
+  "test_cases": [
+    {
+      "question": "When is a company required to notify affected individuals about a personal data breach?",
+      "answer": "A company must notify the data subjects directly when the personal data breach is likely to result in a HIGH risk to the rights and freedoms of natural persons. This is a higher threshold than the standard risk requirement for notifying supervisory authorities under Article 33. The notification must be made without undue delay.",
+      "answer_type": "conditional",
+      "supporting_quote": "When the personal data breach is likely to result in a high risk to the rights and freedoms of natural persons, the controller shall communicate the personal data breach to the data subject without undue delay",
+      "key_phrases": [
+        "high risk",
+        "rights and freedoms",
+        "without undue delay"
+      ]
+    },
+    {
+      "question": "What information must be included when notifying someone that their data has been breached?",
+      "answer": "The communication must describe the nature of the breach in clear and plain language, and must contain at least: (b) the name and contact details of the data protection officer or other contact point; (c) the likely consequences of the breach; and (d) the measures taken or proposed to address the breach and mitigate its effects.",
+      "answer_type": "definition",
+      "supporting_quote": "shall describe in clear and plain language the nature of the personal data breach and contain at least the information and measures referred to in points (b), (c) and (d) of Article 33(3)",
+      "key_phrases": [
+        "clear and plain language",
+        "nature of the breach",
+        "DPO contact",
+        "likely consequences",
+        "measures taken"
+      ]
+    },
+    {
+      "question": "Are there any situations where a company does not have to notify individuals about a data breach?",
+      "answer": "Yes, communication to the data subject is not required if any of these three conditions are met: (a) the controller has implemented appropriate technical and organisational protection measures that render the data unintelligible to unauthorized persons (such as encryption); (b) the controller has taken subsequent measures which ensure that the high risk is no longer likely to materialise; or (c) it would involve disproportionate effort, in which case there must instead be a public communication or similar measure whereby the data subjects are informed in an equally effective manner.",
+      "answer_type": "scope",
+      "supporting_quote": "The communication to the data subject referred to in paragraph 1 shall not be required if any of the following conditions are met: (a) the controller has implemented appropriate technical and organisational protection measures, and those measures were applied to the personal data affected by the personal data breach, in particular those that render the personal data unintelligible to any person who is not authorised to access it, such as encryption; (b) the controller has taken subsequent measures which ensure that the high risk to the rights and freedoms of data subjects referred to in paragraph 1 is no longer likely to materialise; (c) it would involve disproportionate effort. In such a case, there shall instead be a public communication or similar measure whereby the data subjects are informed in an equally effective manner",
+      "key_phrases": [
+        "shall not be required",
+        "appropriate technical and organisational protection measures",
+        "encryption",
+        "no longer likely to materialise",
+        "disproportionate effort",
+        "public communication"
+      ]
+    },
+    {
+      "question": "Can the supervisory authority require a controller to notify data subjects about a breach?",
+      "answer": "Yes. If the controller has not already communicated the personal data breach to the data subject, the supervisory authority may, having considered the likelihood of the breach resulting in a high risk, require the controller to do so. Alternatively, the supervisory authority may decide that any of the three exception conditions in paragraph 3 are met (making notification unnecessary).",
+      "answer_type": "conditional",
+      "supporting_quote": "If the controller has not already communicated the personal data breach to the data subject, the supervisory authority, having considered the likelihood of the personal data breach resulting in a high risk, may require it to do so or may decide that any of the conditions referred to in paragraph 3 are met",
+      "key_phrases": [
+        "supervisory authority",
+        "may require",
+        "may decide",
+        "conditions referred to in paragraph 3"
+      ]
+    }
+  ],
+  "coverage": {
+    "34(1)": "Test case 1 - HIGH risk trigger + without undue delay",
+    "34(2)": "Test case 2 - Clear and plain language + content (b)(c)(d)",
+    "34(3)(a)": "Test case 3 - Exception: technical measures (encryption)",
+    "34(3)(b)": "Test case 3 - Exception: subsequent measures eliminate risk",
+    "34(3)(c)": "Test case 3 - Exception: disproportionate effort (public communication required)",
+    "34(4)": "Test case 4 - NEW - SA can require communication or confirm exception"
+  },
+  "b2b_relevance": "CRITICAL - Article 34 determines when you must directly notify affected customers. Essential for: breach response procedures, encryption strategy (can avoid notification), public communication templates, and understanding SA discretion. Key takeaways: (1) HIGH risk threshold (higher than Article 33), (2) Encryption can exempt you from notification, (3) Public communication option for disproportionate effort, (4) SA can override your decision either way."
+}

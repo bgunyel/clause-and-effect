@@ -1,0 +1,81 @@
+{
+  "article_number": "28",
+  "article_title": "Processor",
+  "test_cases": [
+    {
+      "question": "What criteria should we use to select a vendor to process personal data on our behalf?",
+      "answer": "The controller must use only processors that provide sufficient guarantees to implement appropriate technical and organizational measures. These measures must ensure the processing meets GDPR requirements and protects the rights of data subjects.",
+      "answer_type": "scope",
+      "supporting_quote": "the controller shall use only processors providing sufficient guarantees to implement appropriate technical and organisational measures in such a manner that processing will meet the requirements of this Regulation and ensure the protection of the rights of the data subject",
+      "key_phrases": [
+        "sufficient guarantees",
+        "technical and organisational measures",
+        "protection of the rights"
+      ]
+    },
+    {
+      "question": "When can a data processor hire another company (a sub-processor) to help with the processing?",
+      "answer": "A processor can only engage another processor with the prior specific or general written authorisation of the controller. If they have general authorisation, they must inform the controller of any planned changes to add or replace sub-processors, giving the controller a chance to object.",
+      "answer_type": "conditional",
+      "supporting_quote": "The processor shall not engage another processor without prior specific or general written authorisation of the controller. In the case of general written authorisation, the processor shall inform the controller of any intended changes concerning the addition or replacement of other processors, thereby giving the controller the opportunity to object to such changes",
+      "key_phrases": [
+        "prior specific or general written authorisation",
+        "inform the controller",
+        "opportunity to object"
+      ]
+    },
+    {
+      "question": "What must a data processing contract between a controller and processor specify?",
+      "answer": "The contract must set out the subject-matter and duration of processing, the nature and purpose of processing, the type of personal data and categories of data subjects, and the obligations and rights of the controller. It must also stipulate that the processor: processes data only on documented instructions, ensures personnel confidentiality, takes required security measures, respects sub-processor conditions, assists with data subject requests, assists with security/breach/DPIA obligations, deletes or returns data at contract end, and makes information available for audits.",
+      "answer_type": "definition",
+      "supporting_quote": "That contract or other legal act shall set out the subject-matter and duration of the processing, the nature and purpose of the processing, the type of personal data and categories of data subjects and the obligations and rights of the controller. That contract or other legal act shall stipulate, in particular, that the processor: (a) processes the personal data only on documented instructions... (b) ensures that persons authorised to process the personal data have committed themselves to confidentiality... (c) takes all measures required pursuant to Article 32; (d) respects the conditions... for engaging another processor; (e) assists the controller... for the fulfilment of the controller's obligation to respond to requests for exercising the data subject's rights; (f) assists the controller in ensuring compliance with the obligations pursuant to Articles 32 to 36; (g) at the choice of the controller, deletes or returns all the personal data to the controller after the end of the provision of services... and deletes existing copies; (h) makes available to the controller all information necessary to demonstrate compliance... and allow for and contribute to audits",
+      "key_phrases": [
+        "subject-matter and duration",
+        "documented instructions",
+        "confidentiality",
+        "assist",
+        "delete or return",
+        "audits"
+      ]
+    },
+    {
+      "question": "If a sub-processor fails to fulfill its data protection obligations, who is liable?",
+      "answer": "When a processor engages another processor, the same data protection obligations must be imposed on that sub-processor by way of contract. Where that other processor fails to fulfil its data protection obligations, the initial processor remains fully liable to the controller for the performance of that other processor's obligations.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where that other processor fails to fulfil its data protection obligations, the initial processor shall remain fully liable to the controller for the performance of that other processor's obligations",
+      "key_phrases": [
+        "fails to fulfil",
+        "initial processor",
+        "fully liable to the controller",
+        "other processor's obligations"
+      ]
+    },
+    {
+      "question": "What happens if a processor starts making its own decisions about the purposes of processing rather than following the controller's instructions?",
+      "answer": "If a processor infringes GDPR by determining the purposes and means of processing, the processor shall be considered to be a controller in respect of that processing. This means the processor becomes subject to all controller obligations and is fully liable as a controller for that processing.",
+      "answer_type": "scope",
+      "supporting_quote": "If a processor infringes this Regulation by determining the purposes and means of processing, the processor shall be considered to be a controller in respect of that processing",
+      "key_phrases": [
+        "determining the purposes and means",
+        "considered to be a controller",
+        "in respect of that processing"
+      ]
+    }
+  ],
+  "coverage": {
+    "28(1)": "Test case 1 - Sufficient guarantees requirement",
+    "28(2)": "Test case 2 - Sub-processor authorization (specific or general written)",
+    "28(3) intro": "Test case 3 - Contract content requirements",
+    "28(3)(a)": "Test case 3 - Documented instructions",
+    "28(3)(b)": "Test case 3 - Personnel confidentiality",
+    "28(3)(c)": "Test case 3 - Security measures (Article 32)",
+    "28(3)(d)": "Test case 3 - Sub-processor conditions",
+    "28(3)(e)": "Test case 3 - NEW - Assist with data subject requests",
+    "28(3)(f)": "Test case 3 - NEW - Assist with Articles 32-36 (security, breaches, DPIAs)",
+    "28(3)(g)": "Test case 3 - NEW - Delete or return data at end",
+    "28(3)(h)": "Test case 3 - NEW - Audits and compliance demonstration",
+    "28(4)": "Test case 4 - NEW - Sub-processor liability (processor remains fully liable)",
+    "28(10)": "Test case 5 - NEW - Processor becomes controller when determining purposes/means"
+  },
+  "b2b_relevance": "CRITICAL - Article 28 is THE core article for B2B SaaS vendor relationships. Essential for: DPAs, vendor due diligence, sub-processor management, contract negotiation, audit rights, and liability allocation. Key takeaways: (1) 8 mandatory contract clauses, (2) Sub-processor authorization required, (3) Processor REMAINS liable for sub-processor failures, (4) Processor becoming controller = full liability shift, (5) Must allow audits."
+}

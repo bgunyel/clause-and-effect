@@ -1,0 +1,71 @@
+{
+  "article_number": "89",
+  "article_title": "Safeguards and derogations relating to processing for archiving purposes in the public interest, scientific or historical research purposes or statistical purposes",
+  "test_cases": [
+    {
+      "question": "What safeguards are required when processing personal data for archiving, research, or statistical purposes?",
+      "answer": "Processing for archiving purposes in the public interest, scientific or historical research purposes or statistical purposes shall be subject to appropriate safeguards for the rights and freedoms of the data subject. Those safeguards shall ensure that technical and organisational measures are in place in particular in order to ensure respect for the principle of data minimisation. Those measures may include pseudonymisation provided that those purposes can be fulfilled in that manner. Where those purposes can be fulfilled by further processing which does not permit or no longer permits the identification of data subjects, those purposes shall be fulfilled in that manner.",
+      "answer_type": "definition",
+      "supporting_quote": "Those safeguards shall ensure that technical and organisational measures are in place in particular in order to ensure respect for the principle of data minimisation. Those measures may include pseudonymisation provided that those purposes can be fulfilled in that manner. Where those purposes can be fulfilled by further processing which does not permit or no longer permits the identification of data subjects, those purposes shall be fulfilled in that manner",
+      "key_phrases": [
+        "appropriate safeguards",
+        "technical and organisational measures",
+        "data minimisation",
+        "pseudonymisation",
+        "does not permit or no longer permits the identification"
+      ]
+    },
+    {
+      "question": "Which data subject rights can be derogated for archiving in the public interest?",
+      "answer": "For archiving purposes in the public interest, Union or Member State law may provide for derogations from Articles 15 (access), 16 (rectification), 18 (restriction), 19 (notification regarding rectification/erasure/restriction), 20 (data portability), and 21 (objection). This is a broader set of derogable rights than for research purposes.",
+      "answer_type": "scope",
+      "supporting_quote": "Union or Member State law may provide for derogations from the rights referred to in Articles 15, 16, 18, 19, 20 and 21 subject to the conditions and safeguards referred to in paragraph 1",
+      "key_phrases": [
+        "archiving purposes in the public interest",
+        "Articles 15, 16, 18, 19, 20 and 21",
+        "derogations"
+      ]
+    },
+    {
+      "question": "Which data subject rights can be derogated for scientific or historical research or statistical purposes?",
+      "answer": "For scientific or historical research purposes or statistical purposes, Union or Member State law may provide for derogations from Articles 15 (access), 16 (rectification), 18 (restriction), and 21 (objection). Note: unlike archiving, Articles 19 (notification) and 20 (data portability) cannot be derogated for research or statistics.",
+      "answer_type": "scope",
+      "supporting_quote": "Where personal data are processed for scientific or historical research purposes or statistical purposes, Union or Member State law may provide for derogations from the rights referred to in Articles 15, 16, 18 and 21",
+      "key_phrases": [
+        "scientific or historical research purposes",
+        "statistical purposes",
+        "Articles 15, 16, 18 and 21"
+      ]
+    },
+    {
+      "question": "Under what conditions can data subject rights be derogated for research or archiving purposes?",
+      "answer": "Derogations from data subject rights are permitted only: (1) subject to the conditions and safeguards referred to in paragraph 1; (2) in so far as such rights are likely to render impossible or seriously impair the achievement of the specific purposes; and (3) such derogations are necessary for the fulfilment of those purposes.",
+      "answer_type": "conditional",
+      "supporting_quote": "in so far as such rights are likely to render impossible or seriously impair the achievement of the specific purposes, and such derogations are necessary for the fulfilment of those purposes",
+      "key_phrases": [
+        "render impossible or seriously impair",
+        "necessary for the fulfilment",
+        "subject to the conditions and safeguards"
+      ]
+    },
+    {
+      "question": "If data is processed for both research and another purpose like marketing, do the research derogations apply to all processing?",
+      "answer": "No. Where processing referred to in paragraphs 2 and 3 serves at the same time another purpose, the derogations shall apply only to processing for the purposes referred to in those paragraphs. The derogations do not extend to the other purpose.",
+      "answer_type": "scope",
+      "supporting_quote": "Where processing referred to in paragraphs 2 and 3 serves at the same time another purpose, the derogations shall apply only to processing for the purposes referred to in those paragraphs",
+      "key_phrases": [
+        "serves at the same time another purpose",
+        "derogations shall apply only",
+        "purposes referred to in those paragraphs"
+      ]
+    }
+  ],
+  "coverage": {
+    "89(1)": "Test case 1 - Safeguards: technical/org measures, data minimisation, pseudonymisation, anonymisation if possible",
+    "89(2)": "Test case 2 - Archiving derogations: Arts 15, 16, 18, 19, 20, 21",
+    "89(3)": "Test case 3 - Research/statistics derogations: Arts 15, 16, 18, 21 (NOT 19, 20)",
+    "89(2)+(3) conditions": "Test case 4 - Conditions: render impossible/seriously impair + necessary",
+    "89(4)": "Test case 5 - Dual purpose limitation"
+  },
+  "b2b_relevance": "MEDIUM-HIGH - Article 89 is relevant for B2B SaaS that: (1) Provides analytics/business intelligence with statistical processing, (2) Serves research institutions, (3) Handles archiving solutions for public institutions. Key points: pseudonymisation required where possible, anonymisation required if achievable, derogations only apply when rights would render purpose impossible/seriously impaired. Note the important distinction: archiving can derogate more rights (including portability) than research."
+}

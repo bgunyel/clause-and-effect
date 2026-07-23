@@ -1,0 +1,46 @@
+{
+  "article_number": "86",
+  "article_title": "Processing and public access to official documents",
+  "test_cases": [
+    {
+      "question": "Which organizations can disclose personal data from official documents under this article?",
+      "answer": "Personal data in official documents may be disclosed by: (1) a public authority; (2) a public body; or (3) a private body, but only when that private body holds the documents for the performance of a task carried out in the public interest.",
+      "answer_type": "definition",
+      "supporting_quote": "Personal data in official documents held by a public authority or a public body or a private body for the performance of a task carried out in the public interest may be disclosed by the authority or body",
+      "key_phrases": [
+        "public authority",
+        "public body",
+        "private body",
+        "task carried out in the public interest"
+      ]
+    },
+    {
+      "question": "Under what conditions can personal data in official documents be disclosed?",
+      "answer": "Personal data in official documents may be disclosed in accordance with Union or Member State law to which the public authority or body is subject. The disclosure must be made to reconcile public access to official documents with the right to the protection of personal data pursuant to this Regulation.",
+      "answer_type": "conditional",
+      "supporting_quote": "may be disclosed by the authority or body in accordance with Union or Member State law to which the public authority or body is subject in order to reconcile public access to official documents with the right to the protection of personal data pursuant to this Regulation",
+      "key_phrases": [
+        "in accordance with Union or Member State law",
+        "reconcile public access",
+        "protection of personal data"
+      ]
+    },
+    {
+      "question": "Does this article apply to all personal data held by a public body?",
+      "answer": "No. This article specifically applies only to personal data contained within official documents. It does not cover all personal data held by the body - only data that is part of official documents held for public access purposes.",
+      "answer_type": "scope",
+      "supporting_quote": "Personal data in official documents held by a public authority",
+      "key_phrases": [
+        "official documents",
+        "Personal data in",
+        "held by"
+      ]
+    }
+  ],
+  "coverage": {
+    "86 entities": "Test case 1 - Public authority, public body, private body with public interest",
+    "86 conditions": "Test case 2 - In accordance with EU/MS law, to reconcile access with DP",
+    "86 scope": "Test case 3 - Only personal data IN official documents"
+  },
+  "b2b_relevance": "LOW - Article 86 primarily affects public authorities and bodies subject to freedom of information laws. B2B SaaS relevance: (1) If you process data for government clients, understand FOI may override some DP rights, (2) If you're a private body performing public interest tasks (e.g., public utility contracts), official documents may be disclosable. This is about government transparency, not typical B2B data processing."
+}

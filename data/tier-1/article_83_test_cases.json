@@ -1,0 +1,74 @@
+{
+  "article_number": "83",
+  "article_title": "General conditions for imposing administrative fines",
+  "test_cases": [
+    {
+      "question": "What standards must administrative fines meet under GDPR?",
+      "answer": "Each supervisory authority shall ensure that the imposition of administrative fines pursuant to this Article shall in each individual case be effective, proportionate and dissuasive. Administrative fines may be imposed in addition to, or instead of, other corrective measures referred to in points (a) to (h) and (j) of Article 58(2), depending on the circumstances of each individual case.",
+      "answer_type": "definition",
+      "supporting_quote": "Each supervisory authority shall ensure that the imposition of administrative fines pursuant to this Article in respect of infringements of this Regulation referred to in paragraphs 4, 5 and 6 shall in each individual case be effective, proportionate and dissuasive",
+      "key_phrases": [
+        "effective, proportionate and dissuasive",
+        "each individual case",
+        "in addition to, or instead of"
+      ]
+    },
+    {
+      "question": "What factors must be considered when deciding whether to impose a fine and its amount?",
+      "answer": "Due regard shall be given to: (a) the nature, gravity and duration of the infringement, number of data subjects affected, level of damage; (b) intentional or negligent character; (c) action taken to mitigate damage; (d) degree of responsibility based on technical and organisational measures (Arts 25, 32); (e) previous infringements; (f) degree of cooperation with SA; (g) categories of personal data affected; (h) how the infringement became known (self-notification); (i) compliance with previous corrective measures; (j) adherence to codes of conduct or certification; (k) any other aggravating or mitigating factors including financial benefits gained.",
+      "answer_type": "definition",
+      "supporting_quote": "When deciding whether to impose an administrative fine and deciding on the amount of the administrative fine in each individual case due regard shall be given to the following",
+      "key_phrases": [
+        "nature, gravity and duration",
+        "intentional or negligent",
+        "degree of cooperation",
+        "mitigate the damage",
+        "financial benefits gained"
+      ]
+    },
+    {
+      "question": "What is the maximum fine for violations of controller and processor obligations?",
+      "answer": "Infringements of controller/processor obligations under Articles 8, 11, 25-39, 42, 43, and certification/monitoring body obligations shall be subject to administrative fines up to 10,000,000 EUR, or in the case of an undertaking, up to 2% of the total worldwide annual turnover of the preceding financial year, whichever is higher.",
+      "answer_type": "scope",
+      "supporting_quote": "Infringements of the following provisions shall... be subject to administrative fines up to 10 000 000 EUR, or in the case of an undertaking, up to 2 % of the total worldwide annual turnover of the preceding financial year, whichever is higher",
+      "key_phrases": [
+        "10 000 000 EUR",
+        "2 %",
+        "total worldwide annual turnover",
+        "whichever is higher"
+      ]
+    },
+    {
+      "question": "What is the maximum fine for violations of basic principles, data subject rights, or international transfer rules?",
+      "answer": "Infringements of basic principles for processing (including conditions for consent) under Articles 5, 6, 7 and 9; data subjects' rights under Articles 12-22; transfers to third countries under Articles 44-49; or any MS law adopted under Chapter IX, shall be subject to administrative fines up to 20,000,000 EUR, or in the case of an undertaking, up to 4% of the total worldwide annual turnover of the preceding financial year, whichever is higher.",
+      "answer_type": "scope",
+      "supporting_quote": "Infringements of the following provisions shall... be subject to administrative fines up to 20 000 000 EUR, or in the case of an undertaking, up to 4 % of the total worldwide annual turnover of the preceding financial year, whichever is higher",
+      "key_phrases": [
+        "20 000 000 EUR",
+        "4 %",
+        "basic principles",
+        "data subjects' rights",
+        "transfers"
+      ]
+    },
+    {
+      "question": "What fine applies for non-compliance with a supervisory authority order?",
+      "answer": "Non-compliance with an order by the supervisory authority as referred to in Article 58(2) shall be subject to administrative fines up to 20,000,000 EUR, or in the case of an undertaking, up to 4% of the total worldwide annual turnover of the preceding financial year, whichever is higher. This is the higher tier of fines.",
+      "answer_type": "conditional",
+      "supporting_quote": "Non-compliance with an order by the supervisory authority as referred to in Article 58(2) shall... be subject to administrative fines up to 20 000 000 EUR, or in the case of an undertaking, up to 4 % of the total worldwide annual turnover",
+      "key_phrases": [
+        "non-compliance with an order",
+        "20 000 000 EUR",
+        "4 %"
+      ]
+    }
+  ],
+  "coverage": {
+    "83(1)": "Test case 1 - Effective, proportionate, dissuasive standard",
+    "83(2)": "Test cases 1 and 2 - In addition to/instead of + 11 factors",
+    "83(4)": "Test case 3 - NEW - Lower tier: €10m/2%",
+    "83(5)": "Test case 4 - NEW - Higher tier: €20m/4%",
+    "83(6)": "Test case 5 - NEW - SA order non-compliance = higher tier"
+  },
+  "b2b_relevance": "CRITICAL - Article 83 is the fine article. Key points: (1) Two tiers: €10m/2% for operational violations, €20m/4% for principles/rights/transfers, (2) 11 factors determine fine amount, (3) Cooperation, self-notification, mitigation can reduce fines, (4) Previous infringements increase fines, (5) For undertakings, % of WORLDWIDE GROUP turnover applies. This is the enforcement teeth of GDPR."
+}

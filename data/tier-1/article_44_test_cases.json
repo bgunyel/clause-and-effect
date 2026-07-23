@@ -1,0 +1,60 @@
+{
+  "article_number": "44",
+  "article_title": "General principle for transfers",
+  "test_cases": [
+    {
+      "question": "What is the fundamental requirement for transferring personal data to a third country or international organization?",
+      "answer": "Any transfer of personal data to a third country or international organization shall take place only if, subject to the other provisions of GDPR, the conditions laid down in Chapter V are complied with by the controller and processor. This applies to data that is currently undergoing processing or is intended for processing after transfer.",
+      "answer_type": "conditional",
+      "supporting_quote": "Any transfer of personal data which are undergoing processing or are intended for processing after transfer to a third country or to an international organisation shall take place only if, subject to the other provisions of this Regulation, the conditions laid down in this Chapter are complied with by the controller and processor",
+      "key_phrases": [
+        "only if",
+        "conditions laid down in this Chapter",
+        "controller and processor",
+        "undergoing processing",
+        "intended for processing"
+      ]
+    },
+    {
+      "question": "Do the international transfer rules apply to data processors, or only to controllers?",
+      "answer": "Both controllers and processors must comply with the conditions in Chapter V when transferring personal data to third countries or international organizations. The responsibility is shared between both parties.",
+      "answer_type": "scope",
+      "supporting_quote": "the conditions laid down in this Chapter are complied with by the controller and processor",
+      "key_phrases": [
+        "controller and processor",
+        "complied with by"
+      ]
+    },
+    {
+      "question": "What is an onward transfer under GDPR?",
+      "answer": "An onward transfer occurs when personal data that has already been transferred to a third country or international organization is subsequently transferred to another third country or to another international organization. These onward transfers are also subject to Chapter V conditions.",
+      "answer_type": "definition",
+      "supporting_quote": "including for onward transfers of personal data from the third country or an international organisation to another third country or to another international organisation",
+      "key_phrases": [
+        "onward transfers",
+        "from the third country",
+        "to another third country",
+        "international organisation"
+      ]
+    },
+    {
+      "question": "What is the overarching objective of Chapter V's international transfer provisions?",
+      "answer": "All provisions in Chapter V shall be applied in order to ensure that the level of protection of natural persons guaranteed by GDPR is not undermined when personal data is transferred internationally. The protections must travel with the data.",
+      "answer_type": "definition",
+      "supporting_quote": "All provisions in this Chapter shall be applied in order to ensure that the level of protection of natural persons guaranteed by this Regulation is not undermined",
+      "key_phrases": [
+        "level of protection",
+        "natural persons",
+        "not undermined",
+        "guaranteed by this Regulation"
+      ]
+    }
+  ],
+  "coverage": {
+    "44 - General principle": "Test case 1 - Only if Chapter V conditions complied with",
+    "44 - Shared responsibility": "Test case 2 - Both controller AND processor",
+    "44 - Onward transfers": "Test case 3 - Subsequent transfers also covered",
+    "44 - Protection objective": "Test case 4 - Level of protection not undermined"
+  },
+  "b2b_relevance": "CRITICAL - Article 44 is the gateway to Chapter V (international transfers). Essential for: any B2B SaaS with non-EU customers or infrastructure, cloud providers, international data flows. Key takeaways: (1) BOTH controller and processor must comply, (2) Onward transfers are explicitly covered, (3) The goal is ensuring EU-level protection travels with the data."
+}

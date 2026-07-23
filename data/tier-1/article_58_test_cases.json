@@ -1,0 +1,78 @@
+{
+  "article_number": "58",
+  "article_title": "Powers",
+  "test_cases": [
+    {
+      "question": "What investigative powers do supervisory authorities have?",
+      "answer": "Each supervisory authority has these investigative powers: (a) order the controller, processor, and where applicable their representatives to provide any information required; (b) carry out investigations in the form of data protection audits; (c) carry out a review on certifications issued; (d) notify controller or processor of an alleged infringement; (e) obtain access from controller and processor to all personal data and information necessary; and (f) obtain access to any premises of the controller and processor, including data processing equipment and means.",
+      "answer_type": "definition",
+      "supporting_quote": "Each supervisory authority shall have all of the following investigative powers: (a) to order the controller and the processor, and, where applicable, the controller's or the processor's representative to provide any information it requires for the performance of its tasks; (b) to carry out investigations in the form of data protection audits; (c) to carry out a review on certifications issued pursuant to Article 42(7); (d) to notify the controller or the processor of an alleged infringement of this Regulation; (e) to obtain, from the controller and the processor, access to all personal data and to all information necessary for the performance of its tasks; (f) to obtain access to any premises of the controller and the processor, including to any data processing equipment and means",
+      "key_phrases": [
+        "investigative powers",
+        "provide any information",
+        "data protection audits",
+        "review certifications",
+        "access to premises"
+      ]
+    },
+    {
+      "question": "What corrective powers can a supervisory authority exercise against non-compliant controllers or processors?",
+      "answer": "Supervisory authorities have these corrective powers: (a) issue warnings that intended processing is likely to infringe GDPR; (b) issue reprimands where processing has infringed GDPR; (c) order controller to comply with data subject requests; (d) order controller or processor to bring processing into compliance; (e) order controller to communicate a breach to data subjects; (f) impose a temporary or definitive limitation including a ban on processing; (g) order rectification, erasure, or restriction of processing; (h) withdraw certification or order certification body to withdraw; (i) impose administrative fines pursuant to Article 83; and (j) order suspension of data flows to a third country recipient.",
+      "answer_type": "definition",
+      "supporting_quote": "Each supervisory authority shall have all of the following corrective powers: (a) to issue warnings to a controller or processor that intended processing operations are likely to infringe provisions of this Regulation; (b) to issue reprimands to a controller or a processor where processing operations have infringed provisions of this Regulation; (c) to order the controller or the processor to comply with the data subject's requests to exercise his or her rights pursuant to this Regulation; (d) to order the controller or processor to bring processing operations into compliance with the provisions of this Regulation; (f) to impose a temporary or definitive limitation including a ban on processing; (i) to impose an administrative fine pursuant to Article 83, in addition to, or instead of measures referred to in this paragraph",
+      "key_phrases": [
+        "corrective powers",
+        "issue warnings",
+        "issue reprimands",
+        "ban on processing",
+        "administrative fine"
+      ]
+    },
+    {
+      "question": "What authorization and advisory powers do supervisory authorities have?",
+      "answer": "Each supervisory authority has these authorization and advisory powers: (a) advise controllers in accordance with prior consultation procedure (Art 36); (b) issue opinions to parliament, government, other institutions and bodies, and the public on any issue related to data protection; (c) authorize processing per Art 36(5); (d) issue opinions and approve codes of conduct; (e) accredit certification bodies; (f) grant certifications and approve certification criteria (Art 42(5)); (g) adopt standard contractual clauses (Arts 28(8), 46(2)(d)); (h) authorize contractual clauses (Art 46(3)(a)); (i) authorize administrative arrangements (Art 46(3)(b)); and (j) approve binding corporate rules (Art 47).",
+      "answer_type": "scope",
+      "supporting_quote": "Each supervisory authority shall have all of the following authorisation and advisory powers: (a) to advise the controller in accordance with the prior consultation procedure referred to in Article 36; (b) to issue, on its own initiative or on request, opinions to the national parliament, the Member State government or, in accordance with Member State law, to other institutions and bodies as well as to the public on any issue related to the protection of personal data",
+      "key_phrases": [
+        "authorisation and advisory powers",
+        "advise controller",
+        "issue opinions",
+        "accredit certification bodies",
+        "approve binding corporate rules"
+      ]
+    },
+    {
+      "question": "What procedural safeguards apply when supervisory authorities exercise their powers?",
+      "answer": "The exercise of powers conferred on the supervisory authority shall be subject to appropriate safeguards, including effective judicial remedy and due process, set out in Union and Member State law in accordance with the Charter of Fundamental Rights of the European Union.",
+      "answer_type": "conditional",
+      "supporting_quote": "The exercise of the powers conferred on the supervisory authority pursuant to this Article shall be subject to appropriate safeguards, including effective judicial remedy and due process, set out in Union and Member State law in accordance with the Charter",
+      "key_phrases": [
+        "appropriate safeguards",
+        "effective judicial remedy",
+        "due process",
+        "Charter of Fundamental Rights"
+      ]
+    },
+    {
+      "question": "Can a supervisory authority impose administrative fines in addition to other corrective measures?",
+      "answer": "Yes. The power to impose an administrative fine pursuant to Article 83 can be exercised in addition to, or instead of, the other corrective measures listed in this paragraph, depending on the circumstances of each individual case.",
+      "answer_type": "conditional",
+      "supporting_quote": "to impose an administrative fine pursuant to Article 83, in addition to, or instead of measures referred to in this paragraph, depending on the circumstances of each individual case",
+      "key_phrases": [
+        "administrative fine",
+        "Article 83",
+        "in addition to",
+        "instead of",
+        "circumstances of each individual case"
+      ]
+    }
+  ],
+  "coverage": {
+    "58(1)(a)-(f)": "Test case 1 - All six investigative powers",
+    "58(2)(a)-(j)": "Test case 2 - All ten corrective powers (including fines)",
+    "58(2)(i)": "Test case 5 - NEW - Fines in addition to or instead of other measures",
+    "58(3)(a)-(j)": "Test case 3 - All ten authorization/advisory powers",
+    "58(4)": "Test case 4 - NEW - Procedural safeguards (judicial remedy, due process)"
+  },
+  "b2b_relevance": "VERY HIGH - Article 58 defines what SAs can do TO you. Key powers: (1) Order you to provide information, (2) Conduct audits, (3) Access your premises, (4) Issue warnings/reprimands, (5) Order compliance, (6) Ban processing, (7) Impose fines up to €20M or 4% global revenue. But note: safeguards apply including judicial remedy."
+}

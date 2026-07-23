@@ -1,0 +1,86 @@
+{
+  "article_number": "14",
+  "article_title": "Information to be provided where personal data have not been obtained from the data subject",
+  "test_cases": [
+    {
+      "question": "Under what circumstances does Article 14 require controllers to provide information to data subjects?",
+      "answer": "Article 14 applies specifically when personal data has not been obtained from the data subject. This means the controller collected the data from another source, such as from a third party, a public database, or through automated means, rather than directly from the individual themselves.",
+      "answer_type": "scope",
+      "supporting_quote": "Where personal data have not been obtained from the data subject",
+      "key_phrases": [
+        "not obtained from the data subject",
+        "collected from another source"
+      ]
+    },
+    {
+      "question": "What specific details must a company provide to individuals when it obtains their personal data from a third party rather than collecting it directly from them?",
+      "answer": "The company must provide: the identity and contact details of the controller and any representative; the contact details of the data protection officer (if applicable); the purposes and legal basis for processing; the categories of personal data concerned; the recipients or categories of recipients (if any); and information about any intended transfers to third countries or international organisations including whether an adequacy decision exists.",
+      "answer_type": "definition",
+      "supporting_quote": "the identity and the contact details of the controller and, where applicable, of the controller's representative; the contact details of the data protection officer, where applicable; the purposes of the processing for which the personal data are intended as well as the legal basis for the processing; the categories of personal data concerned; the recipients or categories of recipients of the personal data, if any; where applicable, that the controller intends to transfer personal data to a recipient in a third country or international organisation",
+      "key_phrases": [
+        "identity and contact details",
+        "purposes of the processing",
+        "legal basis",
+        "categories of personal data",
+        "recipients"
+      ]
+    },
+    {
+      "question": "If a controller plans to transfer personal data to a recipient in a third country, what information about the transfer must be provided?",
+      "answer": "The controller must inform the data subject that they intend to transfer personal data to a recipient in a third country or international organisation. They must also disclose whether the European Commission has issued an adequacy decision regarding that destination, or in the absence of such a decision, explain the appropriate safeguards that will apply to the transfer and how to obtain a copy of them.",
+      "answer_type": "conditional",
+      "supporting_quote": "that the controller intends to transfer personal data to a recipient in a third country or international organisation and the existence or absence of an adequacy decision by the Commission, or... reference to the appropriate or suitable safeguards and the means by which to obtain a copy of them",
+      "key_phrases": [
+        "third country",
+        "international organisation",
+        "adequacy decision",
+        "appropriate safeguards"
+      ]
+    },
+    {
+      "question": "When data is obtained from a third party, must the controller disclose the source of the data?",
+      "answer": "Yes. When personal data has not been obtained from the data subject, the controller must provide information about the source from which the personal data originate. If the data came from publicly accessible sources, this should be specified.",
+      "answer_type": "definition",
+      "supporting_quote": "from which source the personal data originate, and if applicable, whether it came from publicly accessible sources",
+      "key_phrases": [
+        "source",
+        "personal data originate",
+        "publicly accessible sources"
+      ]
+    },
+    {
+      "question": "When must a company provide the required information to individuals if it obtained their data from a third party?",
+      "answer": "The controller must provide the information: (a) within a reasonable period after obtaining the personal data, but at the latest within one month; (b) if the data is to be used for communication with the data subject, at the latest at the time of the first communication; or (c) if disclosure to another recipient is envisaged, at the latest when the data is first disclosed.",
+      "answer_type": "timeline",
+      "supporting_quote": "The controller shall provide the information referred to in paragraphs 1 and 2: (a) within a reasonable period after obtaining the personal data, but at the latest within one month... (b) if the personal data are to be used for communication with the data subject, at the latest at the time of the first communication to that data subject; or (c) if a disclosure to another recipient is envisaged, at the latest when the personal data are first disclosed",
+      "key_phrases": [
+        "within one month",
+        "reasonable period",
+        "first communication",
+        "first disclosed"
+      ]
+    },
+    {
+      "question": "Are there any exemptions from the Article 14 disclosure requirements?",
+      "answer": "Yes, paragraphs 1-4 do not apply where: (a) the data subject already has the information; (b) providing the information proves impossible or would involve disproportionate effort, particularly for archiving in the public interest, scientific/historical research, or statistics; (c) obtaining or disclosure is expressly laid down by EU or Member State law with appropriate safeguards; or (d) the personal data must remain confidential subject to a professional secrecy obligation.",
+      "answer_type": "conditional",
+      "supporting_quote": "Paragraphs 1 to 4 shall not apply where and insofar as: (a) the data subject already has the information; (b) the provision of such information proves impossible or would involve a disproportionate effort... (c) obtaining or disclosure is expressly laid down by Union or Member State law... (d) where the personal data must remain confidential subject to an obligation of professional secrecy",
+      "key_phrases": [
+        "already has the information",
+        "impossible or disproportionate effort",
+        "expressly laid down by law",
+        "professional secrecy"
+      ]
+    }
+  ],
+  "coverage": {
+    "14(1) scope": "Test case 1 - When data not obtained from data subject",
+    "14(1)(a)-(f)": "Test case 2 - Basic info requirements (controller, DPO, purposes, legal basis, categories, recipients)",
+    "14(1)(f)": "Test case 3 - Third country transfers with adequacy/safeguards",
+    "14(2)(f)": "Test case 4 - NEW - Source disclosure (unique to Article 14)",
+    "14(3)": "Test case 5 - NEW - Timing (1 month, first communication, first disclosure)",
+    "14(4)": "NOT COVERED - New purpose notification (similar to Article 13(3))",
+    "14(5)": "Test case 6 - NEW - Four exemptions"
+  },
+  "b2b_relevance": "CRITICAL - Article 14 applies when you obtain data from third parties (data brokers, partners, public sources, enrichment services). Key differences from Article 13: (1) Must disclose SOURCE of data, (2) Timing rules are different (up to 1 month), (3) Has exemptions for disproportionate effort. Essential for: lead generation, data enrichment, marketing lists, background checks, and any scenario where you don't collect data directly."
+}

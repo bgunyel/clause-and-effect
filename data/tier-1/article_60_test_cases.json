@@ -1,0 +1,74 @@
+{
+  "article_number": "60",
+  "article_title": "Cooperation between the lead supervisory authority and the other supervisory authorities concerned",
+  "test_cases": [
+    {
+      "question": "What is the main objective of cooperation between lead and concerned supervisory authorities?",
+      "answer": "The lead supervisory authority shall cooperate with the other supervisory authorities concerned in accordance with this Article in an endeavour to reach consensus. The lead supervisory authority and the supervisory authorities concerned shall exchange all relevant information with each other.",
+      "answer_type": "definition",
+      "supporting_quote": "The lead supervisory authority shall cooperate with the other supervisory authorities concerned in accordance with this Article in an endeavour to reach consensus. The lead supervisory authority and the supervisory authorities concerned shall exchange all relevant information with each other",
+      "key_phrases": [
+        "endeavour to reach consensus",
+        "cooperate",
+        "exchange all relevant information"
+      ]
+    },
+    {
+      "question": "When can the lead supervisory authority request mutual assistance from concerned supervisory authorities?",
+      "answer": "The lead supervisory authority may request at any time other supervisory authorities concerned to provide mutual assistance pursuant to Article 61, and may conduct joint operations pursuant to Article 62.",
+      "answer_type": "conditional",
+      "supporting_quote": "The lead supervisory authority may request at any time other supervisory authorities concerned to provide mutual assistance pursuant to Article 61, and may conduct joint operations pursuant to Article 62",
+      "key_phrases": [
+        "at any time",
+        "mutual assistance",
+        "Article 61",
+        "joint operations",
+        "Article 62"
+      ]
+    },
+    {
+      "question": "How long do concerned supervisory authorities have to object to a draft decision?",
+      "answer": "The lead supervisory authority shall, without delay, submit a draft decision to the other supervisory authorities concerned for their opinion and take due account of their views. Within four weeks after being consulted, the supervisory authorities concerned may express a relevant and reasoned objection to the draft decision.",
+      "answer_type": "timeline",
+      "supporting_quote": "The lead supervisory authority shall, without delay, submit a draft decision to the other supervisory authorities concerned for their opinion and take due account of their views... Within a period of four weeks after being consulted... the supervisory authorities concerned may express a relevant and reasoned objection to the draft decision",
+      "key_phrases": [
+        "without delay",
+        "draft decision",
+        "four weeks",
+        "relevant and reasoned objection"
+      ]
+    },
+    {
+      "question": "What happens if no supervisory authority objects to the draft decision within the allowed time?",
+      "answer": "Where none of the other supervisory authorities concerned has objected to the draft decision submitted by the lead supervisory authority within the four-week period, the lead supervisory authority and the supervisory authorities concerned shall be deemed to be in agreement with that draft decision and shall be bound by it.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where none of the other supervisory authorities concerned has objected to the draft decision submitted by the lead supervisory authority within the period referred to in paragraph 4, the lead supervisory authority and the supervisory authorities concerned shall be deemed to be in agreement with that draft decision and shall be bound by it",
+      "key_phrases": [
+        "none has objected",
+        "deemed to be in agreement",
+        "bound by it"
+      ]
+    },
+    {
+      "question": "What happens if a concerned supervisory authority objects to the draft decision?",
+      "answer": "Where any of the other supervisory authorities concerned expresses a relevant and reasoned objection to the draft decision within the four-week period, and the lead supervisory authority does not follow the objection or considers the objection is not relevant or reasoned, the lead supervisory authority shall submit the matter to the consistency mechanism referred to in Article 63.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where any of the other supervisory authorities concerned expresses a relevant and reasoned objection to the draft decision... the lead supervisory authority shall submit the matter to the consistency mechanism referred to in Article 63",
+      "key_phrases": [
+        "relevant and reasoned objection",
+        "submit the matter",
+        "consistency mechanism",
+        "Article 63"
+      ]
+    }
+  ],
+  "coverage": {
+    "60(1)": "Test case 1 - Endeavour to reach consensus",
+    "60(2)": "Test case 1 - Exchange all relevant information",
+    "60(3)": "Test case 2 - Mutual assistance (Art 61) and joint operations (Art 62)",
+    "60(4)": "Test case 3 - NEW - Draft decision + 4-week objection window",
+    "60(5)": "Test case 4 - NEW - Deemed in agreement if no objection + binding",
+    "60(7)": "Test case 5 - NEW - Objection triggers consistency mechanism (Art 63)"
+  },
+  "b2b_relevance": "HIGH - Article 60 is the cooperation procedure when your case involves multiple countries. Key for B2B SaaS: (1) Lead SA consults concerned SAs before deciding, (2) 4-week window for objections, (3) If no objection, decision is binding on all, (4) If objection, matter goes to EDPB for binding decision. Understanding this helps you anticipate timeline for cross-border decisions."
+}

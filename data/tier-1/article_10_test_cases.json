@@ -1,0 +1,57 @@
+{
+  "article_number": "10",
+  "article_title": "Processing of personal data relating to criminal convictions and offences",
+  "test_cases": [
+    {
+      "question": "What types of personal data does Article 10 specifically address?",
+      "answer": "Article 10 specifically addresses the processing of personal data relating to criminal convictions and offences, as well as data relating to related security measures.",
+      "answer_type": "definition",
+      "supporting_quote": "Processing of personal data relating to criminal convictions and offences or related security measures",
+      "key_phrases": [
+        "criminal convictions",
+        "offences",
+        "related security measures"
+      ]
+    },
+    {
+      "question": "What is the relationship between Article 10 and Article 6(1) for processing criminal conviction data?",
+      "answer": "Processing of criminal conviction data must be based on Article 6(1), meaning one of the six lawful bases must apply. However, even with a valid Article 6(1) basis, such processing can only take place under the control of official authority or when authorized by Union or Member State law.",
+      "answer_type": "conditional",
+      "supporting_quote": "Processing of personal data relating to criminal convictions and offences or related security measures based on Article 6(1) shall be carried out only under the control of official authority or when the processing is authorised by Union or Member State law",
+      "key_phrases": [
+        "based on Article 6(1)",
+        "under the control of official authority",
+        "authorised by Union or Member State law"
+      ]
+    },
+    {
+      "question": "Can a private company process criminal conviction data for employment background checks?",
+      "answer": "Generally no. Processing of personal data relating to criminal convictions can only be carried out under the control of official authority or when specifically authorized by Union or Member State law providing for appropriate safeguards for the rights and freedoms of data subjects.",
+      "answer_type": "scope",
+      "supporting_quote": "Processing of personal data relating to criminal convictions and offences or related security measures based on Article 6(1) shall be carried out only under the control of official authority or when the processing is authorised by Union or Member State law providing for appropriate safeguards for the rights and freedoms of data subjects",
+      "key_phrases": [
+        "official authority",
+        "authorised by Union or Member State law",
+        "appropriate safeguards"
+      ]
+    },
+    {
+      "question": "Who is permitted to maintain a comprehensive register of criminal convictions?",
+      "answer": "Only official authorities are permitted to maintain comprehensive registers of criminal convictions. Such registers cannot be maintained by private organizations or individuals.",
+      "answer_type": "scope",
+      "supporting_quote": "Any comprehensive register of criminal convictions shall be kept only under the control of official authority",
+      "key_phrases": [
+        "comprehensive register",
+        "criminal convictions",
+        "only under the control of official authority"
+      ]
+    }
+  ],
+  "coverage": {
+    "10 data types": "Test case 1 - Criminal convictions, offences, and related security measures",
+    "10 Article 6(1) relationship": "Test case 2 - Must have Article 6(1) basis AND additional authorization",
+    "10 authorization requirement": "Test cases 2 and 3 - Only under official authority OR authorized by law with safeguards",
+    "10 comprehensive register": "Test case 4 - Only under control of official authority"
+  },
+  "b2b_relevance": "HIGH - Article 10 is critical for any B2B company considering background checks or criminal history verification. Key takeaways: (1) You cannot process criminal conviction data just because you have consent or legitimate interests—you need specific legal authorization, (2) Most jurisdictions require working through official channels or licensed providers, (3) You cannot build your own comprehensive criminal records database."
+}

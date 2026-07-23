@@ -1,0 +1,157 @@
+{
+  "article_number": "4",
+  "article_title": "Definitions",
+  "test_cases": [
+    {
+      "question": "What types of information qualify as personal data under GDPR?",
+      "answer": "Personal data means any information relating to an identified or identifiable natural person. This includes direct identifiers like a name or identification number, as well as indirect identifiers such as location data, online identifiers, or factors specific to the person's physical, physiological, genetic, mental, economic, cultural, or social identity.",
+      "answer_type": "definition",
+      "supporting_quote": "'personal data' means any information relating to an identified or identifiable natural person ('data subject'); an identifiable natural person is one who can be identified, directly or indirectly, in particular by reference to an identifier such as a name, an identification number, location data, an online identifier or to one or more factors specific to the physical, physiological, genetic, mental, economic, cultural or social identity of that natural person",
+      "key_phrases": [
+        "identified or identifiable natural person",
+        "online identifier",
+        "location data",
+        "identification number"
+      ]
+    },
+    {
+      "question": "What specific activities are considered 'processing' of personal data?",
+      "answer": "Processing includes any operation performed on personal data, whether automated or not, such as collection, recording, organization, structuring, storage, adaptation or alteration, retrieval, consultation, use, disclosure by transmission, dissemination, alignment or combination, restriction, erasure, or destruction.",
+      "answer_type": "definition",
+      "supporting_quote": "'processing' means any operation or set of operations which is performed on personal data or on sets of personal data, whether or not by automated means, such as collection, recording, organisation, structuring, storage, adaptation or alteration, retrieval, consultation, use, disclosure by transmission, dissemination or otherwise making available, alignment or combination, restriction, erasure or destruction",
+      "key_phrases": [
+        "any operation",
+        "whether or not by automated means",
+        "collection",
+        "erasure or destruction"
+      ]
+    },
+    {
+      "question": "What is profiling under GDPR?",
+      "answer": "Profiling is any form of automated processing of personal data that uses the data to evaluate certain personal aspects relating to a natural person, in particular to analyze or predict aspects concerning that person's performance at work, economic situation, health, personal preferences, interests, reliability, behavior, location, or movements.",
+      "answer_type": "definition",
+      "supporting_quote": "'profiling' means any form of automated processing of personal data consisting of the use of personal data to evaluate certain personal aspects relating to a natural person, in particular to analyse or predict aspects concerning that natural person's performance at work, economic situation, health, personal preferences, interests, reliability, behaviour, location or movements",
+      "key_phrases": [
+        "automated processing",
+        "evaluate certain personal aspects",
+        "analyse or predict",
+        "performance at work",
+        "personal preferences"
+      ]
+    },
+    {
+      "question": "What conditions must be met for personal data to be considered pseudonymised?",
+      "answer": "The data must be processed so that it cannot be attributed to a specific data subject without additional information, provided that such additional information is kept separately and subject to technical and organizational measures to ensure non-attribution.",
+      "answer_type": "conditional",
+      "supporting_quote": "'pseudonymisation' means the processing of personal data in such a manner that the personal data can no longer be attributed to a specific data subject without the use of additional information, provided that such additional information is kept separately and is subject to technical and organisational measures to ensure that the personal data are not attributed to an identified or identifiable natural person",
+      "key_phrases": [
+        "no longer be attributed",
+        "additional information",
+        "kept separately",
+        "technical and organisational measures"
+      ]
+    },
+    {
+      "question": "What is the difference between a controller and a processor under GDPR?",
+      "answer": "The controller is the entity that determines the purposes and means of processing personal data—essentially, who decides why and how data is processed. The processor, by contrast, is the entity that processes personal data on the controller's behalf, following the controller's instructions. Both can be natural or legal persons, public authorities, agencies, or other bodies.",
+      "answer_type": "definition",
+      "supporting_quote": "'controller' means the natural or legal person, public authority, agency or other body which, alone or jointly with others, determines the purposes and means of the processing of personal data; 'processor' means a natural or legal person, public authority, agency or other body which processes personal data on behalf of the controller",
+      "key_phrases": [
+        "determines the purposes and means",
+        "on behalf of the controller",
+        "processes personal data"
+      ]
+    },
+    {
+      "question": "Are public authorities that receive personal data during an official inquiry considered 'recipients' under GDPR?",
+      "answer": "No, public authorities that receive personal data in the framework of a particular inquiry in accordance with Union or Member State law are not regarded as recipients. Their processing of that data must comply with applicable data protection rules based on the purposes of the processing.",
+      "answer_type": "scope",
+      "supporting_quote": "public authorities which may receive personal data in the framework of a particular inquiry in accordance with Union or Member State law shall not be regarded as recipients; the processing of those data by those public authorities shall be in compliance with the applicable data protection rules according to the purposes of the processing",
+      "key_phrases": [
+        "public authorities",
+        "not be regarded as recipients",
+        "particular inquiry",
+        "applicable data protection rules"
+      ]
+    },
+    {
+      "question": "Are employees who process data under their employer's authority considered third parties?",
+      "answer": "No, persons who are authorized to process personal data under the direct authority of the controller or processor are excluded from the definition of third party.",
+      "answer_type": "scope",
+      "supporting_quote": "'third party' means a natural or legal person, public authority, agency or body other than the data subject, controller, processor and persons who, under the direct authority of the controller or processor, are authorised to process personal data",
+      "key_phrases": [
+        "other than",
+        "under the direct authority",
+        "authorised to process personal data"
+      ]
+    },
+    {
+      "question": "What elements must be present for a data subject's consent to be considered valid under GDPR?",
+      "answer": "Consent must be freely given, specific, informed, and unambiguous. It must be indicated by the data subject through a statement or a clear affirmative action that signifies their agreement to the processing of their personal data.",
+      "answer_type": "definition",
+      "supporting_quote": "any freely given, specific, informed and unambiguous indication of the data subject's wishes by which he or she, by a statement or by a clear affirmative action, signifies agreement to the processing of personal data relating to him or her",
+      "key_phrases": [
+        "freely given",
+        "specific",
+        "informed",
+        "unambiguous",
+        "clear affirmative action"
+      ]
+    },
+    {
+      "question": "What constitutes a personal data breach under GDPR?",
+      "answer": "A personal data breach is a breach of security leading to the accidental or unlawful destruction, loss, alteration, unauthorised disclosure of, or access to, personal data transmitted, stored or otherwise processed.",
+      "answer_type": "definition",
+      "supporting_quote": "'personal data breach' means a breach of security leading to the accidental or unlawful destruction, loss, alteration, unauthorised disclosure of, or access to, personal data transmitted, stored or otherwise processed",
+      "key_phrases": [
+        "breach of security",
+        "accidental or unlawful",
+        "destruction, loss, alteration",
+        "unauthorised disclosure",
+        "unauthorised access"
+      ]
+    },
+    {
+      "question": "When determining the main establishment of a controller with offices in multiple EU countries, which location is typically considered the main establishment?",
+      "answer": "Normally the place of central administration in the Union is considered the main establishment. However, if decisions about the purposes and means of processing are made in another establishment within the Union, and that establishment has the power to implement such decisions, then that other establishment is considered the main establishment instead.",
+      "answer_type": "conditional",
+      "supporting_quote": "as regards a controller with establishments in more than one Member State, the place of its central administration in the Union, unless the decisions on the purposes and means of the processing of personal data are taken in another establishment of the controller in the Union and the latter establishment has the power to have such decisions implemented",
+      "key_phrases": [
+        "central administration",
+        "decisions on the purposes and means",
+        "power to have such decisions implemented",
+        "main establishment"
+      ]
+    }
+  ],
+  "coverage": {
+    "(1) personal data": "Test case 1 - Definition with identifier types",
+    "(2) processing": "Test case 2 - Complete list of operations",
+    "(4) profiling": "Test case 3 - NEW - Automated evaluation of personal aspects",
+    "(5) pseudonymisation": "Test case 4 - Separation and safeguarding requirements",
+    "(7) controller": "Test case 5 - Determines purposes and means",
+    "(8) processor": "Test case 5 - Processes on behalf of controller",
+    "(9) recipient": "Test case 6 - Public authority exception",
+    "(10) third party": "Test case 7 - Employee exclusion",
+    "(11) consent": "Test case 8 - Four elements required",
+    "(12) personal data breach": "Test case 9 - NEW - Security breach definition",
+    "(16) main establishment": "Test case 10 - Decision-making test"
+  },
+  "definitions_not_covered": [
+    "(3) restriction of processing",
+    "(6) filing system",
+    "(13) genetic data",
+    "(14) biometric data",
+    "(15) data concerning health",
+    "(17) representative",
+    "(18) enterprise",
+    "(19) group of undertakings",
+    "(20) binding corporate rules",
+    "(21-22) supervisory authority",
+    "(23) cross-border processing",
+    "(24) relevant and reasoned objection",
+    "(25) information society service",
+    "(26) international organisation"
+  ],
+  "b2b_relevance": "CRITICAL - Article 4 definitions underpin all GDPR compliance. Most important for B2B: personal data scope, controller/processor distinction, consent requirements, pseudonymisation standards, personal data breach definition, and profiling. These definitions determine roles, responsibilities, and compliance obligations throughout the regulation."
+}

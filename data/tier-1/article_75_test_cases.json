@@ -1,0 +1,60 @@
+{
+  "article_number": "75",
+  "article_title": "Secretariat",
+  "test_cases": [
+    {
+      "question": "Who provides the secretariat for the European Data Protection Board?",
+      "answer": "The Board shall have a secretariat, which shall be provided by the European Data Protection Supervisor. The staff of the EDPS involved in carrying out tasks conferred on the Board shall be subject to separate reporting lines from the staff involved in carrying out tasks conferred on the EDPS itself.",
+      "answer_type": "definition",
+      "supporting_quote": "The Board shall have a secretariat, which shall be provided by the European Data Protection Supervisor. The staff of that Supervisor involved in carrying out the tasks conferred on the Board by this Regulation shall be subject to separate reporting lines from the staff involved in carrying out tasks conferred on the European Data Protection Supervisor",
+      "key_phrases": [
+        "European Data Protection Supervisor",
+        "secretariat",
+        "separate reporting lines"
+      ]
+    },
+    {
+      "question": "What type of support does the secretariat provide and who directs its work?",
+      "answer": "The secretariat shall provide analytical, administrative and logistical support to the Board. The secretariat shall perform its tasks exclusively under the instructions of the Chair of the Board.",
+      "answer_type": "scope",
+      "supporting_quote": "The secretariat shall provide analytical, administrative and logistical support to the Board. The secretariat shall perform its tasks exclusively under the instructions of the Chair of the Board",
+      "key_phrases": [
+        "analytical, administrative and logistical support",
+        "exclusively under the instructions",
+        "Chair of the Board"
+      ]
+    },
+    {
+      "question": "What specific responsibilities does the secretariat have?",
+      "answer": "The secretariat shall be responsible in particular for: (a) the day-to-day business of the Board; (b) communication between the members of the Board, its Chair and the Commission; (c) communication with other institutions and the public; (d) the use of electronic means for internal and external communication; (e) the translation of relevant information; (f) the preparation and follow-up of the meetings of the Board; (g) the preparation, drafting and publication of opinions, decisions on the settlement of disputes between supervisory authorities and other texts adopted by the Board.",
+      "answer_type": "definition",
+      "supporting_quote": "The secretariat shall be responsible in particular for: (a) the day-to-day business of the Board; (b) communication between the members of the Board, its Chair and the Commission; (c) communication with other institutions and the public; (d) the use of electronic means for the internal and external communication; (e) the translation of relevant information; (f) the preparation and follow-up of the meetings of the Board; (g) the preparation, drafting and publication of opinions, decisions on the settlement of disputes between supervisory authorities and other texts adopted by the Board",
+      "key_phrases": [
+        "day-to-day business",
+        "communication",
+        "translation",
+        "preparation, drafting and publication",
+        "opinions, decisions"
+      ]
+    },
+    {
+      "question": "When should the Board and EDPS establish a Memorandum of Understanding?",
+      "answer": "Where appropriate, the Board and the European Data Protection Supervisor shall establish and publish a Memorandum of Understanding implementing this Article, determining the terms of their cooperation and applicable to the staff of the EDPS involved in carrying out tasks conferred on the Board.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where appropriate, the Board and the European Data Protection Supervisor shall establish and publish a Memorandum of Understanding implementing this Article, determining the terms of their cooperation",
+      "key_phrases": [
+        "where appropriate",
+        "Memorandum of Understanding",
+        "terms of their cooperation"
+      ]
+    }
+  ],
+  "coverage": {
+    "75(1)": "Test case 1 - EDPS provides secretariat",
+    "75(2)-(3)": "Test case 2 - Support types + Chair's exclusive instruction",
+    "75(4)": "Test case 1 - Separate reporting lines",
+    "75(5)": "Test case 3 - Seven specific responsibilities (a)-(g)",
+    "75(6)": "Test case 4 - MOU where appropriate"
+  },
+  "b2b_relevance": "LOW - Article 75 is about EDPB internal administration. Indirect relevance: the secretariat drafts opinions and decisions that affect how GDPR is interpreted and applied to your business. Understanding that EDPS provides staff (with separate reporting lines) ensures EDPB's practical independence."
+}

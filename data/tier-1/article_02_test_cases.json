@@ -1,0 +1,76 @@
+{
+  "article_number": "2",
+  "article_title": "Material scope",
+  "test_cases": [
+    {
+      "question": "What types of personal data processing activities are covered by the GDPR?",
+      "answer": "GDPR applies to two types of processing: (1) processing done wholly or partly by automated means, and (2) non-automated processing of personal data that either forms part of a filing system or is intended to form part of a filing system.",
+      "answer_type": "definition",
+      "supporting_quote": "This Regulation applies to the processing of personal data wholly or partly by automated means and to the processing other than by automated means of personal data which form part of a filing system or are intended to form part of a filing system.",
+      "key_phrases": [
+        "automated means",
+        "wholly or partly",
+        "filing system",
+        "intended to form part"
+      ]
+    },
+    {
+      "question": "Does GDPR cover the processing of personal data stored in physical filing cabinets?",
+      "answer": "Yes, GDPR applies to non-automated processing of personal data that forms part of a filing system or is intended to form part of a filing system, which would include paper records in filing cabinets.",
+      "answer_type": "scope",
+      "supporting_quote": "processing other than by automated means of personal data which form part of a filing system or are intended to form part of a filing system",
+      "key_phrases": [
+        "other than by automated means",
+        "filing system",
+        "form part of"
+      ]
+    },
+    {
+      "question": "Does GDPR apply to a person's personal or household data processing activities?",
+      "answer": "No. GDPR explicitly does not apply to processing by a natural person in the course of a purely personal or household activity. This exemption covers data processing done for personal purposes unrelated to professional or commercial activities.",
+      "answer_type": "scope",
+      "supporting_quote": "This Regulation does not apply to the processing of personal data: (c) by a natural person in the course of a purely personal or household activity",
+      "key_phrases": [
+        "purely personal",
+        "household activity",
+        "does not apply",
+        "natural person"
+      ]
+    },
+    {
+      "question": "Does GDPR apply to law enforcement agencies investigating criminal offences?",
+      "answer": "No, GDPR does not apply when competent authorities process personal data for the prevention, investigation, detection or prosecution of criminal offences, the execution of criminal penalties, or the safeguarding against and prevention of threats to public security.",
+      "answer_type": "scope",
+      "supporting_quote": "by competent authorities for the purposes of the prevention, investigation, detection or prosecution of criminal offences or the execution of criminal penalties, including the safeguarding against and the prevention of threats to public security",
+      "key_phrases": [
+        "competent authorities",
+        "criminal offences",
+        "public security",
+        "does not apply"
+      ]
+    },
+    {
+      "question": "Does GDPR apply to activities that fall outside the scope of EU law, such as national security?",
+      "answer": "No. GDPR does not apply to processing of personal data in the course of an activity which falls outside the scope of Union law, such as activities concerning national security. It also does not apply to processing by Member States when carrying out activities related to the common foreign and security policy of the Union.",
+      "answer_type": "conditional",
+      "supporting_quote": "This Regulation does not apply to the processing of personal data: (a) in the course of an activity which falls outside the scope of Union law; (b) by the Member States when carrying out activities which fall within the scope of Chapter 2 of Title V of the TEU",
+      "key_phrases": [
+        "outside the scope of Union law",
+        "national security",
+        "common foreign and security policy",
+        "does not apply"
+      ]
+    }
+  ],
+  "coverage": {
+    "2(1) automated": "Test case 1 - Processing wholly or partly by automated means",
+    "2(1) filing system": "Test cases 1 and 2 - Non-automated processing if part of filing system",
+    "2(2)(a)": "Test case 5 - Activities outside scope of Union law",
+    "2(2)(b)": "Test case 5 - Common foreign and security policy activities",
+    "2(2)(c)": "Test case 3 - Personal or household activity exemption",
+    "2(2)(d)": "Test case 4 - Law enforcement and criminal justice exemption",
+    "2(3)": "NOT COVERED - Reference to Regulation (EC) No 45/2001 for Union institutions (procedural)",
+    "2(4)": "NOT COVERED - Without prejudice to Law Enforcement Directive (procedural reference)"
+  },
+  "b2b_relevance": "HIGH - Article 2 defines what processing activities are in scope. Critical for: determining if GDPR applies to your processing activities, understanding that both digital and paper-based filing systems are covered, and knowing the boundaries (personal use, law enforcement, national security are out of scope)."
+}
