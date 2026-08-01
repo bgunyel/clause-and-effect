@@ -49,10 +49,13 @@ class BaseParser(ABC):
         # document_converter = DocumentConverter()
 
         pipeline_options = ThreadedPdfPipelineOptions(
-            accelerator_options=AcceleratorOptions(device=AcceleratorDevice.CUDA),
+            # AUTO resolves to CUDA/MPS where present and CPU otherwise. Pinning
+            # CUDA makes docling raise AcceleratorDeviceNotAvailableError on
+            # machines without a GPU rather than falling back.
+            accelerator_options=AcceleratorOptions(device=AcceleratorDevice.AUTO),
             ocr_options=RapidOcrOptions(backend="openvino"),
             ocr_batch_size=4,
-            layout_batch_size=64,
+            layout_batch_size=8,
             table_batch_size=4,
         )
 
