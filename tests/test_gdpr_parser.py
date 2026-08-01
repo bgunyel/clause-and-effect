@@ -9,27 +9,44 @@ is deterministic plumbing with no test around it. These tests exercise the
 extraction logic directly on synthetic, GDPR-shaped markdown — no PDF or OCR
 needed — so the regression can never return silently.
 """
+from pathlib import Path
+
 import pytest
 
 from src.clause_and_effect.parsers.gdpr_parser import GDPRParser
 from src.clause_and_effect.parsers.base_parser import Chunk
 
 
-# Synthetic markdown mirroring docling's export: a line-anchored "Article N"
-# header, a title line, then numbered content. Deliberately seeded with the
-# exact patterns that broke the old parser: inline "Article N" cross-references,
-# a dangling next-section heading, and OCR double-spacing.
-SAMPLE = """Article 93
+# Synthetic markdown mirroring docling's *actual* export, verified against
+# data/regulations/gdpr.docling.md. Header shapes matter: docling writes 98 of
+# the 99 headers as "## Article N" and exactly one (Article 28) bare, so both
+# forms appear below. An earlier version of this fixture used only the bare
+# form; the parser was then written to match only that, which collapsed the
+# whole regulation into a single 137k-character article — a bug this suite
+# waved through precisely because the fixture was not calibrated to reality.
+#
+# Also seeded with the patterns that broke earlier parser revisions: inline
+# "Article N" cross-references, dangling next-section headings, trailing
+# chapter/section scaffolding (including a *bare* "Section 1"), and OCR
+# double-spacing.
+SAMPLE = """## Article 93
 ## Committee procedure
 1. The Commission shall be assisted by a committee.
 2. Where reference is made to this paragraph, Article 5 of Regulation (EU) No 182/2011 shall apply.
+
+## CHAPTER XI
+
+## Final provisions
+
+Section 1
+
 Article 94
 ## Repeal of Directive 95/46/EC
 1. Directive  95/46/EC  is  repealed with effect from 25 May 2018.
 2. References to the Working Party established by Article 29 of Directive 95/46/EC shall be construed as references to the European Data Protection Board established by this Regulation.
 
 ## Entry into force and application
-Article 95
+## Article 95
 ## Relationship with Directive 2002/58/EC
 This Regulation shall not impose additional obligations in relation to processing."""
 
@@ -80,6 +97,30 @@ def test_dangling_next_section_heading_removed(articles):
     assert "Entry into force" not in articles["94"]["content"]
 
 
+def test_markdown_prefixed_header_detected(articles):
+    """docling writes almost every header as '## Article N' — it must delimit."""
+    assert articles["93"]["title"] == "Committee procedure"
+    assert articles["95"]["title"] == "Relationship with Directive 2002/58/EC"
+
+
+def test_bare_header_detected(articles):
+    """One real header (Article 28) has no '##' prefix; both forms must work."""
+    assert articles["94"]["title"] == "Repeal of Directive 95/46/EC"
+
+
+def test_trailing_chapter_scaffolding_removed(articles):
+    """
+    The last article before a chapter break picks up that chapter's heading
+    block. Blank lines between those headings must not stop the strip, and the
+    bare 'Section 1' form must be recognised alongside the '## ' form.
+    """
+    art93 = articles["93"]["content"]
+    assert "CHAPTER XI" not in art93
+    assert "Final provisions" not in art93
+    assert "Section 1" not in art93
+    assert art93.rstrip().endswith("shall apply.")
+
+
 def test_chapter_assigned_from_article_number(articles):
     # Articles 92-93 -> chapter 10; 94-99 -> chapter 11 (see _get_chapter_for_article).
     assert articles["93"]["chapter"] == "10"
@@ -124,3 +165,58 @@ def test_long_article_splits_into_paragraph_chunks(parser):
     assert len(chunks) > 1
     assert all(c.metadata["chunk_type"] == "paragraph" for c in chunks)
     assert all(c.metadata["article_number"] == "5" for c in chunks)
+
+
+# --------------------------------------------------------------------------- #
+#  Extraction against the real docling export.                                #
+#                                                                             #
+#  The synthetic fixture above encodes what we *believe* docling emits; these  #
+#  run the same logic over what it actually emitted (checked in as            #
+#  data/regulations/gdpr.docling.md, so no PDF or OCR is needed). A fixture    #
+#  that drifts from the real export is exactly how the single-article          #
+#  collapse shipped, so both layers are kept.                                  #
+# --------------------------------------------------------------------------- #
+
+DOCLING_MARKDOWN = (
+    Path(__file__).resolve().parent.parent
+    / "data" / "regulations" / "gdpr.docling.md"
+)
+
+
+@pytest.fixture(scope="module")
+def real_articles():
+    if not DOCLING_MARKDOWN.exists():
+        pytest.skip(f"docling export not available at {DOCLING_MARKDOWN}")
+    text = DOCLING_MARKDOWN.read_text(encoding="utf-8")
+    return GDPRParser()._extract_articles(text)
+
+
+def test_real_export_yields_all_99_articles(real_articles):
+    """GDPR has exactly 99 articles, each appearing once, in order."""
+    numbers = [int(a["number"]) for a in real_articles]
+    assert numbers == list(range(1, 100))
+
+
+def test_real_export_articles_all_have_title_and_content(real_articles):
+    assert [a["number"] for a in real_articles if not a["title"].strip()] == []
+    assert [a["number"] for a in real_articles if not a["content"].strip()] == []
+    assert [a["number"] for a in real_articles if "#" in a["title"]] == []
+
+
+def test_real_export_no_structural_scaffolding_leaks_into_content(real_articles):
+    leaked = [
+        a["number"]
+        for a in real_articles
+        if "## CHAPTER" in a["content"] or "## Section" in a["content"]
+    ]
+    assert leaked == []
+
+
+def test_real_export_inline_cross_references_do_not_truncate(real_articles):
+    """
+    Article 56 opens with an inline 'Article 55' reference; the old tempered
+    regex cut the article there. It must survive intact.
+    """
+    art56 = next(a for a in real_articles if a["number"] == "56")
+    assert "Without prejudice to Article 55" in art56["content"]
+    assert len(art56["content"]) > 1500

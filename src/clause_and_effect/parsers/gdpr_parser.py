@@ -3,13 +3,6 @@ from pathlib import Path
 from typing import List, Dict, Any
 import pypdf
 
-from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
-from docling.datamodel.base_models import ConversionStatus, InputFormat
-from docling.datamodel.pipeline_options import RapidOcrOptions, ThreadedPdfPipelineOptions
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.pipeline.threaded_standard_pdf_pipeline import ThreadedStandardPdfPipeline
-from docling.utils.profiling import ProfilingItem
-
 from .base_parser import BaseParser, Chunk
 
 
@@ -70,15 +63,21 @@ class GDPRParser(BaseParser):
         return articles
 
 
-    # A *real* article header: "Article N" alone on its own line (MULTILINE
-    # anchors ^ to line starts; the number must be followed only by optional
-    # spaces and a line break). This deliberately does NOT match inline
-    # cross-references such as "... as referred to in Article 6 ...", which sit
-    # mid-line. Keying article boundaries off inline references was the previous
-    # implementation's bug: a tempered-token regex stopped each article's
-    # content at the first inline "Article N", silently truncating ~3/4 of the
-    # articles (and dropping everything after the reference).
-    _ARTICLE_HEADER = re.compile(r'^Article\s+(\d+)[ \t]*$', re.MULTILINE)
+    # A *real* article header: "Article N" alone on its own line, optionally
+    # carrying a markdown heading prefix (MULTILINE anchors ^ to line starts;
+    # the number must be followed only by optional spaces and a line break).
+    # docling exports 98 of the 99 headers as "## Article N" and one — Article
+    # 28 — bare, so the '#' prefix must be optional rather than required:
+    # requiring the bare form collapsed the whole document into a single
+    # article, and requiring '##' would drop Article 28's boundary.
+    #
+    # This deliberately does NOT match inline cross-references such as "...  as
+    # referred to in Article 6 ...", which sit mid-line. Keying article
+    # boundaries off inline references was the original implementation's bug: a
+    # tempered-token regex stopped each article's content at the first inline
+    # "Article N", silently truncating ~3/4 of the articles (and dropping
+    # everything after the reference).
+    _ARTICLE_HEADER = re.compile(r'^#{0,6}[ \t]*Article[ \t]+(\d+)[ \t]*$', re.MULTILINE)
 
     def _extract_articles(self, text: str) -> List[Dict[str, Any]]:
         """
@@ -124,18 +123,37 @@ class GDPRParser(BaseParser):
         """Strip leading markdown heading markers ('## ') and whitespace."""
         return re.sub(r'^#+\s*', '', line.strip())
 
+    # Structural scaffolding that can trail an article when the next chapter or
+    # section starts: a markdown heading, or a bare 'CHAPTER IV' / 'Section 2'
+    # marker. docling is inconsistent about the '##' prefix — it dropped it for
+    # Article 28's header and for the 'Section 1' after Article 59 — so the
+    # bare forms must be recognised too.
+    _TRAILING_SCAFFOLDING = re.compile(
+        r'^\s*(?:#+\s.*|(?:CHAPTER\s+[IVXLC]+|Section\s+\d+)\s*)$'
+    )
+
+    @classmethod
+    def _is_trailing_scaffolding(cls, line: str) -> bool:
+        """True for blank lines and structural headings that belong to the next section."""
+        return not line.strip() or bool(cls._TRAILING_SCAFFOLDING.match(line))
+
     @staticmethod
     def _clean_content(content: str) -> str:
         """
         Tidy extracted article content.
 
-        - Drop a dangling markdown heading the next section may have bled in
-          (a trailing line that is only '## ...' with no body following it).
+        - Drop dangling markdown headings the next section bled in. The last
+          article before a chapter break picks up that chapter's scaffolding
+          ('## CHAPTER II', blank, '## Principles'), which belongs to the next
+          chapter rather than this article. Blank lines between those headings
+          must not stop the strip — halting on the first blank left one heading
+          glued to the content, which is how chapter titles ended up inside
+          article text (and tripped the generator's truncation heuristic).
         - Collapse OCR double-spacing (runs of spaces/tabs) to single spaces,
           while preserving line breaks and paragraph structure.
         """
         lines = content.rstrip().split('\n')
-        while lines and re.match(r'#+\s', lines[-1].lstrip()):
+        while lines and GDPRParser._is_trailing_scaffolding(lines[-1]):
             lines.pop()
         cleaned = '\n'.join(lines)
         cleaned = re.sub(r'[ \t]{2,}', ' ', cleaned)
