@@ -4,29 +4,42 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-07-23._
+> _Last updated: 2026-08-01._
 
 ---
 
 ## 🔴 Blocking — data integrity
 
-The vector index is currently built from a corrupted source (76/99 articles were
-silently truncated at their first inline "Article N" cross-reference). No eval
-number should be trusted until this chain is redone, **in order**:
+The corpus has been rebuilt and re-indexed. One step remains before any eval
+number means anything.
 
-- [ ] **Re-generate `gdpr_articles.json`** _(requested)_
-  - Run `python -m src.scripts.generate_gdpr_articles`.
-  - Spot-check the articles the script flags, and the previously worst-hit ones
-    (27, 8, 56, 46, 94, 97).
-  - Confirm titles look right — the rewritten parser assumes each article's
-    title is the **first line after** its `Article N` header. If docling emits
-    the heading _before_ the number, titles will be wrong; flag it and we adjust.
-- [ ] Re-chunk → re-embed → re-index Qdrant from the corrected JSON
-  (`python -m src.scripts.index_documents`). Incurs OpenAI embedding + Qdrant
-  upsert cost.
+- [x] **Re-generate `gdpr_articles.json`** _(requested)_ — done 2026-08-01.
+  Regenerating first exposed two further parser defects, both now fixed
+  (`9ecdf6f`); the full post-mortem is in
+  [`lessons-learned/2026-08-01-gdpr-article-header-collapse.md`](lessons-learned/2026-08-01-gdpr-article-header-collapse.md).
+  - The boundary regex required a bare `Article N` line, but docling emits
+    `## Article N` for 98 of 99 headers (bare for Article 28 only), so the
+    whole regulation collapsed into a single 137k-char article.
+  - `_clean_content` stopped stripping trailing headings at the first blank
+    line, leaking chapter scaffolding into 22 articles' content.
+  - Title assumption **confirmed**: the line after each header is the title,
+    emitted as `## <Title>`. No adjustment needed.
+  - Result: 99 articles, numbered 1–99, no gaps. Content 81,928 → **187,323
+    chars**; 67 of 99 articles materially longer. Only article 99 is flagged by
+    the truncation heuristic — a false positive (signature block, no terminal
+    punctuation).
+- [x] Re-chunk → re-embed → re-index Qdrant from the corrected JSON — done
+  2026-08-01. `compliance_docs` recreated (1536-dim, cosine), **563/563 points**
+  verified. Point IDs are now keyed by `uuid5(namespace, chunk.id)` (`7f42ea5`),
+  so re-indexing is idempotent and no longer needs the collection dropped first.
 - [ ] Re-run golden-set QA (`python -m src.eval.golden_qa`) against the corrected
-  source and measure how many of the 246 quote-grounding errors were **caused by
-  the truncation bug** vs. genuine golden-set defects.
+  index and measure how many of the 246 quote-grounding errors were **caused by
+  the truncation bug** vs. genuine golden-set defects. Incurs judge-model cost.
+
+> ⚠️ **Every eval number recorded before 2026-08-01 is void.** The corpus content
+> more than doubled and 22 articles shed foreign chapter text, so pre-fix results
+> are not comparable to anything measured after. Re-establish the baseline from
+> the corrected index before comparing chunking or embedding experiments.
 
 ---
 
@@ -35,6 +48,9 @@ number should be trusted until this chain is redone, **in order**:
 - [x] Commit the pending work — parser fix + `generate_gdpr_articles.py`, and the
   new `tests/` suite + pytest config. Likely two commits (parser-fix vs.
   test-suite) for a clean history.
+- [ ] Open the PR from `dev-01` into `main`. The branch is 16 commits ahead and
+  carries the eval framework, test suite, parser fix, corpus regeneration,
+  point-ID rework, and the lessons-learned docs.
 
 ---
 
@@ -50,13 +66,18 @@ number should be trusted until this chain is redone, **in order**:
   - Consider applying the 7-day `--exclude-newer` quarantine inside
     `upgrade-safe` too, not just the blind `upgrade` target.
 - [ ] **Prepare a comprehensive test-status document** _(requested)_
-  - Coverage map: **tested** — GDPR parser extraction, eval dataset loaders, eval
-    golden-QA gates. **Untested** — `vector_db`, `generator`, `compliance_agent`,
-    `embedding_generator`, and the retrieval/lexical scorers (once built).
+  - Coverage map: **tested** — GDPR parser extraction (incl. against the real
+    docling export), `vector_db` point-ID derivation and indexing invariants,
+    eval dataset loaders, eval golden-QA gates. **Untested** — `generator`,
+    `compliance_agent`, `embedding_generator`, and the retrieval/lexical scorers
+    (once built).
   - State the testing philosophy explicitly: deterministic plumbing → unit tests
     (cheap regression tripwire, plan §6.1); LLM/RAG behaviour → eval harness.
-  - Record how to run (`python -m pytest`) and current status (33 passed,
+  - Record how to run (`python -m pytest`) and current status (52 passed,
     1 xfailed).
+  - Carry over the lesson from the header-collapse post-mortem: fixtures written
+    from the same assumption as the code only prove self-consistency. Where a
+    real artifact can be captured and committed, test against it.
 
 ---
 
@@ -91,9 +112,32 @@ number should be trusted until this chain is redone, **in order**:
 
 ---
 
+## 🟣 Chunking & embedding rework (planned)
+
+Upcoming experimentation with different chunking strategies and embedding
+models. Corpus-formatting fixes that would require a full regeneration are
+deliberately deferred into this work rather than done piecemeal.
+
+- [ ] Deferred: `_clean_title` does not collapse OCR double-spacing the way
+  `_clean_content` does, so 3 of 99 titles (articles **12, 60, 89**) keep runs of
+  multiple spaces. Titles are embedded into every chunk of their article, so
+  **27 of 563** indexed chunks carry it. Low impact on semantic retrieval, but
+  the planned lexical scorers do string comparison and may false-flag these.
+- [ ] Establish the corrected-corpus baseline (golden-set QA above) *before*
+  running experiments, so strategies are compared against a valid reference.
+
+---
+
 ## ⚪ Known code issues
 
 - [ ] `Generator.generate` (`src/clause_and_effect/generators/generator.py`)
   computes `structured_response` but never uses it, and `total_tokens` is dead.
   Token/cost accounting is not wired — needed for the operational cost metric
   above.
+- [ ] `generate_gdpr_articles.py` has no corpus-level invariant: it printed
+  `✅ Wrote 1 articles` and exited 0 while the corpus was collapsed. Assert the
+  expected article count (99) and exit non-zero on mismatch.
+- [ ] `_looks_truncated` false-flags article 99 (signature block). Either teach
+  it about document trailers or decide whether that block belongs in article
+  content at all — currently it makes a clean validation run impossible, so any
+  future flag is easy to dismiss.
