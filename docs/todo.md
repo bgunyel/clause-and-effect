@@ -32,7 +32,7 @@ number should be trusted until this chain is redone, **in order**:
 
 ## 🟠 Repo hygiene
 
-- [ ] Commit the pending work — parser fix + `generate_gdpr_articles.py`, and the
+- [x] Commit the pending work — parser fix + `generate_gdpr_articles.py`, and the
   new `tests/` suite + pytest config. Likely two commits (parser-fix vs.
   test-suite) for a clean history.
 
