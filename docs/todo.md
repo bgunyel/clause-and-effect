@@ -43,12 +43,16 @@ number means anything.
     reproduced by running the gate against `bc63974^`.
   - Per-case transition: **95 resolved, 0 introduced, no regressions.**
   - After the soft-hyphen fix (same day) errors are **148**, clean cases **270**.
-  - Of the 148 remaining (segment order enforced): **76 faithful elision**,
-    **37 text altered** (reordered/reworded), **20 text absent**, **15 typography**.
-    So **91 (61.5%) are recoverable by an elision/typography tier** and **57 need
-    the quote rewritten**. An earlier revision of this entry claimed 86.8%
-    recoverable; that classifier did not require segments to advance in order and so
-    counted reordered quotes as faithful stitching.
+    After tier-5 normalization landed in `golden_qa.py`: **136 errors, 14
+    normalized, 283 exact, 282 clean**. After fixing the `art60_case2` and
+    `art80_case2` quotes: **134 errors, 285 exact, 284 clean**.
+  - Of the 134 remaining (segment order enforced): **76 faithful elision**,
+    **37 text altered** (reordered/reworded), **20 text absent**, **1 inserted
+    punctuation**. Every one is now a statement about the quote's *words*, not its
+    formatting. **58 need the quote rewritten**; the 76 elision cases would be
+    covered by a multi-span `supporting_quote`. An earlier revision of this entry
+    claimed 86.8% recoverable; that classifier did not require segments to advance
+    in order and so counted reordered quotes as faithful stitching.
   - Leakage unchanged at 18 (17 genuine + the Article 29 Working Party false
     positive) — a useful control, since a corpus fix cannot affect question text.
   - Gate still **FAILs**, which is correct. Do not relax it to go green.
@@ -105,21 +109,30 @@ number means anything.
 
 ## 🟢 Golden-set remediation (plan §7.3)
 
-- [ ] Decide the quote-grounding definition: strict exact-substring vs. a
-  **token-subsequence** tolerance (the generator dropped enumeration markers like
-  `2. ` / `(a)` when stitching quotes across paragraphs). If we relax it, add a
-  "subsequence" grounding tier to `golden_qa` rather than silently loosening
-  "exact". **Now evidence-backed** (2026-08-02 report), and the evidence argues for
-  keeping "exact" and fixing the *data*: only **94 of 151** are faithful elision or
-  typography; **37 have been reordered or reworded**, which a subsequence check would
-  not pass either, since subsequence requires order. Preferred shape: let
-  `supporting_quote` hold a **list of spans**, each an exact substring, in document
-  order — elision becomes explicit in the data instead of inferred by a fuzzy matcher,
-  and the 76 legitimate enumeration-stem-plus-item quotes are expressible.
-- [ ] Rewrite the **57 quotes that are not verbatim** — 37 altered, 20 absent (lists in
-  the report). Not one batch: `art61_case5` is off by an inflection (`expenditures`),
-  `art25_case2` moves "the controller shall" across a clause, while `art41_case3` has
-  11 consecutive absent tokens and looks invented.
+- [x] Decide the quote-grounding definition — done 2026-08-02. Grounding is now
+  reported in **three tiers** (`exact` / `normalized` / `ungrounded`) rather than
+  pass/fail, with `normalize_for_grounding()` removing rendering differences only:
+  space-before-punctuation, markdown list markers, whitespace, case. Punctuation
+  itself is deliberately kept, so an inserted comma still fails. Tier chosen by
+  measurement: it clears 12 of 15 formatting failures with **0 of 37 altered and
+  0 of 20 absent leaking through**, and that property is pinned by a test over the
+  real golden set, not just measured once.
+- [ ] Still open: **elision**. 76 quotes are verbatim and in sequence but
+  non-contiguous — they join an enumeration stem to a specific item, which is real
+  GDPR structure rather than a defect. Preferred shape: let `supporting_quote` hold a
+  **list of spans**, each an exact substring, in document order, so elision is
+  explicit in the data instead of inferred by a fuzzy matcher. The explicit `...`
+  markers become list boundaries.
+- [ ] Rewrite the **58 quotes that are not verbatim** — 37 altered, 20 absent, 1 with an
+  inserted comma (lists in the report). Not one batch: `art61_case5` is off by an
+  inflection (`expenditures`), `art25_case2` moves "the controller shall" across a
+  clause, while `art41_case3` has 11 consecutive absent tokens and looks invented.
+  - Done 2026-08-02: `art60_case2` and `art80_case2`, one comma each, both now *exact*.
+    `art80_case2` mattered — the comma turned a restrictive clause non-restrictive,
+    widening the provision's apparent scope in a case whose `answer_type` is `scope`.
+  - Open: `art36_case4`. The corpus is faithful here (verified against the PDF:
+    Article 36(2) genuinely leaves its parenthetical unclosed), so the quote is the
+    altered side and the fix is to delete its comma.
 - [ ] Fix/regenerate the **17 true leakage questions** that name their own article
   (e.g. "What does Article 14 require…"). Full list in the `golden_qa` output.
 - [ ] Leakage check: add an allow-list for the **"Article 29 Working Party"**
