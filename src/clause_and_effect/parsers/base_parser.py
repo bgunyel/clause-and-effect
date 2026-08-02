@@ -43,6 +43,18 @@ class BaseParser(ABC):
         """
         pass
 
+    def to_markdown(self, file_path: Path) -> str:
+        """
+        Convert a source PDF to docling markdown.
+
+        This is the expensive step in the pipeline — roughly six minutes of CPU
+        OCR for the GDPR on a machine without a GPU. It is public so the result
+        can be exported once and cached on disk, letting the cheap half (the
+        article split) re-run in under a second against that export instead of
+        repeating the conversion on every parser change.
+        """
+        return self._extract_text_from_pdf(file_path)
+
     @staticmethod
     def _extract_text_from_pdf(file_path: Path) -> str:
         """Extract all text from PDF"""

@@ -62,6 +62,18 @@ class GDPRParser(BaseParser):
         articles = self._extract_articles(text=text)
         return articles
 
+    def get_articles_from_markdown(self, markdown: str) -> List[Dict[str, Any]]:
+        """
+        Extract articles from an already-exported docling markdown.
+
+        The article split is pure text processing, so separating it from the OCR
+        conversion means a parser change can be re-run in under a second against
+        the cached export (``data/regulations/gdpr.docling.md``) rather than
+        repeating six minutes of OCR. Same code path as :meth:`get_articles`
+        past the conversion, so the two agree by construction.
+        """
+        return self._extract_articles(text=markdown)
+
 
     # A *real* article header: "Article N" alone on its own line, optionally
     # carrying a markdown heading prefix (MULTILINE anchors ^ to line starts;
@@ -118,10 +130,33 @@ class GDPRParser(BaseParser):
 
         return articles
 
-    @staticmethod
-    def _clean_title(line: str) -> str:
+    # A soft hyphen (U+00AD) together with the whitespace that follows it.
+    # docling preserves the discretionary hyphen the scanned page used to break
+    # a word across a line, so the export carries "internat\xad ional",
+    # "certifi\xad cation", "propor\xad tionate" and so on.
+    _SOFT_HYPHEN_BREAK = re.compile('­\\s*')
+
+    @classmethod
+    def _rejoin_hyphenated_words(cls, text: str) -> str:
+        """
+        Rejoin words that OCR broke across lines with a soft hyphen.
+
+        Left in place, each break splits one word into two meaningless tokens —
+        wrong in the text that gets embedded, and invisible to any lexical
+        scorer doing string comparison. The whitespace *after* the hyphen has to
+        go with it: deleting only the codepoint leaves "internat ional", which
+        is no improvement.
+
+        Applied per-article rather than to the whole document, so it only
+        touches text that actually becomes article content. Real hyphens are
+        U+002D ("cross-border", "Subject-matter") and are left alone.
+        """
+        return cls._SOFT_HYPHEN_BREAK.sub('', text)
+
+    @classmethod
+    def _clean_title(cls, line: str) -> str:
         """Strip leading markdown heading markers ('## ') and whitespace."""
-        return re.sub(r'^#+\s*', '', line.strip())
+        return cls._rejoin_hyphenated_words(re.sub(r'^#+\s*', '', line.strip()))
 
     # Structural scaffolding that can trail an article when the next chapter or
     # section starts: a markdown heading, or a bare 'CHAPTER IV' / 'Section 2'
@@ -149,9 +184,12 @@ class GDPRParser(BaseParser):
           must not stop the strip — halting on the first blank left one heading
           glued to the content, which is how chapter titles ended up inside
           article text (and tripped the generator's truncation heuristic).
+        - Rejoin words the scan broke across lines with a soft hyphen
+          ("internat\xad ional" -> "international").
         - Collapse OCR double-spacing (runs of spaces/tabs) to single spaces,
           while preserving line breaks and paragraph structure.
         """
+        content = GDPRParser._rejoin_hyphenated_words(content)
         lines = content.rstrip().split('\n')
         while lines and GDPRParser._is_trailing_scaffolding(lines[-1]):
             lines.pop()
