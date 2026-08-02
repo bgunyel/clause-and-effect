@@ -4,7 +4,7 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-01._
+> _Last updated: 2026-08-02._
 
 ---
 
@@ -53,8 +53,11 @@ number means anything.
     covered by a multi-span `supporting_quote`. An earlier revision of this entry
     claimed 86.8% recoverable; that classifier did not require segments to advance
     in order and so counted reordered quotes as faithful stitching.
-  - Leakage unchanged at 18 (17 genuine + the Article 29 Working Party false
-    positive) — a useful control, since a corpus fix cannot affect question text.
+  - Leakage held at 18 through every corpus and measurement change — a useful
+    control, since none of them can affect question text. It moved to **17** only
+    when `art94_case3` was reworded, which also emptied the false-positive category.
+  - **Final state: 285 exact, 14 normalized, 134 ungrounded, 17 leakage, 285 clean
+    of 433. Gate FAIL.**
   - Gate still **FAILs**, which is correct. Do not relax it to go green.
   - Correction: this run costs **nothing**. The module is fully deterministic; the
     LLM-judge gates are P1 and explicitly not implemented in it.
@@ -99,7 +102,7 @@ number means anything.
     (once built).
   - State the testing philosophy explicitly: deterministic plumbing → unit tests
     (cheap regression tripwire, plan §6.1); LLM/RAG behaviour → eval harness.
-  - Record how to run (`python -m pytest`) and current status (52 passed,
+  - Record how to run (`python -m pytest`) and current status (64 passed,
     1 xfailed).
   - Carry over the lesson from the header-collapse post-mortem: fixtures written
     from the same assumption as the code only prove self-consistency. Where a
@@ -133,11 +136,37 @@ number means anything.
   - Open: `art36_case4`. The corpus is faithful here (verified against the PDF:
     Article 36(2) genuinely leaves its parenthetical unclosed), so the quote is the
     altered side and the fix is to delete its comma.
-- [ ] Fix/regenerate the **17 true leakage questions** that name their own article
-  (e.g. "What does Article 14 require…"). Full list in the `golden_qa` output.
-- [ ] Leakage check: add an allow-list for the **"Article 29 Working Party"**
-  proper noun — currently the lone false positive, tracked as an `xfail` in
-  `tests/test_eval_golden_qa.py`.
+- [ ] Fix the **17 remaining leakage questions**, all of which name their own gold
+  article. Full list in the report. Most use the number as a bare handle that can be
+  swapped for the substance ("What types of identifiers does Article 87 cover?"). Three
+  need a substitute for what the number carries: `art65_case1` (the Board's binding
+  decision), `art95_case3` (the ePrivacy carve-out), and `art10_case2`, which names two
+  articles where only one is the self-leak — dropping `Article 10` still leaves
+  `Article 6(1)`, so it depends on the self-reference rule below.
+  - Three also have a broken quote and need two fixes: `art14_case6`, `art90_case2`,
+    `art93_case2`.
+  - They cluster in the final chapters (81, 87, 90, 91, 93, 95, 96) plus the near-twin
+    information-duty articles 13 and 14 — short, procedural articles that are hard to
+    characterise without naming them. Looks like a predictable generator failure on
+    low-distinctiveness articles, not random sloppiness.
+  - Done 2026-08-02: `art94_case3`, reworded to "What body replaces the Working Party of
+    Directive 95/46/EC?".
+- [ ] Leakage check: flag only when the cited article number equals the case's own
+  `article_number`. Supersedes the planned "Article 29 Working Party" allow-list, which
+  was the wrong shape — the discriminator is **self-reference**, not a proper noun.
+  Classified that way the 18 split 17/1, and the 1 was exactly the known false positive
+  (`art94_case3`: gold 94, cited 29, the number belonging to the repealed Directive
+  95/46/EC). `TestCase` already carries `article_number`, so no signature change is
+  needed. The case itself is now reworded, but the checker bug remains and the `xfail`
+  in `tests/test_eval_golden_qa.py` still records it — that test builds its own
+  synthetic question rather than reading the data file.
+- [ ] **Parametric answerability** — a defect class with no check. `art94_case3` is
+  answerable from general knowledge without retrieving anything. Retrieval metrics are
+  unaffected (Hit@k measures whether the gold chunk was retrieved regardless), but
+  end-to-end generation metrics would score well over a broken retriever. The plan's
+  paired end-to-end / gold-context probes (§2) make it detectable — an unusually small
+  gap between probes — but nothing flags it and the extent across the 433 is unmeasured.
+  Worth sampling.
 
 ---
 

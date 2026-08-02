@@ -24,13 +24,18 @@ One row per change, newest last. All 433 cases in every row.
 | 1 | truncation fix | corpus | 267 | 151 | 2 | 18 | FAIL |
 | 2 | soft-hyphen fix | corpus | 270 | 148 | 2 | 18 | FAIL |
 | 3 | tier-5 normalization | measurement | 282 | 136 | 14 | 18 | FAIL |
-| 4 | `art60_case2`, `art80_case2` quotes | golden set | **284** | **134** | 14 | 18 | **FAIL** |
-| | **total Δ** | | **+108** | **−112 (−45.5%)** | −162 | **0** | — |
+| 4 | `art60_case2`, `art80_case2` quotes | golden set | 284 | 134 | 14 | 18 | FAIL |
+| 5 | `art94_case3` question | golden set | **285** | **134** | 14 | **17** | **FAIL** |
+| | **total Δ** | | **+109** | **−112 (−45.5%)** | −162 | **−1** | — |
 
-The `layer` column is the useful one to read down. Three of the four changes were *not*
-to the golden set: two corrected the corpus and one corrected the measurement. Only row 4
-edited a test case. That ratio is the session's main finding — most of what the gate was
-reporting as golden-set defects were defects somewhere else.
+The `layer` column is the useful one to read down. Three of the five changes were *not*
+to the golden set: two corrected the corpus and one corrected the measurement. Only rows 4
+and 5 edited a test case. That ratio is the session's main finding — most of what the gate
+was reporting as golden-set defects were defects somewhere else.
+
+Row 5 is the first movement in **leakage**, which had been flat at 18 through every other
+change — a useful control, since nothing done to the corpus or the measurement can affect
+what a question says.
 
 Grounding is now reported in three tiers rather than pass/fail:
 
@@ -344,17 +349,57 @@ the check already had, since whitespace-only matches were already reported as wa
 
 ---
 
-## Leakage — 18 errors, 17 genuine
+## Leakage — 17 errors, all genuine
 
-Unchanged from the pre-fix run. Confirmed by inspection that exactly one is a false
-positive, matching what the backlog recorded:
+Flat at 18 through the truncation fix, the soft-hyphen fix and the normalization tier —
+the expected control, since leakage is a property of the question text. It moved only
+when a question was actually edited.
 
-- `gdpr_art94_case3` — *"What body replaces the **Article 29 Working Party** under the
-  GDPR?"* — proper noun, not a location reference. Already tracked as an `xfail` in
-  `tests/test_eval_golden_qa.py`; needs an allow-list.
-- `gdpr_art29_case3` — *"Does **Article 29** apply to contractors…"* — genuine leakage,
-  despite also naming Article 29. The allow-list must key on the phrase *"Article 29
-  Working Party"*, not on the number.
+**The useful discriminator is self-reference:** does the question name *its own* gold
+article? That is what "leakage" means operationally — the question must not reveal where
+the answer lives. Classified that way, the 18 split 17 / 1, and the single outlier was
+exactly the known false positive:
+
+- `art94_case3` — *"What body replaces the **Article 29 Working Party** under the GDPR?"*
+  Gold article **94**, cited article **29**. Not a location reference at all: the Working
+  Party takes its nickname from Article 29 of *Directive 95/46/EC*, a different and now
+  repealed instrument. The article's own text says so — *"established by Article 29 of
+  Directive 95/46/EC"*. Naming it gave nothing away.
+- `art29_case3` — *"Does **Article 29** apply to contractors…"* Gold article **29**,
+  cited article **29**. Genuine leakage despite naming the same number, which is why a
+  phrase allow-list keyed to "Article 29 Working Party" would have been the wrong shape.
+
+**Resolved by rewording the question** to *"What body replaces the Working Party of
+Directive 95/46/EC?"* — measured against the checker, this is the only variant tried that
+passes as the rule stands today, because the regex keys on `article|paragraph|recital|…`
+followed by a number and `Directive 95/46/EC` contains no such keyword. Variants that kept
+the literal string "Article 29" stayed flagged. The `answer` and `supporting_quote` needed
+no change and the quote still grounds *exact*.
+
+> That resolves the case but **not the underlying bug** — the checker will still flag any
+> future question citing an unrelated article. The principled fix is to flag only when the
+> cited number equals the case's own `article_number`; `TestCase` already carries it, so no
+> signature change is needed. The `xfail` in `tests/test_eval_golden_qa.py` builds its own
+> synthetic question rather than reading the data file, so it survives this edit and
+> remains the standing record of the defect.
+
+### The remaining 17
+
+All self-referential. Three also have a broken `supporting_quote`
+(`art14_case6`, `art90_case2`, `art93_case2`) and so need two fixes rather than one.
+
+Most use the number as a bare handle that can be swapped for the substance —
+*"What types of identifiers does Article 87 cover?"*. Three need a substitute for
+something the number is carrying: `art65_case1` (the Board's binding decision),
+`art95_case3` (the ePrivacy carve-out), and `art10_case2`, which names **two** articles
+where only one is the self-leak — removing `Article 10` still leaves `Article 6(1)`, so
+that case depends on the self-reference rule landing.
+
+They cluster in the regulation's final chapters — 81, 87, 90, 91, 93, 95, 96 — plus the
+two near-twin information-duty articles, 13 and 14. Those late articles are short and
+procedural, and hard to characterise without naming them, so the leakage looks like a
+predictable failure on low-distinctiveness articles rather than random sloppiness. Worth
+knowing if the set is ever regenerated.
 
 ---
 
@@ -374,9 +419,10 @@ positive, matching what the backlog recorded:
    real feature of GDPR structure, not a defect — while keeping the check exact. The
    explicit `...` markers become list boundaries.
 3. **58 cases need their quote text rewritten** (37 altered + 20 absent + 1 inserted
-   punctuation), plus the 17 leakage questions. Worth doing before any scorer is
-   calibrated against this set. Remediation has started: 2 of the 3 punctuation cases are
-   done, each a one-character deletion.
+   punctuation), plus **17 leakage questions**. Three cases appear on both lists, so the
+   distinct total is **72**. Worth doing before any scorer is calibrated against this set.
+   Remediation has started: 2 of the 3 punctuation cases and 1 of the 18 leakage cases are
+   done.
 4. **Any retrieval metric computed today inherits a golden set where 31% of cases carry
    an ungrounded quote.** Key-phrase and citation scorers are affected most.
 
@@ -394,6 +440,14 @@ positive, matching what the backlog recorded:
    chunk text and embeddings no longer match the corpus. Re-indexing is cheap
    (~$0.001) and idempotent — chunk IDs are semantic, so `uuid5(chunk.id)` yields the
    same point IDs and the write overwrites in place rather than needing a drop.
+6. **A defect class we have no check for: parametric answerability.** `art94_case3` asks
+   what replaced the Article 29 Working Party — answerable from general knowledge without
+   retrieving anything. Retrieval metrics are unaffected (Hit@k measures whether the gold
+   chunk was retrieved, regardless of whether the model needed it), but end-to-end
+   generation metrics would score well over a broken retriever. The plan's paired
+   end-to-end / gold-context probes (§2) make it *detectable* — such a case shows an
+   unusually small gap between the two probes — but nothing currently flags it, and the
+   extent across the 433 is unmeasured.
 
 ## Reproducing
 
