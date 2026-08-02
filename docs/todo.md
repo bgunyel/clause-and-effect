@@ -48,9 +48,12 @@ number means anything.
 - [x] Commit the pending work — parser fix + `generate_gdpr_articles.py`, and the
   new `tests/` suite + pytest config. Likely two commits (parser-fix vs.
   test-suite) for a clean history.
-- [ ] Open the PR from `dev-01` into `main`. The branch is 16 commits ahead and
-  carries the eval framework, test suite, parser fix, corpus regeneration,
-  point-ID rework, and the lessons-learned docs.
+- [x] Open the PR from `dev-01` into `main` — done 2026-08-02.
+  [#1](https://github.com/bgunyel/clause-and-effect/pull/1), 18 commits, merged
+  with a merge commit (`3088d45`) so the split between the parser fix and the
+  corpus data commit stays reviewable. Carried the eval framework, test suite,
+  parser fix, corpus regeneration, point-ID rework, and lessons-learned docs.
+  Eval development continues on `dev-02`.
 
 ---
 
