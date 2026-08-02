@@ -22,3 +22,7 @@ a replacement: commits say what changed, these say what was going on.
 - [2026-08-01 · session 1](devlog_2026-08-01_session-1.md) — GDPR corpus
   regeneration: docling accelerator pin, article-header collapse, chapter
   scaffolding leak, Qdrant point-ID rework, re-index.
+- [2026-08-02 · session 2](devlog_2026-08-02_session-2.md) — golden-set QA
+  baseline, OCR soft hyphens, cached docling-export pipeline, tier-5 grounding
+  normalization, and the discovery that the grounding rule was itself producing
+  false positives.
