@@ -1,0 +1,71 @@
+{
+  "article_number": "8",
+  "article_title": "Conditions applicable to child's consent in relation to information society services",
+  "test_cases": [
+    {
+      "question": "What is the minimum age at which a child can give their own consent for data processing when using information society services?",
+      "answer": "The minimum age is 16 years old. Children below that age cannot provide their own consent for information society services—the processing would instead require parental consent to be lawful.",
+      "answer_type": "definition",
+      "supporting_quote": "in relation to the offer of information society services directly to a child, the processing of the personal data of a child shall be lawful where the child is at least 16 years old",
+      "key_phrases": [
+        "at least 16 years old",
+        "information society services",
+        "parental consent"
+      ]
+    },
+    {
+      "question": "Can EU member states set a lower minimum age for children's consent than 16?",
+      "answer": "Yes, member states may provide a lower age by national law, but it cannot be set below 13 years old. This gives countries some flexibility to adapt the rule to their local legal traditions.",
+      "answer_type": "scope",
+      "supporting_quote": "Member States may provide by law for a lower age for those purposes provided that such lower age is not below 13 years",
+      "key_phrases": [
+        "Member States",
+        "lower age",
+        "not below 13 years"
+      ]
+    },
+    {
+      "question": "What conditions must be met before we can lawfully process personal data from a 14-year-old user of our app if we rely on consent as our legal basis?",
+      "answer": "When the child is below 16 years old, processing is only lawful if and to the extent that consent is given or authorised by the holder of parental responsibility over the child. Additionally, you must make reasonable efforts to verify that such parental consent was actually provided, taking into consideration available technology.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where the child is below the age of 16 years, such processing shall be lawful only if and to the extent that consent is given or authorised by the holder of parental responsibility over the child. The controller shall make reasonable efforts to verify in such cases that consent is given or authorised by the holder of parental responsibility over the child, taking into consideration available technology",
+      "key_phrases": [
+        "below the age of 16 years",
+        "holder of parental responsibility",
+        "reasonable efforts to verify",
+        "available technology"
+      ]
+    },
+    {
+      "question": "Does the GDPR requirement for parental consent for children under 16 affect whether a contract with a child is legally valid under national contract law?",
+      "answer": "No, the GDPR rules regarding children's consent for data processing do not affect the general contract law of Member States, including rules concerning the validity, formation, or effect of contracts with children.",
+      "answer_type": "scope",
+      "supporting_quote": "Paragraph 1 shall not affect the general contract law of Member States such as the rules on the validity, formation or effect of a contract in relation to a child",
+      "key_phrases": [
+        "general contract law",
+        "validity, formation or effect",
+        "not affect"
+      ]
+    },
+    {
+      "question": "Does the child consent rule apply to all types of online services offered to children?",
+      "answer": "No, it specifically applies to information society services offered directly to a child. Importantly, these requirements do not apply to preventive or counselling services offered directly to a child, which are exempted.",
+      "answer_type": "scope",
+      "supporting_quote": "in relation to the offer of information society services directly to a child... shall not apply to preventive or counselling services offered directly to a child",
+      "key_phrases": [
+        "information society services",
+        "directly to a child",
+        "preventive or counselling services"
+      ]
+    }
+  ],
+  "coverage": {
+    "8(1) age threshold": "Test case 1 - Default 16 years old",
+    "8(1) member state variation": "Test case 2 - Can lower to minimum 13 years",
+    "8(1) parental consent": "Test case 3 - Required below age threshold",
+    "8(2)": "Test case 3 - Reasonable efforts to verify, considering available technology",
+    "8(3)": "Test case 4 - Does not affect general contract law",
+    "8(1) exception": "Test case 5 - Preventive/counselling services exempted"
+  },
+  "b2b_relevance": "HIGH - Article 8 is critical for any B2B SaaS that may have child users. Essential for: age verification mechanisms, parental consent workflows, registration flows for apps/services targeting or accessible to minors, and understanding jurisdiction-specific age thresholds across EU member states."
+}

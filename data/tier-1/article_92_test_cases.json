@@ -1,0 +1,59 @@
+{
+  "article_number": "92",
+  "article_title": "Exercise of the delegation",
+  "test_cases": [
+    {
+      "question": "Who has the power to adopt delegated acts under the GDPR?",
+      "answer": "The power to adopt delegated acts is conferred on the Commission subject to the conditions laid down in this Article.",
+      "answer_type": "definition",
+      "supporting_quote": "The power to adopt delegated acts is conferred on the Commission subject to the conditions laid down in this Article",
+      "key_phrases": [
+        "power to adopt delegated acts",
+        "conferred on the Commission",
+        "subject to the conditions"
+      ]
+    },
+    {
+      "question": "For how long is the power to adopt delegated acts conferred on the Commission?",
+      "answer": "The power to adopt delegated acts referred to in Article 12(8) and Article 43(8) shall be conferred on the Commission for an indeterminate period of time from 24 May 2016.",
+      "answer_type": "timeline",
+      "supporting_quote": "The power to adopt delegated acts referred to in Article 12(8) and Article 43(8) shall be conferred on the Commission for an indeterminate period of time from 24 May 2016",
+      "key_phrases": [
+        "indeterminate period of time",
+        "24 May 2016",
+        "Article 12(8)",
+        "Article 43(8)"
+      ]
+    },
+    {
+      "question": "Can the European Parliament or Council revoke the delegation of power to adopt delegated acts?",
+      "answer": "Yes. The delegation of power referred to in Article 12(8) and Article 43(8) may be revoked at any time by the European Parliament or by the Council. A decision to revoke shall put an end to the delegation of the power specified in that decision. It shall take effect the day following the publication of the decision in the Official Journal of the European Union or at a later date specified therein. It shall not affect the validity of any delegated acts already in force.",
+      "answer_type": "scope",
+      "supporting_quote": "The delegation of power referred to in Article 12(8) and Article 43(8) may be revoked at any time by the European Parliament or by the Council. A decision to revoke shall put an end to the delegation of the power specified in that decision",
+      "key_phrases": [
+        "revoked at any time",
+        "European Parliament or by the Council",
+        "shall not affect the validity of any delegated acts already in force"
+      ]
+    },
+    {
+      "question": "What notification and objection process applies to delegated acts?",
+      "answer": "As soon as it adopts a delegated act, the Commission shall notify it simultaneously to the European Parliament and to the Council. A delegated act shall enter into force only if no objection has been expressed either by the European Parliament or the Council within a period of three months of notification of that act to them, or if both have informed the Commission that they will not object. That period shall be extended by three months at the initiative of the European Parliament or of the Council.",
+      "answer_type": "conditional",
+      "supporting_quote": "A delegated act adopted pursuant to Article 12(8) and Article 43(8) shall enter into force only if no objection has been expressed either by the European Parliament or the Council within a period of three months of notification of that act to the European Parliament and the Council or if, before the expiry of that period, the European Parliament and the Council have both informed the Commission that they will not object. That period shall be extended by three months at the initiative of the European Parliament or of the Council",
+      "key_phrases": [
+        "notify it simultaneously",
+        "three months",
+        "no objection",
+        "extended by three months"
+      ]
+    }
+  ],
+  "coverage": {
+    "92(1)": "Test case 1 - Commission power subject to conditions",
+    "92(2)": "Test case 2 - NEW - Indeterminate period from 24 May 2016",
+    "92(3)+(4)": "Test case 3 - NEW - EP/Council revocation power + validity of existing acts",
+    "92(5)+(6)": "Test case 4 - NEW - Notification + 3-month objection period (+3 extension)"
+  },
+  "b2b_relevance": "LOW - Article 92 is procedural, governing how the Commission adopts delegated acts. B2B SaaS companies don't directly interact with this mechanism. However, delegated acts under Art 12(8) (standardised icons for privacy notices) and Art 43(8) (certification mechanisms) may eventually affect how you present privacy information or obtain certifications."
+}

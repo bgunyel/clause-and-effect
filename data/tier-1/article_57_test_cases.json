@@ -1,0 +1,82 @@
+{
+  "article_number": "57",
+  "article_title": "Tasks",
+  "test_cases": [
+    {
+      "question": "What are the main categories of tasks assigned to supervisory authorities?",
+      "answer": "On its territory, each supervisory authority shall: (a) monitor and enforce GDPR application; (b) promote public awareness of processing risks, rules, safeguards, and rights (with specific attention to children); (c) advise national parliament, government, and other institutions on legislation; (d) promote controller/processor awareness of their obligations; (e) upon request, provide information to data subjects on their rights; (f) handle complaints; (g) cooperate with other SAs including sharing information and providing mutual assistance; (h) conduct investigations; and many additional tasks including adopting SCCs, maintaining DPIA lists, approving certifications and BCRs, and contributing to the Board's activities.",
+      "answer_type": "definition",
+      "supporting_quote": "Without prejudice to other tasks set out under this Regulation, each supervisory authority shall on its territory: (a) monitor and enforce the application of this Regulation; (b) promote public awareness and understanding of the risks, rules, safeguards and rights in relation to processing. Activities addressed specifically to children shall receive specific attention",
+      "key_phrases": [
+        "monitor and enforce",
+        "public awareness",
+        "advise parliament",
+        "handle complaints",
+        "cooperate",
+        "conduct investigations"
+      ]
+    },
+    {
+      "question": "Who can submit a complaint to a supervisory authority?",
+      "answer": "Supervisory authorities must handle complaints lodged by a data subject, or by a body, organisation, or association in accordance with Article 80 (representation of data subjects). This means both individuals and representative bodies can file complaints.",
+      "answer_type": "scope",
+      "supporting_quote": "handle complaints lodged by a data subject, or by a body, organisation or association in accordance with Article 80",
+      "key_phrases": [
+        "data subject",
+        "body, organisation or association",
+        "Article 80",
+        "handle complaints"
+      ]
+    },
+    {
+      "question": "What special consideration must supervisory authorities give when promoting public awareness?",
+      "answer": "When promoting public awareness and understanding of the risks, rules, safeguards, and rights in relation to processing, activities addressed specifically to children shall receive specific attention.",
+      "answer_type": "conditional",
+      "supporting_quote": "promote public awareness and understanding of the risks, rules, safeguards and rights in relation to processing. Activities addressed specifically to children shall receive specific attention",
+      "key_phrases": [
+        "children",
+        "specific attention",
+        "public awareness"
+      ]
+    },
+    {
+      "question": "Is there a fee for data subjects to exercise their rights through a supervisory authority?",
+      "answer": "No. The performance of the tasks of each supervisory authority shall be free of charge for the data subject and, where applicable, for the data protection officer. However, where requests are manifestly unfounded or excessive (particularly due to their repetitive character), the supervisory authority may charge a reasonable fee based on administrative costs, or refuse to act on the request.",
+      "answer_type": "conditional",
+      "supporting_quote": "The performance of the tasks of each supervisory authority shall be free of charge for the data subject and, where applicable, for the data protection officer. Where requests are manifestly unfounded or excessive, in particular because of their repetitive character, the supervisory authority may charge a reasonable fee based on administrative costs, or refuse to act on the request",
+      "key_phrases": [
+        "free of charge",
+        "manifestly unfounded or excessive",
+        "reasonable fee",
+        "refuse to act"
+      ]
+    },
+    {
+      "question": "What regulatory tasks must supervisory authorities perform regarding codes of conduct and certification?",
+      "answer": "Supervisory authorities shall: encourage the drawing up of codes of conduct and provide opinions and approvals for such codes (Articles 40-41); encourage the establishment of certification mechanisms and approve criteria for certification (Article 42(5)); carry out periodic review of certifications issued; and draft and publish criteria for accreditation of monitoring bodies and certification bodies (Articles 41 and 43).",
+      "answer_type": "scope",
+      "supporting_quote": "encourage the drawing up of codes of conduct pursuant to Article 40(1) and provide an opinion and approve such codes of conduct which provide sufficient safeguards, pursuant to Article 40(5); encourage the establishment of data protection certification mechanisms and of data protection seals and marks pursuant to Article 42(1), and approve the criteria of certification pursuant to Article 42(5); where applicable, carry out a periodic review of certifications issued in accordance with Article 42(7)",
+      "key_phrases": [
+        "codes of conduct",
+        "certification mechanisms",
+        "approve criteria",
+        "periodic review",
+        "accreditation"
+      ]
+    }
+  ],
+  "coverage": {
+    "57(1)(a)": "Test case 1 - Monitor and enforce",
+    "57(1)(b)": "Test case 1 + 3 - Public awareness (specific attention to children)",
+    "57(1)(c)": "Test case 1 - Advise parliament/government",
+    "57(1)(d)": "Test case 1 - Promote controller/processor awareness",
+    "57(1)(e)": "Test case 1 - Provide info to data subjects on request",
+    "57(1)(f)": "Test case 2 - Handle complaints from data subjects or bodies",
+    "57(1)(g)": "Test case 1 - Cooperate with other SAs",
+    "57(1)(h)": "Test case 1 - Conduct investigations",
+    "57(1)(m)-(q)": "Test case 5 - NEW - Codes of conduct, certification, accreditation",
+    "57(3)": "Test case 4 - NEW - Free of charge + excessive request exception",
+    "57(4)": "Test case 4 - Manifestly unfounded/excessive requests"
+  },
+  "b2b_relevance": "HIGH - Article 57 lists what SAs actually do. Key for B2B: (1) SA will handle complaints against you, (2) SA must provide guidance on your obligations, (3) SA approves codes of conduct and certifications you might use, (4) SA maintains DPIA required lists, (5) SA approves BCRs and SCCs for international transfers."
+}

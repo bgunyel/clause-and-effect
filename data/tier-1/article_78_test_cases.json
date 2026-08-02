@@ -1,0 +1,69 @@
+{
+  "article_number": "78",
+  "article_title": "Right to an effective judicial remedy against a supervisory authority",
+  "test_cases": [
+    {
+      "question": "Who can challenge a legally binding decision of a supervisory authority in court?",
+      "answer": "Without prejudice to any other administrative or non-judicial remedy, each natural or legal person shall have the right to an effective judicial remedy against a legally binding decision of a supervisory authority concerning them. This means both individuals and companies can sue SAs over binding decisions.",
+      "answer_type": "scope",
+      "supporting_quote": "Without prejudice to any other administrative or non-judicial remedy, each natural or legal person shall have the right to an effective judicial remedy against a legally binding decision of a supervisory authority concerning them",
+      "key_phrases": [
+        "natural or legal person",
+        "legally binding decision",
+        "without prejudice to any other... remedy"
+      ]
+    },
+    {
+      "question": "Under what circumstances can a data subject sue a supervisory authority over a complaint?",
+      "answer": "Each data subject shall have the right to an effective judicial remedy where the supervisory authority which is competent pursuant to Articles 55 and 56 does not handle a complaint or does not inform the data subject within three months on the progress or outcome of the complaint lodged pursuant to Article 77.",
+      "answer_type": "conditional",
+      "supporting_quote": "each data subject shall have the right to an effective judicial remedy where the supervisory authority which is competent pursuant to Articles 55 and 56 does not handle a complaint or does not inform the data subject within three months on the progress or outcome of the complaint lodged pursuant to Article 77",
+      "key_phrases": [
+        "does not handle a complaint",
+        "does not inform",
+        "within three months",
+        "Articles 55 and 56"
+      ]
+    },
+    {
+      "question": "How long does a supervisory authority have to respond to a complaint before a data subject can take legal action?",
+      "answer": "The supervisory authority must inform the data subject within three months on the progress or outcome of the complaint. If they fail to do so within this timeframe, the data subject gains the right to seek a judicial remedy against the SA.",
+      "answer_type": "timeline",
+      "supporting_quote": "does not inform the data subject within three months on the progress or outcome of the complaint",
+      "key_phrases": [
+        "three months",
+        "progress or outcome",
+        "judicial remedy"
+      ]
+    },
+    {
+      "question": "In which court should proceedings against a supervisory authority be brought?",
+      "answer": "Proceedings against a supervisory authority shall be brought before the courts of the Member State where the supervisory authority is established. This determines the jurisdiction for challenging SA decisions or inaction.",
+      "answer_type": "definition",
+      "supporting_quote": "Proceedings against a supervisory authority shall be brought before the courts of the Member State where the supervisory authority is established",
+      "key_phrases": [
+        "courts of the Member State",
+        "where the supervisory authority is established",
+        "proceedings"
+      ]
+    },
+    {
+      "question": "What must a supervisory authority do if court proceedings challenge a decision that was preceded by a Board opinion or decision?",
+      "answer": "Where proceedings are brought against a decision of a supervisory authority which was preceded by an opinion or a decision of the Board in the consistency mechanism, the supervisory authority shall forward that opinion or decision to the court.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where proceedings are brought against a decision of a supervisory authority which was preceded by an opinion or a decision of the Board in the consistency mechanism, the supervisory authority shall forward that opinion or decision to the court",
+      "key_phrases": [
+        "opinion or decision of the Board",
+        "consistency mechanism",
+        "forward... to the court"
+      ]
+    }
+  ],
+  "coverage": {
+    "78(1)": "Test case 1 - Natural/legal person right against binding decision",
+    "78(2)": "Test cases 2 and 3 - Data subject right if SA doesn't handle or inform within 3 months",
+    "78(3)": "Test case 4 - NEW - Jurisdiction: courts where SA established",
+    "78(4)": "Test case 5 - NEW - SA must forward Board opinion/decision to court"
+  },
+  "b2b_relevance": "HIGH - Article 78 gives your company the right to challenge SA decisions in court. Key points: (1) Companies (legal persons) can sue SAs over binding decisions, (2) Data subjects can sue if you complain and SA doesn't respond in 3 months, (3) Jurisdiction is where SA is located, (4) If decision involved EDPB, that opinion must go to court. This is your appeal mechanism for fines and enforcement actions."
+}

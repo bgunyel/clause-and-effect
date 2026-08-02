@@ -1,0 +1,47 @@
+{
+  "article_number": "97",
+  "article_title": "Commission reports",
+  "test_cases": [
+    {
+      "question": "How often must the Commission submit GDPR evaluation reports?",
+      "answer": "By 25 May 2020 and every four years thereafter, the Commission shall submit a report on the evaluation and review of this Regulation to the European Parliament and to the Council. The reports shall be made public.",
+      "answer_type": "timeline",
+      "supporting_quote": "By 25 May 2020 and every four years thereafter, the Commission shall submit a report on the evaluation and review of this Regulation to the European Parliament and to the Council. The reports shall be made public",
+      "key_phrases": [
+        "25 May 2020",
+        "every four years thereafter",
+        "European Parliament and to the Council",
+        "made public"
+      ]
+    },
+    {
+      "question": "What specific topic must the Commission examine in its GDPR evaluation reports?",
+      "answer": "In the context of the evaluations and reviews, the Commission shall examine, in particular, the application and functioning of Chapter V on the transfer of personal data to third countries or international organisations with particular regard to decisions adopted pursuant to Article 45(3) and decisions adopted on the basis of Article 25(6) of Directive 95/46/EC.",
+      "answer_type": "scope",
+      "supporting_quote": "the Commission shall examine, in particular, the application and functioning of: (a) Chapter V on the transfer of personal data to third countries or international organisations with particular regard to decisions adopted pursuant to Article 45(3) of this Regulation and decisions adopted on the basis of Article 25(6) of Directive 95/46/EC",
+      "key_phrases": [
+        "Chapter V",
+        "transfer of personal data to third countries",
+        "Article 45(3)",
+        "Article 25(6) of Directive 95/46/EC"
+      ]
+    },
+    {
+      "question": "Who receives the Commission's GDPR evaluation reports?",
+      "answer": "The Commission submits the reports on the evaluation and review of the Regulation to the European Parliament and to the Council. Additionally, the reports shall be made public, ensuring transparency about GDPR's functioning.",
+      "answer_type": "definition",
+      "supporting_quote": "submit a report on the evaluation and review of this Regulation to the European Parliament and to the Council. The reports shall be made public",
+      "key_phrases": [
+        "European Parliament",
+        "Council",
+        "made public"
+      ]
+    }
+  ],
+  "coverage": {
+    "97(1) timeline": "Test case 1 - 25 May 2020 + every 4 years",
+    "97(1) recipients": "Test cases 1 and 3 - EP, Council, made public",
+    "97(2) scope": "Test case 2 - Chapter V examination, Art 45(3) and Directive 95/46/EC Art 25(6) decisions"
+  },
+  "b2b_relevance": "LOW-MEDIUM - Article 97 doesn't directly affect B2B SaaS operations, but the Commission's reports can signal upcoming changes to data transfer rules. Key relevance: (1) Reports examine adequacy decisions (Art 45(3)) - affects where you can freely transfer data, (2) May propose amendments based on findings, (3) Reports are public - useful for compliance monitoring. The 4-year review cycle means GDPR evolves based on these evaluations."
+}

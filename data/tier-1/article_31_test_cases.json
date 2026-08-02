@@ -1,0 +1,47 @@
+{
+  "article_number": "31",
+  "article_title": "Cooperation with the supervisory authority",
+  "test_cases": [
+    {
+      "question": "Who is required to cooperate with data protection authorities during an investigation?",
+      "answer": "Both the data controller and the data processor are required to cooperate with the supervisory authority. If applicable, their representatives must also cooperate. The article lists them together without distinguishing different levels of obligation.",
+      "answer_type": "definition",
+      "supporting_quote": "The controller and the processor and, where applicable, their representatives, shall cooperate, on request, with the supervisory authority in the performance of its tasks",
+      "key_phrases": [
+        "controller",
+        "processor",
+        "representatives",
+        "cooperate",
+        "supervisory authority"
+      ]
+    },
+    {
+      "question": "What triggers the obligation for a controller or processor to cooperate with the supervisory authority?",
+      "answer": "The cooperation obligation is triggered when the supervisory authority requests cooperation. It is not a continuous obligation - cooperation is required only 'on request,' meaning the authority must ask before the obligation to cooperate arises. The purpose is to assist the authority in the performance of its tasks.",
+      "answer_type": "conditional",
+      "supporting_quote": "shall cooperate, on request, with the supervisory authority in the performance of its tasks",
+      "key_phrases": [
+        "on request",
+        "cooperate",
+        "performance of its tasks"
+      ]
+    },
+    {
+      "question": "Are company representatives always required to cooperate with supervisory authorities?",
+      "answer": "No, representatives are only required to cooperate 'where applicable.' The obligation applies directly to controllers and processors, but representatives only need to cooperate when they have been designated and are relevant to the situation.",
+      "answer_type": "scope",
+      "supporting_quote": "and, where applicable, their representatives, shall cooperate",
+      "key_phrases": [
+        "where applicable",
+        "their representatives"
+      ]
+    }
+  ],
+  "coverage": {
+    "who": "Test case 1 - Controller, processor, and representatives (where applicable)",
+    "trigger": "Test case 2 - 'On request' from supervisory authority",
+    "purpose": "Test case 2 - In performance of SA's tasks",
+    "representatives scope": "Test case 3 - 'Where applicable' qualification for representatives"
+  },
+  "b2b_relevance": "HIGH - Article 31 establishes the baseline cooperation requirement with regulators. Essential for: regulatory response planning, incident management procedures, audit preparation, and understanding that both controllers AND processors must cooperate equally. Key takeaway: Cooperation is reactive ('on request') not proactive, but once requested it is mandatory."
+}

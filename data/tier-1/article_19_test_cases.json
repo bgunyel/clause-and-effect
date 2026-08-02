@@ -1,0 +1,46 @@
+{
+  "article_number": "19",
+  "article_title": "Notification obligation regarding rectification or erasure of personal data or restriction of processing",
+  "test_cases": [
+    {
+      "question": "When a company deletes a user's personal data, are they required to inform other organizations that received that data?",
+      "answer": "Yes, the controller must communicate the erasure to each recipient to whom the personal data have been disclosed, unless this proves impossible or involves disproportionate effort.",
+      "answer_type": "scope",
+      "supporting_quote": "The controller shall communicate any rectification or erasure of personal data or restriction of processing carried out in accordance with Article 16, Article 17(1) and Article 18 to each recipient to whom the personal data have been disclosed, unless this proves impossible or involves disproportionate effort.",
+      "key_phrases": [
+        "communicate",
+        "each recipient",
+        "erasure",
+        "disproportionate effort"
+      ]
+    },
+    {
+      "question": "Under what circumstances can a company skip notifying other organizations about updated customer data?",
+      "answer": "A company can skip notifying recipients about rectification, erasure, or restriction when doing so proves impossible or involves disproportionate effort.",
+      "answer_type": "conditional",
+      "supporting_quote": "unless this proves impossible or involves disproportionate effort",
+      "key_phrases": [
+        "impossible",
+        "disproportionate effort",
+        "unless"
+      ]
+    },
+    {
+      "question": "If my data was corrected, can I ask the company who they told about the change?",
+      "answer": "Yes, the data subject has the right to request that the controller provide them with information about the specific recipients to whom the corrected, erased, or restricted data was communicated.",
+      "answer_type": "scope",
+      "supporting_quote": "The controller shall inform the data subject about those recipients if the data subject requests it.",
+      "key_phrases": [
+        "inform the data subject",
+        "those recipients",
+        "if the data subject requests it"
+      ]
+    }
+  ],
+  "coverage": {
+    "main obligation": "Test case 1 - Notify all recipients of rectification, erasure, or restriction",
+    "exception": "Test case 2 - Impossible or disproportionate effort exemption",
+    "data subject right": "Test case 3 - Can request to know which recipients were informed"
+  },
+  "b2b_relevance": "HIGH - Article 19 creates a cascade notification requirement. Essential for: data sharing agreements, processor management, understanding downstream obligations, and responding to data subject inquiries about who was notified. Key takeaways: (1) Must notify all recipients of changes, (2) Exception for impossible/disproportionate effort, (3) Data subject can ask who was notified."
+}

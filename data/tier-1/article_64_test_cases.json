@@ -1,0 +1,65 @@
+{
+  "article_number": "64",
+  "article_title": "Opinion of the Board",
+  "test_cases": [
+    {
+      "question": "What types of measures require a supervisory authority to communicate its draft decision to the Board for an opinion?",
+      "answer": "The Board shall issue an opinion when a supervisory authority intends to adopt: (a) a list of processing operations requiring DPIA (Art 35); (b) matters concerning certification (Arts 42-43); (c) approval or amendment of a code of conduct (Art 40); (d) criteria for accreditation of monitoring or certification bodies (Arts 41, 43); (e) standard contractual clauses (Art 46(2)(d)); (f) contractual clauses (Art 46(3)(a)); (g) binding corporate rules (Art 47); or (h) administrative arrangements between public authorities (Art 46(3)(b)).",
+      "answer_type": "definition",
+      "supporting_quote": "The Board shall issue an opinion where a competent supervisory authority intends to adopt any of the measures below. To that end, the competent supervisory authority shall communicate the draft decision to the Board, when it: (a) aims to adopt a list of the processing operations subject to the requirement for a data protection impact assessment; (b) concerns a matter pursuant to Article 40(7) whether a draft code of conduct or an amendment or extension to a code of conduct complies with this Regulation; (c) aims to approve the criteria for accreditation of a body pursuant to Article 41(3) or a certification body pursuant to Article 43(3); (d) aims to determine standard data protection clauses referred to in point (d) of Article 46(2) and in Article 28(8); (e) aims to authorise contractual clauses referred to in point (a) of Article 46(3); or (f) aims to approve binding corporate rules within the meaning of Article 47",
+      "key_phrases": [
+        "DPIA list",
+        "code of conduct",
+        "certification",
+        "accreditation criteria",
+        "standard contractual clauses",
+        "binding corporate rules"
+      ]
+    },
+    {
+      "question": "Can anyone other than a competent supervisory authority request a Board opinion?",
+      "answer": "Yes. Any supervisory authority, the Chair of the Board, or the Commission may request that any matter of general application or producing effects in more than one Member State be examined by the Board with a view to obtaining an opinion.",
+      "answer_type": "scope",
+      "supporting_quote": "Any supervisory authority, the Chair of the Board or the Commission may request that any matter of general application or producing effects in more than one Member State be examined by the Board with a view to obtaining an opinion",
+      "key_phrases": [
+        "any supervisory authority",
+        "Chair of the Board",
+        "Commission",
+        "general application",
+        "effects in more than one Member State"
+      ]
+    },
+    {
+      "question": "How long does the Board have to issue its opinion on a draft decision?",
+      "answer": "The Board shall issue its opinion within eight weeks by simple majority of its members. Where the matter is complex, that period may be extended by a further six weeks.",
+      "answer_type": "timeline",
+      "supporting_quote": "The Board shall issue an opinion on the matter submitted to it pursuant to paragraphs 1 and 2 within eight weeks by simple majority of its members. That period may be extended by a further six weeks, taking into account the complexity of the subject matter",
+      "key_phrases": [
+        "eight weeks",
+        "extended by a further six weeks",
+        "simple majority",
+        "complexity"
+      ]
+    },
+    {
+      "question": "What must a supervisory authority do after receiving the Board's opinion?",
+      "answer": "The competent supervisory authority shall take utmost account of the opinion of the Board and shall, within two weeks after receiving the opinion, communicate to the Chair of the Board by electronic means whether it will maintain or amend its draft decision, providing the amended draft decision if applicable.",
+      "answer_type": "conditional",
+      "supporting_quote": "The competent supervisory authority and the supervisory authority concerned shall take utmost account of the opinion of the Board and shall, within two weeks after receiving the opinion, communicate to the Chair of the Board by electronic means whether it will maintain or amend its draft decision and, if any, the amended draft decision",
+      "key_phrases": [
+        "take utmost account",
+        "two weeks",
+        "maintain or amend",
+        "communicate to the Chair"
+      ]
+    }
+  ],
+  "coverage": {
+    "64(1)(a)-(h)": "Test case 1 - All eight triggers for mandatory Board opinion",
+    "64(2)": "Test case 2 - NEW - Any SA/Chair/Commission may request opinion on general matters",
+    "64(3)": "Test case 3 - NEW - 8-week timeline (+ 6 weeks for complex)",
+    "64(4)": "Test case 3 - Simple majority",
+    "64(6)": "Test case 4 - NEW - SA takes utmost account + 2-week response"
+  },
+  "b2b_relevance": "HIGH - Article 64 matters when: (1) An SA adopts a DPIA required list that affects your processing, (2) An SA approves SCCs or BCRs you want to use for transfers, (3) An SA approves certification criteria you want to achieve. Key takeaway: Board opinions ensure consistency in SA decisions that have broad application."
+}

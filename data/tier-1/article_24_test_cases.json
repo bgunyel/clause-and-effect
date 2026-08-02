@@ -1,0 +1,60 @@
+{
+  "article_number": "24",
+  "article_title": "Responsibility of the controller",
+  "test_cases": [
+    {
+      "question": "What factors should a company consider when deciding what data protection measures to implement?",
+      "answer": "A controller must consider the nature, scope, context, and purposes of the processing activities, as well as the risks of varying likelihood and severity for the rights and freedoms of natural persons. Based on these factors, the controller implements appropriate technical and organisational measures to ensure and be able to demonstrate that processing is performed in accordance with GDPR.",
+      "answer_type": "definition",
+      "supporting_quote": "Taking into account the nature, scope, context and purposes of processing as well as the risks of varying likelihood and severity for the rights and freedoms of natural persons, the controller shall implement appropriate technical and organisational measures to ensure and to be able to demonstrate that processing is performed in accordance with this Regulation",
+      "key_phrases": [
+        "nature, scope, context and purposes",
+        "risks of varying likelihood and severity",
+        "technical and organisational measures",
+        "demonstrate"
+      ]
+    },
+    {
+      "question": "Do the security measures a company implements need to be static, or can they change?",
+      "answer": "The measures must be reviewed and updated where necessary. They are not static and should evolve based on changes in processing activities, technology, or the risk landscape.",
+      "answer_type": "timeline",
+      "supporting_quote": "Those measures shall be reviewed and updated where necessary.",
+      "key_phrases": [
+        "reviewed and updated",
+        "where necessary"
+      ]
+    },
+    {
+      "question": "Under what conditions is a controller required to implement formal data protection policies?",
+      "answer": "A controller must implement data protection policies when doing so is proportionate to the processing activities being carried out. This is not required for all processing but specifically where the measures are proportionate to the nature and scale of processing undertaken.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where proportionate in relation to processing activities, the measures referred to in paragraph 1 shall include the implementation of appropriate data protection policies by the controller",
+      "key_phrases": [
+        "where proportionate",
+        "processing activities",
+        "data protection policies"
+      ]
+    },
+    {
+      "question": "Can adhering to approved codes of conduct or certification mechanisms help demonstrate GDPR compliance?",
+      "answer": "Yes. Adherence to approved codes of conduct as referred to in Article 40, or approved certification mechanisms as referred to in Article 42, may be used as an element to demonstrate compliance with the controller's obligations under Article 24.",
+      "answer_type": "conditional",
+      "supporting_quote": "Adherence to approved codes of conduct as referred to in Article 40 or approved certification mechanisms as referred to in Article 42 may be used as an element by which to demonstrate compliance with the obligations of the controller",
+      "key_phrases": [
+        "approved codes of conduct",
+        "certification mechanisms",
+        "Article 40",
+        "Article 42",
+        "demonstrate compliance"
+      ]
+    }
+  ],
+  "coverage": {
+    "24(1) factors": "Test case 1 - Nature, scope, context, purposes + risks",
+    "24(1) demonstrate": "Test case 1 - Ensure and demonstrate compliance",
+    "24(1) review": "Test case 2 - Review and update where necessary",
+    "24(2)": "Test case 3 - Data protection policies where proportionate",
+    "24(3)": "Test case 4 - NEW - Codes of conduct and certification as compliance element"
+  },
+  "b2b_relevance": "CRITICAL - Article 24 establishes controller accountability. Essential for: building compliance programs, determining appropriate security measures, creating data protection policies, pursuing certifications (ISO 27701, etc.), and demonstrating compliance during audits. Key takeaways: (1) Risk-based approach - measures must match risk, (2) Must be able to DEMONSTRATE compliance, (3) Policies required where proportionate, (4) Certifications can help prove compliance."
+}

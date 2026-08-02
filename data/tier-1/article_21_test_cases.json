@@ -1,0 +1,62 @@
+{
+  "article_number": "21",
+  "article_title": "Right to object",
+  "test_cases": [
+    {
+      "question": "If a person objects to their data being processed, when can the company legally keep using that data?",
+      "answer": "The company can continue processing only if it can demonstrate compelling legitimate grounds that override the person's interests, rights, and freedoms, or if the processing is for establishing, exercising, or defending legal claims. Otherwise, the company must stop processing upon receiving the objection. This only applies to processing based on public interest (Article 6(1)(e)) or legitimate interests (Article 6(1)(f)).",
+      "answer_type": "conditional",
+      "supporting_quote": "the controller shall no longer process the personal data unless the controller demonstrates compelling legitimate grounds for the processing which override the interests, rights and freedoms of the data subject or for the establishment, exercise or defence of legal claims",
+      "key_phrases": [
+        "compelling legitimate grounds",
+        "override the interests",
+        "rights and freedoms",
+        "legal claims"
+      ]
+    },
+    {
+      "question": "What happens when a user objects to their data being used for direct marketing?",
+      "answer": "When a user objects to processing for direct marketing purposes, the personal data must no longer be processed for such purposes. This is an absolute right with no balancing test—there are no exceptions. This includes profiling activities to the extent they are related to direct marketing.",
+      "answer_type": "scope",
+      "supporting_quote": "Where the data subject objects to processing for direct marketing purposes, the personal data shall no longer be processed for such purposes",
+      "key_phrases": [
+        "no longer be processed",
+        "direct marketing",
+        "profiling",
+        "absolute right"
+      ]
+    },
+    {
+      "question": "What must organizations tell data subjects about the right to object at the time of first communication?",
+      "answer": "At the time of first communication with the data subject, the right to object must be explicitly brought to the data subject's attention and must be presented clearly and separately from any other information.",
+      "answer_type": "timeline",
+      "supporting_quote": "At the latest at the time of the first communication with the data subject, the right referred to in paragraphs 1 and 2 shall be explicitly brought to the attention of the data subject and shall be presented clearly and separately from any other information",
+      "key_phrases": [
+        "first communication",
+        "explicitly brought to the attention",
+        "presented clearly and separately"
+      ]
+    },
+    {
+      "question": "Can a data subject object to processing for scientific research or statistical purposes?",
+      "answer": "Yes, the data subject has the right to object to processing for scientific or historical research purposes or statistical purposes, on grounds relating to their particular situation. However, this right does not apply where the processing is necessary for the performance of a task carried out for reasons of public interest.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where personal data are processed for scientific or historical research purposes or statistical purposes pursuant to Article 89(1), the data subject, on grounds relating to his or her particular situation, shall have the right to object to processing of personal data concerning him or her, unless the processing is necessary for the performance of a task carried out for reasons of public interest",
+      "key_phrases": [
+        "scientific or historical research",
+        "statistical purposes",
+        "particular situation",
+        "public interest"
+      ]
+    }
+  ],
+  "coverage": {
+    "21(1)": "Test case 1 - Right to object to 6(1)(e) or (f) processing + compelling grounds exception",
+    "21(2)": "Test case 2 - Direct marketing objection (absolute right, includes profiling)",
+    "21(3)": "Test case 2 - Must stop processing for direct marketing",
+    "21(4)": "Test case 3 - Notify at first communication, clearly and separately",
+    "21(5)": "NOT COVERED - Automated means for information society services (less B2B critical)",
+    "21(6)": "Test case 4 - NEW - Research/statistical purposes objection"
+  },
+  "b2b_relevance": "CRITICAL - Article 21 affects marketing, analytics, and research activities. Essential for: marketing opt-out mechanisms, legitimate interests processing, customer communication templates, and research compliance. Key takeaways: (1) Direct marketing objection is ABSOLUTE - no exceptions, (2) For legitimate interests, can override only with compelling grounds, (3) Must notify of this right at first communication, clearly and separately from other info."
+}

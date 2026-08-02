@@ -1,0 +1,44 @@
+{
+  "article_number": "87",
+  "article_title": "Processing of the national identification number",
+  "test_cases": [
+    {
+      "question": "What types of identifiers does Article 87 cover?",
+      "answer": "Article 87 covers: (1) national identification numbers, and (2) any other identifier of general application. These are identifiers broadly used to identify individuals within a Member State, not limited to specific sectors or purposes.",
+      "answer_type": "definition",
+      "supporting_quote": "the processing of a national identification number or any other identifier of general application",
+      "key_phrases": [
+        "national identification number",
+        "identifier of general application"
+      ]
+    },
+    {
+      "question": "Can Member States set their own rules for processing national identification numbers?",
+      "answer": "Yes. Member States may further determine the specific conditions for the processing of a national identification number or any other identifier of general application. This allows countries to add their own requirements on top of the GDPR framework.",
+      "answer_type": "scope",
+      "supporting_quote": "Member States may further determine the specific conditions for the processing of a national identification number or any other identifier of general application",
+      "key_phrases": [
+        "Member States",
+        "may further determine",
+        "specific conditions"
+      ]
+    },
+    {
+      "question": "What safeguards are required when Member States set conditions for processing national ID numbers?",
+      "answer": "When Member States have determined specific conditions for processing, the national identification number or any other identifier of general application shall be used only under appropriate safeguards for the rights and freedoms of the data subject pursuant to this Regulation.",
+      "answer_type": "conditional",
+      "supporting_quote": "In that case the national identification number or any other identifier of general application shall be used only under appropriate safeguards for the rights and freedoms of the data subject pursuant to this Regulation",
+      "key_phrases": [
+        "In that case",
+        "appropriate safeguards",
+        "rights and freedoms of the data subject"
+      ]
+    }
+  ],
+  "coverage": {
+    "87_identifiers": "Test case 1 - National ID number + other identifiers of general application",
+    "87_ms_power": "Test case 2 - Member States may determine specific conditions",
+    "87_safeguards": "Test case 3 - Appropriate safeguards required when MS sets conditions"
+  },
+  "b2b_relevance": "MEDIUM - Article 87 affects B2B SaaS if you process national ID numbers (e.g., SSNs, tax IDs, national insurance numbers). Key points: (1) Check each Member State's specific rules, (2) Must implement appropriate safeguards, (3) Rules vary significantly by country. Relevant for KYC processes, employee onboarding, or any SaaS collecting government-issued identifiers."
+}

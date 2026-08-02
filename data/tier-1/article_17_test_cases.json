@@ -1,0 +1,76 @@
+{
+  "article_number": "17",
+  "article_title": "Right to erasure ('right to be forgotten')",
+  "test_cases": [
+    {
+      "question": "What is the 'right to be forgotten' under GDPR?",
+      "answer": "The 'right to be forgotten' is the right of an individual to request that a company erase their personal data without undue delay. The company is obligated to comply when one of the specific legal grounds applies, such as when the data is no longer needed for its original purpose.",
+      "answer_type": "definition",
+      "supporting_quote": "The data subject shall have the right to obtain from the controller the erasure of personal data concerning him or her without undue delay and the controller shall have the obligation to erase personal data without undue delay where one of the following grounds applies",
+      "key_phrases": [
+        "right to erasure",
+        "right to be forgotten",
+        "erase personal data",
+        "without undue delay"
+      ]
+    },
+    {
+      "question": "How quickly must a company erase personal data when a valid erasure request is received?",
+      "answer": "The controller must erase personal data without undue delay when one of the grounds for erasure applies. The data subject also has the right to obtain erasure without undue delay.",
+      "answer_type": "timeline",
+      "supporting_quote": "the controller shall have the obligation to erase personal data without undue delay",
+      "key_phrases": [
+        "without undue delay",
+        "obligation to erase"
+      ]
+    },
+    {
+      "question": "Under what circumstances can a data subject request that their personal data be erased?",
+      "answer": "A data subject can request erasure when: (a) the data is no longer necessary for the original purpose, (b) they withdraw consent and there is no other legal ground, (c) they object to the processing and no overriding legitimate grounds exist, (d) the data was unlawfully processed, (e) erasure is required to comply with a legal obligation in EU or Member State law, or (f) the data was collected from a child in relation to information society services.",
+      "answer_type": "definition",
+      "supporting_quote": "the personal data are no longer necessary in relation to the purposes for which they were collected or otherwise processed; the data subject withdraws consent on which the processing is based... the data subject objects to the processing... the personal data have been unlawfully processed... the personal data have to be erased for compliance with a legal obligation... the personal data have been collected in relation to the offer of information society services",
+      "key_phrases": [
+        "no longer necessary",
+        "withdraws consent",
+        "objects to the processing",
+        "unlawfully processed",
+        "legal obligation",
+        "information society services"
+      ]
+    },
+    {
+      "question": "If a company has made personal data public and then receives an erasure request, what additional obligation does it have?",
+      "answer": "Where the controller has made the personal data public and is obliged to erase it, the controller must take reasonable steps, including technical measures, to inform other controllers which are processing the personal data that the data subject has requested erasure of any links to, or copies or replications of, that data. This must take into account available technology and the cost of implementation.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where the controller has made the personal data public and is obliged pursuant to paragraph 1 to erase the personal data, the controller, taking account of available technology and the cost of implementation, shall take reasonable steps, including technical measures, to inform controllers which are processing the personal data that the data subject has requested the erasure by such controllers of any links to, or copy or replication of, those personal data",
+      "key_phrases": [
+        "made the personal data public",
+        "reasonable steps",
+        "inform controllers",
+        "links to, or copy or replication"
+      ]
+    },
+    {
+      "question": "When can a company refuse to delete personal data despite a valid erasure request?",
+      "answer": "The right to erasure does not apply when processing is necessary for: (a) exercising the right of freedom of expression and information, (b) compliance with a legal obligation or for a task carried out in the public interest or exercise of official authority, (c) reasons of public interest in the area of public health, (d) archiving purposes in the public interest, scientific or historical research purposes, or statistical purposes, or (e) the establishment, exercise or defence of legal claims.",
+      "answer_type": "scope",
+      "supporting_quote": "Paragraphs 1 and 2 shall not apply to the extent that processing is necessary: (a) for exercising the right of freedom of expression and information; (b) for compliance with a legal obligation... or for the performance of a task carried out in the public interest; (c) for reasons of public interest in the area of public health; (d) for archiving purposes in the public interest, scientific or historical research purposes or statistical purposes; (e) for the establishment, exercise or defence of legal claims",
+      "key_phrases": [
+        "shall not apply",
+        "freedom of expression",
+        "legal obligation",
+        "public interest",
+        "public health",
+        "archiving purposes",
+        "legal claims"
+      ]
+    }
+  ],
+  "coverage": {
+    "17(1) intro": "Test cases 1 and 2 - Right to erasure + without undue delay",
+    "17(1)(a)-(f)": "Test case 3 - All six grounds for erasure",
+    "17(2)": "Test case 4 - NEW - Public data notification to other controllers",
+    "17(3)(a)-(e)": "Test case 5 - NEW - All five exceptions"
+  },
+  "b2b_relevance": "CRITICAL - Article 17 is frequently exercised and often misunderstood. Essential for: deletion request workflows, data retention policies, backup/archive handling, and understanding when you can legitimately refuse. Key takeaways: (1) Must notify other controllers if you made data public, (2) Five important exceptions including legal claims and legal obligations, (3) Child data has special erasure rights."
+}

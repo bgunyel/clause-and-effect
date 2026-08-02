@@ -1,0 +1,106 @@
+{
+  "article_number": "12",
+  "article_title": "Transparent information, communication and modalities for the exercise of the rights of the data subject",
+  "test_cases": [
+    {
+      "question": "What language and presentation standards must a company use when informing users about how their data is being processed?",
+      "answer": "Companies must provide information in a concise, transparent, intelligible, and easily accessible form, using clear and plain language. This requirement is especially strict for any information directed specifically at children.",
+      "answer_type": "definition",
+      "supporting_quote": "in a concise, transparent, intelligible and easily accessible form, using clear and plain language, in particular for any information addressed specifically to a child",
+      "key_phrases": [
+        "concise",
+        "transparent",
+        "intelligible",
+        "easily accessible",
+        "clear and plain language",
+        "child"
+      ]
+    },
+    {
+      "question": "What communication methods satisfy the requirements when delivering information to data subjects?",
+      "answer": "Information must be provided in writing, or by other means including electronic means where appropriate. When requested by the data subject, information may be provided orally, but only if the identity of the data subject is proven by other means.",
+      "answer_type": "scope",
+      "supporting_quote": "The information shall be provided in writing, or by other means, including, where appropriate, by electronic means. When requested by the data subject, the information may be provided orally, provided that the identity of the data subject is proven by other means",
+      "key_phrases": [
+        "in writing",
+        "electronic means",
+        "orally",
+        "identity proven"
+      ]
+    },
+    {
+      "question": "Which data subject rights must the controller help facilitate?",
+      "answer": "The controller must facilitate the exercise of data subject rights under Articles 15 through 22, which include the right of access, rectification, erasure, restriction of processing, data portability, the right to object, and rights related to automated decision-making.",
+      "answer_type": "scope",
+      "supporting_quote": "The controller shall facilitate the exercise of data subject rights under Articles 15 to 22",
+      "key_phrases": [
+        "facilitate",
+        "Articles 15 to 22",
+        "data subject rights"
+      ]
+    },
+    {
+      "question": "How long does a company have to respond to a data subject rights request, and can this be extended?",
+      "answer": "The controller must provide information on action taken without undue delay and in any event within one month of receipt of the request. This period may be extended by two further months where necessary, taking into account the complexity and number of requests. The controller must inform the data subject of any such extension within one month, together with the reasons for the delay.",
+      "answer_type": "timeline",
+      "supporting_quote": "The controller shall provide information on action taken on a request under Articles 15 to 22 to the data subject without undue delay and in any event within one month of receipt of the request. That period may be extended by two further months where necessary, taking into account the complexity and number of the requests. The controller shall inform the data subject of any such extension within one month of receipt of the request, together with the reasons for the delay",
+      "key_phrases": [
+        "without undue delay",
+        "within one month",
+        "extended by two further months",
+        "complexity and number of requests",
+        "reasons for the delay"
+      ]
+    },
+    {
+      "question": "What must a company do if it decides not to take action on a data subject's request?",
+      "answer": "If the controller does not take action on the data subject's request, it must inform the data subject without delay and at the latest within one month of receipt of the request of the reasons for not taking action, and of the possibility of lodging a complaint with a supervisory authority and seeking a judicial remedy.",
+      "answer_type": "conditional",
+      "supporting_quote": "If the controller does not take action on the request of the data subject, the controller shall inform the data subject without delay and at the latest within one month of receipt of the request of the reasons for not taking action and on the possibility of lodging a complaint with a supervisory authority and seeking a judicial remedy",
+      "key_phrases": [
+        "does not take action",
+        "within one month",
+        "reasons for not taking action",
+        "lodging a complaint",
+        "supervisory authority",
+        "judicial remedy"
+      ]
+    },
+    {
+      "question": "Can a company charge fees for responding to data subject requests?",
+      "answer": "Information provided under Articles 13 and 14 and communications/actions under Articles 15-22 and 34 must be provided free of charge. However, where requests are manifestly unfounded or excessive, particularly due to their repetitive character, the controller may either charge a reasonable fee taking into account administrative costs, or refuse to act on the request. The controller bears the burden of demonstrating the manifestly unfounded or excessive character.",
+      "answer_type": "conditional",
+      "supporting_quote": "Information provided under Articles 13 and 14 and any communication and any actions taken under Articles 15 to 22 and 34 shall be provided free of charge. Where requests from a data subject are manifestly unfounded or excessive, in particular because of their repetitive character, the controller may either charge a reasonable fee taking into account the administrative costs... or refuse to act on the request",
+      "key_phrases": [
+        "free of charge",
+        "manifestly unfounded or excessive",
+        "repetitive character",
+        "reasonable fee",
+        "refuse to act"
+      ]
+    },
+    {
+      "question": "Can a company ask for additional information to verify the identity of a person making a data subject request?",
+      "answer": "Yes, where the controller has reasonable doubts concerning the identity of the natural person making the request, the controller may request the provision of additional information necessary to confirm the identity of the data subject.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where the controller has reasonable doubts concerning the identity of the natural person making the request under Articles 15 to 21, the controller may request the provision of additional information necessary to confirm the identity of the data subject",
+      "key_phrases": [
+        "reasonable doubts",
+        "identity",
+        "request additional information",
+        "confirm identity"
+      ]
+    }
+  ],
+  "coverage": {
+    "12(1) transparency": "Test case 1 - Concise, transparent, intelligible, accessible, clear/plain language",
+    "12(1) children": "Test case 1 - Special requirements for information to children",
+    "12(1) format": "Test case 2 - Written, electronic, or oral (with identity verification)",
+    "12(2)": "Test case 3 - Controller must facilitate rights under Articles 15-22",
+    "12(3)": "Test case 4 - NEW - One month response + two month extension + inform of delay",
+    "12(4)": "Test case 5 - NEW - Must inform when not taking action + reasons + complaint rights",
+    "12(5)": "Test case 6 - NEW - Free of charge + fee/refusal for excessive requests",
+    "12(6)": "Test case 7 - NEW - Identity verification when reasonable doubts"
+  },
+  "b2b_relevance": "CRITICAL - Article 12 governs all data subject request handling. Essential for: privacy policy design, DSAR (Data Subject Access Request) workflows, customer support procedures, and compliance timelines. Key takeaways: (1) One month response deadline with possible two-month extension, (2) Generally free, but can charge/refuse for abusive requests, (3) Must verify identity before responding, (4) Must explain if refusing to act."
+}

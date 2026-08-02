@@ -1,0 +1,60 @@
+{
+  "article_number": "80",
+  "article_title": "Representation of data subjects",
+  "test_cases": [
+    {
+      "question": "What criteria must an organization meet to represent a data subject under GDPR?",
+      "answer": "The organization must be a not-for-profit body, organisation or association which has been properly constituted in accordance with the law of a Member State, has statutory objectives which are in the public interest, and is active in the field of the protection of data subjects' rights and freedoms with regard to the protection of their personal data.",
+      "answer_type": "definition",
+      "supporting_quote": "a not-for-profit body, organisation or association which has been properly constituted in accordance with the law of a Member State, has statutory objectives which are in the public interest, and is active in the field of the protection of data subjects' rights and freedoms with regard to the protection of their personal data",
+      "key_phrases": [
+        "not-for-profit body",
+        "properly constituted",
+        "statutory objectives",
+        "public interest",
+        "active in the field"
+      ]
+    },
+    {
+      "question": "What specific actions can a mandated organization take on behalf of a data subject?",
+      "answer": "A mandated organization can: (1) lodge complaints on the data subject's behalf; (2) exercise the rights referred to in Articles 77, 78 and 79 (complaint to SA, judicial remedy against SA, judicial remedy against controller/processor) on their behalf; and (3) exercise the right to receive compensation referred to in Article 82 on their behalf, where provided for by Member State law.",
+      "answer_type": "scope",
+      "supporting_quote": "to lodge the complaint on his or her behalf, to exercise the rights referred to in Articles 77, 78 and 79 on his or her behalf, and to exercise the right to receive compensation referred to in Article 82 on his or her behalf, where provided for by Member State law",
+      "key_phrases": [
+        "lodge the complaint",
+        "Articles 77, 78 and 79",
+        "right to receive compensation",
+        "Article 82"
+      ]
+    },
+    {
+      "question": "Can a for-profit company represent data subjects in GDPR complaints or lawsuits?",
+      "answer": "No. Article 80 explicitly limits representation to not-for-profit bodies, organisations or associations. For-profit companies are not eligible to exercise these rights on behalf of data subjects.",
+      "answer_type": "scope",
+      "supporting_quote": "The data subject shall have the right to mandate a not-for-profit body, organisation or association",
+      "key_phrases": [
+        "not-for-profit",
+        "body, organisation or association",
+        "mandate"
+      ]
+    },
+    {
+      "question": "Can an organization file GDPR complaints without being mandated by a specific data subject?",
+      "answer": "Potentially yes. Member States may provide that any body, organisation or association (meeting the criteria in Article 80(1)) has the right to lodge a complaint and exercise Arts 77/78/79 rights independently of a data subject's mandate, if it considers the data subject's rights have been infringed. This is an optional Member State law provision.",
+      "answer_type": "conditional",
+      "supporting_quote": "Member States may provide that any body, organisation or association referred to in paragraph 1 of this Article, independently of a data subject's mandate, has the right in that Member State to lodge a complaint with the supervisory authority... and to exercise the rights referred to in Articles 78 and 79 if it considers that the rights of a data subject under this Regulation have been infringed",
+      "key_phrases": [
+        "Member States may provide",
+        "independently of a data subject's mandate",
+        "considers that the rights... have been infringed"
+      ]
+    }
+  ],
+  "coverage": {
+    "80(1) mandate": "Test cases 1 and 2 - Right to mandate + requirements",
+    "80(1) not-for-profit": "Test case 3 - For-profit excluded",
+    "80(1) actions": "Test case 2 - Complaints, Arts 77/78/79, Art 82 compensation",
+    "80(2)": "Test case 4 - NEW - Member State option for independent action"
+  },
+  "b2b_relevance": "MEDIUM-HIGH - Article 80 enables collective action. Key implications: (1) Data protection NGOs and consumer groups can sue on behalf of data subjects, (2) Some EU countries allow NGOs to act WITHOUT individual mandates (class action style), (3) This amplifies litigation risk - one NGO can represent many users. Watch for advocacy groups like NOYB, Privacy International, etc."
+}

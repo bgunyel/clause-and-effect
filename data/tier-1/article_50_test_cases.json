@@ -1,0 +1,63 @@
+{
+  "article_number": "50",
+  "article_title": "International cooperation for the protection of personal data",
+  "test_cases": [
+    {
+      "question": "What are the four main areas of activity for international cooperation on data protection?",
+      "answer": "In relation to third countries and international organisations, the Commission and supervisory authorities shall take appropriate steps to: (a) develop international cooperation mechanisms to facilitate effective enforcement of data protection legislation; (b) provide international mutual assistance in enforcement, including through notification, complaint referral, investigative assistance, and information exchange; (c) engage relevant stakeholders in discussion and activities aimed at furthering international cooperation in enforcing data protection legislation; and (d) promote the exchange and documentation of personal data protection legislation and practice, including on jurisdictional conflicts with third countries.",
+      "answer_type": "definition",
+      "supporting_quote": "In relation to third countries and international organisations, the Commission and supervisory authorities shall take appropriate steps to: (a) develop international cooperation mechanisms to facilitate the effective enforcement of legislation for the protection of personal data; (b) provide international mutual assistance in the enforcement of legislation for the protection of personal data, including through notification, complaint referral, investigative assistance and information exchange, subject to appropriate safeguards for the protection of personal data and other fundamental rights and freedoms; (c) engage relevant stakeholders in discussion and activities aimed at furthering international cooperation in the enforcement of legislation for the protection of personal data; (d) promote the exchange and documentation of personal data protection legislation and practice, including on jurisdictional conflicts with third countries",
+      "key_phrases": [
+        "international cooperation mechanisms",
+        "international mutual assistance",
+        "engage relevant stakeholders",
+        "exchange and documentation",
+        "jurisdictional conflicts"
+      ]
+    },
+    {
+      "question": "What types of support are included in international mutual assistance for data protection enforcement?",
+      "answer": "International mutual assistance includes four types of support: notification, complaint referral, investigative assistance, and information exchange. All such cooperation must be subject to appropriate safeguards for the protection of personal data and other fundamental rights and freedoms.",
+      "answer_type": "definition",
+      "supporting_quote": "provide international mutual assistance in the enforcement of legislation for the protection of personal data, including through notification, complaint referral, investigative assistance and information exchange, subject to appropriate safeguards for the protection of personal data and other fundamental rights and freedoms",
+      "key_phrases": [
+        "notification",
+        "complaint referral",
+        "investigative assistance",
+        "information exchange",
+        "appropriate safeguards"
+      ]
+    },
+    {
+      "question": "What conditions must be met when supervisory authorities share information with data protection authorities outside the EU?",
+      "answer": "When providing international mutual assistance, including information exchange, such cooperation must be subject to appropriate safeguards for the protection of personal data and other fundamental rights and freedoms. Data cannot be shared without these protections in place.",
+      "answer_type": "conditional",
+      "supporting_quote": "subject to appropriate safeguards for the protection of personal data and other fundamental rights and freedoms",
+      "key_phrases": [
+        "subject to appropriate safeguards",
+        "protection of personal data",
+        "fundamental rights and freedoms"
+      ]
+    },
+    {
+      "question": "Which public bodies are responsible for engaging in international cooperation on data protection?",
+      "answer": "The Commission and supervisory authorities are jointly responsible for taking appropriate steps to develop international cooperation mechanisms and facilitate effective enforcement of data protection legislation with third countries and international organisations.",
+      "answer_type": "scope",
+      "supporting_quote": "the Commission and supervisory authorities shall take appropriate steps to: (a) develop international cooperation mechanisms to facilitate the effective enforcement of legislation for the protection of personal data",
+      "key_phrases": [
+        "Commission",
+        "supervisory authorities",
+        "third countries",
+        "international organisations"
+      ]
+    }
+  ],
+  "coverage": {
+    "50(a)": "Test case 1 - Develop international cooperation mechanisms",
+    "50(b)": "Test case 1 + 2 - Mutual assistance (notification, complaint referral, investigative assistance, information exchange)",
+    "50(b) safeguards": "Test case 2 + 3 - Subject to appropriate safeguards",
+    "50(c)": "Test case 1 - Engage relevant stakeholders",
+    "50(d)": "Test case 1 - Exchange documentation, including jurisdictional conflicts"
+  },
+  "b2b_relevance": "LOW-MEDIUM - Article 50 is primarily about regulatory cooperation, not direct business obligations. However, it's relevant for: understanding how enforcement crosses borders, knowing that jurisdictional conflicts are acknowledged in GDPR, and recognizing that SAs share information internationally. Key takeaways: (1) SAs cooperate internationally, (2) They share complaint referrals and investigative info, (3) Jurisdictional conflicts with third countries are explicitly addressed."
+}

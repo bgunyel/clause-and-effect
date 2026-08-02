@@ -1,0 +1,72 @@
+{
+  "article_number": "66",
+  "article_title": "Urgency procedure",
+  "test_cases": [
+    {
+      "question": "Under what circumstances can a supervisory authority bypass the standard consistency mechanism?",
+      "answer": "In exceptional circumstances, where a supervisory authority concerned considers that there is an urgent need to act in order to protect the rights and freedoms of data subjects, it may, by way of derogation from the consistency mechanism referred to in Articles 63, 64 and 65, immediately adopt provisional measures intended to produce legal effects on its own territory.",
+      "answer_type": "conditional",
+      "supporting_quote": "In exceptional circumstances, where a supervisory authority concerned considers that there is an urgent need to act in order to protect the rights and freedoms of data subjects, it may, by way of derogation from the consistency mechanism referred to in Articles 63, 64 and 65 or the procedure referred to in Article 60, immediately adopt provisional measures intended to produce legal effects on its own territory",
+      "key_phrases": [
+        "exceptional circumstances",
+        "urgent need to act",
+        "protect the rights and freedoms",
+        "derogation",
+        "immediately adopt"
+      ]
+    },
+    {
+      "question": "How long can provisional measures adopted under the urgency procedure remain in effect?",
+      "answer": "Provisional measures adopted under the urgency procedure shall have a specified period of validity which shall not exceed three months.",
+      "answer_type": "timeline",
+      "supporting_quote": "adopt provisional measures intended to produce legal effects on its own territory with a specified period of validity which shall not exceed three months",
+      "key_phrases": [
+        "provisional measures",
+        "specified period of validity",
+        "shall not exceed three months"
+      ]
+    },
+    {
+      "question": "What must a supervisory authority do after adopting urgent provisional measures?",
+      "answer": "The supervisory authority shall, without delay, communicate those measures and the reasons for adopting them to the other supervisory authorities concerned, to the Board, and to the Commission.",
+      "answer_type": "conditional",
+      "supporting_quote": "The supervisory authority shall, without delay, communicate those measures and the reasons for adopting them to the other supervisory authorities concerned, to the Board and to the Commission",
+      "key_phrases": [
+        "without delay",
+        "communicate those measures",
+        "reasons for adopting them",
+        "Board and Commission"
+      ]
+    },
+    {
+      "question": "How quickly must the Board act if a supervisory authority requests an urgent opinion or binding decision?",
+      "answer": "Where a supervisory authority requests an urgent opinion or an urgent binding decision from the Board pursuant to Article 65, the Board shall adopt an opinion or a binding decision within two weeks by a simple majority of its members.",
+      "answer_type": "timeline",
+      "supporting_quote": "Where a supervisory authority has taken a measure pursuant to paragraph 1 and considers that final measures need to be urgently adopted, it may request an urgent opinion or an urgent binding decision from the Board, giving reasons for requesting such opinion or decision. Any supervisory authority may request an urgent opinion or an urgent binding decision, as the case may be, where the competent supervisory authority has not taken an appropriate measure in a situation where there is an urgent need to act, in order to protect the rights and freedoms of data subjects, giving reasons for requesting such urgent opinion or binding decision, including for the urgent need to act. By derogation from Article 64(3) and Article 65(2), an urgent opinion or an urgent binding decision referred to in paragraphs 3 and 4 of this Article shall be adopted within two weeks by simple majority",
+      "key_phrases": [
+        "urgent opinion",
+        "urgent binding decision",
+        "two weeks",
+        "simple majority"
+      ]
+    },
+    {
+      "question": "What happens if another supervisory authority objects to an urgent provisional measure?",
+      "answer": "Where a supervisory authority concerned has raised an objection to the measure of another supervisory authority, or where the Board considers the measure infringes GDPR or would not be consistent, the Board shall adopt a binding decision that urgently requires the supervisory authority to revoke or maintain the provisional measure.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where a supervisory authority concerned has raised an objection to the measure of another supervisory authority... the Board shall adopt a binding decision that urgently requires the supervisory authority to revoke the provisional measure or to maintain it",
+      "key_phrases": [
+        "raised an objection",
+        "binding decision",
+        "revoke or maintain"
+      ]
+    }
+  ],
+  "coverage": {
+    "66(1)": "Test case 1 + 2 - Exceptional circumstances, derogation, 3-month max validity",
+    "66(2)": "Test case 3 - Communicate to SAs, Board, Commission without delay",
+    "66(3)-(4)": "Test case 4 - NEW - Urgent Board opinion/decision within 2 weeks",
+    "66(4)": "Test case 5 - SA objection triggers Board binding decision"
+  },
+  "b2b_relevance": "HIGH - Article 66 is the emergency mechanism. Key for B2B: (1) A single SA can take immediate action against you without waiting for lead SA process, (2) Measures are provisional (max 3 months), (3) Other SAs can object → Board decides, (4) Board can act within 2 WEEKS in emergencies. This is how urgent data protection issues (breaches, ongoing harm) get addressed quickly."
+}

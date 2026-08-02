@@ -1,0 +1,84 @@
+{
+  "article_number": "41",
+  "article_title": "Monitoring of approved codes of conduct",
+  "test_cases": [
+    {
+      "question": "Who can monitor compliance with an approved code of conduct?",
+      "answer": "Monitoring may be carried out by a body which has the appropriate level of expertise in relation to the subject-matter of the code and is accredited by the competent supervisory authority. This is without prejudice to the tasks and powers of the supervisory authority itself under Articles 57 and 58, meaning the SA retains full enforcement powers.",
+      "answer_type": "scope",
+      "supporting_quote": "Without prejudice to the tasks and powers of the competent supervisory authority under Articles 57 and 58, the monitoring of compliance with a code of conduct pursuant to Article 40 may be carried out by a body which has the appropriate level of expertise in relation to the subject-matter of the code and is accredited for that purpose by the competent supervisory authority",
+      "key_phrases": [
+        "without prejudice",
+        "appropriate level of expertise",
+        "accredited",
+        "competent supervisory authority"
+      ]
+    },
+    {
+      "question": "What criteria must a body meet to be accredited for monitoring a code of conduct?",
+      "answer": "A body must: (a) demonstrate independence and expertise in the subject-matter to the SA's satisfaction; (b) establish procedures for assessing eligibility and monitoring compliance; (c) establish procedures for handling complaints about infringements; (d) demonstrate no conflict of interest with its tasks and duties. The body seeking accreditation must submit a draft of the code of conduct to the competent SA along with other relevant documentation.",
+      "answer_type": "definition",
+      "supporting_quote": "A body as referred to in paragraph 1 may be accredited to monitor compliance with a code of conduct if it has: (a) demonstrated its independence and expertise in relation to the subject-matter of the code to the satisfaction of the competent supervisory authority; (b) established procedures which allow it to assess the eligibility of controllers and processors concerned to apply the code, to monitor their compliance with its provisions and to periodically review its operation; (c) established procedures and structures to handle complaints about infringements of the code or the manner in which the code has been, or is being, implemented by a controller or processor, and to make those procedures and structures transparent to data subjects and the public; and (d) demonstrated to the satisfaction of the competent supervisory authority that its tasks and duties do not result in a conflict of interests",
+      "key_phrases": [
+        "independence and expertise",
+        "assess eligibility",
+        "handle complaints",
+        "conflict of interests"
+      ]
+    },
+    {
+      "question": "How long does accreditation last for a monitoring body?",
+      "answer": "Accreditation is granted for a maximum period of five years and may be renewed on the same conditions, provided the monitoring body continues to meet all accreditation requirements.",
+      "answer_type": "timeline",
+      "supporting_quote": "The accreditation of a body as referred to in paragraph 1 shall be for a maximum period of five years and may be renewed on the same conditions provided that the body meets the requirements set out in this Article",
+      "key_phrases": [
+        "maximum period of five years",
+        "may be renewed",
+        "same conditions"
+      ]
+    },
+    {
+      "question": "What actions can a monitoring body take against a controller or processor that violates the code?",
+      "answer": "The monitoring body must take appropriate action in cases of infringement of the code, including suspension or exclusion of the controller or processor from the code. The monitoring body must inform the competent supervisory authority of such actions and the reasons for them.",
+      "answer_type": "conditional",
+      "supporting_quote": "The accredited body as referred to in paragraph 1 shall, without prejudice to the tasks and powers of the competent supervisory authority and the provisions of Chapter VIII, take appropriate action in cases of infringement of the code by a controller or processor, including suspension or exclusion of the controller or processor concerned from the code. It shall inform the competent supervisory authority of such actions and the reasons therefor",
+      "key_phrases": [
+        "appropriate action",
+        "suspension or exclusion",
+        "infringement of the code",
+        "inform the competent supervisory authority"
+      ]
+    },
+    {
+      "question": "Under what circumstances can accreditation be revoked from a monitoring body?",
+      "answer": "The competent supervisory authority shall revoke the accreditation of a body if: (1) the conditions for accreditation are not, or are no longer, met, or (2) actions taken by the body infringe GDPR. The SA shall inform the Board of the revocation.",
+      "answer_type": "conditional",
+      "supporting_quote": "The competent supervisory authority shall revoke the accreditation of a body as referred to in paragraph 1 if the conditions for the accreditation are not, or are no longer, met or where actions taken by the body infringe this Regulation",
+      "key_phrases": [
+        "revoke the accreditation",
+        "conditions are not met",
+        "no longer met",
+        "infringe this Regulation"
+      ]
+    },
+    {
+      "question": "Does Article 41 apply to public authorities processing personal data?",
+      "answer": "No. This Article does not apply to processing carried out by public authorities and bodies. Public authorities are excluded from the code of conduct monitoring framework.",
+      "answer_type": "scope",
+      "supporting_quote": "This Article shall not apply to processing carried out by public authorities and bodies",
+      "key_phrases": [
+        "shall not apply",
+        "public authorities and bodies"
+      ]
+    }
+  ],
+  "coverage": {
+    "41(1)": "Test case 1 - Monitoring bodies with expertise, accredited by SA",
+    "41(2)": "Test case 2 - Four accreditation criteria",
+    "41(3)": "Test case 3 - Five-year term, renewable",
+    "41(4)": "Test case 4 - Enforcement: suspend/exclude, inform SA",
+    "41(5)": "Test case 5 - Revocation conditions",
+    "41(6)": "Test case 6 - NEW - Public authority exception"
+  },
+  "b2b_relevance": "MEDIUM - Article 41 establishes the monitoring body framework for codes of conduct. Key for: organizations seeking code accreditation, understanding enforcement mechanisms, and knowing that SA powers remain intact. Key takeaways: (1) Independent monitoring bodies can be accredited, (2) 5-year renewable term, (3) Bodies can suspend/exclude violators, (4) SA retains full enforcement powers, (5) Public authorities excluded."
+}

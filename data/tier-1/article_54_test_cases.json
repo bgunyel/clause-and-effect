@@ -1,0 +1,67 @@
+{
+  "article_number": "54",
+  "article_title": "Rules on the establishment of the supervisory authority",
+  "test_cases": [
+    {
+      "question": "What must Member States establish by law regarding supervisory authorities?",
+      "answer": "Each Member State shall provide by law for: (a) the establishment of each supervisory authority; (b) the qualifications and eligibility conditions required for appointment as member; (c) the rules and procedures for appointment of members; (d) the duration of the term (no less than 4 years); (e) whether and for how many terms members are eligible for reappointment; (f) the conditions governing obligations of members and staff, including prohibitions on incompatible actions, occupations, and benefits during and after term; and (g) the rules and procedures for termination of duties.",
+      "answer_type": "scope",
+      "supporting_quote": "Each Member State shall provide by law for all of the following: (a) the establishment of each supervisory authority; (b) the qualifications and eligibility conditions required to be appointed as member of each supervisory authority; (c) the rules and procedures for the appointment of the member or members of each supervisory authority; (d) the duration of the term of the member or members of each supervisory authority; (e) whether and, if so, for how many terms the member or members of each supervisory authority is eligible for reappointment; (f) the conditions governing the obligations of the member or members and staff of each supervisory authority, prohibitions on actions, occupations and benefits incompatible therewith during and after the term of office and rules governing the cessation of employment; (g) the rules and procedures for the termination of the duties of the member or members of each supervisory authority",
+      "key_phrases": [
+        "Member State shall provide by law",
+        "establishment",
+        "qualifications",
+        "appointment",
+        "term duration",
+        "reappointment",
+        "termination"
+      ]
+    },
+    {
+      "question": "What is the minimum term length for members of a supervisory authority?",
+      "answer": "Members must serve a term of no less than four years. However, for the first appointment after 24 May 2016, part of the term may be for a shorter period where necessary to protect the independence of the supervisory authority by means of a staggered appointment procedure.",
+      "answer_type": "timeline",
+      "supporting_quote": "the duration of the term of the member or members of each supervisory authority of no less than four years, except for the first appointment after 24 May 2016, part of which may take place for a shorter period where that is necessary to protect the independence of the supervisory authority by means of a staggered appointment procedure",
+      "key_phrases": [
+        "no less than four years",
+        "first appointment after 24 May 2016",
+        "staggered appointment procedure"
+      ]
+    },
+    {
+      "question": "Can supervisory authority members be reappointed for additional terms?",
+      "answer": "Whether members are eligible for reappointment, and if so for how many terms, is determined by each Member State's national law. GDPR requires Member States to establish these rules but does not prescribe a uniform approach.",
+      "answer_type": "conditional",
+      "supporting_quote": "whether and, if so, for how many terms the member or members of each supervisory authority is eligible for reappointment",
+      "key_phrases": [
+        "whether",
+        "eligible for reappointment",
+        "how many terms",
+        "Member State law"
+      ]
+    },
+    {
+      "question": "What professional secrecy obligations apply to supervisory authority members and staff?",
+      "answer": "Members and staff are subject to a duty of professional secrecy, in accordance with Union or Member State law, both during and after their term of office. This applies to any confidential information which has come to their knowledge in the course of performing their tasks or exercising their powers. During their term, this duty particularly applies to reporting by natural persons of infringements of GDPR.",
+      "answer_type": "definition",
+      "supporting_quote": "The member or members and the staff of each supervisory authority shall, in accordance with Union or Member State law, be subject to a duty of professional secrecy both during and after their term of office, with regard to any confidential information which has come to their knowledge in the course of the performance of their tasks or exercise of their powers. During their term of office, that duty of professional secrecy shall in particular apply to reporting by natural persons of infringements of this Regulation",
+      "key_phrases": [
+        "duty of professional secrecy",
+        "during and after their term",
+        "confidential information",
+        "reporting by natural persons"
+      ]
+    }
+  ],
+  "coverage": {
+    "54(1)(a)": "Test case 1 - Establishment of each SA",
+    "54(1)(b)": "Test case 1 - Qualifications and eligibility conditions",
+    "54(1)(c)": "Test case 1 - Rules and procedures for appointment",
+    "54(1)(d)": "Test case 2 - Term duration (no less than 4 years + stagger exception)",
+    "54(1)(e)": "Test case 3 - Reappointment eligibility",
+    "54(1)(f)": "Test case 1 - Conditions governing obligations (during and after term)",
+    "54(1)(g)": "Test case 1 - NEW - Rules for termination of duties",
+    "54(2)": "Test case 4 - Professional secrecy (particularly for whistleblower reports)"
+  },
+  "b2b_relevance": "LOW - Article 54 is about SA establishment rules, not direct business obligations. However, relevant for: (1) Understanding SA members serve 4+ year terms providing stability, (2) Professional secrecy protects complaint confidentiality, (3) Member State law determines many SA details."
+}

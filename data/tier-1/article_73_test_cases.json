@@ -1,0 +1,45 @@
+{
+  "article_number": "73",
+  "article_title": "Chair",
+  "test_cases": [
+    {
+      "question": "How is the Chair of the European Data Protection Board elected?",
+      "answer": "The Board shall elect a chair and two deputy chairs from amongst its members by simple majority. This means only existing Board members are eligible, and election requires more than half of members to agree.",
+      "answer_type": "definition",
+      "supporting_quote": "The Board shall elect a chair and two deputy chairs from amongst its members by simple majority",
+      "key_phrases": [
+        "elect a chair",
+        "two deputy chairs",
+        "from amongst its members",
+        "simple majority"
+      ]
+    },
+    {
+      "question": "How long is the term of office for the EDPB Chair and deputy chairs?",
+      "answer": "The term of office of the Chair and of the deputy chairs shall be five years and be renewable once. This means a Chair could serve a maximum of 10 years total (two five-year terms).",
+      "answer_type": "timeline",
+      "supporting_quote": "The term of office of the Chair and of the deputy chairs shall be five years and be renewable once",
+      "key_phrases": [
+        "five years",
+        "renewable once",
+        "term of office"
+      ]
+    },
+    {
+      "question": "How many leadership positions are elected for the Board?",
+      "answer": "Three leadership positions are elected: one Chair and two deputy chairs. All must be elected from amongst existing Board members by simple majority vote.",
+      "answer_type": "scope",
+      "supporting_quote": "The Board shall elect a chair and two deputy chairs from amongst its members",
+      "key_phrases": [
+        "a chair",
+        "two deputy chairs",
+        "from amongst its members"
+      ]
+    }
+  ],
+  "coverage": {
+    "73(1)": "Test cases 1 and 3 - Election process, eligibility, voting threshold, number of positions",
+    "73(2)": "Test case 2 - Five-year term, renewable once"
+  },
+  "b2b_relevance": "LOW - Article 73 is purely about EDPB internal governance. No direct business obligations. The Chair represents the Board (Art 68(2)) and communicates Board activities to the Commission."
+}

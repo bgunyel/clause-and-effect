@@ -1,22 +1,22 @@
 """
 Index regulation documents into vector database
 """
+import json
+from pathlib import Path
+from typing import Any, Dict, List
 
 from src.config import get_settings
 from src.clause_and_effect import GDPRParser, VectorDatabase
 
 
-def main():
-    """Index GDPR into vector database"""
-    print("""
-    ╔═══════════════════════════════════════════╗
-    ║                                           ║
-    ║        { Clause & Effect }                ║
-    ║   Document Indexing                       ║
-    ║                                           ║
-    ╚═══════════════════════════════════════════╝
-    """)
+def read_gdpr_articles_from_json() -> List[Dict[str, Any]]:
+    settings = get_settings()
+    articles_file = Path(settings.REGULATIONS_DIR) / 'gdpr_articles.json'
+    with open(articles_file, 'r', encoding='utf-8') as f:
+        articles = json.load(f)
+    return articles
 
+def extract_gdpr_articles_from_pdf():
     settings = get_settings()
 
     gdpr_path = settings.REGULATIONS_DIR / "gdpr.pdf"
@@ -34,6 +34,31 @@ def main():
     # Parse GDPR
     parser = GDPRParser()
     chunks = parser.parse(gdpr_path)
+    return chunks
+
+
+
+def main():
+    """Index GDPR into vector database"""
+    print("""
+    ╔═══════════════════════════════════════════╗
+    ║                                           ║
+    ║        { Clause & Effect }                ║
+    ║   Document Indexing                       ║
+    ║                                           ║
+    ╚═══════════════════════════════════════════╝
+    """)
+
+
+    settings = get_settings()
+    articles = read_gdpr_articles_from_json()
+
+    gdpr_parser = GDPRParser()
+
+    chunks = []
+    for article in articles:
+        article_chunks = gdpr_parser.article_to_chunks(article)
+        chunks.extend(article_chunks)
 
     # Statistics
     print(f"\n📊 Statistics:")
@@ -64,6 +89,8 @@ def main():
         print(f"\n{i}. {result['chunk_id']} (score: {result['score']:.3f})")
         print(f"   Article: {result['metadata']['article_number']} - {result['metadata']['article_title']}")
         print(f"   Text: {result['text'][:150]}...")
+
+
 
 
 if __name__ == "__main__":

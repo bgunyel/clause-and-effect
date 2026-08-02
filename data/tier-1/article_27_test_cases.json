@@ -1,0 +1,62 @@
+{
+  "article_number": "27",
+  "article_title": "Representatives of controllers or processors not established in the Union",
+  "test_cases": [
+    {
+      "question": "Who qualifies as a representative for a non-EU company under GDPR and what is their role?",
+      "answer": "A representative is a natural or legal person established in the European Union who is designated in writing by a controller or processor not established in the Union. The representative acts on behalf of the controller or processor regarding their GDPR obligations and serves as the point of contact for supervisory authorities and data subjects on all processing-related issues.",
+      "answer_type": "definition",
+      "supporting_quote": "The controller or the processor shall designate in writing a representative in the Union... The representative shall be mandated by the controller or the processor to be addressed in addition to or instead of the controller or the processor by, in particular, supervisory authorities and data subjects, on all issues related to processing",
+      "key_phrases": [
+        "natural or legal person",
+        "designated in writing",
+        "acts on behalf",
+        "supervisory authorities and data subjects"
+      ]
+    },
+    {
+      "question": "Where should a company's EU representative be located?",
+      "answer": "The representative must be established in one of the Member States where the data subjects whose personal data is being processed are located—this includes people to whom goods or services are offered or whose behavior is being monitored.",
+      "answer_type": "scope",
+      "supporting_quote": "The representative shall be established in one of the Member States where the data subjects, whose personal data are processed in relation to the offering of goods or services to them, or whose behaviour is monitored, are",
+      "key_phrases": [
+        "one of the Member States",
+        "where the data subjects are",
+        "offering of goods or services",
+        "behaviour is monitored"
+      ]
+    },
+    {
+      "question": "Under what circumstances does a non-EU company NOT need to appoint an EU representative?",
+      "answer": "A non-EU company does not need to appoint a representative if: (a) its processing is only occasional, does not involve large-scale processing of special categories of data or criminal conviction data, and is unlikely to result in a risk to the rights and freedoms of natural persons, taking into account the nature, context, scope and purposes of the processing; or (b) it is a public authority or body.",
+      "answer_type": "conditional",
+      "supporting_quote": "Paragraph 1 shall not apply to: (a) processing which is occasional, does not include, on a large scale, processing of special categories of data as referred to in Article 9(1) or processing of personal data relating to criminal convictions and offences referred to in Article 10, and is unlikely to result in a risk to the rights and freedoms of natural persons, taking into account the nature, context, scope and purposes of the processing; or (b) a public authority or body",
+      "key_phrases": [
+        "processing which is occasional",
+        "not include, on a large scale",
+        "unlikely to result in a risk",
+        "public authority or body"
+      ]
+    },
+    {
+      "question": "Does appointing an EU representative protect a non-EU company from legal actions under GDPR?",
+      "answer": "No. The designation of a representative by the controller or processor does not affect legal actions which could be initiated against the controller or the processor themselves. Appointing a representative does not shield the organization from liability or enforcement.",
+      "answer_type": "scope",
+      "supporting_quote": "The designation of a representative by the controller or processor shall be without prejudice to legal actions which could be initiated against the controller or the processor themselves",
+      "key_phrases": [
+        "without prejudice to legal actions",
+        "against the controller or the processor themselves",
+        "designation of a representative"
+      ]
+    }
+  ],
+  "coverage": {
+    "27(1)": "Test case 1 - When Article 3(2) applies, must designate in writing",
+    "27(2)(a)": "Test case 3 - Exception: occasional processing, not large-scale special categories, unlikely risk",
+    "27(2)(b)": "Test case 3 - Exception: public authority or body",
+    "27(3)": "Test case 2 - Location: Member State where data subjects are located",
+    "27(4)": "Test case 1 - Role: act on behalf, addressee for SAs and data subjects",
+    "27(5)": "Test case 4 - NEW - Designation does not shield from legal actions"
+  },
+  "b2b_relevance": "HIGH for non-EU companies - Article 27 is mandatory for non-EU B2B SaaS targeting EU customers. Essential for: market entry strategy, compliance structure, choosing representative service providers, and understanding liability exposure. Key takeaways: (1) Must be in WRITING, (2) Representative location matters - where your customers are, (3) Having a representative does NOT protect you from lawsuits, (4) Occasional/low-risk processing may be exempt."
+}

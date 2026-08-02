@@ -1,0 +1,47 @@
+{
+  "article_number": "76",
+  "article_title": "Confidentiality",
+  "test_cases": [
+    {
+      "question": "Under what circumstances are the Board's discussions confidential?",
+      "answer": "The discussions of the Board shall be confidential where the Board deems it necessary, as provided for in its rules of procedure. Confidentiality is not automatic - it depends on the Board's determination of necessity under its internal rules.",
+      "answer_type": "conditional",
+      "supporting_quote": "The discussions of the Board shall be confidential where the Board deems it necessary, as provided for in its rules of procedure",
+      "key_phrases": [
+        "confidential",
+        "Board deems it necessary",
+        "rules of procedure"
+      ]
+    },
+    {
+      "question": "What regulation governs access to documents submitted to Board members, experts, and third-party representatives?",
+      "answer": "Access to documents submitted to members of the Board, experts and representatives of third parties shall be governed by Regulation (EC) No 1049/2001 of the European Parliament and of the Council. This is a separate regulation on public access to EU institution documents.",
+      "answer_type": "definition",
+      "supporting_quote": "Access to documents submitted to members of the Board, experts and representatives of third parties shall be governed by Regulation (EC) No 1049/2001 of the European Parliament and of the Council",
+      "key_phrases": [
+        "Regulation (EC) No 1049/2001",
+        "access to documents",
+        "members of the Board",
+        "experts",
+        "representatives of third parties"
+      ]
+    },
+    {
+      "question": "Does the GDPR's confidentiality rule for the Board apply to documents it receives?",
+      "answer": "No. Article 76 distinguishes between: (1) Board discussions (confidential where Board deems necessary), and (2) documents submitted to Board members, experts, and third parties (governed separately by Regulation 1049/2001 on public access). The confidentiality rule specifically covers discussions, not documents.",
+      "answer_type": "scope",
+      "supporting_quote": "The discussions of the Board shall be confidential... Access to documents submitted to members of the Board, experts and representatives of third parties shall be governed by Regulation (EC) No 1049/2001",
+      "key_phrases": [
+        "discussions",
+        "confidential",
+        "access to documents",
+        "Regulation (EC) No 1049/2001"
+      ]
+    }
+  ],
+  "coverage": {
+    "76(1)": "Test cases 1 and 3 - Board discussions confidential where Board deems necessary, per rules of procedure",
+    "76(2)": "Test cases 2 and 3 - Document access governed by Regulation 1049/2001"
+  },
+  "b2b_relevance": "LOW - Article 76 is about EDPB internal confidentiality. No direct business obligations. However, note that documents submitted to the Board may be accessible under Regulation 1049/2001 (public access to EU documents). If your company submits information to EDPB (e.g., in BCR applications), be aware of potential public access."
+}

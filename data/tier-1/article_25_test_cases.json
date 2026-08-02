@@ -1,0 +1,65 @@
+{
+  "article_number": "25",
+  "article_title": "Data protection by design and by default",
+  "test_cases": [
+    {
+      "question": "What factors should a company evaluate when deciding what data protection measures to put in place?",
+      "answer": "When implementing data protection measures, the controller must take into account the state of the art, the cost of implementation, the nature, scope, context and purposes of processing, as well as the risks of varying likelihood and severity for the rights and freedoms of natural persons posed by the processing.",
+      "answer_type": "definition",
+      "supporting_quote": "Taking into account the state of the art, the cost of implementation and the nature, scope, context and purposes of processing as well as the risks of varying likelihood and severity for rights and freedoms of natural persons posed by the processing",
+      "key_phrases": [
+        "state of the art",
+        "cost of implementation",
+        "nature, scope, context and purposes",
+        "risks to rights and freedoms"
+      ]
+    },
+    {
+      "question": "At what points in the data processing lifecycle must controllers implement data protection measures?",
+      "answer": "The controller must implement appropriate technical and organisational measures at two specific points: both at the time of the determination of the means for processing and at the time of the processing itself. This ensures protection is built in from the initial design phase through actual implementation. Examples of such measures include pseudonymisation and data minimisation.",
+      "answer_type": "timeline",
+      "supporting_quote": "both at the time of the determination of the means for processing and at the time of the processing itself, the controller shall implement appropriate technical and organisational measures, such as pseudonymisation, which are designed to implement data-protection principles, such as data minimisation",
+      "key_phrases": [
+        "time of determination of means",
+        "time of processing itself",
+        "pseudonymisation",
+        "data minimisation"
+      ]
+    },
+    {
+      "question": "What does data protection by default require companies to do regarding the data they collect?",
+      "answer": "Companies must implement appropriate technical and organisational measures to ensure that by default, only personal data necessary for each specific purpose of the processing are processed. This obligation applies to four aspects: the amount of data collected, the extent of processing, the storage period, and their accessibility. Personal data must not be made accessible without the individual's intervention to an indefinite number of natural persons.",
+      "answer_type": "scope",
+      "supporting_quote": "The controller shall implement appropriate technical and organisational measures for ensuring that, by default, only personal data which are necessary for each specific purpose of the processing are processed. That obligation applies to the amount of personal data collected, the extent of their processing, the period of their storage and their accessibility. In particular, such measures shall ensure that by default personal data are not made accessible without the individual's intervention to an indefinite number of natural persons.",
+      "key_phrases": [
+        "by default",
+        "necessary for each specific purpose",
+        "amount of personal data",
+        "period of storage",
+        "accessibility",
+        "not made accessible without intervention"
+      ]
+    },
+    {
+      "question": "Can certification help demonstrate compliance with data protection by design and by default requirements?",
+      "answer": "Yes. An approved certification mechanism pursuant to Article 42 may be used as an element to demonstrate compliance with the data protection by design and by default requirements set out in Article 25.",
+      "answer_type": "conditional",
+      "supporting_quote": "An approved certification mechanism pursuant to Article 42 may be used as an element to demonstrate compliance with the requirements set out in paragraphs 1 and 2 of this Article",
+      "key_phrases": [
+        "approved certification mechanism",
+        "Article 42",
+        "demonstrate compliance"
+      ]
+    }
+  ],
+  "coverage": {
+    "25(1) factors": "Test case 1 - State of art, cost, nature/scope/context/purposes, risks",
+    "25(1) timing": "Test case 2 - Both at determination of means AND at processing itself",
+    "25(1) examples": "Test case 2 - Pseudonymisation, data minimisation",
+    "25(2) definition": "Test case 3 - Only necessary data for each specific purpose",
+    "25(2) four aspects": "Test case 3 - Amount, extent, storage period, accessibility",
+    "25(2) accessibility": "Test case 3 - Not accessible without individual's intervention",
+    "25(3)": "Test case 4 - NEW - Certification as compliance element"
+  },
+  "b2b_relevance": "CRITICAL - Article 25 requires building privacy into systems from the start. Essential for: product development processes, system architecture decisions, default settings design, privacy impact assessments, and vendor/technology selection. Key takeaways: (1) Must implement at DESIGN time not just deployment, (2) Default settings must be privacy-protective, (3) Four aspects: amount, extent, storage, accessibility, (4) 'Not accessible to indefinite number' = privacy-by-default for sharing."
+}

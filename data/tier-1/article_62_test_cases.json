@@ -1,0 +1,73 @@
+{
+  "article_number": "62",
+  "article_title": "Joint operations of supervisory authorities",
+  "test_cases": [
+    {
+      "question": "What types of activities can supervisory authorities conduct together as joint operations?",
+      "answer": "The supervisory authorities shall, where appropriate, conduct joint operations including joint investigations and joint enforcement measures in which members or staff of the supervisory authorities of other Member States are involved.",
+      "answer_type": "definition",
+      "supporting_quote": "The supervisory authorities shall, where appropriate, conduct joint operations including joint investigations and joint enforcement measures in which members or staff of the supervisory authorities of other Member States are involved",
+      "key_phrases": [
+        "joint operations",
+        "joint investigations",
+        "joint enforcement measures",
+        "where appropriate"
+      ]
+    },
+    {
+      "question": "When does a supervisory authority have the right to participate in joint operations?",
+      "answer": "A supervisory authority has the right to participate in joint operations when: (1) the controller or processor has establishments in several Member States; or (2) a significant number of data subjects in more than one Member State are likely to be substantially affected by processing operations. In either case, a supervisory authority of each of those Member States shall have the right to participate.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where the controller or processor has establishments in several Member States or where a significant number of data subjects in more than one Member State are likely to be substantially affected by processing operations, a supervisory authority of each of those Member States shall have the right to participate in joint operations",
+      "key_phrases": [
+        "establishments in several Member States",
+        "significant number of data subjects",
+        "substantially affected",
+        "right to participate"
+      ]
+    },
+    {
+      "question": "How is the invitation process for joint operations handled between supervisory authorities?",
+      "answer": "The supervisory authority which is competent pursuant to Article 56(1) or (4) shall invite the supervisory authority of each of those Member States to take part in the joint operations and shall respond without delay to the request of a supervisory authority to participate. A supervisory authority may refuse the request but must explain why.",
+      "answer_type": "conditional",
+      "supporting_quote": "The supervisory authority which is competent pursuant to Article 56(1) or (4) shall invite the supervisory authority of each of those Member States to take part in the joint operations and shall respond without delay to the request of a supervisory authority to participate",
+      "key_phrases": [
+        "invite",
+        "respond without delay",
+        "request to participate"
+      ]
+    },
+    {
+      "question": "Which country's laws apply when supervisory authority staff participate in joint operations in another Member State?",
+      "answer": "A supervisory authority may exercise its investigative powers in accordance with the law of the Member State of the inviting supervisory authority. Members of the seconded supervisory authority shall operate under the guidance of the member or staff of the host supervisory authority and in accordance with the law of the host Member State.",
+      "answer_type": "scope",
+      "supporting_quote": "A supervisory authority may, in accordance with its own Member State law, and with the authorisation of the seconding supervisory authority, confer powers, including investigative powers on the seconding supervisory authority's members or staff involved in joint operations or, in so far as the law of the Member State of the host supervisory authority permits, allow the seconding supervisory authority's members or staff to exercise their investigative powers in accordance with the law of the Member State of the seconding supervisory authority",
+      "key_phrases": [
+        "law of the Member State",
+        "host supervisory authority",
+        "investigative powers",
+        "guidance"
+      ]
+    },
+    {
+      "question": "Who is responsible for the legality of joint operations conducted on a Member State's territory?",
+      "answer": "Where members or staff of other supervisory authorities operate in another Member State, the Member State of the host supervisory authority shall assume responsibility for their actions, including liability for any damages caused by those members or staff during the operations, in accordance with the law of that Member State.",
+      "answer_type": "scope",
+      "supporting_quote": "Where, in accordance with paragraph 1, members or staff of a seconding supervisory authority operate in another Member State, the Member State of the host supervisory authority shall assume responsibility for their actions, including liability, for any damage caused by them during their operations, in accordance with the law of the Member State in whose territory they are operating",
+      "key_phrases": [
+        "host supervisory authority",
+        "assume responsibility",
+        "liability",
+        "damage caused"
+      ]
+    }
+  ],
+  "coverage": {
+    "62(1)": "Test case 1 - Joint operations definition (investigations + enforcement)",
+    "62(2)": "Test case 2 - Right to participate (establishments or DS substantially affected)",
+    "62(3)": "Test case 3 - NEW - Invitation process + respond without delay",
+    "62(4)-(5)": "Test case 4 - NEW - Host country law applies to seconded staff",
+    "62(6)": "Test case 5 - NEW - Host country assumes responsibility/liability"
+  },
+  "b2b_relevance": "MEDIUM-HIGH - Article 62 explains how SAs work together in investigations. Key for B2B: (1) If you have establishments in multiple countries, multiple SAs may participate in investigation, (2) If your processing affects many DS across borders, same applies, (3) Joint operations are not automatic ('where appropriate'), (4) Host country bears liability for investigation actions."
+}

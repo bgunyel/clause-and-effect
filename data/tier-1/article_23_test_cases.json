@@ -1,0 +1,67 @@
+{
+  "article_number": "23",
+  "article_title": "Restrictions",
+  "test_cases": [
+    {
+      "question": "Which specific GDPR rights and obligations can be limited by national or EU law?",
+      "answer": "National or EU legislative measures may restrict the scope of the obligations and rights provided for in Articles 12 to 22 of GDPR (transparency, information, access, rectification, erasure, restriction, portability, objection, automated decisions). They may also restrict Article 34 (communication of breaches to data subjects) and corresponding principles in Article 5 insofar as they correspond to those rights.",
+      "answer_type": "scope",
+      "supporting_quote": "restrict by way of a legislative measure the scope of the obligations and rights provided for in Articles 12 to 22 and Article 34, as well as Article 5 in so far as its provisions correspond to the rights and obligations provided for in Articles 12 to 22",
+      "key_phrases": [
+        "Articles 12 to 22",
+        "Article 34",
+        "Article 5",
+        "legislative measure"
+      ]
+    },
+    {
+      "question": "When is it permissible for a national law to limit GDPR data subject rights?",
+      "answer": "A national law can limit these rights only when the restriction respects the essence of fundamental rights and freedoms and is a necessary and proportionate measure in a democratic society to safeguard specific objectives.",
+      "answer_type": "conditional",
+      "supporting_quote": "such a restriction respects the essence of the fundamental rights and freedoms and is a necessary and proportionate measure in a democratic society to safeguard",
+      "key_phrases": [
+        "respects the essence",
+        "fundamental rights and freedoms",
+        "necessary and proportionate",
+        "democratic society"
+      ]
+    },
+    {
+      "question": "What are the legitimate reasons a government might restrict GDPR rights like data access or erasure?",
+      "answer": "Legitimate reasons include: (a) national security, (b) defence, (c) public security, (d) prevention/investigation/prosecution of criminal offences, (e) other important public interests including economic/financial interests, public health, social security, (f) protection of judicial independence, (g) breaches of ethics for regulated professions, (h) monitoring/regulatory functions, (i) protection of the data subject or rights of others, and (j) enforcement of civil law claims.",
+      "answer_type": "definition",
+      "supporting_quote": "(a) national security; (b) defence; (c) public security; (d) the prevention, investigation, detection or prosecution of criminal offences... (e) other important objectives of general public interest... (f) the protection of judicial independence... (g) breaches of ethics for regulated professions; (h) a monitoring, inspection or regulatory function... (i) the protection of the data subject or the rights and freedoms of others; (j) the enforcement of civil law claims",
+      "key_phrases": [
+        "national security",
+        "defence",
+        "public security",
+        "criminal offences",
+        "public interest",
+        "judicial independence",
+        "civil law claims"
+      ]
+    },
+    {
+      "question": "What must a legislative measure contain in order to validly restrict GDPR rights?",
+      "answer": "A legislative measure restricting GDPR rights must contain specific provisions on: (a) the purposes of the processing or categories of processing, (b) the categories of personal data, (c) the scope of the restrictions introduced, (d) the safeguards to prevent abuse or unlawful access, (e) the controller or categories of controllers, (f) the storage periods and applicable safeguards considering nature/scope/purposes, (g) the risks to rights and freedoms of data subjects, and (h) the right of data subjects to be informed about the restriction (unless this would be prejudicial to the purpose).",
+      "answer_type": "definition",
+      "supporting_quote": "any legislative measure referred to in paragraph 1 shall contain specific provisions at least, where relevant, as to: (a) the purposes of the processing or categories of processing; (b) the categories of personal data; (c) the scope of the restrictions introduced; (d) the safeguards to prevent abuse or unlawful access or transfer; (e) the specification of the controller or categories of controllers; (f) the storage periods and the applicable safeguards taking into account the nature, scope and purposes of the processing or categories of processing; (g) the risks to the rights and freedoms of data subjects; and (h) the right of data subjects to be informed about the restriction, unless that may be prejudicial to the purpose of the restriction",
+      "key_phrases": [
+        "specific provisions",
+        "purposes of processing",
+        "categories of personal data",
+        "scope of restrictions",
+        "safeguards",
+        "storage periods",
+        "right to be informed"
+      ]
+    }
+  ],
+  "coverage": {
+    "23(1) intro": "Test case 1 - Scope: Articles 12-22, 34, and corresponding Article 5",
+    "23(1) conditions": "Test case 2 - Respects essence, necessary and proportionate in democratic society",
+    "23(1)(a)-(j)": "Test case 3 - All 10 legitimate objectives",
+    "23(2)": "Test case 4 - NEW - 8 required elements in legislative measure"
+  },
+  "b2b_relevance": "MEDIUM - Article 23 is primarily relevant when operating in jurisdictions with specific national laws restricting GDPR rights (e.g., for financial regulation, healthcare, employment). Essential for: understanding why certain rights requests may be refused under national law, compliance in regulated industries, and advising clients subject to regulatory oversight. Key takeaway: Restrictions must be legislative, proportionate, and contain specific safeguards."
+}

@@ -1,0 +1,80 @@
+{
+  "article_number": "49",
+  "article_title": "Derogations for specific situations",
+  "test_cases": [
+    {
+      "question": "What are the specific situations that allow personal data to be transferred without an adequacy decision or appropriate safeguards?",
+      "answer": "In the absence of an adequacy decision (Article 45) or appropriate safeguards (Article 46), a transfer may take place only if one of these conditions is met: (a) explicit consent after being informed of risks; (b) necessary for contract performance with the data subject; (c) necessary for pre-contractual measures at data subject's request; (d) necessary for important public interest reasons recognized in law; (e) necessary for establishment, exercise, or defence of legal claims; (f) necessary to protect vital interests when data subject is incapable of consenting; or (g) transfer from a public register.",
+      "answer_type": "definition",
+      "supporting_quote": "In the absence of a decision pursuant to Article 45(3), or of appropriate safeguards pursuant to Article 46, including binding corporate rules, a transfer or a set of transfers of personal data to a third country or an international organisation shall take place only on one of the following conditions: (a) the data subject has explicitly consented to the proposed transfer, after having been informed of the possible risks of such transfers for the data subject due to the absence of an adequacy decision and appropriate safeguards; (b) the transfer is necessary for the performance of a contract between the data subject and the controller or the implementation of pre-contractual measures taken at the data subject's request; (c) the transfer is necessary for the conclusion or performance of a contract concluded in the interest of the data subject between the controller and another natural or legal person; (d) the transfer is necessary for important reasons of public interest; (e) the transfer is necessary for the establishment, exercise or defence of legal claims; (f) the transfer is necessary in order to protect the vital interests of the data subject or of other persons, where the data subject is physically or legally incapable of giving consent; (g) the transfer is made from a register which according to Union or Member State law is intended to provide information to the public",
+      "key_phrases": [
+        "explicit consent",
+        "informed of the possible risks",
+        "performance of a contract",
+        "important reasons of public interest",
+        "legal claims",
+        "vital interests",
+        "public register"
+      ]
+    },
+    {
+      "question": "What must a data subject be told before their explicit consent can justify an international transfer under this article?",
+      "answer": "The data subject must be informed of the possible risks of such transfers due to the absence of an adequacy decision and appropriate safeguards. Only after receiving this information can explicit consent be validly obtained for the transfer.",
+      "answer_type": "conditional",
+      "supporting_quote": "the data subject has explicitly consented to the proposed transfer, after having been informed of the possible risks of such transfers for the data subject due to the absence of an adequacy decision and appropriate safeguards",
+      "key_phrases": [
+        "explicitly consented",
+        "informed of the possible risks",
+        "absence of an adequacy decision",
+        "absence of appropriate safeguards"
+      ]
+    },
+    {
+      "question": "Under what strict conditions can a company transfer data based on compelling legitimate interests?",
+      "answer": "This residual derogation applies only when: (1) the transfer is not repetitive; (2) it concerns only a limited number of data subjects; (3) it is necessary for compelling legitimate interests that are not overridden by data subject rights; (4) the controller has assessed all circumstances and provided suitable safeguards; (5) the controller informs the supervisory authority of the transfer; and (6) the controller informs the data subject of the transfer and the compelling legitimate interests pursued, in addition to Articles 13 and 14 information.",
+      "answer_type": "conditional",
+      "supporting_quote": "If the transfer could not be based on a provision in Article 45 or 46, including the provisions on binding corporate rules, and none of the derogations for a specific situation referred to in the first subparagraph of this paragraph is applicable, a transfer to a third country or an international organisation may take place only if the transfer is not repetitive, concerns only a limited number of data subjects, is necessary for the purposes of compelling legitimate interests pursued by the controller which are not overridden by the interests or rights and freedoms of the data subject, and the controller has assessed all the circumstances surrounding the data transfer and has on the basis of that assessment provided suitable safeguards with regard to the protection of personal data. The controller shall inform the supervisory authority of the transfer. The controller shall, in addition to providing the information referred to in Articles 13 and 14, inform the data subject of the transfer and on the compelling legitimate interests pursued",
+      "key_phrases": [
+        "not repetitive",
+        "limited number of data subjects",
+        "compelling legitimate interests",
+        "inform the supervisory authority",
+        "suitable safeguards"
+      ]
+    },
+    {
+      "question": "Do these derogations apply to public authorities exercising their official powers?",
+      "answer": "No. Article 49(3) explicitly states that the first subparagraph (paragraphs a-g) and the compelling legitimate interests derogation shall not apply to activities carried out by public authorities in the exercise of their public powers.",
+      "answer_type": "scope",
+      "supporting_quote": "Points (a), (b), (c) and (f) of the first subparagraph shall not apply to activities carried out by public authorities in the exercise of their public powers",
+      "key_phrases": [
+        "shall not apply",
+        "public authorities",
+        "exercise of their public powers"
+      ]
+    },
+    {
+      "question": "What legal requirement applies when using the 'important public interest' derogation?",
+      "answer": "The public interest referred to in point (d) must be recognised in Union law or in the law of the Member State to which the controller is subject. It cannot be based solely on the controller's own assessment of public interest.",
+      "answer_type": "conditional",
+      "supporting_quote": "The public interest referred to in point (d) of the first subparagraph shall be recognised in Union law or in the law of the Member State to which the controller is subject",
+      "key_phrases": [
+        "recognised in Union law",
+        "law of the Member State",
+        "public interest"
+      ]
+    }
+  ],
+  "coverage": {
+    "49(1)(a)": "Test case 1 + 2 - Explicit consent after being informed of risks",
+    "49(1)(b)(c)": "Test case 1 - Contract performance / pre-contractual measures",
+    "49(1)(d)": "Test case 1 + 5 - Important public interest (must be in law)",
+    "49(1)(e)": "Test case 1 - Legal claims",
+    "49(1)(f)": "Test case 1 - Vital interests",
+    "49(1)(g)": "Test case 1 - Public register",
+    "49(1) 2nd para": "Test case 3 - Compelling legitimate interests (strict conditions)",
+    "49(2)": "Test case 5 - NEW - Public interest must be recognized in law",
+    "49(3)": "Test case 4 - Public authority exception"
+  },
+  "b2b_relevance": "MEDIUM-HIGH - Article 49 provides last-resort derogations when no adequacy decision or Art 46 safeguards exist. Key for: occasional/non-repetitive transfers, litigation support, contractual necessity. Key takeaways: (1) Derogations are exceptions, not regular transfer bases, (2) Explicit consent requires risk disclosure, (3) Compelling legitimate interests is VERY restrictive (not repetitive, limited data subjects, inform SA), (4) Public interest must be in law."
+}

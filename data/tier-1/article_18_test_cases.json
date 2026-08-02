@@ -1,0 +1,51 @@
+{
+  "article_number": "18",
+  "article_title": "Right to restriction of processing",
+  "test_cases": [
+    {
+      "question": "Under what four circumstances can a data subject request that a controller restrict the processing of their personal data?",
+      "answer": "A data subject can request restriction when: (1) they contest the accuracy of the personal data, for a period allowing the controller to verify it; (2) the processing is unlawful but they oppose erasure and want restriction of use instead; (3) the controller no longer needs the data for processing purposes but the data subject needs it for legal claims; or (4) the data subject has objected to processing pending verification of legitimate grounds.",
+      "answer_type": "conditional",
+      "supporting_quote": "The data subject shall have the right to obtain from the controller restriction of processing where one of the following applies: (a) the accuracy of the personal data is contested by the data subject, for a period enabling the controller to verify the accuracy of the personal data; (b) the processing is unlawful and the data subject opposes the erasure of the personal data and requests the restriction of their use instead; (c) the controller no longer needs the personal data for the purposes of the processing, but they are required by the data subject for the establishment, exercise or defence of legal claims; (d) the data subject has objected to processing pursuant to Article 21(1) pending the verification whether the legitimate grounds of the controller override those of the data subject",
+      "key_phrases": [
+        "restriction of processing",
+        "contested accuracy",
+        "unlawful processing",
+        "legal claims",
+        "objected to processing"
+      ]
+    },
+    {
+      "question": "What does it actually mean when processing is 'restricted' under GDPR?",
+      "answer": "When processing is restricted, the personal data may only be stored. The controller cannot process it in any other way, except: with the data subject's consent, for the establishment, exercise or defence of legal claims, for the protection of the rights of another natural or legal person, or for reasons of important public interest of the Union or a Member State.",
+      "answer_type": "definition",
+      "supporting_quote": "Where processing has been restricted under paragraph 1, such personal data shall, with the exception of storage, only be processed with the data subject's consent or for the establishment, exercise or defence of legal claims or for the protection of the rights of another natural or legal person or for reasons of important public interest of the Union or of a Member State",
+      "key_phrases": [
+        "storage",
+        "with the data subject's consent",
+        "legal claims",
+        "protection of the rights",
+        "important public interest"
+      ]
+    },
+    {
+      "question": "What must a controller do before lifting a restriction on processing?",
+      "answer": "A controller who has restricted processing must inform the data subject before the restriction is lifted. This gives the data subject notice that processing will resume.",
+      "answer_type": "conditional",
+      "supporting_quote": "A data subject who has obtained restriction of processing pursuant to paragraph 1 shall be informed by the controller before the restriction of processing is lifted",
+      "key_phrases": [
+        "informed by the controller",
+        "before the restriction of processing is lifted"
+      ]
+    }
+  ],
+  "coverage": {
+    "18(1)(a)": "Test case 1 - Accuracy contested, for period to verify",
+    "18(1)(b)": "Test case 1 - Unlawful processing, opposes erasure",
+    "18(1)(c)": "Test case 1 - Controller no longer needs but data subject needs for legal claims",
+    "18(1)(d)": "Test case 1 - Objected under Article 21(1), pending verification",
+    "18(2)": "Test case 2 - NEW - What restriction means (storage only + four exceptions)",
+    "18(3)": "Test case 3 - NEW - Must inform before lifting restriction"
+  },
+  "b2b_relevance": "HIGH - Article 18 provides an alternative to erasure that preserves data while limiting use. Essential for: dispute resolution workflows, litigation holds, accuracy verification processes, and handling objections. Key takeaways: (1) Restriction = storage only with limited exceptions, (2) Four grounds for requesting restriction, (3) Must notify before lifting restriction."
+}

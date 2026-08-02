@@ -1,0 +1,60 @@
+{
+  "article_number": "59",
+  "article_title": "Activity reports",
+  "test_cases": [
+    {
+      "question": "How frequently must supervisory authorities produce reports on their activities?",
+      "answer": "Each supervisory authority shall draw up an annual report on its activities. This is a mandatory yearly requirement applying to all supervisory authorities without exception.",
+      "answer_type": "timeline",
+      "supporting_quote": "Each supervisory authority shall draw up an annual report on its activities",
+      "key_phrases": [
+        "annual report",
+        "each supervisory authority",
+        "activities"
+      ]
+    },
+    {
+      "question": "What types of information may be included in a supervisory authority's activity report?",
+      "answer": "The activity report may include a list of types of infringement notified and types of measures taken in accordance with Article 58(2) (corrective powers). These elements are optional additions - the word 'may' indicates they are not mandatory.",
+      "answer_type": "definition",
+      "supporting_quote": "which may include a list of types of infringement notified and types of measures taken in accordance with Article 58(2)",
+      "key_phrases": [
+        "may include",
+        "types of infringement notified",
+        "types of measures taken",
+        "Article 58(2)"
+      ]
+    },
+    {
+      "question": "Who must receive the supervisory authority's annual activity report?",
+      "answer": "The reports shall be transmitted to the national parliament, the government, and other authorities as designated under Member State law. This ensures political accountability and oversight of the supervisory authority's work.",
+      "answer_type": "scope",
+      "supporting_quote": "The reports shall be transmitted to the national parliament, the government and other authorities as designated under Member State law",
+      "key_phrases": [
+        "transmitted to",
+        "national parliament",
+        "government",
+        "Member State law"
+      ]
+    },
+    {
+      "question": "Are supervisory authority activity reports available to the public?",
+      "answer": "Yes. The reports shall be made available to the public, to the Commission, and to the Board (EDPB). This ensures transparency about supervisory authority activities and allows for cross-EU comparison and coordination.",
+      "answer_type": "scope",
+      "supporting_quote": "They shall be made available to the public, to the Commission and to the Board",
+      "key_phrases": [
+        "made available",
+        "public",
+        "Commission",
+        "Board"
+      ]
+    }
+  ],
+  "coverage": {
+    "59 para 1": "Test case 1 - Annual report requirement",
+    "59 para 1": "Test case 2 - Optional content (infringement types, measures taken)",
+    "59 para 2": "Test case 3 - NEW - Transmitted to parliament, government, other authorities",
+    "59 para 2": "Test case 4 - NEW - Made available to public, Commission, Board"
+  },
+  "b2b_relevance": "LOW-MEDIUM - Article 59 matters for transparency. SA annual reports are publicly available and show: (1) Types of infringements being enforced, (2) Types of measures taken (warnings, fines, bans), (3) Enforcement trends you should be aware of. Useful for benchmarking compliance priorities."
+}

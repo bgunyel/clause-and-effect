@@ -1,0 +1,45 @@
+{
+  "article_number": "94",
+  "article_title": "Repeal of Directive 95/46/EC",
+  "test_cases": [
+    {
+      "question": "When did Directive 95/46/EC cease to be in effect?",
+      "answer": "Directive 95/46/EC is repealed with effect from 25 May 2018. This date marks the full transition from the 1995 Data Protection Directive to the GDPR.",
+      "answer_type": "timeline",
+      "supporting_quote": "Directive 95/46/EC is repealed with effect from 25 May 2018",
+      "key_phrases": [
+        "repealed",
+        "with effect from 25 May 2018",
+        "Directive 95/46/EC"
+      ]
+    },
+    {
+      "question": "How should legal documents that reference Directive 95/46/EC be interpreted?",
+      "answer": "References to the repealed Directive shall be construed as references to this Regulation. This means contracts, policies, or legal documents citing the old Directive are automatically read as referring to the GDPR.",
+      "answer_type": "definition",
+      "supporting_quote": "References to the repealed Directive shall be construed as references to this Regulation",
+      "key_phrases": [
+        "References to the repealed Directive",
+        "construed as references",
+        "this Regulation"
+      ]
+    },
+    {
+      "question": "What body replaces the Article 29 Working Party under the GDPR?",
+      "answer": "References to the Working Party on the Protection of Individuals with regard to the Processing of Personal Data established by Article 29 of Directive 95/46/EC shall be construed as references to the European Data Protection Board established by this Regulation.",
+      "answer_type": "scope",
+      "supporting_quote": "References to the Working Party on the Protection of Individuals with regard to the Processing of Personal Data established by Article 29 of Directive 95/46/EC shall be construed as references to the European Data Protection Board established by this Regulation",
+      "key_phrases": [
+        "Working Party",
+        "Article 29 of Directive 95/46/EC",
+        "European Data Protection Board"
+      ]
+    }
+  ],
+  "coverage": {
+    "94(1)": "Test case 1 - Directive 95/46/EC repealed 25 May 2018",
+    "94(2) directive refs": "Test case 2 - Directive references → GDPR references",
+    "94(2) WP refs": "Test case 3 - Article 29 Working Party → EDPB"
+  },
+  "b2b_relevance": "LOW-MEDIUM - Article 94 affects legacy compliance. B2B SaaS implications: (1) Older contracts citing Directive 95/46/EC are read as GDPR references, (2) No need to amend old contracts just to update directive citations, (3) Guidance from the Article 29 Working Party remains relevant as it's now treated as EDPB guidance. If you have legacy DPAs or policies referencing the old Directive, they remain valid."
+}

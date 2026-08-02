@@ -1,0 +1,116 @@
+{
+  "article_number": "5",
+  "article_title": "Principles relating to processing of personal data",
+  "test_cases": [
+    {
+      "question": "What does the 'lawfulness, fairness and transparency' principle require when processing personal data?",
+      "answer": "Personal data must be processed lawfully, fairly, and in a transparent manner in relation to the data subject. This means organizations need to have a legal basis for processing, handle data in ways that are fair to individuals, and be open about how they use personal data.",
+      "answer_type": "definition",
+      "supporting_quote": "processed lawfully, fairly and in a transparent manner in relation to the data subject ('lawfulness, fairness and transparency')",
+      "key_phrases": [
+        "lawfully",
+        "fairly",
+        "transparent manner",
+        "data subject",
+        "lawfulness, fairness and transparency"
+      ]
+    },
+    {
+      "question": "What requirements must be met when personal data is collected?",
+      "answer": "Personal data must be collected for specified, explicit, and legitimate purposes. The purposes for collection must be clearly defined and communicated, and must be based on a valid legal ground.",
+      "answer_type": "definition",
+      "supporting_quote": "collected for specified, explicit and legitimate purposes",
+      "key_phrases": [
+        "specified",
+        "explicit",
+        "legitimate purposes",
+        "collected"
+      ]
+    },
+    {
+      "question": "Can a company use personal data for purposes different from why it was originally collected?",
+      "answer": "Personal data cannot be further processed in a manner incompatible with the purposes for which it was originally collected. However, further processing for archiving in the public interest, scientific or historical research purposes, or statistical purposes is permitted under certain conditions.",
+      "answer_type": "conditional",
+      "supporting_quote": "not further processed in a manner that is incompatible with those purposes; further processing for archiving purposes in the public interest, scientific or historical research purposes or statistical purposes",
+      "key_phrases": [
+        "not further processed",
+        "incompatible",
+        "archiving purposes",
+        "scientific or historical research",
+        "statistical purposes"
+      ]
+    },
+    {
+      "question": "What does the principle of data minimization require organizations to do?",
+      "answer": "Personal data must be adequate, relevant, and limited to what is necessary in relation to the purposes for which it is processed. Organizations cannot collect more data than they actually need for their specified purposes.",
+      "answer_type": "definition",
+      "supporting_quote": "adequate, relevant and limited to what is necessary in relation to the purposes for which they are processed ('data minimisation')",
+      "key_phrases": [
+        "data minimisation",
+        "adequate",
+        "relevant",
+        "limited to what is necessary"
+      ]
+    },
+    {
+      "question": "What does GDPR require regarding the accuracy of personal data?",
+      "answer": "Personal data must be accurate and, where necessary, kept up to date. Every reasonable step must be taken to ensure that personal data that are inaccurate, having regard to the purposes for which they are processed, are erased or rectified without delay.",
+      "answer_type": "definition",
+      "supporting_quote": "accurate and, where necessary, kept up to date; every reasonable step must be taken to ensure that personal data that are inaccurate, having regard to the purposes for which they are processed, are erased or rectified without delay ('accuracy')",
+      "key_phrases": [
+        "accurate",
+        "kept up to date",
+        "every reasonable step",
+        "erased or rectified without delay",
+        "accuracy"
+      ]
+    },
+    {
+      "question": "How long can an organization retain personal data according to GDPR?",
+      "answer": "Personal data should be kept in a form that permits identification of data subjects for no longer than is necessary for the purposes for which it was collected. Once those purposes are fulfilled, the data must be deleted or anonymized. Longer storage is permitted only for archiving in the public interest, scientific or historical research, or statistical purposes with appropriate safeguards.",
+      "answer_type": "timeline",
+      "supporting_quote": "kept in a form which permits identification of data subjects for no longer than is necessary for the purposes for which the personal data are processed; personal data may be stored for longer periods insofar as the personal data will be processed solely for archiving purposes in the public interest, scientific or historical research purposes or statistical purposes",
+      "key_phrases": [
+        "no longer than is necessary",
+        "storage limitation",
+        "identification of data subjects",
+        "archiving purposes"
+      ]
+    },
+    {
+      "question": "What security requirements does GDPR impose on the processing of personal data?",
+      "answer": "Personal data must be processed in a manner that ensures appropriate security, including protection against unauthorised or unlawful processing and against accidental loss, destruction or damage. This must be achieved using appropriate technical or organisational measures.",
+      "answer_type": "definition",
+      "supporting_quote": "processed in a manner that ensures appropriate security of the personal data, including protection against unauthorised or unlawful processing and against accidental loss, destruction or damage, using appropriate technical or organisational measures ('integrity and confidentiality')",
+      "key_phrases": [
+        "integrity and confidentiality",
+        "appropriate security",
+        "unauthorised or unlawful processing",
+        "accidental loss, destruction or damage",
+        "technical or organisational measures"
+      ]
+    },
+    {
+      "question": "Who is responsible for demonstrating compliance with GDPR's data protection principles?",
+      "answer": "The controller is responsible for, and must be able to demonstrate compliance with, all the data protection principles. This is known as the accountability principle and means controllers must not only comply but also prove their compliance.",
+      "answer_type": "scope",
+      "supporting_quote": "The controller shall be responsible for, and be able to demonstrate compliance with, paragraph 1 ('accountability')",
+      "key_phrases": [
+        "accountability",
+        "controller shall be responsible",
+        "demonstrate compliance"
+      ]
+    }
+  ],
+  "coverage": {
+    "5(1)(a)": "Test case 1 - Lawfulness, fairness and transparency",
+    "5(1)(b) collection": "Test case 2 - Purpose limitation: specified, explicit, legitimate",
+    "5(1)(b) further processing": "Test case 3 - Purpose limitation: incompatible purposes + exceptions",
+    "5(1)(c)": "Test case 4 - Data minimisation",
+    "5(1)(d)": "Test case 5 - NEW - Accuracy and keeping up to date",
+    "5(1)(e)": "Test case 6 - Storage limitation",
+    "5(1)(f)": "Test case 7 - NEW - Integrity and confidentiality",
+    "5(2)": "Test case 8 - NEW - Accountability"
+  },
+  "b2b_relevance": "CRITICAL - Article 5 contains the foundational principles that govern all GDPR compliance. Every processing activity must satisfy these principles. Essential for: data collection policies, retention schedules, security measures, and demonstrating compliance during audits. The accountability principle (5(2)) is particularly important as it shifts the burden of proof to controllers."
+}

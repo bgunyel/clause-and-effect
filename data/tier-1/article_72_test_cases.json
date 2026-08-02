@@ -1,0 +1,44 @@
+{
+  "article_number": "72",
+  "article_title": "Procedure",
+  "test_cases": [
+    {
+      "question": "What is the default voting threshold for Board decisions?",
+      "answer": "The Board shall take decisions by a simple majority of its members, unless otherwise provided for in this Regulation. This means most decisions require only more than half of the members to agree.",
+      "answer_type": "definition",
+      "supporting_quote": "The Board shall take decisions by a simple majority of its members, unless otherwise provided for in this Regulation",
+      "key_phrases": [
+        "simple majority",
+        "members",
+        "unless otherwise provided"
+      ]
+    },
+    {
+      "question": "What voting threshold is required for the Board to adopt its rules of procedure?",
+      "answer": "The Board shall adopt its own rules of procedure by a two-thirds majority of its members. This is higher than the simple majority required for most other decisions.",
+      "answer_type": "definition",
+      "supporting_quote": "The Board shall adopt its own rules of procedure by a two-thirds majority of its members",
+      "key_phrases": [
+        "two-thirds majority",
+        "rules of procedure",
+        "members"
+      ]
+    },
+    {
+      "question": "Can the Board establish its own internal working methods?",
+      "answer": "Yes. The Board has autonomy to organise its own operational arrangements. This means the Board can determine its internal working methods, processes, and structures without external prescription.",
+      "answer_type": "scope",
+      "supporting_quote": "organise its own operational arrangements",
+      "key_phrases": [
+        "organise",
+        "own operational arrangements"
+      ]
+    }
+  ],
+  "coverage": {
+    "72(1)": "Test case 1 - Simple majority default + exception clause",
+    "72(2) rules": "Test case 2 - Two-thirds majority for rules of procedure",
+    "72(2) operations": "Test case 3 - Organise own operational arrangements"
+  },
+  "b2b_relevance": "LOW - Article 72 is purely about EDPB internal governance. No direct business obligations. However, understanding voting thresholds helps explain why some EDPB decisions take longer (binding decisions under Art 65 require 2/3 majority, not simple majority)."
+}

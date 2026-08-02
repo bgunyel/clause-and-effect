@@ -1,0 +1,70 @@
+{
+  "article_number": "3",
+  "article_title": "Territorial scope",
+  "test_cases": [
+    {
+      "question": "If a company has an office in the EU, does GDPR apply even if it processes data on servers located outside Europe?",
+      "answer": "Yes. GDPR applies to any processing of personal data carried out in the context of an establishment of a controller or processor in the Union, regardless of whether the actual processing takes place in the Union or not.",
+      "answer_type": "scope",
+      "supporting_quote": "applies to the processing of personal data in the context of the activities of an establishment of a controller or a processor in the Union, regardless of whether the processing takes place in the Union or not",
+      "key_phrases": [
+        "establishment in the Union",
+        "regardless of whether the processing takes place",
+        "context of activities"
+      ]
+    },
+    {
+      "question": "Under what conditions does GDPR apply to a company that is not based in the EU?",
+      "answer": "GDPR applies to non-EU controllers and processors when they process personal data of data subjects who are in the Union, but only if the processing is connected to offering goods or services to those individuals (whether or not payment is required) or to monitoring their behavior within the EU.",
+      "answer_type": "conditional",
+      "supporting_quote": "the processing of personal data of data subjects who are in the Union by a controller or processor not established in the Union, where the processing activities are related to the offering of goods or services... or the monitoring of their behaviour as far as their behaviour takes place within the Union",
+      "key_phrases": [
+        "not established in the Union",
+        "offering goods or services",
+        "monitoring behaviour within the Union",
+        "data subjects who are in the Union"
+      ]
+    },
+    {
+      "question": "If a foreign company offers free services to people in the EU, does GDPR still apply to that company?",
+      "answer": "Yes. GDPR applies to the offering of goods or services to data subjects in the Union irrespective of whether a payment from the data subject is required. This means free services are not exempt from GDPR compliance requirements.",
+      "answer_type": "definition",
+      "supporting_quote": "the offering of goods or services, irrespective of whether a payment of the data subject is required, to such data subjects in the Union",
+      "key_phrases": [
+        "irrespective of whether a payment",
+        "offering goods or services",
+        "data subjects in the Union"
+      ]
+    },
+    {
+      "question": "What type of activities would qualify as 'monitoring behavior' that would bring a non-EU company under GDPR?",
+      "answer": "GDPR applies to the monitoring of data subjects' behavior, but only as far as their behavior takes place within the Union. This means a non-EU company must be tracking activities that occur within EU borders for GDPR to apply based on this criterion.",
+      "answer_type": "definition",
+      "supporting_quote": "the monitoring of their behaviour as far as their behaviour takes place within the Union",
+      "key_phrases": [
+        "monitoring of behaviour",
+        "takes place within the Union",
+        "behaviour takes place"
+      ]
+    },
+    {
+      "question": "Does GDPR apply to an EU Member State's embassy or consulate located in a non-EU country?",
+      "answer": "Yes. GDPR applies to the processing of personal data by a controller not established in the Union, but in a place where Member State law applies by virtue of public international law. This includes diplomatic missions and consulates of EU Member States.",
+      "answer_type": "scope",
+      "supporting_quote": "This Regulation applies to the processing of personal data by a controller not established in the Union, but in a place where Member State law applies by virtue of public international law.",
+      "key_phrases": [
+        "not established in the Union",
+        "Member State law applies",
+        "public international law"
+      ]
+    }
+  ],
+  "coverage": {
+    "3(1)": "Test case 1 - EU establishment: processing covered regardless of where it takes place",
+    "3(2) intro": "Test case 2 - Non-EU controllers/processors: conditions for GDPR to apply",
+    "3(2)(a)": "Test cases 2 and 3 - Offering goods/services to EU data subjects (payment not required)",
+    "3(2)(b)": "Test cases 2 and 4 - Monitoring behavior within the Union",
+    "3(3)": "Test case 5 - Public international law (embassies, consulates)"
+  },
+  "b2b_relevance": "CRITICAL - Article 3 determines whether GDPR applies to your business. Essential for: non-EU companies assessing GDPR applicability, understanding that EU establishment triggers compliance regardless of server location, SaaS companies offering services (free or paid) to EU users, and companies using analytics/tracking on EU visitors."
+}

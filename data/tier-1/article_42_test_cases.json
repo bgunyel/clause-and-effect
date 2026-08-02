@@ -1,0 +1,85 @@
+{
+  "article_number": "42",
+  "article_title": "Certification",
+  "test_cases": [
+    {
+      "question": "What is the purpose of data protection certification mechanisms under GDPR?",
+      "answer": "Data protection certification mechanisms, seals, and marks serve to demonstrate compliance with GDPR for processing operations by controllers and processors. The specific needs of micro, small, and medium-sized enterprises must be taken into account when establishing these mechanisms.",
+      "answer_type": "definition",
+      "supporting_quote": "The Member States, the supervisory authorities, the Board and the Commission shall encourage, in particular at Union level, the establishment of data protection certification mechanisms and of data protection seals and marks, for the purpose of demonstrating compliance with this Regulation of processing operations by controllers and processors. The specific needs of micro, small and medium-sized enterprises shall be taken into account",
+      "key_phrases": [
+        "demonstrating compliance",
+        "processing operations",
+        "controllers and processors",
+        "micro, small and medium-sized enterprises"
+      ]
+    },
+    {
+      "question": "Can companies not subject to GDPR still obtain data protection certification?",
+      "answer": "Yes. Data protection certification mechanisms, seals, or marks can be established for controllers or processors that are not subject to GDPR, for the purpose of demonstrating the existence of appropriate safeguards. This enables non-EU entities to demonstrate compliance standards for international data transfer purposes under Article 46(2)(f).",
+      "answer_type": "scope",
+      "supporting_quote": "In addition to adherence by controllers or processors subject to this Regulation, data protection certification mechanisms, seals or marks approved pursuant to paragraph 5 of this Article may be established for the purpose of demonstrating the existence of appropriate safeguards provided by controllers or processors that are not subject to this Regulation pursuant to Article 3 within the framework of personal data transfers to third countries or international organisations under the terms referred to in point (f) of Article 46(2)",
+      "key_phrases": [
+        "not subject to this Regulation",
+        "appropriate safeguards",
+        "transfers to third countries"
+      ]
+    },
+    {
+      "question": "Is obtaining GDPR certification mandatory?",
+      "answer": "No. Certification is voluntary and available via a process that is transparent. The controller or processor who submits their processing to the certification mechanism is responsible for providing the certifying body with all information and access needed for the certification procedure.",
+      "answer_type": "conditional",
+      "supporting_quote": "The certification shall be voluntary and available via a process that is transparent. A certification pursuant to this Article does not reduce the responsibility of the controller or the processor for compliance with this Regulation",
+      "key_phrases": [
+        "voluntary",
+        "process that is transparent",
+        "does not reduce the responsibility"
+      ]
+    },
+    {
+      "question": "Does obtaining certification reduce a controller's or processor's responsibility under GDPR?",
+      "answer": "No. A certification does not reduce the responsibility of the controller or the processor for compliance with GDPR, and it is without prejudice to the tasks and powers of the supervisory authorities. Certification demonstrates compliance but does not shield organizations from enforcement.",
+      "answer_type": "scope",
+      "supporting_quote": "A certification pursuant to this Article does not reduce the responsibility of the controller or the processor for compliance with this Regulation and is without prejudice to the tasks and powers of the supervisory authorities which are competent pursuant to Article 55 or 56",
+      "key_phrases": [
+        "does not reduce the responsibility",
+        "without prejudice",
+        "tasks and powers of the supervisory authorities"
+      ]
+    },
+    {
+      "question": "Who can issue GDPR certifications?",
+      "answer": "Certification can be issued by: (1) certification bodies that have been accredited in accordance with Article 43, or (2) the competent supervisory authority on the basis of criteria approved by that SA pursuant to Article 58(3) or by the Board pursuant to Article 63.",
+      "answer_type": "definition",
+      "supporting_quote": "The certification shall be issued by the certification bodies referred to in Article 43 or by the competent supervisory authority, on the basis of criteria approved by that competent supervisory authority pursuant to Article 58(3) or by the Board pursuant to Article 63",
+      "key_phrases": [
+        "certification bodies",
+        "Article 43",
+        "competent supervisory authority",
+        "criteria approved"
+      ]
+    },
+    {
+      "question": "How long is a GDPR certification valid?",
+      "answer": "A certification is issued for a maximum period of three years. It may be renewed under the same conditions, provided that the relevant requirements continue to be met. Certification can be withdrawn by the certification bodies or supervisory authority when the requirements are no longer met.",
+      "answer_type": "timeline",
+      "supporting_quote": "A certification pursuant to this Article shall be issued to a controller or processor for a maximum period of three years and may be renewed, under the same conditions, provided that the relevant requirements continue to be met. Certification shall be withdrawn, as applicable, by the certification bodies referred to in Article 43 or by the competent supervisory authority where the requirements for the certification are not or are no longer met",
+      "key_phrases": [
+        "maximum period of three years",
+        "may be renewed",
+        "shall be withdrawn",
+        "requirements are not or are no longer met"
+      ]
+    }
+  ],
+  "coverage": {
+    "42(1)": "Test case 1 - Purpose: demonstrate compliance, SME consideration",
+    "42(2)": "Test case 2 - Non-EU controllers for international transfers",
+    "42(3)": "Test case 3 - NEW - Voluntary and transparent process",
+    "42(4)": "Test case 4 - NEW - Does not reduce responsibility",
+    "42(5)": "Test case 5 - NEW - Issued by certification bodies or SA",
+    "42(7)": "Test case 6 - NEW - 3-year term, renewable",
+    "42(8)": "Test case 6 - NEW - Withdrawal when requirements not met"
+  },
+  "b2b_relevance": "HIGH - Article 42 provides certification as a compliance demonstration tool. Key for: marketing compliance credentials, international transfers (Art 46(2)(f)), and customer assurance. Key takeaways: (1) Voluntary but valuable, (2) Does NOT reduce legal responsibility, (3) 3-year renewable term, (4) Non-EU entities can obtain for transfer purposes, (5) SME needs considered."
+}

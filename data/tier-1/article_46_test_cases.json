@@ -1,0 +1,77 @@
+{
+  "article_number": "46",
+  "article_title": "Transfers subject to appropriate safeguards",
+  "test_cases": [
+    {
+      "question": "What is the general condition for transferring personal data to a third country without an adequacy decision?",
+      "answer": "In the absence of an adequacy decision under Article 45, a controller or processor may transfer personal data to a third country or international organization only if they have provided appropriate safeguards, and on condition that enforceable data subject rights and effective legal remedies for data subjects are available.",
+      "answer_type": "conditional",
+      "supporting_quote": "In the absence of a decision pursuant to Article 45(3), a controller or processor may transfer personal data to a third country or an international organisation only if the controller or processor has provided appropriate safeguards, and on condition that enforceable data subject rights and effective legal remedies for data subjects are available",
+      "key_phrases": [
+        "absence of a decision",
+        "appropriate safeguards",
+        "enforceable data subject rights",
+        "effective legal remedies"
+      ]
+    },
+    {
+      "question": "What mechanisms can be used as appropriate safeguards WITHOUT requiring specific authorization from a supervisory authority?",
+      "answer": "The following safeguards can be used without specific SA authorization: (a) a legally binding and enforceable instrument between public authorities or bodies; (b) binding corporate rules (BCRs) in accordance with Article 47; (c) standard data protection clauses (SCCs) adopted by the Commission; (d) standard data protection clauses adopted by a supervisory authority and approved by the Commission; (e) an approved code of conduct pursuant to Article 40 together with binding and enforceable commitments of the controller/processor in the third country; and (f) an approved certification mechanism pursuant to Article 42 together with binding and enforceable commitments.",
+      "answer_type": "definition",
+      "supporting_quote": "The appropriate safeguards referred to in paragraph 1 may be provided for, without requiring any specific authorisation from a supervisory authority, by: (a) a legally binding and enforceable instrument between public authorities or bodies; (b) binding corporate rules in accordance with Article 47; (c) standard data protection clauses adopted by the Commission in accordance with the examination procedure referred to in Article 93(2); (d) standard data protection clauses adopted by a supervisory authority and approved by the Commission pursuant to the examination procedure referred to in Article 93(2); (e) an approved code of conduct pursuant to Article 40 together with binding and enforceable commitments of the controller or processor in the third country to apply the appropriate safeguards, including as regards data subjects' rights; or (f) an approved certification mechanism pursuant to Article 42 together with binding and enforceable commitments of the controller or processor in the third country to apply the appropriate safeguards, including as regards data subjects' rights",
+      "key_phrases": [
+        "without requiring any specific authorisation",
+        "binding corporate rules",
+        "standard data protection clauses",
+        "approved code of conduct",
+        "approved certification mechanism"
+      ]
+    },
+    {
+      "question": "When does an organization need authorization from the supervisory authority for contractual clauses used in international transfers?",
+      "answer": "Authorization from the competent supervisory authority is required for: (a) contractual clauses between the controller/processor and the controller, processor, or recipient in the third country that are NOT standard clauses adopted by the Commission; and (b) provisions to be inserted into administrative arrangements between public authorities or bodies which include enforceable and effective data subject rights.",
+      "answer_type": "conditional",
+      "supporting_quote": "Subject to the authorisation from the competent supervisory authority, the appropriate safeguards referred to in paragraph 1 may also be provided for, in particular, by: (a) contractual clauses between the controller or processor and the controller, processor or the recipient of the personal data in the third country or international organisation; or (b) provisions to be inserted into administrative arrangements between public authorities or bodies which include enforceable and effective data subject rights",
+      "key_phrases": [
+        "Subject to the authorisation",
+        "competent supervisory authority",
+        "contractual clauses",
+        "administrative arrangements"
+      ]
+    },
+    {
+      "question": "Do binding corporate rules count as a valid mechanism for transferring employee data to a parent company in a non-EU country?",
+      "answer": "Yes, binding corporate rules (BCRs) are explicitly listed in Article 46(2)(b) as one of the appropriate safeguards for such transfers, provided they are in accordance with Article 47. BCRs do not require specific authorization from a supervisory authority (though approval under Article 47 is needed). They must ensure enforceable rights and effective legal remedies for data subjects.",
+      "answer_type": "scope",
+      "supporting_quote": "The appropriate safeguards referred to in paragraph 1 may be provided for, without requiring any specific authorisation from a supervisory authority, by:... (b) binding corporate rules in accordance with Article 47",
+      "key_phrases": [
+        "binding corporate rules",
+        "Article 47",
+        "without requiring any specific authorisation"
+      ]
+    },
+    {
+      "question": "What commitments must a third-country recipient make when using an approved code of conduct or certification as a transfer safeguard?",
+      "answer": "When using an approved code of conduct or certification mechanism as a transfer safeguard, the controller or processor in the third country must make binding and enforceable commitments to apply the appropriate safeguards, including as regards data subjects' rights. These commitments must be legally enforceable.",
+      "answer_type": "definition",
+      "supporting_quote": "an approved code of conduct pursuant to Article 40 together with binding and enforceable commitments of the controller or processor in the third country to apply the appropriate safeguards, including as regards data subjects' rights... an approved certification mechanism pursuant to Article 42 together with binding and enforceable commitments of the controller or processor in the third country to apply the appropriate safeguards",
+      "key_phrases": [
+        "binding and enforceable commitments",
+        "apply the appropriate safeguards",
+        "data subjects' rights"
+      ]
+    }
+  ],
+  "coverage": {
+    "46(1)": "Test case 1 - General condition: appropriate safeguards + enforceable rights",
+    "46(2)(a)": "Test case 2 - Public authority binding instrument (no SA authorization)",
+    "46(2)(b)": "Test case 2 + 4 - BCRs (no SA authorization)",
+    "46(2)(c)": "Test case 2 - Commission SCCs (no SA authorization)",
+    "46(2)(d)": "Test case 2 - SA SCCs approved by Commission (no SA authorization)",
+    "46(2)(e)": "Test case 2 + 5 - Approved code of conduct + commitments",
+    "46(2)(f)": "Test case 2 + 5 - Approved certification + commitments",
+    "46(3)(a)": "Test case 3 - Ad hoc contractual clauses (requires SA authorization)",
+    "46(3)(b)": "Test case 3 - Administrative arrangements (requires SA authorization)"
+  },
+  "b2b_relevance": "CRITICAL - Article 46 is the primary transfer mechanism for most B2B SaaS companies. Standard Contractual Clauses (SCCs) are the most commonly used safeguard. Key takeaways: (1) Six safeguards need NO specific SA authorization, (2) SCCs are the go-to for commercial transfers, (3) BCRs for intra-group transfers, (4) Ad hoc clauses DO require SA authorization, (5) All safeguards must ensure enforceable rights + effective remedies."
+}

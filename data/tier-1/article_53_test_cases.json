@@ -1,0 +1,61 @@
+{
+  "article_number": "53",
+  "article_title": "General conditions for the members of the supervisory authority",
+  "test_cases": [
+    {
+      "question": "Who can appoint members to a supervisory authority and how?",
+      "answer": "Member States shall provide for each member of their supervisory authorities to be appointed by means of a transparent procedure by: (a) their parliament; (b) their government; (c) their head of State; or (d) an independent body entrusted with the appointment under Member State law.",
+      "answer_type": "scope",
+      "supporting_quote": "Member States shall provide for each member of their supervisory authorities to be appointed by means of a transparent procedure by: their parliament; their government; their head of State; or an independent body entrusted with the appointment under Member State law",
+      "key_phrases": [
+        "transparent procedure",
+        "parliament",
+        "government",
+        "head of State",
+        "independent body"
+      ]
+    },
+    {
+      "question": "What qualifications must someone have to serve as a member of a supervisory authority?",
+      "answer": "Each member shall have the qualifications, experience, and skills required to perform their duties and exercise their powers. In particular, expertise in the area of protection of personal data is required.",
+      "answer_type": "definition",
+      "supporting_quote": "Each member shall have the qualifications, experience and skills, in particular in the area of the protection of personal data, required to perform its duties and exercise its powers",
+      "key_phrases": [
+        "qualifications",
+        "experience and skills",
+        "protection of personal data",
+        "perform its duties"
+      ]
+    },
+    {
+      "question": "When do the duties of a supervisory authority member end?",
+      "answer": "The duties of a member shall end in the event of: (1) the expiry of the term of office; (2) resignation; or (3) compulsory retirement, in accordance with the law of the Member State concerned.",
+      "answer_type": "conditional",
+      "supporting_quote": "The duties of a member shall end in the event of the expiry of the term of office, resignation or compulsory retirement, in accordance with the law of the Member State concerned",
+      "key_phrases": [
+        "expiry of the term of office",
+        "resignation",
+        "compulsory retirement",
+        "Member State law"
+      ]
+    },
+    {
+      "question": "Under what circumstances can a member of a supervisory authority be dismissed?",
+      "answer": "A member shall be dismissed only in cases of serious misconduct or if the member no longer fulfils the conditions required for the performance of their duties. This provides strong protection for SA members against arbitrary removal.",
+      "answer_type": "conditional",
+      "supporting_quote": "A member shall be dismissed only in cases of serious misconduct or if the member no longer fulfils the conditions required for the performance of the duties",
+      "key_phrases": [
+        "dismissed only",
+        "serious misconduct",
+        "no longer fulfils the conditions"
+      ]
+    }
+  ],
+  "coverage": {
+    "53(1)": "Test case 1 - Appointment via transparent procedure by 4 possible bodies",
+    "53(2)": "Test case 2 - Qualifications, experience, skills (particularly data protection)",
+    "53(3)": "Test case 3 - Termination: expiry, resignation, compulsory retirement",
+    "53(4)": "Test case 4 - Dismissal only for serious misconduct or condition failure"
+  },
+  "b2b_relevance": "LOW - Article 53 is about SA member conditions, not direct business obligations. However, understanding SA governance helps with: (1) Knowing SA members have data protection expertise, (2) Understanding SA members have job security (can't be easily removed), reinforcing their independence."
+}

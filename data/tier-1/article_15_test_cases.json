@@ -1,0 +1,103 @@
+{
+  "article_number": "15",
+  "article_title": "Right of access by the data subject",
+  "test_cases": [
+    {
+      "question": "What specific details must a company provide when an individual requests access to their personal data?",
+      "answer": "When an individual requests access, the company must provide confirmation of processing, the personal data itself, and information including: the purposes of processing, categories of data, recipients (including those in third countries), storage periods or criteria, the individual's rights to rectification/erasure/restriction/objection, the right to lodge a complaint, the source of the data (if not collected from the individual), and details about any automated decision-making including profiling.",
+      "answer_type": "definition",
+      "supporting_quote": "access to the personal data and the following information: (a) the purposes of the processing; (b) the categories of personal data concerned; (c) the recipients or categories of recipient to whom the personal data have been or will be disclosed, in particular recipients in third countries or international organisations; (d) where possible, the envisaged period for which the personal data will be stored, or, if not possible, the criteria used to determine that period; (e) the existence of the right to request from the controller rectification or erasure... (f) the right to lodge a complaint with a supervisory authority; (g) where the personal data are not collected from the data subject, any available information as to their source; (h) the existence of automated decision-making, including profiling",
+      "key_phrases": [
+        "purposes of the processing",
+        "categories of personal data",
+        "recipients",
+        "storage period",
+        "right to rectification",
+        "right to lodge a complaint",
+        "source of the data",
+        "automated decision-making"
+      ]
+    },
+    {
+      "question": "Does the company have to tell me exactly how long they'll keep my data?",
+      "answer": "Not necessarily. The controller must provide the envisaged storage period where possible. However, if the exact period cannot be provided, the controller must instead supply the criteria used to determine that period, such as legal retention requirements or business needs.",
+      "answer_type": "scope",
+      "supporting_quote": "where possible, the envisaged period for which the personal data will be stored, or, if not possible, the criteria used to determine that period",
+      "key_phrases": [
+        "envisaged period",
+        "stored",
+        "criteria used to determine"
+      ]
+    },
+    {
+      "question": "If a company collected my data from another source instead of directly from me, what additional information can I request?",
+      "answer": "When personal data was not collected directly from you, you have the right to request any available information about the source of that data. This is in addition to all the standard information about processing purposes, data categories, recipients, and your rights.",
+      "answer_type": "conditional",
+      "supporting_quote": "where the personal data are not collected from the data subject, any available information as to their source",
+      "key_phrases": [
+        "not collected from the data subject",
+        "available information",
+        "source"
+      ]
+    },
+    {
+      "question": "Does the right of access allow someone to find out if their data has been shared with third parties in other countries?",
+      "answer": "Yes, the data subject has the right to know the recipients or categories of recipient to whom the personal data have been or will be disclosed. This specifically includes recipients in third countries or international organisations.",
+      "answer_type": "scope",
+      "supporting_quote": "the recipients or categories of recipient to whom the personal data have been or will be disclosed, in particular recipients in third countries or international organisations",
+      "key_phrases": [
+        "recipients",
+        "disclosed",
+        "third countries",
+        "international organisations"
+      ]
+    },
+    {
+      "question": "When data is transferred to a third country, what information about safeguards must be provided?",
+      "answer": "Where personal data are transferred to a third country or to an international organisation, the data subject has the right to be informed of the appropriate safeguards pursuant to Article 46 relating to the transfer.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where personal data are transferred to a third country or to an international organisation, the data subject shall have the right to be informed of the appropriate safeguards pursuant to Article 46 relating to the transfer",
+      "key_phrases": [
+        "transferred to a third country",
+        "appropriate safeguards",
+        "Article 46"
+      ]
+    },
+    {
+      "question": "Can a company charge for providing copies of personal data, and in what format must the data be provided?",
+      "answer": "The controller must provide a copy of the personal data undergoing processing free of charge. However, for any further copies requested by the data subject, the controller may charge a reasonable fee based on administrative costs. Where the data subject makes the request by electronic means, the information must be provided in a commonly used electronic form, unless otherwise requested.",
+      "answer_type": "conditional",
+      "supporting_quote": "The controller shall provide a copy of the personal data undergoing processing. For any further copies requested by the data subject, the controller may charge a reasonable fee based on administrative costs. Where the data subject makes the request by electronic means, and unless otherwise requested by the data subject, the information shall be provided in a commonly used electronic form",
+      "key_phrases": [
+        "copy of the personal data",
+        "free of charge",
+        "further copies",
+        "reasonable fee",
+        "electronic form"
+      ]
+    },
+    {
+      "question": "Can a company refuse to provide copies of personal data to protect the rights of others?",
+      "answer": "Yes. The right to obtain a copy of personal data shall not adversely affect the rights and freedoms of others. This means a company may redact or withhold portions of data that would reveal information about other individuals or infringe on their rights.",
+      "answer_type": "scope",
+      "supporting_quote": "The right to obtain a copy referred to in paragraph 3 shall not adversely affect the rights and freedoms of others",
+      "key_phrases": [
+        "shall not adversely affect",
+        "rights and freedoms of others"
+      ]
+    }
+  ],
+  "coverage": {
+    "15(1) intro": "Test case 1 - Right to confirmation and access",
+    "15(1)(a)-(b)": "Test case 1 - Purposes and categories of data",
+    "15(1)(c)": "Test cases 1 and 4 - Recipients including third countries",
+    "15(1)(d)": "Test case 2 - Storage period or criteria",
+    "15(1)(e)-(f)": "Test case 1 - Rights and right to complain",
+    "15(1)(g)": "Test case 3 - Source of data when not from subject",
+    "15(1)(h)": "Test case 1 - Automated decision-making",
+    "15(2)": "Test case 5 - NEW - Third country transfer safeguards",
+    "15(3)": "Test case 6 - NEW - Copy + fee + electronic format",
+    "15(4)": "Test case 7 - NEW - Rights of others limitation"
+  },
+  "b2b_relevance": "CRITICAL - Article 15 defines the data subject access request (DSAR) requirements. Essential for: customer support workflows, DSAR response procedures, data inventory/mapping, and understanding what information must be compiled. Key takeaways: (1) First copy is free, can charge for additional copies, (2) Electronic request = electronic response, (3) Can redact to protect others' rights."
+}

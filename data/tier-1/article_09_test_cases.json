@@ -1,0 +1,130 @@
+{
+  "article_number": "9",
+  "article_title": "Processing of special categories of personal data",
+  "test_cases": [
+    {
+      "question": "What types of personal data are considered 'special categories' under GDPR?",
+      "answer": "Special categories of personal data include data revealing racial or ethnic origin, political opinions, religious or philosophical beliefs, trade union membership, genetic data, biometric data for uniquely identifying a person, data concerning health, and data concerning a person's sex life or sexual orientation. Processing this data is generally prohibited.",
+      "answer_type": "definition",
+      "supporting_quote": "Processing of personal data revealing racial or ethnic origin, political opinions, religious or philosophical beliefs, or trade union membership, and the processing of genetic data, biometric data for the purpose of uniquely identifying a natural person, data concerning health or data concerning a natural person's sex life or sexual orientation shall be prohibited.",
+      "key_phrases": [
+        "racial or ethnic origin",
+        "genetic data",
+        "biometric data",
+        "data concerning health",
+        "sex life or sexual orientation",
+        "shall be prohibited"
+      ]
+    },
+    {
+      "question": "Can a company process someone's health data if they give explicit consent?",
+      "answer": "Yes, explicit consent from the data subject is one condition that allows processing of special category data like health information. However, this does not apply if Union or Member State law specifically states that the data subject cannot lift the prohibition through consent.",
+      "answer_type": "conditional",
+      "supporting_quote": "the data subject has given explicit consent to the processing of those personal data for one or more specified purposes, except where Union or Member State law provide that the prohibition referred to in paragraph 1 may not be lifted by the data subject",
+      "key_phrases": [
+        "explicit consent",
+        "specified purposes",
+        "prohibition may not be lifted"
+      ]
+    },
+    {
+      "question": "When can an employer process an employee's sensitive health information?",
+      "answer": "An employer may process an employee's health data when it is necessary for carrying out obligations or exercising rights in the field of employment and social security law, provided this processing is authorized by Union or Member State law or a collective agreement that includes appropriate safeguards for the employee's fundamental rights and interests.",
+      "answer_type": "conditional",
+      "supporting_quote": "processing is necessary for the purposes of carrying out the obligations and exercising specific rights of the controller or of the data subject in the field of employment and social security and social protection law in so far as it is authorised by Union or Member State law or a collective agreement pursuant to Member State law providing for appropriate safeguards for the fundamental rights and the interests of the data subject",
+      "key_phrases": [
+        "employment",
+        "social security",
+        "authorised by Union or Member State law",
+        "appropriate safeguards"
+      ]
+    },
+    {
+      "question": "Can a not-for-profit organization process special category data regarding its members without their consent?",
+      "answer": "Yes, processing is permitted if carried out in the course of legitimate activities by a not-for-profit body with a political, philosophical, religious or trade union aim, with appropriate safeguards, provided the processing relates solely to members (or former members or those in regular contact) and the data is not disclosed outside the body without consent.",
+      "answer_type": "conditional",
+      "supporting_quote": "processing is carried out in the course of its legitimate activities with appropriate safeguards by a foundation, association or any other not-for-profit body with a political, philosophical, religious or trade union aim... on condition that the processing relates solely to the members or to former members of the body... and that the personal data are not disclosed outside that body without the consent of the data subjects",
+      "key_phrases": [
+        "not-for-profit body",
+        "legitimate activities",
+        "appropriate safeguards",
+        "relates solely to the members"
+      ]
+    },
+    {
+      "question": "Can special category data that someone has made public themselves be processed?",
+      "answer": "Yes, the prohibition on processing special categories does not apply to processing of personal data which are manifestly made public by the data subject themselves.",
+      "answer_type": "scope",
+      "supporting_quote": "processing relates to personal data which are manifestly made public by the data subject",
+      "key_phrases": [
+        "manifestly made public",
+        "by the data subject"
+      ]
+    },
+    {
+      "question": "Is it allowed to process someone's political opinions as part of a lawsuit?",
+      "answer": "Yes, processing special category data, such as political opinions, is permitted when it is necessary for the establishment, exercise, or defence of legal claims, or whenever courts are acting in their judicial capacity.",
+      "answer_type": "scope",
+      "supporting_quote": "processing is necessary for the establishment, exercise or defence of legal claims or whenever courts are acting in their judicial capacity",
+      "key_phrases": [
+        "establishment, exercise or defence of legal claims",
+        "courts",
+        "judicial capacity"
+      ]
+    },
+    {
+      "question": "Does the prohibition on processing health data apply to healthcare providers?",
+      "answer": "No, healthcare providers are generally permitted to process health data under specific conditions. Processing is allowed when necessary for preventive or occupational medicine, medical diagnosis, provision of health or social care or treatment, or management of health or social care systems and services, provided it is based on Union or Member State law or a contract with a health professional, and subject to specified conditions and safeguards.",
+      "answer_type": "scope",
+      "supporting_quote": "processing is necessary for the purposes of preventive or occupational medicine, for the assessment of the working capacity of the employee, medical diagnosis, the provision of health or social care or treatment or the management of health or social care systems and services on the basis of Union or Member State law or pursuant to contract with a health professional and subject to the conditions and safeguards referred to in paragraph 3",
+      "key_phrases": [
+        "preventive medicine",
+        "medical diagnosis",
+        "health or social care",
+        "health professional"
+      ]
+    },
+    {
+      "question": "Can special category data be processed for scientific research or statistical purposes?",
+      "answer": "Yes, processing is permitted when necessary for archiving purposes in the public interest, scientific or historical research purposes, or statistical purposes. This must be based on Union or Member State law, be proportionate to the aim pursued, respect the essence of the right to data protection, and provide suitable and specific measures to safeguard fundamental rights and the data subject's interests.",
+      "answer_type": "conditional",
+      "supporting_quote": "processing is necessary for archiving purposes in the public interest, scientific or historical research purposes or statistical purposes in accordance with Article 89(1) based on Union or Member State law which shall be proportionate to the aim pursued, respect the essence of the right to data protection and provide for suitable and specific measures to safeguard the fundamental rights and the interests of the data subject",
+      "key_phrases": [
+        "archiving purposes",
+        "scientific or historical research",
+        "statistical purposes",
+        "proportionate to the aim"
+      ]
+    },
+    {
+      "question": "Can Member States impose additional restrictions on processing genetic, biometric, or health data?",
+      "answer": "Yes, Member States may maintain or introduce further conditions, including limitations, with regard to the processing of genetic data, biometric data, or data concerning health. This means national laws may impose stricter requirements than the baseline GDPR rules.",
+      "answer_type": "scope",
+      "supporting_quote": "Member States may maintain or introduce further conditions, including limitations, with regard to the processing of genetic data, biometric data or data concerning health",
+      "key_phrases": [
+        "Member States",
+        "further conditions",
+        "limitations",
+        "genetic data",
+        "biometric data",
+        "data concerning health"
+      ]
+    }
+  ],
+  "coverage": {
+    "9(1)": "Test case 1 - Eight special categories listed + general prohibition",
+    "9(2)(a)": "Test case 2 - Explicit consent (including 'may not lift' clause)",
+    "9(2)(b)": "Test case 3 - Employment and social security obligations",
+    "9(2)(c)": "NOT COVERED - Vital interests (less B2B relevant)",
+    "9(2)(d)": "Test case 4 - Not-for-profit bodies",
+    "9(2)(e)": "Test case 5 - NEW - Manifestly made public by data subject",
+    "9(2)(f)": "Test case 6 - Legal claims / courts",
+    "9(2)(g)": "NOT COVERED - Substantial public interest (less B2B relevant)",
+    "9(2)(h)": "Test case 7 - Health purposes (preventive medicine, diagnosis, treatment)",
+    "9(2)(i)": "NOT COVERED - Public health (less B2B relevant)",
+    "9(2)(j)": "Test case 8 - NEW - Research, archiving, statistics",
+    "9(3)": "NOT COVERED - Professional secrecy obligations",
+    "9(4)": "Test case 9 - NEW - Member State further conditions"
+  },
+  "b2b_relevance": "CRITICAL - Article 9 governs sensitive data that many B2B SaaS companies may encounter. Essential for: HR systems handling employee health data, identity verification using biometrics, analytics platforms processing research data, and any service that might inadvertently collect special category data. The explicit consent exception (9(2)(a)) and Member State variations (9(4)) are particularly important for compliance planning."
+}

@@ -1,0 +1,45 @@
+{
+  "article_number": "29",
+  "article_title": "Processing under the authority of the controller or processor",
+  "test_cases": [
+    {
+      "question": "Who is considered a 'person acting under the authority' of a controller or processor under GDPR?",
+      "answer": "Any person who has access to personal data and acts under the authority of the controller or processor is covered by this provision. This includes employees, contractors, subcontractors, or other personnel who handle personal data on behalf of the controller or processor.",
+      "answer_type": "definition",
+      "supporting_quote": "The processor and any person acting under the authority of the controller or of the processor, who has access to personal data",
+      "key_phrases": [
+        "person acting under the authority",
+        "controller or processor",
+        "access to personal data"
+      ]
+    },
+    {
+      "question": "What are the two conditions under which a processor or authorized person may process personal data?",
+      "answer": "A processor or person acting under the authority of the controller may process personal data only in two situations: (1) when following instructions from the controller, or (2) when Union or Member State law requires the processing.",
+      "answer_type": "conditional",
+      "supporting_quote": "shall not process those data except on instructions from the controller, unless required to do so by Union or Member State law",
+      "key_phrases": [
+        "except on instructions from the controller",
+        "unless required to do so",
+        "Union or Member State law"
+      ]
+    },
+    {
+      "question": "Does Article 29 apply to contractors or third-party service providers who handle personal data on behalf of a company?",
+      "answer": "Yes. Article 29 applies to the processor and any person acting under the authority of the controller or processor who has access to personal data, which includes contractors, subcontractors, and third-party service providers. They must process data only on instructions from the controller unless legally required to do otherwise.",
+      "answer_type": "scope",
+      "supporting_quote": "The processor and any person acting under the authority of the controller or of the processor, who has access to personal data, shall not process those data except on instructions from the controller",
+      "key_phrases": [
+        "processor",
+        "person acting under the authority",
+        "instructions from the controller"
+      ]
+    }
+  ],
+  "coverage": {
+    "main rule": "Test cases 1-3 - Process only on controller instructions",
+    "who is covered": "Test cases 1, 3 - Processor + any person acting under authority with access to data",
+    "law exception": "Test case 2 - Unless required by Union or Member State law"
+  },
+  "b2b_relevance": "HIGH - Article 29 establishes the chain of command for data processing. Essential for: employee training, contractor agreements, vendor management, and understanding that everyone with data access must follow controller instructions. Key takeaway: No one can process data on their own initiative - instructions from controller OR legal requirement are the only valid bases."
+}

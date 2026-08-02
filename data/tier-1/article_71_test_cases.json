@@ -1,0 +1,46 @@
+{
+  "article_number": "71",
+  "article_title": "Reports",
+  "test_cases": [
+    {
+      "question": "How frequently must the European Data Protection Board publish reports on data protection?",
+      "answer": "The Board shall draw up an annual report regarding the protection of natural persons with regard to processing in the Union and, where relevant, in third countries and international organisations.",
+      "answer_type": "timeline",
+      "supporting_quote": "The Board shall draw up an annual report regarding the protection of natural persons with regard to processing in the Union and, where relevant, in third countries and international organisations",
+      "key_phrases": [
+        "annual report",
+        "protection of natural persons",
+        "third countries and international organisations"
+      ]
+    },
+    {
+      "question": "Who receives the Board's annual data protection report and is it publicly available?",
+      "answer": "The report shall be made public and be transmitted to the European Parliament, to the Council, and to the Commission.",
+      "answer_type": "scope",
+      "supporting_quote": "The report shall be made public and be transmitted to the European Parliament, to the Council and to the Commission",
+      "key_phrases": [
+        "made public",
+        "European Parliament",
+        "Council",
+        "Commission"
+      ]
+    },
+    {
+      "question": "What specific content must be included in the Board's annual report?",
+      "answer": "The annual report shall include a review of the practical application of the guidelines, recommendations and best practices referred to in point (l) of Article 70(1). This ensures accountability for how EDPB guidance is being implemented in practice.",
+      "answer_type": "definition",
+      "supporting_quote": "The annual report shall include a review of the practical application of the guidelines, recommendations and best practices referred to in point (l)",
+      "key_phrases": [
+        "review of the practical application",
+        "guidelines, recommendations and best practices",
+        "Article 70(1)"
+      ]
+    }
+  ],
+  "coverage": {
+    "71(1)": "Test case 1 - Annual report on protection in Union and third countries",
+    "71(2) recipients": "Test case 2 - Parliament, Council, Commission + made public",
+    "71(2) content": "Test case 3 - Review of practical application of guidelines"
+  },
+  "b2b_relevance": "LOW-MEDIUM - Article 71 requires EDPB to report annually on: (1) How GDPR is working in practice, (2) How guidelines are being applied. These reports are PUBLIC and useful for: understanding enforcement trends, seeing how EDPB guidance is being implemented, and benchmarking your compliance approach against practical application findings."
+}

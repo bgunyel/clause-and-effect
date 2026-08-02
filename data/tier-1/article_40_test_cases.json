@@ -1,0 +1,76 @@
+{
+  "article_number": "40",
+  "article_title": "Codes of conduct",
+  "test_cases": [
+    {
+      "question": "What is the main purpose of codes of conduct under GDPR?",
+      "answer": "Codes of conduct are intended to contribute to the proper application of GDPR. They take into account the specific features of various processing sectors and the specific needs of micro, small, and medium-sized enterprises, making GDPR compliance more accessible and practical for different contexts.",
+      "answer_type": "definition",
+      "supporting_quote": "The Member States, the supervisory authorities, the Board and the Commission shall encourage the drawing up of codes of conduct intended to contribute to the proper application of this Regulation, taking account of the specific features of the various processing sectors and the specific needs of micro, small and medium-sized enterprises",
+      "key_phrases": [
+        "proper application",
+        "specific features of processing sectors",
+        "micro, small and medium-sized enterprises"
+      ]
+    },
+    {
+      "question": "Who is authorized to develop GDPR codes of conduct?",
+      "answer": "Associations and other bodies representing categories of controllers or processors may prepare codes of conduct, or amend or extend existing codes, for the purpose of specifying how GDPR applies to particular processing activities.",
+      "answer_type": "scope",
+      "supporting_quote": "Associations and other bodies representing categories of controllers or processors may prepare codes of conduct, or amend or extend such codes, for the purpose of specifying the application of this Regulation",
+      "key_phrases": [
+        "Associations and other bodies",
+        "representing categories of controllers or processors",
+        "prepare codes of conduct",
+        "amend or extend"
+      ]
+    },
+    {
+      "question": "What topics can be covered by a GDPR code of conduct?",
+      "answer": "Codes of conduct can cover a wide range of topics including: (a) fair and transparent processing; (b) legitimate interests in specific contexts; (c) collection of personal data; (d) pseudonymisation; (e) information provided to the public and data subjects; (f) exercise of data subject rights; (g) information and protection of children and obtaining parental consent; (h) measures under Articles 24 and 25 and security measures under Article 32; (i) breach notification; (j) international transfers; and (k) dispute resolution and out-of-court procedures.",
+      "answer_type": "definition",
+      "supporting_quote": "such as with regard to: (a) fair and transparent processing; (b) the legitimate interests pursued by controllers in specific contexts; (c) the collection of personal data; (d) the pseudonymisation of personal data; (e) the information provided to the public and to data subjects; (f) the exercise of the rights of data subjects; (g) the information provided to, and the protection of, children, and the manner in which the consent of the holders of parental responsibility over children is to be obtained; (h) the measures and procedures referred to in Articles 24 and 25 and the measures to ensure security of processing referred to in Article 32; (i) the notification of personal data breaches to supervisory authorities and the communication of such personal data breaches to data subjects; (j) the transfer of personal data to third countries or international organisations; or (k) out-of-court proceedings and other dispute resolution procedures",
+      "key_phrases": [
+        "fair and transparent processing",
+        "pseudonymisation",
+        "protection of children",
+        "security of processing",
+        "international transfers",
+        "dispute resolution"
+      ]
+    },
+    {
+      "question": "Can codes of conduct be used to facilitate international data transfers?",
+      "answer": "Yes. Codes of conduct approved pursuant to Article 40(5) and having general validity pursuant to Article 40(9) may be adhered to by controllers or processors that are not subject to GDPR (i.e., non-EU entities). This allows codes of conduct to provide appropriate safeguards for international transfers under Article 46(2)(e).",
+      "answer_type": "conditional",
+      "supporting_quote": "A code of conduct approved pursuant to paragraph 5 of this Article and having general validity pursuant to paragraph 9 of this Article may be adhered to by controllers or processors that are not subject to this Regulation pursuant to Article 3 in order to provide appropriate safeguards within the framework of personal data transfers to third countries or international organisations",
+      "key_phrases": [
+        "not subject to this Regulation",
+        "appropriate safeguards",
+        "transfers to third countries",
+        "international organisations"
+      ]
+    },
+    {
+      "question": "What must a code of conduct contain to be approved?",
+      "answer": "A code of conduct must contain mechanisms which enable the body referred to in Article 41 (the monitoring body) to carry out mandatory monitoring of compliance by controllers or processors who commit to apply the code. The draft code must be submitted to the competent supervisory authority for approval.",
+      "answer_type": "definition",
+      "supporting_quote": "A code of conduct referred to in paragraph 2 of this Article shall contain mechanisms which enable the body referred to in Article 41 to carry out the mandatory monitoring of compliance with its provisions by the controllers or processors which undertake to apply it... The draft code, or the amendment or extension, shall be submitted to the supervisory authority which is competent pursuant to Article 55",
+      "key_phrases": [
+        "contain mechanisms",
+        "mandatory monitoring of compliance",
+        "submitted to the supervisory authority",
+        "competent"
+      ]
+    }
+  ],
+  "coverage": {
+    "40(1)": "Test case 1 - Purpose: proper application, sector-specific, SME needs",
+    "40(2)": "Test case 2 - Who can prepare: associations representing controllers/processors",
+    "40(2)(a)-(k)": "Test case 3 - Topics covered (all 11 listed)",
+    "40(3)": "Test case 4 - NEW - Non-EU controllers can adhere for international transfers",
+    "40(4)": "Test case 5 - NEW - Must contain monitoring mechanisms",
+    "40(5)": "Test case 5 - NEW - Submit draft to SA for approval"
+  },
+  "b2b_relevance": "MEDIUM - Article 40 provides a framework for industry self-regulation. Key for: industry associations developing sector codes, SMEs seeking practical compliance guidance, and international data transfers using code adherence. Key takeaways: (1) Industry associations drive code development, (2) SME needs explicitly considered, (3) Can facilitate international transfers, (4) Must have monitoring mechanisms to be approved."
+}

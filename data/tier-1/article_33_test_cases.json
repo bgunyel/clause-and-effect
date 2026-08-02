@@ -1,0 +1,86 @@
+{
+  "article_number": "33",
+  "article_title": "Notification of a personal data breach to the supervisory authority",
+  "test_cases": [
+    {
+      "question": "How quickly must a controller report a personal data breach to the regulator once they become aware of it?",
+      "answer": "The controller must notify the supervisory authority without undue delay and, where feasible, within 72 hours after becoming aware of the breach. If notification is made after 72 hours, it must be accompanied by reasons for the delay.",
+      "answer_type": "timeline",
+      "supporting_quote": "shall without undue delay and, where feasible, not later than 72 hours after having become aware of it, notify the personal data breach to the supervisory authority... Where the notification to the supervisory authority is not made within 72 hours, it shall be accompanied by reasons for the delay",
+      "key_phrases": [
+        "without undue delay",
+        "72 hours",
+        "having become aware",
+        "reasons for the delay"
+      ]
+    },
+    {
+      "question": "When is a controller NOT required to notify the supervisory authority about a personal data breach?",
+      "answer": "Notification to the supervisory authority is not required if the personal data breach is unlikely to result in a risk to the rights and freedoms of natural persons. This is the only exception to the notification requirement.",
+      "answer_type": "conditional",
+      "supporting_quote": "unless the personal data breach is unlikely to result in a risk to the rights and freedoms of natural persons",
+      "key_phrases": [
+        "unless",
+        "unlikely to result in a risk",
+        "rights and freedoms"
+      ]
+    },
+    {
+      "question": "What must a processor do when they discover a personal data breach?",
+      "answer": "The processor must notify the controller without undue delay after becoming aware of a personal data breach. The processor notifies the controller, not the supervisory authority directly—it is then the controller's responsibility to notify the supervisory authority.",
+      "answer_type": "scope",
+      "supporting_quote": "The processor shall notify the controller without undue delay after becoming aware of a personal data breach",
+      "key_phrases": [
+        "processor",
+        "notify the controller",
+        "without undue delay"
+      ]
+    },
+    {
+      "question": "What information must be included in a breach notification to the supervisory authority?",
+      "answer": "The notification must include: (a) the nature of the breach including, where possible, categories and approximate number of data subjects and records concerned; (b) the name and contact details of the data protection officer or other contact point; (c) the likely consequences of the breach; and (d) the measures taken or proposed to address the breach and mitigate its effects.",
+      "answer_type": "definition",
+      "supporting_quote": "The notification referred to in paragraph 1 shall at least: (a) describe the nature of the personal data breach including where possible, the categories and approximate number of data subjects concerned and the categories and approximate number of personal data records concerned; (b) communicate the name and contact details of the data protection officer or other contact point where more information can be obtained; (c) describe the likely consequences of the personal data breach; (d) describe the measures taken or proposed to be taken by the controller to address the personal data breach, including, where appropriate, measures to mitigate its possible adverse effects",
+      "key_phrases": [
+        "nature of the breach",
+        "categories and approximate number",
+        "data protection officer",
+        "likely consequences",
+        "measures taken"
+      ]
+    },
+    {
+      "question": "What if a controller cannot provide all required breach information within 72 hours?",
+      "answer": "If it is not possible to provide all information at the same time, the information may be provided in phases without undue further delay. The controller is not required to delay notification to gather all information—partial notification followed by supplementary information is permitted.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where, and in so far as, it is not possible to provide the information at the same time, the information may be provided in phases without undue further delay",
+      "key_phrases": [
+        "not possible to provide",
+        "in phases",
+        "without undue further delay"
+      ]
+    },
+    {
+      "question": "What documentation must a controller maintain regarding personal data breaches?",
+      "answer": "The controller must document any personal data breaches, comprising the facts relating to the breach, its effects, and the remedial action taken. This documentation must enable the supervisory authority to verify compliance with Article 33.",
+      "answer_type": "definition",
+      "supporting_quote": "The controller shall document any personal data breaches, comprising the facts relating to the personal data breach, its effects and the remedial action taken. That documentation shall enable the supervisory authority to verify compliance with this Article",
+      "key_phrases": [
+        "document any personal data breaches",
+        "facts",
+        "effects",
+        "remedial action",
+        "verify compliance"
+      ]
+    }
+  ],
+  "coverage": {
+    "33(1) timeline": "Test case 1 - 72 hours where feasible, without undue delay, reasons for delay",
+    "33(1) exception": "Test case 2 - NEW - Unless unlikely to result in risk",
+    "33(2)": "Test case 3 - NEW - Processor must notify controller",
+    "33(3)": "Test case 4 - NEW - Notification content (nature, DPO, consequences, measures)",
+    "33(4)": "Test case 5 - NEW - Phased notification permitted",
+    "33(5)": "Test case 6 - NEW - Documentation requirement"
+  },
+  "b2b_relevance": "CRITICAL - Article 33 is THE breach notification article. Essential for: incident response plans, processor contracts (ensuring processor notifies controller immediately), breach assessment procedures, and documentation practices. Key takeaways: (1) 72 hours from AWARENESS (2) Exception if unlikely to result in risk, (3) PROCESSOR notifies CONTROLLER (not SA directly), (4) Phased notification OK, (5) Document ALL breaches regardless of notification."
+}

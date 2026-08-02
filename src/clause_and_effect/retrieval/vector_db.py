@@ -1,6 +1,7 @@
 """
 Vector database operations using Qdrant
 """
+import uuid
 from typing import List, Dict, Any
 from pydantic import SecretStr
 from qdrant_client import QdrantClient
@@ -13,6 +14,19 @@ from src.clause_and_effect.retrieval import EmbeddingGenerator
 
 class VectorDatabase:
     """Qdrant vector database wrapper"""
+
+    # Namespace for deriving point IDs from chunk IDs. Qdrant accepts only
+    # unsigned integers or UUIDs as point IDs, so a semantic key such as
+    # 'gdpr_article_5_para_1' cannot be used directly — uuid5 hashes it into a
+    # valid UUID deterministically.
+    #
+    # This is a domain separator, not a credential: uuid5 is an unkeyed SHA-1,
+    # and the chunk_id it hashes is stored in the payload in plaintext anyway.
+    # It belongs in source precisely because it must be byte-identical across
+    # every environment forever — a namespace that differs between environments
+    # silently re-keys the corpus, so a re-index writes a parallel set of points
+    # instead of updating them in place. Never change this value.
+    POINT_ID_NAMESPACE = uuid.UUID("b1f3a4c2-7d58-4e26-9a0f-3c8d5e1b7a94")
 
     def __init__(self,
                  vector_db_url: SecretStr,
@@ -46,40 +60,86 @@ class VectorDatabase:
             print(f"✅ Created collection '{self.collection_name}'")
 
 
+    @classmethod
+    def point_id(cls, chunk_id: str) -> uuid.UUID:
+        """
+        Map a chunk's semantic ID onto a stable Qdrant point ID.
+
+        Keying points by content identity rather than by position makes
+        re-indexing idempotent: the same chunk lands on the same point every
+        run, so a corrected corpus updates in place. Positional IDs shift
+        whenever the corpus changes, which leaves the collection holding a mix
+        of old and new content unless it is dropped first.
+        """
+        return uuid.uuid5(cls.POINT_ID_NAMESPACE, chunk_id)
+
     def index_chunks(self, chunks: List[Chunk]):
         """
         Index chunks into vector database
 
         Args:
             chunks: List of Chunk objects to index
+
+        Raises:
+            ValueError: if two chunks share an ID, or if the collection does
+                not hold every chunk once indexing completes.
         """
         print(f"📊 Indexing {len(chunks)} chunks...")
 
-        # Generate embeddings in batch
-        texts = [chunk.text for chunk in chunks]
+        # Duplicate chunk IDs collapse onto one point: Qdrant's upsert
+        # overwrites a repeated ID silently, so the loss would otherwise show
+        # up only as a quietly under-populated collection.
+        chunk_ids = [chunk.id for chunk in chunks]
+        if len(set(chunk_ids)) != len(chunk_ids):
+            seen, duplicates = set(), []
+            for chunk_id in chunk_ids:
+                if chunk_id in seen:
+                    duplicates.append(chunk_id)
+                seen.add(chunk_id)
+            raise ValueError(
+                f"Chunk IDs must be unique; {len(duplicates)} duplicate(s): "
+                f"{sorted(set(duplicates))[:10]}"
+            )
 
         batch_size = 100
 
-        for i in tqdm(range(0, len(texts), batch_size)):
+        for i in tqdm(range(0, len(chunks), batch_size)):
             chunks_batch = chunks[i:i + batch_size]
             texts_batch = [c.text for c in chunks_batch]
             batch_embeddings = self.embedding_generator.embed_batch(batch=texts_batch)
 
             points = [
                 PointStruct(
-                    id = i*batch_size + j,  # Use numeric ID for Qdrant
+                    id = self.point_id(chunk.id),
                     vector = embedding,
                     payload = {
                         "chunk_id": chunk.id,
                         "text": chunk.text,
                         "metadata": chunk.metadata,
                         }
-                    ) for j, (chunk, embedding) in enumerate(zip(chunks_batch, batch_embeddings))
+                    ) for chunk, embedding in zip(chunks_batch, batch_embeddings)
             ]
 
             self.client.upsert(collection_name=self.collection_name, points=points)
 
-        print(f"✅ Indexed {len(chunks)} chunks successfully")
+        # Verify against the collection rather than against the input: reporting
+        # len(chunks) back would claim success even if every point had collided.
+        stored = self.client.count(collection_name=self.collection_name, exact=True).count
+        if stored < len(chunks):
+            raise ValueError(
+                f"Indexed {len(chunks)} chunks but collection "
+                f"'{self.collection_name}' holds {stored} points — "
+                f"{len(chunks) - stored} were lost to ID collisions."
+            )
+        if stored > len(chunks):
+            print(
+                f"⚠️  Collection '{self.collection_name}' holds {stored} points for "
+                f"{len(chunks)} chunks: {stored - len(chunks)} orphaned point(s) "
+                f"remain from a previous, larger corpus. Drop the collection to "
+                f"clear them."
+            )
+
+        print(f"✅ Indexed {len(chunks)} chunks successfully ({stored} points in collection)")
 
     def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """

@@ -23,3 +23,9 @@ dependencies = [
 test = [
     "pytest>=8.0.0",
 ]
+
+[tool.pytest.ini_options]
+# Repo root on sys.path so tests can `import src...` the same way the app does.
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-ra"

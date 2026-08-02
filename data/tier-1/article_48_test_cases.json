@@ -1,0 +1,47 @@
+{
+  "article_number": "48",
+  "article_title": "Transfers or disclosures not authorised by Union law",
+  "test_cases": [
+    {
+      "question": "What types of third-country demands are covered by this article?",
+      "answer": "This article covers any judgment of a court or tribunal and any decision of an administrative authority of a third country that requires a controller or processor to transfer or disclose personal data. It applies to both judicial and administrative demands from non-EU countries.",
+      "answer_type": "definition",
+      "supporting_quote": "Any judgment of a court or tribunal and any decision of an administrative authority of a third country requiring a controller or processor to transfer or disclose personal data",
+      "key_phrases": [
+        "judgment of a court or tribunal",
+        "decision of an administrative authority",
+        "third country",
+        "controller or processor"
+      ]
+    },
+    {
+      "question": "Under what conditions can a third-country court judgment requiring data transfer be recognized or enforced?",
+      "answer": "Such a judgment may only be recognized or enforceable in any manner if it is based on an international agreement, such as a mutual legal assistance treaty, that is in force between the requesting third country and either the Union or a Member State. Without such an agreement, the foreign demand cannot be enforced under EU law.",
+      "answer_type": "conditional",
+      "supporting_quote": "may only be recognised or enforceable in any manner if based on an international agreement, such as a mutual legal assistance treaty, in force between the requesting third country and the Union or a Member State",
+      "key_phrases": [
+        "only be recognised or enforceable",
+        "international agreement",
+        "mutual legal assistance treaty",
+        "in force"
+      ]
+    },
+    {
+      "question": "If a foreign court order cannot be enforced under this rule, can personal data still be transferred to that country?",
+      "answer": "Yes. This article is without prejudice to other grounds for transfer pursuant to Chapter V. This means that even if the foreign judgment itself cannot be enforced, controllers and processors may still use other lawful transfer mechanisms such as adequacy decisions, standard contractual clauses, or derogations under Article 49.",
+      "answer_type": "scope",
+      "supporting_quote": "without prejudice to other grounds for transfer pursuant to this Chapter",
+      "key_phrases": [
+        "without prejudice",
+        "other grounds for transfer",
+        "this Chapter"
+      ]
+    }
+  ],
+  "coverage": {
+    "48 - Scope": "Test case 1 - Court judgments, administrative decisions, controller and processor",
+    "48 - Condition": "Test case 2 - International agreement (e.g., MLAT) required",
+    "48 - Without prejudice": "Test case 3 - Other Chapter V transfer grounds remain available"
+  },
+  "b2b_relevance": "HIGH - Article 48 is critical for handling foreign government data demands. Essential for: US subpoenas, third-country law enforcement requests, and understanding that GDPR may conflict with foreign legal obligations. Key takeaways: (1) Foreign court orders are NOT automatically enforceable, (2) Must have international agreement (like MLAT) in force, (3) Other transfer mechanisms still available - you just can't claim the foreign order itself as legal basis."
+}

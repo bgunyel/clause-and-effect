@@ -1,0 +1,63 @@
+{
+  "article_number": "88",
+  "article_title": "Processing in the context of employment",
+  "test_cases": [
+    {
+      "question": "How can Member States establish specific rules for processing employee personal data?",
+      "answer": "Member States may, by law or by collective agreements, provide for more specific rules to ensure the protection of the rights and freedoms in respect of the processing of employees' personal data in the employment context.",
+      "answer_type": "scope",
+      "supporting_quote": "Member States may, by law or by collective agreements, provide for more specific rules to ensure the protection of the rights and freedoms in respect of the processing of employees' personal data in the employment context",
+      "key_phrases": [
+        "Member States",
+        "by law or by collective agreements",
+        "more specific rules",
+        "employment context"
+      ]
+    },
+    {
+      "question": "For which employment-related purposes can Member States establish specific data protection rules?",
+      "answer": "Member States can create more specific rules for processing employee data for purposes including: recruitment; performance of the contract of employment (including discharge of obligations laid down by law or collective agreements); management, planning and organisation of work; equality and diversity in the workplace; health and safety at work; protection of employer's or customer's property; exercise and enjoyment of rights and benefits related to employment (individual or collective basis); and termination of the employment relationship.",
+      "answer_type": "definition",
+      "supporting_quote": "in particular for the purposes of the recruitment, the performance of the contract of employment, including discharge of obligations laid down by law or by collective agreements, management, planning and organisation of work, equality and diversity in the workplace, health and safety at work, protection of employer's or customer's property and for the purposes of the exercise and enjoyment, on an individual or collective basis, of rights and benefits related to employment, and for the purpose of the termination of the employment relationship",
+      "key_phrases": [
+        "recruitment",
+        "performance of the contract of employment",
+        "health and safety at work",
+        "termination of the employment relationship"
+      ]
+    },
+    {
+      "question": "What safeguards must national employment data processing rules include?",
+      "answer": "The rules shall include suitable and specific measures to safeguard the data subject's human dignity, legitimate interests and fundamental rights, with particular regard to: (1) the transparency of processing, (2) the transfer of personal data within a group of undertakings or a group of enterprises engaged in a joint economic activity, and (3) monitoring systems at the work place.",
+      "answer_type": "conditional",
+      "supporting_quote": "Those rules shall include suitable and specific measures to safeguard the data subject's human dignity, legitimate interests and fundamental rights, with particular regard to the transparency of processing, the transfer of personal data within a group of undertakings, or a group of enterprises engaged in a joint economic activity and monitoring systems at the work place",
+      "key_phrases": [
+        "suitable and specific measures",
+        "human dignity",
+        "legitimate interests",
+        "fundamental rights",
+        "transparency of processing",
+        "monitoring systems at the work place"
+      ]
+    },
+    {
+      "question": "What notification obligations do Member States have regarding their employment data protection laws?",
+      "answer": "Each Member State shall notify to the Commission those provisions of its law which it adopts pursuant to paragraph 1, by 25 May 2018 and, without delay, any subsequent amendment affecting them.",
+      "answer_type": "timeline",
+      "supporting_quote": "Each Member State shall notify to the Commission those provisions of its law which it adopts pursuant to paragraph 1, by 25 May 2018 and, without delay, any subsequent amendment affecting them",
+      "key_phrases": [
+        "notify to the Commission",
+        "25 May 2018",
+        "without delay",
+        "subsequent amendment"
+      ]
+    }
+  ],
+  "coverage": {
+    "88(1) authority": "Test case 1 - MS may provide rules by law or collective agreements",
+    "88(1) purposes": "Test case 2 - Employment purposes list (recruitment to termination)",
+    "88(2) safeguards": "Test case 3 - Human dignity, transparency, intra-group transfers, monitoring",
+    "88(3) notification": "Test case 4 - Notify Commission by 25 May 2018 + amendments"
+  },
+  "b2b_relevance": "HIGH - Article 88 is critical for B2B SaaS in the HR/employment space. Key implications: (1) HR software must support varying national rules across EU, (2) Employee monitoring tools need safeguards for human dignity, (3) Intra-group employee data transfers (e.g., multinational HR systems) require particular attention, (4) Transparency requirements affect how HR systems inform employees about data processing. If you build HR SaaS, payroll systems, or workplace monitoring tools, Article 88 directly affects your product design."
+}

@@ -1,0 +1,59 @@
+{
+  "article_number": "55",
+  "article_title": "Competence",
+  "test_cases": [
+    {
+      "question": "What is the general rule for which supervisory authority has jurisdiction over data processing activities?",
+      "answer": "Each supervisory authority shall be competent for the performance of the tasks assigned to and the exercise of the powers conferred on it in accordance with GDPR on the territory of its own Member State. This means that for processing occurring in a given country, that country's supervisory authority is typically the competent authority.",
+      "answer_type": "definition",
+      "supporting_quote": "Each supervisory authority shall be competent for the performance of the tasks assigned to and the exercise of the powers conferred on it in accordance with this Regulation on the territory of its own Member State",
+      "key_phrases": [
+        "competent",
+        "territory of its own Member State",
+        "tasks assigned",
+        "powers conferred"
+      ]
+    },
+    {
+      "question": "Which supervisory authority is competent when processing is carried out by public authorities?",
+      "answer": "Where processing is carried out by public authorities or private bodies acting on the basis of point (c) or (e) of Article 6(1), the supervisory authority of the Member State concerned shall be competent. Point (c) covers processing necessary for legal obligations; point (e) covers processing for public interest or official authority tasks.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where processing is carried out by public authorities or private bodies acting on the basis of point (c) or (e) of Article 6(1), the supervisory authority of the Member State concerned shall be competent",
+      "key_phrases": [
+        "public authorities",
+        "private bodies",
+        "point (c) or (e) of Article 6(1)",
+        "Member State concerned"
+      ]
+    },
+    {
+      "question": "When does the 'lead supervisory authority' mechanism apply instead of territorial competence?",
+      "answer": "Article 56 applies to cross-border processing situations. In such cases, the supervisory authority of the main establishment or single establishment of the controller or processor shall be competent as the lead supervisory authority. This is an exception to the general territorial competence rule.",
+      "answer_type": "scope",
+      "supporting_quote": "This paragraph is without prejudice to Article 56",
+      "key_phrases": [
+        "Article 56",
+        "main establishment",
+        "lead supervisory authority",
+        "cross-border"
+      ]
+    },
+    {
+      "question": "Are supervisory authorities competent to supervise courts when they process personal data?",
+      "answer": "No. Supervisory authorities shall not be competent to supervise processing operations of courts acting in their judicial capacity. This protects judicial independence and the separation of powers.",
+      "answer_type": "scope",
+      "supporting_quote": "Supervisory authorities shall not be competent to supervise processing operations of courts acting in their judicial capacity",
+      "key_phrases": [
+        "shall not be competent",
+        "courts",
+        "judicial capacity"
+      ]
+    }
+  ],
+  "coverage": {
+    "55(1)": "Test case 1 - General territorial competence",
+    "55(2)": "Test case 2 + 3 - Public authorities/private bodies under Art 6(1)(c)(e) + cross-ref to Art 56",
+    "55(3)": "Test case 4 - NEW - Courts exception (judicial capacity)"
+  },
+  "b2b_relevance": "HIGH - Article 55 determines which SA has jurisdiction over your processing. Key for: (1) Understanding which SA to engage with, (2) Recognizing when lead authority (Art 56) applies to cross-border processing, (3) Knowing courts are exempt. For B2B SaaS: if processing only in one Member State, that SA is competent; if cross-border, lead authority rules apply."
+}

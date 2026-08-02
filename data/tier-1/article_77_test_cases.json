@@ -1,0 +1,59 @@
+{
+  "article_number": "77",
+  "article_title": "Right to lodge a complaint with a supervisory authority",
+  "test_cases": [
+    {
+      "question": "Who has the right to lodge a complaint with a supervisory authority and under what condition?",
+      "answer": "Every data subject shall have the right to lodge a complaint with a supervisory authority if the data subject considers that the processing of personal data relating to him or her infringes this Regulation. This right exists without prejudice to any other administrative or judicial remedy.",
+      "answer_type": "definition",
+      "supporting_quote": "Without prejudice to any other administrative or judicial remedy, every data subject shall have the right to lodge a complaint with a supervisory authority... if the data subject considers that the processing of personal data relating to him or her infringes this Regulation",
+      "key_phrases": [
+        "every data subject",
+        "right to lodge a complaint",
+        "considers that the processing... infringes",
+        "without prejudice to any other... remedy"
+      ]
+    },
+    {
+      "question": "Where can a data subject file a GDPR complaint?",
+      "answer": "A data subject can lodge a complaint with a supervisory authority in particular in the Member State of his or her habitual residence, place of work, or place of the alleged infringement. The data subject has flexibility to choose among these jurisdictions.",
+      "answer_type": "scope",
+      "supporting_quote": "in particular in the Member State of his or her habitual residence, place of work or place of the alleged infringement",
+      "key_phrases": [
+        "Member State",
+        "habitual residence",
+        "place of work",
+        "place of the alleged infringement"
+      ]
+    },
+    {
+      "question": "What obligation does a supervisory authority have toward a complainant?",
+      "answer": "The supervisory authority with which the complaint has been lodged shall inform the complainant on the progress and the outcome of the complaint including the possibility of a judicial remedy pursuant to Article 78.",
+      "answer_type": "definition",
+      "supporting_quote": "The supervisory authority with which the complaint has been lodged shall inform the complainant on the progress and the outcome of the complaint including the possibility of a judicial remedy pursuant to Article 78",
+      "key_phrases": [
+        "shall inform the complainant",
+        "progress and the outcome",
+        "possibility of a judicial remedy",
+        "Article 78"
+      ]
+    },
+    {
+      "question": "Does filing a complaint prevent a data subject from pursuing other legal remedies?",
+      "answer": "No. The right to lodge a complaint with a supervisory authority exists without prejudice to any other administrative or judicial remedy. Data subjects can pursue complaints alongside or instead of other legal options, including court actions.",
+      "answer_type": "conditional",
+      "supporting_quote": "Without prejudice to any other administrative or judicial remedy",
+      "key_phrases": [
+        "without prejudice",
+        "administrative or judicial remedy"
+      ]
+    }
+  ],
+  "coverage": {
+    "77(1) right": "Test case 1 - Every data subject has right if considers infringement",
+    "77(1) where": "Test case 2 - Three location options for filing",
+    "77(1) other remedies": "Test case 4 - Without prejudice to other remedies",
+    "77(2)": "Test case 3 - SA must inform on progress, outcome, and judicial remedy possibility"
+  },
+  "b2b_relevance": "HIGH - Article 77 is the gateway to enforcement. Key implications: (1) Data subjects can complain in multiple jurisdictions (your establishment, their residence, or their workplace), (2) Low threshold - just 'considers' infringement, (3) Complaint doesn't bar lawsuits, (4) SA must keep complainant informed. Prepare for complaints from any EU country where you have customers or employees."
+}

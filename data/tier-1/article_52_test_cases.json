@@ -1,0 +1,72 @@
+{
+  "article_number": "52",
+  "article_title": "Independence",
+  "test_cases": [
+    {
+      "question": "What does it mean for a supervisory authority to act with 'complete independence'?",
+      "answer": "Each supervisory authority shall act with complete independence in performing its tasks and exercising its powers. The member or members shall remain free from external influence, whether direct or indirect, and shall neither seek nor take instructions from anybody. They must also refrain from any action incompatible with their duties.",
+      "answer_type": "definition",
+      "supporting_quote": "Each supervisory authority shall act with complete independence in performing its tasks and exercising its powers in accordance with this Regulation. The member or members of each supervisory authority shall, in the performance of their tasks and exercise of their powers in accordance with this Regulation, remain free from external influence, whether direct or indirect, and shall neither seek nor take instructions from anybody",
+      "key_phrases": [
+        "complete independence",
+        "free from external influence",
+        "direct or indirect",
+        "neither seek nor take instructions"
+      ]
+    },
+    {
+      "question": "Are supervisory authority members allowed to hold other jobs while serving their term?",
+      "answer": "No. Members must not, during their term of office, engage in any incompatible occupation, whether gainful or not. They must also refrain from any action incompatible with their duties throughout their term.",
+      "answer_type": "conditional",
+      "supporting_quote": "Member or members of each supervisory authority shall refrain from any action incompatible with their duties and shall not, during their term of office, engage in any incompatible occupation, whether gainful or not",
+      "key_phrases": [
+        "during their term of office",
+        "incompatible occupation",
+        "whether gainful or not"
+      ]
+    },
+    {
+      "question": "What resources must Member States provide to supervisory authorities?",
+      "answer": "Each Member State must ensure that each supervisory authority is provided with the human, technical, and financial resources, premises, and infrastructure necessary for the effective performance of its tasks and exercise of its powers. This includes resources for mutual assistance, cooperation, and participation in the Board (EDPB).",
+      "answer_type": "scope",
+      "supporting_quote": "Each Member State shall ensure that each supervisory authority is provided with the human, technical and financial resources, premises and infrastructure necessary for the effective performance of its tasks and exercise of its powers, including those to be carried out in the context of mutual assistance, cooperation and participation in the Board",
+      "key_phrases": [
+        "human, technical and financial resources",
+        "premises and infrastructure",
+        "mutual assistance",
+        "participation in the Board"
+      ]
+    },
+    {
+      "question": "Who controls the staff of a supervisory authority?",
+      "answer": "Each Member State must ensure that each supervisory authority chooses and has its own staff. This staff shall be subject to the exclusive direction of the member or members of the supervisory authority concerned - not any external government ministry or body.",
+      "answer_type": "scope",
+      "supporting_quote": "Each Member State shall ensure that each supervisory authority chooses and has its own staff which shall be subject to the exclusive direction of the member or members of the supervisory authority concerned",
+      "key_phrases": [
+        "chooses and has its own staff",
+        "exclusive direction",
+        "supervisory authority concerned"
+      ]
+    },
+    {
+      "question": "What financial safeguards must Member States implement to protect supervisory authority independence?",
+      "answer": "Member States must ensure supervisory authorities are subject to financial control which does not affect their independence. Each SA must have separate, public annual budgets, which may be part of the overall state or national budget.",
+      "answer_type": "definition",
+      "supporting_quote": "Each Member State shall ensure that each supervisory authority is subject to financial control which does not affect its independence and that it has separate, public annual budgets, which may be part of the overall state or national budget",
+      "key_phrases": [
+        "financial control",
+        "does not affect its independence",
+        "separate, public annual budgets"
+      ]
+    }
+  ],
+  "coverage": {
+    "52(1)": "Test case 1 - Act with complete independence",
+    "52(2)": "Test case 1 - Free from external influence, no instructions",
+    "52(3)": "Test case 2 - No incompatible occupations during term",
+    "52(4)": "Test case 3 - Resources: human, technical, financial, premises, infrastructure",
+    "52(5)": "Test case 4 - Own staff under exclusive direction",
+    "52(6)": "Test case 5 - Financial control without affecting independence + separate budgets"
+  },
+  "b2b_relevance": "MEDIUM - Article 52 establishes SA independence, which matters because: (1) SAs cannot be influenced by governments or industry to favor particular outcomes, (2) Decisions must be based on GDPR, not politics, (3) When dealing with an SA, understand they are truly independent regulators. Key takeaways: SA cannot take instructions from anyone - not government, not industry."
+}

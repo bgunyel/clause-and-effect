@@ -1,0 +1,70 @@
+{
+  "article_number": "43",
+  "article_title": "Certification bodies",
+  "test_cases": [
+    {
+      "question": "What requirements must a certification body meet to issue GDPR certifications?",
+      "answer": "Certification bodies must: (a) demonstrate their independence and expertise in relation to the subject-matter of the certification to the satisfaction of the competent supervisory authority; (b) undertake to respect the criteria referred to in Article 42(5) and approved by the supervisory authority or the Board; and (c) establish procedures for issuing, reviewing, and withdrawing certifications, seals, and marks. The body must inform the supervisory authority before issuing any certification to allow the authority to exercise its powers.",
+      "answer_type": "definition",
+      "supporting_quote": "Certification bodies referred to in paragraph 1 shall be accredited in accordance with paragraph 1 only where they have: (a) demonstrated their independence and expertise in relation to the subject-matter of the certification to the satisfaction of the competent supervisory authority; (b) undertaken to respect the criteria referred to in Article 42(5) and approved by the competent supervisory authority pursuant to Article 58(3) or by the Board pursuant to Article 63; (c) established procedures for the issuing, periodic review and withdrawal of data protection certification, seals and marks",
+      "key_phrases": [
+        "independence and expertise",
+        "certification criteria",
+        "issuing, periodic review and withdrawal"
+      ]
+    },
+    {
+      "question": "Who can accredit certification bodies under GDPR?",
+      "answer": "Certification bodies can be accredited by either: (1) the competent supervisory authority pursuant to Articles 55 or 56; or (2) the national accreditation body named in accordance with Regulation (EC) No 765/2008 in accordance with EN-ISO/IEC 17065/2012 and with the additional requirements established by the competent supervisory authority.",
+      "answer_type": "scope",
+      "supporting_quote": "Certification bodies referred to in paragraph 1 shall be accredited by the competent supervisory authority pursuant to Article 55 or 56 or by the national accreditation body named in accordance with Regulation (EC) No 765/2008 in accordance with EN-ISO/IEC 17065/2012 and with the additional requirements established by the competent supervisory authority",
+      "key_phrases": [
+        "competent supervisory authority",
+        "national accreditation body",
+        "EN-ISO/IEC 17065/2012"
+      ]
+    },
+    {
+      "question": "How long does accreditation last for a certification body?",
+      "answer": "The accreditation of certification bodies is valid for a maximum period of five years. It may be renewed on the same conditions, provided the certification body continues to meet all the requirements for accreditation.",
+      "answer_type": "timeline",
+      "supporting_quote": "The accreditation of certification bodies as referred to in paragraphs 1 and 2 shall take place on the basis of criteria approved by the competent supervisory authority pursuant to Article 58(3) or by the Board pursuant to Article 63. In the case of accreditation pursuant to point (b) of paragraph 2 of this Article, those requirements shall complement those envisaged in Regulation (EC) No 765/2008 and the technical rules that describe the methods and procedures of certification bodies",
+      "key_phrases": [
+        "maximum period of five years",
+        "may be renewed",
+        "same conditions"
+      ]
+    },
+    {
+      "question": "Under what circumstances can a certification body's accreditation be revoked?",
+      "answer": "The competent supervisory authority or the national accreditation body shall revoke an accreditation if: (1) the conditions for the accreditation are not, or are no longer, met; or (2) actions taken by the certification body infringe GDPR. The SA must inform the Board when accreditations are granted or revoked.",
+      "answer_type": "conditional",
+      "supporting_quote": "The competent supervisory authority or the national accreditation body shall revoke an accreditation of a certification body as referred to in paragraph 1 where the conditions for the accreditation are not, or are no longer, met or where actions taken by a certification body infringe this Regulation",
+      "key_phrases": [
+        "revoke an accreditation",
+        "conditions are not met",
+        "no longer met",
+        "infringe this Regulation"
+      ]
+    },
+    {
+      "question": "Does the certification body framework limit supervisory authority powers?",
+      "answer": "No. The framework operates without prejudice to the tasks and powers of the competent supervisory authority under Articles 57 and 58. The supervisory authority retains full enforcement powers regardless of certification body involvement, and certification bodies must inform the SA before issuing certifications to allow exercise of those powers.",
+      "answer_type": "scope",
+      "supporting_quote": "Without prejudice to the tasks and powers of the competent supervisory authority under Articles 57 and 58, certification bodies which have an appropriate level of expertise in relation to data protection shall, after informing the supervisory authority in order to allow it to exercise its powers pursuant to point (h) of Article 58(2) where necessary, issue and renew certification",
+      "key_phrases": [
+        "without prejudice",
+        "tasks and powers",
+        "informing the supervisory authority"
+      ]
+    }
+  ],
+  "coverage": {
+    "43(1)": "Test case 1 + 5 - Expertise, inform SA, issue certifications",
+    "43(1)(a)(b)(c)": "Test case 1 - NEW - Independence, criteria commitment, procedures",
+    "43(2)": "Test case 2 - NEW - Accreditation by SA or national accreditation body",
+    "43(3)": "Test case 3 - NEW - 5-year term, renewable",
+    "43(6)": "Test case 4 - NEW - Revocation conditions"
+  },
+  "b2b_relevance": "MEDIUM - Article 43 governs who can issue GDPR certifications. Key for: understanding certification validity, choosing accredited certification bodies, and knowing that SA oversight continues. Key takeaways: (1) Bodies must be independent from those they certify, (2) Two accreditation paths: SA or national body, (3) 5-year accreditation term (vs 3-year certification validity), (4) Accreditation can be revoked."
+}

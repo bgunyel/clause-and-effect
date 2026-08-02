@@ -1,0 +1,49 @@
+{
+  "article_number": "74",
+  "article_title": "Tasks of the Chair",
+  "test_cases": [
+    {
+      "question": "What are the tasks of the Chair of the European Data Protection Board?",
+      "answer": "The Chair shall have the following tasks: (a) to convene the meetings of the Board and prepare its agenda; (b) to notify decisions adopted by the Board pursuant to Article 65 to the lead supervisory authority and the supervisory authorities concerned; and (c) to ensure the timely performance of the tasks of the Board, in particular in relation to the consistency mechanism referred to in Article 63.",
+      "answer_type": "definition",
+      "supporting_quote": "The Chair shall have the following tasks: (a) to convene the meetings of the Board and prepare its agenda; (b) to notify decisions adopted by the Board pursuant to Article 65 to the lead supervisory authority and the supervisory authorities concerned; (c) to ensure the timely performance of the tasks of the Board, in particular in relation to the consistency mechanism referred to in Article 63",
+      "key_phrases": [
+        "convene the meetings",
+        "prepare its agenda",
+        "notify decisions",
+        "Article 65",
+        "timely performance",
+        "consistency mechanism"
+      ]
+    },
+    {
+      "question": "Who receives notification of decisions adopted by the Board?",
+      "answer": "The Chair notifies decisions adopted by the Board pursuant to Article 65 to the lead supervisory authority and the supervisory authorities concerned. This ensures all relevant SAs are informed of binding dispute resolution decisions.",
+      "answer_type": "scope",
+      "supporting_quote": "to notify decisions adopted by the Board pursuant to Article 65 to the lead supervisory authority and the supervisory authorities concerned",
+      "key_phrases": [
+        "notify decisions",
+        "Article 65",
+        "lead supervisory authority",
+        "supervisory authorities concerned"
+      ]
+    },
+    {
+      "question": "What specific mechanism must the Chair ensure performs timely?",
+      "answer": "The Chair must ensure the timely performance of the tasks of the Board, in particular in relation to the consistency mechanism referred to in Article 63. This emphasizes the Chair's responsibility for ensuring the cross-border consistency procedures operate efficiently.",
+      "answer_type": "scope",
+      "supporting_quote": "to ensure the timely performance of the tasks of the Board, in particular in relation to the consistency mechanism referred to in Article 63",
+      "key_phrases": [
+        "timely performance",
+        "consistency mechanism",
+        "Article 63"
+      ]
+    }
+  ],
+  "coverage": {
+    "74(a)": "Test case 1 - Convene meetings + prepare agenda",
+    "74(b)": "Test cases 1 and 2 - Notify Art 65 decisions to lead SA and concerned SAs",
+    "74(c)": "Test cases 1 and 3 - Ensure timely performance, especially consistency mechanism"
+  },
+  "b2b_relevance": "LOW-MEDIUM - Article 74 is about EDPB Chair duties. Indirect relevance: Chair ensures consistency mechanism runs on time, which affects how quickly cross-border cases involving your business get resolved. Chair notifies Art 65 binding decisions, which may affect your company's enforcement outcomes."
+}

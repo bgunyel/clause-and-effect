@@ -1,0 +1,58 @@
+{
+  "article_number": "68",
+  "article_title": "European Data Protection Board",
+  "test_cases": [
+    {
+      "question": "What is the European Data Protection Board and what is its legal status?",
+      "answer": "The European Data Protection Board (the 'Board') is hereby established as a body of the Union and shall have legal personality. The Board shall be represented by its Chair.",
+      "answer_type": "definition",
+      "supporting_quote": "The European Data Protection Board (the 'Board') is hereby established as a body of the Union and shall have legal personality. The Board shall be represented by its Chair",
+      "key_phrases": [
+        "body of the Union",
+        "legal personality",
+        "represented by its Chair"
+      ]
+    },
+    {
+      "question": "Who are the members of the European Data Protection Board?",
+      "answer": "The Board shall be composed of the head of one supervisory authority of each Member State and of the European Data Protection Supervisor, or their respective representatives.",
+      "answer_type": "scope",
+      "supporting_quote": "The Board shall be composed of the head of one supervisory authority of each Member State and of the European Data Protection Supervisor, or their respective representatives",
+      "key_phrases": [
+        "head of one supervisory authority",
+        "each Member State",
+        "European Data Protection Supervisor"
+      ]
+    },
+    {
+      "question": "What happens when a Member State has more than one supervisory authority?",
+      "answer": "Where in a Member State more than one supervisory authority is responsible for monitoring the application of GDPR provisions, a joint representative shall be appointed in accordance with that Member State's law.",
+      "answer_type": "conditional",
+      "supporting_quote": "Where in a Member State more than one supervisory authority is responsible for monitoring the application of the provisions pursuant to this Regulation, a joint representative shall be appointed in accordance with that Member State's law",
+      "key_phrases": [
+        "more than one supervisory authority",
+        "joint representative",
+        "Member State's law"
+      ]
+    },
+    {
+      "question": "Can the European Commission vote on Board decisions?",
+      "answer": "No. The Commission shall have the right to participate in the activities and meetings of the Board without voting right. The Commission shall designate a representative, and the Chair shall communicate Board activities to the Commission.",
+      "answer_type": "scope",
+      "supporting_quote": "The Commission shall have the right to participate in the activities and meetings of the Board without voting right. The Commission shall designate a representative. The Chair of the Board shall communicate the activities of the Board to the Commission",
+      "key_phrases": [
+        "without voting right",
+        "participate",
+        "designate a representative"
+      ]
+    }
+  ],
+  "coverage": {
+    "68(1)": "Test case 1 - Body of Union + legal personality",
+    "68(2)": "Test case 1 - Represented by Chair",
+    "68(3)": "Test case 2 - Composition (SA heads + EDPS)",
+    "68(4)": "Test case 3 - Joint representative for multi-SA Member States",
+    "68(5)": "Test case 4 - Commission participates without voting"
+  },
+  "b2b_relevance": "MEDIUM - Article 68 establishes the EDPB, which: (1) Issues binding decisions affecting your cross-border cases, (2) Provides guidance and opinions on GDPR interpretation, (3) Maintains consistency across EU. Key takeaway: EDPB is a Union body with real authority (legal personality), not just a discussion forum."
+}

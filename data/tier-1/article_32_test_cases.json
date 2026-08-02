@@ -1,0 +1,74 @@
+{
+  "article_number": "32",
+  "article_title": "Security of processing",
+  "test_cases": [
+    {
+      "question": "What factors should an organization consider when determining the appropriate level of security for data processing?",
+      "answer": "Organizations must consider the state of the art, costs of implementation, the nature, scope, context and purposes of processing, and the risk of varying likelihood and severity for the rights and freedoms of natural persons. The assessment should particularly weigh risks from accidental or unlawful destruction, loss, alteration, unauthorized disclosure of, or access to personal data transmitted, stored or otherwise processed.",
+      "answer_type": "definition",
+      "supporting_quote": "Taking into account the state of the art, the costs of implementation and the nature, scope, context and purposes of processing as well as the risk of varying likelihood and severity for the rights and freedoms of natural persons... account shall be taken in particular of the risks that are presented by processing, in particular from accidental or unlawful destruction, loss, alteration, unauthorised disclosure of, or access to personal data",
+      "key_phrases": [
+        "state of the art",
+        "costs of implementation",
+        "nature, scope, context and purposes",
+        "risk to rights and freedoms",
+        "accidental or unlawful destruction",
+        "loss",
+        "alteration",
+        "unauthorised disclosure"
+      ]
+    },
+    {
+      "question": "What specific technical security measures does GDPR suggest for protecting personal data?",
+      "answer": "Article 32 lists four measures as appropriate: (a) pseudonymisation and encryption of personal data; (b) ensuring ongoing confidentiality, integrity, availability and resilience of processing systems and services; (c) ability to restore availability and access to personal data in a timely manner after a physical or technical incident; and (d) a process for regularly testing, assessing and evaluating the effectiveness of technical and organisational measures for ensuring security.",
+      "answer_type": "definition",
+      "supporting_quote": "including inter alia as appropriate: (a) the pseudonymisation and encryption of personal data; (b) the ability to ensure the ongoing confidentiality, integrity, availability and resilience of processing systems and services; (c) the ability to restore the availability and access to personal data in a timely manner in the event of a physical or technical incident; (d) a process for regularly testing, assessing and evaluating the effectiveness of technical and organisational measures for ensuring the security of the processing",
+      "key_phrases": [
+        "pseudonymisation",
+        "encryption",
+        "confidentiality",
+        "integrity",
+        "availability",
+        "resilience",
+        "restore",
+        "regularly testing",
+        "assessing",
+        "evaluating"
+      ]
+    },
+    {
+      "question": "Are data processors also responsible for implementing security measures, or is that only the controller's job?",
+      "answer": "Both the controller and the processor are responsible for implementing appropriate technical and organisational security measures to ensure a level of security appropriate to the risk. This is a shared obligation under GDPR.",
+      "answer_type": "scope",
+      "supporting_quote": "the controller and the processor shall implement appropriate technical and organisational measures to ensure a level of security appropriate to the risk",
+      "key_phrases": [
+        "controller and the processor",
+        "shall implement",
+        "appropriate to the risk"
+      ]
+    },
+    {
+      "question": "What obligations do controllers and processors have regarding personnel who access personal data?",
+      "answer": "The controller and processor must take steps to ensure that any natural person acting under their authority who has access to personal data does not process them except on instructions from the controller, unless required to do so by Union or Member State law.",
+      "answer_type": "conditional",
+      "supporting_quote": "The controller and processor shall take steps to ensure that any natural person acting under the authority of the controller or the processor who has access to personal data shall not process them except on instructions from the controller, unless required to do so by Union or Member State law",
+      "key_phrases": [
+        "natural person acting under the authority",
+        "access to personal data",
+        "except on instructions",
+        "Union or Member State law"
+      ]
+    }
+  ],
+  "coverage": {
+    "32(1) intro": "Test case 1 - Factors: state of art, costs, nature/scope/context/purposes, risks",
+    "32(1)(a)": "Test case 2 - Pseudonymisation and encryption",
+    "32(1)(b)": "Test case 2 - Confidentiality, integrity, availability, resilience",
+    "32(1)(c)": "Test case 2 - Restore availability after incident",
+    "32(1)(d)": "Test case 2 - NEW - Regular testing, assessing, evaluating effectiveness",
+    "32(2)": "Test case 1 - Risk assessment: destruction, loss, alteration, disclosure, access",
+    "32(3)": "NOT COVERED - Codes/certification as compliance element (less critical, covered in 24/25)",
+    "32(4)": "Test case 4 - NEW - Personnel only process on instructions"
+  },
+  "b2b_relevance": "CRITICAL - Article 32 is the core security requirements article. Essential for: security program design, vendor security assessments, incident response planning, employee training, and security audits. Key takeaways: (1) Both controller AND processor responsible, (2) Four specific measures: encryption, CIA+R, restore, REGULAR TESTING, (3) Risk-based approach, (4) Personnel must follow instructions."
+}
