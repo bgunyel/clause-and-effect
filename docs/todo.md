@@ -36,9 +36,12 @@ number means anything.
   the 246 quote-grounding errors were **caused by the truncation bug** vs. genuine
   golden-set defects — done 2026-08-02. Full report:
   [`eval-reports/2026-08-02-golden-set-qa-baseline.md`](eval-reports/2026-08-02-golden-set-qa-baseline.md).
-  - **246 → 151** quote-grounding errors; **95 (38.6%) were truncation artifacts**.
-    Warnings collapsed 176 → 2. Both ends measured, not remembered — the pre-fix
-    number was reproduced by running the gate against `bc63974^`.
+  - **246 → 151** quote-grounding errors; **95 (38.6%) were false failures caused
+    by the truncated corpus, not eval-set defects** — those test cases were correct
+    all along, and the article text they quoted had been cut short. Warnings
+    collapsed 176 → 2. Both ends measured, not remembered — the pre-fix number was
+    reproduced by running the gate against `bc63974^`.
+  - Per-case transition: **95 resolved, 0 introduced, no regressions.**
   - Of the 151 remaining: 96 stitched, 18 typography, 17 ellipsis, **20 genuinely
     unsupported**. So **86.8% are recoverable by a subsequence/elision tier** and
     only 20 cases need hand remediation.

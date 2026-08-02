@@ -24,10 +24,28 @@ Both figures are measured, not remembered: the pre-fix column comes from running
 same gate against `git show bc63974^:data/regulations/gdpr_articles.json`. The 246
 baseline reproduced exactly.
 
-**95 of 246 quote-grounding errors (38.6%) were truncation artifacts.** The warning
-count collapsing 176 → 2 is the other half of the same story — those were quotes that
-matched only after whitespace normalization, and the corrected parser now collapses OCR
-double-spacing at the source.
+**95 of 246 quote-grounding errors (38.6%) were false failures caused by the truncated
+corpus — not defects in the eval set.** The distinction matters: those 95 test cases
+were correct all along. Pre-fix, 76 of 99 articles were cut short at their first inline
+`Article N` cross-reference, so a golden quote drawn from the full regulation extended
+past the cut and `quote in source` could not find it. The gate was reporting a corpus
+defect in the vocabulary of a test-case defect.
+
+The warning count collapsing 176 → 2 is the other half of the same story — those were
+quotes that matched only after whitespace normalization, and the corrected parser now
+collapses OCR double-spacing at the source.
+
+Per-case transition, which the net figure would otherwise hide:
+
+```
+174  warning -> ok        95  error -> ok        11  ok      -> ok
+151  error   -> error      2  warning -> warning
+
+errors resolved: 95     errors introduced: 0
+```
+
+**No case regressed.** `246 → 151` is a genuine improvement, not a net of offsetting
+movements in both directions.
 
 Leakage is unchanged, as expected: it is a property of the question text and cannot be
 affected by a corpus fix. That it moved by exactly zero is a useful control.
