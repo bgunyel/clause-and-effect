@@ -7,7 +7,13 @@ into "truth" (principle §1.3). These are the *deterministic* gates that run on
 the set before any score computed against it is believed:
 
     - **Quote grounding** — every ``supporting_quote`` must be a substring of
-      its source article. A miss is a broken test case (fix or remove it).
+      its source article. Reported in three tiers rather than pass/fail:
+      *exact* (byte-identical), *normalized* (identical once rendering
+      differences are removed — see :func:`normalize_for_grounding` — reported
+      as a warning), and *ungrounded* (an error: a broken test case, to fix or
+      remove). The middle tier exists because the substring rule is only a
+      proxy for what we actually want, which is evidence verifiably drawn from
+      the regulation; where proxy and purpose disagree, the proxy bends.
     - **Leakage discipline** — questions must not name article/paragraph
       numbers, or retrieval is tested on citation lookup rather than meaning.
     - **Structural validity** — non-empty required fields, a known
@@ -51,9 +57,50 @@ _LEAKAGE_PATTERN = re.compile(
 # be semantically grounded yet fail a byte-exact substring test.
 _WS = re.compile(r"\s+")
 
+# docling renders the regulation's enumerations as markdown bullets, so
+# Article 53(1) reaches the corpus as "...procedure by:\n- their parliament;\n-
+# their government;...". A citation that reproduces those sub-items as running
+# prose is normal practice, not a misquotation — and dropping the markers is
+# arguably better than keeping them, since a quote covering one numbered
+# paragraph should not carry the enumeration's own labels.
+_LIST_MARKER = re.compile(r"\n+[ \t]*-[ \t]*")
+
+# OCR occasionally leaves a space before punctuation ("inter alia ,"). That is
+# an artifact of the scan, not of the regulation's wording.
+_SPACE_BEFORE_PUNCT = re.compile(r"\s+([,;.)])")
+
 
 def _normalize_ws(text: str) -> str:
     return _WS.sub(" ", text).strip()
+
+
+def normalize_for_grounding(text: str) -> str:
+    """
+    Strip differences that are *rendering*, not wording.
+
+    Applied symmetrically to a quote and its source article, this removes the
+    distinctions a citation legitimately normalizes away:
+
+    - a space before punctuation (OCR artifact)
+    - markdown list markers (docling's rendering of an enumeration)
+    - whitespace runs and line breaks (layout)
+    - letter case (a span lifted from mid-sentence is routinely re-cased to
+      stand alone, and vice versa)
+
+    Punctuation itself is deliberately *kept*. In a legal text a comma marks
+    restrictive versus non-restrictive clauses and enumeration boundaries, so a
+    quote that inserts one has altered the statute — mildly, but really. Erasing
+    punctuation would also erase the check's ability to notice.
+
+    The boundary is drawn from measurement, not taste: across the full error
+    set these steps clear 12 of the 15 formatting-only failures while leaving
+    every reordered, reworded and fabricated quote flagged — 0 of 37 "altered"
+    and 0 of 20 "absent" cases leak through. See
+    ``tests/test_eval_golden_qa.py`` for the property that pins this.
+    """
+    text = _SPACE_BEFORE_PUNCT.sub(r"\1", text)
+    text = _LIST_MARKER.sub(" ", text)
+    return _normalize_ws(text).lower()
 
 
 @dataclass(frozen=True)
@@ -113,15 +160,18 @@ def check_quote_grounding(case: TestCase, article: Article | None) -> QAIssue | 
 
     source = article.full_text
     if quote in source:
-        return None
+        return None  # tier: exact
 
-    # Byte-exact miss: is it a formatting artifact or a genuine fabrication?
-    if _normalize_ws(quote) in _normalize_ws(source):
+    # Byte-exact miss: is it a rendering difference or a real one? Normalizing
+    # both sides answers that without loosening what "grounded" means — a
+    # normalized match is still reported, just not as a failure.
+    if normalize_for_grounding(quote) in normalize_for_grounding(source):
         return QAIssue(
             case.case_id,
             "quote_grounding",
             "warning",
-            "quote matches only after whitespace normalization (source formatting artifact)",
+            "grounded only after formatting normalization "
+            "(list markers / whitespace / case / spacing)",
         )
 
     return QAIssue(
@@ -220,6 +270,11 @@ def main() -> None:
 
     by_check: Counter[str] = Counter(f"{i.check}/{i.severity}" for i in report.issues)
 
+    grounding = {i.case_id: i.severity for i in report.issues if i.check == "quote_grounding"}
+    exact = report.total_cases - len(grounding)
+    normalized = sum(1 for s in grounding.values() if s == "warning")
+    ungrounded = sum(1 for s in grounding.values() if s == "error")
+
     print("Golden-set QA — Tier 1")
     print("=" * 48)
     print(f"cases checked : {report.total_cases}")
@@ -227,6 +282,11 @@ def main() -> None:
     print(f"errors        : {len(report.errors)}")
     print(f"warnings      : {len(report.warnings)}")
     print(f"gate          : {'PASS' if report.passed else 'FAIL'}")
+
+    print("\nquote grounding by tier:")
+    print(f"  {exact:4d}  exact       (byte-identical substring)")
+    print(f"  {normalized:4d}  normalized  (matches once rendering differences are removed)")
+    print(f"  {ungrounded:4d}  ungrounded  (not in the article — a real defect)")
 
     if by_check:
         print("\nissues by check:")

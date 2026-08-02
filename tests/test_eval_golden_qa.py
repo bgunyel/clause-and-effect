@@ -6,9 +6,11 @@ police it are themselves safety-critical — a broken check would wave defective
 test cases through. These tests pin the behaviour of every deterministic gate,
 including the known proper-noun false positive in the leakage check.
 """
+import re
+
 import pytest
 
-from src.eval.dataset import Article, TestCase
+from src.eval.dataset import Article, TestCase, load_gdpr_articles, load_tier1
 from src.eval.golden_qa import (
     check_answer_type,
     check_leakage,
@@ -82,6 +84,76 @@ def test_quote_grounding_whitespace_only_difference_is_a_warning():
     assert issue is not None and issue.severity == "warning"
 
 
+def test_quote_grounding_list_markers_flattened_is_a_warning():
+    """
+    docling renders the regulation's enumerations as markdown bullets. A
+    citation that reproduces the sub-items as running prose is normal practice
+    — see Article 53(1), whose four sub-items reach the corpus as '\\n- ' lines.
+    """
+    article = Article(
+        number="53",
+        title="General conditions",
+        content=(
+            "1. Member States shall provide for each member to be appointed by:\n"
+            "- their parliament;\n- their government;\n- their head of State."
+        ),
+    )
+    case = make_case(
+        article_number="53",
+        supporting_quote=(
+            "Member States shall provide for each member to be appointed by: "
+            "their parliament; their government; their head of State."
+        ),
+    )
+    issue = check_quote_grounding(case, article)
+    assert issue is not None and issue.severity == "warning"
+
+
+def test_quote_grounding_letter_case_difference_is_a_warning():
+    """A span lifted from mid-sentence is routinely re-cased to stand alone."""
+    case = make_case(supporting_quote="Limited to what is necessary")
+    issue = check_quote_grounding(case, ARTICLE)
+    assert issue is not None and issue.severity == "warning"
+
+
+def test_quote_grounding_space_before_punctuation_is_a_warning():
+    """OCR artifact: the corpus carries 'inter alia ,' in Article 7."""
+    article = Article(number="7", title="Consent",
+                      content="Account shall be taken of whether, inter alia , the contract applies.")
+    case = make_case(
+        article_number="7",
+        supporting_quote="whether, inter alia, the contract applies",
+    )
+    issue = check_quote_grounding(case, article)
+    assert issue is not None and issue.severity == "warning"
+
+
+def test_quote_grounding_inserted_punctuation_stays_an_error():
+    """
+    The deliberate boundary of the normalization. In a legal text a comma marks
+    restrictive vs non-restrictive clauses, so a quote that inserts one has
+    altered the statute. Normalizing punctuation away would erase the check's
+    ability to notice.
+    """
+    case = make_case(supporting_quote="limited to what, is necessary")
+    issue = check_quote_grounding(case, ARTICLE)
+    assert issue is not None and issue.severity == "error"
+
+
+def test_quote_grounding_reordered_words_stay_an_error():
+    """Same words, different order — a rewrite, not a rendering difference."""
+    case = make_case(supporting_quote="what is necessary limited to")
+    issue = check_quote_grounding(case, ARTICLE)
+    assert issue is not None and issue.severity == "error"
+
+
+def test_quote_grounding_dropped_words_stay_an_error():
+    """Normalization must not bridge a gap in the quoted text."""
+    case = make_case(supporting_quote="Personal data shall be limited to the purposes")
+    issue = check_quote_grounding(case, ARTICLE)
+    assert issue is not None and issue.severity == "error"
+
+
 def test_quote_grounding_genuine_miss_is_an_error():
     case = make_case(supporting_quote="a phrase that does not appear in the article")
     issue = check_quote_grounding(case, ARTICLE)
@@ -137,3 +209,45 @@ def test_run_golden_qa_clean_set_passes():
     report = run_golden_qa(cases=[make_case()], articles={"5": ARTICLE})
     assert report.passed
     assert report.errors == []
+
+
+# ------------------- normalization safety, on the real set ------------------ #
+#                                                                             #
+#  The normalization is only sound if it removes *rendering* differences and  #
+#  nothing else. That claim is measured against the real golden set rather    #
+#  than asserted, so a future loosening cannot quietly start waving through   #
+#  reordered or fabricated quotes.                                            #
+
+def _word_sequence(text: str) -> list[str]:
+    """Alphanumeric words, lowercased — all rendering stripped away."""
+    return [w for w in (re.sub(r"[^a-z0-9]", "", t.lower()) for t in text.split()) if w]
+
+
+def test_normalization_only_ever_clears_contiguous_verbatim_quotes():
+    """
+    Every case the normalization promotes from error to warning must have the
+    quote's exact word sequence appearing *contiguously* in its article.
+
+    That is the precise definition of "differs only in rendering": same words,
+    same order, no gaps. A quote whose words were reordered, reworded, or
+    dropped cannot satisfy it, so this fails the moment normalization starts
+    clearing something it should not.
+    """
+    articles = load_gdpr_articles()
+    promoted = [
+        (c, articles[c.article_number])
+        for c in load_tier1()
+        if (issue := check_quote_grounding(c, articles.get(c.article_number)))
+        and issue.severity == "warning"
+    ]
+    assert promoted, "expected the real set to exercise the normalization tier"
+
+    for case, article in promoted:
+        quote_words = _word_sequence(case.supporting_quote)
+        source_words = _word_sequence(article.full_text)
+        joined_source = " " + " ".join(source_words) + " "
+        joined_quote = " " + " ".join(quote_words) + " "
+        assert joined_quote in joined_source, (
+            f"{case.case_id}: normalization cleared a quote whose words are not "
+            f"contiguous in article {case.article_number}"
+        )
