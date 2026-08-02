@@ -6,6 +6,14 @@ was not wrong with the golden set
 **Tests:** 52 passed / 1 xfailed → **64 passed / 1 xfailed**
 **Gate:** 246 → **151** total errors (quote-grounding 246 → 134, leakage 18 → 17)
 
+> **Note on voice:** this entry predates the log's attribution convention and is
+> written in the AI assistant's voice — "I" is the assistant, "the user" is
+> Bertan (the engineer). Mistakes recorded below are the assistant's unless
+> stated otherwise; findings credited to "the user" are Bertan's — including the
+> Article 53 grounding-rule correction (§5) and the Article 36 primary-source
+> check (§7). Later entries name agents explicitly — see
+> [README](README.md#voice-and-attribution).
+
 ---
 
 ## Starting point
