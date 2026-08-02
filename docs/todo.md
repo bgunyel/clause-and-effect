@@ -32,9 +32,21 @@ number means anything.
   2026-08-01. `compliance_docs` recreated (1536-dim, cosine), **563/563 points**
   verified. Point IDs are now keyed by `uuid5(namespace, chunk.id)` (`7f42ea5`),
   so re-indexing is idempotent and no longer needs the collection dropped first.
-- [ ] Re-run golden-set QA (`python -m src.eval.golden_qa`) against the corrected
-  index and measure how many of the 246 quote-grounding errors were **caused by
-  the truncation bug** vs. genuine golden-set defects. Incurs judge-model cost.
+- [x] Re-run golden-set QA (`python -m src.eval.golden_qa`) and measure how many of
+  the 246 quote-grounding errors were **caused by the truncation bug** vs. genuine
+  golden-set defects — done 2026-08-02. Full report:
+  [`eval-reports/2026-08-02-golden-set-qa-baseline.md`](eval-reports/2026-08-02-golden-set-qa-baseline.md).
+  - **246 → 151** quote-grounding errors; **95 (38.6%) were truncation artifacts**.
+    Warnings collapsed 176 → 2. Both ends measured, not remembered — the pre-fix
+    number was reproduced by running the gate against `bc63974^`.
+  - Of the 151 remaining: 96 stitched, 18 typography, 17 ellipsis, **20 genuinely
+    unsupported**. So **86.8% are recoverable by a subsequence/elision tier** and
+    only 20 cases need hand remediation.
+  - Leakage unchanged at 18 (17 genuine + the Article 29 Working Party false
+    positive) — a useful control, since a corpus fix cannot affect question text.
+  - Gate still **FAILs**, which is correct. Do not relax it to go green.
+  - Correction: this run costs **nothing**. The module is fully deterministic; the
+    LLM-judge gates are P1 and explicitly not implemented in it.
 
 > ⚠️ **Every eval number recorded before 2026-08-01 is void.** The corpus content
 > more than doubled and 22 articles shed foreign chapter text, so pre-fix results
@@ -90,7 +102,13 @@ number means anything.
   **token-subsequence** tolerance (the generator dropped enumeration markers like
   `2. ` / `(a)` when stitching quotes across paragraphs). If we relax it, add a
   "subsequence" grounding tier to `golden_qa` rather than silently loosening
-  "exact".
+  "exact". **Now evidence-backed** (2026-08-02 report): a tiered check recovers
+  **131 of 151** remaining errors — 96 stitched (mostly 2–4 spans), 18 typography,
+  17 explicit `...` elision. Suggested tiers: `exact` → `typography` →
+  `elided` → `stitched` → `unsupported`.
+- [ ] Fix or remove the **20 genuinely unsupported quotes** (list in the report).
+  Not one batch: `art61_case5` is off by an inflection (`expenditures`), while
+  `art41_case3` has 11 consecutive absent tokens and looks invented.
 - [ ] Fix/regenerate the **17 true leakage questions** that name their own article
   (e.g. "What does Article 14 require…"). Full list in the `golden_qa` output.
 - [ ] Leakage check: add an allow-list for the **"Article 29 Working Party"**
@@ -126,6 +144,14 @@ deliberately deferred into this work rather than done piecemeal.
   multiple spaces. Titles are embedded into every chunk of their article, so
   **27 of 563** indexed chunks carry it. Low impact on semantic retrieval, but
   the planned lexical scorers do string comparison and may false-flag these.
+- [ ] Deferred (found 2026-08-02): **OCR soft-hyphen breaks** — 18 occurrences of
+  U+00AD + space across **14 of 99 articles** (4, 9, 14, 30, 36, 42, 43, 44, 45,
+  46, 49, 50, 58, 80), e.g. `internat­ ional`, `certifi­ cation`,
+  `jurisdic­ tional`. The docling export carries 39; 18 survive into article
+  content. Each splits one word into two meaningless tokens in the embedded text,
+  and the lexical scorers will miss them outright. Same class as the title
+  whitespace issue above — strip `­\s*` during parsing when the corpus is
+  next regenerated.
 - [ ] Establish the corrected-corpus baseline (golden-set QA above) *before*
   running experiments, so strategies are compared against a valid reference.
 
