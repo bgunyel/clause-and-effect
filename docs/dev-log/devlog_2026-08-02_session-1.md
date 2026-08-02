@@ -1,4 +1,4 @@
-# Devlog — 2026-08-02 · session 2
+# Devlog — 2026-08-02 · session 1
 
 **Branch:** `dev-02` (cut from `main` after merging `dev-01`) · `3088d45` → `HEAD`
 **Theme:** Golden-set QA baseline — and discovering that most of what it reported
