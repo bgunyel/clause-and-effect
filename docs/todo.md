@@ -42,9 +42,13 @@ number means anything.
     collapsed 176 → 2. Both ends measured, not remembered — the pre-fix number was
     reproduced by running the gate against `bc63974^`.
   - Per-case transition: **95 resolved, 0 introduced, no regressions.**
-  - Of the 151 remaining: 96 stitched, 18 typography, 17 ellipsis, **20 genuinely
-    unsupported**. So **86.8% are recoverable by a subsequence/elision tier** and
-    only 20 cases need hand remediation.
+  - After the soft-hyphen fix (same day) errors are **148**, clean cases **270**.
+  - Of the 148 remaining (segment order enforced): **76 faithful elision**,
+    **37 text altered** (reordered/reworded), **20 text absent**, **15 typography**.
+    So **91 (61.5%) are recoverable by an elision/typography tier** and **57 need
+    the quote rewritten**. An earlier revision of this entry claimed 86.8%
+    recoverable; that classifier did not require segments to advance in order and so
+    counted reordered quotes as faithful stitching.
   - Leakage unchanged at 18 (17 genuine + the Article 29 Working Party false
     positive) — a useful control, since a corpus fix cannot affect question text.
   - Gate still **FAILs**, which is correct. Do not relax it to go green.
@@ -105,13 +109,17 @@ number means anything.
   **token-subsequence** tolerance (the generator dropped enumeration markers like
   `2. ` / `(a)` when stitching quotes across paragraphs). If we relax it, add a
   "subsequence" grounding tier to `golden_qa` rather than silently loosening
-  "exact". **Now evidence-backed** (2026-08-02 report): a tiered check recovers
-  **131 of 151** remaining errors — 96 stitched (mostly 2–4 spans), 18 typography,
-  17 explicit `...` elision. Suggested tiers: `exact` → `typography` →
-  `elided` → `stitched` → `unsupported`.
-- [ ] Fix or remove the **20 genuinely unsupported quotes** (list in the report).
-  Not one batch: `art61_case5` is off by an inflection (`expenditures`), while
-  `art41_case3` has 11 consecutive absent tokens and looks invented.
+  "exact". **Now evidence-backed** (2026-08-02 report), and the evidence argues for
+  keeping "exact" and fixing the *data*: only **94 of 151** are faithful elision or
+  typography; **37 have been reordered or reworded**, which a subsequence check would
+  not pass either, since subsequence requires order. Preferred shape: let
+  `supporting_quote` hold a **list of spans**, each an exact substring, in document
+  order — elision becomes explicit in the data instead of inferred by a fuzzy matcher,
+  and the 76 legitimate enumeration-stem-plus-item quotes are expressible.
+- [ ] Rewrite the **57 quotes that are not verbatim** — 37 altered, 20 absent (lists in
+  the report). Not one batch: `art61_case5` is off by an inflection (`expenditures`),
+  `art25_case2` moves "the controller shall" across a clause, while `art41_case3` has
+  11 consecutive absent tokens and looks invented.
 - [ ] Fix/regenerate the **17 true leakage questions** that name their own article
   (e.g. "What does Article 14 require…"). Full list in the `golden_qa` output.
 - [ ] Leakage check: add an allow-list for the **"Article 29 Working Party"**
@@ -147,14 +155,16 @@ deliberately deferred into this work rather than done piecemeal.
   multiple spaces. Titles are embedded into every chunk of their article, so
   **27 of 563** indexed chunks carry it. Low impact on semantic retrieval, but
   the planned lexical scorers do string comparison and may false-flag these.
-- [ ] Deferred (found 2026-08-02): **OCR soft-hyphen breaks** — 18 occurrences of
+he - [x] **OCR soft-hyphen breaks** — found and fixed 2026-08-02. 18 occurrences of
   U+00AD + space across **14 of 99 articles** (4, 9, 14, 30, 36, 42, 43, 44, 45,
   46, 49, 50, 58, 80), e.g. `internat­ ional`, `certifi­ cation`,
-  `jurisdic­ tional`. The docling export carries 39; 18 survive into article
-  content. Each splits one word into two meaningless tokens in the embedded text,
-  and the lexical scorers will miss them outright. Same class as the title
-  whitespace issue above — strip `­\s*` during parsing when the corpus is
-  next regenerated.
+  `jurisdic­ tional`. Fixed in the parser
+  (`GDPRParser._rejoin_hyphenated_words`, applied per-article in `_clean_content`
+  and `_clean_title`) rather than by editing the JSON, so a regeneration cannot
+  reintroduce it. Corpus regenerated: 14 lines changed, every one `'\xad ' -> ''`,
+  soft hyphens 18 → 0, all 242 real U+002D hyphens preserved. Golden-set QA
+  151 → 148 errors. **Qdrant re-index still pending** — 14 articles' content
+  changed.
 - [ ] Establish the corrected-corpus baseline (golden-set QA above) *before*
   running experiments, so strategies are compared against a valid reference.
 
