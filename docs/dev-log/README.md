@@ -63,3 +63,7 @@ thing in the record.
   baseline, OCR soft hyphens, cached docling-export pipeline, tier-5 grounding
   normalization, and the discovery that the grounding rule was itself producing
   false positives.
+- [2026-08-03 · session 1](devlog_2026-08-03_session-1.md) — leakage keyed on
+  self-reference, a new self-containment gate, 25 questions reworded, §7.3
+  reconciled with the gates that exist, and the finding that provenance and
+  sufficiency are uncorrelated.
