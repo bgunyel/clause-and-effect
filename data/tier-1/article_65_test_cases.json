@@ -3,7 +3,7 @@
   "article_title": "Dispute resolution by the Board",
   "test_cases": [
     {
-      "question": "What is the purpose of the Board's binding decision under Article 65?",
+      "question": "Why does the Board adopt a binding decision in individual cases?",
       "answer": "In order to ensure the correct and consistent application of GDPR in individual cases, the Board shall adopt a binding decision. This is the dispute resolution mechanism when SAs cannot agree.",
       "answer_type": "definition",
       "supporting_quote": "In order to ensure the correct and consistent application of this Regulation in individual cases, the Board shall adopt a binding decision in the following cases",

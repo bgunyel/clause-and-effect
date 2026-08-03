@@ -3,7 +3,7 @@
   "article_title": "Processing of personal data relating to criminal convictions and offences",
   "test_cases": [
     {
-      "question": "What types of personal data does Article 10 specifically address?",
+      "question": "Which categories of personal data may be processed only under the control of official authority or where authorised by Union or Member State law?",
       "answer": "Article 10 specifically addresses the processing of personal data relating to criminal convictions and offences, as well as data relating to related security measures.",
       "answer_type": "definition",
       "supporting_quote": "Processing of personal data relating to criminal convictions and offences or related security measures",
@@ -14,7 +14,7 @@
       ]
     },
     {
-      "question": "What is the relationship between Article 10 and Article 6(1) for processing criminal conviction data?",
+      "question": "Beyond having a lawful basis under Article 6(1), what further condition must be met before criminal conviction data may be processed?",
       "answer": "Processing of criminal conviction data must be based on Article 6(1), meaning one of the six lawful bases must apply. However, even with a valid Article 6(1) basis, such processing can only take place under the control of official authority or when authorized by Union or Member State law.",
       "answer_type": "conditional",
       "supporting_quote": "Processing of personal data relating to criminal convictions and offences or related security measures based on Article 6(1) shall be carried out only under the control of official authority or when the processing is authorised by Union or Member State law",

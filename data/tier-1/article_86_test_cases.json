@@ -3,7 +3,7 @@
   "article_title": "Processing and public access to official documents",
   "test_cases": [
     {
-      "question": "Which organizations can disclose personal data from official documents under this article?",
+      "question": "Which bodies may disclose personal data contained in official documents in order to reconcile public access with data protection?",
       "answer": "Personal data in official documents may be disclosed by: (1) a public authority; (2) a public body; or (3) a private body, but only when that private body holds the documents for the performance of a task carried out in the public interest.",
       "answer_type": "definition",
       "supporting_quote": "Personal data in official documents held by a public authority or a public body or a private body for the performance of a task carried out in the public interest may be disclosed by the authority or body",
@@ -26,7 +26,7 @@
       ]
     },
     {
-      "question": "Does this article apply to all personal data held by a public body?",
+      "question": "Do the rules on public access to official documents cover all personal data held by a public body?",
       "answer": "No. This article specifically applies only to personal data contained within official documents. It does not cover all personal data held by the body - only data that is part of official documents held for public access purposes.",
       "answer_type": "scope",
       "supporting_quote": "Personal data in official documents held by a public authority",

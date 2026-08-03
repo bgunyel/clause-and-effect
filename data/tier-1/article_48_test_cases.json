@@ -3,7 +3,7 @@
   "article_title": "Transfers or disclosures not authorised by Union law",
   "test_cases": [
     {
-      "question": "What types of third-country demands are covered by this article?",
+      "question": "Which third-country demands for personal data may be recognised or enforced only on the basis of an international agreement?",
       "answer": "This article covers any judgment of a court or tribunal and any decision of an administrative authority of a third country that requires a controller or processor to transfer or disclose personal data. It applies to both judicial and administrative demands from non-EU countries.",
       "answer_type": "definition",
       "supporting_quote": "Any judgment of a court or tribunal and any decision of an administrative authority of a third country requiring a controller or processor to transfer or disclose personal data",
@@ -27,7 +27,7 @@
       ]
     },
     {
-      "question": "If a foreign court order cannot be enforced under this rule, can personal data still be transferred to that country?",
+      "question": "If a foreign court order requiring disclosure cannot be enforced for lack of an international agreement, may personal data still be transferred to that country on other grounds?",
       "answer": "Yes. This article is without prejudice to other grounds for transfer pursuant to Chapter V. This means that even if the foreign judgment itself cannot be enforced, controllers and processors may still use other lawful transfer mechanisms such as adequacy decisions, standard contractual clauses, or derogations under Article 49.",
       "answer_type": "scope",
       "supporting_quote": "without prejudice to other grounds for transfer pursuant to this Chapter",
