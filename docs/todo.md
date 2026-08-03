@@ -136,30 +136,97 @@ number means anything.
   - Open: `art36_case4`. The corpus is faithful here (verified against the PDF:
     Article 36(2) genuinely leaves its parenthetical unclosed), so the quote is the
     altered side and the fix is to delete its comma.
-- [ ] Fix the **17 remaining leakage questions**, all of which name their own gold
-  article. Full list in the report. Most use the number as a bare handle that can be
-  swapped for the substance ("What types of identifiers does Article 87 cover?"). Three
-  need a substitute for what the number carries: `art65_case1` (the Board's binding
-  decision), `art95_case3` (the ePrivacy carve-out), and `art10_case2`, which names two
-  articles where only one is the self-leak — dropping `Article 10` still leaves
-  `Article 6(1)`, so it depends on the self-reference rule below.
-  - Three also have a broken quote and need two fixes: `art14_case6`, `art90_case2`,
-    `art93_case2`.
-  - They cluster in the final chapters (81, 87, 90, 91, 93, 95, 96) plus the near-twin
-    information-duty articles 13 and 14 — short, procedural articles that are hard to
-    characterise without naming them. Looks like a predictable generator failure on
-    low-distinctiveness articles, not random sloppiness.
+- [x] Fix the **17 remaining leakage questions**, all of which named their own gold
+  article — done 2026-08-03. **Leakage is now 0**; clean cases 285 → **299**.
+  - Eleven used the number as a bare handle and were swapped for the substance
+    ("What types of identifiers does Article 87 cover?" → "Which identifiers may Member
+    States lay down specific processing conditions for?"). Four needed a substitute for
+    what the number carried (`art65_case1`, `art93_case3`, `art95_case3`, `art96_case2`).
+  - Two keep a cross-reference and pass only because of the self-reference rule:
+    `art10_case2` (retains `Article 6(1)`, which its `key_phrases` require) and
+    `art93_case2` (retains `Article 5 of Regulation (EU) No 182/2011`).
+  - `art14_case6`, `art90_case2`, `art93_case2` still have a broken quote — question
+    fixed, quote still on the 58-quote item above.
+  - Pinned by `test_no_golden_case_names_its_own_article`, which runs over the real set;
+    mutation-checked to confirm it fails when a self-reference is reintroduced.
   - Done 2026-08-02: `art94_case3`, reworded to "What body replaces the Working Party of
     Directive 95/46/EC?".
-- [ ] Leakage check: flag only when the cited article number equals the case's own
-  `article_number`. Supersedes the planned "Article 29 Working Party" allow-list, which
-  was the wrong shape — the discriminator is **self-reference**, not a proper noun.
-  Classified that way the 18 split 17/1, and the 1 was exactly the known false positive
-  (`art94_case3`: gold 94, cited 29, the number belonging to the repealed Directive
-  95/46/EC). `TestCase` already carries `article_number`, so no signature change is
-  needed. The case itself is now reworded, but the checker bug remains and the `xfail`
-  in `tests/test_eval_golden_qa.py` still records it — that test builds its own
-  synthetic question rather than reading the data file.
+- [x] Leakage check: flag only when the cited article number equals the case's own
+  `article_number` — done 2026-08-03. Superseded the planned "Article 29 Working Party"
+  allow-list; the discriminator is **self-reference**, not a proper noun.
+  - Deliberately narrow: `_ARTICLE_REF` matches one citation at a time, so
+    "Article 93(2)" reads as article 93 and the `(2)` is not mistaken for article 2. It
+    does *not* parse multi-article runs ("Articles 13 and 14" reads as 13 alone) — no
+    question uses that form; widen it when one does.
+  - The bare `paragraph 2` / `recital 39` arm of the old pattern was **dropped**, not
+    ported: only self-reference is prohibited. No question in the 433 contains such a
+    reference, so this gives up no live coverage, and its test was deleted rather than
+    left asserting a rule that no longer holds.
+  - Known boundary: a same-numbered article of a *different* instrument ("Article 5 of
+    Regulation (EU) No 182/2011" in a case whose gold article is 5) would be flagged.
+    No case does this.
+  - The `xfail` this item referenced is gone — it is now a passing test, and the suite
+    has no xfails left (64 passed/1 xfailed → **67 passed**).
+- [x] **Questions that are not self-contained** — a defect class distinct from leakage,
+  found and closed 2026-08-03. **8 cases fixed, new `check_self_containment` gate, now 0.**
+  - `art22_case2`, `art48_case1`, `art49_case2`, `art86_case1`, `art86_case3` ("this
+    article"), `art48_case3` ("this rule"), `art96_case1` ("this provision"),
+    `art49_case4` ("these derogations"). They leak no location — nothing can be looked up
+    by citation — but a question that only makes sense beside its answer is not a
+    retrieval query.
+  - **The count went 5 → 7 → 8 across three sweeps**, and that is the finding worth
+    keeping. Each sweep enumerated *nouns*, which is an open class: a pass for "article"
+    missed "rule"/"provision", and a pass for those still missed "derogations". The gate
+    anchors on the **determiner** (`this|these|those|such|said`) and leaves the noun a
+    wildcard, so it catches words nobody predicted — pinned by
+    `test_self_containment_catches_nouns_nobody_enumerated`.
+  - Bare `that` is excluded: it is ambiguous with the relative pronoun ("activities that
+    fall outside the scope of EU law"), which is a part-of-speech judgement, not a lexical
+    one. Including it flagged **29 questions to find 8**. Two closed-class exemptions keep
+    precision at 9/9: `this Regulation` (a term of art) and a demonstrative followed by an
+    auxiliary (`can this be extended?` — pronoun, not determiner).
+  - Pinned by `test_no_golden_case_refers_to_absent_context` over the real set,
+    mutation-checked by restoring the old `art86_case3` wording.
+- [ ] **Non-deictic context dependence is unmeasured.** The gate above is a floor, not a
+  proof: a question can depend on absent context with no demonstrative at all ("Are there
+  any exemptions?"). Deterministic checks cannot reach it — it is judge-tier (P1), and the
+  regression test says so explicitly so a green result is not read as coverage.
+- [ ] `art44_case4` names **"Chapter V"**. A roman numeral is invisible to a `\d`-based
+  check, and a chapter is a location — worth a decision, though a chapter is coarser than
+  an article and is not the gold unit.
+- [ ] **Constrain the generator, not just the artifact.** Both defect classes closed today
+  are systematic producer faults: the generator wrote while looking at the article and
+  assumed its reader was too. Same principle as the soft-hyphen fix — patching the JSON
+  would leave the generator reintroducing them. The Tier-1 generation prompt should
+  require questions that name no article number and carry their own referents.
+- [x] **Reconcile `docs/evaluation-plan.md` §7.3 with the implemented gates** — done
+  2026-08-03. §7.3 had specified only 2 of the 5 checks in `run_golden_qa`, and both
+  differently from what the code does; the module docstring was the de-facto spec.
+  Rewritten into four parts: **deterministic gates** (grounding tiers with the
+  proxy-vs-purpose rationale and the measured normalization boundary, self-reference
+  leakage, self-containment, structural validity), **judge/manual gates** (entailment and
+  human audit, explicitly P1), **known limits** (non-deictic context dependence,
+  parametric answerability, elision), and **how these checks are meant to be built**.
+  - That last part records the method rather than the rules: checks are *regression*
+    devices, not discovery devices, over a finite set from a known generator; enumerate
+    the construction, not the vocabulary; fix the generator, not just the artifact. Plus
+    mutation as the way check quality is verified — "a gate that has never been observed
+    to fail is not known to work."
+  - Also fixed in §7.1: Tier 1 was described as "~38 articles". It is **433 cases across
+    all 99 articles**.
+- [ ] **Reconcile §3.1** — still open, and more consequential than §7.3 was. §3.1 does not
+  say that **Context Recall, its *primary* retrieval metric, is scored by matching
+  `supporting_quote` against retrieved chunks** — so an ungrounded quote registers as a
+  retriever failure whatever the retriever did, and 134 cases would depress the number for
+  reasons that have nothing to do with retrieval. Mitigation is already in the data: score
+  article-level Hit@k from `article_number` (unaffected), and restrict chunk-level matching
+  to the 299 exact-or-normalized cases with the exclusion reported rather than hidden.
+  When that scorer is built it should import `normalize_for_grounding` rather than
+  reimplement matching, so the gate and the metric cannot drift apart.
+- [ ] **Measure check recall by mutation, systematically.** Both regression tests were
+  mutation-checked by hand (restore the old wording, confirm failure, restore). Worth
+  making that a harness: inject known defect instances into the clean set and count
+  catches, so check quality is a number rather than a feeling.
 - [ ] **Parametric answerability** — a defect class with no check. `art94_case3` is
   answerable from general knowledge without retrieving anything. Retrieval metrics are
   unaffected (Hit@k measures whether the gold chunk was retrieved regardless), but
