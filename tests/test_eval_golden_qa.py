@@ -4,7 +4,8 @@ Unit tests for the deterministic golden-set QA gates (src/eval/golden_qa.py).
 The golden set is LLM-generated and treated as ground truth, so the checks that
 police it are themselves safety-critical — a broken check would wave defective
 test cases through. These tests pin the behaviour of every deterministic gate,
-including the known proper-noun false positive in the leakage check.
+including that leakage keys on *self*-reference — a question naming some other
+article is a cross-reference, not a leak.
 """
 import re
 
@@ -16,6 +17,7 @@ from src.eval.golden_qa import (
     check_leakage,
     check_quote_grounding,
     check_required_fields,
+    check_self_containment,
     run_golden_qa,
 )
 
@@ -52,24 +54,97 @@ def test_leakage_flags_article_number_in_question():
 
 
 def test_leakage_reports_full_multi_digit_reference():
-    case = make_case(question="What does Article 13 require?")
+    case = make_case(article_number="13", question="What does Article 13 require?")
     issue = check_leakage(case)
     assert issue is not None and "Article 13" in issue.detail  # not truncated to 'Article 1'
-
-
-def test_leakage_flags_paragraph_reference():
-    case = make_case(question="When does the procedure under paragraph 2 apply?")
-    assert check_leakage(case) is not None
 
 
 def test_leakage_passes_clean_question():
     assert check_leakage(make_case()) is None
 
 
-@pytest.mark.xfail(reason="known false positive: 'Article 29 Working Party' is a proper noun, not a location leak")
-def test_leakage_allows_article_29_working_party_proper_noun():
-    case = make_case(question="What body replaces the Article 29 Working Party under the GDPR?")
+def test_leakage_allows_reference_to_a_different_article():
+    """A cross-reference points a citation lookup *away* from the gold article."""
+    case = make_case(
+        article_number="10",
+        question="How does Article 6(1) interact with criminal conviction data?",
+    )
     assert check_leakage(case) is None
+
+
+def test_leakage_flags_self_reference_with_paragraph():
+    """'Article 93(2)' cites article 93 — the '(2)' must not read as article 2."""
+    case = make_case(
+        article_number="93",
+        question="When does the examination procedure under Article 93(2) apply?",
+    )
+    issue = check_leakage(case)
+    assert issue is not None and "Article 93" in issue.detail
+
+    unrelated = make_case(article_number="2", question="What does Article 93(2) trigger?")
+    assert check_leakage(unrelated) is None
+
+
+def test_leakage_allows_article_29_working_party_proper_noun():
+    """
+    The former false positive: 'Article 29' is the Working Party's name, taken
+    from the repealed Directive 95/46/EC, not a pointer into this regulation.
+    """
+    case = make_case(
+        article_number="94",
+        question="What body replaces the Article 29 Working Party under the GDPR?",
+    )
+    assert check_leakage(case) is None
+
+
+# --------------------------- self-containment ------------------------------ #
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Does this article apply to all personal data held by a public body?",
+        "Do these derogations apply to public authorities?",
+        "If an order cannot be enforced under this rule, can data be transferred?",
+        "What is the cutoff date under this provision?",
+        "Do those obligations bind processors?",
+        "Are such transfers permitted without safeguards?",
+    ],
+)
+def test_self_containment_flags_dangling_demonstrative(question):
+    issue = check_self_containment(make_case(question=question))
+    assert issue is not None and issue.severity == "error"
+
+
+def test_self_containment_catches_nouns_nobody_enumerated():
+    """
+    The rule anchors on the determiner, so the noun can be anything.
+
+    Enumerating nouns is what made earlier sweeps miss cases: a pass for
+    'article' missed 'this rule' and 'this provision', and a pass for those
+    still missed 'these derogations'.
+    """
+    issue = check_self_containment(make_case(question="Does this widget apply to processors?"))
+    assert issue is not None and "this widget" in issue.detail
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        # antecedent present earlier in the same question
+        "If a person objects to their data being processed, can the company keep using that data?",
+        "If a user gives consent, what requirements must that consent meet?",
+        # 'this Regulation' is a term of art — exactly one regulation is in scope
+        "What rights does this Regulation grant to data subjects?",
+        # demonstrative as a pronoun, not a determiner: the referent is a clause
+        "How long does a company have to respond, and can this be extended?",
+        # 'such as' is not a demonstrative phrase
+        "Does GDPR apply to activities outside EU law, such as national security?",
+        # bare relative 'that' is not a demonstrative and must not be flagged
+        "Under what conditions does GDPR apply to a company that is not based in the EU?",
+    ],
+)
+def test_self_containment_allows_resolvable_references(question):
+    assert check_self_containment(make_case(question=question)) is None
 
 
 # --------------------------- quote grounding ------------------------------- #
@@ -209,6 +284,48 @@ def test_run_golden_qa_clean_set_passes():
     report = run_golden_qa(cases=[make_case()], articles={"5": ARTICLE})
     assert report.passed
     assert report.errors == []
+
+
+# ---------------------- leakage, on the real set ---------------------------- #
+
+def test_no_golden_case_names_its_own_article():
+    """
+    The whole set is free of self-reference, and must stay that way.
+
+    Seventeen cases named their own gold article, all of them in short,
+    procedural articles that are hard to characterise without the number
+    ("What types of identifiers does Article 87 cover?"). They were reworded on
+    2026-08-03. A regenerated or hand-edited case that reintroduces the pattern
+    fails here rather than silently scoring retrieval on citation lookup.
+    """
+    offenders = [
+        (c.case_id, c.question) for c in load_tier1() if check_leakage(c) is not None
+    ]
+    assert not offenders, "questions naming their own gold article: " + "; ".join(
+        f"{cid}: {q!r}" for cid, q in offenders
+    )
+
+
+def test_no_golden_case_refers_to_absent_context():
+    """
+    The whole set is free of dangling demonstratives, and must stay that way.
+
+    Eight questions leaned on the article the reader was assumed to be looking
+    at — five "this article", plus "this rule", "this provision" and "these
+    derogations". They were reworded on 2026-08-03.
+
+    Note what this does *not* cover: a question can depend on absent context
+    with no demonstrative in it at all. That residue is judge-tier (P1) and
+    unmeasured — a green result here is not evidence the set is self-contained.
+    """
+    offenders = [
+        (c.case_id, c.question)
+        for c in load_tier1()
+        if check_self_containment(c) is not None
+    ]
+    assert not offenders, "questions referring to absent context: " + "; ".join(
+        f"{cid}: {q!r}" for cid, q in offenders
+    )
 
 
 # ------------------- normalization safety, on the real set ------------------ #

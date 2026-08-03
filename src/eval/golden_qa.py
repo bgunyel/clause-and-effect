@@ -14,8 +14,14 @@ the set before any score computed against it is believed:
       remove). The middle tier exists because the substring rule is only a
       proxy for what we actually want, which is evidence verifiably drawn from
       the regulation; where proxy and purpose disagree, the proxy bends.
-    - **Leakage discipline** — questions must not name article/paragraph
-      numbers, or retrieval is tested on citation lookup rather than meaning.
+    - **Leakage discipline** — a question must not name *its own* gold article,
+      or retrieval is tested on citation lookup rather than meaning. Naming
+      some *other* article is a cross-reference, not a leak — it points the
+      lookup away from the answer.
+    - **Self-containment** — a question must not point at context it does not
+      carry. "Does this article apply to all personal data held by a public
+      body?" leaks no location, but it cannot be read as a standalone retrieval
+      query either.
     - **Structural validity** — non-empty required fields, a known
       ``answer_type``, and a gold article that actually exists in the corpus.
 
@@ -44,13 +50,42 @@ from .dataset import (
 
 Severity = Literal["error", "warning"]
 
-# Question wording that leaks the answer location (article/paragraph/recital
-# number), which would let retrieval cheat via citation lookup instead of
-# meaning. Matched case-insensitively against the question text.
-_LEAKAGE_PATTERN = re.compile(
-    r"\b(?:article|art\.?|paragraph|para\.?|recital|section|point)\s+\(?\d[\d.()]*",
-    re.IGNORECASE,
-)
+# An article citation in a question: "Article 5", "Art. 6(1)", "Article 93(2)".
+# Only the article number is captured — a parenthesised paragraph is a location
+# *within* the cited article, not a second article, so "93(2)" reads as 93.
+#
+# Deliberately narrow: it does not parse multi-article runs ("Articles 13 and
+# 14" reads as 13 alone). No question in the set uses that form; widen it when
+# one does.
+_ARTICLE_REF = re.compile(r"\b(?:articles?|arts?\.?)\s*(\d+)", re.IGNORECASE)
+
+# A demonstrative phrase — "this article", "these derogations", "such rules".
+#
+# Anchored on the *determiner*, which is a closed class, rather than on the
+# noun, which is not. Listing nouns is what makes this kind of check unwinnable:
+# successive sweeps for "article", then "provision"/"rule", still missed "these
+# derogations". The noun is left as a wildcard so the rule catches words nobody
+# thought to enumerate.
+#
+# Bare "that" is deliberately excluded. It is the one member of the class that
+# is ambiguous with a relative pronoun ("activities that fall outside the scope
+# of EU law"), and telling those apart is a part-of-speech judgement, not a
+# lexical one. Including it flagged 29 questions to find 8.
+_DEMONSTRATIVE = re.compile(r"\b(?:this|these|those|such|said)\s+([a-z]+)\b", re.IGNORECASE)
+
+# "this Regulation" is a term of art, not a dangling reference: exactly one
+# regulation is in scope, so the phrase is unambiguous standing alone.
+_TERMS_OF_ART = frozenset({"regulation"})
+
+# Where the next word is an auxiliary or copula, the demonstrative is a pronoun
+# rather than a determiner ("...and can this be extended?"), and its referent is
+# a clause, not a noun. Also a closed class, which is why enumerating it is safe
+# in a way that enumerating nouns is not.
+_NOT_A_NOUN = frozenset({
+    "as", "be", "is", "are", "was", "were", "been", "being", "has", "have",
+    "had", "will", "would", "can", "could", "shall", "should", "may", "might",
+    "must", "do", "does", "did",
+})
 
 # Collapse whitespace runs (incl. newlines) to a single space. The source
 # articles carry OCR/formatting artifacts (e.g. double spaces), so a quote can
@@ -183,14 +218,61 @@ def check_quote_grounding(case: TestCase, article: Article | None) -> QAIssue | 
 
 
 def check_leakage(case: TestCase) -> QAIssue | None:
-    """Question must not name an article/paragraph/recital number (§7.3)."""
-    match = _LEAKAGE_PATTERN.search(case.question)
-    if match:
+    """
+    Question must not name its own gold article (§7.3).
+
+    The discriminator is *self-reference*, not the presence of a citation. A
+    question that names the article its answer lives in can be resolved by
+    citation lookup, so retrieval is never tested on meaning. A question that
+    names some *other* article is an ordinary cross-reference — it points a
+    lookup shortcut away from the gold article, and Article 10's relationship
+    to Article 6(1) cannot be asked about otherwise.
+
+    Known boundary: a same-numbered article of a *different* instrument
+    ("Article 5 of Regulation (EU) No 182/2011" in a case whose gold article is
+    5) would be flagged. No case in the set does this.
+    """
+    for number in _ARTICLE_REF.findall(case.question):
+        if number == case.article_number:
+            return QAIssue(
+                case.case_id,
+                "leakage",
+                "error",
+                f"question names its own gold article: 'Article {number}'",
+            )
+    return None
+
+
+def check_self_containment(case: TestCase) -> QAIssue | None:
+    """
+    A question must carry its own referents (§7.3).
+
+    Distinct from leakage: "Does this article apply to all personal data held by
+    a public body?" reveals no location, so nothing can be looked up by
+    citation — but it cannot be read on its own either, and a retrieval query
+    that only makes sense next to the answer is not a retrieval query. The
+    generator produced these because it was looking at the article while it
+    wrote, and assumed its reader would be too.
+
+    A demonstrative is accepted when its noun already appeared earlier in the
+    same question ("...inform other organizations that received that data").
+
+    This is a floor, not a proof. A question can depend on absent context with
+    no demonstrative at all — "Are there any exemptions?" points nowhere and is
+    invisible here. That residue belongs to the LLM-judge/audit tier (P1).
+    """
+    for match in _DEMONSTRATIVE.finditer(case.question):
+        noun = match.group(1).lower()
+        if noun in _TERMS_OF_ART or noun in _NOT_A_NOUN:
+            continue
+        preceding = case.question[: match.start()]
+        if re.search(rf"\b{re.escape(noun)}s?\b", preceding, re.IGNORECASE):
+            continue  # antecedent is present in the question itself
         return QAIssue(
             case.case_id,
-            "leakage",
+            "self_containment",
             "error",
-            f"question leaks a location reference: {match.group(0)!r}",
+            f"question refers to absent context: {match.group(0)!r}",
         )
     return None
 
@@ -258,6 +340,7 @@ def run_golden_qa(
             check_required_fields(case),
             check_answer_type(case),
             check_leakage(case),
+            check_self_containment(case),
             check_quote_grounding(case, article),
         ]
         issues.extend(issue for issue in candidates if issue is not None)
