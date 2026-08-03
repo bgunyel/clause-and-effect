@@ -4,15 +4,22 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-02._
+> _Last updated: 2026-08-03._
 
 ---
 
 ## 🔴 Blocking — data integrity
 
-The corpus has been rebuilt and re-indexed. One step remains before any eval
-number means anything.
+The corpus has been rebuilt and the golden-set baseline established. **Qdrant is
+stale again** and is the only thing currently leaving the system inconsistent.
 
+- [ ] **Re-index Qdrant — carried over from 2026-08-02, still not done.** The
+  soft-hyphen fix changed the content of **14 articles** after the 2026-08-01
+  re-index, so those articles' chunk text and embeddings no longer match the
+  corpus. Cheap (~$0.001) and idempotent: point IDs are `uuid5(namespace,
+  chunk.id)`, so the write overwrites in place and the collection does not need
+  dropping. Any retrieval number measured before this is against a corpus that
+  does not exist.
 - [x] **Re-generate `gdpr_articles.json`** _(requested)_ — done 2026-08-01.
   Regenerating first exposed two further parser defects, both now fixed
   (`9ecdf6f`); the full post-mortem is in
@@ -56,8 +63,16 @@ number means anything.
   - Leakage held at 18 through every corpus and measurement change — a useful
     control, since none of them can affect question text. It moved to **17** only
     when `art94_case3` was reworded, which also emptied the false-positive category.
-  - **Final state: 285 exact, 14 normalized, 134 ungrounded, 17 leakage, 285 clean
-    of 433. Gate FAIL.**
+  - **State at end of 2026-08-02: 285 exact, 14 normalized, 134 ungrounded, 17
+    leakage, 285 clean of 433. Gate FAIL.**
+  - **Superseded 2026-08-03: leakage 0, self-containment 0, 299 clean of 433.**
+    Quote grounding is unchanged at 134 — every remaining error is a quote.
+  - The 76/37/20/1 split above **could not be reproduced** on 2026-08-03. The
+    script that produced it was never committed, so its `absent` threshold is not
+    recoverable. Re-deriving with an explicit criterion gives **77 elision / 56
+    altered / 1 punctuation**. The underlying signal does reproduce —
+    `art41_case3` shows an 11-word run with no matching bigram in its article,
+    matching the original note.
   - Gate still **FAILs**, which is correct. Do not relax it to go green.
   - Correction: this run costs **nothing**. The module is fully deterministic; the
     LLM-judge gates are P1 and explicitly not implemented in it.
@@ -102,8 +117,8 @@ number means anything.
     (once built).
   - State the testing philosophy explicitly: deterministic plumbing → unit tests
     (cheap regression tripwire, plan §6.1); LLM/RAG behaviour → eval harness.
-  - Record how to run (`python -m pytest`) and current status (64 passed,
-    1 xfailed).
+  - Record how to run (`python -m pytest`) and current status (**81 passed, no
+    xfails** as of 2026-08-03).
   - Carry over the lesson from the header-collapse post-mortem: fixtures written
     from the same assumption as the code only prove self-consistency. Where a
     real artifact can be captured and committed, test against it.
@@ -112,6 +127,42 @@ number means anything.
 
 ## 🟢 Golden-set remediation (plan §7.3)
 
+- [ ] 🔺 **Build the answer-vs-quote sufficiency judge.** The acceptance criterion, set by
+  Bertan on 2026-08-03: **every one of the 433 questions must be answerable using only its
+  `supporting_quote`.** That is not what the gate measures, and the two properties are
+  uncorrelated:
+  - **Provenance** (`quote ⊆ article`) is what the gate checks. **Sufficiency** (the quote
+    answers the question) is what matters. `art2_case4` grounds *exact* and passes cleanly
+    today: its quote is a verbatim fragment of Article 2 that never contains the negation,
+    while its answer is *"No, GDPR does not apply…"*. Perfect provenance, zero sufficiency.
+  - **Two-sided property.** A quote that cannot answer the question is **useless**; one
+    carrying far more than needed is **not useless but devalued**. The judge should
+    therefore return both a verdict and the minimal sufficient span — which makes the same
+    pass produce the repair, not just the diagnosis.
+  - **Not deterministic, by decision.** A `key_phrases`-in-quote screen was built and
+    rejected as a gate: literal matching flagged 57 cases (mostly word-order noise),
+    subsequence matching 35, but it still fails on glosses — `art8_case1` is flagged for
+    missing `'parental consent'` though its quote fully answers *"what is the minimum
+    age?"*. The screen's only role is **triage and judge calibration**.
+  - **Scope: the repair set is 169 cases, not 134** — 35 pass the gate today and fail the
+    criterion (screen: 264 grounded-and-covered, 35 grounded-but-flagged, 110 ungrounded-
+    but-covered, 24 both).
+  - **Undecided, and it changes the target:** *question answerable from quote* (Bertan's
+    wording) versus the stronger *answer entailed by quote*. They disagree on real cases —
+    `art7_case3`'s quote answers "can consent be withdrawn?" (yes) but does not support
+    the answer's second clause about the lawfulness of prior processing. The stronger
+    reading matters because the gold `answer` is the reference against which Groundedness
+    is scored; if it asserts what its quote does not support, the metric is measuring
+    against a standard that fails its own test.
+  - **Protocol sketched, nothing built.** Blind design: the judge answers the question from
+    the quote alone, seeing neither the article nor the gold answer, with an explicit
+    INSUFFICIENT escape; a second stage compares its answer to the gold. Asking a judge to
+    *perform* the task rather than opine on it is what stops it rationalising. Panel for
+    the verdict (§6.2 already mandates majority/consensus for high-stakes gates), plus a
+    human-labelled calibration sample as §7.3 requires — the judge is not trusted before
+    agreement is reported.
+  - Implementation fits existing plumbing: OpenRouter via `ai_common`, and
+    `gdpr_test_data_generation.py` already has the async multi-model pattern to copy.
 - [x] Decide the quote-grounding definition — done 2026-08-02. Grounding is now
   reported in **three tiers** (`exact` / `normalized` / `ungrounded`) rather than
   pass/fail, with `normalize_for_grounding()` removing rendering differences only:
@@ -120,12 +171,23 @@ number means anything.
   measurement: it clears 12 of 15 formatting failures with **0 of 37 altered and
   0 of 20 absent leaking through**, and that property is pinned by a test over the
   real golden set, not just measured once.
-- [ ] Still open: **elision**. 76 quotes are verbatim and in sequence but
-  non-contiguous — they join an enumeration stem to a specific item, which is real
-  GDPR structure rather than a defect. Preferred shape: let `supporting_quote` hold a
+- [ ] Still open: **elision** — **77** quotes (re-derived 2026-08-03) are verbatim and in
+  sequence but non-contiguous, joining an enumeration stem to a specific item, which is
+  real GDPR structure rather than a defect. Preferred shape: let `supporting_quote` hold a
   **list of spans**, each an exact substring, in document order, so elision is
   explicit in the data instead of inferred by a fuzzy matcher. The explicit `...`
   markers become list boundaries.
+  - **26 of the 77 are not elision at all** — they are the corpus line-numbering artifact
+    (see the chunking-rework section). Strip the spurious indices and all 26 ground as
+    contiguous verbatim, no false clears. So the real elision count is **51**, and the
+    other 26 are blocked on the corpus regeneration rather than on this design.
+  - **Sufficiency is the argument for span lists.** `art2_case4` grounds *exact* yet
+    cannot answer its own question, because the span was truncated and lost the stem
+    carrying the negation (*"This Regulation does not apply to…"*). Stem-plus-item is
+    exactly what a span list preserves and a single contiguous span destroys.
+  - Schema note: this changes `supporting_quote` from `str` to `list[str]`, so
+    `TestCase`, the loader, `check_quote_grounding`, its tests and all 433 files are
+    affected — not only the 51. Decide whether to permit both shapes or migrate cleanly.
 - [ ] Rewrite the **58 quotes that are not verbatim** — 37 altered, 20 absent, 1 with an
   inserted comma (lists in the report). Not one batch: `art61_case5` is off by an
   inflection (`expenditures`), `art25_case2` moves "the controller shall" across a
@@ -136,6 +198,24 @@ number means anything.
   - Open: `art36_case4`. The corpus is faithful here (verified against the PDF:
     Article 36(2) genuinely leaves its parenthetical unclosed), so the quote is the
     altered side and the fix is to delete its comma.
+  - **"Altered" is three different defects** (found 2026-08-03) and must not be worked as
+    one batch:
+    1. **The generator tidied the statute.** `art32_case4` writes *"shall not process
+       them"* for *"does not process them"*; `art38_case2` writes *"performing his or her
+       tasks"* where the regulation genuinely says *"performing his tasks"*. Same class as
+       `art36_case4`. Fix is mechanical: restore the exact text.
+    2. **Substantive alteration.** `art37_case1` turns *"Article 9 **and** personal
+       data"* into *"Article 9 **or** personal data"* — a conjunction governing when a DPO
+       must be designated, like `art80_case2`'s comma.
+    3. **Invalid case, not a quote defect.** `art41_case3` asks how long accreditation
+       lasts; Article 41 contains no *"five years"*, no *"maximum period"*, no
+       *"renewed"*, and it is the only case where **none** of its `key_phrases` appear in
+       its gold article. `art8_case5` quotes **Recital 38**, not Article 8. Writing a
+       quote for these would launder an unanswerable question into a clean-looking case —
+       decide between rewriting question+answer, re-pointing `article_number`, or removal.
+    - Both were checked against the **corpus only, not the source PDF**. Per the
+      `art36_case4` lesson, that rules out one link in the chain and no more — verify
+      against the PDF before deleting or rewriting anything.
 - [x] Fix the **17 remaining leakage questions**, all of which named their own gold
   article — done 2026-08-03. **Leakage is now 0**; clean cases 285 → **299**.
   - Eleven used the number as a bare handle and were swapped for the substance
@@ -166,7 +246,7 @@ number means anything.
     Regulation (EU) No 182/2011" in a case whose gold article is 5) would be flagged.
     No case does this.
   - The `xfail` this item referenced is gone — it is now a passing test, and the suite
-    has no xfails left (64 passed/1 xfailed → **67 passed**).
+    has no xfails left (64 passed/1 xfailed → 67 at this commit, **81 by end of session**).
 - [x] **Questions that are not self-contained** — a defect class distinct from leakage,
   found and closed 2026-08-03. **8 cases fixed, new `check_self_containment` gate, now 0.**
   - `art22_case2`, `art48_case1`, `art49_case2`, `art86_case1`, `art86_case3` ("this
@@ -223,6 +303,12 @@ number means anything.
   to the 299 exact-or-normalized cases with the exclusion reported rather than hidden.
   When that scorer is built it should import `normalize_for_grounding` rather than
   reimplement matching, so the gate and the metric cannot drift apart.
+- [ ] **Commit the quote classifier.** The 77/56/1 split is currently reproducible only
+  from an uncommitted scratch script — the same gap that made the earlier 76/37/20/1 split
+  unreproducible, which the 2026-08-02 report itself flagged. Criterion to encode:
+  contiguous word match → *punctuation*; word subsequence → *elision*; otherwise *altered*,
+  with the longest run of consecutive quote words having no matching bigram in the article
+  as the severity signal (`art41_case3` = 11).
 - [ ] **Measure check recall by mutation, systematically.** Both regression tests were
   mutation-checked by hand (restore the old wording, confirm failure, restore). Worth
   making that a harness: inject known defect instances into the clean set and count
@@ -239,6 +325,34 @@ number means anything.
 
 ## 🔵 Eval P0 build-out (plan §11 — Foundations)
 
+- [ ] **Resolve each quote to gold chunk ID(s) at eval-set build time**, and score
+  Context Recall by ID comparison at run time. Designed 2026-08-03; nothing built.
+  - Neither obvious option is right on its own. **Article-level** matching is too coarse —
+    71.1% of cases sit in multi-chunk articles, mean **6.5** chunks (median 6, max 28), so
+    it credits any 1 of ~6 — and, decisively, it is *blind to the variable under test*:
+    re-chunking changes which chunk is retrieved, rarely which article, so the metric would
+    sit flat across exactly the experiments this roadmap exists to run. **Quote-text
+    matching at scoring time** does fuzzy matching in the loop, turns the 134 ungrounded
+    quotes into silent retrieval failures, and duplicates matching logic that can drift
+    from the gate.
+  - It also has a concrete false-positive mode: chunks are built as
+    `f"Article {n}.{i}: {title}\n\n{para}"`, so a quote overlapping the article **title**
+    matches *every* chunk of that article — `art14_case1` matches all 10 chunks of
+    Article 14. Resolve the span against article **content** by character offset, not by
+    substring search in rendered chunk text.
+  - Measured feasibility: **294 of 299** grounded cases pin exactly one chunk; 3 span a
+    chunk boundary (`art12_case3`, `art37_case3`, `art42_case4`), 2 are ambiguous
+    (`art14_case1`, `art89_case4`). Ungrounded quotes then fail **loudly at build time**
+    ("no gold chunk assignable") instead of depressing every run.
+  - `gold_chunk_ids` is a function of (quote, chunking config), so re-chunking recomputes
+    it — which is correct, and turns chunk-boundary problems into a build-time report.
+  - **Report both levels.** The gap between chunk-level and article-level is the
+    diagnostic: right article/wrong chunk = chunking or embedding problem; wrong article =
+    retrieval problem. That maps onto the §9 failure taxonomy, and article-level stays
+    trustworthy across the cases chunk-level must exclude.
+  - Decide: multi-chunk gold sets need *any* (Hit@k) and *all* (full-evidence recall)
+    reported separately — averaging them hides both. And `art14_case1`'s quote is the
+    article title restated, which is weak evidence regardless of scoring; tighten it.
 - [ ] Deterministic **retrieval scorers**: Context Recall (Hit@k), Context
   Precision, Rank (MRR / nDCG), Score Separation — reported as a function of
   `top_k ∈ {1, 3, 5, 10}`.
@@ -259,12 +373,29 @@ Upcoming experimentation with different chunking strategies and embedding
 models. Corpus-formatting fixes that would require a full regeneration are
 deliberately deferred into this work rather than done piecemeal.
 
+- [ ] Deferred, and the largest of these: **enumeration line numbering leaks into article
+  content.** docling numbered the first sub-items of an enumeration `2. 3. 4.` — continuing
+  the paragraph count — then switched to bullets partway through the *same* list:
+
+  ```
+  1. Where personal data ... are collected from the data subject, the controller shall ...
+  2. (a) the identity and the contact details of the controller ...
+  3. (b) the contact details of the data protection officer ...
+  - (d) where the processing is based on point (f) of Article 6(1) ...
+  ```
+
+  Real Article 13(1) has (a)–(f) under one paragraph, so those indices are spurious.
+  Measured 2026-08-03: stripping them grounds **26 of the 134** remaining quote errors,
+  **all 26 contiguous verbatim** — no false clears. Same shape as the 2026-08-01
+  truncation finding: a corpus fault reported in test-case vocabulary. Fix belongs in the
+  parser, not in `normalize_for_grounding` — normalizing it away would hide a real corpus
+  defect and leave the chunk text (and embeddings) still carrying it.
 - [ ] Deferred: `_clean_title` does not collapse OCR double-spacing the way
   `_clean_content` does, so 3 of 99 titles (articles **12, 60, 89**) keep runs of
   multiple spaces. Titles are embedded into every chunk of their article, so
   **27 of 563** indexed chunks carry it. Low impact on semantic retrieval, but
   the planned lexical scorers do string comparison and may false-flag these.
-he - [x] **OCR soft-hyphen breaks** — found and fixed 2026-08-02. 18 occurrences of
+- [x] **OCR soft-hyphen breaks** — found and fixed 2026-08-02. 18 occurrences of
   U+00AD + space across **14 of 99 articles** (4, 9, 14, 30, 36, 42, 43, 44, 45,
   46, 49, 50, 58, 80), e.g. `internat­ ional`, `certifi­ cation`,
   `jurisdic­ tional`. Fixed in the parser
