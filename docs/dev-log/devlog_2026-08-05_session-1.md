@@ -1,7 +1,7 @@
 # Devlog — 2026-08-05 · session 1
 
-**Branch:** `dev-02`, 20 commits ahead of `main` · `33b4c6d` → `33b4c6d`
-(**no commits this session** — all work is in the tree, unstaged)
+**Branch:** `dev-02`, 25 commits ahead of `main` · `33b4c6d` → `08d6edb`
+(5 commits this session, all made after this entry was written)
 **Theme:** The sufficiency judge reached stage B, and stage B's first clean result
 pointed at a corpus defect that had been invisible to every gate: docling's
 markdown serializer destroys the paragraph hierarchy inside 43 of 99 articles
@@ -485,7 +485,7 @@ structure.
 | Golden set | 285 exact · 14 normalized · 134 ungrounded · 0 leakage · 0 self-containment · 299/433 clean |
 | Sufficiency judge | stages A and B built and eyeballed on 8 cases; C, verdicts, runner, calibration, tests not started |
 | Tests | **81 passed**, no xfails |
-| Working tree | `.gitignore` (+`tmp/`), `src/eval/golden_qa.py` (import made absolute), new `src/eval/sufficiency_judge.py`, new `gdpr.docling.json` — **nothing committed** |
+| Working tree | clean — `c58a5a1` `tmp/` ignore · `552c7df` `gdpr.docling.json` (1.4 MB, tracked like `gdpr.docling.md`; only the PDF is kept local) · `e2ebef1` judge stages A/B + `golden_qa.py` import made absolute · `84762f4` this entry · `08d6edb` backlog |
 
 **Open, roughly in order:**
 
