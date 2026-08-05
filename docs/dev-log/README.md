@@ -67,3 +67,7 @@ thing in the record.
   self-reference, a new self-containment gate, 25 questions reworded, §7.3
   reconciled with the gates that exist, and the finding that provenance and
   sufficiency are uncorrelated.
+- [2026-08-05 · session 1](devlog_2026-08-05_session-1.md) — sufficiency criterion
+  settled on `art7_case3`, stages A and B of the judge built, and the discovery
+  that docling's markdown serializer destroys the paragraph hierarchy in 43 of 99
+  articles — severing stems from their sub-items in the index.
