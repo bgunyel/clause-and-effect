@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Literal
 
-from .dataset import (
+from src.eval.dataset import (
     ANSWER_TYPES,
     Article,
     TestCase,
