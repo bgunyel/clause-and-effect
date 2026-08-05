@@ -4,16 +4,117 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-03._
+> _Last updated: 2026-08-05._
 
 ---
 
 ## 🔴 Blocking — data integrity
 
-The corpus has been rebuilt and the golden-set baseline established. **Qdrant is
-stale again** and is the only thing currently leaving the system inconsistent.
+The corpus text is intact, but its **structure is not**: docling's markdown
+serializer destroys the paragraph hierarchy inside 43 of 99 articles, and the
+chunker turns that into a retrieval-correctness fault. Everything else in this
+file is downstream of fixing it.
 
-- [ ] **Re-index Qdrant — carried over from 2026-08-02, still not done.** The
+- [ ] 🔺 **Regenerate the corpus from the docling *document tree*, not its markdown.**
+  Found by Bertan on 2026-08-05 reading `gdpr.docling.md`; full analysis, worked
+  example and reconstruction plan in
+  [`dev-log/devlog_2026-08-05_session-1.md`](dev-log/devlog_2026-08-05_session-1.md).
+
+  **The defect.** The serializer renumbers non-enumerated list items into the
+  surrounding ordered list, so lettered sub-items are promoted to paragraph level.
+  Article 2 has four paragraphs, with (a)–(d) under ¶2. The markdown emits:
+
+  ```
+  1. This Regulation applies to the processing of personal data ...     <- ¶1
+  2. This Regulation does not apply to the processing of personal data: <- ¶2 stem
+  3. (a) in the course of an activity which falls outside ...           <- ¶2(a)
+  4. (b) by the Member States when carrying out activities ...          <- ¶2(b)
+  5. (c) by a natural person in the course of a purely personal ...     <- ¶2(c)
+  6. (d) by competent authorities for the purposes of the prevention... <- ¶2(d)
+  3. For the processing of personal data by the Union institutions ...  <- ¶3
+  4. This Regulation shall be without prejudice to ...                  <- ¶4
+  ```
+
+  The numbering **restarts** where the real list resumes, so within one article
+  `3.` denotes both ¶2(a) and ¶3. "Article 2(3)" is unresolvable from corpus text.
+
+  | measured 2026-08-05 | |
+  |---|---:|
+  | articles where a numbered line is really a lettered sub-item | **43 / 99** |
+  | articles carrying a genuine paragraph-number collision | **41 / 99** |
+  | articles whose real numbering reconstructs from markdown alone | 82 / 82 |
+
+  **Why this is blocking and not cosmetic.** `_split_into_paragraphs`
+  (`gdpr_parser.py:291`) splits on `\d+\.\s+`, so every spurious number becomes a
+  **chunk boundary**. Article 2 is indexed as 8 chunks, and
+  `gdpr_article_2_para_6` is ¶2(d) severed from the stem that negates it —
+  standing alone it reads as a *positive* statement of scope. A perfect retriever
+  returning that chunk hands the generator text meaning the opposite of what it
+  says in context. `metadata["paragraph"]` is also a sequential index mislabelled
+  as a paragraph number (`para=6` is really ¶2(d)), so any paragraph-level
+  citation metric would score against wrong labels in 43 articles.
+
+  **The source to use.** `data/regulations/gdpr.docling.json` (untracked, 1.4 MB)
+  is the same run's intermediate document tree: 171 groups, 1623 texts. Article 2
+  is `#/groups/35` holding `#/texts/367`…`374`, and the true numbers survive in
+  each item's `marker` with `enumerated` separating the two kinds:
+
+  | item | `label` | `enumerated` | `marker` | is |
+  |---|---|---|---|---|
+  | texts/367 | `list_item` | `true` | `"1."` | ¶1 |
+  | texts/368 | `list_item` | `true` | `"2."` | ¶2 stem |
+  | texts/369–372 | `list_item` | **`false`** | `""` | (a) (b) (c) (d) |
+  | texts/373–374 | `list_item` | `true` | `"3."` `"4."` | ¶3, ¶4 |
+
+  Extraction was never the problem; rendering was. Items also carry `prov`
+  (`page_no`, `charspan`) into the PDF text layer, which makes the PDF
+  verification this file demands elsewhere mechanical rather than manual.
+
+  **Four complications, each measured — the tree is a better source, not a clean one:**
+  1. **Hierarchy is inferred, not encoded.** Every text item has `children: []`
+     and no group contains a group — **0 nesting** across 1623 texts / 171 groups.
+     "(a)–(d) belong to ¶2" is a rule we impose on a flat sibling list.
+  2. **41 paragraphs are `label: "text"`**, with the number left inline in the
+     string (Article 9(1) is `"1. Processing of personal data revealing racial…"`).
+     A rule reading only `list_item.marker` drops them — the cause of the irregular
+     marker runs in articles **9, 18, 35, 57, 58**.
+  3. **Article 28 recurs.** Its header is `[text] #/texts/746 'Article 28'`, not a
+     `section_header`, so a header-label walk finds 98 articles and folds Article
+     28's paragraphs into Article 27. Same quirk as the 2026-08-01 post-mortem,
+     different serialization. **Tested fix:** match `^Article\s+(\d+)$` on items
+     labelled `section_header` *or* `text` → 99 articles, no gaps.
+  4. **Sub-items do not always follow a numbered paragraph.** Article 50 has none
+     (a `text` stem then (a)–(d)); Article 4 is a `text` stem then definitions
+     `(1)`…`(26)` as `enumerated: true, marker: "(1)"`. The attach rule must be
+     *nearest preceding item*, not nearest preceding **enumerated** item.
+
+  **Reconstruction steps** (detail in the devlog): walk `#/body` depth-first,
+  resolving `$ref` against `texts`/`groups` and special-casing `#/body`, which is
+  in neither; detect article boundaries on text with either label; classify each
+  item by the table above; **assert paragraph numbers are 1..N per article** and
+  exit non-zero otherwise; emit real paragraph identity (`2(2)(d)`, not `para=6`)
+  carrying `prov`; re-use `_rejoin_hyphenated_words` and the whitespace collapse;
+  and **chunk each paragraph together with its sub-items**, which is what actually
+  fixes `art2_case4`.
+
+  **The argument for switching is detectability, not cleanliness.** With markdown,
+  hierarchy loss was invisible — the text was intact and only segmentation was
+  wrong, so no gate could see it. With `marker`, the invariant *"every article's
+  paragraph markers form 1..N, no gaps, no repeats"* fails loudly on exactly the
+  six irregular articles. That is the corpus-level assertion this file already
+  wants for `generate_gdpr_articles.py`.
+
+  **Caveat to carry:** the 1..N check proves *consistency*, not *fidelity*. A
+  paragraph docling dropped entirely would still reconstruct cleanly. Per the
+  `art36_case4` lesson this rules out one link in the chain and no more.
+
+  **Consequences to plan for:** corpus content changes, so **every number measured
+  before it is void again**; Qdrant needs a full rebuild; golden-set QA must be
+  re-run and the 134 ungrounded re-derived (26 are predicted to clear).
+
+- [ ] **Re-index Qdrant — carried over from 2026-08-02, still not done.** Now
+  **folded into the regeneration above** rather than a standalone task: the corpus
+  is about to change again, so re-indexing the current one would be wasted. The
   soft-hyphen fix changed the content of **14 articles** after the 2026-08-01
   re-index, so those articles' chunk text and embeddings no longer match the
   corpus. Cheap (~$0.001) and idempotent: point IDs are `uuid5(namespace,
@@ -163,6 +264,36 @@ stale again** and is the only thing currently leaving the system inconsistent.
     agreement is reported.
   - Implementation fits existing plumbing: OpenRouter via `ai_common`, and
     `gdpr_test_data_generation.py` already has the async multi-model pattern to copy.
+  - **Resolved 2026-08-05, by Bertan on `art7_case3`:** the target is *question
+    answerable from quote*, the weaker reading. The shortest sufficient answer there
+    is *"Yes, the data subject shall have the right to withdraw their consent at any
+    time"*; the clause about prior lawfulness is auxiliary information that
+    strengthens the answer, not a claim the quote must carry. Measured: **175 of 433**
+    cases have at least one answer sentence poorly covered by their quote, so the
+    stronger reading would make ~40% of the set a candidate failure. The
+    core-vs-auxiliary split is therefore a first-class judge output.
+  - **Built 2026-08-05 (uncommitted):** `src/eval/sufficiency_judge.py` — stages A
+    (decompose) and B (answer-blind), eyeballed on 8 cases. Stage C, verdict
+    derivation, the `sufficient_verbose` threshold (**measure it, do not guess** —
+    observed span/quote ratios run 19%–100%), the async runner, the calibration
+    sample and tests are **not started**.
+    - Stage A tags by making the judge **write the shortest sufficient answer first**.
+      An earlier leave-one-out removal test returned **zero** core claims on
+      `art7_case3`, because it cannot see mutual redundancy: *"Yes."* was excused by
+      the substantive clause and the substantive clause by *"Yes."*.
+    - Stage B never names the regulation and **copies its span before answering**, so
+      it must ground before it speaks. On `art2_case4` it returned `answered=False`
+      and reasoned about the excerpt's provenance rather than supplying the negation
+      from parametric knowledge — the failure mode that would have made the whole
+      judge worthless.
+    - `span_is_verbatim` reuses `normalize_for_grounding` so the judge and the
+      grounding gate cannot drift on what "the same text" means. It returned 8/8
+      verbatim, i.e. **it has never been observed to fail and so is not yet known to
+      work** — mutate it when the tests land.
+  - Still undecided: calibration sequencing (label a stratified sample first, or run
+    all 433 and sample after), panel composition (constrained by the broken
+    `writer_model[1]`, see known code issues), and whether an `UNANSWERABLE` verdict
+    belongs in this pass at all given stage B is blind to the article.
 - [x] Decide the quote-grounding definition — done 2026-08-02. Grounding is now
   reported in **three tiers** (`exact` / `normalized` / `ungrounded`) rather than
   pass/fail, with `normalize_for_grounding()` removing rendering differences only:
@@ -185,6 +316,14 @@ stale again** and is the only thing currently leaving the system inconsistent.
     cannot answer its own question, because the span was truncated and lost the stem
     carrying the negation (*"This Regulation does not apply to…"*). Stem-plus-item is
     exactly what a span list preserves and a single contiguous span destroys.
+  - **2026-08-05: this is the same decision as the hierarchy fix.** `art2_case4`'s
+    quote *is* ¶2(d); its stem is ¶2, separated by (a), (b) and (c). **No contiguous
+    substring of the corpus can satisfy the sufficiency criterion for that case** — so
+    the case is not a badly-chosen quote, as this file previously implied. Confirmed
+    independently by stage B of the sufficiency judge, which returned `answered=False`
+    on it. Whether span lists are still needed once paragraphs are chunked
+    stem-with-items is an open question the regeneration should answer, not a
+    foregone one.
   - Schema note: this changes `supporting_quote` from `str` to `list[str]`, so
     `TestCase`, the loader, `check_quote_grounding`, its tests and all 433 files are
     affected — not only the 51. Decide whether to permit both shapes or migrate cleanly.
@@ -213,6 +352,21 @@ stale again** and is the only thing currently leaving the system inconsistent.
        its gold article. `art8_case5` quotes **Recital 38**, not Article 8. Writing a
        quote for these would launder an unanswerable question into a clean-looking case —
        decide between rewriting question+answer, re-pointing `article_number`, or removal.
+       - **Re-classified 2026-08-05.** Stage B of the sufficiency judge answered *both*
+         cleanly from their quotes, so **the questions are sound** — the defect is
+         provenance, not answerability, and "invalid case" was the wrong label.
+       - `art41_case3`: its quote matches **no article in the corpus**. A
+         maximum-period-of-five-years accreditation rule is not Article 41 (monitoring
+         of approved codes of conduct) and reads like Article 43's certification-body
+         rule — so this is a mis-pointed `article_number` or text from outside the
+         corpus, not an invention. Re-pointing is the likely fix.
+       - `art8_case5`: the quote is two fragments joined by `...`. The **first is in
+         Article 8**; the **second matches no article**, so the Recital 38 note holds
+         for that fragment only. An intermediate claim that this entry was simply
+         wrong was itself wrong and is retracted here.
+       - Both were checked against the **corpus only**. Verify against the PDF before
+         editing — now cheap, since `gdpr.docling.json` carries `page_no` and
+         `charspan` per item.
     - Both were checked against the **corpus only, not the source PDF**. Per the
       `art36_case4` lesson, that rules out one link in the chain and no more — verify
       against the PDF before deleting or rewriting anything.
@@ -327,6 +481,11 @@ stale again** and is the only thing currently leaving the system inconsistent.
 
 - [ ] **Resolve each quote to gold chunk ID(s) at eval-set build time**, and score
   Context Recall by ID comparison at run time. Designed 2026-08-03; nothing built.
+  - ⛔ **Blocked on the corpus regeneration** (🔴 above). Pinning quotes to chunk IDs
+    against today's chunking would fix them to a decomposition that is wrong in 43 of
+    99 articles — `gdpr_article_2_para_6` is ¶2(d) severed from its stem. The
+    feasibility numbers below (294/299 pin exactly one chunk) were measured against
+    that chunking and must be re-derived after the rebuild.
   - Neither obvious option is right on its own. **Article-level** matching is too coarse —
     71.1% of cases sit in multi-chunk articles, mean **6.5** chunks (median 6, max 28), so
     it credits any 1 of ~6 — and, decisively, it is *blind to the variable under test*:
@@ -373,8 +532,20 @@ Upcoming experimentation with different chunking strategies and embedding
 models. Corpus-formatting fixes that would require a full regeneration are
 deliberately deferred into this work rather than done piecemeal.
 
-- [ ] Deferred, and the largest of these: **enumeration line numbering leaks into article
-  content.** docling numbered the first sub-items of an enumeration `2. 3. 4.` — continuing
+- [x] ~~Deferred, and the largest of these: **enumeration line numbering leaks into
+  article content.**~~ **Superseded 2026-08-05** — this was the symptom, seen from the
+  quote-grounding side. The defect is **hierarchy destruction by the markdown
+  serializer**, it affects 43 of 99 articles, and it severs chunks as well as
+  corrupting quotes. Promoted to the 🔴 blocking section as a corpus regeneration from
+  `gdpr.docling.json`; the note below is kept for the evidence it records.
+  - The **26 of 134** figure below counts only quotes that fail *grounding*. Chunk
+    severance never fails grounding — Article 2's text is intact and only its
+    segmentation is wrong — so it is a floor on a different quantity, not a measure of
+    this defect.
+
+  <details><summary>Original entry (2026-08-03)</summary>
+
+  docling numbered the first sub-items of an enumeration `2. 3. 4.` — continuing
   the paragraph count — then switched to bullets partway through the *same* list:
 
   ```
@@ -390,6 +561,8 @@ deliberately deferred into this work rather than done piecemeal.
   truncation finding: a corpus fault reported in test-case vocabulary. Fix belongs in the
   parser, not in `normalize_for_grounding` — normalizing it away would hide a real corpus
   defect and leave the chunk text (and embeddings) still carrying it.
+
+  </details>
 - [ ] Deferred: `_clean_title` does not collapse OCR double-spacing the way
   `_clean_content` does, so 3 of 99 titles (articles **12, 60, 89**) keep runs of
   multiple spaces. Titles are embedded into every chunk of their article, so
@@ -423,3 +596,15 @@ deliberately deferred into this work rather than done piecemeal.
   it about document trailers or decide whether that block belongs in article
   content at all — currently it makes a clean validation run impossible, so any
   future flag is easy to dismiss.
+- [ ] `GDPRParser._split_into_paragraphs` (`gdpr_parser.py:291`) splits on
+  `\d+\.\s+`, which (a) makes every spurious sub-item number a chunk boundary — see
+  the 🔴 regeneration item — and (b) *deletes* the numbers, so paragraph identity
+  survives neither in the text nor in `metadata["paragraph"]`, which holds a
+  sequential index instead. Both go away if the rebuild emits real paragraph
+  identity, so fix it there rather than patching the regex.
+- [ ] `src/config.py` `get_llm_config()['writer_model'][1]` is **broken**:
+  `ModelNames.GPT_OSS_120B` has no OpenRouter alias in `ai_common`
+  (`MODEL_NAME_ALIAS_DICT` lists groq and ollama only), so `get_llm` raises
+  `KeyError: <LlmServers.OPENROUTER>` on construction. Found 2026-08-05 while
+  picking a judge model. Only DeepSeek V3.2/V4-Flash and Gemini 3.1 Flash-Lite are
+  reachable over OpenRouter today, which also constrains judge-panel diversity.
