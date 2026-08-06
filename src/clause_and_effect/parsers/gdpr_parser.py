@@ -4,6 +4,7 @@ from typing import List, Dict, Any
 import pypdf
 
 from .base_parser import BaseParser, Chunk
+from .docling_tree import text_items
 
 
 class GDPRParser(BaseParser):
@@ -74,6 +75,163 @@ class GDPRParser(BaseParser):
         """
         return self._extract_articles(text=markdown)
 
+    def get_articles_from_dictionary(self, document: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Extract articles from docling's document tree (``gdpr.docling.json``).
+
+        The tree is the better source because it never rendered the hierarchy
+        away: paragraph numbers survive in each item's ``marker`` field, kept
+        structurally apart from the body text. The markdown path has to
+        re-derive them from a string, where "22." ending a cross-reference
+        ("Articles 15 to 22. In the cases...") is indistinguishable from "2."
+        opening a paragraph — the same defect, one level down, that
+        :attr:`_ARTICLE_HEADER` had to be line-anchored to avoid.
+
+        Returns the same four-key records as :meth:`get_articles_from_markdown`
+        so every consumer is unaffected. What changes is their ``content``: the
+        numbering is the regulation's own rather than the serializer's
+        invention, and sub-items stay with the paragraph that governs them.
+        """
+        return self._extract_articles_from_items(text_items(document))
+
+    # An article heading in the tree: the whole item reads "Article N". There
+    # is no '#' prefix to allow for — the heading is its own item — but the
+    # *label* still varies, so it cannot be the test: 98 headings are
+    # 'section_header' and Article 28 alone is 'text'. This is the same Article
+    # 28 quirk the markdown path hit, in a different serialization. Verified
+    # 2026-08-06: matching on text alone finds all 99, in order, no gaps;
+    # matching on 'section_header' alone finds 98 and folds Article 28 into 27.
+    _ARTICLE_HEADING = re.compile(r'^Article\s+(\d+)$')
+
+    # A first-order paragraph, as docling promotes it out of the text: "1.".
+    # Distinct from "(1)", which Article 4 uses for its 26 definitions — those
+    # are sub-items of the article's stem, not paragraphs.
+    _PARAGRAPH_MARKER = re.compile(r'^(\d+)\.$')
+
+    # A paragraph number docling left inline instead of promoting it. 9 items,
+    # across articles 9, 18, 35, 57 and 58. Reading only `marker` drops these
+    # paragraphs silently and leaves those articles' numbering with holes.
+    _INLINE_PARAGRAPH = re.compile(r'^(\d+)\.\s+')
+
+    # Chapter and section scaffolding sitting between two articles. 49 such
+    # items fall inside article ranges: 24 'CHAPTER V'/'Section 2' markers and
+    # their 25 title items, all labelled 'section_header' and dropped by label.
+    # The 'Section 1' after Article 59 is labelled 'text' and needs this — the
+    # same inconsistency the markdown path handles in _TRAILING_SCAFFOLDING.
+    _STRUCTURAL_HEADING = re.compile(r'^(?:CHAPTER\s+[IVXLC]+|Section\s+\d+)$')
+
+    # Items that are never article content, whatever they contain: chapter and
+    # section headings, and the 3 footnotes citing other instruments.
+    _NON_CONTENT_LABELS = frozenset({"section_header", "footnote"})
+
+    def _extract_articles_from_items(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Split a document-ordered item list into one record per article.
+
+        An article runs from its heading item to the next heading, or the end
+        of the document for Article 99 — which is why its closing provisions
+        ("It shall apply from 25 May 2018", the signature block) stay with it,
+        matching the markdown path.
+
+        The item immediately after each heading is its title: verified 99/99,
+        and always a 'section_header'. That replaces the markdown path's
+        "first line of the block" convention, which had to guess.
+        """
+        headings = [
+            (i, match.group(1))
+            for i, item in enumerate(items)
+            if (match := self._ARTICLE_HEADING.match((item.get("text") or "").strip()))
+        ]
+
+        articles = []
+        for n, (start, number) in enumerate(headings):
+            end = headings[n + 1][0] if n + 1 < len(headings) else len(items)
+
+            title = self._clean_title(items[start + 1].get("text", "")) if start + 1 < end else ""
+            units = self._build_units(items[start + 2:end])
+
+            articles.append({
+                "number": number,
+                "title": title,
+                "content": self._render_units(units),
+                "chapter": self._get_chapter_for_article(int(number)),
+            })
+
+        return articles
+
+    @classmethod
+    def _build_units(cls, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Group an article's items into paragraphs, each holding its sub-items.
+
+        This is the hierarchy the markdown serializer destroyed, rebuilt from
+        the fields that survived. A unit is one first-order paragraph (or, for
+        the 17 articles with no numbered paragraphs, an unnumbered stem), and
+        its ``sub_items`` are everything that belongs *under* it — Article
+        2(2)'s (a)-(d), Article 4's 26 definitions, an unnumbered subparagraph
+        continuing the provision above it.
+
+        Sub-items attach to the nearest preceding unit rather than the nearest
+        preceding *numbered* unit, because Article 4 and Article 50 both open
+        on an unnumbered stem that governs everything after it.
+
+        Only ``content`` is serialized today, and rendering flattens this back
+        to lines — but the nesting is what makes that rendering correct, and it
+        is what a hierarchy-aware chunker will need (see docs/todo.md).
+        """
+        units: List[Dict[str, Any]] = []
+
+        for item in items:
+            if item.get("label") in cls._NON_CONTENT_LABELS:
+                continue
+
+            text = cls._clean_text(item.get("text", ""))
+            if not text or cls._STRUCTURAL_HEADING.match(text):
+                continue
+
+            marker = (item.get("marker") or "").strip()
+            number = None
+
+            if item.get("label") == "list_item" and item.get("enumerated"):
+                match = cls._PARAGRAPH_MARKER.match(marker)
+                if match:
+                    number, marker = match.group(1), ""
+            elif item.get("label") == "text":
+                match = cls._INLINE_PARAGRAPH.match(text)
+                if match:
+                    number, marker, text = match.group(1), "", text[match.end():]
+
+            if number is not None or not units:
+                units.append({"number": number, "marker": marker, "text": text, "sub_items": []})
+            else:
+                units[-1]["sub_items"].append({"marker": marker, "text": text})
+
+        return units
+
+    @staticmethod
+    def _render_units(units: List[Dict[str, Any]]) -> str:
+        """
+        Render units back to the flat ``content`` string consumers expect.
+
+        One line per item, marker inline. Indentation is deliberately not used:
+        `_clean_content` collapses runs of spaces on the markdown path, quote
+        grounding normalizes whitespace away, and embeddings never see it — so
+        it would be decoration that makes the two paths' output differ for no
+        gain. The hierarchy is carried by correct numbering, not by layout.
+        """
+        lines = []
+        for unit in units:
+            if unit["number"] is not None:
+                lines.append(f'{unit["number"]}. {unit["text"]}')
+            elif unit["marker"]:
+                lines.append(f'{unit["marker"]} {unit["text"]}')
+            else:
+                lines.append(unit["text"])
+            lines.extend(
+                f'{sub["marker"]} {sub["text"]}' if sub["marker"] else sub["text"]
+                for sub in unit["sub_items"]
+            )
+        return "\n".join(lines).strip()
 
     # A *real* article header: "Article N" alone on its own line, optionally
     # carrying a markdown heading prefix (MULTILINE anchors ^ to line starts;
@@ -152,6 +310,19 @@ class GDPRParser(BaseParser):
         U+002D ("cross-border", "Subject-matter") and are left alone.
         """
         return cls._SOFT_HYPHEN_BREAK.sub('', text)
+
+    @classmethod
+    def _clean_text(cls, text: str) -> str:
+        """
+        The OCR repairs both source paths need: rejoin soft-hyphen breaks and
+        collapse double spacing.
+
+        Shared so markdown-derived and tree-derived content cannot disagree on
+        what the same sentence looks like. The damage is upstream of any
+        serialization choice — it is present in the tree's ``text`` field too —
+        so switching source neither fixes nor worsens it.
+        """
+        return re.sub(r'[ \t]{2,}', ' ', cls._rejoin_hyphenated_words(text)).strip()
 
     @classmethod
     def _clean_title(cls, line: str) -> str:
