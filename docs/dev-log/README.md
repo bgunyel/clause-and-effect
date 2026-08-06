@@ -71,3 +71,7 @@ thing in the record.
   settled on `art7_case3`, stages A and B of the judge built, and the discovery
   that docling's markdown serializer destroys the paragraph hierarchy in 43 of 99
   articles — severing stems from their sub-items in the index.
+- [2026-08-06 · session 1](devlog_2026-08-06_session-1.md) — corpus rebuilt from
+  the docling document tree (grounding 299 → 319 clean, zero regressions), the
+  same defect found one layer down in the chunker with Article 4 as the worked
+  example, and chunk sets made a hashed, provenance-carrying artifact.
