@@ -10,6 +10,9 @@ requires-python = ">=3.13"
 dependencies = [
     "ai-common @ git+https://github.com/bgunyel/ai-common.git@main",
     "docling>=2.68.0",
+    # A docling dependency, declared because the parsers now import
+    # DoclingDocument directly rather than only through docling's converter.
+    "docling-core>=2.87.1",
     "langchain>=1.2.0",
     "openvino>=2025.4.1",
     "pydantic-settings>=2.12.0",
