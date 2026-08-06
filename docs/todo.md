@@ -4,7 +4,7 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-05._
+> _Last updated: 2026-08-06._
 
 ---
 
@@ -563,6 +563,72 @@ deliberately deferred into this work rather than done piecemeal.
   defect and leave the chunk text (and embeddings) still carrying it.
 
   </details>
+- [ ] **Footnotes are dropped from article content by the tree-based parser — decided
+  2026-08-06, flagged for future review.** `_build_units` skips every item labelled
+  `footnote`, matching the markdown path's effect but for a different reason: the
+  markdown serializer inlined them as ordinary text, so they were in the corpus by
+  accident rather than by decision. Now it is a decision, and it should be revisited
+  once retrieval quality is being measured rather than assumed.
+
+  **Scope: 3 items, in articles 5, 43 and 79** (21 exist document-wide; the other 18
+  sit outside any article range and never reached the corpus). All three are
+  citations of other instruments — Directive (EU) 2015/1535, Regulation (EC) No
+  765/2008, and Regulation (EC) No 1049/2001. Verified: removing them leaves each
+  article's prose **byte-identical** to the markdown path, and they are the *only*
+  prose difference between the two paths across all 99 articles (96 match exactly;
+  these 3 differ by exactly their footnote).
+
+  **The known wart.** Only the footnote *body* is dropped; the inline reference
+  marker stays. Article 43's content still reads `... ( 1 ) in accordance with
+  EN-ISO/IEC 17065/2012 ...`, so the text now carries a pointer to something the
+  corpus no longer contains. Harmless for grounding (no golden quote covers it) and
+  invisible to the current gates, but it is a dangling reference inside embedded
+  text.
+
+  **What to review, and when.** Whether a footnote is article content at all is a
+  genuine question, not an oversight: Article 43's footnote defines the
+  accreditation standard its paragraph 1(b) depends on, so a question about
+  accreditation criteria is arguably answerable only *with* it. Revisit alongside
+  the chunking rework, when there is a retrieval metric to decide it against.
+  Reversing the decision is one line in `_NON_CONTENT_LABELS` plus a regeneration.
+- [ ] **Cited instruments may need to enter the corpus — future versions, explicitly
+  not now.** Raised by Bertan 2026-08-06 off the footnote decision above. The corpus
+  today is the GDPR alone, so every cross-instrument reference is a dead end: the
+  text names a rule the retriever cannot reach, and a question whose answer lives in
+  the cited document is unanswerable from the corpus no matter how good retrieval
+  gets.
+
+  **Size of the job, measured 2026-08-06** over `gdpr_articles.json` — **9 distinct
+  instruments, 25 mentions, across 14 articles**:
+
+  | instrument | mentions | articles |
+  |---|---:|---|
+  | Directive 95/46/EC (Data Protection Directive) | 8 | 45, 46, 94, 97 |
+  | Directive 2002/58/EC (ePrivacy) | 3 | 21, 95 |
+  | Regulation (EC) No 765/2008 (accreditation) | 3 | 43 |
+  | Regulation (EU) No 182/2011 (comitology) | 3 | 93 |
+  | Regulation (EC) No 45/2001 (EU institutions) | 2 | 2 |
+  | Directive (EU) 2015/1535 (technical regulations) | 2 | 4, 5 |
+  | Regulation (EC) No 1049/2001 (document access) | 2 | 76, 79 |
+  | Directive 2000/31/EC (e-commerce) | 1 | 2 |
+  | Regulation (EEC) No 339/93 | 1 | 43 |
+
+  **What it would take, and why it is not a "just add more PDFs" job:**
+  - `GDPRParser` is GDPR-shaped (99 articles, chapter map, `Article N` headings).
+    A second instrument needs either its own parser or the article/paragraph model
+    generalised — the `docling_tree` walk is already instrument-agnostic, which is
+    part of why it was split out.
+  - Chunk IDs, `regulation` metadata and the gold-chunk-ID scheme (P0) all assume a
+    single corpus. Multi-instrument retrieval makes *which regulation* a scoring
+    dimension, not a constant.
+  - The golden set is Tier-1 GDPR-only. Cross-instrument questions would be a new
+    tier with its own generation and validation, not extra cases in this one.
+  - Retrieval gets harder before it gets better: Directive 95/46/EC is the GDPR's
+    repealed predecessor and overlaps it heavily in wording, so adding it invites
+    near-duplicate retrieval against text that is *no longer in force*.
+
+  Related: the footnote decision above, which is the narrow version of this question
+  (3 citations, already excluded) — revisit the two together.
 - [ ] Deferred: `_clean_title` does not collapse OCR double-spacing the way
   `_clean_content` does, so 3 of 99 titles (articles **12, 60, 89**) keep runs of
   multiple spaces. Titles are embedded into every chunk of their article, so
