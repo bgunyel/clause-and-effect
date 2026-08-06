@@ -10,15 +10,28 @@
 
 ## 🔴 Blocking — data integrity
 
-The corpus text is intact, but its **structure is not**: docling's markdown
-serializer destroys the paragraph hierarchy inside 43 of 99 articles, and the
-chunker turns that into a retrieval-correctness fault. Everything else in this
-file is downstream of fixing it.
+**Half of this is fixed as of 2026-08-06.** The corpus now carries the
+regulation's own paragraph numbering, rebuilt from docling's document tree. What
+remains is the *other* half of the same defect: the **chunker** still re-derives
+structure from a string with `\d+\.\s+`, so it cannot see the hierarchy the
+corpus now has. Article 4 is the proof — see the chunker item below, which is now
+the top blocking entry.
 
-- [ ] 🔺 **Regenerate the corpus from the docling *document tree*, not its markdown.**
+- [x] ✅ **Regenerate the corpus from the docling *document tree*, not its markdown
+  — done 2026-08-06** (`b69a79c` parser, `78a58bb` corpus).
   Found by Bertan on 2026-08-05 reading `gdpr.docling.md`; full analysis, worked
   example and reconstruction plan in
-  [`dev-log/devlog_2026-08-05_session-1.md`](dev-log/devlog_2026-08-05_session-1.md).
+  [`dev-log/devlog_2026-08-05_session-1.md`](dev-log/devlog_2026-08-05_session-1.md),
+  and the outcome in
+  [`dev-log/devlog_2026-08-06_session-1.md`](dev-log/devlog_2026-08-06_session-1.md).
+
+  **Outcome, measured.** 99 articles numbered 1..99, paragraph numbering
+  contiguous in every one. 59 of 99 articles changed; content 187,287 → 185,466
+  chars. Prose is byte-identical to the markdown path in **96 of 99** once
+  numbering and bullets are stripped — the three that differ (articles 5, 43, 79)
+  differ by exactly the footnote each now drops. Golden-set QA: clean cases
+  **299 → 319**, ungrounded **134 → 114**, exact unchanged at 285, **zero
+  regressions**. Chunk count 563 → 368 with the chunker untouched.
 
   **The defect.** The serializer renumbers non-enumerated list items into the
   surrounding ordered list, so lettered sub-items are promoted to paragraph level.
@@ -112,6 +125,150 @@ file is downstream of fixing it.
   before it is void again**; Qdrant needs a full rebuild; golden-set QA must be
   re-run and the 134 ungrounded re-derived (26 are predicted to clear).
 
+  **Correction, 2026-08-06: 20 cleared, not 26.** The 26 was never a measurement
+  of this defect — it counted quotes that failed *grounding* after stripping
+  spurious enumeration numbers, and this file already flagged it as "a floor on a
+  different quantity". Recorded here so the prediction is not quietly remembered
+  as having been met.
+
+- [ ] 🔺 **Make the chunker hierarchy-aware. `article_to_chunks` still re-derives
+  structure from a string, and Article 4 shows what that costs.**
+  Designed with Bertan 2026-08-06; the recursive-descent shape and the
+  stem-repetition rule are his. Nothing implemented.
+
+  **Why the corpus fix did not fix this.** `_split_into_paragraphs`
+  (`gdpr_parser.py:291`) splits `content` on `\d+\.\s+`. Correct numbering fixed
+  most of it — measured on the rebuilt corpus, **50 of 61** over-budget articles
+  now split into exactly their real paragraph count. The remaining 11 are the
+  cases a regex over rendered text cannot reach:
+
+  - **10 articles split on a cross-reference**, because `\d+\.\s+` cannot tell
+    `22. ` in *"…rights under Articles 15 to 22. In the cases…"* from `2. `
+    opening a paragraph. Articles 12, 20, 35, 36, 40, 42, 43, 58, 62, 65.
+    **This is the bug already fixed one level up**: `_ARTICLE_HEADER` is
+    line-anchored precisely because the original parser keyed article boundaries
+    off inline `Article N` references and truncated three-quarters of the corpus.
+    The paragraph splitter has the identical defect, unfixed.
+  - **It fails silently and shifts every later label.** `re.split` deletes the
+    number, and `metadata["paragraph"]` is the enumeration index — so one spurious
+    split inside ¶2 stamps real ¶3 as `paragraph: "4"` through the end of the
+    article. In those 10 articles the paragraph metadata is wrong **against a
+    perfect corpus**, and nothing surfaces it.
+  - **Article 4 does not split at all**, because its definitions are `(1)`…`(26)`.
+    One chunk, 8,655 chars.
+
+  ### The worked example: Article 4 before the corpus fix
+
+  Article 4 has **no numbered paragraphs**. It has a stem, *"For the purposes of
+  this Regulation:"*, and 26 definitions, three of which — (16), (22), (23) —
+  have their own (a)/(b)/(c) sub-points. The old markdown corpus renumbered those
+  sub-points into the surrounding ordered list, and those invented numbers became
+  the chunk boundaries:
+
+  ```
+  "…'main establishment' means:\n8. (a) as regards a controller…"
+  "…considered to be the main establishment;\n9. (b) as regards a processor…"
+  "…personal data because:\n2. (a) the controller or processor is estab…"
+  "…of that supervisory authority;\n3. (b) data subjects residing…"
+  "…affected by the processing; or\n4. (c) a complaint has been lodged…"
+  "…'cross-border processing' means either:\n6. (a) processing of personal data…"
+  "…in more than one Member State; or\n7. (b) processing of personal data…"
+  ```
+
+  `8.` `9.` `2.` `3.` `4.` `6.` `7.` — **not one of those numbers exists in the
+  regulation.** The resulting eight chunks:
+
+  | chunk | `paragraph` | contains |
+  |---|---|---|
+  | `para_1` | 1 | definitions 1–16, 4,779 chars, ending on `"(16) 'main establishment' means:"` |
+  | `para_2` | 2 | 4(16)(a), severed from its definiendum |
+  | `para_3` | 3 | definitions **17–22** — but the chunk *opens* `"(b) as regards a processor with establishments in more than one Member State…"` |
+  | `para_4` | 4 | 4(22)(a) |
+  | `para_5` | 5 | 4(22)(b) |
+  | `para_6` | 6 | 4(22)(c), then definition 23 |
+  | `para_7` | 7 | 4(23)(a) |
+  | `para_8` | 8 | 4(23)(b), then definitions 24–26 |
+
+  Three distinct harms, and they are worth separating:
+
+  1. **Severance inverts meaning.** `para_6` in full is *"(c) a complaint has been
+     lodged with that supervisory authority;"* — 111 characters with nothing
+     saying it is one of three conditions defining *"supervisory authority
+     concerned"*. Retrieved alone it is a floating clause with no subject.
+  2. **Retrieval by accident.** Which definition lands in which chunk is decided
+     by where the serializer's fake numbers fell. *"Binding corporate rules"*
+     (definition 20) is reachable only through `para_3`, whose embedding is
+     dominated by processor-establishment language it opens with. The chunk cannot
+     be found by the query it answers.
+  3. **Fabricated citations.** Every `paragraph` value 1–8 is invented. Article 4
+     has no paragraph 2. `"Article 4.2"` names something that does not exist.
+
+  **Today, post-rebuild, Article 4 is one 8,655-char chunk.** Nothing severed and
+  no fabricated numbers — strictly better — but not retrievable at definition
+  granularity. This is a knowingly accepted interim state, not an oversight.
+
+  ### What to build
+
+  **Recursive descent with stem repetition.** Try the whole unit; if it does not
+  fit the budget, descend one level and repeat the stem into each child. Applied
+  at every level, not twice — Article 4 needs three (article → definition (16) →
+  sub-point (a)), so the record model must nest to the document's depth rather
+  than a fixed paragraph/sub-item pair.
+
+  Article 2 is the easy case and already behaves: 1,366 chars → doesn't fit →
+  four paragraphs of 247/594/324/197, all fit, ¶2 keeps (a)–(d).
+
+  **The stem must ride along, always.** Splitting Article 9 ¶2 into ten bare
+  `(a)`…`(j)` chunks re-creates `art2_case4` one level down: *"(b) processing
+  relates to personal data manifestly made public…"* reads as a permission when
+  the stem says *"Paragraph 1 shall not apply if one of the following applies"*.
+  A 60-char stem copied into ten chunks costs nothing. **This rule is the point of
+  the exercise; a chunker that splits sub-items off their stem has fixed nothing.**
+
+  **The third level is not an edge case — 31 paragraphs across 26 articles exceed
+  1000 chars:**
+
+  ```
+  art  4 ¶1: 8511 chars, 34 sub-items (the definitions)
+  art 70 ¶1: 5750, 25   art 47 ¶2: 3988, 14   art 57 ¶1: 3469, 22
+  art  9 ¶2: 3359, 10   art 49 ¶1: 2727,  8   art 28 ¶3: 2529,  9
+  … 25 more
+  ```
+
+  **Pack at the third level, not the first.** Article 9 ¶2 becomes ~4 chunks of
+  stem + consecutive sub-items rather than 10 of stem + one. But do **not** pack
+  at paragraph level: the project's direction is paragraph-level citation and gold
+  chunk IDs, and merging ¶3+¶4 makes `2(3)` unaddressable. A definitions article
+  is the clearest case — 26 definitions should be 26 retrievable units, and today's
+  `para_1` holding sixteen unrelated definitions in 4,779 chars is what packing
+  looks like taken to its conclusion.
+
+  **`art 65 ¶6` breaks pure recursion: 1,049 chars, 0 sub-items.** Over budget
+  with no hierarchy to descend into. Needs a deliberate terminal rule — emit
+  oversized (preferred: it is 5% over, and a sentence split severs a legal
+  provision at an arbitrary point, the same class of harm being removed) or
+  sentence-split as a last resort. Decide it rather than discover it.
+
+  **Fix the budget test while you are here.** `article_to_chunks` checks
+  `len(content) < 1000` but emits `f"Article {n}: {title}\n\n{content}"`, so every
+  chunk exceeds the budget it passed. Measure the *rendered* text. And note the
+  1000 is a retrieval-granularity choice, not a capacity limit —
+  `text-embedding-3-small` accepts 8,191 tokens, so even Article 4's 8,655 chars
+  would fit the model.
+
+  **Chunk IDs become the citation surface.** `gdpr_article_2_para_2` can finally
+  mean ¶2; a third-level chunk needs something like
+  `gdpr_article_9_para_2_items_a-c`. Since gold chunk IDs (P0) will pin to this
+  scheme, design it rather than inherit it.
+
+  **How to measure the fix.** The chunk snapshot mechanism
+  (`docs/design/chunk-snapshot-reproducibility.md`) exists for this: the current
+  chunk set is a named, hashed artifact, so the *before* survives the change. Run
+  golden-set QA and retrieval against both and report the delta — this is the
+  first change in the project with a preserved baseline to measure against.
+
+  **Blocked on nothing.** The corpus already carries the hierarchy this needs.
+
 - [ ] **Re-index Qdrant — carried over from 2026-08-02, still not done.** Now
   **folded into the regeneration above** rather than a standalone task: the corpus
   is about to change again, so re-indexing the current one would be wasted. The
@@ -121,6 +278,16 @@ file is downstream of fixing it.
   chunk.id)`, so the write overwrites in place and the collection does not need
   dropping. Any retrieval number measured before this is against a corpus that
   does not exist.
+
+  **2026-08-06 — quantified, and now worse.** Probed live: the collection holds
+  **563 points** with `config.metadata=None`. The rebuilt corpus produces **368**
+  chunks, so a re-index leaves roughly **195 orphaned points** — real GDPR text,
+  embedded and searchable, from a decomposition that exists nowhere else.
+  `index_chunks` (`vector_db.py:134`) already warns about surplus points but
+  cannot identify *which*, so the warning ends at "drop the collection". Writing
+  the chunk-set hash into each point's payload makes orphans exactly the points
+  whose hash is not current — filterable, and prunable behind an explicit flag.
+  Deleting points is destructive; these 195 are its first real test.
 - [x] **Re-generate `gdpr_articles.json`** _(requested)_ — done 2026-08-01.
   Regenerating first exposed two further parser defects, both now fixed
   (`9ecdf6f`); the full post-mortem is in
@@ -481,11 +648,18 @@ file is downstream of fixing it.
 
 - [ ] **Resolve each quote to gold chunk ID(s) at eval-set build time**, and score
   Context Recall by ID comparison at run time. Designed 2026-08-03; nothing built.
-  - ⛔ **Blocked on the corpus regeneration** (🔴 above). Pinning quotes to chunk IDs
-    against today's chunking would fix them to a decomposition that is wrong in 43 of
-    99 articles — `gdpr_article_2_para_6` is ¶2(d) severed from its stem. The
-    feasibility numbers below (294/299 pin exactly one chunk) were measured against
-    that chunking and must be re-derived after the rebuild.
+  - ⛔ **Was blocked on the corpus regeneration; as of 2026-08-06 blocked on the
+    hierarchy-aware chunker instead** (🔴 above). The corpus is fixed and
+    `gdpr_article_2_para_6` no longer exists — Article 2 is now four chunks with
+    real paragraph numbers. But the chunker fix will change chunk IDs again
+    (third-level chunks need identifiers like `gdpr_article_9_para_2_items_a-c`),
+    and Article 4 is currently a single 8,655-char chunk that no quote can pin to
+    usefully. Pinning now would fix the golden set to a scheme already known to be
+    replaced.
+  - The feasibility numbers below (294/299 pin exactly one chunk) were measured
+    against the **pre-rebuild** chunking and are void. Re-derive after the chunker
+    fix, not before — and note the current chunk set is preserved as a snapshot, so
+    the comparison is now possible rather than merely desirable.
   - Neither obvious option is right on its own. **Article-level** matching is too coarse —
     71.1% of cases sit in multi-chunk articles, mean **6.5** chunks (median 6, max 28), so
     it credits any 1 of ~6 — and, decisively, it is *blind to the variable under test*:
@@ -655,19 +829,58 @@ deliberately deferred into this work rather than done piecemeal.
   computes `structured_response` but never uses it, and `total_tokens` is dead.
   Token/cost accounting is not wired — needed for the operational cost metric
   above.
-- [ ] `generate_gdpr_articles.py` has no corpus-level invariant: it printed
-  `✅ Wrote 1 articles` and exited 0 while the corpus was collapsed. Assert the
-  expected article count (99) and exit non-zero on mismatch.
+- [x] ~~`generate_gdpr_articles.py` has no corpus-level invariant: it printed
+  `✅ Wrote 1 articles` and exited 0 while the corpus was collapsed.~~ **Done
+  2026-08-06** (`b4265f9`). `_check_invariants` enforces 99 articles numbered
+  1..99, no gaps or duplicates, no empty title or content, and paragraph
+  numbering contiguous 1..N per article — exiting non-zero *before* writing.
+  Checks the rendered output rather than parser internals, so it validates what
+  reaches disk. **Verified to fail, not only to pass:** run against the old
+  markdown path it rejects 42 articles and exits 1, reporting Article 2 as
+  `[1, 2, 3, 4, 5, 6, 3, 4]` — the restart-collision found by hand on 2026-08-05,
+  now detected mechanically.
 - [ ] `_looks_truncated` false-flags article 99 (signature block). Either teach
   it about document trailers or decide whether that block belongs in article
   content at all — currently it makes a clean validation run impossible, so any
   future flag is easy to dismiss.
 - [ ] `GDPRParser._split_into_paragraphs` (`gdpr_parser.py:291`) splits on
-  `\d+\.\s+`, which (a) makes every spurious sub-item number a chunk boundary — see
-  the 🔴 regeneration item — and (b) *deletes* the numbers, so paragraph identity
-  survives neither in the text nor in `metadata["paragraph"]`, which holds a
-  sequential index instead. Both go away if the rebuild emits real paragraph
-  identity, so fix it there rather than patching the regex.
+  `\d+\.\s+`, which (a) makes every spurious sub-item number a chunk boundary and
+  (b) *deletes* the numbers, so paragraph identity survives neither in the text
+  nor in `metadata["paragraph"]`, which holds a sequential index instead.
+  **Superseded 2026-08-06 by the 🔴 hierarchy-aware chunker item**, which covers
+  this and more: the corpus rebuild fixed (a) for 50 of 61 articles but left the
+  cross-reference splits and Article 4 untouched, and (b) is unchanged. Do not
+  patch the regex — it is the wrong layer.
+- [ ] **Nothing writes `chunk_set_sha256` into Qdrant yet.** The chunk side is
+  built (`chunk_store.py`, `generate_chunks.py`); the index side is not, so
+  staleness is *recordable* but still not *detectable*. Verified available on the
+  live server: `create_collection(..., metadata=…)`,
+  `update_collection(..., metadata=…)`, read back via
+  `get_collection(name).config.metadata`. Two ordering constraints found while
+  probing: `create_collection` no-ops when the collection exists, so the hash must
+  be written on **every** index run, not at creation; and it must be written
+  **after** `index_chunks` verifies its count, or a partial index leaves a
+  collection advertising a snapshot it does not hold. Note also that
+  `update_collection` **merges rather than replaces** — a key written once
+  persists until explicitly overwritten, so decide the metadata schema up front.
+- [ ] **The chunk-set hash does not cover the embedding model.** Identical chunks
+  through different models give different vectors and different retrieval, while
+  both collections would legitimately advertise the same `chunk_set_sha256`. The
+  index's metadata needs model ID and vector size alongside the chunk hash, or
+  "the index matches the chunks" will be true while retrieval has silently
+  changed. Same class of gap as the one just closed, one layer down.
+- [ ] **No automated tests cover `chunk_store.py` or `generate_chunks.py`.** Every
+  property was verified by hand on 2026-08-06 — determinism under randomized
+  `PYTHONHASHSEED`, byte-identical regeneration, tamper detection, `git_state`
+  across six tree states — and **none of it is guarded by the suite** (81 tests,
+  none touching these modules). Real verification, but a snapshot in time rather
+  than a regression barrier, which is the standard this project applies elsewhere.
+  Full list of what was observed: `docs/design/chunk-snapshot-reproducibility.md` §4.
+- [ ] **No tests cover the tree-based parser either** — `docling_tree.py` and
+  `GDPRParser.get_articles_from_dictionary` are covered only by the generator's
+  invariant and by hand-run comparisons. `docling_tree` was deliberately split out
+  to be testable against a small synthetic tree rather than the 1.4 MB fixture;
+  that test does not exist yet.
 - [ ] `src/config.py` `get_llm_config()['writer_model'][1]` is **broken**:
   `ModelNames.GPT_OSS_120B` has no OpenRouter alias in `ai_common`
   (`MODEL_NAME_ALIAS_DICT` lists groq and ollama only), so `get_llm` raises
