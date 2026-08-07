@@ -1,15 +1,18 @@
 # Chunk snapshot reproducibility
 
-**Verified against:** `111cffd` — the commit introducing `chunk_store.py` and
-`generate_chunks.py`.
+**Verified against:** `d7db4f9` — the chunk side introduced at `111cffd`, the
+`git_state` fix at `c67e266`, the index side at `d7db4f9`.
 
 **Code:** `src/clause_and_effect/chunk_store.py`,
-`src/scripts/generate_chunks.py`
+`src/scripts/generate_chunks.py`,
+`src/clause_and_effect/retrieval/vector_db.py`,
+`src/scripts/index_documents.py`
 
-**Status:** the mechanism is built and verified; **no snapshot has been written
-to `data/chunks/` yet**, and nothing writes the hash into Qdrant. Every file
-path and transcript below comes from `--dry-run` output or from temp-directory
-test runs on 2026-08-06. See §12.
+**Status:** end to end and in use. The first snapshot,
+`chunks_2026-08-07_064658_157d4d38` (368 chunks), was written at `2a7811a`, and
+`compliance_docs` holds exactly it — 368 points, 0 orphans, advertising its
+hash, embedding model and vector size. Transcripts below are from live runs on
+2026-08-07 unless marked otherwise. Remaining gaps: §12.
 
 ---
 
@@ -546,9 +549,9 @@ Timestamp alone cannot answer the question the mechanism exists for.
 
 ## 11. Worked example — the chunk set as it stands
 
-Not yet a written snapshot (§12) — this is `--dry-run` output over the current
-corpus: 99 articles, 185,466 chars, `sha256 85fba45c40b6…`, regenerated from
-the docling document tree at commit `78a58bb`.
+`chunks_2026-08-07_064658_157d4d38`, generated at `c67e266` against a clean tree
+and committed at `2a7811a`. Source corpus: 99 articles, 185,466 chars,
+`sha256 85fba45c40b6…`, regenerated from the docling document tree at `78a58bb`.
 
 ```
 chunks           : 368
@@ -578,25 +581,41 @@ problem surfaces first.
 
 ## 12. Known gaps
 
-**No snapshot exists yet.** `data/chunks/` holds only `.gitkeep`. The mechanism
-was built and verified on 2026-08-06 but the session ended before the first
-snapshot was generated — which by §5.5 must happen against a clean tree, after
-the code is committed. Until it does, there is no baseline for the
-hierarchy-aware chunker to be measured against.
+**~~No snapshot exists yet.~~ Closed 2026-08-07.**
+`chunks_2026-08-07_064658_157d4d38` was generated at `c67e266` against a clean
+tree and committed at `2a7811a` — 368 chunks, `git_dirty: false`. §5.5's
+convention held: the code had to be committed first.
 
-**The Qdrant half is not built.** This document describes the chunk side only.
-Nothing yet writes `chunk_set_sha256` into the collection, so staleness is
-*recordable* but not yet *detectable*. The live collection still reads
-`points=563, config.metadata=None`. Verified available:
-`create_collection(..., metadata=…)`, `update_collection(..., metadata=…)`, read
-back via `get_collection(name).config.metadata`.
+**~~The Qdrant half is not built.~~ Closed 2026-08-07** (`d7db4f9`).
+`compliance_docs` now advertises its chunk set and holds nothing else: 368
+points, 0 orphans, 0 missing. The collection had held **563 points with
+`config.metadata=None`**, of which **196 belonged to no current chunk** and one
+current chunk (`gdpr_article_79`) was absent — its footnote being dropped pushed
+the article under the chunk budget, so it stopped splitting into paragraphs and
+acquired a new ID. Metadata is written on every index run and written last,
+after the count is verified and orphans are gone; a run that leaves orphans
+exits non-zero writing nothing. `index_documents.py --check` answers "does this
+collection hold exactly this snapshot?" for free.
 
-**The hash does not cover the embedding model.** Identical chunks embedded with
-different models give different vectors and different retrieval, while both
-collections would legitimately advertise the same `chunk_set_sha256`. The
-index's metadata needs the model ID and vector size alongside the chunk hash,
-or "the index matches the chunks" will be true while retrieval has silently
-changed. Same class of gap as §1, one layer down.
+**~~The hash does not cover the embedding model.~~ Closed 2026-08-07** by
+recording `embedding_model` and `vector_size` in the collection metadata beside
+the hash. The gap was real — identical chunks through different models give
+different vectors and different retrieval while both collections would honestly
+report the same `chunk_set_sha256` — so the hash alone could never have answered
+"does this index match?".
+
+**Point membership is not content equality.** `--check` compares derived point
+IDs and the advertised hash. It does **not** compare each point's stored text
+against the snapshot, so a collection carrying stale text under current IDs
+would pass the ID comparison. The advertised hash is what rules that out, which
+is why it is required even when the ID sets agree — but it is a claim written by
+the indexer, not a re-derivation from what is stored. A payload-level audit
+would close this.
+
+**The `chunker_tree_dirty` flag is recorded but not enforced.** A snapshot taken
+against a dirty tree can still be indexed; the collection simply advertises that
+it was. Deliberate — experiments need it — but nothing prevents a dirty-tree
+snapshot from becoming a published baseline by accident.
 
 **`git_dirty` over-reports.** Repo-wide, so unrelated edits flag a snapshot
 that is genuinely reproducible. `git_dirty_paths` makes it judgeable but not

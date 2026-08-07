@@ -28,9 +28,15 @@ generator and agent staying untested remains an accepted state.
    separately.~~ **Done 2026-08-07** (`2a7811a`) — 368 chunks, `sha256
    157d4d38…`, generated at `c67e266` with `git_dirty: false`. Two defects in
    `git_state` were found and fixed first (`c67e266`); see ⚪ Known code issues.
-2. **Write the chunk-set hash into Qdrant when indexing**, and make it true that
-   *every point in a collection belongs to that collection's chunk set* — the
-   ~195 orphans from the pre-rebuild corpus are the first real case.
+2. ~~**Write the chunk-set hash into Qdrant when indexing**, and make it true
+   that *every point in a collection belongs to that collection's chunk set*.~~
+   **Done 2026-08-07** (`d7db4f9`). `compliance_docs` now holds **368 points, 0
+   orphans, 0 missing**, advertising `157d4d38…`. It held 563 with
+   `metadata=None`; **196 were orphans** (not the ~195 estimated) and one
+   snapshot chunk, `gdpr_article_79`, was absent entirely — dropping its
+   footnote pushed the article under the chunk budget, so it stopped splitting
+   into paragraphs and acquired a new ID. `--check` now answers "does the
+   collection hold exactly this snapshot?" for free.
 3. **Tests** for what was verified by hand only: `chunk_store.py`,
    `generate_chunks.py`, `docling_tree.py`,
    `GDPRParser.get_articles_from_dictionary`.
@@ -312,7 +318,15 @@ per the priority order above.
 
   **Blocked on nothing.** The corpus already carries the hierarchy this needs.
 
-- [ ] **Re-index Qdrant — carried over from 2026-08-02, still not done.** Now
+- [x] ✅ **Re-index Qdrant — done 2026-08-07** (`d7db4f9`), after being carried
+  from 2026-08-02. The collection now holds exactly the
+  `chunks_2026-08-07_064658_157d4d38` snapshot: **368 points, 0 orphans, 0
+  missing**, advertising its hash, embedding model and vector size. The 196
+  orphans were deleted — the first real use of destructive point deletion, and
+  the reason `--prune` is an explicit flag with the delete re-checked afterwards
+  rather than assumed. Entry below kept for the history it records.
+
+  **Original entry.** Now
   **folded into the regeneration above** rather than a standalone task: the corpus
   is about to change again, so re-indexing the current one would be wasted. The
   soft-hyphen fix changed the content of **14 articles** after the 2026-08-01
@@ -915,24 +929,23 @@ deliberately deferred into this work rather than done piecemeal.
   this and more: the corpus rebuild fixed (a) for 50 of 61 articles but left the
   cross-reference splits and Article 4 untouched, and (b) is unchanged. Do not
   patch the regex — it is the wrong layer.
-- [ ] **Nothing writes `chunk_set_sha256` into Qdrant yet.** The chunk side is
-  built (`chunk_store.py`, `generate_chunks.py`); the index side is not, so
-  staleness is *recordable* but still not *detectable*. Verified available on the
-  live server: `create_collection(..., metadata=…)`,
-  `update_collection(..., metadata=…)`, read back via
-  `get_collection(name).config.metadata`. Two ordering constraints found while
-  probing: `create_collection` no-ops when the collection exists, so the hash must
-  be written on **every** index run, not at creation; and it must be written
-  **after** `index_chunks` verifies its count, or a partial index leaves a
-  collection advertising a snapshot it does not hold. Note also that
-  `update_collection` **merges rather than replaces** — a key written once
-  persists until explicitly overwritten, so decide the metadata schema up front.
-- [ ] **The chunk-set hash does not cover the embedding model.** Identical chunks
-  through different models give different vectors and different retrieval, while
-  both collections would legitimately advertise the same `chunk_set_sha256`. The
-  index's metadata needs model ID and vector size alongside the chunk hash, or
-  "the index matches the chunks" will be true while retrieval has silently
-  changed. Same class of gap as the one just closed, one layer down.
+- [x] ~~**Nothing writes `chunk_set_sha256` into Qdrant yet.**~~ **Done
+  2026-08-07** (`d7db4f9`). `set_collection_metadata` writes it on every index
+  run — `create_collection` no-ops when the collection exists, so metadata passed
+  there would only ever be written by the run that created it — and it is written
+  **last**, after `index_chunks` verifies its count and after orphans are gone. A
+  run that leaves orphans exits non-zero writing nothing: a collection
+  advertising a snapshot it only partly holds is worse than one advertising
+  nothing, because the first is trusted and wrong.
+- [x] ~~**The chunk-set hash does not cover the embedding model.**~~ **Closed
+  2026-08-07** by recording `embedding_model` and `vector_size` in the collection
+  metadata alongside the hash. The gap was real: identical chunks through
+  different models give different vectors and different retrieval while both
+  collections would honestly advertise the same `chunk_set_sha256`. The schema is
+  fixed up front rather than grown, because `update_collection` **merges rather
+  than replaces** — a key written once persists until explicitly overwritten, so
+  a renamed key leaves its predecessor behind advertising a value nothing
+  produced. Pinned by `test_collection_metadata_merges_rather_than_replaces`.
 - [ ] **Tests cover `git_state` only; the rest of `chunk_store.py` and all of
   `generate_chunks.py` are still unguarded.** Every property was verified by hand
   on 2026-08-06 — determinism under randomized `PYTHONHASHSEED`, byte-identical
