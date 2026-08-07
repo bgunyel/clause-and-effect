@@ -176,7 +176,25 @@ def main(argv: List[str] | None = None) -> int:
         return _check(vector_db, snapshot_path, snapshot, chunks)
 
     vector_db.create_collection()
-    vector_db.index_chunks(chunks)
+
+    # Read the collection before writing, so the run can report what it is about
+    # to do rather than only what it did. Insert and update are the same upsert
+    # to Qdrant — the split is for the operator, not for the client.
+    before = vector_db.stored_points()
+    expected = {str(vector_db.point_id(c.id)): c.id for c in chunks}
+    print(f"\n🔁 Reconciling against {len(before)} existing point(s)")
+    print(f"   update  : {len(set(expected) & set(before))}")
+    print(f"   insert  : {len(set(expected) - set(before))}")
+    print(f"   delete  : {len(set(before) - set(expected))}")
+
+    digest = vector_db.index_chunks(chunks)
+    # Two independently derived values: `index_chunks` hashes the chunks it
+    # actually wrote, the manifest hashes what was written to disk. They can
+    # only disagree if the snapshot on disk is not the chunk set in memory.
+    if digest != snapshot.chunk_set_sha256:
+        print(f"\n❌ Indexed chunks hash to {digest[:12]}… but the snapshot "
+              f"records {snapshot.chunk_set_sha256[:12]}…")
+        return 1
 
     orphans = vector_db.find_orphans(chunks)
     if orphans:
@@ -197,6 +215,18 @@ def main(argv: List[str] | None = None) -> int:
             print(f"❌ {len(remaining)} orphan(s) survived the delete; "
                   f"nothing recorded.")
             return 1
+
+    # The post-condition that count verification cannot give. Every live point
+    # must carry the digest about to be advertised — including points that kept
+    # their ID through the change, which is where a silently failed upsert or a
+    # half-finished run would otherwise hide.
+    stale = vector_db.find_stale(digest)
+    if stale:
+        print(f"\n❌ {len(stale)} point(s) do not carry {digest[:12]}… after "
+              f"indexing; nothing recorded.")
+        for point_id, held in list(stale.items())[:10]:
+            print(f"     {point_id}  holds {held or '<no digest>'}")
+        return 1
 
     indexed_at = datetime.now(timezone.utc)
     vector_size = vector_db.client.get_collection(
@@ -254,6 +284,7 @@ def _check(
     recorded = vector_db.collection_metadata() or {}
     comparison = _compare(vector_db, chunks)
     advertised = recorded.get("chunk_set_sha256")
+    stale = vector_db.find_stale(snapshot.chunk_set_sha256)
 
     print(f"\n🔎 Collection '{vector_db.collection_name}'")
     print(f"   points          : {len(comparison['stored'])}")
@@ -261,6 +292,7 @@ def _check(
     print(f"   snapshot        : {snapshot.chunk_set_sha256}")
     print(f"   orphans         : {len(comparison['orphans'])}")
     print(f"   missing         : {len(comparison['missing'])}")
+    print(f"   stale           : {len(stale)}")
     if recorded:
         print(f"   embedding_model : {recorded.get('embedding_model')}")
         print(f"   indexed_at      : {recorded.get('indexed_at')}")
@@ -275,19 +307,29 @@ def _check(
         if len(comparison["missing"]) > 10:
             print(f"     … and {len(comparison['missing']) - 10} more")
 
+    if stale:
+        print(f"\n⚠️  {len(stale)} point(s) do not carry this snapshot's digest:")
+        for point_id, held in list(stale.items())[:10]:
+            print(f"     {point_id}  holds {held or '<no digest>'}")
+        if len(stale) > 10:
+            print(f"     … and {len(stale) - 10} more")
+
+    # Membership, advertisement and per-point provenance are three different
+    # claims and all three are required. The ID sets agreeing proves only that
+    # the right chunks are represented, not that their vectors are current — a
+    # text-only change keeps every ID and every point. The advertised hash is
+    # the collection's claim about itself; `stale` is the per-point evidence for
+    # or against it, and the only one that survives a half-finished run.
     matches = (
         advertised == snapshot.chunk_set_sha256
         and not comparison["orphans"]
         and not comparison["missing"]
+        and not stale
     )
     if matches:
         print(f"\n✅ Collection holds exactly {snapshot_path.name}.")
         return 0
 
-    # Point membership alone is not a match: the payload text of a point is not
-    # compared here, so an index carrying old text under current IDs would look
-    # correct by ID and be wrong by content. The advertised hash is what rules
-    # that out, which is why it is required even when the ID sets agree.
     print("\n❌ Collection does not match the snapshot. "
           "Run without --check to index it.")
     return 1

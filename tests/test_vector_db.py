@@ -20,6 +20,7 @@ import uuid
 import pytest
 from qdrant_client.models import PointStruct
 
+from src.clause_and_effect.chunk_store import chunk_set_hash
 from src.clause_and_effect.parsers import Chunk
 from src.clause_and_effect.retrieval.vector_db import VectorDatabase
 
@@ -112,17 +113,26 @@ class _FakeClient:
         an update that does not mention it.
     """
 
-    def __init__(self, reported_count=None, metadata=None):
+    def __init__(self, reported_count=None, metadata=None, fail_upsert_after=None):
         self.upserted = []
         self.points = {}          # str(point_id) -> payload
         self.metadata = metadata  # None models a collection nothing has stamped
         self.deleted = []
         self.delete_calls = []
+        self.upsert_calls = 0
+        # Batch index at which upsert starts raising, to model a run that dies
+        # partway. The batches already written stay written — which is the whole
+        # point: a crash leaves the collection holding two chunk sets at once.
+        self._fail_upsert_after = fail_upsert_after
         self._reported_count = reported_count
 
     # --- points ----------------------------------------------------------- #
 
     def upsert(self, collection_name, points):
+        if (self._fail_upsert_after is not None
+                and self.upsert_calls >= self._fail_upsert_after):
+            raise ConnectionError("connection lost mid-index")
+        self.upsert_calls += 1
         self.upserted.extend(points)
         for point in points:
             self.points[str(point.id)] = point.payload
@@ -134,12 +144,26 @@ class _FakeClient:
 
     def scroll(self, collection_name, limit, offset=None, with_payload=None,
                with_vectors=None):
-        """Qdrant's offset is the ID to resume *from*, not a row number."""
+        """
+        Qdrant's offset is the ID to resume *from*, not a row number.
+
+        `with_payload` is honoured rather than ignored. A field the caller did
+        not ask for is genuinely absent from the response, so a reader that
+        forgets to request `chunk_set_sha256` sees None for every point and
+        concludes the whole collection is stale. A fake that returned the full
+        payload regardless would make that bug invisible.
+        """
         ids = sorted(self.points)
         start = 0 if offset is None else ids.index(str(offset))
         page = ids[start:start + limit]
         next_offset = ids[start + limit] if start + limit < len(ids) else None
-        return [_FakePoint(pid, self.points[pid]) for pid in page], next_offset
+
+        def projected(payload):
+            if isinstance(with_payload, list):
+                return {k: v for k, v in payload.items() if k in with_payload}
+            return payload
+
+        return [_FakePoint(pid, projected(self.points[pid])) for pid in page], next_offset
 
     def delete(self, collection_name, points_selector, wait=True):
         # Every invocation is recorded, not just every deleted point, so a test
@@ -337,6 +361,129 @@ def test_pruning_orphans_makes_the_collection_match_the_chunk_set():
 
     assert db.find_orphans(current) == {}
     assert len(db.stored_point_ids()) == len(current)
+
+
+# --------------------------------------------------------------------------- #
+#  chunk_set_sha256 per point / find_stale                                     #
+#                                                                              #
+#  Point IDs derive from chunk IDs alone, so a chunk whose *text* changes keeps #
+#  its point. ID comparison is structurally blind to that. The per-point digest #
+#  is what is not — it is the only signal that survives a half-finished index.  #
+# --------------------------------------------------------------------------- #
+
+def _retext(chunks, suffix):
+    """The same chunk IDs carrying different text — a text-only revision."""
+    return [Chunk(id=c.id, text=c.text + suffix, metadata=c.metadata) for c in chunks]
+
+
+def test_index_chunks_stamps_every_point_with_the_chunk_set_digest():
+    db = _make_db()
+    chunks = _chunks("gdpr_article_1", "gdpr_article_2")
+
+    digest = db.index_chunks(chunks)
+
+    assert digest == chunk_set_hash(chunks)
+    assert all(p.payload["chunk_set_sha256"] == digest for p in db.client.upserted)
+
+
+def test_index_chunks_derives_the_digest_from_what_it_writes():
+    """
+    Derived, never passed in. A caller-supplied hash is one more thing that can
+    be wrong, and a point advertising a chunk set it is not part of is exactly
+    the failure this field exists to prevent.
+    """
+    db = _make_db()
+    first = db.index_chunks(_chunks("gdpr_article_1"))
+    second = db.index_chunks(_retext(_chunks("gdpr_article_1"), " revised"))
+
+    assert first != second
+
+
+def test_find_stale_catches_a_text_only_revision_that_orphan_detection_cannot():
+    """
+    The citation fix in miniature: `Article 78.3:` -> `Article 78(3):` changes
+    every paragraph chunk's text and none of their IDs. find_orphans correctly
+    reports nothing while every stored vector is from the old text.
+    """
+    db = _make_db()
+    old = _chunks("gdpr_article_78_para_3", "gdpr_article_78_para_4")
+    db.index_chunks(old)
+    new = _retext(old, " (revised citation form)")
+    new_digest = chunk_set_hash(new)
+
+    assert db.find_orphans(new) == {}, "ID comparison cannot see a text-only change"
+    assert len(db.find_stale(new_digest)) == 2, "the digest can"
+
+
+def test_find_stale_is_empty_after_a_complete_index():
+    db = _make_db()
+    chunks = _chunks("gdpr_article_1", "gdpr_article_2")
+
+    digest = db.index_chunks(chunks)
+
+    assert db.find_stale(digest) == {}
+
+
+def test_find_stale_localises_a_partial_index():
+    """
+    A run that dies midway leaves every ID matching and metadata unwritten, so
+    the collection quietly advertises the previous chunk set while holding a mix
+    of two. The points not rewritten are exactly those whose digest is not
+    current — which is what makes the failure diagnosable rather than merely
+    detectable.
+
+    The crash is modelled inside a single `index_chunks` call, which is where a
+    real one happens: the digest is computed once from the full chunk list, so
+    the batches that did land carry the *new* set's digest and the rest carry
+    the old. Simulating it as a second call over a subset would be wrong — that
+    stamps the subset's own hash, which is a different thing entirely.
+    """
+    old = _chunks(*[f"gdpr_article_{i}" for i in range(150)])
+    new = _retext(old, " revised")
+    new_digest = chunk_set_hash(new)
+
+    db = _make_db()
+    db.index_chunks(old)
+    db.client.upsert_calls = 0       # count batches of the *second* index only
+    db.client._fail_upsert_after = 1  # batch size is 100: write one, then die
+
+    with pytest.raises(ConnectionError):
+        db.index_chunks(new)
+
+    stale = db.find_stale(new_digest)
+    assert len(stale) == 50, "the 50 chunks in the unwritten batch"
+    assert all(held == chunk_set_hash(old) for held in stale.values())
+    assert db.find_orphans(new) == {}, "and the ID comparison still sees nothing"
+
+
+def test_indexing_a_subset_stamps_the_subset_not_the_full_set():
+    """
+    The digest describes the set that was written, so indexing part of a corpus
+    advertises that part. Correct, and a trap: a subset index can never make the
+    collection carry the full set's digest, however many times it is repeated.
+    """
+    db = _make_db()
+    chunks = _chunks("gdpr_article_1", "gdpr_article_2")
+
+    subset_digest = db.index_chunks(chunks[:1])
+
+    assert subset_digest == chunk_set_hash(chunks[:1])
+    assert subset_digest != chunk_set_hash(chunks)
+
+
+def test_find_stale_treats_points_with_no_digest_as_stale():
+    """
+    Points indexed before this field existed carry nothing. Nothing is not a
+    match — the live collection held 563 such points on 2026-08-07.
+    """
+    db = _make_db()
+    db.client.points["deadbeef-0000-0000-0000-000000000000"] = {
+        "chunk_id": "gdpr_article_1"
+    }
+
+    stale = db.find_stale("157d4d38")
+
+    assert stale == {"deadbeef-0000-0000-0000-000000000000": None}
 
 
 # --------------------------------------------------------------------------- #

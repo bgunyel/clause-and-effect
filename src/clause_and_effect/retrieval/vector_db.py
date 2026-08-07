@@ -8,12 +8,17 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, PointIdsList
 from tqdm import tqdm
 
+from src.clause_and_effect.chunk_store import chunk_set_hash
 from src.clause_and_effect.parsers import Chunk
 from src.clause_and_effect.retrieval import EmbeddingGenerator
 
-# Page size for walking the collection. Only point IDs and `chunk_id` are
-# fetched, so this stays cheap regardless of corpus size.
+# Page size for walking the collection. Only the provenance fields are fetched —
+# no vectors, no text — so this stays cheap regardless of corpus size.
 _SCROLL_PAGE_SIZE = 512
+
+# The payload fields that say which chunk set a point belongs to. Fetched when
+# walking the collection; everything else stays on the server.
+_PROVENANCE_FIELDS = ["chunk_id", "chunk_set_sha256"]
 
 
 class VectorDatabase:
@@ -77,12 +82,20 @@ class VectorDatabase:
         """
         return uuid.uuid5(cls.POINT_ID_NAMESPACE, chunk_id)
 
-    def index_chunks(self, chunks: List[Chunk]):
+    def index_chunks(self, chunks: List[Chunk]) -> str:
         """
-        Index chunks into vector database
+        Index chunks into the vector database, returning the chunk-set digest
+        stamped into every point.
+
+        The digest is **derived here** from the chunks being written rather than
+        passed in, so a point can never advertise a chunk set it is not part of.
+        A caller-supplied hash is one more thing that can be wrong.
 
         Args:
             chunks: List of Chunk objects to index
+
+        Returns:
+            The `chunk_set_sha256` written into every point's payload.
 
         Raises:
             ValueError: if two chunks share an ID, or if the collection does
@@ -105,6 +118,13 @@ class VectorDatabase:
                 f"{sorted(set(duplicates))[:10]}"
             )
 
+        # Stamped into every point. Point IDs derive from chunk IDs alone, so a
+        # chunk whose *text* changes keeps its ID and its point — which means an
+        # ID-set comparison is structurally blind to stale content. This is the
+        # field that is not: after any run, complete or interrupted, the points
+        # not carrying the current digest are exactly the ones not rewritten.
+        digest = chunk_set_hash(chunks)
+
         batch_size = 100
 
         for i in tqdm(range(0, len(chunks), batch_size)):
@@ -120,6 +140,7 @@ class VectorDatabase:
                         "chunk_id": chunk.id,
                         "text": chunk.text,
                         "metadata": chunk.metadata,
+                        "chunk_set_sha256": digest,
                         }
                     ) for chunk, embedding in zip(chunks_batch, batch_embeddings)
             ]
@@ -145,33 +166,70 @@ class VectorDatabase:
             )
 
         print(f"✅ Indexed {len(chunks)} chunks successfully ({stored} points in collection)")
+        return digest
 
-    def stored_point_ids(self) -> Dict[str, Optional[str]]:
+    def stored_points(self) -> Dict[str, Dict[str, Any]]:
         """
-        Every point in the collection, as ``{point_id: payload chunk_id}``.
+        Every point in the collection, as ``{point_id: {chunk_id, chunk_set_sha256}}``.
 
-        Only the ID and `chunk_id` are fetched — no vectors and no text — so
+        Only the provenance fields are fetched — no vectors and no text — so
         this is cheap enough to run on every index, which is what makes
         "does this collection hold exactly this chunk set?" a checkable
         question rather than a remembered one.
         """
-        stored: Dict[str, Optional[str]] = {}
+        stored: Dict[str, Dict[str, Any]] = {}
         offset = None
         while True:
             points, offset = self.client.scroll(
                 collection_name=self.collection_name,
                 limit=_SCROLL_PAGE_SIZE,
                 offset=offset,
-                with_payload=["chunk_id"],
+                with_payload=_PROVENANCE_FIELDS,
                 with_vectors=False,
             )
             for point in points:
-                stored[str(point.id)] = (point.payload or {}).get("chunk_id")
+                payload = point.payload or {}
+                stored[str(point.id)] = {
+                    field: payload.get(field) for field in _PROVENANCE_FIELDS
+                }
             # `offset is None` is the documented end of the scroll. The empty
             # page check is a belt-and-braces guard: a server that returned a
             # non-null offset forever would otherwise loop without end.
             if offset is None or not points:
                 return stored
+
+    def stored_point_ids(self) -> Dict[str, Optional[str]]:
+        """Every point in the collection, as ``{point_id: payload chunk_id}``."""
+        return {
+            point_id: payload.get("chunk_id")
+            for point_id, payload in self.stored_points().items()
+        }
+
+    def find_stale(self, chunk_set_sha256: str) -> Dict[str, Optional[str]]:
+        """
+        Points not carrying ``chunk_set_sha256``, as ``{point_id: its digest}``.
+
+        This is the check an ID comparison cannot make. Point IDs derive from
+        chunk IDs alone, so a chunk whose text changes keeps its point — and
+        `find_orphans` correctly reports nothing while the stored vector is
+        still embedded from the old text. Changing the paragraph citation form
+        from ``Article 78.3:`` to ``Article 78(3):`` is exactly that shape: a
+        new chunk-set digest, identical IDs, zero orphans, 330 stale vectors.
+
+        It also localises a **partial** index. If a run dies midway, every ID
+        still matches and metadata was never written, so the collection quietly
+        advertises the previous chunk set while holding a mix of two. The points
+        that were not rewritten are precisely those whose digest is not current.
+
+        Points with no digest at all — indexed before this field existed —
+        report ``None`` and count as stale, which is correct: nothing says what
+        they belong to.
+        """
+        return {
+            point_id: payload.get("chunk_set_sha256")
+            for point_id, payload in self.stored_points().items()
+            if payload.get("chunk_set_sha256") != chunk_set_sha256
+        }
 
     def find_orphans(self, chunks: List[Chunk]) -> Dict[str, Optional[str]]:
         """
