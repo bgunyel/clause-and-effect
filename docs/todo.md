@@ -24,8 +24,10 @@ This is what makes the ordering below non-negotiable rather than a preference �
 and what makes step 3 (tests) a hard requirement for eval components while the
 generator and agent staying untested remains an accepted state.
 
-1. **Generate the first chunk snapshot** against a clean tree, then commit it
-   separately. The mechanism is built and has produced nothing.
+1. ~~**Generate the first chunk snapshot** against a clean tree, then commit it
+   separately.~~ **Done 2026-08-07** (`2a7811a`) — 368 chunks, `sha256
+   157d4d38…`, generated at `c67e266` with `git_dirty: false`. Two defects in
+   `git_state` were found and fixed first (`c67e266`); see ⚪ Known code issues.
 2. **Write the chunk-set hash into Qdrant when indexing**, and make it true that
    *every point in a collection belongs to that collection's chunk set* — the
    ~195 orphans from the pre-rebuild corpus are the first real case.
@@ -409,7 +411,25 @@ per the priority order above.
 
 ## 🟡 Tooling
 
-- [ ] **Modify the Makefile for safe dependency upgrades** _(requested)_
+- [ ] 🔺 **Modify the Makefile for safe dependency upgrades** _(requested)_ —
+  **Bertan, 2026-08-07: not to be postponed much longer.** The motivating case
+  arrived on its own that day. `pyproject.toml` had declared `docling-core` since
+  `fabe4ba` without the lock being updated, so the lock sat stale against its own
+  manifest and a plain `uv run` silently re-resolved it — dirtying the tree at the
+  exact moment a clean one was needed to write a chunk snapshot. Nothing in the
+  repo noticed for a session. A **global cache** for `upgrade-safe` is the piece
+  Bertan has been pushing for; resolution being implicit and unrecorded is what
+  makes it necessary.
+  - **A plain `uv sync` uninstalls pytest** — found 2026-08-07. `test` is a PEP 735
+    `[dependency-groups]` entry, not `dev`, so `uv sync` excludes it and the suite
+    becomes unrunnable until `uv sync --group test`. Whatever `make test` does must
+    guarantee the group is present, or the target can report success over a tree
+    that cannot run tests at all.
+  - **Add a lock-consistency check.** `uv lock --check` (or equivalent) run in CI
+    and in `make test` would have caught the `docling-core` drift immediately.
+    Under the eval-flawlessness rule this matters more than usual: a snapshot's
+    reproducibility claim rests on `git_dirty`, and a lock that re-resolves on use
+    means an otherwise-clean tree goes dirty for reasons unrelated to the work.
   - Fix `TEST_DIRECTORY` — it points at `src/tests/`, but the suite now lives at
     `tests/` (repo root). `make test` currently runs nothing.
   - Gate `upgrade-safe` on the **test suite**, not only security scans: after
@@ -913,13 +933,30 @@ deliberately deferred into this work rather than done piecemeal.
   index's metadata needs model ID and vector size alongside the chunk hash, or
   "the index matches the chunks" will be true while retrieval has silently
   changed. Same class of gap as the one just closed, one layer down.
-- [ ] **No automated tests cover `chunk_store.py` or `generate_chunks.py`.** Every
-  property was verified by hand on 2026-08-06 — determinism under randomized
-  `PYTHONHASHSEED`, byte-identical regeneration, tamper detection, `git_state`
-  across six tree states — and **none of it is guarded by the suite** (81 tests,
-  none touching these modules). Real verification, but a snapshot in time rather
-  than a regression barrier, which is the standard this project applies elsewhere.
-  Full list of what was observed: `docs/design/chunk-snapshot-reproducibility.md` §4.
+- [ ] **Tests cover `git_state` only; the rest of `chunk_store.py` and all of
+  `generate_chunks.py` are still unguarded.** Every property was verified by hand
+  on 2026-08-06 — determinism under randomized `PYTHONHASHSEED`, byte-identical
+  regeneration, tamper detection, `git_state` across six tree states — and none of
+  it was guarded by the suite. Full list of what was observed:
+  `docs/design/chunk-snapshot-reproducibility.md` §4.
+
+  **`git_state` closed 2026-08-07** (`c67e266`), and the hand-verification is
+  exactly what it took to show why hand-verification is not enough: those six tree
+  states missed a bug that made the manifest name a file that does not exist.
+  `run()` stripped `git status --porcelain` output, which deletes the leading
+  space of the *first* line's index column, so `" M uv.lock"` sliced to `"v.lock"`.
+  Writing the tests then surfaced a second one — plain `--porcelain` C-quotes paths
+  containing a space or non-ASCII byte, recording `'"a file.txt"'` — fixed by
+  reading with `-z`. `tests/test_chunk_store.py`, 10 tests, mutation-checked at
+  6-of-10 failing against the pre-fix code. Suite 81 → 91.
+
+  **Still unguarded:** `chunk_set_hash` determinism and its insensitivity to
+  generation order and serialization, `write_snapshot`/`read_snapshot` round-trip,
+  tamper detection, `latest_snapshot` ordering, the `_MAX_DIRTY_PATHS` overflow
+  path, and every invariant in `generate_chunks._check_chunks`. The
+  `git_state` fix is the argument for doing the rest: this is eval infrastructure,
+  and it was wrong in the field that decides whether a snapshot counts as a
+  baseline.
 - [ ] **No tests cover the tree-based parser either** — `docling_tree.py` and
   `GDPRParser.get_articles_from_dictionary` are covered only by the generator's
   invariant and by hand-run comparisons. `docling_tree` was deliberately split out
