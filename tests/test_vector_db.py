@@ -74,21 +74,94 @@ class _FakeCount:
         self.count = count
 
 
-class _FakeClient:
-    """Records upserts and reports a configurable point count."""
+class _FakePoint:
+    def __init__(self, point_id, payload):
+        self.id = point_id
+        self.payload = payload
 
-    def __init__(self, reported_count=None):
+
+class _FakeVectors:
+    size = 1536
+
+
+class _FakeParams:
+    vectors = _FakeVectors()
+
+
+class _FakeConfig:
+    def __init__(self, metadata):
+        self.metadata = metadata
+        self.params = _FakeParams()
+
+
+class _FakeCollection:
+    def __init__(self, metadata):
+        self.config = _FakeConfig(metadata)
+
+
+class _FakeClient:
+    """
+    An in-memory stand-in for the parts of Qdrant this module uses.
+
+    Two real behaviours are modelled deliberately, because both have already
+    cost this project something:
+
+      * an upsert of a repeated point ID overwrites rather than appends, which
+        is why `index_chunks` verifies against the collection and not its input;
+      * `update_collection` **merges** metadata, so a key written once survives
+        an update that does not mention it.
+    """
+
+    def __init__(self, reported_count=None, metadata=None):
         self.upserted = []
+        self.points = {}          # str(point_id) -> payload
+        self.metadata = metadata  # None models a collection nothing has stamped
+        self.deleted = []
+        self.delete_calls = []
         self._reported_count = reported_count
+
+    # --- points ----------------------------------------------------------- #
 
     def upsert(self, collection_name, points):
         self.upserted.extend(points)
+        for point in points:
+            self.points[str(point.id)] = point.payload
 
     def count(self, collection_name, exact=True):
         if self._reported_count is not None:
             return _FakeCount(self._reported_count)
-        # Model Qdrant's real behaviour: repeated IDs collapse onto one point.
-        return _FakeCount(len({p.id for p in self.upserted}))
+        return _FakeCount(len(self.points))
+
+    def scroll(self, collection_name, limit, offset=None, with_payload=None,
+               with_vectors=None):
+        """Qdrant's offset is the ID to resume *from*, not a row number."""
+        ids = sorted(self.points)
+        start = 0 if offset is None else ids.index(str(offset))
+        page = ids[start:start + limit]
+        next_offset = ids[start + limit] if start + limit < len(ids) else None
+        return [_FakePoint(pid, self.points[pid]) for pid in page], next_offset
+
+    def delete(self, collection_name, points_selector, wait=True):
+        # Every invocation is recorded, not just every deleted point, so a test
+        # can distinguish "never called" from "called with an empty selector".
+        # Those are the same by outcome here and very much not the same against
+        # a real server.
+        self.delete_calls.append(list(points_selector.points))
+        for point_id in points_selector.points:
+            self.points.pop(str(point_id), None)
+            self.deleted.append(str(point_id))
+
+    # --- collection ------------------------------------------------------- #
+
+    def collection_exists(self, collection_name):
+        return True
+
+    def get_collection(self, collection_name):
+        return _FakeCollection(self.metadata)
+
+    def update_collection(self, collection_name, metadata=None, **kwargs):
+        if metadata is not None:
+            self.metadata = {**(self.metadata or {}), **metadata}
 
 
 class _FakeEmbeddings:
@@ -150,6 +223,159 @@ def test_index_chunks_rejects_duplicate_chunk_ids():
     assert db.client.upserted == [], "nothing should be written when input is invalid"
 
 
+# --------------------------------------------------------------------------- #
+#  stored_point_ids / find_orphans / delete_points                             #
+#                                                                              #
+#  The live collection held 563 points against a 368-chunk snapshot on         #
+#  2026-08-07: 196 belonged to no current chunk and one current chunk          #
+#  (gdpr_article_79) was absent. Orphans are not surplus — they hold real GDPR  #
+#  text, they are embedded, and `search` returns them, so a retrieval metric    #
+#  measured over them is measuring a corpus that exists nowhere else.          #
+# --------------------------------------------------------------------------- #
+
+def test_stored_point_ids_walks_every_page():
+    """
+    Pagination is the whole risk here: a scroll that stops after one page
+    under-reports the collection, and every point it missed is an orphan that
+    silently survives pruning.
+    """
+    db = _make_db()
+    db.index_chunks(_chunks(*[f"gdpr_article_{i}" for i in range(1200)]))
+
+    stored = db.stored_point_ids()
+
+    assert len(stored) == 1200
+    assert set(stored) == {str(VectorDatabase.point_id(f"gdpr_article_{i}"))
+                           for i in range(1200)}
+
+
+def test_stored_point_ids_maps_point_id_to_chunk_id():
+    db = _make_db()
+    db.index_chunks(_chunks("gdpr_article_1", "gdpr_article_2"))
+
+    stored = db.stored_point_ids()
+
+    assert stored[str(VectorDatabase.point_id("gdpr_article_1"))] == "gdpr_article_1"
+
+
+def test_find_orphans_identifies_points_no_chunk_maps_onto():
+    """The 2026-08-07 shape in miniature: some carried over, some orphaned."""
+    db = _make_db()
+    db.index_chunks(_chunks("gdpr_article_79_para_1", "gdpr_article_79_para_2",
+                            "gdpr_article_5"))
+
+    current = _chunks("gdpr_article_79", "gdpr_article_5")
+    orphans = db.find_orphans(current)
+
+    assert sorted(orphans.values()) == ["gdpr_article_79_para_1",
+                                        "gdpr_article_79_para_2"]
+
+
+def test_find_orphans_is_empty_when_collection_matches():
+    db = _make_db()
+    chunks = _chunks("gdpr_article_1", "gdpr_article_2")
+    db.index_chunks(chunks)
+
+    assert db.find_orphans(chunks) == {}
+
+
+def test_find_orphans_flags_points_with_no_chunk_id_payload():
+    """
+    Membership is decided by derived point ID, not by the payload. A point
+    whose payload is missing or corrupt must still be identifiable as an
+    orphan — comparing on `chunk_id` would skip exactly the points least
+    likely to be legitimate.
+    """
+    db = _make_db()
+    db.client.points["deadbeef-0000-0000-0000-000000000000"] = {}
+
+    orphans = db.find_orphans(_chunks("gdpr_article_1"))
+
+    assert orphans == {"deadbeef-0000-0000-0000-000000000000": None}
+
+
+def test_delete_points_removes_exactly_what_it_is_given():
+    db = _make_db()
+    db.index_chunks(_chunks("gdpr_article_1", "gdpr_article_2", "gdpr_article_3"))
+    doomed = [str(VectorDatabase.point_id("gdpr_article_2"))]
+
+    deleted = db.delete_points(doomed)
+
+    assert deleted == 1
+    assert set(db.stored_point_ids()) == {
+        str(VectorDatabase.point_id("gdpr_article_1")),
+        str(VectorDatabase.point_id("gdpr_article_3")),
+    }
+
+
+def test_delete_points_on_empty_list_does_not_call_the_server():
+    """
+    A delete with an empty selector is the kind of call that deletes everything
+    if the server or client interprets it generously. Never issue it.
+
+    Asserts on *calls*, not on outcome. An earlier version checked that nothing
+    was deleted, which a mutation removing the guard passed trivially: the call
+    went out with an empty selector and this fake, unlike an unknown server,
+    happened to do nothing with it.
+    """
+    db = _make_db()
+    db.index_chunks(_chunks("gdpr_article_1"))
+
+    assert db.delete_points([]) == 0
+    assert db.client.delete_calls == [], "no delete should be issued at all"
+    assert len(db.stored_point_ids()) == 1
+
+
+def test_pruning_orphans_makes_the_collection_match_the_chunk_set():
+    """End to end: index a new chunk set over an old one, prune, and verify."""
+    db = _make_db()
+    db.index_chunks(_chunks(*[f"old_chunk_{i}" for i in range(5)]))
+    current = _chunks(*[f"gdpr_article_{i}" for i in range(3)])
+    db.index_chunks(current)
+
+    db.delete_points(list(db.find_orphans(current)))
+
+    assert db.find_orphans(current) == {}
+    assert len(db.stored_point_ids()) == len(current)
+
+
+# --------------------------------------------------------------------------- #
+#  Collection metadata                                                         #
+# --------------------------------------------------------------------------- #
+
+def test_collection_metadata_is_none_before_anything_stamps_it():
+    """The live collection's state on 2026-08-07: 563 points, metadata None."""
+    assert _make_db().collection_metadata() is None
+
+
+def test_set_collection_metadata_round_trips():
+    db = _make_db()
+    db.set_collection_metadata({"chunk_set_sha256": "157d4d38", "chunk_count": 368})
+
+    assert db.collection_metadata() == {
+        "chunk_set_sha256": "157d4d38",
+        "chunk_count": 368,
+    }
+
+
+def test_collection_metadata_merges_rather_than_replaces():
+    """
+    Qdrant merges, so a key written once persists until explicitly overwritten.
+    This is why the metadata schema is decided up front in `index_documents`
+    rather than grown a key at a time — a renamed key leaves its predecessor
+    behind, still advertising a value nothing produced.
+    """
+    db = _make_db()
+    db.set_collection_metadata({"chunk_set_sha256": "aaaa", "embedding_model": "small"})
+    db.set_collection_metadata({"chunk_set_sha256": "bbbb"})
+
+    recorded = db.collection_metadata()
+    assert recorded["chunk_set_sha256"] == "bbbb"
+    assert recorded["embedding_model"] == "small", (
+        "a key absent from the update must survive it — that is the hazard"
+    )
+
+
 def test_index_chunks_raises_when_points_are_lost():
     """A collection holding fewer points than chunks means silent data loss."""
     db = _make_db(reported_count=2)
@@ -157,13 +383,19 @@ def test_index_chunks_raises_when_points_are_lost():
         db.index_chunks(_chunks("a", "b", "c"))
 
 
-def test_index_chunks_warns_about_orphaned_points(capsys):
-    """Extra points survive from a previous, larger corpus — warn, don't fail."""
+def test_index_chunks_warns_about_points_belonging_to_no_chunk(capsys):
+    """
+    Extra points survive from a previous, larger corpus — warn, don't fail.
+    `index_chunks` counts them but cannot name them; identifying and removing
+    them is `find_orphans` / `delete_points`, and the warning now says so
+    rather than offering "drop the collection" as the only remedy.
+    """
     db = _make_db(reported_count=10)
     db.index_chunks(_chunks("a", "b", "c"))
     out = capsys.readouterr().out
-    assert "orphaned" in out
+    assert "belong to no chunk" in out
     assert "7" in out
+    assert "find_orphans" in out
 
 
 def test_index_chunks_reports_the_stored_count_not_the_input_count(capsys):
