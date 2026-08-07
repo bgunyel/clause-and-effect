@@ -8,6 +8,23 @@
 
 This project's governing rule is: **every architecture decision gets measured before it gets kept.** The evaluation framework is the durable asset; the pipeline behind it is disposable. This document is the blueprint for that framework.
 
+### The asymmetry of standards
+
+Set by Bertan, 2026-08-07, and it governs everything below:
+
+> **The algorithm does not need to be perfect. The evaluation pipeline does.**
+
+The retrieval-and-generation pipeline does not have to be the best available, or even good — it has to be *measurable*. The evaluation pipeline has to be flawless, because it is the only instrument that can say whether a change to the product was an improvement. **A defect in the product costs one bad answer. A defect in the eval costs every decision taken on its output** — including the ones that looked like progress, and including the decision to stop working on something because it "measured fine." Product defects are visible and local; eval defects are invisible and compound.
+
+The right to improve the algorithm is therefore something the project *earns*, by first holding an eval it trusts. Four consequences follow, and this document should be read through them:
+
+- **Eval components are tested; product components need not be.** `chunk_store.py` and the scorers are eval infrastructure and must be covered by the suite. `generator.py` and `compliance_agent.py` being untested is an accepted state, not a matching debt.
+- **A gate that has never been observed to fail is not known to work.** The project's existing lesson (from `span_is_verbatim`, and from the corpus invariant that was run against the old parser to watch it reject 42 articles) is a direct corollary: every check must be mutation-tested, not merely observed passing.
+- **Judges are calibrated before they are trusted.** An LLM judge is an eval component, so agreement with human labels is reported before its verdicts are used — §6.2 and §7.3.
+- **The golden set is part of the eval, not an input to it.** That is why §7 gives it its own quality bar, and why an unvalidated golden set is an eval defect rather than a data limitation.
+
+The one thing this asymmetry does *not* license is relaxing a failing gate to go green. A gate that fails is the eval working.
+
 Four principles shape every choice below:
 
 1. **Separate the stages.** Retrieval and generation fail for different reasons and are fixed by different changes. The eval must attribute a bad end-to-end answer to a *specific* stage, or it cannot guide improvement.
