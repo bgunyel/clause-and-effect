@@ -4,18 +4,52 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-06._
+> _Last updated: 2026-08-07._
+
+---
+
+## 🎯 Priority order — set by Bertan, 2026-08-07
+
+**The goal is the first eval numbers from the RAG system as it stands today.**
+Getting the evaluation pipeline end-to-end and measured comes before improving
+any algorithm inside it, because until there is a baseline no improvement can be
+shown to be one.
+
+> **The algorithm does not need to be perfect. The evaluation pipeline does.**
+> The product is measurable-not-optimal; the eval is the instrument, and a
+> defective instrument corrupts every decision taken on its output. Recorded in
+> full at [`evaluation-plan.md` §1](evaluation-plan.md#the-asymmetry-of-standards).
+
+This is what makes the ordering below non-negotiable rather than a preference —
+and what makes step 3 (tests) a hard requirement for eval components while the
+generator and agent staying untested remains an accepted state.
+
+1. **Generate the first chunk snapshot** against a clean tree, then commit it
+   separately. The mechanism is built and has produced nothing.
+2. **Write the chunk-set hash into Qdrant when indexing**, and make it true that
+   *every point in a collection belongs to that collection's chunk set* — the
+   ~195 orphans from the pre-rebuild corpus are the first real case.
+3. **Tests** for what was verified by hand only: `chunk_store.py`,
+   `generate_chunks.py`, `docling_tree.py`,
+   `GDPRParser.get_articles_from_dictionary`.
+4. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
+   calibration, tests.
+
+**Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
+algorithm improvement, not a blocker — Bertan's decision, 2026-08-07. The
+current chunker's known defects (below) are accepted for the baseline run; they
+are recorded so the numbers are read with them in mind, not so they are fixed
+first. Measuring the improvement is exactly what the chunk snapshot exists for.
 
 ---
 
 ## 🔴 Blocking — data integrity
 
-**Half of this is fixed as of 2026-08-06.** The corpus now carries the
-regulation's own paragraph numbering, rebuilt from docling's document tree. What
-remains is the *other* half of the same defect: the **chunker** still re-derives
-structure from a string with `\d+\.\s+`, so it cannot see the hierarchy the
-corpus now has. Article 4 is the proof — see the chunker item below, which is now
-the top blocking entry.
+**The corpus half of this was fixed on 2026-08-06.** It now carries the
+regulation's own paragraph numbering, rebuilt from docling's document tree. The
+*other* half of the same defect — the **chunker** re-deriving structure from a
+string with `\d+\.\s+` — is real, documented below, and **deliberately deferred**
+per the priority order above.
 
 - [x] ✅ **Regenerate the corpus from the docling *document tree*, not its markdown
   — done 2026-08-06** (`b69a79c` parser, `78a58bb` corpus).
@@ -131,10 +165,17 @@ the top blocking entry.
   different quantity". Recorded here so the prediction is not quietly remembered
   as having been met.
 
-- [ ] 🔺 **Make the chunker hierarchy-aware. `article_to_chunks` still re-derives
+- [ ] ⏸️ **Make the chunker hierarchy-aware. `article_to_chunks` still re-derives
   structure from a string, and Article 4 shows what that costs.**
   Designed with Bertan 2026-08-06; the recursive-descent shape and the
   stem-repetition rule are his. Nothing implemented.
+
+  **Deferred to a future iteration — Bertan, 2026-08-07.** This is an algorithm
+  improvement, not a blocker on the eval pipeline. The baseline runs on the
+  chunker as it stands, with the defects below known and accepted; the snapshot
+  mechanism preserves that baseline so this change can be measured against it
+  rather than argued for. The design below is kept complete so it can be picked
+  up without re-deriving it.
 
   **Why the corpus fix did not fix this.** `_split_into_paragraphs`
   (`gdpr_parser.py:291`) splits `content` on `\d+\.\s+`. Correct numbering fixed
@@ -648,18 +689,21 @@ the top blocking entry.
 
 - [ ] **Resolve each quote to gold chunk ID(s) at eval-set build time**, and score
   Context Recall by ID comparison at run time. Designed 2026-08-03; nothing built.
-  - ⛔ **Was blocked on the corpus regeneration; as of 2026-08-06 blocked on the
-    hierarchy-aware chunker instead** (🔴 above). The corpus is fixed and
-    `gdpr_article_2_para_6` no longer exists — Article 2 is now four chunks with
-    real paragraph numbers. But the chunker fix will change chunk IDs again
-    (third-level chunks need identifiers like `gdpr_article_9_para_2_items_a-c`),
-    and Article 4 is currently a single 8,655-char chunk that no quote can pin to
-    usefully. Pinning now would fix the golden set to a scheme already known to be
-    replaced.
+  - ✅ **Unblocked 2026-08-07.** It was blocked on the corpus regeneration, then
+    briefly on the hierarchy-aware chunker; that chunker is now deferred, so this
+    pins against the **current** chunk set. `gold_chunk_ids` is a function of
+    (quote, chunking config) and is recomputed at build time, so pinning now is
+    not a commitment — it is a derived artifact that the snapshot hash identifies.
+    **Record the `chunk_set_sha256` the IDs were derived from**, or the golden set
+    silently carries IDs from a chunk set nobody can name.
+  - Two costs of pinning against today's chunker, accepted knowingly: **Article 4
+    is one 8,655-char chunk**, so all its cases pin to the same ID and the metric
+    cannot distinguish retrieval within it; and the **10 cross-reference-split
+    articles** carry wrong `paragraph` metadata, which does not affect ID equality
+    but does make any per-paragraph reporting off in those articles.
   - The feasibility numbers below (294/299 pin exactly one chunk) were measured
-    against the **pre-rebuild** chunking and are void. Re-derive after the chunker
-    fix, not before — and note the current chunk set is preserved as a snapshot, so
-    the comparison is now possible rather than merely desirable.
+    against the **pre-rebuild** chunking and are void. Re-derive against the first
+    snapshot before relying on them.
   - Neither obvious option is right on its own. **Article-level** matching is too coarse —
     71.1% of cases sit in multi-chunk articles, mean **6.5** chunks (median 6, max 28), so
     it credits any 1 of ~6 — and, decisively, it is *blind to the variable under test*:
