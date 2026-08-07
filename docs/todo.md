@@ -37,6 +37,14 @@ generator and agent staying untested remains an accepted state.
    footnote pushed the article under the chunk budget, so it stopped splitting
    into paragraphs and acquired a new ID. `--check` now answers "does the
    collection hold exactly this snapshot?" for free.
+
+   **Extended the same day** (`6f4df7a`): every point now carries
+   `chunk_set_sha256` in its own payload. Raised by Bertan — ID-set comparison
+   is structurally blind to a text-only revision, because point IDs derive from
+   chunk IDs alone. The paragraph-citation fix proved it: `IDs added 0, removed
+   0, text changed 330`. Current baseline is
+   `chunks_2026-08-07_081627_a231f919`; the collection reports 0 orphans, 0
+   missing, **0 stale**.
 3. **Tests** for what was verified by hand only: `chunk_store.py`,
    `generate_chunks.py`, `docling_tree.py`,
    `GDPRParser.get_articles_from_dictionary`.

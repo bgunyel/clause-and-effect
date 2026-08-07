@@ -1,18 +1,21 @@
 # Chunk snapshot reproducibility
 
-**Verified against:** `d7db4f9` — the chunk side introduced at `111cffd`, the
-`git_state` fix at `c67e266`, the index side at `d7db4f9`.
+**Verified against:** `1802a72` — the chunk side introduced at `111cffd`, the
+`git_state` fix at `c67e266`, the index side at `d7db4f9`, the per-point
+chunk-set digest at `6f4df7a`.
 
 **Code:** `src/clause_and_effect/chunk_store.py`,
 `src/scripts/generate_chunks.py`,
 `src/clause_and_effect/retrieval/vector_db.py`,
 `src/scripts/index_documents.py`
 
-**Status:** end to end and in use. The first snapshot,
-`chunks_2026-08-07_064658_157d4d38` (368 chunks), was written at `2a7811a`, and
-`compliance_docs` holds exactly it — 368 points, 0 orphans, advertising its
-hash, embedding model and vector size. Transcripts below are from live runs on
-2026-08-07 unless marked otherwise. Remaining gaps: §12.
+**Status:** end to end and in use. Current baseline is
+`chunks_2026-08-07_081627_a231f919` (368 chunks, `1802a72`), which superseded the
+first snapshot `157d4d38` the same day when paragraph citations were corrected to
+`Article N(M)`. `compliance_docs` holds exactly it — 368 points, **0 orphans, 0
+missing, 0 stale** — advertising its digest, embedding model and vector size, and
+every point carries that digest in its own payload. Transcripts below are from
+live runs on 2026-08-07 unless marked otherwise. Remaining gaps: §12.
 
 ---
 
@@ -604,13 +607,28 @@ different vectors and different retrieval while both collections would honestly
 report the same `chunk_set_sha256` — so the hash alone could never have answered
 "does this index match?".
 
-**Point membership is not content equality.** `--check` compares derived point
-IDs and the advertised hash. It does **not** compare each point's stored text
-against the snapshot, so a collection carrying stale text under current IDs
-would pass the ID comparison. The advertised hash is what rules that out, which
-is why it is required even when the ID sets agree — but it is a claim written by
-the indexer, not a re-derivation from what is stored. A payload-level audit
-would close this.
+**~~Point membership is not content equality.~~ Narrowed 2026-08-07** (`6f4df7a`)
+by stamping `chunk_set_sha256` into every point's payload. Raised by Bertan, who
+asked what the ID-set reconcile procedure misses.
+
+The gap was structural: point IDs derive from chunk IDs alone, so a chunk whose
+*text* changes keeps its point, and `find_orphans` reports a perfect match while
+every stored vector is from the old text. The paragraph-citation fix the same day
+is exactly that shape — the snapshot diff reads `IDs added 0, removed 0, text
+changed 330`. It also covers a **partial index**, where every ID matches and
+metadata was never written, so the collection quietly advertises the previous
+chunk set while holding a mix of two; and a **silently failed upsert**, which the
+count check cannot see because the count is unchanged.
+
+`--check` now reports staleness as a fourth condition beside membership, absence
+and the advertised hash. All four are required: the ID sets agreeing proves only
+that the right chunks are represented, not that their vectors are current.
+
+**What remains open.** The digest is a claim the indexer wrote, not a
+re-derivation from stored text. A payload mutated *after* indexing keeps a valid
+digest, and a bug writing the wrong text alongside the right digest is
+self-consistent. Both need a payload-level audit — re-hash each stored `text`
+against the snapshot — which is cheap and not built.
 
 **The `chunker_tree_dirty` flag is recorded but not enforced.** A snapshot taken
 against a dirty tree can still be indexed; the collection simply advertises that
