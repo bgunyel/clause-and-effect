@@ -47,3 +47,6 @@ class EmbeddingGenerator:
 
         batch_embeddings = [item.embedding for item in response.data]
         return batch_embeddings
+
+    def get_model(self) -> str:
+        return self.model

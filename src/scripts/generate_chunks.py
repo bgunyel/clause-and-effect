@@ -34,8 +34,8 @@ from typing import Any, Dict, List
 
 from src.config import get_settings
 from src.clause_and_effect import GDPRParser
-from src.clause_and_effect.parsers import Chunk
-from src.clause_and_effect.chunk_store import (
+from src.clause_and_effect.chunking import Chunk
+from src.clause_and_effect.chunking.chunk_store import (
     build_manifest,
     chunk_set_hash,
     latest_snapshot,
@@ -59,8 +59,9 @@ def _check_chunks(chunks: List[Chunk], articles: List[Dict[str, Any]]) -> List[s
     if not chunks:
         problems.append("no chunks produced")
 
-    # Duplicate IDs collapse onto one Qdrant point silently — `index_chunks`
-    # raises on this, but by then the embeddings are already paid for.
+    # Duplicate IDs collapse onto one Qdrant point silently —
+    # `embed_and_upsert_chunks` raises on this, but by then the embeddings are
+    # already paid for.
     seen: Dict[str, int] = {}
     for chunk in chunks:
         seen[chunk.id] = seen.get(chunk.id, 0) + 1

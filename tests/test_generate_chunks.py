@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from src.clause_and_effect.parsers import Chunk
+from src.clause_and_effect.chunking import Chunk
 from src.scripts.generate_chunks import _check_chunks
 
 
@@ -54,8 +54,8 @@ def test_empty_chunk_set_is_rejected():
 def test_duplicate_chunk_ids_are_rejected():
     """
     Qdrant's upsert overwrites a repeated point ID silently, so duplicates
-    collapse onto one point. `index_chunks` raises on this too, but by then the
-    embeddings are already paid for.
+    collapse onto one point. `embed_and_upsert_chunks` raises on this too, but by
+    then the embeddings are already paid for.
     """
     chunks = [
         _chunk("gdpr_article_1", "1"),

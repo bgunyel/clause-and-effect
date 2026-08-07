@@ -25,7 +25,7 @@ Two invariants are enforced, and both were violated by the live collection as of
     retrieval metric measured against them is measuring a corpus nobody has.
 
 Order matters and is not arbitrary. Metadata is written **last** — after
-`index_chunks` verifies its own count and after orphans are gone — because a
+`index_chunks` verifies its count and after orphans are gone — because a
 collection that advertises a snapshot it only partly holds is worse than one
 that advertises nothing: the first is trusted and wrong, the second is merely
 unknown. For the same reason a run that leaves orphans behind exits non-zero
@@ -39,8 +39,10 @@ from typing import Any, Dict, List
 
 from src.config import get_settings
 from src.clause_and_effect import VectorDatabase
-from src.clause_and_effect.parsers import Chunk
-from src.clause_and_effect.chunk_store import (
+from src.clause_and_effect.retrieval.vector_db import ChunkSetMetadata
+from src.clause_and_effect.chunking import Chunk
+from src.clause_and_effect.chunking.chunk_store import (
+    chunk_set_hash,
     latest_snapshot,
     list_snapshots,
     read_snapshot,
@@ -175,77 +177,68 @@ def main(argv: List[str] | None = None) -> int:
     if args.check:
         return _check(vector_db, snapshot_path, snapshot, chunks)
 
-    vector_db.create_collection()
+
+    """
+    print(f"\n🔁 Reconciling against {len(before)} existing point(s)")
+    print(f"   update  : {len(set(expected) & set(before))}")
+    print(f"   insert  : {len(set(expected) - set(before))}")
+    print(f"   delete  : {len(set(before) - set(expected))}")
+    """
+
+    # Stamped into every point. Point IDs derive from chunk IDs alone, so a
+    # chunk whose *text* changes keeps its ID and its point — which means an
+    # ID-set comparison is structurally blind to stale content. This is the
+    # field that is not: after any run, complete or interrupted, the points
+    # not carrying the current digest are exactly the ones not rewritten.
+    chunk_set_id = chunk_set_hash(chunks)
+
+    # Two independently derived values: `index_chunks` hashes the chunks it
+    # actually wrote, the manifest hashes what was written to disk. They can
+    # only disagree if the snapshot on disk is not the chunk set in memory.
+    if chunk_set_id != snapshot.chunk_set_sha256:
+        message = f"\n❌ Indexed chunks hash to {chunk_set_id[:12]}… but the snapshot "
+        message += f"records {snapshot.chunk_set_sha256[:12]}…"
+        raise Exception(message)
 
     # Read the collection before writing, so the run can report what it is about
     # to do rather than only what it did. Insert and update are the same upsert
     # to Qdrant — the split is for the operator, not for the client.
     before = vector_db.stored_points()
     expected = {str(vector_db.point_id(c.id)): c.id for c in chunks}
-    print(f"\n🔁 Reconciling against {len(before)} existing point(s)")
-    print(f"   update  : {len(set(expected) & set(before))}")
-    print(f"   insert  : {len(set(expected) - set(before))}")
-    print(f"   delete  : {len(set(before) - set(expected))}")
 
-    digest = vector_db.index_chunks(chunks)
-    # Two independently derived values: `index_chunks` hashes the chunks it
-    # actually wrote, the manifest hashes what was written to disk. They can
-    # only disagree if the snapshot on disk is not the chunk set in memory.
-    if digest != snapshot.chunk_set_sha256:
-        print(f"\n❌ Indexed chunks hash to {digest[:12]}… but the snapshot "
-              f"records {snapshot.chunk_set_sha256[:12]}…")
-        return 1
+    collection_metadata = {
+        "snapshot": snapshot_path.name,
+        "source_sha256": manifest["source"]["sha256"],
+        "chunker_commit": manifest["git_commit"],
+        "chunker_tree_dirty": manifest["git_dirty"],
+    }
 
-    orphans = vector_db.find_orphans(chunks)
-    if orphans:
-        _report_orphans(orphans)
-        if not args.prune:
-            print("\n❌ Refusing to record this snapshot on a collection that holds "
-                  "points from another one.")
-            print("   Re-run with --prune to delete them. Nothing was recorded, so "
-                  "the collection still advertises no snapshot rather than the "
-                  "wrong one.")
-            return 1
-        deleted = vector_db.delete_points(list(orphans))
-        print(f"\n🗑️  Deleted {deleted} orphaned point(s).")
-        # Re-check rather than trust the delete: this is the destructive step,
-        # and a partial delete would otherwise be recorded as a clean index.
-        remaining = vector_db.find_orphans(chunks)
-        if remaining:
-            print(f"❌ {len(remaining)} orphan(s) survived the delete; "
-                  f"nothing recorded.")
-            return 1
-
-    # The post-condition that count verification cannot give. Every live point
-    # must carry the digest about to be advertised — including points that kept
-    # their ID through the change, which is where a silently failed upsert or a
-    # half-finished run would otherwise hide.
-    stale = vector_db.find_stale(digest)
-    if stale:
-        print(f"\n❌ {len(stale)} point(s) do not carry {digest[:12]}… after "
-              f"indexing; nothing recorded.")
-        for point_id, held in list(stale.items())[:10]:
-            print(f"     {point_id}  holds {held or '<no digest>'}")
-        return 1
+    vector_db.index_chunks(
+        chunks=chunks,
+        chunk_set_id=chunk_set_id,
+        **collection_metadata
+    )
 
     indexed_at = datetime.now(timezone.utc)
     vector_size = vector_db.client.get_collection(
         vector_db.collection_name
     ).config.params.vectors.size
-    metadata = _build_metadata(
+    expected_metadata = _build_metadata(
         snapshot_path, manifest, settings, vector_size, indexed_at
     )
-    vector_db.set_collection_metadata(metadata)
+
+
+
 
     # Read back what the server actually stored. The write is the point of this
     # script, so reporting the dict we sent would verify nothing.
     recorded = vector_db.collection_metadata() or {}
     print("\n📋 Collection metadata")
-    for key in sorted(metadata):
-        stored_value = recorded.get(key)
-        mark = "✅" if str(stored_value) == str(metadata[key]) else "❌"
+    for key in sorted(expected_metadata):
+        stored_value = recorded.get(key, 'N/A')
+        mark = "✅" if str(stored_value) == str(expected_metadata[key]) else "❌"
         print(f"   {mark} {key}: {stored_value}")
-    if any(str(recorded.get(k)) != str(v) for k, v in metadata.items()):
+    if any(str(recorded.get(k, 'N/A')) != str(v) for k, v in expected_metadata.items()):
         print("\n❌ Collection metadata did not read back as written.")
         return 1
 

@@ -2,7 +2,6 @@
 Base parser interface for regulation documents
 """
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import List, Dict, Any
 from pathlib import Path
 
@@ -14,17 +13,6 @@ from docling.pipeline.threaded_standard_pdf_pipeline import ThreadedStandardPdfP
 from docling_core.types.doc import DoclingDocument
 
 
-@dataclass
-class Chunk:
-    """A chunk of text from a regulation document"""
-    id: str
-    text: str
-    metadata: Dict[str, Any]
-
-    def __repr__(self):
-        return f"Chunk(id='{self.id}', metadata={self.metadata})"
-
-
 class BaseParser(ABC):
     """Base class for regulation document parsers"""
 
@@ -32,7 +20,7 @@ class BaseParser(ABC):
         self.regulation_name = regulation_name
 
     @abstractmethod
-    def parse(self, file_path: Path) -> List[Chunk]:
+    def parse(self, file_path: Path) -> List[Dict[str, Any]]:
         """
         Parse a regulation document into chunks
 
@@ -120,13 +108,6 @@ class BaseParser(ABC):
     def _extract_dictionary_from_pdf(cls, file_path: Path) -> Dict[str, Any]:
         """Extract the document tree from PDF, as a plain dictionary"""
         return cls._convert_pdf(file_path).export_to_dict()
-
-    def _create_chunk_id(self, article_num: str, paragraph: str | None = None) -> str:
-        """Generate a unique chunk ID"""
-        base_id = f"{self.regulation_name.lower()}_article_{article_num}"
-        if paragraph:
-            return f"{base_id}_para_{paragraph}"
-        return base_id
 
     @staticmethod
     def _extract_topics(text: str) -> List[str]:

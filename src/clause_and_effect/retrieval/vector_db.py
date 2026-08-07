@@ -2,14 +2,14 @@
 Vector database operations using Qdrant
 """
 import uuid
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
-from pydantic import SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, PointIdsList
 from tqdm import tqdm
 
-from src.clause_and_effect.chunk_store import chunk_set_hash
-from src.clause_and_effect.parsers import Chunk
+from src.clause_and_effect.chunking import Chunk
 from src.clause_and_effect.retrieval import EmbeddingGenerator
 
 # Page size for walking the collection. Only the provenance fields are fetched —
@@ -20,6 +20,13 @@ _SCROLL_PAGE_SIZE = 512
 # walking the collection; everything else stays on the server.
 _PROVENANCE_FIELDS = ["chunk_id", "chunk_set_sha256"]
 
+
+class ChunkSetMetadata(BaseModel):
+    chunk_set_id: str
+    snapshot: str
+    source_sha256: str
+    chunker_commit: str
+    chunker_tree_dirty: bool
 
 class VectorDatabase:
     """Qdrant vector database wrapper"""
@@ -50,7 +57,10 @@ class VectorDatabase:
             url=vector_db_url.get_secret_value(),
             port=vector_db_port,
         )
-        self.embedding_generator = EmbeddingGenerator(model=embedding_model, api_key=embedding_model_api_key)
+        self.embedding_generator = EmbeddingGenerator(
+            model=embedding_model,
+            api_key=embedding_model_api_key,
+        )
 
     def create_collection(self, vector_size: int = 1536):
         """Create collection if it doesn't exist"""
@@ -82,10 +92,81 @@ class VectorDatabase:
         """
         return uuid.uuid5(cls.POINT_ID_NAMESPACE, chunk_id)
 
-    def index_chunks(self, chunks: List[Chunk]) -> str:
+    def index_chunks(self, chunks: List[Chunk], chunk_set_metadata: ChunkSetMetadata) -> None:
         """
-        Index chunks into the vector database, returning the chunk-set digest
-        stamped into every point.
+        Make the collection hold exactly ``chunks``, returning the chunk-set
+        digest every point carries.
+
+        The reconcile step in front of `embed_and_upsert_chunks`. Today it only
+        delegates — the orchestration that belongs here (create the collection,
+        plan the reconcile, prune what no chunk maps onto, verify the
+        post-conditions, record the metadata) still lives in
+        `src/scripts/index_documents.py` and moves in from there.
+
+        Args:
+            chunks: List of Chunk objects to index
+
+        Returns:
+            The `chunk_set_sha256` written into every point's payload.
+            :param chunk_set_metadata:
+            :param chunks:
+            :param chunk_set_id:
+        """
+
+        self.create_collection()
+
+        chunk_set_id = chunk_set_metadata.chunk_set_id
+
+        self.embed_and_upsert_chunks(chunks=chunks, chunk_set_id=chunk_set_id)
+        orphans = self.find_orphans(chunks)
+
+        # TODO: This while loop needs attention and careful thinking.
+        while len(orphans) > 0:
+            deleted = self.delete_points(list(orphans))
+            # Re-check rather than trust the delete: this is the destructive step,
+            # and a partial delete would otherwise be recorded as a clean index.
+            orphans = self.find_orphans(chunks)
+
+        # The post-condition that count verification cannot give. Every live point
+        # must carry the digest about to be advertised — including points that kept
+        # their ID through the change, which is where a silently failed upsert or a
+        # half-finished run would otherwise hide.
+        stale = self.find_stale(chunk_set_sha256=chunk_set_id)
+
+        if stale:
+            message = f"\n❌ {len(stale)} point(s) do not carry {chunk_set_id[:12]}… after "
+            message += f"indexing; nothing recorded."
+            raise Exception(message)
+
+        vector_size = self.client.get_collection(
+            self.collection_name
+        ).config.params.vectors.size
+
+        collection_metadata = {
+            "chunk_set_sha256": chunk_set_id,
+            "chunk_count": len(chunks),
+            "snapshot": chunk_set_metadata.snapshot,
+            "source_sha256": chunk_set_metadata.source_sha256,
+            "chunker_commit": chunk_set_metadata.chunker_commit,
+            "chunker_tree_dirty": chunk_set_metadata.chunker_tree_dirty,
+            "embedding_model": self.embedding_generator.get_model(),
+            "vector_size": vector_size,
+            "indexed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        self.set_collection_metadata(metadata=collection_metadata)
+
+
+
+        return "todo"
+
+    def embed_and_upsert_chunks(self, chunks: List[Chunk], chunk_set_id: str) -> None:
+        """
+        Embed chunks and write them to the collection, returning the chunk-set
+        digest stamped into every point.
+
+        The write primitive: it touches only the points these chunks map onto
+        and decides nothing about the ones it does not. What the collection
+        holds *besides* them is `index_chunks`'s question.
 
         The digest is **derived here** from the chunks being written rather than
         passed in, so a point can never advertise a chunk set it is not part of.
@@ -100,6 +181,8 @@ class VectorDatabase:
         Raises:
             ValueError: if two chunks share an ID, or if the collection does
                 not hold every chunk once indexing completes.
+                :param chunks:
+                :param chunk_set_id:
         """
         print(f"📊 Indexing {len(chunks)} chunks...")
 
@@ -118,12 +201,7 @@ class VectorDatabase:
                 f"{sorted(set(duplicates))[:10]}"
             )
 
-        # Stamped into every point. Point IDs derive from chunk IDs alone, so a
-        # chunk whose *text* changes keeps its ID and its point — which means an
-        # ID-set comparison is structurally blind to stale content. This is the
-        # field that is not: after any run, complete or interrupted, the points
-        # not carrying the current digest are exactly the ones not rewritten.
-        digest = chunk_set_hash(chunks)
+
 
         batch_size = 100
 
@@ -140,7 +218,7 @@ class VectorDatabase:
                         "chunk_id": chunk.id,
                         "text": chunk.text,
                         "metadata": chunk.metadata,
-                        "chunk_set_sha256": digest,
+                        "chunk_set_sha256": chunk_set_id,
                         }
                     ) for chunk, embedding in zip(chunks_batch, batch_embeddings)
             ]
@@ -156,17 +234,7 @@ class VectorDatabase:
                 f"'{self.collection_name}' holds {stored} points — "
                 f"{len(chunks) - stored} were lost to ID collisions."
             )
-        if stored > len(chunks):
-            print(
-                f"⚠️  Collection '{self.collection_name}' holds {stored} points for "
-                f"{len(chunks)} chunks: {stored - len(chunks)} point(s) belong to no "
-                f"chunk in this set. Use `find_orphans` to identify them and "
-                f"`delete_points` to remove them — dropping the collection is no "
-                f"longer the only option."
-            )
 
-        print(f"✅ Indexed {len(chunks)} chunks successfully ({stored} points in collection)")
-        return digest
 
     def stored_points(self) -> Dict[str, Dict[str, Any]]:
         """

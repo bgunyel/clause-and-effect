@@ -40,7 +40,7 @@ from pathlib import Path
 
 import pytest
 
-from src.clause_and_effect.chunk_store import (
+from src.clause_and_effect.chunking.chunk_store import (
     MANIFEST_SUFFIX,
     SNAPSHOT_SUFFIX,
     build_manifest,
@@ -54,7 +54,7 @@ from src.clause_and_effect.chunk_store import (
     snapshot_name,
     write_snapshot,
 )
-from src.clause_and_effect.parsers import Chunk
+from src.clause_and_effect.chunking import Chunk
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -292,8 +292,8 @@ def test_chunk_set_hash_is_stable_across_processes():
     seed = "random"
     repo_root = Path(__file__).resolve().parents[1]
     program = (
-        "from src.clause_and_effect.chunk_store import chunk_set_hash;"
-        "from src.clause_and_effect.parsers import Chunk;"
+        "from src.clause_and_effect.chunking.chunk_store import chunk_set_hash;"
+        "from src.clause_and_effect.chunking import Chunk;"
         "print(chunk_set_hash(["
         "Chunk(id='b', text='second', metadata={'z': 1, 'a': 2}),"
         "Chunk(id='a', text='first', metadata={'m': [1, 2], 'k': 'v'}),"

@@ -34,7 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from src.clause_and_effect.parsers import Chunk
+from .chunk import Chunk
 
 SNAPSHOT_PREFIX = "chunks_"
 SNAPSHOT_SUFFIX = ".jsonl"

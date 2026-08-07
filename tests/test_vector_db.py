@@ -8,9 +8,9 @@ latent hazards:
     already an offset rather than a batch counter). The arithmetic happened to
     stay collision-free, but nothing verified that, and positional IDs re-key
     the whole corpus whenever chunk composition changes.
-  * Qdrant's upsert silently overwrites a repeated point ID, and index_chunks
-    reported success using len(chunks) — the input — so a collision would have
-    been invisible.
+  * Qdrant's upsert silently overwrites a repeated point ID, and
+    embed_and_upsert_chunks reported success using len(chunks) — the input — so
+    a collision would have been invisible.
 
 No live Qdrant or embedding API is used: __init__ is bypassed and the client
 and embedding generator are replaced with fakes, so these run offline.
@@ -20,8 +20,8 @@ import uuid
 import pytest
 from qdrant_client.models import PointStruct
 
-from src.clause_and_effect.chunk_store import chunk_set_hash
-from src.clause_and_effect.parsers import Chunk
+from src.clause_and_effect.chunking.chunk_store import chunk_set_hash
+from src.clause_and_effect.chunking import Chunk
 from src.clause_and_effect.retrieval.vector_db import VectorDatabase
 
 
@@ -108,7 +108,8 @@ class _FakeClient:
     cost this project something:
 
       * an upsert of a repeated point ID overwrites rather than appends, which
-        is why `index_chunks` verifies against the collection and not its input;
+        is why `embed_and_upsert_chunks` verifies against the collection and not
+        its input;
       * `update_collection` **merges** metadata, so a key written once survives
         an update that does not mention it.
     """
@@ -207,44 +208,86 @@ def _chunks(*ids):
 
 
 # --------------------------------------------------------------------------- #
-#  index_chunks                                                                #
+#  embed_and_upsert_chunks                                                     #
 # --------------------------------------------------------------------------- #
 
-def test_index_chunks_keys_points_by_chunk_id():
+def test_embed_and_upsert_chunks_keys_points_by_chunk_id():
     db = _make_db()
     chunks = _chunks("gdpr_article_1", "gdpr_article_2", "gdpr_article_3")
-    db.index_chunks(chunks)
+    db.embed_and_upsert_chunks(chunks)
 
     assert [p.id for p in db.client.upserted] == [
         VectorDatabase.point_id(c.id) for c in chunks
     ]
 
 
-def test_index_chunks_is_idempotent():
+def test_embed_and_upsert_chunks_is_idempotent():
     """Re-indexing the same corpus must update points, not duplicate them."""
     db = _make_db()
     chunks = _chunks("gdpr_article_1", "gdpr_article_2")
-    db.index_chunks(chunks)
+    db.embed_and_upsert_chunks(chunks)
     first = {p.id for p in db.client.upserted}
-    db.index_chunks(chunks)
+    db.embed_and_upsert_chunks(chunks)
     assert {p.id for p in db.client.upserted} == first
 
 
-def test_index_chunks_spans_multiple_batches():
+def test_embed_and_upsert_chunks_spans_multiple_batches():
     """IDs must stay unique across batch boundaries (batch_size is 100)."""
     db = _make_db()
     chunks = _chunks(*[f"gdpr_article_{i}" for i in range(250)])
-    db.index_chunks(chunks)
+    db.embed_and_upsert_chunks(chunks)
     assert len(db.client.upserted) == 250
     assert len({p.id for p in db.client.upserted}) == 250
 
 
-def test_index_chunks_rejects_duplicate_chunk_ids():
+def test_embed_and_upsert_chunks_rejects_duplicate_chunk_ids():
     db = _make_db()
     chunks = _chunks("gdpr_article_1", "gdpr_article_2", "gdpr_article_1")
     with pytest.raises(ValueError, match="unique"):
-        db.index_chunks(chunks)
+        db.embed_and_upsert_chunks(chunks)
     assert db.client.upserted == [], "nothing should be written when input is invalid"
+
+
+# --------------------------------------------------------------------------- #
+#  index_chunks                                                                #
+#                                                                              #
+#  The reconcile step in front of the write primitive. It delegates and nothing #
+#  more for now, so these pin the seam rather than any behaviour of its own —   #
+#  every point the write produces must still be produced, and the digest must   #
+#  still reach the caller, once orchestration grows here.                       #
+# --------------------------------------------------------------------------- #
+
+def test_index_chunks_writes_what_embed_and_upsert_writes():
+    db = _make_db()
+    chunks = _chunks("gdpr_article_1", "gdpr_article_2")
+
+    digest = db.index_chunks(chunks)
+
+    assert digest == chunk_set_hash(chunks)
+    assert {p.id for p in db.client.upserted} == {
+        VectorDatabase.point_id(c.id) for c in chunks
+    }
+
+
+def test_index_chunks_goes_through_embed_and_upsert_chunks():
+    """
+    Asserts on the *call*, not on the outcome. A re-implementation that wrote
+    the same points by another route would satisfy the behavioural test above
+    while leaving two write paths to keep in step — and the digest is derived
+    inside the primitive precisely so that there is only one.
+    """
+    db = _make_db()
+    chunks = _chunks("gdpr_article_1")
+    calls = []
+
+    def _spy(passed):
+        calls.append(passed)
+        return "digest-from-the-primitive"
+
+    db.embed_and_upsert_chunks = _spy
+
+    assert db.index_chunks(chunks) == "digest-from-the-primitive"
+    assert calls == [chunks]
 
 
 # --------------------------------------------------------------------------- #
@@ -264,7 +307,7 @@ def test_stored_point_ids_walks_every_page():
     silently survives pruning.
     """
     db = _make_db()
-    db.index_chunks(_chunks(*[f"gdpr_article_{i}" for i in range(1200)]))
+    db.embed_and_upsert_chunks(_chunks(*[f"gdpr_article_{i}" for i in range(1200)]))
 
     stored = db.stored_point_ids()
 
@@ -275,7 +318,7 @@ def test_stored_point_ids_walks_every_page():
 
 def test_stored_point_ids_maps_point_id_to_chunk_id():
     db = _make_db()
-    db.index_chunks(_chunks("gdpr_article_1", "gdpr_article_2"))
+    db.embed_and_upsert_chunks(_chunks("gdpr_article_1", "gdpr_article_2"))
 
     stored = db.stored_point_ids()
 
@@ -285,7 +328,7 @@ def test_stored_point_ids_maps_point_id_to_chunk_id():
 def test_find_orphans_identifies_points_no_chunk_maps_onto():
     """The 2026-08-07 shape in miniature: some carried over, some orphaned."""
     db = _make_db()
-    db.index_chunks(_chunks("gdpr_article_79_para_1", "gdpr_article_79_para_2",
+    db.embed_and_upsert_chunks(_chunks("gdpr_article_79_para_1", "gdpr_article_79_para_2",
                             "gdpr_article_5"))
 
     current = _chunks("gdpr_article_79", "gdpr_article_5")
@@ -298,7 +341,7 @@ def test_find_orphans_identifies_points_no_chunk_maps_onto():
 def test_find_orphans_is_empty_when_collection_matches():
     db = _make_db()
     chunks = _chunks("gdpr_article_1", "gdpr_article_2")
-    db.index_chunks(chunks)
+    db.embed_and_upsert_chunks(chunks)
 
     assert db.find_orphans(chunks) == {}
 
@@ -320,7 +363,7 @@ def test_find_orphans_flags_points_with_no_chunk_id_payload():
 
 def test_delete_points_removes_exactly_what_it_is_given():
     db = _make_db()
-    db.index_chunks(_chunks("gdpr_article_1", "gdpr_article_2", "gdpr_article_3"))
+    db.embed_and_upsert_chunks(_chunks("gdpr_article_1", "gdpr_article_2", "gdpr_article_3"))
     doomed = [str(VectorDatabase.point_id("gdpr_article_2"))]
 
     deleted = db.delete_points(doomed)
@@ -343,7 +386,7 @@ def test_delete_points_on_empty_list_does_not_call_the_server():
     happened to do nothing with it.
     """
     db = _make_db()
-    db.index_chunks(_chunks("gdpr_article_1"))
+    db.embed_and_upsert_chunks(_chunks("gdpr_article_1"))
 
     assert db.delete_points([]) == 0
     assert db.client.delete_calls == [], "no delete should be issued at all"
@@ -353,9 +396,9 @@ def test_delete_points_on_empty_list_does_not_call_the_server():
 def test_pruning_orphans_makes_the_collection_match_the_chunk_set():
     """End to end: index a new chunk set over an old one, prune, and verify."""
     db = _make_db()
-    db.index_chunks(_chunks(*[f"old_chunk_{i}" for i in range(5)]))
+    db.embed_and_upsert_chunks(_chunks(*[f"old_chunk_{i}" for i in range(5)]))
     current = _chunks(*[f"gdpr_article_{i}" for i in range(3)])
-    db.index_chunks(current)
+    db.embed_and_upsert_chunks(current)
 
     db.delete_points(list(db.find_orphans(current)))
 
@@ -376,25 +419,25 @@ def _retext(chunks, suffix):
     return [Chunk(id=c.id, text=c.text + suffix, metadata=c.metadata) for c in chunks]
 
 
-def test_index_chunks_stamps_every_point_with_the_chunk_set_digest():
+def test_embed_and_upsert_chunks_stamps_every_point_with_the_chunk_set_digest():
     db = _make_db()
     chunks = _chunks("gdpr_article_1", "gdpr_article_2")
 
-    digest = db.index_chunks(chunks)
+    digest = db.embed_and_upsert_chunks(chunks)
 
     assert digest == chunk_set_hash(chunks)
     assert all(p.payload["chunk_set_sha256"] == digest for p in db.client.upserted)
 
 
-def test_index_chunks_derives_the_digest_from_what_it_writes():
+def test_embed_and_upsert_chunks_derives_the_digest_from_what_it_writes():
     """
     Derived, never passed in. A caller-supplied hash is one more thing that can
     be wrong, and a point advertising a chunk set it is not part of is exactly
     the failure this field exists to prevent.
     """
     db = _make_db()
-    first = db.index_chunks(_chunks("gdpr_article_1"))
-    second = db.index_chunks(_retext(_chunks("gdpr_article_1"), " revised"))
+    first = db.embed_and_upsert_chunks(_chunks("gdpr_article_1"))
+    second = db.embed_and_upsert_chunks(_retext(_chunks("gdpr_article_1"), " revised"))
 
     assert first != second
 
@@ -407,7 +450,7 @@ def test_find_stale_catches_a_text_only_revision_that_orphan_detection_cannot():
     """
     db = _make_db()
     old = _chunks("gdpr_article_78_para_3", "gdpr_article_78_para_4")
-    db.index_chunks(old)
+    db.embed_and_upsert_chunks(old)
     new = _retext(old, " (revised citation form)")
     new_digest = chunk_set_hash(new)
 
@@ -419,7 +462,7 @@ def test_find_stale_is_empty_after_a_complete_index():
     db = _make_db()
     chunks = _chunks("gdpr_article_1", "gdpr_article_2")
 
-    digest = db.index_chunks(chunks)
+    digest = db.embed_and_upsert_chunks(chunks)
 
     assert db.find_stale(digest) == {}
 
@@ -432,7 +475,8 @@ def test_find_stale_localises_a_partial_index():
     current — which is what makes the failure diagnosable rather than merely
     detectable.
 
-    The crash is modelled inside a single `index_chunks` call, which is where a
+    The crash is modelled inside a single `embed_and_upsert_chunks` call, which
+    is where a
     real one happens: the digest is computed once from the full chunk list, so
     the batches that did land carry the *new* set's digest and the rest carry
     the old. Simulating it as a second call over a subset would be wrong — that
@@ -443,12 +487,12 @@ def test_find_stale_localises_a_partial_index():
     new_digest = chunk_set_hash(new)
 
     db = _make_db()
-    db.index_chunks(old)
+    db.embed_and_upsert_chunks(old)
     db.client.upsert_calls = 0       # count batches of the *second* index only
     db.client._fail_upsert_after = 1  # batch size is 100: write one, then die
 
     with pytest.raises(ConnectionError):
-        db.index_chunks(new)
+        db.embed_and_upsert_chunks(new)
 
     stale = db.find_stale(new_digest)
     assert len(stale) == 50, "the 50 chunks in the unwritten batch"
@@ -465,7 +509,7 @@ def test_indexing_a_subset_stamps_the_subset_not_the_full_set():
     db = _make_db()
     chunks = _chunks("gdpr_article_1", "gdpr_article_2")
 
-    subset_digest = db.index_chunks(chunks[:1])
+    subset_digest = db.embed_and_upsert_chunks(chunks[:1])
 
     assert subset_digest == chunk_set_hash(chunks[:1])
     assert subset_digest != chunk_set_hash(chunks)
@@ -523,37 +567,38 @@ def test_collection_metadata_merges_rather_than_replaces():
     )
 
 
-def test_index_chunks_raises_when_points_are_lost():
+def test_embed_and_upsert_chunks_raises_when_points_are_lost():
     """A collection holding fewer points than chunks means silent data loss."""
     db = _make_db(reported_count=2)
     with pytest.raises(ValueError, match="lost to ID collisions"):
-        db.index_chunks(_chunks("a", "b", "c"))
+        db.embed_and_upsert_chunks(_chunks("a", "b", "c"))
 
 
-def test_index_chunks_warns_about_points_belonging_to_no_chunk(capsys):
+def test_embed_and_upsert_chunks_warns_about_points_belonging_to_no_chunk(capsys):
     """
     Extra points survive from a previous, larger corpus — warn, don't fail.
-    `index_chunks` counts them but cannot name them; identifying and removing
+    `embed_and_upsert_chunks` counts them but cannot name them; identifying and
+    removing
     them is `find_orphans` / `delete_points`, and the warning now says so
     rather than offering "drop the collection" as the only remedy.
     """
     db = _make_db(reported_count=10)
-    db.index_chunks(_chunks("a", "b", "c"))
+    db.embed_and_upsert_chunks(_chunks("a", "b", "c"))
     out = capsys.readouterr().out
     assert "belong to no chunk" in out
     assert "7" in out
     assert "find_orphans" in out
 
 
-def test_index_chunks_reports_the_stored_count_not_the_input_count(capsys):
+def test_embed_and_upsert_chunks_reports_the_stored_count_not_the_input_count(capsys):
     db = _make_db()
-    db.index_chunks(_chunks("a", "b", "c"))
+    db.embed_and_upsert_chunks(_chunks("a", "b", "c"))
     assert "3 points in collection" in capsys.readouterr().out
 
 
 def test_chunk_payload_carries_identity_and_metadata():
     db = _make_db()
-    db.index_chunks(_chunks("gdpr_article_7"))
+    db.embed_and_upsert_chunks(_chunks("gdpr_article_7"))
     payload = db.client.upserted[0].payload
     assert payload["chunk_id"] == "gdpr_article_7"
     assert payload["text"] == "text for gdpr_article_7"

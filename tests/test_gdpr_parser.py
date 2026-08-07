@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from src.clause_and_effect.parsers.gdpr_parser import GDPRParser
-from src.clause_and_effect.parsers.base_parser import Chunk
+from src.clause_and_effect.chunking import Chunk
 
 
 # Synthetic markdown mirroring docling's *actual* export, verified against

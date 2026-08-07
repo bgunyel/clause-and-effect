@@ -1,11 +1,9 @@
 import re
 from pathlib import Path
 from typing import List, Dict, Any
-import pypdf
 
-from .base_parser import BaseParser, Chunk
+from .base_parser import BaseParser
 from .docling_tree import text_items
-
 
 class GDPRParser(BaseParser):
     """
@@ -31,7 +29,7 @@ class GDPRParser(BaseParser):
     def __init__(self):
         super().__init__("GDPR")
 
-    def parse(self, file_path: Path) -> List[Chunk]:
+    def parse(self, file_path: Path) -> List[Dict[str, Any]]:
         """
         Parse GDPR PDF into article-level chunks
 
@@ -44,16 +42,7 @@ class GDPRParser(BaseParser):
         print(f"📖 Parsing GDPR from {file_path}")
         articles = self.get_articles(file_path=file_path)
         print(f"✅ Extracted {len(articles)} articles from GDPR")
-
-        # Convert to chunks
-        chunks = []
-        for article in articles:
-            article_chunks = self.article_to_chunks(article)
-            chunks.extend(article_chunks)
-
-        print(f"✅ Created {len(chunks)} chunks from GDPR")
-
-        return chunks
+        return articles
 
     def get_articles(self, file_path: Path) -> List[Dict[str, Any]]:
         # Extract text from PDF
@@ -394,72 +383,3 @@ class GDPRParser(BaseParser):
             return "10"
         else:
             return "11"
-
-    def article_to_chunks(self, article: Dict[str, Any]) -> List[Chunk]:
-        """
-        Convert an article to one or more chunks
-
-        For short articles: 1 chunk
-        For long articles (>1000 chars): Split by paragraph
-        """
-        article_num = article["number"]
-        title = article["title"]
-        content = article["content"]
-        chapter = article["chapter"]
-        chapter_title = self.CHAPTER_TITLES.get(chapter, "Unknown")
-
-        # Full article text
-        full_text = f"Article {article_num}: {title}\n\n{content}"
-
-        # Base metadata
-        base_metadata = {
-            "regulation": "GDPR",
-            "article_number": article_num,
-            "article_title": title,
-            "chapter": chapter,
-            "chapter_title": chapter_title,
-            "jurisdiction": "EU",
-            "effective_date": "2018-05-25",
-            "topics": self._extract_topics(full_text),
-            "chunk_type": "article"
-        }
-
-        # If article is short enough, return as single chunk
-        if len(content) < 1000:
-            chunk_id = self._create_chunk_id(article_num)
-            return [Chunk(
-                id=chunk_id,
-                text=full_text,
-                metadata=base_metadata
-            )]
-
-        # For long articles, split by paragraphs
-        paragraphs = self._split_into_paragraphs(content)
-        chunks = []
-
-        for i, para_text in enumerate(paragraphs, start=1):
-            chunk_id = self._create_chunk_id(article_num, str(i))
-            para_metadata = {
-                **base_metadata,
-                "paragraph": str(i),
-                "chunk_type": "paragraph"
-            }
-
-            para_full_text = f"Article {article_num}({i}): {title}\n\n{para_text}"
-
-            chunks.append(Chunk(
-                id=chunk_id,
-                text=para_full_text,
-                metadata=para_metadata
-            ))
-
-        return chunks
-
-    @staticmethod
-    def _split_into_paragraphs(content: str) -> List[str]:
-        """Split article content into numbered paragraphs"""
-        # GDPR uses numbered paragraphs: "1. ", "2. ", etc.
-        paragraph_pattern = r'\d+\.\s+'
-        paragraphs = re.split(paragraph_pattern, content)
-        # Remove empty strings and clean up
-        return [p.strip() for p in paragraphs if p.strip()]
