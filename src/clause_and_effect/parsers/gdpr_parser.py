@@ -445,7 +445,7 @@ class GDPRParser(BaseParser):
                 "chunk_type": "paragraph"
             }
 
-            para_full_text = f"Article {article_num}.{i}: {title}\n\n{para_text}"
+            para_full_text = f"Article {article_num}({i}): {title}\n\n{para_text}"
 
             chunks.append(Chunk(
                 id=chunk_id,
