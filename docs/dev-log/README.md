@@ -81,3 +81,9 @@ thing in the record.
   orphaned points deleted, every point now stamped with its chunk set); tests
   81 → 180, of which the interesting result is the four mutations that survived
   because the tests were green for the wrong reasons.
+- [2026-08-07 · session 2](devlog_2026-08-07_session-2.md) — the `index_chunks`
+  seam split from the write primitive, a `chunking` package extracted (a
+  three-field dataclass was costing 9.78s to import), `Chunk` retyped and the
+  chunker lifted out of the parser, a circular import held closed by two dead
+  lines, and regulation constants collapsed from three free parameters to one
+  lookup. Ends mid-refactor with 58 failing tests, enumerated.
