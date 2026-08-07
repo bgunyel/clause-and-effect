@@ -45,9 +45,13 @@ generator and agent staying untested remains an accepted state.
    0, text changed 330`. Current baseline is
    `chunks_2026-08-07_081627_a231f919`; the collection reports 0 orphans, 0
    missing, **0 stale**.
-3. **Tests** for what was verified by hand only: `chunk_store.py`,
+3. ~~**Tests** for what was verified by hand only: `chunk_store.py`,
    `generate_chunks.py`, `docling_tree.py`,
-   `GDPRParser.get_articles_from_dictionary`.
+   `GDPRParser.get_articles_from_dictionary`.~~ **Done 2026-08-07**
+   (`efd2f09`, `50d8eb8`). Suite **81 → 180**. Mutation-checked across 35
+   mutations; **four were not caught**, and all four were bad or missing tests
+   rather than missing code — listed under 🟡 Tooling below, because what they
+   have in common is worth more than any one of them.
 4. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
    calibration, tests.
 
@@ -522,7 +526,7 @@ per the priority order above.
     cases have at least one answer sentence poorly covered by their quote, so the
     stronger reading would make ~40% of the set a candidate failure. The
     core-vs-auxiliary split is therefore a first-class judge output.
-  - **Built 2026-08-05 (uncommitted):** `src/eval/sufficiency_judge.py` — stages A
+  - **Built 2026-08-05 (`e2ebef1`):** `src/eval/sufficiency_judge.py` — stages A
     (decompose) and B (answer-blind), eyeballed on 8 cases. Stage C, verdict
     derivation, the `sufficient_verbose` threshold (**measure it, do not guess** —
     observed span/quote ratios run 19%–100%), the async runner, the calibration
@@ -713,10 +717,36 @@ per the priority order above.
   contiguous word match → *punctuation*; word subsequence → *elision*; otherwise *altered*,
   with the longest run of consecutive quote words having no matching bigram in the article
   as the severity signal (`art41_case3` = 11).
-- [ ] **Measure check recall by mutation, systematically.** Both regression tests were
-  mutation-checked by hand (restore the old wording, confirm failure, restore). Worth
-  making that a harness: inject known defect instances into the clean set and count
-  catches, so check quality is a number rather than a feeling.
+- [ ] 🔺 **Measure check recall by mutation, systematically.** Regression tests are
+  mutation-checked by hand (apply the mutation, confirm failure, restore). Worth
+  making that a harness: inject known defect instances and count catches, so check
+  quality is a number rather than a feeling.
+
+  **2026-08-07 made the case, with data.** 35 mutations were run by hand across
+  `chunk_store`, `generate_chunks`, `vector_db`, `docling_tree` and the tree-based
+  parser. **Four survived**, and not one of them meant "add a missing test" — every
+  one was a test that already existed and did not work:
+
+  | mutation | why the existing test missed it |
+  |---|---|
+  | `delete_points` empty-selector guard removed | asserted *nothing was deleted*, not *no call was issued* — and an empty selector deletes nothing in a fake while being exactly the call that could delete everything against a real server |
+  | `with_payload` narrowed to drop `chunk_set_sha256` | the fake ignored `with_payload` and returned the full payload, so the field never actually went missing |
+  | `sorted()` dropped from `list_snapshots` | `glob` returns directory order and this directory happened to enumerate the way the assertion wanted — **passing for an accidental reason** |
+  | inline paragraph-number recovery disabled | rendered `content` is byte-identical; only the *unit structure* changes, and the test asserted on the string |
+
+  The common thread is that a test can be green for a reason unrelated to the
+  property it names — through an over-permissive fake, an incidental environment,
+  or an assertion aimed one layer away from the behaviour. That is invisible to
+  coverage and invisible to review, and only mutation reveals it. Under
+  `evaluation-plan.md` §1 this is not optional for eval code: "a gate never
+  observed to fail is not known to work" applies to the gates' own tests.
+
+  A fifth mutation exposed a different failure — the non-ASCII hash test was
+  pinning a property (`ensure_ascii=False`) that is not a correctness property at
+  all, since escaping stays deterministic and injective. The real requirement was
+  *stability*, which only a golden value expresses. Worth having the harness
+  report survivors rather than a pass/fail, so cases like that surface as
+  questions about what a test is for.
 - [ ] **Parametric answerability** — a defect class with no check. `art94_case3` is
   answerable from general knowledge without retrieving anything. Retrieval metrics are
   unaffected (Hit@k measures whether the gold chunk was retrieved regardless), but
@@ -971,18 +1001,27 @@ deliberately deferred into this work rather than done piecemeal.
   reading with `-z`. `tests/test_chunk_store.py`, 10 tests, mutation-checked at
   6-of-10 failing against the pre-fix code. Suite 81 → 91.
 
-  **Still unguarded:** `chunk_set_hash` determinism and its insensitivity to
-  generation order and serialization, `write_snapshot`/`read_snapshot` round-trip,
-  tamper detection, `latest_snapshot` ordering, the `_MAX_DIRTY_PATHS` overflow
-  path, and every invariant in `generate_chunks._check_chunks`. The
-  `git_state` fix is the argument for doing the rest: this is eval infrastructure,
-  and it was wrong in the field that decides whether a snapshot counts as a
-  baseline.
-- [ ] **No tests cover the tree-based parser either** — `docling_tree.py` and
-  `GDPRParser.get_articles_from_dictionary` are covered only by the generator's
-  invariant and by hand-run comparisons. `docling_tree` was deliberately split out
-  to be testable against a small synthetic tree rather than the 1.4 MB fixture;
-  that test does not exist yet.
+  **The rest closed 2026-08-07** (`efd2f09`): `chunk_set_hash` (determinism,
+  insensitivity to generation order and metadata key order, sensitivity to
+  id/text/metadata, cross-process stability, golden values),
+  `write_snapshot`/`read_snapshot` (round trip, generation order, tamper
+  detection on text *and* metadata, truncation, count disagreement, missing
+  manifest), `build_manifest`, snapshot naming and discovery, and every
+  invariant in `_check_chunks`.
+- [x] ~~**No tests cover the tree-based parser either.**~~ **Closed 2026-08-07**
+  (`50d8eb8`). `docling_tree.py` and `GDPRParser.get_articles_from_dictionary`
+  are covered by synthetic trees, one structural hazard each, every one
+  mirroring a shape verified against `gdpr.docling.json`. The `visited` guard
+  gets its own tests precisely because the real export **cannot** exercise it —
+  it has no nesting anywhere, so nothing there would notice its removal.
+- [ ] **`src/clause_and_effect/__init__.py` imports the world eagerly**, found
+  2026-08-07. `from .agents/.parsers/.retrieval import *` pulls docling,
+  langchain, openai and qdrant, so importing a pure-stdlib module like
+  `chunk_store` costs **~17 seconds**. Every test run pays ~14s before doing
+  anything, and it is why the cross-process hash test is a single invocation
+  rather than a sweep of seeds. A regression suite is meant to be cheap enough
+  to run on every change; this is the main thing making it not. Lazy imports, or
+  importing submodules directly rather than re-exporting, would fix it.
 - [ ] `src/config.py` `get_llm_config()['writer_model'][1]` is **broken**:
   `ModelNames.GPT_OSS_120B` has no OpenRouter alias in `ai_common`
   (`MODEL_NAME_ALIAS_DICT` lists groq and ollama only), so `get_llm` raises
