@@ -75,3 +75,9 @@ thing in the record.
   the docling document tree (grounding 299 → 319 clean, zero regressions), the
   same defect found one layer down in the chunker with Article 4 as the worked
   example, and chunk sets made a hashed, provenance-carrying artifact.
+- [2026-08-07 · session 1](devlog_2026-08-07_session-1.md) — priority reset to
+  the evaluation pipeline under the rule that the eval must be flawless while the
+  algorithm need not be; first two chunk snapshots written and indexed (196
+  orphaned points deleted, every point now stamped with its chunk set); tests
+  81 → 180, of which the interesting result is the four mutations that survived
+  because the tests were green for the wrong reasons.

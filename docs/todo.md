@@ -52,7 +52,34 @@ generator and agent staying untested remains an accepted state.
    mutations; **four were not caught**, and all four were bad or missing tests
    rather than missing code — listed under 🟡 Tooling below, because what they
    have in common is worth more than any one of them.
-4. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
+4. 🔺 **Refactor `index_documents.py` and `vector_db.py` — first item of the next
+   session, set by Bertan 2026-08-07.** The script accumulated logic that belongs
+   in `VectorDatabase`. It grew that way because each piece was added to answer a
+   question as it came up — reconcile reporting, orphan pruning, the stale
+   post-condition, metadata assembly — and the layering was never revisited once
+   the shape was known.
+
+   What sits in the script today and should not: the reconcile plan
+   (`before`/`expected`, update/insert/delete counts), the orphan-stale-missing
+   comparison in `_compare`, the metadata schema in `_build_metadata`, the
+   digest cross-check against the manifest, and the post-conditions enforced
+   after indexing. A script should read as *what to do*; deciding whether a
+   collection is consistent with a chunk set, and making it so, is *what a
+   vector database is*.
+
+   Target shape, roughly: `VectorDatabase` gains a single reconcile entry point
+   that takes a snapshot and returns a report — counts, orphans, stale, missing —
+   and owns the ordering constraints that are currently comments in the script
+   (metadata last, upsert before delete, re-check after delete). `--check`
+   becomes the same call with writes disabled. `index_documents.py` shrinks to
+   argument parsing, snapshot resolution and printing.
+
+   Two things to preserve, both load-bearing: the digest must stay **derived
+   inside** `index_chunks` from the chunks being written rather than passed in;
+   and a run that leaves orphans must still refuse to write metadata. Both are
+   covered by tests, so the refactor has a net under it — 180 passing before it
+   starts.
+5. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
    calibration, tests.
 
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
