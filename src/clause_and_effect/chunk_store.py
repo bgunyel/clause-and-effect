@@ -119,20 +119,41 @@ def git_state(repo_root: Path) -> Tuple[str, List[str]]:
             )
         except (OSError, subprocess.SubprocessError):
             return None
-        return result.stdout.strip() if result.returncode == 0 else None
+        # Deliberately *not* stripped. Porcelain's first column is the index
+        # status and is a space for a worktree-only change, so the first line
+        # reads " M uv.lock"; stripping shifts it left and the `line[3:]` below
+        # then eats a character of the path, recording "v.lock". Callers that
+        # want a bare value strip it themselves.
+        return result.stdout if result.returncode == 0 else None
 
-    commit = run("rev-parse", "HEAD")
-    if commit is None:
+    head = run("rev-parse", "HEAD")
+    if head is None:
         return "unknown", [_GIT_UNAVAILABLE]
+    commit = head.strip()
 
-    status = run("status", "--porcelain")
+    # `-z` rather than plain `--porcelain`: without it git C-quotes any path
+    # containing a space or non-ASCII byte ("a file.txt", "\303\251.txt"), and
+    # the manifest would record the quoting as part of the name — a path that
+    # does not exist, which is the one thing this list must never contain.
+    # `-z` emits literal NUL-terminated paths and never quotes.
+    status = run("status", "--porcelain", "-z")
     if status is None:
         return commit, [_GIT_UNAVAILABLE]
 
-    # Porcelain v1 lines are "XY path"; the two status columns are fixed-width,
-    # so the path starts at column 3. Renames arrive as "old -> new", which is
-    # more informative left intact than split.
-    paths = [line[3:] for line in status.splitlines() if line.strip()]
+    # Each record is "XY <path>" with the two status columns fixed-width, so the
+    # path starts at offset 3. Renames and copies emit the *old* path as a
+    # second record, which is consumed here and rendered "old -> new" — the same
+    # shape plain porcelain would have produced.
+    records = [r for r in status.split("\0") if r]
+    paths: List[str] = []
+    pending = iter(records)
+    for record in pending:
+        code, path = record[:2], record[3:]
+        if "R" in code or "C" in code:
+            origin = next(pending, None)
+            if origin is not None:
+                path = f"{origin} -> {path}"
+        paths.append(path)
     if len(paths) > _MAX_DIRTY_PATHS:
         overflow = len(paths) - _MAX_DIRTY_PATHS
         paths = paths[:_MAX_DIRTY_PATHS] + [f"… and {overflow} more"]
