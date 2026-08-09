@@ -52,8 +52,9 @@ generator and agent staying untested remains an accepted state.
    mutations; **four were not caught**, and all four were bad or missing tests
    rather than missing code — listed under 🟡 Tooling below, because what they
    have in common is worth more than any one of them.
-4. 🔺 **Refactor `index_documents.py` and `vector_db.py` — first item of the next
-   session, set by Bertan 2026-08-07.** The script accumulated logic that belongs
+4. **Refactor `index_documents.py` and `vector_db.py`** — was the first item of
+   the 2026-08-09 session, set by Bertan 2026-08-07; **source side done, tests
+   open as item 5.** The script accumulated logic that belongs
    in `VectorDatabase`. It grew that way because each piece was added to answer a
    question as it came up — reconcile reporting, orphan pruning, the stale
    post-condition, metadata assembly — and the layering was never revisited once
@@ -79,7 +80,53 @@ generator and agent staying untested remains an accepted state.
    and a run that leaves orphans must still refuse to write metadata. Both are
    covered by tests, so the refactor has a net under it — 180 passing before it
    starts.
-5. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
+
+   **Status 2026-08-09: the source side is done; the tests are not.** The
+   refactor landed and was reviewed item by item — see the devlog. One of the
+   two properties above was deliberately **reversed**: the digest is now
+   caller-supplied, because the value a point must advertise is the one the
+   snapshot recorded, and only the caller can compare the two. `index_documents`
+   derives it and refuses to index if it disagrees with the manifest, which is a
+   check re-deriving inside could not make. The orphan property survives intact.
+
+5. 🔺 **Repair `test_vector_db.py` — first item of the next session, set by
+   Bertan 2026-08-09.** 24 of its 32 tests fail; every other test module is
+   green. Nothing else in this list starts until these do, because the vector_db
+   refactor above is unverified until they run, and it is the last thing between
+   here and a re-index.
+
+   Three layers, and the first hides the other two. The stale `_chunks` helper
+   (`tests/test_vector_db.py:207`) builds `Chunk(metadata={"article_number": i})`
+   and makes 23 tests fail at construction; repairing it alone takes 24 → 23 and
+   reveals the real cause — `TypeError` from the changed signatures of
+   `embed_and_upsert_chunks(chunks, chunk_set_id)` and
+   `index_chunks(chunks, chunk_set_metadata)`.
+
+   Beyond the repoint, these need **rewriting rather than fixing**, because the
+   behaviour they name has changed:
+   - `..._derives_the_digest_from_what_it_writes` — asserts the contract that was
+     deliberately inverted; it should now assert the digest is written verbatim.
+   - `indexing_a_subset_stamps_the_subset_not_the_full_set` — same root cause.
+   - `..._reports_the_stored_count_not_the_input_count` — that count check no
+     longer exists.
+   - `..._raises_when_points_are_lost` — now `IndexVerificationError`, which is
+     **not** a `ValueError` subclass, and the check is stricter: scoped by digest
+     and compared by point identity.
+   - `..._warns_about_points_belonging_to_no_chunk` — uses `capsys`; the warning
+     is a log record from `index_chunks` now, so `caplog`, asserting on level.
+   - `chunk_payload_carries_identity_and_metadata` — should pin that the
+     payload's `metadata` is a `dict`. Without that it passes equally against the
+     model form, which is how a latent gRPC failure survived unnoticed.
+   - `pruning_orphans_makes_the_collection_match_the_chunk_set` — pruning is
+     unconditional now, and a surviving orphan raises.
+
+   **The fake Qdrant client needs an in-memory point store.** The post-write
+   check reads `stored_points()` after writing, so a fake that does not reflect
+   what was upserted fails every write test for reasons unrelated to what they
+   test. Build the store rather than stubbing per test: it makes the tests
+   exercise the real verify-after-write path.
+
+6. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
    calibration, tests.
 
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
@@ -393,8 +440,13 @@ per the priority order above.
   `chunks_2026-08-07_064658_157d4d38` snapshot: **368 points, 0 orphans, 0
   missing**, advertising its hash, embedding model and vector size. The 196
   orphans were deleted — the first real use of destructive point deletion, and
-  the reason `--prune` is an explicit flag with the delete re-checked afterwards
-  rather than assumed. Entry below kept for the history it records.
+  the reason the delete is re-checked afterwards rather than assumed. It was
+  also the reason pruning sat behind an explicit `--prune` flag; **that flag was
+  removed on 2026-08-09 (Bertan): pruning is not optional.** A collection
+  holding points from a corpus that no longer exists fails the invariant rather
+  than partly meeting it, so an index run that leaves them behind has not
+  indexed the snapshot. `--check` remains for seeing what a run would change.
+  Entry below kept for the history it records.
 
   **Original entry.** Now
   **folded into the regeneration above** rather than a standalone task: the corpus
