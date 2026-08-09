@@ -17,10 +17,10 @@ named, hashed artifact is what lets the index declare which chunks it was built
 from — and lets a future chunker be compared against this one, since the "before"
 survives the change that replaces it.
 
-This script is the **only** producer of indexed chunks. ``GDPRParser.parse()``
-still chunks a PDF directly as a library entry point, but nothing downstream of
-here consumes its output; keeping two producers would mean chunks reaching the
-index without ever being recorded.
+This script is the **only** producer of indexed chunks, and since the chunker
+moved out of the parser it is the only producer of chunks at all — ``parse()``
+returns articles now. Two producers would mean chunks reaching the index
+without ever being recorded, which is the state this script exists to prevent.
 
 An unchanged corpus regenerates to an identical ``chunk_set_sha256``, and the
 script then declines to write a duplicate snapshot unless given ``--force``.
@@ -33,18 +33,84 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.config import get_settings
-from src.clause_and_effect import GDPRParser
-from src.clause_and_effect.chunking import Chunk
+from src.clause_and_effect.chunking import (
+    ArticleMetadata,
+    Chunk,
+    Chunker,
+    GDPR,
+    Regulation,
+)
 from src.clause_and_effect.chunking.chunk_store import (
     build_manifest,
-    chunk_set_hash,
+    LegacySnapshotError,
     latest_snapshot,
-    manifest_path_for,
     read_snapshot,
     write_snapshot,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _article_metadata(
+    article: Dict[str, Any], regulation: Regulation
+) -> ArticleMetadata:
+    """
+    Adapt one corpus record to the typed metadata the chunker takes.
+
+    The only place that knows the corpus's on-disk shape, which is why it is a
+    named function rather than four lines inside the loop: when the corpus
+    starts carrying paragraph units instead of a flat ``content`` string — the
+    change `docs/todo.md` describes for the hierarchy-aware chunker — this is
+    the seam that moves.
+
+    ``chapter_title`` is looked up rather than read off the record because the
+    corpus does not carry one. The regulation is the single source for it, so an
+    article cannot claim a chapter title that no chapter has.
+    """
+    return ArticleMetadata(
+        article_number=article["number"],
+        article_title=article["title"],
+        chapter=article["chapter"],
+        chapter_title=regulation.chapter_titles[article["chapter"]],
+    )
+
+
+def _check_articles(
+    articles: List[Dict[str, Any]], regulation: Regulation
+) -> List[str]:
+    """
+    Properties the corpus must have before chunking is attempted at all.
+
+    Separate from :func:`_check_chunks` because these are the faults that stop
+    chunks from being produced rather than faults *in* the chunks. An unknown
+    chapter used to surface as a bare ``KeyError`` from inside the loop, which
+    named neither the article nor the chapter and reported none of the others;
+    the point of this script is to collect what is wrong and print all of it.
+    """
+    problems: List[str] = []
+
+    missing_keys = sorted(
+        a.get("number", "?")
+        for a in articles
+        if not {"number", "title", "content", "chapter"} <= set(a)
+    )
+    if missing_keys:
+        problems.append(
+            f"{len(missing_keys)} article(s) missing required keys: {missing_keys[:8]}"
+        )
+
+    unknown = sorted(
+        {
+            a["chapter"] for a in articles
+            if "chapter" in a and a["chapter"] not in regulation.chapter_titles
+        }
+    )
+    if unknown:
+        problems.append(
+            f"{len(unknown)} chapter(s) not declared by {regulation.name}: {unknown}"
+        )
+
+    return problems
 
 
 def _check_chunks(chunks: List[Chunk], articles: List[Dict[str, Any]]) -> List[str]:
@@ -77,7 +143,7 @@ def _check_chunks(chunks: List[Chunk], articles: List[Dict[str, Any]]) -> List[s
 
     # An article that produces nothing is unreachable by retrieval, and would
     # not show up as a count mismatch anywhere downstream.
-    covered = {str(c.metadata.get("article_number")) for c in chunks}
+    covered = {c.metadata.article_number for c in chunks}
     missing = sorted(
         (a["number"] for a in articles if a["number"] not in covered),
         key=int,
@@ -147,10 +213,22 @@ def main(argv: List[str] | None = None) -> int:
     articles = json.loads(articles_path.read_text(encoding="utf-8"))
     print(f"📖 Chunking {len(articles)} articles from {articles_path}")
 
-    parser = GDPRParser()
+    problems = _check_articles(articles, GDPR)
+    if problems:
+        print(f"\n❌ Corpus is unusable ({len(problems)}); nothing chunked.")
+        for problem in problems:
+            print(f"   - {problem}")
+        return 1
+
+    chunker = Chunker(regulation=GDPR)
     chunks: List[Chunk] = []
     for article in articles:
-        chunks.extend(parser.article_to_chunks(article))
+        chunks.extend(
+            chunker.run(
+                content=article["content"],
+                article_metadata=_article_metadata(article, GDPR),
+            )
+        )
 
     problems = _check_chunks(chunks, articles)
     if problems:
@@ -162,6 +240,7 @@ def main(argv: List[str] | None = None) -> int:
     created_at = datetime.now(timezone.utc)
     manifest = build_manifest(
         chunks,
+        chunker=chunker,
         source_path=articles_path,
         source_description={"article_count": len(articles)},
         repo_root=_REPO_ROOT,
@@ -170,8 +249,19 @@ def main(argv: List[str] | None = None) -> int:
     _report(chunks, manifest)
 
     previous = latest_snapshot(chunks_dir)
+    prior = None
     if previous is not None:
-        prior = read_snapshot(previous)
+        try:
+            prior = read_snapshot(previous)
+        except LegacySnapshotError as exc:
+            # Not a failure: the newest snapshot predates the current schema, so
+            # there is nothing to compare against. Reported rather than raised
+            # because the *first* run after a schema change necessarily hits
+            # this, and refusing to write would make the new baseline
+            # unreachable.
+            print(f"\n⚠  No comparison against {previous.name}: {exc}")
+
+    if prior is not None:
         if prior.chunk_set_sha256 == manifest["chunk_set_sha256"] and not args.force:
             print(f"\n✅ Identical to the newest snapshot ({previous.name}); "
                   f"nothing written.")
