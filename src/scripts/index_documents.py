@@ -38,8 +38,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.config import get_settings
-from src.clause_and_effect import VectorDatabase
-from src.clause_and_effect.retrieval.vector_db import ChunkSetMetadata
+from src.clause_and_effect.retrieval import VectorDatabase
 from src.clause_and_effect.chunking import Chunk
 from src.clause_and_effect.chunking.chunk_store import (
     chunk_set_hash,

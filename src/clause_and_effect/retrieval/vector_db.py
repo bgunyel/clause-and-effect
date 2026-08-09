@@ -9,7 +9,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, PointIdsList
 from tqdm import tqdm
 
-from src.clause_and_effect.chunking import Chunk
+from src.clause_and_effect.chunking import Chunk, ChunkSetMetadata
 from src.clause_and_effect.retrieval import EmbeddingGenerator
 
 # Page size for walking the collection. Only the provenance fields are fetched —
@@ -21,12 +21,7 @@ _SCROLL_PAGE_SIZE = 512
 _PROVENANCE_FIELDS = ["chunk_id", "chunk_set_sha256"]
 
 
-class ChunkSetMetadata(BaseModel):
-    chunk_set_id: str
-    snapshot: str
-    source_sha256: str
-    chunker_commit: str
-    chunker_tree_dirty: bool
+
 
 class VectorDatabase:
     """Qdrant vector database wrapper"""

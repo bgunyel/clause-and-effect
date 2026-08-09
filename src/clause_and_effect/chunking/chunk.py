@@ -53,3 +53,9 @@ class Chunk(BaseModel):
         return f"Chunk(id='{self.id}', metadata={self.metadata.model_dump()})"
 
 
+class ChunkSetMetadata(BaseModel):
+    chunk_set_id: str
+    snapshot: str
+    source_sha256: str
+    chunker_commit: str
+    chunker_tree_dirty: bool
