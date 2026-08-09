@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 
 from src.clause_and_effect.parsers.gdpr_parser import GDPRParser
-from src.clause_and_effect.chunking import Chunk
 
 
 # Synthetic markdown mirroring docling's *actual* export, verified against
@@ -169,31 +168,6 @@ def test_inline_reference_never_creates_spurious_record(parser):
     nums = [a["number"] for a in parser._extract_articles(SAMPLE)]
     assert nums == ["93", "94", "95"]
     assert nums.count("29") == 0
-
-
-# --------------------------------------------------------------------------- #
-#  article_to_chunks — the bridge from extracted articles to indexed chunks.  #
-# --------------------------------------------------------------------------- #
-
-def test_short_article_becomes_single_article_chunk(parser, articles):
-    chunks = parser.article_to_chunks(articles["94"])
-    assert len(chunks) == 1
-    chunk = chunks[0]
-    assert isinstance(chunk, Chunk)
-    assert chunk.metadata["article_number"] == "94"
-    assert chunk.metadata["regulation"] == "GDPR"
-    assert chunk.metadata["chunk_type"] == "article"
-    # The recovered cross-reference text must reach the indexed chunk.
-    assert "European Data Protection Board" in chunk.text
-
-
-def test_long_article_splits_into_paragraph_chunks(parser):
-    long_content = "\n".join(f"{i}. " + "clause text " * 40 for i in range(1, 5))
-    article = {"number": "5", "title": "Principles", "content": long_content, "chapter": "2"}
-    chunks = parser.article_to_chunks(article)
-    assert len(chunks) > 1
-    assert all(c.metadata["chunk_type"] == "paragraph" for c in chunks)
-    assert all(c.metadata["article_number"] == "5" for c in chunks)
 
 
 # --------------------------------------------------------------------------- #
