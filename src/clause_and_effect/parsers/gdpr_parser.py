@@ -11,21 +11,6 @@ class GDPRParser(BaseParser):
     Handles the structure of GDPR regulation (99 articles + recitals)
     """
 
-    # GDPR has 11 chapters
-    CHAPTER_TITLES = {
-        "1": "General provisions",
-        "2": "Principles",
-        "3": "Rights of the data subject",
-        "4": "Controller and processor",
-        "5": "Transfers of personal data to third countries or international organisations",
-        "6": "Independent supervisory authorities",
-        "7": "Cooperation and consistency",
-        "8": "Remedies, liability and penalties",
-        "9": "Provisions relating to specific processing situations",
-        "10": "Delegated acts and implementing acts",
-        "11": "Final provisions",
-    }
-
     def __init__(self):
         super().__init__("GDPR")
 
