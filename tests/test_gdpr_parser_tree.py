@@ -31,7 +31,7 @@ nothing.
 """
 import pytest
 
-from src.clause_and_effect import GDPRParser
+from src.clause_and_effect.parsers import GDPRParser
 
 
 @pytest.fixture

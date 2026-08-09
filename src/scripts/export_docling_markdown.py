@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 
 from src.config import get_settings
-from src.clause_and_effect import GDPRParser
+from src.clause_and_effect.parsers import GDPRParser
 
 
 def _describe(text: str) -> str:

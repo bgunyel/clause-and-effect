@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.config import get_settings
-from src.clause_and_effect import GDPRParser
+from src.clause_and_effect.parsers import GDPRParser
 
 # The number of articles the GDPR has. Not a heuristic — a known constant, and
 # the single strongest check available on the whole pipeline.

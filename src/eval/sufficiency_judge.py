@@ -80,7 +80,7 @@ from pydantic import BaseModel, Field
 
 from src.eval.dataset import load_tier1, TestCase
 from src.eval.golden_qa import normalize_for_grounding
-from src.config import get_llm_config
+from src.llm_config import get_llm_config
 
 # The structured-output shape a judge stage returns. Each stage has its own.
 _SchemaT = TypeVar("_SchemaT", bound=BaseModel)
@@ -319,7 +319,7 @@ def build_judge_llm(
     Build a structured-output LLM for one judge stage.
 
     Args:
-        model_params: One entry from :func:`src.config.get_llm_config`.
+        model_params: One entry from :func:`src.llm_config.get_llm_config`.
         schema:       The pydantic shape the stage must return.
 
     Returns:

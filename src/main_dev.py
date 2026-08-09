@@ -12,8 +12,9 @@ import rich
 import time
 from uuid import uuid4
 
-from src.config import get_settings, get_llm_config
-from src.clause_and_effect import ComplianceAgent
+from src.config import get_settings
+from src.llm_config import get_llm_config
+from src.clause_and_effect.agents import ComplianceAgent
 
 
 def main():

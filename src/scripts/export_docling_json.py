@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from src.config import get_settings
-from src.clause_and_effect import GDPRParser
+from src.clause_and_effect.parsers import GDPRParser
 
 
 def _describe(document: Dict[str, Any]) -> str:
