@@ -33,16 +33,20 @@ the bug came from, and so would have passed against the broken code.
 """
 import hashlib
 import json
+import random
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import List
 
 import pytest
 
 from src.clause_and_effect.chunking.chunk_store import (
     MANIFEST_SUFFIX,
     SNAPSHOT_SUFFIX,
+    LegacySnapshotError,
+    _canonical_rows,
     build_manifest,
     chunk_set_hash,
     file_hash,
@@ -54,7 +58,7 @@ from src.clause_and_effect.chunking.chunk_store import (
     snapshot_name,
     write_snapshot,
 )
-from src.clause_and_effect.chunking import Chunk
+from src.clause_and_effect.chunking import Chunk, ChunkMetadata, Chunker, Regulation
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -187,8 +191,31 @@ def test_missing_git_repository_reads_as_dirty(tmp_path: Path) -> None:
 #  put through a real change would make a stale index look current.            #
 # --------------------------------------------------------------------------- #
 
-def _c(cid, text="text", **metadata):
-    return Chunk(id=cid, text=text, metadata=metadata or {"k": "v"})
+# A complete, deliberately uninteresting metadata payload.
+#
+# These tests are about hashing and the file round-trip, not about what
+# metadata says — they used to pass `{"k": "v"}` for exactly that reason. A
+# fixed schema makes "arbitrary keys" unexpressible, so every chunk now needs a
+# full one; keeping it dull keeps the tests reading as being about the hash.
+_METADATA = {
+    "article_number": "1",
+    "article_title": "Subject-matter and objectives",
+    "chapter": "1",
+    "chapter_title": "General provisions",
+    "regulation": "GDPR",
+    "jurisdiction": "EU",
+    "effective_date": "2018-05-25",
+    "chunk_type": "article",
+}
+
+
+def _c(cid, text="text", **overrides):
+    """
+    A chunk with valid metadata. Keyword overrides vary one field at a time,
+    which is what a test asserting *metadata* affects the digest needs — the
+    old helper varied it by adding a key, and that is no longer possible.
+    """
+    return Chunk(id=cid, text=text, metadata=ChunkMetadata(**{**_METADATA, **overrides}))
 
 
 def test_chunk_set_hash_is_deterministic():
@@ -208,11 +235,34 @@ def test_chunk_set_hash_ignores_generation_order():
 
 def test_chunk_set_hash_ignores_metadata_key_order():
     """
-    `sort_keys=True`. Without it the digest would depend on dict insertion
-    order, and two runs producing identical chunks would disagree.
+    The order fields are supplied in must not reach the digest.
+
+    This guarded `sort_keys=True` when metadata was a plain dict: two code paths
+    building the same metadata in different insertion orders serialized to
+    different bytes and hashed differently, so the same chunk set produced twice
+    could disagree with itself.
+
+    A typed `ChunkMetadata` removes that at the source — `model_dump()` emits
+    declaration order whatever order the fields arrive in — so **this test
+    cannot currently fail**, and it is kept deliberately as a tripwire on that
+    normalization rather than as a live check. If metadata ever goes back to
+    being a bare mapping, or the model stops normalizing, the guarantee would be
+    lost in silence; this is what would say so.
+
+    It does **not** protect `sort_keys=True` any more. Sorted order is not
+    declaration order, so dropping `sort_keys` still moves every digest — but
+    only `test_chunk_set_hash_is_pinned_to_golden_values` would notice.
     """
-    first = Chunk(id="a", text="t", metadata={"x": 1, "y": 2})
-    second = Chunk(id="a", text="t", metadata={"y": 2, "x": 1})
+    forward = dict(_METADATA)
+    backward = dict(reversed(list(_METADATA.items())))
+    assert list(forward) != list(backward), "the two orders must actually differ"
+
+    first = Chunk(id="a", text="t", metadata=ChunkMetadata(**forward))
+    second = Chunk(id="a", text="t", metadata=ChunkMetadata(**backward))
+
+    # Asserted separately so a failure names the layer that broke: the
+    # normalization itself, or the hash that depends on it.
+    assert list(first.metadata.model_dump()) == list(second.metadata.model_dump())
     assert chunk_set_hash([first]) == chunk_set_hash([second])
 
 
@@ -221,17 +271,53 @@ def test_chunk_set_hash_ignores_metadata_key_order():
                  id="text"),
     pytest.param(lambda c: Chunk(id=c.id + "!", text=c.text, metadata=c.metadata),
                  id="id"),
-    pytest.param(lambda c: Chunk(id=c.id, text=c.text, metadata={**c.metadata, "n": 1}),
-                 id="metadata"),
 ])
-def test_chunk_set_hash_changes_when_content_changes(mutate):
-    """
-    All three fields are part of identity. Metadata matters as much as text:
-    `paragraph` and `article_number` are what citations are scored against, so
-    a metadata-only change is a different chunk set.
-    """
+def test_chunk_set_hash_changes_when_id_or_text_changes(mutate):
     original = _c("a")
     assert chunk_set_hash([original]) != chunk_set_hash([mutate(original)])
+
+
+def _altered(metadata: ChunkMetadata, field: str) -> ChunkMetadata:
+    """
+    The same metadata with one field changed, whatever that field's type.
+
+    Rebuilt through the model rather than with `model_copy(update=...)`, which
+    skips validation: a `chunk_type` outside its `Literal` would sail through
+    and the test would then pin behaviour on a value the schema forbids.
+    """
+    values = metadata.model_dump()
+    if field == "chunk_type":
+        values[field] = "paragraph" if values[field] == "article" else "article"
+    elif values[field] is None:
+        values[field] = "1"
+    else:
+        values[field] = values[field] + "!"
+    return ChunkMetadata(**values)
+
+
+@pytest.mark.parametrize("field", sorted(ChunkMetadata.model_fields))
+def test_chunk_set_hash_changes_when_any_metadata_field_changes(field: str):
+    """
+    Every field is part of identity — enumerated from the model, not listed
+    here, so a field added to `ChunkMetadata` is covered without anyone
+    remembering to extend this.
+
+    This replaced a single case that proved the point by adding an arbitrary
+    key. That is no longer expressible against a fixed schema, and mutating one
+    chosen field would have been strictly weaker than what it replaced: the
+    realistic failure is not "metadata is ignored" but "*one field* is". `_row`
+    dumps the model, and a dump narrowed by `exclude=` or `include=` would drop
+    a field out of identity silently — with `paragraph_number` gone, Article
+    12(1) and Article 12(2) hash the same, and a chunk set could change while
+    the digest, the snapshot filename and every point's payload stayed put.
+    """
+    original = _c("a", chunk_type="paragraph", paragraph_number="1")
+    altered = Chunk(
+        id=original.id,
+        text=original.text,
+        metadata=_altered(original.metadata, field),
+    )
+    assert chunk_set_hash([original]) != chunk_set_hash([altered])
 
 
 def test_chunk_set_hash_changes_when_a_chunk_is_added_or_removed():
@@ -251,64 +337,153 @@ def test_chunk_set_hash_is_pinned_to_golden_values():
     wrong frame — escaping is still deterministic and injective, so it is not a
     correctness property at all, and the test passed happily when the flag was
     flipped. Stability is what actually matters here, and only a golden value
-    expresses it. Non-ASCII text, nested metadata and unsorted input are folded
-    into the fixture so the same assertion covers them.
+    expresses it. Non-ASCII text and unsorted input are folded into the fixture
+    so the same assertion covers them.
+
+    This is also the **only** test that covers stability across code versions.
+    The other three hash tests vary input order, the process and the hash seed,
+    and all of them recompute both sides — so a changed scheme moves both and
+    they stay green. `test_chunk_set_hash_ignores_metadata_key_order` no longer
+    guards `sort_keys=True` either, now that a typed model normalizes field
+    order at the source. If this test is weakened, nothing is left.
 
     A failure here means the hashing scheme changed. That is not necessarily
     wrong, but it invalidates every snapshot in `data/chunks/` and every
     collection built from one — so it must be a decision, not a side effect.
+
+    ### Regenerated 2026-08-09, when `Chunk.metadata` became `ChunkMetadata`
+
+    The old fixture carried `{"z": 1, "a": [2, 3]}` and `{"paragraph": "1"}`,
+    shapes a fixed schema rejects, so the value could not simply be re-pinned —
+    the fixture had to change too. Nested metadata is gone from the docstring
+    above because it is no longer constructible; every field is now a string.
+    Added in its place: both `chunk_type` branches, so `paragraph_number` is
+    covered set *and* `None`.
+
+    The digest was **not** taken from whatever the code emitted. It was derived
+    independently, by writing out the canonical form by hand from the rules in
+    `chunk_store`'s module docstring — rows sorted by id, keys sorted at every
+    level, `separators=(",", ":")`, `ensure_ascii=False` — hashing that string,
+    and confirming the two agreed. Pasting the implementation's own output would
+    have made the pin a restatement of the code rather than a check on it, and
+    regeneration is the one moment when that distinction is invisible.
+
+    The empty-chunk-set value is unchanged and needs no regeneration: it is
+    `sha256(b"[]")` and touches no metadata at all.
     """
+    common = dict(chapter="1", chapter_title="General provisions",
+                  regulation="GDPR", jurisdiction="EU",
+                  effective_date="2018-05-25")
     chunks = [
+        # Deliberately unsorted — article_2 first — so the sort in
+        # `_canonical_rows` is part of what the golden value pins.
         Chunk(id="gdpr_article_2", text="données — personnelles",
-              metadata={"z": 1, "a": [2, 3]}),
-        Chunk(id="gdpr_article_1", text="Scope", metadata={"paragraph": "1"}),
+              metadata=ChunkMetadata(article_number="2",
+                                     article_title="Champ d'application",
+                                     chunk_type="paragraph",
+                                     paragraph_number="1", **common)),
+        Chunk(id="gdpr_article_1", text="Scope",
+              metadata=ChunkMetadata(article_number="1",
+                                     article_title="Subject-matter",
+                                     chunk_type="article", **common)),
     ]
 
     assert chunk_set_hash(chunks) == (
-        "841640c584e313e79f23b978e3a76f06091b9b444f6f3ae6cffc1e9cf612e324"
+        "8ff0c98eeac4707265d9be0dffce9374409a94c2181573341635e6bbe0822daf"
     )
     assert chunk_set_hash([]) == (
         "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
     )
 
 
-def test_chunk_set_hash_is_stable_across_processes():
+# Seeds that always run. `0` is qualitatively different from the rest — it
+# disables hash randomization outright rather than seeding it, so it exercises a
+# different branch in CPython's startup, not just another point in the same
+# space. `1` is the minimal enabled case.
+#
+# Any seed that has ever been seen to fail belongs here permanently: that is how
+# a one-off observation becomes a standing regression test.
+_FIXED_HASH_SEEDS = (0, 1)
+
+# Drawn fresh on every collection, so coverage widens across runs instead of
+# retesting the same points forever.
+_RANDOM_HASH_SEEDS = 3
+
+
+def _hash_seeds() -> List[int]:
+    """
+    Fixed seeds plus fresh random ones.
+
+    Chosen *here* rather than delegated to `PYTHONHASHSEED=random`, which is a
+    sentinel telling CPython to draw its own seed from OS entropy. That reads
+    like the same thing and is not: the interpreter never exposes the seed it
+    generated — `sys.hash_info.seed_bits` is the width, not the value, and the
+    environment variable still just says "random" — so a failure under it is
+    irreproducible *in principle*. Picking the integer on this side keeps the
+    breadth and makes every failure replayable, because we know what we passed.
+
+    Deliberately not seeded from the clock. `random` is already seeded from
+    `os.urandom(32)` at import; seeding from `time.time()` would be strictly
+    worse, and worse precisely where it matters — parallel CI jobs starting in
+    the same second would draw *identical* seeds while appearing to sample
+    independently.
+    """
+    return [*_FIXED_HASH_SEEDS,
+            *(random.randrange(2 ** 32) for _ in range(_RANDOM_HASH_SEEDS))]
+
+
+@pytest.mark.parametrize("seed", _hash_seeds())
+def test_chunk_set_hash_is_stable_across_processes(seed: int):
     """
     The property hand-verified on 2026-08-06 and never guarded since: a digest
     regenerated tomorrow, in a fresh interpreter, must equal today's. One that
     shifted between runs would make every index permanently stale.
 
-    Run under `PYTHONHASHSEED=random`, which perturbs set iteration order — the
-    thing an in-process test cannot vary. Reading the implementation says this
-    should be safe (`sorted()` by ID, `sort_keys=True`, no set anywhere in the
-    path), but that reasoning is exactly what a hand-verification already
-    assumed; the subprocess is what makes it observed rather than argued.
+    Hash randomization perturbs set iteration order — the thing an in-process
+    test cannot vary. Reading the implementation says this should be safe
+    (`sorted()` by ID, `sort_keys=True`, no set anywhere in the path), but that
+    reasoning is exactly what a hand-verification already assumed; the
+    subprocess is what makes it observed rather than argued. It cannot currently
+    fail for that same reason — it is a tripwire against a `set()` appearing in
+    the canonical path later, not a live check.
 
-    Deliberately one invocation, not a parametrized sweep of seeds. Importing
-    the package costs ~17s because `src/clause_and_effect/__init__.py` eagerly
-    imports docling, langchain, openai and qdrant, so each extra seed buys
-    little and costs a lot.
+    The chunk set is built here and handed over as JSON rather than written into
+    the child's source. The fixture used to live inside the `-c` string, where
+    no symbol search and no IDE rename could reach it — which is how it went on
+    passing untyped metadata for two days after `Chunk` was retyped, and why the
+    package move before that had to have this program's import paths corrected
+    by hand. Named once, in real code, it breaks visibly instead.
+
+    Was one invocation under `PYTHONHASHSEED=random`, on the grounds that
+    importing the package cost ~17s. That cost is 0.27s since
+    `src/clause_and_effect/__init__.py` stopped importing the world
+    (2026-08-09), so the constraint that shaped this test no longer applies.
     """
-    seed = "random"
+    chunks = [
+        _c("b", "second"),
+        _c("a", "first", chunk_type="paragraph", paragraph_number="1"),
+    ]
     repo_root = Path(__file__).resolve().parents[1]
     program = (
+        "import json,sys;"
         "from src.clause_and_effect.chunking.chunk_store import chunk_set_hash;"
         "from src.clause_and_effect.chunking import Chunk;"
-        "print(chunk_set_hash(["
-        "Chunk(id='b', text='second', metadata={'z': 1, 'a': 2}),"
-        "Chunk(id='a', text='first', metadata={'m': [1, 2], 'k': 'v'}),"
-        "]))"
+        "print(chunk_set_hash([Chunk(**row) for row in json.loads(sys.argv[1])]))"
     )
     result = subprocess.run(
-        [sys.executable, "-c", program],
+        [sys.executable, "-c", program,
+         json.dumps([c.model_dump() for c in chunks], ensure_ascii=False)],
         cwd=repo_root, capture_output=True, text=True, check=True,
         env={"PATH": "/usr/bin:/bin", "PYTHONPATH": str(repo_root),
-             "PYTHONHASHSEED": seed},
+             "PYTHONHASHSEED": str(seed)},
     )
-    assert result.stdout.strip() == chunk_set_hash([
-        Chunk(id="b", text="second", metadata={"z": 1, "a": 2}),
-        Chunk(id="a", text="first", metadata={"m": [1, 2], "k": "v"}),
-    ])
+
+    # The seed goes in the message, not a print: pytest swallows stdout for
+    # passing tests, and this is the one fact that makes a failure replayable.
+    assert result.stdout.strip() == chunk_set_hash(chunks), (
+        f"digest depends on the interpreter's hash seed; "
+        f"reproduce with PYTHONHASHSEED={seed}"
+    )
 
 
 def test_file_hash_is_sha256_of_the_bytes(tmp_path: Path):
@@ -423,10 +598,14 @@ def _written(tmp_path: Path, chunks, **manifest_overrides):
 
 
 def test_snapshot_round_trip_preserves_chunks_exactly(tmp_path: Path):
+    """
+    Both chunk shapes, and text that is not ASCII: `ensure_ascii=False` is what
+    keeps "données" readable in the archive rather than escaped, and the round
+    trip is what proves the choice does not corrupt it.
+    """
     chunks = [
-        Chunk(id="gdpr_article_2", text="Scope", metadata={"paragraph": "1", "n": 2}),
-        Chunk(id="gdpr_article_5", text="données — personnelles",
-              metadata={"topics": ["a", "b"]}),
+        _c("gdpr_article_2", "Scope", chunk_type="paragraph", paragraph_number="1"),
+        _c("gdpr_article_5", "données — personnelles", article_number="5"),
     ]
 
     loaded = read_snapshot(_written(tmp_path, chunks))
@@ -484,15 +663,98 @@ def test_read_snapshot_rejects_edited_chunk_text(tmp_path: Path):
         read_snapshot(chunks_path)
 
 
-def test_read_snapshot_rejects_edited_metadata(tmp_path: Path):
-    """Metadata is part of identity, so editing it must fail the same way."""
+def _edited(tmp_path: Path, edit) -> Path:
+    """Write a one-chunk snapshot, then apply `edit` to the row on disk."""
     chunks_path = _written(tmp_path, [_c("a")])
     row = json.loads(chunks_path.read_text(encoding="utf-8").strip())
-    row["metadata"]["paragraph"] = "99"
+    edit(row)
     chunks_path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    return chunks_path
+
+
+# --------------------------------------------------------------------------- #
+#  Editing metadata has three outcomes, and which one you get depends on how   #
+#  the file was edited. They must stay distinguishable in both directions:     #
+#  reporting a merely-old snapshot as corrupt sends the reader hunting for     #
+#  tampering that did not happen, and reporting a tampered one as old tells    #
+#  them to regenerate it instead of investigating.                             #
+# --------------------------------------------------------------------------- #
+
+def test_read_snapshot_rejects_an_edited_metadata_value(tmp_path: Path):
+    """
+    Metadata is part of identity, so editing a field must fail exactly as an
+    edited `text` does. The schema is still satisfied here — the chunk loads
+    cleanly and it is the re-hash that catches it, which is the tamper check
+    doing its job.
+    """
+    chunks_path = _edited(
+        tmp_path, lambda row: row["metadata"].__setitem__("article_title", "tampered")
+    )
 
     with pytest.raises(ValueError, match="does not match its manifest"):
         read_snapshot(chunks_path)
+
+
+def test_read_snapshot_rejects_an_unknown_metadata_key(tmp_path: Path):
+    """
+    An unknown key is rejected **before** hashing, and that rejection is
+    load-bearing for integrity rather than for error messages.
+
+    Pydantic ignores unknown keys by default. Without the check, adding one to a
+    chunks file on disk is discarded at load, the reconstructed chunks are
+    identical to the originals, the re-hash matches the manifest, and
+    `read_snapshot` returns a `Snapshot` as though nothing happened — verified
+    2026-08-09 by disabling only that branch. **The tamper check cannot catch an
+    edit the loader throws away before hashing.** This is the only thing between
+    a hand-edited metadata key and a clean bill of health.
+    """
+    chunks_path = _edited(
+        tmp_path, lambda row: row["metadata"].__setitem__("paragraph", "99")
+    )
+
+    with pytest.raises(LegacySnapshotError, match="predates the current chunk schema"):
+        read_snapshot(chunks_path)
+
+
+def test_read_snapshot_rejects_a_missing_required_field(tmp_path: Path):
+    """
+    The other way a row can fail the schema: a field removed rather than added.
+    Caught as a `ValidationError` and re-raised with the file named, since the
+    bare pydantic error says nothing about which snapshot it came from.
+    """
+    chunks_path = _edited(tmp_path, lambda row: row["metadata"].pop("chapter"))
+
+    with pytest.raises(LegacySnapshotError, match="does not fit the current chunk schema"):
+        read_snapshot(chunks_path)
+
+
+def test_read_snapshot_reports_a_real_legacy_snapshot_as_legacy(tmp_path: Path):
+    """
+    The direction `LegacySnapshotError` was introduced for, against the shape
+    actually on disk: `chunks_2026-08-07_081627_a231f919` carries `topics` on
+    every chunk and `paragraph` on its 330 paragraph chunks.
+
+    Before the check existed, pydantic dropped both keys, the re-hash then
+    disagreed with the manifest, and the reader was told *"chunk set does not
+    match its manifest"* — the message written for a hand-edited or truncated
+    file. The file was intact; only the schema had moved.
+
+    Reconstructed here rather than read from `data/chunks/`, so the test states
+    the shape it is about and keeps working once that archive is retired.
+    """
+    chunks_path = _written(tmp_path, [_c("a")])
+    row = json.loads(chunks_path.read_text(encoding="utf-8").strip())
+    row["metadata"]["topics"] = ["data_subject_rights", "processing"]
+    row["metadata"]["paragraph"] = row["metadata"].pop("paragraph_number")
+    chunks_path.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    with pytest.raises(LegacySnapshotError) as raised:
+        read_snapshot(chunks_path)
+
+    # Both offending keys named, so the reader learns which schema it predates
+    # rather than only that it does.
+    assert "paragraph" in str(raised.value) and "topics" in str(raised.value)
+    assert "does not match its manifest" not in str(raised.value)
 
 
 def test_read_snapshot_rejects_a_truncated_file(tmp_path: Path):
@@ -543,12 +805,36 @@ def test_write_snapshot_creates_the_directory(tmp_path: Path):
 #  build_manifest                                                              #
 # --------------------------------------------------------------------------- #
 
+# Deliberately not `GDPR`. `build_manifest` records the chunker's regulation by
+# reading it off the live object, and against the real constant a test could not
+# tell that apart from the hardcoded `"GDPR"` string this replaced — which is the
+# exact failure being guarded against, since the field it replaced sat wrong for
+# two days.
+_TEST_REGULATION = Regulation(
+    name="TESTREG",
+    jurisdiction="XX",
+    effective_date="2000-01-01",
+    chapter_titles={"1": "Only chapter"},
+)
+
+
+class _SubclassedChunker(Chunker):
+    """
+    A chunker whose class name is not `Chunker`.
+
+    Same reason `_TEST_REGULATION` is not `GDPR`: the manifest records
+    `type(chunker).__name__`, and against the real class that is indistinguishable
+    from the hardcoded `"Chunker"` a future edit might reintroduce.
+    """
+
+
 def _manifest(repo: Path, chunks=None):
     source = repo / "data" / "regulations" / "gdpr_articles.json"
     source.parent.mkdir(parents=True, exist_ok=True)
     source.write_text('[{"number": "1"}]', encoding="utf-8")
     return build_manifest(
         chunks if chunks is not None else [_c("a", "x"), _c("b", "yy")],
+        chunker=_SubclassedChunker(regulation=_TEST_REGULATION),
         source_path=source,
         source_description={"article_count": 1},
         repo_root=repo,
@@ -608,3 +894,66 @@ def test_manifest_truncates_a_very_dirty_tree(repo: Path):
     assert len(paths) == 51, "50 paths plus one overflow marker"
     assert "more" in paths[-1]
     assert manifest["git_dirty"] is True
+
+
+def test_manifest_records_the_chunker_that_actually_ran(repo: Path):
+    """
+    Provenance read off the live chunker, never typed in.
+
+    This field said `{"class": "GDPRParser", "method": "article_to_chunks"}` for
+    two days after the chunker moved out of the parser and that method ceased to
+    exist — a manifest naming a producer that could not have produced it. It is
+    the exact hazard the module docstring warns about ("any constant duplicated
+    here becomes a second source of truth"), and the field proved the warning.
+
+    Both values are deliberately unlike the production ones. `_TEST_REGULATION`
+    is not `GDPR`, and the chunker is a subclass rather than a `Chunker` — with
+    the real types, `type(chunker).__name__` and `chunker.regulation.name` would
+    each produce exactly the string a hardcoded literal would, and this
+    assertion would pass against the very bug it exists to catch. Verified: with
+    a plain `Chunker`, re-hardcoding `"class": "Chunker"` does not fail.
+    """
+    manifest = _manifest(repo)
+
+    assert manifest["chunker"] == {"class": "_SubclassedChunker",
+                                   "regulation": "TESTREG"}
+
+
+def test_manifest_stats_count_both_chunk_types(repo: Path):
+    """`by_chunk_type` reads the typed field; it used to `.get` a dict."""
+    chunks = [
+        _c("a", chunk_type="article"),
+        _c("b", chunk_type="paragraph", paragraph_number="1"),
+        _c("c", chunk_type="paragraph", paragraph_number="2"),
+    ]
+
+    manifest = _manifest(repo, chunks)
+
+    assert manifest["stats"]["by_chunk_type"] == {"article": 1, "paragraph": 2}
+
+
+def test_written_rows_are_the_rows_that_were_hashed(tmp_path: Path):
+    """
+    The hash and the writer must serialize a chunk identically.
+
+    They are both `_row` for that reason. When they were two separate literals,
+    any drift between them would have made a freshly written snapshot fail its
+    own tamper check on the very next read — a failure that reads as corruption
+    and is really a mismatch between two copies of the same idea.
+
+    Asserted against the file on disk rather than by calling `_row` twice, so it
+    still holds if the two ever diverge again.
+    """
+    chunks = [
+        _c("a", "first"),
+        _c("b", "second", chunk_type="paragraph", paragraph_number="1"),
+    ]
+    chunks_path = _written(tmp_path, chunks)
+
+    written = [
+        json.loads(line)
+        for line in chunks_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    # Same rows the digest was taken over, modulo the writer's document order.
+    assert sorted(written, key=lambda r: r["id"]) == _canonical_rows(chunks)
