@@ -1,9 +1,12 @@
+import logging
 import re
 from pathlib import Path
 from typing import List, Dict, Any
 
 from .base_parser import BaseParser
 from .docling_tree import text_items
+
+logger = logging.getLogger(__name__)
 
 class GDPRParser(BaseParser):
     """
@@ -24,9 +27,9 @@ class GDPRParser(BaseParser):
         Returns:
             List of Chunk objects, one per article (or paragraph for long articles)
         """
-        print(f"📖 Parsing GDPR from {file_path}")
+        logger.info("📖 Parsing GDPR from %s", file_path)
         articles = self.get_articles(file_path=file_path)
-        print(f"✅ Extracted {len(articles)} articles from GDPR")
+        logger.info("✅ Extracted %d articles from GDPR", len(articles))
         return articles
 
     def get_articles(self, file_path: Path) -> List[Dict[str, Any]]:
