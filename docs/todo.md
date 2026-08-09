@@ -242,8 +242,39 @@ per the priority order above.
     split inside ¶2 stamps real ¶3 as `paragraph: "4"` through the end of the
     article. In those 10 articles the paragraph metadata is wrong **against a
     perfect corpus**, and nothing surfaces it.
+  - **A quieter second class, found 2026-08-09: the split deletes a citation
+    number without shifting anything.** When the false match is the last thing
+    on its line, `\s+` swallows the newline, the delimiter runs up to the next
+    real marker, and the empty segment between them is dropped by the
+    `if p.strip()` filter. The paragraph count therefore stays *correct* — and
+    the sentence has silently lost its citation, ending *"…shall be adopted in
+    accordance with Article"* with nothing after it. **32 sites across 26
+    articles** (2, 12, 13, 14, 20, 28, 35, 36, 37, 40, 41, 42, 43, 45, 47, 51,
+    56, 58, 60, 61, 62, 64, 65, 78, 82, 92) — 16 of them appear on no other list
+    here, because count-based checks cannot see this. Article 40 carries all
+    four of its bad splits at once: three of this class, one of the class above.
+    The invariant that catches it is *chunking partitions an article, it does
+    not edit it* — pinned as `test_splitting_an_article_never_loses_characters`.
   - **Article 4 does not split at all**, because its definitions are `(1)`…`(26)`.
     One chunk, 8,655 chars.
+  - **The structure is not missing — it is built and then discarded.** Verified
+    2026-08-09 against `gdpr.docling.json`: Article 12's ¶2 is a single
+    `list_item` (item 367) with `marker='2.'` and its text unbroken through
+    *"…identify the data subject."*, and `_build_units` already yields the
+    correct 8 units with (a)/(b) attached to ¶5. Across the corpus the tree
+    gives **319 numbered units** against the chunker's **330 chunks**, agreeing
+    with the regulation everywhere. `_render_units` then flattens the units into
+    `content`, the corpus schema `{number, title, content, chapter}` has nowhere
+    to keep them, and `_split_into_paragraphs` re-derives from that rendering
+    what the pipeline was holding two functions earlier. Anchoring the regex to
+    `(?m)^\d+\.[ \t]+` does fix all 11 articles and all 32 deletions — but only
+    because `_render_units` happens to emit one line per unit, so it is a patch
+    that works by exploiting our own serializer. Carrying the units into the
+    corpus is the actual fix.
+
+  **Not to be fixed before the eval pipeline exists — Bertan, 2026-08-09.** Not
+  because the fix is unclear, but because a fix has to be shown not to have side
+  effects, and only the eval pipeline can show that.
 
   ### The worked example: Article 4 before the corpus fix
 
@@ -463,6 +494,96 @@ per the priority order above.
 ---
 
 ## 🟡 Tooling
+
+- [x] ✅ **`src/config.py` pulled torch to read two directory paths — split
+  2026-08-09.** `get_llm_config` moved to `src/llm_config.py`; `config.py` now
+  holds only `Settings` and `get_settings()` and carries no LLM dependency.
+  **`import src.config` 8.34s → 0.267s; `import src.scripts.generate_chunks`
+  5.46s → 0.254s.** Call sites repointed: `main_dev.py`,
+  `scripts/gdpr_test_data_generation.py`, `eval/sufficiency_judge.py`.
+
+  A lazy import inside the function would have bought the same seconds, but a
+  module boundary is not something the next edit undoes by accident. The cost
+  itself originates in `ai_common` — see the entry below, which is still open.
+
+- [ ] **`ai_common` costs ~8s to import, and ~100% of it is avoidable for most
+  consumers.** Found 2026-08-09 while tracing why chunk generation loaded torch.
+  `ai_common` is Bertan's own library (`/home/bgunyel/source/ai/ai-common`,
+  installed non-editable into this venv) and is consumed by at least six of his
+  projects — `auto-company`, `business-researcher`, `deep-sage`, `ragnar`,
+  `summary-writer`, `elite-craft` — so a fix there pays off well beyond this
+  repo. **Deferred by Bertan, 2026-08-09: to be dealt with later.**
+
+  ### The chain
+
+  ```
+  from ai_common import LlmServers, ModelNames        (two enums)
+    ai_common/__init__  →  .base .enums .engine .llm .price .utils .web_search
+      ai_common.llm     →  langchain_{anthropic,google_genai,groq,ollama,
+                                      openai,openrouter}  + ollama
+        langchain_core.language_models.base
+          try: from transformers import GPT2TokenizerFast   ← module scope
+            transformers → torch
+  ```
+
+  ### Measurements
+
+  | | |
+  |---|---|
+  | `import ai_common` | ~7.8s |
+  | `from ai_common.enums import ModelNames` | ~8.1s — **no cheaper** |
+  | `ai_common/enums.py`'s real deps (`enum`, `typing`, `pydantic`) | **0.06s** |
+  | one langchain provider | 5.37s (the shared langchain_core/transformers/torch base) |
+  | all six providers together | 7.46s (marginal cost of the other five ≈ 2.1s) |
+
+  ### Three findings
+
+  1. **`__init__.py` imports the whole surface eagerly.** This is the same
+     defect as the one fixed in `src/clause_and_effect/__init__.py` on
+     2026-08-09, one dependency out — and it has the same consequence: importing
+     a submodule directly does *not* avoid it, because Python executes the parent
+     package first. `enums.py` needs only stdlib and pydantic (0.06s) and cannot
+     be reached for less than 8s. **For a consumer that only wants an enum, all
+     of the cost is avoidable.**
+
+     The backward-compatible fix is PEP 562 lazy re-export — a module-level
+     `__getattr__` mapping each exported name to its submodule, resolving and
+     caching in `globals()` on first access. `from ai_common import ModelNames`
+     keeps working and loads only `enums.py`. It must be paired with
+     `if TYPE_CHECKING: from .enums import …`, or IDE autocomplete and static
+     analysis go blind on every re-exported name.
+
+  2. **`llm.py` imports six provider SDKs at module scope**, and the speed is
+     the lesser half of the argument. **`ai_common` cannot be imported at all
+     unless all six provider packages are installed** — a project that only ever
+     calls OpenRouter still carries `langchain_anthropic`, `langchain_groq`,
+     `langchain_ollama`, `langchain_openai` and `langchain_google_genai` as hard
+     dependencies. Importing them inside `get_llm()`, keyed off `LlmServers`,
+     turns them into optional extras and changes the failure mode from an
+     ImportError at import time to *"you asked for Groq, install
+     `langchain_groq`"* at the point of use. Worth ~2.1s on top.
+
+  3. **The transformers→torch leg is upstream, not Bertan's.**
+     `langchain_core/language_models/base.py:42` does a module-scope
+     `try: from transformers import GPT2TokenizerFast / except ImportError`,
+     for a fallback token counter in `get_num_tokens`. Not `TYPE_CHECKING`-
+     guarded — a real eager import that degrades quietly when transformers is
+     absent. Since transformers *is* installed here, the try succeeds and drags
+     in torch (~2s). Nothing to fix in `ai_common`; it only bites once anything
+     langchain-based loads, which findings 1 and 2 are what make avoidable.
+
+  ### Consequence for this repo, until it is fixed
+
+  `src/llm_config.py` imports `from ai_common.enums import …` rather than the
+  top-level name. That expresses the right intent but **buys nothing today** —
+  measured identical, because the parent `__init__` runs regardless. It becomes
+  cheap for free the moment finding 1 lands. Nothing else here depends on
+  `ai_common`, so the 7.6s is now confined to the one module that builds LLMs.
+
+  **Before implementing:** check what the other six consumers import from
+  `ai_common`, including names not in `__all__` — that decides how conservative
+  the `_EXPORTS` map has to be, and whether anything relies on a submodule being
+  imported as a side effect of importing the package.
 
 - [ ] 🔺 **Modify the Makefile for safe dependency upgrades** _(requested)_ —
   **Bertan, 2026-08-07: not to be postponed much longer.** The motivating case
@@ -1041,15 +1162,32 @@ deliberately deferred into this work rather than done piecemeal.
   mirroring a shape verified against `gdpr.docling.json`. The `visited` guard
   gets its own tests precisely because the real export **cannot** exercise it —
   it has no nesting anywhere, so nothing there would notice its removal.
-- [ ] **`src/clause_and_effect/__init__.py` imports the world eagerly**, found
-  2026-08-07. `from .agents/.parsers/.retrieval import *` pulls docling,
-  langchain, openai and qdrant, so importing a pure-stdlib module like
-  `chunk_store` costs **~17 seconds**. Every test run pays ~14s before doing
-  anything, and it is why the cross-process hash test is a single invocation
-  rather than a sweep of seeds. A regression suite is meant to be cheap enough
-  to run on every change; this is the main thing making it not. Lazy imports, or
-  importing submodules directly rather than re-exporting, would fix it.
-- [ ] `src/config.py` `get_llm_config()['writer_model'][1]` is **broken**:
+- [x] ✅ **`src/clause_and_effect/__init__.py` imported the world eagerly — done
+  2026-08-09 by Bertan**, found 2026-08-07. `from .agents/.parsers/.retrieval
+  import *` pulled docling, langchain, openai and qdrant, so importing a
+  pure-stdlib module like `chunk_store` cost **~17 seconds** and every test run
+  paid ~14s before doing anything. Emptying the file to its docstring and
+  version fixed it; the seven sites that imported through the re-exports now
+  import from their subpackage (`…clause_and_effect.parsers`, `.retrieval`,
+  `.agents`).
+
+  Measured: `import …chunking` **15.6s → 0.124s**; suite wall clock 23.9s →
+  17.5s with identical results. Per test module, the OCR stack is now confined
+  to the three that actually parse — `test_chunker` 0.30s, `test_chunk_store`
+  0.47s, the two eval modules 0.15s, against 9–11s for `test_gdpr_parser`,
+  `test_gdpr_parser_tree` and `test_docling_tree`.
+
+  **One import left to remove:** `test_generate_chunks` still costs 13.4s,
+  because `generate_chunks.py` imports `GDPRParser` for two lines — constructing
+  it and calling the removed `article_to_chunks`. Wiring `Chunker` in its place
+  drops that import, and the `gdpr_articles.json → chunks` stage stops depending
+  on docling at all, which is the correct shape: chunking a JSON corpus has no
+  reason to load an OCR stack.
+
+  With this cheap, the cross-process determinism test could become a sweep of
+  `PYTHONHASHSEED` values rather than the single invocation it was reduced to.
+- [ ] `src/llm_config.py` (was `src/config.py` until the 2026-08-09 split)
+  `get_llm_config()['writer_model'][1]` is **broken**:
   `ModelNames.GPT_OSS_120B` has no OpenRouter alias in `ai_common`
   (`MODEL_NAME_ALIAS_DICT` lists groq and ollama only), so `get_llm` raises
   `KeyError: <LlmServers.OPENROUTER>` on construction. Found 2026-08-05 while
