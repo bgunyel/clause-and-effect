@@ -5,7 +5,7 @@ Index a chunk snapshot into the vector database.
                                                                                     ^^^^^^
 Run:
 
-    python -m src.scripts.index_documents [--check] [--prune] [--snapshot NAME]
+    python -m src.scripts.index_documents [--check] [--snapshot NAME]
 
 **Indexes a snapshot, never a fresh chunking.** Re-chunking here would embed a
 chunk set that was never written down, so the hash recorded on the collection
@@ -24,6 +24,16 @@ Two invariants are enforced, and both were violated by the live collection as of
     returned by `search`, from a decomposition that exists nowhere else. A
     retrieval metric measured against them is measuring a corpus nobody has.
 
+**Pruning is not optional** — Bertan, 2026-08-09. It was briefly gated behind a
+`--prune` flag, when the first destructive run had 196 points to remove and an
+opt-in felt prudent. The flag is gone. The second invariant above is not a
+preference the caller may decline: a collection holding points from a corpus
+that no longer exists does not partly satisfy it, it fails it, and an index run
+that leaves them behind has not indexed the snapshot. Making removal optional
+made "did this run do its job?" depend on which flags were typed, which is
+exactly the state the `chunk_set_sha256` machinery exists to end. Use `--check`
+to see what a run would change without changing anything.
+
 Order matters and is not arbitrary. Metadata is written **last** — after
 `index_chunks` verifies its count and after orphans are gone — because a
 collection that advertises a snapshot it only partly holds is worse than one
@@ -32,22 +42,27 @@ unknown. For the same reason a run that leaves orphans behind exits non-zero
 *without* writing metadata.
 """
 import argparse
+import logging
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
 from src.config import get_settings
+from src.logging_setup import setup_logging
 from src.clause_and_effect.retrieval import VectorDatabase
-from src.clause_and_effect.chunking import Chunk
+from src.clause_and_effect.chunking import Chunk, ChunkSetMetadata
 from src.clause_and_effect.chunking.chunk_store import (
-    chunk_set_hash,
     latest_snapshot,
     list_snapshots,
     read_snapshot,
 )
 
 _SMOKE_QUERY = "What is the timeline for data deletion requests?"
+
+logger = logging.getLogger(__name__)
+
+# How many offending items a report names before summarising the rest.
+_REPORT_LIMIT = 10
 
 
 def _resolve_snapshot(chunks_dir: Path, name: str | None) -> Path | None:
@@ -64,47 +79,23 @@ def _resolve_snapshot(chunks_dir: Path, name: str | None) -> Path | None:
     return None
 
 
-def _build_metadata(
-    snapshot_path: Path,
-    manifest: Dict[str, Any],
-    settings: Any,
-    vector_size: int,
-    indexed_at: datetime,
-) -> Dict[str, Any]:
-    """
-    What the collection records about its own provenance.
-
-    Decided in full up front rather than grown key by key: Qdrant **merges**
-    collection metadata, so a key written once persists until explicitly
-    overwritten. A schema that accretes leaves stale keys behind advertising
-    values nothing produced.
-
-    `embedding_model` and `vector_size` are here because the chunk hash does not
-    cover them. Identical chunks through different models give different vectors
-    and different retrieval, while both collections would honestly report the
-    same `chunk_set_sha256` — so the hash alone cannot answer "does this index
-    match?" and these two close that gap.
-    """
-    return {
-        "chunk_set_sha256": manifest["chunk_set_sha256"],
-        "chunk_count": manifest["chunk_count"],
-        "snapshot": snapshot_path.name,
-        "source_sha256": manifest["source"]["sha256"],
-        "chunker_commit": manifest["git_commit"],
-        "chunker_tree_dirty": manifest["git_dirty"],
-        "embedding_model": settings.EMBEDDING_MODEL,
-        "vector_size": vector_size,
-        "indexed_at": indexed_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
+def _listing(items: List[str], limit: int = _REPORT_LIMIT) -> str:
+    """Indented lines for a log record, truncated with an honest tail count."""
+    shown = "\n".join(f"     {item}" for item in items[:limit])
+    if len(items) > limit:
+        shown += f"\n     … and {len(items) - limit} more"
+    return shown
 
 
-def _report_orphans(orphans: Dict[str, str | None], limit: int = 10) -> None:
-    print(f"\n⚠️  {len(orphans)} point(s) in the collection belong to no chunk "
-          f"in this snapshot.")
-    for point_id, chunk_id in sorted(orphans.items(), key=lambda kv: str(kv[1]))[:limit]:
-        print(f"     {chunk_id or '<no chunk_id in payload>'}  ({point_id})")
-    if len(orphans) > limit:
-        print(f"     … and {len(orphans) - limit} more")
+def _report_orphans(orphans: Dict[str, str | None]) -> None:
+    lines = [
+        f"{chunk_id or '<no chunk_id in payload>'}  ({point_id})"
+        for point_id, chunk_id in sorted(orphans.items(), key=lambda kv: str(kv[1]))
+    ]
+    logger.warning(
+        "⚠️  %d point(s) in the collection belong to no chunk in this snapshot:\n%s",
+        len(orphans), _listing(lines),
+    )
 
 
 def _compare(vector_db: VectorDatabase, chunks: List[Chunk]) -> Dict[str, Any]:
@@ -130,24 +121,21 @@ def main(argv: List[str] | None = None) -> int:
              "Writes nothing and spends nothing.",
     )
     ap.add_argument(
-        "--prune",
-        action="store_true",
-        help="delete points that belong to no chunk in the snapshot (destructive)",
-    )
-    ap.add_argument(
         "--snapshot",
         default=None,
         help="snapshot to index (default: the newest in CHUNKS_DIR)",
     )
     args = ap.parse_args(argv)
+    setup_logging()
 
     settings = get_settings()
     chunks_dir = Path(settings.CHUNKS_DIR)
 
     snapshot_path = _resolve_snapshot(chunks_dir, args.snapshot)
     if snapshot_path is None:
-        print(f"❌ No chunk snapshot found in {chunks_dir}")
-        print("   Run `python -m src.scripts.generate_chunks` first.")
+        logger.error("❌ No chunk snapshot found in %s\n"
+                     "   Run `python -m src.scripts.generate_chunks` first.",
+                     chunks_dir)
         return 1
 
     # `read_snapshot` re-hashes the file and compares against its manifest, so a
@@ -156,13 +144,16 @@ def main(argv: List[str] | None = None) -> int:
     manifest = snapshot.manifest
     chunks = snapshot.chunks
 
-    print(f"📦 Snapshot  : {snapshot_path.name}")
-    print(f"   chunks    : {len(chunks)}")
-    print(f"   sha256    : {snapshot.chunk_set_sha256}")
-    print(f"   corpus    : {manifest['source']['path']} "
-          f"(sha {manifest['source']['sha256'][:12]}…)")
-    print(f"   chunker   : {manifest['git_commit'][:12]}"
-          f"{' (DIRTY)' if manifest['git_dirty'] else ''}")
+    logger.info(
+        "📦 Snapshot  : %s\n"
+        "   chunks    : %d\n"
+        "   sha256    : %s\n"
+        "   corpus    : %s (sha %s…)\n"
+        "   chunker   : %s%s",
+        snapshot_path.name, len(chunks), snapshot.chunk_set_sha256,
+        manifest["source"]["path"], manifest["source"]["sha256"][:12],
+        manifest["git_commit"][:12], " (DIRTY)" if manifest["git_dirty"] else "",
+    )
 
     vector_db = VectorDatabase(
         vector_db_url=settings.QDRANT_URL,
@@ -177,83 +168,85 @@ def main(argv: List[str] | None = None) -> int:
         return _check(vector_db, snapshot_path, snapshot, chunks)
 
 
-    """
-    print(f"\n🔁 Reconciling against {len(before)} existing point(s)")
-    print(f"   update  : {len(set(expected) & set(before))}")
-    print(f"   insert  : {len(set(expected) - set(before))}")
-    print(f"   delete  : {len(set(before) - set(expected))}")
-    """
-
     # Stamped into every point. Point IDs derive from chunk IDs alone, so a
     # chunk whose *text* changes keeps its ID and its point — which means an
     # ID-set comparison is structurally blind to stale content. This is the
     # field that is not: after any run, complete or interrupted, the points
     # not carrying the current digest are exactly the ones not rewritten.
-    chunk_set_id = chunk_set_hash(chunks)
+    #
+    # Taken from the snapshot rather than recomputed. `read_snapshot` has
+    # already hashed these exact chunks and raised if the result disagreed with
+    # the manifest, so re-deriving it here re-hashes 368 chunks to arrive at a
+    # value that cannot differ.
+    #
+    # It was a real comparison once, when `index_chunks` derived the digest from
+    # the chunks it wrote: the two came from genuinely independent routes and
+    # could disagree. Since the digest became caller-supplied, both sides read
+    # the same manifest field, and the check that guarded them became
+    # unreachable — code that reads like a safeguard and can never fire, which
+    # is worse than no check because it invites trust it cannot earn. The
+    # guarantee still exists; it lives in `read_snapshot`.
+    chunk_set_id = snapshot.chunk_set_sha256
 
-    # Two independently derived values: `index_chunks` hashes the chunks it
-    # actually wrote, the manifest hashes what was written to disk. They can
-    # only disagree if the snapshot on disk is not the chunk set in memory.
-    if chunk_set_id != snapshot.chunk_set_sha256:
-        message = f"\n❌ Indexed chunks hash to {chunk_set_id[:12]}… but the snapshot "
-        message += f"records {snapshot.chunk_set_sha256[:12]}…"
-        raise Exception(message)
-
-    # Read the collection before writing, so the run can report what it is about
-    # to do rather than only what it did. Insert and update are the same upsert
-    # to Qdrant — the split is for the operator, not for the client.
+    # Read the collection before writing, so the run can say what it is about to
+    # do rather than only what it did. Insert and update are the same upsert to
+    # Qdrant — the split is for the operator, not for the client.
     before = vector_db.stored_points()
     expected = {str(vector_db.point_id(c.id)): c.id for c in chunks}
+    logger.info(
+        "🔁 Reconciling against %d existing point(s)\n"
+        "   update  : %d\n"
+        "   insert  : %d\n"
+        "   delete  : %d",
+        len(before),
+        len(set(expected) & set(before)),
+        len(set(expected) - set(before)),
+        len(set(before) - set(expected)),
+    )
 
-    collection_metadata = {
-        "snapshot": snapshot_path.name,
-        "source_sha256": manifest["source"]["sha256"],
-        "chunker_commit": manifest["git_commit"],
-        "chunker_tree_dirty": manifest["git_dirty"],
-    }
+    chunk_set_metadata = ChunkSetMetadata(
+        chunk_set_id = chunk_set_id,
+        snapshot = snapshot_path.name,
+        source_sha256 = manifest["source"]["sha256"],
+        chunker_commit = manifest["git_commit"],
+        chunker_tree_dirty = manifest["git_dirty"],
+    )
 
-    vector_db.index_chunks(
+    collection_metadata = vector_db.index_chunks(
         chunks=chunks,
-        chunk_set_id=chunk_set_id,
-        **collection_metadata
+        chunk_set_metadata=chunk_set_metadata
     )
-
-    indexed_at = datetime.now(timezone.utc)
-    vector_size = vector_db.client.get_collection(
-        vector_db.collection_name
-    ).config.params.vectors.size
-    expected_metadata = _build_metadata(
-        snapshot_path, manifest, settings, vector_size, indexed_at
-    )
-
-
-
 
     # Read back what the server actually stored. The write is the point of this
     # script, so reporting the dict we sent would verify nothing.
     recorded = vector_db.collection_metadata() or {}
-    print("\n📋 Collection metadata")
-    for key in sorted(expected_metadata):
-        stored_value = recorded.get(key, 'N/A')
-        mark = "✅" if str(stored_value) == str(expected_metadata[key]) else "❌"
-        print(f"   {mark} {key}: {stored_value}")
-    if any(str(recorded.get(k, 'N/A')) != str(v) for k, v in expected_metadata.items()):
-        print("\n❌ Collection metadata did not read back as written.")
+    rows = []
+    for key in sorted(collection_metadata):
+        stored_value = recorded.get(key, "N/A")
+        mark = "✅" if str(stored_value) == str(collection_metadata[key]) else "❌"
+        rows.append(f"   {mark} {key}: {stored_value}")
+    logger.info("📋 Collection metadata\n%s", "\n".join(rows))
+
+    if any(str(recorded.get(k, "N/A")) != str(v) for k, v in collection_metadata.items()):
+        logger.error("❌ Collection metadata did not read back as written.")
         return 1
 
     final = _compare(vector_db, chunks)
     count = vector_db.client.count(
         collection_name=vector_db.collection_name, exact=True
     ).count
-    print(f"\n✅ {count} points, {len(chunks)} chunks, "
-          f"{len(final['orphans'])} orphans, {len(final['missing'])} missing.")
+    logger.info("✅ %d points, %d chunks, %d orphans, %d missing.",
+                count, len(chunks), len(final["orphans"]), len(final["missing"]))
 
-    print(f"\n🔍 Smoke search: {_SMOKE_QUERY}")
+    hits = []
     for i, result in enumerate(vector_db.search(_SMOKE_QUERY, top_k=3), 1):
         meta = result["metadata"]
-        print(f"\n{i}. {result['chunk_id']} (score: {result['score']:.3f})")
-        print(f"   Article {meta['article_number']} — {meta['article_title']}")
-        print(f"   {result['text'][:150]}...")
+        hits.append(
+            f"{i}. {result['chunk_id']} (score: {result['score']:.3f})\n"
+            f"   Article {meta['article_number']} — {meta['article_title']}\n"
+            f"   {result['text'][:150]}..."
+        )
+    logger.info("🔍 Smoke search: %s\n%s", _SMOKE_QUERY, "\n".join(hits))
     return 0
 
 
@@ -270,7 +263,7 @@ def _check(
     safe thing to run before deciding whether an index is needed at all.
     """
     if not vector_db.client.collection_exists(vector_db.collection_name):
-        print(f"\n❌ Collection '{vector_db.collection_name}' does not exist.")
+        logger.error("❌ Collection '%s' does not exist.", vector_db.collection_name)
         return 1
 
     recorded = vector_db.collection_metadata() or {}
@@ -278,33 +271,34 @@ def _check(
     advertised = recorded.get("chunk_set_sha256")
     stale = vector_db.find_stale(snapshot.chunk_set_sha256)
 
-    print(f"\n🔎 Collection '{vector_db.collection_name}'")
-    print(f"   points          : {len(comparison['stored'])}")
-    print(f"   advertises      : {advertised or '<nothing>'}")
-    print(f"   snapshot        : {snapshot.chunk_set_sha256}")
-    print(f"   orphans         : {len(comparison['orphans'])}")
-    print(f"   missing         : {len(comparison['missing'])}")
-    print(f"   stale           : {len(stale)}")
+    rows = [
+        f"   points          : {len(comparison['stored'])}",
+        f"   advertises      : {advertised or '<nothing>'}",
+        f"   snapshot        : {snapshot.chunk_set_sha256}",
+        f"   orphans         : {len(comparison['orphans'])}",
+        f"   missing         : {len(comparison['missing'])}",
+        f"   stale           : {len(stale)}",
+    ]
     if recorded:
-        print(f"   embedding_model : {recorded.get('embedding_model')}")
-        print(f"   indexed_at      : {recorded.get('indexed_at')}")
+        rows.append(f"   embedding_model : {recorded.get('embedding_model')}")
+        rows.append(f"   indexed_at      : {recorded.get('indexed_at')}")
+    logger.info("🔎 Collection '%s'\n%s", vector_db.collection_name, "\n".join(rows))
 
     if comparison["orphans"]:
         _report_orphans(comparison["orphans"])
     if comparison["missing"]:
-        print(f"\n⚠️  {len(comparison['missing'])} chunk(s) in the snapshot are not "
-              f"in the collection:")
-        for chunk_id in comparison["missing"][:10]:
-            print(f"     {chunk_id}")
-        if len(comparison["missing"]) > 10:
-            print(f"     … and {len(comparison['missing']) - 10} more")
+        logger.warning(
+            "⚠️  %d chunk(s) in the snapshot are not in the collection:\n%s",
+            len(comparison["missing"]), _listing(comparison["missing"]),
+        )
 
     if stale:
-        print(f"\n⚠️  {len(stale)} point(s) do not carry this snapshot's digest:")
-        for point_id, held in list(stale.items())[:10]:
-            print(f"     {point_id}  holds {held or '<no digest>'}")
-        if len(stale) > 10:
-            print(f"     … and {len(stale) - 10} more")
+        logger.warning(
+            "⚠️  %d point(s) do not carry this snapshot's digest:\n%s",
+            len(stale),
+            _listing([f"{pid}  holds {held or '<no digest>'}"
+                      for pid, held in stale.items()]),
+        )
 
     # Membership, advertisement and per-point provenance are three different
     # claims and all three are required. The ID sets agreeing proves only that
@@ -319,11 +313,11 @@ def _check(
         and not stale
     )
     if matches:
-        print(f"\n✅ Collection holds exactly {snapshot_path.name}.")
+        logger.info("✅ Collection holds exactly %s.", snapshot_path.name)
         return 0
 
-    print("\n❌ Collection does not match the snapshot. "
-          "Run without --check to index it.")
+    logger.error("❌ Collection does not match the snapshot. "
+                 "Run without --check to index it.")
     return 1
 
 

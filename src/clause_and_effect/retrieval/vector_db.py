@@ -1,6 +1,7 @@
 """
 Vector database operations using Qdrant
 """
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
@@ -12,6 +13,8 @@ from tqdm import tqdm
 from src.clause_and_effect.chunking import Chunk, ChunkSetMetadata
 from src.clause_and_effect.retrieval import EmbeddingGenerator
 
+logger = logging.getLogger(__name__)
+
 # Page size for walking the collection. Only the provenance fields are fetched —
 # no vectors, no text — so this stays cheap regardless of corpus size.
 _SCROLL_PAGE_SIZE = 512
@@ -19,6 +22,29 @@ _SCROLL_PAGE_SIZE = 512
 # The payload fields that say which chunk set a point belongs to. Fetched when
 # walking the collection; everything else stays on the server.
 _PROVENANCE_FIELDS = ["chunk_id", "chunk_set_sha256"]
+
+# How many offending points a diagnostic names before summarising the rest.
+# Enough to recognise a pattern; not so many that a whole-corpus mismatch
+# buries the message that produced it.
+_ORPHAN_REPORT_LIMIT = 10
+
+
+class IndexVerificationError(RuntimeError):
+    """
+    An index run did not reach the state it promised, and recorded nothing.
+
+    `RuntimeError` rather than `ValueError` because nothing is wrong with the
+    caller's arguments: the chunks were valid, the digest was valid, and the
+    operation simply did not end with the collection holding what it was asked
+    to hold. `ValueError` stays for the one fault that *is* an argument fault —
+    duplicate chunk IDs, which are wrong before anything is attempted.
+
+    Named rather than bare so `index_documents.py` can tell "this index failed
+    its own post-condition" apart from a bug, and exit non-zero with the message
+    instead of a traceback. Every raise of this type happens **before** metadata
+    is written, so a collection is never left advertising a chunk set it does
+    not hold.
+    """
 
 
 
@@ -61,7 +87,7 @@ class VectorDatabase:
         """Create collection if it doesn't exist"""
 
         if self.client.collection_exists(self.collection_name):
-            print(f"✅ Collection '{self.collection_name}' already exists")
+            logger.info("✅ Collection '%s' already exists", self.collection_name)
         else:
             # Create new collection
             self.client.create_collection(
@@ -71,7 +97,7 @@ class VectorDatabase:
                     distance=Distance.COSINE
                 )
             )
-            print(f"✅ Created collection '{self.collection_name}'")
+            logger.info("✅ Created collection '%s'", self.collection_name)
 
 
     @classmethod
@@ -87,25 +113,56 @@ class VectorDatabase:
         """
         return uuid.uuid5(cls.POINT_ID_NAMESPACE, chunk_id)
 
-    def index_chunks(self, chunks: List[Chunk], chunk_set_metadata: ChunkSetMetadata) -> None:
+    def index_chunks(
+            self,
+            chunks: List[Chunk],
+            chunk_set_metadata: ChunkSetMetadata
+    ) -> Dict[str, Any]:
         """
-        Make the collection hold exactly ``chunks``, returning the chunk-set
-        digest every point carries.
+        Make the collection hold exactly ``chunks``, and record what it was
+        built from.
 
-        The reconcile step in front of `embed_and_upsert_chunks`. Today it only
-        delegates — the orchestration that belongs here (create the collection,
-        plan the reconcile, prune what no chunk maps onto, verify the
-        post-conditions, record the metadata) still lives in
-        `src/scripts/index_documents.py` and moves in from there.
+        The reconcile step in front of `embed_and_upsert_chunks`: that primitive
+        touches only the points its chunks map onto, while what the collection
+        holds *besides* them is decided here — create the collection, write,
+        prune what no chunk maps onto, verify the post-conditions, record the
+        metadata.
+
+        Two orderings are load-bearing. Upsert runs before delete, so a run that
+        dies partway leaves a superset rather than a deficit. `find_stale` runs
+        before the metadata write, so nothing can advertise a snapshot it only
+        partly holds.
+
+        **The returned dict is the metadata that was written**, so a caller can
+        read the collection back and compare against what was actually sent.
+        `index_documents.py` used to rebuild the same schema independently for
+        that comparison, which made it a check on two builders agreeing rather
+        than on the write — and put two clock reads of `indexed_at` on either
+        side of an equality test, so it failed at random whenever the round trip
+        crossed a second boundary.
+
+        The schema is decided in full here rather than grown key by key: Qdrant
+        **merges** collection metadata, so a key written once persists until
+        explicitly overwritten. A schema that accretes leaves stale keys behind
+        advertising values nothing produced, and a renamed key leaves its
+        predecessor in place.
+
+        `embedding_model` and `vector_size` are recorded because the chunk hash
+        does not cover them. Identical chunks embedded through different models
+        give different vectors and different retrieval, while both collections
+        would honestly report the same `chunk_set_sha256` — so the hash alone
+        cannot answer "does this index match?" and these two close that gap.
+        `embedding_model` is read off the generator that ran rather than from
+        settings, so it records what was used and not what config claimed.
 
         Args:
-            chunks: List of Chunk objects to index
+            chunks: the chunk set the collection must end up holding.
+            chunk_set_metadata: provenance of that chunk set — its digest, the
+                snapshot it came from, the corpus hash, and the chunker's commit
+                and tree state.
 
         Returns:
-            The `chunk_set_sha256` written into every point's payload.
-            :param chunk_set_metadata:
-            :param chunks:
-            :param chunk_set_id:
+            The collection metadata as written.
         """
 
         self.create_collection()
@@ -113,14 +170,50 @@ class VectorDatabase:
         chunk_set_id = chunk_set_metadata.chunk_set_id
 
         self.embed_and_upsert_chunks(chunks=chunks, chunk_set_id=chunk_set_id)
-        orphans = self.find_orphans(chunks)
 
-        # TODO: This while loop needs attention and careful thinking.
-        while len(orphans) > 0:
-            deleted = self.delete_points(list(orphans))
-            # Re-check rather than trust the delete: this is the destructive step,
-            # and a partial delete would otherwise be recorded as a clean index.
-            orphans = self.find_orphans(chunks)
+        orphans = self.find_orphans(chunks)
+        if orphans:
+            # Named before they are removed, not counted after. Pruning is not
+            # optional (Bertan, 2026-08-09), so the operator no longer opts in
+            # by typing `--prune` and this log is the only record that anything
+            # was destroyed. 196 points were deleted on 2026-08-07 and the run
+            # printed nothing about which.
+            listed = "\n".join(
+                f"    {chunk_id or '<no chunk_id in payload>'}  ({point_id})"
+                for point_id, chunk_id in sorted(
+                    orphans.items(), key=lambda kv: str(kv[1])
+                )[:_ORPHAN_REPORT_LIMIT]
+            )
+            if len(orphans) > _ORPHAN_REPORT_LIMIT:
+                listed += f"\n    … and {len(orphans) - _ORPHAN_REPORT_LIMIT} more"
+            logger.warning(
+                "🗑  Deleting %d point(s) belonging to no chunk in this set:\n%s",
+                len(orphans), listed,
+            )
+
+            self.delete_points(list(orphans))
+
+            # Re-check rather than trust the delete: this is the destructive
+            # step, and a partial delete would otherwise be recorded as a clean
+            # index. The server does not say what it removed — Qdrant's
+            # `UpdateResult` carries only an operation id and a status — so
+            # looking again is the only way to know.
+            #
+            # Checked once, not retried. This was a `while` loop, which could
+            # not help and could not stop: the second attempt sends the same
+            # point IDs to the same collection, so a delete that did not take
+            # effect the first time will not the second, and the run would spin
+            # against the server without limit or output. A delete that *errors*
+            # raises out of here already; a delete that silently no-ops, or a
+            # concurrent writer producing orphans faster than they are removed,
+            # is a condition to report rather than to grind against.
+            survivors = self.find_orphans(chunks)
+            if survivors:
+                raise IndexVerificationError(
+                    f"{len(survivors)} orphan(s) survived deletion from "
+                    f"'{self.collection_name}'; nothing recorded. "
+                    f"Point IDs: {sorted(survivors)[:10]}"
+                )
 
         # The post-condition that count verification cannot give. Every live point
         # must carry the digest about to be advertised — including points that kept
@@ -129,16 +222,17 @@ class VectorDatabase:
         stale = self.find_stale(chunk_set_sha256=chunk_set_id)
 
         if stale:
-            message = f"\n❌ {len(stale)} point(s) do not carry {chunk_set_id[:12]}… after "
-            message += f"indexing; nothing recorded."
-            raise Exception(message)
+            raise IndexVerificationError(
+                f"{len(stale)} point(s) do not carry {chunk_set_id[:12]}… after "
+                f"indexing; nothing recorded."
+            )
 
         vector_size = self.client.get_collection(
             self.collection_name
         ).config.params.vectors.size
 
         collection_metadata = {
-            "chunk_set_sha256": chunk_set_id,
+            "chunk_set_sha256": chunk_set_metadata.chunk_set_id,
             "chunk_count": len(chunks),
             "snapshot": chunk_set_metadata.snapshot,
             "source_sha256": chunk_set_metadata.source_sha256,
@@ -150,36 +244,52 @@ class VectorDatabase:
         }
         self.set_collection_metadata(metadata=collection_metadata)
 
-
-
-        return "todo"
+        return collection_metadata
 
     def embed_and_upsert_chunks(self, chunks: List[Chunk], chunk_set_id: str) -> None:
         """
-        Embed chunks and write them to the collection, returning the chunk-set
-        digest stamped into every point.
+        Embed chunks and write them to the collection, stamping each point with
+        the chunk set it belongs to.
 
         The write primitive: it touches only the points these chunks map onto
         and decides nothing about the ones it does not. What the collection
         holds *besides* them is `index_chunks`'s question.
 
-        The digest is **derived here** from the chunks being written rather than
-        passed in, so a point can never advertise a chunk set it is not part of.
-        A caller-supplied hash is one more thing that can be wrong.
+        **The digest is supplied, not derived here.** An earlier version hashed
+        the chunks it was writing, on the grounds that a caller-supplied hash is
+        one more thing that can be wrong. What that argument missed is that the
+        digest a point must advertise is not "a hash of these chunks" but
+        "the hash the snapshot on disk recorded" — and only the caller can
+        compare the two. `index_documents.py` derives it with
+        `chunk_set_hash(chunks)` and refuses to index at all if it disagrees
+        with `snapshot.chunk_set_sha256`, which is a stronger check than
+        re-deriving it here would be: it catches a snapshot whose file no longer
+        matches the chunk set in memory, which a second local hash cannot see.
+
+        The consequence is that the invariant *a point never advertises a chunk
+        set it is not part of* now lives with the caller rather than here. This
+        method takes the digest on trust and writes it verbatim.
 
         Args:
-            chunks: List of Chunk objects to index
-
-        Returns:
-            The `chunk_set_sha256` written into every point's payload.
+            chunks: the chunks to embed and write.
+            chunk_set_id: the `chunk_set_sha256` stamped into every point's
+                payload, and the field `find_stale` later reads to decide which
+                points were not rewritten.
 
         Raises:
-            ValueError: if two chunks share an ID, or if the collection does
-                not hold every chunk once indexing completes.
-                :param chunks:
-                :param chunk_set_id:
+            ValueError: if two chunks share an ID, or if any chunk did not reach
+                the collection carrying ``chunk_set_id``.
+
+        Note:
+            The post-write check is scoped to the points this call stamped and
+            compares them by identity. A bare collection count would be masked
+            by points left from an earlier corpus — 10 stale points plus 13 of
+            15 written is 23, which passes ``23 >= 15`` while two chunks are
+            missing. Verifying the expected point IDs are present *with this
+            digest* is immune to that, and names which chunks are absent rather
+            than reporting that two numbers disagree.
         """
-        print(f"📊 Indexing {len(chunks)} chunks...")
+        logger.info("📊 Embedding and upserting %d chunks…", len(chunks))
 
         # Duplicate chunk IDs collapse onto one point: Qdrant's upsert
         # overwrites a repeated ID silently, so the loss would otherwise show
@@ -209,10 +319,18 @@ class VectorDatabase:
                 PointStruct(
                     id = self.point_id(chunk.id),
                     vector = embedding,
+                    # `.model_dump()` rather than the model itself. Pydantic
+                    # happens to convert it when serializing the REST request,
+                    # so the stored payload is identical either way — but that
+                    # is incidental, and `payload_to_grpc` rejects a BaseModel
+                    # outright, so the model form works only for as long as
+                    # nobody sets `prefer_grpc`. Dumping here also matches
+                    # `chunk_store._row`, which converts explicitly so that the
+                    # archive and its hash cannot disagree.
                     payload = {
                         "chunk_id": chunk.id,
                         "text": chunk.text,
-                        "metadata": chunk.metadata,
+                        "metadata": chunk.metadata.model_dump(),
                         "chunk_set_sha256": chunk_set_id,
                         }
                     ) for chunk, embedding in zip(chunks_batch, batch_embeddings)
@@ -222,12 +340,32 @@ class VectorDatabase:
 
         # Verify against the collection rather than against the input: reporting
         # len(chunks) back would claim success even if every point had collided.
-        stored = self.client.count(collection_name=self.collection_name, exact=True).count
-        if stored < len(chunks):
-            raise ValueError(
-                f"Indexed {len(chunks)} chunks but collection "
-                f"'{self.collection_name}' holds {stored} points — "
-                f"{len(chunks) - stored} were lost to ID collisions."
+        #
+        # Scoped to the points this call stamped, not the collection's total. A
+        # bare `count()` compares against everything the collection holds, so
+        # points left by an earlier corpus mask a loss: 10 old points plus 13 of
+        # 15 written is 23, and `23 >= 15` passes while two chunks are missing.
+        #
+        # Checked by identity rather than by count, because the point IDs are
+        # known here — which turns "the numbers disagree" into "these chunks did
+        # not land", and is immune to an unrelated point happening to make the
+        # totals add up.
+        landed = {
+            point_id
+            for point_id, payload in self.stored_points().items()
+            if payload.get("chunk_set_sha256") == chunk_set_id
+        }
+        missing = {
+            chunk.id: str(self.point_id(chunk.id))
+            for chunk in chunks
+            if str(self.point_id(chunk.id)) not in landed
+        }
+        if missing:
+            raise IndexVerificationError(
+                f"Indexed {len(chunks)} chunks but {len(missing)} did not reach "
+                f"collection '{self.collection_name}' carrying "
+                f"{chunk_set_id[:12]}… — lost to ID collisions or a failed "
+                f"upsert: {sorted(missing)[:10]}"
             )
 
 
@@ -316,11 +454,20 @@ class VectorDatabase:
 
     def delete_points(self, point_ids: List[str]) -> int:
         """
-        Delete points by ID, returning how many were removed.
+        Delete points by ID, returning how many were **requested**.
 
         Destructive and deliberately dumb: it deletes exactly what it is given
         and decides nothing. Callers choose what to delete, which keeps the
         judgement in the script the operator invoked.
+
+        The return value is `len(point_ids)` and nothing more. It cannot be a
+        count of what was removed, because Qdrant does not report one — an
+        `UpdateResult` carries an operation id and a status, no tally — so this
+        number says what was asked for, never what happened. It used to be
+        documented as "how many were removed", which made it look like a
+        progress signal a caller could act on; `index_chunks` had a retry loop
+        built on that reading. Verifying a delete means looking at the
+        collection again, which is what `find_orphans` is for.
         """
         if not point_ids:
             return 0
