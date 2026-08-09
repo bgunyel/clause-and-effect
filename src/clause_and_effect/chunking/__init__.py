@@ -1,10 +1,11 @@
-from .chunk import ArticleMetadata, Chunk, ChunkMetadata
+from .chunk import ArticleMetadata, Chunk, ChunkMetadata, ChunkSetMetadata
 from .chunker import Chunker
 from .regulation import GDPR, Regulation
 from .chunk_store import (
     MANIFEST_SUFFIX,
     SNAPSHOT_PREFIX,
     SNAPSHOT_SUFFIX,
+    LegacySnapshotError,
     Snapshot,
     build_manifest,
     chunk_set_hash,
@@ -23,11 +24,13 @@ __all__ = [
     "ArticleMetadata",
     "Chunk",
     "ChunkMetadata",
+    "ChunkSetMetadata",
     "Chunker",
     "Regulation",
     "MANIFEST_SUFFIX",
     "SNAPSHOT_PREFIX",
     "SNAPSHOT_SUFFIX",
+    "LegacySnapshotError",
     "Snapshot",
     "build_manifest",
     "chunk_set_hash",

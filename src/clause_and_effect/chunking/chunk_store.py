@@ -34,7 +34,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from .chunk import Chunk
+from pydantic import ValidationError
+
+from .chunk import Chunk, ChunkMetadata
+from .chunker import Chunker
 
 SNAPSHOT_PREFIX = "chunks_"
 SNAPSHOT_SUFFIX = ".jsonl"
@@ -59,12 +62,22 @@ class Snapshot:
         return self.manifest["chunk_set_sha256"]
 
 
+def _row(chunk: Chunk) -> Dict[str, Any]:
+    """
+    A chunk as plain JSON-ready data.
+
+    The single place a `Chunk` becomes a dict, shared by the hash and the
+    writer. They must agree exactly: the hash is taken over this shape, the file
+    is written in this shape, and `read_snapshot` re-hashes what it loaded to
+    prove the two match. Two independent conversions would let a snapshot fail
+    its own tamper check the first time they drifted.
+    """
+    return {"id": chunk.id, "text": chunk.text, "metadata": chunk.metadata.model_dump()}
+
+
 def _canonical_rows(chunks: List[Chunk]) -> List[Dict[str, Any]]:
     """The chunk set reduced to what identifies it, in a stable order."""
-    return sorted(
-        ({"id": c.id, "text": c.text, "metadata": c.metadata} for c in chunks),
-        key=lambda row: row["id"],
-    )
+    return sorted((_row(c) for c in chunks), key=lambda row: row["id"])
 
 
 def chunk_set_hash(chunks: List[Chunk]) -> str:
@@ -187,12 +200,23 @@ def manifest_path_for(chunks_path: Path) -> Path:
 def build_manifest(
     chunks: List[Chunk],
     *,
+    chunker: Chunker,
     source_path: Path,
     source_description: Dict[str, Any],
     repo_root: Path,
     created_at: datetime,
 ) -> Dict[str, Any]:
-    """Assemble the provenance record written beside a chunk set."""
+    """
+    Assemble the provenance record written beside a chunk set.
+
+    ``chunker`` is taken as an object rather than a description because the
+    hardcoded ``{"class": "GDPRParser", "method": "article_to_chunks"}`` this
+    replaced was wrong for two days without anything noticing — the chunker had
+    moved out of the parser and the manifest went on naming a class that no
+    longer had that method. A value read off the live object cannot go stale;
+    a constant typed in by hand is exactly what the module docstring warns
+    against, and this field proved the warning.
+    """
     commit, dirty_paths = git_state(repo_root)
     # Repo-relative: the manifest is committed, and an absolute path would
     # bake one machine's home directory into a shared artifact.
@@ -203,7 +227,7 @@ def build_manifest(
     lengths = sorted(len(c.text) for c in chunks)
     by_type: Dict[str, int] = {}
     for chunk in chunks:
-        key = str(chunk.metadata.get("chunk_type", "unknown"))
+        key = chunk.metadata.chunk_type
         by_type[key] = by_type.get(key, 0) + 1
 
     return {
@@ -224,8 +248,14 @@ def build_manifest(
             "sha256": file_hash(source_path),
             **source_description,
         },
-        # No chunker parameters here on purpose — see the module docstring.
-        "chunker": {"class": "GDPRParser", "method": "article_to_chunks"},
+        # No chunker *parameters* here on purpose — see the module docstring.
+        # Both values below are read off the live chunker, so neither can
+        # disagree with what actually ran. The regulation is worth recording
+        # because it decides the chunk-ID prefix and three payload fields.
+        "chunker": {
+            "class": type(chunker).__name__,
+            "regulation": chunker.regulation.name,
+        },
         "stats": {
             "by_chunk_type": dict(sorted(by_type.items())),
             "chars": {
@@ -260,13 +290,73 @@ def write_snapshot(
 
     with open(chunks_path, "w", encoding="utf-8") as handle:
         for chunk in chunks:
-            row = {"id": chunk.id, "text": chunk.text, "metadata": chunk.metadata}
-            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+            handle.write(json.dumps(_row(chunk), ensure_ascii=False) + "\n")
 
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     return chunks_path, manifest_path
+
+
+class LegacySnapshotError(ValueError):
+    """
+    A snapshot written against an older chunk schema, which cannot be loaded.
+
+    Subclasses ``ValueError`` so existing handlers still catch it, but exists as
+    its own type because it means something entirely different from the tamper
+    error beside it: nothing is wrong with the file, it simply predates the
+    current `ChunkMetadata`. Conflating the two is how a routine format change
+    ends up reported as corruption.
+    """
+
+
+def _load_chunks(rows: List[Dict[str, Any]], chunks_path: Path) -> List[Chunk]:
+    """
+    Build chunks from parsed rows, or say precisely why they cannot be built.
+
+    Pydantic ignores unknown keys by default, so a pre-typing snapshot loads
+    *successfully* with its `topics` and `paragraph` fields silently discarded —
+    and then fails the hash check below, reporting "chunk set does not match its
+    manifest". That message was written for a hand-edited or truncated file, and
+    it sent the reader looking for tampering that had not happened. Rejecting
+    here, by name, is the difference between "this archive is old" and "this
+    archive is corrupt".
+
+    **This check is load-bearing for integrity, not only for the message.** The
+    same silent discarding hides real tampering: add an unknown key to a chunks
+    file on disk, and without this check pydantic drops it, the reconstructed
+    chunks are identical to the originals, the re-hash *matches* the manifest,
+    and `read_snapshot` returns a `Snapshot` as though nothing happened —
+    verified 2026-08-09 by disabling only this branch. The hash cannot catch an
+    edit the loader throws away before hashing, which makes this the only thing
+    standing between a hand-edited metadata key and a clean bill of health. Do
+    not relax it as over-strict.
+    """
+    known = set(ChunkMetadata.model_fields)
+    unknown = sorted(
+        {key for row in rows for key in row.get("metadata", {})} - known
+    )
+    if unknown:
+        raise LegacySnapshotError(
+            f"{chunks_path.name} predates the current chunk schema and can no "
+            f"longer be loaded: its metadata carries {unknown}, which "
+            f"ChunkMetadata does not define. The file is intact — it is the "
+            f"schema that moved. Read it as raw JSONL if you need the "
+            f"historical chunk set, or regenerate with "
+            f"`python -m src.scripts.generate_chunks`."
+        )
+
+    try:
+        return [
+            Chunk(id=row["id"], text=row["text"], metadata=row["metadata"])
+            for row in rows
+        ]
+    except (ValidationError, KeyError) as exc:
+        raise LegacySnapshotError(
+            f"{chunks_path.name} does not fit the current chunk schema and "
+            f"cannot be loaded: {exc}. If this snapshot predates a schema "
+            f"change, read it as raw JSONL rather than through read_snapshot."
+        ) from exc
 
 
 def read_snapshot(chunks_path: Path) -> Snapshot:
@@ -277,20 +367,21 @@ def read_snapshot(chunks_path: Path) -> Snapshot:
     failed write, or paired with the wrong manifest would otherwise be indexed
     as though it were the recorded chunk set, and the collection would then
     advertise a hash it does not hold.
+
+    Raises `LegacySnapshotError` — separately from the tamper check — when the
+    file was written against an older `ChunkMetadata`.
     """
     manifest_path = manifest_path_for(chunks_path)
     if not manifest_path.exists():
         raise FileNotFoundError(f"snapshot has no manifest: {manifest_path}")
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    chunks = [
-        Chunk(id=row["id"], text=row["text"], metadata=row["metadata"])
-        for row in (
-            json.loads(line)
-            for line in chunks_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        )
+    rows = [
+        json.loads(line)
+        for line in chunks_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
     ]
+    chunks = _load_chunks(rows, chunks_path)
 
     recomputed = chunk_set_hash(chunks)
     if recomputed != manifest["chunk_set_sha256"]:
