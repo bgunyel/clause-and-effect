@@ -552,7 +552,17 @@ per the priority order above.
   holds only `Settings` and `get_settings()` and carries no LLM dependency.
   **`import src.config` 8.34s → 0.267s; `import src.scripts.generate_chunks`
   5.46s → 0.254s.** Call sites repointed: `main_dev.py`,
-  `scripts/gdpr_test_data_generation.py`, `eval/sufficiency_judge.py`.
+  `scripts/gdpr_test_data_generation.py`, and what was then
+  `eval/sufficiency_judge.py` (now `eval/sufficiency/judge.py`).
+
+  - **The same reasoning shaped the sufficiency package, 2026-08-10.**
+    `build_judge_llm` is alone in `eval/sufficiency/llm.py` and the package
+    `__init__` exports nothing, so the dataclasses and anything derived from
+    them import without `ai_common`. Measured: `import
+    src.eval.sufficiency.models` **7.68s → 0.07s** once the `__init__` stopped
+    re-exporting the stages. The 7.68s was real and was introduced by a
+    convenience re-export — a package `__init__` runs before any submodule, so
+    it is a cost paid by every importer, including tests.
 
   A lazy import inside the function would have bought the same seconds, but a
   module boundary is not something the next edit undoes by accident. The cost
@@ -731,6 +741,11 @@ per the priority order above.
     derivation, the `sufficient_verbose` threshold (**measure it, do not guess** —
     observed span/quote ratios run 19%–100%), the async runner, the calibration
     sample and tests are **not started**.
+    - **Split into `src/eval/sufficiency/` on 2026-08-10**, before stage C rather
+      than after, so stage C is written into its own file instead of moved later:
+      `models` / `llm` / `stage_a` / `stage_b` / `judge`, with `stage_c` to come.
+      A pure move — both prompts byte-identical by AST comparison, no top-level
+      name lost or added. Design document: `docs/design/sufficiency-judge.md`.
     - Stage A tags by making the judge **write the shortest sufficient answer first**.
       An earlier leave-one-out removal test returned **zero** core claims on
       `art7_case3`, because it cannot see mutual redundancy: *"Yes."* was excused by

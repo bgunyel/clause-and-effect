@@ -22,18 +22,18 @@ yet, and says so rather than reading as though it did.
 
 | Component | Location | State |
 |---|---|---|
-| Criterion, protocol, verdict vocabulary | `sufficiency_judge.py` module docstring | **Built** — documented in code |
-| Types (`Claim`, `Decomposition`, `BlindAnswer`, `ClaimVerdict`, `Adjudication`, `PanelistRun`, `CaseJudgement`) | `sufficiency_judge.py:113-206` | **Built** |
-| Stage A — decompose | `sufficiency_judge.py:233-362` | **Built**, eyeballed on 8 cases |
-| Stage B — answer blind | `sufficiency_judge.py:391-493` | **Built**, eyeballed on 8 cases |
-| `span_is_verbatim` | `sufficiency_judge.py:459-472` | **Built**, never observed to fail |
+| Criterion, protocol, verdict vocabulary | `sufficiency/__init__.py` docstring | **Built** — documented in code |
+| Types (`Claim`, `Decomposition`, `BlindAnswer`, `ClaimVerdict`, `Adjudication`, `PanelistRun`, `CaseJudgement`) | `sufficiency/models.py` | **Built** |
+| Stage A — decompose | `sufficiency/stage_a.py` | **Built**, eyeballed on 8 cases |
+| Stage B — answer blind | `sufficiency/stage_b.py` | **Built**, eyeballed on 8 cases |
+| `span_is_verbatim` | `sufficiency/stage_b.py:span_is_verbatim` | **Built**, never observed to fail |
 | Stage C — adjudicate | — | **Specified below, not built** |
-| Verdict derivation | `Verdict` type exists (`:110`); no function derives one | **Specified below, not built** |
+| Verdict derivation | `Verdict` in `models.py`; no function derives one | **Specified below, not built** |
 | `sufficient_verbose` threshold | — | **Not decided** — to be measured |
 | Panel runner / aggregation | `CaseJudgement.unanimous` exists; nothing populates it | **Specified below, not built** |
 | Calibration sample | — | **Not started** |
 | Tests | none | **Not started** |
-| `main()` probe harness | `sufficiency_judge.py:496-545` | Built — a scratch driver over 8 cases, not the runner |
+| `main()` probe harness | `sufficiency/judge.py:main` | Built — a scratch driver over 8 cases, not the runner |
 
 Sections 2–5 describe built behaviour. Sections 6–10 are specification for work
 not yet done, and are marked as such. **No verdict from this module gates
@@ -135,8 +135,8 @@ calibration signal, not noise to be averaged away (§8).
 
 ## 4. Stage A — decompose (built)
 
-`sufficiency_judge.py:345-362`. Prompt at `:233-273`, structured output shapes at
-`:276-300`.
+`sufficiency/stage_a.py` — `decompose`, with `STAGE_A_INSTRUCTIONS`,
+`_StageAClaim`/`_StageADecomposition` and `build_stage_a_prompt` beside it.
 
 ### 4.1 Mechanism
 
@@ -211,7 +211,8 @@ It says the gold answer does not answer its own question — a defect in the
 
 ## 5. Stage B — answer blind (built)
 
-`sufficiency_judge.py:475-493`. Prompt at `:391-424`, output shape at `:427-445`.
+`sufficiency/stage_b.py` — `answer_blind`, with `STAGE_B_INSTRUCTIONS`,
+`_StageBAnswer` and `build_stage_b_prompt` beside it.
 
 ### 5.1 Mechanism
 
@@ -275,7 +276,7 @@ that decision rather than pre-empt it.
 
 ### 5.5 `span_is_verbatim` — a deterministic check on the judge's own output
 
-`sufficiency_judge.py:459-472`. Stage B is told to copy; a span it paraphrased
+`sufficiency/stage_b.py:span_is_verbatim`. Stage B is told to copy; a span it paraphrased
 instead is not a repair candidate. Matching reuses
 `golden_qa.normalize_for_grounding` rather than reimplementing it, so the judge
 and the grounding gate cannot drift apart on what "the same text" means — the
@@ -334,7 +335,7 @@ does.
 
 ## 7. Verdict derivation (specified, not built)
 
-The `Verdict` literal exists at `sufficiency_judge.py:110`; nothing derives one.
+The `Verdict` literal exists in `sufficiency/models.py`; nothing derives one.
 
 ### 7.1 The vocabulary
 
@@ -459,7 +460,7 @@ deliberately avoided through this configuration.
 Four consequences:
 
 1. **The current judge is cleaner than it first appeared, but not clean.**
-   `sufficiency_judge.py:511` runs on DeepSeek V4 Flash — a *different family from
+   `sufficiency/judge.py` runs on DeepSeek V4 Flash — a *different family from
    the chief judge* that arbitrated the set, which is the comparison that matters
    most, but the *same family as proposer DeepSeek V-3.2*.
 2. **Six models were involved in generation; five families were not.** A judge is
@@ -718,7 +719,7 @@ a process that cannot be matched to the existing ones.
 
 ```bash
 python -m src.eval.golden_qa          # the deterministic gate — free, no model calls
-python -m src.eval.sufficiency_judge  # the 8-case probe harness (stages A and B only)
+python -m src.eval.sufficiency.judge  # the 8-case probe harness (stages A and B only)
 ```
 
 The probe harness runs against `get_llm_config()["writer_model"][0]` and prints
