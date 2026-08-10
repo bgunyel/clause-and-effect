@@ -102,3 +102,15 @@ thing in the record.
   it wrongly from git twice. `ai_common`'s fix order shown to be forced: two of
   three candidate optimisations measure as worth zero until the package
   `__init__` is fixed.
+- [2026-08-10 · session 2](devlog_2026-08-10_session-2.md) — spent entirely in
+  the **`ai-common`** repo. The `__init__` fix landed in an hour (`from
+  ai_common.enums import …` 4.11s → 0.14s); the rest went to the GuardDog
+  wrapper sitting uncommitted beside it, where the tier-2 gate turned out never
+  to have gated — `guarddog pypi scan` exits 0 whether it found nothing, found
+  malicious indicators, or never downloaded the package. Rebuilt to derive its
+  own verdict from JSON, with a machine-wide cache that concurrent projects no
+  longer clobber and an `upgrade-safe` that no longer leaves `uv.lock` upgraded
+  and unverified on Ctrl-C. Then guarddog 2.10.0 → 3.1.0, and a one-minute smoke
+  scan produced three blockers — a dead sandbox, 61 renamed rules, and a guard
+  that eats the error it was written to surface — so the hour-long sweep was not
+  started.

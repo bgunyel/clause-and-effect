@@ -148,9 +148,17 @@ generator and agent staying untested remains an accepted state.
      the claim now lives where it can be made
      (`test_distinct_chunk_ids_yield_distinct_point_ids`).
 
-6. 🔺 **`ai_common` import cost — the first item of the next session, set by
-   Bertan 2026-08-10.** No longer deferred. Full entry, measurements and the
-   implementation order under 🟡 Tooling below.
+6. ~~🔺 **`ai_common` import cost**~~ — **step 1 done 2026-08-10 session 2.**
+   The package `__init__` now resolves lazily (PEP 562); `from ai_common.enums
+   import …` went **4.11s → 0.14s**. On branch `lazy-package-init` in
+   `ai-common`, pushed, not merged.
+   - **🔺 The win does not reach this repo yet.** The pin is
+     `ai-common @ git+…@main`, non-editable — merge and re-resolve first.
+   - Findings 2 and 3 (lazy provider SDKs, `BaseChatModel` behind
+     `TYPE_CHECKING`) are now unblocked; re-measure before implementing.
+   - **That branch also carries the GuardDog tier-2 gate rework, which is
+     blocked on three findings from the guarddog 3.1.0 smoke test.** See the new
+     entry under 🟡 Tooling; one of the three is a decision only Bertan can make.
 
 7. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
    calibration, tests. Split into `src/eval/sufficiency/` on 2026-08-10 and
@@ -596,8 +604,13 @@ per the priority order above.
   module boundary is not something the next edit undoes by accident. The cost
   itself originates in `ai_common` — see the entry below, which is still open.
 
-- [ ] **`ai_common` costs ~8s to import, and ~100% of it is avoidable for most
-  consumers.** Found 2026-08-09 while tracing why chunk generation loaded torch.
+- [x] ✅ **`ai_common` costs ~8s to import, and ~100% of it is avoidable for most
+  consumers.** **Finding 1 — the package `__init__` — was fixed 2026-08-10
+  session 2**, on branch `lazy-package-init` in `ai-common` (commit `6b72ed8`,
+  pushed). Findings 2 and 3 remain open and are now unblocked; see
+  *"What is still open"* at the end of this entry.
+
+  Found 2026-08-09 while tracing why chunk generation loaded torch.
   `ai_common` is Bertan's own library (`/home/bgunyel/source/ai/ai-common`,
   installed non-editable into this venv) and is consumed by at least six of his
   projects — `auto-company`, `business-researcher`, `deep-sage`, `ragnar`,
@@ -769,6 +782,122 @@ per the priority order above.
   remove the cost of a heavy name, it defers it to first access. Good for
   compatibility, confusing for anyone profiling.
 
+  ### ✅ 2026-08-10 session 2 — step 1 done, measured in `ai-common`
+
+  All 24 exported names now resolve through PEP 562 `__getattr__`, with a
+  `TYPE_CHECKING` block for static tools and a `__dir__` so the visible surface
+  does not depend on import history.
+
+  | statement | before | after |
+  |---|---|---|
+  | `import ai_common` | 4.42s · 3124 modules | **0.01s · 51** |
+  | `from ai_common.enums import LlmServers, ModelNames` | 4.11s · 3124 | **0.14s · 194** |
+  | `from ai_common import calculate_token_cost` | 4.38s · 3124 | **0.15s · 195** |
+  | `from ai_common import CfgBase` | 4.27s · 3124 | **0.36s · 518** |
+  | `from ai_common import get_llm` | 4.46s · 3124 | 4.19s · 3111 *(correct)* |
+
+  Absolute numbers are lower than the 7.6–8.1s above because these were taken in
+  `ai-common`'s own venv, which has no torch; this repo's venv does. The shape —
+  every entry point costing the same 3124 modules — is identical, and that was
+  the finding.
+
+  **The suggested shape was not the one implemented.** Keeping `enums` eager for
+  IDE ergonomics turned out to be unnecessary: the `TYPE_CHECKING` block gives
+  type checkers and autocomplete the whole surface at zero runtime cost, so
+  nothing stayed eager and `import ai_common` fell to 0.01s rather than to the
+  0.13s enums floor.
+
+  `test_public_api` **was already failing on `main`** — its allowance for three
+  leaked submodule attributes had gone stale and five more had appeared. Lazy
+  resolution removes the leak, so the allowance was dropped rather than widened.
+  1 test → 32, four mutants killed.
+
+  ### What is still open
+
+  - **🔺 Nothing reaches this repo until the branch merges.** `pyproject.toml`
+    pins `ai-common @ git+https://github.com/bgunyel/ai-common.git@main`, a
+    **non-editable** git install, so `src/llm_config.py` still pays the full
+    cost. Merge `lazy-package-init` and re-resolve the pin, then re-measure
+    `import src.llm_config` here (expected ~7.7s → ~0.2s).
+  - **Findings 2 and 3, now unblocked.** Six provider SDKs inside `get_llm`
+    (≈3.7s, and it turns five of them into optional rather than hard
+    dependencies — the stronger half of the argument) and `BaseChatModel` behind
+    `TYPE_CHECKING` (≈4.3s). **Re-measure before implementing**: every number in
+    this entry predates the lazy `__init__`, which changes the baseline they
+    were measured against.
+  - The pre-implementation check listed above — *what the other six consumers
+    import from `ai_common`* — was **not** performed. The lazy map covers exactly
+    `__all__`, and `ai-common`'s own internal consumers were verified, but the
+    other projects (`auto-company`, `business-researcher`, `deep-sage`,
+    `ragnar`, `summary-writer`, `elite-craft`) were not checked for imports of
+    non-`__all__` names or reliance on a submodule being present as a side
+    effect. Worth doing before the branch merges.
+
+- [ ] 🔺 **The GuardDog tier-2 gate — three blockers from the 3.1.0 smoke test**
+  _(2026-08-10 session 2; work lives in `ai-common`, branch `lazy-package-init`,
+  commit `dd8309a`, pushed)_
+
+  The wrapper was moved into `ai-common` as the `guarddog-cached` console script
+  so it stops being copied into every project — **`scripts/guarddog_cached.py`
+  in this repo is that copy** and should be deleted once the branch merges. It
+  now derives its own verdict instead of trusting an exit code, caches
+  machine-wide with version-keyed entries under an flock, and `upgrade-safe`
+  restores `uv.lock` on interrupt. 60 tests, 34 mutants.
+
+  guarddog was upgraded **2.10.0 → 3.1.0** on this machine. A one-minute smoke
+  scan then produced three blockers, and **the tier-2 sweep was not started.**
+
+  1. **🔺 DECISION FOR BERTAN — the v3 sandbox cannot start here.** v3.0.0 made
+     the nono-py kernel sandbox mandatory:
+
+     ```
+     $ guarddog pypi scan six --version 1.17.0
+     * download-package: Sandboxed extraction failed: Fatal Python error:
+       _Py_HashRandomization_Init: failed to get random numbers to initialize Python
+     No risks found in six
+     exit=0
+     ```
+
+     **No package can be scanned at all**, and guarddog says *"No risks found"*
+     and exits 0. On the old wrapper an hour-long sweep would have written ~91
+     fake clean verdicts and printed `✓ Clean across both tiers`; the new one
+     returns INCOMPLETE → exit 1 → `uv.lock` reverted. `--no-sandbox` works.
+     **Options: investigate the entropy failure, accept `--no-sandbox`, or roll
+     back to 2.10.0.** Everything else here waits on this.
+
+  2. **`BLOCKING_RULES` is stale — v3 renamed all 61 rules.** The catalogue went
+     from 25 to 61 on a new `capability-*` / `threat-*` taxonomy, and **not one
+     of the seven committed rule names exists in v3** (`code-execution` →
+     `threat-setup-network-in-install`, `exec-base64` →
+     `threat-runtime-obfuscation-base64exec`, `download-executable` →
+     `threat-process-download-exec`, `silent-process-execution` →
+     `threat-process-spawn-silent`, `exfiltrate-sensitive-data` →
+     `threat-network-exfiltration`, `steganography` →
+     `threat-runtime-obfuscation-steganography`; no direct equivalent found for
+     `cmd-overwrite`). **The gate would be inert again — silently, by a
+     different route than the exit code.** Noise profile changed too: `tqdm`
+     scores **7.2/10 `high_risk`** in v3 where v2 gave three advisory
+     indicators.
+
+     **Fix: re-base the gate on v3's `risk_score` / `risks` rather than rule
+     names** — `risk_score.label`, per-risk `severity`, and `mitre_tactics` are
+     a calibrated signal that a single upgrade cannot silently empty, which a
+     hand-curated name list has just proved it can.
+
+  3. **The report-shape guard swallows the error it exists to surface.** It
+     requires `errors` *and* `results` to be present dicts, to stop a future
+     rename making everything read as clean. But **v3 omits `results` entirely
+     when a scan fails** — a failing report's keys are just `['package',
+     'issues', 'errors']` — so the guard reports *"unrecognised report shape"*
+     and discards guarddog's real message. Verdict is still correct
+     (INCOMPLETE), but the line saying *the sandbox is broken* is lost.
+     **Fix: `results` absent is coherent when `errors` is populated; fire only
+     when `results` is missing AND `errors` is empty.**
+
+  Related, surfaced by the push: **a high-severity Dependabot alert on
+  `ai-common`'s `main`** — <https://github.com/bgunyel/ai-common/security/dependabot/33>.
+  Independent of this work, and exactly what tier 1 (`make audit`) is for.
+
 - [ ] 🔺 **Modify the Makefile for safe dependency upgrades** _(requested)_ —
   **Bertan, 2026-08-07: not to be postponed much longer.** The motivating case
   arrived on its own that day. `pyproject.toml` had declared `docling-core` since
@@ -796,6 +925,28 @@ per the priority order above.
     dependency bump can be functionally broken yet still pass the gate.
   - Consider applying the 7-day `--exclude-newer` quarantine inside
     `upgrade-safe` too, not just the blind `upgrade` target.
+  - **Several pieces of this were built in `ai-common` on 2026-08-10 session 2
+    and should be copied here rather than re-derived**, once
+    `lazy-package-init` merges:
+    - **The interrupt hazard is real and was fixed there.** `make` abandons the
+      remaining recipe lines on SIGINT, so the old `upgrade-safe` never reached
+      its restore branch and left `uv.lock` **upgraded but only partly scanned**,
+      with `uv.lock.preupgrade` stranded beside it — and the next run's
+      `cp uv.lock uv.lock.preupgrade` overwrote the real original. Fix: run the
+      guarded section as **one shell** with `trap … EXIT` plus `INT`/`TERM`, and
+      pin `SHELL := /bin/bash`. This repo's Makefile has the same shape and the
+      same bug.
+    - **`GUARDDOG_BUDGET`** bounds a sweep in wall-clock seconds; scanning stops
+      *starting* new packages once spent and exits 75, which reverts the lock as
+      an interrupt does. Repeated budgeted runs converge on a full sweep and
+      only a run finishing inside its budget can adopt an upgrade. This is the
+      answer to *"can I run it for 10 minutes and reuse the findings?"* — yes,
+      completed scans are banked per-package and shared machine-wide.
+    - **The global cache Bertan has been pushing for now exists** at
+      `$XDG_CACHE_HOME/guarddog-cached/cache.json`, shipped by `ai-common`, so
+      this repo gets it by depending on the library. **Delete
+      `scripts/guarddog_cached.py` here** and point the Makefile at the
+      `guarddog-cached` console script.
 - [ ] **Prepare a comprehensive test-status document** _(requested)_
   - Coverage map: **tested** — GDPR parser extraction (incl. against the real
     docling export), `vector_db` point-ID derivation and indexing invariants,
