@@ -25,7 +25,7 @@
       ]
     },
     {
-      "question": "Does Article 29 apply to contractors or third-party service providers who handle personal data on behalf of a company?",
+      "question": "Do the limits on processing personal data only on the controller's instructions extend to contractors and third-party service providers?",
       "answer": "Yes. Article 29 applies to the processor and any person acting under the authority of the controller or processor who has access to personal data, which includes contractors, subcontractors, and third-party service providers. They must process data only on instructions from the controller unless legally required to do otherwise.",
       "answer_type": "scope",
       "supporting_quote": "The processor and any person acting under the authority of the controller or of the processor, who has access to personal data, shall not process those data except on instructions from the controller",

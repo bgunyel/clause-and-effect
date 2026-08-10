@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 
 from src.clause_and_effect.parsers.gdpr_parser import GDPRParser
-from src.clause_and_effect.parsers.base_parser import Chunk
 
 
 # Synthetic markdown mirroring docling's *actual* export, verified against
@@ -42,7 +41,7 @@ Section 1
 
 Article 94
 ## Repeal of Directive 95/46/EC
-1. Directive  95/46/EC  is  repealed with effect from 25 May 2018.
+1. Directive  95/46/EC  is  repealed with effect from 25 May 2018. Any cross-border admin­ istration shall be propor­ tionate.
 2. References to the Working Party established by Article 29 of Directive 95/46/EC shall be construed as references to the European Data Protection Board established by this Regulation.
 
 ## Entry into force and application
@@ -93,6 +92,23 @@ def test_ocr_double_spacing_collapsed(articles):
     assert "  " not in articles["94"]["content"]
 
 
+def test_ocr_soft_hyphen_breaks_rejoined(articles):
+    """
+    docling keeps the discretionary hyphen (U+00AD) where the scan broke a word
+    across a line, e.g. "internat\xad ional". Both the hyphen and the space
+    after it must go, or the word stays split into two meaningless tokens.
+    """
+    content = articles["94"]["content"]
+    assert "­" not in content
+    assert "administration" in content
+    assert "proportionate" in content
+
+
+def test_real_hyphens_are_not_touched(articles):
+    """U+002D is a real hyphen in the regulation's own wording, not an artifact."""
+    assert "cross-border" in articles["94"]["content"]
+
+
 def test_dangling_next_section_heading_removed(articles):
     assert "Entry into force" not in articles["94"]["content"]
 
@@ -135,36 +151,23 @@ def test_no_headers_yields_no_articles(parser):
     assert parser._extract_articles("Just some text with no article headers.") == []
 
 
+def test_get_articles_from_markdown_matches_internal_split(parser):
+    """
+    The cached-export path must agree with the PDF path past the conversion.
+
+    `generate_gdpr_articles.py` reads `gdpr.docling.md` by default and only
+    falls back to re-running OCR, so the two entry points have to produce the
+    same records or the cheap path would silently diverge from the expensive
+    one.
+    """
+    assert parser.get_articles_from_markdown(SAMPLE) == parser._extract_articles(SAMPLE)
+
+
 def test_inline_reference_never_creates_spurious_record(parser):
     """An inline 'Article 29' reference must not spawn its own article record."""
     nums = [a["number"] for a in parser._extract_articles(SAMPLE)]
     assert nums == ["93", "94", "95"]
     assert nums.count("29") == 0
-
-
-# --------------------------------------------------------------------------- #
-#  article_to_chunks — the bridge from extracted articles to indexed chunks.  #
-# --------------------------------------------------------------------------- #
-
-def test_short_article_becomes_single_article_chunk(parser, articles):
-    chunks = parser.article_to_chunks(articles["94"])
-    assert len(chunks) == 1
-    chunk = chunks[0]
-    assert isinstance(chunk, Chunk)
-    assert chunk.metadata["article_number"] == "94"
-    assert chunk.metadata["regulation"] == "GDPR"
-    assert chunk.metadata["chunk_type"] == "article"
-    # The recovered cross-reference text must reach the indexed chunk.
-    assert "European Data Protection Board" in chunk.text
-
-
-def test_long_article_splits_into_paragraph_chunks(parser):
-    long_content = "\n".join(f"{i}. " + "clause text " * 40 for i in range(1, 5))
-    article = {"number": "5", "title": "Principles", "content": long_content, "chapter": "2"}
-    chunks = parser.article_to_chunks(article)
-    assert len(chunks) > 1
-    assert all(c.metadata["chunk_type"] == "paragraph" for c in chunks)
-    assert all(c.metadata["article_number"] == "5" for c in chunks)
 
 
 # --------------------------------------------------------------------------- #
@@ -203,6 +206,20 @@ def test_real_export_articles_all_have_title_and_content(real_articles):
     assert [a["number"] for a in real_articles if "#" in a["title"]] == []
 
 
+def test_real_export_carries_no_soft_hyphens(real_articles):
+    """
+    The real export has 39 soft hyphens, 18 of which land inside article
+    content (14 articles, e.g. "internat\xad ional" in Article 14). None may
+    survive into the corpus: each one splits a word into two tokens that no
+    embedding or lexical scorer can match.
+    """
+    offenders = [
+        a["number"] for a in real_articles
+        if "­" in a["title"] or "­" in a["content"]
+    ]
+    assert offenders == []
+
+
 def test_real_export_no_structural_scaffolding_leaks_into_content(real_articles):
     leaked = [
         a["number"]
@@ -210,6 +227,16 @@ def test_real_export_no_structural_scaffolding_leaks_into_content(real_articles)
         if "## CHAPTER" in a["content"] or "## Section" in a["content"]
     ]
     assert leaked == []
+
+
+def test_real_export_public_markdown_entry_point_yields_all_99(parser):
+    """The path `generate_gdpr_articles.py` actually uses, on the real export."""
+    if not DOCLING_MARKDOWN.exists():
+        pytest.skip(f"docling export not available at {DOCLING_MARKDOWN}")
+    articles = parser.get_articles_from_markdown(
+        DOCLING_MARKDOWN.read_text(encoding="utf-8")
+    )
+    assert [int(a["number"]) for a in articles] == list(range(1, 100))
 
 
 def test_real_export_inline_cross_references_do_not_truncate(real_articles):

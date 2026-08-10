@@ -15,7 +15,7 @@
       ]
     },
     {
-      "question": "Under what three circumstances can an organization make automated decisions about someone without violating this article?",
+      "question": "Under what three circumstances is a decision based solely on automated processing permitted?",
       "answer": "Automated decisions are permitted when: (1) the decision is necessary for entering into or performing a contract between the data subject and the controller; (2) the decision is authorized by Union or Member State law that includes suitable safeguards for the data subject's rights; or (3) the decision is based on the data subject's explicit consent.",
       "answer_type": "conditional",
       "supporting_quote": "Paragraph 1 shall not apply if the decision: (a) is necessary for entering into, or performance of, a contract between the data subject and a data controller; (b) is authorised by Union or Member State law to which the controller is subject and which also lays down suitable measures to safeguard the data subject's rights and freedoms and legitimate interests; or (c) is based on the data subject's explicit consent.",

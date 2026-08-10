@@ -38,7 +38,7 @@
       ]
     },
     {
-      "question": "Does Article 81 coordination apply to proceedings within the same Member State?",
+      "question": "Does the duty to contact another court about parallel proceedings apply when both sets of proceedings are pending within the same Member State?",
       "answer": "No. Article 81 applies only when proceedings are pending in a court in another Member State. Coordination of parallel cases within the same country is governed by that Member State's domestic procedural law, not GDPR Article 81.",
       "answer_type": "scope",
       "supporting_quote": "pending in a court in another Member State",

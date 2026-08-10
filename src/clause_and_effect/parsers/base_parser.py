@@ -2,7 +2,6 @@
 Base parser interface for regulation documents
 """
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import List, Dict, Any
 from pathlib import Path
 
@@ -11,17 +10,7 @@ from docling.datamodel.base_models import ConversionStatus, InputFormat
 from docling.datamodel.pipeline_options import RapidOcrOptions, ThreadedPdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.pipeline.threaded_standard_pdf_pipeline import ThreadedStandardPdfPipeline
-
-
-@dataclass
-class Chunk:
-    """A chunk of text from a regulation document"""
-    id: str
-    text: str
-    metadata: Dict[str, Any]
-
-    def __repr__(self):
-        return f"Chunk(id='{self.id}', metadata={self.metadata})"
+from docling_core.types.doc import DoclingDocument
 
 
 class BaseParser(ABC):
@@ -31,7 +20,7 @@ class BaseParser(ABC):
         self.regulation_name = regulation_name
 
     @abstractmethod
-    def parse(self, file_path: Path) -> List[Chunk]:
+    def parse(self, file_path: Path) -> List[Dict[str, Any]]:
         """
         Parse a regulation document into chunks
 
@@ -43,9 +32,45 @@ class BaseParser(ABC):
         """
         pass
 
+    def to_markdown(self, file_path: Path) -> str:
+        """
+        Convert a source PDF to docling markdown.
+
+        This is the expensive step in the pipeline — roughly six minutes of CPU
+        OCR for the GDPR on a machine without a GPU. It is public so the result
+        can be exported once and cached on disk, letting the cheap half (the
+        article split) re-run in under a second against that export instead of
+        repeating the conversion on every parser change.
+
+        Note that the markdown *serializer* loses structure the conversion
+        itself captured: nested list items are flattened into one ordered list
+        and renumbered, so a sub-item (a) becomes a sibling paragraph. Use
+        :meth:`to_dictionary` where within-article hierarchy matters.
+        """
+        return self._extract_text_from_pdf(file_path)
+
+    def to_dictionary(self, file_path: Path) -> Dict[str, Any]:
+        """
+        Convert a source PDF to docling's document tree.
+
+        Same conversion as :meth:`to_markdown` — and just as expensive — but
+        serialized to the ``DoclingDocument`` dictionary rather than to
+        markdown. This keeps what markdown discards: list items retain their
+        own ``marker`` and ``enumerated`` flag, so real paragraph numbering
+        survives, and every item carries ``prov`` (page number and character
+        span) back into the PDF text layer.
+        """
+        return self._extract_dictionary_from_pdf(file_path)
+
     @staticmethod
-    def _extract_text_from_pdf(file_path: Path) -> str:
-        """Extract all text from PDF"""
+    def _convert_pdf(file_path: Path) -> DoclingDocument:
+        """
+        Run the docling OCR conversion and return the converted document.
+
+        Both export paths go through here, so markdown and the document tree
+        are guaranteed to come from an identically-configured conversion and
+        cannot drift apart on pipeline options.
+        """
         # document_converter = DocumentConverter()
 
         pipeline_options = ThreadedPdfPipelineOptions(
@@ -72,15 +97,17 @@ class BaseParser(ABC):
 
         document = doc_converter.convert(file_path)  # TODO: important
         assert document.status == ConversionStatus.SUCCESS
-        text = document.document.export_to_markdown()
-        return text
+        return document.document
 
-    def _create_chunk_id(self, article_num: str, paragraph: str | None = None) -> str:
-        """Generate a unique chunk ID"""
-        base_id = f"{self.regulation_name.lower()}_article_{article_num}"
-        if paragraph:
-            return f"{base_id}_para_{paragraph}"
-        return base_id
+    @classmethod
+    def _extract_text_from_pdf(cls, file_path: Path) -> str:
+        """Extract all text from PDF, serialized as markdown"""
+        return cls._convert_pdf(file_path).export_to_markdown()
+
+    @classmethod
+    def _extract_dictionary_from_pdf(cls, file_path: Path) -> Dict[str, Any]:
+        """Extract the document tree from PDF, as a plain dictionary"""
+        return cls._convert_pdf(file_path).export_to_dict()
 
     @staticmethod
     def _extract_topics(text: str) -> List[str]:

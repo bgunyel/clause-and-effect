@@ -1,10 +1,18 @@
+"""
+Where things are: paths, endpoints and credentials.
+
+Deliberately free of any LLM dependency. ``get_llm_config`` moved to
+``src/llm_config.py`` on 2026-08-09 because importing ``ai_common`` for its two
+enums pulled six langchain provider SDKs, transformers and torch — 8.34s, paid
+by all eight modules that import this one, though only two ever build an LLM.
+This module is 0.21s and must stay that way; anything needing a model belongs
+next door.
+"""
 import os
 from pydantic_settings import BaseSettings
 from pydantic import SecretStr
 from functools import lru_cache
 from pathlib import Path
-
-from ai_common import LlmServers, ModelNames
 
 FILE_DIR = os.path.dirname(os.path.abspath(__file__))
 ENV_FILE_DIR = os.path.abspath(os.path.join(FILE_DIR, os.pardir))
@@ -47,50 +55,3 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
-
-def get_llm_config():
-    settings = get_settings()
-
-    llm_config = {
-        'orchestrator_model': [
-            {
-                'model': ModelNames.DEEPSEEK_V_4_FLASH,
-                'model_provider': LlmServers.OPENROUTER,
-                'api_key': settings.OPENROUTER_API_KEY,
-                'max_llm_retries': 3,
-                'model_args': {
-                    'temperature': 0,
-                    'reasoning_effort': 'high',
-                    'top_p': 0.95,
-                }
-            },
-
-        ],
-        'writer_model': [
-            {
-                'model': ModelNames.DEEPSEEK_V_4_FLASH,
-                'model_provider': LlmServers.OPENROUTER,
-                'api_key': settings.OPENROUTER_API_KEY,
-                'max_llm_retries': 3,
-                'model_args': {
-                    'temperature': 0,
-                    'reasoning_effort': 'high',
-                    'top_p': 0.95,
-                }
-            },
-            {
-                'model': ModelNames.GPT_OSS_120B,
-                'model_provider': LlmServers.OPENROUTER,
-                'api_key': settings.OPENROUTER_API_KEY,
-                'max_llm_retries': 3,
-                'model_args': {
-                    'temperature': 0,
-                    'reasoning_effort': 'high',
-                    'top_p': 0.95,
-                }
-            },
-        ]
-
-    }
-
-    return llm_config

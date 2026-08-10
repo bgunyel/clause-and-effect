@@ -4,7 +4,8 @@ import logging
 from pathlib import Path
 
 from ai_common import calculate_token_cost, get_llm
-from src.config import get_settings, get_llm_config
+from src.config import get_settings
+from src.llm_config import get_llm_config
 
 
 TIER_ONE_INSTRUCTIONS = """

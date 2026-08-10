@@ -13,7 +13,7 @@
       ]
     },
     {
-      "question": "Does Article 13 apply when a company collects personal data from a third party instead of directly from the individual?",
+      "question": "If a company obtains personal data from a third party rather than directly from the individual, do the information duties that attach to direct collection still apply?",
       "answer": "No. Article 13 specifically applies only when personal data is collected from the data subject directly. When data is obtained from a source other than the data subject, different requirements under Article 14 would apply instead.",
       "answer_type": "scope",
       "supporting_quote": "Where personal data relating to a data subject are collected from the data subject",
@@ -86,7 +86,7 @@
       ]
     },
     {
-      "question": "Is a company required to provide Article 13 information if the data subject already knows it?",
+      "question": "Must a controller still provide the required information at the time data are obtained if the data subject already has it?",
       "answer": "No. Paragraphs 1, 2, and 3 of Article 13 do not apply where and insofar as the data subject already has the information. This prevents redundant disclosures when the individual is already aware of the required information.",
       "answer_type": "scope",
       "supporting_quote": "Paragraphs 1, 2 and 3 shall not apply where and insofar as the data subject already has the information",

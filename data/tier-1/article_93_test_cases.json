@@ -13,7 +13,7 @@
       ]
     },
     {
-      "question": "When does the examination procedure under Article 93(2) apply?",
+      "question": "When does the examination procedure of Article 5 of Regulation (EU) No 182/2011 apply to the committee assisting the Commission?",
       "answer": "Where reference is made to this paragraph, the examination procedure referred to in Article 5 of Regulation (EU) No 182/2011 shall apply. This procedure is triggered when other GDPR provisions explicitly reference Article 93(2) for adopting implementing acts.",
       "answer_type": "conditional",
       "supporting_quote": "Where reference is made to this paragraph, the examination procedure referred to in Article 5 of Regulation (EU) No 182/2011 shall apply",
@@ -24,7 +24,7 @@
       ]
     },
     {
-      "question": "Does Article 93 deal with data protection supervision or administrative procedures?",
+      "question": "Does the rule on the committee assisting the Commission concern data protection supervision or administrative procedure?",
       "answer": "Article 93 deals only with administrative and procedural matters concerning how the Commission is assisted by a committee for adopting implementing acts under the GDPR. It does not address data protection supervision, which is handled by supervisory authorities and the European Data Protection Board under other articles.",
       "answer_type": "scope",
       "supporting_quote": "The Commission shall be assisted by a committee. That committee shall be a committee within the meaning of Regulation (EU) No 182/2011",

@@ -18,7 +18,7 @@
       ]
     },
     {
-      "question": "What must a data subject be told before their explicit consent can justify an international transfer under this article?",
+      "question": "What must a data subject be told before their explicit consent can justify a transfer to a third country without an adequacy decision or appropriate safeguards?",
       "answer": "The data subject must be informed of the possible risks of such transfers due to the absence of an adequacy decision and appropriate safeguards. Only after receiving this information can explicit consent be validly obtained for the transfer.",
       "answer_type": "conditional",
       "supporting_quote": "the data subject has explicitly consented to the proposed transfer, after having been informed of the possible risks of such transfers for the data subject due to the absence of an adequacy decision and appropriate safeguards",
@@ -43,7 +43,7 @@
       ]
     },
     {
-      "question": "Do these derogations apply to public authorities exercising their official powers?",
+      "question": "Do the derogations permitting transfers without an adequacy decision apply to public authorities exercising their public powers?",
       "answer": "No. Article 49(3) explicitly states that the first subparagraph (paragraphs a-g) and the compelling legitimate interests derogation shall not apply to activities carried out by public authorities in the exercise of their public powers.",
       "answer_type": "scope",
       "supporting_quote": "Points (a), (b), (c) and (f) of the first subparagraph shall not apply to activities carried out by public authorities in the exercise of their public powers",

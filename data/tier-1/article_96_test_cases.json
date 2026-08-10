@@ -3,7 +3,7 @@
   "article_title": "Relationship with previously concluded Agreements",
   "test_cases": [
     {
-      "question": "What is the cutoff date for international data transfer agreements to remain in force under this provision?",
+      "question": "What is the cutoff date for previously concluded international data transfer agreements to remain in force?",
       "answer": "International agreements involving the transfer of personal data to third countries or international organisations which were concluded by Member States prior to 24 May 2016, and which comply with Union law as applicable prior to that date, shall remain in force until amended, replaced or revoked.",
       "answer_type": "timeline",
       "supporting_quote": "International agreements involving the transfer of personal data to third countries or international organisations which were concluded by Member States prior to 24 May 2016, and which comply with Union law as applicable prior to that date, shall remain in force until amended, replaced or revoked",
@@ -14,7 +14,7 @@
       ]
     },
     {
-      "question": "What types of agreements does Article 96 cover?",
+      "question": "Which international agreements on transfers of personal data, concluded before the GDPR applied, remain in force?",
       "answer": "Article 96 covers international agreements involving the transfer of personal data to third countries or international organisations. These must be agreements concluded by Member States (national governments), not private contracts between companies or agreements made by the EU itself.",
       "answer_type": "definition",
       "supporting_quote": "International agreements involving the transfer of personal data to third countries or international organisations which were concluded by Member States",

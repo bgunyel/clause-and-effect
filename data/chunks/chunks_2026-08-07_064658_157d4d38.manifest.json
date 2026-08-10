@@ -1,0 +1,29 @@
+{
+  "chunk_set_sha256": "157d4d385908346bae470f75dc6c93e2f4ffcd84863f699ce11e33d3faf3c0ac",
+  "chunk_count": 368,
+  "created_at": "2026-08-07T06:46:58Z",
+  "git_commit": "c67e266e946483b995aaa042540c428d7b3bcf51",
+  "git_dirty": false,
+  "git_dirty_paths": [],
+  "source": {
+    "path": "data/regulations/gdpr_articles.json",
+    "sha256": "85fba45c40b6a7239bd3dc3f7bf1a4bafcf44eca6d37bd4404f9cb8595cad7ca",
+    "article_count": 99
+  },
+  "chunker": {
+    "class": "GDPRParser",
+    "method": "article_to_chunks"
+  },
+  "stats": {
+    "by_chunk_type": {
+      "article": 38,
+      "paragraph": 330
+    },
+    "chars": {
+      "total": 203964,
+      "min": 90,
+      "median": 389,
+      "max": 8655
+    }
+  }
+}

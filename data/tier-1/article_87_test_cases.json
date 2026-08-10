@@ -3,7 +3,7 @@
   "article_title": "Processing of the national identification number",
   "test_cases": [
     {
-      "question": "What types of identifiers does Article 87 cover?",
+      "question": "Which identifiers may Member States lay down specific processing conditions for?",
       "answer": "Article 87 covers: (1) national identification numbers, and (2) any other identifier of general application. These are identifiers broadly used to identify individuals within a Member State, not limited to specific sectors or purposes.",
       "answer_type": "definition",
       "supporting_quote": "the processing of a national identification number or any other identifier of general application",

@@ -13,6 +13,7 @@ __pycache__/
 # Input/Output folders
 input/
 out/
+tmp/
 
 # Specific data entities are kept local
 data/regulations/gdpr.pdf

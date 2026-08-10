@@ -4,6 +4,12 @@
 **Theme:** GDPR corpus regeneration — and the two parser defects it exposed
 **Tests:** 33 passed / 1 xfailed → **52 passed / 1 xfailed**
 
+> **Note on voice:** this entry predates the log's attribution convention and is
+> written in the AI assistant's voice — "I" is the assistant, "the user" is
+> Bertan (the engineer). Mistakes recorded below are the assistant's unless
+> stated otherwise; findings credited to "the user" are Bertan's. Later entries
+> name agents explicitly — see [README](README.md#voice-and-attribution).
+
 ---
 
 ## Starting point
