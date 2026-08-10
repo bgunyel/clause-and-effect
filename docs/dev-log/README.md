@@ -87,3 +87,18 @@ thing in the record.
   chunker lifted out of the parser, a circular import held closed by two dead
   lines, and regulation constants collapsed from three free parameters to one
   lookup. Ends mid-refactor with 58 failing tests, enumerated.
+- [2026-08-09 · session 1](devlog_2026-08-09_session-1.md) — the chunking
+  refactor finished and the `vector_db` source side reviewed item by item; the
+  digest became caller-supplied (a recorded property deliberately reversed);
+  output routed through logging, with `RichHandler` tried and rejected for
+  breaking a hash across two lines. Ends with 24 failing tests in
+  `test_vector_db.py`.
+- [2026-08-10 · session 1](devlog_2026-08-10_session-1.md) — `test_vector_db.py`
+  repaired 24 → 0 with every rewrite mutation-checked, two of the three handover
+  predictions found wrong, and the first baseline snapshot (`5caac594…`) written
+  against a clean tree and merged to `main`. The sufficiency judge documented and
+  split into a package — where a claimed import-cost property was measured and
+  found absent. Golden-set provenance established after the assistant concluded
+  it wrongly from git twice. `ai_common`'s fix order shown to be forced: two of
+  three candidate optimisations measure as worth zero until the package
+  `__init__` is fixed.

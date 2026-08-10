@@ -89,11 +89,17 @@ generator and agent staying untested remains an accepted state.
    derives it and refuses to index if it disagrees with the manifest, which is a
    check re-deriving inside could not make. The orphan property survives intact.
 
-5. 🔺 **Repair `test_vector_db.py` — first item of the next session, set by
-   Bertan 2026-08-09.** 24 of its 32 tests fail; every other test module is
-   green. Nothing else in this list starts until these do, because the vector_db
-   refactor above is unverified until they run, and it is the last thing between
-   here and a re-index.
+5. ~~🔺 **Repair `test_vector_db.py`** — first item of the 2026-08-09 session,
+   set by Bertan.~~ **Done 2026-08-10** (`5d517e8`, `7fd6274`). 24 failures → 0;
+   suite **243 passed, 5 xfailed**. Every rewritten test was mutation-checked.
+   One source correction fell out of it: the "lost to ID collisions" message
+   named a failure the identity check structurally cannot see. Baseline snapshot
+   `5caac594…` generated against a clean tree and merged to `main` in
+   [#2](https://github.com/bgunyel/clause-and-effect/pull/2). Detail below.
+
+   <details><summary>The original breakdown, kept for the record</summary>
+
+   24 of 32 tests failed; every other test module was green.
 
    Three layers, and the first hides the other two. The stale `_chunks` helper
    (`tests/test_vector_db.py:207`) builds `Chunk(metadata={"article_number": i})`
@@ -126,8 +132,30 @@ generator and agent staying untested remains an accepted state.
    test. Build the store rather than stubbing per test: it makes the tests
    exercise the real verify-after-write path.
 
-6. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
-   calibration, tests.
+   </details>
+
+   **What the repair actually found, 2026-08-10.** Two of the three predictions
+   above were wrong, and the correction is the useful part:
+   - The `_chunks` helper was not a stale *repoint*. `Chunk.metadata` became a
+     `ChunkMetadata` model, so its one-key dict failed pydantic validation before
+     any code under test ran — 7 missing required fields.
+   - **The fake Qdrant client already had an in-memory point store.**
+     `_FakeClient.points` existed, `upsert` populated it, `scroll` projected
+     `with_payload` off it. Nothing to build.
+   - The identity check cannot detect an **ID collision** — both chunks derive
+     the same point, that point is present, so neither is reported missing. The
+     count check it replaced could see this. Message and docstring corrected;
+     the claim now lives where it can be made
+     (`test_distinct_chunk_ids_yield_distinct_point_ids`).
+
+6. 🔺 **`ai_common` import cost — the first item of the next session, set by
+   Bertan 2026-08-10.** No longer deferred. Full entry, measurements and the
+   implementation order under 🟡 Tooling below.
+
+7. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
+   calibration, tests. Split into `src/eval/sufficiency/` on 2026-08-10 and
+   documented in `docs/design/sufficiency-judge.md`; stage C now has a file to be
+   written into rather than a 545-line module to be carved.
 
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
 algorithm improvement, not a blocker — Bertan's decision, 2026-08-07. The
@@ -574,7 +602,12 @@ per the priority order above.
   installed non-editable into this venv) and is consumed by at least six of his
   projects — `auto-company`, `business-researcher`, `deep-sage`, `ragnar`,
   `summary-writer`, `elite-craft` — so a fix there pays off well beyond this
-  repo. **Deferred by Bertan, 2026-08-09: to be dealt with later.**
+  repo.
+
+  > **🔺 This is the first work item of the next session (Bertan, 2026-08-10).**
+  > Deferred on 2026-08-09; un-deferred after the 2026-08-10 measurements below,
+  > which establish the implementation order and show that two of the three
+  > candidate fixes are worth **nothing** until the third lands.
 
   ### The chain
 
@@ -646,6 +679,95 @@ per the priority order above.
   `ai_common`, including names not in `__all__` — that decides how conservative
   the `_EXPORTS` map has to be, and whether anything relies on a submodule being
   imported as a side effect of importing the package.
+
+  ### 2026-08-10 — re-measured, and the implementation order is now forced
+
+  Prompted by the question *"would importing the provider SDKs inside `get_llm`
+  help?"* Answered by measurement: **on its own, no.**
+
+  **The ordering result.** A module carrying only the imports that would remain
+  in `llm.py` after moving all six provider SDKs into the `match` branches:
+
+  | variant | cost |
+  |---|---|
+  | `import ai_common.llm` today | 7.63s |
+  | six provider SDKs moved into `get_llm` | **7.93s — no better** |
+  | …and `BaseChatModel` behind `TYPE_CHECKING` too | **7.79s — still no better** |
+
+  Both are worth zero because `llm.py` itself does `from .enums import …`, which
+  re-enters the package `__init__`. **Finding 1 is not one of three options; it
+  is the precondition for the other two.**
+
+  **The submodule path buys nothing either**, which settles a natural workaround:
+
+  | | cost | `sys.modules` |
+  |---|---|---|
+  | `from ai_common import get_llm` | 7.95s | 4622 |
+  | `from ai_common.llm import get_llm` | 7.83s | 4622 |
+  | `import ai_common.enums` | 7.86s | 4622 |
+
+  Identical module counts. All nine submodules load either way — Python must
+  execute a parent package's `__init__` to completion before any submodule of it.
+
+  **Where the cost actually is**, isolated:
+
+  | | cost | pulls torch |
+  |---|---|---|
+  | `typing` + `pydantic` (the floor for `enums.py`) | **0.13s** | no |
+  | `langchain_core…chat_models` → `BaseChatModel` | **4.28s** | **yes** |
+  | `ai_common.enums` (a file of plain `Enum`s) | 7.86s | yes |
+
+  **Marginal cost per provider**, with `langchain_core` already loaded — this is
+  what lazy provider imports would actually save:
+
+  ```
+  langchain_google_genai  +1.87s      langchain_ollama      +0.15s
+  langchain_openai        +0.94s      langchain_groq        +0.01s
+  langchain_anthropic     +0.74s      langchain_openrouter  +0.01s
+  ```
+
+  ≈3.7s total, and **OpenRouter — the provider this project uses — is +0.01s**,
+  so a lazy `get_llm` would save nearly all of it on a real call.
+
+  `BaseChatModel` is worth more than all six combined: 4.28s for what is only a
+  return annotation. `from __future__ import annotations` plus a `TYPE_CHECKING`
+  guard removes it from runtime entirely.
+
+  **PEP 562 verified, not assumed.** A toy package with a lazy `__getattr__`
+  routing one cheap and one heavy name:
+
+  ```
+  from pkg import Servers            0.02s   ['pkg', 'pkg.cheap']
+  from pkg import get_llm            1.01s   ['pkg', 'pkg.heavy']
+  from pkg import Servers, get_llm   1.01s   ['pkg', 'pkg.cheap', 'pkg.heavy']
+  ```
+
+  Cost becomes **per name**, not per package, and the old API keeps working. Note
+  the third row: one heavy name in a statement defeats the laziness for that
+  statement.
+
+  ### Implementation order
+
+  1. **`__init__.py` first** — nothing else is observable until it lands. Suggested
+     shape: keep `enums` **eager** (0.13s, universally used, keeps IDE
+     autocomplete and mypy working without ceremony) and put the heavy names
+     — `get_llm`, `load_ollama_model`, `WebSearch`, anything from `base`/`utils`
+     — behind the lazy map with `if TYPE_CHECKING:` imports beside it.
+  2. **Re-measure.** Expected: `from ai_common import LlmServers` ≈ 0.13s and no
+     torch, so `import src.llm_config` goes ~7.7s → ~0.15s, which reaches
+     `gdpr_test_data_generation.py`, `eval/sufficiency/judge.py` and
+     `main_dev.py`.
+  3. **Then** the six provider SDKs inside `get_llm` (~3.7s, and it makes five of
+     them optional dependencies rather than hard ones — the stronger half of the
+     argument) and `BaseChatModel` behind `TYPE_CHECKING` (~4.3s).
+
+  The submodule dependency graph says step 1 pays widely: `price` and `engine`
+  have no external imports at all, `enums` needs only `pydantic`, `tools` needs
+  `ollama`+`tqdm`; only `base`, `utils` and `llm` are heavy.
+
+  **Caveat to document wherever the lazy shim lands:** `__getattr__` does not
+  remove the cost of a heavy name, it defers it to first access. Good for
+  compatibility, confusing for anyone profiling.
 
 - [ ] 🔺 **Modify the Makefile for safe dependency upgrades** _(requested)_ —
   **Bertan, 2026-08-07: not to be postponed much longer.** The motivating case
