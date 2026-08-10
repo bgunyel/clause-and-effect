@@ -277,8 +277,10 @@ class VectorDatabase:
                 points were not rewritten.
 
         Raises:
-            ValueError: if two chunks share an ID, or if any chunk did not reach
-                the collection carrying ``chunk_set_id``.
+            ValueError: if two chunks share an ID — an argument fault, caught
+                before anything is written.
+            IndexVerificationError: if any chunk did not reach the collection
+                carrying ``chunk_set_id``.
 
         Note:
             The post-write check is scoped to the points this call stamped and
@@ -288,6 +290,16 @@ class VectorDatabase:
             missing. Verifying the expected point IDs are present *with this
             digest* is immune to that, and names which chunks are absent rather
             than reporting that two numbers disagree.
+
+            It is, in exchange, blind to an ID **collision**, which the count
+            check could see: if two chunk IDs derived the same point, the upsert
+            overwrites and one chunk is lost, yet both find their point present
+            and neither is reported missing. Nothing here can detect that,
+            because it asks the collection the same question that produced the
+            collision. The claim is carried where it can be made instead —
+            duplicate chunk IDs are rejected above, and
+            `test_distinct_chunk_ids_yield_distinct_point_ids` pins that
+            distinct IDs derive distinct points.
         """
         logger.info("📊 Embedding and upserting %d chunks…", len(chunks))
 
@@ -339,7 +351,8 @@ class VectorDatabase:
             self.client.upsert(collection_name=self.collection_name, points=points)
 
         # Verify against the collection rather than against the input: reporting
-        # len(chunks) back would claim success even if every point had collided.
+        # len(chunks) back would claim success without ever asking the server
+        # whether the write landed.
         #
         # Scoped to the points this call stamped, not the collection's total. A
         # bare `count()` compares against everything the collection holds, so
@@ -364,8 +377,8 @@ class VectorDatabase:
             raise IndexVerificationError(
                 f"Indexed {len(chunks)} chunks but {len(missing)} did not reach "
                 f"collection '{self.collection_name}' carrying "
-                f"{chunk_set_id[:12]}… — lost to ID collisions or a failed "
-                f"upsert: {sorted(missing)[:10]}"
+                f"{chunk_set_id[:12]}… — lost to a failed upsert: "
+                f"{sorted(missing)[:10]}"
             )
 
 
