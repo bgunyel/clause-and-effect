@@ -47,25 +47,16 @@ def get_llm_config():
             },
 
         ],
-        # NOTE: entry [1] is currently broken — `ModelNames.GPT_OSS_120B` has no
-        # OpenRouter alias in `ai_common`'s `MODEL_NAME_ALIAS_DICT` (groq and
-        # ollama only), so `get_llm` raises
-        # `KeyError: <LlmServers.OPENROUTER>` on construction. Found 2026-08-05.
-        # Tracked in docs/todo.md; entry [0] is the one in use.
+        # A second entry held `ModelNames.GPT_OSS_120B` on `OPENROUTER` and raised
+        # `KeyError: <LlmServers.OPENROUTER>` on construction; removed 2026-08-10.
+        # The model was never the problem — it has `GROQ` and `OLLAMA` aliases and
+        # ran fine on `OLLAMA` at 2638b52. The wholesale switch to OpenRouter
+        # (6ccd193) moved it to a provider it has no alias for. Worth knowing
+        # before a second panelist is added here: check the alias dict for the
+        # provider, not just the model.
         'writer_model': [
             {
                 'model': ModelNames.DEEPSEEK_V_4_FLASH,
-                'model_provider': LlmServers.OPENROUTER,
-                'api_key': settings.OPENROUTER_API_KEY,
-                'max_llm_retries': 3,
-                'model_args': {
-                    'temperature': 0,
-                    'reasoning_effort': 'high',
-                    'top_p': 0.95,
-                }
-            },
-            {
-                'model': ModelNames.GPT_OSS_120B,
                 'model_provider': LlmServers.OPENROUTER,
                 'api_key': settings.OPENROUTER_API_KEY,
                 'max_llm_retries': 3,
