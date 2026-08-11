@@ -22,3 +22,6 @@ turned out to be false.
 - [2026-08-01 — GDPR article-header collapse](2026-08-01-gdpr-article-header-collapse.md)
   — a parser and its test fixture agreed with each other but not with docling,
   collapsing all 99 GDPR articles into one 137k-character record.
+- [2026-08-11 — GuardDog's sandbox and `/dev/urandom`](2026-08-11-guarddog-sandbox-dev-urandom.md)
+  — an error message naming the random-number subsystem was a Landlock file
+  denial; GuardDog scanned 0 of 61 rules and reported "No risks found", exit 0.

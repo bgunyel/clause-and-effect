@@ -4,7 +4,7 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-07._
+> _Last updated: 2026-08-11._
 
 ---
 
@@ -156,9 +156,10 @@ generator and agent staying untested remains an accepted state.
      `ai-common @ git+…@main`, non-editable — merge and re-resolve first.
    - Findings 2 and 3 (lazy provider SDKs, `BaseChatModel` behind
      `TYPE_CHECKING`) are now unblocked; re-measure before implementing.
-   - **That branch also carries the GuardDog tier-2 gate rework, which is
-     blocked on three findings from the guarddog 3.1.0 smoke test.** See the new
-     entry under 🟡 Tooling; one of the three is a decision only Bertan can make.
+   - **That branch also carries the GuardDog tier-2 gate rework. All three
+     guarddog 3.1.0 blockers were closed 2026-08-11** — see 🟡 Tooling. What now
+     gates the merge is different: `upgrade-safe` must pass before a PR closes
+     (Bertan, 2026-08-11) and it cannot until the three baseline waivers exist.
 
 7. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
    calibration, tests. Split into `src/eval/sufficiency/` on 2026-08-10 and
@@ -833,70 +834,86 @@ per the priority order above.
     non-`__all__` names or reliance on a submodule being present as a side
     effect. Worth doing before the branch merges.
 
-- [ ] 🔺 **The GuardDog tier-2 gate — three blockers from the 3.1.0 smoke test**
-  _(2026-08-10 session 2; work lives in `ai-common`, branch `lazy-package-init`,
-  commit `dd8309a`, pushed)_
+- [x] ✅ **The GuardDog tier-2 gate — all three 3.1.0 blockers closed 2026-08-11**
+  _(work in `ai-common`, branch `lazy-package-init`; 103 tests, 13 mutants, no
+  survivors)_
 
-  The wrapper was moved into `ai-common` as the `guarddog-cached` console script
-  so it stops being copied into every project — **`scripts/guarddog_cached.py`
-  in this repo is that copy** and should be deleted once the branch merges. It
-  now derives its own verdict instead of trusting an exit code, caches
-  machine-wide with version-keyed entries under an flock, and `upgrade-safe`
-  restores `uv.lock` on interrupt. 60 tests, 34 mutants.
+  1. **The sandbox works, fully enforced.** It was never an entropy problem.
+     GuardDog's capability set grants no path under `/dev`
+     (`_get_common_read_paths()` filters on `os.path.isdir`, so a character
+     device cannot pass), and python-build-standalone interpreters — what
+     `uv tool install` uses — are built `HAVE_GETRANDOM=0`, so hash-seed init
+     *must* open `/dev/urandom`. `strace` from inside the sandbox showed a
+     successful `getrandom` three lines above an `EACCES` on `/dev/urandom`.
+     Fixed with `uv tool install --force --python /usr/bin/python3.12
+     guarddog`; the pin is recorded in the uv receipt and was demonstrated to
+     survive `uv tool upgrade`. **`--no-sandbox` was not needed.** Full
+     post-mortem:
+     [`lessons-learned/2026-08-11-guarddog-sandbox-dev-urandom.md`](lessons-learned/2026-08-11-guarddog-sandbox-dev-urandom.md).
 
-  guarddog was upgraded **2.10.0 → 3.1.0** on this machine. A one-minute smoke
-  scan then produced three blockers, and **the tier-2 sweep was not started.**
+  2. **The gate is re-based off rule names onto `risks[].severity`.**
+     `BLOCKING_RULES` was deleted rather than updated. A risk's severity is its
+     threat rule's severity, downgraded one level for cross-file correlation
+     and two for cross-category, so `high` means a high-severity rule that
+     stands alone or correlates within one file. Two guards make the
+     silent-inert failure structurally impossible: **an unrecognised severity
+     blocks**, and **a completed scan with no `risks` field is INCOMPLETE**.
+     Cache schema 3 → 4.
 
-  1. **🔺 DECISION FOR BERTAN — the v3 sandbox cannot start here.** v3.0.0 made
-     the nono-py kernel sandbox mandatory:
+     Calibrated against **74 known-good ai-common dependencies**: `severity >=
+     high` blocks **3** (google-genai, pillow, pyyaml) against 26/91 ≈ 29% for
+     the v2 "any finding" option. GuardDog's own `risk_score.label` was
+     measured and **rejected** — it blocks tqdm (7.2 `high_risk`, nothing above
+     medium severity) and misses google-genai (4.9 `low`, carries a high
+     severity risk).
 
-     ```
-     $ guarddog pypi scan six --version 1.17.0
-     * download-package: Sandboxed extraction failed: Fatal Python error:
-       _Py_HashRandomization_Init: failed to get random numbers to initialize Python
-     No risks found in six
-     exit=0
-     ```
+  3. **`results` is required only when `errors` is empty**, so a failing report
+     — whose keys are exactly `['package', 'issues', 'errors']` — keeps
+     GuardDog's own message instead of being called an unrecognised shape.
 
-     **No package can be scanned at all**, and guarddog says *"No risks found"*
-     and exits 0. On the old wrapper an hour-long sweep would have written ~91
-     fake clean verdicts and printed `✓ Clean across both tiers`; the new one
-     returns INCOMPLETE → exit 1 → `uv.lock` reverted. `--no-sandbox` works.
-     **Options: investigate the entropy failure, accept `--no-sandbox`, or roll
-     back to 2.10.0.** Everything else here waits on this.
+  Related, still open: **a high-severity Dependabot alert on `ai-common`'s
+  `main`** — <https://github.com/bgunyel/ai-common/security/dependabot/33>.
 
-  2. **`BLOCKING_RULES` is stale — v3 renamed all 61 rules.** The catalogue went
-     from 25 to 61 on a new `capability-*` / `threat-*` taxonomy, and **not one
-     of the seven committed rule names exists in v3** (`code-execution` →
-     `threat-setup-network-in-install`, `exec-base64` →
-     `threat-runtime-obfuscation-base64exec`, `download-executable` →
-     `threat-process-download-exec`, `silent-process-execution` →
-     `threat-process-spawn-silent`, `exfiltrate-sensitive-data` →
-     `threat-network-exfiltration`, `steganography` →
-     `threat-runtime-obfuscation-steganography`; no direct equivalent found for
-     `cmd-overwrite`). **The gate would be inert again — silently, by a
-     different route than the exit code.** Noise profile changed too: `tqdm`
-     scores **7.2/10 `high_risk`** in v3 where v2 gave three advisory
-     indicators.
+- [ ] 🔺 **Three baseline waivers, blocking the `lazy-package-init` merge**
+  _(2026-08-11)_ — `upgrade-safe` cannot pass on the committed lock until
+  `accepted.json` exists, and **Bertan's rule is that `upgrade-safe` completes
+  before a PR is closed and merged**, so this gates the merge rather than being
+  cleanup.
 
-     **Fix: re-base the gate on v3's `risk_score` / `risks` rather than rule
-     names** — `risk_score.label`, per-risk `severity`, and `mitre_tactics` are
-     a calibrated signal that a single upgrade cannot silently empty, which a
-     hand-curated name list has just proved it can.
+  | package | rule | assessment |
+  |---|---|---|
+  | `google-genai` | steganography | a `VertexAISearch(datastore=…)` string in the package's own test file — false positive |
+  | `pillow` | steganography | `def eval(image, *args)`, Pillow's documented per-pixel API — false positive |
+  | `pyyaml` ×3 | dynamic-loader | `__import__(name)` in `yaml/constructor.py` — **behaviourally true**; waiving it means affirming "we use `safe_load`" |
 
-  3. **The report-shape guard swallows the error it exists to surface.** It
-     requires `errors` *and* `results` to be present dicts, to stop a future
-     rename making everything read as clean. But **v3 omits `results` entirely
-     when a scan fails** — a failing report's keys are just `['package',
-     'issues', 'errors']` — so the guard reports *"unrecognised report shape"*
-     and discards guarddog's real message. Verdict is still correct
-     (INCOMPLETE), but the line saying *the sandbox is broken* is lost.
-     **Fix: `results` absent is coherent when `errors` is populated; fire only
-     when `results` is missing AND `errors` is empty.**
+- [ ] 🔺 **Decide how waivers are keyed** _(2026-08-11, raised by a real case)_ —
+  Bertan ran `upgrade-safe` and `google-genai==2.17.0` blocked. Compared against
+  the 2.11.0 calibration report: **same rule, same file, same line 217, same
+  matched code**, six minor versions apart. Waivers are keyed on
+  `(name, version)` deliberately, so every bump of that package re-blocks on an
+  identical, already-reviewed false positive — and friction on a security gate
+  becomes rubber-stamping. Options: leave it; surface the prior decision as
+  context while still requiring a fresh waiver; or key on
+  `(package, rule, hash of matched code)` so an unchanged finding stays waived
+  and any change to that code re-blocks.
 
-  Related, surfaced by the push: **a high-severity Dependabot alert on
-  `ai-common`'s `main`** — <https://github.com/bgunyel/ai-common/security/dependabot/33>.
-  Independent of this work, and exactly what tier 1 (`make audit`) is for.
+- [ ] 🔺 **Verify the gate actually catches things** _(2026-08-11)_ — the 3/74
+  figure is a **false-positive rate only**. There are 74 known-good packages and
+  zero known-bad ones, so nothing yet shows `severity >= high` fires on
+  download-and-execute, base64 `exec` or install-time network. The v2 rule list
+  would have looked equally clean under a noise sweep — it blocked nothing on
+  good packages because it blocked nothing at all. Plan: a local fixture package
+  carrying those patterns, scanned via `guarddog pypi scan <path>`, never
+  installed or executed. **Until this exists the threshold has a measured noise
+  floor and an assumed catch rate.**
+
+- [ ] **Report the `/dev/urandom` sandbox bug upstream to GuardDog** — present in
+  3.1.0, the latest release. Every `uv`/`rye`/`mise`-installed GuardDog on Linux
+  scans nothing and exits 0. The fix — `allow_file("/dev/urandom", READ)` at both
+  grant sites in `sandbox.py` — was implemented and verified end-to-end, and
+  deliberately not applied locally because a `uv tool` venv is rewritten on
+  upgrade.
+
 
 - [ ] 🔺 **Modify the Makefile for safe dependency upgrades** _(requested)_ —
   **Bertan, 2026-08-07: not to be postponed much longer.** The motivating case
@@ -946,7 +963,33 @@ per the priority order above.
       `$XDG_CACHE_HOME/guarddog-cached/cache.json`, shipped by `ai-common`, so
       this repo gets it by depending on the library. **Delete
       `scripts/guarddog_cached.py` here** and point the Makefile at the
-      `guarddog-cached` console script.
+      `guarddog-cached` console script. It is a declared `[project.scripts]`
+      entry point, so **this repo's Makefile can use the identical
+      `uv run guarddog-cached` line** — no import shim, no `python -m`. It is
+      absent here today only because the pin is `@main`, which predates the
+      security module.
+    - **Three fixes landed in `ai-common`'s Makefile on 2026-08-11 and must be
+      carried over here** when this repo's Makefile is written. Each was a real
+      defect, not a tidy-up:
+      - **`uv export` needs `--frozen`.** Without it, an export from a lock that
+        has drifted from `pyproject.toml` **re-resolves and rewrites
+        `uv.lock`**, so a read-only-looking recipe edits the lockfile and then
+        scans a resolution nobody chose — and `verify` audits the committed lock
+        in tier 1 while GuardDog examines a different one in tier 2.
+        Demonstrated on a scratch copy.
+      - **The flattened requirements file must be repo-local.** `ai-common`
+        called it `GUARDDOG_CACHE` (it is not the cache) and put it at a fixed
+        `/tmp` path shared by every project. `main()` reads that file once at
+        startup, so a second repo exporting in the window between this repo's
+        export and its read makes the sweep **scan the other repo's dependencies
+        and pass on them**, silently. Now `FLAT_REQUIREMENTS_FILE :=
+        tmp/flat-requirements.txt`, with a `mkdir -p` because git does not track
+        empty directories and `tmp/` is absent in a fresh clone. Simultaneous
+        sweeps within *one* repo are deliberately not handled (Bertan).
+      - **Exit 75 does not survive `make`.** The recipe exits 75; make reports
+        `Error 75` and exits **2**, as for any failure. The budget case is now
+        handled explicitly in the recipe, which says UNFINISHED is not a pass and
+        points a caller needing the raw code at the wrapper directly.
 - [ ] **Prepare a comprehensive test-status document** _(requested)_
   - Coverage map: **tested** — GDPR parser extraction (incl. against the real
     docling export), `vector_db` point-ID derivation and indexing invariants,
