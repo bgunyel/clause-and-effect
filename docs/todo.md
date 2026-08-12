@@ -4,7 +4,7 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-11._
+> _Last updated: 2026-08-12._
 
 ---
 
@@ -159,7 +159,11 @@ generator and agent staying untested remains an accepted state.
    - **That branch also carries the GuardDog tier-2 gate rework. All three
      guarddog 3.1.0 blockers were closed 2026-08-11** — see 🟡 Tooling. What now
      gates the merge is different: `upgrade-safe` must pass before a PR closes
-     (Bertan, 2026-08-11) and it cannot until the three baseline waivers exist.
+     (Bertan, 2026-08-11).
+   - **2026-08-12: the waivers exist and tier 2 passes.** `make scan` on the
+     committed lock reports 74 packages, **BLOCKED 0, INCOMPLETE 0**. **Tier 1
+     (`make audit`) was not run**, so `verify` is only half demonstrated — that
+     is the first item of the next session.
 
 7. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
    calibration, tests. Split into `src/eval/sufficiency/` on 2026-08-10 and
@@ -874,17 +878,47 @@ per the priority order above.
   Related, still open: **a high-severity Dependabot alert on `ai-common`'s
   `main`** — <https://github.com/bgunyel/ai-common/security/dependabot/33>.
 
-- [ ] 🔺 **Three baseline waivers, blocking the `lazy-package-init` merge**
-  _(2026-08-11)_ — `upgrade-safe` cannot pass on the committed lock until
-  `accepted.json` exists, and **Bertan's rule is that `upgrade-safe` completes
-  before a PR is closed and merged**, so this gates the merge rather than being
-  cleanup.
+- [x] ✅ **Three baseline waivers — done 2026-08-12**, plus a fourth for
+  `google-genai==2.17.0`. `accepted.json` exists (machine-wide, 4 entries) and
+  **`make scan` passes the committed lock: 74 packages, BLOCKED 0, INCOMPLETE 0**.
+  Each waived finding still **prints**, still at `[high]`, with the advisory `·`
+  marker rather than `✗` — waived is not hidden, and no severity was downgraded.
 
-  | package | rule | assessment |
+  **Two of the three are one upstream rule defect, not three judgements.** The
+  steganography rule's condition has two branches; the Python branch scores zero
+  on both packages, and the JavaScript branch fires. That branch is degenerate —
+  `$js_eval` is itself a member of `$js_*`, so it reduces to **`"eval("` AND an
+  image filename**. `$js_eval = "eval(" nocase` is a bare literal with no word
+  boundary, and `path_include` covers `*.py`. The Python patterns are guarded
+  (`/[^.\w]eval\s*\(/`) and would not have matched.
+
+  | package | rule | what actually matched |
   |---|---|---|
-  | `google-genai` | steganography | a `VertexAISearch(datastore=…)` string in the package's own test file — false positive |
-  | `pillow` | steganography | `def eval(image, *args)`, Pillow's documented per-pixel API — false positive |
-  | `pyyaml` ×3 | dynamic-loader | `__import__(name)` in `yaml/constructor.py` — **behaviourally true**; waiving it means affirming "we use `safe_load`" |
+  | `google-genai==2.11.0` | steganography | `eval(` inside `types.Retrieval(` at `test_generate_content_tools.py:217`; `$img_png` on `google_homepage.png` at line 46 |
+  | `google-genai==2.17.0` | steganography | identical — same file, same line, same text, six minor versions apart |
+  | `pillow==12.3.0` | steganography | ` eval(` on `def eval(image, *args)`, Pillow's documented per-pixel API, `Image.py:3776`; `$img_png` on `.bmp"` at line 329 |
+  | `pyyaml==6.0.3` ×3 | dynamic-loader | `__import__(` + `getattr(module,` + `base64.decodebytes` in one file |
+
+  **Correction to the 2026-08-11 assessment of pyyaml.** It was recorded as
+  *"behaviourally true"* and the evidence is more favourable. Branch **B** fired
+  — import ∧ getattr ∧ base64 — and the correlation is spurious: the base64 at
+  `constructor.py:299-308` and `:505-511` is `construct_yaml_binary` implementing
+  the `!!binary` tag, unrelated to the import machinery. Branch A cannot fire;
+  there is no network call in the file. Both `__import__` calls sit **inside
+  `if unsafe:` blocks** — `FullConstructor` passes `unsafe=False`, so the import
+  never runs; only `UnsafeConstructor` (line 713) sets it. And neither repository
+  imports `yaml` at all: it is transitive via `langchain-core`, whose only call
+  sites are `yaml.safe_load` (`prompts/loading.py:131`, `:267`), and
+  `SafeConstructor` does not bind the `!!python/*` tags. The waiver note records
+  this and says to re-check it if we ever call `yaml.load`/`full_load`/
+  `unsafe_load` ourselves.
+
+  **Verification caveat worth keeping.** `make scan` reads the *committed lock*,
+  so it can only ever exercise waivers for versions pinned there — it cannot
+  cover `google-genai==2.17.0`, and most waivers are written for upgrade
+  candidates. That one was verified separately against its cached entry
+  (`1 cached, 0 scanned`, exit 0). Caught by Bertan after the assistant had
+  nearly reported the check complete.
 
 - [ ] 🔺 **Decide how waivers are keyed** _(2026-08-11, raised by a real case)_ —
   Bertan ran `upgrade-safe` and `google-genai==2.17.0` blocked. Compared against
@@ -897,6 +931,17 @@ per the priority order above.
   `(package, rule, hash of matched code)` so an unchanged finding stays waived
   and any change to that code re-blocks.
 
+  **2026-08-12 — resolved in favour of "leave it", conditional on
+  `upgrade-partial`.** The pressure on `(name, version)` came from the friction
+  being *global*: a strict key re-blocked the whole upgrade on an
+  already-reviewed finding. With partial adoption the friction becomes **local** —
+  one package held back instead of forty — so the strict key, which is the
+  correct semantics because a new version really is new code, becomes affordable.
+  The keying stays as designed; the item that has to land is `upgrade-partial`
+  below. Note also that the two google-genai reviews took minutes rather than
+  hours precisely because the second was an identical match at an identical
+  location, which the stored report makes trivial to confirm.
+
 - [ ] 🔺 **Verify the gate actually catches things** _(2026-08-11)_ — the 3/74
   figure is a **false-positive rate only**. There are 74 known-good packages and
   zero known-bad ones, so nothing yet shows `severity >= high` fires on
@@ -907,12 +952,123 @@ per the priority order above.
   installed or executed. **Until this exists the threshold has a measured noise
   floor and an assumed catch rate.**
 
+- [x] ✅ **Raw reports, a review ledger and a review skill — built 2026-08-12**
+  _(`ai-common` `lazy-package-init`, commits `4b72daa`, `8abb78a`, `3e77cdd`;
+  103 → 127 tests, 19 mutants, 0 survivors)_
+
+  **Why it was needed.** Cache schema 4 dropped `findings` on 2026-08-11 because
+  *"nothing reads it now that the verdict comes from `risks`"*. That was true of
+  machines and false of people, and it took twenty-four hours to bite: from a
+  cache entry alone the google-genai finding is a high-severity steganography
+  detection at a named line, and there is no way to discover the matched text is
+  `eval(`. **A gate that cannot show its evidence produces rubber-stamping.**
+
+  - **`reports/` beside the cache** — GuardDog's report in full, one file per
+    key, named after the same key, plus a `_guarddog_cached` provenance block.
+    Completed scans only; replaced by rename; **no lock**, because it is one file
+    per key rather than a shared document. Filenames are sanitised: `REQ_RE`
+    pins a package name but accepts any non-space run as the *version*, which
+    admits `/` and `..`, and a rewritten key gets a digest appended so two
+    versions cannot share one report.
+  - **`guarddog-review`** lists reports whose findings nobody has adjudicated,
+    blocking first, and records decisions in `reviewed.json`. **The ledger never
+    affects a verdict** — pinned by a test. Only `accepted.json` waives, and
+    recording a review prints a reminder saying so. Entries key on the full cache
+    key (the same code under a newer GuardDog can produce unseen findings) and
+    store a digest of what was adjudicated, so a re-scan with different matches
+    re-opens the entry. Reports with no risks are never recorded.
+  - **`scripts/backfill_guarddog_reports.py`** imported the 74 calibration
+    reports. `collect_v3.py` used the byte-identical invocation to
+    `scan_package`, so they are what the wrapper would have written. **Reports
+    only** — the cache and the waivers are untouched, verified after the fact —
+    and the GuardDog version is a required argument because it appears nowhere in
+    GuardDog's output.
+  - **`waiver-review` skill** at `.claude/skills/waiver-review/` in this repo
+    (`38bc96a`). Enforces: never decide alone, an unverifiable finding is not a
+    false positive, and waiving takes two writes. If `lazy-package-init` merges
+    and the pin is repointed, the hardcoded path to `ai-common` in it can come
+    out — `uv run guarddog-review` will resolve from this repo's own venv.
+
+  Two defects surfaced from real data rather than tests: a docstring claim
+  falsified by the backfill within the hour (*"a report exists exactly when the
+  entry it explains does"*), and `ruff`'s `bundled_binary`, a metadata risk that
+  names no file and rendered as `at ` with nothing after it.
+
+- [ ] 🔺 **`upgrade-partial`** _(designed with Bertan 2026-08-12; nothing built)_
+  — `upgrade-safe` is all-or-nothing: `uv lock --upgrade` upgrades everything and
+  the `EXIT` trap reverts `uv.lock` wholesale if either tier fires, so one blocked
+  package reverts forty that passed. The recipe's own advice on failure
+  (`uv lock --upgrade-package <other> …`) is inside-out — it asks you to name
+  every package you *do* want, at the moment you are most tempted to skip the
+  gate. `upgrade-safe` **stays strict**; this is a second target.
+
+  Three things settled in the design discussion:
+  - **The deterministic part must not be a skill.** Which packages are adopted
+    has to give the same answer in CI and a year from now. A skill fits the part
+    that is genuinely judgement — reading a report and drafting the waiver.
+  - **Partial is not subtraction.** Excluding a blocked package means
+    re-resolving, and the result is a *different lock* that must be gated in
+    full, held-back packages included **at their old versions**. Otherwise a
+    tier-2 false positive can pin you to a version carrying a tier-1 advisory —
+    trading a heuristic for a real one, silently. Re-gating is what makes partial
+    adoption safe, not bureaucracy. It is cheap: almost all cache hits, and
+    verdicts are recomputed on read.
+  - **It must make held-back packages loud and ageing**, recorded with the
+    finding and the date and surfaced by `verify` until resolved. One command to
+    route around a finding turns into permanent quiet exclusion otherwise — the
+    rubber-stamping risk arriving by a different door.
+
+  **Build in this order:**
+  1. **The candidate record.** `mv -f uv.lock.preupgrade uv.lock` destroys the
+     proposed set, so by the time a reviewer looks, the resolution they are meant
+     to review is gone. The *reports* survive — they are written per-package as
+     scans complete — but nothing records **which versions were proposed**. This
+     is the missing input to the review skill and is useful on its own the moment
+     `upgrade-safe` fails for any reason.
+  2. The resolve-pin-re-gate loop, with a bounded iteration count.
+  3. Held-back entries surfacing in `verify`.
+
+  Note that re-running `upgrade-safe` after a review **re-resolves**, so the
+  second candidate may differ from the reviewed one; the skill should flag any
+  package present in the new candidate that was not in the reviewed set.
+
+- [ ] **Consider sharding the GuardDog sweep** _(2026-08-12)_ — a full re-scan of
+  74 packages took **~70 minutes**, and it recurs on **every GuardDog upgrade**,
+  since entries key on the GuardDog version. The shared cache already supports
+  concurrent workers: `save_cache` re-reads and merges before writing, in place,
+  into the dict `main()` iterates, so a running sweep picks up what another
+  worker finishes and prints `[cached]` instead of re-scanning. A `--workers N`
+  flag that shards the list, or just a documented shard-and-run pattern, would cut
+  it to a quarter. **Demonstrated incidentally**: two sweeps ran concurrently and
+  one was Ctrl-C'd, leaving no `.tmp` debris, no malformed entries and none
+  carrying `errors`.
+
+- [ ] **13 advisory reports await review** _(2026-08-12)_ — `idna`, `pygments`,
+  `python-dotenv`, `langsmith`, `ruff`, and API-key env reads in `ollama`,
+  `tavily-python`, `openrouter`, `tiktoken`, `langchain-google-genai`,
+  `langgraph-checkpoint`, `regex`. **None block.** Reviewing them is optional;
+  recording the reviews stops them being re-read on every sweep.
+
 - [ ] **Report the `/dev/urandom` sandbox bug upstream to GuardDog** — present in
   3.1.0, the latest release. Every `uv`/`rye`/`mise`-installed GuardDog on Linux
   scans nothing and exits 0. The fix — `allow_file("/dev/urandom", READ)` at both
   grant sites in `sandbox.py` — was implemented and verified end-to-end, and
   deliberately not applied locally because a `uv tool` venv is rewritten on
   upgrade.
+
+- [ ] **Report the `$js_eval` rule defect upstream to GuardDog** _(2026-08-12)_ —
+  `threat-runtime-obfuscation-steganography` declares
+  `$js_eval = "eval(" nocase`, a bare literal with no word boundary, and
+  `path_include` covers `*.py`. Since `$js_eval` is itself a member of `$js_*`,
+  the JavaScript branch of the condition reduces to **"contains `eval(`" AND
+  "contains an image filename"**, and fires on any Python file where `eval(`
+  appears as a substring — including inside `Retrieval(` and on a function
+  actually named `eval`. The rule's Python patterns are guarded
+  (`/[^.\w]eval\s*\(/`) and show the intended form. **Two independent
+  confirmations in one dependency set** (`google-genai`, `pillow`), each a
+  high-severity `defense-evasion` finding on ordinary library code. Fix is a word
+  boundary on `$js_eval`, and arguably de-duplicating `$js_eval` out of the
+  `any of ($js_*)` term so the branch requires two distinct signals.
 
 
 - [ ] 🔺 **Modify the Makefile for safe dependency upgrades** _(requested)_ —
