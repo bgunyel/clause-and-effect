@@ -114,3 +114,27 @@ thing in the record.
   scan produced three blockers — a dead sandbox, 61 renamed rules, and a guard
   that eats the error it was written to surface — so the hour-long sweep was not
   started.
+- [2026-08-11 · session 1](devlog_2026-08-11_session-1.md) — all three GuardDog
+  3.1.0 blockers closed: the "sandbox cannot get entropy" failure turned out to
+  be a Landlock filesystem denial wearing an entropy error's clothing, settled by
+  one `strace` line. The tier-2 gate re-based off rule names onto risk severity
+  and the new threshold measured against 74 real dependencies; three Makefile
+  defects the measurement exposed tightened. Tests 92 → 103, 13 mutants killed
+  with no survivors.
+- [2026-08-12 · session 1](devlog_2026-08-12_session-1.md) — the high-severity
+  `google-genai` finding shown to be `eval(` matching inside the word
+  `Retrieval(`, an unguarded JavaScript pattern applied to Python source, with
+  `pillow` blocking on the same upstream defect. Because the cache could not have
+  answered that question, a report store, a review ledger and a backfill of 74
+  calibration reports were built around it; four waivers written, and the pyyaml
+  assessment corrected in the package's favour. Tests 103 → 127, 19 mutants, 0
+  survivors.
+- [2026-08-13 · session 1](devlog_2026-08-13_session-1.md) — tier 1 found red on
+  the committed lock and taken 5 advisories → 3; `ai-common` PR #24 merged and
+  Dependabot alert #33 identified; lockfile independence measured — a merge that
+  moved 25 packages there moved none here; `make test` found to have been running
+  nothing since `57c37a5`; the two langchain versions shown by experiment to be a
+  stale fork rather than a platform requirement; a 66-minute sweep aborted on
+  Bertan's question and the abort vindicated by the candidate lock; and Python
+  found 12 patch releases stale, with 30 advisories neither tier of the gate can
+  see.

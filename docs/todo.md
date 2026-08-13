@@ -4,7 +4,7 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-12._
+> _Last updated: 2026-08-13._
 
 ---
 
@@ -1090,8 +1090,10 @@ per the priority order above.
     Under the eval-flawlessness rule this matters more than usual: a snapshot's
     reproducibility claim rests on `git_dirty`, and a lock that re-resolves on use
     means an otherwise-clean tree goes dirty for reasons unrelated to the work.
-  - Fix `TEST_DIRECTORY` — it points at `src/tests/`, but the suite now lives at
-    `tests/` (repo root). `make test` currently runs nothing.
+  - ~~Fix `TEST_DIRECTORY` — it points at `src/tests/`, but the suite now lives at
+    `tests/` (repo root). `make test` currently runs nothing.~~ **Done
+    2026-08-13** (`7e359b6`). It had been broken since `57c37a5`, exiting 4
+    having collected 0 items — 243 tests were never reached by it.
   - Gate `upgrade-safe` on the **test suite**, not only security scans: after
     `uv lock --upgrade` and the OSV + GuardDog tiers pass, run `make test` and
     revert `uv.lock` (restore `uv.lock.preupgrade`) if tests fail. Today a
@@ -1115,18 +1117,22 @@ per the priority order above.
       only a run finishing inside its budget can adopt an upgrade. This is the
       answer to *"can I run it for 10 minutes and reuse the findings?"* — yes,
       completed scans are banked per-package and shared machine-wide.
-    - **The global cache Bertan has been pushing for now exists** at
+    - ~~**The global cache Bertan has been pushing for now exists** at
       `$XDG_CACHE_HOME/guarddog-cached/cache.json`, shipped by `ai-common`, so
       this repo gets it by depending on the library. **Delete
       `scripts/guarddog_cached.py` here** and point the Makefile at the
-      `guarddog-cached` console script. It is a declared `[project.scripts]`
-      entry point, so **this repo's Makefile can use the identical
-      `uv run guarddog-cached` line** — no import shim, no `python -m`. It is
-      absent here today only because the pin is `@main`, which predates the
-      security module.
-    - **Three fixes landed in `ai-common`'s Makefile on 2026-08-11 and must be
-      carried over here** when this repo's Makefile is written. Each was a real
-      defect, not a tidy-up:
+      `guarddog-cached` console script.~~ **Done 2026-08-13** (`7e359b6`), once
+      the pin moved to `a2a7a21`. The duplicate is deleted and the Makefile uses
+      the identical `uv run guarddog-cached` line — no import shim, no
+      `python -m`.
+    - ~~**Three fixes landed in `ai-common`'s Makefile on 2026-08-11 and must be
+      carried over here.**~~ **Done 2026-08-13** (`7e359b6`) — all three carried
+      over, along with the `trap`/`SHELL` and `GUARDDOG_BUDGET` items above. The
+      shared-`/tmp` hazard was then observed from the other side the same day:
+      stopping a sweep fired its `EXIT` trap and removed the flattened
+      requirements file while a second sweep was mid-run in the same repo.
+      Harmless only because the wrapper reads that file once at startup. Each was
+      a real defect, not a tidy-up:
       - **`uv export` needs `--frozen`.** Without it, an export from a lock that
         has drifted from `pyproject.toml` **re-resolves and rewrites
         `uv.lock`**, so a read-only-looking recipe edits the lockfile and then
@@ -1146,6 +1152,74 @@ per the priority order above.
         `Error 75` and exits **2**, as for any failure. The budget case is now
         handled explicitly in the recipe, which says UNFINISHED is not a pass and
         points a caller needing the raw code at the wrapper directly.
+- [ ] 🔺 **Decide what happens to `cuda-toolkit==13.0.3.0`, which cannot be
+  scanned at all.** _(surfaced 2026-08-13)_ GuardDog reports
+  `download-package: Version 13.0.3.0 for package cuda-toolkit doesn't exist`,
+  so nothing is checked and the verdict is INCOMPLETE — which never passes. The
+  2026-08-13 `uv lock --upgrade` left it at the same version, so it will fail
+  every `upgrade-safe` identically and **blocks the `upgrade-safe →
+  waiver-review → upgrade-safe` loop from ever closing**. It is a prerequisite
+  for that loop, not a parallel item.
+  - It is not a finding to adjudicate. `accepted.json` waives GuardDog *rules* —
+    "this pattern fired wrongly, here is the code that refutes it" — and no
+    amount of reading refutes "the package could not be fetched". Folding it in
+    would give one file two kinds of entry with identical ceremony and different
+    meaning, the confusion the ledger/waiver split exists to prevent.
+  - Options, none yet chosen: establish whether the version is genuinely
+    unfetchable from PyPI or the name is normalised differently; a separate
+    trusted-source or unscannable-package record with its own ceremony; or
+    dropping the dependency if `openvino`/`docling` do not truly need it.
+
+- [ ] 🔺 **Upgrade Python 3.13.3 → 3.13.15, and decide whether the interpreter
+  belongs inside the gate.** _(raised by Bertan 2026-08-13)_ **41 OSV advisories
+  match CPython 3.13.3; 30 are fixed between 3.13.4 and 3.13.14** and would all
+  close. Several are on this project's paths: a ZIP64 EOCD locator offset check
+  (`.docx`/`.xlsx` are ZIP archives), a stack overflow parsing deeply nested XML
+  DTDs (Office formats are XML), a `tarfile.data_filter` traversal bypass, and
+  use-after-free in the `lzma`/`bz2`/`gzip` decompressors.
+  - **Neither tier can see any of it.** `osv-scanner` reads `uv.lock`; GuardDog
+    scans PyPI packages. The interpreter is examined by nobody — so the gate
+    would block a merge over a 4.8 `pypdf` DoS while 30 interpreter advisories
+    sit underneath it, unreported. That asymmetry is the real item here; the
+    upgrade itself is mechanical.
+  - Nothing pins 3.13.3: no `.python-version` in either repository or `$HOME`,
+    and `requires-python = ">=3.13"` permits the upgrade freely. `uv sync`
+    reuses an existing venv rather than re-selecting an interpreter, so the venv
+    has carried whatever `uv` had installed the day it was made. Add a
+    `.python-version` so it becomes a recorded choice rather than drift.
+  - No lock change is needed — the lock is already universal across 3.13/3.14.
+  - **Do not disturb GuardDog's interpreter.** The 2026-08-11 lesson is that
+    Landlock denies `/dev/urandom` to standalone builds, which is exactly what
+    `uv`-managed CPython is; guarddog runs on distro Python for that reason. The
+    two venvs are separate, but verify rather than assume after switching.
+
+- [ ] **Count and name dropped requirement lines** _(surfaced 2026-08-13; the
+  fix belongs in `ai-common`)_ `parse_requirements`
+  (`guarddog_cached.py:412-421`) discards any line `REQ_RE` cannot match with no
+  record, and the driver prints the post-filter count — so 182 requirement lines
+  are announced as **181**. The dropped categories are git, URL and local-path
+  dependencies, i.e. the non-PyPI sources, which are the ones least covered by
+  everything else. Today the only such line is our own `ai-common`, so nothing
+  is concealed that is not already accepted; a third-party git dependency would
+  vanish identically while `BLOCKED 0 · INCOMPLETE 0` still read as full
+  coverage. Non-blocking by design — count and name them, do not gate on them —
+  and a prerequisite for ever choosing to gate on them. Scope and the accepted
+  first-party gap are recorded in
+  [`design/dependency-scanning-scope.md`](design/dependency-scanning-scope.md).
+
+- [ ] **Collapse the stale langchain fork.** _(surfaced 2026-08-13)_ `uv.lock`
+  carries `langchain` at both 1.3.2 and 1.3.14, plus `langgraph`,
+  `langgraph-sdk` and `websockets`, all four on
+  `python_full_version >= '3.14' and sys_platform == 'darwin'`. Established by
+  experiment that this is **not** required: the same dependency list resolves
+  fresh with no fork at all, and `uv lock --upgrade-package langchain` on a
+  scratch copy collapses all four and takes tier 1 from 3 advisories to 2.
+  `uv lock` is minimal-change and preserves pins that remain valid without
+  re-optimising, so the fork has been carried forward since whenever it was
+  genuinely needed. `langchain 1.3.2` exists only to serve it — which is why
+  `PYSEC-2026-2192` is not installed on this machine at all. Subsumed if a full
+  `upgrade-safe` lands.
+
 - [ ] **Prepare a comprehensive test-status document** _(requested)_
   - Coverage map: **tested** — GDPR parser extraction (incl. against the real
     docling export), `vector_db` point-ID derivation and indexing invariants,
