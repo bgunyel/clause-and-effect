@@ -73,6 +73,10 @@ strengths tells a reader nothing they can rely on.
 
 ## Documents
 
+- [What the dependency gate actually scans](dependency-scanning-scope.md) — the
+  scope of the two-tier supply-chain gate: that a dependency's own dependencies
+  are fully covered, that a consumed lockfile has no authority over ours, and
+  that first-party source is scanned by nobody — deliberately, but silently.
 - [Chunk snapshot reproducibility](chunk-snapshot-reproducibility.md) — how a
   chunk set becomes a named, hashed, provenance-carrying artifact, so that "is
   the vector index stale?" becomes a comparison rather than a recollection.
