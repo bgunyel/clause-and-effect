@@ -138,3 +138,15 @@ thing in the record.
   Bertan's question and the abort vindicated by the candidate lock; and Python
   found 12 patch releases stale, with 30 advisories neither tier of the gate can
   see.
+- [2026-08-13 · session 2](devlog_2026-08-13_session-2.md) — `cuda-toolkit`
+  shown not to be unscannable at all: uv reads a version from the wheel
+  filename, PyPI keys its index on the canonical form, and the two disagree on
+  4 of 39 releases. Fixed in `ai-common` PR #25, which let tier 2 reach a
+  verdict on every package for the first time — 178 packages, INCOMPLETE 0,
+  eight blockers. Six of the eight are one rule firing outside its declared
+  scope; four waived, and session 1's reading of `docling-slim` found inverted —
+  its `curl … | sh` is a log message, while the two packages that really do
+  fetch-and-execute were never reached by the aborted sweep. Underneath it,
+  uv found 16 months stale, which blocks the interpreter upgrade and puts the
+  resolver that writes `uv.lock` in the same blind spot as the interpreter;
+  plan written, not executed.
