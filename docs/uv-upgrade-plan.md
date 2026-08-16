@@ -1,7 +1,10 @@
 # Clause & Effect — uv Upgrade Plan
 
-> **Status:** Planning document, written 2026-08-13. **Nothing here has been
-> executed.** It states what should happen, in what order, and what must be true
+> **Status:** Written 2026-08-13 as a planning document; **phases 0–5 executed
+> 2026-08-16** in `clause-and-effect`, leaving phase 6 (ai-common) and phase 7
+> (record). Phase 5's exit criteria were amended after running them showed two
+> of the three were unsatisfiable before the upgrade began — see the note there.
+> It states what should happen, in what order, and what must be true
 > at each step before the next one starts. Prerequisite for
 > [`todo.md`](todo.md) 🔺 *"Upgrade Python 3.13.3 → 3.13.15"* (line 1173), which
 > cannot proceed until this lands.
@@ -324,23 +327,66 @@ them, in this order, cheapest first:
 
 ```bash
 # R6: --frozen must leave the lock byte-identical
+sha256sum uv.lock                     # before
 uv export --frozen --no-hashes --all-groups -o /tmp/flat.txt
-git diff --exit-code uv.lock          # must produce no output
+sha256sum uv.lock                     # must be unchanged
 
 uv lock --check                       # lock still consistent with pyproject
 make audit                            # tier 1, cheap, read-only
+make scan                             # tier 2, expensive; see the note below
 ```
 
-Then the expensive one. The GuardDog cache is warm and `guarddog_version` has
-not moved, so this should be mostly cache hits:
+Compare hashes rather than `git diff --exit-code uv.lock`: the lock may be
+knowingly dirty — it was on 2026-08-16, carrying the uncommitted `ai-common`
+pin re-point — and `git diff` cannot then distinguish "the export rewrote the
+lock" from "the lock was already modified". The hash can.
 
-```bash
-make verify                           # audit + scan against the committed lock
-```
+Worth also exporting with the *old* uv into a scratch copy and diffing the two
+flat files. The flattened export is tier 2's actual input, so "did the export
+change" is a sharper question than "did the lock change". Measured 2026-08-16:
+identical apart from the header comment recording the output path.
 
-**Proceed when:** the export is byte-identical, tier 1 is clean, and tier 2
-reports the same verdicts as before the upgrade. A *new* blocker here is a
-finding about the plan, not about the packages.
+### Amended exit criteria (2026-08-16)
+
+As written, this phase required *"the export is byte-identical, tier 1 is clean,
+and tier 2 reports the same verdicts as before the upgrade."* Running it showed
+**two of the three were already unsatisfiable before the upgrade began**, so
+they cannot gate it:
+
+- **Tier 1 is not clean and was not clean beforehand.** Three advisories stand
+  against the committed lock — `cryptography` 49.0.0, `h2` 4.3.0, `langchain`
+  1.3.2 — all published before 2026-08-13 and all recorded as unreachable on
+  this platform. `osv-scanner` exits 1 on any finding, so `make audit` fails.
+- **`make verify` therefore cannot reach tier 2 at all.** `verify: audit scan`
+  (`Makefile:83`) makes tier 1 a prerequisite, and make stops at a failed one.
+  Run `make scan` directly instead; `verify` is unusable in this repository
+  until the three advisories clear.
+- **Tier 2 has no pre-upgrade baseline to match.** The only complete sweep to
+  date was against the *candidate* lock (`upgrade-safe`), not the committed one,
+  and the 2026-08-13 session-1 committed-lock sweep was aborted at 64/181. There
+  is nothing to compare "the same verdicts" against.
+
+**Proceed when**, instead:
+
+- the export leaves `uv.lock` byte-identical, and matches the old uv's export;
+- `uv lock --check` passes;
+- **R1** holds — `guarddog --version` unmoved and the sweep is dominated by
+  cache hits, which is the positive evidence that the store's keys survived the
+  resolver swap;
+- **R3** holds — GuardDog still resolves to `/usr/bin/python3.12`;
+- no blocker is *attributable to the upgrade*. A blocker at a version the
+  committed lock already carried is the adjudication backlog surfacing, not a
+  regression; a blocker on a package or version the upgrade introduced is a
+  finding about the plan.
+
+**Result 2026-08-16.** All five met. Tier 2: 180 packages, clean 131, advisory
+41, **BLOCKED 8, INCOMPLETE 0**, from 163 cache hits and 17 fresh scans; the
+report store went 227 → 244, exactly the 17. Every blocker sits at a version the
+committed lock already carried, and `torch==2.13.0` and `transformers==5.8.1`
+are at the *same* versions the candidate sweep found, so they need no second
+adjudication. `make scan` exits 1 on those eight — correctly, and independently
+of this plan. This run is consequently the first complete committed-lock tier-2
+baseline the project has, which is what future phases can compare against.
 
 ---
 
@@ -374,6 +420,20 @@ uv lock --check          # must still pass; the constraint is not a resolution i
 make test                # unchanged
 ```
 
+**`.python-version` is gitignored in both repositories** — `.gitignore:8` in
+each, filed under "Virtual Environments" (found 2026-08-16, while executing
+phase 2). This is why phase 0 measured the file as absent everywhere: it could
+never have been committed. Committing the pin therefore requires deleting that
+line first, or decision 1 is defeated — the pin stays local and invisible, which
+is the drift the item exists to correct:
+
+```bash
+# in both repositories
+grep -n python-version .gitignore     # expect: 8:.python-version
+# remove that line, then:
+git status --short                    # .python-version must now appear
+```
+
 Then:
 
 - `.python-version` committed in both repositories, reading exactly `3.13.15`.
@@ -394,7 +454,8 @@ Then:
 - `.venv/bin/python -V` → 3.13.15 in both repositories.
 - `.python-version` in both repositories reads exactly `3.13.15` — not `3.13` —
   and is committed. The minor pin from phase 1 is an intermediate and must not
-  survive.
+  survive. Committing it at all requires the `.gitignore` deletion recorded in
+  phase 7; the file is ignored in both repositories today.
 - `guarddog --version` → **3.1.0**, on `/usr/bin/python3.12`. The cache still
   holds 153 reports and the ledger still shows the same review state.
 - `make test` → 243 passed, 5 xfailed here; 139 passed in ai-common.
