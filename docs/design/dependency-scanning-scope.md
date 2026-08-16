@@ -13,7 +13,7 @@ examined being read as a package that came back clean.
 
 ```make
 uv export --frozen --no-hashes --all-groups -o tmp/flat-requirements.txt
-uv run guarddog-cached tmp/flat-requirements.txt
+uv run --frozen --no-sync guarddog-cached tmp/flat-requirements.txt
 ```
 
 `guarddog-cached` reads that file once at startup and keeps only lines matching
