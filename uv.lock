@@ -33,7 +33,7 @@ wheels = [
 [[package]]
 name = "ai-common"
 version = "0.1.0"
-source = { git = "https://github.com/bgunyel/ai-common.git?rev=main#a2a7a211624c14041c0589c56db6ecfd51f54a44" }
+source = { git = "https://github.com/bgunyel/ai-common.git?rev=main#a1fa1973b80bf53020b2ccea0169a60db3c32996" }
 dependencies = [
     { name = "langchain", version = "1.3.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14' and sys_platform == 'darwin'" },
     { name = "langchain", version = "1.3.14", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14' or sys_platform != 'darwin'" },
@@ -46,6 +46,7 @@ dependencies = [
     { name = "langchain-openrouter" },
     { name = "ollama" },
     { name = "openai" },
+    { name = "packaging" },
     { name = "pillow" },
     { name = "tavily-python" },
     { name = "tqdm" },
