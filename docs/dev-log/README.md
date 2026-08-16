@@ -150,3 +150,16 @@ thing in the record.
   uv found 16 months stale, which blocks the interpreter upgrade and puts the
   resolver that writes `uv.lock` in the same blind spot as the interpreter;
   plan written, not executed.
+- [2026-08-16 · session 1](devlog_2026-08-16_session-1.md) — the uv plan
+  executed end to end: both repositories on uv 0.12.5 and CPython 3.13.15,
+  pinned and committed, with the old resolver now refusing to run in either.
+  Two of phase 5's three exit criteria turned out to have been unsatisfiable
+  before the upgrade began, and the sweep that replaced them produced the first
+  complete committed-lock tier-2 baseline the project has — 180 packages,
+  INCOMPLETE 0, eight blockers, none attributable to the upgrade. The larger
+  finding came from a phase-1 side effect: **the sweep installs the candidate
+  it is about to judge, and a rejected candidate stays installed**, in the
+  environment that runs the code and in no artifact either tier examines.
+  Demonstrated, fixed with `uv run --frozen --no-sync`, given a test in both
+  suites, and documented — and the test then caught the same drift again on its
+  first run.

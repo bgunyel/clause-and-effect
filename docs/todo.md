@@ -1170,28 +1170,54 @@ per the priority order above.
     trusted-source or unscannable-package record with its own ceremony; or
     dropping the dependency if `openvino`/`docling` do not truly need it.
 
-- [ ] 🔺 **Upgrade Python 3.13.3 → 3.13.15, and decide whether the interpreter
-  belongs inside the gate.** _(raised by Bertan 2026-08-13)_ **41 OSV advisories
-  match CPython 3.13.3; 30 are fixed between 3.13.4 and 3.13.14** and would all
-  close. Several are on this project's paths: a ZIP64 EOCD locator offset check
-  (`.docx`/`.xlsx` are ZIP archives), a stack overflow parsing deeply nested XML
-  DTDs (Office formats are XML), a `tarfile.data_filter` traversal bypass, and
-  use-after-free in the `lzma`/`bz2`/`gzip` decompressors.
-  - **Neither tier can see any of it.** `osv-scanner` reads `uv.lock`; GuardDog
-    scans PyPI packages. The interpreter is examined by nobody — so the gate
-    would block a merge over a 4.8 `pypdf` DoS while 30 interpreter advisories
-    sit underneath it, unreported. That asymmetry is the real item here; the
-    upgrade itself is mechanical.
-  - Nothing pins 3.13.3: no `.python-version` in either repository or `$HOME`,
-    and `requires-python = ">=3.13"` permits the upgrade freely. `uv sync`
-    reuses an existing venv rather than re-selecting an interpreter, so the venv
-    has carried whatever `uv` had installed the day it was made. Add a
-    `.python-version` so it becomes a recorded choice rather than drift.
-  - No lock change is needed — the lock is already universal across 3.13/3.14.
-  - **Do not disturb GuardDog's interpreter.** The 2026-08-11 lesson is that
-    Landlock denies `/dev/urandom` to standalone builds, which is exactly what
-    `uv`-managed CPython is; guarddog runs on distro Python for that reason. The
-    two venvs are separate, but verify rather than assume after switching.
+- [x] ✅ **Upgrade Python 3.13.3 → 3.13.15 — done 2026-08-16** (`6a813dc` here,
+  `18bba60` in `ai-common`). **41 OSV advisories matched CPython 3.13.3; 30 are
+  fixed between 3.13.4 and 3.13.14.** Several were on this project's paths: a
+  ZIP64 EOCD locator offset check (`.docx`/`.xlsx` are ZIP archives), a stack
+  overflow parsing deeply nested XML DTDs (Office formats are XML), a
+  `tarfile.data_filter` traversal bypass, and use-after-free in the
+  `lzma`/`bz2`/`gzip` decompressors.
+  - Blocked until then by **uv 0.6.17**, which compiles the
+    python-build-standalone download metadata into its own binary and so did
+    not know any CPython past 3.13.3 existed. The prerequisite upgrade to uv
+    0.12.5 ran per [`uv-upgrade-plan.md`](uv-upgrade-plan.md), phases 0–7.
+  - Both repositories now carry a **committed** `.python-version` reading
+    `3.13.15` exactly, plus `[tool.uv] required-version = ">=0.12,<0.13"`. The
+    file had been gitignored in both — which is why nothing had ever recorded
+    the choice, and why phase 0 measured it as absent. The plan did not
+    anticipate that; §7 was amended.
+  - GuardDog's interpreter was not disturbed, per the 2026-08-11 Landlock
+    lesson: verified at 3.1.0 on `/usr/bin/python3.12` both before and after
+    the resolver swap.
+  - **🔺 The 30 advisories are NOT verified closed.**
+    [`uv-upgrade-plan.md`](uv-upgrade-plan.md) §8 already recorded that nothing
+    re-queries OSV afterwards, and the attempt on 2026-08-16 matched
+    `RUSTSEC-2023-0076` — a Rust crate also named `cpython`. The 2026-08-13
+    query method is recorded nowhere. **Re-establish that query and re-run it
+    before this upgrade's headline benefit is relied on.**
+  - The interpreter-in-the-gate half of this item is promoted to its own entry
+    below.
+
+- [ ] 🔺 **Decide whether the toolchain belongs inside the gate.** _(promoted
+  from the interpreter item, 2026-08-16)_ Both tiers read `uv.lock`. Neither
+  can see the **interpreter** that runs the code, the **resolver** that decided
+  which code there is, or the **scanner** that judges it — so the gate will
+  block a merge over a medium-severity DoS in a leaf dependency while 30
+  interpreter advisories sit underneath it, unreported. That asymmetry is the
+  item, and it survived the upgrade unchanged: pinning a toolchain is not the
+  same as scanning one.
+  - A cheap first move exists that is not a scan. The interpreter and resolver
+    are now **pinned and committed**, so the gate could assert that the
+    recorded pins match what is actually running — `.python-version` and
+    `required-version` are both checkable with no new infrastructure, in the
+    same spirit as the environment-coupling test.
+  - **GuardDog 3.1.0 is itself unexamined, and deliberately not upgraded.** The
+    cache and review ledger key on `(name, version, guarddog_version)`, so a
+    bump turns every stored report into a cache miss and re-opens every
+    completed review at once — **250 reports** as of 2026-08-16. Any decision
+    here has to say what happens to the store.
+  - This is a scope question about the gate rather than a mechanical task; it
+    wants a decision recorded in `design/`, not a patch.
 
 - [ ] **Count and name dropped requirement lines** _(surfaced 2026-08-13; the
   fix belongs in `ai-common`)_ `parse_requirements`
@@ -1207,19 +1233,20 @@ per the priority order above.
   first-party gap are recorded in
   [`design/dependency-scanning-scope.md`](design/dependency-scanning-scope.md).
 
-- [ ] **`upgrade-safe` reverts the lock but not the environment.** _(surfaced
-  2026-08-16, during phase 1 of the uv upgrade)_ When the gate rejects a
-  candidate, `uv.lock` is restored and the venv is left holding the candidate's
+- [x] ✅ **`upgrade-safe` reverted the lock but not the environment — fixed
+  2026-08-16** (`7046a0d` here, `18bba60` in `ai-common`). _(surfaced the same
+  day, during phase 1 of the uv upgrade)_ When the gate rejected a candidate,
+  `uv.lock` was restored and the venv was left holding the candidate's
   packages — including, in principle, the very package that blocked adoption.
-  - **Mechanism.** `Makefile:118` runs `uv run guarddog-cached …` at a point
+  - **Mechanism.** `Makefile:133` runs `uv run guarddog-cached …` at a point
     where `uv.lock` *is* the candidate, and `uv run` syncs the project
     environment before executing. That sync is **inexact by default** —
     `--exact` is an opt-in flag, confirmed against `uv run --help` on 0.6.17 —
     so it installs whatever the candidate adds and removes nothing.
     `uv lock --upgrade` and `uv export --frozen` write no packages, which
     leaves `uv run` as the only installer in the recipe. The `EXIT` trap then
-    restores the lock, and the `uv sync --all-groups` at `Makefile:133` never
-    runs: it sits after `rm -f uv.lock.preupgrade`, on the success path only.
+    restored the lock, and the `uv sync --all-groups` at `Makefile:149` never
+    ran: it sits after `rm -f uv.lock.preupgrade`, on the success path only.
   - **Evidence.** `olefile==0.47` and `python-oxmsg==0.0.2` were installed in
     this venv until 2026-08-16 and appear in **no commit's `uv.lock`** —
     `git log -S` over that path returns nothing for either name. Their GuardDog
@@ -1233,14 +1260,25 @@ per the priority order above.
     it. Tests run against the drifted environment too — `make test` is
     `uv run --group test pytest`, inexact for the same reason, so it neither
     cleans up nor reports the difference.
-  - Options, none yet chosen: pass `--exact` where the sweep invokes `uv run`;
-    resync inside the `EXIT` trap alongside the lock restore, making the revert
-    atomic across lock and environment; or run the sweep with `--no-sync`
-    against an explicitly prepared environment. Only the trap variant also
-    covers the interrupt paths.
-  - Independent of the uv upgrade, and **not fixed by it**: `--exact` is still
-    an opt-in flag on `uv run` in 0.12.5, confirmed against `--help` after the
-    upgrade landed. The behaviour is unchanged between 0.6.17 and 0.12.5.
+  - **Fix.** `uv run --frozen --no-sync` at both call sites in both
+    repositories. `--no-sync` prevents the install rather than undoing it; the
+    sweep does not need the candidate installed, since it reads the flattened
+    requirements file and fetches each artifact from PyPI itself. `--frozen`
+    stops `uv run` rewriting the lock it was handed. **`--exact` was considered
+    and rejected**: it makes the environment match the *candidate* exactly
+    rather than accumulate on top of it, but after the revert the environment
+    is still the candidate's set. Not fixed by the uv upgrade either — `--exact`
+    is still opt-in on 0.12.5.
+  - **A test, because the flags are not sufficient.** One of the three drifts
+    found that day came from an extras-installing command rather than the
+    sweep. `tests/test_environment_sync.py` runs `uv sync --check --frozen
+    --all-groups` each suite; it caught five stray packages on its first run.
+    Recorded in
+    [`design/environment-lock-coupling.md`](design/environment-lock-coupling.md).
+  - **🔺 Residual: the fix has never been exercised by a complete
+    `upgrade-safe`.** The only run attempted on 2026-08-16 was interrupted, and
+    it predated the patch. This closes when a full `upgrade-safe` finishes and
+    the environment is verifiably unchanged afterwards.
 
 - [ ] **Collapse the stale langchain fork.** _(surfaced 2026-08-13)_ `uv.lock`
   carries `langchain` at both 1.3.2 and 1.3.14, plus `langgraph`,
