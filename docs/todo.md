@@ -1207,6 +1207,41 @@ per the priority order above.
   first-party gap are recorded in
   [`design/dependency-scanning-scope.md`](design/dependency-scanning-scope.md).
 
+- [ ] **`upgrade-safe` reverts the lock but not the environment.** _(surfaced
+  2026-08-16, during phase 1 of the uv upgrade)_ When the gate rejects a
+  candidate, `uv.lock` is restored and the venv is left holding the candidate's
+  packages — including, in principle, the very package that blocked adoption.
+  - **Mechanism.** `Makefile:118` runs `uv run guarddog-cached …` at a point
+    where `uv.lock` *is* the candidate, and `uv run` syncs the project
+    environment before executing. That sync is **inexact by default** —
+    `--exact` is an opt-in flag, confirmed against `uv run --help` on 0.6.17 —
+    so it installs whatever the candidate adds and removes nothing.
+    `uv lock --upgrade` and `uv export --frozen` write no packages, which
+    leaves `uv run` as the only installer in the recipe. The `EXIT` trap then
+    restores the lock, and the `uv sync --all-groups` at `Makefile:133` never
+    runs: it sits after `rm -f uv.lock.preupgrade`, on the success path only.
+  - **Evidence.** `olefile==0.47` and `python-oxmsg==0.0.2` were installed in
+    this venv until 2026-08-16 and appear in **no commit's `uv.lock`** —
+    `git log -S` over that path returns nothing for either name. Their GuardDog
+    reports are stamped **2026-08-13 12:27 and 12:38**, inside the session-2
+    sweep of the candidate `upgrade-safe` went on to reject. The
+    `uv sync --all-groups` in phase 1 of the uv upgrade removed them, which is
+    the only reason they were noticed.
+  - **Why it is not cosmetic.** The install precedes the scan, so a blocking
+    finding cannot keep the package out of the environment; afterwards
+    `osv-scanner --lockfile=uv.lock` reads the *committed* lock and cannot see
+    it. Tests run against the drifted environment too — `make test` is
+    `uv run --group test pytest`, inexact for the same reason, so it neither
+    cleans up nor reports the difference.
+  - Options, none yet chosen: pass `--exact` where the sweep invokes `uv run`;
+    resync inside the `EXIT` trap alongside the lock restore, making the revert
+    atomic across lock and environment; or run the sweep with `--no-sync`
+    against an explicitly prepared environment. Only the trap variant also
+    covers the interrupt paths.
+  - Independent of the uv upgrade, and **not fixed by it**: `--exact` is still
+    an opt-in flag on `uv run` in 0.12.5, confirmed against `--help` after the
+    upgrade landed. The behaviour is unchanged between 0.6.17 and 0.12.5.
+
 - [ ] **Collapse the stale langchain fork.** _(surfaced 2026-08-13)_ `uv.lock`
   carries `langchain` at both 1.3.2 and 1.3.14, plus `langgraph`,
   `langgraph-sdk` and `websockets`, all four on
