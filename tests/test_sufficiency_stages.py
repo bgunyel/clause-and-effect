@@ -120,12 +120,17 @@ def test_stage_a_prompt_carries_the_question_and_the_answer_under_their_own_labe
     """
     Presence is not enough: a prompt built with the two fields swapped still
     contains both. The label positions are what pin which is which.
+
+    rindex rather than index, because the worked examples in the stage A
+    prompt carry their own QUESTION:/ANSWER: lines. Against index this
+    test would compare the real fields to the *examples'* labels and pass however
+    the real ones were ordered.
     """
     prompt = build_stage_a_prompt(make_case())
 
-    assert prompt.index("QUESTION:") < prompt.index(QUESTION)
-    assert prompt.index(QUESTION) < prompt.index("ANSWER:")
-    assert prompt.index("ANSWER:") < prompt.index(ANSWER)
+    assert prompt.rindex("QUESTION:") < prompt.rindex(QUESTION)
+    assert prompt.rindex(QUESTION) < prompt.rindex("ANSWER:")
+    assert prompt.rindex("ANSWER:") < prompt.rindex(ANSWER)
 
 
 def test_stage_a_prompt_never_carries_the_quote():
