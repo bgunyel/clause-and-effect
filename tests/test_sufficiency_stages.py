@@ -1,25 +1,28 @@
 """
-Unit tests for stages A and B of the sufficiency judge.
+Unit tests for stages A, B and C of the sufficiency judge.
 
-Both stages were built on 2026-08-05 and verified by eyeballing eight cases,
+Stages A and B were built on 2026-08-05 and verified by eyeballing eight cases,
 which under this project's own rule leaves them unverified rather than working —
 ``span_is_verbatim`` in particular returned 8/8 verbatim and has therefore never
-been observed to fail. These tests pin what is deterministic in the two stages:
+been observed to fail. These tests pin what is deterministic in the three stages:
 the **structural blinding** that the whole protocol rests on, the mapping from a
-model response into the stage's dataclass, and ``span_is_verbatim``.
+model response into the stage's dataclass, ``span_is_verbatim``, and stage C's
+claim-to-verdict matching.
 
 The blinding is the load-bearing part. Stage A must never see the quote, or its
 core/auxiliary tagging can be fitted to whatever the quote happens to contain;
 stage B must never see the gold answer, or it can work backwards from the
-conclusion it exists to test. Both are claims about what a prompt *cannot*
-contain, so they are tested as invariance properties — two cases differing in
-every field but the two a stage is allowed to see must produce byte-identical
-prompts — rather than by checking one sentinel string, which a later field
-added to a prompt would slip straight past.
+conclusion it exists to test; stage C must never see the quote, or it re-reads
+the evidence and the two artifacts it exists to compare collapse into one. Each
+is a claim about what a prompt *cannot* contain, so they are tested as invariance
+properties — two inputs differing in every field but the ones a stage is allowed
+to see must produce byte-identical prompts — rather than by checking one sentinel
+string, which a later field added to a prompt would slip straight past.
 
 No model is called. Each stage's runnable is replaced with a fake, so what is
 tested is the stage's own wiring: which prompt it sends, which schema it asks
-for, and how it maps what comes back.
+for, how it maps what comes back, and — for stage C — when it declines to call
+at all.
 """
 import asyncio
 import subprocess
@@ -27,16 +30,25 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from src.eval.dataset import TestCase
-from src.eval.sufficiency.models import Claim, Decomposition
+from src.eval.sufficiency.models import BlindAnswer, Claim, Decomposition
 from src.eval.sufficiency.stage_a import build_stage_a_prompt, decompose
 from src.eval.sufficiency.stage_b import (
     answer_blind,
     build_stage_b_prompt,
     span_is_verbatim,
 )
+from src.eval.sufficiency.stage_c import (
+    AdjudicationError,
+    adjudicate,
+    build_stage_c_prompt,
+    render_claims,
+)
 from src.eval.sufficiency import stage_a as stage_a_module
 from src.eval.sufficiency import stage_b as stage_b_module
+from src.eval.sufficiency import stage_c as stage_c_module
 
 
 # The fixtures follow `gdpr_art7_case3` — the case the criterion was settled on,
@@ -121,10 +133,10 @@ def test_stage_a_prompt_carries_the_question_and_the_answer_under_their_own_labe
     Presence is not enough: a prompt built with the two fields swapped still
     contains both. The label positions are what pin which is which.
 
-    rindex rather than index, because the worked examples in the stage A
-    prompt carry their own QUESTION:/ANSWER: lines. Against index this
-    test would compare the real fields to the *examples'* labels and pass however
-    the real ones were ordered.
+    ``rindex`` rather than ``index``, because the worked examples added on
+    2026-08-17 carry their own ``QUESTION:``/``ANSWER:`` lines. Against ``index``
+    this test would compare the real fields to the *examples'* labels and pass
+    however the real ones were ordered.
     """
     prompt = build_stage_a_prompt(make_case())
 
@@ -444,6 +456,315 @@ def test_answer_blind_asks_for_the_stage_b_schema_and_passes_the_caller_s_model(
     assert captured["model_params"] == MODEL_PARAMS
 
 
+# ---------------------------- stage C — the prompt -------------------------- #
+
+# Stage C's fixtures follow the `gdpr_art8_case1` run: one core claim, and a
+# blind answer far terser than the claim it has to carry.
+C_QUESTION = "What is the minimum age at which a child can give their own consent?"
+CORE_CLAIM = Claim(
+    text="The minimum age is 16 years old.",
+    tag="core",
+    reason="It is the substance of the shortest sufficient answer.",
+)
+SECOND_CLAIM = Claim(
+    text="Consent must be given by the holder of parental responsibility.",
+    tag="core",
+    reason="The question asks who may consent.",
+)
+
+# `minimal_span` is a verbatim slice of the quote and `note` is stage B's own
+# assessment. Neither may reach stage C, so both carry distinctive text.
+BLIND = BlindAnswer(
+    answered=True,
+    answer="16 years old",
+    minimal_span="the child is at least 16 years old",
+    note="The span establishes an unconditional age threshold.",
+)
+SPAN_ONLY_PHRASE = "at least 16"
+NOTE_ONLY_PHRASE = "unconditional age threshold"
+
+
+def test_stage_c_prompt_carries_the_question_the_answer_and_the_claims_under_their_own_labels():
+    prompt = build_stage_c_prompt(C_QUESTION, [CORE_CLAIM], BLIND)
+
+    assert prompt.index("QUESTION:") < prompt.index(C_QUESTION)
+    assert prompt.index(C_QUESTION) < prompt.index("ANSWER:")
+    assert prompt.index("ANSWER:") < prompt.index(BLIND.answer)
+    assert prompt.index(BLIND.answer) < prompt.index("CLAIMS:")
+    assert prompt.index("CLAIMS:") < prompt.index(CORE_CLAIM.text)
+
+
+def test_stage_c_prompt_never_carries_the_span_or_the_note():
+    """
+    The span is a verbatim slice of the quote, so leaking it would hand stage C
+    the evidence it must not re-read — the blinding that makes stage B worth
+    running at all. The note is stage B's self-assessment: adjudicating against
+    it would judge what stage B thought rather than what it answered.
+    """
+    prompt = build_stage_c_prompt(C_QUESTION, [CORE_CLAIM], BLIND)
+
+    assert BLIND.minimal_span not in prompt
+    assert SPAN_ONLY_PHRASE not in prompt
+    assert BLIND.note not in prompt
+    assert NOTE_ONLY_PHRASE not in prompt
+
+
+def test_stage_c_prompt_is_blind_to_every_field_of_the_blind_answer_but_the_answer():
+    """The invariance form of the test above — a field added later fails here."""
+    other = BlindAnswer(
+        answered=False,
+        answer=BLIND.answer,
+        minimal_span="an entirely different slice of some other article",
+        note="a different note, reaching a different conclusion",
+    )
+
+    assert build_stage_c_prompt(C_QUESTION, [CORE_CLAIM], BLIND) == build_stage_c_prompt(
+        C_QUESTION, [CORE_CLAIM], other
+    )
+
+
+def test_stage_c_prompt_never_shows_a_claims_tag_or_stage_as_reasoning():
+    """
+    Every claim reaching stage C is core, so a tag carries no information and
+    could only invite treating one claim as lower-stakes. Stage A's ``reason`` is
+    withheld for a sharper reason: it is *how stage A thought*, and stage C
+    comparing two independent artifacts must not be shown one of their workings.
+    """
+    tagged = Claim(
+        text="The minimum age is 16 years old.",
+        tag="auxiliary",
+        reason="A distinctive rationale that must not reach stage C.",
+    )
+    prompt = build_stage_c_prompt(C_QUESTION, [tagged], BLIND)
+
+    assert "auxiliary" not in prompt
+    assert tagged.reason not in prompt
+    assert "distinctive rationale" not in prompt
+
+
+def test_stage_c_prompt_never_names_the_regulation():
+    """
+    Stage C judges text against text and needs no legal knowledge at all, so
+    naming the law could only invite it to supply what the answer does not say.
+    """
+    prompt = build_stage_c_prompt(
+        "What is the minimum age for a person to agree on their own behalf?",
+        [Claim(text="The minimum age is 16 years old.", tag="core", reason="asked")],
+        BlindAnswer(answered=True, answer="16 years old", minimal_span="", note=""),
+    )
+
+    for name in ("GDPR", "General Data Protection", "Regulation", "Article"):
+        assert name not in prompt
+
+
+# --------------------------- stage C — render_claims ------------------------ #
+
+def test_render_claims_numbers_from_one_in_order():
+    rendered = render_claims([CORE_CLAIM, SECOND_CLAIM])
+
+    assert rendered == (
+        "1. The minimum age is 16 years old.\n"
+        "2. Consent must be given by the holder of parental responsibility."
+    )
+
+
+def test_render_claims_of_no_claims_is_empty():
+    assert render_claims([]) == ""
+
+
+# ----------------------------- stage C — the call --------------------------- #
+
+def test_adjudicate_matches_verdicts_to_claims_by_number_not_by_position(monkeypatch):
+    """
+    The reason claims are numbered at all. A response listing claim 2 before
+    claim 1 must still label the right claims — under positional pairing this
+    silently swaps them, and every downstream verdict is derived from the swap.
+    """
+    response = SimpleNamespace(
+        claim_verdicts=[
+            SimpleNamespace(claim_number=2, support="absent", rationale="Says nothing about who consents."),
+            SimpleNamespace(claim_number=1, support="supported", rationale="States '16 years old'."),
+        ]
+    )
+    install_fake_llm(monkeypatch, stage_c_module, response)
+
+    adjudication = asyncio.run(
+        adjudicate(C_QUESTION, [CORE_CLAIM, SECOND_CLAIM], BLIND, MODEL_PARAMS)
+    )
+
+    first, second = adjudication.claim_verdicts
+    assert first.claim is CORE_CLAIM
+    assert first.support == "supported"
+    assert first.rationale == "States '16 years old'."
+    assert second.claim is SECOND_CLAIM
+    assert second.support == "absent"
+    assert second.rationale == "Says nothing about who consents."
+
+
+def test_adjudicate_carries_all_three_support_values(monkeypatch):
+    third = Claim(text="Consent may be withdrawn.", tag="core", reason="asked")
+    response = SimpleNamespace(
+        claim_verdicts=[
+            SimpleNamespace(claim_number=1, support="supported", rationale="r1"),
+            SimpleNamespace(claim_number=2, support="absent", rationale="r2"),
+            SimpleNamespace(claim_number=3, support="contradicted", rationale="r3"),
+        ]
+    )
+    install_fake_llm(monkeypatch, stage_c_module, response)
+
+    adjudication = asyncio.run(
+        adjudicate(C_QUESTION, [CORE_CLAIM, SECOND_CLAIM, third], BLIND, MODEL_PARAMS)
+    )
+
+    assert [v.support for v in adjudication.claim_verdicts] == [
+        "supported", "absent", "contradicted",
+    ]
+
+
+def test_adjudicate_rejects_a_verdict_for_a_claim_that_was_never_given(monkeypatch):
+    """An invented claim number means the mapping cannot be trusted at all."""
+    response = SimpleNamespace(
+        claim_verdicts=[
+            SimpleNamespace(claim_number=1, support="supported", rationale="r1"),
+            SimpleNamespace(claim_number=7, support="absent", rationale="r7"),
+        ]
+    )
+    install_fake_llm(monkeypatch, stage_c_module, response)
+
+    with pytest.raises(AdjudicationError) as excinfo:
+        asyncio.run(adjudicate(C_QUESTION, [CORE_CLAIM], BLIND, MODEL_PARAMS))
+
+    assert "7" in str(excinfo.value)
+
+
+def test_adjudicate_rejects_claim_number_zero(monkeypatch):
+    """Numbering starts at 1, so a 0 is off-by-one rather than a stray value."""
+    response = SimpleNamespace(
+        claim_verdicts=[SimpleNamespace(claim_number=0, support="supported", rationale="r")]
+    )
+    install_fake_llm(monkeypatch, stage_c_module, response)
+
+    with pytest.raises(AdjudicationError):
+        asyncio.run(adjudicate(C_QUESTION, [CORE_CLAIM], BLIND, MODEL_PARAMS))
+
+
+def test_adjudicate_rejects_a_claim_labelled_twice(monkeypatch):
+    response = SimpleNamespace(
+        claim_verdicts=[
+            SimpleNamespace(claim_number=1, support="supported", rationale="r1"),
+            SimpleNamespace(claim_number=1, support="absent", rationale="r1-again"),
+        ]
+    )
+    install_fake_llm(monkeypatch, stage_c_module, response)
+
+    with pytest.raises(AdjudicationError) as excinfo:
+        asyncio.run(adjudicate(C_QUESTION, [CORE_CLAIM, SECOND_CLAIM], BLIND, MODEL_PARAMS))
+
+    assert "more than once" in str(excinfo.value)
+
+
+def test_adjudicate_rejects_a_dropped_claim(monkeypatch):
+    """
+    The failure positional pairing hides: two verdicts for three claims would
+    mislabel the third rather than fail, and the error names which is missing.
+    """
+    third = Claim(text="Consent may be withdrawn.", tag="core", reason="asked")
+    response = SimpleNamespace(
+        claim_verdicts=[
+            SimpleNamespace(claim_number=1, support="supported", rationale="r1"),
+            SimpleNamespace(claim_number=3, support="absent", rationale="r3"),
+        ]
+    )
+    install_fake_llm(monkeypatch, stage_c_module, response)
+
+    with pytest.raises(AdjudicationError) as excinfo:
+        asyncio.run(
+            adjudicate(C_QUESTION, [CORE_CLAIM, SECOND_CLAIM, third], BLIND, MODEL_PARAMS)
+        )
+
+    assert "2" in str(excinfo.value)
+
+
+def test_adjudicate_asks_for_the_stage_c_schema_and_passes_the_caller_s_model(monkeypatch):
+    response = SimpleNamespace(
+        claim_verdicts=[SimpleNamespace(claim_number=1, support="supported", rationale="r")]
+    )
+    _, captured = install_fake_llm(monkeypatch, stage_c_module, response)
+
+    asyncio.run(adjudicate(C_QUESTION, [CORE_CLAIM], BLIND, MODEL_PARAMS))
+
+    assert set(captured["schema"].model_fields) == {"claim_verdicts"}
+    assert captured["model_params"] == MODEL_PARAMS
+
+
+# ------------------- stage C — the two paths that take no call -------------- #
+
+def test_adjudicate_makes_no_call_when_there_are_no_claims(monkeypatch):
+    """
+    Stage A legitimately returns no core claims when a gold answer does not
+    answer its own question. There is nothing to adjudicate, and spending a call
+    to be told so would be spending it 433 times.
+    """
+    fake, _ = install_fake_llm(monkeypatch, stage_c_module, SimpleNamespace(claim_verdicts=[]))
+
+    adjudication = asyncio.run(adjudicate(C_QUESTION, [], BLIND, MODEL_PARAMS))
+
+    assert adjudication.claim_verdicts == []
+    assert fake.prompts == []
+
+
+def test_adjudicate_makes_no_call_when_stage_b_produced_no_answer_text(monkeypatch):
+    """
+    An empty answer carries nothing, so every claim is absent by arithmetic
+    rather than by judgement — and asking a model to confirm it would invite it
+    to fill the silence from what it knows.
+    """
+    silent = BlindAnswer(answered=False, answer="", minimal_span="", note="nothing settles it")
+    fake, _ = install_fake_llm(monkeypatch, stage_c_module, SimpleNamespace(claim_verdicts=[]))
+
+    adjudication = asyncio.run(
+        adjudicate(C_QUESTION, [CORE_CLAIM, SECOND_CLAIM], silent, MODEL_PARAMS)
+    )
+
+    assert fake.prompts == []
+    assert [v.support for v in adjudication.claim_verdicts] == ["absent", "absent"]
+    assert [v.claim for v in adjudication.claim_verdicts] == [CORE_CLAIM, SECOND_CLAIM]
+    assert all(v.rationale for v in adjudication.claim_verdicts)
+
+
+def test_adjudicate_treats_a_whitespace_only_answer_as_no_answer(monkeypatch):
+    blank = BlindAnswer(answered=True, answer="  \n  ", minimal_span="", note="")
+    fake, _ = install_fake_llm(monkeypatch, stage_c_module, SimpleNamespace(claim_verdicts=[]))
+
+    adjudication = asyncio.run(adjudicate(C_QUESTION, [CORE_CLAIM], blank, MODEL_PARAMS))
+
+    assert fake.prompts == []
+    assert [v.support for v in adjudication.claim_verdicts] == ["absent"]
+
+
+def test_adjudicate_judges_an_answer_written_despite_the_escape(monkeypatch):
+    """
+    The guard is on the answer text, not on ``answered``. A model that took the
+    escape and still wrote an answer has produced something judgeable, and
+    short-circuiting on the flag would discard it unread.
+    """
+    contrary = BlindAnswer(
+        answered=False,
+        answer="16 years old",
+        minimal_span="the child is at least 16 years old",
+        note="Reported as unanswered, but an answer was written anyway.",
+    )
+    response = SimpleNamespace(
+        claim_verdicts=[SimpleNamespace(claim_number=1, support="supported", rationale="r")]
+    )
+    fake, _ = install_fake_llm(monkeypatch, stage_c_module, response)
+
+    adjudication = asyncio.run(adjudicate(C_QUESTION, [CORE_CLAIM], contrary, MODEL_PARAMS))
+
+    assert len(fake.prompts) == 1
+    assert [v.support for v in adjudication.claim_verdicts] == ["supported"]
+
+
 # ------------------------------ import cost --------------------------------- #
 
 def test_importing_a_judge_stage_does_not_load_torch():
@@ -460,7 +781,9 @@ def test_importing_a_judge_stage_does_not_load_torch():
     """
     probe = (
         "import sys\n"
-        "import src.eval.sufficiency.stage_a, src.eval.sufficiency.stage_b\n"
+        "import src.eval.sufficiency.stage_a\n"
+        "import src.eval.sufficiency.stage_b\n"
+        "import src.eval.sufficiency.stage_c\n"
         "loaded = [m for m in ('torch', 'langchain_core') if m in sys.modules]\n"
         "print(','.join(loaded))\n"
     )
