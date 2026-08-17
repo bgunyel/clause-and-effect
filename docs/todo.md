@@ -942,6 +942,50 @@ per the priority order above.
   hours precisely because the second was an identical match at an identical
   location, which the stored report makes trivial to confirm.
 
+- [ ] **A GuardDog upgrade carries every waiver forward onto rules that may have
+  been rewritten underneath it** _(surfaced 2026-08-17, while checking whether
+  3.2.0 had already fixed the three defects awaiting an upstream report)_ —
+  waivers key on `(name, version)` and deliberately omit the GuardDog version,
+  so they survive an upgrade. That is the correct semantics: the *package* code
+  has not changed. But every waiver's `note` is an argument about what one
+  specific rule does — "the JS branch matched `eval(` inside `Retrieval(`",
+  "branch 1 fired on `$shell_curl_pipe` against a log message". A rule whose
+  condition is rewritten keeps its waiver and silently loses its justification.
+
+  **A patch release is enough to do it.** 3.1.0 → 3.2.0 added and removed no
+  rules — 54 `.yar` files before, 54 after — and changed six bodies:
+  `capability-network-outbound`, `capability-process-spawn`,
+  `threat-network-exfiltration`, `threat-process-cryptomining`,
+  `threat-runtime-environment-read`, `threat-runtime-obfuscation-general`.
+
+  The intersection with the five rules the current 21 waivers rest on
+  (`threat-process-download-exec`, `threat-runtime-obfuscation-steganography`,
+  `threat-filesystem-autostart`, `threat-network-exfil-sysinfo`,
+  `threat-runtime-dynamic-loader`) is **empty**, so nothing is affected today.
+  That is luck rather than design — nothing in the tooling would have said
+  otherwise, and the check was only run because an unrelated question sent
+  someone to compare the two releases by hand.
+
+  **Minimum, before a new version's cache is trusted:**
+
+  ```
+  diff -rq <old>/guarddog/analyzer/sourcecode <new>/guarddog/analyzer/sourcecode
+  ```
+
+  cross-referenced against the rule names in `accepted.json`. Any overlap means
+  those waivers are re-reviewed before the upgrade is adopted — the finding may
+  now be a different finding.
+
+  **Better than remembering to diff:** store a digest of the matched rule's text
+  alongside each waiver, so the wrapper flags a stale justification the way it
+  already re-opens a review when a report's findings change. Same family as the
+  two `guarddog-review` gaps found on 2026-08-17 — it cannot say "this report's
+  findings are identical to one already decided", and it does not warn when a
+  rule exhausted its `max_hits` and truncated what the reviewer could see.
+
+  This does not reopen the keying decision settled above. Waivers surviving an
+  upgrade is right; what is missing is any signal that the rule has moved.
+
 - [ ] 🔺 **Verify the gate actually catches things** _(2026-08-11)_ — the 3/74
   figure is a **false-positive rate only**. There are 74 known-good packages and
   zero known-bad ones, so nothing yet shows `severity >= high` fires on
