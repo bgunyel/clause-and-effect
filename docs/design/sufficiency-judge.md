@@ -24,20 +24,73 @@ yet, and says so rather than reading as though it did.
 |---|---|---|
 | Criterion, protocol, verdict vocabulary | `sufficiency/__init__.py` docstring | **Built** — documented in code |
 | Types (`Claim`, `Decomposition`, `BlindAnswer`, `ClaimVerdict`, `Adjudication`, `PanelistRun`, `CaseJudgement`) | `sufficiency/models.py` | **Built** |
-| Stage A — decompose | `sufficiency/stage_a.py` | **Built**, eyeballed on 8 cases |
-| Stage B — answer blind | `sufficiency/stage_b.py` | **Built**, eyeballed on 8 cases |
-| `span_is_verbatim` | `sufficiency/stage_b.py:span_is_verbatim` | **Built**, never observed to fail |
+| Stage A — decompose | `sufficiency/stage_a.py` | **Built**; wiring tested, tagging quality still eyeballed on 8 cases |
+| Stage B — answer blind | `sufficiency/stage_b.py` | **Built**; wiring tested, leakage resistance still one observation on one case |
+| `span_is_verbatim` | `sufficiency/stage_b.py:span_is_verbatim` | **Built and mutation-tested** (§5.5) |
 | Stage C — adjudicate | — | **Specified below, not built** |
 | Verdict derivation | `Verdict` in `models.py`; no function derives one | **Specified below, not built** |
 | `sufficient_verbose` threshold | — | **Not decided** — to be measured |
 | Panel runner / aggregation | `CaseJudgement.unanimous` exists; nothing populates it | **Specified below, not built** |
 | Calibration sample | — | **Not started** |
-| Tests | none | **Not started** |
+| Tests — stages A and B | `tests/test_sufficiency_stages.py` | **Built** — 31 tests, 20 mutations, no survivors (§1.1) |
 | `main()` probe harness | `sufficiency/judge.py:main` | Built — a scratch driver over 8 cases, not the runner |
 
 Sections 2–5 describe built behaviour. Sections 6–10 are specification for work
 not yet done, and are marked as such. **No verdict from this module gates
 anything today**, because judge–human agreement is unmeasured (§9).
+
+### 1.1 The test surface, and what it deliberately does not reach
+
+`tests/test_sufficiency_stages.py` pins what is **deterministic** in stages A
+and B. No model is called: each stage's runnable is replaced by a fake, so what
+is under test is the stage's own wiring — which prompt it sends, which schema it
+asks for, and how it maps what comes back.
+
+| Group | What it pins |
+|---|---|
+| **Structural blinding** | §3's claim, as an *invariance*: two cases agreeing only on the fields a stage may see must render byte-identical prompts. Plus label positions (`QUESTION:` < question < `ANSWER:` < answer), and that stage B's prompt never names the regulation (§5.2) |
+| **`span_is_verbatim`** | 13 cases — substring, case, whitespace, space-before-punctuation and list-marker all verbatim; empty, whitespace-only, paraphrased, reordered, stitched-from-disjoint-parts and inserted-comma all not |
+| **Response mapping** | `answered=False` with an empty span survives as a legitimate outcome (§10.1 escape), and an empty `core_claims` is not an error (§4.5) |
+| **Schema wiring** | Asserted by field names rather than the private class, so a stage swapped onto the other stage's schema fails |
+| **Import cost** | Importing a stage loads neither `torch` nor `langchain_core` — see below |
+
+**Why blinding is tested as invariance rather than by searching for the quote.**
+A sentinel check answers "is *this* field absent"; the invariance answers "can
+*any* field but the permitted two reach the prompt". A field added to a prompt
+later fails the second and slips past the first, and the blinding is the property
+the whole protocol rests on.
+
+**Mutation results.** 20 mutations injected one at a time, **all 20 killed, no
+survivors**. The load-bearing ones: leaking the quote into stage A's prompt
+(4 tests fail), leaking the gold answer into stage B's (4), removing the
+empty-span guard — without which `""` is a substring of every quote, so a stage B
+that found nothing reads as having copied perfectly (2) — and erasing punctuation
+inside `span_is_verbatim`, caught by exactly the one test that exists to pin that
+boundary (§5.5).
+
+**The tests forced a source fix.** Both stage modules import `build_judge_llm` at
+module scope, so `sufficiency/llm.py` charged every importer — and every test —
+for langchain → transformers → torch: **6.3s** to `import
+src.eval.sufficiency.llm`, 2.4s on the suite. Two imports had to move, not one.
+`get_llm` is now called inside `build_judge_llm`, and the two `langchain_core`
+names — needed only by the signature, which `from __future__ import annotations`
+already makes a string — sit behind `TYPE_CHECKING`. Deferring `get_llm` alone
+would have bought nothing, because `langchain_core` is the leg that pulls torch.
+Measured after: **6.3s → 0.11s**, and the test file runs in **0.32s** against
+6.60s before. The cost is deferred, not removed — the first `build_judge_llm`
+call still pays it.
+
+That guard runs in a **fresh interpreter**, because by the time it executes
+another test module has already imported torch into the pytest process and an
+in-process `sys.modules` check would pass regardless. Both mutations that undo
+the fix are caught, and caught *by wall clock as well as by assertion* — the file
+takes 8.3s and 14.0s under them against 0.32s clean.
+
+**What the tests do not reach.** They say nothing about whether stage A tags
+core/auxiliary *correctly* or whether stage B actually resists parametric
+leakage. Those are judge behaviour, measured against human labels, and they
+remain one observation each on eight eyeballed cases — that is calibration (§9),
+not unit testing, and it is why no verdict here gates anything yet.
 
 ---
 
@@ -282,9 +335,24 @@ instead is not a repair candidate. Matching reuses
 and the grounding gate cannot drift apart on what "the same text" means — the
 same requirement §3.1 places on the retrieval scorers.
 
-**It returned 8/8 verbatim on the probe set, which by this project's own rule
-means it is unverified, not working.** A gate never observed to fail is not known
-to work. It must be mutation-tested when the tests land (§10.6).
+It returned 8/8 verbatim on the probe set, which by this project's own rule made
+it unverified rather than working — a gate never observed to fail is not known to
+work. **It is now mutation-tested** (§1.1): thirteen cases, and four mutations —
+the empty-span guard removed, the normalized fallback removed,
+always-true-for-non-empty, and punctuation erased alongside whitespace — each
+killed by the tests that exist for them.
+
+One boundary is worth naming, because it is the one a later edit will be tempted
+to move. Punctuation is **kept**, so a span that inserts a comma is not verbatim,
+and `test_a_span_with_an_inserted_comma_is_not_verbatim` is the only thing
+standing between this check and the grounding gate drifting apart on what "the
+same text" means. Under the punctuation-erasing mutation, 12 of the 13 cases
+still pass.
+
+What this does **not** establish is that stage B copies rather than paraphrases.
+The check is verified against synthetic spans; how often a real model returns a
+non-verbatim span is a measurement that needs the full run (§7.3), and 8/8 on the
+probe set remains one small sample.
 
 ### 5.6 Observed span-shrink ratios
 
@@ -651,13 +719,22 @@ Measured at `HEAD` over all 433 cases:
 failure mode for numeric deadlines. Per-`answer_type` sufficiency rates will have
 correspondingly weaker resolution there.
 
-### 10.6 `span_is_verbatim` is unverified
+### 10.6 The judge's *behaviour* is unverified; its wiring no longer is
 
-8/8 verbatim on the probe set is not evidence it works. It must be mutation-tested
-(§5.5). This is the project's standing rule, and `todo.md` carries a broader entry
-on making mutation a harness rather than a hand procedure — 35 hand-run mutations
-on 2026-08-07 left **four survivors**, and not one meant "add a missing test";
-every one was a test that already existed and did not work.
+**Closed in part.** `span_is_verbatim` and the deterministic surface of stages A
+and B are tested and mutation-verified (§1.1, §5.5) — 8/8 verbatim on the probe
+set was not evidence anything worked, and is no longer what the claim rests on.
+
+What remains open is the half unit tests cannot reach: whether stage A's
+core/auxiliary tagging matches a human's, and whether stage B resists parametric
+leakage at a rate rather than in one observed case. That is §9's calibration, and
+it is the reason no verdict here gates anything.
+
+The 20 mutations behind §1.1 were hand-run, which `todo.md` carries a broader
+entry against: 35 hand-run mutations on 2026-08-07 left **four survivors**, and
+not one meant "add a missing test" — every one was a test that already existed
+and did not work. A hand procedure that has to be remembered is the gap, not the
+mutations themselves.
 
 ### 10.7 Undecided, and each changes the output
 
@@ -720,6 +797,9 @@ a process that cannot be matched to the existing ones.
 ```bash
 python -m src.eval.golden_qa          # the deterministic gate — free, no model calls
 python -m src.eval.sufficiency.judge  # the 8-case probe harness (stages A and B only)
+
+# The stage A/B tests — no model calls, 0.32s
+uv run --group test pytest tests/test_sufficiency_stages.py
 ```
 
 The probe harness runs against `get_llm_config()["writer_model"][0]` and prints
@@ -737,3 +817,8 @@ plus auxiliary consequence), `gdpr_art15_case1` (enumeration — every item core
 commit; the 8-case probe figures in §4.2, §5.3 and §5.6 are from the 2026-08-05
 run recorded in `docs/dev-log/devlog_2026-08-05_session-1.md` and have not been
 re-run since.
+
+**§1.1 and §5.5 verified on 2026-08-17**, against `b99783b` plus the uncommitted
+`tests/test_sufficiency_stages.py` and the `sufficiency/llm.py` deferral —
+31 tests, 20 mutations with no survivors, and the import figures measured on this
+machine rather than carried over.
