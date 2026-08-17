@@ -87,3 +87,79 @@ thing in the record.
   chunker lifted out of the parser, a circular import held closed by two dead
   lines, and regulation constants collapsed from three free parameters to one
   lookup. Ends mid-refactor with 58 failing tests, enumerated.
+- [2026-08-09 · session 1](devlog_2026-08-09_session-1.md) — the chunking
+  refactor finished and the `vector_db` source side reviewed item by item; the
+  digest became caller-supplied (a recorded property deliberately reversed);
+  output routed through logging, with `RichHandler` tried and rejected for
+  breaking a hash across two lines. Ends with 24 failing tests in
+  `test_vector_db.py`.
+- [2026-08-10 · session 1](devlog_2026-08-10_session-1.md) — `test_vector_db.py`
+  repaired 24 → 0 with every rewrite mutation-checked, two of the three handover
+  predictions found wrong, and the first baseline snapshot (`5caac594…`) written
+  against a clean tree and merged to `main`. The sufficiency judge documented and
+  split into a package — where a claimed import-cost property was measured and
+  found absent. Golden-set provenance established after the assistant concluded
+  it wrongly from git twice. `ai_common`'s fix order shown to be forced: two of
+  three candidate optimisations measure as worth zero until the package
+  `__init__` is fixed.
+- [2026-08-10 · session 2](devlog_2026-08-10_session-2.md) — spent entirely in
+  the **`ai-common`** repo. The `__init__` fix landed in an hour (`from
+  ai_common.enums import …` 4.11s → 0.14s); the rest went to the GuardDog
+  wrapper sitting uncommitted beside it, where the tier-2 gate turned out never
+  to have gated — `guarddog pypi scan` exits 0 whether it found nothing, found
+  malicious indicators, or never downloaded the package. Rebuilt to derive its
+  own verdict from JSON, with a machine-wide cache that concurrent projects no
+  longer clobber and an `upgrade-safe` that no longer leaves `uv.lock` upgraded
+  and unverified on Ctrl-C. Then guarddog 2.10.0 → 3.1.0, and a one-minute smoke
+  scan produced three blockers — a dead sandbox, 61 renamed rules, and a guard
+  that eats the error it was written to surface — so the hour-long sweep was not
+  started.
+- [2026-08-11 · session 1](devlog_2026-08-11_session-1.md) — all three GuardDog
+  3.1.0 blockers closed: the "sandbox cannot get entropy" failure turned out to
+  be a Landlock filesystem denial wearing an entropy error's clothing, settled by
+  one `strace` line. The tier-2 gate re-based off rule names onto risk severity
+  and the new threshold measured against 74 real dependencies; three Makefile
+  defects the measurement exposed tightened. Tests 92 → 103, 13 mutants killed
+  with no survivors.
+- [2026-08-12 · session 1](devlog_2026-08-12_session-1.md) — the high-severity
+  `google-genai` finding shown to be `eval(` matching inside the word
+  `Retrieval(`, an unguarded JavaScript pattern applied to Python source, with
+  `pillow` blocking on the same upstream defect. Because the cache could not have
+  answered that question, a report store, a review ledger and a backfill of 74
+  calibration reports were built around it; four waivers written, and the pyyaml
+  assessment corrected in the package's favour. Tests 103 → 127, 19 mutants, 0
+  survivors.
+- [2026-08-13 · session 1](devlog_2026-08-13_session-1.md) — tier 1 found red on
+  the committed lock and taken 5 advisories → 3; `ai-common` PR #24 merged and
+  Dependabot alert #33 identified; lockfile independence measured — a merge that
+  moved 25 packages there moved none here; `make test` found to have been running
+  nothing since `57c37a5`; the two langchain versions shown by experiment to be a
+  stale fork rather than a platform requirement; a 66-minute sweep aborted on
+  Bertan's question and the abort vindicated by the candidate lock; and Python
+  found 12 patch releases stale, with 30 advisories neither tier of the gate can
+  see.
+- [2026-08-13 · session 2](devlog_2026-08-13_session-2.md) — `cuda-toolkit`
+  shown not to be unscannable at all: uv reads a version from the wheel
+  filename, PyPI keys its index on the canonical form, and the two disagree on
+  4 of 39 releases. Fixed in `ai-common` PR #25, which let tier 2 reach a
+  verdict on every package for the first time — 178 packages, INCOMPLETE 0,
+  eight blockers. Six of the eight are one rule firing outside its declared
+  scope; four waived, and session 1's reading of `docling-slim` found inverted —
+  its `curl … | sh` is a log message, while the two packages that really do
+  fetch-and-execute were never reached by the aborted sweep. Underneath it,
+  uv found 16 months stale, which blocks the interpreter upgrade and puts the
+  resolver that writes `uv.lock` in the same blind spot as the interpreter;
+  plan written, not executed.
+- [2026-08-16 · session 1](devlog_2026-08-16_session-1.md) — the uv plan
+  executed end to end: both repositories on uv 0.12.5 and CPython 3.13.15,
+  pinned and committed, with the old resolver now refusing to run in either.
+  Two of phase 5's three exit criteria turned out to have been unsatisfiable
+  before the upgrade began, and the sweep that replaced them produced the first
+  complete committed-lock tier-2 baseline the project has — 180 packages,
+  INCOMPLETE 0, eight blockers, none attributable to the upgrade. The larger
+  finding came from a phase-1 side effect: **the sweep installs the candidate
+  it is about to judge, and a rejected candidate stays installed**, in the
+  environment that runs the code and in no artifact either tier examines.
+  Demonstrated, fixed with `uv run --frozen --no-sync`, given a test in both
+  suites, and documented — and the test then caught the same drift again on its
+  first run.

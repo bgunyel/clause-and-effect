@@ -4,7 +4,7 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-07._
+> _Last updated: 2026-08-13._
 
 ---
 
@@ -89,11 +89,17 @@ generator and agent staying untested remains an accepted state.
    derives it and refuses to index if it disagrees with the manifest, which is a
    check re-deriving inside could not make. The orphan property survives intact.
 
-5. 🔺 **Repair `test_vector_db.py` — first item of the next session, set by
-   Bertan 2026-08-09.** 24 of its 32 tests fail; every other test module is
-   green. Nothing else in this list starts until these do, because the vector_db
-   refactor above is unverified until they run, and it is the last thing between
-   here and a re-index.
+5. ~~🔺 **Repair `test_vector_db.py`** — first item of the 2026-08-09 session,
+   set by Bertan.~~ **Done 2026-08-10** (`5d517e8`, `7fd6274`). 24 failures → 0;
+   suite **243 passed, 5 xfailed**. Every rewritten test was mutation-checked.
+   One source correction fell out of it: the "lost to ID collisions" message
+   named a failure the identity check structurally cannot see. Baseline snapshot
+   `5caac594…` generated against a clean tree and merged to `main` in
+   [#2](https://github.com/bgunyel/clause-and-effect/pull/2). Detail below.
+
+   <details><summary>The original breakdown, kept for the record</summary>
+
+   24 of 32 tests failed; every other test module was green.
 
    Three layers, and the first hides the other two. The stale `_chunks` helper
    (`tests/test_vector_db.py:207`) builds `Chunk(metadata={"article_number": i})`
@@ -126,8 +132,43 @@ generator and agent staying untested remains an accepted state.
    test. Build the store rather than stubbing per test: it makes the tests
    exercise the real verify-after-write path.
 
-6. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
-   calibration, tests.
+   </details>
+
+   **What the repair actually found, 2026-08-10.** Two of the three predictions
+   above were wrong, and the correction is the useful part:
+   - The `_chunks` helper was not a stale *repoint*. `Chunk.metadata` became a
+     `ChunkMetadata` model, so its one-key dict failed pydantic validation before
+     any code under test ran — 7 missing required fields.
+   - **The fake Qdrant client already had an in-memory point store.**
+     `_FakeClient.points` existed, `upsert` populated it, `scroll` projected
+     `with_payload` off it. Nothing to build.
+   - The identity check cannot detect an **ID collision** — both chunks derive
+     the same point, that point is present, so neither is reported missing. The
+     count check it replaced could see this. Message and docstring corrected;
+     the claim now lives where it can be made
+     (`test_distinct_chunk_ids_yield_distinct_point_ids`).
+
+6. ~~🔺 **`ai_common` import cost**~~ — **step 1 done 2026-08-10 session 2.**
+   The package `__init__` now resolves lazily (PEP 562); `from ai_common.enums
+   import …` went **4.11s → 0.14s**. On branch `lazy-package-init` in
+   `ai-common`, pushed, not merged.
+   - **🔺 The win does not reach this repo yet.** The pin is
+     `ai-common @ git+…@main`, non-editable — merge and re-resolve first.
+   - Findings 2 and 3 (lazy provider SDKs, `BaseChatModel` behind
+     `TYPE_CHECKING`) are now unblocked; re-measure before implementing.
+   - **That branch also carries the GuardDog tier-2 gate rework. All three
+     guarddog 3.1.0 blockers were closed 2026-08-11** — see 🟡 Tooling. What now
+     gates the merge is different: `upgrade-safe` must pass before a PR closes
+     (Bertan, 2026-08-11).
+   - **2026-08-12: the waivers exist and tier 2 passes.** `make scan` on the
+     committed lock reports 74 packages, **BLOCKED 0, INCOMPLETE 0**. **Tier 1
+     (`make audit`) was not run**, so `verify` is only half demonstrated — that
+     is the first item of the next session.
+
+7. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
+   calibration, tests. Split into `src/eval/sufficiency/` on 2026-08-10 and
+   documented in `docs/design/sufficiency-judge.md`; stage C now has a file to be
+   written into rather than a 545-line module to be carved.
 
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
 algorithm improvement, not a blocker — Bertan's decision, 2026-08-07. The
@@ -552,19 +593,39 @@ per the priority order above.
   holds only `Settings` and `get_settings()` and carries no LLM dependency.
   **`import src.config` 8.34s → 0.267s; `import src.scripts.generate_chunks`
   5.46s → 0.254s.** Call sites repointed: `main_dev.py`,
-  `scripts/gdpr_test_data_generation.py`, `eval/sufficiency_judge.py`.
+  `scripts/gdpr_test_data_generation.py`, and what was then
+  `eval/sufficiency_judge.py` (now `eval/sufficiency/judge.py`).
+
+  - **The same reasoning shaped the sufficiency package, 2026-08-10.**
+    `build_judge_llm` is alone in `eval/sufficiency/llm.py` and the package
+    `__init__` exports nothing, so the dataclasses and anything derived from
+    them import without `ai_common`. Measured: `import
+    src.eval.sufficiency.models` **7.68s → 0.07s** once the `__init__` stopped
+    re-exporting the stages. The 7.68s was real and was introduced by a
+    convenience re-export — a package `__init__` runs before any submodule, so
+    it is a cost paid by every importer, including tests.
 
   A lazy import inside the function would have bought the same seconds, but a
   module boundary is not something the next edit undoes by accident. The cost
   itself originates in `ai_common` — see the entry below, which is still open.
 
-- [ ] **`ai_common` costs ~8s to import, and ~100% of it is avoidable for most
-  consumers.** Found 2026-08-09 while tracing why chunk generation loaded torch.
+- [x] ✅ **`ai_common` costs ~8s to import, and ~100% of it is avoidable for most
+  consumers.** **Finding 1 — the package `__init__` — was fixed 2026-08-10
+  session 2**, on branch `lazy-package-init` in `ai-common` (commit `6b72ed8`,
+  pushed). Findings 2 and 3 remain open and are now unblocked; see
+  *"What is still open"* at the end of this entry.
+
+  Found 2026-08-09 while tracing why chunk generation loaded torch.
   `ai_common` is Bertan's own library (`/home/bgunyel/source/ai/ai-common`,
   installed non-editable into this venv) and is consumed by at least six of his
   projects — `auto-company`, `business-researcher`, `deep-sage`, `ragnar`,
   `summary-writer`, `elite-craft` — so a fix there pays off well beyond this
-  repo. **Deferred by Bertan, 2026-08-09: to be dealt with later.**
+  repo.
+
+  > **🔺 This is the first work item of the next session (Bertan, 2026-08-10).**
+  > Deferred on 2026-08-09; un-deferred after the 2026-08-10 measurements below,
+  > which establish the implementation order and show that two of the three
+  > candidate fixes are worth **nothing** until the third lands.
 
   ### The chain
 
@@ -637,6 +698,423 @@ per the priority order above.
   the `_EXPORTS` map has to be, and whether anything relies on a submodule being
   imported as a side effect of importing the package.
 
+  ### 2026-08-10 — re-measured, and the implementation order is now forced
+
+  Prompted by the question *"would importing the provider SDKs inside `get_llm`
+  help?"* Answered by measurement: **on its own, no.**
+
+  **The ordering result.** A module carrying only the imports that would remain
+  in `llm.py` after moving all six provider SDKs into the `match` branches:
+
+  | variant | cost |
+  |---|---|
+  | `import ai_common.llm` today | 7.63s |
+  | six provider SDKs moved into `get_llm` | **7.93s — no better** |
+  | …and `BaseChatModel` behind `TYPE_CHECKING` too | **7.79s — still no better** |
+
+  Both are worth zero because `llm.py` itself does `from .enums import …`, which
+  re-enters the package `__init__`. **Finding 1 is not one of three options; it
+  is the precondition for the other two.**
+
+  **The submodule path buys nothing either**, which settles a natural workaround:
+
+  | | cost | `sys.modules` |
+  |---|---|---|
+  | `from ai_common import get_llm` | 7.95s | 4622 |
+  | `from ai_common.llm import get_llm` | 7.83s | 4622 |
+  | `import ai_common.enums` | 7.86s | 4622 |
+
+  Identical module counts. All nine submodules load either way — Python must
+  execute a parent package's `__init__` to completion before any submodule of it.
+
+  **Where the cost actually is**, isolated:
+
+  | | cost | pulls torch |
+  |---|---|---|
+  | `typing` + `pydantic` (the floor for `enums.py`) | **0.13s** | no |
+  | `langchain_core…chat_models` → `BaseChatModel` | **4.28s** | **yes** |
+  | `ai_common.enums` (a file of plain `Enum`s) | 7.86s | yes |
+
+  **Marginal cost per provider**, with `langchain_core` already loaded — this is
+  what lazy provider imports would actually save:
+
+  ```
+  langchain_google_genai  +1.87s      langchain_ollama      +0.15s
+  langchain_openai        +0.94s      langchain_groq        +0.01s
+  langchain_anthropic     +0.74s      langchain_openrouter  +0.01s
+  ```
+
+  ≈3.7s total, and **OpenRouter — the provider this project uses — is +0.01s**,
+  so a lazy `get_llm` would save nearly all of it on a real call.
+
+  `BaseChatModel` is worth more than all six combined: 4.28s for what is only a
+  return annotation. `from __future__ import annotations` plus a `TYPE_CHECKING`
+  guard removes it from runtime entirely.
+
+  **PEP 562 verified, not assumed.** A toy package with a lazy `__getattr__`
+  routing one cheap and one heavy name:
+
+  ```
+  from pkg import Servers            0.02s   ['pkg', 'pkg.cheap']
+  from pkg import get_llm            1.01s   ['pkg', 'pkg.heavy']
+  from pkg import Servers, get_llm   1.01s   ['pkg', 'pkg.cheap', 'pkg.heavy']
+  ```
+
+  Cost becomes **per name**, not per package, and the old API keeps working. Note
+  the third row: one heavy name in a statement defeats the laziness for that
+  statement.
+
+  ### Implementation order
+
+  1. **`__init__.py` first** — nothing else is observable until it lands. Suggested
+     shape: keep `enums` **eager** (0.13s, universally used, keeps IDE
+     autocomplete and mypy working without ceremony) and put the heavy names
+     — `get_llm`, `load_ollama_model`, `WebSearch`, anything from `base`/`utils`
+     — behind the lazy map with `if TYPE_CHECKING:` imports beside it.
+  2. **Re-measure.** Expected: `from ai_common import LlmServers` ≈ 0.13s and no
+     torch, so `import src.llm_config` goes ~7.7s → ~0.15s, which reaches
+     `gdpr_test_data_generation.py`, `eval/sufficiency/judge.py` and
+     `main_dev.py`.
+  3. **Then** the six provider SDKs inside `get_llm` (~3.7s, and it makes five of
+     them optional dependencies rather than hard ones — the stronger half of the
+     argument) and `BaseChatModel` behind `TYPE_CHECKING` (~4.3s).
+
+  The submodule dependency graph says step 1 pays widely: `price` and `engine`
+  have no external imports at all, `enums` needs only `pydantic`, `tools` needs
+  `ollama`+`tqdm`; only `base`, `utils` and `llm` are heavy.
+
+  **Caveat to document wherever the lazy shim lands:** `__getattr__` does not
+  remove the cost of a heavy name, it defers it to first access. Good for
+  compatibility, confusing for anyone profiling.
+
+  ### ✅ 2026-08-10 session 2 — step 1 done, measured in `ai-common`
+
+  All 24 exported names now resolve through PEP 562 `__getattr__`, with a
+  `TYPE_CHECKING` block for static tools and a `__dir__` so the visible surface
+  does not depend on import history.
+
+  | statement | before | after |
+  |---|---|---|
+  | `import ai_common` | 4.42s · 3124 modules | **0.01s · 51** |
+  | `from ai_common.enums import LlmServers, ModelNames` | 4.11s · 3124 | **0.14s · 194** |
+  | `from ai_common import calculate_token_cost` | 4.38s · 3124 | **0.15s · 195** |
+  | `from ai_common import CfgBase` | 4.27s · 3124 | **0.36s · 518** |
+  | `from ai_common import get_llm` | 4.46s · 3124 | 4.19s · 3111 *(correct)* |
+
+  Absolute numbers are lower than the 7.6–8.1s above because these were taken in
+  `ai-common`'s own venv, which has no torch; this repo's venv does. The shape —
+  every entry point costing the same 3124 modules — is identical, and that was
+  the finding.
+
+  **The suggested shape was not the one implemented.** Keeping `enums` eager for
+  IDE ergonomics turned out to be unnecessary: the `TYPE_CHECKING` block gives
+  type checkers and autocomplete the whole surface at zero runtime cost, so
+  nothing stayed eager and `import ai_common` fell to 0.01s rather than to the
+  0.13s enums floor.
+
+  `test_public_api` **was already failing on `main`** — its allowance for three
+  leaked submodule attributes had gone stale and five more had appeared. Lazy
+  resolution removes the leak, so the allowance was dropped rather than widened.
+  1 test → 32, four mutants killed.
+
+  ### What is still open
+
+  - **🔺 Nothing reaches this repo until the branch merges.** `pyproject.toml`
+    pins `ai-common @ git+https://github.com/bgunyel/ai-common.git@main`, a
+    **non-editable** git install, so `src/llm_config.py` still pays the full
+    cost. Merge `lazy-package-init` and re-resolve the pin, then re-measure
+    `import src.llm_config` here (expected ~7.7s → ~0.2s).
+  - **Findings 2 and 3, now unblocked.** Six provider SDKs inside `get_llm`
+    (≈3.7s, and it turns five of them into optional rather than hard
+    dependencies — the stronger half of the argument) and `BaseChatModel` behind
+    `TYPE_CHECKING` (≈4.3s). **Re-measure before implementing**: every number in
+    this entry predates the lazy `__init__`, which changes the baseline they
+    were measured against.
+  - The pre-implementation check listed above — *what the other six consumers
+    import from `ai_common`* — was **not** performed. The lazy map covers exactly
+    `__all__`, and `ai-common`'s own internal consumers were verified, but the
+    other projects (`auto-company`, `business-researcher`, `deep-sage`,
+    `ragnar`, `summary-writer`, `elite-craft`) were not checked for imports of
+    non-`__all__` names or reliance on a submodule being present as a side
+    effect. Worth doing before the branch merges.
+
+- [x] ✅ **The GuardDog tier-2 gate — all three 3.1.0 blockers closed 2026-08-11**
+  _(work in `ai-common`, branch `lazy-package-init`; 103 tests, 13 mutants, no
+  survivors)_
+
+  1. **The sandbox works, fully enforced.** It was never an entropy problem.
+     GuardDog's capability set grants no path under `/dev`
+     (`_get_common_read_paths()` filters on `os.path.isdir`, so a character
+     device cannot pass), and python-build-standalone interpreters — what
+     `uv tool install` uses — are built `HAVE_GETRANDOM=0`, so hash-seed init
+     *must* open `/dev/urandom`. `strace` from inside the sandbox showed a
+     successful `getrandom` three lines above an `EACCES` on `/dev/urandom`.
+     Fixed with `uv tool install --force --python /usr/bin/python3.12
+     guarddog`; the pin is recorded in the uv receipt and was demonstrated to
+     survive `uv tool upgrade`. **`--no-sandbox` was not needed.** Full
+     post-mortem:
+     [`lessons-learned/2026-08-11-guarddog-sandbox-dev-urandom.md`](lessons-learned/2026-08-11-guarddog-sandbox-dev-urandom.md).
+
+  2. **The gate is re-based off rule names onto `risks[].severity`.**
+     `BLOCKING_RULES` was deleted rather than updated. A risk's severity is its
+     threat rule's severity, downgraded one level for cross-file correlation
+     and two for cross-category, so `high` means a high-severity rule that
+     stands alone or correlates within one file. Two guards make the
+     silent-inert failure structurally impossible: **an unrecognised severity
+     blocks**, and **a completed scan with no `risks` field is INCOMPLETE**.
+     Cache schema 3 → 4.
+
+     Calibrated against **74 known-good ai-common dependencies**: `severity >=
+     high` blocks **3** (google-genai, pillow, pyyaml) against 26/91 ≈ 29% for
+     the v2 "any finding" option. GuardDog's own `risk_score.label` was
+     measured and **rejected** — it blocks tqdm (7.2 `high_risk`, nothing above
+     medium severity) and misses google-genai (4.9 `low`, carries a high
+     severity risk).
+
+  3. **`results` is required only when `errors` is empty**, so a failing report
+     — whose keys are exactly `['package', 'issues', 'errors']` — keeps
+     GuardDog's own message instead of being called an unrecognised shape.
+
+  Related, still open: **a high-severity Dependabot alert on `ai-common`'s
+  `main`** — <https://github.com/bgunyel/ai-common/security/dependabot/33>.
+
+- [x] ✅ **Three baseline waivers — done 2026-08-12**, plus a fourth for
+  `google-genai==2.17.0`. `accepted.json` exists (machine-wide, 4 entries) and
+  **`make scan` passes the committed lock: 74 packages, BLOCKED 0, INCOMPLETE 0**.
+  Each waived finding still **prints**, still at `[high]`, with the advisory `·`
+  marker rather than `✗` — waived is not hidden, and no severity was downgraded.
+
+  **Two of the three are one upstream rule defect, not three judgements.** The
+  steganography rule's condition has two branches; the Python branch scores zero
+  on both packages, and the JavaScript branch fires. That branch is degenerate —
+  `$js_eval` is itself a member of `$js_*`, so it reduces to **`"eval("` AND an
+  image filename**. `$js_eval = "eval(" nocase` is a bare literal with no word
+  boundary, and `path_include` covers `*.py`. The Python patterns are guarded
+  (`/[^.\w]eval\s*\(/`) and would not have matched.
+
+  | package | rule | what actually matched |
+  |---|---|---|
+  | `google-genai==2.11.0` | steganography | `eval(` inside `types.Retrieval(` at `test_generate_content_tools.py:217`; `$img_png` on `google_homepage.png` at line 46 |
+  | `google-genai==2.17.0` | steganography | identical — same file, same line, same text, six minor versions apart |
+  | `pillow==12.3.0` | steganography | ` eval(` on `def eval(image, *args)`, Pillow's documented per-pixel API, `Image.py:3776`; `$img_png` on `.bmp"` at line 329 |
+  | `pyyaml==6.0.3` ×3 | dynamic-loader | `__import__(` + `getattr(module,` + `base64.decodebytes` in one file |
+
+  **Correction to the 2026-08-11 assessment of pyyaml.** It was recorded as
+  *"behaviourally true"* and the evidence is more favourable. Branch **B** fired
+  — import ∧ getattr ∧ base64 — and the correlation is spurious: the base64 at
+  `constructor.py:299-308` and `:505-511` is `construct_yaml_binary` implementing
+  the `!!binary` tag, unrelated to the import machinery. Branch A cannot fire;
+  there is no network call in the file. Both `__import__` calls sit **inside
+  `if unsafe:` blocks** — `FullConstructor` passes `unsafe=False`, so the import
+  never runs; only `UnsafeConstructor` (line 713) sets it. And neither repository
+  imports `yaml` at all: it is transitive via `langchain-core`, whose only call
+  sites are `yaml.safe_load` (`prompts/loading.py:131`, `:267`), and
+  `SafeConstructor` does not bind the `!!python/*` tags. The waiver note records
+  this and says to re-check it if we ever call `yaml.load`/`full_load`/
+  `unsafe_load` ourselves.
+
+  **Verification caveat worth keeping.** `make scan` reads the *committed lock*,
+  so it can only ever exercise waivers for versions pinned there — it cannot
+  cover `google-genai==2.17.0`, and most waivers are written for upgrade
+  candidates. That one was verified separately against its cached entry
+  (`1 cached, 0 scanned`, exit 0). Caught by Bertan after the assistant had
+  nearly reported the check complete.
+
+- [ ] 🔺 **Decide how waivers are keyed** _(2026-08-11, raised by a real case)_ —
+  Bertan ran `upgrade-safe` and `google-genai==2.17.0` blocked. Compared against
+  the 2.11.0 calibration report: **same rule, same file, same line 217, same
+  matched code**, six minor versions apart. Waivers are keyed on
+  `(name, version)` deliberately, so every bump of that package re-blocks on an
+  identical, already-reviewed false positive — and friction on a security gate
+  becomes rubber-stamping. Options: leave it; surface the prior decision as
+  context while still requiring a fresh waiver; or key on
+  `(package, rule, hash of matched code)` so an unchanged finding stays waived
+  and any change to that code re-blocks.
+
+  **2026-08-12 — resolved in favour of "leave it", conditional on
+  `upgrade-partial`.** The pressure on `(name, version)` came from the friction
+  being *global*: a strict key re-blocked the whole upgrade on an
+  already-reviewed finding. With partial adoption the friction becomes **local** —
+  one package held back instead of forty — so the strict key, which is the
+  correct semantics because a new version really is new code, becomes affordable.
+  The keying stays as designed; the item that has to land is `upgrade-partial`
+  below. Note also that the two google-genai reviews took minutes rather than
+  hours precisely because the second was an identical match at an identical
+  location, which the stored report makes trivial to confirm.
+
+- [ ] **A GuardDog upgrade carries every waiver forward onto rules that may have
+  been rewritten underneath it** _(surfaced 2026-08-17, while checking whether
+  3.2.0 had already fixed the three defects awaiting an upstream report)_ —
+  waivers key on `(name, version)` and deliberately omit the GuardDog version,
+  so they survive an upgrade. That is the correct semantics: the *package* code
+  has not changed. But every waiver's `note` is an argument about what one
+  specific rule does — "the JS branch matched `eval(` inside `Retrieval(`",
+  "branch 1 fired on `$shell_curl_pipe` against a log message". A rule whose
+  condition is rewritten keeps its waiver and silently loses its justification.
+
+  **A patch release is enough to do it.** 3.1.0 → 3.2.0 added and removed no
+  rules — 54 `.yar` files before, 54 after — and changed six bodies:
+  `capability-network-outbound`, `capability-process-spawn`,
+  `threat-network-exfiltration`, `threat-process-cryptomining`,
+  `threat-runtime-environment-read`, `threat-runtime-obfuscation-general`.
+
+  The intersection with the five rules the current 21 waivers rest on
+  (`threat-process-download-exec`, `threat-runtime-obfuscation-steganography`,
+  `threat-filesystem-autostart`, `threat-network-exfil-sysinfo`,
+  `threat-runtime-dynamic-loader`) is **empty**, so nothing is affected today.
+  That is luck rather than design — nothing in the tooling would have said
+  otherwise, and the check was only run because an unrelated question sent
+  someone to compare the two releases by hand.
+
+  **Minimum, before a new version's cache is trusted:**
+
+  ```
+  diff -rq <old>/guarddog/analyzer/sourcecode <new>/guarddog/analyzer/sourcecode
+  ```
+
+  cross-referenced against the rule names in `accepted.json`. Any overlap means
+  those waivers are re-reviewed before the upgrade is adopted — the finding may
+  now be a different finding.
+
+  **Better than remembering to diff:** store a digest of the matched rule's text
+  alongside each waiver, so the wrapper flags a stale justification the way it
+  already re-opens a review when a report's findings change. Same family as the
+  two `guarddog-review` gaps found on 2026-08-17 — it cannot say "this report's
+  findings are identical to one already decided", and it does not warn when a
+  rule exhausted its `max_hits` and truncated what the reviewer could see.
+
+  This does not reopen the keying decision settled above. Waivers surviving an
+  upgrade is right; what is missing is any signal that the rule has moved.
+
+- [ ] 🔺 **Verify the gate actually catches things** _(2026-08-11)_ — the 3/74
+  figure is a **false-positive rate only**. There are 74 known-good packages and
+  zero known-bad ones, so nothing yet shows `severity >= high` fires on
+  download-and-execute, base64 `exec` or install-time network. The v2 rule list
+  would have looked equally clean under a noise sweep — it blocked nothing on
+  good packages because it blocked nothing at all. Plan: a local fixture package
+  carrying those patterns, scanned via `guarddog pypi scan <path>`, never
+  installed or executed. **Until this exists the threshold has a measured noise
+  floor and an assumed catch rate.**
+
+- [x] ✅ **Raw reports, a review ledger and a review skill — built 2026-08-12**
+  _(`ai-common` `lazy-package-init`, commits `4b72daa`, `8abb78a`, `3e77cdd`;
+  103 → 127 tests, 19 mutants, 0 survivors)_
+
+  **Why it was needed.** Cache schema 4 dropped `findings` on 2026-08-11 because
+  *"nothing reads it now that the verdict comes from `risks`"*. That was true of
+  machines and false of people, and it took twenty-four hours to bite: from a
+  cache entry alone the google-genai finding is a high-severity steganography
+  detection at a named line, and there is no way to discover the matched text is
+  `eval(`. **A gate that cannot show its evidence produces rubber-stamping.**
+
+  - **`reports/` beside the cache** — GuardDog's report in full, one file per
+    key, named after the same key, plus a `_guarddog_cached` provenance block.
+    Completed scans only; replaced by rename; **no lock**, because it is one file
+    per key rather than a shared document. Filenames are sanitised: `REQ_RE`
+    pins a package name but accepts any non-space run as the *version*, which
+    admits `/` and `..`, and a rewritten key gets a digest appended so two
+    versions cannot share one report.
+  - **`guarddog-review`** lists reports whose findings nobody has adjudicated,
+    blocking first, and records decisions in `reviewed.json`. **The ledger never
+    affects a verdict** — pinned by a test. Only `accepted.json` waives, and
+    recording a review prints a reminder saying so. Entries key on the full cache
+    key (the same code under a newer GuardDog can produce unseen findings) and
+    store a digest of what was adjudicated, so a re-scan with different matches
+    re-opens the entry. Reports with no risks are never recorded.
+  - **`scripts/backfill_guarddog_reports.py`** imported the 74 calibration
+    reports. `collect_v3.py` used the byte-identical invocation to
+    `scan_package`, so they are what the wrapper would have written. **Reports
+    only** — the cache and the waivers are untouched, verified after the fact —
+    and the GuardDog version is a required argument because it appears nowhere in
+    GuardDog's output.
+  - **`waiver-review` skill** at `.claude/skills/waiver-review/` in this repo
+    (`38bc96a`). Enforces: never decide alone, an unverifiable finding is not a
+    false positive, and waiving takes two writes. If `lazy-package-init` merges
+    and the pin is repointed, the hardcoded path to `ai-common` in it can come
+    out — `uv run guarddog-review` will resolve from this repo's own venv.
+
+  Two defects surfaced from real data rather than tests: a docstring claim
+  falsified by the backfill within the hour (*"a report exists exactly when the
+  entry it explains does"*), and `ruff`'s `bundled_binary`, a metadata risk that
+  names no file and rendered as `at ` with nothing after it.
+
+- [ ] 🔺 **`upgrade-partial`** _(designed with Bertan 2026-08-12; nothing built)_
+  — `upgrade-safe` is all-or-nothing: `uv lock --upgrade` upgrades everything and
+  the `EXIT` trap reverts `uv.lock` wholesale if either tier fires, so one blocked
+  package reverts forty that passed. The recipe's own advice on failure
+  (`uv lock --upgrade-package <other> …`) is inside-out — it asks you to name
+  every package you *do* want, at the moment you are most tempted to skip the
+  gate. `upgrade-safe` **stays strict**; this is a second target.
+
+  Three things settled in the design discussion:
+  - **The deterministic part must not be a skill.** Which packages are adopted
+    has to give the same answer in CI and a year from now. A skill fits the part
+    that is genuinely judgement — reading a report and drafting the waiver.
+  - **Partial is not subtraction.** Excluding a blocked package means
+    re-resolving, and the result is a *different lock* that must be gated in
+    full, held-back packages included **at their old versions**. Otherwise a
+    tier-2 false positive can pin you to a version carrying a tier-1 advisory —
+    trading a heuristic for a real one, silently. Re-gating is what makes partial
+    adoption safe, not bureaucracy. It is cheap: almost all cache hits, and
+    verdicts are recomputed on read.
+  - **It must make held-back packages loud and ageing**, recorded with the
+    finding and the date and surfaced by `verify` until resolved. One command to
+    route around a finding turns into permanent quiet exclusion otherwise — the
+    rubber-stamping risk arriving by a different door.
+
+  **Build in this order:**
+  1. **The candidate record.** `mv -f uv.lock.preupgrade uv.lock` destroys the
+     proposed set, so by the time a reviewer looks, the resolution they are meant
+     to review is gone. The *reports* survive — they are written per-package as
+     scans complete — but nothing records **which versions were proposed**. This
+     is the missing input to the review skill and is useful on its own the moment
+     `upgrade-safe` fails for any reason.
+  2. The resolve-pin-re-gate loop, with a bounded iteration count.
+  3. Held-back entries surfacing in `verify`.
+
+  Note that re-running `upgrade-safe` after a review **re-resolves**, so the
+  second candidate may differ from the reviewed one; the skill should flag any
+  package present in the new candidate that was not in the reviewed set.
+
+- [ ] **Consider sharding the GuardDog sweep** _(2026-08-12)_ — a full re-scan of
+  74 packages took **~70 minutes**, and it recurs on **every GuardDog upgrade**,
+  since entries key on the GuardDog version. The shared cache already supports
+  concurrent workers: `save_cache` re-reads and merges before writing, in place,
+  into the dict `main()` iterates, so a running sweep picks up what another
+  worker finishes and prints `[cached]` instead of re-scanning. A `--workers N`
+  flag that shards the list, or just a documented shard-and-run pattern, would cut
+  it to a quarter. **Demonstrated incidentally**: two sweeps ran concurrently and
+  one was Ctrl-C'd, leaving no `.tmp` debris, no malformed entries and none
+  carrying `errors`.
+
+- [ ] **13 advisory reports await review** _(2026-08-12)_ — `idna`, `pygments`,
+  `python-dotenv`, `langsmith`, `ruff`, and API-key env reads in `ollama`,
+  `tavily-python`, `openrouter`, `tiktoken`, `langchain-google-genai`,
+  `langgraph-checkpoint`, `regex`. **None block.** Reviewing them is optional;
+  recording the reviews stops them being re-read on every sweep.
+
+- [ ] **Report the `/dev/urandom` sandbox bug upstream to GuardDog** — present in
+  3.1.0, the latest release. Every `uv`/`rye`/`mise`-installed GuardDog on Linux
+  scans nothing and exits 0. The fix — `allow_file("/dev/urandom", READ)` at both
+  grant sites in `sandbox.py` — was implemented and verified end-to-end, and
+  deliberately not applied locally because a `uv tool` venv is rewritten on
+  upgrade.
+
+- [ ] **Report the `$js_eval` rule defect upstream to GuardDog** _(2026-08-12)_ —
+  `threat-runtime-obfuscation-steganography` declares
+  `$js_eval = "eval(" nocase`, a bare literal with no word boundary, and
+  `path_include` covers `*.py`. Since `$js_eval` is itself a member of `$js_*`,
+  the JavaScript branch of the condition reduces to **"contains `eval(`" AND
+  "contains an image filename"**, and fires on any Python file where `eval(`
+  appears as a substring — including inside `Retrieval(` and on a function
+  actually named `eval`. The rule's Python patterns are guarded
+  (`/[^.\w]eval\s*\(/`) and show the intended form. **Two independent
+  confirmations in one dependency set** (`google-genai`, `pillow`), each a
+  high-severity `defense-evasion` finding on ordinary library code. Fix is a word
+  boundary on `$js_eval`, and arguably de-duplicating `$js_eval` out of the
+  `any of ($js_*)` term so the branch requires two distinct signals.
+
+
 - [ ] 🔺 **Modify the Makefile for safe dependency upgrades** _(requested)_ —
   **Bertan, 2026-08-07: not to be postponed much longer.** The motivating case
   arrived on its own that day. `pyproject.toml` had declared `docling-core` since
@@ -656,14 +1134,209 @@ per the priority order above.
     Under the eval-flawlessness rule this matters more than usual: a snapshot's
     reproducibility claim rests on `git_dirty`, and a lock that re-resolves on use
     means an otherwise-clean tree goes dirty for reasons unrelated to the work.
-  - Fix `TEST_DIRECTORY` — it points at `src/tests/`, but the suite now lives at
-    `tests/` (repo root). `make test` currently runs nothing.
+  - ~~Fix `TEST_DIRECTORY` — it points at `src/tests/`, but the suite now lives at
+    `tests/` (repo root). `make test` currently runs nothing.~~ **Done
+    2026-08-13** (`7e359b6`). It had been broken since `57c37a5`, exiting 4
+    having collected 0 items — 243 tests were never reached by it.
   - Gate `upgrade-safe` on the **test suite**, not only security scans: after
     `uv lock --upgrade` and the OSV + GuardDog tiers pass, run `make test` and
     revert `uv.lock` (restore `uv.lock.preupgrade`) if tests fail. Today a
     dependency bump can be functionally broken yet still pass the gate.
   - Consider applying the 7-day `--exclude-newer` quarantine inside
     `upgrade-safe` too, not just the blind `upgrade` target.
+  - **Several pieces of this were built in `ai-common` on 2026-08-10 session 2
+    and should be copied here rather than re-derived**, once
+    `lazy-package-init` merges:
+    - **The interrupt hazard is real and was fixed there.** `make` abandons the
+      remaining recipe lines on SIGINT, so the old `upgrade-safe` never reached
+      its restore branch and left `uv.lock` **upgraded but only partly scanned**,
+      with `uv.lock.preupgrade` stranded beside it — and the next run's
+      `cp uv.lock uv.lock.preupgrade` overwrote the real original. Fix: run the
+      guarded section as **one shell** with `trap … EXIT` plus `INT`/`TERM`, and
+      pin `SHELL := /bin/bash`. This repo's Makefile has the same shape and the
+      same bug.
+    - **`GUARDDOG_BUDGET`** bounds a sweep in wall-clock seconds; scanning stops
+      *starting* new packages once spent and exits 75, which reverts the lock as
+      an interrupt does. Repeated budgeted runs converge on a full sweep and
+      only a run finishing inside its budget can adopt an upgrade. This is the
+      answer to *"can I run it for 10 minutes and reuse the findings?"* — yes,
+      completed scans are banked per-package and shared machine-wide.
+    - ~~**The global cache Bertan has been pushing for now exists** at
+      `$XDG_CACHE_HOME/guarddog-cached/cache.json`, shipped by `ai-common`, so
+      this repo gets it by depending on the library. **Delete
+      `scripts/guarddog_cached.py` here** and point the Makefile at the
+      `guarddog-cached` console script.~~ **Done 2026-08-13** (`7e359b6`), once
+      the pin moved to `a2a7a21`. The duplicate is deleted and the Makefile uses
+      the identical `uv run guarddog-cached` line — no import shim, no
+      `python -m`.
+    - ~~**Three fixes landed in `ai-common`'s Makefile on 2026-08-11 and must be
+      carried over here.**~~ **Done 2026-08-13** (`7e359b6`) — all three carried
+      over, along with the `trap`/`SHELL` and `GUARDDOG_BUDGET` items above. The
+      shared-`/tmp` hazard was then observed from the other side the same day:
+      stopping a sweep fired its `EXIT` trap and removed the flattened
+      requirements file while a second sweep was mid-run in the same repo.
+      Harmless only because the wrapper reads that file once at startup. Each was
+      a real defect, not a tidy-up:
+      - **`uv export` needs `--frozen`.** Without it, an export from a lock that
+        has drifted from `pyproject.toml` **re-resolves and rewrites
+        `uv.lock`**, so a read-only-looking recipe edits the lockfile and then
+        scans a resolution nobody chose — and `verify` audits the committed lock
+        in tier 1 while GuardDog examines a different one in tier 2.
+        Demonstrated on a scratch copy.
+      - **The flattened requirements file must be repo-local.** `ai-common`
+        called it `GUARDDOG_CACHE` (it is not the cache) and put it at a fixed
+        `/tmp` path shared by every project. `main()` reads that file once at
+        startup, so a second repo exporting in the window between this repo's
+        export and its read makes the sweep **scan the other repo's dependencies
+        and pass on them**, silently. Now `FLAT_REQUIREMENTS_FILE :=
+        tmp/flat-requirements.txt`, with a `mkdir -p` because git does not track
+        empty directories and `tmp/` is absent in a fresh clone. Simultaneous
+        sweeps within *one* repo are deliberately not handled (Bertan).
+      - **Exit 75 does not survive `make`.** The recipe exits 75; make reports
+        `Error 75` and exits **2**, as for any failure. The budget case is now
+        handled explicitly in the recipe, which says UNFINISHED is not a pass and
+        points a caller needing the raw code at the wrapper directly.
+- [ ] 🔺 **Decide what happens to `cuda-toolkit==13.0.3.0`, which cannot be
+  scanned at all.** _(surfaced 2026-08-13)_ GuardDog reports
+  `download-package: Version 13.0.3.0 for package cuda-toolkit doesn't exist`,
+  so nothing is checked and the verdict is INCOMPLETE — which never passes. The
+  2026-08-13 `uv lock --upgrade` left it at the same version, so it will fail
+  every `upgrade-safe` identically and **blocks the `upgrade-safe →
+  waiver-review → upgrade-safe` loop from ever closing**. It is a prerequisite
+  for that loop, not a parallel item.
+  - It is not a finding to adjudicate. `accepted.json` waives GuardDog *rules* —
+    "this pattern fired wrongly, here is the code that refutes it" — and no
+    amount of reading refutes "the package could not be fetched". Folding it in
+    would give one file two kinds of entry with identical ceremony and different
+    meaning, the confusion the ledger/waiver split exists to prevent.
+  - Options, none yet chosen: establish whether the version is genuinely
+    unfetchable from PyPI or the name is normalised differently; a separate
+    trusted-source or unscannable-package record with its own ceremony; or
+    dropping the dependency if `openvino`/`docling` do not truly need it.
+
+- [x] ✅ **Upgrade Python 3.13.3 → 3.13.15 — done 2026-08-16** (`6a813dc` here,
+  `18bba60` in `ai-common`). **41 OSV advisories matched CPython 3.13.3; 30 are
+  fixed between 3.13.4 and 3.13.14.** Several were on this project's paths: a
+  ZIP64 EOCD locator offset check (`.docx`/`.xlsx` are ZIP archives), a stack
+  overflow parsing deeply nested XML DTDs (Office formats are XML), a
+  `tarfile.data_filter` traversal bypass, and use-after-free in the
+  `lzma`/`bz2`/`gzip` decompressors.
+  - Blocked until then by **uv 0.6.17**, which compiles the
+    python-build-standalone download metadata into its own binary and so did
+    not know any CPython past 3.13.3 existed. The prerequisite upgrade to uv
+    0.12.5 ran per [`uv-upgrade-plan.md`](uv-upgrade-plan.md), phases 0–7.
+  - Both repositories now carry a **committed** `.python-version` reading
+    `3.13.15` exactly, plus `[tool.uv] required-version = ">=0.12,<0.13"`. The
+    file had been gitignored in both — which is why nothing had ever recorded
+    the choice, and why phase 0 measured it as absent. The plan did not
+    anticipate that; §7 was amended.
+  - GuardDog's interpreter was not disturbed, per the 2026-08-11 Landlock
+    lesson: verified at 3.1.0 on `/usr/bin/python3.12` both before and after
+    the resolver swap.
+  - **🔺 The 30 advisories are NOT verified closed.**
+    [`uv-upgrade-plan.md`](uv-upgrade-plan.md) §8 already recorded that nothing
+    re-queries OSV afterwards, and the attempt on 2026-08-16 matched
+    `RUSTSEC-2023-0076` — a Rust crate also named `cpython`. The 2026-08-13
+    query method is recorded nowhere. **Re-establish that query and re-run it
+    before this upgrade's headline benefit is relied on.**
+  - The interpreter-in-the-gate half of this item is promoted to its own entry
+    below.
+
+- [ ] 🔺 **Decide whether the toolchain belongs inside the gate.** _(promoted
+  from the interpreter item, 2026-08-16)_ Both tiers read `uv.lock`. Neither
+  can see the **interpreter** that runs the code, the **resolver** that decided
+  which code there is, or the **scanner** that judges it — so the gate will
+  block a merge over a medium-severity DoS in a leaf dependency while 30
+  interpreter advisories sit underneath it, unreported. That asymmetry is the
+  item, and it survived the upgrade unchanged: pinning a toolchain is not the
+  same as scanning one.
+  - A cheap first move exists that is not a scan. The interpreter and resolver
+    are now **pinned and committed**, so the gate could assert that the
+    recorded pins match what is actually running — `.python-version` and
+    `required-version` are both checkable with no new infrastructure, in the
+    same spirit as the environment-coupling test.
+  - **GuardDog 3.1.0 is itself unexamined, and deliberately not upgraded.** The
+    cache and review ledger key on `(name, version, guarddog_version)`, so a
+    bump turns every stored report into a cache miss and re-opens every
+    completed review at once — **250 reports** as of 2026-08-16. Any decision
+    here has to say what happens to the store.
+  - This is a scope question about the gate rather than a mechanical task; it
+    wants a decision recorded in `design/`, not a patch.
+
+- [ ] **Count and name dropped requirement lines** _(surfaced 2026-08-13; the
+  fix belongs in `ai-common`)_ `parse_requirements`
+  (`guarddog_cached.py:412-421`) discards any line `REQ_RE` cannot match with no
+  record, and the driver prints the post-filter count — so 182 requirement lines
+  are announced as **181**. The dropped categories are git, URL and local-path
+  dependencies, i.e. the non-PyPI sources, which are the ones least covered by
+  everything else. Today the only such line is our own `ai-common`, so nothing
+  is concealed that is not already accepted; a third-party git dependency would
+  vanish identically while `BLOCKED 0 · INCOMPLETE 0` still read as full
+  coverage. Non-blocking by design — count and name them, do not gate on them —
+  and a prerequisite for ever choosing to gate on them. Scope and the accepted
+  first-party gap are recorded in
+  [`design/dependency-scanning-scope.md`](design/dependency-scanning-scope.md).
+
+- [x] ✅ **`upgrade-safe` reverted the lock but not the environment — fixed
+  2026-08-16** (`7046a0d` here, `18bba60` in `ai-common`). _(surfaced the same
+  day, during phase 1 of the uv upgrade)_ When the gate rejected a candidate,
+  `uv.lock` was restored and the venv was left holding the candidate's
+  packages — including, in principle, the very package that blocked adoption.
+  - **Mechanism.** `Makefile:133` runs `uv run guarddog-cached …` at a point
+    where `uv.lock` *is* the candidate, and `uv run` syncs the project
+    environment before executing. That sync is **inexact by default** —
+    `--exact` is an opt-in flag, confirmed against `uv run --help` on 0.6.17 —
+    so it installs whatever the candidate adds and removes nothing.
+    `uv lock --upgrade` and `uv export --frozen` write no packages, which
+    leaves `uv run` as the only installer in the recipe. The `EXIT` trap then
+    restored the lock, and the `uv sync --all-groups` at `Makefile:149` never
+    ran: it sits after `rm -f uv.lock.preupgrade`, on the success path only.
+  - **Evidence.** `olefile==0.47` and `python-oxmsg==0.0.2` were installed in
+    this venv until 2026-08-16 and appear in **no commit's `uv.lock`** —
+    `git log -S` over that path returns nothing for either name. Their GuardDog
+    reports are stamped **2026-08-13 12:27 and 12:38**, inside the session-2
+    sweep of the candidate `upgrade-safe` went on to reject. The
+    `uv sync --all-groups` in phase 1 of the uv upgrade removed them, which is
+    the only reason they were noticed.
+  - **Why it is not cosmetic.** The install precedes the scan, so a blocking
+    finding cannot keep the package out of the environment; afterwards
+    `osv-scanner --lockfile=uv.lock` reads the *committed* lock and cannot see
+    it. Tests run against the drifted environment too — `make test` is
+    `uv run --group test pytest`, inexact for the same reason, so it neither
+    cleans up nor reports the difference.
+  - **Fix.** `uv run --frozen --no-sync` at both call sites in both
+    repositories. `--no-sync` prevents the install rather than undoing it; the
+    sweep does not need the candidate installed, since it reads the flattened
+    requirements file and fetches each artifact from PyPI itself. `--frozen`
+    stops `uv run` rewriting the lock it was handed. **`--exact` was considered
+    and rejected**: it makes the environment match the *candidate* exactly
+    rather than accumulate on top of it, but after the revert the environment
+    is still the candidate's set. Not fixed by the uv upgrade either — `--exact`
+    is still opt-in on 0.12.5.
+  - **A test, because the flags are not sufficient.** One of the three drifts
+    found that day came from an extras-installing command rather than the
+    sweep. `tests/test_environment_sync.py` runs `uv sync --check --frozen
+    --all-groups` each suite; it caught five stray packages on its first run.
+    Recorded in
+    [`design/environment-lock-coupling.md`](design/environment-lock-coupling.md).
+  - **🔺 Residual: the fix has never been exercised by a complete
+    `upgrade-safe`.** The only run attempted on 2026-08-16 was interrupted, and
+    it predated the patch. This closes when a full `upgrade-safe` finishes and
+    the environment is verifiably unchanged afterwards.
+
+- [ ] **Collapse the stale langchain fork.** _(surfaced 2026-08-13)_ `uv.lock`
+  carries `langchain` at both 1.3.2 and 1.3.14, plus `langgraph`,
+  `langgraph-sdk` and `websockets`, all four on
+  `python_full_version >= '3.14' and sys_platform == 'darwin'`. Established by
+  experiment that this is **not** required: the same dependency list resolves
+  fresh with no fork at all, and `uv lock --upgrade-package langchain` on a
+  scratch copy collapses all four and takes tier 1 from 3 advisories to 2.
+  `uv lock` is minimal-change and preserves pins that remain valid without
+  re-optimising, so the fork has been carried forward since whenever it was
+  genuinely needed. `langchain 1.3.2` exists only to serve it — which is why
+  `PYSEC-2026-2192` is not installed on this machine at all. Subsumed if a full
+  `upgrade-safe` lands.
+
 - [ ] **Prepare a comprehensive test-status document** _(requested)_
   - Coverage map: **tested** — GDPR parser extraction (incl. against the real
     docling export), `vector_db` point-ID derivation and indexing invariants,
@@ -731,6 +1404,11 @@ per the priority order above.
     derivation, the `sufficient_verbose` threshold (**measure it, do not guess** —
     observed span/quote ratios run 19%–100%), the async runner, the calibration
     sample and tests are **not started**.
+    - **Split into `src/eval/sufficiency/` on 2026-08-10**, before stage C rather
+      than after, so stage C is written into its own file instead of moved later:
+      `models` / `llm` / `stage_a` / `stage_b` / `judge`, with `stage_c` to come.
+      A pure move — both prompts byte-identical by AST comparison, no top-level
+      name lost or added. Design document: `docs/design/sufficiency-judge.md`.
     - Stage A tags by making the judge **write the shortest sufficient answer first**.
       An earlier leave-one-out removal test returned **zero** core claims on
       `art7_case3`, because it cannot see mutual redundancy: *"Yes."* was excused by

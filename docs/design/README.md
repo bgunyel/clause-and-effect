@@ -73,6 +73,19 @@ strengths tells a reader nothing they can rely on.
 
 ## Documents
 
+- [What the dependency gate actually scans](dependency-scanning-scope.md) — the
+  scope of the two-tier supply-chain gate: that a dependency's own dependencies
+  are fully covered, that a consumed lockfile has no authority over ours, and
+  that first-party source is scanned by nobody — deliberately, but silently.
+- [Keeping the environment coupled to the lock](environment-lock-coupling.md) —
+  why a package can be installed without being locked, and so scanned by
+  neither tier; the recipe flags that stop the sweep installing a candidate it
+  is about to reject, and the test that catches the drift arriving by any other
+  route.
 - [Chunk snapshot reproducibility](chunk-snapshot-reproducibility.md) — how a
   chunk set becomes a named, hashed, provenance-carrying artifact, so that "is
   the vector index stale?" becomes a comparison rather than a recollection.
+- [The answer-vs-quote sufficiency judge](sufficiency-judge.md) — how the golden
+  set is checked for whether each `supporting_quote` actually answers its
+  question, as opposed to merely coming from the right article. Half built; the
+  document marks which sections describe code and which specify unbuilt work.
