@@ -40,8 +40,10 @@ was never given. Each panel member runs A→B→C independently and votes, so
 disagreement is a calibration signal rather than noise to be averaged away.
 
 **No verdict from this package gates anything.** Judge–human agreement is
-unmeasured until the calibration step exists (§6.2 makes it mandatory), and stage
-C, verdict derivation and the panel runner are not built. Stages A and B have
+unmeasured until the calibration step exists (§6.2 makes it mandatory), and
+verdict derivation and the panel runner are not built. Stage C labels claims and
+deliberately stops there: turning those labels into a verdict is deterministic,
+needs no model call, and is a separate piece. Stages A and B have
 tests as of 2026-08-17 (``tests/test_sufficiency_stages.py``), but they pin the
 stages' *wiring* — the blinding, the response mapping, ``span_is_verbatim`` —
 and say nothing about whether the judge's tagging or blind answers are any good.
@@ -61,7 +63,7 @@ module             holds
 ``llm``            ``build_judge_llm`` — the only ``ai_common`` touchpoint
 ``stage_a``        decompose: instructions, schemas, prompt builder, call
 ``stage_b``        answer blind: as above, plus ``span_is_verbatim``
-``stage_c``        adjudicate — not built
+``stage_c``        adjudicate: as above, and the claim/verdict mapping
 ``judge``          the driver; verdict derivation and the panel go here
 =================  =========================================================
 
