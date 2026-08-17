@@ -165,10 +165,35 @@ generator and agent staying untested remains an accepted state.
      (`make audit`) was not run**, so `verify` is only half demonstrated — that
      is the first item of the next session.
 
-7. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
-   calibration, tests. Split into `src/eval/sufficiency/` on 2026-08-10 and
-   documented in `docs/design/sufficiency-judge.md`; stage C now has a file to be
-   written into rather than a 545-line module to be carved.
+7. **Finish the sufficiency judge** — verdict derivation, runner, panel,
+   calibration. Split into `src/eval/sufficiency/` on 2026-08-10 and documented in
+   `docs/design/sufficiency-judge.md`.
+
+   **2026-08-17: stage C and the tests are done.** `stage_c.py` labels each core
+   claim `supported`/`absent`/`contradicted` against the blind answer and produces
+   no verdict; `tests/test_sufficiency_stages.py` holds 49 tests over all three
+   stages, mutation-verified at 36 with no survivors; `judge.py` runs the full
+   A→B→C chain over the eight probe cases. Core-claims-only was decided on
+   measurement (design §6.1), and the two no-call paths are documented at §6.3.
+
+   **What the first real runs found, and it outranks the code.** Stage A is **not
+   stable at temperature 0**, and the instability reaches the verdict:
+   `art8_case1` returned 1, 1, 2 and 1 core claims across four identical runs, and
+   the two-claim run flips the case from `sufficient` to `insufficient`. Two
+   rounds of prompt work (sharpened rules, then four worked examples) took the two
+   observed failures to zero — full before/after table at design §4.6 — but left
+   a residue that is **not fixed**: sentence-fragment claims in 2 of 6 non-target
+   runs, and `art41_case3` less stable than before this started.
+
+   Two things to carry forward. **The prompt has been tuned against the same six
+   cases three times**, so some of what looks fixed is fitted; the next
+   measurement needs cases not used for tuning (~20 stratified, 3 runs each, ~60
+   calls). And **only `art7_case3`'s expected output rests on a ruling of
+   Bertan's** — the other five are the assistant's classification, `art7_case4`
+   most consequentially.
+
+   Also open from the same runs: `art8_case5` returned `contradicted`, which looks
+   like a false positive on a quote whose two halves are joined by `...`.
 
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
 algorithm improvement, not a blocker — Bertan's decision, 2026-08-07. The
