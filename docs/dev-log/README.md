@@ -163,3 +163,15 @@ thing in the record.
   Demonstrated, fixed with `uv run --frozen --no-sync`, given a test in both
   suites, and documented — and the test then caught the same drift again on its
   first run.
+- [2026-08-17 · session 1](devlog_2026-08-17_session-1.md) — an `upgrade-safe`
+  found stalled at 85 minutes on a dead socket nothing was watching for:
+  `pygit2` clones with no timeout, and `_scan_once` ran `subprocess.run` with
+  none either, so one silently-dropped connection held the sweep open
+  indefinitely. Bounded in `ai-common` #28 and #29, both mutation-verified by
+  wall clock. The gate's remaining eight blockers were then cleared by twenty
+  individually-approved decisions — and the method changed halfway through, when
+  comparing *reported* findings across versions was shown unsound: GuardDog's
+  `max_hits` truncates the evidence, and `transformers` reported one qualifying
+  file out of ten. Both tiers now pass and `make verify`, structurally unusable
+  here while tier 1 was red, exits 0. Also found: the installed GuardDog is not
+  the stock 3.1.0 wheel.
