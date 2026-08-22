@@ -35,7 +35,7 @@ def get_llm_config():
     llm_config = {
         'orchestrator_model': [
             {
-                'model': ModelNames.DEEPSEEK_V_4_FLASH,
+                'model': ModelNames.DEEPSEEK_V_4_FLASH_0731,
                 'model_provider': LlmServers.OPENROUTER,
                 'api_key': settings.OPENROUTER_API_KEY,
                 'max_llm_retries': 3,
@@ -56,7 +56,7 @@ def get_llm_config():
         # provider, not just the model.
         'writer_model': [
             {
-                'model': ModelNames.DEEPSEEK_V_4_FLASH,
+                'model': ModelNames.DEEPSEEK_V_4_FLASH_0731,
                 'model_provider': LlmServers.OPENROUTER,
                 'api_key': settings.OPENROUTER_API_KEY,
                 'max_llm_retries': 3,

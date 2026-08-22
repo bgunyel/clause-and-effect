@@ -33,7 +33,7 @@ wheels = [
 [[package]]
 name = "ai-common"
 version = "0.1.0"
-source = { git = "https://github.com/bgunyel/ai-common.git?rev=main#a0f06eaef6ee25190828c8546cb505a2489b1185" }
+source = { git = "https://github.com/bgunyel/ai-common.git?rev=main#05aed7660a1653d2f0efb00e2520897de2fe899f" }
 dependencies = [
     { name = "langchain" },
     { name = "langchain-anthropic" },
