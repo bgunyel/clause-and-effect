@@ -4,7 +4,7 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-13._
+> _Last updated: 2026-08-22._
 
 ---
 
@@ -23,6 +23,75 @@ shown to be one.
 This is what makes the ordering below non-negotiable rather than a preference —
 and what makes step 3 (tests) a hard requirement for eval components while the
 generator and agent staying untested remains an accepted state.
+
+### The judge is a defect finder, not a classifier — Bertan, 2026-08-22
+
+Two reframings that govern how the sufficiency judge is built and measured. Both
+correct framings the assistant had been importing, and both change decisions
+rather than only vocabulary.
+
+**1. There is no held-out set, and there should not be.** The goal is not a judge
+that generalises to unseen cases; it is a judge that determines sufficiency
+correctly *in this context*, with as little help as possible. **The 433 Tier-1
+cases are not a sample drawn from a population — they are the population** the
+judge will ever run on. A held-out set estimates error on unseen data, and that
+estimand does not exist when there is no unseen data. Calibrating an instrument
+against known reference standards is the right analogy; nobody holds back three
+of the reference weights to check the scale generalises.
+
+Consequently: **drop the train/test vocabulary** — *contaminated*, *spent*, *burn
+a case*, *held-out*. Any case may be tuned on, including all of them. What may
+not be done is declaring a rate from six cases and assuming the other 427 behave.
+The one real cost of using a case as a prompt worked example is narrow and
+already recorded in `stage_a2.py`: a case shown to the judge stops being a
+*check* on whether the judge agrees with a ruling.
+
+**The judge's output is a work list.** It finds which cases in the golden set
+have a supporting quote that does not answer the question; those cases then get
+modified. It covers a defect class `golden_qa.py` **structurally cannot see** —
+the gate asks *is this quote in the article?* (grounding: 134 failures, 58 needing
+the quote rewritten), and a quote can be perfectly grounded, faithfully elided,
+and still not answer the question. That is stage B's job and nothing else can do
+it. It also means the set is **not static**: findings produce edits, edited cases
+need re-running, and a finding should eventually be recorded against a case-set
+identity the way chunks are.
+
+**The risk that survives is not generalisation — it is fitting to an unvalidated
+standard.** Five of the six §4.6 expectations are the assistant's classification,
+and under this framing nothing downstream would ever surface a wrong label. The
+defences are Bertan's rulings on contested cases, `Claim.reason` as an audit
+trail, and the panel's non-unanimity reporting — which makes §8/§9 **more**
+important here, not less. "Little help from us" means help at the
+**standard-setting** step, not per-case adjudication.
+
+**2. The core/auxiliary boundary is hard; granularity is soft.** Splitting one
+core claim into two core claims changes **nothing** about what the quote must
+contain — the union of core content is identical, and the finer split is if
+anything the *stricter* test. Moving a piece across the core/auxiliary line
+**removes a requirement**.
+
+| property | error direction | cost |
+|---|---|---|
+| core/auxiliary **boundary** | **silent** | a defective case certified sound, permanently |
+| core **granularity** | visible, or stricter | a slightly coarser or finer work list |
+
+The error asymmetry is the operative consequence. A claim wrongly tagged **core**
+produces a spurious `absent` that a human reads and dismisses — visible and
+self-correcting. A claim wrongly tagged **auxiliary** means the quote is never
+asked to support it, and nothing raises it again. **So err toward more core, not
+fewer.** This argues for calling `art7_case4`'s third sentence CORE (open item 5,
+Bertan's call) and de-escalates `art8_case5`'s probable false-positive
+`contradicted`.
+
+Splitting has a floor: it bottoms out at meaningfulness, which is what the
+unapplied atomicity rule guards.
+
+**This invalidates §4.6's metric.** That table measures *core claim count*, which
+conflates the two properties. The measurement matching the criterion is **core
+coverage** — which parts of the gold answer are marked core, however carved up.
+Implemented in `scripts/probe_a2_stability.py`, and on its first run three cases
+came back **count-stable and coverage-unstable**, a difference a count metric
+structurally cannot see.
 
 1. ~~**Generate the first chunk snapshot** against a clean tree, then commit it
    separately.~~ **Done 2026-08-07** (`2a7811a`) — 368 chunks, `sha256
@@ -148,14 +217,32 @@ generator and agent staying untested remains an accepted state.
      the claim now lives where it can be made
      (`test_distinct_chunk_ids_yield_distinct_point_ids`).
 
-6. ~~🔺 **`ai_common` import cost**~~ — **step 1 done 2026-08-10 session 2.**
+6. ~~🔺 **`ai_common` import cost**~~ — **step 1 done 2026-08-10 session 2**, and
+   **it reaches this repo as of 2026-08-22.**
    The package `__init__` now resolves lazily (PEP 562); `from ai_common.enums
    import …` went **4.11s → 0.14s**. On branch `lazy-package-init` in
    `ai-common`, pushed, not merged.
-   - **🔺 The win does not reach this repo yet.** The pin is
-     `ai-common @ git+…@main`, non-editable — merge and re-resolve first.
+   - ~~**🔺 The win does not reach this repo yet.**~~ **Closed 2026-08-22**
+     (`6128a3a`). The pin string never needed changing — it was already `@main`;
+     what was stale was the lock, held at `a0f06ea`. `uv lock --upgrade-package
+     ai-common` moved it to `05aed76`, a **one-line lock diff** with no
+     dependency movement. Measured here afterwards:
+
+     | | before | now |
+     |---|---|---|
+     | `import src.llm_config` | ~7.7s | **0.233s** |
+     | modules loaded | 3124 | **285** |
+     | torch pulled | yes | **no** |
+
+     The prediction recorded below was ~0.2s. **Met.** The win reaches
+     `gdpr_test_data_generation.py`, `eval/sufficiency/judge.py` and
+     `main_dev.py`. The re-resolve was prompted by needing new models, not by
+     this item — the import fix came along with them.
    - Findings 2 and 3 (lazy provider SDKs, `BaseChatModel` behind
-     `TYPE_CHECKING`) are now unblocked; re-measure before implementing.
+     `TYPE_CHECKING`) are now unblocked; re-measure before implementing. **Note
+     the baseline has moved**: every number in this entry predates the lazy
+     `__init__` landing here, so re-measure against 0.233s and 285 modules
+     rather than against 7.7s.
    - **That branch also carries the GuardDog tier-2 gate rework. All three
      guarddog 3.1.0 blockers were closed 2026-08-11** — see 🟡 Tooling. What now
      gates the merge is different: `upgrade-safe` must pass before a PR closes
@@ -192,8 +279,99 @@ generator and agent staying untested remains an accepted state.
    Bertan's** — the other five are the assistant's classification, `art7_case4`
    most consequentially.
 
+   > **Correction, 2026-08-22.** The first of those two — "needs cases not used
+   > for tuning" — was written in train/test vocabulary that does not apply here.
+   > See *The judge is a defect finder* above. It is a **coverage gap** (6 of 433
+   > measured), not a hygiene requirement, and any case may be tuned on. The
+   > second carries forward unchanged and is now the more important of the two.
+
    Also open from the same runs: `art8_case5` returned `contradicted`, which looks
    like a false positive on a quote whose two halves are joined by `...`.
+   **De-escalated 2026-08-22** by the error asymmetry: a false positive is the
+   cheap error, since a human reads the flag and dismisses it.
+
+   ### 2026-08-22: stage A split into two independent calls, and measured
+
+   **Built, not adopted.** `stage_a1.py` writes the shortest sufficient answer;
+   `stage_a2.py` splits the answer into tagged claims; `stage_a_twocall.py` runs
+   both. **Neither receives the other's output** — Bertan's design, corrected
+   mid-build from the assistant's initial pipeline reading. `stage_a.py` is
+   untouched so the §4.6 baseline stays reproducible. `Decomposition` is
+   unchanged, so stage C and `judge.py` are unaffected.
+
+   The point of independence is that the two outputs become **comparable**: A2's
+   core claims assert what the shortest sufficient answer contains, and A1's
+   output is that answer. Detecting stage A instability currently costs N runs of
+   one prompt; a disagreement between A1 and A2 is visible in **one**. That
+   consistency check is designed and **not built** — it is the highest-value
+   remaining piece of this experiment.
+
+   **Six probe scripts** added under a new top-level `scripts/`, run as
+   `uv run python -m scripts.<name>` (a path invocation fails — `scripts/` lands
+   on `sys.path` instead of the repo root, and `pythonpath` in `pyproject.toml`
+   is pytest-only). Three per stage: its own worked examples (a floor test worth
+   little), held-out adversarial cases, the six real §4.6 cases, and stability at
+   N=5.
+
+   **A1 is clean everywhere it was pointed.** 4/4 on its own examples, 6/6 on
+   held-out adversarial probes, 6/6 on the real cases with zero introduced
+   wording, and **0 of 6 unstable across 30 calls** — byte-identical per case,
+   punctuation included. `art41_case3` returns without its terminal full stop on
+   5/5 runs: systematic, not drift.
+
+   **A2 is clean on examples and baseline, unstable under repetition.** 4/4 on
+   its own examples across count, tags and texts. Both **rule collisions** in the
+   adversarial set held — probes whose answer *is* the consequence, or *is* the
+   added specificity, where mechanical rule-following gives the wrong tag
+   silently. On the six real cases the core content matched §4.6 on all six with
+   zero mechanical breaches, including **`art15_case1` returning exactly ten core
+   claims with the stem repeated into each** — the case that collapsed to one
+   claim under the three-example prompt.
+
+   Stability, two separate 30-call samples:
+
+   | case | sample 1 | sample 2 |
+   |---|---|---|
+   | `art7_case3` | stable | stable |
+   | `art7_case4` | stable | **unstable** |
+   | `art8_case1` | **unstable** | stable |
+   | `art33_case1` | **unstable** | **unstable** |
+   | `art15_case1` | **unstable** | **unstable** |
+   | `art41_case3` | **unstable** | stable |
+   | | **4 of 6** | **3 of 6** |
+
+   **Two of the failures are degenerate output, not disagreement.** One run
+   returned a core claim whose text is literally `"..."`; another returned one
+   whose text is the empty string. Both got past the schema because `str` accepts
+   them. **Fixing that is item 1 below** and removes two of three current
+   failures. `art15_case1` also produced claim counts of 10 / 1 / 10 / **13** / 10.
+
+   **The instability is itself unstable across samples** — a different three
+   cases each time. At N=5 a 1-in-5 failure has a real chance of not appearing.
+   Neither sample is a rate.
+
+   **The comparison to §4.6 is not like-for-like**, and this is the thing most
+   likely to be misread later. §4.6 measures core *count* under the combined
+   prompt; these measure core *coverage* under the split. **Settling whether the
+   split helped or hurt requires re-running the untouched `stage_a.py` under the
+   coverage metric** — 30 calls, module and metric both exist, not done.
+
+   **A transport failure was found that had been latent in all five stages.**
+   `with_structured_output` returns `None` when output cannot be coerced into the
+   schema, and every stage read a field straight off it — surfacing as
+   `AttributeError: 'NoneType' object has no attribute 'claims'`, naming neither
+   stage nor cause. `require_response` / `JudgeResponseError` now guard all five
+   call sites (`af6bf5d`), with six tests, mutation-verified, suite **298 → 304**.
+   The error type is deliberately unrelated to `AdjudicationError`: a transport
+   failure is a case never judged, an adjudication failure is a judgement gone
+   wrong, and conflating them would let a caller silently shrink the sample.
+   Bertan added `.with_retry(stop_after_attempt=3)`, which covers transient API
+   errors but **not** this `None` — that is a returned value, not an exception.
+
+   **Model changed:** both roles now run `DEEPSEEK_V_4_FLASH_0731`. The switch
+   fixed the one clear A2 adversarial failure — a five-item enumeration the old
+   model packed into a single core claim now splits one claim per item with the
+   stem repeated.
 
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
 algorithm improvement, not a blocker — Bertan's decision, 2026-08-07. The
@@ -844,11 +1022,13 @@ per the priority order above.
 
   ### What is still open
 
-  - **🔺 Nothing reaches this repo until the branch merges.** `pyproject.toml`
-    pins `ai-common @ git+https://github.com/bgunyel/ai-common.git@main`, a
-    **non-editable** git install, so `src/llm_config.py` still pays the full
-    cost. Merge `lazy-package-init` and re-resolve the pin, then re-measure
-    `import src.llm_config` here (expected ~7.7s → ~0.2s).
+  - ~~**🔺 Nothing reaches this repo until the branch merges.**~~ **Closed
+    2026-08-22** (`6128a3a`). The lock was re-resolved `a0f06ea` → `05aed76` — a
+    one-line diff, no dependency movement — and the measurement here came out at
+    **`import src.llm_config` 0.233s, 285 modules, no torch**, against ~7.7s and
+    3124 modules before. **The ~0.2s prediction was met.** The re-resolve was
+    triggered by needing five new OpenRouter models, not by this entry; the
+    import fix arrived with them.
   - **Findings 2 and 3, now unblocked.** Six provider SDKs inside `get_llm`
     (≈3.7s, and it turns five of them into optional rather than hard
     dependencies — the stronger half of the argument) and `BaseChatModel` behind
@@ -1348,6 +1528,15 @@ per the priority order above.
     `upgrade-safe`.** The only run attempted on 2026-08-16 was interrupted, and
     it predated the patch. This closes when a full `upgrade-safe` finishes and
     the environment is verifiably unchanged afterwards.
+  - **🔺 `dev-04` now carries a lock change and `upgrade-safe` has not been run
+    on it** _(2026-08-22)_. `6128a3a` moves the `ai-common` git rev
+    `a0f06ea` → `05aed76`. It is a one-line diff with no third-party version
+    movement, so it should be clean, but that is the gate's floor before a PR
+    closes and it is unverified. Separately, `ai-common`'s own `uv.lock` is dirty
+    on `main` with a format bump (`revision 2` → `3`, `upload_time` →
+    `upload-time`) and dependency bumps such as `anthropic 0.121.0` → `0.122.0`;
+    it was deliberately excluded from PR #30 because it moves dependencies and
+    belongs in its own change.
 
 - [ ] **Collapse the stale langchain fork.** _(surfaced 2026-08-13)_ `uv.lock`
   carries `langchain` at both 1.3.2 and 1.3.14, plus `langgraph`,
@@ -1844,6 +2033,33 @@ deliberately deferred into this work rather than done piecemeal.
 
 ## ⚪ Known code issues
 
+- [ ] 🔺 **A2 can return a claim whose text is empty or `"..."`, and the schema
+  accepts it.** Found 2026-08-22 in the stability runs: one run returned a single
+  core claim with text `"..."`, another with text `""`. Both were the entire
+  "unstable" verdict for their case. `str` accepts them, so nothing downstream
+  notices until stage C is asked to adjudicate a claim that says nothing.
+  **Guard in `tag_claims` before anything else** — this removes two of the three
+  current stability failures, so any measurement taken before it is fixed is
+  measuring the guard's absence.
+- [ ] **The judge harness and the probe scripts print rather than log.**
+  `eval/sufficiency/judge.py` has done so since it was written — deliberate and
+  flagged, since it exists to be read on stdout — and the six `scripts/probe_a*`
+  files added 2026-08-22 follow it. That is now seven files against the standing
+  convention (`src/logging_setup.py`; libraries configure nothing, scripts call
+  `setup_logging()`). Decide whether probe harnesses are a standing exception or
+  whether they get converted.
+- [ ] **`max_llm_retries` is in `model_params` and nothing reads it.**
+  `build_judge_llm` hardcodes `.with_retry(stop_after_attempt=3)` beside a config
+  field carrying the same 3. Wire the field in so the config is live rather than
+  decorative.
+- [ ] **`scripts/` and `src/scripts/` coexist with no rule separating them.**
+  `src/scripts/` holds the six artifact builders (`generate_chunks.py`,
+  `index_documents.py`, the docling exporters); `scripts/` was added 2026-08-22
+  for the judge probes. A defensible split exists — *builds artifacts* vs *runs
+  experiments* — but it is inferred, not written down, and two directories with
+  the same name and no stated rule read as an accident later. Note both are run
+  as `python -m`; a path invocation of `scripts/` fails because `pythonpath` in
+  `pyproject.toml` is pytest-only.
 - [ ] `Generator.generate` (`src/clause_and_effect/generators/generator.py`)
   computes `structured_response` but never uses it, and `total_tokens` is dead.
   Token/cost accounting is not wired — needed for the operational cost metric
