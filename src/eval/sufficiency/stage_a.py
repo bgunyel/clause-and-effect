@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Literal
 from pydantic import BaseModel, Field
 
 from src.eval.dataset import TestCase
-from src.eval.sufficiency.llm import build_judge_llm
+from src.eval.sufficiency.llm import build_judge_llm, require_response
 from src.eval.sufficiency.models import Claim, Decomposition
 
 # Tagging works by making the judge *write the shortest sufficient answer first*,
@@ -317,7 +317,7 @@ async def decompose(case: TestCase, model_params: Dict[str, Any]) -> Decompositi
         in the case rather than in the quote.
     """
     llm = build_judge_llm(model_params, _StageADecomposition)
-    response: _StageADecomposition = await llm.ainvoke(build_stage_a_prompt(case))
+    response = require_response(await llm.ainvoke(build_stage_a_prompt(case)), stage="A")
     return Decomposition(
         shortest_sufficient_answer=response.shortest_sufficient_answer,
         claims=[Claim(text=c.text, tag=c.tag, reason=c.reason) for c in response.claims],

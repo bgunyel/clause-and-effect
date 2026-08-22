@@ -34,6 +34,45 @@ if TYPE_CHECKING:
 _SchemaT = TypeVar("_SchemaT", bound=BaseModel)
 
 
+class JudgeResponseError(RuntimeError):
+    """
+    A stage's model call returned nothing parseable into its schema.
+
+    ``with_structured_output`` yields ``None`` when the model's output cannot be
+    coerced into the requested shape. Observed 2026-08-22 on stage A2, where it
+    surfaced as ``AttributeError: 'NoneType' object has no attribute 'claims'``
+    from inside a list comprehension — a traceback naming neither the stage nor
+    the cause. Every stage had the same shape, because every stage read a field
+    straight off the value ``ainvoke`` returned.
+
+    This is a *transport* failure, not a judgement: the case was not judged
+    insufficient, it was not judged at all. Keeping it a distinct exception type
+    is what lets a caller tell "the judge decided" from "the judge did not
+    answer" — a distinction an eval instrument cannot afford to blur, since a
+    swallowed one would silently shrink the sample.
+    """
+
+
+def require_response(response: _SchemaT | None, *, stage: str) -> _SchemaT:
+    """
+    Return the stage's structured response, or raise naming the stage.
+
+    Args:
+        response: Whatever ``ainvoke`` returned.
+        stage:    Which stage is asking, for the error message.
+
+    Raises:
+        JudgeResponseError: if the model returned no parseable structure.
+    """
+    if response is None:
+        raise JudgeResponseError(
+            f"stage {stage}: the model returned no output parseable into its "
+            f"schema. The case was not judged; it must not be recorded as one "
+            f"that was."
+        )
+    return response
+
+
 def build_judge_llm(
     model_params: Dict[str, Any],
     schema: type[_SchemaT],
@@ -66,5 +105,5 @@ def build_judge_llm(
     )
     return cast(
         "Runnable[LanguageModelInput, _SchemaT]",
-        llm.with_structured_output(schema=schema),
+        llm.with_structured_output(schema=schema).with_retry(stop_after_attempt=3),
     )

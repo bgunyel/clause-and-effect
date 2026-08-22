@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from src.eval.dataset import TestCase
 from src.eval.golden_qa import normalize_for_grounding
-from src.eval.sufficiency.llm import build_judge_llm
+from src.eval.sufficiency.llm import build_judge_llm, require_response
 from src.eval.sufficiency.models import BlindAnswer
 
 # Two structural defences against the judge answering from what it knows rather
@@ -138,7 +138,7 @@ async def answer_blind(case: TestCase, model_params: Dict[str, Any]) -> BlindAns
         a legitimate outcome, not an error.
     """
     llm = build_judge_llm(model_params, _StageBAnswer)
-    response = await llm.ainvoke(build_stage_b_prompt(case))
+    response = require_response(await llm.ainvoke(build_stage_b_prompt(case)), stage="B")
     return BlindAnswer(
         answered=response.answered,
         answer=response.answer,

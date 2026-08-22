@@ -46,7 +46,12 @@ from src.eval.sufficiency.stage_c import (
     build_stage_c_prompt,
     render_claims,
 )
+from src.eval.sufficiency.llm import JudgeResponseError
+from src.eval.sufficiency.stage_a1 import write_shortest_answer
+from src.eval.sufficiency.stage_a2 import tag_claims
 from src.eval.sufficiency import stage_a as stage_a_module
+from src.eval.sufficiency import stage_a1 as stage_a1_module
+from src.eval.sufficiency import stage_a2 as stage_a2_module
 from src.eval.sufficiency import stage_b as stage_b_module
 from src.eval.sufficiency import stage_c as stage_c_module
 
@@ -813,3 +818,68 @@ def test_the_two_stages_see_disjoint_evidence():
 
     assert case.answer in prompt_a and case.supporting_quote not in prompt_a
     assert case.supporting_quote in prompt_b and case.answer not in prompt_b
+
+# --------------------- the transport failure every stage shares ------------- #
+#
+# `with_structured_output` yields None when the model's output cannot be coerced
+# into the requested schema. Observed 2026-08-22 on stage A2 as
+# `AttributeError: 'NoneType' object has no attribute 'claims'` — raised from
+# inside a list comprehension, naming neither the stage nor the cause. Every
+# stage had the same shape, because every stage read a field straight off what
+# `ainvoke` returned.
+#
+# These pin the guard per stage rather than testing `require_response` once,
+# because the defect was never in the helper: it was that five call sites each
+# forgot the check. A test of the helper alone would pass against a stage that
+# had dropped it.
+
+@pytest.mark.parametrize(
+    "module, call, stage_label",
+    [
+        (stage_a_module, lambda: decompose(make_case(), MODEL_PARAMS), "A"),
+        (stage_a1_module,
+         lambda: write_shortest_answer("Q?", "An answer.", MODEL_PARAMS), "A1"),
+        (stage_a2_module,
+         lambda: tag_claims("Q?", "An answer.", MODEL_PARAMS), "A2"),
+        (stage_b_module, lambda: answer_blind(make_case(), MODEL_PARAMS), "B"),
+        (stage_c_module,
+         lambda: adjudicate(
+             "Q?",
+             [Claim(text="A claim.", tag="core", reason="because")],
+             BlindAnswer(answered=True, answer="An answer.", minimal_span="An", note=""),
+             MODEL_PARAMS,
+         ),
+         "C"),
+    ],
+)
+def test_a_stage_raises_rather_than_crashing_when_the_model_returns_nothing(
+    monkeypatch, module, call, stage_label
+):
+    """
+    A None response must raise JudgeResponseError naming the stage, not an
+    AttributeError from wherever the first field access happens to be.
+
+    The stage label is asserted because the message is the only thing that says
+    *which* of five identically-shaped call sites failed, and a run that loses a
+    case needs to record which stage lost it.
+    """
+    install_fake_llm(monkeypatch, module, None)
+
+    with pytest.raises(JudgeResponseError) as excinfo:
+        asyncio.run(call())
+
+    assert f"stage {stage_label}" in str(excinfo.value)
+
+
+def test_a_transport_failure_is_not_a_judgement():
+    """
+    JudgeResponseError must not be catchable as a stage's own domain error.
+
+    Stage C raises AdjudicationError when the model answers but the answer does
+    not map onto the claims — a judgement that went wrong. A transport failure is
+    a case that was never judged at all. Folding the two together would let a
+    caller that meant to tolerate a bad mapping silently drop unjudged cases,
+    which shrinks the sample without saying so.
+    """
+    assert not issubclass(JudgeResponseError, AdjudicationError)
+    assert not issubclass(AdjudicationError, JudgeResponseError)
