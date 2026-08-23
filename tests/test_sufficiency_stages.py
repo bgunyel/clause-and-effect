@@ -27,6 +27,7 @@ at all.
 import asyncio
 import subprocess
 import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -46,7 +47,15 @@ from src.eval.sufficiency.stage_c import (
     build_stage_c_prompt,
     render_claims,
 )
-from src.eval.sufficiency.llm import JudgeResponseError, sum_costs
+from pydantic import BaseModel
+
+from src.eval.sufficiency.llm import (
+    JudgeResponseError,
+    build_judge_llm,
+    payload_from_tool_call,
+    require_response,
+    sum_costs,
+)
 from src.eval.sufficiency.stage_a1 import write_shortest_answer
 from src.eval.sufficiency.stage_a2 import tag_claims
 from src.eval.sufficiency.stage_a_twocall import decompose as decompose_twocall
@@ -1099,3 +1108,300 @@ def test_the_two_call_variant_keeps_both_halves_of_what_it_paid_for(monkeypatch)
 
     assert decomposition.shortest_sufficient_answer == "The shortest answer."
     assert [c.text for c in decomposition.claims] == ["A claim."]
+
+
+# ------------------- what the provider does to the config ------------------- #
+
+def _fake_ai_common(monkeypatch, seen):
+    """
+    Stand in for ``ai_common``, reproducing the one behaviour that matters.
+
+    ``get_llm`` does not read ``model_args`` — it **empties** it. The OpenRouter
+    branch pops ``temperature``, ``top_p`` and ``reasoning_effort`` out and
+    passes the remainder on as ``model_kwargs``, so the dict it was handed comes
+    back ``{}``. The fake records what it received and then clears it, which is
+    what the real branch leaves behind.
+
+    Installed into ``sys.modules`` rather than monkeypatched onto the real
+    module because importing ``ai_common`` costs 6.58s and three thousand
+    modules — the cost this whole package is arranged to avoid paying in tests.
+    """
+    def fake_get_llm(*, model_name, model_provider, api_key, model_args):
+        seen.append(dict(model_args))
+        model_args.clear()
+        return SimpleNamespace(
+            with_structured_output=lambda **kwargs: SimpleNamespace(
+                with_retry=lambda **kw: "runnable"
+            )
+        )
+
+    _install_fake_ai_common(monkeypatch, fake_get_llm)
+
+
+def _install_fake_ai_common(monkeypatch, fake_get_llm):
+    """
+    Put a fake ``ai_common`` in ``sys.modules``, ``enums`` submodule included.
+
+    The submodule is not optional. ``build_judge_llm`` defers
+    ``from src.llm_config import TOOL_CALL_AUTO``, and `llm_config` imports
+    ``ai_common.enums`` at its own module scope — so a fake that shadows only
+    the package turns that into ``ModuleNotFoundError``. The two names are
+    placeholders: nothing under test reads them, and `get_llm_config` is never
+    called here.
+    """
+    package = types.ModuleType("ai_common")
+    package.get_llm = fake_get_llm
+    enums = types.ModuleType("ai_common.enums")
+    enums.LlmServers = SimpleNamespace(OPENROUTER="openrouter")
+    enums.ModelNames = SimpleNamespace()
+    package.enums = enums
+    monkeypatch.setitem(sys.modules, "ai_common", package)
+    monkeypatch.setitem(sys.modules, "ai_common.enums", enums)
+
+
+def test_repeated_builds_all_receive_the_configured_sampling(monkeypatch):
+    """
+    Every build gets the full settings, not just the first one in the process.
+
+    Each stage builds its model on every call from the single entry
+    ``get_llm_config`` returns, so a provider that empties that entry leaves
+    every call after the first running on defaults. Two of the three keys
+    survived that by coincidence — the real pops name ``0`` and ``0.95`` as
+    their defaults, which are the configured values — while
+    ``reasoning_effort`` defaulted to ``None``. A panel multiplies the exposure
+    by its member count.
+
+    The expectation is written out as a literal rather than read back from
+    ``entry["model_args"]``: taking it from the object under test would pass
+    just as happily against a dict that had been emptied and refilled with
+    whatever the last caller sent.
+    """
+    seen = []
+    _fake_ai_common(monkeypatch, seen)
+    entry = {
+        "model": "a-model",
+        "model_provider": "a-provider",
+        "api_key": "a-key",
+        "model_args": {"temperature": 0, "reasoning_effort": "high", "top_p": 0.95},
+        "structured_output": "function_calling",
+    }
+
+    for _ in range(3):
+        build_judge_llm(entry, SimpleNamespace)
+
+    assert seen == [{"temperature": 0, "reasoning_effort": "high", "top_p": 0.95}] * 3
+
+
+def test_building_a_judge_leaves_the_caller_s_config_untouched(monkeypatch):
+    """
+    The entry is reusable afterwards, which is the property the stages rely on.
+
+    ``get_llm_config`` is called once and its entry passed to every stage and
+    every repetition; if a build consumed it, the config would describe a run
+    that only the first call made.
+    """
+    _fake_ai_common(monkeypatch, [])
+    entry = {
+        "model": "a-model",
+        "model_provider": "a-provider",
+        "api_key": "a-key",
+        "model_args": {"temperature": 0, "reasoning_effort": "high", "top_p": 0.95},
+        "structured_output": "function_calling",
+    }
+
+    build_judge_llm(entry, SimpleNamespace)
+
+    assert entry["model_args"] == {
+        "temperature": 0,
+        "reasoning_effort": "high",
+        "top_p": 0.95,
+    }
+
+
+# ------------------- the tool_choice="auto" structured path ----------------- #
+#
+# One panelist cannot be called the way the other eight are. OpenRouter's
+# `z-ai/glm-5.3` rejects a pinned `tool_choice` outright, so `build_judge_llm`
+# binds the schema with `tool_choice="auto"` and rebuilds the payload itself.
+# That path is a second implementation of the contract every stage depends on,
+# and it has a failure the forced path cannot produce: the model may answer
+# without calling the tool at all.
+
+class _Claims(BaseModel):
+    """A stand-in for a stage schema — a list, like every real one."""
+
+    claims: list[str]
+
+
+def _message(tool_calls, *, content="", cost=0.5):
+    """An `AIMessage`-shaped object, as `bind_tools` would return it."""
+    return SimpleNamespace(
+        content=content,
+        tool_calls=tool_calls,
+        response_metadata={"cost": cost},
+    )
+
+
+def test_a_tool_call_becomes_the_parsed_schema():
+    payload = payload_from_tool_call(
+        _message([{"name": "_Claims", "args": {"claims": ["a", "b"]}, "id": "1"}]),
+        _Claims,
+    )
+
+    assert payload["parsed"].claims == ["a", "b"]
+    assert payload["parsing_error"] is None
+
+
+def test_the_raw_message_survives_so_the_call_can_still_be_priced():
+    """
+    The whole point of rebuilding the payload rather than returning the parsed
+    object: ``_cost_of`` reads ``raw``, and a path that dropped the message
+    would make one panelist silently unpriceable while the other eight report.
+    """
+    payload = payload_from_tool_call(
+        _message([{"name": "_Claims", "args": {"claims": []}, "id": "1"}], cost=0.25),
+        _Claims,
+    )
+
+    assert require_response(payload, stage="X").cost == 0.25
+
+
+def test_no_tool_call_is_a_transport_failure_and_not_an_empty_result():
+    """
+    The failure the forced path cannot produce, and the one that matters most.
+
+    ``tool_choice="auto"`` lets the model answer in prose. Stage A2 returning
+    *zero claims* is a legitimate verdict — the gold answer does not answer its
+    own question (§4.5) — so mapping silence to an empty list would record a
+    case nobody judged as a case judged to have no core content. That is the
+    silent direction, and it is the one the whole judge is arranged against.
+    """
+    payload = payload_from_tool_call(
+        _message([], content="I think the first sentence is the important one."),
+        _Claims,
+    )
+
+    assert payload["parsed"] is None
+    with pytest.raises(JudgeResponseError) as raised:
+        require_response(payload, stage="A2")
+    assert "I think the first sentence" in str(raised.value)
+
+
+def test_an_empty_claim_list_from_a_real_tool_call_is_kept_as_a_result():
+    """The other side of the previous test: a tool call saying *nothing is core*
+    is a judgement, and must survive as one."""
+    payload = payload_from_tool_call(
+        _message([{"name": "_Claims", "args": {"claims": []}, "id": "1"}]),
+        _Claims,
+    )
+
+    assert require_response(payload, stage="A2").value.claims == []
+
+
+def test_arguments_that_do_not_fit_the_schema_are_reported_not_raised():
+    """
+    A coercion failure must arrive as a payload, exactly as it does on the
+    forced path, so `require_response` is the single place either path fails.
+    """
+    payload = payload_from_tool_call(
+        _message([{"name": "_Claims", "args": {"claims": "not a list"}, "id": "1"}]),
+        _Claims,
+    )
+
+    assert payload["parsed"] is None
+    assert payload["parsing_error"] is not None
+    with pytest.raises(JudgeResponseError):
+        require_response(payload, stage="A2")
+
+
+def test_only_the_configured_model_takes_the_auto_path(monkeypatch):
+    """
+    The branch is driven by the config entry, not by a model name spelled inside
+    `llm.py`. An entry that says nothing must take the forced path — otherwise
+    adding one panelist would quietly change how the other eight are called.
+    """
+    built = {}
+
+    def fake_get_llm(*, model_name, model_provider, api_key, model_args):
+        return SimpleNamespace(
+            bind_tools=lambda tools, tool_choice: built.setdefault(
+                "bound", tool_choice
+            ) and None or SimpleNamespace(with_retry=lambda **kw: _Passthrough()),
+            with_structured_output=lambda **kwargs: built.setdefault(
+                "forced", kwargs
+            ) and None or SimpleNamespace(with_retry=lambda **kw: "runnable"),
+        )
+
+    _install_fake_ai_common(monkeypatch, fake_get_llm)
+
+    base = {"model": "m", "model_provider": "p", "api_key": "k", "model_args": {}}
+
+    build_judge_llm({**base, "structured_output": "function_calling"}, _Claims)
+    assert built["forced"].get("method") is None and "bound" not in built
+
+    built.clear()
+    build_judge_llm({**base, "structured_output": "tool_call_auto"}, _Claims)
+    assert built.get("bound") == "auto" and "forced" not in built
+
+    built.clear()
+    build_judge_llm({**base, "structured_output": "json_schema"}, _Claims)
+    assert built["forced"]["method"] == "json_schema" and "bound" not in built
+
+
+def test_every_path_keeps_include_raw(monkeypatch):
+    """
+    Whichever way the schema is requested, the message must come back with it.
+
+    ``include_raw`` is the only reason a call can be priced at all: without it
+    the chain yields the parsed object and the ``AIMessage`` carrying `cost` is
+    dropped inside it. A new mode that forgot the flag would leave one panelist
+    silently unpriceable while the rest reported, which is exactly the shape of
+    under-reporting `sum_costs` exists to make impossible.
+    """
+    built = {}
+
+    def fake_get_llm(*, model_name, model_provider, api_key, model_args):
+        return SimpleNamespace(
+            bind_tools=lambda tools, tool_choice: SimpleNamespace(
+                with_retry=lambda **kw: _Passthrough()
+            ),
+            with_structured_output=lambda **kwargs: built.setdefault(
+                "forced", kwargs
+            ) and None or SimpleNamespace(with_retry=lambda **kw: "runnable"),
+        )
+
+    _install_fake_ai_common(monkeypatch, fake_get_llm)
+    base = {"model": "m", "model_provider": "p", "api_key": "k", "model_args": {}}
+
+    for mode in ("function_calling", "json_schema"):
+        built.clear()
+        build_judge_llm({**base, "structured_output": mode}, _Claims)
+        assert built["forced"]["include_raw"] is True, mode
+
+
+def test_a_model_with_no_declared_channel_is_refused(monkeypatch):
+    """
+    Construction fails rather than picking one, and it fails before any spend.
+
+    Neither channel works for every model — MiniMax M3 takes no tools, DeepSeek
+    V4 Flash times out under `response_format` — so a default would call some
+    new panelist the wrong way and the result would be recorded as its
+    judgement. `llm_config` therefore has no fallback either.
+    """
+    _install_fake_ai_common(
+        monkeypatch,
+        lambda **kwargs: pytest.fail("the model must not be built at all"),
+    )
+    base = {"model": "a-new-model", "model_provider": "p", "api_key": "k",
+            "model_args": {}}
+
+    for mode in (None, "", "structured", "tool_calling"):
+        with pytest.raises(ValueError, match="structured-output channel"):
+            build_judge_llm({**base, "structured_output": mode}, _Claims)
+
+
+class _Passthrough:
+    """Minimal runnable so `bound | RunnableLambda(...)` composes."""
+
+    def __or__(self, other):
+        return other

@@ -42,7 +42,7 @@ from typing import (
     cast,
 )
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 if TYPE_CHECKING:
     from langchain_core.language_models import LanguageModelInput
@@ -201,6 +201,52 @@ def require_response(
     return StageResponse(value=parsed, cost=_cost_of(payload.get("raw")))
 
 
+def payload_from_tool_call(
+    message: Any, schema: type[_SchemaT]
+) -> StructuredPayload[_SchemaT]:
+    """
+    Turn one ``bind_tools`` reply into the payload the rest of this module reads.
+
+    The ``TOOL_CALL_AUTO`` path returns an ``AIMessage`` rather than the
+    ``{raw, parsed, parsing_error}`` dict ``with_structured_output(include_raw=
+    True)`` produces. Rebuilding that shape here — rather than teaching
+    :func:`require_response` a second one — is what keeps every stage, the error
+    reporting and the cost plumbing identical across the two paths. ``raw`` is
+    the same message either way, so ``_cost_of`` needs no branch.
+
+    **A missing tool call is a failure, and specifically not an empty result.**
+    ``tool_choice="auto"`` permits the model to answer in prose instead of
+    calling the tool, which the forced path makes impossible. Stage A2 may
+    legitimately return *zero claims* (design §4.5: a gold answer that does not
+    answer its own question), so if silence were mapped to an empty list the two
+    would be indistinguishable — a case nobody judged would be recorded as a case
+    judged to have no core content. It is reported as ``parsed: None`` instead,
+    which :func:`require_response` turns into a :class:`JudgeResponseError`.
+
+    The first tool call is taken. Only one tool is ever bound, so a second would
+    mean the model called the same schema twice; that is not a shape any stage
+    has a use for, and quietly concatenating them would invent content.
+    """
+    calls = getattr(message, "tool_calls", None) or []
+    if not calls:
+        return {
+            "raw": message,
+            "parsed": None,
+            "parsing_error": (
+                "the model returned no tool call. `tool_choice=\"auto\"` allows "
+                "that; it means the case was not judged, not that it has no "
+                "core claims."
+            ),
+        }
+
+    try:
+        parsed = schema(**calls[0]["args"])
+    except ValidationError as exc:
+        return {"raw": message, "parsed": None, "parsing_error": exc}
+
+    return {"raw": message, "parsed": parsed, "parsing_error": None}
+
+
 def build_judge_llm(
     model_params: Dict[str, Any],
     schema: type[_SchemaT],
@@ -229,6 +275,25 @@ def build_judge_llm(
     class narrows that at runtime but not in the type system, so the cast is made
     once here rather than at each of the five stage call sites.
     """
+    # Deferred, like `get_llm` below: `src.llm_config` imports `ai_common.enums`
+    # at module scope, which is 0.24s and 195 modules. Naming these at the top of
+    # this file would put that on `models.py`'s test run and on every importer of
+    # a stage — the cost this module is arranged to avoid. They are three
+    # strings, and the config is where they are defined.
+    from src.llm_config import FUNCTION_CALLING, JSON_SCHEMA, TOOL_CALL_AUTO
+
+    # Checked before anything is built. Neither channel works for every model —
+    # MiniMax M3's endpoint takes no tools, DeepSeek V4 Flash times out under
+    # `response_format` — so a silent default would call some new panelist the
+    # wrong way and the result would be recorded as that model's judgement.
+    mode = model_params.get("structured_output")
+    if mode not in (FUNCTION_CALLING, JSON_SCHEMA, TOOL_CALL_AUTO):
+        raise ValueError(
+            f"model {model_params.get('model')!r} has no structured-output "
+            f"channel: got {mode!r}. Choose one in `llm_config.structured_output` "
+            f"— it is a measurement about the model, not a default."
+        )
+
     # Deferred deliberately — see the module docstring. This is the line that
     # costs langchain → transformers → torch, and it is paid on first call
     # rather than by every importer of a stage module.
@@ -238,8 +303,53 @@ def build_judge_llm(
         model_name=model_params["model"],
         model_provider=model_params["model_provider"],
         api_key=model_params["api_key"],
-        model_args=model_params["model_args"],
+        # A fresh copy, because ``get_llm`` does not read this dict — it
+        # **empties** it. The OpenRouter branch pops ``temperature``, ``top_p``
+        # and ``reasoning_effort`` out and hands the remainder to the client as
+        # ``model_kwargs``, leaving the caller's dict ``{}``.
+        #
+        # Every stage builds its model on every call from the one entry
+        # ``get_llm_config`` returns, so without this copy only the *first*
+        # build in a process gets the configured sampling. The two pops that
+        # carry defaults survive by coincidence — ``pop('temperature', 0)`` and
+        # ``pop('top_p', 0.95)`` happen to name the configured values — but
+        # ``reasoning_effort`` defaults to ``None``, so the second call onwards
+        # silently ran with no reasoning budget at all. Measured 2026-08-23:
+        # build 1 gives ``reasoning={'effort': 'high'}``, build 2 gives
+        # ``{'effort': None}``.
+        #
+        # `llm_config.py` already gives each entry its own copy, which stops one
+        # panelist rewriting another's sampling. That cannot help here: this is
+        # a single entry eroding across repeated builds of *itself*.
+        model_args=dict(model_params["model_args"]),
     )
+    if mode == JSON_SCHEMA:
+        # `response_format` rather than tools. `include_raw` behaves identically
+        # on this path — the parser assigns `parsed`/`parsing_error` beside the
+        # same `raw` message — so the cost plumbing and `require_response` need
+        # no branch. Note the failure mode is unchanged too: an unparseable
+        # response arrives as `parsed: None`, not as an exception, so
+        # `.with_retry` never sees it.
+        return cast(
+            "Runnable[LanguageModelInput, StructuredPayload[_SchemaT]]",
+            llm.with_structured_output(
+                schema=schema, method="json_schema", include_raw=True
+            ).with_retry(stop_after_attempt=3),
+        )
+
+    if mode == TOOL_CALL_AUTO:
+        # Deferred for the same reason as `get_llm`: this is a `langchain_core`
+        # name, and `langchain_core` is the leg that pulls torch. By this line
+        # `get_llm` has already imported it, so the cost is not paid twice.
+        from langchain_core.runnables import RunnableLambda
+
+        return cast(
+            "Runnable[LanguageModelInput, StructuredPayload[_SchemaT]]",
+            llm.bind_tools([schema], tool_choice="auto")
+               .with_retry(stop_after_attempt=3)
+            | RunnableLambda(lambda message: payload_from_tool_call(message, schema)),
+        )
+
     return cast(
         "Runnable[LanguageModelInput, StructuredPayload[_SchemaT]]",
         llm.with_structured_output(schema=schema, include_raw=True)

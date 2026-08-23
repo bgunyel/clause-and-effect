@@ -28,6 +28,33 @@ from ai_common.enums import LlmServers, ModelNames
 
 from src.config import get_settings
 
+# How a model is asked to return its schema, read by
+# :func:`src.eval.sufficiency.llm.build_judge_llm`.
+#
+# The default — an entry whose ``structured_output`` is ``None`` — is
+# ``with_structured_output``, which pins ``tool_choice`` to the schema's own
+# function so the model cannot decline to fill it. ``TOOL_CALL_AUTO`` selects
+# ``bind_tools(..., tool_choice="auto")`` instead, for a model that rejects that
+# pinning.
+TOOL_CALL_AUTO = 'tool_call_auto'
+
+# ``with_structured_output(method="json_schema")``, which binds
+# ``response_format={"type": "json_schema", ...}`` instead of sending tools.
+#
+# This is what the panel runs on. Function calling was the default and it failed
+# unevenly across the roster: MiniMax M3's OpenRouter endpoint does not accept
+# tools at all, so it answered in the schema's *shape* as prose and scored 2/6;
+# Kimi K3 did the same on 2 of 6; Grok emitted the tool call as a fenced JSON
+# block. Measured 2026-08-23 on the three cases MiniMax had failed, `json_schema`
+# returned all three — including `art15_case1`'s ten core claims, which is §4.6's
+# expected output exactly.
+JSON_SCHEMA = 'json_schema'
+
+# ``with_structured_output()`` as it comes — tools plus a pinned ``tool_choice``.
+# The library's own default; named here so every panelist's channel is stated in
+# the table below rather than half of them being an absence.
+FUNCTION_CALLING = 'function_calling'
+
 
 def get_llm_config():
     settings = get_settings()
@@ -37,7 +64,14 @@ def get_llm_config():
             ModelNames.DEEPSEEK_V_4_FLASH_0731,
             ModelNames.DEEPSEEK_V_4_PRO_0813,
             ModelNames.GEMINI_3_7_FLASH,
-            ModelNames.GLM_5_3,
+            # ModelNames.GLM_5_3 — callable, and too slow to be a panelist.
+            # `TOOL_CALL_AUTO` below fixed its structured output: it answers the
+            # roster probe's trivial prompt correctly in 18s. On a real stage A2
+            # prompt it then **timed out on all six baseline cases at 120s
+            # each** (2026-08-23 panel run), contributing nothing while stalling
+            # every case behind it — the whole panel had previously sat for 19
+            # minutes with no per-call deadline. The `structured_output` entry is
+            # kept, so re-adding the model needs no rediscovery.
             ModelNames.GROK_4_6,
             ModelNames.KIMI_K3,
             ModelNames.MINIMAX_M_3,
@@ -79,6 +113,95 @@ def get_llm_config():
         'temperature': 0,
         'reasoning_effort': 'high',
         'top_p': 0.95,
+        # OpenRouter routes one model id to whichever upstream provider it
+        # picks, and **support for the parameters we send varies between them**
+        # for the same model. Without this, a provider that does not implement
+        # `response_format` may be chosen and simply ignore it: the call
+        # succeeds, is billed, and comes back as prose. `require_parameters`
+        # restricts routing to providers that honour what was sent, turning
+        # silent degradation into an explicit routing failure.
+        #
+        # This is a candidate explanation for the roster's unexplained
+        # intermittency — Grok answered 4 of 6 in one panel run and 6 of 6 in
+        # the next with no change on our side.
+        #
+        # It reaches the request through `model_kwargs`: `get_llm` pops
+        # `temperature`, `top_p` and `reasoning_effort` and hands the rest to
+        # `ChatOpenRouter(model_kwargs=...)`, whose `_default_params` spreads
+        # them into the body. `provider` is the body's own field name — the
+        # constructor spells it `openrouter_provider`, which `get_llm` does not
+        # pass, so nothing overwrites this.
+        'provider': {'require_parameters': True},
+    }
+
+    # How a model is asked to return its schema, where the default does not work.
+    #
+    # `build_judge_llm` uses `with_structured_output`, which pins `tool_choice`
+    # to the schema's own function so the model cannot decline to fill it.
+    # OpenRouter's `z-ai/glm-5.3` rejects that outright —
+    # `BadRequestResponseError: Tool choice must be auto` — while serving
+    # perfectly well otherwise. Measured 2026-08-23: a plain `invoke` works and
+    # reports cost; `method="json_schema"` is accepted but *unenforced*, so the
+    # model answers in prose and the parser raises; `json_mode` is not
+    # implemented by `langchain_openrouter` and silently falls back to the same
+    # failure. `bind_tools([schema], tool_choice="auto")` works — three runs,
+    # correct arguments every time, cost on the raw message.
+    #
+    # The cost of that path is that `auto` lets the model answer without calling
+    # the tool at all, which the forced path makes impossible. That is handled
+    # where it has to be: `payload_from_tool_call` reports a missing tool call as
+    # a transport failure rather than as an empty claim list, because stage A2
+    # returning *no core claims* is a legitimate verdict and must stay
+    # distinguishable from a case nobody judged.
+    #
+    # Listed per model rather than sniffed at build time, so which panelist is
+    # being called differently is visible here rather than inside a fallback.
+    #
+    # **Neither channel works for every model, so each is assigned its own.**
+    # Measured over the six §4.6 cases, cases answered out of 6:
+    #
+    # | model | function_calling | json_schema | assigned |
+    # |---|---|---|---|
+    # | DeepSeek V4 Flash | 6/6, 6/6 @ ~7s | **3/6**, 3 timeouts @ 63s | function_calling |
+    # | DeepSeek V4 Pro | 6/6, 6/6 @ ~25s | 6/6 @ 41s | function_calling |
+    # | Gemini 3.7 Flash | 6/6, 6/6 @ ~10s | 6/6 @ 12s | function_calling |
+    # | Qwen 3.8-27B | 6/6, 6/6 | 6/6 | function_calling |
+    # | Qwen 3.8-2.4T | 6/6, 6/6 | 6/6 | function_calling |
+    # | Grok 4.6 | 4/6, 6/6 | 6/6 | json_schema |
+    # | Kimi K3 | 3/6, 4/6 | 6/6 | json_schema |
+    # | MiniMax M3 | 2/6, 6/6 | 6/6 | json_schema |
+    #
+    # Two assignments rest on a mechanism and the rest on counts. **MiniMax's
+    # OpenRouter endpoint does not accept tools at all** (their documentation),
+    # which is why it answered in the schema's shape as prose — it was never a
+    # judgement failure. **DeepSeek V4 Flash is the mirror image**: it is the
+    # cheapest and fastest panelist on tools and times out under
+    # `response_format`, 63s mean against 7s.
+    #
+    # **This costs the uniformity this config otherwise keeps.** Everything else
+    # here is deliberately identical across panelists so that a disagreement is
+    # about the case rather than the sampling, and a per-model channel weakens
+    # exactly that. It is accepted because the alternative is worse — a uniform
+    # channel means some panelist is being scored on calls it never had a fair
+    # chance to answer. The risk to watch is that the channel changes more than
+    # the wire format: MiniMax reported **zero reasoning tokens** under
+    # `json_schema` while producing `reasoning_content` on the tool path, and if
+    # `response_format` suppresses reasoning then those three panelists judge
+    # without the budget the other five get. Unquantified, and it should be.
+    #
+    # Counts are one run per model per channel. Grok read 4/6 then 6/6 on
+    # *identical* function-calling runs, so the single-sample rows are weaker
+    # evidence than they look.
+    structured_output = {
+        ModelNames.DEEPSEEK_V_4_FLASH_0731: FUNCTION_CALLING,
+        ModelNames.DEEPSEEK_V_4_PRO_0813: FUNCTION_CALLING,
+        ModelNames.GEMINI_3_7_FLASH: FUNCTION_CALLING,
+        ModelNames.GLM_5_3: TOOL_CALL_AUTO,
+        ModelNames.GROK_4_6: JSON_SCHEMA,
+        ModelNames.KIMI_K3: JSON_SCHEMA,
+        ModelNames.MINIMAX_M_3: JSON_SCHEMA,
+        ModelNames.QWEN_3_8_27B: FUNCTION_CALLING,
+        ModelNames.QWEN_3_8_2_4T_A95B: FUNCTION_CALLING,
     }
 
     llm_config = {
@@ -88,6 +211,11 @@ def get_llm_config():
                 'model_provider': provider,
                 'api_key': api_key,
                 'max_llm_retries': 3,
+                # No default: a model absent from the table above is a model
+                # whose channel nobody chose, and `build_judge_llm` refuses it
+                # rather than guessing. Adding a panelist should require the one
+                # measurement that says how to call it.
+                'structured_output': structured_output[model],
                 # A fresh copy per entry, and this is load-bearing rather than
                 # defensive: `ai_common.get_llm` *mutates* the dict it is given
                 # for Google models — it forces `temperature` to 1.0 on gemini-3
