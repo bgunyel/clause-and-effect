@@ -48,6 +48,7 @@ import re
 from dataclasses import dataclass
 from typing import List
 
+from scripts.probe_spend import format_spend
 from src.eval.sufficiency.stage_a2 import A2_INSTRUCTIONS, tag_claims
 from src.llm_config import get_llm_config
 
@@ -256,13 +257,14 @@ def mechanical_breaches(claims, answer: str) -> List[str]:
 async def main() -> None:
     check_probes_are_held_out()
 
-    model_params = get_llm_config()["writer_model"][0]
+    model_params = get_llm_config()["sufficiency_judge"][0]
     print(f"model: {model_params['model']}  "
           f"temperature={model_params['model_args']['temperature']}\n")
 
-    outputs = await asyncio.gather(*[
+    responses = await asyncio.gather(*[
         tag_claims(p.question, p.answer, model_params) for p in PROBES
     ])
+    outputs = [r.value for r in responses]
 
     total_breaches = 0
     for probe, claims in zip(PROBES, outputs):
@@ -294,6 +296,7 @@ async def main() -> None:
     print("The tags themselves are for reading: four of the six expectations are the "
           "assistant's\nreading of what the question asks for, and those need Bertan's "
           "agreement to mean anything.")
+    print(format_spend(responses))
 
 
 if __name__ == "__main__":

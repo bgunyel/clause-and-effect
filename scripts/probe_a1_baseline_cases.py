@@ -39,6 +39,7 @@ import re
 from dataclasses import dataclass
 from typing import List
 
+from scripts.probe_spend import format_spend
 from src.eval.dataset import load_tier1
 from src.eval.sufficiency.stage_a1 import write_shortest_answer
 from src.llm_config import get_llm_config
@@ -164,18 +165,19 @@ async def main() -> None:
     if missing:
         raise SystemExit(f"case ids not found in the golden set: {missing}")
 
-    model_params = get_llm_config()["writer_model"][0]
+    model_params = get_llm_config()["sufficiency_judge"][0]
     print(f"model: {model_params['model']}  "
           f"temperature={model_params['model_args']['temperature']}")
     print(f"cases: {len(CASES)}, all resolved from the golden set\n")
     print("These six are the TUNING set. A good result here is partly fitted.\n")
 
-    outputs = await asyncio.gather(*[
+    responses = await asyncio.gather(*[
         write_shortest_answer(
             loaded[c.case_id].question, loaded[c.case_id].answer, model_params
         )
         for c in CASES
     ])
+    outputs = [r.value for r in responses]
 
     breaches = 0
     for baseline, actual in zip(CASES, outputs):
@@ -202,6 +204,7 @@ async def main() -> None:
           f"answer.")
     print("Everything else above is for reading: five of the six standards are the "
           "assistant's,\nand these are the cases the prompt was tuned on.")
+    print(format_spend(responses))
 
 
 if __name__ == "__main__":

@@ -19,7 +19,11 @@ from typing import Any, Dict, List, Literal, Sequence
 
 from pydantic import BaseModel, Field
 
-from src.eval.sufficiency.llm import build_judge_llm, require_response
+from src.eval.sufficiency.llm import (
+    StageResponse,
+    build_judge_llm,
+    require_response,
+)
 from src.eval.sufficiency.models import Adjudication, BlindAnswer, Claim, ClaimVerdict
 
 # Four decisions are baked into the prompt below, each of which could have gone
@@ -222,7 +226,7 @@ async def adjudicate(
     claims: Sequence[Claim],
     blind_answer: BlindAnswer,
     model_params: Dict[str, Any],
-) -> Adjudication:
+) -> StageResponse[Adjudication]:
     """
     Stage C — label each claim against the blind answer.
 
@@ -234,10 +238,14 @@ async def adjudicate(
         model_params: One entry from :func:`src.llm_config.get_llm_config`.
 
     Returns:
-        An :class:`Adjudication` with one :class:`ClaimVerdict` per claim, in the
-        order the claims were given.
+        A :class:`StageResponse` carrying an :class:`Adjudication` with one
+        :class:`ClaimVerdict` per claim, in the order the claims were given, and
+        what the call cost.
 
-    Two inputs are handled without a model call, and neither is an error:
+    Two inputs are handled without a model call, and neither is an error. Both
+    report a cost of **0.0 rather than None**: no call was made, so the price is
+    known and it is nothing. ``None`` is reserved for a call that happened and
+    came back unpriced, which is money spent that cannot be accounted for.
 
     - **No claims.** Stage A legitimately returns an empty ``core_claims`` when a
       gold answer does not answer its own question. That is a defect in the case
@@ -252,24 +260,27 @@ async def adjudicate(
             claim. See :func:`_verdicts_by_claim_number`.
     """
     if not claims:
-        return Adjudication(claim_verdicts=[])
+        return StageResponse(value=Adjudication(claim_verdicts=[]), cost=0.0)
     if not blind_answer.answer.strip():
-        return _nothing_to_carry(claims)
+        return StageResponse(value=_nothing_to_carry(claims), cost=0.0)
 
     llm = build_judge_llm(model_params, _StageCAdjudication)
     response = require_response(
         await llm.ainvoke(build_stage_c_prompt(question, claims, blind_answer)),
         stage="C",
     )
-    by_number = _verdicts_by_claim_number(response, len(claims))
+    by_number = _verdicts_by_claim_number(response.value, len(claims))
 
-    return Adjudication(
-        claim_verdicts=[
-            ClaimVerdict(
-                claim=claim,
-                support=by_number[i].support,
-                rationale=by_number[i].rationale,
-            )
-            for i, claim in enumerate(claims, start=1)
-        ]
+    return StageResponse(
+        value=Adjudication(
+            claim_verdicts=[
+                ClaimVerdict(
+                    claim=claim,
+                    support=by_number[i].support,
+                    rationale=by_number[i].rationale,
+                )
+                for i, claim in enumerate(claims, start=1)
+            ]
+        ),
+        cost=response.cost,
     )

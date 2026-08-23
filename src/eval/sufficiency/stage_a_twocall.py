@@ -45,12 +45,15 @@ import asyncio
 from typing import Any, Dict
 
 from src.eval.dataset import TestCase
+from src.eval.sufficiency.llm import StageResponse, sum_costs
 from src.eval.sufficiency.models import Decomposition
 from src.eval.sufficiency.stage_a1 import write_shortest_answer
 from src.eval.sufficiency.stage_a2 import tag_claims
 
 
-async def decompose(case: TestCase, model_params: Dict[str, Any]) -> Decomposition:
+async def decompose(
+    case: TestCase, model_params: Dict[str, Any]
+) -> StageResponse[Decomposition]:
     """
     Stage A as two independent calls — a drop-in for :func:`stage_a.decompose`.
 
@@ -61,18 +64,30 @@ async def decompose(case: TestCase, model_params: Dict[str, Any]) -> Decompositi
     interpolate it — the same reasoning as :func:`stage_c.adjudicate`.
 
     Returns:
-        A :class:`Decomposition` carrying A1's shortest sufficient answer and A2's
-        claims. **The two are recorded exactly as returned, and are not reconciled
+        A :class:`StageResponse` carrying a :class:`Decomposition` with A1's
+        shortest sufficient answer and A2's claims, and what the pair cost.
+        **The two are recorded exactly as returned, and are not reconciled
         here.** A1 returning empty while A2 tags claims core is a disagreement
         between two independent derivations, and it is the signal this experiment
         exists to expose; forcing the tags to agree would erase it. Whatever
         reconciliation the verdict needs is a separate, later decision.
+
+        The cost is the sum of both calls, and **``None`` if either leg went
+        unpriced**. Reporting the priced half as the pair's cost would put a
+        number on a two-call stage while silently omitting one of the calls —
+        the flattening :class:`StageResponse` exists to prevent. This variant is
+        twice the calls of the combined stage, which is the trade it is being
+        measured on, so its price has to be either right or absent.
     """
-    shortest_sufficient_answer, claims = await asyncio.gather(
+    a1, a2 = await asyncio.gather(
         write_shortest_answer(case.question, case.answer, model_params),
         tag_claims(case.question, case.answer, model_params),
     )
-    return Decomposition(
-        shortest_sufficient_answer=shortest_sufficient_answer,
-        claims=claims,
+    total, unpriced = sum_costs([a1.cost, a2.cost])
+    return StageResponse(
+        value=Decomposition(
+            shortest_sufficient_answer=a1.value,
+            claims=a2.value,
+        ),
+        cost=None if unpriced else total,
     )

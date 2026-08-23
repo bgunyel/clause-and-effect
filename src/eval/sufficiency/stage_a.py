@@ -14,7 +14,11 @@ from typing import Any, Dict, List, Literal
 from pydantic import BaseModel, Field
 
 from src.eval.dataset import TestCase
-from src.eval.sufficiency.llm import build_judge_llm, require_response
+from src.eval.sufficiency.llm import (
+    StageResponse,
+    build_judge_llm,
+    require_response,
+)
 from src.eval.sufficiency.models import Claim, Decomposition
 
 # Tagging works by making the judge *write the shortest sufficient answer first*,
@@ -304,7 +308,9 @@ def build_stage_a_prompt(case: TestCase) -> str:
     return STAGE_A_INSTRUCTIONS.format(question=case.question, answer=case.answer)
 
 
-async def decompose(case: TestCase, model_params: Dict[str, Any]) -> Decomposition:
+async def decompose(
+    case: TestCase, model_params: Dict[str, Any]
+) -> StageResponse[Decomposition]:
     """
     Stage A — split a case's gold answer into core and auxiliary claims.
 
@@ -312,13 +318,20 @@ async def decompose(case: TestCase, model_params: Dict[str, Any]) -> Decompositi
     quote happens to contain.
 
     Returns:
-        A :class:`Decomposition`. ``core_claims`` may legitimately be empty: that
-        says the gold answer does not answer its own question, which is a defect
-        in the case rather than in the quote.
+        A :class:`StageResponse` carrying a :class:`Decomposition` and what the
+        call cost. ``core_claims`` may legitimately be empty: that says the gold
+        answer does not answer its own question, which is a defect in the case
+        rather than in the quote.
     """
     llm = build_judge_llm(model_params, _StageADecomposition)
     response = require_response(await llm.ainvoke(build_stage_a_prompt(case)), stage="A")
-    return Decomposition(
-        shortest_sufficient_answer=response.shortest_sufficient_answer,
-        claims=[Claim(text=c.text, tag=c.tag, reason=c.reason) for c in response.claims],
+    parsed = response.value
+    return StageResponse(
+        value=Decomposition(
+            shortest_sufficient_answer=parsed.shortest_sufficient_answer,
+            claims=[
+                Claim(text=c.text, tag=c.tag, reason=c.reason) for c in parsed.claims
+            ],
+        ),
+        cost=response.cost,
     )

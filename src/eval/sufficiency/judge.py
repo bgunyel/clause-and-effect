@@ -26,6 +26,7 @@ import asyncio
 from typing import Any, Dict, Tuple
 
 from src.eval.dataset import TestCase, load_tier1
+from src.eval.sufficiency.llm import StageResponse, sum_costs
 from src.eval.sufficiency.models import Adjudication, BlindAnswer, Decomposition
 from src.eval.sufficiency.stage_a import decompose
 from src.eval.sufficiency.stage_b import answer_blind, span_is_verbatim
@@ -36,7 +37,7 @@ from src.llm_config import get_llm_config
 async def probe_case(
     case: TestCase,
     model_params: Dict[str, Any],
-) -> Tuple[Decomposition, BlindAnswer, Adjudication]:
+) -> StageResponse[Tuple[Decomposition, BlindAnswer, Adjudication]]:
     """
     Run one case through A, B and C.
 
@@ -44,15 +45,26 @@ async def probe_case(
     concurrently. C consumes both, so it waits. Cases are gathered in ``main``,
     which keeps the concurrency across cases rather than across stages: a
     stage-wide barrier would idle the fast cases until the slowest caught up.
+
+    Returns:
+        The three stages' output and what the case cost across all three. As in
+        :func:`stage_a_twocall.decompose`, an unpriced stage makes the whole
+        case unpriced rather than reporting a partial total as the case's cost.
+        Stage C may contribute a true ``0.0`` — it skips the model when there is
+        nothing to adjudicate — and that is a price, not a gap.
     """
     decomposition, blind = await asyncio.gather(
         decompose(case, model_params),
         answer_blind(case, model_params),
     )
     adjudication = await adjudicate(
-        case.question, decomposition.core_claims, blind, model_params
+        case.question, decomposition.value.core_claims, blind.value, model_params
     )
-    return decomposition, blind, adjudication
+    total, unpriced = sum_costs([decomposition.cost, blind.cost, adjudication.cost])
+    return StageResponse(
+        value=(decomposition.value, blind.value, adjudication.value),
+        cost=None if unpriced else total,
+    )
 
 
 def print_stage_c(decomposition: Decomposition, blind: BlindAnswer, adjudication: Adjudication):
@@ -92,12 +104,13 @@ async def main():
     cases = {c.case_id: c for c in load_tier1()}
     picked = [cases[c] for c in wanted if c in cases]
 
-    model_params = get_llm_config()["writer_model"][0]
+    model_params = get_llm_config()["sufficiency_judge"][0]
     print(f"model: {model_params['model']}\n")
 
     results = await asyncio.gather(*[probe_case(c, model_params) for c in picked])
 
-    for case, (dec, blind, adjudication) in zip(picked, results):
+    for case, result in zip(picked, results):
+        dec, blind, adjudication = result.value
         print("=" * 78)
         print(f"{case.case_id}  [{case.answer_type}]")
         print(f"Q: {case.question}")
@@ -121,7 +134,14 @@ async def main():
         print(f"   note:   {blind.note}")
 
         print_stage_c(dec, blind, adjudication)
+        cost = "unpriced" if result.cost is None else f"${result.cost:.6f}"
+        print(f"\n-- cost: {cost} across A, B and C")
         print()
+
+    total, unpriced = sum_costs([r.cost for r in results])
+    print("=" * 78)
+    print(f"total: ${total:.6f} over {len(picked)} cases"
+          + (f", {unpriced} of them unpriced and excluded" if unpriced else ""))
 
 
 if __name__ == "__main__":

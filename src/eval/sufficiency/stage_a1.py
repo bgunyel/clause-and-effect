@@ -13,7 +13,11 @@ from typing import Any, Dict
 
 from pydantic import BaseModel, Field
 
-from src.eval.sufficiency.llm import build_judge_llm, require_response
+from src.eval.sufficiency.llm import (
+    StageResponse,
+    build_judge_llm,
+    require_response,
+)
 
 # The rules are STEP 1's from `stage_a.py`, plus one that used to be implicit.
 #
@@ -141,17 +145,20 @@ async def write_shortest_answer(
     question: str,
     answer: str,
     model_params: Dict[str, Any],
-) -> str:
+) -> StageResponse[str]:
     """
     A1 — the shortest version of ``answer`` that still fully answers ``question``.
 
     Returns:
-        The shortest sufficient answer, or an empty string when nothing in the
-        answer answers the question. An empty return is a finding about the case —
-        the gold answer does not answer its own question — and not an error.
+        A :class:`StageResponse` carrying the shortest sufficient answer and what
+        the call cost. The value is an empty string when nothing in the answer
+        answers the question: a finding about the case — the gold answer does not
+        answer its own question — and not an error.
     """
     llm = build_judge_llm(model_params, _A1ShortestAnswer)
     response = require_response(
         await llm.ainvoke(build_a1_prompt(question, answer)), stage="A1"
     )
-    return response.shortest_sufficient_answer
+    return StageResponse(
+        value=response.value.shortest_sufficient_answer, cost=response.cost
+    )

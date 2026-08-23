@@ -12,6 +12,7 @@ defective input and agrees with itself.
 """
 import asyncio
 
+from scripts.probe_spend import format_spend
 from src.eval.sufficiency.stage_a1 import A1_INSTRUCTIONS, write_shortest_answer
 from src.llm_config import get_llm_config
 
@@ -81,14 +82,15 @@ def check_literals_match_the_prompt() -> None:
 async def main() -> None:
     check_literals_match_the_prompt()
 
-    model_params = get_llm_config()["writer_model"][0]
+    model_params = get_llm_config()["sufficiency_judge"][0]
     print(f"model: {model_params['model']}  "
           f"temperature={model_params['model_args']['temperature']}\n")
 
-    outputs = await asyncio.gather(*[
+    responses = await asyncio.gather(*[
         write_shortest_answer(question, answer, model_params)
         for _, question, answer, _ in EXAMPLES
     ])
+    outputs = [r.value for r in responses]
 
     exact = 0
     for (label, question, answer, expected), actual in zip(EXAMPLES, outputs):
@@ -107,6 +109,7 @@ async def main() -> None:
 
     print("=" * 78)
     print(f"\n{exact}/{len(EXAMPLES)} reproduced exactly")
+    print(format_spend(responses))
 
 
 if __name__ == "__main__":

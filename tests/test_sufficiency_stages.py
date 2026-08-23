@@ -46,9 +46,10 @@ from src.eval.sufficiency.stage_c import (
     build_stage_c_prompt,
     render_claims,
 )
-from src.eval.sufficiency.llm import JudgeResponseError
+from src.eval.sufficiency.llm import JudgeResponseError, sum_costs
 from src.eval.sufficiency.stage_a1 import write_shortest_answer
 from src.eval.sufficiency.stage_a2 import tag_claims
+from src.eval.sufficiency.stage_a_twocall import decompose as decompose_twocall
 from src.eval.sufficiency import stage_a as stage_a_module
 from src.eval.sufficiency import stage_a1 as stage_a1_module
 from src.eval.sufficiency import stage_a2 as stage_a2_module
@@ -100,26 +101,67 @@ def make_case(**overrides) -> TestCase:
     return TestCase(**base)
 
 
+# The price a faked call reports. A literal, not a constant imported from the
+# code under test: a stage that dropped the cost on the floor and returned 0.0
+# would agree with a shared constant of 0.0 and fail against this.
+FAKE_COST = 0.000123
+
+
 class _FakeJudgeLLM:
     """Stands in for the structured-output runnable a stage builds."""
 
-    def __init__(self, response):
-        self.response = response
+    def __init__(self, payload):
+        self.payload = payload
         self.prompts = []
 
     async def ainvoke(self, prompt):
         self.prompts.append(prompt)
-        return self.response
+        return self.payload
 
 
-def install_fake_llm(monkeypatch, module, response):
+def make_payload(parsed, *, cost=FAKE_COST, content="", parsing_error=None):
+    """
+    The dict ``with_structured_output(..., include_raw=True)`` hands back.
+
+    Built here from literals rather than by calling anything in ``llm.py``,
+    because a stage is only correct if it reads the shape the *provider* sends;
+    a helper shared with the code under test would agree with whatever that code
+    happened to do. ``response_metadata`` carries ``cost`` the way OpenRouter
+    sends it — observed 2026-08-23 alongside ``cost_details`` and the usual
+    ``model_name``/``finish_reason`` keys.
+    """
+    raw = SimpleNamespace(
+        content=content,
+        response_metadata={} if cost is None else {"cost": cost},
+    )
+    return {"raw": raw, "parsed": parsed, "parsing_error": parsing_error}
+
+
+def install_fake_llm(monkeypatch, module, response, *, cost=FAKE_COST):
     """
     Replace a stage's ``build_judge_llm`` with one returning a fake runnable.
+
+    ``response`` is the *parsed* object — what the stage would have got before
+    ``include_raw``. It is wrapped in a payload here so that the twenty-odd
+    tests written against the old contract keep saying what they said, and the
+    payload shape is stated in exactly one place.
 
     Returns the fake — which records every prompt it was invoked with — and a
     dict capturing the arguments the stage passed to the builder.
     """
-    fake = _FakeJudgeLLM(response)
+    return install_fake_payload(
+        monkeypatch, module, make_payload(response, cost=cost)
+    )
+
+
+def install_fake_payload(monkeypatch, module, payload):
+    """
+    As :func:`install_fake_llm`, but for a payload built by the caller.
+
+    Used by the transport-failure tests, which need shapes no parsed response
+    can express: no payload at all, and a payload whose ``parsed`` is None.
+    """
+    fake = _FakeJudgeLLM(payload)
     captured = {}
 
     def build(model_params, schema):
@@ -197,7 +239,7 @@ def test_decompose_maps_the_response_into_a_decomposition(monkeypatch):
     )
     install_fake_llm(monkeypatch, stage_a_module, response)
 
-    decomposition = asyncio.run(decompose(make_case(), MODEL_PARAMS))
+    decomposition = asyncio.run(decompose(make_case(), MODEL_PARAMS)).value
 
     assert isinstance(decomposition, Decomposition)
     assert decomposition.shortest_sufficient_answer == response.shortest_sufficient_answer
@@ -255,7 +297,7 @@ def test_decompose_accepts_a_decomposition_with_no_core_claims(monkeypatch):
     )
     install_fake_llm(monkeypatch, stage_a_module, response)
 
-    decomposition = asyncio.run(decompose(make_case(), MODEL_PARAMS))
+    decomposition = asyncio.run(decompose(make_case(), MODEL_PARAMS)).value
 
     assert decomposition.core_claims == []
     assert len(decomposition.claims) == 1
@@ -409,7 +451,7 @@ def test_answer_blind_maps_the_response_into_a_blind_answer(monkeypatch):
     )
     install_fake_llm(monkeypatch, stage_b_module, response)
 
-    blind = asyncio.run(answer_blind(make_case(), MODEL_PARAMS))
+    blind = asyncio.run(answer_blind(make_case(), MODEL_PARAMS)).value
 
     assert blind.answered is True
     assert blind.answer == response.answer
@@ -431,7 +473,7 @@ def test_answer_blind_carries_the_insufficiency_escape(monkeypatch):
     )
     install_fake_llm(monkeypatch, stage_b_module, response)
 
-    blind = asyncio.run(answer_blind(make_case(), MODEL_PARAMS))
+    blind = asyncio.run(answer_blind(make_case(), MODEL_PARAMS)).value
 
     assert blind.answered is False
     assert blind.answer == ""
@@ -595,7 +637,7 @@ def test_adjudicate_matches_verdicts_to_claims_by_number_not_by_position(monkeyp
 
     adjudication = asyncio.run(
         adjudicate(C_QUESTION, [CORE_CLAIM, SECOND_CLAIM], BLIND, MODEL_PARAMS)
-    )
+    ).value
 
     first, second = adjudication.claim_verdicts
     assert first.claim is CORE_CLAIM
@@ -619,7 +661,7 @@ def test_adjudicate_carries_all_three_support_values(monkeypatch):
 
     adjudication = asyncio.run(
         adjudicate(C_QUESTION, [CORE_CLAIM, SECOND_CLAIM, third], BLIND, MODEL_PARAMS)
-    )
+    ).value
 
     assert [v.support for v in adjudication.claim_verdicts] == [
         "supported", "absent", "contradicted",
@@ -712,7 +754,7 @@ def test_adjudicate_makes_no_call_when_there_are_no_claims(monkeypatch):
     """
     fake, _ = install_fake_llm(monkeypatch, stage_c_module, SimpleNamespace(claim_verdicts=[]))
 
-    adjudication = asyncio.run(adjudicate(C_QUESTION, [], BLIND, MODEL_PARAMS))
+    adjudication = asyncio.run(adjudicate(C_QUESTION, [], BLIND, MODEL_PARAMS)).value
 
     assert adjudication.claim_verdicts == []
     assert fake.prompts == []
@@ -729,7 +771,7 @@ def test_adjudicate_makes_no_call_when_stage_b_produced_no_answer_text(monkeypat
 
     adjudication = asyncio.run(
         adjudicate(C_QUESTION, [CORE_CLAIM, SECOND_CLAIM], silent, MODEL_PARAMS)
-    )
+    ).value
 
     assert fake.prompts == []
     assert [v.support for v in adjudication.claim_verdicts] == ["absent", "absent"]
@@ -741,7 +783,7 @@ def test_adjudicate_treats_a_whitespace_only_answer_as_no_answer(monkeypatch):
     blank = BlindAnswer(answered=True, answer="  \n  ", minimal_span="", note="")
     fake, _ = install_fake_llm(monkeypatch, stage_c_module, SimpleNamespace(claim_verdicts=[]))
 
-    adjudication = asyncio.run(adjudicate(C_QUESTION, [CORE_CLAIM], blank, MODEL_PARAMS))
+    adjudication = asyncio.run(adjudicate(C_QUESTION, [CORE_CLAIM], blank, MODEL_PARAMS)).value
 
     assert fake.prompts == []
     assert [v.support for v in adjudication.claim_verdicts] == ["absent"]
@@ -764,7 +806,7 @@ def test_adjudicate_judges_an_answer_written_despite_the_escape(monkeypatch):
     )
     fake, _ = install_fake_llm(monkeypatch, stage_c_module, response)
 
-    adjudication = asyncio.run(adjudicate(C_QUESTION, [CORE_CLAIM], contrary, MODEL_PARAMS))
+    adjudication = asyncio.run(adjudicate(C_QUESTION, [CORE_CLAIM], contrary, MODEL_PARAMS)).value
 
     assert len(fake.prompts) == 1
     assert [v.support for v in adjudication.claim_verdicts] == ["supported"]
@@ -863,7 +905,7 @@ def test_a_stage_raises_rather_than_crashing_when_the_model_returns_nothing(
     *which* of five identically-shaped call sites failed, and a run that loses a
     case needs to record which stage lost it.
     """
-    install_fake_llm(monkeypatch, module, None)
+    install_fake_payload(monkeypatch, module, None)
 
     with pytest.raises(JudgeResponseError) as excinfo:
         asyncio.run(call())
@@ -883,3 +925,177 @@ def test_a_transport_failure_is_not_a_judgement():
     """
     assert not issubclass(JudgeResponseError, AdjudicationError)
     assert not issubclass(AdjudicationError, JudgeResponseError)
+
+
+def test_a_stage_says_what_the_model_returned_when_it_would_not_parse(monkeypatch):
+    """
+    An unparseable answer must be quoted back, not reported as silence.
+
+    Before ``include_raw`` these were the same event: a coercion failure and an
+    empty response both arrived as ``None``, and the error could only say that
+    something went wrong. They call for different repairs — a refusal is a
+    prompt problem, an empty response is a transport problem — so the text and
+    the parser's own complaint are both carried into the message.
+    """
+    install_fake_payload(
+        monkeypatch,
+        stage_a2_module,
+        make_payload(
+            None,
+            content="I cannot split this answer into claims.",
+            parsing_error=ValueError("no tool call found"),
+        ),
+    )
+
+    with pytest.raises(JudgeResponseError) as excinfo:
+        asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS))
+
+    message = str(excinfo.value)
+    assert "stage A2" in message
+    assert "I cannot split this answer into claims." in message
+    assert "no tool call found" in message
+
+
+# ------------------------------ what a call cost ---------------------------- #
+#
+# Every stage reads its price off the same payload, and every stage has to hand
+# it on. That is five call sites each of which can silently drop the field —
+# the shape of the defect the None guard was written for, so it is pinned the
+# same way: per stage, not once on the helper.
+
+@pytest.mark.parametrize(
+    "module, call, parsed",
+    [
+        (stage_a_module,
+         lambda: decompose(make_case(), MODEL_PARAMS),
+         SimpleNamespace(shortest_sufficient_answer="An answer.", claims=[])),
+        (stage_a1_module,
+         lambda: write_shortest_answer("Q?", "An answer.", MODEL_PARAMS),
+         SimpleNamespace(shortest_sufficient_answer="An answer.")),
+        (stage_a2_module,
+         lambda: tag_claims("Q?", "An answer.", MODEL_PARAMS),
+         SimpleNamespace(claims=[])),
+        (stage_b_module,
+         lambda: answer_blind(make_case(), MODEL_PARAMS),
+         SimpleNamespace(answered=True, answer="An answer.", minimal_span="An", note="")),
+        (stage_c_module,
+         lambda: adjudicate(C_QUESTION, [CORE_CLAIM], BLIND, MODEL_PARAMS),
+         SimpleNamespace(
+             claim_verdicts=[
+                 SimpleNamespace(claim_number=1, support="supported", rationale="r")
+             ]
+         )),
+    ],
+)
+def test_a_stage_carries_the_price_of_its_call(monkeypatch, module, call, parsed):
+    install_fake_llm(monkeypatch, module, parsed, cost=FAKE_COST)
+
+    assert asyncio.run(call()).cost == FAKE_COST
+
+
+def test_a_call_the_provider_did_not_price_is_unpriced_rather_than_free(monkeypatch):
+    """
+    ``cost`` is an OpenRouter field, and a provider that omits it must yield
+    ``None``.
+
+    Zero would be a lie of the expensive kind: it reads as a call that cost
+    nothing, sums into a total that looks complete, and hides spend that
+    happened. ``None`` propagates into :func:`sum_costs` as a count of what
+    could not be priced.
+    """
+    install_fake_llm(monkeypatch, stage_a2_module, SimpleNamespace(claims=[]), cost=None)
+
+    assert asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS)).cost is None
+
+
+@pytest.mark.parametrize(
+    "claims, blind",
+    [
+        ([], BLIND),
+        ([CORE_CLAIM], BlindAnswer(answered=False, answer="", minimal_span="", note="")),
+    ],
+    ids=["no claims", "no answer text"],
+)
+def test_stage_c_reports_zero_rather_than_unpriced_when_it_makes_no_call(
+    monkeypatch, claims, blind
+):
+    """
+    The other half of the distinction above. Stage C declines to call the model
+    when there is nothing to adjudicate, and a call that never happened has a
+    known price of zero — unlike a call that happened and came back unpriced.
+    Collapsing the two would make a skipped stage look like a billing gap.
+    """
+    install_fake_llm(monkeypatch, stage_c_module, SimpleNamespace(claim_verdicts=[]))
+
+    assert asyncio.run(adjudicate(C_QUESTION, claims, blind, MODEL_PARAMS)).cost == 0.0
+
+
+def test_summing_costs_returns_the_total_and_how_much_was_unpriced():
+    assert sum_costs([0.25, 0.75]) == (1.0, 0)
+
+
+def test_summing_costs_counts_the_unpriced_instead_of_treating_them_as_zero():
+    """
+    The count is what stops a partial total being read as a complete one. A
+    caller that only gets the float cannot tell $1.00 over two calls from $1.00
+    over two calls plus three that nobody could price.
+    """
+    assert sum_costs([0.25, None, 0.75, None]) == (1.0, 2)
+
+
+def test_summing_no_costs_is_zero_and_nothing_unpriced():
+    """A run that made no calls spent nothing, and knows it."""
+    assert sum_costs([]) == (0.0, 0)
+
+
+# --------------------- the two-call stage A variant ------------------------- #
+
+def test_the_two_call_variant_charges_for_both_of_its_calls(monkeypatch):
+    """
+    A1 and A2 are two calls, and the variant exists to be compared against the
+    combined stage on exactly that trade. A cost that reported one leg would
+    make the expensive option look like the cheap one.
+    """
+    install_fake_llm(
+        monkeypatch, stage_a1_module,
+        SimpleNamespace(shortest_sufficient_answer="An answer."), cost=0.001,
+    )
+    install_fake_llm(monkeypatch, stage_a2_module, SimpleNamespace(claims=[]), cost=0.002)
+
+    assert asyncio.run(decompose_twocall(make_case(), MODEL_PARAMS)).cost == 0.003
+
+
+def test_the_two_call_variant_is_unpriced_when_either_leg_is(monkeypatch):
+    """
+    Not the priced half. A number covering one of two calls, presented as the
+    cost of the pair, understates by exactly the amount nobody can see.
+    """
+    install_fake_llm(
+        monkeypatch, stage_a1_module,
+        SimpleNamespace(shortest_sufficient_answer="An answer."), cost=0.001,
+    )
+    install_fake_llm(monkeypatch, stage_a2_module, SimpleNamespace(claims=[]), cost=None)
+
+    assert asyncio.run(decompose_twocall(make_case(), MODEL_PARAMS)).cost is None
+
+
+def test_the_two_call_variant_keeps_both_halves_of_what_it_paid_for(monkeypatch):
+    """
+    The cost plumbing must not disturb what the variant is for: A1's answer and
+    A2's claims arrive unreconciled, exactly as returned.
+    """
+    install_fake_llm(
+        monkeypatch, stage_a1_module,
+        SimpleNamespace(shortest_sufficient_answer="The shortest answer."),
+    )
+    install_fake_llm(
+        monkeypatch, stage_a2_module,
+        SimpleNamespace(
+            claims=[SimpleNamespace(text="A claim.", tag="core", reason="because")]
+        ),
+    )
+
+    decomposition = asyncio.run(decompose_twocall(make_case(), MODEL_PARAMS)).value
+
+    assert decomposition.shortest_sufficient_answer == "The shortest answer."
+    assert [c.text for c in decomposition.claims] == ["A claim."]

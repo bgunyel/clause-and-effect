@@ -17,7 +17,11 @@ from pydantic import BaseModel, Field
 
 from src.eval.dataset import TestCase
 from src.eval.golden_qa import normalize_for_grounding
-from src.eval.sufficiency.llm import build_judge_llm, require_response
+from src.eval.sufficiency.llm import (
+    StageResponse,
+    build_judge_llm,
+    require_response,
+)
 from src.eval.sufficiency.models import BlindAnswer
 
 # Two structural defences against the judge answering from what it knows rather
@@ -126,7 +130,9 @@ def span_is_verbatim(span: str, quote: str) -> bool:
     return normalize_for_grounding(span) in normalize_for_grounding(quote)
 
 
-async def answer_blind(case: TestCase, model_params: Dict[str, Any]) -> BlindAnswer:
+async def answer_blind(
+    case: TestCase, model_params: Dict[str, Any]
+) -> StageResponse[BlindAnswer]:
     """
     Stage B — answer a case's question from its ``supporting_quote`` alone.
 
@@ -134,14 +140,19 @@ async def answer_blind(case: TestCase, model_params: Dict[str, Any]) -> BlindAns
     work backwards from the conclusion it is meant to be testing.
 
     Returns:
-        A :class:`BlindAnswer`. ``answered`` False is the insufficiency escape and
-        a legitimate outcome, not an error.
+        A :class:`StageResponse` carrying a :class:`BlindAnswer` and what the call
+        cost. ``answered`` False is the insufficiency escape and a legitimate
+        outcome, not an error.
     """
     llm = build_judge_llm(model_params, _StageBAnswer)
     response = require_response(await llm.ainvoke(build_stage_b_prompt(case)), stage="B")
-    return BlindAnswer(
-        answered=response.answered,
-        answer=response.answer,
-        minimal_span=response.minimal_span,
-        note=response.note,
+    parsed = response.value
+    return StageResponse(
+        value=BlindAnswer(
+            answered=parsed.answered,
+            answer=parsed.answer,
+            minimal_span=parsed.minimal_span,
+            note=parsed.note,
+        ),
+        cost=response.cost,
     )

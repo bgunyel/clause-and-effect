@@ -37,6 +37,7 @@ from collections import Counter
 from typing import Dict, List
 
 from scripts.probe_a1_baseline_cases import CASES
+from scripts.probe_spend import format_spend
 from src.eval.dataset import load_tier1
 from src.eval.sufficiency.stage_a1 import write_shortest_answer
 from src.llm_config import get_llm_config
@@ -60,7 +61,7 @@ async def main() -> None:
     if missing:
         raise SystemExit(f"case ids not found in the golden set: {missing}")
 
-    model_params = get_llm_config()["writer_model"][0]
+    model_params = get_llm_config()["sufficiency_judge"][0]
     print(f"model: {model_params['model']}  "
           f"temperature={model_params['model_args']['temperature']}")
     print(f"{len(CASES)} cases x {RUNS} runs = {len(CASES) * RUNS} calls\n")
@@ -68,15 +69,17 @@ async def main() -> None:
     # One round of six concurrent calls at a time, repeated. Independent calls
     # either way; batching only keeps the burst small.
     results: Dict[str, List[str]] = {c.case_id: [] for c in CASES}
+    responses = []
     for run in range(1, RUNS + 1):
-        outputs = await asyncio.gather(*[
+        round_responses = await asyncio.gather(*[
             write_shortest_answer(
                 loaded[c.case_id].question, loaded[c.case_id].answer, model_params
             )
             for c in CASES
         ])
-        for baseline, actual in zip(CASES, outputs):
-            results[baseline.case_id].append(actual)
+        responses.extend(round_responses)
+        for baseline, response in zip(CASES, round_responses):
+            results[baseline.case_id].append(response.value)
         print(f"  run {run}/{RUNS} complete")
 
     print()
@@ -113,6 +116,7 @@ async def main() -> None:
     print(f"\n{unstable} of {len(CASES)} cases unstable in their words; "
           f"{drift} showed punctuation-only drift.")
     print("Five runs, and these are the tuning cases. Necessary, not sufficient.")
+    print(format_spend(responses))
 
 
 if __name__ == "__main__":

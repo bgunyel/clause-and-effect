@@ -13,7 +13,11 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
-from src.eval.sufficiency.llm import build_judge_llm, require_response
+from src.eval.sufficiency.llm import (
+    StageResponse,
+    build_judge_llm,
+    require_response,
+)
 from src.eval.sufficiency.models import Claim
 
 # A2 states the criterion as a hypothetical — *consider* the shortest version that
@@ -209,7 +213,7 @@ async def tag_claims(
     question: str,
     answer: str,
     model_params: Dict[str, Any],
-) -> List[Claim]:
+) -> StageResponse[List[Claim]]:
     """
     A2 — split ``answer`` into atomic claims and tag each core or auxiliary.
 
@@ -218,12 +222,19 @@ async def tag_claims(
     returned here are an independent derivation rather than a reading of A1's text.
 
     Returns:
-        Every claim in the answer, in the order it appears. May legitimately
-        contain no core claim: that says the gold answer does not answer its own
-        question, which is a defect in the case rather than in the quote.
+        A :class:`StageResponse` carrying every claim in the answer, in the order
+        it appears, and what the call cost. The claims may legitimately contain
+        no core one: that says the gold answer does not answer its own question,
+        which is a defect in the case rather than in the quote.
     """
     llm = build_judge_llm(model_params, _A2Claims)
     response = require_response(
         await llm.ainvoke(build_a2_prompt(question, answer)), stage="A2"
     )
-    return [Claim(text=c.text, tag=c.tag, reason=c.reason) for c in response.claims]
+    return StageResponse(
+        value=[
+            Claim(text=c.text, tag=c.tag, reason=c.reason)
+            for c in response.value.claims
+        ],
+        cost=response.cost,
+    )

@@ -34,6 +34,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import List, Tuple
 
+from scripts.probe_spend import format_spend
 from src.eval.sufficiency.stage_a2 import A2_INSTRUCTIONS, tag_claims
 from src.llm_config import get_llm_config
 
@@ -141,13 +142,14 @@ def check_literals_match_the_prompt() -> None:
 async def main() -> None:
     check_literals_match_the_prompt()
 
-    model_params = get_llm_config()["writer_model"][0]
+    model_params = get_llm_config()["sufficiency_judge"][0]
     print(f"model: {model_params['model']}  "
           f"temperature={model_params['model_args']['temperature']}\n")
 
-    outputs = await asyncio.gather(*[
+    responses = await asyncio.gather(*[
         tag_claims(e.question, e.answer, model_params) for e in EXAMPLES
     ])
+    outputs = [r.value for r in responses]
 
     counts_ok = tags_ok = texts_ok = 0
     for example, claims in zip(EXAMPLES, outputs):
@@ -201,6 +203,7 @@ async def main() -> None:
     print(f"\ncount matched {counts_ok}/{n}   tags matched {tags_ok}/{n}   "
           f"texts matched {texts_ok}/{n}")
     print("Floor test: the expected output is in the prompt above the input.")
+    print(format_spend(responses))
 
 
 if __name__ == "__main__":
