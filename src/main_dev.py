@@ -28,7 +28,7 @@ def main():
     os.environ['LANGSMITH_TRACING'] = settings.LANGSMITH_TRACING
     os.environ['LANGSMITH_PROJECT'] = settings.APPLICATION_NAME.lower()
 
-    model_params = get_llm_config()["sufficiency_judge"][0]
+    model_params = get_llm_config()["sufficiency_judge"][5]
     llm = get_llm(
         model_name=model_params["model"],
         model_provider=model_params["model_provider"],
