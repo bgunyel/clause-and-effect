@@ -174,4 +174,36 @@ thing in the record.
   `max_hits` truncates the evidence, and `transformers` reported one qualifying
   file out of ten. Both tiers now pass and `make verify`, structurally unusable
   here while tier 1 was red, exits 0. Also found: the installed GuardDog is not
-  the stock 3.1.0 wheel.
+  the stock 3.1.0 wheel.- [2026-08-17 · session 2](devlog_2026-08-17_session-2.md) — stage C built and
+  tested (suite 249 → 298), the full A→B→C chain running over the eight probe
+  cases, and core-claims-only settled by Bertan on evidence rather than cost:
+  stage B answers only what was asked, so an auxiliary claim comes back `absent`
+  almost by construction. The finding that outranks the code came from running
+  it — **stage A is not stable at temperature 0, and the instability reaches the
+  verdict**: `art8_case1` returned 1, 1, 2 and 1 core claims across four
+  identical runs, and the two-claim run flips the case from `sufficient` to
+  `insufficient`. Two rounds of prompt work took the observed failures to zero
+  and introduced a new one.
+- [2026-08-22 · session 1](devlog_2026-08-22_session-1.md) — stage A split into
+  two independent calls (A1 writes the shortest sufficient answer, A2 tags the
+  claims, neither sees the other's output), six probe scripts, and 60 stability
+  calls. A1 measured clean everywhere it was pointed; A2 unstable on 3–4 of 6
+  cases, two of those failures degenerate output rather than disagreement. A
+  transport failure latent in all five stages was found and guarded —
+  `with_structured_output` returns `None` when output will not coerce, and every
+  stage read a field straight off it. Both of the session's larger results are
+  Bertan's reframings: **the judge is a defect finder for the golden set, not a
+  classifier fitted to it**, which removes the train/test framing entirely, and
+  **granularity is soft while the core/auxiliary boundary is hard**, which
+  invalidates the metric §4.6 uses.
+- [2026-08-23 · session 1](devlog_2026-08-23_session-1.md) — a judge run made
+  auditable: every stage now returns what its call cost, read off the raw message
+  that `include_raw=True` keeps, and every A2 stability sample writes a
+  provenance-carrying record into `docs/eval-reports/`. Eight OpenRouter models
+  added to `ai-common` (#31) and the config rebuilt from a list of names — where
+  a shared `model_args` dict would have let the Gemini panelist rewrite the
+  sampling of the other eight, since `ai_common.get_llm` mutates what it is
+  handed. The larger result is about the instrument: **two more stability samples
+  came back 0 of 6**, putting four samples of the same prompt and model at 4/6,
+  3/6, 0/6, 0/6 — N=5 cannot support the comparison the next measurement was
+  going to make.

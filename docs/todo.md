@@ -4,7 +4,7 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-22._
+> _Last updated: 2026-08-23._
 
 ---
 
@@ -372,6 +372,85 @@ structurally cannot see.
    fixed the one clear A2 adversarial failure — a five-item enumeration the old
    model packed into a single core claim now splits one claim per item with the
    stem repeated.
+
+   ### 2026-08-23: every call reports its cost, every sample is a record
+
+   **Cost tracking, end to end.** `build_judge_llm` now asks for
+   `with_structured_output(..., include_raw=True)` and returns a
+   `StructuredPayload` — the parsed schema plus the `AIMessage` it came from.
+   Without `include_raw` the message is dropped inside the chain and
+   `response_metadata` goes with it, which is where OpenRouter puts the price.
+   The mechanism is Bertan's (`output.response_metadata.get('cost')`); the
+   plumbing to reach it from a structured call is not. `require_response` is the
+   single unwrap point, so the price comes off the same message the parse came
+   from, and every stage returns `StageResponse(value, cost)`.
+
+   **`cost` is `float | None`, and `None` is not `0.0`.** A call that never
+   happened is free (stage C's two no-call paths report `0.0`); a call that
+   happened and came back unpriced is money nobody can account for. `sum_costs`
+   returns `(total, unpriced_count)` so a partial total cannot be printed as a
+   complete one, and both multi-call sites — `stage_a_twocall.decompose` and
+   `judge.probe_case` — go `None` if any leg is unpriced rather than reporting
+   the priced half. OpenRouter always prices, so `None` should not occur today;
+   it is modelled because **a panel is several providers by definition**.
+
+   Measured live: `probe_a2_examples` **$0.000481** over 4 calls,
+   `probe_a2_stability` **$0.003229** over 30, per case $0.000396–$0.000733.
+
+   **The error message improved as a side effect.** A coercion failure and an
+   empty response used to arrive identically as `None`. They are now told apart:
+   an absent payload reports silence, while a payload with `parsed: None` quotes
+   `parsing_error` and up to 300 characters of what the model actually said.
+   Note what is still not retried — `include_raw` *catches* the coercion failure
+   and reports it in the payload, so `.with_retry` never sees one. That was
+   equally true before, when it arrived as a returned `None`.
+
+   **Every A2 stability run now writes a record to `docs/eval-reports/`**, dated
+   and timed in the filename, refusing to overwrite an existing one, with a
+   provenance header written before the first call: commit, dirty paths, model,
+   provider, temperature, and the paths of the stage and case modules. The file
+   and the terminal are the same text. This exists because the 2026-08-22 sample
+   that was piped through `tail` cost a second sample which was not the same
+   sample.
+
+   **Two more samples, both 0 of 6, and the finding is about sample size.**
+
+   | case | 08-22 s1 | 08-22 s2 | 08-23 07:03 | 08-23 08:00 |
+   |---|---|---|---|---|
+   | `art7_case3` | stable | stable | stable | stable |
+   | `art7_case4` | stable | **unstable** | stable | stable |
+   | `art8_case1` | **unstable** | stable | stable | stable |
+   | `art33_case1` | **unstable** | **unstable** | stable | stable |
+   | `art15_case1` | **unstable** | **unstable** | stable | stable |
+   | `art41_case3` | **unstable** | stable | stable | stable |
+   | | **4 of 6** | **3 of 6** | **0 of 6** | **0 of 6** |
+
+   Same prompt (`stage_a2.py` unmodified), same model, byte-identical sampling
+   settings — checked, not assumed. Today's two samples also agree case by case
+   on claim counts: `art33_case1` split into two core claims on all ten runs,
+   `art15_case1` returned ten on all ten. **No degenerate claim appeared in 60
+   calls**, which lowers the urgency of the `""`/`"..."` guard without touching
+   its correctness — a failure that rare is exactly one a five-run sample misses.
+
+   **Operative consequence: N=5 cannot support the comparison item 2 was going to
+   make.** Four samples of one instrument reading 4/6, 3/6, 0/6, 0/6 means the
+   between-sample variance swamps the signal. Decide the sample size *before*
+   spending calls on re-running the combined `stage_a.py` under the coverage
+   metric.
+
+   **The panel roster exists and has never been called.** `llm_names` in
+   `get_llm_config` now lists nine models for `sufficiency_judge` (Bertan), and
+   the config is generated from it rather than hand-written per model. Eight of
+   the nine have never been sent a request — they are name resolution only, and
+   nothing has confirmed OpenRouter serves those ids. **One cheap call each
+   before a panel run**, or a bad id fails after the expensive part.
+
+   One line of the generator is load-bearing: `'model_args': dict(model_args)`.
+   `ai_common.get_llm` **mutates** what it is handed for Google models — it
+   forces `temperature` to 1.0 on `gemini-3*` and pops `reasoning` into
+   `thinking_level` — so a shared dict would let building the Gemini panelist
+   rewrite the sampling of the other eight, silently, the first time the panel
+   runs. `GEMINI_3_7_FLASH` is in the list.
 
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
 algorithm improvement, not a blocker — Bertan's decision, 2026-08-07. The
@@ -1904,6 +1983,14 @@ per the priority order above.
   keyed by SHA + set version (plan §6.3, §8.3).
 - [ ] **Operational metrics**: latency + cost-per-query (wire
   `calculate_token_cost` from `ai_common`).
+  - **Partly done for the judge, 2026-08-23.** Every judge stage returns
+    `StageResponse(value, cost)`, read from `response_metadata['cost']` off the
+    raw message `include_raw=True` keeps; `sum_costs` totals them and counts what
+    could not be priced. This does **not** cover the RAG path — `Generator.
+    generate` still computes nothing usable (see ⚪ below) — and it does not use
+    `calculate_token_cost`, because OpenRouter prices the call itself. That
+    fallback is for providers that do not; Bertan: not needed while we are on
+    OpenRouter.
 - [ ] Every new scorer lands **with its unit test** in `tests/`.
 
 ---
@@ -2041,13 +2128,45 @@ deliberately deferred into this work rather than done piecemeal.
   **Guard in `tag_claims` before anything else** — this removes two of the three
   current stability failures, so any measurement taken before it is fixed is
   measuring the guard's absence.
+
+  **2026-08-23: absent from 60 further calls.** Two 30-call samples produced no
+  empty and no `"..."` claim. That is evidence about the *rate*, not about the
+  guard: a failure this rare is one a five-run sample misses, which is the same
+  property that makes the stability rates unreliable. Still open, still cheap.
 - [ ] **The judge harness and the probe scripts print rather than log.**
   `eval/sufficiency/judge.py` has done so since it was written — deliberate and
   flagged, since it exists to be read on stdout — and the six `scripts/probe_a*`
-  files added 2026-08-22 follow it. That is now seven files against the standing
+  files added 2026-08-22 follow it, as do `probe_spend.py` and the report writer
+  added 2026-08-23. That is now nine files against the standing
   convention (`src/logging_setup.py`; libraries configure nothing, scripts call
   `setup_logging()`). Decide whether probe harnesses are a standing exception or
   whether they get converted.
+- [ ] 🔺 **`src/scripts/gdpr_test_data_generation.py:150` raises `KeyError:
+  'orchestrator_model'`.** The role was renamed `sufficiency_judge` on
+  2026-08-23 (Bertan) and this consumer was not repointed; committed broken in
+  `28dc9a4` deliberately, because **which role the golden-set generator reads is
+  a decision about provenance, not a rename**. `writer_model` now holds exactly
+  the model `orchestrator_model` used to (`DEEPSEEK_V_4_FLASH_0731`), which makes
+  it the least-surprising repair. Bertan's call. This is the script that produced
+  the 433 cases everything else is measured against.
+- [ ] **The eight new panelists have never been called.** `GEMINI_3_6_FLASH`,
+  `GEMINI_3_7_FLASH`, `GLM_5_3`, `GROK_4_6`, `KIMI_K3`, `MINIMAX_M_3`,
+  `QWEN_3_8_2_4T_A95B`, `QWEN_3_8_MAX` resolve through `get_model_name_alias` and
+  nothing more — ai-common #31 verified name resolution, not service. A bad id
+  inside a panel run fails after the expensive part, so send one cheap call to
+  each first.
+- [ ] **`llm_config.py`'s docstring blames torch for a cost that no longer loads
+  torch.** Measured 2026-08-23 in one process: `ai_common.enums` 0.243s / 195
+  modules, then `ai_common.llm` **+6.583s / 3,248 modules, with `torch` absent
+  from `sys.modules`**. The cost is real and the number is roughly unchanged, but
+  it is the six langchain provider SDKs rather than transformers → torch. The
+  docstring was left as written and the measurement recorded in the comment
+  beside it; reconcile the two.
+- [ ] **A bare `uv sync` prunes `[dependency-groups]` and uninstalls pytest.**
+  Hit 2026-08-23 after the lock re-resolve: the next `pytest` failed with
+  `Failed to spawn`. `uv sync --group test` restores it. Loud if the suite is the
+  next command and silent otherwise — worth a line in the README or a make
+  target, since a suite that cannot start is worse than one that fails.
 - [ ] **`max_llm_retries` is in `model_params` and nothing reads it.**
   `build_judge_llm` hardcodes `.with_retry(stop_after_attempt=3)` beside a config
   field carrying the same 3. Wire the field in so the config is live rather than
