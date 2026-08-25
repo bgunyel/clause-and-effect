@@ -24,6 +24,8 @@ the next edit hoisting it back to the top; a module boundary is not something
 you undo by accident. See ``docs/todo.md`` for the ``ai_common`` side, which is
 where the cost actually originates.
 """
+from typing import Any, Dict, List
+
 from ai_common.enums import LlmServers, ModelNames
 
 from src.config import get_settings
@@ -230,3 +232,35 @@ def get_llm_config():
     }
 
     return llm_config
+
+def panelist(entries: List[Dict[str, Any]], model: ModelNames) -> Dict[str, Any]:
+    """
+    The config entry for a named model, from one role's roster.
+
+    **Use this instead of indexing.** `get_llm_config()['sufficiency_judge'][0]`
+    appears at ten call sites, and every one of them makes the subject of a
+    measurement a consequence of where a model happens to sit in `llm_names` —
+    a list nobody reads as ordered. Reordering it, or inserting a panelist at the
+    front, silently repoints every one of those probes while their reports go on
+    saying exactly what they said before. The four A2 stability samples are the
+    concrete risk: they are only comparable to each other if they measured the
+    same model, and nothing in them recorded a reason to believe that beyond the
+    model name in the header.
+
+    Raises rather than falling back when the model is not in the roster. A probe
+    whose model has been dropped should stop and say so; measuring its neighbour
+    and reporting the result under the same title is the failure this exists to
+    prevent.
+
+    Takes the entries rather than fetching them, so the lookup is a pure
+    function of the roster and needs no settings to test.
+    """
+    for entry in entries:
+        if entry["model"] == model:
+            return entry
+    available = ", ".join(str(e["model"]).split(".", 1)[-1] for e in entries)
+    raise KeyError(
+        f"{str(model).split('.', 1)[-1]} is not in this roster. Available: "
+        f"{available}. A probe pinned to a model that has left the roster must "
+        f"stop rather than measure a different one."
+    )
