@@ -526,6 +526,57 @@ structurally cannot see.
    raises rather than falling back; **nine sites still index**, and
    `main_dev.py`'s `[5]` is Bertan's.
 
+   ### 2026-08-25 session 2: the panelist is not one server
+
+   The `require_parameters` suspicion above is **wrong**, and the thing it was
+   standing in front of is larger. OpenRouter routes one model id to whichever
+   upstream provider it picks; those providers differ in what they can actually
+   do; and **nothing has ever recorded which one answered**.
+
+   **MiniMax's channel assignment was decided by a rate limiter.** Every success
+   on record came from Venice (6/6 on tool calls) or CoreWeave (6/6 on
+   `json_schema`); every failure came from Parasail, which advertises both
+   channels and delivers neither. OpenRouter reaches the working providers by
+   falling back — one recorded chain reads `Parasail:429 -> Venice:200` — so the
+   successes are precisely the runs where Parasail refused. Console rows were
+   tied to specific runs by summing costs against the recorded report totals,
+   matching to the last displayed digit in both cases.
+
+   `require_parameters` is exonerated and worked exactly as specified: Parasail
+   advertises `tools`, `response_format` **and** `structured_outputs`, so no
+   filter phrased in terms of advertised support can exclude it, and Parasail was
+   already serving MiniMax on 2026-08-23 under no such constraint. One weaker
+   point survives — `require_parameters` filters on `response_format` while the
+   `json_schema` channel needs `structured_outputs`, and for MiniMax, DeepInfra
+   advertises the first and not the second.
+
+   **It generalises.** Within one four-minute run, DeepSeek V4 Pro was served by
+   Alibaba, Sail Research and Together; Qwen 3.8-27B by AkashML, Phala and Io
+   Net; Qwen 3.8-2.4T by DeepInfra, SiliconFlow and Modal. Only Grok and Gemini
+   are single-provider. **The premise this config rests on — every panelist runs
+   identical settings, so a disagreement is a disagreement about the case — is
+   broken one layer below the configuration.**
+
+   It reaches backwards too. DeepSeek V4 Pro's clean zero in the 2026-08-25
+   reasoning sample was the call **Together** served; its 2663 reasoning tokens
+   on the other case came from **Sail Research**. A model compared against itself
+   was two different machines. Grok's zero was `xAI` on both calls and still has
+   no explanation.
+
+   **Three measurements shaped what follows.** The served provider is on the wire
+   and **dropped by the client library** — asserted twice by the assistant from
+   reading `langchain_openrouter` source, and false. The generation record takes
+   **8–10 seconds** to become readable, which is what forces the call log to be
+   two-phase. A local row write is free (0.012 ms median under WAL); the remote
+   figure is unmeasured.
+
+   **Bertan's direction:** log model calls to a remote PostgreSQL database
+   through SQLAlchemy, addressed by an optional URL, written by an `llm_call()`
+   wrapper *after* the timed region so evaluation latency stays the model's
+   latency alone. Recorded in full at
+   [`design/llm-call-log.md`](design/llm-call-log.md) — a **draft**, carrying
+   eleven open questions and eight traps, and the first task of the next session.
+
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
 algorithm improvement, not a blocker — Bertan's decision, 2026-08-07. The
 current chunker's known defects (below) are accepted for the baseline run; they
@@ -2066,6 +2117,46 @@ per the priority order above.
     fallback is for providers that do not; Bertan: not needed while we are on
     OpenRouter.
 - [ ] Every new scorer lands **with its unit test** in `tests/`.
+- [ ] **Finish [`design/llm-call-log.md`](design/llm-call-log.md), then build
+  it.** Bertan's instruction, 2026-08-25: the design document comes first.
+  Eleven open questions in it; three gate the build — **where the Postgres
+  instance lives** (serverless cold-start and connection limits change the
+  engine setup), **the async driver** (`create_async_engine` + `asyncpg`, or a
+  sync session in `asyncio.to_thread`), and **whether a failed call stores its
+  raw text in full**.
+  - The build is an `llm_call()` wrapper at the five stage call sites
+    (`stage_a.py:326`, `a1:158`, `a2:230`, `b:147`, `c:275`), a two-phase row,
+    and an enrichment sweep for what only `/api/v1/generation` carries.
+  - **The timed region must exclude the write**, or every latency number in the
+    eval becomes a latency-plus-bookkeeping number.
+  - Two new dependencies — `sqlalchemy` and an async driver — go through the
+    GuardDog gate, so this brings `make scan` / `upgrade-safe` into the change.
+- [ ] **Pin the provider per panelist.** The log makes routing *visible*; it does
+  not make it *stable*. Panel-wide or MiniMax only, and which provider MiniMax
+  gets — CoreWeave + `json_schema` keeps the committed channel, Venice +
+  `function_calling` is the other coherent pair, and no other combination exists
+  because each of those providers lacks the other's channel. **Bertan's call.**
+  - `provider: {"only": [...], "allow_fallbacks": False}` is the knob.
+    `require_parameters` is not — it filters on advertised support, and Parasail
+    advertises everything.
+  - It costs availability: 429s are common enough that two of two sampled Qwen
+    calls hit one, so a pinned panelist will fail outright where it currently
+    falls back. That is the same trade this config already took once — explicit
+    failure over silent degradation — but it will bite more often.
+- [ ] **Re-measure the `structured_output` channel table under pinned
+  providers.** Every entry in it was measured across runs whose provider varied
+  and was never recorded, so it is a mixture measurement throughout. Grok and
+  Gemini are single-provider and unaffected.
+- [ ] **Demote LangSmith to opt-in, behind one entry-point setup function.**
+  It is enabled in exactly one place today — `main_dev.py:27-29` — so every panel
+  run, both stability samples and the reasoning-channel probe ran untraced. The
+  proposal to enable it everywhere was withdrawn 2026-08-25: our workload is
+  structurally close to its worst case (large payloads; one judge call is a
+  nested tree through `with_structured_output(include_raw=True)` + `with_retry`),
+  and our prompts are reproducible from case id, stage and commit, so what it
+  would carry is largely recoverable. Turn it on where a trace earns its keep —
+  `ComplianceAgent` is a genuine multi-step tree. Decide whether the separate
+  `clause-and-effect-eval` project survives being opt-in.
 
 ---
 
@@ -2194,6 +2285,28 @@ deliberately deferred into this work rather than done piecemeal.
 
 ## ⚪ Known code issues
 
+- [ ] 🔺 **A comment in `llm_config.py` is false.** *"MiniMax M3's OpenRouter
+  endpoint does not accept tools at all (their documentation), which is why it
+  answered in the schema's shape as prose."* **Venice served it 6/6 on tool
+  calls**, 2026-08-23, cost-matched to report `162138`. The sentence is the
+  mechanism half of the "two assignments rest on a mechanism, the rest on counts"
+  comment, and the mechanism was a provider that cannot do `response_format`, not
+  a model that cannot do tools. Correcting it is not cosmetic — that comment is
+  the stated reason MiniMax is on the channel it is on.
+- [ ] 🔺 **Retries produce billed generations that nothing sees.**
+  `build_judge_llm` attaches `.with_retry(stop_after_attempt=3)` on all three
+  channels. A retried call produces more than one generation at the provider,
+  each billed, and the returned message carries only the last one's id — so
+  **every cost total this project has reported may be an undercount**, for a
+  second and different reason from the unpriced-failure one already recorded.
+  Unverified: whether the callback layer can see the discarded attempts. The call
+  log inherits the same blind spot unless it can.
+- [ ] **`langchain_openrouter` drops the `provider` field.** OpenRouter returns
+  the serving provider at the top level of the response body; `_create_chat_result`
+  calls `response.model_dump(by_alias=True)` on the SDK object and it does not
+  survive, while declared fields such as `system_fingerprint` do. Measured
+  2026-08-25 on the real judge path. Worked around locally by reading it off the
+  wire or from `/api/v1/generation`; decide whether to report it upstream.
 - [ ] 🔺 **A2 can return a claim whose text is empty or `"..."`, and the schema
   accepts it.** Found 2026-08-22 in the stability runs: one run returned a single
   core claim with text `"..."`, another with text `""`. Both were the entire

@@ -207,3 +207,31 @@ thing in the record.
   came back 0 of 6**, putting four samples of the same prompt and model at 4/6,
   3/6, 0/6, 0/6 — N=5 cannot support the comparison the next measurement was
   going to make.
+- [2026-08-23 · session 2](devlog_2026-08-23_session-2.md) — the panel stood up,
+  and almost everything found was about the instrument rather than the judges:
+  reasoning effort silently lost after the first call, no timeout anywhere, and
+  structured output failing for reasons unrelated to judgement — so each panelist
+  now gets its own measured channel, at the cost of the uniformity the config
+  otherwise keeps. The panel does agree, 4–5 of 6 cases unanimous, but every run
+  disagreed with the one before it by about as much as the panelists disagreed
+  with each other. The most consequential finding is Bertan's, from the
+  OpenRouter console rather than the code: **MiniMax's "failures" were
+  successful, billed generations that we discarded.**
+- [2026-08-25 · session 1](devlog_2026-08-25_session-1.md) — three facts the code
+  was holding at the moment of failure and throwing away — the price of a failed
+  call, the generation id, the reasoning budget — recorded as
+  `CallRecord(generation_id, cost, reasoning_tokens)`. Once recorded, two beliefs
+  about the panel proved wrong: the reasoning-suppression suspicion **does not
+  reproduce** on the model that raised it, and A2 stability at 25 runs reads a
+  substantive **0 of 6**, the one flagged case differing by the word `and`.
+  Bertan's catch changed the most code — `[0]` on the roster at ten call sites
+  makes the subject of a measurement a consequence of list order.
+- [2026-08-25 · session 2](devlog_2026-08-25_session-2.md) — no code, by intent.
+  MiniMax's channel failure was traced to its root and is **not about MiniMax**:
+  OpenRouter routes one model id to whichever upstream provider it picks, those
+  providers differ in what they can do, and nothing recorded which one answered.
+  Every MiniMax success on record came from a provider reached by **falling back
+  from one that returned 429** — the channel assignment was decided by a rate
+  limiter. The premise `llm_config.py` rests on is broken one layer below the
+  configuration. Bertan directed that calls be logged to a database; the session
+  closed with a draft design document and eleven open questions.
