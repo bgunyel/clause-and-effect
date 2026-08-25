@@ -77,7 +77,29 @@ class JudgeResponseError(RuntimeError):
     is what lets a caller tell "the judge decided" from "the judge did not
     answer" — a distinction an eval instrument cannot afford to blur, since a
     swallowed one would silently shrink the sample.
+
+    **A failure carries what the failed call cost and which generation it was.**
+    Both are keyword-only and neither has a default, because the defect this
+    repairs is precisely that they were in hand and thrown away: the raise sites
+    read the raw message, and then dropped it. Observed 2026-08-23 — a MiniMax
+    response that raised here reported ``finish_reason: stop`` and
+    ``cost: 0.0011607`` on the very message the error was built from, while
+    every report of that run said failed calls "may still have been billed".
+    They *were* billed, by a knowable amount; 20 calls across three panel runs
+    went unaccounted for that way. A defaulted ``None`` would let a future raise
+    site re-create the same silence by omission.
     """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        cost: float | None,
+        generation_id: str | None,
+    ) -> None:
+        super().__init__(message)
+        self.cost = cost
+        self.generation_id = generation_id
 
 
 class StructuredPayload(TypedDict, Generic[_SchemaT]):
@@ -99,7 +121,7 @@ class StructuredPayload(TypedDict, Generic[_SchemaT]):
 @dataclass(frozen=True)
 class StageResponse(Generic[_ValueT]):
     """
-    One stage's result and what the call to produce it cost.
+    One stage's result, what the calls to produce it cost, and which they were.
 
     ``cost`` is ``None`` when the provider did not report one, and that is not
     the same as ``0.0``. A stage that made no call at all is genuinely free —
@@ -112,10 +134,30 @@ class StageResponse(Generic[_ValueT]):
     against the current configuration. It is modelled anyway because the panel
     (§8) is the reason the cost is being tracked, and a panel is several
     providers by definition.
+
+    ``generation_ids`` holds **one entry per model call behind this response**,
+    in the order the calls were made. A stage that made none has ``()`` — stage
+    C's two no-call paths, where it is the exact companion of ``cost=0.0``. The
+    two-call variant has two, and :func:`judge.probe_case` has the union of its
+    three stages. An entry is ``None`` when the call happened and the provider
+    named no generation, which is the same distinction ``cost`` draws: nothing
+    to report is not the same as nothing to look up.
+
+    **Plural, though the design note (devlog 2026-08-23) proposed a singular
+    ``generation_id``.** Singular composes wrong at the only two sites that
+    matter: ``stage_a_twocall.decompose`` and ``judge.probe_case`` aggregate
+    several calls into one response, and a single field forces them to pick one
+    id and drop the rest — losing exactly the calls whose spend the aggregate is
+    already summing. Cost survives aggregation by addition; ids survive it by
+    concatenation, and ``()`` for no calls keeps both readings honest.
+
+    The id is ``response_metadata['id']``, the join key to the provider's
+    console — see :func:`_generation_id_of`.
     """
 
     value: _ValueT
     cost: float | None
+    generation_ids: Tuple[str | None, ...]
 
 
 def sum_costs(costs: Iterable[float | None]) -> Tuple[float, int]:
@@ -143,6 +185,51 @@ def _cost_of(raw: Any) -> float | None:
     return metadata.get("cost")
 
 
+def _generation_id_of(raw: Any) -> str | None:
+    """
+    The provider's own id for one generation, if it named one.
+
+    ``response_metadata['id']``, and specifically **not** ``raw.id``. Measured
+    2026-08-25 on both channels: the message's own ``id`` is a LangChain run
+    identifier minted in this process (``lc_run--01a0376a-7f1a-…``), while
+    OpenRouter's is ``gen-1787636121-eAEcEp3BID10rZPfqZgv`` and appears only in
+    the metadata. ``raw.id`` is the tempting attribute and it is worthless here,
+    because it joins to nothing outside this process.
+
+    This is the one field that makes a run auditable against the provider. It is
+    also the field whose absence made Bertan's 2026-08-23 finding manual work:
+    the panel had recorded MiniMax as failing on cases the OpenRouter console
+    showed as successful, and the two could only be matched by re-running the
+    case with a diagnostic that printed an id the judge itself never kept.
+
+    ``.get`` for the same reason as :func:`_cost_of`: this is a provider field,
+    not a LangChain one, and a response without it must yield an unidentified
+    call rather than a ``KeyError`` that loses a judgement over bookkeeping.
+    """
+    metadata = getattr(raw, "response_metadata", None) or {}
+    return metadata.get("id")
+
+
+def _audit_note(cost: float | None, generation_id: str | None) -> str:
+    """
+    Where to find this call at the provider, appended to a failure's message.
+
+    In the message and not only on the exception, because a failure most often
+    reaches a human as a line in a report or a traceback. An id that is only
+    reachable through ``exc.generation_id`` is one nobody reads at the moment
+    they are looking at the failure — which is the state this whole change is
+    correcting.
+    """
+    where = (
+        f"generation {generation_id}"
+        if generation_id
+        else "no generation id was reported, so this call cannot be matched "
+        "against the provider's console"
+    )
+    price = "not reported" if cost is None else f"${cost:.6f}"
+    return f"[{where}; cost {price}]"
+
+
 def _excerpt(raw: Any) -> str:
     """What the model actually said, shortened, for an error message."""
     content = getattr(raw, "content", "") or ""
@@ -158,9 +245,15 @@ def require_response(
     """
     Unwrap a stage's structured payload, or raise naming the stage.
 
-    The single place the raw message is read, so it is also where the cost is
-    taken off it: a stage that mapped its schema and discarded the payload would
-    have to be edited twice to keep the two in step.
+    The single place the raw message is read, so it is also where the cost and
+    the generation id are taken off it: a stage that mapped its schema and
+    discarded the payload would have to be edited twice to keep them in step.
+
+    **Both are recorded on the failure paths too, and that is the point.** A
+    call that could not be parsed was still made, still billed, and still exists
+    at the provider under an id. Raising without them — which is what this did
+    until 2026-08-25 — throws away the two facts that would let someone check
+    what actually happened, at exactly the moment they most need checking.
 
     Two failures reach here, and they are told apart rather than merged.
     ``None`` is nothing at all — the chain yielded no payload. A payload whose
@@ -183,22 +276,42 @@ def require_response(
         JudgeResponseError: if the model returned no parseable structure.
     """
     if payload is None:
+        # Nothing came back at all, so there is nothing to read a price or an id
+        # off. This is the one failure that is genuinely unaccountable, and it
+        # says so rather than implying the call was free.
         raise JudgeResponseError(
             f"stage {stage}: the model returned no output at all. The case was "
-            f"not judged; it must not be recorded as one that was."
+            f"not judged; it must not be recorded as one that was. "
+            f"{_audit_note(None, None)}",
+            cost=None,
+            generation_id=None,
         )
 
     parsed = payload.get("parsed")
     if parsed is None:
+        # The opposite case, and the common one: the model answered, the answer
+        # would not coerce, and the message carrying the answer also carries
+        # what it cost and which generation it was. Both are taken off the same
+        # message the excerpt is quoted from, so a report can state the spend of
+        # its failures instead of describing it as a floor.
         raw = payload.get("raw")
+        cost = _cost_of(raw)
+        generation_id = _generation_id_of(raw)
         raise JudgeResponseError(
             f"stage {stage}: the model's output would not coerce into its "
             f"schema ({payload.get('parsing_error')!r}). It returned: "
             f"{_excerpt(raw)}. The case was not judged; it must not be recorded "
-            f"as one that was."
+            f"as one that was. {_audit_note(cost, generation_id)}",
+            cost=cost,
+            generation_id=generation_id,
         )
 
-    return StageResponse(value=parsed, cost=_cost_of(payload.get("raw")))
+    raw = payload.get("raw")
+    return StageResponse(
+        value=parsed,
+        cost=_cost_of(raw),
+        generation_ids=(_generation_id_of(raw),),
+    )
 
 
 def payload_from_tool_call(

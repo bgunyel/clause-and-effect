@@ -155,4 +155,5 @@ async def answer_blind(
             note=parsed.note,
         ),
         cost=response.cost,
+        generation_ids=response.generation_ids,
     )

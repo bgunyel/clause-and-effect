@@ -115,6 +115,14 @@ def make_case(**overrides) -> TestCase:
 # would agree with a shared constant of 0.0 and fail against this.
 FAKE_COST = 0.000123
 
+# The generation id a faked call reports, in the shape OpenRouter actually
+# sends — measured 2026-08-25 on both structured-output channels, alongside
+# `cost` and `model_name` in `response_metadata`. A literal for the same reason
+# as the price above, and a realistic one because the point of the field is that
+# it can be pasted into the provider's console: a placeholder like "id-1" would
+# let a stage substitute the LangChain run id (`lc_run--…`) and still pass.
+FAKE_GENERATION_ID = "gen-1787636121-eAEcEp3BID10rZPfqZgv"
+
 
 class _FakeJudgeLLM:
     """Stands in for the structured-output runnable a stage builds."""
@@ -128,25 +136,44 @@ class _FakeJudgeLLM:
         return self.payload
 
 
-def make_payload(parsed, *, cost=FAKE_COST, content="", parsing_error=None):
+def make_payload(
+    parsed,
+    *,
+    cost=FAKE_COST,
+    generation_id=FAKE_GENERATION_ID,
+    content="",
+    parsing_error=None,
+):
     """
     The dict ``with_structured_output(..., include_raw=True)`` hands back.
 
     Built here from literals rather than by calling anything in ``llm.py``,
     because a stage is only correct if it reads the shape the *provider* sends;
     a helper shared with the code under test would agree with whatever that code
-    happened to do. ``response_metadata`` carries ``cost`` the way OpenRouter
-    sends it — observed 2026-08-23 alongside ``cost_details`` and the usual
-    ``model_name``/``finish_reason`` keys.
+    happened to do. ``response_metadata`` carries ``cost`` and ``id`` the way
+    OpenRouter sends them — observed 2026-08-23 and 2026-08-25 alongside
+    ``cost_details`` and the usual ``model_name``/``finish_reason`` keys.
+
+    The two are omitted independently, because they go missing independently: a
+    provider that prices without identifying, or identifies without pricing, is
+    a different gap in the record and each has its own reading.
+
+    ``raw`` deliberately has **no** ``id`` attribute. The real message does — it
+    is the LangChain run id, minted locally and useless for looking anything up
+    — so a fake that carried one would let a stage read the wrong field and pass.
     """
-    raw = SimpleNamespace(
-        content=content,
-        response_metadata={} if cost is None else {"cost": cost},
-    )
+    metadata = {}
+    if cost is not None:
+        metadata["cost"] = cost
+    if generation_id is not None:
+        metadata["id"] = generation_id
+    raw = SimpleNamespace(content=content, response_metadata=metadata)
     return {"raw": raw, "parsed": parsed, "parsing_error": parsing_error}
 
 
-def install_fake_llm(monkeypatch, module, response, *, cost=FAKE_COST):
+def install_fake_llm(
+    monkeypatch, module, response, *, cost=FAKE_COST, generation_id=FAKE_GENERATION_ID
+):
     """
     Replace a stage's ``build_judge_llm`` with one returning a fake runnable.
 
@@ -159,7 +186,7 @@ def install_fake_llm(monkeypatch, module, response, *, cost=FAKE_COST):
     dict capturing the arguments the stage passed to the builder.
     """
     return install_fake_payload(
-        monkeypatch, module, make_payload(response, cost=cost)
+        monkeypatch, module, make_payload(response, cost=cost, generation_id=generation_id)
     )
 
 
@@ -1108,6 +1135,236 @@ def test_the_two_call_variant_keeps_both_halves_of_what_it_paid_for(monkeypatch)
 
     assert decomposition.shortest_sufficient_answer == "The shortest answer."
     assert [c.text for c in decomposition.claims] == ["A claim."]
+
+
+# --------------------- which generation each call was ----------------------- #
+#
+# The join key to the provider's console, and the field whose absence turned a
+# real finding into hand-matching: three panel runs recorded MiniMax as failing
+# on cases OpenRouter showed as successful, and reconciling the two meant
+# re-running a case with a diagnostic that printed an id the judge never kept.
+#
+# Pinned per stage for the same reason the price is: five call sites, each able
+# to drop the field on its own, and a dropped id is invisible in the output.
+
+@pytest.mark.parametrize(
+    "module, call, parsed",
+    [
+        (stage_a_module,
+         lambda: decompose(make_case(), MODEL_PARAMS),
+         SimpleNamespace(shortest_sufficient_answer="An answer.", claims=[])),
+        (stage_a1_module,
+         lambda: write_shortest_answer("Q?", "An answer.", MODEL_PARAMS),
+         SimpleNamespace(shortest_sufficient_answer="An answer.")),
+        (stage_a2_module,
+         lambda: tag_claims("Q?", "An answer.", MODEL_PARAMS),
+         SimpleNamespace(claims=[])),
+        (stage_b_module,
+         lambda: answer_blind(make_case(), MODEL_PARAMS),
+         SimpleNamespace(answered=True, answer="An answer.", minimal_span="An", note="")),
+        (stage_c_module,
+         lambda: adjudicate(C_QUESTION, [CORE_CLAIM], BLIND, MODEL_PARAMS),
+         SimpleNamespace(
+             claim_verdicts=[
+                 SimpleNamespace(claim_number=1, support="supported", rationale="r")
+             ]
+         )),
+    ],
+)
+def test_a_stage_carries_the_generation_id_of_its_call(monkeypatch, module, call, parsed):
+    install_fake_llm(monkeypatch, module, parsed, generation_id=FAKE_GENERATION_ID)
+
+    assert asyncio.run(call()).generation_ids == (FAKE_GENERATION_ID,)
+
+
+def test_a_call_the_provider_did_not_identify_is_still_recorded_as_a_call(monkeypatch):
+    """
+    ``(None,)`` and not ``()``.
+
+    The tuple's length is the number of calls made, so an empty one means the
+    stage never called the model — which is a real state, and stage C's. A call
+    the provider declined to name is a call that happened, was billed, and
+    cannot be looked up; collapsing it into "no call" would delete the evidence
+    that there is something missing.
+    """
+    install_fake_llm(
+        monkeypatch, stage_a2_module, SimpleNamespace(claims=[]), generation_id=None
+    )
+
+    assert asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS)).generation_ids == (
+        None,
+    )
+
+
+@pytest.mark.parametrize(
+    "claims, blind",
+    [
+        ([], BLIND),
+        ([CORE_CLAIM], BlindAnswer(answered=False, answer="", minimal_span="", note="")),
+    ],
+    ids=["no claims", "no answer text"],
+)
+def test_stage_c_records_no_generation_when_it_makes_no_call(monkeypatch, claims, blind):
+    """
+    The companion of ``cost == 0.0`` on the same two paths: nothing was called,
+    so there is nothing to point at.
+    """
+    install_fake_llm(monkeypatch, stage_c_module, SimpleNamespace(claim_verdicts=[]))
+
+    result = asyncio.run(adjudicate(C_QUESTION, claims, blind, MODEL_PARAMS))
+
+    assert result.generation_ids == ()
+
+
+def test_the_two_call_variant_carries_both_generation_ids_in_call_order(monkeypatch):
+    """
+    A1's then A2's. The pair is two billed generations and both have to be
+    reachable — a single id would name one of them and silently disown the other.
+    """
+    a1_id, a2_id = "gen-aaa", "gen-bbb"
+    install_fake_llm(
+        monkeypatch, stage_a1_module,
+        SimpleNamespace(shortest_sufficient_answer="An answer."), generation_id=a1_id,
+    )
+    install_fake_llm(
+        monkeypatch, stage_a2_module, SimpleNamespace(claims=[]), generation_id=a2_id,
+    )
+
+    result = asyncio.run(decompose_twocall(make_case(), MODEL_PARAMS))
+
+    assert result.generation_ids == (a1_id, a2_id)
+
+
+def test_the_two_call_variant_keeps_the_identified_leg_when_the_other_is_not(monkeypatch):
+    """
+    Ids do not aggregate the way the price does, and this is the test that says so.
+
+    An unpriced leg makes the *pair* unpriced, because a total covering half the
+    calls is worse than no total. An unidentified leg makes only that leg
+    unidentifiable: the other one still exists at the provider and is still worth
+    being able to open.
+    """
+    install_fake_llm(
+        monkeypatch, stage_a1_module,
+        SimpleNamespace(shortest_sufficient_answer="An answer."), generation_id=None,
+    )
+    install_fake_llm(
+        monkeypatch, stage_a2_module, SimpleNamespace(claims=[]),
+        generation_id=FAKE_GENERATION_ID,
+    )
+
+    result = asyncio.run(decompose_twocall(make_case(), MODEL_PARAMS))
+
+    assert result.generation_ids == (None, FAKE_GENERATION_ID)
+
+
+# ------------- what a failed call cost, and which one it was ---------------- #
+#
+# The 2026-08-23 finding in one line: a call that could not be parsed was still
+# made, still billed, and still exists at the provider under an id. Raising
+# without those two facts is what made three reports say failed calls "may still
+# have been billed" — they had been, by an amount the error was holding.
+
+def test_a_failed_call_carries_the_cost_the_provider_charged(monkeypatch):
+    """
+    Not a floor, not an estimate — the number off the message that failed.
+
+    Reproduced live 2026-08-23: MiniMax returned ``finish_reason: stop`` and
+    ``cost: 0.0011607`` on a response the panel recorded as a failure, and 20
+    such calls across three runs were left out of the totals.
+    """
+    install_fake_payload(
+        monkeypatch,
+        stage_a2_module,
+        make_payload(None, cost=FAKE_COST, content="Prose, not a tool call."),
+    )
+
+    with pytest.raises(JudgeResponseError) as excinfo:
+        asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS))
+
+    assert excinfo.value.cost == FAKE_COST
+
+
+def test_a_failed_call_carries_its_generation_id(monkeypatch):
+    """The other half: the failure is checkable against the provider's console."""
+    install_fake_payload(
+        monkeypatch,
+        stage_a2_module,
+        make_payload(None, generation_id=FAKE_GENERATION_ID, content="Prose."),
+    )
+
+    with pytest.raises(JudgeResponseError) as excinfo:
+        asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS))
+
+    assert excinfo.value.generation_id == FAKE_GENERATION_ID
+
+
+def test_a_failure_names_the_generation_in_its_message(monkeypatch):
+    """
+    On the message, not only on the exception.
+
+    A failure usually reaches a person as a line in a report or a traceback, and
+    an id reachable only through ``exc.generation_id`` is one nobody has in front
+    of them at the moment they are asking what went wrong.
+    """
+    install_fake_payload(
+        monkeypatch,
+        stage_a2_module,
+        make_payload(None, cost=FAKE_COST, generation_id=FAKE_GENERATION_ID),
+    )
+
+    with pytest.raises(JudgeResponseError) as excinfo:
+        asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS))
+
+    message = str(excinfo.value)
+    assert FAKE_GENERATION_ID in message
+    assert "0.000123" in message
+
+
+def test_silence_carries_no_cost_and_no_generation_and_says_so(monkeypatch):
+    """
+    The one failure that really is unaccountable, and it must not pretend
+    otherwise.
+
+    No payload means no message, so there is nothing to read either field off.
+    ``cost=None`` rather than ``0.0`` for the reason the priced path already
+    draws: this is "unknown", not "free". The message says the call cannot be
+    matched against the console, which is the honest form of a missing id.
+    """
+    install_fake_payload(monkeypatch, stage_a2_module, None)
+
+    with pytest.raises(JudgeResponseError) as excinfo:
+        asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS))
+
+    assert excinfo.value.cost is None
+    assert excinfo.value.generation_id is None
+    assert "cannot be matched" in str(excinfo.value)
+
+
+def test_a_billed_call_that_skipped_the_tool_is_priced_and_identified(monkeypatch):
+    """
+    The MiniMax case end to end, through the ``TOOL_CALL_AUTO`` path.
+
+    A model that answers in prose instead of calling the tool produces a
+    ``parsed: None`` payload built by :func:`payload_from_tool_call` around a
+    real, billed ``AIMessage``. That is the exact shape whose cost and id were
+    being discarded, so it is pinned through the same public path a stage uses
+    rather than against the helper alone.
+    """
+    message = SimpleNamespace(
+        content="claims:\n  CORE - \"No.\"",
+        tool_calls=[],
+        response_metadata={"cost": FAKE_COST, "id": FAKE_GENERATION_ID},
+    )
+    install_fake_payload(
+        monkeypatch, stage_a2_module, payload_from_tool_call(message, _Claims)
+    )
+
+    with pytest.raises(JudgeResponseError) as excinfo:
+        asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS))
+
+    assert excinfo.value.cost == FAKE_COST
+    assert excinfo.value.generation_id == FAKE_GENERATION_ID
 
 
 # ------------------- what the provider does to the config ------------------- #

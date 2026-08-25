@@ -90,4 +90,10 @@ async def decompose(
             claims=a2.value,
         ),
         cost=None if unpriced else total,
+        # Concatenated in call order — A1 then A2 — rather than reduced to one.
+        # The cost above collapses to `None` when either leg is unpriced, which
+        # is right for a number that is only usable whole; ids are not that kind
+        # of value. Dropping one because the other is missing would hide the leg
+        # that *did* run from anyone trying to look this pair up.
+        generation_ids=a1.generation_ids + a2.generation_ids,
     )

@@ -64,6 +64,13 @@ async def probe_case(
     return StageResponse(
         value=(decomposition.value, blind.value, adjudication.value),
         cost=None if unpriced else total,
+        # A, B, then C — and C contributes nothing on the two paths where it
+        # makes no call, so a case's id count is 2 or 3 and says which it was.
+        generation_ids=(
+            decomposition.generation_ids
+            + blind.generation_ids
+            + adjudication.generation_ids
+        ),
     )
 
 

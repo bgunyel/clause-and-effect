@@ -160,5 +160,7 @@ async def write_shortest_answer(
         await llm.ainvoke(build_a1_prompt(question, answer)), stage="A1"
     )
     return StageResponse(
-        value=response.value.shortest_sufficient_answer, cost=response.cost
+        value=response.value.shortest_sufficient_answer,
+        cost=response.cost,
+        generation_ids=response.generation_ids,
     )

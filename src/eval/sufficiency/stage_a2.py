@@ -237,4 +237,5 @@ async def tag_claims(
             for c in response.value.claims
         ],
         cost=response.cost,
+        generation_ids=response.generation_ids,
     )

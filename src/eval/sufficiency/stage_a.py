@@ -334,4 +334,5 @@ async def decompose(
             ],
         ),
         cost=response.cost,
+        generation_ids=response.generation_ids,
     )

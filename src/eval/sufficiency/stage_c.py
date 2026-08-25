@@ -259,10 +259,18 @@ async def adjudicate(
         AdjudicationError: if the response does not carry exactly one verdict per
             claim. See :func:`_verdicts_by_claim_number`.
     """
+    # `generation_ids=()` is the companion of `cost=0.0` on both no-call paths:
+    # no call was made, so there is no generation to point at. An empty tuple
+    # says that, where a `(None,)` would claim a call happened and went
+    # unidentified.
     if not claims:
-        return StageResponse(value=Adjudication(claim_verdicts=[]), cost=0.0)
+        return StageResponse(
+            value=Adjudication(claim_verdicts=[]), cost=0.0, generation_ids=()
+        )
     if not blind_answer.answer.strip():
-        return StageResponse(value=_nothing_to_carry(claims), cost=0.0)
+        return StageResponse(
+            value=_nothing_to_carry(claims), cost=0.0, generation_ids=()
+        )
 
     llm = build_judge_llm(model_params, _StageCAdjudication)
     response = require_response(
@@ -283,4 +291,5 @@ async def adjudicate(
             ]
         ),
         cost=response.cost,
+        generation_ids=response.generation_ids,
     )
