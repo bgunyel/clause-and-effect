@@ -54,6 +54,22 @@ single trivial call. Over 433 cases x 3 stages x 8 members, which panelists are
 in the panel decides the run's cost by two orders of magnitude, so a report that
 says who agreed but not what they charged cannot be used to choose.
 
+**Failed calls are priced too, since 2026-08-25.** The three samples before that
+date said their totals were "a floor - failed calls are unpriced and may still
+have been billed", which understated them by 11, 6 and 3 calls. It was never
+true: a response that would not coerce arrives on a message carrying its price,
+and the judge discarded it while raising. A model that fails half its cases while
+being billed for them is expensive in a way "cost of answers" alone reports as
+cheap, which is exactly how MiniMax read at 2/6. What stays genuinely unknown is
+narrower and is now named as such: a timeout, where nothing came back at all and
+the generation may have completed and been billed after we stopped waiting.
+
+**Every call is listed with its provider-side generation id.** That table is the
+only thing in this report the OpenRouter console can contradict - and on
+2026-08-23 it did, showing as successful six MiniMax generations recorded here
+as failures. Reconciling the two took a hand-run diagnostic, because nothing in
+the run kept an id.
+
 Run:
 
     uv run python -m scripts.probe_a2_panel
@@ -64,7 +80,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from scripts.probe_a2_baseline_cases import CASES
 from scripts.probe_a2_stability import (
@@ -76,7 +92,7 @@ from scripts.probe_a2_stability import (
 )
 from src.clause_and_effect.chunking.chunk_store import git_state
 from src.eval.dataset import load_tier1
-from src.eval.sufficiency.llm import sum_costs
+from src.eval.sufficiency.llm import JudgeResponseError, sum_costs
 from src.eval.sufficiency.stage_a2 import tag_claims
 from src.llm_config import get_llm_config
 
@@ -106,7 +122,21 @@ CALL_TIMEOUT_SECONDS = 120
 
 @dataclass(frozen=True)
 class Cell:
-    """One panelist's result on one case."""
+    """
+    One panelist's result on one case.
+
+    ``cost`` is what the call was charged **whether or not it produced claims**.
+    Until 2026-08-25 a failed cell was recorded as costing nothing knowable,
+    which is how three of these reports came to describe their totals as a floor:
+    a call that returned prose instead of a tool call was billed, and the price
+    was on the very message the error was built from. ``ok`` still gates the
+    *agreement* arithmetic — a failed cell judges nothing — but it no longer
+    gates the accounting.
+
+    ``generation_ids`` is what makes a row checkable at the provider. Empty when
+    nothing came back to identify (a timeout, a transport error); ``(None,)``
+    when a call happened and the provider named no generation.
+    """
 
     model: str
     claims: Optional[list]      # None when the call failed
@@ -114,6 +144,7 @@ class Cell:
     cost: Optional[float]
     seconds: float
     error: Optional[str]
+    generation_ids: Tuple[Optional[str], ...]
 
     @property
     def ok(self) -> bool:
@@ -144,6 +175,11 @@ async def run_cell(case, model_params: Dict) -> Cell:
         # and a model that never answers are different findings about a panelist,
         # and the second one is invisible without this because nothing else in
         # the stack imposes a deadline.
+        #
+        # This is the one failure whose spend stays genuinely unknown: we stopped
+        # waiting, so nothing came back to read a price or an id off, and the
+        # generation may well have completed and been billed on the provider's
+        # side after we walked away.
         return Cell(
             model=short_name(model_params["model"]),
             claims=None,
@@ -151,8 +187,27 @@ async def run_cell(case, model_params: Dict) -> Cell:
             cost=None,
             seconds=time.perf_counter() - started,
             error=f"TIMEOUT: no response within {CALL_TIMEOUT_SECONDS}s",
+            generation_ids=(),
+        )
+    except JudgeResponseError as exc:
+        # The model answered and the answer would not coerce — the failure that
+        # was miscounted as a judgement for three panel runs, when in fact
+        # MiniMax was returning §4.6's expected output as prose. It is billed, it
+        # exists at the provider under an id, and both now travel on the
+        # exception. This branch precedes the general one so those two facts
+        # survive; catching `Exception` first would discard them.
+        return Cell(
+            model=short_name(model_params["model"]),
+            claims=None,
+            coverage=None,
+            cost=exc.cost,
+            seconds=time.perf_counter() - started,
+            error=f"{type(exc).__name__}: {str(exc)[:200]}",
+            generation_ids=(exc.generation_id,),
         )
     except Exception as exc:  # noqa: BLE001 — the failure is the datum
+        # A transport error: the provider rejected or dropped the request, so
+        # there is no generation to point at and nothing was charged for one.
         return Cell(
             model=short_name(model_params["model"]),
             claims=None,
@@ -160,6 +215,7 @@ async def run_cell(case, model_params: Dict) -> Cell:
             cost=None,
             seconds=time.perf_counter() - started,
             error=f"{type(exc).__name__}: {str(exc)[:200]}",
+            generation_ids=(),
         )
     return Cell(
         model=short_name(model_params["model"]),
@@ -168,7 +224,31 @@ async def run_cell(case, model_params: Dict) -> Cell:
         cost=response.cost,
         seconds=time.perf_counter() - started,
         error=None,
+        generation_ids=response.generation_ids,
     )
+
+
+def failed_spend(cells: List[Cell]) -> str:
+    """
+    What the failed calls among ``cells`` cost, as a phrase.
+
+    A zero is **not** printed when nothing among them was priced. "$0.000000"
+    for a case whose only failure was a timeout reads as *the failure was free*,
+    which is the understatement this column exists to remove — the previous
+    reports made the same claim in words. The unknown count is always shown,
+    because it is the part of the number that is missing rather than the part
+    that happens to be small.
+
+    One formatter for both the per-case line and the panelist table, so the two
+    cannot drift into disagreeing about the same calls.
+    """
+    failed = [c for c in cells if not c.ok]
+    if not failed:
+        return "—"
+    total, unknown = sum_costs([c.cost for c in failed])
+    if unknown == len(failed):
+        return f"unknown ({unknown} call(s) returned no price)"
+    return f"${total:.6f}" + (f" (+{unknown} unknown)" if unknown else "")
 
 
 def dominant_bloc(cells: List[Cell]):
@@ -270,7 +350,11 @@ def emit_case(out: Report, baseline, case, cells: List[Cell]) -> None:
     out("|---|---:|---:|---:|:---:|---:|---:|")
     for cell in cells:
         if not cell.ok:
-            out(f"| `{cell.model}` | — | — | — | — | — | {cell.seconds:.1f} |")
+            # The cost column is filled in even here. A failed call that was
+            # billed is exactly the row a reader would otherwise skip past.
+            failed_cost = "—" if cell.cost is None else f"${cell.cost:.6f}"
+            out(f"| `{cell.model}` | — | — | — | — | {failed_cost} | "
+                f"{cell.seconds:.1f} |")
             continue
         n_core = sum(1 for c in cell.claims if c.tag == "core")
         in_bloc = "yes" if cell.coverage == bloc_coverage else "—"
@@ -295,6 +379,8 @@ def emit_case(out: Report, baseline, case, cells: List[Cell]) -> None:
     case_total, case_unpriced = sum_costs([c.cost for c in cells if c.ok])
     out(f"| spend | ${case_total:.6f}"
         + (f" ({case_unpriced} unpriced)" if case_unpriced else "") + " |")
+    if any(not c.ok for c in cells):
+        out(f"| spend on failed calls | {failed_spend(cells)} |")
     out()
 
     if contested:
@@ -368,8 +454,13 @@ def emit_panelist_summary(out: Report, grid: Dict[str, List[Cell]], names: List[
     """Per panelist: how often it sat in the bloc, what it cost, how slow it was."""
     out("## Panelists")
     out()
-    out("| panelist | answered | in dominant bloc | total cost | mean sec |")
-    out("|---|---:|---:|---:|---:|")
+    # Two cost columns rather than one. The panel is planned on what a panelist
+    # charges, and a model that fails half its cases while being billed for them
+    # is expensive in a way a single "cost of answers" column reports as cheap —
+    # which is precisely how MiniMax read at 2/6 in the 2026-08-23 samples.
+    out("| panelist | answered | in dominant bloc | cost of answers | "
+        "cost of failures | mean sec |")
+    out("|---|---:|---:|---:|---:|---:|")
     for name in names:
         cells = [next(c for c in grid[case_id] if c.model == name) for case_id in grid]
         answered = sum(1 for c in cells if c.ok)
@@ -382,7 +473,39 @@ def emit_panelist_summary(out: Report, grid: Dict[str, List[Cell]], names: List[
         cost = f"${total:.6f}" + (f" ({unpriced} unpriced)" if unpriced else "")
         mean = sum(c.seconds for c in cells) / len(cells)
         out(f"| `{name}` | {answered}/{len(CASES)} | {in_bloc}/{len(CASES)} | "
-            f"{cost} | {mean:.1f} |")
+            f"{cost} | {failed_spend(cells)} | {mean:.1f} |")
+    out()
+
+
+def emit_generations(out: Report, grid: Dict[str, List[Cell]]) -> None:
+    """
+    Every call in the run, by the id it has at the provider.
+
+    The join table. Each row can be pasted into the OpenRouter console, which is
+    the only place that can contradict this report — and on 2026-08-23 it did:
+    the panel recorded MiniMax as failing six cases the console showed as
+    successful, billed generations, and reconciling the two took a hand-run
+    diagnostic because nothing here kept an id.
+
+    Failed calls are listed **beside** successful ones rather than in a section
+    of their own, because the question this table answers — "what did we actually
+    send, and what came back?" — does not distinguish them.
+    """
+    out("## Generations")
+    out()
+    out("Every call, by its provider-side id. `—` means nothing came back to "
+        "identify the call: the request timed out or was rejected before a "
+        "generation existed.")
+    out()
+    out("| case | panelist | result | cost | generation |")
+    out("|---|---|---|---:|---|")
+    for case_id, cells in grid.items():
+        for cell in cells:
+            result = "answered" if cell.ok else "failed"
+            cost = "—" if cell.cost is None else f"${cell.cost:.6f}"
+            ids = ", ".join(f"`{i}`" if i else "unidentified"
+                            for i in cell.generation_ids) or "—"
+            out(f"| {case_id} | `{cell.model}` | {result} | {cost} | {ids} |")
     out()
 
 
@@ -430,16 +553,28 @@ async def main() -> None:
 
     every_cost = [c.cost for cells in grid.values() for c in cells if c.ok]
     total, unpriced = sum_costs(every_cost)
-    lost = sum(1 for cells in grid.values() for c in cells if not c.ok)
-    # A failed call is missing from this total and may still have been billed:
-    # the exception means no response came back to read a price off, not that
-    # the provider forgave the attempt.
-    floor = " (a floor — failed calls are unpriced and may still have been billed)"
-    out(f"**Spend: ${total:.6f}** over {len(every_cost)} completed call(s)"
-        + (f", {unpriced} of them unpriced" if unpriced else "")
-        + (f"; {lost} call(s) failed and are not in that total" if lost else "")
-        + (floor if lost else "")
+    failed_cells = [c for cells in grid.values() for c in cells if not c.ok]
+    failed_total, failed_unknown = sum_costs([c.cost for c in failed_cells])
+    lost = len(failed_cells)
+
+    # **This paragraph used to be wrong in the timid direction.** It read "a
+    # floor — failed calls are unpriced and may still have been billed", which
+    # treated a knowable number as unknowable: a call whose output would not
+    # coerce came back on a message carrying its price, and `require_response`
+    # discarded it while raising. Three reports understated their spend by
+    # 11 + 6 + 3 = 20 calls that way. What is left genuinely unknown is narrower
+    # and now named: the calls where nothing came back at all.
+    out(f"**Spend: ${total + failed_total:.6f}** over "
+        f"{len(every_cost) + lost} call(s)"
+        + (f" — ${total:.6f} on {len(every_cost)} that answered, "
+           f"${failed_total:.6f} on {lost} that failed" if lost else "")
+        + (f", {unpriced} of the answers unpriced" if unpriced else "")
         + ".")
+    if failed_unknown:
+        out()
+        out(f"{failed_unknown} of the failed call(s) returned no price — a "
+            f"timeout or a rejected request — so this total is a floor by "
+            f"however much those were billed.")
     out()
 
     # The headline table first, so the report answers its own question before it
@@ -475,6 +610,11 @@ async def main() -> None:
 
     for baseline in CASES:
         emit_case(out, baseline, loaded[baseline.case_id], grid[baseline.case_id])
+
+    # Last, because it is a reference rather than a reading: nobody works
+    # through 48 generation ids in order, and everybody wants one of them the
+    # moment a row above looks wrong.
+    emit_generations(out, grid)
 
     out("---")
     out()
