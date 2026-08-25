@@ -123,6 +123,13 @@ FAKE_COST = 0.000123
 # let a stage substitute the LangChain run id (`lc_run--…`) and still pass.
 FAKE_GENERATION_ID = "gen-1787636121-eAEcEp3BID10rZPfqZgv"
 
+# How many output tokens a faked call spent reasoning. 114 is what Gemini 3.7
+# Flash actually reported on a trivial structured call over function calling,
+# measured 2026-08-25 in the same session that found MiniMax reporting 0 under
+# `json_schema` — the observation the whole reasoning-token record exists to
+# turn into a measurement.
+FAKE_REASONING_TOKENS = 114
+
 
 class _FakeJudgeLLM:
     """Stands in for the structured-output runnable a stage builds."""
@@ -141,6 +148,7 @@ def make_payload(
     *,
     cost=FAKE_COST,
     generation_id=FAKE_GENERATION_ID,
+    reasoning_tokens=FAKE_REASONING_TOKENS,
     content="",
     parsing_error=None,
 ):
@@ -167,12 +175,28 @@ def make_payload(
         metadata["cost"] = cost
     if generation_id is not None:
         metadata["id"] = generation_id
-    raw = SimpleNamespace(content=content, response_metadata=metadata)
+    # `usage_metadata` is a separate attribute from `response_metadata`, and the
+    # reasoning count is nested inside `output_token_details` rather than beside
+    # the token totals — the shape LangChain normalises to, observed 2026-08-25.
+    # A flatter fake would let a stage read `usage_metadata['reasoning']` and
+    # pass against a key the provider never sends.
+    usage = {"input_tokens": 86, "output_tokens": 135, "total_tokens": 221}
+    if reasoning_tokens is not None:
+        usage["output_token_details"] = {"reasoning": reasoning_tokens}
+    raw = SimpleNamespace(
+        content=content, response_metadata=metadata, usage_metadata=usage
+    )
     return {"raw": raw, "parsed": parsed, "parsing_error": parsing_error}
 
 
 def install_fake_llm(
-    monkeypatch, module, response, *, cost=FAKE_COST, generation_id=FAKE_GENERATION_ID
+    monkeypatch,
+    module,
+    response,
+    *,
+    cost=FAKE_COST,
+    generation_id=FAKE_GENERATION_ID,
+    reasoning_tokens=FAKE_REASONING_TOKENS,
 ):
     """
     Replace a stage's ``build_judge_llm`` with one returning a fake runnable.
@@ -186,7 +210,14 @@ def install_fake_llm(
     dict capturing the arguments the stage passed to the builder.
     """
     return install_fake_payload(
-        monkeypatch, module, make_payload(response, cost=cost, generation_id=generation_id)
+        monkeypatch,
+        module,
+        make_payload(
+            response,
+            cost=cost,
+            generation_id=generation_id,
+            reasoning_tokens=reasoning_tokens,
+        ),
     )
 
 
@@ -1256,6 +1287,104 @@ def test_the_two_call_variant_keeps_the_identified_leg_when_the_other_is_not(mon
     result = asyncio.run(decompose_twocall(make_case(), MODEL_PARAMS))
 
     assert result.generation_ids == (None, FAKE_GENERATION_ID)
+
+
+# ------------------- how much of a call was reasoning ----------------------- #
+#
+# The panel calls three of its eight members through `json_schema` and five
+# through function calling, because neither channel works for every model. That
+# concession breaks `llm_config`'s premise that every panelist runs identical
+# settings — and the suspicion it raises is specific: MiniMax reported
+# `{'reasoning': 0}` under `json_schema` while reasoning on the tool path. If
+# `response_format` suppresses reasoning for some models, three panelists judge
+# without the budget the other five get, inside the comparison the panel exists
+# to make. None of that is settleable while nothing records the number.
+
+def test_a_stage_records_how_many_tokens_its_call_spent_reasoning(monkeypatch):
+    install_fake_llm(
+        monkeypatch, stage_a2_module, SimpleNamespace(claims=[]),
+        reasoning_tokens=FAKE_REASONING_TOKENS,
+    )
+
+    result = asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS))
+
+    assert [c.reasoning_tokens for c in result.calls] == [FAKE_REASONING_TOKENS]
+
+
+def test_a_call_that_reported_no_reasoning_at_all_is_none_not_zero(monkeypatch):
+    """
+    The distinction the whole measurement turns on.
+
+    ``0`` is a provider saying *this call did no reasoning* — which is the
+    suppression being looked for. ``None`` is a provider not saying, which is a
+    gap in the record and evidence of nothing. Averaging the second as the first
+    would manufacture exactly the finding this field was added to test for.
+    """
+    install_fake_llm(
+        monkeypatch, stage_a2_module, SimpleNamespace(claims=[]), reasoning_tokens=None
+    )
+
+    result = asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS))
+
+    assert result.calls[0].reasoning_tokens is None
+
+
+def test_a_reported_zero_is_kept_as_zero(monkeypatch):
+    """The other side of it: a real zero must survive to be counted as one."""
+    install_fake_llm(
+        monkeypatch, stage_a2_module, SimpleNamespace(claims=[]), reasoning_tokens=0
+    )
+
+    result = asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS))
+
+    assert result.calls[0].reasoning_tokens == 0
+
+
+def test_each_call_keeps_its_own_id_cost_and_reasoning_together(monkeypatch):
+    """
+    Why this is one record per call rather than three parallel tuples.
+
+    The two legs of the two-call variant differ in all three fields at once, so
+    a shape that let them drift out of alignment would attribute one leg's
+    reasoning count to the other leg's generation — a wrong row in the table
+    that exists to be checked against the provider, and wrong in a way nothing
+    downstream could detect.
+    """
+    install_fake_llm(
+        monkeypatch, stage_a1_module,
+        SimpleNamespace(shortest_sufficient_answer="An answer."),
+        cost=0.001, generation_id="gen-a1", reasoning_tokens=10,
+    )
+    install_fake_llm(
+        monkeypatch, stage_a2_module, SimpleNamespace(claims=[]),
+        cost=0.002, generation_id="gen-a2", reasoning_tokens=20,
+    )
+
+    result = asyncio.run(decompose_twocall(make_case(), MODEL_PARAMS))
+
+    assert [(c.generation_id, c.cost, c.reasoning_tokens) for c in result.calls] == [
+        ("gen-a1", 0.001, 10),
+        ("gen-a2", 0.002, 20),
+    ]
+
+
+def test_a_failed_call_carries_its_reasoning_tokens(monkeypatch):
+    """
+    A model that answered in prose still reported what it spent thinking, and
+    that number is as much a measurement of the channel as a successful call's.
+    Discarding it would leave the suppression question unanswerable for exactly
+    the models where the channel is doing something unusual.
+    """
+    install_fake_payload(
+        monkeypatch,
+        stage_a2_module,
+        make_payload(None, reasoning_tokens=0, content="Prose, not a tool call."),
+    )
+
+    with pytest.raises(JudgeResponseError) as excinfo:
+        asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS))
+
+    assert excinfo.value.reasoning_tokens == 0
 
 
 # ------------- what a failed call cost, and which one it was ---------------- #

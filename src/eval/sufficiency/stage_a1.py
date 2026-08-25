@@ -162,5 +162,5 @@ async def write_shortest_answer(
     return StageResponse(
         value=response.value.shortest_sufficient_answer,
         cost=response.cost,
-        generation_ids=response.generation_ids,
+        calls=response.calls,
     )

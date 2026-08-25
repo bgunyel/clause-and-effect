@@ -95,5 +95,5 @@ async def decompose(
         # is right for a number that is only usable whole; ids are not that kind
         # of value. Dropping one because the other is missing would hide the leg
         # that *did* run from anyone trying to look this pair up.
-        generation_ids=a1.generation_ids + a2.generation_ids,
+        calls=a1.calls + a2.calls,
     )

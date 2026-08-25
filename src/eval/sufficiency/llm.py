@@ -78,10 +78,11 @@ class JudgeResponseError(RuntimeError):
     answer" — a distinction an eval instrument cannot afford to blur, since a
     swallowed one would silently shrink the sample.
 
-    **A failure carries what the failed call cost and which generation it was.**
-    Both are keyword-only and neither has a default, because the defect this
-    repairs is precisely that they were in hand and thrown away: the raise sites
-    read the raw message, and then dropped it. Observed 2026-08-23 — a MiniMax
+    **A failure carries the record of the call that failed** — its price, its
+    generation id, and its reasoning tokens. ``call`` is keyword-only and has no
+    default, because the defect this repairs is precisely that these were in
+    hand and thrown away: the raise sites read the raw message, and then dropped
+    it. Observed 2026-08-23 — a MiniMax
     response that raised here reported ``finish_reason: stop`` and
     ``cost: 0.0011607`` on the very message the error was built from, while
     every report of that run said failed calls "may still have been billed".
@@ -90,16 +91,24 @@ class JudgeResponseError(RuntimeError):
     site re-create the same silence by omission.
     """
 
-    def __init__(
-        self,
-        message: str,
-        *,
-        cost: float | None,
-        generation_id: str | None,
-    ) -> None:
+    def __init__(self, message: str, *, call: "CallRecord") -> None:
         super().__init__(message)
-        self.cost = cost
-        self.generation_id = generation_id
+        self.call = call
+
+    @property
+    def cost(self) -> float | None:
+        """What the provider charged for the call that failed."""
+        return self.call.cost
+
+    @property
+    def generation_id(self) -> str | None:
+        """The failed call's id at the provider, where it can still be read."""
+        return self.call.generation_id
+
+    @property
+    def reasoning_tokens(self) -> int | None:
+        """How much of the failed call was reasoning, if it said."""
+        return self.call.reasoning_tokens
 
 
 class StructuredPayload(TypedDict, Generic[_SchemaT]):
@@ -119,6 +128,33 @@ class StructuredPayload(TypedDict, Generic[_SchemaT]):
 
 
 @dataclass(frozen=True)
+class CallRecord:
+    """
+    What one model call was: which generation, what it cost, how much of it was
+    reasoning.
+
+    **One record rather than three parallel tuples.** Until 2026-08-25 the id
+    travelled alone in a ``Tuple[str | None, ...]``, which was right while there
+    was one fact per call. Reasoning tokens are the third, and three tuples that
+    must stay index-aligned across the three sites that concatenate them would
+    make the alignment a convention rather than a structure — with the failure
+    mode of attributing a reasoning count to the wrong generation, inside the
+    record that exists to be checkable against the provider. A record cannot
+    drift from itself.
+
+    Every field is ``None`` for the same class of reason: the provider did not
+    report it. ``None`` is never a zero. A call that reported ``reasoning: 0``
+    thought without spending tokens on it, or was not given the budget; a call
+    that reported nothing may have reasoned freely and simply not said so, and
+    the two must not average together.
+    """
+
+    generation_id: str | None
+    cost: float | None
+    reasoning_tokens: int | None
+
+
+@dataclass(frozen=True)
 class StageResponse(Generic[_ValueT]):
     """
     One stage's result, what the calls to produce it cost, and which they were.
@@ -135,29 +171,42 @@ class StageResponse(Generic[_ValueT]):
     (§8) is the reason the cost is being tracked, and a panel is several
     providers by definition.
 
-    ``generation_ids`` holds **one entry per model call behind this response**,
-    in the order the calls were made. A stage that made none has ``()`` — stage
-    C's two no-call paths, where it is the exact companion of ``cost=0.0``. The
-    two-call variant has two, and :func:`judge.probe_case` has the union of its
-    three stages. An entry is ``None`` when the call happened and the provider
-    named no generation, which is the same distinction ``cost`` draws: nothing
-    to report is not the same as nothing to look up.
+    ``calls`` holds **one :class:`CallRecord` per model call behind this
+    response**, in the order the calls were made. A stage that made none has
+    ``()`` — stage C's two no-call paths, where it is the exact companion of
+    ``cost=0.0``. The two-call variant has two, and :func:`judge.probe_case` has
+    the union of its three stages.
 
-    **Plural, though the design note (devlog 2026-08-23) proposed a singular
+    **A tuple, though the design note (devlog 2026-08-23) proposed a singular
     ``generation_id``.** Singular composes wrong at the only two sites that
     matter: ``stage_a_twocall.decompose`` and ``judge.probe_case`` aggregate
     several calls into one response, and a single field forces them to pick one
-    id and drop the rest — losing exactly the calls whose spend the aggregate is
-    already summing. Cost survives aggregation by addition; ids survive it by
-    concatenation, and ``()`` for no calls keeps both readings honest.
+    call and drop the rest — losing exactly the calls whose spend the aggregate
+    is already summing. Cost survives aggregation by addition; the calls
+    themselves survive it by concatenation, and ``()`` for no calls keeps both
+    readings honest.
 
-    The id is ``response_metadata['id']``, the join key to the provider's
-    console — see :func:`_generation_id_of`.
+    ``cost`` here is the aggregate and it is not the sum of ``calls``: it goes
+    ``None`` when *any* leg was unpriced, because a total covering some of the
+    calls is worse than no total. The per-call prices stay in ``calls``, where a
+    reader can see which leg was the gap.
     """
 
     value: _ValueT
     cost: float | None
-    generation_ids: Tuple[str | None, ...]
+    calls: Tuple[CallRecord, ...]
+
+    @property
+    def generation_ids(self) -> Tuple[str | None, ...]:
+        """
+        The provider-side ids of the calls behind this response, in call order.
+
+        A derived view rather than a stored field, so it cannot disagree with
+        ``calls``. Kept because "which generations was this?" is the question
+        reports actually ask, and answering it by mapping over records at every
+        call site would put the same comprehension in six places.
+        """
+        return tuple(call.generation_id for call in self.calls)
 
 
 def sum_costs(costs: Iterable[float | None]) -> Tuple[float, int]:
@@ -208,6 +257,41 @@ def _generation_id_of(raw: Any) -> str | None:
     """
     metadata = getattr(raw, "response_metadata", None) or {}
     return metadata.get("id")
+
+
+def _reasoning_tokens_of(raw: Any) -> int | None:
+    """
+    How many of the call's output tokens went on reasoning, if it reported any.
+
+    ``usage_metadata['output_token_details']['reasoning']``, which LangChain
+    normalises from whatever the provider sends. Recorded because the panel
+    calls different models through different structured-output channels — a
+    concession made 2026-08-23 to the fact that neither channel works for every
+    model — and that concession has an unquantified cost.
+
+    The specific suspicion, and it is measured rather than assumed: MiniMax
+    reported ``{'reasoning': 0}`` under ``json_schema`` while producing
+    reasoning on the tool path. If ``response_format`` suppresses reasoning for
+    some models, then three of the eight panelists judge without the budget the
+    other five get, *inside the comparison the panel exists to make*. Nothing
+    could settle that while nothing recorded the number.
+
+    ``None`` and ``0`` are different answers and both occur. ``0`` is a provider
+    saying this call did no reasoning; ``None`` is a provider not saying. Only
+    the first belongs in an average.
+    """
+    usage = getattr(raw, "usage_metadata", None) or {}
+    details = usage.get("output_token_details") or {}
+    return details.get("reasoning")
+
+
+def _record_of(raw: Any) -> CallRecord:
+    """One call's audit record, read off the message it came back on."""
+    return CallRecord(
+        generation_id=_generation_id_of(raw),
+        cost=_cost_of(raw),
+        reasoning_tokens=_reasoning_tokens_of(raw),
+    )
 
 
 def _audit_note(cost: float | None, generation_id: str | None) -> str:
@@ -283,8 +367,7 @@ def require_response(
             f"stage {stage}: the model returned no output at all. The case was "
             f"not judged; it must not be recorded as one that was. "
             f"{_audit_note(None, None)}",
-            cost=None,
-            generation_id=None,
+            call=CallRecord(generation_id=None, cost=None, reasoning_tokens=None),
         )
 
     parsed = payload.get("parsed")
@@ -294,24 +377,18 @@ def require_response(
         # what it cost and which generation it was. Both are taken off the same
         # message the excerpt is quoted from, so a report can state the spend of
         # its failures instead of describing it as a floor.
-        raw = payload.get("raw")
-        cost = _cost_of(raw)
-        generation_id = _generation_id_of(raw)
+        record = _record_of(payload.get("raw"))
         raise JudgeResponseError(
             f"stage {stage}: the model's output would not coerce into its "
             f"schema ({payload.get('parsing_error')!r}). It returned: "
-            f"{_excerpt(raw)}. The case was not judged; it must not be recorded "
-            f"as one that was. {_audit_note(cost, generation_id)}",
-            cost=cost,
-            generation_id=generation_id,
+            f"{_excerpt(payload.get('raw'))}. The case was not judged; it must "
+            f"not be recorded as one that was. "
+            f"{_audit_note(record.cost, record.generation_id)}",
+            call=record,
         )
 
-    raw = payload.get("raw")
-    return StageResponse(
-        value=parsed,
-        cost=_cost_of(raw),
-        generation_ids=(_generation_id_of(raw),),
-    )
+    record = _record_of(payload.get("raw"))
+    return StageResponse(value=parsed, cost=record.cost, calls=(record,))
 
 
 def payload_from_tool_call(
