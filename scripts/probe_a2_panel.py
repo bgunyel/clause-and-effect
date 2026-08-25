@@ -92,7 +92,7 @@ from scripts.probe_a2_stability import (
 )
 from src.clause_and_effect.chunking.chunk_store import git_state
 from src.eval.dataset import load_tier1
-from src.eval.sufficiency.llm import JudgeResponseError, sum_costs
+from src.eval.sufficiency.llm import CallRecord, JudgeResponseError, sum_costs
 from src.eval.sufficiency.stage_a2 import tag_claims
 from src.llm_config import get_llm_config
 
@@ -133,9 +133,9 @@ class Cell:
     *agreement* arithmetic — a failed cell judges nothing — but it no longer
     gates the accounting.
 
-    ``generation_ids`` is what makes a row checkable at the provider. Empty when
-    nothing came back to identify (a timeout, a transport error); ``(None,)``
-    when a call happened and the provider named no generation.
+    ``calls`` is what makes a row checkable at the provider: the generation id,
+    the price and the reasoning tokens of every call behind the cell. Empty when
+    nothing came back to record (a timeout, a transport error).
     """
 
     model: str
@@ -144,7 +144,7 @@ class Cell:
     cost: Optional[float]
     seconds: float
     error: Optional[str]
-    generation_ids: Tuple[Optional[str], ...]
+    calls: Tuple[CallRecord, ...]
 
     @property
     def ok(self) -> bool:
@@ -187,7 +187,7 @@ async def run_cell(case, model_params: Dict) -> Cell:
             cost=None,
             seconds=time.perf_counter() - started,
             error=f"TIMEOUT: no response within {CALL_TIMEOUT_SECONDS}s",
-            generation_ids=(),
+            calls=(),
         )
     except JudgeResponseError as exc:
         # The model answered and the answer would not coerce — the failure that
@@ -203,7 +203,7 @@ async def run_cell(case, model_params: Dict) -> Cell:
             cost=exc.cost,
             seconds=time.perf_counter() - started,
             error=f"{type(exc).__name__}: {str(exc)[:200]}",
-            generation_ids=(exc.generation_id,),
+            calls=(exc.call,),
         )
     except Exception as exc:  # noqa: BLE001 — the failure is the datum
         # A transport error: the provider rejected or dropped the request, so
@@ -215,7 +215,7 @@ async def run_cell(case, model_params: Dict) -> Cell:
             cost=None,
             seconds=time.perf_counter() - started,
             error=f"{type(exc).__name__}: {str(exc)[:200]}",
-            generation_ids=(),
+            calls=(),
         )
     return Cell(
         model=short_name(model_params["model"]),
@@ -224,7 +224,7 @@ async def run_cell(case, model_params: Dict) -> Cell:
         cost=response.cost,
         seconds=time.perf_counter() - started,
         error=None,
-        generation_ids=response.generation_ids,
+        calls=response.calls,
     )
 
 
@@ -497,15 +497,24 @@ def emit_generations(out: Report, grid: Dict[str, List[Cell]]) -> None:
         "identify the call: the request timed out or was rejected before a "
         "generation existed.")
     out()
-    out("| case | panelist | result | cost | generation |")
-    out("|---|---|---|---:|---|")
+    out("| case | panelist | result | cost | reasoning | generation |")
+    out("|---|---|---|---:|---:|---|")
     for case_id, cells in grid.items():
         for cell in cells:
             result = "answered" if cell.ok else "failed"
             cost = "—" if cell.cost is None else f"${cell.cost:.6f}"
-            ids = ", ".join(f"`{i}`" if i else "unidentified"
-                            for i in cell.generation_ids) or "—"
-            out(f"| {case_id} | `{cell.model}` | {result} | {cost} | {ids} |")
+            # `0` and `—` are different answers and the column keeps them apart.
+            # A zero is the provider saying this call did no reasoning, which is
+            # the suppression the mixed-channel panel is suspected of causing; a
+            # dash is the provider not saying, which is evidence of nothing.
+            reasoning = ", ".join(
+                "—" if c.reasoning_tokens is None else str(c.reasoning_tokens)
+                for c in cell.calls
+            ) or "—"
+            ids = ", ".join(f"`{c.generation_id}`" if c.generation_id
+                            else "unidentified" for c in cell.calls) or "—"
+            out(f"| {case_id} | `{cell.model}` | {result} | {cost} | "
+                f"{reasoning} | {ids} |")
     out()
 
 
