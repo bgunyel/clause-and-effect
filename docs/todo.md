@@ -4,7 +4,7 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-23._
+> _Last updated: 2026-08-25._
 
 ---
 
@@ -451,6 +451,80 @@ structurally cannot see.
    `thinking_level` — so a shared dict would let building the Gemini panelist
    rewrite the sampling of the other eight, silently, the first time the panel
    runs. `GEMINI_3_7_FLASH` is in the list.
+
+   ### 2026-08-25: the instrument now says what it already knew
+
+   Four open items closed, and the shape of all four is the same — a fact the
+   code was holding at the moment of failure and throwing away.
+
+   **`require_parameters` reaches the wire** (item 2). Verified by wrapping
+   `httpx.AsyncClient.send` and keeping the JSON body of every request, through
+   `build_judge_llm` rather than a locally assembled model: **8 of 8 panelists,
+   both channels**. The control is the half that makes it worth anything —
+   removing `provider` from one entry produces `MISMATCH`, so the check can fail.
+   Not established: that the constraint changes *routing*, which is a claim about
+   the provider's side.
+
+   **A failure carries its price and its generation id** (item 3). Three panel
+   reports had said failed calls "may still have been billed"; they *were*, by an
+   amount the exception was holding, and 20 calls across those runs were
+   unaccounted for. The id is `response_metadata['id']` and specifically not
+   `raw.id`, which is a LangChain run id that joins to nothing outside the
+   process.
+
+   **Reasoning tokens are recorded per call, and the confound was measured**
+   (item 4). `CallRecord(generation_id, cost, reasoning_tokens)` — one record per
+   call rather than three index-aligned tuples, because drift would attribute one
+   call's reasoning to another's generation inside the record that exists to be
+   checkable.
+
+   The measurement did **not** find what raised the question. MiniMax, whose
+   `{'reasoning': 0}` under `json_schema` started it, reasons on both channels.
+   Two clean zeros appeared elsewhere — DeepSeek V4 Pro and Grok — each on one of
+   its two cases, so the verdict is `INTERMITTENT` rather than `SUPPRESSED`.
+   **Grok is the panel's own `json_schema` member**, so §8's confound is real for
+   at least one panelist, in a shape nobody predicted.
+
+   > **Not a statistically meaningful sample — Bertan, 2026-08-25.** Two cases of
+   > 433, one run per cell. Sized to catch a categorical effect and nothing
+   > finer. A "no suppression" mark is the weakest possible negative result and
+   > does not clear a model; nothing supports comparing models to each other. The
+   > repeat needs a stratified case set, possibly a wider roster, and repeats per
+   > cell.
+
+   **A2 stability re-measured at 25 runs** (item 5). `RUNS` was 5 for no reason
+   but habit — this stage on DeepSeek V4 Flash is $0.0001 a call, so 150 calls
+   cost $0.010072. Five of six cases stable; the sixth differs **by the word
+   `and`**, one run in twenty-five joining two core claims that the other
+   twenty-four split. Nothing crossed the core/auxiliary boundary, so by the
+   2026-08-22 criterion the substantive reading is **0 of 6** — and the coverage
+   metric is over-reporting exactly as its own docstring warns.
+
+   **Every call received its reasoning budget: 150/150, none zero, min 200.**
+   That is the live evidence for the 2026-08-23 `model_args` fix and what item 5
+   was really asking. Two things not to overclaim: the 2026-08-23 samples already
+   read 0/6 and 0/6 *before* that fix, so the 4/6 and 3/6 of 2026-08-22 remain
+   unexplained outliers; and `art15_case1` returning 10 core claims on all 25 runs
+   is a real change from 10/1/10/13/10 but is not attributable to the fix on this
+   evidence.
+
+   **Two findings that open work rather than close it.**
+
+   *MiniMax now fails `json_schema`*, the channel it was assigned on 6/6 evidence
+   from 2026-08-23. What differs is `require_parameters`, which no earlier run
+   carried — plausibly it changed which upstream provider serves the model. The
+   generation ids are recorded, so the console can settle it. If it holds,
+   `require_parameters` did not only make the channel assignment stick, it
+   invalidated part of the evidence the assignment was chosen on.
+
+   *`get_llm_config()["sufficiency_judge"][0]` appears at ten call sites*
+   (Bertan, reading `probe_a2_stability.py`). Each makes the subject of a
+   measurement a consequence of where a model sits in `llm_names`. Insert a
+   panelist at the front and every indexed probe repoints silently while its
+   reports keep their titles — and the four stability samples are only comparable
+   if all four measured the same model. `llm_config.panelist(entries, model)`
+   raises rather than falling back; **nine sites still index**, and
+   `main_dev.py`'s `[5]` is Bertan's.
 
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
 algorithm improvement, not a blocker — Bertan's decision, 2026-08-07. The
