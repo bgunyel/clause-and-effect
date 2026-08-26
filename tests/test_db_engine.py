@@ -11,7 +11,7 @@ Three things are pinned, and they fail in different ways:
 - **The gate** (:func:`is_enabled`). Trap 5. The failure is invisible: a suite
   that writes to the production log leaves fixture rows nobody notices until
   they read the table.
-- **Redaction** (:func:`safe_target`, ``_redact``). Trap 6. The failure is a
+- **Redaction** (:func:`safe_target`, ``redact``). Trap 6. The failure is a
   password in a log line, and it is unrecoverable once it has been written
   somewhere.
 - **The connection parameters.** The failure is slow rather than loud — a
@@ -179,31 +179,31 @@ def test_safe_target_survives_an_absent_url(db_url):
     assert safe_target() == "<no DB_URL>"
 
 
-def test_redact_removes_the_password_from_a_driver_error(db_url):
+def testredact_removes_the_password_from_a_driver_error(db_url):
     db_url()
     message = f'connection to server failed: password "{FAKE_PASSWORD}" rejected'
-    redacted = engine_module._redact(message)
+    redacted = engine_module.redact(message)
     assert FAKE_PASSWORD not in redacted
     assert "***" in redacted
 
 
-def test_redact_removes_a_whole_dsn_quoted_back_at_us(db_url):
+def testredact_removes_a_whole_dsn_quoted_back_at_us(db_url):
     db_url()
-    redacted = engine_module._redact(f"could not translate host name in {FAKE_URL}")
+    redacted = engine_module.redact(f"could not translate host name in {FAKE_URL}")
     assert FAKE_PASSWORD not in redacted
     assert "<DB_URL>" in redacted
 
 
-def test_redact_accepts_an_exception_rather_than_a_string(db_url):
-    """It is called as `_redact(exc)`, not `_redact(str(exc))`."""
+def testredact_accepts_an_exception_rather_than_a_string(db_url):
+    """It is called as `redact(exc)`, not `redact(str(exc))`."""
     db_url()
-    redacted = engine_module._redact(RuntimeError(f"auth failed for {FAKE_URL}"))
+    redacted = engine_module.redact(RuntimeError(f"auth failed for {FAKE_URL}"))
     assert FAKE_PASSWORD not in redacted
 
 
-def test_redact_leaves_an_unrelated_message_alone(db_url):
+def testredact_leaves_an_unrelated_message_alone(db_url):
     db_url()
-    assert engine_module._redact("connection timed out") == "connection timed out"
+    assert engine_module.redact("connection timed out") == "connection timed out"
 
 
 # --------------------------------------------------------------------------

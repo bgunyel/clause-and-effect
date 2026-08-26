@@ -67,7 +67,7 @@ number existed; the number is recorded here so it can be revisited on evidence.
 
 Trap 6: **``DB_URL`` is a secret and contains a password.** It is never logged.
 Every message here names :func:`safe_target` — host, port and database — and
-every exception is passed through :func:`_redact` before it reaches a log line,
+every exception is passed through :func:`redact` before it reaches a log line,
 because connection errors are fond of quoting the DSN they failed on.
 """
 from __future__ import annotations
@@ -201,7 +201,17 @@ def is_enabled() -> bool:
     return bool(get_settings().DB_URL.get_secret_value().strip())
 
 
-def _raw_url() -> str:
+def raw_url() -> str:
+    """
+    The configured ``DB_URL``, stripped. Empty string when there is none.
+
+    Public because the migration environment reads it too, and one function
+    means one answer to "is a URL configured?" — the stripping in particular,
+    without which a ``DB_URL`` holding a stray newline would be absent here and
+    present to Alembic. What is deliberately *not* shared is the reaction to it
+    being empty: :func:`_require_url` says the call log's writes were not gated,
+    which is not what a migration run needs to hear.
+    """
     return get_settings().DB_URL.get_secret_value().strip()
 
 
@@ -213,7 +223,7 @@ def safe_target() -> str:
     since this is called from failure paths and a logging helper that throws
     inside an exception handler replaces the error it was reporting.
     """
-    raw = _raw_url()
+    raw = raw_url()
     if not raw:
         return "<no DB_URL>"
     try:
@@ -223,16 +233,19 @@ def safe_target() -> str:
     return f"{url.host}:{url.port}/{url.database}"
 
 
-def _redact(message: object) -> str:
+def redact(message: object) -> str:
     """
     Strip the password, and the URL carrying it, out of ``message``.
 
     Trap 6. Driver-level connection errors quote the DSN they failed on, and a
     ``SecretStr`` protects the value in *our* code without protecting it in a
-    library's exception text. Applied to every exception this module logs.
+    library's exception text. Applied to every exception this module logs, and
+    public because the repository layer logs the same class of exception from
+    the same driver — a second implementation there would be a second thing to
+    get right, and this one is the tested one.
     """
     text_out = str(message)
-    raw = _raw_url()
+    raw = raw_url()
     if not raw:
         return text_out
     if raw in text_out:
@@ -308,7 +321,7 @@ def get_sync_engine() -> Engine:
 
 
 def _require_url() -> str:
-    raw = _raw_url()
+    raw = raw_url()
     if not raw:
         raise RuntimeError(
             "DB_URL is not set. Call log writes must be gated on is_enabled()."
@@ -352,7 +365,7 @@ async def warm_up_async() -> bool:
             "Call log unreachable at %s — writes will be skipped (%s: %s)",
             safe_target(),
             type(exc).__name__,
-            _redact(exc),
+            redact(exc),
         )
         return False
     elapsed_ms = (time.perf_counter() - started) * 1000
@@ -375,7 +388,7 @@ def warm_up_sync() -> bool:
             "Call log unreachable at %s — writes will be skipped (%s: %s)",
             safe_target(),
             type(exc).__name__,
-            _redact(exc),
+            redact(exc),
         )
         return False
     elapsed_ms = (time.perf_counter() - started) * 1000
