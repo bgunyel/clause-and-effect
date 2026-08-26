@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     QDRANT_PORT: int = 6333
     VECTOR_DB_COLLECTION_NAME: str = "compliance_docs"
 
+    # SQL Database
+    DB_URL: SecretStr = SecretStr("")
+
     # Paths
     INPUT_FOLDER: Path = os.path.join(ENV_FILE_DIR, 'input')
     OUT_FOLDER: Path = os.path.join(ENV_FILE_DIR, 'out')

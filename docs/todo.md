@@ -993,6 +993,39 @@ per the priority order above.
 
 ---
 
+## 🟠 Model naming — reports vs. the call log
+
+- [ ] **`short_name()` writes the enum's member name, and the call log will write
+  its value.** `scripts/probe_a2_panel.py:156` reads
+  `str(model).split(".", 1)[-1]`, which yields `DEEPSEEK_V_4_FLASH_0731` because
+  `ModelNames` has no `str` mixin — so every committed report identifies a
+  panelist by its **Python identifier**. `docs/design/llm-call-log.md` (decision
+  14) stores `ModelNames.value`, `deepseek-v4-flash-0731`, because that is the
+  platform-neutral name the alias table maps to a wire id and it is the identity
+  that survives the same model being served through a different LLM server.
+
+  Nothing is broken and no column is being added: `ModelNames(value).name`
+  recovers the report's spelling exactly. The cost is human — someone greps a
+  report's model name against the log, finds nothing, and concludes the run was
+  never logged. **The log is right and the report is the side to change**;
+  `short_name` is a markdown-table display helper being used as an identity.
+
+  **Bertan's call, because it is not free.** Changing it makes new reports stop
+  matching old ones by grep, and the committed reports are history that is not
+  rewritten. Three options: emit `.value` and accept the discontinuity; emit both;
+  or leave reports alone and rely on the mapping. Raised 2026-08-26 while
+  finishing the call-log design.
+
+- [ ] **Three strings name one model and the distinction is not written down
+  anywhere outside the design doc:** `.name` (`MINIMAX_M_3`, a Python
+  identifier), `.value` (`minimax-m3`, platform-neutral), and the alias
+  (`minimax/minimax-m3`, the wire id from `get_model_name_alias`). The call log
+  stores the second on `llm_call.model` and the third on
+  `llm_attempt.model_alias`. Worth a comment in `llm_config.py` so the next
+  reader does not have to re-derive it.
+
+---
+
 ## 🟡 Tooling
 
 - [x] ✅ **`src/config.py` pulled torch to read two directory paths — split
