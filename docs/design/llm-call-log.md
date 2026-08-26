@@ -91,10 +91,55 @@ totals — which worked (Venice ×6 sums to $0.008409 against the report's
 $0.008409; CoreWeave ×6 to $0.002413 against $0.002412) but is not a method
 anyone should have to use twice.
 
-The account API cannot substitute for recording it: `/api/v1/activity` returns
-`403 — Only management keys can fetch activity for an account`, and there is no
-list-generations endpoint. Without a local record, the evidence is whatever the
-console still shows.
+### The generation id is the only key, and nothing hands it back
+
+**This is the reason the log has to exist rather than merely being useful, and
+it is a fact about OpenRouter's API rather than an inference from our
+experience.** Established 2026-08-26 by Bertan, from OpenRouter's own
+documentation:
+
+> The `/generation` and `/generation/content` endpoints only fetch a **single
+> generation by its id** — there's no documented endpoint that lists or
+> enumerates generation IDs within a date range.
+>
+> The closest thing for date-range querying is the Activity API
+> (`GET /activity`), which returns **aggregated usage stats per day and
+> endpoint** over a date range, but it does not return individual generation
+> IDs. Individual generation records with IDs are otherwise viewable in the
+> **Logs page in the dashboard**, not via a listing API.
+
+The consequence is sharper than "the data is inconvenient to reach". **A
+generation whose id we did not capture at call time is unreachable by API,
+permanently.** Not slow to find — unreachable. The only lookup takes the id as
+input, so there is no query that starts from a time, a model, a case or a run
+and arrives at a generation. Nothing recovers an id that was never written down.
+
+Three things follow, and each of them is load-bearing for a decision below.
+
+**The capture must happen at call time or not at all.** There is no sweep that
+could go back and collect what was missed, which is why the enrichment pass is
+described as *completing* rows rather than *finding* them, and why an
+`llm_attempt` row is written the moment the socket sees a response rather than
+after the call resolves.
+
+**`/api/v1/activity` cannot substitute for it on two independent counts.** It is
+aggregated per day and endpoint, so it could not attribute a call to a case or a
+panelist even if we could read it; and we cannot — it returns `403 — Only
+management keys can fetch activity for an account`. Either failure alone would
+be enough.
+
+**The dashboard is not a fallback.** It is the one place individual records with
+ids appear, and it is a web page: manual, unqueryable, unjoinable to a case id,
+and subject to whatever retention OpenRouter chooses. The cost-matching
+described above is what depending on it looks like in practice.
+
+This compounds with [the retry finding](#a-callback-handler-cannot-see-the-retries)
+in a way worth stating plainly. The attempts a retry swallowed produce real,
+billed generations whose ids **no layer above the socket ever sees**. Under this
+API those generations are not merely unaccounted — they are unreachable by any
+means except scrolling a dashboard, with nothing to match them against. Every
+one of them is money spent that no query will ever be able to name. That is what
+`llm_attempt` is for.
 
 ---
 
