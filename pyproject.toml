@@ -9,6 +9,15 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "ai-common @ git+https://github.com/bgunyel/ai-common.git@main",
+    # The LLM call log needs two drivers because it has two callers, and an
+    # asyncpg connection is bound to the event loop that opened it — so a
+    # synchronous caller cannot borrow the async pool by wrapping each write in
+    # `asyncio.run()`. asyncpg serves the async judge path; psycopg serves the
+    # synchronous product path. Only one of them is ever built in a given
+    # process: a probe is async-only, `main_dev` is sync-only.
+    "asyncpg>=0.31.0",
+    "psycopg[binary]>=3.2.12",
+    "sqlalchemy[asyncio]>=2.0.44",
     "docling>=2.68.0",
     # A docling dependency, declared because the parsers now import
     # DoclingDocument directly rather than only through docling's converter.
@@ -22,6 +31,15 @@ dependencies = [
 [dependency-groups]
 test = [
     "pytest>=8.0.0",
+]
+# Alembic is a command, not a library: nothing under src/ imports it, and the
+# migration environment imports our models rather than the reverse. Keeping it
+# out of the runtime set means the product environment does not carry a schema
+# tool. Both gate tiers still cover it — `uv export --all-groups` flattens
+# every group into the file GuardDog reads.
+#   uv run --group migrations alembic upgrade head
+migrations = [
+    "alembic>=1.17.1",
 ]
 
 [tool.uv]
