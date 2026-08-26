@@ -727,7 +727,7 @@ entry point has to remember to open one.
 | `model`, `channel` | the config entry | `channel` is the `structured_output` mode |
 | `llm_server` | the config entry | `LlmServers.value` — who we bought the call from, **not** who ran it |
 | `requested_provider` | the config entry | the routing constraint we sent, as JSON |
-| `status` | wrapper | `OK` / `STRUCTURE` / `TIMEOUT` / `TRANSPORT` |
+| `status` | wrapper | `OK` / `STRUCTURE_PROBLEM` / `TIMEOUT` / `TRANSPORT_PROBLEM` |
 | `call_seconds` | wrapper | the bare invocation, timer stopped before the write |
 | `started_at` | wrapper | **departure 2** — places the call against the clock, not merely inside its run |
 | `generation_id`, `cost`, `finish_reason` | `response_metadata` | **what the caller believed** — the last attempt only |

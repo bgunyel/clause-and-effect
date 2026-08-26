@@ -75,6 +75,18 @@ class CallStatus(Enum):
     """
     How a logical call ended, as seen by the wrapper.
 
+    **Nothing here is specific to the judge** — Bertan, 2026-08-26. Any model
+    call in this repository ends one of these four ways: the product path's
+    structured-output call can fail to coerce exactly as a judge stage's can,
+    and both paths sit behind the same network. The vocabulary lives beside the
+    column it is written into rather than beside any one caller.
+
+    ``_PROBLEM`` on the two that would otherwise read as nouns for *parts of the
+    system* rather than as *outcomes*. ``STRUCTURE`` and ``TRANSPORT`` name
+    layers; ``STRUCTURE_PROBLEM`` and ``TRANSPORT_PROBLEM`` name what went wrong
+    in them, which is what a status column holds. ``TIMEOUT`` needs no suffix —
+    it is already an event and not a layer.
+
     Deliberately a plain ``Enum`` and **not** ``StrEnum``, so that writing
     ``.value`` is the only way to get the string and the discipline is the same
     one decision 14 imposes on ``ai_common``'s enums. Those carry no ``str``
@@ -84,9 +96,16 @@ class CallStatus(Enum):
     """
 
     OK = "OK"
-    STRUCTURE = "STRUCTURE"
+    # The model produced output and the output would not coerce into the
+    # pydantic schema it was asked for. Also covers a model that answered in
+    # prose instead of calling the tool at all, on the `tool_call_auto` path.
+    STRUCTURE_PROBLEM = "STRUCTURE_PROBLEM"
     TIMEOUT = "TIMEOUT"
-    TRANSPORT = "TRANSPORT"
+    # Anything that went wrong getting to the provider or back. A row with this
+    # status may sit on top of three upstream attempts, since `.with_retry`
+    # retries a raise; a STRUCTURE_PROBLEM row never does, because the
+    # coercion failure is reported in the payload rather than raised.
+    TRANSPORT_PROBLEM = "TRANSPORT_PROBLEM"
 
 
 class LlmRun(Base):

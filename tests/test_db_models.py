@@ -274,7 +274,7 @@ def test_the_enumerated_columns_are_plain_text(model, name):
 
 
 def test_call_status_carries_the_four_values_the_design_lists():
-    assert {s.value for s in CallStatus} == {"OK", "STRUCTURE", "TIMEOUT", "TRANSPORT"}
+    assert {s.value for s in CallStatus} == {"OK", "STRUCTURE_PROBLEM", "TIMEOUT", "TRANSPORT_PROBLEM"}
 
 
 def test_call_status_members_are_not_their_own_values():
