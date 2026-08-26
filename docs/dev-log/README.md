@@ -247,4 +247,17 @@ thing in the record.
   meanwhile, is free in the raw response body. The log became three tables with
   a socket-level attempt row, and Bertan's clarification that **the LLM server is
   not the provider** exposed a column the assistant had misnamed.
+- [2026-08-26 · session 2](devlog_2026-08-26_session-2.md) — the call log built
+  as far as its schema: dependencies, two engines, three tables, 141 new tests,
+  and nothing written to the database. Two findings, both about the gap between
+  a decision and its effect. **The statement timeout was never in force** —
+  Supabase's pooler consumes the startup packet, so `pg_sleep(30)` ran to
+  completion while the code read as correct; the repair needs a `SET` *and* a
+  commit, because both drivers leave it in a transaction they never end. And
+  **the same one-row write costs 47 ms or 141 ms** depending only on whether
+  SQLAlchemy wrapped it in a transaction. A trigger proposed for `updated_at`
+  was measured out of existence when Bertan's two questions exposed a third
+  option the assistant's framing had hidden. Bertan's reading of OpenRouter's
+  documentation gave the design its strongest argument: **an uncaptured
+  generation id is unreachable by API, permanently.**
 

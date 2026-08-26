@@ -4,7 +4,7 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-25._
+> _Last updated: 2026-08-26._
 
 ---
 
@@ -576,6 +576,140 @@ structurally cannot see.
    latency alone. Recorded in full at
    [`design/llm-call-log.md`](design/llm-call-log.md) — a **draft**, carrying
    eleven open questions and eight traps, and the first task of the next session.
+
+   ### 2026-08-26 session 2: the call log exists as far as the schema
+
+   Four commits, `b8f0d36 → c16f780`. Suite **354 → 495 passed / 5 xfailed**.
+   **No model was called all session**; every measurement below is a database
+   round trip, and the spend is $0.00.
+
+   **Dependencies through the gate.** `sqlalchemy`, `asyncpg` and `psycopg` as
+   runtime dependencies, `alembic` in a new `migrations` group — nothing under
+   `src/` imports it, and `uv export --all-groups` means both gate tiers still
+   cover it. `make audit` clean; `make scan` blocked once on **sqlalchemy
+   2.0.52 / threat-filesystem-autostart**, reviewed and waived as a rule
+   defect: `$py_profile` matched the literal `".profile"` at
+   `sqlalchemy/testing/profiling.py:303`, which is a cProfile stats-dump
+   *extension* rather than the shell startup file, and the `open(` completing
+   the condition is two functions away reading the test suite's call-count
+   baseline. The condition is file-scoped, so the two halves need no
+   relationship. Re-scan: BLOCKED 0, INCOMPLETE 0.
+
+   **Two drivers, because an asyncpg connection is bound to its event loop.**
+   The synchronous product path cannot borrow the async pool by wrapping each
+   write in `asyncio.run()` — the second call would find connections belonging
+   to a closed loop. asyncpg serves the judge path, psycopg the product path,
+   and only one is built per process. The alternative, one engine on a
+   dedicated background loop, saves a dependency and costs a thread whose
+   shutdown has to be right.
+
+   **Decision 20's statement timeout was silently not in force**, and this is
+   the session's first finding. Both drivers' startup-parameter mechanisms —
+   asyncpg's `server_settings`, psycopg's `options="-c …"` — reach Supabase's
+   pooler and go no further: `current_setting('statement_timeout')` read back
+   `2min`, `application_name` read back `Supavisor`, and `SELECT pg_sleep(30)`
+   **ran to completion**. Setting the GUC after connect fixes it, but only with
+   a commit — both drivers open an implicit transaction for the `SET` and
+   neither ends it, so without one the value is correct on first use and
+   reverts after a single pool round trip. Measured both ways.
+   `pool_reset_on_return` is not the cause. After the fix: `10s` across three
+   checkouts on both drivers, and `pg_sleep(30)` cancelled at **10.3 s**.
+
+   **Decision 1 holds — it really is session mode.** Worth checking, because
+   the symptom above looks exactly like transaction pooling.
+   `pg_backend_pid()` is stable across checkouts, so the backend is sticky and
+   asyncpg's prepared-statement cache is safe. No `statement_cache_size=0`
+   workaround; a test pins its absence.
+
+   **The remote round trip, measured** — the number the design listed as the
+   first thing to do once an engine existed, against its local-SQLite reference
+   of 0.012 ms:
+
+   | | | |
+   |---|---:|---|
+   | one statement, connection already open | 47 ms | 1 round trip |
+   | checkout + statement, implicit `BEGIN`/`ROLLBACK` | 141 ms | 3 round trips |
+   | checkout + statement, `AUTOCOMMIT` | 48 ms | 1 round trip |
+   | checkout + statement, `AUTOCOMMIT` + pre-ping | 202 ms | ~4 round trips |
+
+   Two consequences the repository layer inherits. **A one-row insert in an
+   implicit transaction costs three round trips for one statement**, so a
+   single-row write should say `AUTOCOMMIT` and a call-plus-attempts write
+   should batch — ~100 ms per call between them. And **`pool_pre_ping` costs
+   ~155 ms per checkout**, roughly 23 s over a 150-call sample. That trade was
+   decided before the number existed; it is left as decided with the number
+   recorded.
+
+   **Trap 5 needed more than the empty `DB_URL` default.** The design argues
+   the suite is hermetic because `DB_URL` defaults to empty, but `Settings`
+   reads the repository's `.env` and that file has a real URL in it — so
+   `is_enabled()` would have been `True` under pytest. The guard is structural
+   instead: `is_enabled()` returns `False` whenever `pytest` is in
+   `sys.modules`. Test-awareness in non-test code, taken deliberately, because
+   the alternative is hermeticity that depends on every future test remembering
+   to unset something.
+
+   **The schema.** Three tables, verified against the live instance by creating
+   the whole thing inside a transaction and rolling it back — `create_all`
+   runs, **zero enum types** are created, the `SUM(llm_attempt.cost)` join
+   parses. Three departures from the design, each marked `DEPARTURE` at the
+   column:
+
+   - `llm_run` stores **`git_dirty_paths`**, not a `git_dirty` boolean.
+     `chunk_store.git_state` returns paths and argues against the boolean in
+     its own docstring — repo-wide, so an unrelated draft marks a run dirty —
+     and warns against a flag beside the list because they fall out of sync.
+   - `llm_call` and `llm_attempt` each gain **`started_at`**. The design's
+     lists carry durations but no wall clock, so a call could be placed no more
+     precisely than its run.
+   - **`llm_attempt.call_id` carries no foreign key**, and `llm_attempt` gains
+     `llm_server`. The socket writes the attempt while the request is in
+     flight; the wrapper writes `llm_call` only after it returns, because that
+     row needs the status and the duration — so an attempt always exists before
+     its call, and a foreign key would make write ordering a database
+     constraint. `llm_server` cannot come from a join either, because the rows
+     that most need filtering are the ones with a null `call_id`.
+
+   **`created_at` and `updated_at` on every table, timezone-aware — Bertan.**
+   On `Base` rather than in a mixin, so a table added next year cannot be the
+   one that forgot; the tests are driven off `Base.metadata.sorted_tables` for
+   the same reason. Stamped by the database (`server_default`), not the client,
+   because runs come from more than one machine and rows stamped by each
+   machine's clock cannot be ordered against each other.
+
+   **Repositories write with Core `update()`, never `text()` — Bertan**, and a
+   `BEFORE UPDATE` trigger is rejected. `onupdate` is applied when SQLAlchemy
+   *builds* the statement, so it belongs to the statement rather than the
+   table. Measured, 300 rows, median of 5:
+
+   | | | `updated_at` moved |
+   |---|---:|---|
+   | raw `text()` executemany | 59.9 ms | **0 / 300** |
+   | Core `update()` executemany | 67.5 ms | 300 / 300 |
+   | ORM load + mutate + flush | 125.5 ms | 300 / 300 |
+
+   A Core `update()` is a statement builder, not the ORM's object graph:
+   nothing is loaded, and it compiles to the same SQL plus one `SET`. 7.6 ms
+   for 300 rows against a 47 ms round trip, on a sweep that runs once per run.
+   The trigger would be schema Alembic has to carry, invisible from the model
+   file, and inconsistent with decision 12, which keeps the enum vocabularies
+   out of the database on the grounds that repositories are the only writers.
+   What replaces it is a test on the **compiled** UPDATE — a different claim
+   from `column.onupdate` being set.
+
+   **The design gained its strongest argument, from Bertan reading OpenRouter's
+   documentation.** `/generation` and `/generation/content` fetch a single
+   generation **by its id**; no documented endpoint enumerates ids over a date
+   range; `/activity` returns aggregates per day and endpoint with no
+   individual ids. So **a generation whose id we did not capture at call time
+   is unreachable by API, permanently** — not slow to find. It compounds with
+   the retry finding: the attempts a retry swallowed have ids no layer above
+   the socket ever sees, so that money is unnameable by any query, forever.
+
+   **Not built:** Alembic, the repositories, the `llm_call()` wrapper in both
+   flavours, the `httpx` patch, the enrichment sweep. Nothing has been written
+   to the database — every live check this session ran inside a transaction
+   that was rolled back.
 
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
 algorithm improvement, not a blocker — Bertan's decision, 2026-08-07. The
