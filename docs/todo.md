@@ -638,7 +638,8 @@ structurally cannot see.
    should batch — ~100 ms per call between them. And **`pool_pre_ping` costs
    ~155 ms per checkout**, roughly 23 s over a 150-call sample. That trade was
    decided before the number existed; it is left as decided with the number
-   recorded.
+   recorded. **[Superseded — the 155 ms came from `SELECT 1`. Measured on the
+   real insert in session 3 below: 43.4 ms, ~6.5 s per 150 calls.]**
 
    **Trap 5 needed more than the empty `DB_URL` default.** The design argues
    the suite is hermetic because `DB_URL` defaults to empty, but `Settings`
@@ -710,6 +711,97 @@ structurally cannot see.
    flavours, the `httpx` patch, the enrichment sweep. Nothing has been written
    to the database — every live check this session ran inside a transaction
    that was rolled back.
+
+   ### 2026-08-26 session 3: the storage half is finished
+
+   Four commits, `28dd5a1 → 3af829c`. Suite **495 → 537 passed / 5 xfailed**.
+   **No model was called**; the spend is $0.00 and every measurement is a
+   database round trip. The schema is now **applied to the live instance** —
+   the first thing this project has written there — and the tables hold no
+   rows.
+
+   **Alembic, and the verification the design asked for.** `alembic.ini`,
+   `migrations/env.py`, revision `f5c1763874f3` applied, then an autogenerate
+   that came back **empty**, which is the check that a migration reproduces the
+   models rather than merely running. Schema read back from
+   `information_schema` and `pg_indexes` rather than assumed: three tables,
+   every constraint carrying its convention name, the partial index with its
+   predicate intact, **zero enum types**, no rows.
+
+   **`include_object` is load-bearing and was measured, not trusted.** With a
+   table in `public` that the models do not declare, autogenerate produced an
+   empty migration with the filter and `op.drop_table('zz_include_object_probe')`
+   without it. The instance is a Supabase project, not a private database, so
+   the failure guarded against is not a broken migration but one that applies
+   cleanly and deletes somebody else's table.
+
+   **The repositories**, split three ways so the layer can be checked without a
+   database: `statements.py` builds Core constructs and never executes them,
+   `call_log.py` executes them and carries the failure policy, `ledger.py`
+   counts what did not land. `AsyncCallLog` and `SyncCallLog` are written out
+   separately; the duplication is deliberate.
+
+   **`pool_pre_ping` costs a quarter of what session 2 recorded.** Repeated on
+   the real 23-column `llm_call` insert rather than `SELECT 1` — 20 samples,
+   median:
+
+   | | |
+   |---|---:|
+   | connection already open, no checkout | 46.8 ms |
+   | checkout + insert, `pool_pre_ping=False` | 47.7 ms |
+   | checkout + insert, `pool_pre_ping=True` | 91.1 ms |
+
+   So **43.4 ms per write, about 6.5 s over a 150-call run** — not the ~155 ms
+   and ~23 s recorded above, which came from a `SELECT 1` measurement. **This
+   supersedes that number**, and it is the one the open `pool_pre_ping`
+   decision should be taken on. The other half of the table is that **the row
+   shape costs nothing**: a 23-column insert carrying JSONB and NUMERIC takes
+   the same 47 ms as `SELECT 1`, so this is round trips and not payload, and
+   storing less would not make it faster.
+
+   **Departure 5 — Bertan.** The design says each failure goes through
+   `logging` at warning level; the first failure of each *kind* is logged and
+   the rest are counted. An unreachable database fails every write in a run,
+   and 150 identical warnings bury the findings the run exists to produce. The
+   total is in `LEDGER.report()` and is never suppressed.
+
+   **Four defects were found in the new code before any of it ran for real**,
+   three of them in one seam. `insert(LlmCall)` routes through the ORM's
+   bulk-persistence path, which resolved the dict key by class attribute and
+   read `LlmCall.metadata` as SQLAlchemy's `MetaData`; targeting `__table__`
+   keeps it Core. `Column.key` for that column *is* `metadata` — only the
+   mapper knows about `call_metadata` — so iterating the table's columns bound
+   `MetaData` as a value. And **`Float` subclasses `Numeric`**, so the
+   `Decimal(str(value))` rule would have converted `call_seconds` as well. The
+   fourth was structural: statements were built *outside* the `try`, making a
+   caller's missing primary key the one exception the failure policy let
+   through.
+
+   **Verified live**, writing the real rows and deleting them afterwards.
+   `AUTOCOMMIT` commits — rows read back from a second connection with no
+   commit call. `updated_at` moved 2.4 s on a real UPDATE while `created_at`
+   held. A cost round-tripped as exactly `Decimal('0.00123')` while
+   `call_seconds` stayed a float. `EXPLAIN` reports **`Index Scan using
+   ix_llm_attempt_pending_enrichment`**, so the partial index earns itself.
+
+   **Mutation: 17 + 25 mutations, 0 survivors**, after three rounds. Two gaps
+   the first sweeps exposed are worth keeping: an assertion that a constraint
+   name appeared *in the source text* passed against a renamed foreign key,
+   because the name is also in the migration's docstring — an assertion a
+   comment can satisfy is not an assertion about the code. And a mutant that
+   made the **async** `_write` re-raise survived everything, because every test
+   exercised `SyncCallLog` and **the judge path is the async one**; the
+   failure-policy tests run against both flavours now.
+
+   **`design/llm-call-log.md` now describes what exists** — half built, with
+   what is applied, two corrections marked in place, five departures collected,
+   and a `Verified against` line that no longer reads "nothing".
+
+   **Not built:** the `llm_call()` wrapper in both flavours, the `contextvar`,
+   the `httpx` patch, the enrichment sweep. **Nothing calls the repositories
+   outside a probe**, the layer is unexercised under concurrency, and the cost
+   queries the log exists for — `SUM(llm_attempt.cost)` per run, per case, per
+   provider — are written nowhere and have never run against real data.
 
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
 algorithm improvement, not a blocker — Bertan's decision, 2026-08-07. The
@@ -2284,20 +2376,32 @@ per the priority order above.
     fallback is for providers that do not; Bertan: not needed while we are on
     OpenRouter.
 - [ ] Every new scorer lands **with its unit test** in `tests/`.
-- [ ] **Finish [`design/llm-call-log.md`](design/llm-call-log.md), then build
-  it.** Bertan's instruction, 2026-08-25: the design document comes first.
-  Eleven open questions in it; three gate the build — **where the Postgres
-  instance lives** (serverless cold-start and connection limits change the
-  engine setup), **the async driver** (`create_async_engine` + `asyncpg`, or a
-  sync session in `asyncio.to_thread`), and **whether a failed call stores its
-  raw text in full**.
-  - The build is an `llm_call()` wrapper at the five stage call sites
-    (`stage_a.py:326`, `a1:158`, `a2:230`, `b:147`, `c:275`), a two-phase row,
-    and an enrichment sweep for what only `/api/v1/generation` carries.
+- [ ] **Build the capture half of the call log.** The design is finished and the
+  storage half is done — see the 2026-08-26 session 2 and 3 entries above.
+  ~~Eleven open questions~~ all answered; ~~three gate the build~~ all three
+  settled (session pooler on 5432, `create_async_engine` + `asyncpg` for the
+  judge path with psycopg for the product path, failed raw output stored in
+  full). ~~Two new dependencies through the GuardDog gate~~ — cleared
+  2026-08-26, one waiver written.
+  - **Done:** the engines and the `DB_URL` gate, the three tables, Alembic and
+    the applied migration, the repository layer.
+  - **What is left:** the `llm_call()` wrapper at the five stage call sites
+    (`stage_a.py:326`, `a1:158`, `a2:230`, `b:147`, `c:275`) in both flavours,
+    the `contextvar` carrying the call id to the socket, the `httpx` patch
+    installed from an entry point rather than on import, and the enrichment
+    sweep at exit and as a re-runnable command.
   - **The timed region must exclude the write**, or every latency number in the
     eval becomes a latency-plus-bookkeeping number.
-  - Two new dependencies — `sqlalchemy` and an async driver — go through the
-    GuardDog gate, so this brings `make scan` / `upgrade-safe` into the change.
+  - The first logged panel run is what answers the question the whole log was
+    built for: whether the published cost totals are 1% low or 60% low.
+
+- [ ] **Decide `pool_pre_ping`. Bertan's call.** Measured 2026-08-26 on the real
+  insert: **43.4 ms per write, ~6.5 s over a 150-call run**. Earlier notes in
+  this file say ~155 ms and ~23 s — that figure came from `SELECT 1` and is
+  **superseded**. What it buys is that a connection dropped by a serverless
+  host surfaces as a reconnect rather than as a failed write; what it costs is
+  a doubling of every single-row write. Decision 20 chose it before any number
+  existed.
 - [ ] **Pin the provider per panelist.** The log makes routing *visible*; it does
   not make it *stable*. Panel-wide or MiniMax only, and which provider MiniMax
   gets — CoreWeave + `json_schema` keeps the committed channel, Venice +
