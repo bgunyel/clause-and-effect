@@ -1,12 +1,21 @@
 # The LLM call log
 
-> **Status: decided, not built.** Every question this document opened on
-> 2026-08-25 has been answered, and the answers are recorded below with who made
-> them. Nothing here is implemented yet, so the document still breaks the rule
-> stated in [`README.md`](README.md) — that `design/` describes mechanisms that
-> *exist* — and it will keep breaking it until the build lands. Finishing a
-> design does not verify it; only code does. The `Verified against` line at the
-> foot says so plainly and stays that way until there is something to check.
+> **Status: half built.** The storage half exists and is verified; the capture
+> half does not exist at all. Concretely, as of 2026-08-26:
+>
+> | | |
+> |---|---|
+> | **Built** | the engines and the `DB_URL` gate (`src/db/engine.py`), the three tables (`src/db/models/`), Alembic and the initial migration (`alembic.ini`, `migrations/`), the repository layer (`src/db/repos/`) |
+> | **Applied** | the schema is live on the Supabase instance, three tables, **no rows** |
+> | **Not built** | the `llm_call()` wrapper, the `contextvar`, the `httpx` patch, the enrichment sweep — that is, **nothing calls the repositories yet** |
+>
+> So the document is part description and part specification, and the two are
+> marked: a section describing code that exists names the file. Where the build
+> contradicted the design the design has been corrected in place, with the
+> correction marked and dated — this directory's documents are current state,
+> not history, and the history is in git. Two such corrections and five
+> deliberate departures are collected under [*What the build
+> changed*](#what-the-build-changed).
 >
 > Statements marked **measured** are observations with numbers attached.
 > Everything else is a decision or the argument for one.
@@ -374,8 +383,47 @@ SQLite file with a realistic 19-column row:
 | WAL, `synchronous=NORMAL` | **0.012 ms** | 0.022 ms | 0.050 ms |
 
 **That measurement does not describe the chosen storage.** It is kept as the
-shape of the argument. The remote figure is **unmeasured** and is the first
-thing to measure once the engine exists.
+shape of the argument.
+
+**The remote figure, measured 2026-08-26** once the engine existed, from this
+machine against `aws-0-eu-central-2`. It is four orders of magnitude larger than
+the SQLite row, and **how the time is spent turns out to matter more than the
+network**:
+
+| | | |
+|---|---|---|
+| one statement, connection already open | 47 ms | 1 round trip |
+| checkout + statement, implicit `BEGIN`/`ROLLBACK` | 141 ms | 3 round trips |
+| checkout + statement, `AUTOCOMMIT` | 48 ms | 1 round trip |
+| checkout + statement, `AUTOCOMMIT` + pre-ping | 202 ms | ~4 round trips |
+
+The conclusion for *this* section is unchanged — tens of milliseconds against a
+call that takes seconds, outside the timer, awaited inline. The consequence for
+the repositories is that **a single-row write wrapped in an implicit transaction
+costs three round trips for one statement**, so a repository writing one row runs
+in `AUTOCOMMIT`.
+
+Those figures are `SELECT 1` and a two-column `UPDATE`. **Repeated once the
+repositories existed**, against the real 23-column `llm_call` row with its JSONB
+and its NUMERIC — 20 samples, median:
+
+| | |
+|---|---|
+| connection already open, no checkout | 46.8 ms |
+| checkout + insert, `pool_pre_ping=False` | 47.7 ms |
+| checkout + insert, `pool_pre_ping=True` | 91.1 ms |
+
+Two things follow, and the second corrects a number this document previously
+carried. **The row shape costs nothing** — the real insert takes the same 47 ms
+as `SELECT 1`, so this is round trips and not payload, and no amount of trimming
+what is stored will make it faster. **The checkout costs nothing either;
+`pool_pre_ping` is the whole of it**, at 43.4 ms per write, about 6.5 seconds
+over a 150-call run. That is a quarter of the 23 seconds estimated from the
+`SELECT 1` figure, and it is the number the open `pool_pre_ping` decision should
+be taken on.
+
+**The pool under eight concurrent panelists is still unmeasured.** Every figure
+here is single-threaded.
 
 ### The socket patch, and what it costs
 
@@ -436,16 +484,52 @@ host:
 - **One connection is opened at run start**, so the cold start is paid before the
   first judged call rather than inside it.
 
+**Correction, 2026-08-26 — the statement timeout cannot be sent as a startup
+parameter, and the first implementation that did was not in force.** Both
+drivers document the startup-parameter route — asyncpg's `server_settings`,
+psycopg's `options` — and Supabase's pooler consumes the startup packet without
+forwarding what it carries. Measured against the live instance: with the timeout
+set that way, `current_setting('statement_timeout')` read back `2min`, the
+project default; `application_name` read back `Supavisor` rather than ours; and
+`SELECT pg_sleep(30)` ran to completion. Setting the GUCs after connect is also
+not enough on its own — both drivers leave the `SET` in an implicit transaction
+they never end, so it reads back correctly once and reverts after a single pool
+round trip. What works, and what `engine.py` does, is a `connect` event listener
+that issues the `SET`s **and commits them**.
+
+Two things follow that are worth carrying into any later work here. The connect
+timeout is unaffected, because it is client-side and never reaches the pooler.
+And **no test could have caught this**: the failure was visible only by asking
+the server what it thought the setting was. `test_db_engine.py` now asserts the
+GUCs do *not* travel as startup parameters, which pins the finding rather than
+being capable of discovering it.
+
 ### The optional URL
 
 `DB_URL` in `src/config.py`, a `SecretStr` defaulting to empty — the name is
 Bertan's, already declared. The wrapper checks it after the model call: if there
 is one, it writes; if not, it does not.
 
-**Absent must remain the default**, so the test suite is hermetic by construction
-rather than by remembering to unset something, and so a fresh clone runs without
-infrastructure. A test that writes to the real log would corrupt the record it
-exists to verify.
+**Absent must remain the default**, so a fresh clone runs the whole pipeline
+with no infrastructure and no entry point has to opt out of logging.
+
+**Correction, 2026-08-26 — the empty default does not make the suite hermetic,
+and trap 5 needed a different mechanism.** The draft argued that it did:
+`DB_URL` defaults to empty, so a test run finds no URL and writes nothing. That
+is true of a fresh clone and false of the machine this is developed on.
+`Settings` reads the repository's `.env`, and on a developer's machine that file
+holds the real URL — so under the default alone, a test that touched the log
+would write to the production record it exists to verify, and nothing would say
+so until someone read the table and found fixture rows in it.
+
+The gate in `engine.py:is_enabled` is therefore **structural**: a test run
+cannot enable the log, whatever the environment says. It checks whether `pytest`
+is in `sys.modules` and refuses. Putting test-awareness in non-test code is a
+smell and it is taken deliberately, because the alternative is hermeticity that
+depends on every future test remembering to unset something — which is exactly
+the arrangement this section originally proposed. The cost is that integration
+tests against a scratch database now need that one line changed, deliberately
+and with its own review.
 
 ### Where the code lives — `src/db/`
 
@@ -466,6 +550,58 @@ an explicit contract — no LLM dependency, 0.21s import, paid by all eight modu
 that import it — and inverting the dependency would put SQLAlchemy on every one
 of them.
 
+### The repository layer — `src/db/repos/`
+
+**Built 2026-08-26.** Three modules, and the split between the first two is what
+makes the layer checkable: `statements.py` builds SQLAlchemy Core constructs and
+never executes them, `call_log.py` executes them and carries the failure policy,
+`ledger.py` counts what did not land. A repository that built and executed in one
+method could only be checked against a database; this way the SQL the log is
+about to write is compiled to a string and asserted against, with no connection
+and no rows — which is the only way to see the two properties below at all.
+
+`AsyncCallLog` serves the judge path and `SyncCallLog` the product path, written
+out separately rather than sharing a base. The duplication is deliberate: the
+bodies differ only by `await`, and both alternatives — a base class with a hook
+per statement, or one class branching on a flag — hide which path a reader is
+on, in the layer whose whole purpose is that a failure on one path must not
+reach the other.
+
+**Three rules live here rather than in the callers.** A rule a caller has to
+remember is a rule that holds until the next call site is written, and all three
+fail invisibly.
+
+- **Core `update()`, never `text()`** — the `updated_at` rule of departure 4.
+- **Every value bound for a `NUMERIC` column goes through `Decimal(str(value))`**,
+  since a caller reading a price off a JSON body has a float in hand. Note that
+  `Float` subclasses `Numeric` in SQLAlchemy, so the check has to exclude it or
+  a latency measured with a stopwatch acquires arbitrary precision.
+- **A primary key is never defaulted.** The columns carry `default=uuid.uuid4`,
+  so an insert without an id succeeds and the caller never learns what it got —
+  fatal here, because `call_id` travels in a contextvar to the socket, which
+  writes attempt rows against it *before* the call row exists.
+
+**The transaction shape is not uniform**, and the difference is the measured one
+from §The timed region: a single-row write runs in `AUTOCOMMIT`, because
+SQLAlchemy otherwise wraps one statement in an implicit transaction and spends
+three round trips delivering it — 141 ms against 48 ms. The one place a
+transaction earns its extra round trips is the enrichment sweep, which writes
+many rows and wants all or none of them: a sweep that half-lands leaves rows
+stamped `enriched_at` whose findings were rolled back, and trap 4 makes that
+permanent, since a stamped row is never swept again.
+
+**There is no method that writes a call together with its attempts**, though the
+latency argument would favour one. It is not possible under this design and is
+stated here so nobody adds it: the rows are never in hand at the same moment,
+which is departure 3's reasoning exactly.
+
+**Measured against the live instance, 2026-08-26**, writing the real rows and
+deleting them afterwards: `AUTOCOMMIT` commits (rows read back from a second
+connection), `updated_at` moves on a real UPDATE while `created_at` holds, a
+cost round-trips as exactly `Decimal('0.00123')` while `call_seconds` stays a
+float, and the sweep's query uses the partial index — `Index Scan using
+ix_llm_attempt_pending_enrichment`, from `EXPLAIN`.
+
 ### Alembic from the first commit
 
 **Decision — Bertan, 2026-08-26**, overriding the draft's proposal of
@@ -475,6 +611,45 @@ it is stronger and the draft had already half-conceded it — **a remote databas
 means a schema change is no longer "delete the file"**. Three tables, a live
 instance and no undo is precisely the situation migrations exist for, and
 retrofitting Alembic onto a table with rows in it is worse than starting with it.
+
+**Built 2026-08-26**: `alembic.ini`, `migrations/env.py`, and one revision,
+`f5c1763874f3`, applied to the live instance. Four properties of that setup are
+load-bearing rather than incidental.
+
+**The constraint naming convention had to exist before the first migration**, and
+it does — on `Base.metadata` in `src/db/models/base.py`. Without it Postgres
+invents the names, the invented names land in the first migration, and every
+later `op.drop_constraint` quotes a string nobody chose. Adding the convention
+afterwards means a migration that renames every constraint in the database to
+fix a problem caused only by lateness.
+
+**Alembic is a dependency group, not a runtime dependency.** Nothing under
+`src/` imports it; `migrations/env.py` imports our models rather than the
+reverse. So the product environment does not carry a schema tool, while both
+supply-chain gate tiers still cover it — `uv export --all-groups` flattens every
+group into the file GuardDog reads.
+
+**`env.py` restricts autogenerate to tables this project declares**, via
+`include_object`. The instance is a Supabase project rather than a private
+database: things arrive in `public` that this repository did not create. Without
+the filter the failure is not a broken migration but a migration that applies
+cleanly and deletes somebody else's table. **Measured, not assumed** — with a
+foreign table present, autogenerate produced an empty migration with the filter
+and `op.drop_table('zz_include_object_probe')` without it.
+
+**The migration runs on its own engine, not the call log's.** The product engine
+carries a 10-second `statement_timeout` chosen so a stalled write cannot stall a
+judged run; a migration waiting on a lock may legitimately take longer than a
+model call may. Migrations run under the server's own two-minute default, which
+is intended and stated in `env.py` rather than left to be rediscovered.
+
+**Verification is `upgrade head` followed by an autogenerate that must come back
+empty**, because a migration that runs is not the same as a migration that
+reproduces the models. That is a live check needing a network, so it is a thing
+someone can forget; `tests/test_migrations.py` covers the part that is visible
+in the text — every table, column and index in `Base.metadata` appears in the
+migration and the reverse — without Alembic and without a connection. What it
+cannot see is types, server defaults, and whether any of it was ever applied.
 
 ---
 
@@ -489,11 +664,35 @@ completed panel run into a crashed one. So: catch, do not raise.
 **2. A logging failure must never be silent.** An instrument that quietly drops
 records is the same defect class as every other finding this project has made
 this month. The run counts its misses and reports them — *"148 of 150 calls
-logged; 2 writes failed"* — and each failure goes through `logging` at warning
-level.
+logged; 2 writes failed"*.
 
 The statement and connect timeouts above are what make the first rule
 achievable: an unreachable database must cause skipped writes, not a stalled run.
+
+**Built in `src/db/repos/ledger.py`**, as a process-wide `WriteLedger` counting
+attempted, written and failed, plus a count per exception type. It is per
+process rather than per run, because that is what a process can honestly claim:
+`llm_run` is a database row, and a run whose writes all failed has no row to
+attach a count to. `LEDGER.report()` is the one line an entry point logs at the
+end, and a run that attempted nothing says so rather than reporting *0 of 0*,
+which reads as success to someone skimming.
+
+**Departure 5 — the first failure of each kind is logged, not every failure.**
+The draft said each failure goes through `logging` at warning level, and that is
+wrong at the scale this operates on: an unreachable database fails every write
+in the run, and 150 identical warnings bury the output the run exists to
+produce, including the findings themselves. So the first of each exception type
+is a warning naming `safe_target()` and the redacted exception; the rest are
+counted and appear in the report. The total is the number that matters, and it
+is never suppressed. Bertan's call, 2026-08-26.
+
+Two things about the boundary are worth stating, because both were wrong in the
+first implementation and neither is visible from the outside. **The statement is
+built inside the `try`** — the builders refuse a missing primary key by raising,
+so with construction outside, a caller's bug was the one exception the policy let
+through. And **the gate is checked before anything else**, so a process with no
+`DB_URL` attempts nothing and reports nothing rather than counting misses it
+never intended to make.
 
 ---
 
@@ -509,9 +708,11 @@ a long-lived server is not a script invocation.
 |---|---|
 | `run_id` | generated uuid; the join key |
 | `entry_point` | caller, e.g. `probe_a2_stability.py` |
-| `commit_sha`, `git_dirty` | `chunk_store.git_state` reports both |
+| `commit_sha` | `chunk_store.git_state` |
+| `git_dirty_paths` | `chunk_store.git_state`; JSONB, **departure 1** — the paths, not a boolean |
 | `started_at`, `finished_at` | caller |
 | `hostname` | for when runs come from more than one machine |
+| `created_at`, `updated_at` | **departure 4** — row lifecycle, on every table |
 
 Created lazily by the first call that needs it (`ON CONFLICT DO NOTHING`), so no
 entry point has to remember to open one.
@@ -528,12 +729,14 @@ entry point has to remember to open one.
 | `requested_provider` | the config entry | the routing constraint we sent, as JSON |
 | `status` | wrapper | `OK` / `STRUCTURE` / `TIMEOUT` / `TRANSPORT` |
 | `call_seconds` | wrapper | the bare invocation, timer stopped before the write |
+| `started_at` | wrapper | **departure 2** — places the call against the clock, not merely inside its run |
 | `generation_id`, `cost`, `finish_reason` | `response_metadata` | **what the caller believed** — the last attempt only |
 | `prompt_tokens`, `completion_tokens`, `reasoning_tokens` | `usage_metadata` | |
 | `prompt_sha256` | wrapper | see *what is not stored* |
 | `raw_output` | wrapper | failures only, **in full** |
 | `error_type`, `error_message` | wrapper | |
 | `metadata` | call site | JSONB, for whatever a site knows that has no column |
+| `created_at`, `updated_at` | the database | **departure 4** |
 
 **`llm_attempt`** — one row per upstream HTTP request, written by the socket
 patch. **This is the table that says what a call actually cost.**
@@ -541,8 +744,10 @@ patch. **This is the table that says what a call actually cost.**
 | column | phase | source |
 |---|---|---|
 | `attempt_id` | 1 | generated |
-| `call_id` | 1 | the contextvar; **nullable** — null means a request made outside any wrapper |
+| `call_id` | 1 | the contextvar; **nullable**, and **departure 3a** — no foreign key |
 | `seq` | 1 | order within the call |
+| `llm_server` | 1 | **departure 3b** — the request URL; what the sweep filters on |
+| `started_at` | 1 | **departure 2** — `seq` orders attempts within a call, this places them against the clock |
 | `generation_id` | 1 | `id` in the response body |
 | `served_provider` | 1 | **`provider` in the response body — free and immediate**; who ran the machine |
 | `model_alias` | 1 | `model` in the response body — the wire id, e.g. `minimax/minimax-m3` |
@@ -552,6 +757,7 @@ patch. **This is the table that says what a call actually cost.**
 | `routing_chain` | 2 | generation endpoint, e.g. `Parasail:429 -> Venice:200` |
 | `native_finish_reason`, `generation_time`, `latency` | 2 | generation endpoint |
 | `enriched_at` | 2 | null until the sweep runs |
+| `created_at`, `updated_at` | — | **departure 4** |
 
 **The true cost of a call is `SUM(llm_attempt.cost)`, not `llm_call.cost`.** The
 two are stored separately and deliberately: the gap between them is the
@@ -866,9 +1072,13 @@ therefore re-runnable and records its failures rather than assuming success.
 sweep re-fetches the same permanently-missing generations forever. *Not yet
 swept* and *swept, nothing there* must be distinguishable.
 
-**5. Tests must never write to the real database.** Covered by the empty-`DB_URL`
-default, but it needs a test that asserts it, since the failure is invisible until
-someone inspects the table and finds fixture data in it.
+**5. Tests must never write to the real database.** ~~Covered by the
+empty-`DB_URL` default~~ — it is not, on any machine whose `.env` holds a real
+URL, which is every machine this is developed on. `engine.py:is_enabled` refuses
+structurally when `pytest` is in `sys.modules`, and `test_db_engine.py` asserts
+it. See [the correction](#the-optional-url). The failure is invisible until
+someone inspects the table and finds fixture data in it, which is why the
+argument that it was already covered was worth checking rather than accepting.
 
 **6. `DB_URL` is a secret** and contains a password. It is a `SecretStr`, and it
 must not reach a log line, an exception message or a committed report. Connection
@@ -936,14 +1146,100 @@ makes this visible; it does not fix it, and the fix belongs in `todo.md`.
 
 ---
 
+## What the build changed
+
+Collected here so that a reader who knows the original design can find every
+difference in one place. The corrections are marked at the sections they
+correct; the departures are marked at the columns they affect and argued in
+`src/db/models/llm_log.py`, which is where someone reversing one would be.
+
+**Two corrections. Both are cases where a decision was recorded and then
+silently not in force**, which is this project's recurring defect class rather
+than a coincidence.
+
+| | what the design said | what is true |
+|---|---|---|
+| 1 | statement timeout 10s | sent as a startup parameter it never reached the server; the pooler ate it, and `pg_sleep(30)` ran to completion |
+| 2 | the empty `DB_URL` default makes the suite hermetic | it does not on a machine whose `.env` has a real URL; the gate is structural instead |
+
+**Five departures**, all deliberate, none of which changes what the log is for.
+The fifth is in §Failure policy — the first failure of each kind is logged
+rather than every failure — and is argued there.
+
+1. **`llm_run.git_dirty_paths` rather than a `git_dirty` boolean.**
+   `chunk_store.git_state` argues against the boolean in its own docstring: it
+   is repo-wide, so an unrelated draft in `docs/` marks a run dirty even when
+   everything that produced it is committed, and only the paths let a reader
+   three months later tell those apart. The same docstring warns against keeping
+   a flag beside the list, because the two drift. So the boolean is a query —
+   `jsonb_array_length(git_dirty_paths) > 0`.
+
+2. **`started_at` on both `llm_call` and `llm_attempt`.** Without it a call can
+   be placed no more precisely than its run, two runs interleaved on one machine
+   cannot be untangled, and no query can ask what the panel was doing at a given
+   moment. Eight bytes, and not reconstructable later.
+
+3. **`llm_attempt.call_id` carries no foreign key, and `llm_attempt` gains
+   `llm_server`.** The missing key is forced by write ordering: the socket
+   writes the attempt while the request is in flight, and the wrapper writes the
+   call only after it returns, because the row needs the status and the
+   duration. **An attempt therefore always exists before the call it belongs
+   to**, and a foreign key would reject it — turning the log's failure policy
+   into a constraint on when rows may be written. The reference is real and
+   indexed, simply not enforced by the database, which is the same trade
+   decision 12 already makes for the enumerations. `llm_server` is on the
+   attempt because the sweep's own filter needs it (`WHERE enriched_at IS NULL
+   AND generation_id IS NOT NULL AND llm_server = 'openrouter'`) and it cannot
+   come from a join: the rows that most need filtering are exactly the ones with
+   a null `call_id`.
+
+4. **Every table carries `created_at` and `updated_at`** — Bertan, 2026-08-26.
+   On the declarative base rather than in a mixin tables opt into, so a table
+   added next year cannot be the one that forgot. They are **not** duplicates of
+   the domain timestamps beside them: `llm_call.started_at` is when the call
+   began, `created_at` is when the row reached the database, and the gap is the
+   call's duration plus the write. When a record and its subject disagree about
+   time, having only one of them makes the disagreement invisible.
+
+   `updated_at` is maintained by SQLAlchemy's `onupdate`, which is a property of
+   the *statement* rather than of the table — so a literal `text("UPDATE …")`
+   does not get it and the column would keep the insert's value while the row
+   changed underneath it. **The rule that closes this is that repositories write
+   with Core `update()`, never with `text()`.** A `BEFORE UPDATE` trigger was
+   proposed and rejected on measurement, 300 rows against the live instance:
+
+   | | | |
+   |---|---|---|
+   | raw `text()` executemany | 59.9 ms | `updated_at` moved: 0/300 |
+   | Core `update()` executemany | 67.5 ms | 300/300 |
+   | ORM load + mutate + flush | 125.5 ms | 300/300 |
+
+   7.6 ms per 300 rows against a 47 ms round trip, and the sweep runs once per
+   run rather than once per call. The trigger would also be schema Alembic has
+   to carry and invisible from the model file, and it would enforce in the
+   database a guarantee that decision 12 declines to enforce there for `status`.
+
+---
+
 ## Known gaps
 
-- **The mechanism does not exist.** This document describes a design, not code.
-- **The remote write latency is unmeasured.** The local SQLite figures quoted
-  above do not stand in for it, and it is the first thing to measure once the
-  engine exists.
-- **Two new dependencies** — `sqlalchemy`, `asyncpg` — plus `alembic`, all of
-  which must pass the GuardDog gate before they can land.
+- **Nothing captures anything yet.** The tables exist and are empty and the
+  repositories can write to them, but the wrapper, the `contextvar`, the socket
+  patch and the sweep are unbuilt, so nothing calls them outside a probe. Until
+  they exist this document is still partly a specification.
+- **The repository layer is unexercised under concurrency.** Every latency
+  figure here is single-threaded, and eight panelists contending for a pool of
+  five have not been measured. The `enrich_attempts` transaction in particular
+  has only ever held three rows.
+- **`pending_enrichment` is the only read the layer offers**, and the sweep that
+  would consume it does not exist. The cost queries the log is *for* —
+  `SUM(llm_attempt.cost)` per run, per case, per provider — are written nowhere
+  and have never been run against real data.
+- **Autogenerate does not compare server defaults.** `compare_server_default`
+  is off — Alembic's default, and left there because turning it on produces
+  spurious diffs from Postgres rewriting default expressions. A change to
+  `created_at`/`updated_at`'s `server_default=func.now()` will pass the
+  empty-diff check silently, and its migration has to be written by hand.
 - **`native_finish_reason` may be in the response body already**, in which case
   it moves from phase 2 to phase 1. Not checked; check it at build time rather
   than assuming either way.
@@ -958,8 +1254,23 @@ makes this visible; it does not fix it, and the fix belongs in `todo.md`.
 
 ---
 
-**Verified against:** nothing. No code implements this design. The measurements
-quoted were taken on 2026-08-25 and 2026-08-26 at commit `4768ce9`, against
-`langchain_openrouter` and `langsmith 0.11.1` as pinned in `uv.lock` on those
-dates; the 2026-08-26 figures come from `scripts/probe_retry_visibility.py`. When
-the mechanism exists, this line names the commit it was checked against.
+**Verified against:** `dev-04` at the commit that added `src/db/repos/` — the
+storage half only, covered by 183 tests (`src/db/engine.py` 37, the models 104,
+the migration environment 9, the repositories 33), each file mutation-swept with
+no survivors. **The capture half is verified against nothing, because it does
+not exist**: every statement about the wrapper, the `contextvar`, the socket
+patch and the enrichment sweep is a specification.
+
+What was checked against the live Supabase instance on 2026-08-26, rather than
+reasoned about: the connection parameters as the server reports them, the DDL
+via `create_all` into a throwaway schema and then via `upgrade head` for real,
+the schema read back from `information_schema` and `pg_indexes`, the empty
+autogenerate, the `include_object` filter against a real foreign table, the
+repositories writing and reading back every real row shape, and every latency
+figure quoted above. The rows those probes wrote were deleted afterwards; the
+tables hold nothing.
+
+The pre-build measurements were taken on 2026-08-25 and 2026-08-26 at commit
+`4768ce9`, against `langchain_openrouter` and `langsmith 0.11.1` as pinned in
+`uv.lock` on those dates; those figures come from
+`scripts/probe_retry_visibility.py`.
