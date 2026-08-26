@@ -235,3 +235,16 @@ thing in the record.
   limiter. The premise `llm_config.py` rests on is broken one layer below the
   configuration. Bertan directed that calls be logged to a database; the session
   closed with a draft design document and eleven open questions.
+- [2026-08-26 · session 1](devlog_2026-08-26_session-1.md) — the call-log design
+  was finished, and the measurement taken to finish it changed what is being
+  built. **A retried call makes an unbounded number of billed generations and
+  nothing above the socket could name more than one of them** — 67% of one
+  call's cost unaccounted in the mild case, 100% in the exhausted one.
+  `max_retries` turns out to be a 300-second time budget rather than a count, so
+  one logical call has a fifteen-minute worst case; a callback handler was
+  proposed as the capture mechanism and **rejected on measurement**, because it
+  sees no more of the retries than the call site does. The served provider,
+  meanwhile, is free in the raw response body. The log became three tables with
+  a socket-level attempt row, and Bertan's clarification that **the LLM server is
+  not the provider** exposed a column the assistant had misnamed.
+
