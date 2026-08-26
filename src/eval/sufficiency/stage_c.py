@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from src.eval.sufficiency.llm import (
     StageResponse,
     build_judge_llm,
-    require_response,
+    llm_call,
 )
 from src.eval.sufficiency.models import Adjudication, BlindAnswer, Claim, ClaimVerdict
 
@@ -272,9 +272,10 @@ async def adjudicate(
             value=_nothing_to_carry(claims), cost=0.0, calls=()
         )
 
-    llm = build_judge_llm(model_params, _StageCAdjudication)
-    response = require_response(
-        await llm.ainvoke(build_stage_c_prompt(question, claims, blind_answer)),
+    response = await llm_call(
+        build_judge_llm(model_params, _StageCAdjudication),
+        build_stage_c_prompt(question, claims, blind_answer),
+        model_params=model_params,
         stage="C",
     )
     by_number = _verdicts_by_claim_number(response.value, len(claims))

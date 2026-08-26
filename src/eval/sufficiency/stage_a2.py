@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from src.eval.sufficiency.llm import (
     StageResponse,
     build_judge_llm,
-    require_response,
+    llm_call,
 )
 from src.eval.sufficiency.models import Claim
 
@@ -227,9 +227,11 @@ async def tag_claims(
         no core one: that says the gold answer does not answer its own question,
         which is a defect in the case rather than in the quote.
     """
-    llm = build_judge_llm(model_params, _A2Claims)
-    response = require_response(
-        await llm.ainvoke(build_a2_prompt(question, answer)), stage="A2"
+    response = await llm_call(
+        build_judge_llm(model_params, _A2Claims),
+        build_a2_prompt(question, answer),
+        model_params=model_params,
+        stage="A2",
     )
     return StageResponse(
         value=[

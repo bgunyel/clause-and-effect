@@ -17,7 +17,7 @@ from src.eval.dataset import TestCase
 from src.eval.sufficiency.llm import (
     StageResponse,
     build_judge_llm,
-    require_response,
+    llm_call,
 )
 from src.eval.sufficiency.models import Claim, Decomposition
 
@@ -323,8 +323,12 @@ async def decompose(
         answer does not answer its own question, which is a defect in the case
         rather than in the quote.
     """
-    llm = build_judge_llm(model_params, _StageADecomposition)
-    response = require_response(await llm.ainvoke(build_stage_a_prompt(case)), stage="A")
+    response = await llm_call(
+        build_judge_llm(model_params, _StageADecomposition),
+        build_stage_a_prompt(case),
+        model_params=model_params,
+        stage="A",
+    )
     parsed = response.value
     return StageResponse(
         value=Decomposition(

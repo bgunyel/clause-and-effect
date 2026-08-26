@@ -29,7 +29,10 @@ run can report its spend without any stage having to know how spend is totalled.
 """
 from __future__ import annotations
 
+import time
+from contextlib import nullcontext
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -43,6 +46,8 @@ from typing import (
 )
 
 from pydantic import BaseModel, ValidationError
+
+from src.db.capture import response as response_reader
 
 if TYPE_CHECKING:
     from langchain_core.language_models import LanguageModelInput
@@ -229,9 +234,14 @@ def _cost_of(raw: Any) -> float | None:
     ``.get`` rather than ``[]``: ``cost`` is an OpenRouter field, not a
     LangChain one, and a provider that omits it must yield an unpriced call
     rather than a ``KeyError`` that loses an otherwise valid judgement.
+
+    Delegated to :mod:`src.db.capture.response`, which the call log reads the
+    same field with. Two implementations of "where does the provider put the
+    price" is one too many: the day OpenRouter moves it, one of them gets fixed
+    and the other goes on returning ``None`` — indistinguishable, here, from a
+    provider that did not report a price.
     """
-    metadata = getattr(raw, "response_metadata", None) or {}
-    return metadata.get("cost")
+    return response_reader.cost_of(raw)
 
 
 def _generation_id_of(raw: Any) -> str | None:
@@ -254,9 +264,10 @@ def _generation_id_of(raw: Any) -> str | None:
     ``.get`` for the same reason as :func:`_cost_of`: this is a provider field,
     not a LangChain one, and a response without it must yield an unidentified
     call rather than a ``KeyError`` that loses a judgement over bookkeeping.
+
+    Delegated for the reason :func:`_cost_of` gives.
     """
-    metadata = getattr(raw, "response_metadata", None) or {}
-    return metadata.get("id")
+    return response_reader.generation_id_of(raw)
 
 
 def _reasoning_tokens_of(raw: Any) -> int | None:
@@ -279,10 +290,10 @@ def _reasoning_tokens_of(raw: Any) -> int | None:
     ``None`` and ``0`` are different answers and both occur. ``0`` is a provider
     saying this call did no reasoning; ``None`` is a provider not saying. Only
     the first belongs in an average.
+
+    Delegated for the reason :func:`_cost_of` gives.
     """
-    usage = getattr(raw, "usage_metadata", None) or {}
-    details = usage.get("output_token_details") or {}
-    return details.get("reasoning")
+    return response_reader.reasoning_tokens_of(raw)
 
 
 def _record_of(raw: Any) -> CallRecord:
@@ -389,6 +400,144 @@ def require_response(
 
     record = _record_of(payload.get("raw"))
     return StageResponse(value=parsed, cost=record.cost, calls=(record,))
+
+
+async def llm_call(
+    runnable: "Runnable[LanguageModelInput, StructuredPayload[_SchemaT]]",
+    prompt: Any,
+    *,
+    model_params: Dict[str, Any],
+    stage: str,
+    metadata: Dict[str, Any] | None = None,
+) -> StageResponse[_SchemaT]:
+    """
+    Invoke one judge call, time it, log it, and unwrap it.
+
+    Replaces the two lines every stage repeated — ``await llm.ainvoke(prompt)``
+    inside ``require_response(...)`` — and adds the call log around them. A
+    stage that used it before the log existed would behave identically, which is
+    the property that makes it safe to put on the judge's hot path.
+
+    **It takes a built runnable rather than building one.** Passing
+    ``model_params`` and a schema would read better at the call site and would
+    move ``build_judge_llm`` inside this function, where a stage's tests can no
+    longer replace it — twenty of them install a fake by patching the stage
+    module's own reference. The log is not worth reaching into the judge's test
+    seam for.
+
+    **The timer stops before the write** (design §The timed region excludes the
+    write, Bertan's correction of 2025-08-25). ``call_seconds`` is the bare
+    invocation; a run's wall clock includes the ~90 ms round trip that follows,
+    and the per-call latency column does not.
+
+    **A failed call is logged and then still raised.** That is most of the point
+    rather than a nicety: a call that raised was still made, still billed, and
+    still exists at the provider under an id that, per OpenRouter's
+    documentation, no query can recover after the fact. The row is written
+    first and the exception propagates unchanged, so nothing above this can tell
+    the log is here.
+
+    The four statuses are told apart because they call for different reactions.
+    ``STRUCTURE_PROBLEM`` is a model that answered unusably — a prompt or a
+    channel problem. ``TIMEOUT`` and ``TRANSPORT_PROBLEM`` are the network or
+    the provider, and
+    a run full of them says nothing about any panelist's judgement.
+
+    Args:
+        runnable:     What ``build_judge_llm`` returned.
+        prompt:       Whatever the stage built; hashed, never stored.
+        model_params: The config entry, for the model, channel and routing
+                      constraint the row records.
+        stage:        ``"A"``, ``"A1"``, ``"A2"``, ``"B"`` or ``"C"``.
+        metadata:     Anything the call site knows that has no column.
+
+    Returns:
+        The :class:`StageResponse` :func:`require_response` would have returned.
+
+    Raises:
+        JudgeResponseError: exactly as :func:`require_response` does, after the
+            row is written.
+    """
+    # Deferred for the reason the module docstring gives about `get_llm`: the
+    # storage layer costs 0.495s to import, and a stage module that is only
+    # imported — by its tests, or to read a prompt — must not pay it.
+    from src.db import engine as db_engine
+    from src.db.capture import recorder
+    from src.db.capture.context import call_context, current_case
+    from src.db.models import CallStatus
+
+    enabled = db_engine.is_enabled()
+    # Built only when the log is on: the first call to `RUN.row()` shells out to
+    # git, and a fresh clone with no DB_URL must not run a subprocess to make a
+    # model call.
+    context = recorder.new_call_context(stage, current_case()) if enabled else None
+
+    async def record(status, *, raw=None, error=None, error_message=None) -> None:
+        if not enabled:
+            return
+        await recorder.record_call(
+            recorder.build_call_row(
+                context=context,
+                model_params=model_params,
+                prompt=prompt,
+                status=status,
+                started_at=started_at,
+                call_seconds=call_seconds,
+                raw=raw,
+                error=error,
+                error_message=error_message,
+                metadata=metadata,
+            )
+        )
+
+    started_at = _now()
+    started = time.perf_counter()
+    try:
+        # The context is published only around the invocation, because that is
+        # the only window in which the socket sees a request belonging to this
+        # call. Anything the process does outside it — including the log's own
+        # writes — is correctly attributed to no call at all.
+        with call_context(context) if enabled else nullcontext():
+            payload = await runnable.ainvoke(prompt)
+    except BaseException as exc:  # noqa: BLE001 — re-raised below, unchanged
+        call_seconds = time.perf_counter() - started
+        # `TimeoutError` and `asyncio.TimeoutError` are the same class from
+        # Python 3.11, so one branch catches both. Everything else is transport:
+        # the distinction worth drawing is "we gave up waiting" against "it went
+        # wrong", and inventing finer categories from exception names would be
+        # guessing about libraries we do not control.
+        status = CallStatus.TIMEOUT if isinstance(exc, TimeoutError) else CallStatus.TRANSPORT_PROBLEM
+        await record(status, error=exc, error_message=str(exc))
+        raise
+    call_seconds = time.perf_counter() - started
+
+    # `payload` is `None` when the chain yielded nothing at all, which is the one
+    # failure with no message to read a price off. `.get` guards that shape.
+    raw = payload.get("raw") if payload else None
+    try:
+        response = require_response(payload, stage=stage)
+    except JudgeResponseError as exc:
+        # Logged from the exception rather than from the payload, so
+        # `error_message` carries the full text a human would see — including
+        # the audit note naming the generation. `raw_output` stores the model's
+        # own words separately and, unlike that message, unshortened.
+        await record(CallStatus.STRUCTURE_PROBLEM, raw=raw, error=exc, error_message=str(exc))
+        raise
+
+    await record(CallStatus.OK, raw=raw)
+    return response
+
+
+def _now() -> datetime:
+    """
+    Wall-clock start of a call, in UTC.
+
+    Separate from ``perf_counter`` on purpose: this one places the call against
+    other calls and other machines, and the monotonic clock times it. Neither
+    can do the other's job — a monotonic reading is meaningless across
+    processes, and a wall clock can go backwards mid-measurement.
+    """
+    return datetime.now(timezone.utc)
 
 
 def payload_from_tool_call(

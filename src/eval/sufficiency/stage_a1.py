@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from src.eval.sufficiency.llm import (
     StageResponse,
     build_judge_llm,
-    require_response,
+    llm_call,
 )
 
 # The rules are STEP 1's from `stage_a.py`, plus one that used to be implicit.
@@ -155,9 +155,11 @@ async def write_shortest_answer(
         answers the question: a finding about the case — the gold answer does not
         answer its own question — and not an error.
     """
-    llm = build_judge_llm(model_params, _A1ShortestAnswer)
-    response = require_response(
-        await llm.ainvoke(build_a1_prompt(question, answer)), stage="A1"
+    response = await llm_call(
+        build_judge_llm(model_params, _A1ShortestAnswer),
+        build_a1_prompt(question, answer),
+        model_params=model_params,
+        stage="A1",
     )
     return StageResponse(
         value=response.value.shortest_sufficient_answer,

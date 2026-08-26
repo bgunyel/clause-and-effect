@@ -20,7 +20,7 @@ from src.eval.golden_qa import normalize_for_grounding
 from src.eval.sufficiency.llm import (
     StageResponse,
     build_judge_llm,
-    require_response,
+    llm_call,
 )
 from src.eval.sufficiency.models import BlindAnswer
 
@@ -144,8 +144,12 @@ async def answer_blind(
         cost. ``answered`` False is the insufficiency escape and a legitimate
         outcome, not an error.
     """
-    llm = build_judge_llm(model_params, _StageBAnswer)
-    response = require_response(await llm.ainvoke(build_stage_b_prompt(case)), stage="B")
+    response = await llm_call(
+        build_judge_llm(model_params, _StageBAnswer),
+        build_stage_b_prompt(case),
+        model_params=model_params,
+        stage="B",
+    )
     parsed = response.value
     return StageResponse(
         value=BlindAnswer(
