@@ -712,7 +712,7 @@ structurally cannot see.
    to the database — every live check this session ran inside a transaction
    that was rolled back.
 
-   ### 2026-08-26 session 3: the storage half is finished
+   ### 2026-08-26 session 3: the storage half, and the wrapper on top of it
 
    Four commits, `28dd5a1 → 3af829c`. Suite **495 → 537 passed / 5 xfailed**.
    **No model was called**; the spend is $0.00 and every measurement is a
@@ -797,9 +797,35 @@ structurally cannot see.
    what is applied, two corrections marked in place, five departures collected,
    and a `Verified against` line that no longer reads "nothing".
 
-   **Not built:** the `llm_call()` wrapper in both flavours, the `contextvar`,
-   the `httpx` patch, the enrichment sweep. **Nothing calls the repositories
-   outside a probe**, the layer is unexercised under concurrency, and the cost
+   **The wrapper, and the context the socket will read.** `src/db/capture/`
+   holds three scopes with three lifetimes — the run is the process (built
+   lazily, so a script that never calls a model never shells out to git), the
+   case is set by whoever iterates cases, and the call is published for the
+   duration of the invocation. `llm_call()` replaces the two lines all five
+   judge stages repeated. The 100 existing stage tests pass untouched, which is
+   the evidence that it is behaviour-identical with no `DB_URL`.
+
+   **One module now owns where the provider puts its metadata.** `llm.py`'s
+   three private readers delegate to `capture/response.py`. Two callers needed
+   the same seven fields; written twice, the day OpenRouter moves `cost` is the
+   day one gets fixed and the other returns `None` — indistinguishable, in that
+   column, from a provider that did not report a price. Field names transcribed
+   from a real reply dumped 2026-08-23, not from documentation.
+
+   **Verified end to end against the live instance with a fake runnable**, so
+   no model was called and the spend stayed $0.00. All four statuses landed; the
+   socket saw the call id during the invocation and nothing after it; cost
+   stored as `0.00003235`; the run row written once with 8 dirty paths from real
+   `git_state`. 5 of 5 writes landed, rows deleted afterwards. **Mutation: 31
+   mutations, 0 survivors.**
+
+   **`STRUCTURE` → `STRUCTURE_PROBLEM`, `TRANSPORT` → `TRANSPORT_PROBLEM` —
+   Bertan.** The old names named parts of the system; a status column holds what
+   went wrong in them. `TIMEOUT` keeps its name, being already an event rather
+   than a layer. No migration — decision 12 keeps the column plain text.
+
+   **Not built:** the sync flavour of the wrapper, the `httpx` patch, the
+   enrichment sweep. The layer is unexercised under concurrency, and the cost
    queries the log exists for — `SUM(llm_attempt.cost)` per run, per case, per
    provider — are written nowhere and have never run against real data.
 
@@ -2384,16 +2410,106 @@ per the priority order above.
   full). ~~Two new dependencies through the GuardDog gate~~ — cleared
   2026-08-26, one waiver written.
   - **Done:** the engines and the `DB_URL` gate, the three tables, Alembic and
-    the applied migration, the repository layer.
-  - **What is left:** the `llm_call()` wrapper at the five stage call sites
-    (`stage_a.py:326`, `a1:158`, `a2:230`, `b:147`, `c:275`) in both flavours,
-    the `contextvar` carrying the call id to the socket, the `httpx` patch
-    installed from an entry point rather than on import, and the enrichment
-    sweep at exit and as a re-runnable command.
+    the applied migration, the repository layer, the `contextvar`, and
+    `llm_call()` wired at all five judge stage call sites.
+  - **What is left:** the **sync flavour** and its product-path call sites, the
+    `httpx` patch installed from an entry point rather than on import, and the
+    enrichment sweep at exit and as a re-runnable command.
+  - **The sync flavour is blocked on a decision, not on work.**
+    `generator.py:99` reads `structured_response = self.structured_llm.invoke(...)`
+    and the result is never used — **a second full model call per product
+    answer, billed and discarded**. Wrapping it means logging a call that should
+    not exist. Delete it, use it, or decide it stays; then the wrapper goes on.
+    Found 2026-08-26 while looking for the product path's call sites, which is
+    itself an argument for the log.
   - **The timed region must exclude the write**, or every latency number in the
     eval becomes a latency-plus-bookkeeping number.
   - The first logged panel run is what answers the question the whole log was
     built for: whether the published cost totals are 1% low or 60% low.
+
+- [ ] **Lift the generic LLM machinery out of `src/eval/sufficiency/llm.py` into
+  a shared `src/llm/` tier — Bertan, 2026-08-26.** Raised on reading the file
+  after the wrapper landed: a great deal of what is in there is not specific to
+  the sufficiency judge, and `llm_call()` in particular **will be used wherever
+  a model call is made, including every module under `src/clause_and_effect/`**.
+  A wrapper that both packages must reach cannot live inside one of them.
+
+  The placement is already wrong in a visible way: the product path would have
+  to import from `src/eval/sufficiency/` to build a structured-output model, and
+  the sync flavour of the wrapper has nowhere sensible to sit while its async
+  twin is inside the judge.
+
+  **What moves** — the test is *does this encode a fact about
+  LangChain/OpenRouter, or a fact about the judge?*
+
+  | to `src/llm/` | stays in `src/eval/sufficiency/` |
+  |---|---|
+  | `llm_call()` / `llm_call_sync()` | `JudgeResponseError`, `StageResponse` |
+  | `StructuredPayload`, `payload_from_tool_call` | `require_response`'s `stage=` vocabulary |
+  | `build_judge_llm` (renamed — nothing about it judges) | a ~8-line adapter that unwraps into a `StageResponse` |
+  | `sum_costs`, `_excerpt`, the channel constants | |
+  | eventually `llm_config.py` as `src/llm/config.py` | |
+
+  **`CallStatus` does not move and does not need to.** It already sits in
+  `src/db/models/`, reachable from both packages — and none of its four members
+  is judge-specific, which was Bertan's observation while renaming two of them.
+  A product-path structured-output call fails to coerce exactly as a stage's
+  does.
+
+  **This removes the callback hook the first sketch needed.** The assistant
+  argued that `STRUCTURE_PROBLEM` classification must stay in the judge because
+  it requires reading `{raw, parsed, parsing_error}` — and then Bertan's point
+  that the statuses are not judge-specific exposed the error: that shape is
+  LangChain's `include_raw` contract, which `llm.py` merely *declares*. Once
+  `StructuredPayload` moves, the shared wrapper classifies all four statuses
+  itself and needs nothing injected.
+
+  **Sequencing: do this before the `httpx` patch.** The patch reads the
+  contextvar and will import from wherever the wrapper lands, so moving it
+  afterwards means touching the patch too. `src/db/capture/context.py` stays
+  where it is — it is about the log's rows, and both the wrapper and the patch
+  read it from there.
+
+- [ ] **Carrying functionality to `ai-common`: deliberately not now — Bertan,
+  2026-08-26**, agreed after discussion. Recorded so the question is not
+  reopened from scratch. What would eventually qualify is narrow:
+  `src/db/capture/response.py` (where a provider puts cost, id, finish reason,
+  reasoning tokens), the `include_raw` payload shape, and the channel constants
+  — facts about LangChain and OpenRouter rather than about this project.
+
+  **The `structured_output` table specifically should not go**, though it looks
+  like the most reusable thing in `llm_config.py`. Those assignments were
+  measured on stage A2 prompts over six cases; promoted to a library they become
+  "how to call MiniMax", a stronger claim than the evidence supports, and the
+  counts are single-sample — Grok read 4/6 then 6/6 on identical runs.
+  Measurements should live where their evidence lives.
+
+  Two constraints on any future move. This module is architected around
+  `ai_common` being expensive to import (6.58s for `ai_common.llm`), so moving
+  code there makes the cheap tier harder to keep cheap unless `ai-common` gets
+  its own layering first. And `ai_common.get_llm` still mutates the dict it is
+  handed — see below — which `build_judge_llm` works around with a defensive
+  copy; that should be fixed there before anything is built on top of it.
+
+- [ ] **The probe scripts carry their own status vocabulary.**
+  `probe_wire_params.py:222`, `probe_panel_roster.py:164` and
+  `probe_reasoning_channel.py:108,155,162` write the string literals
+  `"STRUCTURE"` and `"TRANSPORT"` and never touch `CallStatus`. After the
+  2026-08-26 rename they disagree with the log. Importing `CallStatus` and
+  writing `.value` is the fix, and it is **Bertan's call because it is not
+  free**: new eval reports would say `STRUCTURE_PROBLEM` where
+  `2026-08-25-reasoning-channel-061136.md` says `STRUCTURE`, and committed
+  reports are history that is not rewritten. Same shape as the `short_name`
+  decision above.
+
+- [ ] **A payload of `None` is recorded as `STRUCTURE_PROBLEM`.** That is the
+  case where the chain yielded nothing at all — nothing was generated, so the
+  name fits even less well after the rename than before it. `require_response`
+  calls it "the one failure that is genuinely unaccountable": no message, so no
+  cost, no generation id, nothing to read. Folding it into `TRANSPORT_PROBLEM`
+  is one line and one assertion. It is a defensive branch —
+  `with_structured_output(include_raw=True)` should always return a dict — so
+  nothing depends on the answer today.
 
 - [ ] **Decide `pool_pre_ping`. Bertan's call.** Measured 2026-08-26 on the real
   insert: **43.4 ms per write, ~6.5 s over a 150-call run**. Earlier notes in
