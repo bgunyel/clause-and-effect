@@ -260,4 +260,17 @@ thing in the record.
   option the assistant's framing had hidden. Bertan's reading of OpenRouter's
   documentation gave the design its strongest argument: **an uncaptured
   generation id is unreachable by API, permanently.**
+- [2026-08-26 · session 3](devlog_2026-08-26_session-3.md) — the call log becomes
+  a mechanism: Alembic applied to the live instance, the repository layer, and
+  `llm_call()` wrapped around all five judge stages, at a spend of $0.00.
+  **`pool_pre_ping` costs a quarter of what session 2 recorded** — 43.4 ms per
+  write against the real insert, not 155 ms — and the row shape turns out to
+  cost nothing at all. **`include_object` was measured in both directions**: on a
+  shared Supabase project, autogenerate without it writes a migration that
+  applies cleanly and drops somebody else's table. Bertan established that
+  `llm_call()` belongs in a shared tier rather than inside the judge, and his
+  second observation — that none of the four call statuses is judge-specific —
+  removed a callback hook the assistant was about to design. Looking for the
+  product path's call sites turned up **a second billed model call per answer,
+  discarded**.
 
