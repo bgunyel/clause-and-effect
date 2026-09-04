@@ -1,7 +1,7 @@
 """
 One phrasing of what a probe run cost, shared by the eight probe scripts.
 
-The arithmetic lives in :func:`src.eval.sufficiency.llm.sum_costs`; only the
+The arithmetic lives in :func:`src.llm.call.sum_costs`; only the
 wording is here. Keeping the two apart is the same split the rest of the
 codebase keeps: `llm.py` is library code and returns numbers, and how a number
 is put in front of a person is the script's business.
@@ -19,7 +19,8 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from src.eval.sufficiency.llm import StageResponse, sum_costs
+from src.eval.sufficiency.llm import StageResponse
+from src.llm.call import sum_costs
 
 
 def format_spend(responses: Iterable[StageResponse]) -> str:

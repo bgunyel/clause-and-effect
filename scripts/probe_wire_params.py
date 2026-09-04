@@ -26,7 +26,7 @@ is ours; whatever is in there is what OpenRouter received. Reading
 `_default_params`, or the model object's attributes, would re-derive the answer
 from the same layer whose behaviour is in question.
 
-**The call goes through `build_judge_llm`**, not through a locally assembled
+**The call goes through `build_structured_llm`**, not through a locally assembled
 model. The question is what *the judge* sends, so the judge's own construction
 path — including the `dict(model_args)` copy and the channel branch — has to be
 the one under test. A convenience wrapper here would be a probe of this file.
@@ -64,9 +64,9 @@ from scripts.probe_spend import format_spend
 from src.eval.sufficiency.llm import (
     JudgeResponseError,
     StageResponse,
-    build_judge_llm,
     require_response,
 )
+from src.llm.structured import build_structured_llm
 from src.llm_config import get_llm_config
 from src.logging_setup import setup_logging
 
@@ -209,7 +209,7 @@ async def probe_model(
     response: Optional[StageResponse] = None
 
     try:
-        llm = build_judge_llm(entry, _WireCheck)
+        llm = build_structured_llm(entry, _WireCheck)
         response = require_response(
             await asyncio.wait_for(
                 llm.ainvoke(_PROMPT), timeout=CALL_TIMEOUT_SECONDS

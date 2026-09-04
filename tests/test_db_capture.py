@@ -40,7 +40,7 @@ from src.db.capture.context import (
     reset_run,
 )
 from src.db.models import CallStatus, LlmCall, LlmRun
-from src.eval.sufficiency.llm import JudgeResponseError, llm_call
+from src.llm.call import LlmResponseError, llm_call
 
 RUN_ID = uuid.UUID("44444444-4444-4444-8444-444444444444")
 CALL_ID = uuid.UUID("55555555-5555-4555-8555-555555555555")
@@ -132,7 +132,7 @@ def recorded(monkeypatch, fake_run):
 
 
 class _FakeRunnable:
-    """A built runnable, as `build_judge_llm` would have returned one."""
+    """A built runnable, as `build_structured_llm` would have returned one."""
 
     def __init__(self, payload=None, raises=None):
         self.payload = payload
@@ -373,14 +373,14 @@ def test_a_failed_call_stores_what_the_model_said_in_full():
     row = build(
         status=CallStatus.STRUCTURE_PROBLEM,
         raw=a_message(content="y" * 4000),
-        error=JudgeResponseError("stage A2: …", call=None),
-        error_message="stage A2: the model's output would not coerce",
+        error=LlmResponseError("…", call=None),
+        error_message="the model's output would not coerce",
     )
 
     assert row.status == "STRUCTURE_PROBLEM"
     assert row.raw_output == "y" * 4000
-    assert row.error_type == "JudgeResponseError"
-    assert row.error_message == "stage A2: the model's output would not coerce"
+    assert row.error_type == "LlmResponseError"
+    assert row.error_message == "the model's output would not coerce"
 
 
 def test_a_failed_call_still_records_what_it_cost():
@@ -512,7 +512,7 @@ def test_an_unparseable_response_is_logged_and_then_still_raised(recorded):
     payload = a_payload(parsed=None, raw=a_message(content="I cannot answer that."),
                         parsing_error="not valid JSON")
 
-    with pytest.raises(JudgeResponseError):
+    with pytest.raises(LlmResponseError):
         invoke(_FakeRunnable(payload))
 
     assert len(recorded) == 1
@@ -546,7 +546,7 @@ def test_a_call_that_returned_nothing_at_all_is_still_recorded(recorded):
     The one failure with no message to read a price off — and the one that must
     not be described as free.
     """
-    with pytest.raises(JudgeResponseError):
+    with pytest.raises(LlmResponseError):
         invoke(_FakeRunnable(payload=None))
 
     assert recorded[0].status == "STRUCTURE_PROBLEM"

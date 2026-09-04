@@ -19,11 +19,8 @@ from typing import Any, Dict, List, Literal, Sequence
 
 from pydantic import BaseModel, Field
 
-from src.eval.sufficiency.llm import (
-    StageResponse,
-    build_judge_llm,
-    llm_call,
-)
+from src.eval.sufficiency.llm import StageResponse, stage_call
+from src.llm.structured import build_structured_llm
 from src.eval.sufficiency.models import Adjudication, BlindAnswer, Claim, ClaimVerdict
 
 # Four decisions are baked into the prompt below, each of which could have gone
@@ -272,8 +269,8 @@ async def adjudicate(
             value=_nothing_to_carry(claims), cost=0.0, calls=()
         )
 
-    response = await llm_call(
-        build_judge_llm(model_params, _StageCAdjudication),
+    response = await stage_call(
+        build_structured_llm(model_params, _StageCAdjudication),
         build_stage_c_prompt(question, claims, blind_answer),
         model_params=model_params,
         stage="C",

@@ -92,7 +92,8 @@ from scripts.probe_a2_stability import (
 )
 from src.clause_and_effect.chunking.chunk_store import git_state
 from src.eval.dataset import load_tier1
-from src.eval.sufficiency.llm import CallRecord, JudgeResponseError, sum_costs
+from src.eval.sufficiency.llm import JudgeResponseError
+from src.llm.call import CallRecord, sum_costs
 from src.eval.sufficiency.stage_a2 import tag_claims
 from src.llm_config import get_llm_config
 

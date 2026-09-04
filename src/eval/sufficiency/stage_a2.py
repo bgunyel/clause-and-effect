@@ -13,11 +13,8 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
-from src.eval.sufficiency.llm import (
-    StageResponse,
-    build_judge_llm,
-    llm_call,
-)
+from src.eval.sufficiency.llm import StageResponse, stage_call
+from src.llm.structured import build_structured_llm
 from src.eval.sufficiency.models import Claim
 
 # A2 states the criterion as a hypothetical — *consider* the shortest version that
@@ -227,8 +224,8 @@ async def tag_claims(
         no core one: that says the gold answer does not answer its own question,
         which is a defect in the case rather than in the quote.
     """
-    response = await llm_call(
-        build_judge_llm(model_params, _A2Claims),
+    response = await stage_call(
+        build_structured_llm(model_params, _A2Claims),
         build_a2_prompt(question, answer),
         model_params=model_params,
         stage="A2",

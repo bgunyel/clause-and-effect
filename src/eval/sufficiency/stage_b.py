@@ -17,11 +17,8 @@ from pydantic import BaseModel, Field
 
 from src.eval.dataset import TestCase
 from src.eval.golden_qa import normalize_for_grounding
-from src.eval.sufficiency.llm import (
-    StageResponse,
-    build_judge_llm,
-    llm_call,
-)
+from src.eval.sufficiency.llm import StageResponse, stage_call
+from src.llm.structured import build_structured_llm
 from src.eval.sufficiency.models import BlindAnswer
 
 # Two structural defences against the judge answering from what it knows rather
@@ -144,8 +141,8 @@ async def answer_blind(
         cost. ``answered`` False is the insufficiency escape and a legitimate
         outcome, not an error.
     """
-    response = await llm_call(
-        build_judge_llm(model_params, _StageBAnswer),
+    response = await stage_call(
+        build_structured_llm(model_params, _StageBAnswer),
         build_stage_b_prompt(case),
         model_params=model_params,
         stage="B",

@@ -3,7 +3,7 @@ Everything the log reads off a model's reply, in one place.
 
 **One module because two callers need the same knowledge and must not disagree
 about it.** The call log reads seven fields to fill a row; the judge's
-:class:`~src.eval.sufficiency.llm.CallRecord` reads three of them to report what
+:class:`~src.llm.call.CallRecord` reads three of them to report what
 a run cost. Written twice, the day OpenRouter moves ``cost`` is the day someone
 fixes the report and the log goes on recording nulls — silently, because a null
 here is indistinguishable from a provider that did not report the field. That

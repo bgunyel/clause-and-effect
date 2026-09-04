@@ -14,11 +14,8 @@ from typing import Any, Dict, List, Literal
 from pydantic import BaseModel, Field
 
 from src.eval.dataset import TestCase
-from src.eval.sufficiency.llm import (
-    StageResponse,
-    build_judge_llm,
-    llm_call,
-)
+from src.eval.sufficiency.llm import StageResponse, stage_call
+from src.llm.structured import build_structured_llm
 from src.eval.sufficiency.models import Claim, Decomposition
 
 # Tagging works by making the judge *write the shortest sufficient answer first*,
@@ -323,8 +320,8 @@ async def decompose(
         answer does not answer its own question, which is a defect in the case
         rather than in the quote.
     """
-    response = await llm_call(
-        build_judge_llm(model_params, _StageADecomposition),
+    response = await stage_call(
+        build_structured_llm(model_params, _StageADecomposition),
         build_stage_a_prompt(case),
         model_params=model_params,
         stage="A",

@@ -49,13 +49,9 @@ from src.eval.sufficiency.stage_c import (
 )
 from pydantic import BaseModel
 
-from src.eval.sufficiency.llm import (
-    JudgeResponseError,
-    build_judge_llm,
-    payload_from_tool_call,
-    require_response,
-    sum_costs,
-)
+from src.eval.sufficiency.llm import JudgeResponseError, require_response
+from src.llm.call import LlmResponseError, sum_costs
+from src.llm.structured import build_structured_llm, payload_from_tool_call
 from src.eval.sufficiency.stage_a1 import write_shortest_answer
 from src.eval.sufficiency.stage_a2 import tag_claims
 from src.eval.sufficiency.stage_a_twocall import decompose as decompose_twocall
@@ -199,7 +195,7 @@ def install_fake_llm(
     reasoning_tokens=FAKE_REASONING_TOKENS,
 ):
     """
-    Replace a stage's ``build_judge_llm`` with one returning a fake runnable.
+    Replace a stage's ``build_structured_llm`` with one returning a fake runnable.
 
     ``response`` is the *parsed* object — what the stage would have got before
     ``include_raw``. It is wrapped in a payload here so that the twenty-odd
@@ -236,7 +232,7 @@ def install_fake_payload(monkeypatch, module, payload):
         captured["schema"] = schema
         return fake
 
-    monkeypatch.setattr(module, "build_judge_llm", build)
+    monkeypatch.setattr(module, "build_structured_llm", build)
     return fake, captured
 
 
@@ -908,7 +904,7 @@ def test_importing_a_judge_stage_does_not_load_torch():
 
     assert result.stdout.strip() == "", (
         f"importing the judge stages loaded {result.stdout.strip()}; "
-        "the ai_common and langchain_core imports in sufficiency/llm.py are deferred on purpose"
+        "the ai_common and langchain_core imports in src/llm/structured.py are deferred on purpose"
     )
 
 
@@ -978,6 +974,27 @@ def test_a_stage_raises_rather_than_crashing_when_the_model_returns_nothing(
         asyncio.run(call())
 
     assert f"stage {stage_label}" in str(excinfo.value)
+
+
+def test_the_judges_failure_is_the_shared_one_under_a_judge_name(monkeypatch):
+    """
+    ``JudgeResponseError`` must stay catchable as ``LlmResponseError``.
+
+    The wrapper in :mod:`src.llm.call` raises the shared type; the judge's
+    adapter re-raises it worded as a case that was not judged. A caller that
+    genuinely does not care which tier raised — a probe totalling the spend of
+    failed calls, say — catches the shared type, and would silently skip every
+    judge failure if the two hierarchies were separate. The subclass relation is
+    asserted rather than the ``except`` clause because that is the property the
+    ``except`` clause depends on.
+    """
+    assert issubclass(JudgeResponseError, LlmResponseError)
+
+    install_fake_payload(monkeypatch, stage_a2_module, None)
+    with pytest.raises(LlmResponseError) as excinfo:
+        asyncio.run(tag_claims("Q?", "An answer.", MODEL_PARAMS))
+
+    assert type(excinfo.value) is JudgeResponseError
 
 
 def test_a_transport_failure_is_not_a_judgement():
@@ -1528,10 +1545,13 @@ def _install_fake_ai_common(monkeypatch, fake_get_llm):
     """
     Put a fake ``ai_common`` in ``sys.modules``, ``enums`` submodule included.
 
-    The submodule is not optional. ``build_judge_llm`` defers
-    ``from src.llm_config import TOOL_CALL_AUTO``, and `llm_config` imports
-    ``ai_common.enums`` at its own module scope — so a fake that shadows only
-    the package turns that into ``ModuleNotFoundError``. The two names are
+    The submodule is kept though ``build_structured_llm`` no longer needs it.
+    It did until 2026-08-26: the channel constants lived in `llm_config`, which
+    imports ``ai_common.enums`` at its own module scope, so a fake that shadowed
+    only the package turned the deferred import into ``ModuleNotFoundError``.
+    :mod:`src.llm.channels` imports nothing and the deferral is gone, but a test
+    module that fakes ``ai_common`` and leaves a real ``ai_common.enums``
+    importable behind it would be faking half a package. The two names are
     placeholders: nothing under test reads them, and `get_llm_config` is never
     called here.
     """
@@ -1573,7 +1593,7 @@ def test_repeated_builds_all_receive_the_configured_sampling(monkeypatch):
     }
 
     for _ in range(3):
-        build_judge_llm(entry, SimpleNamespace)
+        build_structured_llm(entry, SimpleNamespace)
 
     assert seen == [{"temperature": 0, "reasoning_effort": "high", "top_p": 0.95}] * 3
 
@@ -1595,7 +1615,7 @@ def test_building_a_judge_leaves_the_caller_s_config_untouched(monkeypatch):
         "structured_output": "function_calling",
     }
 
-    build_judge_llm(entry, SimpleNamespace)
+    build_structured_llm(entry, SimpleNamespace)
 
     assert entry["model_args"] == {
         "temperature": 0,
@@ -1607,7 +1627,7 @@ def test_building_a_judge_leaves_the_caller_s_config_untouched(monkeypatch):
 # ------------------- the tool_choice="auto" structured path ----------------- #
 #
 # One panelist cannot be called the way the other eight are. OpenRouter's
-# `z-ai/glm-5.3` rejects a pinned `tool_choice` outright, so `build_judge_llm`
+# `z-ai/glm-5.3` rejects a pinned `tool_choice` outright, so `build_structured_llm`
 # binds the schema with `tool_choice="auto"` and rebuilds the payload itself.
 # That path is a second implementation of the contract every stage depends on,
 # and it has a failure the forced path cannot produce: the model may answer
@@ -1722,15 +1742,15 @@ def test_only_the_configured_model_takes_the_auto_path(monkeypatch):
 
     base = {"model": "m", "model_provider": "p", "api_key": "k", "model_args": {}}
 
-    build_judge_llm({**base, "structured_output": "function_calling"}, _Claims)
+    build_structured_llm({**base, "structured_output": "function_calling"}, _Claims)
     assert built["forced"].get("method") is None and "bound" not in built
 
     built.clear()
-    build_judge_llm({**base, "structured_output": "tool_call_auto"}, _Claims)
+    build_structured_llm({**base, "structured_output": "tool_call_auto"}, _Claims)
     assert built.get("bound") == "auto" and "forced" not in built
 
     built.clear()
-    build_judge_llm({**base, "structured_output": "json_schema"}, _Claims)
+    build_structured_llm({**base, "structured_output": "json_schema"}, _Claims)
     assert built["forced"]["method"] == "json_schema" and "bound" not in built
 
 
@@ -1761,7 +1781,7 @@ def test_every_path_keeps_include_raw(monkeypatch):
 
     for mode in ("function_calling", "json_schema"):
         built.clear()
-        build_judge_llm({**base, "structured_output": mode}, _Claims)
+        build_structured_llm({**base, "structured_output": mode}, _Claims)
         assert built["forced"]["include_raw"] is True, mode
 
 
@@ -1783,7 +1803,7 @@ def test_a_model_with_no_declared_channel_is_refused(monkeypatch):
 
     for mode in (None, "", "structured", "tool_calling"):
         with pytest.raises(ValueError, match="structured-output channel"):
-            build_judge_llm({**base, "structured_output": mode}, _Claims)
+            build_structured_llm({**base, "structured_output": mode}, _Claims)
 
 
 class _Passthrough:

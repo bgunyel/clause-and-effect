@@ -60,7 +60,8 @@ Layout, and what this file deliberately does not do
 module             holds
 =================  =========================================================
 ``models``         the dataclasses and literals every stage returns
-``llm``            ``build_judge_llm`` — the only ``ai_common`` touchpoint
+``llm``            the judge's words for a model call — an adapter over
+                   :mod:`src.llm`
 ``stage_a``        decompose: instructions, schemas, prompt builder, call
 ``stage_b``        answer blind: as above, plus ``span_is_verbatim``
 ``stage_c``        adjudicate: as above, and the claim/verdict mapping
@@ -81,17 +82,18 @@ stands unchanged.
 
 The second was cost. Python runs a package's ``__init__`` before any submodule of
 it, so re-exporting the stages here made even ``import
-src.eval.sufficiency.models`` pull :mod:`~src.eval.sufficiency.llm`, and with it
-``ai_common`` → langchain → transformers → torch: this file did re-export them
-for one revision, and importing the dataclasses cost **7.7s**.
+src.eval.sufficiency.models`` pull the module that reached ``ai_common``, and
+with it langchain → transformers → torch: this file did re-export them for one
+revision, and importing the dataclasses cost **7.7s**.
 
-**That is no longer what a re-export would cost.** On 2026-08-17 ``llm`` deferred
-both its heavy imports — ``get_llm`` into the function body, the two
-``langchain_core`` names behind ``TYPE_CHECKING`` — so importing it costs 0.11s
-and loads no torch. A re-export here would now be cheap at import time and would
-pay only on the first ``build_judge_llm`` call. The honest statement is therefore
-that **the argument above is now one reason, not two**, and the surviving reason
-is the one about public surfaces. Re-measure before assuming either way; the
-guard that keeps this true is
+**That is no longer what a re-export would cost.** On 2026-08-17 the heavy
+imports were deferred — ``get_llm`` into the function body, the two
+``langchain_core`` names behind ``TYPE_CHECKING`` — so the module cost 0.11s and
+loaded no torch, and on 2026-08-26 the ``ai_common`` touchpoint left this package
+altogether for :mod:`src.llm.structured`. A re-export here would now be cheap at
+import time and would pay only on the first ``build_structured_llm`` call. The
+honest statement is therefore that **the argument above is now one reason, not
+two**, and the surviving reason is the one about public surfaces. Re-measure
+before assuming either way; the guard that keeps this true is
 ``test_importing_a_judge_stage_does_not_load_torch``.
 """

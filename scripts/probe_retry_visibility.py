@@ -2,7 +2,7 @@
 How many model calls a retried call really makes, and how many of them the
 process can name.
 
-**The question, and why it decides a schema.** `build_judge_llm` attaches
+**The question, and why it decides a schema.** `build_structured_llm` attaches
 `.with_retry(stop_after_attempt=3)` to every judge stage. A retried call runs
 the model more than once; each run is a generation at the provider and each is
 billed. The returned message carries the id of the *last* one. So every cost
@@ -22,7 +22,7 @@ means writing it twice.
 nothing in `ai_common.get_llm` overrides it, so the OpenAI SDK client retries
 before LangChain's `.with_retry` ever sees a failure. Up to 3 × 3 = 9 upstream
 requests per logical call. (`llm_config` carries `max_llm_retries: 3`, but
-`get_llm` takes no such argument and `build_judge_llm` does not pass it: it is
+`get_llm` takes no such argument and `build_structured_llm` does not pass it: it is
 dead config, and is not the layer above.)
 
 **So the probe counts at the socket.** The number of requests that actually
@@ -347,19 +347,19 @@ def _judge_chain(schema: type[BaseModel]):
     """
     The real construction path, for the cheapest panelist.
 
-    `build_judge_llm` rather than a locally assembled model, because the retry
+    `build_structured_llm` rather than a locally assembled model, because the retry
     under investigation is the one *it* attaches, and its channel branch decides
     whether a failure raises or is captured into the payload.
     """
     from ai_common.enums import ModelNames
 
-    from src.eval.sufficiency.llm import build_judge_llm
+    from src.llm.structured import build_structured_llm
     from src.llm_config import get_llm_config, panelist
 
     entry = panelist(
         get_llm_config()["sufficiency_judge"], ModelNames.DEEPSEEK_V_4_FLASH_0731
     )
-    return build_judge_llm(entry, schema)
+    return build_structured_llm(entry, schema)
 
 
 def _read_caller_view(payload: Any) -> Tuple[str, Optional[str], Optional[float]]:

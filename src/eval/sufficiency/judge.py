@@ -26,7 +26,8 @@ import asyncio
 from typing import Any, Dict, Tuple
 
 from src.eval.dataset import TestCase, load_tier1
-from src.eval.sufficiency.llm import StageResponse, sum_costs
+from src.eval.sufficiency.llm import StageResponse
+from src.llm.call import sum_costs
 from src.eval.sufficiency.models import Adjudication, BlindAnswer, Decomposition
 from src.eval.sufficiency.stage_a import decompose
 from src.eval.sufficiency.stage_b import answer_blind, span_is_verbatim

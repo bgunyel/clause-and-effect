@@ -29,33 +29,17 @@ from typing import Any, Dict, List
 from ai_common.enums import LlmServers, ModelNames
 
 from src.config import get_settings
-
-# How a model is asked to return its schema, read by
-# :func:`src.eval.sufficiency.llm.build_judge_llm`.
+# How a model is asked to return its schema. The three constants moved to
+# :mod:`src.llm.channels` on 2026-08-26 with the machinery that reads them, and
+# they cost nothing to import — that module imports nothing. They are named
+# here so every panelist's channel is stated in the roster below rather than
+# half of them being an absence.
 #
-# The default — an entry whose ``structured_output`` is ``None`` — is
-# ``with_structured_output``, which pins ``tool_choice`` to the schema's own
-# function so the model cannot decline to fill it. ``TOOL_CALL_AUTO`` selects
-# ``bind_tools(..., tool_choice="auto")`` instead, for a model that rejects that
-# pinning.
-TOOL_CALL_AUTO = 'tool_call_auto'
-
-# ``with_structured_output(method="json_schema")``, which binds
-# ``response_format={"type": "json_schema", ...}`` instead of sending tools.
-#
-# This is what the panel runs on. Function calling was the default and it failed
-# unevenly across the roster: MiniMax M3's OpenRouter endpoint does not accept
-# tools at all, so it answered in the schema's *shape* as prose and scored 2/6;
-# Kimi K3 did the same on 2 of 6; Grok emitted the tool call as a fenced JSON
-# block. Measured 2026-08-23 on the three cases MiniMax had failed, `json_schema`
-# returned all three — including `art15_case1`'s ten core claims, which is §4.6's
-# expected output exactly.
-JSON_SCHEMA = 'json_schema'
-
-# ``with_structured_output()`` as it comes — tools plus a pinned ``tool_choice``.
-# The library's own default; named here so every panelist's channel is stated in
-# the table below rather than half of them being an absence.
-FUNCTION_CALLING = 'function_calling'
+# **The table stays here, and that is deliberate** (todo, 2026-08-26): each
+# assignment is a measurement over six stage-A2 cases, recorded in the per-model
+# comments below. Promoted to a library it would read as "how to call MiniMax",
+# a stronger claim than the evidence supports.
+from src.llm.channels import FUNCTION_CALLING, JSON_SCHEMA, TOOL_CALL_AUTO
 
 
 def get_llm_config():
@@ -138,7 +122,7 @@ def get_llm_config():
 
     # How a model is asked to return its schema, where the default does not work.
     #
-    # `build_judge_llm` uses `with_structured_output`, which pins `tool_choice`
+    # `build_structured_llm` uses `with_structured_output`, which pins `tool_choice`
     # to the schema's own function so the model cannot decline to fill it.
     # OpenRouter's `z-ai/glm-5.3` rejects that outright —
     # `BadRequestResponseError: Tool choice must be auto` — while serving
@@ -214,7 +198,7 @@ def get_llm_config():
                 'api_key': api_key,
                 'max_llm_retries': 3,
                 # No default: a model absent from the table above is a model
-                # whose channel nobody chose, and `build_judge_llm` refuses it
+                # whose channel nobody chose, and `build_structured_llm` refuses it
                 # rather than guessing. Adding a panelist should require the one
                 # measurement that says how to call it.
                 'structured_output': structured_output[model],

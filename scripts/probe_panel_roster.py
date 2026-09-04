@@ -60,9 +60,9 @@ from scripts.probe_spend import format_spend
 from src.eval.sufficiency.llm import (
     JudgeResponseError,
     StageResponse,
-    build_judge_llm,
     require_response,
 )
+from src.llm.structured import build_structured_llm
 from src.llm_config import get_llm_config
 
 # What the probe asks for, and what it must get back. Both values are fixed here
@@ -144,7 +144,7 @@ async def probe_model(entry: Dict[str, Any]) -> RosterResult:
     started = time.perf_counter()
 
     try:
-        llm = build_judge_llm(entry, _RosterCheck)
+        llm = build_structured_llm(entry, _RosterCheck)
     except Exception as exc:  # noqa: BLE001 — classifying, not handling
         return RosterResult(
             model=str(entry["model"]),
@@ -238,7 +238,7 @@ async def main() -> None:
 def manual_test() -> None:
     entries = get_llm_config()["sufficiency_judge"]
 
-    structured_llm = build_judge_llm(entries[3], _RosterCheck)
+    structured_llm = build_structured_llm(entries[3], _RosterCheck)
     response = structured_llm.invoke(_PROMPT)
 
     dummy = -32

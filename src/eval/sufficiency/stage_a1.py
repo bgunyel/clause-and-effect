@@ -13,11 +13,8 @@ from typing import Any, Dict
 
 from pydantic import BaseModel, Field
 
-from src.eval.sufficiency.llm import (
-    StageResponse,
-    build_judge_llm,
-    llm_call,
-)
+from src.eval.sufficiency.llm import StageResponse, stage_call
+from src.llm.structured import build_structured_llm
 
 # The rules are STEP 1's from `stage_a.py`, plus one that used to be implicit.
 #
@@ -155,8 +152,8 @@ async def write_shortest_answer(
         answers the question: a finding about the case — the gold answer does not
         answer its own question — and not an error.
     """
-    response = await llm_call(
-        build_judge_llm(model_params, _A1ShortestAnswer),
+    response = await stage_call(
+        build_structured_llm(model_params, _A1ShortestAnswer),
         build_a1_prompt(question, answer),
         model_params=model_params,
         stage="A1",

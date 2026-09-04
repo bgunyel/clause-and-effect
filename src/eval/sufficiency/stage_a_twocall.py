@@ -45,7 +45,8 @@ import asyncio
 from typing import Any, Dict
 
 from src.eval.dataset import TestCase
-from src.eval.sufficiency.llm import StageResponse, sum_costs
+from src.eval.sufficiency.llm import StageResponse
+from src.llm.call import sum_costs
 from src.eval.sufficiency.models import Decomposition
 from src.eval.sufficiency.stage_a1 import write_shortest_answer
 from src.eval.sufficiency.stage_a2 import tag_claims

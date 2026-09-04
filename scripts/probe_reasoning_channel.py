@@ -76,7 +76,8 @@ from typing import Dict, List, Optional, Tuple
 from scripts.probe_a2_stability import REPORTS_DIR, Report, describe_tree
 from src.clause_and_effect.chunking.chunk_store import git_state
 from src.eval.dataset import load_tier1
-from src.eval.sufficiency.llm import CallRecord, JudgeResponseError, sum_costs
+from src.eval.sufficiency.llm import JudgeResponseError
+from src.llm.call import CallRecord, sum_costs
 from src.eval.sufficiency.stage_a2 import tag_claims
 from src.llm_config import FUNCTION_CALLING, JSON_SCHEMA, get_llm_config
 
@@ -129,7 +130,7 @@ async def run_cell(case, entry: Dict, channel: str) -> Cell:
     One call, and never an exception.
 
     The entry is copied with its channel overridden rather than reconfigured
-    globally, so `build_judge_llm` takes the same path it takes in a panel run —
+    globally, so `build_structured_llm` takes the same path it takes in a panel run —
     including its refusal to build a model whose channel it does not recognise.
     """
     params = dict(entry, structured_output=channel)
