@@ -273,4 +273,16 @@ thing in the record.
   removed a callback hook the assistant was about to design. Looking for the
   product path's call sites turned up **a second billed model call per answer,
   discarded**.
+- [2026-09-04 · session 1](devlog_2026-09-04_session-1.md) — the model-call
+  machinery lifted out of the judge into a shared `src/llm/` tier, on Bertan's
+  constraint that **every LLM call in the repository goes through the logged
+  wrapper**, not only the judge's. `src/eval/sufficiency/llm.py` is 158 lines
+  against 695 and holds only the judge's vocabulary. Two departures from the
+  recorded plan, both the assistant's: `StageResponse` subclasses the shared
+  response rather than restating it, which makes a judge failure catchable as
+  the shared one, and the log row's `error_message` drops the stage prefix
+  because the row already has a `stage` column. One deferral could be deleted
+  rather than moved — the channel constants no longer sit behind a module that
+  imports `ai_common`. Also found: **`src/config.py` modified by nobody this
+  session**, committed separately rather than folded into the refactor.
 

@@ -1280,6 +1280,14 @@ per the priority order above.
 
 ## 🟡 Tooling
 
+- [ ] **One high-severity Dependabot alert on `main` — reported 2026-09-04** on
+  pushing `dev-04`, at `security/dependabot/6`. Not looked at: neither the
+  package nor the advisory has been read, so nothing here says whether the
+  committed lock is affected or whether `dev-04` already carries the fix. `make
+  upgrade-safe` has to pass before this branch merges in any case, which is the
+  floor rather than the answer — tier 1 reads the committed lock and an alert on
+  `main` may be about a version neither branch resolves to.
+
 - [x] ✅ **`src/config.py` pulled torch to read two directory paths — split
   2026-08-09.** `get_llm_config` moved to `src/llm_config.py`; `config.py` now
   holds only `Settings` and `get_settings()` and carries no LLM dependency.
