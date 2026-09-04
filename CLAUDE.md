@@ -189,3 +189,20 @@ a claim without a number is a claim to re-measure.
 - Deliver one reviewable step at a time on multi-part builds.
 - A red suite mid-refactor is acceptable — verify against the recorded snapshot
   in the dev-log rather than insisting on green first.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `bgunyel/clause-and-effect`, via the `gh` CLI. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles, each label string equal to its name. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, neither of which
+exists yet. See `docs/agents/domain.md`.
