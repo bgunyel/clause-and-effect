@@ -4,7 +4,7 @@
 > outstanding work surfaced while diagnosing the `gdpr_articles.json` truncation
 > bug and standing up the eval framework + test suite.
 >
-> _Last updated: 2026-08-13._
+> _Last updated: 2026-08-26._
 
 ---
 
@@ -23,6 +23,75 @@ shown to be one.
 This is what makes the ordering below non-negotiable rather than a preference —
 and what makes step 3 (tests) a hard requirement for eval components while the
 generator and agent staying untested remains an accepted state.
+
+### The judge is a defect finder, not a classifier — Bertan, 2026-08-22
+
+Two reframings that govern how the sufficiency judge is built and measured. Both
+correct framings the assistant had been importing, and both change decisions
+rather than only vocabulary.
+
+**1. There is no held-out set, and there should not be.** The goal is not a judge
+that generalises to unseen cases; it is a judge that determines sufficiency
+correctly *in this context*, with as little help as possible. **The 433 Tier-1
+cases are not a sample drawn from a population — they are the population** the
+judge will ever run on. A held-out set estimates error on unseen data, and that
+estimand does not exist when there is no unseen data. Calibrating an instrument
+against known reference standards is the right analogy; nobody holds back three
+of the reference weights to check the scale generalises.
+
+Consequently: **drop the train/test vocabulary** — *contaminated*, *spent*, *burn
+a case*, *held-out*. Any case may be tuned on, including all of them. What may
+not be done is declaring a rate from six cases and assuming the other 427 behave.
+The one real cost of using a case as a prompt worked example is narrow and
+already recorded in `stage_a2.py`: a case shown to the judge stops being a
+*check* on whether the judge agrees with a ruling.
+
+**The judge's output is a work list.** It finds which cases in the golden set
+have a supporting quote that does not answer the question; those cases then get
+modified. It covers a defect class `golden_qa.py` **structurally cannot see** —
+the gate asks *is this quote in the article?* (grounding: 134 failures, 58 needing
+the quote rewritten), and a quote can be perfectly grounded, faithfully elided,
+and still not answer the question. That is stage B's job and nothing else can do
+it. It also means the set is **not static**: findings produce edits, edited cases
+need re-running, and a finding should eventually be recorded against a case-set
+identity the way chunks are.
+
+**The risk that survives is not generalisation — it is fitting to an unvalidated
+standard.** Five of the six §4.6 expectations are the assistant's classification,
+and under this framing nothing downstream would ever surface a wrong label. The
+defences are Bertan's rulings on contested cases, `Claim.reason` as an audit
+trail, and the panel's non-unanimity reporting — which makes §8/§9 **more**
+important here, not less. "Little help from us" means help at the
+**standard-setting** step, not per-case adjudication.
+
+**2. The core/auxiliary boundary is hard; granularity is soft.** Splitting one
+core claim into two core claims changes **nothing** about what the quote must
+contain — the union of core content is identical, and the finer split is if
+anything the *stricter* test. Moving a piece across the core/auxiliary line
+**removes a requirement**.
+
+| property | error direction | cost |
+|---|---|---|
+| core/auxiliary **boundary** | **silent** | a defective case certified sound, permanently |
+| core **granularity** | visible, or stricter | a slightly coarser or finer work list |
+
+The error asymmetry is the operative consequence. A claim wrongly tagged **core**
+produces a spurious `absent` that a human reads and dismisses — visible and
+self-correcting. A claim wrongly tagged **auxiliary** means the quote is never
+asked to support it, and nothing raises it again. **So err toward more core, not
+fewer.** This argues for calling `art7_case4`'s third sentence CORE (open item 5,
+Bertan's call) and de-escalates `art8_case5`'s probable false-positive
+`contradicted`.
+
+Splitting has a floor: it bottoms out at meaningfulness, which is what the
+unapplied atomicity rule guards.
+
+**This invalidates §4.6's metric.** That table measures *core claim count*, which
+conflates the two properties. The measurement matching the criterion is **core
+coverage** — which parts of the gold answer are marked core, however carved up.
+Implemented in `scripts/probe_a2_stability.py`, and on its first run three cases
+came back **count-stable and coverage-unstable**, a difference a count metric
+structurally cannot see.
 
 1. ~~**Generate the first chunk snapshot** against a clean tree, then commit it
    separately.~~ **Done 2026-08-07** (`2a7811a`) — 368 chunks, `sha256
@@ -148,14 +217,32 @@ generator and agent staying untested remains an accepted state.
      the claim now lives where it can be made
      (`test_distinct_chunk_ids_yield_distinct_point_ids`).
 
-6. ~~🔺 **`ai_common` import cost**~~ — **step 1 done 2026-08-10 session 2.**
+6. ~~🔺 **`ai_common` import cost**~~ — **step 1 done 2026-08-10 session 2**, and
+   **it reaches this repo as of 2026-08-22.**
    The package `__init__` now resolves lazily (PEP 562); `from ai_common.enums
    import …` went **4.11s → 0.14s**. On branch `lazy-package-init` in
    `ai-common`, pushed, not merged.
-   - **🔺 The win does not reach this repo yet.** The pin is
-     `ai-common @ git+…@main`, non-editable — merge and re-resolve first.
+   - ~~**🔺 The win does not reach this repo yet.**~~ **Closed 2026-08-22**
+     (`6128a3a`). The pin string never needed changing — it was already `@main`;
+     what was stale was the lock, held at `a0f06ea`. `uv lock --upgrade-package
+     ai-common` moved it to `05aed76`, a **one-line lock diff** with no
+     dependency movement. Measured here afterwards:
+
+     | | before | now |
+     |---|---|---|
+     | `import src.llm_config` | ~7.7s | **0.233s** |
+     | modules loaded | 3124 | **285** |
+     | torch pulled | yes | **no** |
+
+     The prediction recorded below was ~0.2s. **Met.** The win reaches
+     `gdpr_test_data_generation.py`, `eval/sufficiency/judge.py` and
+     `main_dev.py`. The re-resolve was prompted by needing new models, not by
+     this item — the import fix came along with them.
    - Findings 2 and 3 (lazy provider SDKs, `BaseChatModel` behind
-     `TYPE_CHECKING`) are now unblocked; re-measure before implementing.
+     `TYPE_CHECKING`) are now unblocked; re-measure before implementing. **Note
+     the baseline has moved**: every number in this entry predates the lazy
+     `__init__` landing here, so re-measure against 0.233s and 285 modules
+     rather than against 7.7s.
    - **That branch also carries the GuardDog tier-2 gate rework. All three
      guarddog 3.1.0 blockers were closed 2026-08-11** — see 🟡 Tooling. What now
      gates the merge is different: `upgrade-safe` must pass before a PR closes
@@ -165,10 +252,582 @@ generator and agent staying untested remains an accepted state.
      (`make audit`) was not run**, so `verify` is only half demonstrated — that
      is the first item of the next session.
 
-7. **Finish the sufficiency judge** — stage C, verdict derivation, runner,
-   calibration, tests. Split into `src/eval/sufficiency/` on 2026-08-10 and
-   documented in `docs/design/sufficiency-judge.md`; stage C now has a file to be
-   written into rather than a 545-line module to be carved.
+7. **Finish the sufficiency judge** — verdict derivation, runner, panel,
+   calibration. Split into `src/eval/sufficiency/` on 2026-08-10 and documented in
+   `docs/design/sufficiency-judge.md`.
+
+   **2026-08-17: stage C and the tests are done.** `stage_c.py` labels each core
+   claim `supported`/`absent`/`contradicted` against the blind answer and produces
+   no verdict; `tests/test_sufficiency_stages.py` holds 49 tests over all three
+   stages, mutation-verified at 36 with no survivors; `judge.py` runs the full
+   A→B→C chain over the eight probe cases. Core-claims-only was decided on
+   measurement (design §6.1), and the two no-call paths are documented at §6.3.
+
+   **What the first real runs found, and it outranks the code.** Stage A is **not
+   stable at temperature 0**, and the instability reaches the verdict:
+   `art8_case1` returned 1, 1, 2 and 1 core claims across four identical runs, and
+   the two-claim run flips the case from `sufficient` to `insufficient`. Two
+   rounds of prompt work (sharpened rules, then four worked examples) took the two
+   observed failures to zero — full before/after table at design §4.6 — but left
+   a residue that is **not fixed**: sentence-fragment claims in 2 of 6 non-target
+   runs, and `art41_case3` less stable than before this started.
+
+   Two things to carry forward. **The prompt has been tuned against the same six
+   cases three times**, so some of what looks fixed is fitted; the next
+   measurement needs cases not used for tuning (~20 stratified, 3 runs each, ~60
+   calls). And **only `art7_case3`'s expected output rests on a ruling of
+   Bertan's** — the other five are the assistant's classification, `art7_case4`
+   most consequentially.
+
+   > **Correction, 2026-08-22.** The first of those two — "needs cases not used
+   > for tuning" — was written in train/test vocabulary that does not apply here.
+   > See *The judge is a defect finder* above. It is a **coverage gap** (6 of 433
+   > measured), not a hygiene requirement, and any case may be tuned on. The
+   > second carries forward unchanged and is now the more important of the two.
+
+   Also open from the same runs: `art8_case5` returned `contradicted`, which looks
+   like a false positive on a quote whose two halves are joined by `...`.
+   **De-escalated 2026-08-22** by the error asymmetry: a false positive is the
+   cheap error, since a human reads the flag and dismisses it.
+
+   ### 2026-08-22: stage A split into two independent calls, and measured
+
+   **Built, not adopted.** `stage_a1.py` writes the shortest sufficient answer;
+   `stage_a2.py` splits the answer into tagged claims; `stage_a_twocall.py` runs
+   both. **Neither receives the other's output** — Bertan's design, corrected
+   mid-build from the assistant's initial pipeline reading. `stage_a.py` is
+   untouched so the §4.6 baseline stays reproducible. `Decomposition` is
+   unchanged, so stage C and `judge.py` are unaffected.
+
+   The point of independence is that the two outputs become **comparable**: A2's
+   core claims assert what the shortest sufficient answer contains, and A1's
+   output is that answer. Detecting stage A instability currently costs N runs of
+   one prompt; a disagreement between A1 and A2 is visible in **one**. That
+   consistency check is designed and **not built** — it is the highest-value
+   remaining piece of this experiment.
+
+   **Six probe scripts** added under a new top-level `scripts/`, run as
+   `uv run python -m scripts.<name>` (a path invocation fails — `scripts/` lands
+   on `sys.path` instead of the repo root, and `pythonpath` in `pyproject.toml`
+   is pytest-only). Three per stage: its own worked examples (a floor test worth
+   little), held-out adversarial cases, the six real §4.6 cases, and stability at
+   N=5.
+
+   **A1 is clean everywhere it was pointed.** 4/4 on its own examples, 6/6 on
+   held-out adversarial probes, 6/6 on the real cases with zero introduced
+   wording, and **0 of 6 unstable across 30 calls** — byte-identical per case,
+   punctuation included. `art41_case3` returns without its terminal full stop on
+   5/5 runs: systematic, not drift.
+
+   **A2 is clean on examples and baseline, unstable under repetition.** 4/4 on
+   its own examples across count, tags and texts. Both **rule collisions** in the
+   adversarial set held — probes whose answer *is* the consequence, or *is* the
+   added specificity, where mechanical rule-following gives the wrong tag
+   silently. On the six real cases the core content matched §4.6 on all six with
+   zero mechanical breaches, including **`art15_case1` returning exactly ten core
+   claims with the stem repeated into each** — the case that collapsed to one
+   claim under the three-example prompt.
+
+   Stability, two separate 30-call samples:
+
+   | case | sample 1 | sample 2 |
+   |---|---|---|
+   | `art7_case3` | stable | stable |
+   | `art7_case4` | stable | **unstable** |
+   | `art8_case1` | **unstable** | stable |
+   | `art33_case1` | **unstable** | **unstable** |
+   | `art15_case1` | **unstable** | **unstable** |
+   | `art41_case3` | **unstable** | stable |
+   | | **4 of 6** | **3 of 6** |
+
+   **Two of the failures are degenerate output, not disagreement.** One run
+   returned a core claim whose text is literally `"..."`; another returned one
+   whose text is the empty string. Both got past the schema because `str` accepts
+   them. **Fixing that is item 1 below** and removes two of three current
+   failures. `art15_case1` also produced claim counts of 10 / 1 / 10 / **13** / 10.
+
+   **The instability is itself unstable across samples** — a different three
+   cases each time. At N=5 a 1-in-5 failure has a real chance of not appearing.
+   Neither sample is a rate.
+
+   **The comparison to §4.6 is not like-for-like**, and this is the thing most
+   likely to be misread later. §4.6 measures core *count* under the combined
+   prompt; these measure core *coverage* under the split. **Settling whether the
+   split helped or hurt requires re-running the untouched `stage_a.py` under the
+   coverage metric** — 30 calls, module and metric both exist, not done.
+
+   **A transport failure was found that had been latent in all five stages.**
+   `with_structured_output` returns `None` when output cannot be coerced into the
+   schema, and every stage read a field straight off it — surfacing as
+   `AttributeError: 'NoneType' object has no attribute 'claims'`, naming neither
+   stage nor cause. `require_response` / `JudgeResponseError` now guard all five
+   call sites (`af6bf5d`), with six tests, mutation-verified, suite **298 → 304**.
+   The error type is deliberately unrelated to `AdjudicationError`: a transport
+   failure is a case never judged, an adjudication failure is a judgement gone
+   wrong, and conflating them would let a caller silently shrink the sample.
+   Bertan added `.with_retry(stop_after_attempt=3)`, which covers transient API
+   errors but **not** this `None` — that is a returned value, not an exception.
+
+   **Model changed:** both roles now run `DEEPSEEK_V_4_FLASH_0731`. The switch
+   fixed the one clear A2 adversarial failure — a five-item enumeration the old
+   model packed into a single core claim now splits one claim per item with the
+   stem repeated.
+
+   ### 2026-08-23: every call reports its cost, every sample is a record
+
+   **Cost tracking, end to end.** `build_judge_llm` now asks for
+   `with_structured_output(..., include_raw=True)` and returns a
+   `StructuredPayload` — the parsed schema plus the `AIMessage` it came from.
+   Without `include_raw` the message is dropped inside the chain and
+   `response_metadata` goes with it, which is where OpenRouter puts the price.
+   The mechanism is Bertan's (`output.response_metadata.get('cost')`); the
+   plumbing to reach it from a structured call is not. `require_response` is the
+   single unwrap point, so the price comes off the same message the parse came
+   from, and every stage returns `StageResponse(value, cost)`.
+
+   **`cost` is `float | None`, and `None` is not `0.0`.** A call that never
+   happened is free (stage C's two no-call paths report `0.0`); a call that
+   happened and came back unpriced is money nobody can account for. `sum_costs`
+   returns `(total, unpriced_count)` so a partial total cannot be printed as a
+   complete one, and both multi-call sites — `stage_a_twocall.decompose` and
+   `judge.probe_case` — go `None` if any leg is unpriced rather than reporting
+   the priced half. OpenRouter always prices, so `None` should not occur today;
+   it is modelled because **a panel is several providers by definition**.
+
+   Measured live: `probe_a2_examples` **$0.000481** over 4 calls,
+   `probe_a2_stability` **$0.003229** over 30, per case $0.000396–$0.000733.
+
+   **The error message improved as a side effect.** A coercion failure and an
+   empty response used to arrive identically as `None`. They are now told apart:
+   an absent payload reports silence, while a payload with `parsed: None` quotes
+   `parsing_error` and up to 300 characters of what the model actually said.
+   Note what is still not retried — `include_raw` *catches* the coercion failure
+   and reports it in the payload, so `.with_retry` never sees one. That was
+   equally true before, when it arrived as a returned `None`.
+
+   **Every A2 stability run now writes a record to `docs/eval-reports/`**, dated
+   and timed in the filename, refusing to overwrite an existing one, with a
+   provenance header written before the first call: commit, dirty paths, model,
+   provider, temperature, and the paths of the stage and case modules. The file
+   and the terminal are the same text. This exists because the 2026-08-22 sample
+   that was piped through `tail` cost a second sample which was not the same
+   sample.
+
+   **Two more samples, both 0 of 6, and the finding is about sample size.**
+
+   | case | 08-22 s1 | 08-22 s2 | 08-23 07:03 | 08-23 08:00 |
+   |---|---|---|---|---|
+   | `art7_case3` | stable | stable | stable | stable |
+   | `art7_case4` | stable | **unstable** | stable | stable |
+   | `art8_case1` | **unstable** | stable | stable | stable |
+   | `art33_case1` | **unstable** | **unstable** | stable | stable |
+   | `art15_case1` | **unstable** | **unstable** | stable | stable |
+   | `art41_case3` | **unstable** | stable | stable | stable |
+   | | **4 of 6** | **3 of 6** | **0 of 6** | **0 of 6** |
+
+   Same prompt (`stage_a2.py` unmodified), same model, byte-identical sampling
+   settings — checked, not assumed. Today's two samples also agree case by case
+   on claim counts: `art33_case1` split into two core claims on all ten runs,
+   `art15_case1` returned ten on all ten. **No degenerate claim appeared in 60
+   calls**, which lowers the urgency of the `""`/`"..."` guard without touching
+   its correctness — a failure that rare is exactly one a five-run sample misses.
+
+   **Operative consequence: N=5 cannot support the comparison item 2 was going to
+   make.** Four samples of one instrument reading 4/6, 3/6, 0/6, 0/6 means the
+   between-sample variance swamps the signal. Decide the sample size *before*
+   spending calls on re-running the combined `stage_a.py` under the coverage
+   metric.
+
+   **The panel roster exists and has never been called.** `llm_names` in
+   `get_llm_config` now lists nine models for `sufficiency_judge` (Bertan), and
+   the config is generated from it rather than hand-written per model. Eight of
+   the nine have never been sent a request — they are name resolution only, and
+   nothing has confirmed OpenRouter serves those ids. **One cheap call each
+   before a panel run**, or a bad id fails after the expensive part.
+
+   One line of the generator is load-bearing: `'model_args': dict(model_args)`.
+   `ai_common.get_llm` **mutates** what it is handed for Google models — it
+   forces `temperature` to 1.0 on `gemini-3*` and pops `reasoning` into
+   `thinking_level` — so a shared dict would let building the Gemini panelist
+   rewrite the sampling of the other eight, silently, the first time the panel
+   runs. `GEMINI_3_7_FLASH` is in the list.
+
+   ### 2026-08-25: the instrument now says what it already knew
+
+   Four open items closed, and the shape of all four is the same — a fact the
+   code was holding at the moment of failure and throwing away.
+
+   **`require_parameters` reaches the wire** (item 2). Verified by wrapping
+   `httpx.AsyncClient.send` and keeping the JSON body of every request, through
+   `build_judge_llm` rather than a locally assembled model: **8 of 8 panelists,
+   both channels**. The control is the half that makes it worth anything —
+   removing `provider` from one entry produces `MISMATCH`, so the check can fail.
+   Not established: that the constraint changes *routing*, which is a claim about
+   the provider's side.
+
+   **A failure carries its price and its generation id** (item 3). Three panel
+   reports had said failed calls "may still have been billed"; they *were*, by an
+   amount the exception was holding, and 20 calls across those runs were
+   unaccounted for. The id is `response_metadata['id']` and specifically not
+   `raw.id`, which is a LangChain run id that joins to nothing outside the
+   process.
+
+   **Reasoning tokens are recorded per call, and the confound was measured**
+   (item 4). `CallRecord(generation_id, cost, reasoning_tokens)` — one record per
+   call rather than three index-aligned tuples, because drift would attribute one
+   call's reasoning to another's generation inside the record that exists to be
+   checkable.
+
+   The measurement did **not** find what raised the question. MiniMax, whose
+   `{'reasoning': 0}` under `json_schema` started it, reasons on both channels.
+   Two clean zeros appeared elsewhere — DeepSeek V4 Pro and Grok — each on one of
+   its two cases, so the verdict is `INTERMITTENT` rather than `SUPPRESSED`.
+   **Grok is the panel's own `json_schema` member**, so §8's confound is real for
+   at least one panelist, in a shape nobody predicted.
+
+   > **Not a statistically meaningful sample — Bertan, 2026-08-25.** Two cases of
+   > 433, one run per cell. Sized to catch a categorical effect and nothing
+   > finer. A "no suppression" mark is the weakest possible negative result and
+   > does not clear a model; nothing supports comparing models to each other. The
+   > repeat needs a stratified case set, possibly a wider roster, and repeats per
+   > cell.
+
+   **A2 stability re-measured at 25 runs** (item 5). `RUNS` was 5 for no reason
+   but habit — this stage on DeepSeek V4 Flash is $0.0001 a call, so 150 calls
+   cost $0.010072. Five of six cases stable; the sixth differs **by the word
+   `and`**, one run in twenty-five joining two core claims that the other
+   twenty-four split. Nothing crossed the core/auxiliary boundary, so by the
+   2026-08-22 criterion the substantive reading is **0 of 6** — and the coverage
+   metric is over-reporting exactly as its own docstring warns.
+
+   **Every call received its reasoning budget: 150/150, none zero, min 200.**
+   That is the live evidence for the 2026-08-23 `model_args` fix and what item 5
+   was really asking. Two things not to overclaim: the 2026-08-23 samples already
+   read 0/6 and 0/6 *before* that fix, so the 4/6 and 3/6 of 2026-08-22 remain
+   unexplained outliers; and `art15_case1` returning 10 core claims on all 25 runs
+   is a real change from 10/1/10/13/10 but is not attributable to the fix on this
+   evidence.
+
+   **Two findings that open work rather than close it.**
+
+   *MiniMax now fails `json_schema`*, the channel it was assigned on 6/6 evidence
+   from 2026-08-23. What differs is `require_parameters`, which no earlier run
+   carried — plausibly it changed which upstream provider serves the model. The
+   generation ids are recorded, so the console can settle it. If it holds,
+   `require_parameters` did not only make the channel assignment stick, it
+   invalidated part of the evidence the assignment was chosen on.
+
+   *`get_llm_config()["sufficiency_judge"][0]` appears at ten call sites*
+   (Bertan, reading `probe_a2_stability.py`). Each makes the subject of a
+   measurement a consequence of where a model sits in `llm_names`. Insert a
+   panelist at the front and every indexed probe repoints silently while its
+   reports keep their titles — and the four stability samples are only comparable
+   if all four measured the same model. `llm_config.panelist(entries, model)`
+   raises rather than falling back; **nine sites still index**, and
+   `main_dev.py`'s `[5]` is Bertan's.
+
+   ### 2026-08-25 session 2: the panelist is not one server
+
+   The `require_parameters` suspicion above is **wrong**, and the thing it was
+   standing in front of is larger. OpenRouter routes one model id to whichever
+   upstream provider it picks; those providers differ in what they can actually
+   do; and **nothing has ever recorded which one answered**.
+
+   **MiniMax's channel assignment was decided by a rate limiter.** Every success
+   on record came from Venice (6/6 on tool calls) or CoreWeave (6/6 on
+   `json_schema`); every failure came from Parasail, which advertises both
+   channels and delivers neither. OpenRouter reaches the working providers by
+   falling back — one recorded chain reads `Parasail:429 -> Venice:200` — so the
+   successes are precisely the runs where Parasail refused. Console rows were
+   tied to specific runs by summing costs against the recorded report totals,
+   matching to the last displayed digit in both cases.
+
+   `require_parameters` is exonerated and worked exactly as specified: Parasail
+   advertises `tools`, `response_format` **and** `structured_outputs`, so no
+   filter phrased in terms of advertised support can exclude it, and Parasail was
+   already serving MiniMax on 2026-08-23 under no such constraint. One weaker
+   point survives — `require_parameters` filters on `response_format` while the
+   `json_schema` channel needs `structured_outputs`, and for MiniMax, DeepInfra
+   advertises the first and not the second.
+
+   **It generalises.** Within one four-minute run, DeepSeek V4 Pro was served by
+   Alibaba, Sail Research and Together; Qwen 3.8-27B by AkashML, Phala and Io
+   Net; Qwen 3.8-2.4T by DeepInfra, SiliconFlow and Modal. Only Grok and Gemini
+   are single-provider. **The premise this config rests on — every panelist runs
+   identical settings, so a disagreement is a disagreement about the case — is
+   broken one layer below the configuration.**
+
+   It reaches backwards too. DeepSeek V4 Pro's clean zero in the 2026-08-25
+   reasoning sample was the call **Together** served; its 2663 reasoning tokens
+   on the other case came from **Sail Research**. A model compared against itself
+   was two different machines. Grok's zero was `xAI` on both calls and still has
+   no explanation.
+
+   **Three measurements shaped what follows.** The served provider is on the wire
+   and **dropped by the client library** — asserted twice by the assistant from
+   reading `langchain_openrouter` source, and false. The generation record takes
+   **8–10 seconds** to become readable, which is what forces the call log to be
+   two-phase. A local row write is free (0.012 ms median under WAL); the remote
+   figure is unmeasured.
+
+   **Bertan's direction:** log model calls to a remote PostgreSQL database
+   through SQLAlchemy, addressed by an optional URL, written by an `llm_call()`
+   wrapper *after* the timed region so evaluation latency stays the model's
+   latency alone. Recorded in full at
+   [`design/llm-call-log.md`](design/llm-call-log.md) — a **draft**, carrying
+   eleven open questions and eight traps, and the first task of the next session.
+
+   ### 2026-08-26 session 2: the call log exists as far as the schema
+
+   Four commits, `b8f0d36 → c16f780`. Suite **354 → 495 passed / 5 xfailed**.
+   **No model was called all session**; every measurement below is a database
+   round trip, and the spend is $0.00.
+
+   **Dependencies through the gate.** `sqlalchemy`, `asyncpg` and `psycopg` as
+   runtime dependencies, `alembic` in a new `migrations` group — nothing under
+   `src/` imports it, and `uv export --all-groups` means both gate tiers still
+   cover it. `make audit` clean; `make scan` blocked once on **sqlalchemy
+   2.0.52 / threat-filesystem-autostart**, reviewed and waived as a rule
+   defect: `$py_profile` matched the literal `".profile"` at
+   `sqlalchemy/testing/profiling.py:303`, which is a cProfile stats-dump
+   *extension* rather than the shell startup file, and the `open(` completing
+   the condition is two functions away reading the test suite's call-count
+   baseline. The condition is file-scoped, so the two halves need no
+   relationship. Re-scan: BLOCKED 0, INCOMPLETE 0.
+
+   **Two drivers, because an asyncpg connection is bound to its event loop.**
+   The synchronous product path cannot borrow the async pool by wrapping each
+   write in `asyncio.run()` — the second call would find connections belonging
+   to a closed loop. asyncpg serves the judge path, psycopg the product path,
+   and only one is built per process. The alternative, one engine on a
+   dedicated background loop, saves a dependency and costs a thread whose
+   shutdown has to be right.
+
+   **Decision 20's statement timeout was silently not in force**, and this is
+   the session's first finding. Both drivers' startup-parameter mechanisms —
+   asyncpg's `server_settings`, psycopg's `options="-c …"` — reach Supabase's
+   pooler and go no further: `current_setting('statement_timeout')` read back
+   `2min`, `application_name` read back `Supavisor`, and `SELECT pg_sleep(30)`
+   **ran to completion**. Setting the GUC after connect fixes it, but only with
+   a commit — both drivers open an implicit transaction for the `SET` and
+   neither ends it, so without one the value is correct on first use and
+   reverts after a single pool round trip. Measured both ways.
+   `pool_reset_on_return` is not the cause. After the fix: `10s` across three
+   checkouts on both drivers, and `pg_sleep(30)` cancelled at **10.3 s**.
+
+   **Decision 1 holds — it really is session mode.** Worth checking, because
+   the symptom above looks exactly like transaction pooling.
+   `pg_backend_pid()` is stable across checkouts, so the backend is sticky and
+   asyncpg's prepared-statement cache is safe. No `statement_cache_size=0`
+   workaround; a test pins its absence.
+
+   **The remote round trip, measured** — the number the design listed as the
+   first thing to do once an engine existed, against its local-SQLite reference
+   of 0.012 ms:
+
+   | | | |
+   |---|---:|---|
+   | one statement, connection already open | 47 ms | 1 round trip |
+   | checkout + statement, implicit `BEGIN`/`ROLLBACK` | 141 ms | 3 round trips |
+   | checkout + statement, `AUTOCOMMIT` | 48 ms | 1 round trip |
+   | checkout + statement, `AUTOCOMMIT` + pre-ping | 202 ms | ~4 round trips |
+
+   Two consequences the repository layer inherits. **A one-row insert in an
+   implicit transaction costs three round trips for one statement**, so a
+   single-row write should say `AUTOCOMMIT` and a call-plus-attempts write
+   should batch — ~100 ms per call between them. And **`pool_pre_ping` costs
+   ~155 ms per checkout**, roughly 23 s over a 150-call sample. That trade was
+   decided before the number existed; it is left as decided with the number
+   recorded. **[Superseded — the 155 ms came from `SELECT 1`. Measured on the
+   real insert in session 3 below: 43.4 ms, ~6.5 s per 150 calls.]**
+
+   **Trap 5 needed more than the empty `DB_URL` default.** The design argues
+   the suite is hermetic because `DB_URL` defaults to empty, but `Settings`
+   reads the repository's `.env` and that file has a real URL in it — so
+   `is_enabled()` would have been `True` under pytest. The guard is structural
+   instead: `is_enabled()` returns `False` whenever `pytest` is in
+   `sys.modules`. Test-awareness in non-test code, taken deliberately, because
+   the alternative is hermeticity that depends on every future test remembering
+   to unset something.
+
+   **The schema.** Three tables, verified against the live instance by creating
+   the whole thing inside a transaction and rolling it back — `create_all`
+   runs, **zero enum types** are created, the `SUM(llm_attempt.cost)` join
+   parses. Three departures from the design, each marked `DEPARTURE` at the
+   column:
+
+   - `llm_run` stores **`git_dirty_paths`**, not a `git_dirty` boolean.
+     `chunk_store.git_state` returns paths and argues against the boolean in
+     its own docstring — repo-wide, so an unrelated draft marks a run dirty —
+     and warns against a flag beside the list because they fall out of sync.
+   - `llm_call` and `llm_attempt` each gain **`started_at`**. The design's
+     lists carry durations but no wall clock, so a call could be placed no more
+     precisely than its run.
+   - **`llm_attempt.call_id` carries no foreign key**, and `llm_attempt` gains
+     `llm_server`. The socket writes the attempt while the request is in
+     flight; the wrapper writes `llm_call` only after it returns, because that
+     row needs the status and the duration — so an attempt always exists before
+     its call, and a foreign key would make write ordering a database
+     constraint. `llm_server` cannot come from a join either, because the rows
+     that most need filtering are the ones with a null `call_id`.
+
+   **`created_at` and `updated_at` on every table, timezone-aware — Bertan.**
+   On `Base` rather than in a mixin, so a table added next year cannot be the
+   one that forgot; the tests are driven off `Base.metadata.sorted_tables` for
+   the same reason. Stamped by the database (`server_default`), not the client,
+   because runs come from more than one machine and rows stamped by each
+   machine's clock cannot be ordered against each other.
+
+   **Repositories write with Core `update()`, never `text()` — Bertan**, and a
+   `BEFORE UPDATE` trigger is rejected. `onupdate` is applied when SQLAlchemy
+   *builds* the statement, so it belongs to the statement rather than the
+   table. Measured, 300 rows, median of 5:
+
+   | | | `updated_at` moved |
+   |---|---:|---|
+   | raw `text()` executemany | 59.9 ms | **0 / 300** |
+   | Core `update()` executemany | 67.5 ms | 300 / 300 |
+   | ORM load + mutate + flush | 125.5 ms | 300 / 300 |
+
+   A Core `update()` is a statement builder, not the ORM's object graph:
+   nothing is loaded, and it compiles to the same SQL plus one `SET`. 7.6 ms
+   for 300 rows against a 47 ms round trip, on a sweep that runs once per run.
+   The trigger would be schema Alembic has to carry, invisible from the model
+   file, and inconsistent with decision 12, which keeps the enum vocabularies
+   out of the database on the grounds that repositories are the only writers.
+   What replaces it is a test on the **compiled** UPDATE — a different claim
+   from `column.onupdate` being set.
+
+   **The design gained its strongest argument, from Bertan reading OpenRouter's
+   documentation.** `/generation` and `/generation/content` fetch a single
+   generation **by its id**; no documented endpoint enumerates ids over a date
+   range; `/activity` returns aggregates per day and endpoint with no
+   individual ids. So **a generation whose id we did not capture at call time
+   is unreachable by API, permanently** — not slow to find. It compounds with
+   the retry finding: the attempts a retry swallowed have ids no layer above
+   the socket ever sees, so that money is unnameable by any query, forever.
+
+   **Not built:** Alembic, the repositories, the `llm_call()` wrapper in both
+   flavours, the `httpx` patch, the enrichment sweep. Nothing has been written
+   to the database — every live check this session ran inside a transaction
+   that was rolled back.
+
+   ### 2026-08-26 session 3: the storage half, and the wrapper on top of it
+
+   Four commits, `28dd5a1 → 3af829c`. Suite **495 → 537 passed / 5 xfailed**.
+   **No model was called**; the spend is $0.00 and every measurement is a
+   database round trip. The schema is now **applied to the live instance** —
+   the first thing this project has written there — and the tables hold no
+   rows.
+
+   **Alembic, and the verification the design asked for.** `alembic.ini`,
+   `migrations/env.py`, revision `f5c1763874f3` applied, then an autogenerate
+   that came back **empty**, which is the check that a migration reproduces the
+   models rather than merely running. Schema read back from
+   `information_schema` and `pg_indexes` rather than assumed: three tables,
+   every constraint carrying its convention name, the partial index with its
+   predicate intact, **zero enum types**, no rows.
+
+   **`include_object` is load-bearing and was measured, not trusted.** With a
+   table in `public` that the models do not declare, autogenerate produced an
+   empty migration with the filter and `op.drop_table('zz_include_object_probe')`
+   without it. The instance is a Supabase project, not a private database, so
+   the failure guarded against is not a broken migration but one that applies
+   cleanly and deletes somebody else's table.
+
+   **The repositories**, split three ways so the layer can be checked without a
+   database: `statements.py` builds Core constructs and never executes them,
+   `call_log.py` executes them and carries the failure policy, `ledger.py`
+   counts what did not land. `AsyncCallLog` and `SyncCallLog` are written out
+   separately; the duplication is deliberate.
+
+   **`pool_pre_ping` costs a quarter of what session 2 recorded.** Repeated on
+   the real 23-column `llm_call` insert rather than `SELECT 1` — 20 samples,
+   median:
+
+   | | |
+   |---|---:|
+   | connection already open, no checkout | 46.8 ms |
+   | checkout + insert, `pool_pre_ping=False` | 47.7 ms |
+   | checkout + insert, `pool_pre_ping=True` | 91.1 ms |
+
+   So **43.4 ms per write, about 6.5 s over a 150-call run** — not the ~155 ms
+   and ~23 s recorded above, which came from a `SELECT 1` measurement. **This
+   supersedes that number**, and it is the one the open `pool_pre_ping`
+   decision should be taken on. The other half of the table is that **the row
+   shape costs nothing**: a 23-column insert carrying JSONB and NUMERIC takes
+   the same 47 ms as `SELECT 1`, so this is round trips and not payload, and
+   storing less would not make it faster.
+
+   **Departure 5 — Bertan.** The design says each failure goes through
+   `logging` at warning level; the first failure of each *kind* is logged and
+   the rest are counted. An unreachable database fails every write in a run,
+   and 150 identical warnings bury the findings the run exists to produce. The
+   total is in `LEDGER.report()` and is never suppressed.
+
+   **Four defects were found in the new code before any of it ran for real**,
+   three of them in one seam. `insert(LlmCall)` routes through the ORM's
+   bulk-persistence path, which resolved the dict key by class attribute and
+   read `LlmCall.metadata` as SQLAlchemy's `MetaData`; targeting `__table__`
+   keeps it Core. `Column.key` for that column *is* `metadata` — only the
+   mapper knows about `call_metadata` — so iterating the table's columns bound
+   `MetaData` as a value. And **`Float` subclasses `Numeric`**, so the
+   `Decimal(str(value))` rule would have converted `call_seconds` as well. The
+   fourth was structural: statements were built *outside* the `try`, making a
+   caller's missing primary key the one exception the failure policy let
+   through.
+
+   **Verified live**, writing the real rows and deleting them afterwards.
+   `AUTOCOMMIT` commits — rows read back from a second connection with no
+   commit call. `updated_at` moved 2.4 s on a real UPDATE while `created_at`
+   held. A cost round-tripped as exactly `Decimal('0.00123')` while
+   `call_seconds` stayed a float. `EXPLAIN` reports **`Index Scan using
+   ix_llm_attempt_pending_enrichment`**, so the partial index earns itself.
+
+   **Mutation: 17 + 25 mutations, 0 survivors**, after three rounds. Two gaps
+   the first sweeps exposed are worth keeping: an assertion that a constraint
+   name appeared *in the source text* passed against a renamed foreign key,
+   because the name is also in the migration's docstring — an assertion a
+   comment can satisfy is not an assertion about the code. And a mutant that
+   made the **async** `_write` re-raise survived everything, because every test
+   exercised `SyncCallLog` and **the judge path is the async one**; the
+   failure-policy tests run against both flavours now.
+
+   **`design/llm-call-log.md` now describes what exists** — half built, with
+   what is applied, two corrections marked in place, five departures collected,
+   and a `Verified against` line that no longer reads "nothing".
+
+   **The wrapper, and the context the socket will read.** `src/db/capture/`
+   holds three scopes with three lifetimes — the run is the process (built
+   lazily, so a script that never calls a model never shells out to git), the
+   case is set by whoever iterates cases, and the call is published for the
+   duration of the invocation. `llm_call()` replaces the two lines all five
+   judge stages repeated. The 100 existing stage tests pass untouched, which is
+   the evidence that it is behaviour-identical with no `DB_URL`.
+
+   **One module now owns where the provider puts its metadata.** `llm.py`'s
+   three private readers delegate to `capture/response.py`. Two callers needed
+   the same seven fields; written twice, the day OpenRouter moves `cost` is the
+   day one gets fixed and the other returns `None` — indistinguishable, in that
+   column, from a provider that did not report a price. Field names transcribed
+   from a real reply dumped 2026-08-23, not from documentation.
+
+   **Verified end to end against the live instance with a fake runnable**, so
+   no model was called and the spend stayed $0.00. All four statuses landed; the
+   socket saw the call id during the invocation and nothing after it; cost
+   stored as `0.00003235`; the run row written once with 8 dirty paths from real
+   `git_state`. 5 of 5 writes landed, rows deleted afterwards. **Mutation: 31
+   mutations, 0 survivors.**
+
+   **`STRUCTURE` → `STRUCTURE_PROBLEM`, `TRANSPORT` → `TRANSPORT_PROBLEM` —
+   Bertan.** The old names named parts of the system; a status column holds what
+   went wrong in them. `TIMEOUT` keeps its name, being already an event rather
+   than a layer. No migration — decision 12 keeps the column plain text.
+
+   **Not built:** the sync flavour of the wrapper, the `httpx` patch, the
+   enrichment sweep. The layer is unexercised under concurrency, and the cost
+   queries the log exists for — `SUM(llm_attempt.cost)` per run, per case, per
+   provider — are written nowhere and have never run against real data.
 
 **Explicitly not in this sequence: the hierarchy-aware chunker.** It is a future
 algorithm improvement, not a blocker — Bertan's decision, 2026-08-07. The
@@ -586,7 +1245,48 @@ per the priority order above.
 
 ---
 
+## 🟠 Model naming — reports vs. the call log
+
+- [ ] **`short_name()` writes the enum's member name, and the call log will write
+  its value.** `scripts/probe_a2_panel.py:156` reads
+  `str(model).split(".", 1)[-1]`, which yields `DEEPSEEK_V_4_FLASH_0731` because
+  `ModelNames` has no `str` mixin — so every committed report identifies a
+  panelist by its **Python identifier**. `docs/design/llm-call-log.md` (decision
+  14) stores `ModelNames.value`, `deepseek-v4-flash-0731`, because that is the
+  platform-neutral name the alias table maps to a wire id and it is the identity
+  that survives the same model being served through a different LLM server.
+
+  Nothing is broken and no column is being added: `ModelNames(value).name`
+  recovers the report's spelling exactly. The cost is human — someone greps a
+  report's model name against the log, finds nothing, and concludes the run was
+  never logged. **The log is right and the report is the side to change**;
+  `short_name` is a markdown-table display helper being used as an identity.
+
+  **Bertan's call, because it is not free.** Changing it makes new reports stop
+  matching old ones by grep, and the committed reports are history that is not
+  rewritten. Three options: emit `.value` and accept the discontinuity; emit both;
+  or leave reports alone and rely on the mapping. Raised 2026-08-26 while
+  finishing the call-log design.
+
+- [ ] **Three strings name one model and the distinction is not written down
+  anywhere outside the design doc:** `.name` (`MINIMAX_M_3`, a Python
+  identifier), `.value` (`minimax-m3`, platform-neutral), and the alias
+  (`minimax/minimax-m3`, the wire id from `get_model_name_alias`). The call log
+  stores the second on `llm_call.model` and the third on
+  `llm_attempt.model_alias`. Worth a comment in `llm_config.py` so the next
+  reader does not have to re-derive it.
+
+---
+
 ## 🟡 Tooling
+
+- [ ] **One high-severity Dependabot alert on `main` — reported 2026-09-04** on
+  pushing `dev-04`, at `security/dependabot/6`. Not looked at: neither the
+  package nor the advisory has been read, so nothing here says whether the
+  committed lock is affected or whether `dev-04` already carries the fix. `make
+  upgrade-safe` has to pass before this branch merges in any case, which is the
+  floor rather than the answer — tier 1 reads the committed lock and an alert on
+  `main` may be about a version neither branch resolves to.
 
 - [x] ✅ **`src/config.py` pulled torch to read two directory paths — split
   2026-08-09.** `get_llm_config` moved to `src/llm_config.py`; `config.py` now
@@ -819,11 +1519,13 @@ per the priority order above.
 
   ### What is still open
 
-  - **🔺 Nothing reaches this repo until the branch merges.** `pyproject.toml`
-    pins `ai-common @ git+https://github.com/bgunyel/ai-common.git@main`, a
-    **non-editable** git install, so `src/llm_config.py` still pays the full
-    cost. Merge `lazy-package-init` and re-resolve the pin, then re-measure
-    `import src.llm_config` here (expected ~7.7s → ~0.2s).
+  - ~~**🔺 Nothing reaches this repo until the branch merges.**~~ **Closed
+    2026-08-22** (`6128a3a`). The lock was re-resolved `a0f06ea` → `05aed76` — a
+    one-line diff, no dependency movement — and the measurement here came out at
+    **`import src.llm_config` 0.233s, 285 modules, no torch**, against ~7.7s and
+    3124 modules before. **The ~0.2s prediction was met.** The re-resolve was
+    triggered by needing five new OpenRouter models, not by this entry; the
+    import fix arrived with them.
   - **Findings 2 and 3, now unblocked.** Six provider SDKs inside `get_llm`
     (≈3.7s, and it turns five of them into optional rather than hard
     dependencies — the stronger half of the argument) and `BaseChatModel` behind
@@ -1323,6 +2025,15 @@ per the priority order above.
     `upgrade-safe`.** The only run attempted on 2026-08-16 was interrupted, and
     it predated the patch. This closes when a full `upgrade-safe` finishes and
     the environment is verifiably unchanged afterwards.
+  - **🔺 `dev-04` now carries a lock change and `upgrade-safe` has not been run
+    on it** _(2026-08-22)_. `6128a3a` moves the `ai-common` git rev
+    `a0f06ea` → `05aed76`. It is a one-line diff with no third-party version
+    movement, so it should be clean, but that is the gate's floor before a PR
+    closes and it is unverified. Separately, `ai-common`'s own `uv.lock` is dirty
+    on `main` with a format bump (`revision 2` → `3`, `upload_time` →
+    `upload-time`) and dependency bumps such as `anthropic 0.121.0` → `0.122.0`;
+    it was deliberately excluded from PR #30 because it moves dependencies and
+    belongs in its own change.
 
 - [ ] **Collapse the stale langchain fork.** _(surfaced 2026-08-13)_ `uv.lock`
   carries `langchain` at both 1.3.2 and 1.3.14, plus `langgraph`,
@@ -1690,7 +2401,165 @@ per the priority order above.
   keyed by SHA + set version (plan §6.3, §8.3).
 - [ ] **Operational metrics**: latency + cost-per-query (wire
   `calculate_token_cost` from `ai_common`).
+  - **Partly done for the judge, 2026-08-23.** Every judge stage returns
+    `StageResponse(value, cost)`, read from `response_metadata['cost']` off the
+    raw message `include_raw=True` keeps; `sum_costs` totals them and counts what
+    could not be priced. This does **not** cover the RAG path — `Generator.
+    generate` still computes nothing usable (see ⚪ below) — and it does not use
+    `calculate_token_cost`, because OpenRouter prices the call itself. That
+    fallback is for providers that do not; Bertan: not needed while we are on
+    OpenRouter.
 - [ ] Every new scorer lands **with its unit test** in `tests/`.
+- [ ] **Build the capture half of the call log.** The design is finished and the
+  storage half is done — see the 2026-08-26 session 2 and 3 entries above.
+  ~~Eleven open questions~~ all answered; ~~three gate the build~~ all three
+  settled (session pooler on 5432, `create_async_engine` + `asyncpg` for the
+  judge path with psycopg for the product path, failed raw output stored in
+  full). ~~Two new dependencies through the GuardDog gate~~ — cleared
+  2026-08-26, one waiver written.
+  - **Done:** the engines and the `DB_URL` gate, the three tables, Alembic and
+    the applied migration, the repository layer, the `contextvar`, and
+    `llm_call()` wired at all five judge stage call sites.
+  - **What is left:** the **sync flavour** and its product-path call sites, the
+    `httpx` patch installed from an entry point rather than on import, and the
+    enrichment sweep at exit and as a re-runnable command.
+  - **The sync flavour is blocked on a decision, not on work.**
+    `generator.py:99` reads `structured_response = self.structured_llm.invoke(...)`
+    and the result is never used — **a second full model call per product
+    answer, billed and discarded**. Wrapping it means logging a call that should
+    not exist. Delete it, use it, or decide it stays; then the wrapper goes on.
+    Found 2026-08-26 while looking for the product path's call sites, which is
+    itself an argument for the log.
+  - **The timed region must exclude the write**, or every latency number in the
+    eval becomes a latency-plus-bookkeeping number.
+  - The first logged panel run is what answers the question the whole log was
+    built for: whether the published cost totals are 1% low or 60% low.
+
+- [x] **Lift the generic LLM machinery out of `src/eval/sufficiency/llm.py` into
+  a shared `src/llm/` tier — Bertan, 2026-08-26. Done 2026-09-04.** Raised on
+  reading the file after the wrapper landed: a great deal of what was in there
+  is not specific to the sufficiency judge, and `llm_call()` in particular
+  **will be used wherever a model call is made, including every module under
+  `src/clause_and_effect/`**. A wrapper that both packages must reach cannot
+  live inside one of them.
+
+  **What was built.** `src/llm/` beside `config.py`, exporting nothing from its
+  `__init__` for the reason `src/db/capture/` does:
+
+  | module | holds |
+  |---|---|
+  | `channels.py` | `FUNCTION_CALLING`, `JSON_SCHEMA`, `TOOL_CALL_AUTO` — moved out of `llm_config.py`, which now imports them |
+  | `structured.py` | `build_structured_llm` (was `build_judge_llm`), `StructuredPayload`, `payload_from_tool_call` — the repository's only `ai_common` touchpoint |
+  | `call.py` | `llm_call`, `require_payload`, `LlmResponse`, `CallRecord`, `LlmResponseError`, `sum_costs` |
+
+  `src/eval/sufficiency/llm.py` is now 158 lines against 695, holding only what
+  is judge-shaped: `JudgeResponseError`, `StageResponse`, `require_response` and
+  `stage_call` — the two adapters that add the `stage=` label and nothing else.
+
+  **Two things came out differently from the sketch above, both deliberate.**
+
+  - `StageResponse` is a **subclass** of `LlmResponse` rather than a second
+    three-field dataclass. The sketch said it stays in the judge, which it does;
+    it did not say it should restate the fields. Sub-classing keeps the name the
+    five stages, two aggregators and six probes are typed on, keeps the
+    reasoning about `cost=None` and the `calls` tuple on the base class where
+    the product path can read it, and makes `JudgeResponseError` catchable as
+    `LlmResponseError` — which a probe totalling the spend of failed calls needs.
+  - **The log row's `error_message` no longer carries the stage.** `llm_call`
+    writes the row before the judge's adapter ever sees the exception, so the
+    row gets the shared tier's wording. Nothing is lost: `llm_call` already has
+    a `stage` column, and putting the stage in the message too would store the
+    same fact twice and make the column the copy that can drift. What a *caller*
+    sees is unchanged — `stage A2: …` exactly as before.
+
+  **Verified.** 572 passed / 5 xfailed, up one from 571 — the new test is that
+  a judge failure is still catchable as the shared type. Three mutations of the
+  new seam, no survivors: dropping the stage prefix (6 failures), swallowing the
+  re-wording (13), dropping the failed call's record (4). All fourteen probe
+  scripts still import. Import cost re-measured: `src.llm.channels` 0.000s,
+  `src.llm.structured` 0.105s, `src.llm.call` 0.107s, `src.eval.sufficiency.llm`
+  0.108s, `src.eval.sufficiency.stage_a2` 0.148s — none of them loading torch,
+  transformers, `langchain_core` or `ai_common`.
+
+  One thing got cheaper rather than merely moving: `build_structured_llm` used
+  to defer its channel-constant import, because they lived in `llm_config`,
+  which imports `ai_common.enums` at module scope (0.24s, 195 modules).
+  `src/llm/channels.py` imports nothing, so the deferral is gone.
+
+- [ ] **Carrying functionality to `ai-common`: deliberately not now — Bertan,
+  2026-08-26**, agreed after discussion. Recorded so the question is not
+  reopened from scratch. What would eventually qualify is narrow:
+  `src/db/capture/response.py` (where a provider puts cost, id, finish reason,
+  reasoning tokens), the `include_raw` payload shape, and the channel constants
+  — facts about LangChain and OpenRouter rather than about this project.
+
+  **The `structured_output` table specifically should not go**, though it looks
+  like the most reusable thing in `llm_config.py`. Those assignments were
+  measured on stage A2 prompts over six cases; promoted to a library they become
+  "how to call MiniMax", a stronger claim than the evidence supports, and the
+  counts are single-sample — Grok read 4/6 then 6/6 on identical runs.
+  Measurements should live where their evidence lives.
+
+  Two constraints on any future move. This module is architected around
+  `ai_common` being expensive to import (6.58s for `ai_common.llm`), so moving
+  code there makes the cheap tier harder to keep cheap unless `ai-common` gets
+  its own layering first. And `ai_common.get_llm` still mutates the dict it is
+  handed — see below — which `build_judge_llm` works around with a defensive
+  copy; that should be fixed there before anything is built on top of it.
+
+- [ ] **The probe scripts carry their own status vocabulary.**
+  `probe_wire_params.py:222`, `probe_panel_roster.py:164` and
+  `probe_reasoning_channel.py:108,155,162` write the string literals
+  `"STRUCTURE"` and `"TRANSPORT"` and never touch `CallStatus`. After the
+  2026-08-26 rename they disagree with the log. Importing `CallStatus` and
+  writing `.value` is the fix, and it is **Bertan's call because it is not
+  free**: new eval reports would say `STRUCTURE_PROBLEM` where
+  `2026-08-25-reasoning-channel-061136.md` says `STRUCTURE`, and committed
+  reports are history that is not rewritten. Same shape as the `short_name`
+  decision above.
+
+- [ ] **A payload of `None` is recorded as `STRUCTURE_PROBLEM`.** That is the
+  case where the chain yielded nothing at all — nothing was generated, so the
+  name fits even less well after the rename than before it. `require_response`
+  calls it "the one failure that is genuinely unaccountable": no message, so no
+  cost, no generation id, nothing to read. Folding it into `TRANSPORT_PROBLEM`
+  is one line and one assertion. It is a defensive branch —
+  `with_structured_output(include_raw=True)` should always return a dict — so
+  nothing depends on the answer today.
+
+- [ ] **Decide `pool_pre_ping`. Bertan's call.** Measured 2026-08-26 on the real
+  insert: **43.4 ms per write, ~6.5 s over a 150-call run**. Earlier notes in
+  this file say ~155 ms and ~23 s — that figure came from `SELECT 1` and is
+  **superseded**. What it buys is that a connection dropped by a serverless
+  host surfaces as a reconnect rather than as a failed write; what it costs is
+  a doubling of every single-row write. Decision 20 chose it before any number
+  existed.
+- [ ] **Pin the provider per panelist.** The log makes routing *visible*; it does
+  not make it *stable*. Panel-wide or MiniMax only, and which provider MiniMax
+  gets — CoreWeave + `json_schema` keeps the committed channel, Venice +
+  `function_calling` is the other coherent pair, and no other combination exists
+  because each of those providers lacks the other's channel. **Bertan's call.**
+  - `provider: {"only": [...], "allow_fallbacks": False}` is the knob.
+    `require_parameters` is not — it filters on advertised support, and Parasail
+    advertises everything.
+  - It costs availability: 429s are common enough that two of two sampled Qwen
+    calls hit one, so a pinned panelist will fail outright where it currently
+    falls back. That is the same trade this config already took once — explicit
+    failure over silent degradation — but it will bite more often.
+- [ ] **Re-measure the `structured_output` channel table under pinned
+  providers.** Every entry in it was measured across runs whose provider varied
+  and was never recorded, so it is a mixture measurement throughout. Grok and
+  Gemini are single-provider and unaffected.
+- [ ] **Demote LangSmith to opt-in, behind one entry-point setup function.**
+  It is enabled in exactly one place today — `main_dev.py:27-29` — so every panel
+  run, both stability samples and the reasoning-channel probe ran untraced. The
+  proposal to enable it everywhere was withdrawn 2026-08-25: our workload is
+  structurally close to its worst case (large payloads; one judge call is a
+  nested tree through `with_structured_output(include_raw=True)` + `with_retry`),
+  and our prompts are reproducible from case id, stage and commit, so what it
+  would carry is largely recoverable. Turn it on where a trace earns its keep —
+  `ComplianceAgent` is a genuine multi-step tree. Decide whether the separate
+  `clause-and-effect-eval` project survives being opt-in.
 
 ---
 
@@ -1819,6 +2688,87 @@ deliberately deferred into this work rather than done piecemeal.
 
 ## ⚪ Known code issues
 
+- [ ] 🔺 **A comment in `llm_config.py` is false.** *"MiniMax M3's OpenRouter
+  endpoint does not accept tools at all (their documentation), which is why it
+  answered in the schema's shape as prose."* **Venice served it 6/6 on tool
+  calls**, 2026-08-23, cost-matched to report `162138`. The sentence is the
+  mechanism half of the "two assignments rest on a mechanism, the rest on counts"
+  comment, and the mechanism was a provider that cannot do `response_format`, not
+  a model that cannot do tools. Correcting it is not cosmetic — that comment is
+  the stated reason MiniMax is on the channel it is on.
+- [ ] 🔺 **Retries produce billed generations that nothing sees.**
+  `build_judge_llm` attaches `.with_retry(stop_after_attempt=3)` on all three
+  channels. A retried call produces more than one generation at the provider,
+  each billed, and the returned message carries only the last one's id — so
+  **every cost total this project has reported may be an undercount**, for a
+  second and different reason from the unpriced-failure one already recorded.
+  Unverified: whether the callback layer can see the discarded attempts. The call
+  log inherits the same blind spot unless it can.
+- [ ] **`langchain_openrouter` drops the `provider` field.** OpenRouter returns
+  the serving provider at the top level of the response body; `_create_chat_result`
+  calls `response.model_dump(by_alias=True)` on the SDK object and it does not
+  survive, while declared fields such as `system_fingerprint` do. Measured
+  2026-08-25 on the real judge path. Worked around locally by reading it off the
+  wire or from `/api/v1/generation`; decide whether to report it upstream.
+- [ ] 🔺 **A2 can return a claim whose text is empty or `"..."`, and the schema
+  accepts it.** Found 2026-08-22 in the stability runs: one run returned a single
+  core claim with text `"..."`, another with text `""`. Both were the entire
+  "unstable" verdict for their case. `str` accepts them, so nothing downstream
+  notices until stage C is asked to adjudicate a claim that says nothing.
+  **Guard in `tag_claims` before anything else** — this removes two of the three
+  current stability failures, so any measurement taken before it is fixed is
+  measuring the guard's absence.
+
+  **2026-08-23: absent from 60 further calls.** Two 30-call samples produced no
+  empty and no `"..."` claim. That is evidence about the *rate*, not about the
+  guard: a failure this rare is one a five-run sample misses, which is the same
+  property that makes the stability rates unreliable. Still open, still cheap.
+- [ ] **The judge harness and the probe scripts print rather than log.**
+  `eval/sufficiency/judge.py` has done so since it was written — deliberate and
+  flagged, since it exists to be read on stdout — and the six `scripts/probe_a*`
+  files added 2026-08-22 follow it, as do `probe_spend.py` and the report writer
+  added 2026-08-23. That is now nine files against the standing
+  convention (`src/logging_setup.py`; libraries configure nothing, scripts call
+  `setup_logging()`). Decide whether probe harnesses are a standing exception or
+  whether they get converted.
+- [ ] 🔺 **`src/scripts/gdpr_test_data_generation.py:150` raises `KeyError:
+  'orchestrator_model'`.** The role was renamed `sufficiency_judge` on
+  2026-08-23 (Bertan) and this consumer was not repointed; committed broken in
+  `28dc9a4` deliberately, because **which role the golden-set generator reads is
+  a decision about provenance, not a rename**. `writer_model` now holds exactly
+  the model `orchestrator_model` used to (`DEEPSEEK_V_4_FLASH_0731`), which makes
+  it the least-surprising repair. Bertan's call. This is the script that produced
+  the 433 cases everything else is measured against.
+- [ ] **The eight new panelists have never been called.** `GEMINI_3_6_FLASH`,
+  `GEMINI_3_7_FLASH`, `GLM_5_3`, `GROK_4_6`, `KIMI_K3`, `MINIMAX_M_3`,
+  `QWEN_3_8_2_4T_A95B`, `QWEN_3_8_MAX` resolve through `get_model_name_alias` and
+  nothing more — ai-common #31 verified name resolution, not service. A bad id
+  inside a panel run fails after the expensive part, so send one cheap call to
+  each first.
+- [ ] **`llm_config.py`'s docstring blames torch for a cost that no longer loads
+  torch.** Measured 2026-08-23 in one process: `ai_common.enums` 0.243s / 195
+  modules, then `ai_common.llm` **+6.583s / 3,248 modules, with `torch` absent
+  from `sys.modules`**. The cost is real and the number is roughly unchanged, but
+  it is the six langchain provider SDKs rather than transformers → torch. The
+  docstring was left as written and the measurement recorded in the comment
+  beside it; reconcile the two.
+- [ ] **A bare `uv sync` prunes `[dependency-groups]` and uninstalls pytest.**
+  Hit 2026-08-23 after the lock re-resolve: the next `pytest` failed with
+  `Failed to spawn`. `uv sync --group test` restores it. Loud if the suite is the
+  next command and silent otherwise — worth a line in the README or a make
+  target, since a suite that cannot start is worse than one that fails.
+- [ ] **`max_llm_retries` is in `model_params` and nothing reads it.**
+  `build_judge_llm` hardcodes `.with_retry(stop_after_attempt=3)` beside a config
+  field carrying the same 3. Wire the field in so the config is live rather than
+  decorative.
+- [ ] **`scripts/` and `src/scripts/` coexist with no rule separating them.**
+  `src/scripts/` holds the six artifact builders (`generate_chunks.py`,
+  `index_documents.py`, the docling exporters); `scripts/` was added 2026-08-22
+  for the judge probes. A defensible split exists — *builds artifacts* vs *runs
+  experiments* — but it is inferred, not written down, and two directories with
+  the same name and no stated rule read as an accident later. Note both are run
+  as `python -m`; a path invocation of `scripts/` fails because `pythonpath` in
+  `pyproject.toml` is pytest-only.
 - [ ] `Generator.generate` (`src/clause_and_effect/generators/generator.py`)
   computes `structured_response` but never uses it, and `total_tokens` is dead.
   Token/cost accounting is not wired — needed for the operational cost metric

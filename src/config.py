@@ -20,8 +20,8 @@ ENV_FILE_DIR = os.path.abspath(os.path.join(FILE_DIR, os.pardir))
 
 class Settings(BaseSettings):
     APPLICATION_NAME: str = "Clause-And-Effect"
-    APPLICATION_OWNER: SecretStr = "Bertan Günyel"
-    IDENTITY_EMAIL: SecretStr = "bertan.gunyel@gmail.com"
+    APPLICATION_OWNER: SecretStr = SecretStr("Bertan Günyel")
+    IDENTITY_EMAIL: SecretStr = SecretStr("bertan.gunyel@gmail.com")
 
     # AI related
     EMBEDDING_MODEL: str = "text-embedding-3-small" # OpenAI
@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     QDRANT_URL: SecretStr = ""
     QDRANT_PORT: int = 6333
     VECTOR_DB_COLLECTION_NAME: str = "compliance_docs"
+
+    # SQL Database
+    DB_URL: SecretStr = SecretStr("")
 
     # Paths
     INPUT_FOLDER: Path = os.path.join(ENV_FILE_DIR, 'input')

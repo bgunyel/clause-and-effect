@@ -12,6 +12,8 @@ import rich
 import time
 from uuid import uuid4
 
+from ai_common import get_llm
+
 from src.config import get_settings
 from src.llm_config import get_llm_config
 from src.clause_and_effect.agents import ComplianceAgent
@@ -25,6 +27,16 @@ def main():
     os.environ['LANGSMITH_API_KEY'] = settings.LANGSMITH_API_KEY.get_secret_value()
     os.environ['LANGSMITH_TRACING'] = settings.LANGSMITH_TRACING
     os.environ['LANGSMITH_PROJECT'] = settings.APPLICATION_NAME.lower()
+
+    model_params = get_llm_config()["sufficiency_judge"][5]
+    llm = get_llm(
+        model_name=model_params["model"],
+        model_provider=model_params["model_provider"],
+        api_key=model_params["api_key"],
+        model_args=model_params["model_args"],
+    )
+
+    output = llm.invoke("Give me information about Ankara.")
 
 
     query = "What types of processing of personal data does this Regulation apply to?"

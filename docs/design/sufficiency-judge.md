@@ -24,20 +24,89 @@ yet, and says so rather than reading as though it did.
 |---|---|---|
 | Criterion, protocol, verdict vocabulary | `sufficiency/__init__.py` docstring | **Built** — documented in code |
 | Types (`Claim`, `Decomposition`, `BlindAnswer`, `ClaimVerdict`, `Adjudication`, `PanelistRun`, `CaseJudgement`) | `sufficiency/models.py` | **Built** |
-| Stage A — decompose | `sufficiency/stage_a.py` | **Built**, eyeballed on 8 cases |
-| Stage B — answer blind | `sufficiency/stage_b.py` | **Built**, eyeballed on 8 cases |
-| `span_is_verbatim` | `sufficiency/stage_b.py:span_is_verbatim` | **Built**, never observed to fail |
-| Stage C — adjudicate | — | **Specified below, not built** |
+| Stage A — decompose | `sufficiency/stage_a.py` | **Built**; wiring tested, tagging quality still eyeballed on 8 cases |
+| Stage B — answer blind | `sufficiency/stage_b.py` | **Built**; wiring tested, leakage resistance still one observation on one case |
+| `span_is_verbatim` | `sufficiency/stage_b.py:span_is_verbatim` | **Built and mutation-tested** (§5.5) |
+| Stage C — adjudicate | `sufficiency/stage_c.py` | **Built** 2026-08-17 (§6) |
 | Verdict derivation | `Verdict` in `models.py`; no function derives one | **Specified below, not built** |
 | `sufficient_verbose` threshold | — | **Not decided** — to be measured |
 | Panel runner / aggregation | `CaseJudgement.unanimous` exists; nothing populates it | **Specified below, not built** |
 | Calibration sample | — | **Not started** |
-| Tests | none | **Not started** |
+| Tests — stages A, B and C | `tests/test_sufficiency_stages.py` | **Built** — 49 tests, 36 mutations, no survivors (§1.1) |
 | `main()` probe harness | `sufficiency/judge.py:main` | Built — a scratch driver over 8 cases, not the runner |
 
 Sections 2–5 describe built behaviour. Sections 6–10 are specification for work
 not yet done, and are marked as such. **No verdict from this module gates
 anything today**, because judge–human agreement is unmeasured (§9).
+
+### 1.1 The test surface, and what it deliberately does not reach
+
+`tests/test_sufficiency_stages.py` pins what is **deterministic** in stages A, B
+and C. No model is called: each stage's runnable is replaced by a fake, so what
+is under test is the stage's own wiring — which prompt it sends, which schema it
+asks for, how it maps what comes back, and for stage C when it declines to call
+at all.
+
+| Group | What it pins |
+|---|---|
+| **Structural blinding** | §3's claim, as an *invariance*: two inputs agreeing only on the fields a stage may see must render byte-identical prompts. Plus label positions (`QUESTION:` < question < `ANSWER:` < answer), and that stages B and C never name the regulation (§5.2, §6.1) |
+| **`span_is_verbatim`** | 13 cases — substring, case, whitespace, space-before-punctuation and list-marker all verbatim; empty, whitespace-only, paraphrased, reordered, stitched-from-disjoint-parts and inserted-comma all not |
+| **Response mapping** | `answered=False` with an empty span survives as a legitimate outcome (§10.1 escape), and an empty `core_claims` is not an error (§4.5) |
+| **Stage C's claim matching** | A response listing claim 2 before claim 1 still lands on the right claims, and an invented, zero-numbered, duplicated or dropped claim number raises rather than being silently repaired (§6.2) |
+| **Stage C's no-call paths** | No claims, and no answer text, each return without a model call; a `answered=False` that nonetheless carries answer text is judged, because the guard is on the text (§6.3) |
+| **Schema wiring** | Asserted by field names rather than the private class, so a stage swapped onto another stage's schema fails |
+| **Import cost** | Importing a stage loads neither `torch` nor `langchain_core` — see below |
+
+Two prompt-level assertions use `rindex` rather than `index`, because stage A's
+worked examples (§4.6) carry their own `QUESTION:`/`ANSWER:` lines. Against
+`index` those tests would compare the real fields against the *examples'* labels
+and pass however the real ones were ordered.
+
+**Why blinding is tested as invariance rather than by searching for the quote.**
+A sentinel check answers "is *this* field absent"; the invariance answers "can
+*any* field but the permitted two reach the prompt". A field added to a prompt
+later fails the second and slips past the first, and the blinding is the property
+the whole protocol rests on.
+
+**Mutation results.** 36 mutations injected one at a time — 20 for stages A and B
+and `llm.py`, 16 for stage C — **all 36 killed, no survivors**. The load-bearing
+ones: leaking the quote into stage A's prompt (4 tests fail), leaking the gold
+answer into stage B's (4), leaking stage B's span or note into stage C's (2 each),
+removing the empty-span guard — without which `""` is a substring of every quote,
+so a stage B that found nothing reads as having copied perfectly (2) — erasing
+punctuation inside `span_is_verbatim`, caught by exactly the one test that exists
+to pin that boundary (§5.5), and pairing stage C's verdicts by position instead of
+by claim number, which is the failure that would silently mislabel rather than
+fail.
+
+**The tests forced a source fix.** Every stage module imports the model builder
+at module scope, so the module holding it charged every importer — and every
+test — for langchain → transformers → torch: **6.3s** to import it, 2.4s on the
+suite. Two imports had to move, not one. `get_llm` is now called inside the
+builder, and the two `langchain_core` names — needed only by the signature,
+which `from __future__ import annotations` already makes a string — sit behind
+`TYPE_CHECKING`. Deferring `get_llm` alone would have bought nothing, because
+`langchain_core` is the leg that pulls torch. Measured after: **6.3s → 0.11s**,
+and the test file runs in **0.32s** against 6.60s before. The cost is deferred,
+not removed — the first `build_structured_llm` call still pays it.
+
+The builder itself left this package on 2026-08-26: it is
+`src.llm.structured.build_structured_llm`, one tier down, where the product path
+can reach it too. The deferral moved with it unchanged, and the guard —
+`test_importing_a_judge_stage_does_not_load_torch` — still watches it from the
+stage side, which is the side that matters.
+
+That guard runs in a **fresh interpreter**, because by the time it executes
+another test module has already imported torch into the pytest process and an
+in-process `sys.modules` check would pass regardless. Both mutations that undo
+the fix are caught, and caught *by wall clock as well as by assertion* — the file
+takes 8.3s and 14.0s under them against 0.32s clean.
+
+**What the tests do not reach.** They say nothing about whether stage A tags
+core/auxiliary *correctly* or whether stage B actually resists parametric
+leakage. Those are judge behaviour, measured against human labels, and they
+remain one observation each on eight eyeballed cases — that is calibration (§9),
+not unit testing, and it is why no verdict here gates anything yet.
 
 ---
 
@@ -115,11 +184,11 @@ already been shown. The blinding is **structural, not instructed**: each prompt
 is built from only the fields that stage is allowed to see, so there is nothing
 to leak. A prompt cannot leak what it was never given.
 
-| Stage | Sees | Blind to | Produces |
-|---|---|---|---|
-| **A — Decompose** | `question`, gold `answer` | the quote | shortest sufficient answer; every claim tagged `core`/`auxiliary`, each with a reason |
-| **B — Answer blind** | `question`, `supporting_quote` | gold answer, source article | minimal span (copied verbatim), an answer derived from it, an `answered` flag, a note |
-| **C — Adjudicate** | `question`, tagged claims, blind answer | the quote | per-core-claim `supported`/`contradicted`/`absent`, with rationale |
+| Stage | Sees | Blind to | Produces                                                                                             |
+|---|---|---|------------------------------------------------------------------------------------------------------|
+| **A — Decompose** | `question`, gold `answer` | the quote | shortest sufficient answer; every claim tagged `core`/`auxiliary`, each with a reason                |
+| **B — Answer blind** | `question`, `supporting_quote` | gold answer, source article | minimal span (copied verbatim), an answer derived from it (blind answer), an `answered` flag, a note |
+| **C — Adjudicate** | `question`, tagged claims, blind answer | the quote | per-core-claim `supported`/`contradicted`/`absent`, with rationale                                   |
 
 The ordering is what makes it work. Stage A cannot fit its core/auxiliary tagging
 to whatever the quote happens to contain, because it has never seen the quote —
@@ -195,17 +264,123 @@ Neither is decoration.
   question correctly when they tag the same claim differently. §6.2 of the plan
   requires decomposed verdicts to carry a rationale.
 
-### 4.4 Why there is no worked example in the prompt
+### 4.4 Why there were no worked examples, until the output asked
 
 The obvious example would be `gdpr_art7_case3`, and putting it in the prompt would
 destroy its value as a check on whether the judge independently agrees with the
 ruling. A synthetic example is a fix for an inconsistency that has not been
 observed, so it waits until the output asks for one.
 
+**On 2026-08-17 the output asked**, and four synthetic examples were added — see
+§4.6. They are synthetic rather than drawn from the golden set for the reason this
+section already gives, generalised: every one of the 433 cases is *evidence*, and
+the cases worth using as examples are exactly the diagnostic ones. `art7_case3`
+independently reproduced Bertan's ruling on 3 of 3 runs, and `art8_case1` and
+`art15_case1` are the cases whose stability is being measured. Showing the judge
+the answer for a case removes that case from the evidence; a synthetic example
+costs nothing.
+
 ### 4.5 An empty `core_claims` is a legitimate output
 
 It says the gold answer does not answer its own question — a defect in the
 **case**, not in the quote. It must not be treated as an error.
+
+### 4.6 Stage A is not stable at temperature 0, and the instability reaches the verdict
+
+Found 2026-08-17 by running the probe harness twice. `gdpr_art8_case1` returned
+**1, 1, 2 and 1** core claims across four runs of an identical prompt. That is not
+a cosmetic difference: with one core claim the case reads `sufficient`, and with
+two the second comes back `absent` from stage C and it reads `insufficient`. The
+same run also split `art7_case4` into 3 claims where another run gave 2.
+
+Both divergences broke a constraint the prompt already stated, and in both the
+model's own `reason` field **recorded the breach** — which is what §4.3 keeps
+`Claim.reason` for, now demonstrated rather than argued:
+
+- The run that tagged an extra claim core explained it as *"IMPLIED BY the
+  shortest sufficient answer but adds specificity"*. The test is **appears in**.
+- The run that split `No.` off as its own claim broke the polarity rule verbatim.
+
+#### What was changed, in two rounds
+
+**Round 1 — the rules were sharpened.** The CORE test now names implication,
+consequence and added specificity as AUXILIARY and addresses the model's own
+reasoning (*"if your reason for calling a claim CORE would be that the shortest
+sufficient answer implies it, that claim is AUXILIARY"*), and the polarity rule now
+states that a bare `Yes`/`No` claim is never correct output rather than merely
+preferring the alternative.
+
+**Round 2 — four worked examples**, because a constraint stated twice and broken a
+third of the time is not fixed by stating it a third time. Ordered by descending
+core count — **4 / 2 / 1 / 1** core claims out of 4 / 3 / 3 / 2 total — with the
+counts stated in the prompt's own lead-in. Each targets one observed failure or one
+thing at risk: an enumeration where every item is core; a shortest sufficient
+answer spanning two claims, plus a consequence tagged auxiliary; a consequence that
+repeats the core claim's own number and is still auxiliary; and polarity attached,
+with the reason saying so in as many words.
+
+#### The measurements
+
+Each cell is *N* independent calls to stage A for one case, identical prompt,
+`temperature=0`, DeepSeek V4 Flash. Any difference between runs in one cell is
+model nondeterminism, not a different input. **The property that matters is the
+core-claim set**, because stage C sees only core claims, so a core set that varies
+between runs is a verdict that varies between runs.
+
+| case | what it probes | correct output | N | rules only | + 3 examples | + 4 examples |
+|---|---|---|---|---|---|---|
+| `art7_case4` | polarity — is `No.` split off? | 1 core, `No.` attached | 6 | bare `No.` in **2/6** | 0/6 | **6/6 correct**, identical |
+| `art8_case1` | implication — is a consequence tagged core? | 1 core | 6 | 6/6 correct | 6/6 | **6/6 correct**, identical core set |
+| `art7_case3` | the case the criterion was settled on | 1 core; prior-lawfulness auxiliary | 3 | 3/3 | 3/3 | **3/3**, ruling reproduced |
+| `art33_case1` | consequence — *reasons for delay* stays auxiliary | 1 core | 3 | 3/3 | 3/3 | **3/3** |
+| `art15_case1` | enumeration — a 10-item answer | 10 core, one per item | 3 | 3/3 | **1 claim total** ✗ | **3/3**, one run fragmentary |
+| `art41_case3` | *renewal* stays auxiliary | 1 core | 3 | 3/3 | 3/3, trailing-dot drift | **1 of 3 promotes renewal** ✗ |
+
+Read across the last three columns rather than down them. The two hunted failures
+are at zero in the current prompt, and four cases hold in all three states — but
+examples damaged two cases that had been correct without them:
+
+- **`art15_case1` collapsed from 10 core claims to 1** under three examples, on all
+  three runs. Two of those three examples had a single core claim *and* a first
+  claim that was verbatim the shortest sufficient answer, and the model generalised
+  *"claim 1 = STEP 1's text"* — right when STEP 1 is one sentence, catastrophic when
+  it is a whole enumerated answer. The third example contradicted it and was
+  outvoted. Reordering to 4 / 2 / 1 / 1 and adding the rule that splitting does not
+  depend on STEP 1's length repaired it.
+- **`art41_case3` is the one case now worse than when this started.** One run in
+  three promoted *"and may be renewed on the same conditions…"* to core.
+
+#### The residue, and it is not small
+
+**Sentence-fragment claims are a new failure mode introduced by the examples.** One
+`art15_case1` run returned claims like `"the personal data itself"` and `"and
+information including: the purposes of processing"`; one `art41_case3` run returned
+`"and may be renewed on the same conditions, provided…"` and tagged it core. These
+break a rule already in the prompt — *do not split so far that a fragment stops
+meaning anything on its own* — and a fragment handed to stage C cannot be judged
+supported or absent in any useful way. Example 2 models the correct behaviour
+explicitly, repeating the full subject in both of its core claims, and the model
+fragmented anyway; so the fix is a rule, not a fifth example. **Not yet applied.**
+
+**Two caveats on all of the above, and they limit what it is worth.**
+
+1. **Three prompt revisions have been tuned against the same six cases**, and
+   small-*N* differences are being read as signal. Some of what looks fixed is
+   fitted. `art41_case3`'s "three different shapes in three runs" is one
+   observation of instability, not a rate. The next measurement should include
+   cases *not* used for tuning — a stratified sample of ~20 across the four
+   `answer_type`s at three runs each is about 60 calls on this model.
+2. **Only `art7_case3`'s expected output rests on a ruling of Bertan's.** The other
+   five "correct output" columns are the assistant's classification. `art7_case4`
+   is the case to watch: round 1 demoted *"The data processed while consent was
+   still valid remains lawfully processed"* from core to auxiliary, and the 6/6
+   result is against that reading. Read as core, the current prompt scores 0/6
+   there.
+
+**A prompt fix cannot remove run-to-run variance at temperature 0.** It narrows one
+failure mode. The panel (§8) and the reporting of non-unanimity are what make the
+residue visible instead of invisible — and this section is the first evidence that
+they are load-bearing rather than ceremony.
 
 ---
 
@@ -282,9 +457,24 @@ instead is not a repair candidate. Matching reuses
 and the grounding gate cannot drift apart on what "the same text" means — the
 same requirement §3.1 places on the retrieval scorers.
 
-**It returned 8/8 verbatim on the probe set, which by this project's own rule
-means it is unverified, not working.** A gate never observed to fail is not known
-to work. It must be mutation-tested when the tests land (§10.6).
+It returned 8/8 verbatim on the probe set, which by this project's own rule made
+it unverified rather than working — a gate never observed to fail is not known to
+work. **It is now mutation-tested** (§1.1): thirteen cases, and four mutations —
+the empty-span guard removed, the normalized fallback removed,
+always-true-for-non-empty, and punctuation erased alongside whitespace — each
+killed by the tests that exist for them.
+
+One boundary is worth naming, because it is the one a later edit will be tempted
+to move. Punctuation is **kept**, so a span that inserts a comma is not verbatim,
+and `test_a_span_with_an_inserted_comma_is_not_verbatim` is the only thing
+standing between this check and the grounding gate drifting apart on what "the
+same text" means. Under the punctuation-erasing mutation, 12 of the 13 cases
+still pass.
+
+What this does **not** establish is that stage B copies rather than paraphrases.
+The check is verified against synthetic spans; how often a real model returns a
+non-verbatim span is a measurement that needs the full run (§7.3), and 8/8 on the
+probe set remains one small sample.
 
 ### 5.6 Observed span-shrink ratios
 
@@ -304,12 +494,22 @@ arbitrary**.
 
 ---
 
-## 6. Stage C — adjudicate (specified, not built)
+## 6. Stage C — adjudicate (built 2026-08-17)
 
-Inputs: the question, stage A's tagged claims, stage B's blind answer. **Not the
+`sufficiency/stage_c.py` — `adjudicate`, with `STAGE_C_INSTRUCTIONS`,
+`_StageCClaimVerdict` / `_StageCAdjudication`, `build_stage_c_prompt`,
+`render_claims` and `AdjudicationError` beside it.
+
+Inputs: the question, stage A's core claims, stage B's blind answer. **Not the
 quote** — stage C must not be able to re-read the evidence and substitute its own
 judgement for stage B's, because that would collapse the blinding that makes B
-worth running.
+worth running. The signature takes a `question: str` rather than a `TestCase`,
+deliberately unlike stages A and B: the quote is not a parameter of this stage at
+any point, which is stronger than being handed the case and declining to
+interpolate it.
+
+**Stage C produces no verdict.** It labels claims and stops; §7's derivation is
+deterministic, needs no model call, and is a separate piece.
 
 Per **core** claim, one of:
 
@@ -323,13 +523,86 @@ Per **core** claim, one of:
 different repairs. Folding them together would make the output less actionable
 than the two-line distinction costs.
 
-Auxiliary claims are adjudicated **or not** — this is an open decision (§10.7).
-Adjudicating them costs tokens and produces information the verdict ignores;
-skipping them loses a cheap signal about how far the gold answer runs beyond its
-evidence. The type as built (`Adjudication.claim_verdicts`) accommodates either.
-
 Each `ClaimVerdict` carries a `rationale`, for the same reason `Claim.reason`
 does.
+
+### 6.1 Core claims only — decided on evidence, not on cost
+
+**Decided 2026-08-17 (Bertan): core claims only.** The caller filters, so this
+stage is never told a claim's tag, and `render_claims` renders no tags — every
+claim it sees is core, so a tag could only invite treating one as lower-stakes.
+
+The alternative — adjudicate everything and let §7 ignore the surplus — was
+rejected on measurement. Stage B is instructed to answer *"as fully as that text
+allows, and no further"*, so its answer is scoped to the question; an auxiliary
+claim is by definition not what the question asked, and comes back `absent` almost
+by construction. On `art8_case1` stage B answered *"16 years old"*, against which
+both auxiliary claims are trivially absent. That measures how far the gold answer
+runs past the **question** — which stage A already recorded when it tagged them —
+not how far it runs past its **evidence**, which is the quantity worth having and
+which no stage blind to the quote can produce.
+
+Two further choices in the prompt:
+
+- **The `answer` alone, not the `note`.** The note is stage B's self-assessment,
+  and adjudicating against it would judge what stage B *thought* rather than what
+  it *answered*. The cost is recorded rather than hidden: on `art8_case1` the
+  answer is *"16 years old"* while the note adds *"for their own consent to be
+  lawful"*, so a fully-phrased core claim can read `absent` off stage B's brevity.
+  If that shows at scale the fix belongs in stage B's step 2 wording, not in
+  feeding this stage a second artifact.
+- **The regulation is never named**, as in §5.2. This stage judges text against
+  text and needs no legal knowledge, so naming the law could only invite it to
+  supply what the answer does not say. The prompt states outright that a
+  true-but-unstated claim is `absent`, and that supplying it is the failure being
+  detected.
+
+### 6.2 Claims are numbered, and the mapping is validated
+
+Pairing verdicts to claims by position looks simpler and is unsafe: a model
+returning two verdicts for three claims silently mislabels the third rather than
+failing. Claims are numbered from 1 by `render_claims`, the response carries
+`claim_number`, and `AdjudicationError` separates the three ways it can fail to
+line up — a number outside the range means an invented claim, a repeat means one
+labelled twice, a gap means one dropped. An eval instrument should fail loudly
+rather than return a plausible wrong answer.
+
+### 6.3 Two inputs take no model call, and neither is an error
+
+- **No claims.** Stage A legitimately returns an empty `core_claims` (§4.5). There
+  is nothing to adjudicate, and spending a call to be told so would spend it 433
+  times.
+- **No answer text.** An empty answer carries nothing, so every claim is `absent`
+  by arithmetic rather than judgement, and asking a model to confirm it would
+  invite it to fill the silence from what it knows.
+
+The guard is on `answer.strip()` and **not on `answered`**: a model that takes the
+insufficiency escape while still writing an answer has produced something
+judgeable, and short-circuiting on the flag would discard it unread. That is not
+hypothetical — it is what stage B did on `gdpr_art2_case4` in the first real run
+(§6.4).
+
+### 6.4 First real run, eight cases
+
+Stage C ran the §11 probe set on 2026-08-17. Three results are worth keeping:
+
+- **`art2_case4` behaved as designed.** Stage B returned `answered=False` and an
+  answer explaining that the excerpt does not settle the question; stage C, blind
+  to the quote, labelled the core claim `absent` — *"The ANSWER states it does not
+  specify whether GDPR applies."* Both of §7.2's routes to `insufficient` agree.
+- **`art15_case1` produced repairs, not just a verdict.** Ten core claims, 8
+  `supported`, 2 `absent`, and both absences are real defects in the case:
+  *"confirmation of processing"* is asserted by the gold answer and absent from the
+  quote, and *"restriction/objection"* is cut off by the quote's own `...`. That is
+  §10.2's elision problem surfacing as a sufficiency finding.
+- **`art8_case5` returned `contradicted`, and it is probably a false positive.**
+  The claim *"it specifically applies to information society services offered
+  directly to a child"* is compatible with the answer's *"does not apply to
+  preventive or counselling services offered directly to a child"* — a rule with an
+  exception. Stage C read the shared phrase as incompatible. `contradicted` is the
+  most expensive label to get wrong, since §7.1 has it implicate the gold answer
+  and not only the quote, and this case's quote is two fragments joined by `...`
+  whose second half matches no article (§10.1). **Unresolved.**
 
 ---
 
@@ -651,17 +924,30 @@ Measured at `HEAD` over all 433 cases:
 failure mode for numeric deadlines. Per-`answer_type` sufficiency rates will have
 correspondingly weaker resolution there.
 
-### 10.6 `span_is_verbatim` is unverified
+### 10.6 The judge's *behaviour* is unverified; its wiring no longer is
 
-8/8 verbatim on the probe set is not evidence it works. It must be mutation-tested
-(§5.5). This is the project's standing rule, and `todo.md` carries a broader entry
-on making mutation a harness rather than a hand procedure — 35 hand-run mutations
-on 2026-08-07 left **four survivors**, and not one meant "add a missing test";
-every one was a test that already existed and did not work.
+**Closed in part.** `span_is_verbatim` and the deterministic surface of stages A
+and B are tested and mutation-verified (§1.1, §5.5) — 8/8 verbatim on the probe
+set was not evidence anything worked, and is no longer what the claim rests on.
+
+What remains open is the half unit tests cannot reach: whether stage A's
+core/auxiliary tagging matches a human's, and whether stage B resists parametric
+leakage at a rate rather than in one observed case. That is §9's calibration, and
+it is the reason no verdict here gates anything.
+
+The 20 mutations behind §1.1 were hand-run, which `todo.md` carries a broader
+entry against: 35 hand-run mutations on 2026-08-07 left **four survivors**, and
+not one meant "add a missing test" — every one was a test that already existed
+and did not work. A hand procedure that has to be remembered is the gap, not the
+mutations themselves.
 
 ### 10.7 Undecided, and each changes the output
 
-- Whether stage C adjudicates auxiliary claims at all (§6).
+- ~~Whether stage C adjudicates auxiliary claims at all~~ — **decided 2026-08-17:
+  core only, on the evidence in §6.1.**
+- Whether stage A needs the atomicity rule that would stop sentence-fragment
+  claims, and whether the prompt work so far generalises beyond the six cases it
+  was tuned on (§4.6). Both are open and both are measurable.
 - What verdict an empty `core_claims` produces (§4.5, §7.2) — it is a case defect
   and does not fit the four-verdict vocabulary.
 - Calibration sequencing (§9.2).
@@ -719,7 +1005,10 @@ a process that cannot be matched to the existing ones.
 
 ```bash
 python -m src.eval.golden_qa          # the deterministic gate — free, no model calls
-python -m src.eval.sufficiency.judge  # the 8-case probe harness (stages A and B only)
+python -m src.eval.sufficiency.judge  # the 8-case probe harness — all three stages
+
+# The stage A/B tests — no model calls, 0.32s
+uv run --group test pytest tests/test_sufficiency_stages.py
 ```
 
 The probe harness runs against `get_llm_config()["writer_model"][0]` and prints
@@ -737,3 +1026,15 @@ plus auxiliary consequence), `gdpr_art15_case1` (enumeration — every item core
 commit; the 8-case probe figures in §4.2, §5.3 and §5.6 are from the 2026-08-05
 run recorded in `docs/dev-log/devlog_2026-08-05_session-1.md` and have not been
 re-run since.
+
+**§1.1 and §5.5 verified on 2026-08-17**, session 1, against `b99783b` plus the
+then-uncommitted `tests/test_sufficiency_stages.py` and the import
+deferral — 31 tests, 20 mutations with no survivors, and the import figures
+measured on this machine rather than carried over.
+
+**§4.6, §6 and §1.1's stage C rows verified on 2026-08-17**, session 2, against
+`c96c210` plus this session's work — 49 tests, 36 mutations with no survivors, one
+full 8-case probe run per prompt revision, and 45 stage A calls across six cases
+for the stability table. Every figure in §4.6 was measured, not estimated, and the
+two caveats stated there — six tuning cases, one ruled expectation — bound what
+those figures are worth.

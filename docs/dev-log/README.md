@@ -163,3 +163,126 @@ thing in the record.
   Demonstrated, fixed with `uv run --frozen --no-sync`, given a test in both
   suites, and documented — and the test then caught the same drift again on its
   first run.
+- [2026-08-17 · session 1](devlog_2026-08-17_session-1.md) — an `upgrade-safe`
+  found stalled at 85 minutes on a dead socket nothing was watching for:
+  `pygit2` clones with no timeout, and `_scan_once` ran `subprocess.run` with
+  none either, so one silently-dropped connection held the sweep open
+  indefinitely. Bounded in `ai-common` #28 and #29, both mutation-verified by
+  wall clock. The gate's remaining eight blockers were then cleared by twenty
+  individually-approved decisions — and the method changed halfway through, when
+  comparing *reported* findings across versions was shown unsound: GuardDog's
+  `max_hits` truncates the evidence, and `transformers` reported one qualifying
+  file out of ten. Both tiers now pass and `make verify`, structurally unusable
+  here while tier 1 was red, exits 0. Also found: the installed GuardDog is not
+  the stock 3.1.0 wheel.- [2026-08-17 · session 2](devlog_2026-08-17_session-2.md) — stage C built and
+  tested (suite 249 → 298), the full A→B→C chain running over the eight probe
+  cases, and core-claims-only settled by Bertan on evidence rather than cost:
+  stage B answers only what was asked, so an auxiliary claim comes back `absent`
+  almost by construction. The finding that outranks the code came from running
+  it — **stage A is not stable at temperature 0, and the instability reaches the
+  verdict**: `art8_case1` returned 1, 1, 2 and 1 core claims across four
+  identical runs, and the two-claim run flips the case from `sufficient` to
+  `insufficient`. Two rounds of prompt work took the observed failures to zero
+  and introduced a new one.
+- [2026-08-22 · session 1](devlog_2026-08-22_session-1.md) — stage A split into
+  two independent calls (A1 writes the shortest sufficient answer, A2 tags the
+  claims, neither sees the other's output), six probe scripts, and 60 stability
+  calls. A1 measured clean everywhere it was pointed; A2 unstable on 3–4 of 6
+  cases, two of those failures degenerate output rather than disagreement. A
+  transport failure latent in all five stages was found and guarded —
+  `with_structured_output` returns `None` when output will not coerce, and every
+  stage read a field straight off it. Both of the session's larger results are
+  Bertan's reframings: **the judge is a defect finder for the golden set, not a
+  classifier fitted to it**, which removes the train/test framing entirely, and
+  **granularity is soft while the core/auxiliary boundary is hard**, which
+  invalidates the metric §4.6 uses.
+- [2026-08-23 · session 1](devlog_2026-08-23_session-1.md) — a judge run made
+  auditable: every stage now returns what its call cost, read off the raw message
+  that `include_raw=True` keeps, and every A2 stability sample writes a
+  provenance-carrying record into `docs/eval-reports/`. Eight OpenRouter models
+  added to `ai-common` (#31) and the config rebuilt from a list of names — where
+  a shared `model_args` dict would have let the Gemini panelist rewrite the
+  sampling of the other eight, since `ai_common.get_llm` mutates what it is
+  handed. The larger result is about the instrument: **two more stability samples
+  came back 0 of 6**, putting four samples of the same prompt and model at 4/6,
+  3/6, 0/6, 0/6 — N=5 cannot support the comparison the next measurement was
+  going to make.
+- [2026-08-23 · session 2](devlog_2026-08-23_session-2.md) — the panel stood up,
+  and almost everything found was about the instrument rather than the judges:
+  reasoning effort silently lost after the first call, no timeout anywhere, and
+  structured output failing for reasons unrelated to judgement — so each panelist
+  now gets its own measured channel, at the cost of the uniformity the config
+  otherwise keeps. The panel does agree, 4–5 of 6 cases unanimous, but every run
+  disagreed with the one before it by about as much as the panelists disagreed
+  with each other. The most consequential finding is Bertan's, from the
+  OpenRouter console rather than the code: **MiniMax's "failures" were
+  successful, billed generations that we discarded.**
+- [2026-08-25 · session 1](devlog_2026-08-25_session-1.md) — three facts the code
+  was holding at the moment of failure and throwing away — the price of a failed
+  call, the generation id, the reasoning budget — recorded as
+  `CallRecord(generation_id, cost, reasoning_tokens)`. Once recorded, two beliefs
+  about the panel proved wrong: the reasoning-suppression suspicion **does not
+  reproduce** on the model that raised it, and A2 stability at 25 runs reads a
+  substantive **0 of 6**, the one flagged case differing by the word `and`.
+  Bertan's catch changed the most code — `[0]` on the roster at ten call sites
+  makes the subject of a measurement a consequence of list order.
+- [2026-08-25 · session 2](devlog_2026-08-25_session-2.md) — no code, by intent.
+  MiniMax's channel failure was traced to its root and is **not about MiniMax**:
+  OpenRouter routes one model id to whichever upstream provider it picks, those
+  providers differ in what they can do, and nothing recorded which one answered.
+  Every MiniMax success on record came from a provider reached by **falling back
+  from one that returned 429** — the channel assignment was decided by a rate
+  limiter. The premise `llm_config.py` rests on is broken one layer below the
+  configuration. Bertan directed that calls be logged to a database; the session
+  closed with a draft design document and eleven open questions.
+- [2026-08-26 · session 1](devlog_2026-08-26_session-1.md) — the call-log design
+  was finished, and the measurement taken to finish it changed what is being
+  built. **A retried call makes an unbounded number of billed generations and
+  nothing above the socket could name more than one of them** — 67% of one
+  call's cost unaccounted in the mild case, 100% in the exhausted one.
+  `max_retries` turns out to be a 300-second time budget rather than a count, so
+  one logical call has a fifteen-minute worst case; a callback handler was
+  proposed as the capture mechanism and **rejected on measurement**, because it
+  sees no more of the retries than the call site does. The served provider,
+  meanwhile, is free in the raw response body. The log became three tables with
+  a socket-level attempt row, and Bertan's clarification that **the LLM server is
+  not the provider** exposed a column the assistant had misnamed.
+- [2026-08-26 · session 2](devlog_2026-08-26_session-2.md) — the call log built
+  as far as its schema: dependencies, two engines, three tables, 141 new tests,
+  and nothing written to the database. Two findings, both about the gap between
+  a decision and its effect. **The statement timeout was never in force** —
+  Supabase's pooler consumes the startup packet, so `pg_sleep(30)` ran to
+  completion while the code read as correct; the repair needs a `SET` *and* a
+  commit, because both drivers leave it in a transaction they never end. And
+  **the same one-row write costs 47 ms or 141 ms** depending only on whether
+  SQLAlchemy wrapped it in a transaction. A trigger proposed for `updated_at`
+  was measured out of existence when Bertan's two questions exposed a third
+  option the assistant's framing had hidden. Bertan's reading of OpenRouter's
+  documentation gave the design its strongest argument: **an uncaptured
+  generation id is unreachable by API, permanently.**
+- [2026-08-26 · session 3](devlog_2026-08-26_session-3.md) — the call log becomes
+  a mechanism: Alembic applied to the live instance, the repository layer, and
+  `llm_call()` wrapped around all five judge stages, at a spend of $0.00.
+  **`pool_pre_ping` costs a quarter of what session 2 recorded** — 43.4 ms per
+  write against the real insert, not 155 ms — and the row shape turns out to
+  cost nothing at all. **`include_object` was measured in both directions**: on a
+  shared Supabase project, autogenerate without it writes a migration that
+  applies cleanly and drops somebody else's table. Bertan established that
+  `llm_call()` belongs in a shared tier rather than inside the judge, and his
+  second observation — that none of the four call statuses is judge-specific —
+  removed a callback hook the assistant was about to design. Looking for the
+  product path's call sites turned up **a second billed model call per answer,
+  discarded**.
+- [2026-09-04 · session 1](devlog_2026-09-04_session-1.md) — the model-call
+  machinery lifted out of the judge into a shared `src/llm/` tier, on Bertan's
+  constraint that **every LLM call in the repository goes through the logged
+  wrapper**, not only the judge's. `src/eval/sufficiency/llm.py` is 158 lines
+  against 695 and holds only the judge's vocabulary. Two departures from the
+  recorded plan, both the assistant's: `StageResponse` subclasses the shared
+  response rather than restating it, which makes a judge failure catchable as
+  the shared one, and the log row's `error_message` drops the stage prefix
+  because the row already has a `stage` column. One deferral could be deleted
+  rather than moved — the channel constants no longer sit behind a module that
+  imports `ai_common`. Also found: **`src/config.py` modified by nobody this
+  session**, committed separately rather than folded into the refactor.
+

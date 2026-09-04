@@ -89,3 +89,9 @@ strengths tells a reader nothing they can rely on.
   set is checked for whether each `supporting_quote` actually answers its
   question, as opposed to merely coming from the right article. Half built; the
   document marks which sections describe code and which specify unbuilt work.
+- [The LLM call log](llm-call-log.md) — recording which upstream provider
+  answered each model call, at what price, and whether it got there by falling
+  back from one that refused. **Half built**: the engines, the tables, the
+  migrations and the repository layer exist and are verified against the live
+  instance; nothing captures anything yet. The document marks which sections describe code and which
+  specify unbuilt work, and collects the corrections the build forced.

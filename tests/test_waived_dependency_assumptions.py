@@ -1,13 +1,13 @@
-"""Guards for the claims five GuardDog waivers rest on.
+"""Guards for the claims six GuardDog waivers rest on.
 
-Five waivers in the machine-wide GuardDog store are classified *real
+Six waivers in the machine-wide GuardDog store are classified *real
 behaviour, accepted in context*. Unlike a rule defect, they do not say the
 matched code is harmless. They say **we never reach it**:
 
 | waiver | the behaviour that is real |
 |---|---|
 | `typer==0.24.2`, `typer==0.26.8` | `--install-completion` appends to `~/.bashrc` and `~/.zshrc` |
-| `huggingface-hub==1.24.0`, `==1.27.0` | `hf update` self-updates via `subprocess.call`, one branch being `curl … \\| bash` |
+| `huggingface-hub==1.24.0`, `==1.27.0`, `==1.28.0` | `hf update` self-updates via `subprocess.call`, one branch being `curl … \\| bash` |
 | `torch==2.13.0` | `format_flamegraph` fetches `flamegraph.pl` from an unpinned `master` URL, `chmod 0o755`, then executes it — and re-executes the cached copy unverified |
 
 Every one of those was accepted because nothing in this repository calls it.
@@ -153,7 +153,7 @@ def test_the_huggingface_hub_cli_is_never_imported():
     found = _imports_of("huggingface_hub.cli")
 
     assert not found, _waiver_broken(
-        "huggingface-hub==1.24.0 and huggingface-hub==1.27.0",
+        "huggingface-hub==1.24.0, ==1.27.0 and ==1.28.0",
         "huggingface_hub.cli, which carries the `hf update` self-updater "
         "(subprocess.call, one branch being `curl … | bash`)",
         found,
@@ -184,7 +184,7 @@ def test_importing_huggingface_hub_does_not_pull_in_its_cli():
     loaded = [name for name in result.stdout.strip().split(",") if name]
 
     assert not loaded, _waiver_broken(
-        "huggingface-hub==1.24.0 and huggingface-hub==1.27.0",
+        "huggingface-hub==1.24.0, ==1.27.0 and ==1.28.0",
         "huggingface_hub.cli — importing the library now loads it eagerly",
         loaded,
     )

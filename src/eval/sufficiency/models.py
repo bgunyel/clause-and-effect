@@ -6,7 +6,8 @@ transformers, which pulls torch — measured at 8.34s on this machine when
 ``src/config.py`` still carried it. Verdict derivation and every property of
 these types can therefore be tested without paying that, which is the same
 reasoning that split ``llm_config.py`` out of ``config.py``. Anything needing a
-model lives in :mod:`src.eval.sufficiency.llm` instead.
+model lives in :mod:`src.llm` instead — :mod:`src.llm.structured` is the one
+module in the repository that reaches ``ai_common``.
 """
 from __future__ import annotations
 
