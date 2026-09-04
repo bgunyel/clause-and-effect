@@ -79,17 +79,22 @@ to pin that boundary (§5.5), and pairing stage C's verdicts by position instead
 by claim number, which is the failure that would silently mislabel rather than
 fail.
 
-**The tests forced a source fix.** Both stage modules import `build_judge_llm` at
-module scope, so `sufficiency/llm.py` charged every importer — and every test —
-for langchain → transformers → torch: **6.3s** to `import
-src.eval.sufficiency.llm`, 2.4s on the suite. Two imports had to move, not one.
-`get_llm` is now called inside `build_judge_llm`, and the two `langchain_core`
-names — needed only by the signature, which `from __future__ import annotations`
-already makes a string — sit behind `TYPE_CHECKING`. Deferring `get_llm` alone
-would have bought nothing, because `langchain_core` is the leg that pulls torch.
-Measured after: **6.3s → 0.11s**, and the test file runs in **0.32s** against
-6.60s before. The cost is deferred, not removed — the first `build_judge_llm`
-call still pays it.
+**The tests forced a source fix.** Every stage module imports the model builder
+at module scope, so the module holding it charged every importer — and every
+test — for langchain → transformers → torch: **6.3s** to import it, 2.4s on the
+suite. Two imports had to move, not one. `get_llm` is now called inside the
+builder, and the two `langchain_core` names — needed only by the signature,
+which `from __future__ import annotations` already makes a string — sit behind
+`TYPE_CHECKING`. Deferring `get_llm` alone would have bought nothing, because
+`langchain_core` is the leg that pulls torch. Measured after: **6.3s → 0.11s**,
+and the test file runs in **0.32s** against 6.60s before. The cost is deferred,
+not removed — the first `build_structured_llm` call still pays it.
+
+The builder itself left this package on 2026-08-26: it is
+`src.llm.structured.build_structured_llm`, one tier down, where the product path
+can reach it too. The deferral moved with it unchanged, and the guard —
+`test_importing_a_judge_stage_does_not_load_torch` — still watches it from the
+stage side, which is the side that matters.
 
 That guard runs in a **fresh interpreter**, because by the time it executes
 another test module has already imported torch into the pytest process and an
@@ -1023,7 +1028,7 @@ run recorded in `docs/dev-log/devlog_2026-08-05_session-1.md` and have not been
 re-run since.
 
 **§1.1 and §5.5 verified on 2026-08-17**, session 1, against `b99783b` plus the
-then-uncommitted `tests/test_sufficiency_stages.py` and the `sufficiency/llm.py`
+then-uncommitted `tests/test_sufficiency_stages.py` and the import
 deferral — 31 tests, 20 mutations with no survivors, and the import figures
 measured on this machine rather than carried over.
 

@@ -1,13 +1,13 @@
 # The LLM call log
 
-> **Status: half built.** The storage half exists and is verified; the capture
-> half does not exist at all. Concretely, as of 2026-08-26:
+> **Status: the logical-call half is built; the attempt half is not.** As of
+> 2026-09-04:
 >
 > | | |
 > |---|---|
-> | **Built** | the engines and the `DB_URL` gate (`src/db/engine.py`), the three tables (`src/db/models/`), Alembic and the initial migration (`alembic.ini`, `migrations/`), the repository layer (`src/db/repos/`) |
-> | **Applied** | the schema is live on the Supabase instance, three tables, **no rows** |
-> | **Not built** | the `llm_call()` wrapper, the `contextvar`, the `httpx` patch, the enrichment sweep — that is, **nothing calls the repositories yet** |
+> | **Built** | the engines and the `DB_URL` gate (`src/db/engine.py`), the three tables (`src/db/models/`), Alembic and the initial migration (`alembic.ini`, `migrations/`), the repository layer (`src/db/repos/`), the contexts and the recorder (`src/db/capture/`), the async `llm_call()` wrapper (`src/llm/call.py`), wired at all five judge stages |
+> | **Applied** | the schema is live on the Supabase instance, three tables, **no rows** — every probe has deleted its own |
+> | **Not built** | `llm_call_sync()`, the `httpx` patch, the enrichment sweep — so `llm_attempt` is never written and `SUM(llm_attempt.cost)` has no rows to sum |
 >
 > So the document is part description and part specification, and the two are
 > marked: a section describing code that exists names the file. Where the build
@@ -178,7 +178,7 @@ and from the 2026-08-25 probes named inline.
 
 `langchain_openrouter/chat_models.py:870` assigns
 `message.response_metadata["provider"]`, and reading that line is what produced
-the wrong claim. **Measured on the real judge path** (`build_judge_llm` with
+the wrong claim. **Measured on the real judge path** (`build_structured_llm` with
 `_A2Claims`, DeepSeek V4 Flash, function calling):
 
 ```
@@ -272,7 +272,7 @@ from the roster for timing out at 120s per case after the panel had once sat for
 timeout. A 300-second retry budget with no deadline above it is how both happen.
 
 `llm_config` carries `max_llm_retries: 3`, but `get_llm` accepts no such
-argument and `build_judge_llm` does not pass it. **It is dead config** and is not
+argument and `build_structured_llm` does not pass it. **It is dead config** and is not
 the layer described here.
 
 ### The generation record is not readable immediately
@@ -334,27 +334,39 @@ worries about, and this way the log reports it instead of missing it.
 
 ### One wrapper, at every call site
 
-The five judge stages repeat the same two lines today:
-
-```
-src/eval/sufficiency/stage_a.py:326-327
-src/eval/sufficiency/stage_a1.py:158-160
-src/eval/sufficiency/stage_a2.py:230-232
-src/eval/sufficiency/stage_b.py:147-148
-src/eval/sufficiency/stage_c.py:275-277
-```
-
-each of the form `build_judge_llm(...)` followed by
+`src/llm/call.py`. The five judge stages used to repeat the same two lines —
+`build_judge_llm(...)` followed by
 `require_response(await llm.ainvoke(prompt), stage=...)`. The wrapper replaces
 both: it sets the context, invokes, times the invocation, writes the row, and
-returns the `StageResponse`.
+returns the response.
 
-**Scope is every LLM call, not only the judge's** — Bertan, 2026-08-26. That
-includes the product path, which is **synchronous**: `generator.py:83,99` and
-`main_dev.py:39` call `.invoke()`, and `ComplianceAgent.ask()` is a sync method.
-So the wrapper has two entry points, `llm_call()` and `llm_call_sync()`, sharing
-one recording path. The socket patch needs no such split — it wraps both
-`httpx.AsyncClient.send` and `httpx.Client.send`.
+**Scope is every LLM call, not only the judge's** — Bertan, 2026-08-26. That is
+why the wrapper does not live in `src/eval/sufficiency/`, which is where it was
+first built. On 2026-08-26 it moved to `src/llm/`, a tier beside `config.py`
+that both halves of the project can reach, together with everything else in that
+module that encoded a fact about LangChain and OpenRouter rather than about the
+judge: `build_structured_llm` (renamed — nothing about it judges),
+`StructuredPayload`, `payload_from_tool_call`, `sum_costs`, `CallRecord`,
+`LlmResponse`, and the classification of the four statuses.
+`src/eval/sufficiency/llm.py` is now an adapter holding the judge's vocabulary:
+`JudgeResponseError`, `StageResponse`, and the `stage=` labels.
+
+**Sequencing, and it is not the obvious one** — Bertan, 2026-08-26. Promoting
+code after it works is usually cheaper than promoting it during, but the socket
+patch reads the contextvar and imports from wherever the wrapper lands, so
+lifting afterwards would mean touching the patch too. The lift went first.
+
+The product path is **synchronous**: `generator.py:83,99` and `main_dev.py:39`
+call `.invoke()`, and `ComplianceAgent.ask()` is a sync method. So the wrapper
+has two entry points, `llm_call()` and `llm_call_sync()`, sharing one recording
+path — `recorder.record_call_sync` is the second one's half and exists already.
+**`llm_call_sync()` itself is not built**, and its first call site is blocked on
+a decision: `generator.py:99` makes a second billed model call per product
+answer and discards the result, so wiring the wrapper there would log a call
+that should not exist.
+
+The socket patch needs no such split — it wraps both `httpx.AsyncClient.send`
+and `httpx.Client.send`.
 
 **Failure paths are logged too, and that is most of the point.** A call that
 raised `JudgeResponseError` was still made, still billed, and still exists at the

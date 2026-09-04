@@ -2427,48 +2427,56 @@ per the priority order above.
   - The first logged panel run is what answers the question the whole log was
     built for: whether the published cost totals are 1% low or 60% low.
 
-- [ ] **Lift the generic LLM machinery out of `src/eval/sufficiency/llm.py` into
-  a shared `src/llm/` tier — Bertan, 2026-08-26.** Raised on reading the file
-  after the wrapper landed: a great deal of what is in there is not specific to
-  the sufficiency judge, and `llm_call()` in particular **will be used wherever
-  a model call is made, including every module under `src/clause_and_effect/`**.
-  A wrapper that both packages must reach cannot live inside one of them.
+- [x] **Lift the generic LLM machinery out of `src/eval/sufficiency/llm.py` into
+  a shared `src/llm/` tier — Bertan, 2026-08-26. Done 2026-09-04.** Raised on
+  reading the file after the wrapper landed: a great deal of what was in there
+  is not specific to the sufficiency judge, and `llm_call()` in particular
+  **will be used wherever a model call is made, including every module under
+  `src/clause_and_effect/`**. A wrapper that both packages must reach cannot
+  live inside one of them.
 
-  The placement is already wrong in a visible way: the product path would have
-  to import from `src/eval/sufficiency/` to build a structured-output model, and
-  the sync flavour of the wrapper has nowhere sensible to sit while its async
-  twin is inside the judge.
+  **What was built.** `src/llm/` beside `config.py`, exporting nothing from its
+  `__init__` for the reason `src/db/capture/` does:
 
-  **What moves** — the test is *does this encode a fact about
-  LangChain/OpenRouter, or a fact about the judge?*
-
-  | to `src/llm/` | stays in `src/eval/sufficiency/` |
+  | module | holds |
   |---|---|
-  | `llm_call()` / `llm_call_sync()` | `JudgeResponseError`, `StageResponse` |
-  | `StructuredPayload`, `payload_from_tool_call` | `require_response`'s `stage=` vocabulary |
-  | `build_judge_llm` (renamed — nothing about it judges) | a ~8-line adapter that unwraps into a `StageResponse` |
-  | `sum_costs`, `_excerpt`, the channel constants | |
-  | eventually `llm_config.py` as `src/llm/config.py` | |
+  | `channels.py` | `FUNCTION_CALLING`, `JSON_SCHEMA`, `TOOL_CALL_AUTO` — moved out of `llm_config.py`, which now imports them |
+  | `structured.py` | `build_structured_llm` (was `build_judge_llm`), `StructuredPayload`, `payload_from_tool_call` — the repository's only `ai_common` touchpoint |
+  | `call.py` | `llm_call`, `require_payload`, `LlmResponse`, `CallRecord`, `LlmResponseError`, `sum_costs` |
 
-  **`CallStatus` does not move and does not need to.** It already sits in
-  `src/db/models/`, reachable from both packages — and none of its four members
-  is judge-specific, which was Bertan's observation while renaming two of them.
-  A product-path structured-output call fails to coerce exactly as a stage's
-  does.
+  `src/eval/sufficiency/llm.py` is now 158 lines against 695, holding only what
+  is judge-shaped: `JudgeResponseError`, `StageResponse`, `require_response` and
+  `stage_call` — the two adapters that add the `stage=` label and nothing else.
 
-  **This removes the callback hook the first sketch needed.** The assistant
-  argued that `STRUCTURE_PROBLEM` classification must stay in the judge because
-  it requires reading `{raw, parsed, parsing_error}` — and then Bertan's point
-  that the statuses are not judge-specific exposed the error: that shape is
-  LangChain's `include_raw` contract, which `llm.py` merely *declares*. Once
-  `StructuredPayload` moves, the shared wrapper classifies all four statuses
-  itself and needs nothing injected.
+  **Two things came out differently from the sketch above, both deliberate.**
 
-  **Sequencing: do this before the `httpx` patch.** The patch reads the
-  contextvar and will import from wherever the wrapper lands, so moving it
-  afterwards means touching the patch too. `src/db/capture/context.py` stays
-  where it is — it is about the log's rows, and both the wrapper and the patch
-  read it from there.
+  - `StageResponse` is a **subclass** of `LlmResponse` rather than a second
+    three-field dataclass. The sketch said it stays in the judge, which it does;
+    it did not say it should restate the fields. Sub-classing keeps the name the
+    five stages, two aggregators and six probes are typed on, keeps the
+    reasoning about `cost=None` and the `calls` tuple on the base class where
+    the product path can read it, and makes `JudgeResponseError` catchable as
+    `LlmResponseError` — which a probe totalling the spend of failed calls needs.
+  - **The log row's `error_message` no longer carries the stage.** `llm_call`
+    writes the row before the judge's adapter ever sees the exception, so the
+    row gets the shared tier's wording. Nothing is lost: `llm_call` already has
+    a `stage` column, and putting the stage in the message too would store the
+    same fact twice and make the column the copy that can drift. What a *caller*
+    sees is unchanged — `stage A2: …` exactly as before.
+
+  **Verified.** 572 passed / 5 xfailed, up one from 571 — the new test is that
+  a judge failure is still catchable as the shared type. Three mutations of the
+  new seam, no survivors: dropping the stage prefix (6 failures), swallowing the
+  re-wording (13), dropping the failed call's record (4). All fourteen probe
+  scripts still import. Import cost re-measured: `src.llm.channels` 0.000s,
+  `src.llm.structured` 0.105s, `src.llm.call` 0.107s, `src.eval.sufficiency.llm`
+  0.108s, `src.eval.sufficiency.stage_a2` 0.148s — none of them loading torch,
+  transformers, `langchain_core` or `ai_common`.
+
+  One thing got cheaper rather than merely moving: `build_structured_llm` used
+  to defer its channel-constant import, because they lived in `llm_config`,
+  which imports `ai_common.enums` at module scope (0.24s, 195 modules).
+  `src/llm/channels.py` imports nothing, so the deferral is gone.
 
 - [ ] **Carrying functionality to `ai-common`: deliberately not now — Bertan,
   2026-08-26**, agreed after discussion. Recorded so the question is not

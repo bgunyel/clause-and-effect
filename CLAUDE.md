@@ -80,14 +80,22 @@ generate). Synchronous throughout.
 **`src/eval/`** — `dataset.py` (typed loaders), `golden_qa.py` (deterministic
 gates on the golden set), `sufficiency/` (the LLM judge). Async throughout.
 
+**`src/llm/`** — the shared model-call tier, beside `config.py` because both the
+product path and the judge reach it: `channels.py` (how a model is asked for a
+schema), `structured.py` (`build_structured_llm` — the repository's only
+`ai_common` touchpoint), `call.py` (`llm_call` — invoke, time, log, unwrap;
+`CallRecord`, `LlmResponse`, `sum_costs`). Everything here encodes a fact about
+LangChain or OpenRouter. `src/eval/sufficiency/llm.py` is the judge's adapter
+over it and holds only the judge's vocabulary — `JudgeResponseError`,
+`StageResponse`, the `stage=` labels.
+
 **`src/db/`** — the LLM call log: `llm_run` (per process) / `llm_call` (per
 logical call) / `llm_attempt` (per upstream HTTP request). It sits directly under
 `src/` because both the product and judge paths make model calls. `capture/` is
 the write-side (context vars, response readers, recorder); `repos/`, `models/`,
 `engine.py` are storage. See `docs/design/llm-call-log.md` for what is built and
-what is still specification — the socket patch and enrichment sweep do not exist
-yet, and `llm_call()` currently lives in `src/eval/sufficiency/llm.py` pending
-its lift into a shared tier.
+what is still specification — `llm_call_sync()`, the socket patch and the
+enrichment sweep do not exist yet, so `llm_attempt` is never written.
 
 **Two DB drivers on purpose.** asyncpg serves the async judge path, psycopg the
 sync product path; an asyncpg connection is bound to the loop that opened it, so
@@ -107,11 +115,12 @@ are the population.
 
 **Import cost is a design constraint.** `ai_common` pulls langchain →
 transformers → torch (8.34s measured). Hence: `src/config.py` (paths/keys, 0.21s)
-is split from `src/llm_config.py` (models); `src/eval/sufficiency/__init__.py`
-and `src/db/capture/__init__.py` deliberately export nothing, so importing a
-submodule does not run a heavy `__init__`; `llm.py` defers `get_llm` into the
-function body and hides `langchain_core` behind `TYPE_CHECKING`; `llm_call()`
-imports the storage layer lazily. Guarded by
+is split from `src/llm_config.py` (models); `src/eval/sufficiency/__init__.py`,
+`src/db/capture/__init__.py` and `src/llm/__init__.py` deliberately export
+nothing, so importing a submodule does not run a heavy `__init__`;
+`src/llm/structured.py` defers `get_llm` into the function body and hides
+`langchain_core` behind `TYPE_CHECKING`; `llm_call()` imports the storage layer
+lazily. Guarded by
 `test_importing_a_judge_stage_does_not_load_torch`. Re-measure before assuming
 either way — several of these claims have been checked and found stale.
 
