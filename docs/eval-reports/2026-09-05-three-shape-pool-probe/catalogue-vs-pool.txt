@@ -1,0 +1,87 @@
+================================================================================================
+Catalogue against pool -- does supported_parameters predict who serves you?
+================================================================================================
+Compared as a MULTISET over providers, never as a size and never as a set.
+`available` entries carry no endpoint id, so a provider's two endpoints are
+indistinguishable within a pool; only multiplicity separates them.
+
+  deepseek/deepseek-v4-flash-0731
+    catalogue endpoints                 : 30
+    distinct providers in the catalogue : 29
+    catalogue multiset : {"AkashML": 1, "Alibaba": 1, "AtlasCloud": 1, "Baidu": 1, "BaseTen": 2, "Cloudflare": 1, "CoreWeave": 1, "DeepInfra": 1, "DeepSeek": 1, "DigitalOcean": 1, "Fireworks": 1, "GMICloud": 1, "Inceptron": 1, "Makora": 1, "Mancer 2": 1, "Morph": 1, "NextBit": 1, "Novita": 1, "OpenInference": 1, "Parasail": 1, "Phala": 1, "Reka": 1, "Relace": 1, "Sail Research": 1, "SiliconFlow": 1, "StreamLake": 1, "Together": 1, "Venice": 1, "Wafer": 1}
+
+    plain  <- every catalogue endpoint
+      predicted : 30 endpoints / 29 providers
+      observed  : 29 endpoints / 28 providers
+      predicted but absent : {"DeepSeek": 1}
+      served but unpredicted: {}
+    function_calling  <- declares tools + tool_choice
+      predicted : 30 endpoints / 29 providers
+      observed  : 23 endpoints / 22 providers
+      predicted but absent : {"Alibaba": 1, "CoreWeave": 1, "DeepSeek": 1, "GMICloud": 1, "Mancer 2": 1, "Novita": 1, "SiliconFlow": 1}
+      served but unpredicted: {}
+    json_schema  <- declares structured_outputs
+      predicted : 21 endpoints / 21 providers
+      observed  : 21 endpoints / 21 providers
+      predicted but absent : {}
+      served but unpredicted: {}
+      identical multiset -- the catalogue predicted this pool.
+    json_schema  <- declares response_format
+      predicted : 26 endpoints / 26 providers
+      observed  : 21 endpoints / 21 providers
+      predicted but absent : {"DeepSeek": 1, "DigitalOcean": 1, "GMICloud": 1, "Novita": 1, "StreamLake": 1}
+      served but unpredicted: {}
+
+  moonshotai/kimi-k3
+    catalogue endpoints                 : 18
+    distinct providers in the catalogue : 15
+    catalogue multiset : {"Alibaba": 1, "BaseTen": 1, "Chutes": 1, "DeepInfra": 1, "DigitalOcean": 1, "Fireworks": 3, "Makora": 1, "Modal": 1, "Moonshot AI": 1, "Morph": 2, "Parasail": 1, "Phala": 1, "Sail Research": 1, "Together": 1, "Wafer": 1}
+
+    plain  <- every catalogue endpoint
+      predicted : 18 endpoints / 15 providers
+      observed  : 16 endpoints / 13 providers
+      predicted but absent : {"Alibaba": 1, "Moonshot AI": 1}
+      served but unpredicted: {}
+    function_calling  <- declares tools + tool_choice
+      predicted : 15 endpoints / 13 providers
+      observed  : 13 endpoints / 11 providers
+      predicted but absent : {"Alibaba": 1, "Moonshot AI": 1}
+      served but unpredicted: {}
+    json_schema  <- declares structured_outputs
+      predicted : 17 endpoints / 14 providers
+      observed  : 15 endpoints / 12 providers
+      predicted but absent : {"Alibaba": 1, "Moonshot AI": 1}
+      served but unpredicted: {}
+    json_schema  <- declares response_format
+      predicted : 17 endpoints / 14 providers
+      observed  : 15 endpoints / 12 providers
+      predicted but absent : {"Alibaba": 1, "Moonshot AI": 1}
+      served but unpredicted: {}
+
+  x-ai/grok-4.6
+    catalogue endpoints                 : 5
+    distinct providers in the catalogue : 2
+    catalogue multiset : {"Amazon Bedrock": 1, "xAI": 4}
+
+    plain  <- every catalogue endpoint
+      predicted : 5 endpoints / 2 providers
+      observed  : 2 endpoints / 1 providers
+      predicted but absent : {"Amazon Bedrock": 1, "xAI": 2}
+      served but unpredicted: {}
+    function_calling  <- declares tools + tool_choice
+      predicted : 5 endpoints / 2 providers
+      observed  : 2 endpoints / 1 providers
+      predicted but absent : {"Amazon Bedrock": 1, "xAI": 2}
+      served but unpredicted: {}
+    json_schema  <- declares structured_outputs
+      predicted : 5 endpoints / 2 providers
+      observed  : 2 endpoints / 1 providers
+      predicted but absent : {"Amazon Bedrock": 1, "xAI": 2}
+      served but unpredicted: {}
+    json_schema  <- declares response_format
+      predicted : 5 endpoints / 2 providers
+      observed  : 2 endpoints / 1 providers
+      predicted but absent : {"Amazon Bedrock": 1, "xAI": 2}
+      served but unpredicted: {}
+
+================================================================================================

@@ -1,0 +1,1983 @@
+[
+  {
+    "label": "ModelNames.DEEPSEEK_V_4_FLASH_0731::plain",
+    "model": "ModelNames.DEEPSEEK_V_4_FLASH_0731",
+    "shape": "plain",
+    "call_status": "OK",
+    "detail": "",
+    "wire": [
+      {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sent_header": true,
+        "request_headers": {
+          "host": "openrouter.ai",
+          "accept-encoding": "gzip, deflate, zstd",
+          "connection": "keep-alive",
+          "http-referer": "https://docs.langchain.com",
+          "x-title": "LangChain",
+          "accept": "application/json",
+          "user-agent": "speakeasy-sdk/python 0.11.46 2.914.0 1.0.0 openrouter",
+          "authorization": "<redacted>",
+          "content-type": "application/json",
+          "content-length": "291",
+          "x-openrouter-metadata": "enabled"
+        },
+        "request_body": {
+          "messages": [
+            {
+              "content": "Which city is the capital of Türkiye? Answer with the city name only.",
+              "role": "user"
+            }
+          ],
+          "model": "deepseek/deepseek-v4-flash-0731",
+          "provider": {
+            "require_parameters": true
+          },
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          },
+          "stream": false,
+          "temperature": 0.0,
+          "top_p": 0.95
+        },
+        "status": 200,
+        "response_headers": {
+          "date": "Sat, 05 Sep 2026 12:28:31 GMT",
+          "content-type": "application/json",
+          "transfer-encoding": "chunked",
+          "connection": "keep-alive",
+          "access-control-allow-origin": "*",
+          "x-generation-id": "gen-1788611310-L4u4yVVJTZJgbXG8lANo",
+          "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+          "set-cookie": "<redacted>",
+          "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+          "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+          "x-content-type-options": "nosniff",
+          "content-encoding": "gzip",
+          "server": "cloudflare",
+          "cf-ray": "a3653bf0f8b2fb7d-AMS"
+        },
+        "response_body": {
+          "id": "gen-1788611310-L4u4yVVJTZJgbXG8lANo",
+          "object": "chat.completion",
+          "created": 1788611310,
+          "model": "deepseek/deepseek-v4-flash-0731",
+          "provider": "OpenInference",
+          "system_fingerprint": "vllm-dev-ep-8b5ae245",
+          "service_tier": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "content": " Ankara",
+                "refusal": null,
+                "reasoning": "1.  The user asks for the capital of Türkiye (Turkey) and specifies to answer with the city name only.\n2.  The capital of Türkiye is Ankara.\n3.  Output only \"Ankara\".",
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.text",
+                    "text": "1.  The user asks for the capital of Türkiye (Turkey) and specifies to answer with the city name only.\n2.  The capital of Türkiye is Ankara.\n3.  Output only \"Ankara\".",
+                    "format": "unknown",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 21,
+            "completion_tokens": 51,
+            "total_tokens": 72,
+            "cost": 9.21e-06,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 9.21e-06,
+              "upstream_inference_prompt_cost": 1.05e-06,
+              "upstream_inference_completions_cost": 8.16e-06
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 47,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "openrouter_metadata": {
+            "requested": "deepseek/deepseek-v4-flash-0731",
+            "strategy": "direct",
+            "region": "AMS",
+            "summary": "available=29, selected=OpenInference",
+            "attempt": 1,
+            "is_byok": false,
+            "endpoints": {
+              "total": 30,
+              "available": [
+                {
+                  "provider": "OpenInference",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": true
+                },
+                {
+                  "provider": "Baidu",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "StreamLake",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "AkashML",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Sail Research",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Venice",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "DigitalOcean",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Wafer",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Relace",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "BaseTen",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Mancer 2",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "BaseTen",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Together",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "AtlasCloud",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "DeepInfra",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "SiliconFlow",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Parasail",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "CoreWeave",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Reka",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Morph",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "GMICloud",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Inceptron",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Fireworks",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Cloudflare",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "NextBit",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Alibaba",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Novita",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Makora",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Phala",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                }
+              ]
+            },
+            "generation_time": 5328
+          }
+        },
+        "wire_seconds": 6.156
+      }
+    ]
+  },
+  {
+    "label": "ModelNames.DEEPSEEK_V_4_FLASH_0731::function_calling",
+    "model": "ModelNames.DEEPSEEK_V_4_FLASH_0731",
+    "shape": "function_calling",
+    "call_status": "OK",
+    "detail": "",
+    "wire": [
+      {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sent_header": true,
+        "request_headers": {
+          "host": "openrouter.ai",
+          "accept-encoding": "gzip, deflate, zstd",
+          "connection": "keep-alive",
+          "http-referer": "https://docs.langchain.com",
+          "x-title": "LangChain",
+          "accept": "application/json",
+          "user-agent": "speakeasy-sdk/python 0.11.46 2.914.0 1.0.0 openrouter",
+          "authorization": "<redacted>",
+          "content-type": "application/json",
+          "content-length": "836",
+          "x-openrouter-metadata": "enabled"
+        },
+        "request_body": {
+          "messages": [
+            {
+              "content": "Which city is the capital of Türkiye? Answer with the city name only.",
+              "role": "user"
+            }
+          ],
+          "model": "deepseek/deepseek-v4-flash-0731",
+          "provider": {
+            "require_parameters": true
+          },
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          },
+          "stream": false,
+          "temperature": 0.0,
+          "tool_choice": {
+            "function": {
+              "name": "_Answer"
+            },
+            "type": "function"
+          },
+          "tools": [
+            {
+              "function": {
+                "name": "_Answer",
+                "description": "One field, deliberately trivial. #13 used the same question, so a body\nfrom this run is readable beside one from that one; and a schema with any\nreal content would make the prompt a source of variance across nine cells\nwhose only intended difference is the shape.",
+                "parameters": {
+                  "properties": {
+                    "city": {
+                      "description": "the city named in the question",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "city"
+                  ],
+                  "type": "object"
+                }
+              },
+              "type": "function"
+            }
+          ],
+          "top_p": 0.95
+        },
+        "status": 200,
+        "response_headers": {
+          "date": "Sat, 05 Sep 2026 12:28:37 GMT",
+          "content-type": "application/json",
+          "transfer-encoding": "chunked",
+          "connection": "keep-alive",
+          "access-control-allow-origin": "*",
+          "x-generation-id": "gen-1788611316-ejGzU4LzZqBe7o4X8fqM",
+          "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+          "set-cookie": "<redacted>",
+          "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+          "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+          "x-content-type-options": "nosniff",
+          "content-encoding": "gzip",
+          "server": "cloudflare",
+          "cf-ray": "a3653c15caa8f807-DUS"
+        },
+        "response_body": {
+          "id": "gen-1788611316-ejGzU4LzZqBe7o4X8fqM",
+          "object": "chat.completion",
+          "created": 1788611316,
+          "model": "deepseek/deepseek-v4-flash-0731",
+          "provider": "Baidu",
+          "system_fingerprint": null,
+          "service_tier": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "tool_calls",
+              "native_finish_reason": "tool_calls",
+              "message": {
+                "role": "assistant",
+                "content": null,
+                "refusal": null,
+                "reasoning": null,
+                "tool_calls": [
+                  {
+                    "type": "function",
+                    "index": 0,
+                    "id": "call_b2474d85f61d42a29a55c3b2",
+                    "function": {
+                      "name": "_Answer",
+                      "arguments": "{\"city\": \"Ankara\"}"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 431,
+            "completion_tokens": 17,
+            "total_tokens": 448,
+            "cost": 1.3004796e-05,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 256,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 1.3004796e-05,
+              "upstream_inference_prompt_cost": 1.1305476e-05,
+              "upstream_inference_completions_cost": 1.69932e-06
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "openrouter_metadata": {
+            "requested": "deepseek/deepseek-v4-flash-0731",
+            "strategy": "direct",
+            "region": "DUS",
+            "summary": "available=23, selected=Baidu",
+            "attempt": 1,
+            "is_byok": false,
+            "endpoints": {
+              "total": 30,
+              "available": [
+                {
+                  "provider": "Baidu",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": true
+                },
+                {
+                  "provider": "Relace",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "DeepInfra",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Wafer",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Reka",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Morph",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Together",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Parasail",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Venice",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "NextBit",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "AtlasCloud",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Cloudflare",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "OpenInference",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Sail Research",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "DigitalOcean",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "StreamLake",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "BaseTen",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Inceptron",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Fireworks",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "AkashML",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "BaseTen",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Makora",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Phala",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                }
+              ]
+            },
+            "generation_time": 797
+          }
+        },
+        "wire_seconds": 1.234
+      }
+    ]
+  },
+  {
+    "label": "ModelNames.DEEPSEEK_V_4_FLASH_0731::json_schema",
+    "model": "ModelNames.DEEPSEEK_V_4_FLASH_0731",
+    "shape": "json_schema",
+    "call_status": "OK",
+    "detail": "",
+    "wire": [
+      {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sent_header": true,
+        "request_headers": {
+          "host": "openrouter.ai",
+          "accept-encoding": "gzip, deflate, zstd",
+          "connection": "keep-alive",
+          "http-referer": "https://docs.langchain.com",
+          "x-title": "LangChain",
+          "accept": "application/json",
+          "user-agent": "speakeasy-sdk/python 0.11.46 2.914.0 1.0.0 openrouter",
+          "authorization": "<redacted>",
+          "content-type": "application/json",
+          "content-length": "800",
+          "x-openrouter-metadata": "enabled"
+        },
+        "request_body": {
+          "messages": [
+            {
+              "content": "Which city is the capital of Türkiye? Answer with the city name only.",
+              "role": "user"
+            }
+          ],
+          "model": "deepseek/deepseek-v4-flash-0731",
+          "provider": {
+            "require_parameters": true
+          },
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          },
+          "response_format": {
+            "json_schema": {
+              "name": "_Answer",
+              "schema": {
+                "title": "_Answer",
+                "description": "One field, deliberately trivial. #13 used the same question, so a body\nfrom this run is readable beside one from that one; and a schema with any\nreal content would make the prompt a source of variance across nine cells\nwhose only intended difference is the shape.",
+                "properties": {
+                  "city": {
+                    "description": "the city named in the question",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ],
+                "type": "object"
+              }
+            },
+            "type": "json_schema"
+          },
+          "stream": false,
+          "temperature": 0.0,
+          "top_p": 0.95
+        },
+        "status": 200,
+        "response_headers": {
+          "date": "Sat, 05 Sep 2026 12:28:38 GMT",
+          "content-type": "application/json",
+          "transfer-encoding": "chunked",
+          "connection": "keep-alive",
+          "access-control-allow-origin": "*",
+          "x-generation-id": "gen-1788611317-FT3aDcILDCsTo93mV6hj",
+          "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+          "set-cookie": "<redacted>",
+          "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+          "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+          "x-content-type-options": "nosniff",
+          "content-encoding": "gzip",
+          "server": "cloudflare",
+          "cf-ray": "a3653c1d7c466791-DUS"
+        },
+        "response_body": {
+          "id": "gen-1788611317-FT3aDcILDCsTo93mV6hj",
+          "object": "chat.completion",
+          "created": 1788611317,
+          "model": "deepseek/deepseek-v4-flash-0731",
+          "provider": "Baidu",
+          "system_fingerprint": null,
+          "service_tier": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "content": "{\"city\":\"Ankara\"}",
+                "refusal": null,
+                "reasoning": "We need answer city name only. Capital of Türkiye is Ankara. Need JSON schema? User says answer with city name only. But also system says output must follow JSON schema with city property. Need provide JSON object {\"city\":\"Ankara\"}. But user says \"Answer with the city name only.\" However instructions from system require JSON schema. Need reconcile: output JSON with city only. The \"Answer with city name only\" likely means don't include extra text. But JSON object is okay? The output format specified by developer requires JSON schema. So output {\"city\":\"Ankara\"}. Ensure no markdown.",
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.text",
+                    "text": "We need answer city name only. Capital of Türkiye is Ankara. Need JSON schema? User says answer with city name only. But also system says output must follow JSON schema with city property. Need provide JSON object {\"city\":\"Ankara\"}. But user says \"Answer with the city name only.\" However instructions from system require JSON schema. Need reconcile: output JSON with city only. The \"Answer with city name only\" likely means don't include extra text. But JSON object is okay? The output format specified by developer requires JSON schema. So output {\"city\":\"Ankara\"}. Ensure no markdown.",
+                    "format": "unknown",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 337,
+            "completion_tokens": 133,
+            "total_tokens": 470,
+            "cost": 3.013794e-05,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 3.013794e-05,
+              "upstream_inference_prompt_cost": 1.684326e-05,
+              "upstream_inference_completions_cost": 1.329468e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 124,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "openrouter_metadata": {
+            "requested": "deepseek/deepseek-v4-flash-0731",
+            "strategy": "direct",
+            "region": "DUS",
+            "summary": "available=21, selected=Baidu",
+            "attempt": 1,
+            "is_byok": false,
+            "endpoints": {
+              "total": 30,
+              "available": [
+                {
+                  "provider": "Baidu",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": true
+                },
+                {
+                  "provider": "OpenInference",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "AkashML",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Alibaba",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Sail Research",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "DeepInfra",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Parasail",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Wafer",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Reka",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Fireworks",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Mancer 2",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Together",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Inceptron",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Morph",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Venice",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "SiliconFlow",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "AtlasCloud",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Cloudflare",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "NextBit",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Makora",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                },
+                {
+                  "provider": "Phala",
+                  "model": "deepseek/deepseek-v4-flash-20260731",
+                  "selected": false
+                }
+              ]
+            },
+            "generation_time": 1634
+          }
+        },
+        "wire_seconds": 1.992
+      }
+    ]
+  },
+  {
+    "label": "ModelNames.KIMI_K3::plain",
+    "model": "ModelNames.KIMI_K3",
+    "shape": "plain",
+    "call_status": "OK",
+    "detail": "",
+    "wire": [
+      {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sent_header": true,
+        "request_headers": {
+          "host": "openrouter.ai",
+          "accept-encoding": "gzip, deflate, zstd",
+          "connection": "keep-alive",
+          "http-referer": "https://docs.langchain.com",
+          "x-title": "LangChain",
+          "accept": "application/json",
+          "user-agent": "speakeasy-sdk/python 0.11.46 2.914.0 1.0.0 openrouter",
+          "authorization": "<redacted>",
+          "content-type": "application/json",
+          "content-length": "278",
+          "x-openrouter-metadata": "enabled"
+        },
+        "request_body": {
+          "messages": [
+            {
+              "content": "Which city is the capital of Türkiye? Answer with the city name only.",
+              "role": "user"
+            }
+          ],
+          "model": "moonshotai/kimi-k3",
+          "provider": {
+            "require_parameters": true
+          },
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          },
+          "stream": false,
+          "temperature": 0.0,
+          "top_p": 0.95
+        },
+        "status": 200,
+        "response_headers": {
+          "date": "Sat, 05 Sep 2026 12:28:40 GMT",
+          "content-type": "application/json",
+          "transfer-encoding": "chunked",
+          "connection": "keep-alive",
+          "access-control-allow-origin": "*",
+          "x-generation-id": "gen-1788611319-KrA35M98kgi4L00zLFOf",
+          "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+          "set-cookie": "<redacted>",
+          "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+          "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+          "x-content-type-options": "nosniff",
+          "content-encoding": "gzip",
+          "server": "cloudflare",
+          "cf-ray": "a3653c2a2f76715c-DUS"
+        },
+        "response_body": {
+          "id": "gen-1788611319-KrA35M98kgi4L00zLFOf",
+          "object": "chat.completion",
+          "created": 1788611319,
+          "model": "moonshotai/kimi-k3",
+          "provider": "Sail Research",
+          "system_fingerprint": null,
+          "service_tier": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "content": "Ankara",
+                "refusal": null,
+                "reasoning": "The user is asking for the capital of Türkiye. The capital is Ankara. They want the city name only.",
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.text",
+                    "text": "The user is asking for the capital of Türkiye. The capital is Ankara. They want the city name only.",
+                    "format": "unknown",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 141,
+            "completion_tokens": 40,
+            "total_tokens": 181,
+            "cost": 0.0008866,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0008866,
+              "upstream_inference_prompt_cost": 0.0003666,
+              "upstream_inference_completions_cost": 0.00052
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 28,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "openrouter_metadata": {
+            "requested": "moonshotai/kimi-k3",
+            "strategy": "direct",
+            "region": "DUS",
+            "summary": "available=16, selected=Sail Research",
+            "attempt": 1,
+            "is_byok": false,
+            "endpoints": {
+              "total": 18,
+              "available": [
+                {
+                  "provider": "Sail Research",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": true
+                },
+                {
+                  "provider": "Morph",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Parasail",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Morph",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Chutes",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "DigitalOcean",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Wafer",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Modal",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Fireworks",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "DeepInfra",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Makora",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Fireworks",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Together",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Phala",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Fireworks",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "BaseTen",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                }
+              ]
+            },
+            "generation_time": 1398
+          }
+        },
+        "wire_seconds": 1.738
+      }
+    ]
+  },
+  {
+    "label": "ModelNames.KIMI_K3::function_calling",
+    "model": "ModelNames.KIMI_K3",
+    "shape": "function_calling",
+    "call_status": "OK",
+    "detail": "",
+    "wire": [
+      {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sent_header": true,
+        "request_headers": {
+          "host": "openrouter.ai",
+          "accept-encoding": "gzip, deflate, zstd",
+          "connection": "keep-alive",
+          "http-referer": "https://docs.langchain.com",
+          "x-title": "LangChain",
+          "accept": "application/json",
+          "user-agent": "speakeasy-sdk/python 0.11.46 2.914.0 1.0.0 openrouter",
+          "authorization": "<redacted>",
+          "content-type": "application/json",
+          "content-length": "823",
+          "x-openrouter-metadata": "enabled"
+        },
+        "request_body": {
+          "messages": [
+            {
+              "content": "Which city is the capital of Türkiye? Answer with the city name only.",
+              "role": "user"
+            }
+          ],
+          "model": "moonshotai/kimi-k3",
+          "provider": {
+            "require_parameters": true
+          },
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          },
+          "stream": false,
+          "temperature": 0.0,
+          "tool_choice": {
+            "function": {
+              "name": "_Answer"
+            },
+            "type": "function"
+          },
+          "tools": [
+            {
+              "function": {
+                "name": "_Answer",
+                "description": "One field, deliberately trivial. #13 used the same question, so a body\nfrom this run is readable beside one from that one; and a schema with any\nreal content would make the prompt a source of variance across nine cells\nwhose only intended difference is the shape.",
+                "parameters": {
+                  "properties": {
+                    "city": {
+                      "description": "the city named in the question",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "city"
+                  ],
+                  "type": "object"
+                }
+              },
+              "type": "function"
+            }
+          ],
+          "top_p": 0.95
+        },
+        "status": 200,
+        "response_headers": {
+          "date": "Sat, 05 Sep 2026 12:28:42 GMT",
+          "content-type": "application/json",
+          "transfer-encoding": "chunked",
+          "connection": "keep-alive",
+          "access-control-allow-origin": "*",
+          "x-generation-id": "gen-1788611321-dE3XNOr0nu4y3isYaDE0",
+          "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+          "set-cookie": "<redacted>",
+          "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+          "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+          "x-content-type-options": "nosniff",
+          "content-encoding": "gzip",
+          "server": "cloudflare",
+          "cf-ray": "a3653c357b8e482d-DUS"
+        },
+        "response_body": {
+          "id": "gen-1788611321-dE3XNOr0nu4y3isYaDE0",
+          "object": "chat.completion",
+          "created": 1788611321,
+          "model": "moonshotai/kimi-k3",
+          "provider": "DigitalOcean",
+          "system_fingerprint": null,
+          "service_tier": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "tool_calls",
+              "native_finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "content": null,
+                "refusal": null,
+                "reasoning": "The user is asking about the capital of Türkiye (Turkey). The answer is Ankara. Many people mistakenly think it's Istanbul, but Ankara is the capital. I need to answer with the city name only using the _Answer tool with the city parameter.",
+                "tool_calls": [
+                  {
+                    "type": "function",
+                    "index": 0,
+                    "id": "chatcmpl-tool-876401f687528905",
+                    "function": {
+                      "name": "_Answer",
+                      "arguments": "{\"city\": \"Ankara\"}"
+                    }
+                  }
+                ],
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.text",
+                    "text": "The user is asking about the capital of Türkiye (Turkey). The answer is Ankara. Many people mistakenly think it's Istanbul, but Ankara is the capital. I need to answer with the city name only using the _Answer tool with the city parameter.",
+                    "format": "unknown",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 241,
+            "completion_tokens": 103,
+            "total_tokens": 344,
+            "cost": 0.0021546,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0021546,
+              "upstream_inference_prompt_cost": 0.00068685,
+              "upstream_inference_completions_cost": 0.00146775
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 51,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "openrouter_metadata": {
+            "requested": "moonshotai/kimi-k3",
+            "strategy": "direct",
+            "region": "DUS",
+            "summary": "available=13, selected=DigitalOcean",
+            "attempt": 1,
+            "is_byok": false,
+            "endpoints": {
+              "total": 18,
+              "available": [
+                {
+                  "provider": "DigitalOcean",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": true
+                },
+                {
+                  "provider": "Wafer",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Sail Research",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Morph",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Parasail",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Morph",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Fireworks",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Fireworks",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "DeepInfra",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Makora",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Together",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "BaseTen",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Phala",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                }
+              ]
+            },
+            "generation_time": 2904
+          }
+        },
+        "wire_seconds": 3.172
+      }
+    ]
+  },
+  {
+    "label": "ModelNames.KIMI_K3::json_schema",
+    "model": "ModelNames.KIMI_K3",
+    "shape": "json_schema",
+    "call_status": "OK",
+    "detail": "",
+    "wire": [
+      {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sent_header": true,
+        "request_headers": {
+          "host": "openrouter.ai",
+          "accept-encoding": "gzip, deflate, zstd",
+          "connection": "keep-alive",
+          "http-referer": "https://docs.langchain.com",
+          "x-title": "LangChain",
+          "accept": "application/json",
+          "user-agent": "speakeasy-sdk/python 0.11.46 2.914.0 1.0.0 openrouter",
+          "authorization": "<redacted>",
+          "content-type": "application/json",
+          "content-length": "787",
+          "x-openrouter-metadata": "enabled"
+        },
+        "request_body": {
+          "messages": [
+            {
+              "content": "Which city is the capital of Türkiye? Answer with the city name only.",
+              "role": "user"
+            }
+          ],
+          "model": "moonshotai/kimi-k3",
+          "provider": {
+            "require_parameters": true
+          },
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          },
+          "response_format": {
+            "json_schema": {
+              "name": "_Answer",
+              "schema": {
+                "title": "_Answer",
+                "description": "One field, deliberately trivial. #13 used the same question, so a body\nfrom this run is readable beside one from that one; and a schema with any\nreal content would make the prompt a source of variance across nine cells\nwhose only intended difference is the shape.",
+                "properties": {
+                  "city": {
+                    "description": "the city named in the question",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ],
+                "type": "object"
+              }
+            },
+            "type": "json_schema"
+          },
+          "stream": false,
+          "temperature": 0.0,
+          "top_p": 0.95
+        },
+        "status": 200,
+        "response_headers": {
+          "date": "Sat, 05 Sep 2026 12:28:45 GMT",
+          "content-type": "application/json",
+          "transfer-encoding": "chunked",
+          "connection": "keep-alive",
+          "access-control-allow-origin": "*",
+          "x-generation-id": "gen-1788611324-I3E27PjlJCqwvyP85SlF",
+          "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+          "set-cookie": "<redacted>",
+          "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+          "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+          "x-content-type-options": "nosniff",
+          "content-encoding": "gzip",
+          "server": "cloudflare",
+          "cf-ray": "a3653c49ac0afe96-AMS"
+        },
+        "response_body": {
+          "id": "gen-1788611324-I3E27PjlJCqwvyP85SlF",
+          "object": "chat.completion",
+          "created": 1788611324,
+          "model": "moonshotai/kimi-k3",
+          "provider": "Wafer",
+          "system_fingerprint": null,
+          "service_tier": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "content": "{\"city\":\"Ankara\"}",
+                "refusal": null,
+                "reasoning": "The user asks capital of Türkiye, answer city name only, but response format requires raw JSON matching schema with field city. Need final only JSON no markdown. Capital is Ankara. Ensure valid JSON.",
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.text",
+                    "text": "The user asks capital of Türkiye, answer city name only, but response format requires raw JSON matching schema with field city. Need final only JSON no markdown. Capital is Ankara. Ensure valid JSON.",
+                    "format": "unknown",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 292,
+            "completion_tokens": 52,
+            "total_tokens": 344,
+            "cost": 0.0013662,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 64,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0013662,
+              "upstream_inference_prompt_cost": 0.0007032,
+              "upstream_inference_completions_cost": 0.000663
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 45,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "openrouter_metadata": {
+            "requested": "moonshotai/kimi-k3",
+            "strategy": "direct",
+            "region": "AMS",
+            "summary": "available=15, selected=Wafer",
+            "attempt": 1,
+            "is_byok": false,
+            "endpoints": {
+              "total": 18,
+              "available": [
+                {
+                  "provider": "Wafer",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": true
+                },
+                {
+                  "provider": "Morph",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Morph",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Chutes",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Sail Research",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Parasail",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "DigitalOcean",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Fireworks",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Modal",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Fireworks",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Fireworks",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "DeepInfra",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Makora",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Together",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                },
+                {
+                  "provider": "Phala",
+                  "model": "moonshotai/kimi-k3-20260715",
+                  "selected": false
+                }
+              ]
+            },
+            "generation_time": 2245
+          }
+        },
+        "wire_seconds": 2.534
+      }
+    ]
+  },
+  {
+    "label": "ModelNames.GROK_4_6::plain",
+    "model": "ModelNames.GROK_4_6",
+    "shape": "plain",
+    "call_status": "OK",
+    "detail": "",
+    "wire": [
+      {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sent_header": true,
+        "request_headers": {
+          "host": "openrouter.ai",
+          "accept-encoding": "gzip, deflate, zstd",
+          "connection": "keep-alive",
+          "http-referer": "https://docs.langchain.com",
+          "x-title": "LangChain",
+          "accept": "application/json",
+          "user-agent": "speakeasy-sdk/python 0.11.46 2.914.0 1.0.0 openrouter",
+          "authorization": "<redacted>",
+          "content-type": "application/json",
+          "content-length": "273",
+          "x-openrouter-metadata": "enabled"
+        },
+        "request_body": {
+          "messages": [
+            {
+              "content": "Which city is the capital of Türkiye? Answer with the city name only.",
+              "role": "user"
+            }
+          ],
+          "model": "x-ai/grok-4.6",
+          "provider": {
+            "require_parameters": true
+          },
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          },
+          "stream": false,
+          "temperature": 0.0,
+          "top_p": 0.95
+        },
+        "status": 200,
+        "response_headers": {
+          "date": "Sat, 05 Sep 2026 12:28:47 GMT",
+          "content-type": "application/json",
+          "transfer-encoding": "chunked",
+          "connection": "keep-alive",
+          "access-control-allow-origin": "*",
+          "x-generation-id": "gen-1788611327-rvpD1F2lqUkAqGcDsH4s",
+          "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+          "set-cookie": "<redacted>",
+          "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+          "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+          "x-content-type-options": "nosniff",
+          "content-encoding": "gzip",
+          "server": "cloudflare",
+          "cf-ray": "a3653c59fb8066c8-AMS"
+        },
+        "response_body": {
+          "id": "gen-1788611327-rvpD1F2lqUkAqGcDsH4s",
+          "object": "chat.completion",
+          "created": 1788611327,
+          "model": "x-ai/grok-4.6",
+          "provider": "xAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "Ankara",
+                "refusal": null,
+                "reasoning": "The question is: \"Which city is the capital of Türkiye? Answer with the city name only.\"\n",
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.summary",
+                    "summary": "The question is: \"Which city is the capital of Türkiye? Answer with the city name only.\"\n",
+                    "format": "xai-responses-v1",
+                    "index": 0
+                  },
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "P+qVF6pbqgWRbzJ9oUvrqLUXNMtqDlzxImtsK3OQprPN1pcsUhxenrwTvVJj32oNxS/EMRAdYsYbqyUmsJX760x2RFMhM392xsrLMcxAmQntu+t1Qc63392LkZqTUh2b6F19YiXlm4/zAqsl5EKOA29qiXDOiB+Imkv7PZnS13p750lZzXU/rs/dAJdsFg2OatO1xO2hi6hfBwiSYVPqD8+On3PfJF0Qnx0vBWmGSCiBW4UPT8JfHsSWAfgm0mZkr0+NdTCPWAYcDjD+rsUWHvXjLcOm7izGpAe+SimeUREqCgy4s7+3HeZMfLytDNeYEbHr+WQyU/8wHx+I9MNVwE7NN72+4mEbZLpmCaneBgPLWTI6Qiu6pChtm8UnE6nDZyER/NttXJI6hTmSBFfrgKJJ446OMSFQJVkyOtm3KrxzAvYel4gXRg06lR50/nsMUkVpXPXj47YAV4VzfO5Sl5rUCBX2Lm8jlcqYzTbKiRXgTty95MW67oM/hQsXoH6BO754qHa7ns9PDKMJa+HUSMHj8Faf5I8sOa8yScerP1KN8CYM+LGx6bmtjJiyW/bdaO6/zQBTR1b6oPIbwLNxDH/sVLEPhcV+hMNXfnWaAkTKf58nSMtIpx42M6yuWnrsVwVLEVWyrKAll9muaNzeRjTQf6Cg781jKqzLIApjvjp/Yw.eyJlbmRwb2ludF9zbHVnIjoieC1haS9ncm9rLTQuNi0yMDI2MDgxMHx4YWkifQ",
+                    "format": "xai-responses-v1",
+                    "id": "rs_8b86f85a-cbf2-9b59-8ddf-f6cacad395a1",
+                    "index": 1
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 221,
+            "completion_tokens": 113,
+            "total_tokens": 334,
+            "cost": 0.000928,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 128,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.000928,
+              "upstream_inference_prompt_cost": 0.00025,
+              "upstream_inference_completions_cost": 0.000678
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 111,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "openrouter_metadata": {
+            "requested": "x-ai/grok-4.6",
+            "strategy": "direct",
+            "region": "AMS",
+            "summary": "available=2, selected=xAI",
+            "attempt": 1,
+            "is_byok": false,
+            "endpoints": {
+              "total": 5,
+              "available": [
+                {
+                  "provider": "xAI",
+                  "model": "x-ai/grok-4.6-20260810",
+                  "selected": true
+                },
+                {
+                  "provider": "xAI",
+                  "model": "x-ai/grok-4.6-20260810",
+                  "selected": false
+                }
+              ]
+            },
+            "generation_time": 2429
+          }
+        },
+        "wire_seconds": 2.797
+      }
+    ]
+  },
+  {
+    "label": "ModelNames.GROK_4_6::function_calling",
+    "model": "ModelNames.GROK_4_6",
+    "shape": "function_calling",
+    "call_status": "OK",
+    "detail": "",
+    "wire": [
+      {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sent_header": true,
+        "request_headers": {
+          "host": "openrouter.ai",
+          "accept-encoding": "gzip, deflate, zstd",
+          "connection": "keep-alive",
+          "http-referer": "https://docs.langchain.com",
+          "x-title": "LangChain",
+          "accept": "application/json",
+          "user-agent": "speakeasy-sdk/python 0.11.46 2.914.0 1.0.0 openrouter",
+          "authorization": "<redacted>",
+          "content-type": "application/json",
+          "content-length": "818",
+          "x-openrouter-metadata": "enabled"
+        },
+        "request_body": {
+          "messages": [
+            {
+              "content": "Which city is the capital of Türkiye? Answer with the city name only.",
+              "role": "user"
+            }
+          ],
+          "model": "x-ai/grok-4.6",
+          "provider": {
+            "require_parameters": true
+          },
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          },
+          "stream": false,
+          "temperature": 0.0,
+          "tool_choice": {
+            "function": {
+              "name": "_Answer"
+            },
+            "type": "function"
+          },
+          "tools": [
+            {
+              "function": {
+                "name": "_Answer",
+                "description": "One field, deliberately trivial. #13 used the same question, so a body\nfrom this run is readable beside one from that one; and a schema with any\nreal content would make the prompt a source of variance across nine cells\nwhose only intended difference is the shape.",
+                "parameters": {
+                  "properties": {
+                    "city": {
+                      "description": "the city named in the question",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "city"
+                  ],
+                  "type": "object"
+                }
+              },
+              "type": "function"
+            }
+          ],
+          "top_p": 0.95
+        },
+        "status": 200,
+        "response_headers": {
+          "date": "Sat, 05 Sep 2026 12:28:50 GMT",
+          "content-type": "application/json",
+          "transfer-encoding": "chunked",
+          "connection": "keep-alive",
+          "access-control-allow-origin": "*",
+          "x-generation-id": "gen-1788611329-KUz7A0s585wYbXHDO1kd",
+          "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+          "set-cookie": "<redacted>",
+          "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+          "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+          "x-content-type-options": "nosniff",
+          "content-encoding": "gzip",
+          "server": "cloudflare",
+          "cf-ray": "a3653c6b9cdb1620-DUS"
+        },
+        "response_body": {
+          "id": "gen-1788611329-KUz7A0s585wYbXHDO1kd",
+          "object": "chat.completion",
+          "created": 1788611329,
+          "model": "x-ai/grok-4.6",
+          "provider": "xAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "tool_calls",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": null,
+                "refusal": null,
+                "reasoning": "The question is: \"Which city is the capital of Türkiye? Answer with the city name only.\"\n",
+                "tool_calls": [
+                  {
+                    "type": "function",
+                    "index": 0,
+                    "id": "call-cbfe4275-db57-4453-a525-054a5f0915b1-0",
+                    "function": {
+                      "name": "_Answer",
+                      "arguments": "{\"city\":\"Ankara\"}"
+                    }
+                  }
+                ],
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.summary",
+                    "summary": "The question is: \"Which city is the capital of Türkiye? Answer with the city name only.\"\n",
+                    "format": "xai-responses-v1",
+                    "index": 0
+                  },
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "HQuRdpM1lgZyST9DwMILoibuz5iWhLmKzsR81YoF+HTk95bt1KxL5O+mtKv89r1VwxkzTvh6ixatcqsWmxLveFstyg46TNov72iqH9JY33ZZvbfM7mrnTBYLfzh6cWWPXoEUkpKFtpXzzpLOiYmGlCF/Y2py70vS0eSjaD8IxVM7BafHVJNpzo7EDrZogaNdJcoDhKsWGfUMqUkQQoxnKENe86xAzofkcWA5janDYgzmsVFaWgUf4fimC9lNw5MLNcks+SGzKqMfSPJlh1YCTe57MsI6qrPLvtJ6Min3ktpNTZHOpol//5wMkO5OwWgB9QXZn3zcjgMKhjVZQnAswuSpo01qHB2SDMh82phtk3ArsWwFRIa4lpdzxMIJ98s6YdzpRQskJ3D9J96qhAauyqYziLhZEV+JY+GUZj86DcasBUV60YI2zQgroGQKEnShnWfjOGx4loky5OhztYGZJPC9uiq6wOCPp1tlxdzXhDzVka/vUcaiaiADVziHn7yxbgzawAapgcStAp+BAztsR+xOyFRn3ze13vAF6aiUSxLh1/OkX7cyv7wUsvV+Z87OeC13MxazFYUVYsfnG73gNZX14LUMnvTCNakmzrSClmsrELfuAic4Tfwcf6D8qIQVlgKLXigCfRuykkXB2A8z6MSQbT4Rh+t5mUb7y2Sk/mak/ObrWIbS9qp2GrveKHd9bk4bzkcnYDDQjXI6cciqt+3X11e3tjoygdovk+lOtvm4G0imiFIoUvp/Vm1ON5yrB1UQC2r6OjjRouYMOpoKixC2It02Cxjtp73y9FTUZceLbxEKdB0YJvjQZu+TzQ3BotIj1o8fOrf1V8fWwHhexj2AOfm+kiEuSKebN4OlAd1Qdg5aa7AJfqnLpqGoZeYvVuWN5zcWspqouv2M3mdz963uo3ey33K3FAdRMXOE35qXcXBgldn3qAJ2vBNZ41HU/GGnYr/XbhtPPGYhcWOPEsjdvKw9fMy3yB6i85+iQNN55vsARTSAnz1RYsh/CRwtdCcMHFtq2oPA6t0HOcVa9fRGJt4nusgAgzG7wZAvwyv0jWCvl8u0w1Y72EPnqr23o8K8Oq+yPuLxZTYtX8EvGYdmrBTkqPiJQNCd/KytF3J9PhrrfpVX44rRMMcZJiXBMKzC5FJGu+ddNZKLyxotRtSNyLxztnX28N134XesLsnjZOcJZ+6iDM8YdlQU6bGnJ724jq0uWay3IStk/3xEpK/yMriD6wrAqkb4m9kSjbHPkkcj4JTnYz5w+yME5BtLV/CkxnGKgzufkhIEnuUED1dHoOaFYRYh/dC0mcrXOCD89i8DD16BA/aoOorx+JWGFn3E5uXVs+w+Z6tr/d3sRmECKbmQ8qDafXTefT7m9c5e1nNNByJkwoGE4+tf9HzKi7z42FQJQvzPCqgOopm72LkjI9XR4VcqBgDQ6XDDrjzvbk2Kh/QxL7AVUsN132nniJ/hvDUdsOzKfRktMwqMaP7X+d7NmdbcTliE69nFxARyFamb1AOFkr8MT5eUQHRQXlW1+w6Sjc/rJs/PBtLq5R85m6ap/c0Rwtf/9OmkFf4OPeyjRUQayfqqwbembDExxec8/wJtTdeVhio6fgeC31Jo44LCA32873uskMH2D5ZLpuhjKz+mySXTEWRoSG6NdV3QqDzJc9WcAHQVhr+cJkEOxVdOW+vioq83DHbb+YmAYLLXgTro7LLOxZV8oZ71XFdg5X4ydihbVUB6NI0vJI83CT1CYvunhGm0FaS7AKxn91bYBRZrnGsZvZpy8/UTTDFIVHCO+Xlre2DPDrc.eyJlbmRwb2ludF9zbHVnIjoieC1haS9ncm9rLTQuNi0yMDI2MDgxMHx4YWkifQ",
+                    "format": "xai-responses-v1",
+                    "id": "rs_50a1320b-ff56-9673-91ba-2bc6614b4298",
+                    "index": 1
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 379,
+            "completion_tokens": 321,
+            "total_tokens": 700,
+            "cost": 0.002492,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 128,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.002492,
+              "upstream_inference_prompt_cost": 0.000566,
+              "upstream_inference_completions_cost": 0.001926
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 309,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "openrouter_metadata": {
+            "requested": "x-ai/grok-4.6",
+            "strategy": "direct",
+            "region": "DUS",
+            "summary": "available=2, selected=xAI",
+            "attempt": 1,
+            "is_byok": false,
+            "endpoints": {
+              "total": 5,
+              "available": [
+                {
+                  "provider": "xAI",
+                  "model": "x-ai/grok-4.6-20260810",
+                  "selected": true
+                },
+                {
+                  "provider": "xAI",
+                  "model": "x-ai/grok-4.6-20260810",
+                  "selected": false
+                }
+              ]
+            },
+            "generation_time": 5944
+          }
+        },
+        "wire_seconds": 6.264
+      }
+    ]
+  },
+  {
+    "label": "ModelNames.GROK_4_6::json_schema",
+    "model": "ModelNames.GROK_4_6",
+    "shape": "json_schema",
+    "call_status": "OK",
+    "detail": "",
+    "wire": [
+      {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sent_header": true,
+        "request_headers": {
+          "host": "openrouter.ai",
+          "accept-encoding": "gzip, deflate, zstd",
+          "connection": "keep-alive",
+          "http-referer": "https://docs.langchain.com",
+          "x-title": "LangChain",
+          "accept": "application/json",
+          "user-agent": "speakeasy-sdk/python 0.11.46 2.914.0 1.0.0 openrouter",
+          "authorization": "<redacted>",
+          "content-type": "application/json",
+          "content-length": "782",
+          "x-openrouter-metadata": "enabled"
+        },
+        "request_body": {
+          "messages": [
+            {
+              "content": "Which city is the capital of Türkiye? Answer with the city name only.",
+              "role": "user"
+            }
+          ],
+          "model": "x-ai/grok-4.6",
+          "provider": {
+            "require_parameters": true
+          },
+          "reasoning": {
+            "effort": "high",
+            "summary": "auto"
+          },
+          "response_format": {
+            "json_schema": {
+              "name": "_Answer",
+              "schema": {
+                "title": "_Answer",
+                "description": "One field, deliberately trivial. #13 used the same question, so a body\nfrom this run is readable beside one from that one; and a schema with any\nreal content would make the prompt a source of variance across nine cells\nwhose only intended difference is the shape.",
+                "properties": {
+                  "city": {
+                    "description": "the city named in the question",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "city"
+                ],
+                "type": "object"
+              }
+            },
+            "type": "json_schema"
+          },
+          "stream": false,
+          "temperature": 0.0,
+          "top_p": 0.95
+        },
+        "status": 200,
+        "response_headers": {
+          "date": "Sat, 05 Sep 2026 12:28:56 GMT",
+          "content-type": "application/json",
+          "transfer-encoding": "chunked",
+          "connection": "keep-alive",
+          "access-control-allow-origin": "*",
+          "x-generation-id": "gen-1788611336-US3fHp4kACnxJ07DIIdh",
+          "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+          "set-cookie": "<redacted>",
+          "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+          "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+          "x-content-type-options": "nosniff",
+          "content-encoding": "gzip",
+          "server": "cloudflare",
+          "cf-ray": "a3653c92d902fea4-AMS"
+        },
+        "response_body": {
+          "id": "gen-1788611336-US3fHp4kACnxJ07DIIdh",
+          "object": "chat.completion",
+          "created": 1788611336,
+          "model": "x-ai/grok-4.6",
+          "provider": "xAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"city\":\"Ankara\"}",
+                "refusal": null,
+                "reasoning": "The user asked: \"Which city is the capital of Türkiye? Answer with the city name only.\"\n",
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.summary",
+                    "summary": "The user asked: \"Which city is the capital of Türkiye? Answer with the city name only.\"\n",
+                    "format": "xai-responses-v1",
+                    "index": 0
+                  },
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "WgY2USe6zphmOIjlG/NW5ngEnQjipstym5IqHaQbqUQbGHHWz7d0HEhHMceb9e+WdGvLKzjB1w/Od24i56HNNflP0hi+OroObm7q9UCVMbRceb0hYY6WoZwkImPqHdXnmPcq0Ea/sh3mUuvxnub2MPhm7diJ0DRKVdqhf3FLHKGhXOncOG88Qtb9LglWbt63hIl3Cjcg5HGSO6yLzvOjlWjL4xJZ9AdZKArEj/yFcdzOS7CSmf9j7mFlVFnf8IO10g1rZM+91ycmofNk1SRu05KoUwOBor8wQWFR24xlZ+Hn+I2w6EunX9/8E8J4wP8Nurd/KhTfjflEPaq4e5/2XgomEl2oykPZn9jBjtwK69iaY5EEr6pq2MVQBiQACxyhQ4JYDSLFiznUWYCFO0UZQxIiWnhW0Nzsw7z7a77bkaoCgn0IFX6ZVqJRajDiWJoJZHtJcXN8RipUMf7eWL5HOJMoKLRHTIG1+bph1PH7pjBAb8CpgON8AE8qpuHMT4/fV20Bt7aVJhVAWVg9GUc4QLbOkXyS7mPzbbUNvHVRuXlyQUzrEgIs+ls/7sBZSOOxMY5mWzXbknElWdHqmyBaqiWYBZTfQuQWpBRT6L2DRl8EnY1XD3X1/AWX+wHB+mvpiIUvXXrYDjKtklDaNJmNwg09LeXSfUTz3tuwlfAUv65nMyxrmWNvrLdIYjzV/5dO1pr1zLGSIplfrwpz4mONjvGqc+AClmmMqo/j5dPSYXHgp8kG36SP0wyvHSOAj2TETVRm2dYBJqYDO3bgq+V54taeiHHSFLwMMFFlFE6zSK3x/83k/BpT9Gu2Sv6N8Y0LuQHFZEFmjHTVi9DkajwbE+4052Rb7hxMILqAEGDv8IjhOpg9IbYwsVdyhUd9KSLZD03bKbDc8eLz0Uh0VwBo89xqLZg1X1qh1WWCgGeUBP8U7cpHWWY3dvivgr62iWXCfHUICj8SIF25xRF4i1hBHOc5pwHaKFyYPBqQg3ppOn6QA2StQIKakQAb0/9P+R/eCU9rYpvkJZbz65QgvDJ6c6xEJjKeizxzeQELZ5ABbuqMsa2eoz3k1EZueetGPBg7FvH1pKxGJl5roFwHhgkrvKrIRYePpuIG4hoiCePMg8dHesf0TVvGkvvvnUlLvRyX9ZkSrPzEqC5QHoRtCaZGgQlAqGlJHWqBM2h+sejC69toxmn/paHbGRNkfbMlO+TrhBgHAIMaauWu3f5YoWY279yOuxv8C+MWb/lze06tJAWEN7dLJgqB0uHU7LAM2FQZWkb9Hl6a9hYGs1eRs7ijGKq0ecwqrIxJiRMq1zLEqoPuH2kin9WtgxJsWqM7GCX0yNfQtN35LRGoW9K+kICUmT8f3kY9KAqCX0DmDfWoXv/SFroSqmWldWZnyGzqDZ7LsdBnH+fuiY2V4fpDqzM/rRCfIwJSkJSvV+VnYYuJdy3YgY60jz8oMA0N/E1yE//mSA/x93FZuGs5GbPeCeW/niD8jaFINEm2fdrZ98XR/VumFuez8/zMcAVgIKk1siQ2hD52+au51NvbJ/jUv00zwLMD+8vgZMot8gwQaZdBDKb3rikovqPLkAkkW5BOH+ZUxk/Y1c0BfI4l2bjqqWuD/MNIxChu/afxcxGjsqPRv2O8ZYxql4eMfhY6KMgU1heyl2MO/TSM4hJFPByljwtlMEruBVAi2tasje99CPuKzg.eyJlbmRwb2ludF9zbHVnIjoieC1haS9ncm9rLTQuNi0yMDI2MDgxMHx4YWkifQ",
+                    "format": "xai-responses-v1",
+                    "id": "rs_f03bfb8b-baa7-9c8a-ac14-1e500a9e6ebd",
+                    "index": 1
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 349,
+            "completion_tokens": 292,
+            "total_tokens": 641,
+            "cost": 0.002258,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 128,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.002258,
+              "upstream_inference_prompt_cost": 0.000506,
+              "upstream_inference_completions_cost": 0.001752
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 285,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          },
+          "openrouter_metadata": {
+            "requested": "x-ai/grok-4.6",
+            "strategy": "direct",
+            "region": "AMS",
+            "summary": "available=2, selected=xAI",
+            "attempt": 1,
+            "is_byok": false,
+            "endpoints": {
+              "total": 5,
+              "available": [
+                {
+                  "provider": "xAI",
+                  "model": "x-ai/grok-4.6-20260810",
+                  "selected": true
+                },
+                {
+                  "provider": "xAI",
+                  "model": "x-ai/grok-4.6-20260810",
+                  "selected": false
+                }
+              ]
+            },
+            "generation_time": 4344
+          }
+        },
+        "wire_seconds": 4.632
+      }
+    ]
+  }
+]

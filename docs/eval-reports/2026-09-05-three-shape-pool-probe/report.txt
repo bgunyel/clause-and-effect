@@ -1,0 +1,103 @@
+================================================================================================
+The three-shape pool probe -- separating the channel confound from the model
+================================================================================================
+REGISTERED READING RULE (written before the run, #27)
+  Equal pool sizes are not the same pool. The comparison that matters is
+  set membership -- as a MULTISET over providers, since two endpoints of
+  one provider are byte-identical inside `available`. At one call per cell
+  a null result is *no difference observed at n=1*, not *no difference*.
+
+Nine cells
+  model                              shape                st  total  endp  prov  selected
+  ModelNames.DEEPSEEK_V_4_FLASH_0731 plain               200     30    29    28  OpenInference
+  ModelNames.DEEPSEEK_V_4_FLASH_0731 function_calling    200     30    23    22  Baidu
+  ModelNames.DEEPSEEK_V_4_FLASH_0731 json_schema         200     30    21    21  Baidu
+  ModelNames.KIMI_K3                 plain               200     18    16    13  Sail Research
+  ModelNames.KIMI_K3                 function_calling    200     18    13    11  DigitalOcean
+  ModelNames.KIMI_K3                 json_schema         200     18    15    12  Wafer
+  ModelNames.GROK_4_6                plain               200      5     2     1  xAI
+  ModelNames.GROK_4_6                function_calling    200      5     2     1  xAI
+  ModelNames.GROK_4_6                json_schema         200      5     2     1  xAI
+
+Precondition -- the shape reached the wire
+  ModelNames.DEEPSEEK_V_4_FLASH_0731 plain              ok
+  ModelNames.DEEPSEEK_V_4_FLASH_0731 function_calling   ok
+  ModelNames.DEEPSEEK_V_4_FLASH_0731 json_schema        ok
+  ModelNames.KIMI_K3         plain              ok
+  ModelNames.KIMI_K3         function_calling   ok
+  ModelNames.KIMI_K3         json_schema        ok
+  ModelNames.GROK_4_6        plain              ok
+  ModelNames.GROK_4_6        function_calling   ok
+  ModelNames.GROK_4_6        json_schema        ok
+
+Anchors -- the two cells #13 already measured (2026-09-05, n=1 each)
+  plain              not run
+  function_calling   not run
+  A divergence here is a finding about pool stability over time, not a
+  wiring fault -- the pool is OpenRouter's and moves without us.
+
+Per-model membership -- the comparison the rule says is the one that matters
+  ModelNames.DEEPSEEK_V_4_FLASH_0731
+    plain              29 endpoints / 28 providers
+    function_calling   23 endpoints / 22 providers
+    json_schema        21 endpoints / 21 providers
+    plain -> function_calling
+      lost   : {'Alibaba': 1, 'CoreWeave': 1, 'GMICloud': 1, 'Mancer 2': 1, 'Novita': 1, 'SiliconFlow': 1}
+      gained : {}
+    plain -> json_schema
+      lost   : {'BaseTen': 2, 'CoreWeave': 1, 'DigitalOcean': 1, 'GMICloud': 1, 'Novita': 1, 'Relace': 1, 'StreamLake': 1}
+      gained : {}
+    function_calling -> json_schema
+      lost   : {'BaseTen': 2, 'DigitalOcean': 1, 'Relace': 1, 'StreamLake': 1}
+      gained : {'Alibaba': 1, 'Mancer 2': 1, 'SiliconFlow': 1}
+
+  ModelNames.KIMI_K3
+    plain              16 endpoints / 13 providers
+    function_calling   13 endpoints / 11 providers
+    json_schema        15 endpoints / 12 providers
+    plain -> function_calling
+      lost   : {'Chutes': 1, 'Fireworks': 1, 'Modal': 1}
+      gained : {}
+    plain -> json_schema
+      lost   : {'BaseTen': 1}
+      gained : {}
+    function_calling -> json_schema
+      lost   : {'BaseTen': 1}
+      gained : {'Chutes': 1, 'Fireworks': 1, 'Modal': 1}
+
+  ModelNames.GROK_4_6
+    plain              2 endpoints / 1 providers
+    function_calling   2 endpoints / 1 providers
+    json_schema        2 endpoints / 1 providers
+    plain -> function_calling
+      lost   : {}
+      gained : {}
+      IDENTICAL MULTISET at n=1 -- no narrowing observed, which is
+      not the same as no narrowing.
+    plain -> json_schema
+      lost   : {}
+      gained : {}
+      IDENTICAL MULTISET at n=1 -- no narrowing observed, which is
+      not the same as no narrowing.
+    function_calling -> json_schema
+      lost   : {}
+      gained : {}
+
+Denominator zero -- #20 3b's vocabulary, still looking for its first instance
+  No cell returned an empty pool. The degenerate case stays unobserved;
+  that is a gap, not an absence.
+
+Permaslug -- #20's hoist-when-constant condition, checked per cell
+  ModelNames.DEEPSEEK_V_4_FLASH_0731 plain              constant: ['deepseek/deepseek-v4-flash-20260731']
+  ModelNames.DEEPSEEK_V_4_FLASH_0731 function_calling   constant: ['deepseek/deepseek-v4-flash-20260731']
+  ModelNames.DEEPSEEK_V_4_FLASH_0731 json_schema        constant: ['deepseek/deepseek-v4-flash-20260731']
+  ModelNames.KIMI_K3         plain              constant: ['moonshotai/kimi-k3-20260715']
+  ModelNames.KIMI_K3         function_calling   constant: ['moonshotai/kimi-k3-20260715']
+  ModelNames.KIMI_K3         json_schema        constant: ['moonshotai/kimi-k3-20260715']
+  ModelNames.GROK_4_6        plain              constant: ['x-ai/grok-4.6-20260810']
+  ModelNames.GROK_4_6        function_calling   constant: ['x-ai/grok-4.6-20260810']
+  ModelNames.GROK_4_6        json_schema        constant: ['x-ai/grok-4.6-20260810']
+
+cells reporting a cost: 9/9
+spend over the run    : $0.010138
+================================================================================================
