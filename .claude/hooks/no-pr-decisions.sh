@@ -39,11 +39,11 @@ SCAN=$(echo "$COMMAND" | awk '
 DECIDE="Blocked: deciding a pull request is Bertan's call, not an agent's. Opening a PR, commenting on it and editing it are allowed; accepting, rejecting, merging and reopening are not."
 
 WRAPPED=
-if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))'; then
+if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))'; then
   WRAPPED=1
   SCAN="$SCAN
 $COMMAND"
-elif echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)gh[[:space:]]+api' \
+elif echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*gh[[:space:]]+api' \
      && echo "$COMMAND" | grep -q '<<'; then
   SCAN="$SCAN
 $COMMAND"
@@ -75,40 +75,40 @@ fi
 # zero, as this file first did, missed every indented decision. The cost is a
 # quoted multi-line string whose continuation line begins with one of these
 # commands; that false positive is accepted, being visible and one edit away.
-if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)gh[[:space:]]+pr[[:space:]]+merge([^-A-Za-z0-9_]|$)'; then
+if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*gh[[:space:]]+pr[[:space:]]+merge([^-A-Za-z0-9_]|$)'; then
   echo "$DECIDE Leave the PR open and say it is ready to merge." >&2
   exit 2
 fi
 
 # Only the verdict flags. Reviewing with --comment leaves remarks without a
 # verdict and stays allowed, so the subcommand alone is not enough to block on.
-if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)gh[[:space:]]+pr[[:space:]]+review([^-A-Za-z0-9_]|$)' \
+if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*gh[[:space:]]+pr[[:space:]]+review([^-A-Za-z0-9_]|$)' \
    && echo "$SCAN" | grep -qE '[[:space:]](--approve|--request-changes|-a|-r)([[:space:]]|=|$)'; then
   echo "$DECIDE Review with --comment to leave remarks without a verdict." >&2
   exit 2
 fi
 
 # Rejecting a pull request by outcome rather than by verdict.
-if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)gh[[:space:]]+pr[[:space:]]+(close|reopen)([^-A-Za-z0-9_]|$)'; then
+if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*gh[[:space:]]+pr[[:space:]]+(close|reopen)([^-A-Za-z0-9_]|$)'; then
   echo "$DECIDE Closing a PR rejects it; say why it should be closed instead." >&2
   exit 2
 fi
 
 # Outward-facing publication. This repository is public.
-if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)gh[[:space:]]+release[[:space:]]+(create|delete|delete-asset)([^-A-Za-z0-9_]|$)'; then
+if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*gh[[:space:]]+release[[:space:]]+(create|delete|delete-asset)([^-A-Za-z0-9_]|$)'; then
   echo "Blocked: publishing or deleting a GitHub release is Bertan's call. This repository is public; a release is visible the moment it exists." >&2
   exit 2
 fi
 
 # The REST endpoints behind the two blocked pull-request commands.
-if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)gh[[:space:]]+api([^-A-Za-z0-9_]|$)' \
+if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*gh[[:space:]]+api([^-A-Za-z0-9_]|$)' \
    && echo "$SCAN" | grep -qE '/pulls/[^ ]*/(merge|reviews)'; then
   echo "$DECIDE Reaching the merge or review endpoint through gh api is the same decision by another name." >&2
   exit 2
 fi
 
 # The same two decisions expressed as graphql mutations.
-if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)gh[[:space:]]+api([^-A-Za-z0-9_]|$)' \
+if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*gh[[:space:]]+api([^-A-Za-z0-9_]|$)' \
    && echo "$SCAN" | grep -qE 'mergePullRequest|addPullRequestReview'; then
   echo "$DECIDE Reaching the merge or review mutation through graphql is the same decision by another name." >&2
   exit 2

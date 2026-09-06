@@ -104,6 +104,36 @@ probe no-git-push.sh BLOCK 'a push inside bash -c'             'bash -c "git pus
 probe no-git-push.sh BLOCK 'a push inside eval'                'eval "git push"'
 probe no-git-push.sh BLOCK 'a push inside a heredoc fed to sh' $'bash <<\'EOF\'\ngit push\nEOF'
 
+echo "=== REGRESSION: PR #35, a denylist could not see a push naming no branch ==="
+# The check refused branches by name, so any spelling that named none was
+# invisible: --all advanced main and dev-05 from any worktree, and --mirror
+# deleted every remote branch absent locally, closing open pull requests. The
+# check is now an allowlist -- the push must positively name this branch.
+probe no-git-push.sh BLOCK 'git push --all origin'      'git push --all origin'
+probe no-git-push.sh BLOCK 'git push --mirror origin'   'git push --mirror origin'
+probe no-git-push.sh BLOCK 'git push --prune origin'    'git push --prune origin'
+probe no-git-push.sh BLOCK 'git push origin --tags'     'git push origin --tags'
+probe no-git-push.sh BLOCK 'git push --follow-tags'     'git push --follow-tags origin'
+probe no-git-push.sh BLOCK 'wildcard refspec, forced'   'git push origin +refs/heads/*:refs/heads/*'
+probe no-git-push.sh BLOCK 'deleting a remote branch'   "git push origin --delete $CURRENT"
+probe no-git-push.sh BLOCK 'deleting by empty source'   'git push origin :main'
+
+echo "=== REGRESSION: PR #35, redirects and cd forms the rules did not reach ==="
+# An environment assignment precedes the command, so git was not at a command
+# position and the push was never even detected; the anchors now allow a VAR=
+# prefix. pushd changes directory exactly as cd does.
+probe no-git-push.sh     BLOCK 'GIT_DIR= prefix'     'GIT_DIR=/other/.git git push origin main'
+probe no-git-push.sh     BLOCK 'GIT_WORK_TREE= prefix' 'GIT_WORK_TREE=/other git push'
+probe no-git-push.sh     BLOCK 'pushd before a push'  'pushd /some/repo && git push'
+probe no-pr-decisions.sh BLOCK 'env prefix before gh' 'FOO=1 gh pr merge 35'
+
+echo "=== the allowlist still admits an ordinary push of this branch ==="
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin'                "git push origin"
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin HEAD'           "git push origin HEAD"
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin HEAD:<branch>'  "git push origin HEAD:$CURRENT"
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin <b>:<b>'        "git push origin $CURRENT:$CURRENT"
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'push option with a value'       "git push -o ci.skip origin $CURRENT"
+
 echo "=== no-git-push.sh : not a push at all ==="
 for c in 'git status' \
          'git commit -m "explain how to git push later"' \
