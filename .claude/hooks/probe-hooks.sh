@@ -42,6 +42,35 @@ probe no-pr-decisions.sh BLOCK 'multi-line, merge on line 2'  $'cd /tmp\ngh pr m
 probe no-git-push.sh     BLOCK 'heredoc fed to a shell'       $'bash <<\'EOF\'\ngit push\nEOF'
 probe no-git-push.sh     BLOCK 'real push after heredoc ends' $'cat > /tmp/f <<\'EOF\'\nhello\nEOF\ngit push'
 
+echo "=== REGRESSION: PR #35, indentation defeated the anchor ==="
+# The anchor required column zero, so a command inside an if or a for loop --
+# indented, and the ordinary way either is written -- passed both hooks, while
+# no-commit-to-main.sh with its looser anchor still caught the same shape.
+probe no-git-push.sh     BLOCK 'if/then + indented push'   $'if true; then\n    git push origin dev-05\nfi'
+probe no-git-push.sh     BLOCK 'for loop + indented push'  $'for b in a b; do\n  git push origin $b\ndone'
+probe no-git-push.sh     BLOCK 'deeply indented push'      $'if true; then\n  if true; then\n        git push\n  fi\nfi'
+probe no-pr-decisions.sh BLOCK 'if/then + indented merge'  $'if true; then\n    gh pr merge 35\nfi'
+probe no-pr-decisions.sh BLOCK 'for loop + indented close' $'for n in 1 2; do\n  gh pr close $n\ndone'
+
+echo "=== REGRESSION: PR #35, no-pr-decisions.sh had no wrapper rule ==="
+# Its sibling re-admitted the raw command for shell wrappers and this file did
+# not, so everything the heredoc drop hid stayed hidden -- including a graphql
+# mutation, which is ordinarily sent through a heredoc.
+probe no-pr-decisions.sh BLOCK 'bash -c gh pr merge'  "bash -c 'gh pr merge 35'"
+probe no-pr-decisions.sh BLOCK 'sh -c gh pr merge'    'sh -c "gh pr merge 35"'
+probe no-pr-decisions.sh BLOCK 'eval gh pr merge'     "eval 'gh pr merge 35'"
+probe no-pr-decisions.sh BLOCK 'graphql mutation via heredoc' $'gh api graphql -f query=@- <<EOF\nmutation { mergePullRequest(input:{pullRequestId:"x"}) { clientMutationId } }\nEOF'
+probe no-pr-decisions.sh BLOCK 'REST merge via heredoc body'  $'gh api -X PUT --input - <<EOF\n{"path":"/repos/o/r/pulls/5/merge"}\nEOF'
+
+echo "=== ACCEPTED false positive: quoted multi-line string, not a heredoc ==="
+# The price of allowing leading whitespace in the anchor. A continuation line of
+# a quoted argument that begins with one of these commands is refused. Kept on
+# purpose: a blocked comment is visible and one edit away, a silently permitted
+# push is neither. These assert the current, deliberate behaviour -- if a later
+# change makes them ALLOW, that is a decision to take knowingly, not a bug fix.
+probe no-git-push.sh     BLOCK 'multi-line -b string continuing with a push' $'gh issue comment 27 -b "to release:\n  git push origin main"'
+probe no-pr-decisions.sh BLOCK 'multi-line -b string continuing with a merge' $'gh issue comment 27 -b "to land it:\n  gh pr merge 35"'
+
 echo "=== no-git-push.sh : must BLOCK ==="
 for c in 'git push' \
          'git push origin dev-05' \

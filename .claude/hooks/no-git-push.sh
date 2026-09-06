@@ -15,11 +15,10 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
 
 # A heredoc body is data, not commands. This repository writes dev-log entries
 # and commit messages through a quoted heredoc, and those texts name the very
-# commands refused here. grep anchors ^ per line, so a wrapped line of prose
-# beginning with one of them read as a command position and the rule forbade
-# writing about itself -- observed when an earlier version of this hook blocked
-# the commit that introduced it. Bodies are dropped before matching; a heredoc
-# fed to a shell is caught by the wrapper rule below, on the raw command.
+# commands refused here. grep anchors ^ per line, so a line of prose beginning
+# with one of them read as a command position, and an earlier version of this
+# hook refused the commit that introduced it. Bodies are dropped before
+# matching.
 SCAN=$(echo "$COMMAND" | awk '
   ind { if ($0 == d) ind = 0; next }
   {
@@ -32,24 +31,47 @@ SCAN=$(echo "$COMMAND" | awk '
     print
   }')
 
-# A real command sits at a command position: start of line, or after ; && || |
-# or an opening paren. Matching after a bare space instead would block a commit
-# message that merely mentions the command. The -c/-C branch is what lets
-# `git -C /path push` through the global-option run; without it the option's
-# separate value ends the match before push is reached.
-if echo "$SCAN" | grep -qE '(^|[;&|(]\s*)git\s+((-[cC]\s+[^ ]+|-[^ ]+)\s+)*push([^-A-Za-z0-9_]|$)'; then
-  echo "Blocked: git push. Pushes to the remote are Bertan's, made from a separate terminal. Leave the commits on the branch and say what is ready to push." >&2
+# Dropping bodies is itself a bypass: `sh -c "..."` and a heredoc fed to a shell
+# both carry real commands inside text that was just discarded. For those shapes
+# the raw command is appended back, so what the drop hides is still matched.
+# no-pr-decisions.sh carries the same block; the two must stay in step.
+WRAPPED=
+if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))'; then
+  WRAPPED=1
+  SCAN="$SCAN
+$COMMAND"
+fi
+
+# Re-admitting the text is enough for a heredoc, whose payload sits at the start
+# of a line, and not for `sh -c "..."`, whose payload sits inside quotes where no
+# command position exists. Inside a wrapper the anchor is therefore dropped
+# entirely. Narrow on purpose: the unanchored pattern runs only once a wrapper
+# has already been found, never over an ordinary command.
+if [ -n "$WRAPPED" ] \
+   && echo "$COMMAND" | grep -qE 'git[[:space:]]+([^;&|]*[[:space:]])?push([^-A-Za-z0-9_]|$)'; then
+  echo "Blocked: git push inside a shell wrapper. Pushes to the remote are Bertan's, made from a separate terminal." >&2
   exit 2
 fi
 
-# The anchor above ignores quoted text and heredoc bodies, which would otherwise
-# hide a real push inside a shell wrapper. Wrappers are matched on the whole raw
-# command, quotes and bodies included.
-if echo "$COMMAND" | grep -qE '(^|[;&|(]\s*)(ba|z|)sh\s+(-c|<<)|(^|[;&|(]\s*)eval([^-A-Za-z0-9_]|$)'; then
-  if echo "$COMMAND" | grep -qE 'git\s+([^;&|]*\s)?push([^-A-Za-z0-9_]|$)'; then
-    echo "Blocked: git push inside a shell wrapper. Pushes to the remote are Bertan's, made from a separate terminal." >&2
-    exit 2
-  fi
+# A command sits at a command position: the start of a line -- leading
+# whitespace included -- or after ; && || | or an opening paren.
+#
+# Leading whitespace is load-bearing. The anchor first written here required
+# column zero, which fixed the heredoc false positive and silently gave up every
+# indented push: a push inside an if or a for loop is written indented, and that
+# is the accident this hook exists to stop. no-commit-to-main.sh, with the
+# looser anchor, still caught it. Reported on PR #35 and fixed here.
+#
+# The cost is one false positive, accepted knowingly: a quoted multi-line string
+# that is not a heredoc, whose continuation line begins with the command, as in
+# `gh issue comment -b "...\n  git push ..."`. A blocked comment is visible and
+# one edit away; a silently permitted push is neither.
+#
+# The -c/-C branch lets `git -C /path push` through the global-option run;
+# without it the option's separate value ends the match before push is reached.
+if echo "$SCAN" | grep -qE '(^[[:space:]]*|[;&|(][[:space:]]*)git[[:space:]]+((-[cC][[:space:]]+[^ ]+|-[^ ]+)[[:space:]]+)*push([^-A-Za-z0-9_]|$)'; then
+  echo "Blocked: git push. Pushes to the remote are Bertan's, made from a separate terminal. Leave the commits on the branch and say what is ready to push." >&2
+  exit 2
 fi
 
 exit 0
