@@ -190,6 +190,45 @@ a claim without a number is a claim to re-measure.
 - A red suite mid-refactor is acceptable — verify against the recorded snapshot
   in the dev-log rather than insisting on green first.
 
+## What an unattended agent may do to this repository
+
+An agent may push the branch of the linked worktree it is working in —
+non-forced, positively naming that branch, to a remote this repository has — and
+nothing else. It may open a pull request, comment on one, edit one and read one,
+through `gh pr view` or through a `gh api` request that does not write. It may
+not merge one, review one with a verdict, close or reopen one, or create or
+delete a release. `main` and `dev-NN` are Bertan's to push; `main` is
+additionally protected server-side by the `main-branch-protection` ruleset,
+which requires a pull request.
+
+"Positively naming that branch" is literal: write `git push origin <branch>`.
+A bare `git push`, and `git push origin` with no refspec, are refused. Their
+destination comes from configuration — `push.default`, a `remote.<name>.push`
+refspec, the branch's upstream — and an agent may run `git config`, so a rule
+resting on a configured value can be arranged around one command earlier. The
+destination has to be in the command for the hook to have anything to check.
+
+Enforced by `.claude/hooks/no-git-push.sh` and `no-pr-decisions.sh`, both built
+on `.claude/hooks/lib/command-scan.sh`, which answers where a command starts and
+where its arguments end — that question, re-derived in each hook, was the whole
+of five defects. `bash .claude/hooks/probe-hooks.sh` checks the boundary in both
+directions and prints which context it ran in. Hooks see only the Bash tool, so
+Bertan's own terminal is not subject to any of this.
+
+`dev-NN` rests on those hooks alone and can rest on nothing else: an agent pushes
+as `bgunyel`, so a server-side rule on `dev-*` would block Bertan too, and naming
+him a bypass actor would hand the agent the bypass. Whether the command runs in a
+linked worktree is the only signal that separates them. `main` is different —
+there the policy is identical for both, which is why a ruleset carries it.
+
+**Deliberately left open.** These stop mistakes, not adversaries: they read the
+text of a command, so a caller that means to evade them can. Two consequences are
+accepted rather than fixed. A push or a decision inside `sh -c` is refused
+outright rather than assessed, because a destination inside quotes cannot be
+read. And a quoted multi-line string whose continuation line begins with one of
+these commands is refused although it is only prose — a blocked comment is
+visible and one edit away, a silently permitted push is neither.
+
 ## Agent skills
 
 ### Issue tracker
