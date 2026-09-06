@@ -31,6 +31,20 @@ SCAN=$(echo "$COMMAND" | awk '
     print
   }')
 
+# A backslash-newline is a line continuation, not a command separator. Its
+# sibling scoped arguments by line and was defeated by one; these checks span
+# lines and were not, but the two files are kept in step deliberately -- the one
+# time they diverged, the wrapper rule existed in only one of them.
+SCAN=$(printf '%s\n' "$SCAN" | awk '
+  {
+    line = $0
+    while (line ~ /\\$/) {
+      sub(/\\$/, "", line)
+      if ((getline nxt) > 0) line = line nxt; else break
+    }
+    print line
+  }')
+
 # Dropping bodies is itself a bypass, and this file lacked the guard its sibling
 # had -- reported on PR #35, where `bash -c 'gh pr merge 35'` and a graphql
 # mutation sent through a heredoc both passed. Two shapes re-admit the raw

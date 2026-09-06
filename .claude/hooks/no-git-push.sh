@@ -45,6 +45,22 @@ SCAN=$(echo "$COMMAND" | awk '
     print
   }')
 
+# A backslash-newline is a line continuation, not a command separator. The
+# argument scope further down runs from push to the next separator, a newline
+# ended it, and an empty scope fell through to the bare-push case -- the
+# permitted one. So `git push \` followed by `--mirror origin` read as an
+# ordinary bare push and would have deleted every remote branch absent locally.
+# Continuations are joined before anything is matched. Reported on PR #35.
+SCAN=$(printf '%s\n' "$SCAN" | awk '
+  {
+    line = $0
+    while (line ~ /\\$/) {
+      sub(/\\$/, "", line)
+      if ((getline nxt) > 0) line = line nxt; else break
+    }
+    print line
+  }')
+
 # Dropping bodies is itself a bypass: `sh -c "..."` and a heredoc fed to a shell
 # both carry real commands inside text that was just discarded.
 WRAPPED=
@@ -120,7 +136,19 @@ fi
 # of `rm -f x && git push` -- is not mistaken for the push's own.
 PUSH_LINE=$(echo "$SCAN" | grep -m1 -E '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*git[[:space:]]+((-[cC][[:space:]]+[^ ]+|-[^ ]+)[[:space:]]+)*push([^-A-Za-z0-9_]|$)')
 ARGS=${PUSH_LINE#*push}
-ARGS=$(printf '%s' "$ARGS" | sed 's/[;&|].*//' | tr -d '\042\047')
+# The scope ends at a shell separator, and a closing paren is one: without it
+# the ) of `(git push)` was read as the push's remote.
+ARGS=$(printf '%s' "$ARGS" | sed 's/[;&|)].*//' | tr -d '\042\047')
+
+# Joining above consumes a backslash that ends a line, including one with no
+# continuation line after it, which is simply a bare push. A backslash surviving
+# here is one the join did not recognise -- trailed by whitespace, say -- and
+# what follows it cannot be read. An empty scope is the permitted case, so an
+# unreadable one is refused rather than allowed to look empty.
+if printf '%s' "$ARGS" | grep -q '\\[[:space:]]*$'; then
+  echo "$REFUSE The arguments continue past where this check can read them." >&2
+  exit 2
+fi
 
 # Whole-repository and tag forms name no branch at all. Refusing branches by
 # name was the shape of this check before, and a denylist cannot see a spelling
@@ -168,7 +196,18 @@ for TOK in $ARGS; do
     -o|--push-option|--repo|--receive-pack|--exec) SKIP=1; continue ;;
     -*) continue ;;
   esac
-  if [ -z "$REMOTE_SEEN" ]; then REMOTE_SEEN=1; continue; fi
+  # The first bare token is the remote. Nothing required it to be one, so a URL
+  # or a typo'd name was admitted whenever the refspec happened to name this
+  # branch. It reaches none of Bertan's branches, but an invented remote is the
+  # shape of mistake this file is for. Raised on PR #35.
+  if [ -z "$REMOTE_SEEN" ]; then
+    REMOTE_SEEN=1
+    if ! git remote | grep -qxF "$TOK"; then
+      echo "$REFUSE $TOK is not a remote of this repository." >&2
+      exit 2
+    fi
+    continue
+  fi
   REFSPEC_SEEN=1
   # A leading + on a refspec is the other spelling of --force.
   case "$TOK" in

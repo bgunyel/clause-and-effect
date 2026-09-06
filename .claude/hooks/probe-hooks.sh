@@ -150,6 +150,29 @@ probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin HEAD:<branch>'  "git pu
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin <b>:<b>'        "git push origin $CURRENT:$CURRENT"
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'push option with a value'       "git push -o ci.skip origin $CURRENT"
 
+echo "=== REGRESSION: PR #35, a line continuation emptied the argument scope ==="
+# The scope ran from push to the next shell separator; a newline ended it, and
+# an empty scope fell through to the bare-push case, the permitted one. So one
+# wrapped line turned any push into an ordinary one -- --mirror included, which
+# deletes remote branches and closes open PRs. Continuations are now joined
+# before anything is matched.
+probe no-git-push.sh BLOCK 'continued --mirror'  $'git push \\\n  --mirror origin'
+probe no-git-push.sh BLOCK 'continued --all'     $'git push \\\n  --all origin'
+probe no-git-push.sh BLOCK 'continued force'     $'git push \\\n  --force-with-lease origin main'
+probe no-git-push.sh BLOCK 'continued origin main' $'git push \\\n  origin main'
+probe no-git-push.sh BLOCK 'continuation over three lines' $'git push \\\n  --all \\\n  origin'
+# A trailing backslash with nothing after it is not a continuation of anything:
+# the command is a bare push of this branch, and that is permitted.
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'trailing backslash, nothing after' $'git push \\'
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'continued push of this branch'     $'git push \\\n  origin '"$CURRENT"
+
+echo "=== the remote must be a remote of this repository ==="
+# Nothing required the first bare token to be a remote, so a URL or a typo was
+# admitted whenever the refspec named this branch. Raised on PR #35.
+probe no-git-push.sh BLOCK 'a foreign remote URL'    'git push git@github.com:someone/else.git HEAD'
+probe no-git-push.sh BLOCK 'an undefined remote name' 'git push upstream HEAD'
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'origin is a real remote' "git push origin $CURRENT"
+
 echo "=== no-git-push.sh : not a push at all ==="
 for c in 'git status' \
          'git commit -m "explain how to git push later"' \
