@@ -35,6 +35,14 @@
 # This stops mistakes, not adversaries.
 . "$(dirname "$0")/lib/command-scan.sh"
 
+# check_push splits a push's arguments with `for TOK in $ARGS`, unquoted because
+# the split is the point. That also globs them against the worktree: `*` is
+# refused by name, `?` and [...] were not, and a refspec that matched a file
+# would have been read as that filename. Both spellings land on BLOCK today, so
+# this is a latent surprise rather than a hole -- closed here rather than left
+# to become one. Nothing in this file needs pathname expansion.
+set -f
+
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
 SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)

@@ -11,10 +11,17 @@
 # indentation and wrapper probes come from the review on PR #35.
 #
 # The control-word, here-string, <<- , bare-push and gh api probes come from a
-# second review of the same branch, which found four ways past the boundary that
-# these probes did not ask about. That is worth saying plainly: the suite was
-# green while `if true; then git push --mirror origin; fi` was permitted. A
-# probe suite is evidence about the cases it names and about nothing else.
+# second review of the same branch, and the quoted-<<, bundled-flag,
+# flag-before-subcommand and gh api close/release probes from a third. Between
+# them those reviews found eight ways past the boundary that this suite did not
+# ask about, and it was green before each round. Worth saying plainly rather
+# than counting: the suite passed while `if true; then git push --mirror origin;
+# fi` was permitted, and passed again while a commit message mentioning `<<EOF`
+# blinded both hooks for the rest of the command.
+#
+# So the number below is not a measure of the boundary. A probe suite is
+# evidence about the cases it names and about nothing else, and every case here
+# was named by someone who went looking for one it had missed.
 #
 # One expectation is not a literal but a context: whether pushing this branch is
 # permitted depends on where the suite runs, because that is exactly what
@@ -105,6 +112,10 @@ tok 'dash-heredoc ends on a tab-indented terminator' \
     'cat <<-EOF
 gh pr merge 35' \
     "$(printf 'cat <<-EOF\n\thello\n\tEOF\ngh pr merge 35\n' | cs_normalise)"
+tok 'unterminated heredoc gives its lines back' \
+    'git commit -m "fix <<EOF handling"
+    git push --all origin' \
+    "$(printf 'git commit -m "fix <<EOF handling"\n    git push --all origin\n' | cs_normalise)"
 tok 'control word removed, then/fi' \
     'true
 git push --mirror origin' \
@@ -238,6 +249,71 @@ probe no-pr-decisions.sh BLOCK 'DELETE a review'         'gh api -X DELETE repos
 # A read wrapped in a shell is still refused: inside quotes the method cannot be
 # read any more than the endpoint can. Run it unwrapped.
 probe no-pr-decisions.sh BLOCK 'a GET inside bash -c'    "bash -c 'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews'"
+
+echo "=== REGRESSION: review of 02a14d8, a heredoc that never was ==="
+# `<<` inside double quotes is text, not a redirection, and the opener was
+# matched anywhere on the line. The terminator it took never arrives, so every
+# following line was dropped and both hooks went blind for the rest of the
+# command -- reachable by writing a commit message about this very file. Third
+# wrong answer to what counts as a heredoc, so the drop is no longer trusted:
+# lines held for a heredoc that does not terminate are given back at END.
+probe no-git-push.sh     BLOCK 'commit msg naming <<EOF, then --all'    $'git commit -m "hooks: fix <<EOF handling in cs_normalise"\n    git push --all origin'
+probe no-pr-decisions.sh BLOCK 'pr comment naming <<, then a merge'     $'gh pr comment 35 -b "the << operator confused it"\n    gh pr merge 35'
+probe no-git-push.sh     BLOCK 'left shift << in a message, then --all' $'git commit -m "left shift << done"\n    git push --all origin'
+probe no-git-push.sh     BLOCK 'issue comment naming <<, then --mirror' $'gh issue comment 1 -b "see << notes"\n    git push --mirror origin'
+# A heredoc that does terminate is still data, so the older probes above still
+# ALLOW -- that is what says the fail-safe did not simply disable the drop.
+
+echo "=== REGRESSION: review of 02a14d8, bundled gh shorthand flags ==="
+# gh takes shorthand flags together, so -ab is --approve --body and approves.
+# no-git-push.sh had already answered this for -fu and this file had not: the
+# same asymmetry between the siblings, in a second place.
+probe no-pr-decisions.sh BLOCK 'gh pr review -ab "lgtm" 35'  'gh pr review -ab "lgtm" 35'
+probe no-pr-decisions.sh BLOCK 'gh pr review 35 -ab lgtm'    'gh pr review 35 -ab lgtm'
+probe no-pr-decisions.sh BLOCK 'gh pr review -rb "no" 35'    'gh pr review -rb "no" 35'
+probe no-pr-decisions.sh BLOCK 'verdict letter last, -ba'    'gh pr review -ba "lgtm" 35'
+# A bundle carrying no verdict letter is still a comment, and a long flag must
+# not match on a letter it happens to contain -- --repo is not --request-changes.
+probe no-pr-decisions.sh ALLOW 'gh pr review -cb "a remark"' 'gh pr review -cb "a remark" 35'
+probe no-pr-decisions.sh ALLOW 'review --comment with --repo' 'gh pr review --comment --repo o/r -b x 35'
+
+echo "=== REGRESSION: review of 02a14d8, a flag before the subcommand ==="
+# Cobra resolves the subcommand at the first non-flag argument, so a flag may
+# sit in front of it and every rule here wanted it as the third word. -R/--repo
+# takes its value as a separate token, which would otherwise be read as the
+# subcommand and hide it just as effectively.
+probe no-pr-decisions.sh BLOCK 'gh pr --repo o/r merge 35'      'gh pr --repo o/r merge 35'
+probe no-pr-decisions.sh BLOCK 'gh pr -R o/r close 35'          'gh pr -R o/r close 35'
+probe no-pr-decisions.sh BLOCK 'gh pr --repo=o/r reopen 35'     'gh pr --repo=o/r reopen 35'
+probe no-pr-decisions.sh BLOCK 'gh pr --repo o/r review -a 35'  'gh pr --repo o/r review -a 35'
+probe no-pr-decisions.sh BLOCK 'gh release --repo o/r create v1' 'gh release --repo o/r create v1'
+# An ordinary subcommand behind a flag is still ordinary.
+probe no-pr-decisions.sh ALLOW 'gh pr --repo o/r view 35'       'gh pr --repo o/r view 35'
+probe no-pr-decisions.sh ALLOW 'gh pr --repo o/r list'          'gh pr --repo o/r list'
+
+echo "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
+# Closing a PR and publishing a release were refused in the gh spelling and open
+# through gh api, so the boundary was spelling-dependent exactly where the file
+# says it is not. PATCH /pulls/N is also how gh pr edit retitles, which stays
+# allowed, so the field decides this one rather than the endpoint.
+probe no-pr-decisions.sh BLOCK 'PATCH a PR to state=closed'  'gh api -X PATCH repos/o/r/pulls/35 -f state=closed'
+probe no-pr-decisions.sh BLOCK 'PATCH a PR to state=open'    'gh api -X PATCH repos/o/r/pulls/35 -f state=open'
+probe no-pr-decisions.sh BLOCK 'POST a release'              'gh api -X POST repos/o/r/releases -f tag_name=v1'
+probe no-pr-decisions.sh BLOCK 'DELETE a release'            'gh api -X DELETE repos/o/r/releases/123'
+probe no-pr-decisions.sh BLOCK 'graphql closePullRequest'    'gh api graphql -f query="mutation{closePullRequest(input:{x:1})}"'
+probe no-pr-decisions.sh BLOCK 'graphql createRelease'       'gh api graphql -f query="mutation{createRelease(input:{x:1})}"'
+probe no-pr-decisions.sh BLOCK 'graphql state on updatePR'   'gh api graphql -f query="mutation{updatePullRequest(input:{state:CLOSED})}"'
+# Retitling through that same endpoint is editing, and listing releases is
+# reading. Both stay allowed, which is what makes the field test worth having.
+probe no-pr-decisions.sh ALLOW 'PATCH a PR title'            'gh api -X PATCH repos/o/r/pulls/35 -f title=newtitle'
+probe no-pr-decisions.sh ALLOW 'GET the releases list'       'gh api repos/o/r/releases'
+probe no-pr-decisions.sh ALLOW 'gh pr edit retitles'         'gh pr edit 35 --title newtitle'
+
+echo "=== the push argument split does not glob against the worktree ==="
+# `for TOK in $ARGS` is unquoted because the split is the point; set -f stops
+# the same line expanding ? and [...] against the files sitting next to it.
+probe no-git-push.sh BLOCK 'a ? wildcard refspec'     'git push origin ?'
+probe no-git-push.sh BLOCK 'a [...] wildcard refspec' 'git push origin [a-z]*'
 
 echo "=== worktree exception: pushing this worktree's own branch ==="
 # Every permitted push names the branch. That is the whole exception: a push

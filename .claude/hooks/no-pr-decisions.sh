@@ -47,44 +47,63 @@ CMDS=$(printf '%s\n' "$SCAN" | cs_split)
 
 DECIDE="Blocked: deciding a pull request is Bertan's call, not an agent's. Opening a PR, commenting on it and editing it are allowed; accepting, rejecting, merging and reopening are not."
 
+# `gh pr merge` is not the only way to write `gh pr merge`. Cobra resolves the
+# subcommand at the first non-flag argument, so a flag may sit in front of it:
+# `gh pr --repo o/r merge 35` merges, and every rule here wanted the subcommand
+# as the third word. -R/--repo takes its value as a separate token and has to
+# consume it, or the value would be read as the subcommand. Written once and
+# interpolated, so the group and the verb are still all a rule has to name.
+GHPR='^gh[[:space:]]+pr([[:space:]]+((-R|--repo|--hostname)[[:space:]]+[^[:space:]]+|-[^[:space:]]+))*[[:space:]]+'
+GHRELEASE='^gh[[:space:]]+release([[:space:]]+((-R|--repo|--hostname)[[:space:]]+[^[:space:]]+|-[^[:space:]]+))*[[:space:]]+'
+
+# The verdict flags, bundled or not. gh takes shorthand flags together, so
+# `gh pr review -ab "lgtm" 35` is --approve --body and was allowed while
+# `-a` alone was refused. no-git-push.sh had already answered this for -fu and
+# this file had not -- the same asymmetry twice. Only single-dash bundles are
+# scanned for a or r: a long flag would match on any letter it happens to
+# contain, and --repo would read as --request-changes.
+VERDICT='[[:space:]](--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[:space:]]|=|"|$)'
+
 # A wrapper's payload sits inside quotes, where there is no command word for the
 # tokeniser to find, so these run unanchored over the raw text -- and only once
 # a wrapper has been found, never over an ordinary command.
 if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))'; then
-  if echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+(merge|close|reopen)([^-A-Za-z0-9_]|$)' \
-     || echo "$COMMAND" | grep -qE 'gh[[:space:]]+release[[:space:]]+(create|delete|delete-asset)([^-A-Za-z0-9_]|$)' \
+  if echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+.*(merge|close|reopen)([^-A-Za-z0-9_]|$)' \
+     || echo "$COMMAND" | grep -qE 'gh[[:space:]]+release[[:space:]]+.*(create|delete|delete-asset)([^-A-Za-z0-9_]|$)' \
      || echo "$COMMAND" | grep -qE '/pulls/[^ ]*/(merge|reviews)' \
-     || echo "$COMMAND" | grep -qE 'mergePullRequest|addPullRequestReview'; then
+     || echo "$COMMAND" | grep -qE '/releases([^A-Za-z0-9_-]|$)' \
+     || echo "$COMMAND" | grep -qiE 'state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?' \
+     || echo "$COMMAND" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then
     echo "$DECIDE A shell wrapper does not change what the command decides." >&2
     exit 2
   fi
   if echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+review([^-A-Za-z0-9_]|$)' \
-     && echo "$COMMAND" | grep -qE '[[:space:]](--approve|--request-changes|-a|-r)([[:space:]]|=|"|$)'; then
+     && echo "$COMMAND" | grep -qE "$VERDICT"; then
     echo "$DECIDE A shell wrapper does not change what the command decides." >&2
     exit 2
   fi
 fi
 
-if printf '%s\n' "$CMDS" | grep -qE '^gh[[:space:]]+pr[[:space:]]+merge([^-A-Za-z0-9_]|$)'; then
+if printf '%s\n' "$CMDS" | grep -qE "${GHPR}merge([^-A-Za-z0-9_]|\$)"; then
   echo "$DECIDE Leave the PR open and say it is ready to merge." >&2
   exit 2
 fi
 
 # Only the verdict flags, and only in the same command as the subcommand.
 # Reviewing with --comment leaves remarks without a verdict and stays allowed.
-if printf '%s\n' "$CMDS" | grep -qE '^gh[[:space:]]+pr[[:space:]]+review([[:space:]].*)?[[:space:]](--approve|--request-changes|-a|-r)([[:space:]]|=|$)'; then
+if printf '%s\n' "$CMDS" | grep -qE "${GHPR}review([[:space:]].*)?${VERDICT}"; then
   echo "$DECIDE Review with --comment to leave remarks without a verdict." >&2
   exit 2
 fi
 
 # Rejecting a pull request by outcome rather than by verdict.
-if printf '%s\n' "$CMDS" | grep -qE '^gh[[:space:]]+pr[[:space:]]+(close|reopen)([^-A-Za-z0-9_]|$)'; then
+if printf '%s\n' "$CMDS" | grep -qE "${GHPR}(close|reopen)([^-A-Za-z0-9_]|\$)"; then
   echo "$DECIDE Closing a PR rejects it; say why it should be closed instead." >&2
   exit 2
 fi
 
 # Outward-facing publication. This repository is public.
-if printf '%s\n' "$CMDS" | grep -qE '^gh[[:space:]]+release[[:space:]]+(create|delete|delete-asset)([^-A-Za-z0-9_]|$)'; then
+if printf '%s\n' "$CMDS" | grep -qE "${GHRELEASE}(create|delete|delete-asset)([^-A-Za-z0-9_]|\$)"; then
   echo "Blocked: publishing or deleting a GitHub release is Bertan's call. This repository is public; a release is visible the moment it exists." >&2
   exit 2
 fi
@@ -135,8 +154,23 @@ if [ -n "$API_WRITE" ]; then
     echo "$DECIDE Reaching the merge or review endpoint through gh api is the same decision by another name." >&2
     exit 2
   fi
-  if echo "$SCAN" | grep -qE 'mergePullRequest|addPullRequestReview'; then
-    echo "$DECIDE Reaching the merge or review mutation through graphql is the same decision by another name." >&2
+  # Closing and reopening were refused in the gh pr spelling and open through
+  # gh api, so the boundary was spelling-dependent where it claimed not to be.
+  # They are a write to the pull request itself rather than to a subpath, and
+  # the same PATCH is how `gh pr edit` retitles one, which stays allowed -- so
+  # the endpoint cannot decide this and the field has to. graphql spells the
+  # same change as a state on updatePullRequest.
+  if echo "$SCAN" | grep -qiE '(/pulls/|updatePullRequest)' \
+     && echo "$SCAN" | grep -qiE 'state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?'; then
+    echo "$DECIDE Setting a pull request's state through gh api closes or reopens it, which is the same decision by another name." >&2
+    exit 2
+  fi
+  if echo "$SCAN" | grep -qE '/releases([^A-Za-z0-9_-]|$)'; then
+    echo "Blocked: publishing or deleting a GitHub release is Bertan's call, reached through gh api no less than through gh release. This repository is public; a release is visible the moment it exists." >&2
+    exit 2
+  fi
+  if echo "$SCAN" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then
+    echo "$DECIDE Reaching the same decision through a graphql mutation is the same decision by another name." >&2
     exit 2
   fi
 fi

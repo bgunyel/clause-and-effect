@@ -28,6 +28,14 @@
 # after `then`, `do`, `else`, `{` or `!` is at a command position and was not
 # treated as one. Each of the three hid every command that followed it.
 #
+# A third review found the heredoc question wrong a third time, and that is the
+# number that settled it. `git commit -m "fix <<EOF handling"` contains no
+# heredoc -- inside double quotes `<<` is text -- and the rest of the command
+# was dropped. Three wrong answers, each silent and each in the permitting
+# direction, is evidence about the question rather than about the answers: it
+# cannot be got exact by looking more carefully, because that is what the
+# previous two attempts were. The drop is a fail-safe now. See cs_normalise.
+#
 # The answers are approximate on purpose. Splitting more eagerly than a shell
 # would yields extra command candidates, which can only refuse more; it never
 # hides one. That is the safe direction for a guard whose failure mode, twice
@@ -53,12 +61,26 @@
 # tabs from the terminator, which an exact comparison never matched, so that
 # heredoc did not end either. Either one turned a `git push --mirror` or a
 # `gh pr merge` on a following line into nothing at all.
+#
+# Those were the second and third answers to the same question, and a fourth
+# followed them: `git commit -m "fix <<EOF handling"` has no heredoc in it at
+# all -- inside double quotes `<<` is text -- and the opener was matched
+# anywhere on the line, quotes included. So the drop is no longer trusted to be
+# right. A heredoc that never reaches its terminator was not a heredoc, and the
+# lines held for it are given back at END rather than lost.
+#
+# That is the answer this question should have had from the start: the exact
+# version has been got wrong three times, and each time the failure was silent
+# and in the permitting direction. The fail-safe costs a genuinely unterminated
+# heredoc being scanned as commands -- which bash would refuse to run anyway --
+# and it is the direction this file takes everywhere else.
 cs_normalise() {
   awk '
     ind {
       line = $0
       if (dash) sub(/^\t+/, "", line)
-      if (line == d) ind = 0
+      held[++nheld] = $0
+      if (line == d) { ind = 0; nheld = 0 }
       next
     }
     {
@@ -74,7 +96,10 @@ cs_normalise() {
         ind = 1
       }
       print
-    }' \
+    }
+    # The terminator never arrived, so this was not a heredoc and the lines were
+    # dropped in error. Give them back.
+    END { for (i = 1; i <= nheld; i++) print held[i] }' \
   | awk '
     {
       line = $0
