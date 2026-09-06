@@ -5,14 +5,35 @@
 # against calling the function under test forbids is deriving the expectation
 # from it, and every verdict below is written as a literal BLOCK or ALLOW.
 #
-# The four heredoc probes exist because an earlier version of these hooks
-# blocked the commit that introduced them: grep anchors ^ per line, so a wrapped
-# line of a commit message naming one of the refused commands read as a command
-# position. The four multi-line probes guard the other direction, that dropping
-# heredoc bodies did not also drop real commands.
+# The heredoc probes exist because an earlier version of these hooks blocked the
+# commit that introduced them: grep anchors ^ per line, so a wrapped line of a
+# commit message naming a refused command read as a command position. The
+# indentation and wrapper probes come from the review on PR #35.
+#
+# One expectation is not a literal but a context: whether pushing this branch is
+# permitted depends on where the suite runs, because that is exactly what
+# no-git-push.sh decides. Run from a linked worktree on a feature branch, a push
+# of that branch is ALLOW; run from the main checkout, the identical command is
+# BLOCK. OWN_BRANCH_PUSH holds whichever applies, and the banner says which.
 #
 # Run: bash .claude/hooks/probe-hooks.sh
 cd "$(dirname "$0")" || exit 1
+
+CURRENT=$(git branch --show-current 2>/dev/null)
+GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null)
+GIT_COMMON_PATH=$(git rev-parse --git-common-dir 2>/dev/null)
+
+if [ -n "$GIT_DIR_PATH" ] && [ "$GIT_DIR_PATH" != "$GIT_COMMON_PATH" ] \
+   && [ -n "$CURRENT" ] && [ "$CURRENT" != "main" ] \
+   && ! echo "$CURRENT" | grep -qE '^dev-[0-9]+$'; then
+  OWN_BRANCH_PUSH=ALLOW
+  CONTEXT="linked worktree on $CURRENT -- a push of this branch is permitted"
+else
+  OWN_BRANCH_PUSH=BLOCK
+  CONTEXT="main checkout or a reserved branch (${CURRENT:-none}) -- every push is refused"
+fi
+echo "context: $CONTEXT"
+echo
 
 FAILED=0
 probe() {
@@ -29,33 +50,23 @@ probe() {
 }
 
 echo "=== REGRESSION: heredoc prose that blocked its own commit ==="
-COMMIT_MSG=$'git commit -q -F - <<\'EOF\'\nLeave pushing and deciding a PR to Bertan\n\nno-git-push.sh refuses every push; no-pr-decisions.sh refuses\ngh pr review --approve and --request-changes, gh pr close and reopen.\ngit push is refused in every form.\ngh pr merge 5 would also be refused.\nEOF'
+COMMIT_MSG=$'git commit -q -F - <<\'EOF\'\nLeave pushing and deciding a PR to Bertan\n\nno-git-push.sh refuses every push; no-pr-decisions.sh refuses\ngh pr review --approve and --request-changes, gh pr close and reopen.\ngit push origin main is refused in every form.\ngh pr merge 5 would also be refused.\nEOF'
 probe no-git-push.sh     ALLOW 'commit msg naming git push in heredoc' "$COMMIT_MSG"
 probe no-pr-decisions.sh ALLOW 'commit msg naming gh pr verbs in heredoc' "$COMMIT_MSG"
-NOTE=$'cat > /tmp/note.md <<\'MD\'\ngh pr merge is now refused by a hook.\ngit push likewise.\nMD'
+NOTE=$'cat > /tmp/note.md <<\'MD\'\ngh pr merge is now refused by a hook.\ngit push origin main likewise.\nMD'
 probe no-git-push.sh     ALLOW 'heredoc body naming git push' "$NOTE"
 probe no-pr-decisions.sh ALLOW 'heredoc body naming gh pr merge' "$NOTE"
 
-echo "=== REGRESSION: real commands still caught in multi-line input ==="
-probe no-git-push.sh     BLOCK 'multi-line, push on line 2'   $'cd /tmp\ngit push origin dev-05'
-probe no-pr-decisions.sh BLOCK 'multi-line, merge on line 2'  $'cd /tmp\ngh pr merge 5'
-probe no-git-push.sh     BLOCK 'heredoc fed to a shell'       $'bash <<\'EOF\'\ngit push\nEOF'
-probe no-git-push.sh     BLOCK 'real push after heredoc ends' $'cat > /tmp/f <<\'EOF\'\nhello\nEOF\ngit push'
-
 echo "=== REGRESSION: PR #35, indentation defeated the anchor ==="
-# The anchor required column zero, so a command inside an if or a for loop --
-# indented, and the ordinary way either is written -- passed both hooks, while
-# no-commit-to-main.sh with its looser anchor still caught the same shape.
-probe no-git-push.sh     BLOCK 'if/then + indented push'   $'if true; then\n    git push origin dev-05\nfi'
-probe no-git-push.sh     BLOCK 'for loop + indented push'  $'for b in a b; do\n  git push origin $b\ndone'
-probe no-git-push.sh     BLOCK 'deeply indented push'      $'if true; then\n  if true; then\n        git push\n  fi\nfi'
-probe no-pr-decisions.sh BLOCK 'if/then + indented merge'  $'if true; then\n    gh pr merge 35\nfi'
-probe no-pr-decisions.sh BLOCK 'for loop + indented close' $'for n in 1 2; do\n  gh pr close $n\ndone'
+# Each names a refused destination, so these assert that the command is still
+# *found* when indented, independently of the worktree exception.
+probe no-git-push.sh     BLOCK 'if/then + indented push to dev-05' $'if true; then\n    git push origin dev-05\nfi'
+probe no-git-push.sh     BLOCK 'for loop + indented push to main'  $'for r in a b; do\n  git push origin main\ndone'
+probe no-git-push.sh     BLOCK 'deeply indented push to main'      $'if true; then\n  if true; then\n        git push origin main\n  fi\nfi'
+probe no-pr-decisions.sh BLOCK 'if/then + indented merge'          $'if true; then\n    gh pr merge 35\nfi'
+probe no-pr-decisions.sh BLOCK 'for loop + indented close'         $'for n in 1 2; do\n  gh pr close $n\ndone'
 
 echo "=== REGRESSION: PR #35, no-pr-decisions.sh had no wrapper rule ==="
-# Its sibling re-admitted the raw command for shell wrappers and this file did
-# not, so everything the heredoc drop hid stayed hidden -- including a graphql
-# mutation, which is ordinarily sent through a heredoc.
 probe no-pr-decisions.sh BLOCK 'bash -c gh pr merge'  "bash -c 'gh pr merge 35'"
 probe no-pr-decisions.sh BLOCK 'sh -c gh pr merge'    'sh -c "gh pr merge 35"'
 probe no-pr-decisions.sh BLOCK 'eval gh pr merge'     "eval 'gh pr merge 35'"
@@ -63,33 +74,37 @@ probe no-pr-decisions.sh BLOCK 'graphql mutation via heredoc' $'gh api graphql -
 probe no-pr-decisions.sh BLOCK 'REST merge via heredoc body'  $'gh api -X PUT --input - <<EOF\n{"path":"/repos/o/r/pulls/5/merge"}\nEOF'
 
 echo "=== ACCEPTED false positive: quoted multi-line string, not a heredoc ==="
-# The price of allowing leading whitespace in the anchor. A continuation line of
-# a quoted argument that begins with one of these commands is refused. Kept on
-# purpose: a blocked comment is visible and one edit away, a silently permitted
-# push is neither. These assert the current, deliberate behaviour -- if a later
-# change makes them ALLOW, that is a decision to take knowingly, not a bug fix.
+# The price of allowing leading whitespace in the anchor. Kept on purpose: a
+# blocked comment is visible and one edit away, a silently permitted push is
+# neither. If a later change makes these ALLOW, that is a decision to take
+# knowingly, not a bug fix.
 probe no-git-push.sh     BLOCK 'multi-line -b string continuing with a push' $'gh issue comment 27 -b "to release:\n  git push origin main"'
 probe no-pr-decisions.sh BLOCK 'multi-line -b string continuing with a merge' $'gh issue comment 27 -b "to land it:\n  gh pr merge 35"'
 
-echo "=== no-git-push.sh : must BLOCK ==="
-for c in 'git push' \
-         'git push origin dev-05' \
-         'git push -f origin dev-05' \
-         'git push --force-with-lease' \
-         'git push origin HEAD:main' \
-         'git -C /home/bgunyel/source/ai/clause-and-effect push' \
-         'git -c user.name=x push origin HEAD' \
-         'git commit -m msg && git push' \
-         'cd /tmp; git push' \
-         'make test || git push' \
-         '(git push)' \
-         'bash -c "git push origin dev-05"' \
-         'sh -c "git push"' \
-         'eval "git push"' \
-         'git push;'
-do probe no-git-push.sh BLOCK "$c" "$c"; done
+echo "=== worktree exception: pushing this worktree's own branch ==="
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'bare git push'                    'git push'
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push after a commit'          'git commit -m msg && git push'
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push in a subshell'           '(git push)'
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push with a trailing ;'       'git push;'
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push --force-with-lease'      'git push --force-with-lease'
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push -u origin <this branch>' "git push -u origin $CURRENT"
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'indented push, own branch'        $'if true; then\n    git push\nfi'
 
-echo "=== no-git-push.sh : must ALLOW ==="
+echo "=== worktree exception does not extend to ==="
+probe no-git-push.sh BLOCK 'another branch by name: main'      'git push origin main'
+probe no-git-push.sh BLOCK 'another branch by name: dev-05'    'git push origin dev-05'
+probe no-git-push.sh BLOCK 'a refspec destination: HEAD:main'  'git push origin HEAD:main'
+probe no-git-push.sh BLOCK 'a forced push to dev-05'           'git push -f origin dev-05'
+probe no-git-push.sh BLOCK 'a cd before the push'              'cd /tmp && git push'
+probe no-git-push.sh BLOCK 'a cd before the push, with ;'      'cd /tmp; git push'
+probe no-git-push.sh BLOCK 'git redirected with -C'            'git -C /home/bgunyel/source/ai/clause-and-effect push'
+probe no-git-push.sh BLOCK 'git redirected with --git-dir'     'git --git-dir=/elsewhere/.git push'
+probe no-git-push.sh BLOCK 'a push inside sh -c'               'sh -c "git push"'
+probe no-git-push.sh BLOCK 'a push inside bash -c'             'bash -c "git push origin dev-05"'
+probe no-git-push.sh BLOCK 'a push inside eval'                'eval "git push"'
+probe no-git-push.sh BLOCK 'a push inside a heredoc fed to sh' $'bash <<\'EOF\'\ngit push\nEOF'
+
+echo "=== no-git-push.sh : not a push at all ==="
 for c in 'git status' \
          'git commit -m "explain how to git push later"' \
          'echo "run git push when ready" >> notes.md' \
