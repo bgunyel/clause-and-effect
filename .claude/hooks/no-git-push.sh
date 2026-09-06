@@ -114,27 +114,43 @@ if [ "$CURRENT" = "main" ] || echo "$CURRENT" | grep -qE '^dev-[0-9]+$'; then
   exit 2
 fi
 
+# Everything after the first push on the matched line, up to the next shell
+# separator, is the push's own arguments. Every check below reads these rather
+# than the whole command, so an unrelated flag elsewhere on the line -- the -f
+# of `rm -f x && git push` -- is not mistaken for the push's own.
+PUSH_LINE=$(echo "$SCAN" | grep -m1 -E '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*git[[:space:]]+((-[cC][[:space:]]+[^ ]+|-[^ ]+)[[:space:]]+)*push([^-A-Za-z0-9_]|$)')
+ARGS=${PUSH_LINE#*push}
+ARGS=$(printf '%s' "$ARGS" | sed 's/[;&|].*//' | tr -d '\042\047')
+
 # Whole-repository and tag forms name no branch at all. Refusing branches by
 # name was the shape of this check before, and a denylist cannot see a spelling
 # that names nothing: `git push --all origin` advanced main and dev-05 from any
 # worktree, and --mirror deleted every remote branch absent locally, closing
 # open pull requests. Reported on PR #35.
-if echo "$SCAN" | grep -qE '[[:space:]](--all|--mirror|--tags|--follow-tags|--prune|--delete|-d)([[:space:]]|=|$)'; then
+if printf ' %s ' "$ARGS" | grep -qE '[[:space:]](--all|--mirror|--tags|--follow-tags|--prune|--delete|-d)([[:space:]]|=|$)'; then
   echo "$REFUSE That form pushes or deletes refs wholesale rather than naming this branch." >&2
   exit 2
 fi
-if echo "$SCAN" | grep -q '[*]'; then
+
+# A forced push rewrites what the remote already has, which for this branch is
+# the history an open pull request is showing. --force-with-lease is refused
+# with the rest: it makes the rewrite safe against clobbering someone else's
+# work, not against rewriting a PR under its reviewer. The short form may be
+# bundled with other single-letter options, as -fu, so any single-dash token
+# containing f counts.
+if printf ' %s ' "$ARGS" | grep -qE '[[:space:]](--force|--force-with-lease|--force-if-includes|-[A-Za-z]*f[A-Za-z]*)([[:space:]]|=|$)'; then
+  echo "$REFUSE That is a forced push, which rewrites history the open pull request is showing. Add a commit instead." >&2
+  exit 2
+fi
+
+if printf '%s' "$ARGS" | grep -q '[*]'; then
   echo "$REFUSE A wildcard refspec does not name this branch." >&2
   exit 2
 fi
 
-# What remains must positively name this branch. Everything after the first
-# push on the matched line, up to the next shell separator, is read as
-# arguments; the first bare token is the remote and every later one is a
-# refspec, whose source and destination must both be this branch or HEAD.
-PUSH_LINE=$(echo "$SCAN" | grep -m1 -E '(^[[:space:]]*|[;&|(][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*git[[:space:]]+((-[cC][[:space:]]+[^ ]+|-[^ ]+)[[:space:]]+)*push([^-A-Za-z0-9_]|$)')
-ARGS=${PUSH_LINE#*push}
-ARGS=$(printf '%s' "$ARGS" | sed 's/[;&|].*//' | tr -d '\042\047')
+# What remains must positively name this branch: the first bare token is the
+# remote and every later one is a refspec, whose source and destination must
+# both be this branch or HEAD.
 
 names_this_branch() {
   case "$1" in
@@ -154,7 +170,13 @@ for TOK in $ARGS; do
   esac
   if [ -z "$REMOTE_SEEN" ]; then REMOTE_SEEN=1; continue; fi
   REFSPEC_SEEN=1
-  SPEC=${TOK#+}
+  # A leading + on a refspec is the other spelling of --force.
+  case "$TOK" in
+    +*)
+      echo "$REFUSE A leading + forces the push, which rewrites history the open pull request is showing." >&2
+      exit 2 ;;
+  esac
+  SPEC=$TOK
   case "$SPEC" in
     *:*) SRC=${SPEC%%:*}; DST=${SPEC#*:} ;;
     *)   SRC=$SPEC; DST=$SPEC ;;

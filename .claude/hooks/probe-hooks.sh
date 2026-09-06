@@ -86,9 +86,25 @@ probe no-git-push.sh "$OWN_BRANCH_PUSH" 'bare git push'                    'git 
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push after a commit'          'git commit -m msg && git push'
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push in a subshell'           '(git push)'
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push with a trailing ;'       'git push;'
-probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push --force-with-lease'      'git push --force-with-lease'
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push -u origin <this branch>' "git push -u origin $CURRENT"
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'indented push, own branch'        $'if true; then\n    git push\nfi'
+# An unrelated -f elsewhere on the line is not the push's own flag. Every option
+# check reads the push's arguments, not the whole command, so this still passes.
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'rm -f before an ordinary push'    'rm -f notes.md && git push'
+
+echo "=== forced pushes, refused in every spelling ==="
+# Forcing rewrites what the remote already has, which for this branch is the
+# history an open pull request is showing. --force-with-lease is refused with
+# the rest: it guards against clobbering another person's work, not against
+# rewriting a PR under its reviewer.
+probe no-git-push.sh BLOCK 'git push -f'                   'git push -f'
+probe no-git-push.sh BLOCK 'git push --force'              'git push --force'
+probe no-git-push.sh BLOCK 'git push --force-with-lease'   'git push --force-with-lease'
+probe no-git-push.sh BLOCK 'lease with a value'            "git push --force-with-lease=$CURRENT origin"
+probe no-git-push.sh BLOCK 'git push --force-if-includes'  'git push --force-if-includes origin'
+probe no-git-push.sh BLOCK 'bundled short flags -fu'       "git push -fu origin $CURRENT"
+probe no-git-push.sh BLOCK 'forced by leading + on refspec' "git push origin +$CURRENT"
+probe no-git-push.sh BLOCK 'forced push of own branch'     "git push -f origin $CURRENT"
 
 echo "=== worktree exception does not extend to ==="
 probe no-git-push.sh BLOCK 'another branch by name: main'      'git push origin main'
