@@ -49,6 +49,82 @@ probe() {
   fi
 }
 
+. ./lib/command-scan.sh
+
+tok() {  # tok <label> <expected> <actual>
+  if [ "$3" = "$2" ]; then
+    printf '  ok   %s\n' "$1"
+  else
+    printf '  FAIL %s\n         want |%s|\n         got  |%s|\n' "$1" "$2" "$3"
+    FAILED=1
+  fi
+}
+
+echo "=== the tokeniser itself ==="
+# Every defect on PR #35 was one question -- how far around a matched token to
+# look -- answered differently in a different place. It is answered once in
+# lib/command-scan.sh, so these aim at it rather than through a hook.
+tok 'split on ; && || |' \
+    'a
+b
+c
+d' \
+    "$(printf 'a && b; c | d\n' | cs_split)"
+tok 'split on a subshell paren' \
+    'a
+b' \
+    "$(printf 'a && (b)\n' | cs_split)"
+tok 'split on backticks, the twin of $( )' \
+    'echo
+git push --mirror origin' \
+    "$(printf 'echo `git push --mirror origin`\n' | cs_split)"
+tok 'environment assignments removed' \
+    'git push' \
+    "$(printf 'GIT_DIR=/x FOO=1 git push\n' | cs_split)"
+tok 'wrapper word and its options removed' \
+    'git push --mirror' \
+    "$(printf 'xargs -n1 git push --mirror\n' | cs_split)"
+tok 'continuation joined before anything else' \
+    'git push   --all origin' \
+    "$(printf 'git push \\\n  --all origin\n' | cs_normalise)"
+tok 'heredoc body dropped' \
+    'cat > f <<EOF
+echo after' \
+    "$(printf 'cat > f <<EOF\ngit push origin main\nEOF\necho after\n' | cs_normalise)"
+tok 'git args, plain' 'origin main' "$(printf 'git push origin main\n' | cs_git_args push)"
+tok 'git args, global option with a separate value' \
+    '--all' "$(printf 'git -C /x push --all\n' | cs_git_args push)"
+tok 'git args, empty for a bare push' '' "$(printf 'git push\n' | cs_git_args push)"
+if printf 'git push\n' | cs_git_args push >/dev/null; then
+  tok 'bare push succeeds, so empty args mean a push' 'found' 'found'
+else
+  tok 'bare push succeeds, so empty args mean a push' 'found' 'not found'
+fi
+if printf 'git status\n' | cs_git_args push >/dev/null; then
+  tok 'git status is not a push' 'not found' 'found'
+else
+  tok 'git status is not a push' 'not found' 'not found'
+fi
+
+echo "=== REGRESSION: PR #35, only the first push on a line was validated ==="
+# The scope found the first push, validated its arguments, and stopped. So a
+# legitimate push carried an illegitimate one after ; or && on its coat-tails.
+probe no-git-push.sh BLOCK 'legit push ; push origin main'  "git push origin $CURRENT; git push origin main"
+probe no-git-push.sh BLOCK 'legit push && push --all'       "git push origin $CURRENT && git push --all origin"
+probe no-git-push.sh BLOCK 'bare push && forced push'       "git push && git push --force origin $CURRENT"
+probe no-git-push.sh BLOCK 'three pushes, last one bad'     "git push; git push origin $CURRENT; git push --mirror origin"
+probe no-pr-decisions.sh BLOCK 'gh pr view ; gh pr merge'   'gh pr view 5; gh pr merge 5'
+
+echo "=== REGRESSION: PR #35, backticks and command prefixes ==="
+# $( ) was closed by the paren in the separator class and its twin was not --
+# the same asymmetry GIT_DIR= had against --git-dir. Both hooks were open.
+probe no-git-push.sh     BLOCK 'backticked push'      'echo `git push --mirror origin`'
+probe no-git-push.sh     BLOCK 'dollar-paren push'    'echo $(git push --mirror origin)'
+probe no-pr-decisions.sh BLOCK 'backticked merge'     'echo `gh pr merge 35`'
+probe no-pr-decisions.sh BLOCK 'dollar-paren merge'   'echo $(gh pr merge 35)'
+probe no-git-push.sh     BLOCK 'push through xargs'   'echo origin | xargs git push --mirror'
+probe no-pr-decisions.sh BLOCK 'merge through xargs'  'echo 35 | xargs gh pr merge'
+
 echo "=== REGRESSION: heredoc prose that blocked its own commit ==="
 COMMIT_MSG=$'git commit -q -F - <<\'EOF\'\nLeave pushing and deciding a PR to Bertan\n\nno-git-push.sh refuses every push; no-pr-decisions.sh refuses\ngh pr review --approve and --request-changes, gh pr close and reopen.\ngit push origin main is refused in every form.\ngh pr merge 5 would also be refused.\nEOF'
 probe no-git-push.sh     ALLOW 'commit msg naming git push in heredoc' "$COMMIT_MSG"
