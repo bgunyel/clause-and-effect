@@ -20,6 +20,14 @@
 # in one place kept opening it in another. It is derived once here instead, and
 # the probe suite points at these functions directly.
 #
+# A second review found three more of the same shape, and all three were here
+# rather than spread across the hooks, which is the point of the file. Two were
+# the heredoc question answered too loosely -- a here-string read as a heredoc,
+# and a tab-indented <<- terminator never recognised, so that heredoc never
+# ended. One was the command-position question answered too narrowly: a command
+# after `then`, `do`, `else`, `{` or `!` is at a command position and was not
+# treated as one. Each of the three hid every command that followed it.
+#
 # The answers are approximate on purpose. Splitting more eagerly than a shell
 # would yields extra command candidates, which can only refuse more; it never
 # hides one. That is the safe direction for a guard whose failure mode, twice
@@ -36,12 +44,31 @@
 #
 # Joining runs after dropping, so a backslash at the end of the line before a
 # heredoc terminator cannot swallow the terminator and hide what follows.
+#
+# Dropping is the one step here that hides commands rather than exposing them,
+# so what counts as a heredoc has to be exact in both directions -- and it was
+# wrong in both. `<<<` is a here-string: the operator regex matched its second
+# and third `<`, took the here-string's own text for a terminator that never
+# arrives, and dropped the rest of the command. `<<-` lets bash strip leading
+# tabs from the terminator, which an exact comparison never matched, so that
+# heredoc did not end either. Either one turned a `git push --mirror` or a
+# `gh pr merge` on a following line into nothing at all.
 cs_normalise() {
   awk '
-    ind { if ($0 == d) ind = 0; next }
+    ind {
+      line = $0
+      if (dash) sub(/^\t+/, "", line)
+      if (line == d) ind = 0
+      next
+    }
     {
-      if (match($0, /<<-?[[:space:]]*[^[:space:];|&<>()]+/)) {
-        d = substr($0, RSTART, RLENGTH)
+      # A here-string is not a heredoc. Blanked at its own width, so a real
+      # heredoc later on the same line is still found where it stands.
+      scan = $0
+      gsub(/<<</, "   ", scan)
+      if (match(scan, /<<-?[[:space:]]*[^[:space:];|&<>()]+/)) {
+        d = substr(scan, RSTART, RLENGTH)
+        dash = (d ~ /^<<-/)
         sub(/^<<-?[[:space:]]*/, "", d)
         gsub(/[\047"]/, "", d)
         ind = 1
@@ -67,10 +94,22 @@ cs_normalise() {
 # $( ) was closed by the paren and its twin was not -- the same asymmetry
 # GIT_DIR= had against --git-dir.
 #
-# Removed prefixes: environment assignments, and the wrapper words that run
-# another command with their own options. A caller that cares about the
-# assignments themselves must look at the un-split text; no-git-push.sh does,
-# for GIT_DIR= and GIT_WORK_TREE=.
+# Removed prefixes: environment assignments, the shell's own control words, and
+# the wrapper words that run another command with their own options. A caller
+# that cares about the assignments themselves must look at the un-split text;
+# no-git-push.sh does, for GIT_DIR= and GIT_WORK_TREE=.
+#
+# The control words are here because a separator is not the only thing a command
+# can follow. `if true; then git push --mirror origin; fi` splits correctly and
+# still left `then` standing in front of the command word, so the anchor never
+# saw a push at all; `do`, `else`, `elif`, `{` and `!` each did the same. They
+# are removed rather than matched around, so every caller keeps anchoring at ^.
+#
+# The trade, taken knowingly and probed as such: a quoted string holding a
+# separator and then one of these words in front of a refused command now reads
+# as that command, so `git commit -m "wait; then git push --all origin"` is
+# refused. That is the direction this file has taken throughout -- a blocked
+# comment is visible and one edit away, a silently permitted push is neither.
 cs_split() {
   sed -e 's/&&/\n/g' -e 's/||/\n/g' -e 's/[;&|()`]/\n/g' \
   | awk '
@@ -81,6 +120,10 @@ cs_split() {
       while (changed) {
         changed = 0
         if (match(line, /^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+/)) {
+          line = substr(line, RSTART + RLENGTH)
+          changed = 1
+        }
+        if (match(line, /^([{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|select|function|coproc)([[:space:]]+|$)/)) {
           line = substr(line, RSTART + RLENGTH)
           changed = 1
         }

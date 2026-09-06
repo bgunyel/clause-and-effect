@@ -10,6 +10,12 @@
 # commit message naming a refused command read as a command position. The
 # indentation and wrapper probes come from the review on PR #35.
 #
+# The control-word, here-string, <<- , bare-push and gh api probes come from a
+# second review of the same branch, which found four ways past the boundary that
+# these probes did not ask about. That is worth saying plainly: the suite was
+# green while `if true; then git push --mirror origin; fi` was permitted. A
+# probe suite is evidence about the cases it names and about nothing else.
+#
 # One expectation is not a literal but a context: whether pushing this branch is
 # permitted depends on where the suite runs, because that is exactly what
 # no-git-push.sh decides. Run from a linked worktree on a feature branch, a push
@@ -91,6 +97,21 @@ tok 'heredoc body dropped' \
     'cat > f <<EOF
 echo after' \
     "$(printf 'cat > f <<EOF\ngit push origin main\nEOF\necho after\n' | cs_normalise)"
+tok 'here-string is not a heredoc' \
+    'cat <<< "hello"
+gh pr merge 35' \
+    "$(printf 'cat <<< "hello"\ngh pr merge 35\n' | cs_normalise)"
+tok 'dash-heredoc ends on a tab-indented terminator' \
+    'cat <<-EOF
+gh pr merge 35' \
+    "$(printf 'cat <<-EOF\n\thello\n\tEOF\ngh pr merge 35\n' | cs_normalise)"
+tok 'control word removed, then/fi' \
+    'true
+git push --mirror origin' \
+    "$(printf 'if true; then git push --mirror origin; fi\n' | cs_split)"
+tok 'control word removed, brace group' \
+    'git push --mirror origin' \
+    "$(printf '{ git push --mirror origin; }\n' | cs_split)"
 tok 'git args, plain' 'origin main' "$(printf 'git push origin main\n' | cs_git_args push)"
 tok 'git args, global option with a separate value' \
     '--all' "$(printf 'git -C /x push --all\n' | cs_git_args push)"
@@ -156,17 +177,102 @@ echo "=== ACCEPTED false positive: quoted multi-line string, not a heredoc ==="
 # knowingly, not a bug fix.
 probe no-git-push.sh     BLOCK 'multi-line -b string continuing with a push' $'gh issue comment 27 -b "to release:\n  git push origin main"'
 probe no-pr-decisions.sh BLOCK 'multi-line -b string continuing with a merge' $'gh issue comment 27 -b "to land it:\n  gh pr merge 35"'
+# And the price of removing control words: a quoted string holding a separator
+# and then one of them reads as a command. Same trade, same reason.
+probe no-git-push.sh     BLOCK 'quoted "; then" before a push'  'git commit -m "wait; then git push --all origin"'
+probe no-pr-decisions.sh BLOCK 'quoted "; then" before a merge' 'git commit -m "wait; then gh pr merge 35"'
+
+echo "=== REGRESSION: PR #35 review, a command after a control word ==="
+# A separator is not the only thing a command can follow. Splitting on ; left
+# `then` in front of the command word, so the anchor never saw the command at
+# all, and `do`, `else`, `elif`, `{` and `!` did the same. Every probe here was
+# ALLOW before the control words were removed in cs_split.
+probe no-git-push.sh     BLOCK 'then + push --mirror'     'if true; then git push --mirror origin; fi'
+probe no-git-push.sh     BLOCK 'do + push --all'          'while true; do git push --all origin; done'
+probe no-git-push.sh     BLOCK 'brace group + push'       '{ git push --mirror origin; }'
+probe no-git-push.sh     BLOCK 'then + push to dev-05'    'if true; then git push origin dev-05; fi'
+probe no-pr-decisions.sh BLOCK 'then + gh pr merge'       'if true; then gh pr merge 35; fi'
+probe no-pr-decisions.sh BLOCK 'do + gh pr merge'         'for x in a; do gh pr merge 35; done'
+probe no-pr-decisions.sh BLOCK 'until/do + gh pr merge'   'until false; do gh pr merge 35; done'
+probe no-pr-decisions.sh BLOCK 'else + gh pr merge'       'if true; then :; else gh pr merge 35; fi'
+probe no-pr-decisions.sh BLOCK 'elif + gh pr merge'       'if true; then :; elif true; then gh pr merge 35; fi'
+probe no-pr-decisions.sh BLOCK '! negation + gh pr merge' '! gh pr merge 35'
+probe no-pr-decisions.sh BLOCK 'brace group + gh pr close' '{ gh pr close 35; }'
+# The words are removed at the start of a command only, so an ordinary sentence
+# that happens to contain one is untouched.
+probe no-pr-decisions.sh ALLOW 'a control word mid-sentence' 'echo "then run gh pr merge 35" >> notes.md'
+
+echo "=== REGRESSION: PR #35 review, heredoc detection dropped live commands ==="
+# Dropping a heredoc body is the one step that hides commands, so both ends of
+# it have to be exact. `<<<` is a here-string and was read as a heredoc whose
+# terminator never arrives; `<<-` ends on a tab-indented terminator that an
+# exact comparison never matched. Either one discarded every following line, so
+# the hook saw an empty command and returned 0.
+probe no-pr-decisions.sh BLOCK 'here-string then a merge'  $'cat <<< "hello"\ngh pr merge 35'
+probe no-git-push.sh     BLOCK 'here-string then a push'   $'cat <<< "hello"\ngit push --mirror origin'
+probe no-pr-decisions.sh BLOCK '<<- tab terminator, then a merge' $'cat <<-EOF\n\thello\n\tEOF\ngh pr merge 35'
+probe no-git-push.sh     BLOCK '<<- tab terminator, then a push'  $'cat <<-EOF\n\thello\n\tEOF\ngit push --mirror origin'
+# The body of a real heredoc is still data, tab-indented or not.
+probe no-pr-decisions.sh ALLOW '<<- body naming a merge'   $'cat <<-EOF\n\tgh pr merge 35 would be refused\n\tEOF\necho done'
+probe no-git-push.sh     ALLOW '<<- body naming a push'    $'cat <<-EOF\n\tgit push --all origin is refused\n\tEOF\necho done'
+
+echo "=== REGRESSION: PR #35 review, reading a PR through gh api ==="
+# The endpoint does not say whether a call decides anything. GET /pulls/N/reviews
+# lists reviews and GET /pulls/N/merge reports whether the PR is merged; both are
+# reading a pull request, which CLAUDE.md allows in the sentence that forbids
+# deciding one, and both were refused. The method separates them, so the method
+# is what is tested -- gh sends GET unless a --method or a field flag says
+# otherwise.
+probe no-pr-decisions.sh ALLOW 'GET the reviews list'    'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews'
+probe no-pr-decisions.sh ALLOW 'GET the merge state'     'gh api repos/bgunyel/clause-and-effect/pulls/35/merge'
+probe no-pr-decisions.sh ALLOW 'GET named explicitly'    'gh api -X GET repos/bgunyel/clause-and-effect/pulls/35/reviews'
+probe no-pr-decisions.sh ALLOW 'GET with --paginate'     'gh api --paginate repos/bgunyel/clause-and-effect/pulls/35/reviews'
+probe no-pr-decisions.sh ALLOW 'GET with --jq'           'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews --jq ".[].state"'
+# The writes to those same endpoints are refused exactly as before.
+probe no-pr-decisions.sh BLOCK 'POST a review verdict'   'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews -f event=APPROVE'
+probe no-pr-decisions.sh BLOCK 'value attached to -f'    'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews -fevent=APPROVE'
+probe no-pr-decisions.sh BLOCK 'method attached to -X'   'gh api -XPUT repos/bgunyel/clause-and-effect/pulls/35/merge'
+probe no-pr-decisions.sh BLOCK '--method=PUT'            'gh api --method=PUT repos/bgunyel/clause-and-effect/pulls/35/merge'
+probe no-pr-decisions.sh BLOCK 'a review body by --input' 'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews --input body.json'
+probe no-pr-decisions.sh BLOCK 'DELETE a review'         'gh api -X DELETE repos/bgunyel/clause-and-effect/pulls/35/reviews'
+# A read wrapped in a shell is still refused: inside quotes the method cannot be
+# read any more than the endpoint can. Run it unwrapped.
+probe no-pr-decisions.sh BLOCK 'a GET inside bash -c'    "bash -c 'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews'"
 
 echo "=== worktree exception: pushing this worktree's own branch ==="
-probe no-git-push.sh "$OWN_BRANCH_PUSH" 'bare git push'                    'git push'
-probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push after a commit'          'git commit -m msg && git push'
-probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push in a subshell'           '(git push)'
-probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push with a trailing ;'       'git push;'
+# Every permitted push names the branch. That is the whole exception: a push
+# that does not name it is answered by configuration instead, and configuration
+# is not a thing this hook can hold still. See the bare-push section below.
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'push naming this branch'          "git push origin $CURRENT"
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'push after a commit'              "git commit -m msg && git push origin $CURRENT"
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'push in a subshell'               "(git push origin $CURRENT)"
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'push with a trailing ;'           "git push origin $CURRENT;"
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push -u origin <this branch>' "git push -u origin $CURRENT"
-probe no-git-push.sh "$OWN_BRANCH_PUSH" 'indented push, own branch'        $'if true; then\n    git push\nfi'
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'indented push, own branch'        $'if true; then\n    git push origin '"$CURRENT"$'\nfi'
 # An unrelated -f elsewhere on the line is not the push's own flag. Every option
 # check reads the push's arguments, not the whole command, so this still passes.
-probe no-git-push.sh "$OWN_BRANCH_PUSH" 'rm -f before an ordinary push'    'rm -f notes.md && git push'
+probe no-git-push.sh "$OWN_BRANCH_PUSH" 'rm -f before an ordinary push'    "rm -f notes.md && git push origin $CURRENT"
+
+echo "=== REGRESSION: PR #35 review, a bare push is answered by configuration ==="
+# A push naming no refspec is sent where push.default, a remote.<name>.push
+# refspec, or the branch's upstream says -- and -c sets any of those for one
+# command, past whatever this hook reads back afterwards. The old check read
+# push.default alone, so `git -c push.default=matching push` was ALLOW: it would
+# have carried every branch whose name exists on both sides, dev-05 included.
+#
+# The trade, taken knowingly: `git push` and `git push origin` were permitted
+# and are refused now. The destination has to be in the command, which is what
+# CLAUDE.md already asked for -- a push "positively naming that branch".
+probe no-git-push.sh BLOCK 'bare git push'                     'git push'
+probe no-git-push.sh BLOCK 'push naming only the remote'       'git push origin'
+probe no-git-push.sh BLOCK 'bare push after a commit'          'git commit -m msg && git push'
+probe no-git-push.sh BLOCK 'bare push in a subshell'           '(git push)'
+probe no-git-push.sh BLOCK 'push.default set for this command' 'git -c push.default=matching push'
+probe no-git-push.sh BLOCK 'push.default=upstream for one'     'git -c push.default=upstream push origin'
+probe no-git-push.sh BLOCK 'config set by --config-env'        'git --config-env=push.default=PD push'
+# -c is refused even alongside a refspec that does name this branch: the hook
+# cannot know which setting the override was for.
+probe no-git-push.sh BLOCK '-c with an explicit refspec'       "git -c http.sslVerify=false push origin $CURRENT"
 
 echo "=== forced pushes, refused in every spelling ==="
 # Forcing rewrites what the remote already has, which for this branch is the
@@ -220,7 +326,6 @@ probe no-git-push.sh     BLOCK 'pushd before a push'  'pushd /some/repo && git p
 probe no-pr-decisions.sh BLOCK 'env prefix before gh' 'FOO=1 gh pr merge 35'
 
 echo "=== the allowlist still admits an ordinary push of this branch ==="
-probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin'                "git push origin"
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin HEAD'           "git push origin HEAD"
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin HEAD:<branch>'  "git push origin HEAD:$CURRENT"
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin <b>:<b>'        "git push origin $CURRENT:$CURRENT"
@@ -237,9 +342,11 @@ probe no-git-push.sh BLOCK 'continued --all'     $'git push \\\n  --all origin'
 probe no-git-push.sh BLOCK 'continued force'     $'git push \\\n  --force-with-lease origin main'
 probe no-git-push.sh BLOCK 'continued origin main' $'git push \\\n  origin main'
 probe no-git-push.sh BLOCK 'continuation over three lines' $'git push \\\n  --all \\\n  origin'
-# A trailing backslash with nothing after it is not a continuation of anything:
-# the command is a bare push of this branch, and that is permitted.
-probe no-git-push.sh "$OWN_BRANCH_PUSH" 'trailing backslash, nothing after' $'git push \\'
+# A trailing backslash with nothing after it is not a continuation of anything.
+# The command is a bare push, which used to be the permitted shape and is now
+# refused for naming no destination -- the join still has to consume the
+# backslash, or this would be refused for being unreadable instead.
+probe no-git-push.sh BLOCK 'trailing backslash, nothing after' $'git push \\'
 probe no-git-push.sh "$OWN_BRANCH_PUSH" 'continued push of this branch'     $'git push \\\n  origin '"$CURRENT"
 
 echo "=== the remote must be a remote of this repository ==="

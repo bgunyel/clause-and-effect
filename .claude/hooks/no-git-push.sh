@@ -5,6 +5,11 @@
 # refused, and Bertan's own pushes are made from a separate terminal where no
 # hook runs.
 #
+# The push must name that branch in the command -- `git push origin <branch>`,
+# not `git push`. A push naming no refspec is answered by configuration, and an
+# agent can set configuration, so a bare push cannot be judged from here at all.
+# See the refspec check at the foot of check_push.
+#
 # The exception is keyed on where the command runs, not on what the branch is
 # called. Worktrees are made two ways here -- EnterWorktree, which prefixes the
 # branch `worktree-`, and `git worktree add -b`, which does not -- so a name
@@ -110,6 +115,16 @@ check_push() {
     return 1
   fi
 
+  # -c and --config-env set configuration for this one command. Every value this
+  # hook reads back with `git config` is therefore a value the command can have
+  # already replaced, which is not a gap that can be closed by reading more
+  # carefully. `git -c push.default=matching push` was allowed for exactly that
+  # reason. Reported on PR #35's review.
+  if printf '%s' "$CMD" | grep -qE '(^|[[:space:]])(-c|--config-env)([[:space:]]|=)'; then
+    echo "$REFUSE This command sets git configuration for itself, which overrides what this check would read back." >&2
+    return 1
+  fi
+
   # Joining consumes a backslash that ends a line, including one with nothing
   # after it, which is a bare push and stays permitted. A backslash surviving
   # here is one the join did not recognise, and what follows cannot be read. An
@@ -179,11 +194,22 @@ check_push() {
     fi
   done
 
-  # With no refspec the destination comes from push.default. Every value but
-  # matching pushes the current branch alone; matching pushes every branch whose
-  # name exists on both sides, which would carry dev-NN along without naming it.
-  if [ -z "$REFSPEC_SEEN" ] && [ "$(git config --get push.default 2>/dev/null)" = "matching" ]; then
-    echo "$REFUSE push.default is matching, so a push naming no refspec would carry other branches with it." >&2
+  # A push naming no refspec takes its destination from configuration, and there
+  # are four places to write it: push.default, a remote.<name>.push refspec, the
+  # branch's own upstream under push.default=upstream, and -c on the command
+  # itself. Reading push.default answered one of the four, and -c walked past
+  # even that -- so the destination is required in the command instead. That is
+  # what CLAUDE.md already asks for: a push "positively naming that branch".
+  #
+  # The check is also no longer a question about configuration, which is what
+  # makes it hold. An agent may run `git config`; nothing here refuses it. Any
+  # rule resting on a configured value could be arranged around one command
+  # earlier, and reading the value more thoroughly would not change that.
+  #
+  # The trade: bare `git push` no longer works, and neither does `git push
+  # origin`. Both were permitted before. Write `git push origin <branch>`.
+  if [ -z "$REFSPEC_SEEN" ]; then
+    echo "$REFUSE A push naming no refspec takes its destination from configuration, which this command could have set for itself. Name the branch: git push <remote> $CURRENT." >&2
     return 1
   fi
 

@@ -194,11 +194,19 @@ a claim without a number is a claim to re-measure.
 
 An agent may push the branch of the linked worktree it is working in —
 non-forced, positively naming that branch, to a remote this repository has — and
-nothing else. It may open a pull request, comment on one, edit one and read one.
-It may not merge one, review one with a verdict, close or reopen one, or create
-or delete a release. `main` and `dev-NN` are Bertan's to push; `main` is
+nothing else. It may open a pull request, comment on one, edit one and read one,
+through `gh pr view` or through a `gh api` request that does not write. It may
+not merge one, review one with a verdict, close or reopen one, or create or
+delete a release. `main` and `dev-NN` are Bertan's to push; `main` is
 additionally protected server-side by the `main-branch-protection` ruleset,
 which requires a pull request.
+
+"Positively naming that branch" is literal: write `git push origin <branch>`.
+A bare `git push`, and `git push origin` with no refspec, are refused. Their
+destination comes from configuration — `push.default`, a `remote.<name>.push`
+refspec, the branch's upstream — and an agent may run `git config`, so a rule
+resting on a configured value can be arranged around one command earlier. The
+destination has to be in the command for the hook to have anything to check.
 
 Enforced by `.claude/hooks/no-git-push.sh` and `no-pr-decisions.sh`, both built
 on `.claude/hooks/lib/command-scan.sh`, which answers where a command starts and
