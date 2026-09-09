@@ -114,7 +114,22 @@ cs_normalise() {
     # The terminator never arrived, so this was not a heredoc and the lines were
     # dropped in error. Give them back.
     END { for (i = 1; i <= nheld; i++) print held[i] }' \
-  | awk '
+  | cs_join
+}
+
+# Join backslash line continuations, and nothing else.
+#
+# The second half of cs_normalise, on its own, for a caller that needs the
+# joining without the heredoc drop. no-pr-decisions.sh is one: its wrapper rules
+# read raw text because cs_normalise drops heredoc bodies and `bash <<EOF` is
+# itself a wrapper, so the payload would go with the body -- but grep matches
+# within a line, and a continuation between a command word and its subcommand
+# hid the subcommand from a rule that could not tokenise it anyway.
+#
+# Extracted rather than copied. A rule written twice is answered twice, which is
+# the thing this file exists to stop.
+cs_join() {
+  awk '
     {
       line = $0
       while (line ~ /\\$/) {

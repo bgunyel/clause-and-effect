@@ -75,40 +75,65 @@ GHRELEASE='^gh[[:space:]]+release([[:space:]]+((-R|--repo|--hostname)[[:space:]]
 # contain, and --repo would read as --request-changes.
 VERDICT='[[:space:]](--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[:space:]]|=|"|$)'
 
-# Inside a wrapper the group is the whole of what a rule can honestly name.
-# These ran unanchored over the raw text and still wanted `pr` to follow `gh`
-# immediately, so `gh -R o/r pr merge 5` was permitted while
+# Once a wrapper is on the line, the group is the whole of what a rule can
+# honestly name. These ran unanchored over the raw text and still wanted `pr`
+# to follow `gh` immediately, so `gh -R o/r pr merge 5` was permitted while
 # `gh pr --repo o/r merge 5` was refused -- the command-position question again,
 # one word later, in the sixth place. It is also the one place cs_gh_args cannot
 # answer it: the payload is quoted text with no command word for the tokeniser
 # to find, which is why these rules are a blunt text match to begin with.
 #
-# So the verb is not read at all. Anything may stand between `gh` and the group,
-# and whatever follows the group is not looked at. That is the answer the note
-# at the top of this file already gives -- if nothing can be read out of a
-# wrapped payload, then naming merge|close|reopen inside one is reading it, and
-# the table on issue #51 is what reading it badly looked like.
+# So the verb is not read at all. Anything on the line may stand between `gh`
+# and the group, and whatever follows the group is not looked at. That is the
+# answer the note at the top of this file already gives -- if nothing can be
+# read out of a wrapped payload, then naming merge|close|reopen inside one is
+# reading it, and the table on issue #51 is what reading it badly looked like.
 #
-# The trade, taken knowingly: every wrapped `gh pr`, `gh release` and `gh api`
-# is refused whatever it goes on to say. It costs `bash -c "gh pr view 5"`,
-# `bash -c "gh release list"` and every wrapped read through `gh api`; it also
-# costs a wrapped `gh issue` whose body happens to contain the word `pr`, since
-# there is no argument structure in quoted text to say which is which. All are
-# reads or ordinary edits, all are refused with the writes for the same reason
-# the method of a wrapped `gh api` was already not read, and all are one edit
-# away from working. Run them unwrapped.
-GH_WRAPPED='gh[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
+# The name says surface rather than wrapper because a group is what it matches,
+# and says anywhere because that is where it looks: these rules read the whole
+# command and not the payload, there being nothing here that tells the two
+# apart. That is the third part of the trade below.
+#
+# The trade, taken knowingly, in three parts.
+#
+#   1. Every wrapped `gh pr`, `gh release` and `gh api` is refused whatever it
+#      goes on to say: `bash -c "gh pr view 5"`, `bash -c "gh release list"`,
+#      every wrapped read through `gh api`.
+#   2. So is a wrapped `gh` command that is none of the three but whose text
+#      carries one of the words anyway -- an issue comment whose body says
+#      `pr`, `release` or `api` -- because quoted text has no argument
+#      structure to say whether a word is a subcommand or prose.
+#   3. So is an entirely unwrapped one that merely shares a line with a
+#      wrapper: `bash -c "make test" && gh pr view 5`. Under the old rules only
+#      merge|close|reopen reached across the line this way; naming the group
+#      widens the reach to the reads. Matching inside the wrapper's own quotes
+#      is what would narrow it, and reading inside those quotes is the thing
+#      this entire section says cannot be done.
+#
+# All three are reads or ordinary edits, all are refused with the writes for the
+# same reason the method of a wrapped `gh api` was already not read, and all are
+# one edit away from working. Run them unwrapped, on a line of their own.
+GH_SURFACE_ANYWHERE='gh[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
 
 # A wrapper's payload sits inside quotes, where there is no command word for the
-# tokeniser to find, so these run unanchored over the raw text -- and only once
-# a wrapper has been found, never over an ordinary command.
-if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))'; then
-  if echo "$COMMAND" | grep -qE "$GH_WRAPPED" \
-     || echo "$COMMAND" | grep -qE '/pulls/[^ ]*/(merge|reviews)' \
-     || echo "$COMMAND" | grep -qE '/releases([^A-Za-z0-9_-]|$)' \
-     || echo "$COMMAND" | grep -qiE 'state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?' \
-     || echo "$COMMAND" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then
-    echo "$DECIDE A shell wrapper does not change what the command decides, and nothing can be read out of its quoted payload -- so gh pr, gh release and gh api are refused there whatever the verb. Run it unwrapped." >&2
+# tokeniser to find, so these run unanchored over the text -- and only once a
+# wrapper has been found, never over an ordinary command.
+#
+# Raw text rather than $SCAN, because cs_normalise drops heredoc bodies and
+# `bash <<EOF` is itself one of the wrappers: its payload would go with the
+# body. But grep matches within a line, so a backslash continuation between
+# `gh` and the group hid the group from these rules while the ordinary ones,
+# reading $SCAN, saw through it. Joining is the half of cs_normalise these rules
+# do want, and cs_join is that half on its own.
+WRAPTEXT=$(printf '%s\n' "$COMMAND" | cs_join)
+
+if echo "$WRAPTEXT" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))'; then
+  if echo "$WRAPTEXT" | grep -qE "$GH_SURFACE_ANYWHERE" \
+     || echo "$WRAPTEXT" | grep -qE '/pulls/[^ ]*/(merge|reviews)' \
+     || echo "$WRAPTEXT" | grep -qE '/releases([^A-Za-z0-9_-]|$)' \
+     || echo "$WRAPTEXT" | grep -qiE 'state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?' \
+     || echo "$WRAPTEXT" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then
+    echo "$DECIDE A shell wrapper does not change what the command decides, and its payload cannot be read. Run it unwrapped." >&2
     exit 2
   fi
 fi
