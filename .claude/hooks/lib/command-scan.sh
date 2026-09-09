@@ -221,6 +221,15 @@ cs_git_args() {
 # command at a time, as no-git-push.sh does with cs_split's output, and the
 # check suite pins that the second match is lost.
 #
+# One place it does not mirror cs_git_args: that function removes the matched
+# subcommand with a regular expression, so the expression that matches and the
+# one that removes are the same and cannot disagree. This one matches part[i] as
+# a regular expression and removes it by string length. That is the same answer
+# for a word and a different one for anything carrying a metacharacter. Every
+# caller passes a literal path, so it is a property rather than a defect -- but
+# it is the kind that gets discovered rather than read, and closing it would
+# need a check written against a caller that does not exist.
+#
 # It is written before the rule that uses it, so what it is for is worth saying:
 # asking whether a flag belongs to *this* command is argument scoping, and
 # scoping answered ad hoc is where two of the five defects above came from --
