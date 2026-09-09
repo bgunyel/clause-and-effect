@@ -29,6 +29,16 @@
 # every rule below anchors at ^ and none of them describes a command position.
 # That is where all of PR #35's defects lived, this file's included: it was the
 # sibling that had the wrapper rule, and this one that did not.
+#
+# STOPPING RULE. A newly found evasion earns a fix only if it is a shape an
+# agent would plausibly write, not one it would have to construct. A flag
+# sitting in front of the subcommand, a bundled shorthand flag, a graphql
+# mutation in a heredoc: all shapes an agent writes without meaning to evade
+# anything, and all fixed here for that reason. A payload quoted inside eval or
+# a shell wrapper is not, which is why wrappers are refused outright rather than
+# parsed -- that is the designed answer, not a limitation to be closed later.
+# The endpoint list above is a list and will never be a principle; it stops
+# growing when the spellings stop being ones an agent would plausibly write.
 . "$(dirname "$0")/lib/command-scan.sh"
 
 INPUT=$(cat)

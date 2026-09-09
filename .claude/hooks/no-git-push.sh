@@ -17,12 +17,15 @@
 # anyway. In a linked worktree `git rev-parse --git-dir` is .git/worktrees/<name>
 # while --git-common-dir is .git; in the main checkout the two are equal.
 #
-# That check is the only signal that separates Bertan from an agent, because an
-# agent pushes as bgunyel. A server-side ruleset cannot tell them apart: on
-# dev-* it would block both or allow both, and naming him a bypass actor hands
-# the agent the bypass. So for dev-NN this file is the enforcement, not a
-# convenience in front of one. main is different -- there the policy is the same
-# for both, and the branch ruleset is the right mechanism.
+# That check is the only signal available here that separates Bertan from an
+# agent, because an agent pushes as bgunyel today. A server-side ruleset cannot
+# tell those two apart while they share one account: on dev-* it would block
+# both or allow both, and naming him a bypass actor hands the agent the bypass.
+# So for dev-NN this file is the enforcement, not a convenience in front of one.
+# main is different -- there the policy is the same for both, and the branch
+# ruleset is the right mechanism. The shared account is a configuration choice,
+# not a law; docs/adr/0001-hooks-not-ruleset.md records it and the alternative
+# that would change the answer.
 #
 # Finding commands in the text is lib/command-scan.sh's job, not this file's.
 # Every defect found in PR #35 was that question answered differently in a
@@ -33,6 +36,17 @@
 # this file is disabled.
 #
 # This stops mistakes, not adversaries.
+#
+# STOPPING RULE. A newly found evasion earns a fix only if it is a shape an
+# agent would plausibly write, not one it would have to construct. Indentation,
+# && chains and control words clear that bar -- an agent writes those without
+# meaning to evade anything, which is why each of them was fixed. A payload
+# quoted inside eval or a shell wrapper does not, which is why wrappers are
+# refused outright rather than parsed: that is the designed answer, not a
+# limitation to be closed later. Each round of review on PR #35 found something,
+# and at least one fix opened the next hole: dropping heredoc bodies stopped a
+# false positive and blinded both hooks to a real command, which b625d64 then
+# closed. Stop when the shapes stop being ones an agent would plausibly write.
 . "$(dirname "$0")/lib/command-scan.sh"
 
 # check_push splits a push's arguments with `for TOK in $ARGS`, unquoted because
