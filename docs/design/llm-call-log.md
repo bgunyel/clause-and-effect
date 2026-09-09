@@ -81,6 +81,23 @@ a different and probably unreachable goal — but to answer, months later and
 without a login to anyone's console, *which server answered, under what routing
 constraint, at what price, and did it fall back to get there.*
 
+**What counts as good enough is pre-registered elsewhere, and is not restated
+here.** The tolerance a provider cell must clear, the n behind it, the six
+pre-registration rules, the frozen case draw, the attribution invariants that run
+before any reproduction, and the meaning of each outcome — including the
+disconfirming one — are fixed in
+[`docs/eval-reports/2026-09-05-provider-acceptance-pre-registration.md`](../eval-reports/2026-09-05-provider-acceptance-pre-registration.md),
+written before the log held a single provider-attributed row. **This document
+cites that entry and never repeats its numerals.** A threshold copied into a file
+that is revised in place is a threshold that drifts, and `docs/design/` is the
+copy that can be edited; the report is append-only, and amendments to it are dated
+appends naming the old value and the reason.
+
+The MiniMax table above has a second job under that registration: reproducing it
+from the log's own rows — in rank and direction, on terms the entry fixes — is the
+**positive control** for provider attribution. It is prospective, because
+`record_attempt` has no caller in `src/` yet.
+
 ### A second reason arrived on 2026-08-26
 
 The design started as a provider-attribution problem. Measuring it turned up a
@@ -1258,6 +1275,15 @@ rather than every failure — and is argued there.
 - **How often retries actually fire in a real run is unknown.** The probe forced
   them. Whether the published cost totals are 1% low or 60% low is exactly what
   the first logged panel run will answer.
+- **The acceptance reads do not exist**, and the criteria they will be judged
+  against are already fixed. The seven queries, the rule-in/rule-out bars and the
+  gate are pre-registered in
+  [`docs/eval-reports/2026-09-05-provider-acceptance-pre-registration.md`](../eval-reports/2026-09-05-provider-acceptance-pre-registration.md);
+  the reads themselves are the first build step and are written nowhere yet. Two
+  of that entry's clauses are conditionals the build settles, not open questions:
+  the tolerance depends on the judge runner's failure types, and the sampled chain
+  cross-check applies only if `routing_chain` is taken from the completions body
+  rather than the sweep.
 - **Provider pinning is a separate, related decision** and is not part of this
   document. The log makes routing *visible*; it does not make it *stable*.
 - **The confounded `structured_output` table in `llm_config.py` is not fixed by
