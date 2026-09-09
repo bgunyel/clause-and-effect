@@ -155,6 +155,7 @@ cs_split() {
     {
       line = $0
       sub(/^[[:space:]]+/, "", line)
+      wrapped = 0
       changed = 1
       while (changed) {
         changed = 0
@@ -171,6 +172,7 @@ cs_split() {
           while (match(line, /^-[^[:space:]]*[[:space:]]+/)) {
             line = substr(line, RSTART + RLENGTH)
           }
+          wrapped = 1
           changed = 1
         }
         # timeout and flock take an operand -- a duration, a lock file -- that
@@ -187,11 +189,42 @@ cs_split() {
           if (match(line, /^[^-[:space:]][^[:space:]]*[[:space:]]+/)) {
             line = substr(line, RSTART + RLENGTH)
           }
+          wrapped = 1
           changed = 1
         }
       }
       sub(/[[:space:]]+$/, "", line)
       if (line != "") print line
+      # A wrapper option taking its value as a separate token leaves that value
+      # where the command word has to be, and the command behind it is never at
+      # ^ again: `sudo -u root git push --all origin` left `root`, `nice -n 10`
+      # left `10`, and `timeout -s KILL 30` left `30` even after the operand
+      # strip above took KILL for the duration. Which options take a value is a
+      # list, and two are already kept here -- for the git globals and for the
+      # gh ones -- so a third would be the same answer written a third time,
+      # wrong wherever it is short.
+      #
+      # So the tail is offered as further candidates rather than the head being
+      # trimmed to find one. Offering cannot hide a command; trimming can.
+      # `sudo apt-get install jq` still yields itself, and `install jq` beside
+      # it refuses nothing. It is the rule at the top of this file -- splitting
+      # more eagerly than a shell only ever refuses more -- applied where the
+      # command word cannot be found by looking.
+      #
+      # Three is past the longest real leftover: `timeout -s KILL 30 cmd`
+      # leaves two. A token opening a quote ends it, because what follows is
+      # the text of an argument, and reading text as a command is the mistake
+      # cs_normalise has already made three times.
+      if (wrapped && line != "") {
+        rest = line
+        for (k = 0; k < 3; k++) {
+          if (rest ~ /^["]/ || rest ~ /^[\x27]/) break
+          if (!match(rest, /^[^[:space:]]+[[:space:]]+/)) break
+          rest = substr(rest, RSTART + RLENGTH)
+          if (rest ~ /^["]/ || rest ~ /^[\x27]/) break
+          print rest
+        }
+      }
     }'
 }
 

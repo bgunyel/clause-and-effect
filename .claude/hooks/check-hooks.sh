@@ -192,9 +192,30 @@ git push --mirror origin' \
 tok 'environment assignments removed' \
     'git push' \
     "$(printf 'GIT_DIR=/x FOO=1 git push\n' | cs_split)"
+# The wrapper word and its options go, and the tail follows as further
+# candidates -- see the note in cs_split. They cost nothing here: a line that
+# does not begin with a command word matches no rule.
 tok 'wrapper word and its options removed' \
-    'git push --mirror' \
+    'git push --mirror
+push --mirror
+--mirror' \
     "$(printf 'xargs -n1 git push --mirror\n' | cs_split)"
+# The value of a wrapper option that takes one is not an option, so the strip
+# stops in front of it and the command word is no longer at ^. The tail is what
+# finds it.
+tok 'a wrapper option value does not hide the command' \
+    'root git push --all origin
+git push --all origin
+push --all origin
+--all origin' \
+    "$(printf 'sudo -u root git push --all origin\n' | cs_split)"
+# The tail stops at a token opening a quote: what follows is the text of an
+# argument, and a commit message naming a push is not a push.
+tok 'the tail stops where a quoted argument starts' \
+    'git commit -m "git push --all origin"
+commit -m "git push --all origin"
+-m "git push --all origin"' \
+    "$(printf 'sudo git commit -m "git push --all origin"\n' | cs_split)"
 tok 'continuation joined before anything else' \
     'git push   --all origin' \
     "$(printf 'git push \\\n  --all origin\n' | cs_normalise)"
@@ -597,6 +618,27 @@ check no-pr-decisions.sh BLOCK 'sudo before a merge'             'sudo gh pr mer
 # ordinary command that begins with one of these words is still itself.
 check no-git-push.sh     ALLOW 'timeout in front of something else' 'timeout 5 make test'
 check no-git-push.sh     ALLOW 'sudo in front of something else'    'sudo apt-get install jq'
+
+# Found by reviewing PR #49, and the same defect one turn further on. Stripping
+# a wrapper word and its options leaves the value of any option that took one
+# where the command word has to be, so the operand rule above closes `timeout
+# 30` and not `timeout -s KILL 30`, and closes nothing at all for the wrapper
+# words that have no operand rule. cs_split offers the tail as further
+# candidates rather than keeping a third list of which options take a value.
+check no-git-push.sh BLOCK 'sudo with a separated option value'   'sudo -u root git push --all origin'
+check no-git-push.sh BLOCK 'nice with a separated niceness'       'nice -n 10 git push --all origin'
+check no-git-push.sh BLOCK 'ionice with a separated class'        'ionice -c 2 git push --all origin'
+check no-git-push.sh BLOCK 'timeout whose signal took the operand' 'timeout -s KILL 30 git push --all origin'
+check no-git-push.sh BLOCK 'xargs with a separated count'         'xargs -n 1 git push --all origin'
+check no-git-push.sh BLOCK 'env with a separated directory'       'env -C /tmp git push --all origin'
+check no-pr-decisions.sh BLOCK 'sudo with a separated option value, before a merge' \
+  'sudo -u root gh pr merge 5'
+# The tail only ever adds candidates, so an ordinary command that begins with a
+# wrapper word still yields itself and the additions refuse nothing.
+check no-git-push.sh ALLOW 'a wrapper option value in front of something else' \
+  'sudo -u root apt-get install jq'
+check no-git-push.sh ALLOW 'a commit whose message quotes a push, behind a wrapper' \
+  'sudo git commit -m "git push --all origin"'
 
 echo "=== no-commit-to-main.sh : invariants, identical literals across #43 ==="
 # What the migration preserved. These six were written before it, are green on
