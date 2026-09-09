@@ -208,8 +208,14 @@ cs_git_args() {
 # between the group and the verb and never before the group, so `gh -R o/r pr
 # merge 5` was permitted while `gh pr --repo o/r merge 5` was refused. Issue #47
 # moved that file's merge, review, close, reopen, release and gh api rules onto
-# this function and deleted GHPR and GHRELEASE, so the question is answered here
-# and in no second place.
+# this function and deleted GHPR and GHRELEASE, so among the rules over ordinary
+# commands the question is answered here and in no second place. Not among all
+# of them: that file's wrapper rules match raw text, because a quoted payload
+# has no command word to find, and they still answer it themselves and still
+# answer it one level too late. Issue #51 carries that, and the header of
+# no-pr-decisions.sh says so rather than denying it -- which is the reason to
+# say it here too, since this is where a reader comes to find out whether the
+# question is settled.
 #
 # The exit status is what distinguishes `gh pr create` -- a create whose
 # argument list is empty, which is exactly the shape that lets gh choose the
