@@ -26,11 +26,20 @@
 # *ahead == 0 && behind > 0* against the active dev branch, as the fallback for
 # when nobody has pruned yet. This one rests on *merged implies ancestor*, which
 # is a property of merge style rather than of git: a squash or a rebase merge
-# rewrites the commits and leaves the branch no ancestor of anything. So
-# allow_squash_merge and allow_rebase_merge are disabled on the repository,
-# making the assumption true by configuration rather than by habit. An
-# assumption a repository setting can silently break is not an assumption; it is
-# a bug with a delay.
+# rewrites the commits and leaves the branch no ancestor of anything.
+#
+# So the fallback REQUIRES allow_squash_merge and allow_rebase_merge to be
+# disabled on the repository, which makes the assumption true by configuration
+# rather than by habit. An assumption a repository setting can silently break is
+# not an assumption; it is a bug with a delay.
+#
+# That is a repository setting and not something this file can assert. At the
+# time of writing it is NOT yet applied -- both are still enabled -- and issue
+# #44 carries it as an acceptance criterion for Bertan, because changing a
+# repository setting is not an act an agent takes. Until it is applied, a branch
+# merged by squash or by rebase defeats this detector: its commits are rewritten
+# on the dev branch, so it is no ancestor and reads as ahead > 0. The gone
+# detector still catches that branch, which is the point of having two.
 #
 # THE ACTIVE DEV BRANCH is the highest-numbered refs/remotes/origin/dev-*, read
 # with no network because a hook has five seconds. Sorted with `sort -V` and
@@ -180,7 +189,15 @@ refuse() {
 # comment.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
-if ! command -v cs_split >/dev/null 2>&1; then
+#
+# All three functions are probed, not one. cs_git_args is the one whose absence
+# would be silent and permitting: `RAW=$(cs_git_args "$VERB") || continue`
+# cannot tell "not this verb" from "no such function", so a library holding
+# cs_split but not cs_git_args would leave every verb permitted through the very
+# check written to stop that.
+if ! command -v cs_split >/dev/null 2>&1 \
+   || ! command -v cs_normalise >/dev/null 2>&1 \
+   || ! command -v cs_git_args >/dev/null 2>&1; then
   refuse "(This hook could not load lib/command-scan.sh, so it cannot read what this command does. Refusing rather than permitting.)"
 fi
 
@@ -253,13 +270,28 @@ is_catch_up() {
 # lib/command-scan.sh's own list.
 while IFS= read -r CMD; do
   for VERB in $VERBS; do
-    ARGS=$(cs_git_args "$VERB" <<<"$CMD") || continue
-    ARGS=$(printf '%s' "$ARGS" | tr -d '\042\047')
+    RAW=$(cs_git_args "$VERB" <<<"$CMD") || continue
+    ARGS=$(printf '%s' "$RAW" | tr -d '\042\047')
 
     # Mid-operation continuations. See the header: a refusal here strands state
     # the agent cannot exit.
-    if printf ' %s ' "$ARGS" | grep -qE '[[:space:]]--(continue|abort|skip|quit)([[:space:]]|$)'; then
-      continue
+    #
+    # Matched as the first argument and nowhere else, and never for commit,
+    # which has no continuation at all. Scanning the whole argument list for the
+    # flag is what the first version did, and it read the text of a commit
+    # message as an option: `git commit -m "permit rebase --continue"` -- the
+    # shape of a message written while working on this very hook -- permitted a
+    # commit on a merged branch. Silent, and in the permitting direction. The
+    # quotes have already been stripped by then, so there is no quoting left to
+    # look at; the answer is the position instead.
+    #
+    # A real continuation is the sole argument of the command, so this costs
+    # `git rebase --quiet --continue`, which is refused. Visible, and one edit
+    # away.
+    if [ "$VERB" != "commit" ]; then
+      case "${RAW%%[[:space:]]*}" in
+        --continue|--abort|--skip|--quit) continue ;;
+      esac
     fi
 
     if [ "$STATE" = "STALE" ] && { [ "$VERB" = "merge" ] || [ "$VERB" = "rebase" ]; }; then

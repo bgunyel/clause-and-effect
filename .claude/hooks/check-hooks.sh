@@ -978,6 +978,32 @@ check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'merge --abort' \
   'git merge --abort'
 check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'cherry-pick --skip' \
   'git cherry-pick --skip'
+# A commit message is the one argument on this path that carries arbitrary
+# prose, and the arguments are stripped of their quotes before the continuation
+# flags are looked for. So the text of a message read as an option, and
+# `git commit -m "permit rebase --continue"` -- the shape of a message written
+# while working on this very hook -- permitted a commit on a merged branch.
+# Silent, and in the permitting direction. Found by review, not by this suite:
+# every continuation check here drove the bare flag, which is exactly the case
+# that already worked.
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a commit message naming a continuation flag' \
+  'git commit -m "permit rebase --continue"'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a commit message naming --skip' \
+  'git commit -m "handle --skip in the guard"'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a merge message naming a continuation flag' \
+  'git merge -m "wip --continue" some-other-branch'
+# An unterminated quote is argument text past the point this can read, and
+# reading argument text as a flag is what permits here, so the ambiguous case
+# must not.
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'an unterminated quote before a continuation flag' \
+  'git commit -m "wip --continue'
+# A continuation flag anywhere but the first argument is not a continuation.
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a continuation flag trailing a real commit' \
+  'git commit -m "wip" --skip'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a continuation flag trailing a cherry-pick' \
+  'git cherry-pick 1234abc --continue'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a continuation flag behind an option' \
+  'git rebase --quiet --continue'
 check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'a read is not work' \
   'git log --oneline -5'
 check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'a command with no git in it at all' \
@@ -1042,6 +1068,10 @@ check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a permitted merge followe
   'git merge origin/dev-05 && git commit -m "wip"'
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'rebase --continue' \
   'git rebase --continue'
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a commit message naming a continuation flag' \
+  'git commit -m "permit rebase --continue"'
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a merge message naming a continuation flag' \
+  'git merge -m "wip --continue" some-other-branch'
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'a read is not work' \
   'git status'
 
@@ -1103,6 +1133,20 @@ check_in "$WT_STALE" "$FIXTURES/nolib/no-work-on-stale-branch.sh" BLOCK 'no lib/
 # worktree is not refused because a library is missing.
 check_in "$WT_WORK" "$FIXTURES/nolib/no-work-on-stale-branch.sh" ALLOW 'no lib/, on a branch carrying work' \
   'git commit -m "wip"'
+# A library that is present but incomplete. cs_git_args is the function whose
+# absence would be silent and permitting: `RAW=$(cs_git_args "$VERB") ||
+# continue` cannot tell "not this verb" from "no such function", so probing
+# cs_split alone left every verb permitted through the check written to stop
+# exactly that. Found by review, not by this suite.
+mkdir -p "$FIXTURES/halflib/lib"
+cp no-work-on-stale-branch.sh "$FIXTURES/halflib/"
+sed 's/^cs_git_args()/cs_renamed_away()/' lib/command-scan.sh > "$FIXTURES/halflib/lib/command-scan.sh"
+grep -q '^cs_renamed_away()' "$FIXTURES/halflib/lib/command-scan.sh" || {
+  echo "the half-library fixture did not rename cs_git_args; the check below proves nothing" >&2
+  exit 1
+}
+check_in "$WT_STALE" "$FIXTURES/halflib/no-work-on-stale-branch.sh" BLOCK 'a library missing only cs_git_args' \
+  'git commit -m "wip"'
 
 echo "=== the arming properties, asserted as literals ==="
 # A second kind of check: the ones above drive a hook as a process and read its
@@ -1135,6 +1179,21 @@ unarmed 'the report force-deletes no branch' \
   "$HOOKS/report-stale-branches.sh" 'branch -D'
 unarmed 'the report deletes nothing on the remote' \
   "$HOOKS/report-stale-branches.sh" 'push origin --delete'
+
+# The active dev branch is derived in both files, and the copies are identical
+# by hand. lib/command-scan.sh's own header names this failure mode -- the same
+# question answered differently in a different place -- and the library is right
+# there, so the duplication is a decision and not an oversight: the guard must
+# read its state before it may depend on lib/ at all. That is what lets it fail
+# closed only on a branch it has an opinion about, rather than refusing every
+# command in every worktree whenever a library is missing. The cost of that
+# ordering is two copies, so the copies are pinned instead of shared. A
+# divergence here silently unarms the guard or misreports the branch.
+DEV_DERIVATION="| grep -E '^origin/dev-[0-9]+\$' | sort -V | tail -1)"
+armed 'the guard derives the active dev branch this way' \
+  "$HOOKS/no-work-on-stale-branch.sh" "$DEV_DERIVATION"
+armed 'and the report derives it identically' \
+  "$HOOKS/report-stale-branches.sh" "$DEV_DERIVATION"
 
 # settings.json is what actually runs either file, so a hook present in the tree
 # and absent from the configuration is a hook that does nothing. jq reads it;
