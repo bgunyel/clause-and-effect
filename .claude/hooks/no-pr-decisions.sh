@@ -164,6 +164,27 @@ gh_pr_bases() {
 #
 # The asymmetry with gh_pr_bases is deliberate and is the whole point: quoted
 # text may still trigger a refusal there, and may not grant an exemption here.
+# The arguments a base is read out of, with quoted text taken out of them but a
+# quoted base value kept.
+#
+# `tr -d` over the quotes was doing the opposite of what the comment below the
+# create rule claimed. Deleting the quote characters and keeping what stood
+# between them turns prose into tokens, so `--body "--base dev-05"` named a base
+# in a command that named none, and the create went to the default branch with
+# the hook satisfied -- the one shape issue #40 exists to refuse, arriving
+# through a body. It is not only an added refusal: where no base is named at
+# all, prose is what supplies one.
+#
+# So a base flag has its own value unquoted first, and every remaining quoted
+# span is then dropped whole, which is what gh_pr_web already did for -w and
+# what rest_bases already did by anchoring on the field flag. Three readers of
+# the same argument list, and this was the one that still read prose.
+base_args() {
+  printf '%s' "$1" \
+    | sed -E "s/(--base|-[A-Za-z]*B)([[:space:]]*=?[[:space:]]*)[\"']([^\"']*)[\"']/\1\2\3/g" \
+    | sed -e 's/"[^"]*"//g' -e "s/'[^']*'//g"
+}
+
 gh_pr_web() {
   local TOK
   for TOK in $1; do
@@ -358,6 +379,7 @@ rest_bases() {
 # agent writes by accident.
 gql_bases() {
   printf '%s\n' "$1" \
+    | sed -E 's/\\(["'"'"'])/\1/g' \
     | grep -oiE "baseRefName[[:space:]]*:[[:space:]]*[\"']?[^[:space:]\"',})]*" \
     | sed -E "s/.*:[[:space:]]*[\"']?//"
 }
@@ -422,10 +444,10 @@ fi
 # defects came from being answered ad hoc.
 while IFS= read -r CMD; do
   if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then
-    # Two readings of one argument list, because the two questions want opposite
-    # errors. Unquoting exposes prose as tokens, which can only add a refusal;
-    # deleting the quoted span cannot invent the flag that would remove one.
-    ARGS=$(printf '%s' "$RAW" | tr -d '\042\047')
+    # Two readings of one argument list. Both drop quoted spans; the base reader
+    # keeps a base flag's own quoted value, which is the only quoted text either
+    # question wants.
+    ARGS=$(base_args "$RAW")
     WEBARGS=$(printf '%s' "$RAW" | sed -e 's/"[^"]*"//g' -e "s/'[^']*'//g")
     BASES=$(gh_pr_bases "$ARGS")
     if [ -n "$BASES" ]; then
@@ -449,7 +471,7 @@ while IFS= read -r CMD; do
   # Editing a pull request stays allowed; moving its base is the same choice of
   # destination made a second time, so it is checked, and only when it is there.
   if RAW=$(cs_gh_args 'pr edit' <<<"$CMD"); then
-    ARGS=$(printf '%s' "$RAW" | tr -d '\042\047')
+    ARGS=$(base_args "$RAW")
     if ! bases_all_dev "$(gh_pr_bases "$ARGS")"; then
       echo "$BASE Retargeting to $BAD_BASE chooses that destination just as creating it there would. Edit anything else you like." >&2
       exit 2

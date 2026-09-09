@@ -892,12 +892,45 @@ check no-pr-decisions.sh BLOCK 'a label value beginning -w'  'gh pr create -l -w
 check no-pr-decisions.sh BLOCK 'a bundle holding w'          'gh pr create -twibble --body y'
 check no-pr-decisions.sh BLOCK 'a title naming -w'           'gh pr create --title "Handle -w in gh_pr_web" --body y'
 check no-pr-decisions.sh BLOCK 'a body naming -watch'        'gh pr create --title x --body "adds -watch mode"'
-# The exemption itself still works, and quoted prose may still refuse: the
-# asymmetry is the point. Deleting a quoted span cannot invent a flag; unquoting
-# one can, so only the permitting test reads the deleted form.
+# The exemption itself still works. The asymmetry that used to be recorded here
+# is gone: both readers drop a quoted span whole now. Unquoting one can invent a
+# flag, and inventing a --base in a command that named none removes a refusal
+# just as inventing a -w does, which is the half this comment used to miss. See
+# base_args, and group 5.
 check no-pr-decisions.sh ALLOW 'the web form, unbundled'     'gh pr create -w --title x'
 check no-pr-decisions.sh ALLOW 'the web form, long'          'gh pr create --web --title x'
+# Still refused, and now for naming no base rather than for naming a bad one.
 check no-pr-decisions.sh BLOCK 'a title naming -B main'      'gh pr create --title "-B main" --body y'
+
+# 5. A base read out of prose. `tr -d` deleted the quote characters and kept
+# what stood between them, so a body naming the flag named a base in a command
+# that named none -- and gh would have sent that create to the repository
+# default branch with this hook satisfied, which is the one shape #40 exists to
+# refuse, arriving through a body. The trigger is not contrived: a body quoting
+# the command it is about is how the pull requests in this repository are
+# written. base_args drops a quoted span whole and unquotes only a base flag own
+# value.
+check no-pr-decisions.sh BLOCK 'a base named only in a body'      'gh pr create --title t --body "--base dev-05"'
+check no-pr-decisions.sh BLOCK 'a base named only in a title'     'gh pr create --title "--base dev-05" --body b'
+check no-pr-decisions.sh BLOCK 'a body quoting the command'       'gh pr create --title x --body "Write: gh pr create --base dev-05 --title ..."'
+check no-pr-decisions.sh BLOCK 'a shorthand base in a body'       'gh pr create --title t --body "-B dev-05"'
+# The other direction, which the same defect caused: prose naming the flag made
+# a correct create refuse.
+check no-pr-decisions.sh ALLOW 'a body naming the base flag'      'gh pr create --base dev-05 --title t --body "the --base flag"'
+check no-pr-decisions.sh ALLOW 'a body naming a main retarget'    'gh pr create --base dev-05 --title t --body "use -B main to retarget"'
+check no-pr-decisions.sh ALLOW 'an edit titled after the flag'    'gh pr edit 5 --title "--base main"'
+# A base flag own value is the one quoted span that is kept, in either quote,
+# because gh takes either. Dropping it would refuse a correctly based create.
+check no-pr-decisions.sh ALLOW 'a double-quoted base value'       'gh pr create --base "dev-05" --title t'
+check no-pr-decisions.sh ALLOW 'a single-quoted base value'       "gh pr create --base 'dev-05' --title t"
+check no-pr-decisions.sh BLOCK 'a quoted base naming main'        'gh pr create --base "main" --title t'
+check no-pr-decisions.sh BLOCK 'a quoted retarget to main'        'gh pr edit 5 --base "main"'
+# 6. A graphql string value is quoted, and the shell quoting around the query
+# commonly escapes those quotes. gql_bases read the backslash as the whole value
+# and refused a dev-NN base for not being one. Refusing direction, so it sat
+# behind the two spellings that did work, both of which are pinned above.
+check no-pr-decisions.sh ALLOW 'graphql into dev, escaped'        'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}"'
+check no-pr-decisions.sh BLOCK 'graphql into main, escaped'       'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"main\"})}"'
 # 3. The gh api base was read from the whole line, so a neighbouring command
 # answered for this one -- in both directions. This is the first of the five
 # defects lib/command-scan.sh exists to end, reintroduced for gh api after being
