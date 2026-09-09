@@ -48,6 +48,19 @@ closed-without-merge pull request would discard the work.
 
 ### 2. Report what is stale
 
+Part of this now runs on its own. `.claude/hooks/report-stale-branches.sh` is a
+`SessionStart` hook that does the pruning fetch and reports stale branches and
+the worktrees standing on them — the read-only half of this step, and nothing
+else: it removes nothing, which is why it is named `report-` and not `sweep-`.
+Its output is already in the session; read it before running the commands below,
+and run them for what it does not cover — the pull request state, which needs
+`gh`, and the last commit dates.
+
+That fetch is also what arms `.claude/hooks/no-work-on-stale-branch.sh`, which
+refuses a commit on a branch whose work is over. Both read remote-tracking refs,
+so both are exactly as fresh as that fetch; when the report says the fetch
+failed, neither detector is armed for that session.
+
 ```bash
 git fetch --prune
 git branch -a

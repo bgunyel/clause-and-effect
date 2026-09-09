@@ -1,0 +1,278 @@
+#!/bin/bash
+# A worktree branch exists for one pull request. When that pull request merges,
+# the branch has served its purpose: remotely `delete_branch_on_merge` removes
+# it, locally Bertan's sweep does. Nothing stopped work continuing on it in the
+# meantime, and that failure has fired twice -- the probe->check rename was
+# committed onto hooks-push-and-pr-guards after PR #35 had already merged it,
+# and research/non-openrouter-response-bodies sat one commit ahead and nineteen
+# behind with no pull request, loaded to revert nineteen commits the moment
+# anyone proposed it.
+#
+# Keyed on running in a linked worktree, the same keying no-git-push.sh uses and
+# deliberately not on the branch's name. CONTEXT.md's *worktree branch* entry
+# says why at length: worktrees are made two ways here and only one of them
+# prefixes the branch, and a branch in the main checkout can be given whatever
+# name a rule looks for.
+#
+# TWO DETECTORS, EACH COVERING THE OTHER'S BLIND SPOT.
+#
+# *The upstream is gone.* With delete_branch_on_merge on, a merged worktree
+# branch is exactly a branch whose upstream has been pruned away. This reads the
+# remote's existence rather than the commits' ancestry, so no merge style
+# defeats it. `%(upstream:track)` reports `[gone]` for precisely that state --
+# upstream configured, remote-tracking ref absent -- and `%(upstream)` does not,
+# because it keeps naming the ref after the ref is gone. Measured on a fixture.
+#
+# *ahead == 0 && behind > 0* against the active dev branch, as the fallback for
+# when nobody has pruned yet. This one rests on *merged implies ancestor*, which
+# is a property of merge style rather than of git: a squash or a rebase merge
+# rewrites the commits and leaves the branch no ancestor of anything. So
+# allow_squash_merge and allow_rebase_merge are disabled on the repository,
+# making the assumption true by configuration rather than by habit. An
+# assumption a repository setting can silently break is not an assumption; it is
+# a bug with a delay.
+#
+# THE ACTIVE DEV BRANCH is the highest-numbered refs/remotes/origin/dev-*, read
+# with no network because a hook has five seconds. Sorted with `sort -V` and
+# filtered to `^origin/dev-[0-9]+$`, and both halves earn their place: a lexical
+# sort makes dev-09 beat dev-10, and an unfiltered glob lets origin/dev-foo win
+# outright. The branch-hygiene skill mandates two-digit zero-padding, so a
+# lexical sort would be correct today and wrong at dev-10; the version sort does
+# not depend on that mandate holding.
+#
+# When no such ref exists -- a fresh clone, or the rotation window after the
+# merged dev-NN is deleted and its successor is not yet pushed -- the guard
+# ABSTAINS rather than refuses. These stop mistakes, not adversaries.
+#
+# THE MESSAGES STATE WHAT THE HOOK CAN SEE. `upstream: gone` fires only on the
+# genuinely merged case, so that message says "merged" and means it. The
+# fallback cannot distinguish a merged branch from a brand-new worktree branch
+# that has not committed while dev-NN moved on -- the two are topologically
+# identical and only a network call would separate them -- so its message is
+# about state: this branch has no work of its own and the active dev branch has
+# moved past it. check-hooks.sh pins both messages, because a change routing
+# both states through one wording would leave the verdicts green and the claim
+# false.
+#
+# WHICH COMMANDS. Any command that adds a commit makes ahead > 0 and retires the
+# fallback for that branch permanently, so the test is not "would an agent
+# plausibly write this" but "would this silently disable the rule". That is
+# commit, cherry-pick, revert, merge and `am`. cherry-pick is not marginal -- it
+# is the command in this repository's own recovery procedure. rebase is here
+# too, not because it is in that list but because the carve-out below has to
+# answer for it: a rebase onto anything but the active dev branch writes new
+# commits onto this branch exactly as a merge would.
+#
+# Mid-operation continuations -- --continue, --abort, --skip, --quit -- are
+# excluded, and the reason belongs here: a refusal mid-rebase strands state the
+# agent cannot exit, and a guard that leaves the repository in a condition only
+# a human can clear is worse than the mistake it prevents.
+#
+# THE ONE CARVE-OUT. Under the fallback, ahead == 0 means the branch is a strict
+# ancestor of the active dev branch, so merging or rebasing onto that branch is
+# a fast-forward: it creates no commit and masks nothing. Merge was in the set
+# for a hazard unreachable in that exact state, and refusing it there deadlocks
+# the branch -- no commit, no catch-up, and removing a worktree is a reserved
+# act, so a timing race becomes a hand-off to a human. So under the fallback a
+# merge or rebase naming the active dev branch is permitted, and one naming
+# anything else is refused, because that one would create a real commit and
+# would mask. Under `upstream: gone` both are refused: merging into a branch
+# that no longer exists on the remote is meaningless.
+#
+# The carve-out is the only permitting path in a refused state, so it is a
+# whitelist rather than a blacklist. Every token has to be either the active dev
+# branch under one of its four spellings or an option from a short list that
+# takes no value and creates no commit. --no-ff is not on that list and never
+# will be: it is the spelling whose whole purpose is to write a merge commit
+# where a fast-forward would do.
+#
+# ARMED BY report-stale-branches.sh. Both detectors read remote-tracking refs
+# and are exactly as fresh as the last fetch -- the fallback no less than the
+# gone test, since origin/dev-NN is a remote-tracking ref too. A hook cannot
+# fetch, so a SessionStart hook does it, with an explicit --prune. Two soft
+# edges follow and both are deliberate. The fetch fails open, so an offline or
+# slow session proceeds with neither detector armed; that is announced by the
+# report, which says the fetch failed. And permitting the catch-up merge means a
+# genuinely merged branch can be fast-forwarded to the tip, after which both
+# detectors read clean -- a window lasting only a session, in which a merge
+# lands after that session's fetch, closed at the next session start.
+#
+# NOT COVERED, AND DELIBERATELY. `git pull` is fetch plus merge and can write a
+# merge commit; it is not matched here. On a gone branch it fails of its own
+# accord, and on the fallback it is the catch-up the carve-out exists to permit.
+# `git stash pop`, `git apply` and `git checkout -- .` change the working tree
+# and write no commit, so they do not move ahead and do not disable the rule.
+# `git reset` and `git branch -f` can move the branch and are not matched: they
+# are the shapes of a recovery, not of work continuing by mistake.
+#
+# STOPPING RULE, inherited from no-git-push.sh. A newly found evasion earns a
+# fix only if it is a shape an agent would plausibly write, not one it would
+# have to construct. A wrapper's payload sits in quotes where no command
+# position exists, so wrappers are refused outright rather than parsed.
+#
+# This stops mistakes, not adversaries.
+
+set -f
+
+INPUT=$(cat)
+COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+
+# Every command this file refuses is a git subcommand, so text with no `git` in
+# it anywhere cannot hold one -- a wrapped payload included, since the payload
+# still carries the word. This bail runs before the library is needed and before
+# any git process is started, so `ls` in a stale worktree costs one grep.
+echo "$COMMAND" | grep -q 'git' || exit 0
+
+# The exception is keyed on where the command runs, not on what the branch is
+# called: in a linked worktree --git-dir is .git/worktrees/<name> while
+# --git-common-dir is .git; in the main checkout the two are equal. The main
+# checkout is unaffected by this file.
+GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null)
+GIT_COMMON_PATH=$(git rev-parse --git-common-dir 2>/dev/null)
+[ -n "$GIT_DIR_PATH" ] || exit 0
+[ "$GIT_DIR_PATH" = "$GIT_COMMON_PATH" ] && exit 0
+
+CURRENT=$(git branch --show-current 2>/dev/null)
+# A detached HEAD has no branch, so neither detector has anything to read.
+[ -n "$CURRENT" ] || exit 0
+
+# The active dev branch. See the header for why the filter and the version sort
+# are both load-bearing.
+DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
+      | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
+
+TRACK=$(git for-each-ref --format='%(upstream:track)' "refs/heads/$CURRENT" 2>/dev/null)
+
+STATE=CLEAR
+BEHIND=0
+if [ "$TRACK" = "[gone]" ]; then
+  STATE=GONE
+elif [ -n "$DEV" ] && [ "origin/$CURRENT" != "$DEV" ]; then
+  COUNTS=$(git rev-list --left-right --count "$DEV...refs/heads/$CURRENT" 2>/dev/null)
+  BEHIND=$(printf '%s' "$COUNTS" | cut -f1)
+  AHEAD=$(printf '%s' "$COUNTS" | cut -f2)
+  # An unreadable count is not a stale branch. Abstaining is the same answer
+  # this file gives when there is no dev ref at all.
+  if [ -n "$AHEAD" ] && [ "$AHEAD" -eq 0 ] && [ "$BEHIND" -gt 0 ]; then
+    STATE=STALE
+  fi
+fi
+
+# A branch carrying work of its own, a fresh branch at the dev tip, and every
+# branch in a repository with no origin/dev-* ref at all leave here without an
+# opinion. That is most sessions, and it costs four git reads.
+[ "$STATE" = "CLEAR" ] && exit 0
+
+GONE_REFUSE="Blocked: this worktree branch has been merged. Its branch on the remote is gone, which is what delete_branch_on_merge does when a pull request lands, so work added here now sits on a branch nothing will merge again. Make a new worktree from ${DEV:-the active dev branch} and move the work there."
+STALE_REFUSE="Blocked: this worktree branch has no work of its own and ${DEV:-the active dev branch} is $BEHIND commit(s) ahead of it. A commit here would be the first thing on a branch the active dev branch has already moved past. Catch up first -- git merge ${DEV:-the active dev branch} is permitted from here -- or make a new worktree."
+
+refuse() {
+  if [ "$STATE" = "GONE" ]; then echo "$GONE_REFUSE $1" >&2; else echo "$STALE_REFUSE $1" >&2; fi
+  exit 2
+}
+
+# The branch is stale or gone, so from here the file has an opinion and must be
+# able to read the command to hold it. Without the tokeniser it cannot find a
+# command word at all, and every commit on a merged branch would be permitted.
+# A guard's own breakage refuses; it does not wave things through. Tested for
+# before it is sourced and the functions after: a missing file makes `.` end the
+# shell where an `if` around it never runs, so the guard would have been a
+# comment.
+LIB="$(dirname "$0")/lib/command-scan.sh"
+[ -r "$LIB" ] && . "$LIB"
+if ! command -v cs_split >/dev/null 2>&1; then
+  refuse "(This hook could not load lib/command-scan.sh, so it cannot read what this command does. Refusing rather than permitting.)"
+fi
+
+SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)
+CMDS=$(printf '%s\n' "$SCAN" | cs_split)
+
+VERBS="commit cherry-pick revert merge am rebase"
+
+# A wrapper's payload sits in quotes, where no command position exists and the
+# tokeniser finds nothing -- so this runs on the raw text and before the search
+# for a command word, exactly as the three sibling hooks do. Ordering it the
+# other way would let every wrapped commit through.
+if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))' \
+   && echo "$COMMAND" | grep -qE 'git[[:space:]]+([^;&|]*[[:space:]])?(commit|cherry-pick|revert|merge|am|rebase)([^-A-Za-z0-9_]|$)'; then
+  refuse "(That command is wrapped in a shell, so what it would write cannot be read through a quoted payload. Run it plainly.)"
+fi
+
+# Whether the carve-out may be taken at all. Everything here moves git somewhere
+# else, or moves the branch under it, so the state read above would not be the
+# state the command runs against -- and the carve-out is the one path out of a
+# refused state. Refusing rather than assessing is what makes the read sound;
+# it is the answer issue #43 gave in no-commit-to-main.sh, and this file is
+# blocked on that one for exactly this reason. The environment spellings come
+# from the un-split text, because cs_split removes assignments to find the
+# command word behind them.
+CARVE=1
+if printf '%s\n' "$CMDS" | grep -qE '^(cd|pushd|popd)([^-A-Za-z0-9_]|$)'; then CARVE=; fi
+if echo "$SCAN" | grep -qE '(GIT_DIR|GIT_WORK_TREE|GIT_COMMON_DIR)='; then CARVE=; fi
+if printf '%s\n' "$CMDS" | grep -qE '^git[[:space:]]+([^[:space:]]+[[:space:]]+)*(-C|--git-dir|--work-tree)([[:space:]]|=)'; then CARVE=; fi
+while IFS= read -r CMD; do
+  if cs_git_args checkout <<<"$CMD" >/dev/null || cs_git_args switch <<<"$CMD" >/dev/null; then
+    CARVE=
+    break
+  fi
+done <<CMDLIST
+$CMDS
+CMDLIST
+
+# The four spellings of the active dev branch. DEV is origin/dev-NN; the local
+# branch of the same name, and both branches' full ref paths, name the same
+# commit for the purpose of a fast-forward.
+DEV_SHORT=${DEV#origin/}
+names_dev() {
+  case "$1" in
+    "$DEV"|"$DEV_SHORT"|"refs/remotes/$DEV"|"refs/heads/$DEV_SHORT") return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# A merge or rebase that is a fast-forward onto the active dev branch and
+# nothing else. A whitelist: every token must be one of a short list of options
+# that take no value and create no commit, or a name of that branch, and at
+# least one name must be present. A bare `git merge` takes its argument from
+# configuration and names nothing, so it is refused with the rest.
+is_catch_up() {
+  local ARGS="$1" TOK NAMED=
+  for TOK in $ARGS; do
+    case "$TOK" in
+      --ff|--ff-only|-q|--quiet|-v|--verbose|--stat|--no-stat|--progress|--no-progress|--no-edit) continue ;;
+      -*) return 1 ;;
+    esac
+    names_dev "$TOK" || return 1
+    NAMED=1
+  done
+  [ -n "$NAMED" ]
+}
+
+# Every command, not the first: `git merge dev-05 && git commit -m x` is refused
+# on its second half. Scoping to one occurrence is the fifth defect in
+# lib/command-scan.sh's own list.
+while IFS= read -r CMD; do
+  for VERB in $VERBS; do
+    ARGS=$(cs_git_args "$VERB" <<<"$CMD") || continue
+    ARGS=$(printf '%s' "$ARGS" | tr -d '\042\047')
+
+    # Mid-operation continuations. See the header: a refusal here strands state
+    # the agent cannot exit.
+    if printf ' %s ' "$ARGS" | grep -qE '[[:space:]]--(continue|abort|skip|quit)([[:space:]]|$)'; then
+      continue
+    fi
+
+    if [ "$STATE" = "STALE" ] && { [ "$VERB" = "merge" ] || [ "$VERB" = "rebase" ]; }; then
+      if [ -n "$CARVE" ] && is_catch_up "$ARGS"; then
+        continue
+      fi
+      refuse "(A $VERB naming $DEV would be a fast-forward and is permitted; this one is not that.)"
+    fi
+
+    refuse "(Refused command: git $VERB.)"
+  done
+done <<CMDLIST
+$CMDS
+CMDLIST
+
+exit 0
