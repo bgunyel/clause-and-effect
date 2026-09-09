@@ -482,6 +482,46 @@ check no-pr-decisions.sh BLOCK 'gh release --repo o/r create v1' 'gh release --r
 check no-pr-decisions.sh ALLOW 'gh pr --repo o/r view 35'       'gh pr --repo o/r view 35'
 check no-pr-decisions.sh ALLOW 'gh pr --repo o/r list'          'gh pr --repo o/r list'
 
+echo "=== REGRESSION: #51, a flag before the group evaded the wrapper rules ==="
+# The wrapper rules carried the blind spot the section above removed from the
+# ordinary ones, one word earlier. They are unanchored, but `pr` still had to
+# follow `gh` immediately, so a global flag in front of the group hid it and
+# every shape refused above came back the moment it was wrapped. Each row here
+# was PERMITTED against this file's siblings on dev-05 (6f2434c), measured
+# before the fix; each is a reserved act.
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r pr merge'       'bash -c "gh -R o/r pr merge 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh --repo o/r pr merge'   'bash -c "gh --repo o/r pr merge 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh --hostname h pr merge' 'bash -c "gh --hostname h pr merge 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r pr close'       'bash -c "gh -R o/r pr close 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r pr review -a'   'bash -c "gh -R o/r pr review 5 --approve"'
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r release create' 'bash -c "gh -R o/r release create v1"'
+check no-pr-decisions.sh BLOCK 'sh -c gh -R o/r pr reopen'        'sh -c "gh -R o/r pr reopen 5"'
+check no-pr-decisions.sh BLOCK 'eval gh -R o/r release delete'    'eval "gh -R o/r release delete v1"'
+# The boundary the table marked: a flag *between* the group and the verb was
+# caught by the `.*` all along, so it was the flag before the group alone that
+# escaped. Kept so a later change cannot lose the half that worked.
+check no-pr-decisions.sh BLOCK 'bash -c gh pr --repo o/r merge'   'bash -c "gh pr --repo o/r merge 5"'
+
+echo "=== ACCEPTED false positive: #51, the verb is not read inside a wrapper ==="
+# What refusing the group outright gives up. These are reads and ordinary edits,
+# refused with the writes because a wrapped payload is quoted text with no
+# command word in it -- the same reason the method of a wrapped `gh api` is not
+# read either, which is the check at 'a GET inside bash -c' above. Every one is
+# one edit away from working: run it unwrapped.
+check no-pr-decisions.sh BLOCK 'bash -c gh pr view'          'bash -c "gh pr view 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh pr list'          'bash -c "gh pr list"'
+check no-pr-decisions.sh BLOCK 'bash -c gh release list'     'bash -c "gh release list"'
+check no-pr-decisions.sh BLOCK 'eval gh api on an issue'     'eval "gh api repos/o/r/issues/27"'
+# And the word alone is enough, wherever it sits: inside a wrapper there is no
+# argument structure to say whether it is a subcommand or prose.
+check no-pr-decisions.sh BLOCK 'bash -c a comment naming pr' 'bash -c "gh issue comment 5 -b \"the pr looks fine\""'
+# The rule reaches gh's three deciding surfaces and stops there. A wrapped
+# command that is none of them is answered by whatever else covers it, and by
+# this file not at all.
+check no-pr-decisions.sh ALLOW 'bash -c gh issue close'      'bash -c "gh issue close 27"'
+check no-pr-decisions.sh ALLOW 'bash -c gh issue list'       'bash -c "gh issue list"'
+check no-pr-decisions.sh ALLOW 'bash -c an ordinary command' 'bash -c "make test"'
+
 echo "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
 # Closing a PR and publishing a release were refused in the gh spelling and open
 # through gh api, so the boundary was spelling-dependent exactly where the file

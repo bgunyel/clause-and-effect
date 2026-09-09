@@ -21,8 +21,9 @@
 #
 # The wrapper rule below is the exception to the method test, and stays blunt on
 # purpose: inside `bash -c '...'` the payload is quoted text, so neither the
-# method nor anything else can be read out of it. A read of a PR wrapped in a
-# shell is refused with the writes. Run it unwrapped.
+# method nor the subcommand nor anything else can be read out of it. A read of a
+# PR wrapped in a shell is refused with the writes, and so is every wrapped
+# `gh pr`, `gh release` and `gh api` whatever verb follows. Run it unwrapped.
 #
 # Finding commands in the text is lib/command-scan.sh's job. Each line it
 # returns is one command with everything before the command word removed, so
@@ -74,22 +75,40 @@ GHRELEASE='^gh[[:space:]]+release([[:space:]]+((-R|--repo|--hostname)[[:space:]]
 # contain, and --repo would read as --request-changes.
 VERDICT='[[:space:]](--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[:space:]]|=|"|$)'
 
+# Inside a wrapper the group is the whole of what a rule can honestly name.
+# These ran unanchored over the raw text and still wanted `pr` to follow `gh`
+# immediately, so `gh -R o/r pr merge 5` was permitted while
+# `gh pr --repo o/r merge 5` was refused -- the command-position question again,
+# one word later, in the sixth place. It is also the one place cs_gh_args cannot
+# answer it: the payload is quoted text with no command word for the tokeniser
+# to find, which is why these rules are a blunt text match to begin with.
+#
+# So the verb is not read at all. Anything may stand between `gh` and the group,
+# and whatever follows the group is not looked at. That is the answer the note
+# at the top of this file already gives -- if nothing can be read out of a
+# wrapped payload, then naming merge|close|reopen inside one is reading it, and
+# the table on issue #51 is what reading it badly looked like.
+#
+# The trade, taken knowingly: every wrapped `gh pr`, `gh release` and `gh api`
+# is refused whatever it goes on to say. It costs `bash -c "gh pr view 5"`,
+# `bash -c "gh release list"` and every wrapped read through `gh api`; it also
+# costs a wrapped `gh issue` whose body happens to contain the word `pr`, since
+# there is no argument structure in quoted text to say which is which. All are
+# reads or ordinary edits, all are refused with the writes for the same reason
+# the method of a wrapped `gh api` was already not read, and all are one edit
+# away from working. Run them unwrapped.
+GH_WRAPPED='gh[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
+
 # A wrapper's payload sits inside quotes, where there is no command word for the
 # tokeniser to find, so these run unanchored over the raw text -- and only once
 # a wrapper has been found, never over an ordinary command.
 if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))'; then
-  if echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+.*(merge|close|reopen)([^-A-Za-z0-9_]|$)' \
-     || echo "$COMMAND" | grep -qE 'gh[[:space:]]+release[[:space:]]+.*(create|delete|delete-asset)([^-A-Za-z0-9_]|$)' \
+  if echo "$COMMAND" | grep -qE "$GH_WRAPPED" \
      || echo "$COMMAND" | grep -qE '/pulls/[^ ]*/(merge|reviews)' \
      || echo "$COMMAND" | grep -qE '/releases([^A-Za-z0-9_-]|$)' \
      || echo "$COMMAND" | grep -qiE 'state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?' \
      || echo "$COMMAND" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then
-    echo "$DECIDE A shell wrapper does not change what the command decides." >&2
-    exit 2
-  fi
-  if echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+review([^-A-Za-z0-9_]|$)' \
-     && echo "$COMMAND" | grep -qE "$VERDICT"; then
-    echo "$DECIDE A shell wrapper does not change what the command decides." >&2
+    echo "$DECIDE A shell wrapper does not change what the command decides, and nothing can be read out of its quoted payload -- so gh pr, gh release and gh api are refused there whatever the verb. Run it unwrapped." >&2
     exit 2
   fi
 fi
