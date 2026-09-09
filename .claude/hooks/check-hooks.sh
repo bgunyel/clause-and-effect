@@ -1,5 +1,6 @@
 #!/bin/bash
-# Regression checks for no-git-push.sh and no-pr-decisions.sh.
+# Regression checks for no-git-push.sh, no-pr-decisions.sh and
+# no-commit-to-main.sh.
 #
 # A hook is a process, so the only way to test one is to run it; what the rule
 # against calling the function under test forbids is deriving the expectation
@@ -23,6 +24,14 @@
 # fi` was permitted, and passed again while a commit message mentioning `<<EOF`
 # blinded both hooks for the rest of the command.
 #
+# The redirect checks come from a fourth review, of PR #48, and are the first
+# of these to name a defect in the refusing direction rather than the
+# permitting one: every redirect on an otherwise permitted push was refused,
+# because nothing removed redirections and the operator read as a refspec. It
+# survived three rounds of review for that reason -- it refuses too much, and
+# the workaround is to drop the redirect -- and was filed anyway, because the
+# question it gets wrong is the one lib/command-scan.sh exists to answer once.
+#
 # So the number below is not a measure of the boundary. A check suite is
 # evidence about the cases it names and about nothing else, and every case here
 # was named by someone who went looking for one it had missed.
@@ -43,8 +52,37 @@
 # of that branch is ALLOW; run from the main checkout, the identical command is
 # BLOCK. OWN_BRANCH_PUSH holds whichever applies, and the banner says which.
 #
+# no-commit-to-main.sh is checked in two classes, because issue #43 rebuilt it
+# on lib/command-scan.sh and did not preserve its behaviour -- that file's
+# behaviour included its defects. The invariant class is written in identical
+# literals on both sides of the migration and pins what was preserved, which is
+# the file's purpose. The defective class names what it got wrong before, and
+# each of those checks carries the verdict it used to return: `ok ALLOW (was
+# BLOCK)` is the migration's evidence, and reverting the file turns exactly
+# those red with `got` equal to the recorded `was`. An all-green run on both
+# sides would have been evidence that the migration changed nothing. Sixteen
+# invariants, eighteen flips, two that the file fails closed without its
+# library, and four that name which refusal fired.
+#
+# A review of the migration found eight more permitting verdicts of the same
+# kind, seven of them shapes an agent writes without meaning anything by them:
+# `git push -u origin HEAD` from main, `git checkout main && git commit`,
+# `sudo` and `timeout` in front of either, `git --git-dir <path>` in its
+# separated spelling, and the file permitting everything when its library was
+# not beside it. Four of those were fixed in lib/command-scan.sh rather than
+# here, and they were holes in no-git-push.sh too. That is the ninth review
+# round on these files to find something the suite did not ask about.
+#
+# Some of those checks depend on which branch is checked out where the hook
+# runs, and one on the difference between that and where the command would run.
+# They are run with the hook's working directory inside a throwaway repository
+# on main or on a dev branch rather than in this one, because this one is
+# neither. `git branch --show-current` reports an unborn branch, so the
+# fixtures need no commits.
+#
 # Run: bash .claude/hooks/check-hooks.sh
 cd "$(dirname "$0")" || exit 1
+HOOKS=$(pwd)
 
 CURRENT=$(git branch --show-current 2>/dev/null)
 GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null)
@@ -74,6 +112,70 @@ check() {
     printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
     FAILED=1
   fi
+}
+
+# Two throwaway repositories, one on main and one on a dev branch, so that a
+# hook reading `git branch --show-current` can be asked both questions from a
+# suite that runs on neither. They hold no commits and no remotes: an unborn
+# branch is still reported by name, and nothing here reaches a remote.
+FIXTURES=$(mktemp -d)
+trap 'rm -rf "$FIXTURES"' EXIT
+git init -q -b main "$FIXTURES/on-main"
+git init -q -b dev-99 "$FIXTURES/on-dev"
+ON_MAIN="$FIXTURES/on-main"
+ON_DEV="$FIXTURES/on-dev"
+# An unmade fixture would make ( cd "$dir" && hook ) return 1, which reads as
+# ALLOW -- so every ALLOW-expecting check below would pass without running the
+# hook at all. `git init -b` needs git 2.28.
+[ -d "$ON_MAIN/.git" ] && [ -d "$ON_DEV/.git" ] || {
+  echo "fixtures were not created; git init -b needs git 2.28 or newer" >&2
+  exit 1
+}
+# A copy of each hook with no lib/ beside it, to ask what one does when the
+# tokeniser it now depends on is not there.
+mkdir -p "$FIXTURES/nolib"
+cp no-commit-to-main.sh "$FIXTURES/nolib/"
+
+# check, with the hook's working directory named rather than inherited. The
+# hook is invoked by absolute path because it sources lib/ relative to $0.
+check_in() {  # check_in <dir> <script|/absolute/hook> <want> <label> <cmd>
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" got rc hook
+  case "$script" in /*) hook="$script" ;; *) hook="$HOOKS/$script" ;; esac
+  printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+    | ( cd "$dir" && "$hook" ) >/dev/null 2>&1
+  rc=$?
+  if [ $rc -eq 2 ]; then got=BLOCK; else got=ALLOW; fi
+  if [ "$got" = "$want" ]; then
+    printf '  ok   %-5s %s\n' "$got" "$label"
+  else
+    printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
+    FAILED=1
+  fi
+}
+
+# A check whose verdict the #43 migration changed. Both verdicts are literals:
+# `was` is what the file returned before it, `want` what it returns after, and
+# the run prints both so the flip is visible rather than inferred. Reverting
+# the migration fails exactly these, reporting got=<was>.
+flip() {  # flip <dir> <script> <was> <want> <label> <cmd>
+  check_in "$1" "$2" "$4" "$5 (was $3)" "$6"
+}
+
+# Which refusal fired, not just that one did. no-commit-to-main.sh is kept
+# beside a hook that would refuse most of the same commands only because its
+# message names main and says why main is closed; nothing above can tell the
+# three messages apart, so a change routing every path through one of them
+# would leave the suite green and the file pointless.
+says() {  # says <dir> <script> <fragment> <label> <cmd>
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+        | ( cd "$dir" && "$HOOKS/$script" ) 2>&1 >/dev/null)
+  case "$err" in
+    *"$want"*) printf '  ok   says  %s\n' "$label" ;;
+    *) printf '  FAIL %s\n         wanted the refusal to say |%s|\n         it said |%s|\n' \
+         "$label" "$want" "$err"
+       FAILED=1 ;;
+  esac
 }
 
 . ./lib/command-scan.sh
@@ -108,14 +210,51 @@ git push --mirror origin' \
 tok 'environment assignments removed' \
     'git push' \
     "$(printf 'GIT_DIR=/x FOO=1 git push\n' | cs_split)"
+# The wrapper word and its options go, and the tail follows as further
+# candidates -- see the note in cs_split. They cost nothing here: a line that
+# does not begin with a command word matches no rule.
 tok 'wrapper word and its options removed' \
-    'git push --mirror' \
+    'git push --mirror
+push --mirror
+--mirror' \
     "$(printf 'xargs -n1 git push --mirror\n' | cs_split)"
+# The value of a wrapper option that takes one is not an option, so the strip
+# stops in front of it and the command word is no longer at ^. The tail is what
+# finds it.
+tok 'a wrapper option value does not hide the command' \
+    'root git push --all origin
+git push --all origin
+push --all origin
+--all origin' \
+    "$(printf 'sudo -u root git push --all origin\n' | cs_split)"
+# The tail stops at a token opening a quote: what follows is the text of an
+# argument, and a commit message naming a push is not a push.
+tok 'the tail stops where a quoted argument starts' \
+    'git commit -m "git push --all origin"
+commit -m "git push --all origin"
+-m "git push --all origin"' \
+    "$(printf 'sudo git commit -m "git push --all origin"\n' | cs_split)"
 tok 'continuation joined before anything else' \
     'git push   --all origin' \
     "$(printf 'git push \\\n  --all origin\n' | cs_normalise)"
-tok 'heredoc body dropped' \
+# The joining half on its own, for a caller that wants it without the heredoc
+# drop -- no-pr-decisions.sh reads raw text because `bash <<EOF` is a wrapper
+# whose payload the drop would take with the body. Same joining as the line
+# above, written as the same literal, because it is the same code.
+tok 'cs_join joins a continuation' \
+    'git push   --all origin' \
+    "$(printf 'git push \\\n  --all origin\n' | cs_join)"
+# And leaves a heredoc body where it stands, which is the whole difference.
+tok 'cs_join keeps a heredoc body' \
     'cat > f <<EOF
+gh pr merge 5
+EOF' \
+    "$(printf 'cat > f <<EOF\ngh pr merge 5\nEOF\n' | cs_join)"
+# The one expectation issue #50 changed. It pins that the body is dropped and
+# that `echo after` survives, which is what it has always been about; the `> f`
+# is gone from the opener because cs_normalise now drops redirections too.
+tok 'heredoc body dropped' \
+    'cat <<EOF
 echo after' \
     "$(printf 'cat > f <<EOF\ngit push origin main\nEOF\necho after\n' | cs_normalise)"
 tok 'here-string is not a heredoc' \
@@ -130,6 +269,135 @@ tok 'unterminated heredoc gives its lines back' \
     'git commit -m "fix <<EOF handling"
     git push --all origin' \
     "$(printf 'git commit -m "fix <<EOF handling"\n    git push --all origin\n' | cs_normalise)"
+# Redirections. A redirect is not an argument, and nothing removed it, so its
+# operator or its target was read as a refspec and every redirect on an
+# otherwise permitted push was refused. Issue #50.
+#
+# The two that come first are the ones the drop must not get wrong, because
+# they are the ones where it would hide something: a process substitution
+# carries a command, and a redirect inside quotes is text. Both are written
+# before the drops themselves for that reason.
+tok 'process substitution is not a redirect, <(' \
+    'cat <(git push --all origin)' \
+    "$(printf 'cat <(git push --all origin)\n' | cs_normalise)"
+tok 'process substitution is not a redirect, >(' \
+    'tee >(git push --all origin)' \
+    "$(printf 'tee >(git push --all origin)\n' | cs_normalise)"
+# The process substitution is tested before the fd digits are taken, so a digit
+# standing in front of one does not turn it into a redirect and take the
+# command with it.
+tok 'process substitution behind an fd digit' \
+    'cat 2>(git push --all origin)' \
+    "$(printf 'cat 2>(git push --all origin)\n' | cs_normalise)"
+tok 'a redirect inside double quotes is text' \
+    'git commit -m "redirect 2>/dev/null in the notes"' \
+    "$(printf 'git commit -m "redirect 2>/dev/null in the notes"\n' | cs_normalise)"
+tok 'a redirect inside single quotes is text' \
+    "git commit -m 'see > out.txt and 2>&1'" \
+    "$(printf "git commit -m 'see > out.txt and 2>&1'\n" | cs_normalise)"
+tok 'an escaped operator is not a redirect' \
+    'echo a \> b' \
+    "$(printf 'echo a \\> b\n' | cs_normalise)"
+# A target that is a command substitution is not a target at all. Without the
+# backtick and the paren ending the target scan, the command inside would be
+# swallowed with it -- the same mistake as hiding a process substitution.
+tok 'a backticked target ends the target scan' \
+    'echo `git push --all origin`' \
+    "$(printf 'echo > `git push --all origin`\n' | cs_normalise)"
+tok 'a $( ) target ends the target scan' \
+    'echo $(git push --all origin)' \
+    "$(printf 'echo > $(git push --all origin)\n' | cs_normalise)"
+# Now the drops. Every spelling, with and without a space before the target.
+tok 'redirect dropped, > with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b > out.txt\n' | cs_normalise)"
+tok 'redirect dropped, > with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b >out.txt\n' | cs_normalise)"
+tok 'redirect dropped, >> with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b >> push.log\n' | cs_normalise)"
+tok 'redirect dropped, >> with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b >>push.log\n' | cs_normalise)"
+tok 'redirect dropped, 2> with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b 2> /dev/null\n' | cs_normalise)"
+tok 'redirect dropped, 2> with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b 2>/dev/null\n' | cs_normalise)"
+tok 'redirect dropped, 2>> with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b 2>> push.log\n' | cs_normalise)"
+tok 'redirect dropped, 2>> with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b 2>>push.log\n' | cs_normalise)"
+tok 'redirect dropped, &> with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b &> out.txt\n' | cs_normalise)"
+tok 'redirect dropped, &> with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b &>out.txt\n' | cs_normalise)"
+tok 'redirect dropped, >& with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b >& out.txt\n' | cs_normalise)"
+tok 'redirect dropped, >& with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b >&out.txt\n' | cs_normalise)"
+tok 'redirect dropped, a leading < with a space' \
+    'cat' \
+    "$(printf 'cat < input.txt\n' | cs_normalise)"
+tok 'redirect dropped, a leading < with no space' \
+    'cat' \
+    "$(printf 'cat <input.txt\n' | cs_normalise)"
+tok 'redirect dropped, two of them' \
+    'git push origin b' \
+    "$(printf 'git push origin b >/dev/null 2>&1\n' | cs_normalise)"
+# The fd belongs to the operator, so it goes with it; the pipe does not, and
+# staying is the whole point -- it is what still shows tail as a command.
+tok 'the pipe after 2>&1 survives the drop' \
+    'git push origin b | tail -3' \
+    "$(printf 'git push origin b 2>&1 | tail -3\n' | cs_normalise)"
+# A digit is an fd only when it is a word of its own. `origin b2` is a token
+# that happens to end in one, and taking the 2 would change the refspec.
+tok 'a digit attached to a word is not an fd' \
+    'git push origin b2' \
+    "$(printf 'git push origin b2>out.txt\n' | cs_normalise)"
+# && is a separator, not the & of &>. The strip only reaches a & that touches
+# the operator, so the spelling that exercises the guard is the adjacent one --
+# and the spaced spelling is here beside it to say the strip never fires there.
+# No hook verdict turns on this pair: cs_split breaks on a single & as readily
+# as on a double one, so a separator half-eaten still ends the command. It is
+# pinned at the tokeniser because that is where the rule is written, and the
+# rule is that the strip takes the & of &> and never a separator.
+tok 'an adjacent && is not the & of &>' \
+    'git push origin b &&' \
+    "$(printf 'git push origin b &&> out.txt\n' | cs_normalise)"
+tok 'a spaced && is not touched at all' \
+    'git push origin b &&' \
+    "$(printf 'git push origin b && > out.txt\n' | cs_normalise)"
+# << <<- <<< are the heredoc pass's question, answered above. This pass leaves
+# them alone rather than answering it a second time and differently.
+# Quote state is per line, so a string left open at a newline protects nothing
+# on the line after it. That can only drop more, never less, and dropping more
+# of a line already inside quotes changes no verdict -- but it is behaviour, so
+# it is named rather than left to be discovered.
+tok 'quote state does not carry across a newline' \
+    'echo "unclosed
+cat' \
+    "$(printf 'echo "unclosed\ncat > f\n' | cs_normalise)"
+# >| is the clobber operator. The | is not consumed with it, so the target
+# becomes a command candidate of its own -- over-splitting, which can only
+# refuse more, and preferred to eating a | that is a separator everywhere else.
+tok '>| leaves its pipe standing' \
+    'git push origin b | out.txt' \
+    "$(printf 'git push origin b >| out.txt\n' | cs_normalise)"
+tok 'the heredoc operator survives the redirect drop' \
+    'cat <<EOF' \
+    "$(printf 'cat <<EOF\nbody\nEOF\n' | cs_normalise)"
+tok 'the here-string operator survives the redirect drop' \
+    'cat <<< "hello"' \
+    "$(printf 'cat <<< "hello"\n' | cs_normalise)"
 tok 'control word removed, then/fi' \
     'true
 git push --mirror origin' \
@@ -377,6 +645,140 @@ check no-pr-decisions.sh BLOCK 'gh release --repo o/r create v1' 'gh release --r
 check no-pr-decisions.sh ALLOW 'gh pr --repo o/r view 35'       'gh pr --repo o/r view 35'
 check no-pr-decisions.sh ALLOW 'gh pr --repo o/r list'          'gh pr --repo o/r list'
 
+echo "=== REGRESSION: #47, a flag before the group evaded every gh rule ==="
+# The same question one level up, and it had been applied at one level only.
+# GHPR and GHRELEASE skipped options between the group and the verb and never
+# before the group; the two gh api matches skipped none at all. Every BLOCK in
+# this block was PERMITTED by the hook on dev-05, and all but the release are a
+# decision on a pull request. -R/--repo before the group is not an evasion an
+# agent has to construct -- it is the ordinary way to work on a repository from
+# elsewhere. The same flag in front of a wrapped command was permitted too;
+# that is issue #51, and the sections below close it.
+check no-pr-decisions.sh BLOCK 'gh -R o/r pr merge 5'          'gh -R o/r pr merge 5'
+check no-pr-decisions.sh BLOCK 'gh --repo o/r pr merge 5'      'gh --repo o/r pr merge 5'
+check no-pr-decisions.sh BLOCK 'gh -R o/r pr close 5'          'gh -R o/r pr close 5'
+check no-pr-decisions.sh BLOCK 'gh -R o/r pr reopen 5'         'gh -R o/r pr reopen 5'
+check no-pr-decisions.sh BLOCK 'gh -R o/r pr review 5 --approve' 'gh -R o/r pr review 5 --approve'
+check no-pr-decisions.sh BLOCK 'gh -R o/r release create v1'   'gh -R o/r release create v1'
+check no-pr-decisions.sh BLOCK 'gh --hostname h api -X PUT merge' 'gh --hostname h api -X PUT repos/o/r/pulls/5/merge'
+check no-pr-decisions.sh BLOCK 'gh -R o/r api graphql merge in a heredoc' $'gh -R o/r api graphql -f query=@- <<EOF\nmutation { mergePullRequest(input:{pullRequestId:"x"}) { clientMutationId } }\nEOF'
+# The verdict is matched against the arguments cs_gh_args returns, which are
+# this command's own, so it no longer has to say "in the same command as the
+# subcommand" as a regular expression -- and the flag may be the first argument
+# with no space in front of it, which a pattern requiring one would miss.
+check no-pr-decisions.sh BLOCK 'verdict as the first argument'    'gh -R o/r pr review -a 5'
+check no-pr-decisions.sh BLOCK 'bundled verdict, first argument'  'gh -R o/r pr review -ab lgtm 5'
+# A flag before the group does not make an ordinary subcommand a decision.
+check no-pr-decisions.sh ALLOW 'gh -R o/r pr view 5'           'gh -R o/r pr view 5'
+check no-pr-decisions.sh ALLOW 'gh -R o/r pr list'             'gh -R o/r pr list'
+check no-pr-decisions.sh ALLOW 'gh -R o/r pr create, based' 'gh -R o/r pr create --base dev-05 --fill'
+# The baseless spelling made this point until #40 gave a create a base to
+# name. It is refused now, and for the base rather than for the flag, which
+# is what the line above still has to show.
+check no-pr-decisions.sh BLOCK 'gh -R o/r pr create --fill'  'gh -R o/r pr create --fill'
+check no-pr-decisions.sh ALLOW 'gh -R o/r pr edit 5 --title x' 'gh -R o/r pr edit 5 --title x'
+check no-pr-decisions.sh ALLOW 'gh -R o/r pr review --comment' 'gh -R o/r pr review --comment -b x 5'
+check no-pr-decisions.sh ALLOW 'gh -R o/r release list'        'gh -R o/r release list'
+# A path word is matched whole, so `release delete` does not cover
+# `release delete-asset` the way the old alternation did. The regular
+# expression carried delete-asset and nothing asked about it; the rule that
+# replaced it names it separately, and this is what would notice if it stopped.
+check no-pr-decisions.sh BLOCK 'gh release delete-asset'       'gh release delete-asset v1.0.0 file.tgz'
+check no-pr-decisions.sh BLOCK 'gh -R o/r release delete-asset' 'gh -R o/r release delete-asset v1.0.0 file.tgz'
+check no-pr-decisions.sh ALLOW 'gh -R o/r api reads a PR'      'gh -R o/r api repos/o/r/pulls/5'
+check no-pr-decisions.sh ALLOW 'gh -R o/r issue close 27'      'gh -R o/r issue close 27'
+
+echo "=== REGRESSION: #47, a second gh command after ; or && is examined ==="
+# Every rule feeds cs_gh_args one command at a time. These three pin that a
+# second command is reached at all: a loop that stopped at the first command,
+# or at the first that is not a match, permits every one of them.
+check no-pr-decisions.sh BLOCK 'a release list, then a create'      'gh release list; gh release create v1'
+check no-pr-decisions.sh BLOCK 'a read api call, then a write'      'gh api repos/o/r/pulls/5 && gh api -X PUT repos/o/r/pulls/5/merge'
+check no-pr-decisions.sh BLOCK 'a pr create, then a merge'          'gh pr create --fill && gh pr merge 5'
+
+echo "=== REGRESSION: #47, cs_gh_args answers about the first match and stops ==="
+# What the three above do NOT pin, and were written believing they did. The
+# helper scans past a command that is not a match, so for a rule with no
+# argument expression the per-command loop and one whole-list call find the
+# same thing and the mutation is invisible. It is a rule *with* one that needs
+# the loop: the first match's arguments come back and a later command's are
+# never seen, so handing cs_gh_args the whole list reads this as the --comment
+# alone and permits the approval. Measured, not reasoned -- the whole-list
+# mutation fails this line and only this line.
+check no-pr-decisions.sh BLOCK 'a comment review, then an approval' 'gh pr review --comment -b x 5 && gh pr review -a 6'
+
+echo "=== REGRESSION: #51, a flag before the group evaded the wrapper rules ==="
+# The wrapper rules carried the blind spot the section above removed from the
+# ordinary ones, one word earlier. They are unanchored, but `pr` still had to
+# follow `gh` immediately, so a global flag in front of the group hid it and
+# every shape refused above came back the moment it was wrapped. Each of the
+# eight rows below was PERMITTED by no-pr-decisions.sh on dev-05 (6f2434c),
+# measured before the fix; each is a reserved act. The ninth row is the boundary
+# they marked and was refused there already.
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r pr merge'       'bash -c "gh -R o/r pr merge 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh --repo o/r pr merge'   'bash -c "gh --repo o/r pr merge 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh --hostname h pr merge' 'bash -c "gh --hostname h pr merge 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r pr close'       'bash -c "gh -R o/r pr close 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r pr review -a'   'bash -c "gh -R o/r pr review 5 --approve"'
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r release create' 'bash -c "gh -R o/r release create v1"'
+check no-pr-decisions.sh BLOCK 'sh -c gh -R o/r pr reopen'        'sh -c "gh -R o/r pr reopen 5"'
+check no-pr-decisions.sh BLOCK 'eval gh -R o/r release delete'    'eval "gh -R o/r release delete v1"'
+# The boundary the table marked: a flag *between* the group and the verb was
+# caught by the `.*` all along, so it was the flag before the group alone that
+# escaped. Kept so a later change cannot lose the half that worked.
+check no-pr-decisions.sh BLOCK 'bash -c gh pr --repo o/r merge'   'bash -c "gh pr --repo o/r merge 5"'
+
+echo "=== REGRESSION: review of #51, a continuation split the payload ==="
+# These rules read raw text, because cs_normalise drops heredoc bodies and
+# `bash <<EOF` is a wrapper. Raw text is line-oriented and grep matches within a
+# line, so a backslash continuation between the command word and the group hid
+# the group -- from these rules only: the ordinary rules read $SCAN, where
+# cs_normalise had already joined it. Found by the Standards review of 48ca05d,
+# which measured the claim "anything may stand between gh and the group" rather
+# than taking it. The joining half of cs_normalise is cs_join now, and these
+# rules call it.
+check no-pr-decisions.sh BLOCK 'continuation between gh and pr'   $'bash -c "gh \\\n pr merge 5"'
+check no-pr-decisions.sh BLOCK 'continuation after a repo flag'   $'bash -c "gh -R o/r \\\n pr merge 5"'
+check no-pr-decisions.sh BLOCK 'continuation before the wrapper'  $'bash \\\n -c "gh pr merge 5"'
+# The ordinary rules were never blind to this, and still are not.
+check no-pr-decisions.sh BLOCK 'continuation, unwrapped merge'    $'gh \\\n pr merge 5'
+# Joining is not dropping: a continuation inside heredoc prose is still prose.
+check no-pr-decisions.sh ALLOW 'a continuation in heredoc prose'  $'cat > /tmp/n.md <<\'MD\'\nthe hook refuses a wrapped \\\ngh pr merge 5\nMD'
+
+echo "=== ACCEPTED false positive: #51, the verb is not read inside a wrapper ==="
+# What refusing the group outright gives up. These are reads and ordinary edits,
+# refused with the writes because a wrapped payload is quoted text with no
+# command word in it -- the same reason the method of a wrapped `gh api` is not
+# read either, which is the check at 'a GET inside bash -c' above. Every one is
+# one edit away from working: run it unwrapped.
+check no-pr-decisions.sh BLOCK 'bash -c gh pr view'          'bash -c "gh pr view 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh pr list'          'bash -c "gh pr list"'
+check no-pr-decisions.sh BLOCK 'bash -c gh release list'     'bash -c "gh release list"'
+check no-pr-decisions.sh BLOCK 'eval gh api on an issue'     'eval "gh api repos/o/r/issues/27"'
+# And the word alone is enough, wherever it sits: inside a wrapper there is no
+# argument structure to say whether it is a subcommand or prose. All three
+# words, not just the one that names this file's subject.
+check no-pr-decisions.sh BLOCK 'bash -c a comment naming pr' 'bash -c "gh issue comment 5 -b \"the pr looks fine\""'
+check no-pr-decisions.sh BLOCK 'bash -c a comment naming release' "bash -c \"gh issue comment 5 --body 'approved release notes'\""
+check no-pr-decisions.sh BLOCK 'bash -c a comment naming api'     "bash -c \"gh issue comment 5 --body 'the api is down'\""
+# The third part of the trade: these rules read the whole command rather than
+# the payload, because nothing here can tell the two apart, so an entirely
+# unwrapped gh command sharing a line with a wrapper is refused with it. Under
+# the old rules only merge|close|reopen reached across the line like this;
+# naming the group widens the reach to the reads. Measured dev-05 -> here, each
+# of these went ALLOW -> BLOCK.
+check no-pr-decisions.sh BLOCK 'a wrapper elsewhere, then a view'  'bash -c "make test" && gh pr view 5'
+check no-pr-decisions.sh BLOCK 'a wrapper elsewhere, then an api'  'bash -c "echo hi"; gh api repos/o/r/issues/27'
+# The reach needs a wrapper on the line to begin with. Without one these rules
+# never run, which is what keeps the cost to lines that have both.
+check no-pr-decisions.sh ALLOW 'the same view with no wrapper'     'make test && gh pr view 5'
+# The rule reaches gh's three deciding surfaces and stops there. A wrapped
+# command that is none of them is answered by whatever else covers it, and by
+# this file not at all.
+check no-pr-decisions.sh ALLOW 'bash -c gh issue close'      'bash -c "gh issue close 27"'
+check no-pr-decisions.sh ALLOW 'bash -c gh issue list'       'bash -c "gh issue list"'
+check no-pr-decisions.sh ALLOW 'bash -c an ordinary command' 'bash -c "make test"'
+
 echo "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
 # Closing a PR and publishing a release were refused in the gh spelling and open
 # through gh api, so the boundary was spelling-dependent exactly where the file
@@ -518,13 +920,21 @@ check no-pr-decisions.sh ALLOW 'an issue write naming rebase' 'gh api -X POST re
 # The graphql retarget carries the same field as the create, and is refused with
 # it rather than by naming the verb.
 check no-pr-decisions.sh BLOCK 'graphql retarget to main'    'gh api graphql -f query="mutation{updatePullRequest(input:{baseRefName:main})}"'
-# 4. Scope creep, reported and removed: the wrapper rule refused a wrapped
-# listing and a wrapped edit that touched no base. Only a create or a retarget
-# is refused there now.
-check no-pr-decisions.sh ALLOW 'a wrapped listing'           "bash -c 'gh api repos/o/r/pulls'"
-check no-pr-decisions.sh ALLOW 'a wrapped label edit'        "bash -c 'gh pr edit 35 --add-label bug'"
+# 4. These two were pinned ALLOW while #40 carried a wrapper rule of its own,
+# which read the payload far enough to tell a listing from a create. #51
+# settled that the payload cannot be read at all and refuses every wrapped
+# gh pr, gh release and gh api whatever follows, so #40 no longer has a
+# wrapper rule and these are refused with the rest of that surface. Both are
+# one edit away from working: run them unwrapped.
+check no-pr-decisions.sh BLOCK 'a wrapped listing'           "bash -c 'gh api repos/o/r/pulls'"
+check no-pr-decisions.sh BLOCK 'a wrapped label edit'        "bash -c 'gh pr edit 35 --add-label bug'"
 check no-pr-decisions.sh BLOCK 'a wrapped retarget'          "bash -c 'gh pr edit 35 --base main'"
 check no-pr-decisions.sh BLOCK 'a wrapped REST create'       "bash -c 'gh api -X POST repos/o/r/pulls -f base=dev-05'"
+# What #40's own wrapper rule used to refuse, still refused, by #51 naming the
+# surface rather than by anything reading a base out of quoted text.
+check no-pr-decisions.sh BLOCK 'a wrapped create into main'  'bash -c "gh pr create --base main"'
+check no-pr-decisions.sh BLOCK 'a wrapped create, flag first' 'bash -c "gh -R o/r pr create --base main"'
+check no-pr-decisions.sh BLOCK 'a wrapped baseless create'   'bash -c "gh pr create --fill"'
 
 echo "=== the push argument split does not glob against the worktree ==="
 # `for TOK in $ARGS` is unquoted because the split is the point; set -f stops
@@ -545,6 +955,74 @@ check no-git-push.sh "$OWN_BRANCH_PUSH" 'indented push, own branch'        $'if 
 # An unrelated -f elsewhere on the line is not the push's own flag. Every option
 # check reads the push's arguments, not the whole command, so this still passes.
 check no-git-push.sh "$OWN_BRANCH_PUSH" 'rm -f before an ordinary push'    "rm -f notes.md && git push origin $CURRENT"
+
+echo "=== REGRESSION: issue #50, a redirect was read as a refspec ==="
+# Nothing removed redirections, so `2>/dev/null` was the refspec and the message
+# said so in as many words. A stderr redirect is a shape an agent writes without
+# meaning anything by it -- `2>&1 | tail -3` on a push is how you read the result
+# of one -- so by the stopping rule in no-git-push.sh that is a defect.
+#
+# PR #48 reported the `2>&1` spelling and blamed the split on &. That is true of
+# that spelling and was not the cause: `2>/dev/null` holds no & and was refused
+# just the same. cs_normalise drops the redirection now, before cs_split sees it.
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with 2>/dev/null'     "git push origin $CURRENT 2>/dev/null"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with > out.txt'       "git push origin $CURRENT > out.txt"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with 2>> push.log'    "git push origin $CURRENT 2>> push.log"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with >/dev/null 2>&1' "git push origin $CURRENT >/dev/null 2>&1"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with 2>&1 | tail -3'  "git push origin $CURRENT 2>&1 | tail -3"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with &> out.txt'      "git push origin $CURRENT &> out.txt"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with >& out.txt'      "git push origin $CURRENT >& out.txt"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with a redirect first' "git push origin >out.txt $CURRENT"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with >| out.txt'      "git push origin $CURRENT >| out.txt"
+# The redirect changes what the hook can see, never what it decides. Every
+# refused destination is still refused wearing one, and so is every refused
+# form -- the drop must not carry the flag off with the redirect.
+check no-git-push.sh BLOCK 'push to main with 2>/dev/null'    'git push origin main 2>/dev/null'
+check no-git-push.sh BLOCK 'push to dev-05 with > out.txt'    'git push origin dev-05 > out.txt'
+check no-git-push.sh BLOCK 'push to main with 2>> push.log'   'git push origin main 2>> push.log'
+check no-git-push.sh BLOCK 'push to dev-05, >/dev/null 2>&1'  'git push origin dev-05 >/dev/null 2>&1'
+check no-git-push.sh BLOCK 'push to main with 2>&1 | tail'    'git push origin main 2>&1 | tail -3'
+check no-git-push.sh BLOCK 'push --all with a redirect'       'git push --all origin >/dev/null 2>&1'
+check no-git-push.sh BLOCK 'push --mirror with a redirect'    'git push --mirror origin 2>&1'
+check no-git-push.sh BLOCK 'forced push of own branch, redirected' "git push -f origin $CURRENT 2>/dev/null"
+check no-git-push.sh BLOCK 'bare push with a redirect'        'git push 2>/dev/null'
+# A pipe is not a redirect and still ends the command, so what follows one is
+# still a command. Dropping must never hide it.
+check no-git-push.sh BLOCK 'legit push 2>&1 then push --all'  "git push origin $CURRENT 2>&1 | tail -3; git push --all origin"
+check no-pr-decisions.sh BLOCK 'gh pr merge with a redirect'  'gh pr merge 35 >/dev/null 2>&1'
+check no-pr-decisions.sh BLOCK 'gh pr review -a, redirected'  'gh pr review -a 35 2>&1 | tail -1'
+check no-pr-decisions.sh ALLOW 'gh pr view with a redirect'   'gh pr view 35 > /tmp/pr.json'
+
+echo "=== ACCEPTED false positive: a quoted redirect target ==="
+# The target scan stops at a quote, so a quoted target is not consumed and its
+# text stays in the push's arguments, where it reads as a refspec. Issue #50
+# asked for every redirect on a permitted push to be allowed and granted no
+# exception, so this is a shortfall against it rather than a decision the issue
+# made -- taken because consuming a quoted target would mean the drop swallowing
+# text it cannot see the end of, which is the direction that has gone wrong
+# three times in this file. The targets an agent writes -- /dev/null, out.txt,
+# push.log -- carry no quotes.
+#
+# Pinned in both directions so a later change cannot move it silently. If these
+# become ALLOW, that is a decision to take knowingly, not a bug fix.
+tok 'a quoted target is left in the arguments' \
+    'git push origin b "push log"' \
+    "$(printf 'git push origin b 2> "push log"\n' | cs_normalise)"
+check no-git-push.sh BLOCK 'push with a quoted redirect target' "git push origin $CURRENT 2> \"push log\""
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'the same target unquoted' "git push origin $CURRENT 2> push.log"
+
+echo "=== REGRESSION: issue #50, the drop must not hide a command ==="
+# Dropping is the one step in cs_normalise that hides text rather than exposing
+# it, and the heredoc question was got wrong three times in exactly that
+# direction. A process substitution carries a command, so it is not a redirect;
+# a command substitution used as a target is not a target. Both are pinned here
+# with a refused command inside, so hiding one would show up as ALLOW.
+check no-git-push.sh     BLOCK 'push inside <( )'             'cat <(git push --all origin)'
+check no-git-push.sh     BLOCK 'push inside >( )'             'tee >(git push --all origin)'
+check no-git-push.sh     BLOCK 'push as a backticked target'  'echo > `git push --all origin`'
+check no-git-push.sh     BLOCK 'push as a $( ) target'        'echo > $(git push --all origin)'
+check no-pr-decisions.sh BLOCK 'merge inside <( )'            'cat <(gh pr merge 35)'
+check no-pr-decisions.sh BLOCK 'merge as a $( ) target'       'echo > $(gh pr merge 35)'
 
 echo "=== REGRESSION: PR #35 review, a bare push is answered by configuration ==="
 # A push naming no refspec is sent where push.default, a remote.<name>.push
@@ -698,6 +1176,187 @@ for c in 'gh pr create --base dev-05 --title x --body y' \
          'echo "then run gh pr merge 5 to land it" >> notes.md' \
          'git push'
 do check no-pr-decisions.sh ALLOW "$c" "$c"; done
+
+echo "=== REGRESSION: review of #43, prefixes and separated options hid commands ==="
+# Found by reviewing the #43 migration, fixed in lib/command-scan.sh, and
+# therefore not about no-commit-to-main.sh: every hook was blind to these.
+# cs_split stripped a wrapper word and its options but not an operand, so
+# `timeout 30` left a bare 30 where the command word had to be; sudo, doas,
+# setsid and chronic were not wrapper words at all; and cs_git_args skipped
+# --git-dir only in its = form, so the separated one hid the subcommand behind
+# its own value.
+check no-git-push.sh     BLOCK 'timeout before a wholesale push' 'timeout 5 git push --all origin'
+check no-git-push.sh     BLOCK 'sudo before a mirror push'       'sudo git push --mirror origin'
+check no-git-push.sh     BLOCK 'separated --git-dir before a push' 'git --git-dir /tmp/other/.git push --all origin'
+check no-pr-decisions.sh BLOCK 'setsid before a merge'           'setsid gh pr merge 5'
+check no-pr-decisions.sh BLOCK 'sudo before a merge'             'sudo gh pr merge 5'
+# The operand strip takes one token and only if it is not an option, so an
+# ordinary command that begins with one of these words is still itself.
+check no-git-push.sh     ALLOW 'timeout in front of something else' 'timeout 5 make test'
+check no-git-push.sh     ALLOW 'sudo in front of something else'    'sudo apt-get install jq'
+
+# Found by reviewing PR #49, and the same defect one turn further on. Stripping
+# a wrapper word and its options leaves the value of any option that took one
+# where the command word has to be, so the operand rule above closes `timeout
+# 30` and not `timeout -s KILL 30`, and closes nothing at all for the wrapper
+# words that have no operand rule. cs_split offers the tail as further
+# candidates rather than keeping a third list of which options take a value.
+check no-git-push.sh BLOCK 'sudo with a separated option value'   'sudo -u root git push --all origin'
+check no-git-push.sh BLOCK 'nice with a separated niceness'       'nice -n 10 git push --all origin'
+check no-git-push.sh BLOCK 'ionice with a separated class'        'ionice -c 2 git push --all origin'
+check no-git-push.sh BLOCK 'timeout whose signal took the operand' 'timeout -s KILL 30 git push --all origin'
+check no-git-push.sh BLOCK 'xargs with a separated count'         'xargs -n 1 git push --all origin'
+check no-git-push.sh BLOCK 'env with a separated directory'       'env -C /tmp git push --all origin'
+check no-pr-decisions.sh BLOCK 'sudo with a separated option value, before a merge' \
+  'sudo -u root gh pr merge 5'
+# The tail only ever adds candidates, so an ordinary command that begins with a
+# wrapper word still yields itself and the additions refuse nothing.
+check no-git-push.sh ALLOW 'a wrapper option value in front of something else' \
+  'sudo -u root apt-get install jq'
+check no-git-push.sh ALLOW 'a commit whose message quotes a push, behind a wrapper' \
+  'sudo git commit -m "git push --all origin"'
+
+echo "=== no-commit-to-main.sh : invariants, identical literals across #43 ==="
+# What the migration preserved. These six were written before it, are green on
+# both sides of it, and are the whole of what this file is for: main is not
+# committed to, and main is not pushed to.
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'commit while standing on main' \
+  'git commit -m "wip"'
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'commit on a dev branch' \
+  'git commit -m "wip"'
+check_in "$ON_DEV"  no-commit-to-main.sh BLOCK 'push naming main' \
+  'git push origin main'
+check_in "$ON_DEV"  no-commit-to-main.sh BLOCK 'the HEAD:main refspec' \
+  'git push origin HEAD:main'
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'main on the source side only' \
+  'git push origin main:spike'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'a bare push while on main' \
+  'git push'
+# The other side of the bare push, and the commands this file has no opinion
+# about at all. Also invariant: a commit message may name a push, and a push of
+# a dev branch is no business of this file's.
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'a bare push on a dev branch' \
+  'git push'
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'push of a dev branch' \
+  'git push origin dev-99'
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'commit message naming a push' \
+  'git commit -m "explain how to git push later"'
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'neither a commit nor a push' \
+  'git status'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'commit after a control word' \
+  'if true; then git commit -m "wip"; fi'
+# A commit message is the one argument here that carries arbitrary prose, so
+# the directory options are matched only where git accepts them. Permitted
+# before the migration for a weaker reason -- they were not matched at all.
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'a commit message naming -C' \
+  'git commit -m "stop matching -C everywhere"'
+# A prefix word the old anchor did not care about, because it looked only for a
+# space in front of `git`. cs_split strips a known wrapper word and its
+# options, and these were not in its list -- so the migration first lost these
+# four, in the permitting direction, and lib/command-scan.sh was corrected
+# rather than the loss being recorded. Found reviewing the migration.
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'sudo in front of a commit on main' \
+  'sudo git commit -m "wip"'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'timeout, whose operand is not an option' \
+  'timeout 30 git commit -m "wip"'
+check_in "$ON_DEV"  no-commit-to-main.sh BLOCK 'timeout in front of a push to main' \
+  'timeout 30 git push origin main'
+check_in "$ON_DEV"  no-commit-to-main.sh BLOCK 'sudo in front of a push to main' \
+  'sudo git push origin main'
+
+echo "=== no-commit-to-main.sh : what #43 changed, verdict by verdict ==="
+# Written before the migration against the file as it stood, so each `was` is
+# a measurement of the old file and not a guess about it. Reverting the
+# migration fails exactly this section.
+#
+# The first three are the same defect from three directions: the file answered
+# the command-position question itself, with a bare preceding space for an
+# anchor and no notion of a heredoc body. The heredoc case is the one that
+# blocked the writing of issue #36 -- a ticket cannot quote the command it is
+# about. The quoted-string cases are the same false positive the sibling hooks
+# were rebuilt to stop.
+flip "$ON_DEV"  no-commit-to-main.sh BLOCK ALLOW 'heredoc body quoting a push to main' \
+  $'cat >> notes.md <<EOF\ngit push origin main is refused here\nEOF\necho written'
+flip "$ON_MAIN" no-commit-to-main.sh BLOCK ALLOW 'a commit named inside a quoted string' \
+  'echo "never git commit while standing on main"'
+flip "$ON_DEV"  no-commit-to-main.sh BLOCK ALLOW 'a push named inside a quoted string' \
+  'echo "never git push origin main from here"'
+# The branch was read with `git branch --show-current` in the hook's own
+# working directory, which is the session's and not necessarily the command's,
+# while nothing refused a command that changed directory. #40 refused to
+# compute a merge base here for exactly this reason.
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'cd into a repository on main, then commit' \
+  "cd $ON_MAIN && git commit -m 'on main'"
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'GIT_DIR pointed at a repository on main' \
+  "GIT_DIR=$ON_MAIN/.git git commit -m 'on main'"
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'git -C into another repository' \
+  "git -C $ON_MAIN commit -m 'on main'"
+# A wrapper's payload sits in quotes, where the old anchor found no command at
+# all: a wrapped commit was permitted on main itself. Refused outright now,
+# as in both sibling hooks.
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'sh -c wrapping a commit, on main' \
+  "sh -c 'git commit -m \"wip\"'"
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'eval wrapping a push to main' \
+  'eval "git push origin main"'
+# Matching main by name could not see a spelling that named no branch, which is
+# the hole PR #35 closed in no-git-push.sh and left open here. Both of these
+# advance main from a dev branch.
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'push --all advances main too' \
+  'git push --all origin'
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'push --mirror advances main too' \
+  'git push --mirror origin'
+# The bare-push case rests on configuration, and -c replaces it for this one
+# command: push.default=matching advances main from a dev branch.
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'push with configuration set inline' \
+  'git -c push.default=matching push'
+# HEAD names whatever is checked out, so on main it names main -- and it also
+# counts as a refspec, which switched off the bare-push case that would have
+# caught the same push. `git push -u origin HEAD` is a shape written daily.
+# Found reviewing the migration; no-git-push.sh already resolves HEAD, and
+# this file did not.
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'push origin HEAD while on main' \
+  'git push origin HEAD'
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'push -u origin HEAD while on main' \
+  'git push -u origin HEAD'
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'the @ spelling of HEAD' \
+  'git push origin @'
+check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'HEAD off main still names a dev branch' \
+  'git push origin HEAD'
+# Changing branch defeats the branch read exactly as changing directory does,
+# and is the likelier of the two. Refusing directory moves while permitting
+# this left the soundness claim half-made. Found reviewing the migration.
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'checkout main, then commit' \
+  'git checkout main && git commit -m "wip"'
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'switch to main, then commit' \
+  'git switch main && git commit -m "wip"'
+# git's directory options in their separated spelling. cs_git_args skipped
+# --git-dir only in its = form, so the separated one left the path at the head
+# of the line, the subcommand was never found, and this file left without an
+# opinion -- with `main` written in the command. Found reviewing the migration.
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'separated --git-dir before commit' \
+  "git --git-dir $ON_MAIN/.git commit -m 'on main'"
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'separated --namespace before a push to main' \
+  'git --namespace n push origin main'
+
+echo "=== the hooks fail closed when the tokeniser is not beside them ==="
+# All three hooks now rest on lib/command-scan.sh, and this one is kept in the
+# tree precisely because it still stands when the broader hook is disabled. An
+# unreadable library left cs_split undefined, the command list empty and every
+# commit on main permitted -- a single point of failure that failed open.
+check_in "$ON_MAIN" "$FIXTURES/nolib/no-commit-to-main.sh" BLOCK 'no lib/, commit on main' \
+  'git commit -m "wip"'
+check_in "$ON_DEV"  "$FIXTURES/nolib/no-commit-to-main.sh" BLOCK 'no lib/, anything at all' \
+  'ls'
+
+echo "=== the refusals still name main, which is why this file is kept ==="
+says "$ON_MAIN" no-commit-to-main.sh 'Blocked: committing to main.' \
+  'a commit on main is refused as a commit on main' 'git commit -m "wip"'
+says "$ON_DEV"  no-commit-to-main.sh 'Blocked: pushing to main.' \
+  'a push to main is refused as a push to main' 'git push origin main'
+says "$ON_MAIN" no-commit-to-main.sh "bare 'git push' while on main" \
+  'the bare push keeps its own wording' 'git push'
+says "$ON_DEV"  no-commit-to-main.sh 'whether it lands on main' \
+  'a directory move says what cannot be judged' "cd $ON_MAIN && git commit -m 'wip'"
 
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi

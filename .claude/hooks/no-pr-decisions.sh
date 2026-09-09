@@ -48,14 +48,31 @@
 #
 # The wrapper rule below is the exception to the method test, and stays blunt on
 # purpose: inside `bash -c '...'` the payload is quoted text, so neither the
-# method nor anything else can be read out of it. A read of a PR wrapped in a
-# shell is refused with the writes. Run it unwrapped.
+# method nor the subcommand nor anything else can be read out of it. A read of a
+# PR wrapped in a shell is refused with the writes, and so is every wrapped
+# `gh pr`, `gh release` and `gh api` whatever verb follows. Run it unwrapped.
 #
-# Finding commands in the text is lib/command-scan.sh's job. Each line it
-# returns is one command with everything before the command word removed, so
-# every rule below anchors at ^ and none of them describes a command position.
+# Finding commands in the text is lib/command-scan.sh's job, and so is finding
+# the subcommand inside one: cs_split returns one command per line with
+# everything before the command word removed, and cs_gh_args then names a gh
+# subcommand by its whole path and hands back that command's own arguments. No
+# rule that goes through gh_rule describes a command position or anchors at ^.
 # That is where all of PR #35's defects lived, this file's included: it was the
-# sibling that had the wrapper rule, and this one that did not.
+# sibling that had the wrapper rule, and this one that did not. It was also, for
+# longer, the file that answered the position question one word too late; see
+# gh_rule.
+#
+# Two things here are still position-dependent, and neither is an oversight of
+# the same kind. VERDICT anchors at ^, but at the start of a command's own
+# argument list rather than at a command word -- the opposite of a position
+# question, and why it can be written there at all. The wrapper rules below no
+# longer describe one. They used to: the group had to follow gh immediately, so
+# `bash -c "gh -R o/r pr merge 5"` was permitted while `bash -c "gh pr merge 5"`
+# was refused. That was never fixable the way the rules above were -- a quoted
+# payload has no command word for cs_gh_args to find, which is the whole reason
+# these are a blunt text match. Issue #51 settled it the only other way, by not
+# reading the verb at all, so what these rules name now is a group standing
+# anywhere on the line and nothing after it.
 #
 # STOPPING RULE. A newly found evasion earns a fix only if it is a shape an
 # agent would plausibly write, not one it would have to construct. A flag
@@ -78,15 +95,6 @@ set -f
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
 SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)
-
-# gh api reading a heredoc is a decision hiding in text that was just dropped --
-# a heredoc is the ordinary way to send a graphql mutation. The raw command is
-# re-admitted for that shape alone.
-if printf '%s\n' "$SCAN" | cs_split | grep -qE '^gh[[:space:]]+api([^-A-Za-z0-9_]|$)' \
-   && echo "$COMMAND" | grep -q '<<'; then
-  SCAN="$SCAN
-$COMMAND"
-fi
 CMDS=$(printf '%s\n' "$SCAN" | cs_split)
 
 DECIDE="Blocked: deciding a pull request is Bertan's call, not an agent's. Opening a PR, commenting on it and editing it are allowed; accepting, rejecting, merging and reopening are not."
@@ -217,14 +225,57 @@ BASELIST
   return 0
 }
 
-# `gh pr merge` is not the only way to write `gh pr merge`. Cobra resolves the
-# subcommand at the first non-flag argument, so a flag may sit in front of it:
-# `gh pr --repo o/r merge 35` merges, and every rule here wanted the subcommand
-# as the third word. -R/--repo takes its value as a separate token and has to
-# consume it, or the value would be read as the subcommand. Written once and
-# interpolated, so the group and the verb are still all a rule has to name.
-GHPR='^gh[[:space:]]+pr([[:space:]]+((-R|--repo|--hostname)[[:space:]]+[^[:space:]]+|-[^[:space:]]+))*[[:space:]]+'
-GHRELEASE='^gh[[:space:]]+release([[:space:]]+((-R|--repo|--hostname)[[:space:]]+[^[:space:]]+|-[^[:space:]]+))*[[:space:]]+'
+# Every rule over an ordinary command asks through here, and none of them
+# describes where in a command the subcommand sits. The two that do not are the
+# wrapper block, which has no command word to find and is discussed in the
+# header, and the API_WRITE loop, which needs the command itself and says why.
+#
+# cs_gh_args answers the position question: it skips options before every word
+# of the path, so `gh -R o/r pr merge 5`, `gh pr --repo o/r merge 5` and
+# `gh pr merge 5` are one command to every rule below.
+#
+# That is what this file got wrong for as long as it had rules. GHPR and
+# GHRELEASE skipped options between the group and the verb and never before it,
+# and the two gh api matches were raw `^gh[[:space:]]+api` skipping none at all,
+# so a single flag written first walked past all four rules -- six of the nine
+# shapes in #47's table were a merge. The comment above GHPR stated the
+# principle that GHPR then applied at one level only. The helper is #39's.
+#
+# One command at a time, because cs_gh_args answers about the first match and
+# stops. Worth being exact about when that matters, because three checks were
+# written here believing it mattered always: the helper scans past a command
+# that is not a match, so for a rule with no ARGRE the loop and one whole-list
+# call find the same thing. It is a rule *with* ARGRE that needs the loop --
+# there the first match's arguments come back and a later command's are never
+# seen, so `gh pr review --comment -b x 5 && gh pr review -a 6` would read as
+# the comment alone. no-git-push.sh loops the same way over cs_git_args.
+#
+# ARGRE, when given, is matched against the arguments cs_gh_args returns -- and
+# those are that command's own, so a rule that used to have to express "in the
+# same command as the subcommand" as a regular expression now expresses nothing
+# about position at all.
+gh_rule() {  # gh_rule <subcommand path> [<extended regex over that command's arguments>]
+  local WANT="$1" ARGRE="$2" CMD ARGS
+  while IFS= read -r CMD; do
+    ARGS=$(cs_gh_args "$WANT" <<<"$CMD") || continue
+    if [ -n "$ARGRE" ]; then
+      printf '%s\n' "$ARGS" | grep -qE "$ARGRE" || continue
+    fi
+    return 0
+  done <<CMDLIST
+$CMDS
+CMDLIST
+  return 1
+}
+
+# gh api reading a heredoc is a decision hiding in text that was just dropped --
+# a heredoc is the ordinary way to send a graphql mutation. The raw command is
+# re-admitted for that shape alone, and the split redone over what it added.
+if gh_rule api && echo "$COMMAND" | grep -q '<<'; then
+  SCAN="$SCAN
+$COMMAND"
+  CMDS=$(printf '%s\n' "$SCAN" | cs_split)
+fi
 
 # The verdict flags, bundled or not. gh takes shorthand flags together, so
 # `gh pr review -ab "lgtm" 35` is --approve --body and was allowed while
@@ -232,7 +283,52 @@ GHRELEASE='^gh[[:space:]]+release([[:space:]]+((-R|--repo|--hostname)[[:space:]]
 # this file had not -- the same asymmetry twice. Only single-dash bundles are
 # scanned for a or r: a long flag would match on any letter it happens to
 # contain, and --repo would read as --request-changes.
-VERDICT='[[:space:]](--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[:space:]]|=|"|$)'
+#
+# It is matched against the review's own arguments, where the flag may be the
+# very first token -- `gh pr review -a 35` returns `-a 35` -- so ^ is an
+# alternative to the leading space. Against a whole command there was always a
+# space in front of it and the anchor was not needed.
+VERDICT='(^|[[:space:]])(--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[:space:]]|=|"|$)'
+
+# Once a wrapper is on the line, the group is the whole of what a rule can
+# honestly name. These ran unanchored over the raw text and still wanted `pr`
+# to follow `gh` immediately, so `gh -R o/r pr merge 5` was permitted while
+# `gh pr --repo o/r merge 5` was refused -- the command-position question again,
+# one word later, in the sixth place. It is also the one place cs_gh_args cannot
+# answer it: the payload is quoted text with no command word for the tokeniser
+# to find, which is why these rules are a blunt text match to begin with.
+#
+# So the verb is not read at all. Anything on the line may stand between `gh`
+# and the group, and whatever follows the group is not looked at. That is the
+# answer the note at the top of this file already gives -- if nothing can be
+# read out of a wrapped payload, then naming merge|close|reopen inside one is
+# reading it, and the table on issue #51 is what reading it badly looked like.
+#
+# The name says surface rather than wrapper because a group is what it matches,
+# and says anywhere because that is where it looks: these rules read the whole
+# command and not the payload, there being nothing here that tells the two
+# apart. That is the third part of the trade below.
+#
+# The trade, taken knowingly, in three parts.
+#
+#   1. Every wrapped `gh pr`, `gh release` and `gh api` is refused whatever it
+#      goes on to say: `bash -c "gh pr view 5"`, `bash -c "gh release list"`,
+#      every wrapped read through `gh api`.
+#   2. So is a wrapped `gh` command that is none of the three but whose text
+#      carries one of the words anyway -- an issue comment whose body says
+#      `pr`, `release` or `api` -- because quoted text has no argument
+#      structure to say whether a word is a subcommand or prose.
+#   3. So is an entirely unwrapped one that merely shares a line with a
+#      wrapper: `bash -c "make test" && gh pr view 5`. Under the old rules only
+#      merge|close|reopen reached across the line this way; naming the group
+#      widens the reach to the reads. Matching inside the wrapper's own quotes
+#      is what would narrow it, and reading inside those quotes is the thing
+#      this entire section says cannot be done.
+#
+# All three are reads or ordinary edits, all are refused with the writes for the
+# same reason the method of a wrapped `gh api` was already not read, and all are
+# one edit away from working. Run them unwrapped, on a line of their own.
+GH_SURFACE_ANYWHERE='gh[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
 
 # Every base a gh api call names, in the two shapes gh accepts one. Both print
 # the values, one per line, for bases_all_dev -- the same "every, not the last"
@@ -267,69 +363,52 @@ gql_bases() {
 }
 
 # A wrapper's payload sits inside quotes, where there is no command word for the
-# tokeniser to find, so these run unanchored over the raw text -- and only once
-# a wrapper has been found, never over an ordinary command.
-if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))'; then
-  if echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+.*(merge|close|reopen)([^-A-Za-z0-9_]|$)' \
-     || echo "$COMMAND" | grep -qE 'gh[[:space:]]+release[[:space:]]+.*(create|delete|delete-asset)([^-A-Za-z0-9_]|$)' \
-     || echo "$COMMAND" | grep -qE '/pulls/[^ ]*/(merge|reviews)' \
-     || echo "$COMMAND" | grep -qE '/releases([^A-Za-z0-9_-]|$)' \
-     || echo "$COMMAND" | grep -qiE 'state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?' \
-     || echo "$COMMAND" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then
-    echo "$DECIDE A shell wrapper does not change what the command decides." >&2
-    exit 2
-  fi
-  if echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+review([^-A-Za-z0-9_]|$)' \
-     && echo "$COMMAND" | grep -qE "$VERDICT"; then
-    echo "$DECIDE A shell wrapper does not change what the command decides." >&2
-    exit 2
-  fi
-  # Making or retargeting a pull request inside a wrapper is refused outright,
-  # for the reason the sibling hook refuses a wrapped push: the destination sits
-  # in quotes, where there is no command position for the tokeniser to find, so
-  # the base cannot be read at all. Permitting a pull request whose destination
-  # is unknown is not the same as permitting one into the active dev branch.
-  #
-  # It reaches only as far as that, and no further -- each of these three names
-  # a create or a retarget, not a pull request. A first version refused any
-  # wrapped /pulls, which took a wrapped LISTING with it, and justified itself
-  # by saying the wrapped read of one was already refused. That was not true:
-  # `bash -c 'gh api repos/o/r/pulls/35'` is permitted here and was before. A
-  # comment that argues from a false premise is worse than none, so the premise
-  # is gone and the rule is narrowed to what the ticket asked for. Reported on
-  # the review of be0e3c7. The write test is reused for the REST shape rather
-  # than a second guess at what a write looks like.
-  if echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+([^;&|]*[[:space:]])?create([^-A-Za-z0-9_]|$)' \
-     || { echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+([^;&|]*[[:space:]])?edit([^-A-Za-z0-9_]|$)' \
-          && echo "$COMMAND" | grep -qE '(--base|[[:space:]]-[A-Za-z]*B)([[:space:]]|=|$)'; } \
-     || { echo "$COMMAND" | grep -qE '/pulls([^/A-Za-z0-9_-]|$)' \
-          && gh_api_is_write "$COMMAND"; } \
-     || echo "$COMMAND" | grep -q 'createPullRequest'; then
-    echo "$BASE A shell wrapper hides the base behind quotes, so where this would go cannot be read. Run it unwrapped." >&2
+# tokeniser to find, so these run unanchored over the text -- and only once a
+# wrapper has been found, never over an ordinary command.
+#
+# Raw text rather than $SCAN, because cs_normalise drops heredoc bodies and
+# `bash <<EOF` is itself one of the wrappers: its payload would go with the
+# body. But grep matches within a line, so a backslash continuation between
+# `gh` and the group hid the group from these rules while the ordinary ones,
+# reading $SCAN, saw through it. Joining is the half of cs_normalise these rules
+# do want, and cs_join is that half on its own.
+WRAPTEXT=$(printf '%s\n' "$COMMAND" | cs_join)
+
+if echo "$WRAPTEXT" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))'; then
+  if echo "$WRAPTEXT" | grep -qE "$GH_SURFACE_ANYWHERE" \
+     || echo "$WRAPTEXT" | grep -qE '/pulls/[^ ]*/(merge|reviews)' \
+     || echo "$WRAPTEXT" | grep -qE '/releases([^A-Za-z0-9_-]|$)' \
+     || echo "$WRAPTEXT" | grep -qiE 'state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?' \
+     || echo "$WRAPTEXT" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then
+    echo "$DECIDE A shell wrapper does not change what the command decides, and its payload cannot be read. Run it unwrapped." >&2
     exit 2
   fi
 fi
 
-if printf '%s\n' "$CMDS" | grep -qE "${GHPR}merge([^-A-Za-z0-9_]|\$)"; then
+if gh_rule 'pr merge'; then
   echo "$DECIDE Leave the PR open and say it is ready to merge." >&2
   exit 2
 fi
 
-# Only the verdict flags, and only in the same command as the subcommand.
-# Reviewing with --comment leaves remarks without a verdict and stays allowed.
-if printf '%s\n' "$CMDS" | grep -qE "${GHPR}review([[:space:]].*)?${VERDICT}"; then
+# Only the verdict flags. The arguments gh_rule matches VERDICT against are the
+# review's own, so nothing here has to say so. Reviewing with --comment leaves
+# remarks without a verdict and stays allowed.
+if gh_rule 'pr review' "$VERDICT"; then
   echo "$DECIDE Review with --comment to leave remarks without a verdict." >&2
   exit 2
 fi
 
 # Rejecting a pull request by outcome rather than by verdict.
-if printf '%s\n' "$CMDS" | grep -qE "${GHPR}(close|reopen)([^-A-Za-z0-9_]|\$)"; then
+if gh_rule 'pr close' || gh_rule 'pr reopen'; then
   echo "$DECIDE Closing a PR rejects it; say why it should be closed instead." >&2
   exit 2
 fi
 
-# Outward-facing publication. This repository is public.
-if printf '%s\n' "$CMDS" | grep -qE "${GHRELEASE}(create|delete|delete-asset)([^-A-Za-z0-9_]|\$)"; then
+# Outward-facing publication. This repository is public. delete-asset is named
+# separately because a path word is matched whole: `release delete` does not
+# match `gh release delete-asset`, which is the same shape that keeps
+# `gh pr create` out of the `pr close` rule.
+if gh_rule 'release create' || gh_rule 'release delete' || gh_rule 'release delete-asset'; then
   echo "Blocked: publishing or deleting a GitHub release is Bertan's call. This repository is public; a release is visible the moment it exists." >&2
   exit 2
 fi
@@ -399,11 +478,19 @@ CMDLIST
 # being fixed for gh pr -- exactly the split between the two spellings that this
 # rule was written to close. Reported on the review of be0e3c7. The loop no
 # longer stops at the first write, because a second write is a second command.
+#
+# This is the one gh rule gh_rule cannot express: the question is about the
+# command, not about a pattern over its arguments. Finding the call still goes
+# through cs_gh_args, so `gh --hostname h api -X PUT ...` is an api call here as
+# it is everywhere else. The method is then read from the whole command rather
+# than from the returned arguments -- cs_split has already scoped it to this one
+# invocation, and every option that can precede `api` is a global one carrying
+# neither a method nor a field.
 API_WRITE=
 API_BAD_BASE=
 API_NO_BASE=
 while IFS= read -r CMD; do
-  printf '%s\n' "$CMD" | grep -qE '^gh[[:space:]]+api([^-A-Za-z0-9_]|$)' || continue
+  cs_gh_args api <<<"$CMD" >/dev/null || continue
   gh_api_is_write "$CMD" || continue
   API_WRITE=1
   CMD_BASES=$(rest_bases "$CMD")
