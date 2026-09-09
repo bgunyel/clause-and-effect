@@ -38,14 +38,14 @@
 # Two things here are still position-dependent, and neither is an oversight of
 # the same kind. VERDICT anchors at ^, but at the start of a command's own
 # argument list rather than at a command word -- the opposite of a position
-# question, and why it can be written there at all. The wrapper rules below do
-# describe one, and that is a known open hole rather than a design: they require
-# the group to follow gh immediately, so `bash -c "gh -R o/r pr merge 5"` is
-# permitted while `bash -c "gh pr merge 5"` is refused. Measured, pre-existing,
-# and not fixable the way the rules above were -- a quoted payload has no
-# command word for cs_gh_args to find, which is the whole reason these are a
-# blunt text match. Issue #51 carries it, and the question it has to settle is
-# whether naming the verb inside a wrapper is worth doing at all.
+# question, and why it can be written there at all. The wrapper rules below no
+# longer describe one. They used to: the group had to follow gh immediately, so
+# `bash -c "gh -R o/r pr merge 5"` was permitted while `bash -c "gh pr merge 5"`
+# was refused. That was never fixable the way the rules above were -- a quoted
+# payload has no command word for cs_gh_args to find, which is the whole reason
+# these are a blunt text match. Issue #51 settled it the only other way, by not
+# reading the verb at all, so what these rules name now is a group standing
+# anywhere on the line and nothing after it.
 #
 # STOPPING RULE. A newly found evasion earns a fix only if it is a shape an
 # agent would plausibly write, not one it would have to construct. A flag
