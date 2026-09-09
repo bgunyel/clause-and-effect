@@ -203,7 +203,7 @@ with a verdict, close or reopen one, or create or delete a release. `main` and
 `dev-NN` are Bertan's to push; `main` is additionally protected server-side by
 the `main-branch-protection` ruleset, which requires a pull request. Enforced by
 `.claude/hooks/no-git-push.sh` and `no-pr-decisions.sh`, both built on
-`.claude/hooks/lib/command-scan.sh`; `bash .claude/hooks/probe-hooks.sh` checks
+`.claude/hooks/lib/command-scan.sh`; `bash .claude/hooks/check-hooks.sh` checks
 the boundary in both directions. Hooks see only the Bash tool, so Bertan's own
 terminal is not subject to any of this.
 
@@ -243,5 +243,6 @@ The five canonical roles, each label string equal to its name. See
 
 ### Domain docs
 
-Single-context: `docs/adr/` holds one ADR; `CONTEXT.md` does not exist yet. See
+Single-context: `docs/adr/` holds one ADR; `CONTEXT.md` holds the glossary, so
+far the one distinction between a *check* and a *probe*. See
 `docs/agents/domain.md`.

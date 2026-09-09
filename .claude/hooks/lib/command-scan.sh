@@ -18,7 +18,7 @@
 # Two of those were introduced by the fix to the previous two. The rule was
 # re-derived in about a dozen regular expressions across two files, so fixing it
 # in one place kept opening it in another. It is derived once here instead, and
-# the probe suite points at these functions directly.
+# the check suite points at these functions directly.
 #
 # A second review found three more of the same shape, and all three were here
 # rather than spread across the hooks, which is the point of the file. Two were
@@ -130,7 +130,7 @@ cs_normalise() {
 # saw a push at all; `do`, `else`, `elif`, `{` and `!` each did the same. They
 # are removed rather than matched around, so every caller keeps anchoring at ^.
 #
-# The trade, taken knowingly and probed as such: a quoted string holding a
+# The trade, taken knowingly and checked as such: a quoted string holding a
 # separator and then one of these words in front of a refused command now reads
 # as that command, so `git commit -m "wait; then git push --all origin"` is
 # refused. That is the direction this file has taken throughout -- a blocked
