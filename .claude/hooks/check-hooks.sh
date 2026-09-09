@@ -24,6 +24,14 @@
 # fi` was permitted, and passed again while a commit message mentioning `<<EOF`
 # blinded both hooks for the rest of the command.
 #
+# The redirect checks come from a fourth review, of PR #48, and are the first
+# of these to name a defect in the refusing direction rather than the
+# permitting one: every redirect on an otherwise permitted push was refused,
+# because nothing removed redirections and the operator read as a refspec. It
+# survived three rounds of review for that reason -- it refuses too much, and
+# the workaround is to drop the redirect -- and was filed anyway, because the
+# question it gets wrong is the one lib/command-scan.sh exists to answer once.
+#
 # So the number below is not a measure of the boundary. A check suite is
 # evidence about the cases it names and about nothing else, and every case here
 # was named by someone who went looking for one it had missed.
@@ -219,8 +227,11 @@ commit -m "git push --all origin"
 tok 'continuation joined before anything else' \
     'git push   --all origin' \
     "$(printf 'git push \\\n  --all origin\n' | cs_normalise)"
+# The one expectation issue #50 changed. It pins that the body is dropped and
+# that `echo after` survives, which is what it has always been about; the `> f`
+# is gone from the opener because cs_normalise now drops redirections too.
 tok 'heredoc body dropped' \
-    'cat > f <<EOF
+    'cat <<EOF
 echo after' \
     "$(printf 'cat > f <<EOF\ngit push origin main\nEOF\necho after\n' | cs_normalise)"
 tok 'here-string is not a heredoc' \
@@ -235,6 +246,135 @@ tok 'unterminated heredoc gives its lines back' \
     'git commit -m "fix <<EOF handling"
     git push --all origin' \
     "$(printf 'git commit -m "fix <<EOF handling"\n    git push --all origin\n' | cs_normalise)"
+# Redirections. A redirect is not an argument, and nothing removed it, so its
+# operator or its target was read as a refspec and every redirect on an
+# otherwise permitted push was refused. Issue #50.
+#
+# The two that come first are the ones the drop must not get wrong, because
+# they are the ones where it would hide something: a process substitution
+# carries a command, and a redirect inside quotes is text. Both are written
+# before the drops themselves for that reason.
+tok 'process substitution is not a redirect, <(' \
+    'cat <(git push --all origin)' \
+    "$(printf 'cat <(git push --all origin)\n' | cs_normalise)"
+tok 'process substitution is not a redirect, >(' \
+    'tee >(git push --all origin)' \
+    "$(printf 'tee >(git push --all origin)\n' | cs_normalise)"
+# The process substitution is tested before the fd digits are taken, so a digit
+# standing in front of one does not turn it into a redirect and take the
+# command with it.
+tok 'process substitution behind an fd digit' \
+    'cat 2>(git push --all origin)' \
+    "$(printf 'cat 2>(git push --all origin)\n' | cs_normalise)"
+tok 'a redirect inside double quotes is text' \
+    'git commit -m "redirect 2>/dev/null in the notes"' \
+    "$(printf 'git commit -m "redirect 2>/dev/null in the notes"\n' | cs_normalise)"
+tok 'a redirect inside single quotes is text' \
+    "git commit -m 'see > out.txt and 2>&1'" \
+    "$(printf "git commit -m 'see > out.txt and 2>&1'\n" | cs_normalise)"
+tok 'an escaped operator is not a redirect' \
+    'echo a \> b' \
+    "$(printf 'echo a \\> b\n' | cs_normalise)"
+# A target that is a command substitution is not a target at all. Without the
+# backtick and the paren ending the target scan, the command inside would be
+# swallowed with it -- the same mistake as hiding a process substitution.
+tok 'a backticked target ends the target scan' \
+    'echo `git push --all origin`' \
+    "$(printf 'echo > `git push --all origin`\n' | cs_normalise)"
+tok 'a $( ) target ends the target scan' \
+    'echo $(git push --all origin)' \
+    "$(printf 'echo > $(git push --all origin)\n' | cs_normalise)"
+# Now the drops. Every spelling, with and without a space before the target.
+tok 'redirect dropped, > with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b > out.txt\n' | cs_normalise)"
+tok 'redirect dropped, > with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b >out.txt\n' | cs_normalise)"
+tok 'redirect dropped, >> with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b >> push.log\n' | cs_normalise)"
+tok 'redirect dropped, >> with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b >>push.log\n' | cs_normalise)"
+tok 'redirect dropped, 2> with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b 2> /dev/null\n' | cs_normalise)"
+tok 'redirect dropped, 2> with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b 2>/dev/null\n' | cs_normalise)"
+tok 'redirect dropped, 2>> with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b 2>> push.log\n' | cs_normalise)"
+tok 'redirect dropped, 2>> with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b 2>>push.log\n' | cs_normalise)"
+tok 'redirect dropped, &> with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b &> out.txt\n' | cs_normalise)"
+tok 'redirect dropped, &> with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b &>out.txt\n' | cs_normalise)"
+tok 'redirect dropped, >& with a space' \
+    'git push origin b' \
+    "$(printf 'git push origin b >& out.txt\n' | cs_normalise)"
+tok 'redirect dropped, >& with no space' \
+    'git push origin b' \
+    "$(printf 'git push origin b >&out.txt\n' | cs_normalise)"
+tok 'redirect dropped, a leading < with a space' \
+    'cat' \
+    "$(printf 'cat < input.txt\n' | cs_normalise)"
+tok 'redirect dropped, a leading < with no space' \
+    'cat' \
+    "$(printf 'cat <input.txt\n' | cs_normalise)"
+tok 'redirect dropped, two of them' \
+    'git push origin b' \
+    "$(printf 'git push origin b >/dev/null 2>&1\n' | cs_normalise)"
+# The fd belongs to the operator, so it goes with it; the pipe does not, and
+# staying is the whole point -- it is what still shows tail as a command.
+tok 'the pipe after 2>&1 survives the drop' \
+    'git push origin b | tail -3' \
+    "$(printf 'git push origin b 2>&1 | tail -3\n' | cs_normalise)"
+# A digit is an fd only when it is a word of its own. `origin b2` is a token
+# that happens to end in one, and taking the 2 would change the refspec.
+tok 'a digit attached to a word is not an fd' \
+    'git push origin b2' \
+    "$(printf 'git push origin b2>out.txt\n' | cs_normalise)"
+# && is a separator, not the & of &>. The strip only reaches a & that touches
+# the operator, so the spelling that exercises the guard is the adjacent one --
+# and the spaced spelling is here beside it to say the strip never fires there.
+# No hook verdict turns on this pair: cs_split breaks on a single & as readily
+# as on a double one, so a separator half-eaten still ends the command. It is
+# pinned at the tokeniser because that is where the rule is written, and the
+# rule is that the strip takes the & of &> and never a separator.
+tok 'an adjacent && is not the & of &>' \
+    'git push origin b &&' \
+    "$(printf 'git push origin b &&> out.txt\n' | cs_normalise)"
+tok 'a spaced && is not touched at all' \
+    'git push origin b &&' \
+    "$(printf 'git push origin b && > out.txt\n' | cs_normalise)"
+# << <<- <<< are the heredoc pass's question, answered above. This pass leaves
+# them alone rather than answering it a second time and differently.
+# Quote state is per line, so a string left open at a newline protects nothing
+# on the line after it. That can only drop more, never less, and dropping more
+# of a line already inside quotes changes no verdict -- but it is behaviour, so
+# it is named rather than left to be discovered.
+tok 'quote state does not carry across a newline' \
+    'echo "unclosed
+cat' \
+    "$(printf 'echo "unclosed\ncat > f\n' | cs_normalise)"
+# >| is the clobber operator. The | is not consumed with it, so the target
+# becomes a command candidate of its own -- over-splitting, which can only
+# refuse more, and preferred to eating a | that is a separator everywhere else.
+tok '>| leaves its pipe standing' \
+    'git push origin b | out.txt' \
+    "$(printf 'git push origin b >| out.txt\n' | cs_normalise)"
+tok 'the heredoc operator survives the redirect drop' \
+    'cat <<EOF' \
+    "$(printf 'cat <<EOF\nbody\nEOF\n' | cs_normalise)"
+tok 'the here-string operator survives the redirect drop' \
+    'cat <<< "hello"' \
+    "$(printf 'cat <<< "hello"\n' | cs_normalise)"
 tok 'control word removed, then/fi' \
     'true
 git push --mirror origin' \
@@ -577,6 +717,74 @@ check no-git-push.sh "$OWN_BRANCH_PUSH" 'indented push, own branch'        $'if 
 # An unrelated -f elsewhere on the line is not the push's own flag. Every option
 # check reads the push's arguments, not the whole command, so this still passes.
 check no-git-push.sh "$OWN_BRANCH_PUSH" 'rm -f before an ordinary push'    "rm -f notes.md && git push origin $CURRENT"
+
+echo "=== REGRESSION: issue #50, a redirect was read as a refspec ==="
+# Nothing removed redirections, so `2>/dev/null` was the refspec and the message
+# said so in as many words. A stderr redirect is a shape an agent writes without
+# meaning anything by it -- `2>&1 | tail -3` on a push is how you read the result
+# of one -- so by the stopping rule in no-git-push.sh that is a defect.
+#
+# PR #48 reported the `2>&1` spelling and blamed the split on &. That is true of
+# that spelling and was not the cause: `2>/dev/null` holds no & and was refused
+# just the same. cs_normalise drops the redirection now, before cs_split sees it.
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with 2>/dev/null'     "git push origin $CURRENT 2>/dev/null"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with > out.txt'       "git push origin $CURRENT > out.txt"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with 2>> push.log'    "git push origin $CURRENT 2>> push.log"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with >/dev/null 2>&1' "git push origin $CURRENT >/dev/null 2>&1"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with 2>&1 | tail -3'  "git push origin $CURRENT 2>&1 | tail -3"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with &> out.txt'      "git push origin $CURRENT &> out.txt"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with >& out.txt'      "git push origin $CURRENT >& out.txt"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with a redirect first' "git push origin >out.txt $CURRENT"
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with >| out.txt'      "git push origin $CURRENT >| out.txt"
+# The redirect changes what the hook can see, never what it decides. Every
+# refused destination is still refused wearing one, and so is every refused
+# form -- the drop must not carry the flag off with the redirect.
+check no-git-push.sh BLOCK 'push to main with 2>/dev/null'    'git push origin main 2>/dev/null'
+check no-git-push.sh BLOCK 'push to dev-05 with > out.txt'    'git push origin dev-05 > out.txt'
+check no-git-push.sh BLOCK 'push to main with 2>> push.log'   'git push origin main 2>> push.log'
+check no-git-push.sh BLOCK 'push to dev-05, >/dev/null 2>&1'  'git push origin dev-05 >/dev/null 2>&1'
+check no-git-push.sh BLOCK 'push to main with 2>&1 | tail'    'git push origin main 2>&1 | tail -3'
+check no-git-push.sh BLOCK 'push --all with a redirect'       'git push --all origin >/dev/null 2>&1'
+check no-git-push.sh BLOCK 'push --mirror with a redirect'    'git push --mirror origin 2>&1'
+check no-git-push.sh BLOCK 'forced push of own branch, redirected' "git push -f origin $CURRENT 2>/dev/null"
+check no-git-push.sh BLOCK 'bare push with a redirect'        'git push 2>/dev/null'
+# A pipe is not a redirect and still ends the command, so what follows one is
+# still a command. Dropping must never hide it.
+check no-git-push.sh BLOCK 'legit push 2>&1 then push --all'  "git push origin $CURRENT 2>&1 | tail -3; git push --all origin"
+check no-pr-decisions.sh BLOCK 'gh pr merge with a redirect'  'gh pr merge 35 >/dev/null 2>&1'
+check no-pr-decisions.sh BLOCK 'gh pr review -a, redirected'  'gh pr review -a 35 2>&1 | tail -1'
+check no-pr-decisions.sh ALLOW 'gh pr view with a redirect'   'gh pr view 35 > /tmp/pr.json'
+
+echo "=== ACCEPTED false positive: a quoted redirect target ==="
+# The target scan stops at a quote, so a quoted target is not consumed and its
+# text stays in the push's arguments, where it reads as a refspec. Issue #50
+# asked for every redirect on a permitted push to be allowed and granted no
+# exception, so this is a shortfall against it rather than a decision the issue
+# made -- taken because consuming a quoted target would mean the drop swallowing
+# text it cannot see the end of, which is the direction that has gone wrong
+# three times in this file. The targets an agent writes -- /dev/null, out.txt,
+# push.log -- carry no quotes.
+#
+# Pinned in both directions so a later change cannot move it silently. If these
+# become ALLOW, that is a decision to take knowingly, not a bug fix.
+tok 'a quoted target is left in the arguments' \
+    'git push origin b "push log"' \
+    "$(printf 'git push origin b 2> "push log"\n' | cs_normalise)"
+check no-git-push.sh BLOCK 'push with a quoted redirect target' "git push origin $CURRENT 2> \"push log\""
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'the same target unquoted' "git push origin $CURRENT 2> push.log"
+
+echo "=== REGRESSION: issue #50, the drop must not hide a command ==="
+# Dropping is the one step in cs_normalise that hides text rather than exposing
+# it, and the heredoc question was got wrong three times in exactly that
+# direction. A process substitution carries a command, so it is not a redirect;
+# a command substitution used as a target is not a target. Both are pinned here
+# with a refused command inside, so hiding one would show up as ALLOW.
+check no-git-push.sh     BLOCK 'push inside <( )'             'cat <(git push --all origin)'
+check no-git-push.sh     BLOCK 'push inside >( )'             'tee >(git push --all origin)'
+check no-git-push.sh     BLOCK 'push as a backticked target'  'echo > `git push --all origin`'
+check no-git-push.sh     BLOCK 'push as a $( ) target'        'echo > $(git push --all origin)'
+check no-pr-decisions.sh BLOCK 'merge inside <( )'            'cat <(gh pr merge 35)'
+check no-pr-decisions.sh BLOCK 'merge as a $( ) target'       'echo > $(gh pr merge 35)'
 
 echo "=== REGRESSION: PR #35 review, a bare push is answered by configuration ==="
 # A push naming no refspec is sent where push.default, a remote.<name>.push
