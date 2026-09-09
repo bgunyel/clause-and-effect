@@ -1,0 +1,62 @@
+[
+ {
+  "label": "A tools+require",
+  "status": 200,
+  "summary": "available=23, selected=Baidu",
+  "attempt": 1,
+  "strategy": "direct",
+  "endpoints_total": 30,
+  "available_n": 23,
+  "provider": "Baidu",
+  "finish": "tool_calls",
+  "native_finish": "length"
+ },
+ {
+  "label": "B tools+norp",
+  "status": 200,
+  "summary": "available=23, selected=Baidu",
+  "attempt": 1,
+  "strategy": "direct",
+  "endpoints_total": 30,
+  "available_n": 23,
+  "provider": "Baidu",
+  "finish": "tool_calls",
+  "native_finish": "length"
+ },
+ {
+  "label": "C notools+require",
+  "status": 200,
+  "summary": "available=29, selected=Baidu",
+  "attempt": 1,
+  "strategy": "direct",
+  "endpoints_total": 30,
+  "available_n": 29,
+  "provider": "Baidu",
+  "finish": "length",
+  "native_finish": "length"
+ },
+ {
+  "label": "D notools+norp",
+  "status": 200,
+  "summary": "available=29, selected=Baidu",
+  "attempt": 1,
+  "strategy": "direct",
+  "endpoints_total": 30,
+  "available_n": 29,
+  "provider": "Baidu",
+  "finish": "length",
+  "native_finish": "length"
+ },
+ {
+  "label": "A2 tools+require",
+  "status": 200,
+  "summary": "available=23, selected=Baidu",
+  "attempt": 1,
+  "strategy": "direct",
+  "endpoints_total": 30,
+  "available_n": 23,
+  "provider": "Baidu",
+  "finish": "tool_calls",
+  "native_finish": "length"
+ }
+]

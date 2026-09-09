@@ -1,0 +1,84 @@
+{
+ "id": "gen-1788604005-FWNP4eQHPSVrupsNHHjj",
+ "polls": [
+  {
+   "t": 0.01,
+   "status": 404,
+   "body": "{\"error\":{\"message\":\"Generation gen-1788604005-FWNP4eQHPSVrupsNHHjj not found\",\"code\":404}}"
+  },
+  {
+   "t": 2.33,
+   "status": 404,
+   "body": "{\"error\":{\"message\":\"Generation gen-1788604005-FWNP4eQHPSVrupsNHHjj not found\",\"code\":404}}"
+  },
+  {
+   "t": 4.62,
+   "status": 404,
+   "body": "{\"error\":{\"message\":\"Generation gen-1788604005-FWNP4eQHPSVrupsNHHjj not found\",\"code\":404}}"
+  },
+  {
+   "t": 6.84,
+   "status": 200,
+   "body": {
+    "data": {
+     "created_at": "2026-09-05T10:26:45.195Z",
+     "model": "deepseek/deepseek-v4-flash-20260731",
+     "app_id": 2524738,
+     "external_user": null,
+     "streamed": true,
+     "cancelled": false,
+     "latency": 718,
+     "moderation_latency": null,
+     "generation_time": 780,
+     "tokens_prompt": 83,
+     "tokens_completion": 8,
+     "native_tokens_prompt": 375,
+     "native_tokens_completion": 19,
+     "native_tokens_completion_images": null,
+     "native_tokens_reasoning": 0,
+     "native_tokens_cached": 256,
+     "num_media_prompt": null,
+     "num_input_audio_prompt": null,
+     "num_media_completion": 0,
+     "num_search_results": null,
+     "num_fetches": null,
+     "web_search_engine": null,
+     "origin": "https://docs.langchain.com/",
+     "is_byok": false,
+     "finish_reason": "tool_calls",
+     "native_finish_reason": "tool_calls",
+     "service_tier": null,
+     "usage": 1.0405e-05,
+     "router": null,
+     "user_agent": "speakeasy-sdk/python 0.11.46 2.914.0 1.0.0 openrouter",
+     "http_referer": null,
+     "request_id": "req-1788604005-UyrYrLrDZfxgrqblHOSX",
+     "session_id": null,
+     "preset_id": null,
+     "api_type": "completions",
+     "id": "gen-1788604005-FWNP4eQHPSVrupsNHHjj",
+     "upstream_id": "as-3fb7j3masu",
+     "provider_responses": [
+      {
+       "endpoint_id": "223c54e7-4db1-4098-980f-47741e7637ab",
+       "id": "as-3fb7j3masu",
+       "is_byok": false,
+       "latency": 718,
+       "model_permaslug": "deepseek/deepseek-v4-flash-20260731",
+       "provider_name": "Baidu",
+       "status": 200
+      }
+     ],
+     "total_cost": 1.0405e-05,
+     "cache_discount": 2.8672e-05,
+     "upstream_inference_cost": 0,
+     "provider_name": "Baidu",
+     "response_cache_source_id": null,
+     "data_region": "global",
+     "workspace_id": "<redacted>"
+    }
+   }
+  }
+ ],
+ "first_200_at": 6.84
+}
