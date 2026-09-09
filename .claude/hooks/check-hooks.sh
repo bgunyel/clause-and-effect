@@ -142,6 +142,70 @@ else
   tok 'git status is not a push' 'not found' 'not found'
 fi
 
+# The gh helper answers the same question one level deeper: gh nests its verbs
+# under a group, so the subcommand is a path, and an option sitting between its
+# words has to be skipped or the verb is never reached at all. Nothing uses this
+# yet -- it is the footing the base rule is built on, rather than a fourth raw
+# match over the whole line, which is the shape that produced two of the five
+# defects listed at the top of lib/command-scan.sh.
+tok 'gh args, plain' '--base dev-05 --title x' \
+    "$(printf 'gh pr create --base dev-05 --title x\n' | cs_gh_args 'pr create')"
+tok 'gh args, a flag between the group and the verb' \
+    '--base main' "$(printf 'gh pr --repo o/r create --base main\n' | cs_gh_args 'pr create')"
+tok 'gh args, the repo value attached rather than separate' \
+    '35 --base main' "$(printf 'gh pr --repo=o/r edit 35 --base main\n' | cs_gh_args 'pr edit')"
+tok 'gh args, a one-word subcommand path' \
+    'repos/o/r/pulls -f base=main' \
+    "$(printf 'gh api repos/o/r/pulls -f base=main\n' | cs_gh_args api)"
+tok 'gh args, empty for a bare create' '' "$(printf 'gh pr create\n' | cs_gh_args 'pr create')"
+# An option on a neighbouring command is not this command's own. Scoping that
+# question to the whole line is the first of the two defects named above, and
+# the neighbour here carries the very flag the base rule will look for.
+tok 'gh args, an option on a neighbouring command' '--base dev-05' \
+    "$(printf 'gh pr view 35 --base main\ngh pr create --base dev-05\n' | cs_gh_args 'pr create')"
+# It answers about the first match and stops, so a caller handed a whole command
+# list would never see the second -- the fifth defect in command-scan.sh's list.
+# no-git-push.sh loops per command over cs_split's output for exactly that
+# reason; this is what obliges the base rule to do the same.
+tok 'gh args, the first match only, and the rest unseen' '' \
+    "$(printf 'gh pr create\ngh pr create --base dev-05\n' | cs_gh_args 'pr create')"
+if printf 'gh pr create\n' | cs_gh_args 'pr create' >/dev/null; then
+  tok 'bare create succeeds, so empty args mean a create' 'found' 'found'
+else
+  tok 'bare create succeeds, so empty args mean a create' 'found' 'not found'
+fi
+if printf 'gh pr view 35\n' | cs_gh_args 'pr create' >/dev/null; then
+  tok 'gh pr view is not a create' 'not found' 'found'
+else
+  tok 'gh pr view is not a create' 'not found' 'not found'
+fi
+# The group is part of the path, so a verb of the same name under another group
+# is a different command.
+if printf 'gh issue create\n' | cs_gh_args 'pr create' >/dev/null; then
+  tok 'gh issue create is not a pr create' 'not found' 'found'
+else
+  tok 'gh issue create is not a pr create' 'not found' 'not found'
+fi
+if printf 'git status\n' | cs_gh_args 'pr create' >/dev/null; then
+  tok 'a command that is not gh at all' 'not found' 'found'
+else
+  tok 'a command that is not gh at all' 'not found' 'not found'
+fi
+# The command word is `gh`, not a prefix of one. Without the word boundary the
+# first two letters of `ghpr` are stripped and the rest reads as `pr create`.
+if printf 'ghpr create\n' | cs_gh_args 'pr create' >/dev/null; then
+  tok 'ghpr is not gh' 'not found' 'found'
+else
+  tok 'ghpr is not gh' 'not found' 'not found'
+fi
+# The one-word path needs its exit status pinned too: it is the shape the two
+# gh api spellings of the base rule will ask about.
+if printf 'gh pr create --base main\n' | cs_gh_args api >/dev/null; then
+  tok 'a pr create is not a gh api call' 'not found' 'found'
+else
+  tok 'a pr create is not a gh api call' 'not found' 'not found'
+fi
+
 echo "=== REGRESSION: PR #35, only the first push on a line was validated ==="
 # The scope found the first push, validated its arguments, and stopped. So a
 # legitimate push carried an illegitimate one after ; or && on its coat-tails.

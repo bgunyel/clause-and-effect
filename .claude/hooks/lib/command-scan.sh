@@ -192,3 +192,61 @@ cs_git_args() {
     }
     END { exit(found ? 0 : 1) }'
 }
+
+# Print the arguments of a gh subcommand and succeed, or print nothing and fail
+# if this command is not that subcommand. The subcommand is given as its whole
+# path -- "pr create", "pr edit", "api" -- because gh nests its verbs under a
+# group, and the group on its own does not say what the command does.
+#
+# Options are skipped before every word of that path, not only before the first.
+# Cobra resolves each level at the first non-flag argument, so a flag may sit
+# between the group and the verb and `gh pr --repo o/r create` still creates;
+# -R/--repo and --hostname take their value as a separate token, which has to be
+# consumed with them or the value reads as the verb and hides it. That is the
+# same shape the GHPR pattern in no-pr-decisions.sh answers with a regular
+# expression of its own. So the question is answered in both places for now, and
+# will stay so while GHPR still carries the merge, review, close and reopen
+# rules; this is the answer the next rule is built on rather than a fourth
+# regular expression, which is the whole reason for adding it before its caller.
+#
+# The exit status is what distinguishes `gh pr create` -- a create whose
+# argument list is empty, which is exactly the shape that lets gh choose the
+# base for itself -- from a command that is not a create at all. A caller
+# testing the printed text instead would have to re-derive the rule, which is
+# the habit this file exists to end.
+#
+# Like cs_git_args, it answers about the first match and stops, which is the
+# fifth defect in the list at the top of this file if a caller hands it a whole
+# command list: the second command is never examined. So a caller feeds it one
+# command at a time, as no-git-push.sh does with cs_split's output, and the
+# check suite pins that the second match is lost.
+#
+# It is written before the rule that uses it, so what it is for is worth saying:
+# asking whether a flag belongs to *this* command is argument scoping, and
+# scoping answered ad hoc is where two of the five defects above came from --
+# the whole line read an unrelated option as the command's own, and the
+# narrowing that fixed that cut at a newline, so a continuation made every
+# command look bare.
+cs_gh_args() {
+  awk -v want="$1" '
+    BEGIN { found = 0; n = split(want, part, /[[:space:]]+/) }
+    {
+      line = $0
+      if (line !~ /^gh([[:space:]]|$)/) next
+      sub(/^gh[[:space:]]*/, "", line)
+      matched = 1
+      for (i = 1; i <= n; i++) {
+        while (match(line, /^((-R|--repo|--hostname)[[:space:]]+[^[:space:]]+|-[^[:space:]]+)[[:space:]]+/)) {
+          line = substr(line, RSTART + RLENGTH)
+        }
+        if (line !~ "^" part[i] "([[:space:]]|$)") { matched = 0; break }
+        line = substr(line, length(part[i]) + 1)
+        sub(/^[[:space:]]*/, "", line)
+      }
+      if (!matched) next
+      print line
+      found = 1
+      exit
+    }
+    END { exit(found ? 0 : 1) }'
+}
