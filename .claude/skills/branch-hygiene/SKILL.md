@@ -55,14 +55,23 @@ gh pr list --state all --limit 30 --json number,headRefName,state,mergedAt \
   --jq '.[] | "\(.headRefName)\t\(.state)"'
 ```
 
-Stale is a branch with nothing in flight on it: a `dev-NN` other than the active
-one, or a worktree branch whose pull request is merged or closed. A worktree
-branch with an open pull request is **not** stale — several open at once is the
-ordinary state of this repository, not drift. That is what the invariant at the
-top of this file already says, and it is the half of it most easily read as a
-mess to tidy.
+Stale is a branch whose work is over: a `dev-NN` other than the active one, or a
+worktree branch whose pull request is merged or closed. A worktree branch with an
+open pull request is **not** stale — several open at once is the ordinary state
+of this repository, not drift. That is what the invariant at the top of this file
+already says, and it is the half of it most easily read as a mess to tidy.
 
-Two things to name in the report rather than act on:
+**A worktree branch with no pull request at all is neither, and saying which it
+is takes more than this skill can see.** A branch freshly cut for work not yet
+started and a branch abandoned after a rotation are both branches with no pull
+request, and ahead/behind does not separate them: a fresh one cut before the dev
+branch moved is `ahead == 0`, and an abandoned one carrying a commit of its own
+is `ahead > 0`, so the count that would condemn the first exonerates the second.
+Only whoever cut it knows. Report it by name with its ahead/behind and its last
+commit date, call it unclassified rather than stale, and stop — the *reserved
+act* entry in `CONTEXT.md` says what to do where nothing enforces.
+
+Two more things to name in the report rather than act on:
 
 - **Open pull requests against `dev-NN`.** Deleting a base branch closes the
   pull requests that target it, so a rotation waits until they are merged or
@@ -164,3 +173,8 @@ delete.
   reason a rotation waits for the branches in flight.
 - Rotate only after a merge, not after each session. A dev branch spanning
   several sessions is normal; two dev branches at once is not.
+- Push a worktree branch with `git push -u origin <branch>` the first time, as
+  the rotation pushes `dev-NN+1`. Without the upstream, a merged branch whose
+  remote half `delete_branch_on_merge` has removed is indistinguishable from one
+  that was never pushed — both read as having no upstream, and the `[gone]` that
+  says *this branch had a remote and lost it* never appears.
