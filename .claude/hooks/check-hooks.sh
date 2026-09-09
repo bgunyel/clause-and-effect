@@ -1,6 +1,6 @@
 #!/bin/bash
-# Regression checks for no-git-push.sh, no-pr-decisions.sh and
-# no-commit-to-main.sh.
+# Regression checks for no-git-push.sh, no-pr-decisions.sh,
+# no-commit-to-main.sh and no-work-on-stale-branch.sh.
 #
 # A hook is a process, so the only way to test one is to run it; what the rule
 # against calling the function under test forbids is deriving the expectation
@@ -176,6 +176,43 @@ says() {  # says <dir> <script> <fragment> <label> <cmd>
          "$label" "$want" "$err"
        FAILED=1 ;;
   esac
+}
+
+# The other half of says: a refusal that must not say something. The fallback
+# detector cannot tell a merged branch from one cut before the dev branch moved,
+# so a message claiming a merge there would be a claim the hook cannot support.
+# Nothing above can catch a message saying too much.
+says_not() {  # says_not <dir> <script> <fragment> <label> <cmd>
+  local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+        | ( cd "$dir" && "$HOOKS/$script" ) 2>&1 >/dev/null)
+  case "$err" in
+    *"$unwanted"*) printf '  FAIL %s\n         the refusal must not say |%s|\n         it said |%s|\n' \
+         "$label" "$unwanted" "$err"
+       FAILED=1 ;;
+    *) printf '  ok   says  %s\n' "$label" ;;
+  esac
+}
+
+# A property of a file rather than of a process. See the arming section at the
+# foot of this suite for why one file in .claude/ needs this and the others do
+# not. Fixed strings, not patterns: the expectation is the line as written.
+armed() {  # armed <label> <file> <literal>
+  if grep -qF -- "$3" "$2" 2>/dev/null; then
+    printf '  ok   armed %s\n' "$1"
+  else
+    printf '  FAIL %s\n         expected %s to contain |%s|\n' "$1" "$2" "$3"
+    FAILED=1
+  fi
+}
+
+unarmed() {  # unarmed <label> <file> <literal>
+  if grep -qF -- "$3" "$2" 2>/dev/null; then
+    printf '  FAIL %s\n         %s must not contain |%s|\n' "$1" "$2" "$3"
+    FAILED=1
+  else
+    printf '  ok   armed %s\n' "$1"
+  fi
 }
 
 . ./lib/command-scan.sh
@@ -1390,6 +1427,326 @@ says "$ON_MAIN" no-commit-to-main.sh "bare 'git push' while on main" \
   'the bare push keeps its own wording' 'git push'
 says "$ON_DEV"  no-commit-to-main.sh 'whether it lands on main' \
   'a directory move says what cannot be judged' "cd $ON_MAIN && git commit -m 'wip'"
+
+echo "=== no-work-on-stale-branch.sh: a branch whose life is over ==="
+# Three lifecycle states in one throwaway repository, all built locally: the
+# remote-tracking refs are written with update-ref, so nothing here reaches a
+# network. Unlike the fixtures above, these need real commits -- ahead/behind
+# is the whole question -- so an identity is set on each commit rather than
+# borrowed from whatever global configuration the runner happens to have.
+LIFE="$FIXTURES/lifecycle"
+git init -q -b main "$LIFE"
+GL="git -C $LIFE -c user.email=checks@example.invalid -c user.name=checks"
+# A remote named origin has to exist for git to resolve an upstream at all --
+# without one, `%(upstream:track)` is empty rather than `[gone]` and the first
+# detector cannot fire. Nothing here ever reaches the URL; the fetch refspec it
+# brings is what maps refs/heads/x to refs/remotes/origin/x.
+$GL remote add origin "$FIXTURES/unreachable-remote.git"
+$GL commit -q --allow-empty -m base
+LIFE_BASE=$($GL rev-parse HEAD)
+$GL commit -q --allow-empty -m advance
+LIFE_TIP=$($GL rev-parse HEAD)
+# The active dev branch, one commit ahead of base. Two decoys stand beside it:
+# origin/dev-foo would win a lexical sort of the glob, and origin/dev-4 would
+# win one against dev-05 unless the sort is a version sort.
+$GL update-ref refs/remotes/origin/dev-05 "$LIFE_TIP"
+$GL update-ref refs/remotes/origin/dev-foo "$LIFE_BASE"
+$GL update-ref refs/remotes/origin/dev-4 "$LIFE_BASE"
+
+# ahead == 0, behind == 1. The fallback detector's case, and nothing else: this
+# branch has no upstream configured, so `[gone]` cannot be what refuses it.
+$GL branch stale-branch "$LIFE_BASE"
+$GL worktree add -q "$LIFE/wt-stale" stale-branch
+
+# upstream configured, remote-tracking ref absent -- what a pruning fetch leaves
+# behind after delete_branch_on_merge removes the branch. Placed at the dev tip
+# so ahead == 0 and behind == 0: the fallback cannot fire here, and a refusal is
+# the gone detector's alone.
+$GL branch gone-branch "$LIFE_TIP"
+$GL config -f "$LIFE/.git/config" branch.gone-branch.remote origin
+$GL config -f "$LIFE/.git/config" branch.gone-branch.merge refs/heads/gone-branch
+$GL worktree add -q "$LIFE/wt-gone" gone-branch
+
+# A fresh worktree branch at the dev tip: ahead == 0, behind == 0.
+$GL branch fresh-branch "$LIFE_TIP"
+$GL worktree add -q "$LIFE/wt-fresh" fresh-branch
+
+# A worktree branch carrying work of its own: ahead == 1.
+$GL branch work-branch "$LIFE_TIP"
+$GL worktree add -q "$LIFE/wt-work" work-branch
+git -C "$LIFE/wt-work" -c user.email=checks@example.invalid -c user.name=checks \
+  commit -q --allow-empty -m own
+
+# The main checkout is moved to the same commit as the stale worktree branch, so
+# the two differ in exactly one thing: where the command runs. An identical
+# command is BLOCK in one and ALLOW in the other, which is the keying claim
+# stated as a check rather than as a sentence in a header.
+$GL update-ref refs/heads/main "$LIFE_BASE"
+
+WT_STALE="$LIFE/wt-stale"
+WT_GONE="$LIFE/wt-gone"
+WT_FRESH="$LIFE/wt-fresh"
+WT_WORK="$LIFE/wt-work"
+
+[ -d "$WT_STALE" ] && [ -d "$WT_GONE" ] && [ -d "$WT_WORK" ] && [ -d "$WT_FRESH" ] || {
+  echo "the lifecycle worktrees were not created; every check below would pass without running the hook" >&2
+  exit 1
+}
+
+echo "--- upstream gone: the branch was merged and its remote half is pruned ---"
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'commit on a merged branch' \
+  'git commit -m "wip"'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'cherry-pick, the recovery procedure own command' \
+  'git cherry-pick 1234abc'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'revert on a merged branch' \
+  'git revert HEAD'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'am on a merged branch' \
+  'git am /tmp/patch.mbox'
+# Merging into a branch that no longer exists on the remote is meaningless, so
+# the carve-out that exists under the fallback does not exist here.
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'merge naming the dev branch is still refused' \
+  'git merge origin/dev-05'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'rebase naming the dev branch is still refused' \
+  'git rebase origin/dev-05'
+# A refusal mid-rebase strands state the agent cannot exit.
+check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'rebase --continue' \
+  'git rebase --continue'
+check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'merge --abort' \
+  'git merge --abort'
+check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'cherry-pick --skip' \
+  'git cherry-pick --skip'
+# A commit message is the one argument on this path that carries arbitrary
+# prose, and the arguments are stripped of their quotes before the continuation
+# flags are looked for. So the text of a message read as an option, and
+# `git commit -m "permit rebase --continue"` -- the shape of a message written
+# while working on this very hook -- permitted a commit on a merged branch.
+# Silent, and in the permitting direction. Found by review, not by this suite:
+# every continuation check here drove the bare flag, which is exactly the case
+# that already worked.
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a commit message naming a continuation flag' \
+  'git commit -m "permit rebase --continue"'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a commit message naming --skip' \
+  'git commit -m "handle --skip in the guard"'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a merge message naming a continuation flag' \
+  'git merge -m "wip --continue" some-other-branch'
+# An unterminated quote is argument text past the point this can read, and
+# reading argument text as a flag is what permits here, so the ambiguous case
+# must not.
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'an unterminated quote before a continuation flag' \
+  'git commit -m "wip --continue'
+# A continuation flag anywhere but the first argument is not a continuation.
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a continuation flag trailing a real commit' \
+  'git commit -m "wip" --skip'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a continuation flag trailing a cherry-pick' \
+  'git cherry-pick 1234abc --continue'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a continuation flag behind an option' \
+  'git rebase --quiet --continue'
+check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'a read is not work' \
+  'git log --oneline -5'
+check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'a command with no git in it at all' \
+  'ls -la'
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a commit wrapped in a shell' \
+  "sh -c 'git commit -m \"wip\"'"
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a cherry-pick wrapped in eval' \
+  'eval "git cherry-pick 1234abc"'
+
+echo "--- the fallback: ahead == 0, behind > 0 against the active dev branch ---"
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'commit on a branch dev has moved past' \
+  'git commit -m "wip"'
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'cherry-pick' \
+  'git cherry-pick 1234abc'
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'revert' \
+  'git revert HEAD'
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'am' \
+  'git am /tmp/patch.mbox'
+# ahead == 0 means this branch is a strict ancestor of the dev branch, so this
+# is a fast-forward: it creates no commit and masks nothing. Refusing it would
+# deadlock the branch -- no commit, no catch-up, and removing a worktree is a
+# reserved act.
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up merge, remote spelling' \
+  'git merge origin/dev-05'
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up merge, short spelling' \
+  'git merge dev-05'
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up merge, full ref' \
+  'git merge refs/remotes/origin/dev-05'
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up merge, --ff-only' \
+  'git merge --ff-only origin/dev-05'
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up rebase' \
+  'git rebase origin/dev-05'
+# Anything else a merge or rebase can name would write a real commit here.
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a merge naming another branch' \
+  'git merge some-other-branch'
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a rebase naming another branch' \
+  'git rebase some-other-branch'
+# --no-ff exists to write a merge commit where a fast-forward would do, which is
+# the one thing the carve-out is for not doing.
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'the catch-up merge forced to commit' \
+  'git merge --no-ff origin/dev-05'
+# --onto is where a rebase's destination really is; naming the dev branch after
+# it names it as the source.
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'rebase --onto somewhere else' \
+  'git rebase --onto some-other-branch origin/dev-05'
+# A bare merge takes its argument from configuration and names nothing.
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a merge naming nothing at all' \
+  'git merge'
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a rebase naming nothing at all' \
+  'git rebase'
+# The carve-out is the only permitting path out of a refused state, so anything
+# that moves git elsewhere or moves the branch underneath it withdraws it: the
+# state was read here, and these make here the wrong place to have read it.
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'the catch-up merge after a directory change' \
+  "cd $WT_WORK && git merge origin/dev-05"
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'the catch-up merge after a checkout' \
+  'git checkout fresh-branch && git merge origin/dev-05'
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'the catch-up merge with git pointed elsewhere' \
+  'git --git-dir /elsewhere/.git merge origin/dev-05'
+# Every command, not the first: the permitted half does not license the second.
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a permitted merge followed by a commit' \
+  'git merge origin/dev-05 && git commit -m "wip"'
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'rebase --continue' \
+  'git rebase --continue'
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a commit message naming a continuation flag' \
+  'git commit -m "permit rebase --continue"'
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a merge message naming a continuation flag' \
+  'git merge -m "wip --continue" some-other-branch'
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'a read is not work' \
+  'git status'
+
+echo "--- branches whose life is not over, and the main checkout ---"
+check_in "$WT_WORK"  no-work-on-stale-branch.sh ALLOW 'a branch carrying work of its own, ahead == 1' \
+  'git commit -m "wip"'
+check_in "$WT_FRESH" no-work-on-stale-branch.sh ALLOW 'a fresh branch at the dev tip, ahead == 0 behind == 0' \
+  'git commit -m "wip"'
+# The same commit, the same state, the same command -- and the main checkout is
+# unaffected, because the guard keys on the linked worktree.
+check_in "$LIFE" no-work-on-stale-branch.sh ALLOW 'the main checkout at the stale branch own commit' \
+  'git commit -m "wip"'
+
+echo "--- abstaining when there is no active dev branch to compare against ---"
+# A fresh clone, or the rotation window after the merged dev-NN is deleted and
+# its successor is not yet pushed.
+NODEV="$FIXTURES/nodev"
+git init -q -b main "$NODEV"
+GN="git -C $NODEV -c user.email=checks@example.invalid -c user.name=checks"
+$GN remote add origin "$FIXTURES/unreachable-remote.git"
+$GN commit -q --allow-empty -m base
+NODEV_BASE=$($GN rev-parse HEAD)
+$GN commit -q --allow-empty -m advance
+$GN branch behind-branch "$NODEV_BASE"
+$GN worktree add -q "$NODEV/wt-behind" behind-branch
+$GN branch nodev-gone-branch "$NODEV_BASE"
+$GN config -f "$NODEV/.git/config" branch.nodev-gone-branch.remote origin
+$GN config -f "$NODEV/.git/config" branch.nodev-gone-branch.merge refs/heads/nodev-gone-branch
+$GN worktree add -q "$NODEV/wt-nodev-gone" nodev-gone-branch
+check_in "$NODEV/wt-behind" no-work-on-stale-branch.sh ALLOW 'no origin/dev-* ref, so the fallback abstains' \
+  'git commit -m "wip"'
+# The gone detector reads the remote's existence, not ancestry against a dev
+# branch, so it is not the fallback and does not abstain with it. A branch whose
+# remote half has been pruned away is merged whether or not this clone has ever
+# seen a dev branch.
+check_in "$NODEV/wt-nodev-gone" no-work-on-stale-branch.sh BLOCK 'upstream gone still refuses with no dev ref' \
+  'git commit -m "wip"'
+
+echo "--- the two refusals say different things, because they know different things ---"
+# `upstream: gone` fires only on the genuinely merged case, so it may say
+# merged. The fallback cannot tell a merged branch from one cut before the dev
+# branch moved, so it must not.
+says "$WT_GONE"  no-work-on-stale-branch.sh 'has been merged' \
+  'the gone refusal names the merge' 'git commit -m "wip"'
+says "$WT_STALE" no-work-on-stale-branch.sh 'no work of its own' \
+  'the fallback refusal is about state' 'git commit -m "wip"'
+says_not "$WT_STALE" no-work-on-stale-branch.sh 'merged' \
+  'the fallback refusal does not claim a merge' 'git commit -m "wip"'
+# The deadlock the carve-out exists to avoid is named in the refusal that would
+# otherwise cause it.
+says "$WT_STALE" no-work-on-stale-branch.sh 'git merge origin/dev-05 is permitted' \
+  'the fallback refusal says how to get out' 'git commit -m "wip"'
+
+echo "--- the guard fails closed when the tokeniser is not beside it, and only where it has an opinion ---"
+cp no-work-on-stale-branch.sh "$FIXTURES/nolib/"
+check_in "$WT_STALE" "$FIXTURES/nolib/no-work-on-stale-branch.sh" BLOCK 'no lib/, on a stale branch' \
+  'git status'
+# Failing closed is scoped to a branch this file has an opinion about. A healthy
+# worktree is not refused because a library is missing.
+check_in "$WT_WORK" "$FIXTURES/nolib/no-work-on-stale-branch.sh" ALLOW 'no lib/, on a branch carrying work' \
+  'git commit -m "wip"'
+# A library that is present but incomplete. cs_git_args is the function whose
+# absence would be silent and permitting: `RAW=$(cs_git_args "$VERB") ||
+# continue` cannot tell "not this verb" from "no such function", so probing
+# cs_split alone left every verb permitted through the check written to stop
+# exactly that. Found by review, not by this suite.
+mkdir -p "$FIXTURES/halflib/lib"
+cp no-work-on-stale-branch.sh "$FIXTURES/halflib/"
+sed 's/^cs_git_args()/cs_renamed_away()/' lib/command-scan.sh > "$FIXTURES/halflib/lib/command-scan.sh"
+grep -q '^cs_renamed_away()' "$FIXTURES/halflib/lib/command-scan.sh" || {
+  echo "the half-library fixture did not rename cs_git_args; the check below proves nothing" >&2
+  exit 1
+}
+check_in "$WT_STALE" "$FIXTURES/halflib/no-work-on-stale-branch.sh" BLOCK 'a library missing only cs_git_args' \
+  'git commit -m "wip"'
+
+echo "=== the arming properties, asserted as literals ==="
+# A second kind of check: the ones above drive a hook as a process and read its
+# exit code, and these read a file. It is a new seam in this suite and is named
+# as one.
+#
+# It exists because report-stale-branches.sh arms enforcement rather than
+# performing it. Issue #36 leaves `.claude/` unguarded on the grounds that
+# breakage announces itself -- the refusal stops coming -- and that reasoning
+# does not hold for a file whose failure is that two detectors quietly read
+# stale refs. Dropping --prune from that script changes nothing visible, so
+# these say what must be true of it.
+#
+# This announces at the next review rather than on the next push: the repository
+# has no CI, so the suite runs when someone runs it. That is how every check
+# above already behaves.
+armed 'the report fetches with an explicit prune' \
+  "$HOOKS/report-stale-branches.sh" 'git fetch --prune --quiet origin'
+armed 'the fetch is bounded, so an offline session still starts' \
+  "$HOOKS/report-stale-branches.sh" 'timeout "$FETCH_TIMEOUT" git fetch'
+armed 'a failed fetch says so, because neither detector is armed after one' \
+  "$HOOKS/report-stale-branches.sh" 'FAILED or timed out'
+# Read-only by name and by content. The name is checked by being the path above;
+# the content is checked here.
+unarmed 'the report removes no worktree' \
+  "$HOOKS/report-stale-branches.sh" 'worktree remove'
+unarmed 'the report deletes no branch' \
+  "$HOOKS/report-stale-branches.sh" 'branch -d'
+unarmed 'the report force-deletes no branch' \
+  "$HOOKS/report-stale-branches.sh" 'branch -D'
+unarmed 'the report deletes nothing on the remote' \
+  "$HOOKS/report-stale-branches.sh" 'push origin --delete'
+
+# The active dev branch is derived in both files, and the copies are identical
+# by hand. lib/command-scan.sh's own header names this failure mode -- the same
+# question answered differently in a different place -- and the library is right
+# there, so the duplication is a decision and not an oversight: the guard must
+# read its state before it may depend on lib/ at all. That is what lets it fail
+# closed only on a branch it has an opinion about, rather than refusing every
+# command in every worktree whenever a library is missing. The cost of that
+# ordering is two copies, so the copies are pinned instead of shared. A
+# divergence here silently unarms the guard or misreports the branch.
+DEV_DERIVATION="| grep -E '^origin/dev-[0-9]+\$' | sort -V | tail -1)"
+armed 'the guard derives the active dev branch this way' \
+  "$HOOKS/no-work-on-stale-branch.sh" "$DEV_DERIVATION"
+armed 'and the report derives it identically' \
+  "$HOOKS/report-stale-branches.sh" "$DEV_DERIVATION"
+
+# settings.json is what actually runs either file, so a hook present in the tree
+# and absent from the configuration is a hook that does nothing. jq reads it;
+# the expectation is a literal.
+SETTINGS="$HOOKS/../settings.json"
+tok 'settings.json runs the report at SessionStart' \
+    '"$CLAUDE_PROJECT_DIR"/.claude/hooks/report-stale-branches.sh' \
+    "$(jq -r '.hooks.SessionStart[]?.hooks[]?.command' "$SETTINGS" 2>/dev/null | grep report-stale-branches)"
+tok 'settings.json runs the guard on every Bash command' \
+    '"$CLAUDE_PROJECT_DIR"/.claude/hooks/no-work-on-stale-branch.sh' \
+    "$(jq -r '.hooks.PreToolUse[]? | select(.matcher == "Bash") | .hooks[]?.command' "$SETTINGS" 2>/dev/null | grep no-work-on-stale-branch)"
+# The report's timeout must outlast the fetch it waits on, or the hook is killed
+# before it can say that the fetch failed.
+tok 'the report hook outlasts its own fetch' \
+    '30' \
+    "$(jq -r '.hooks.SessionStart[]?.hooks[]? | select(.command | contains("report-stale-branches")) | .timeout' "$SETTINGS" 2>/dev/null)"
 
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
