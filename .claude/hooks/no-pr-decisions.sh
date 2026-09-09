@@ -93,9 +93,17 @@ DECIDE="Blocked: deciding a pull request is Bertan's call, not an agent's. Openi
 
 BASE="Blocked: a pull request may be proposed only into the active dev branch, and the base has to be named in the command. Write: gh pr create --base dev-NN --title ... --body ..."
 
-# The base named in one gh pr command's arguments. Prints it and succeeds;
-# prints nothing and fails if no base flag is there at all, which is the shape
-# that lets gh pick the repository's default branch for itself.
+# Every base named in one gh pr command's arguments, one per line. Prints
+# nothing when no base flag is there at all, which is the shape that lets gh
+# pick the repository's default branch for itself.
+#
+# Every, not the first, and not the last. gh takes the last of a repeated flag,
+# so a rule reading one occurrence can be answered by the other: reading the
+# first, `--base dev-05 -B main` opened into main while satisfying a check that
+# had already seen a dev branch. Reading the last would only move which half
+# lies. Requiring all of them to be dev-NN is the answer that does not depend on
+# knowing gh's precedence, and it is the refusing direction when they disagree.
+# Found by review of be0e3c7, not by the suite.
 #
 # -B is the shorthand, and gh takes shorthand flags bundled with their value
 # attached or separate, so `-B main`, `-Bmain`, `-dB main` and `-dBmain` are one
@@ -105,26 +113,25 @@ BASE="Blocked: a pull request may be proposed only into the active dev branch, a
 # not --base.
 #
 # A flag whose value never arrives -- `gh pr create -B` at the end of the line
-# -- reports no base, and the caller refuses that as a create naming none. An
-# unreadable destination is refused rather than left to look like the permitted
-# shape, which is the answer the bare push already has.
+# -- names no base, and the caller refuses it as a create naming none, which is
+# what it is.
 #
 # The trade: quotes are stripped before this runs, so `--title "-B main"` reads
 # as a base of main and is refused. A blocked title is visible and one edit
-# away; this file has taken that direction throughout.
-gh_pr_base() {
+# away; this file has taken that direction throughout. The opposite direction is
+# not symmetrical and is not taken -- see gh_pr_web.
+gh_pr_bases() {
   local TOK WANT=
   for TOK in $1; do
-    if [ -n "$WANT" ]; then printf '%s' "$TOK"; return 0; fi
+    if [ -n "$WANT" ]; then printf '%s\n' "$TOK"; WANT=; continue; fi
     case "$TOK" in
-      --base=*) printf '%s' "${TOK#--base=}"; return 0 ;;
+      --base=*) printf '%s\n' "${TOK#--base=}" ;;
       --base)   WANT=1 ;;
       --*)      ;;
       -*B)      WANT=1 ;;
-      -*B*)     printf '%s' "${TOK#*B}"; return 0 ;;
+      -*B*)     printf '%s\n' "${TOK#*B}" ;;
     esac
   done
-  return 1
 }
 
 # Does this gh pr create hand the pull request off to a browser? The web form
@@ -133,13 +140,27 @@ gh_pr_base() {
 # The exemption covers a missing base and nothing else -- a --base written into
 # the command is still that command naming a destination, and --web does not
 # launder it.
+#
+# Two narrowings, both because this is the one test here that PERMITS, so a
+# token read too generously is a pull request into main rather than a refusal
+# someone can see. It was written both ways round first, and both were holes
+# found by review of be0e3c7:
+#
+#   - only `--web` and exactly `-w` count, where any single-dash token holding a
+#     w counted before. A label value of `-wip` and an assignee of `-w` are not
+#     the web form, and `gh pr create -l -wip` opened into main.
+#   - the caller hands this the arguments with QUOTED SPANS REMOVED, not merely
+#     unquoted. `--title "Handle -w in gh_pr_web"` is prose, and prose in this
+#     repository names flags -- that title is one a session on this very file
+#     would write. Deleting the span cannot invent a flag; unquoting one can.
+#
+# The asymmetry with gh_pr_bases is deliberate and is the whole point: quoted
+# text may still trigger a refusal there, and may not grant an exemption here.
 gh_pr_web() {
   local TOK
   for TOK in $1; do
     case "$TOK" in
-      --web)      return 0 ;;
-      --*)        ;;
-      -*w*)       return 0 ;;
+      --web|-w) return 0 ;;
     esac
   done
   return 1
@@ -147,6 +168,53 @@ gh_pr_web() {
 
 is_dev_base() {
   printf '%s' "$1" | grep -qE '^dev-[0-9]+$'
+}
+
+# Is this gh api call a write? Succeeds if it is, or if that cannot be told.
+#
+# gh sends GET unless told otherwise, and switches to POST the moment a field or
+# input flag appears, so a call carrying neither is a read. The test is the
+# method and not the endpoint because the endpoint does not distinguish them:
+# GET /pulls/N/reviews lists reviews and GET /pulls/N/merge reports whether the
+# PR is merged. Both are reading a pull request, which CLAUDE.md allows in the
+# same sentence that forbids deciding one.
+#
+# Any token beginning -f or -F counts, not just `-f x=y`: gh accepts the value
+# attached, and `-fevent=APPROVE` is the same request as `-f event=APPROVE`.
+# A method that cannot be parsed is treated as a write.
+#
+# It is defined here, above every rule, rather than beside the gh api rules it
+# was written for: the wrapper rule calls it too and runs first.
+gh_api_is_write() {
+  local CMD="$1" METHOD
+  METHOD=$(printf '%s' "$CMD" | sed -nE 's/.*(^|[[:space:]])(-X|--method)[[:space:]=]*([A-Za-z]+).*/\3/p')
+  if [ -n "$METHOD" ]; then
+    case "$METHOD" in
+      GET|get|Get|HEAD|head|Head) ;;
+      *) return 0 ;;
+    esac
+  elif printf '%s' "$CMD" | grep -qE '(^|[[:space:]])(-X|--method)([[:space:]]|=|$)'; then
+    return 0
+  fi
+  if printf '%s' "$CMD" | grep -qE '(^|[[:space:]])(-[fF]|--field|--raw-field|--input)'; then
+    return 0
+  fi
+  return 1
+}
+
+# Refuse unless every base in a newline-separated list is a dev-NN branch. The
+# offending one is left in BAD_BASE for the caller's message. An empty list is
+# no bases, which is a different question and the caller's to ask.
+bases_all_dev() {
+  local B
+  BAD_BASE=
+  [ -n "$1" ] || return 0
+  while IFS= read -r B; do
+    if ! is_dev_base "$B"; then BAD_BASE=$B; return 1; fi
+  done <<BASELIST
+$1
+BASELIST
+  return 0
 }
 
 # `gh pr merge` is not the only way to write `gh pr merge`. Cobra resolves the
@@ -166,19 +234,37 @@ GHRELEASE='^gh[[:space:]]+release([[:space:]]+((-R|--repo|--hostname)[[:space:]]
 # contain, and --repo would read as --request-changes.
 VERDICT='[[:space:]](--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[:space:]]|=|"|$)'
 
-# A base carried in a gh api call: `-f base=dev-05`, `-fbase=dev-05`, and the
-# graphql field `baseRefName: "dev-05"`. Two patterns rather than one negated
-# one -- is a base named here at all, and is the one named a dev branch --
-# because they answer different questions, and a base that matches the first and
-# not the second is a destination this file cannot read, which is refused.
+# Every base a gh api call names, in the two shapes gh accepts one. Both print
+# the values, one per line, for bases_all_dev -- the same "every, not the last"
+# answer gh_pr_bases gives, and for the same reason: `-f base=dev-05 -f
+# base=main` must not be answered by whichever occurrence a rule happened to
+# look at.
 #
-# The alternation puts baseRefName first: POSIX matching is leftmost-longest and
-# would take it anyway, but a rule this file rests on should not need that to be
-# recalled. The character before `base` is required to be a non-word one, or the
-# `-f`/`-F` it can be written against, so that `rebase` and `database` are the
-# words they are and not this field.
-API_BASE_ANY='(^|[^A-Za-z0-9_]|-[fF])(baseRefName|base)[[:space:]]*[=:]'
-API_BASE_DEV="(^|[^A-Za-z0-9_]|-[fF])(baseRefName|base)[[:space:]]*[=:][[:space:]]*[\"']?dev-[0-9]+[\"']?([^A-Za-z0-9_.-]|\$)"
+# REST: the value is a FIELD, so the field flag is part of the pattern. Matching
+# the bare word instead read `-f title="base: dev-05"` as a base, so a create
+# naming none of its own was permitted. Reported on the review of be0e3c7.
+# `-f base=x`, `-fbase=x` and `--field base=x` are one request written three
+# ways; anchoring on the flag is also what keeps `rebase` and `database` the
+# words they are.
+rest_bases() {
+  printf '%s\n' "$1" \
+    | grep -oiE "(-[fF]|--field|--raw-field)[[:space:]]*base[[:space:]]*=[[:space:]]*[\"']?[^[:space:]\"',}]*" \
+    | sed -E "s/.*=[[:space:]]*[\"']?//"
+}
+
+# graphql: baseRefName stands on its own, and has to. cs_split cuts a mutation
+# body on its own braces and parens, so the field and the command word are never
+# in the same fragment -- which is why this one is asked of the whole normalised
+# text where the REST pair is asked of a single command. The cost is the bleed
+# the REST rule no longer has: a mutation on one command and a baseRefName on
+# another read as one. Accepted, because scoping it would mean re-deriving the
+# split this file delegates to lib/command-scan.sh, and the shape is not one an
+# agent writes by accident.
+gql_bases() {
+  printf '%s\n' "$1" \
+    | grep -oiE "baseRefName[[:space:]]*:[[:space:]]*[\"']?[^[:space:]\"',})]*" \
+    | sed -E "s/.*:[[:space:]]*[\"']?//"
+}
 
 # A wrapper's payload sits inside quotes, where there is no command word for the
 # tokeniser to find, so these run unanchored over the raw text -- and only once
@@ -203,10 +289,21 @@ if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Z
   # in quotes, where there is no command position for the tokeniser to find, so
   # the base cannot be read at all. Permitting a pull request whose destination
   # is unknown is not the same as permitting one into the active dev branch.
-  # This refuses a wrapped listing of pull requests along with the writes, as
-  # the wrapped read of one is already refused above. Run it unwrapped.
-  if echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+([^;&|]*[[:space:]])?(create|edit)([^-A-Za-z0-9_]|$)' \
-     || echo "$COMMAND" | grep -qE '/pulls([^/A-Za-z0-9_-]|$)' \
+  #
+  # It reaches only as far as that, and no further -- each of these three names
+  # a create or a retarget, not a pull request. A first version refused any
+  # wrapped /pulls, which took a wrapped LISTING with it, and justified itself
+  # by saying the wrapped read of one was already refused. That was not true:
+  # `bash -c 'gh api repos/o/r/pulls/35'` is permitted here and was before. A
+  # comment that argues from a false premise is worse than none, so the premise
+  # is gone and the rule is narrowed to what the ticket asked for. Reported on
+  # the review of be0e3c7. The write test is reused for the REST shape rather
+  # than a second guess at what a write looks like.
+  if echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+([^;&|]*[[:space:]])?create([^-A-Za-z0-9_]|$)' \
+     || { echo "$COMMAND" | grep -qE 'gh[[:space:]]+pr[[:space:]]+([^;&|]*[[:space:]])?edit([^-A-Za-z0-9_]|$)' \
+          && echo "$COMMAND" | grep -qE '(--base|[[:space:]]-[A-Za-z]*B)([[:space:]]|=|$)'; } \
+     || { echo "$COMMAND" | grep -qE '/pulls([^/A-Za-z0-9_-]|$)' \
+          && gh_api_is_write "$COMMAND"; } \
      || echo "$COMMAND" | grep -q 'createPullRequest'; then
     echo "$BASE A shell wrapper hides the base behind quotes, so where this would go cannot be read. Run it unwrapped." >&2
     exit 2
@@ -245,14 +342,19 @@ fi
 # whether a flag belongs to *this* command is the question two of the five
 # defects came from being answered ad hoc.
 while IFS= read -r CMD; do
-  if ARGS=$(cs_gh_args 'pr create' <<<"$CMD"); then
-    ARGS=$(printf '%s' "$ARGS" | tr -d '\042\047')
-    if BASE_NAMED=$(gh_pr_base "$ARGS"); then
-      if ! is_dev_base "$BASE_NAMED"; then
-        echo "$BASE This names $BASE_NAMED, which is not a dev-NN branch." >&2
+  if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then
+    # Two readings of one argument list, because the two questions want opposite
+    # errors. Unquoting exposes prose as tokens, which can only add a refusal;
+    # deleting the quoted span cannot invent the flag that would remove one.
+    ARGS=$(printf '%s' "$RAW" | tr -d '\042\047')
+    WEBARGS=$(printf '%s' "$RAW" | sed -e 's/"[^"]*"//g' -e "s/'[^']*'//g")
+    BASES=$(gh_pr_bases "$ARGS")
+    if [ -n "$BASES" ]; then
+      if ! bases_all_dev "$BASES"; then
+        echo "$BASE This names $BAD_BASE, which is not a dev-NN branch." >&2
         exit 2
       fi
-    elif ! gh_pr_web "$ARGS"; then
+    elif ! gh_pr_web "$WEBARGS"; then
       echo "$BASE No base is named here, so this would go to the repository's default branch." >&2
       exit 2
     fi
@@ -267,10 +369,10 @@ while IFS= read -r CMD; do
   #
   # Editing a pull request stays allowed; moving its base is the same choice of
   # destination made a second time, so it is checked, and only when it is there.
-  if ARGS=$(cs_gh_args 'pr edit' <<<"$CMD"); then
-    ARGS=$(printf '%s' "$ARGS" | tr -d '\042\047')
-    if BASE_NAMED=$(gh_pr_base "$ARGS") && ! is_dev_base "$BASE_NAMED"; then
-      echo "$BASE Retargeting to $BASE_NAMED chooses that destination just as creating it there would. Edit anything else you like." >&2
+  if RAW=$(cs_gh_args 'pr edit' <<<"$CMD"); then
+    ARGS=$(printf '%s' "$RAW" | tr -d '\042\047')
+    if ! bases_all_dev "$(gh_pr_bases "$ARGS")"; then
+      echo "$BASE Retargeting to $BAD_BASE chooses that destination just as creating it there would. Edit anything else you like." >&2
       exit 2
     fi
   fi
@@ -278,58 +380,43 @@ done <<CMDLIST
 $CMDS
 CMDLIST
 
-# Is this gh api call a write? Succeeds if it is, or if that cannot be told.
-#
-# gh sends GET unless told otherwise, and switches to POST the moment a field or
-# input flag appears, so a call carrying neither is a read. The test is the
-# method and not the endpoint because the endpoint does not distinguish them:
-# GET /pulls/N/reviews lists reviews and GET /pulls/N/merge reports whether the
-# PR is merged. Both are reading a pull request, which CLAUDE.md allows in the
-# same sentence that forbids deciding one.
-#
-# Any token beginning -f or -F counts, not just `-f x=y`: gh accepts the value
-# attached, and `-fevent=APPROVE` is the same request as `-f event=APPROVE`.
-# A method that cannot be parsed is treated as a write.
-gh_api_is_write() {
-  local CMD="$1" METHOD
-  METHOD=$(printf '%s' "$CMD" | sed -nE 's/.*(^|[[:space:]])(-X|--method)[[:space:]=]*([A-Za-z]+).*/\3/p')
-  if [ -n "$METHOD" ]; then
-    case "$METHOD" in
-      GET|get|Get|HEAD|head|Head) ;;
-      *) return 0 ;;
-    esac
-  elif printf '%s' "$CMD" | grep -qE '(^|[[:space:]])(-X|--method)([[:space:]]|=|$)'; then
-    return 0
-  fi
-  if printf '%s' "$CMD" | grep -qE '(^|[[:space:]])(-[fF]|--field|--raw-field|--input)'; then
-    return 0
-  fi
-  return 1
-}
+# gh_api_is_write is defined with the other helpers at the top of this file. It
+# used to sit here, where it reads most naturally -- but the wrapper rule calls
+# it, and the wrapper rule runs first, so a definition here was not yet in scope
+# when it was wanted and the call would have failed quietly to "not a write".
+# That is the permitting direction, and it would not have shown as an error.
 
 # The REST endpoints and the graphql mutations behind those commands. The
 # command word and the payload can be separated by the tokeniser -- a mutation
 # body splits on its own braces and parens -- so gh api is looked for among the
 # commands and what it carries anywhere in the text.
+# Every question here is asked of ONE writing command's own text, never of the
+# line. Asked of the line, a base on a neighbouring command answered for this
+# one in both directions: a create naming no base was permitted because
+# something else on the line said dev-05, and an unrelated issue write was
+# refused because something else said main. That is the first of the five
+# defects lib/command-scan.sh exists to end, reintroduced here for gh api after
+# being fixed for gh pr -- exactly the split between the two spellings that this
+# rule was written to close. Reported on the review of be0e3c7. The loop no
+# longer stops at the first write, because a second write is a second command.
 API_WRITE=
-API_CREATE=
+API_BAD_BASE=
+API_NO_BASE=
 while IFS= read -r CMD; do
   printf '%s\n' "$CMD" | grep -qE '^gh[[:space:]]+api([^-A-Za-z0-9_]|$)' || continue
   gh_api_is_write "$CMD" || continue
   API_WRITE=1
+  CMD_BASES=$(rest_bases "$CMD")
+  if [ -n "$CMD_BASES" ]; then
+    bases_all_dev "$CMD_BASES" || API_BAD_BASE=${BAD_BASE:-nothing readable}
   # The collection endpoint is where a pull request is made; /pulls/N is one
-  # that already exists. Asked of the writing command's own arguments rather
-  # than of the whole line, so that listing pull requests beside an unrelated
-  # write is still a listing. The loop no longer stops at the first write for
-  # that reason.
-  if printf '%s\n' "$CMD" | grep -qE '/pulls([^/A-Za-z0-9_-]|$)'; then API_CREATE=1; fi
+  # that already exists and is not asked for a base it already has.
+  elif printf '%s\n' "$CMD" | grep -qE '/pulls([^/A-Za-z0-9_-]|$)'; then
+    API_NO_BASE=1
+  fi
 done <<CMDLIST
 $CMDS
 CMDLIST
-# The graphql spelling cannot be scoped the same way: cs_split cuts a mutation
-# body on its own braces and parens, so the verb and the command word are not
-# in the same fragment. It is looked for in the text, as the other mutations are.
-if printf '%s\n' "$SCAN" | grep -q 'createPullRequest'; then API_CREATE=1; fi
 
 if [ -n "$API_WRITE" ]; then
   if echo "$SCAN" | grep -qE '/pulls/[^ ]*/(merge|reviews)'; then
@@ -369,13 +456,24 @@ if [ -n "$API_WRITE" ]; then
   #
   # A base that is present but not readable as dev-NN is refused: an unreadable
   # destination must not be able to look like the permitted one, which is the
-  # answer the bare push already has. Accepted with it: prose in a written field
-  # spelling `base:` reads as a base and is refused.
-  if echo "$SCAN" | grep -qiE "$API_BASE_ANY" && ! echo "$SCAN" | grep -qiE "$API_BASE_DEV"; then
-    echo "$BASE Naming it through gh api makes it the same destination under another spelling." >&2
+  # answer the bare push already has.
+  #
+  # The graphql half is settled here rather than in the loop above, on the whole
+  # text, for the reason gql_bases gives. It covers the retarget as well as the
+  # create: updatePullRequest carries the same field, and a rule keyed on the
+  # verb would have answered for one and not the other.
+  GQL_BASES=$(gql_bases "$SCAN")
+  if [ -n "$GQL_BASES" ]; then
+    bases_all_dev "$GQL_BASES" || API_BAD_BASE=${BAD_BASE:-nothing readable}
+  elif echo "$SCAN" | grep -q 'createPullRequest'; then
+    API_NO_BASE=1
+  fi
+
+  if [ -n "$API_BAD_BASE" ]; then
+    echo "$BASE This names $API_BAD_BASE; reaching it through gh api makes it the same destination under another spelling." >&2
     exit 2
   fi
-  if [ -n "$API_CREATE" ] && ! echo "$SCAN" | grep -qiE "$API_BASE_ANY"; then
+  if [ -n "$API_NO_BASE" ]; then
     echo "$BASE No base is named here, so this would go to the repository's default branch." >&2
     exit 2
   fi

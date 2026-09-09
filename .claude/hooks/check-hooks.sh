@@ -471,6 +471,61 @@ check no-pr-decisions.sh ALLOW 'PATCH a PR body, the -F habit'   'gh api -X PATC
 check no-pr-decisions.sh ALLOW 'creating an issue'               'gh api -X POST repos/o/r/issues -f title=x'
 check no-pr-decisions.sh ALLOW 'gh issue create names no base'   'gh issue create --title x --body y'
 
+echo "=== REGRESSION: review of be0e3c7, the base rule's own permitting holes ==="
+# Four found by review, none of them named by the section above, which was green.
+# The pattern of this repository holds a fifth time: every one was silent and in
+# the permitting direction.
+#
+# 1. A repeated flag. gh takes the last; the rule read the first, so a create
+# that had already shown a dev branch could name main after it and go there.
+# Every base must now be dev-NN, which does not depend on knowing gh's
+# precedence.
+check no-pr-decisions.sh BLOCK 'good base, then a bad one'   'gh pr create --base dev-05 -B main'
+check no-pr-decisions.sh BLOCK 'bad base, then a good one'   'gh pr create -B main --base dev-05'
+check no-pr-decisions.sh BLOCK 'two long bases disagreeing'  'gh pr create --base dev-05 --base main'
+# 2. The web exemption read any single-dash token holding a w, and read it out of
+# quoted prose. Both halves mattered: a label value, and a title naming a flag --
+# a title a session working on this very file would write.
+check no-pr-decisions.sh BLOCK 'a label value beginning -w'  'gh pr create -l -wip --title x'
+check no-pr-decisions.sh BLOCK 'a bundle holding w'          'gh pr create -twibble --body y'
+check no-pr-decisions.sh BLOCK 'a title naming -w'           'gh pr create --title "Handle -w in gh_pr_web" --body y'
+check no-pr-decisions.sh BLOCK 'a body naming -watch'        'gh pr create --title x --body "adds -watch mode"'
+# The exemption itself still works, and quoted prose may still refuse: the
+# asymmetry is the point. Deleting a quoted span cannot invent a flag; unquoting
+# one can, so only the permitting test reads the deleted form.
+check no-pr-decisions.sh ALLOW 'the web form, unbundled'     'gh pr create -w --title x'
+check no-pr-decisions.sh ALLOW 'the web form, long'          'gh pr create --web --title x'
+check no-pr-decisions.sh BLOCK 'a title naming -B main'      'gh pr create --title "-B main" --body y'
+# 3. The gh api base was read from the whole line, so a neighbouring command
+# answered for this one -- in both directions. This is the first of the five
+# defects lib/command-scan.sh exists to end, reintroduced for gh api after being
+# fixed for gh pr.
+check no-pr-decisions.sh BLOCK 'a base on a neighbour'       'echo base=dev-05 && gh api -X POST repos/o/r/pulls -f head=x'
+check no-pr-decisions.sh BLOCK 'good create, then one to main' 'gh api -X POST repos/o/r/pulls -f base=dev-05 && gh api -X POST repos/o/r/pulls -f base=main'
+check no-pr-decisions.sh BLOCK 'a dev base hidden in a title' 'gh api -X POST repos/o/r/pulls -f base=main -f title="retarget of base=dev-05"'
+check no-pr-decisions.sh BLOCK 'a title standing in for a base' 'gh api -X POST repos/o/r/pulls -f head=x -f title="base: dev-05"'
+check no-pr-decisions.sh BLOCK 'two REST bases disagreeing'  'gh api -X POST repos/o/r/pulls -f base=dev-05 -f base=main'
+# This one is what makes the scoping load-bearing rather than merely tidy. The
+# base belongs to the issue write; the create beside it names none of its own,
+# and a rule reading the line would let that base answer for both. Anchoring on
+# the field flag and requiring every base to be dev-NN fixes the other leaks
+# whatever the scope, so without this case the scope could be widened again and
+# the suite would not notice -- which is exactly what a mutation run showed.
+check no-pr-decisions.sh BLOCK 'a base belonging to another write' 'gh api -X POST repos/o/r/issues -f base=dev-05 && gh api -X POST repos/o/r/pulls -f head=x'
+# ... and an unrelated write must not be refused by a neighbour either.
+check no-pr-decisions.sh ALLOW 'an issue write beside prose' 'gh api -X POST repos/o/r/issues -f title=x && echo "base=main"'
+check no-pr-decisions.sh ALLOW 'an issue write naming rebase' 'gh api -X POST repos/o/r/issues -f title="rebase onto main"'
+# The graphql retarget carries the same field as the create, and is refused with
+# it rather than by naming the verb.
+check no-pr-decisions.sh BLOCK 'graphql retarget to main'    'gh api graphql -f query="mutation{updatePullRequest(input:{baseRefName:main})}"'
+# 4. Scope creep, reported and removed: the wrapper rule refused a wrapped
+# listing and a wrapped edit that touched no base. Only a create or a retarget
+# is refused there now.
+check no-pr-decisions.sh ALLOW 'a wrapped listing'           "bash -c 'gh api repos/o/r/pulls'"
+check no-pr-decisions.sh ALLOW 'a wrapped label edit'        "bash -c 'gh pr edit 35 --add-label bug'"
+check no-pr-decisions.sh BLOCK 'a wrapped retarget'          "bash -c 'gh pr edit 35 --base main'"
+check no-pr-decisions.sh BLOCK 'a wrapped REST create'       "bash -c 'gh api -X POST repos/o/r/pulls -f base=dev-05'"
+
 echo "=== the push argument split does not glob against the worktree ==="
 # `for TOK in $ARGS` is unquoted because the split is the point; set -f stops
 # the same line expanding ? and [...] against the files sitting next to it.

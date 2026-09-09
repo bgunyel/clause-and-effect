@@ -232,12 +232,15 @@ move the rule to a ruleset. Why it was not done, and what would have to be
 checked first, is in `docs/adr/0001-hooks-not-ruleset.md`.
 
 **Deliberately left open.** These stop mistakes, not adversaries: they read the
-text of a command, so a caller that means to evade them can. Three consequences
-are accepted rather than fixed. A push or a decision inside `sh -c` is refused
-outright rather than assessed, because a destination inside quotes cannot be
-read. A quoted multi-line string whose continuation line begins with one of
-these commands is refused although it is only prose — a blocked comment is
-visible and one edit away, a silently permitted push is neither. And nothing in
+text of a command, so a caller that means to evade them can. Four consequences
+are accepted rather than fixed. A push, a decision or a pull request inside
+`sh -c` is refused outright rather than assessed, because a destination inside
+quotes cannot be read — so opening a pull request from a wrapper is refused even
+into the right base. A quoted multi-line string whose continuation line begins
+with one of these commands is refused although it is only prose — a blocked
+comment is visible and one edit away, a silently permitted push is neither. A
+base written after a command substitution is not seen as that command's, because
+the tokeniser cuts on its parens; name the base first. And nothing in
 this repository guards `.claude/`: the only `Edit|Write` hook covers three
 `docs/` directories, so the hook files and `settings.json` that carry this
 boundary are not themselves covered by the boundary. Whether an edit to them
