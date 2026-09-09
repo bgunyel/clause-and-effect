@@ -227,6 +227,19 @@ commit -m "git push --all origin"
 tok 'continuation joined before anything else' \
     'git push   --all origin' \
     "$(printf 'git push \\\n  --all origin\n' | cs_normalise)"
+# The joining half on its own, for a caller that wants it without the heredoc
+# drop -- no-pr-decisions.sh reads raw text because `bash <<EOF` is a wrapper
+# whose payload the drop would take with the body. Same joining as the line
+# above, written as the same literal, because it is the same code.
+tok 'cs_join joins a continuation' \
+    'git push   --all origin' \
+    "$(printf 'git push \\\n  --all origin\n' | cs_join)"
+# And leaves a heredoc body where it stands, which is the whole difference.
+tok 'cs_join keeps a heredoc body' \
+    'cat > f <<EOF
+gh pr merge 5
+EOF' \
+    "$(printf 'cat > f <<EOF\ngh pr merge 5\nEOF\n' | cs_join)"
 # The one expectation issue #50 changed. It pins that the body is dropped and
 # that `echo after` survives, which is what it has always been about; the `> f`
 # is gone from the opener because cs_normalise now drops redirections too.
@@ -629,8 +642,8 @@ echo "=== REGRESSION: #47, a flag before the group evaded every gh rule ==="
 # this block was PERMITTED by the hook on dev-05, and all but the release are a
 # decision on a pull request. -R/--repo before the group is not an evasion an
 # agent has to construct -- it is the ordinary way to work on a repository from
-# elsewhere. The same flag in front of a wrapped command is still permitted;
-# that is issue #51, and no check here claims otherwise.
+# elsewhere. The same flag in front of a wrapped command was permitted too;
+# that is issue #51, and the sections below close it.
 check no-pr-decisions.sh BLOCK 'gh -R o/r pr merge 5'          'gh -R o/r pr merge 5'
 check no-pr-decisions.sh BLOCK 'gh --repo o/r pr merge 5'      'gh --repo o/r pr merge 5'
 check no-pr-decisions.sh BLOCK 'gh -R o/r pr close 5'          'gh -R o/r pr close 5'
@@ -679,6 +692,78 @@ echo "=== REGRESSION: #47, cs_gh_args answers about the first match and stops ==
 # alone and permits the approval. Measured, not reasoned -- the whole-list
 # mutation fails this line and only this line.
 check no-pr-decisions.sh BLOCK 'a comment review, then an approval' 'gh pr review --comment -b x 5 && gh pr review -a 6'
+
+echo "=== REGRESSION: #51, a flag before the group evaded the wrapper rules ==="
+# The wrapper rules carried the blind spot the section above removed from the
+# ordinary ones, one word earlier. They are unanchored, but `pr` still had to
+# follow `gh` immediately, so a global flag in front of the group hid it and
+# every shape refused above came back the moment it was wrapped. Each of the
+# eight rows below was PERMITTED by no-pr-decisions.sh on dev-05 (6f2434c),
+# measured before the fix; each is a reserved act. The ninth row is the boundary
+# they marked and was refused there already.
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r pr merge'       'bash -c "gh -R o/r pr merge 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh --repo o/r pr merge'   'bash -c "gh --repo o/r pr merge 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh --hostname h pr merge' 'bash -c "gh --hostname h pr merge 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r pr close'       'bash -c "gh -R o/r pr close 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r pr review -a'   'bash -c "gh -R o/r pr review 5 --approve"'
+check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r release create' 'bash -c "gh -R o/r release create v1"'
+check no-pr-decisions.sh BLOCK 'sh -c gh -R o/r pr reopen'        'sh -c "gh -R o/r pr reopen 5"'
+check no-pr-decisions.sh BLOCK 'eval gh -R o/r release delete'    'eval "gh -R o/r release delete v1"'
+# The boundary the table marked: a flag *between* the group and the verb was
+# caught by the `.*` all along, so it was the flag before the group alone that
+# escaped. Kept so a later change cannot lose the half that worked.
+check no-pr-decisions.sh BLOCK 'bash -c gh pr --repo o/r merge'   'bash -c "gh pr --repo o/r merge 5"'
+
+echo "=== REGRESSION: review of #51, a continuation split the payload ==="
+# These rules read raw text, because cs_normalise drops heredoc bodies and
+# `bash <<EOF` is a wrapper. Raw text is line-oriented and grep matches within a
+# line, so a backslash continuation between the command word and the group hid
+# the group -- from these rules only: the ordinary rules read $SCAN, where
+# cs_normalise had already joined it. Found by the Standards review of 48ca05d,
+# which measured the claim "anything may stand between gh and the group" rather
+# than taking it. The joining half of cs_normalise is cs_join now, and these
+# rules call it.
+check no-pr-decisions.sh BLOCK 'continuation between gh and pr'   $'bash -c "gh \\\n pr merge 5"'
+check no-pr-decisions.sh BLOCK 'continuation after a repo flag'   $'bash -c "gh -R o/r \\\n pr merge 5"'
+check no-pr-decisions.sh BLOCK 'continuation before the wrapper'  $'bash \\\n -c "gh pr merge 5"'
+# The ordinary rules were never blind to this, and still are not.
+check no-pr-decisions.sh BLOCK 'continuation, unwrapped merge'    $'gh \\\n pr merge 5'
+# Joining is not dropping: a continuation inside heredoc prose is still prose.
+check no-pr-decisions.sh ALLOW 'a continuation in heredoc prose'  $'cat > /tmp/n.md <<\'MD\'\nthe hook refuses a wrapped \\\ngh pr merge 5\nMD'
+
+echo "=== ACCEPTED false positive: #51, the verb is not read inside a wrapper ==="
+# What refusing the group outright gives up. These are reads and ordinary edits,
+# refused with the writes because a wrapped payload is quoted text with no
+# command word in it -- the same reason the method of a wrapped `gh api` is not
+# read either, which is the check at 'a GET inside bash -c' above. Every one is
+# one edit away from working: run it unwrapped.
+check no-pr-decisions.sh BLOCK 'bash -c gh pr view'          'bash -c "gh pr view 5"'
+check no-pr-decisions.sh BLOCK 'bash -c gh pr list'          'bash -c "gh pr list"'
+check no-pr-decisions.sh BLOCK 'bash -c gh release list'     'bash -c "gh release list"'
+check no-pr-decisions.sh BLOCK 'eval gh api on an issue'     'eval "gh api repos/o/r/issues/27"'
+# And the word alone is enough, wherever it sits: inside a wrapper there is no
+# argument structure to say whether it is a subcommand or prose. All three
+# words, not just the one that names this file's subject.
+check no-pr-decisions.sh BLOCK 'bash -c a comment naming pr' 'bash -c "gh issue comment 5 -b \"the pr looks fine\""'
+check no-pr-decisions.sh BLOCK 'bash -c a comment naming release' "bash -c \"gh issue comment 5 --body 'approved release notes'\""
+check no-pr-decisions.sh BLOCK 'bash -c a comment naming api'     "bash -c \"gh issue comment 5 --body 'the api is down'\""
+# The third part of the trade: these rules read the whole command rather than
+# the payload, because nothing here can tell the two apart, so an entirely
+# unwrapped gh command sharing a line with a wrapper is refused with it. Under
+# the old rules only merge|close|reopen reached across the line like this;
+# naming the group widens the reach to the reads. Measured dev-05 -> here, each
+# of these went ALLOW -> BLOCK.
+check no-pr-decisions.sh BLOCK 'a wrapper elsewhere, then a view'  'bash -c "make test" && gh pr view 5'
+check no-pr-decisions.sh BLOCK 'a wrapper elsewhere, then an api'  'bash -c "echo hi"; gh api repos/o/r/issues/27'
+# The reach needs a wrapper on the line to begin with. Without one these rules
+# never run, which is what keeps the cost to lines that have both.
+check no-pr-decisions.sh ALLOW 'the same view with no wrapper'     'make test && gh pr view 5'
+# The rule reaches gh's three deciding surfaces and stops there. A wrapped
+# command that is none of them is answered by whatever else covers it, and by
+# this file not at all.
+check no-pr-decisions.sh ALLOW 'bash -c gh issue close'      'bash -c "gh issue close 27"'
+check no-pr-decisions.sh ALLOW 'bash -c gh issue list'       'bash -c "gh issue list"'
+check no-pr-decisions.sh ALLOW 'bash -c an ordinary command' 'bash -c "make test"'
 
 echo "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
 # Closing a PR and publishing a release were refused in the gh spelling and open
