@@ -1,5 +1,6 @@
 #!/bin/bash
-# Regression checks for no-git-push.sh and no-pr-decisions.sh.
+# Regression checks for no-git-push.sh, no-pr-decisions.sh and
+# no-commit-to-main.sh.
 #
 # A hook is a process, so the only way to test one is to run it; what the rule
 # against calling the function under test forbids is deriving the expectation
@@ -33,8 +34,37 @@
 # of that branch is ALLOW; run from the main checkout, the identical command is
 # BLOCK. OWN_BRANCH_PUSH holds whichever applies, and the banner says which.
 #
+# no-commit-to-main.sh is checked in two classes, because issue #43 rebuilt it
+# on lib/command-scan.sh and did not preserve its behaviour -- that file's
+# behaviour included its defects. The invariant class is written in identical
+# literals on both sides of the migration and pins what was preserved, which is
+# the file's purpose. The defective class names what it got wrong before, and
+# each of those checks carries the verdict it used to return: `ok ALLOW (was
+# BLOCK)` is the migration's evidence, and reverting the file turns exactly
+# those red with `got` equal to the recorded `was`. An all-green run on both
+# sides would have been evidence that the migration changed nothing. Sixteen
+# invariants, eighteen flips, two that the file fails closed without its
+# library, and four that name which refusal fired.
+#
+# A review of the migration found eight more permitting verdicts of the same
+# kind, seven of them shapes an agent writes without meaning anything by them:
+# `git push -u origin HEAD` from main, `git checkout main && git commit`,
+# `sudo` and `timeout` in front of either, `git --git-dir <path>` in its
+# separated spelling, and the file permitting everything when its library was
+# not beside it. Four of those were fixed in lib/command-scan.sh rather than
+# here, and they were holes in no-git-push.sh too. That is the ninth review
+# round on these files to find something the suite did not ask about.
+#
+# Some of those checks depend on which branch is checked out where the hook
+# runs, and one on the difference between that and where the command would run.
+# They are run with the hook's working directory inside a throwaway repository
+# on main or on a dev branch rather than in this one, because this one is
+# neither. `git branch --show-current` reports an unborn branch, so the
+# fixtures need no commits.
+#
 # Run: bash .claude/hooks/check-hooks.sh
 cd "$(dirname "$0")" || exit 1
+HOOKS=$(pwd)
 
 CURRENT=$(git branch --show-current 2>/dev/null)
 GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null)
@@ -64,6 +94,70 @@ check() {
     printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
     FAILED=1
   fi
+}
+
+# Two throwaway repositories, one on main and one on a dev branch, so that a
+# hook reading `git branch --show-current` can be asked both questions from a
+# suite that runs on neither. They hold no commits and no remotes: an unborn
+# branch is still reported by name, and nothing here reaches a remote.
+FIXTURES=$(mktemp -d)
+trap 'rm -rf "$FIXTURES"' EXIT
+git init -q -b main "$FIXTURES/on-main"
+git init -q -b dev-99 "$FIXTURES/on-dev"
+ON_MAIN="$FIXTURES/on-main"
+ON_DEV="$FIXTURES/on-dev"
+# An unmade fixture would make ( cd "$dir" && hook ) return 1, which reads as
+# ALLOW -- so every ALLOW-expecting check below would pass without running the
+# hook at all. `git init -b` needs git 2.28.
+[ -d "$ON_MAIN/.git" ] && [ -d "$ON_DEV/.git" ] || {
+  echo "fixtures were not created; git init -b needs git 2.28 or newer" >&2
+  exit 1
+}
+# A copy of each hook with no lib/ beside it, to ask what one does when the
+# tokeniser it now depends on is not there.
+mkdir -p "$FIXTURES/nolib"
+cp no-commit-to-main.sh "$FIXTURES/nolib/"
+
+# check, with the hook's working directory named rather than inherited. The
+# hook is invoked by absolute path because it sources lib/ relative to $0.
+check_in() {  # check_in <dir> <script|/absolute/hook> <want> <label> <cmd>
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" got rc hook
+  case "$script" in /*) hook="$script" ;; *) hook="$HOOKS/$script" ;; esac
+  printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+    | ( cd "$dir" && "$hook" ) >/dev/null 2>&1
+  rc=$?
+  if [ $rc -eq 2 ]; then got=BLOCK; else got=ALLOW; fi
+  if [ "$got" = "$want" ]; then
+    printf '  ok   %-5s %s\n' "$got" "$label"
+  else
+    printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
+    FAILED=1
+  fi
+}
+
+# A check whose verdict the #43 migration changed. Both verdicts are literals:
+# `was` is what the file returned before it, `want` what it returns after, and
+# the run prints both so the flip is visible rather than inferred. Reverting
+# the migration fails exactly these, reporting got=<was>.
+flip() {  # flip <dir> <script> <was> <want> <label> <cmd>
+  check_in "$1" "$2" "$4" "$5 (was $3)" "$6"
+}
+
+# Which refusal fired, not just that one did. no-commit-to-main.sh is kept
+# beside a hook that would refuse most of the same commands only because its
+# message names main and says why main is closed; nothing above can tell the
+# three messages apart, so a change routing every path through one of them
+# would leave the suite green and the file pointless.
+says() {  # says <dir> <script> <fragment> <label> <cmd>
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+        | ( cd "$dir" && "$HOOKS/$script" ) 2>&1 >/dev/null)
+  case "$err" in
+    *"$want"*) printf '  ok   says  %s\n' "$label" ;;
+    *) printf '  FAIL %s\n         wanted the refusal to say |%s|\n         it said |%s|\n' \
+         "$label" "$want" "$err"
+       FAILED=1 ;;
+  esac
 }
 
 . ./lib/command-scan.sh
@@ -485,6 +579,166 @@ for c in 'gh pr create --title x --body y' \
          'echo "then run gh pr merge 5 to land it" >> notes.md' \
          'git push'
 do check no-pr-decisions.sh ALLOW "$c" "$c"; done
+
+echo "=== REGRESSION: review of #43, prefixes and separated options hid commands ==="
+# Found by reviewing the #43 migration, fixed in lib/command-scan.sh, and
+# therefore not about no-commit-to-main.sh: every hook was blind to these.
+# cs_split stripped a wrapper word and its options but not an operand, so
+# `timeout 30` left a bare 30 where the command word had to be; sudo, doas,
+# setsid and chronic were not wrapper words at all; and cs_git_args skipped
+# --git-dir only in its = form, so the separated one hid the subcommand behind
+# its own value.
+check no-git-push.sh     BLOCK 'timeout before a wholesale push' 'timeout 5 git push --all origin'
+check no-git-push.sh     BLOCK 'sudo before a mirror push'       'sudo git push --mirror origin'
+check no-git-push.sh     BLOCK 'separated --git-dir before a push' 'git --git-dir /tmp/other/.git push --all origin'
+check no-pr-decisions.sh BLOCK 'setsid before a merge'           'setsid gh pr merge 5'
+check no-pr-decisions.sh BLOCK 'sudo before a merge'             'sudo gh pr merge 5'
+# The operand strip takes one token and only if it is not an option, so an
+# ordinary command that begins with one of these words is still itself.
+check no-git-push.sh     ALLOW 'timeout in front of something else' 'timeout 5 make test'
+check no-git-push.sh     ALLOW 'sudo in front of something else'    'sudo apt-get install jq'
+
+echo "=== no-commit-to-main.sh : invariants, identical literals across #43 ==="
+# What the migration preserved. These six were written before it, are green on
+# both sides of it, and are the whole of what this file is for: main is not
+# committed to, and main is not pushed to.
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'commit while standing on main' \
+  'git commit -m "wip"'
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'commit on a dev branch' \
+  'git commit -m "wip"'
+check_in "$ON_DEV"  no-commit-to-main.sh BLOCK 'push naming main' \
+  'git push origin main'
+check_in "$ON_DEV"  no-commit-to-main.sh BLOCK 'the HEAD:main refspec' \
+  'git push origin HEAD:main'
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'main on the source side only' \
+  'git push origin main:spike'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'a bare push while on main' \
+  'git push'
+# The other side of the bare push, and the commands this file has no opinion
+# about at all. Also invariant: a commit message may name a push, and a push of
+# a dev branch is no business of this file's.
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'a bare push on a dev branch' \
+  'git push'
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'push of a dev branch' \
+  'git push origin dev-99'
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'commit message naming a push' \
+  'git commit -m "explain how to git push later"'
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'neither a commit nor a push' \
+  'git status'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'commit after a control word' \
+  'if true; then git commit -m "wip"; fi'
+# A commit message is the one argument here that carries arbitrary prose, so
+# the directory options are matched only where git accepts them. Permitted
+# before the migration for a weaker reason -- they were not matched at all.
+check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'a commit message naming -C' \
+  'git commit -m "stop matching -C everywhere"'
+# A prefix word the old anchor did not care about, because it looked only for a
+# space in front of `git`. cs_split strips a known wrapper word and its
+# options, and these were not in its list -- so the migration first lost these
+# four, in the permitting direction, and lib/command-scan.sh was corrected
+# rather than the loss being recorded. Found reviewing the migration.
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'sudo in front of a commit on main' \
+  'sudo git commit -m "wip"'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'timeout, whose operand is not an option' \
+  'timeout 30 git commit -m "wip"'
+check_in "$ON_DEV"  no-commit-to-main.sh BLOCK 'timeout in front of a push to main' \
+  'timeout 30 git push origin main'
+check_in "$ON_DEV"  no-commit-to-main.sh BLOCK 'sudo in front of a push to main' \
+  'sudo git push origin main'
+
+echo "=== no-commit-to-main.sh : what #43 changed, verdict by verdict ==="
+# Written before the migration against the file as it stood, so each `was` is
+# a measurement of the old file and not a guess about it. Reverting the
+# migration fails exactly this section.
+#
+# The first three are the same defect from three directions: the file answered
+# the command-position question itself, with a bare preceding space for an
+# anchor and no notion of a heredoc body. The heredoc case is the one that
+# blocked the writing of issue #36 -- a ticket cannot quote the command it is
+# about. The quoted-string cases are the same false positive the sibling hooks
+# were rebuilt to stop.
+flip "$ON_DEV"  no-commit-to-main.sh BLOCK ALLOW 'heredoc body quoting a push to main' \
+  $'cat >> notes.md <<EOF\ngit push origin main is refused here\nEOF\necho written'
+flip "$ON_MAIN" no-commit-to-main.sh BLOCK ALLOW 'a commit named inside a quoted string' \
+  'echo "never git commit while standing on main"'
+flip "$ON_DEV"  no-commit-to-main.sh BLOCK ALLOW 'a push named inside a quoted string' \
+  'echo "never git push origin main from here"'
+# The branch was read with `git branch --show-current` in the hook's own
+# working directory, which is the session's and not necessarily the command's,
+# while nothing refused a command that changed directory. #40 refused to
+# compute a merge base here for exactly this reason.
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'cd into a repository on main, then commit' \
+  "cd $ON_MAIN && git commit -m 'on main'"
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'GIT_DIR pointed at a repository on main' \
+  "GIT_DIR=$ON_MAIN/.git git commit -m 'on main'"
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'git -C into another repository' \
+  "git -C $ON_MAIN commit -m 'on main'"
+# A wrapper's payload sits in quotes, where the old anchor found no command at
+# all: a wrapped commit was permitted on main itself. Refused outright now,
+# as in both sibling hooks.
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'sh -c wrapping a commit, on main' \
+  "sh -c 'git commit -m \"wip\"'"
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'eval wrapping a push to main' \
+  'eval "git push origin main"'
+# Matching main by name could not see a spelling that named no branch, which is
+# the hole PR #35 closed in no-git-push.sh and left open here. Both of these
+# advance main from a dev branch.
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'push --all advances main too' \
+  'git push --all origin'
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'push --mirror advances main too' \
+  'git push --mirror origin'
+# The bare-push case rests on configuration, and -c replaces it for this one
+# command: push.default=matching advances main from a dev branch.
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'push with configuration set inline' \
+  'git -c push.default=matching push'
+# HEAD names whatever is checked out, so on main it names main -- and it also
+# counts as a refspec, which switched off the bare-push case that would have
+# caught the same push. `git push -u origin HEAD` is a shape written daily.
+# Found reviewing the migration; no-git-push.sh already resolves HEAD, and
+# this file did not.
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'push origin HEAD while on main' \
+  'git push origin HEAD'
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'push -u origin HEAD while on main' \
+  'git push -u origin HEAD'
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'the @ spelling of HEAD' \
+  'git push origin @'
+check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'HEAD off main still names a dev branch' \
+  'git push origin HEAD'
+# Changing branch defeats the branch read exactly as changing directory does,
+# and is the likelier of the two. Refusing directory moves while permitting
+# this left the soundness claim half-made. Found reviewing the migration.
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'checkout main, then commit' \
+  'git checkout main && git commit -m "wip"'
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'switch to main, then commit' \
+  'git switch main && git commit -m "wip"'
+# git's directory options in their separated spelling. cs_git_args skipped
+# --git-dir only in its = form, so the separated one left the path at the head
+# of the line, the subcommand was never found, and this file left without an
+# opinion -- with `main` written in the command. Found reviewing the migration.
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'separated --git-dir before commit' \
+  "git --git-dir $ON_MAIN/.git commit -m 'on main'"
+flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'separated --namespace before a push to main' \
+  'git --namespace n push origin main'
+
+echo "=== the hooks fail closed when the tokeniser is not beside them ==="
+# All three hooks now rest on lib/command-scan.sh, and this one is kept in the
+# tree precisely because it still stands when the broader hook is disabled. An
+# unreadable library left cs_split undefined, the command list empty and every
+# commit on main permitted -- a single point of failure that failed open.
+check_in "$ON_MAIN" "$FIXTURES/nolib/no-commit-to-main.sh" BLOCK 'no lib/, commit on main' \
+  'git commit -m "wip"'
+check_in "$ON_DEV"  "$FIXTURES/nolib/no-commit-to-main.sh" BLOCK 'no lib/, anything at all' \
+  'ls'
+
+echo "=== the refusals still name main, which is why this file is kept ==="
+says "$ON_MAIN" no-commit-to-main.sh 'Blocked: committing to main.' \
+  'a commit on main is refused as a commit on main' 'git commit -m "wip"'
+says "$ON_DEV"  no-commit-to-main.sh 'Blocked: pushing to main.' \
+  'a push to main is refused as a push to main' 'git push origin main'
+says "$ON_MAIN" no-commit-to-main.sh "bare 'git push' while on main" \
+  'the bare push keeps its own wording' 'git push'
+says "$ON_DEV"  no-commit-to-main.sh 'whether it lands on main' \
+  'a directory move says what cannot be judged' "cd $ON_MAIN && git commit -m 'wip'"
 
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi

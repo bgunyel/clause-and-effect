@@ -1,6 +1,7 @@
 #!/bin/bash
 # Where a command starts, where its arguments end, and how many commands a
-# string holds. Sourced by no-git-push.sh and no-pr-decisions.sh.
+# string holds. Sourced by no-git-push.sh, no-pr-decisions.sh and, since issue
+# #43, no-commit-to-main.sh -- which is every hook that reads a command.
 #
 # This exists because of what the defects in PR #35 turned out to have in
 # common. Every one of them, found by Bertan or by the assistant, was the same
@@ -35,6 +36,19 @@
 # direction, is evidence about the question rather than about the answers: it
 # cannot be got exact by looking more carefully, because that is what the
 # previous two attempts were. The drop is a fail-safe now. See cs_normalise.
+#
+# A fourth review, of the #43 migration, found two more -- both the same shape
+# as the first three, and both here rather than in a hook. A wrapper word was
+# stripped along with its options but not its operand, so `timeout 30 git push
+# --all origin` left a bare `30` where the command word had to be; and sudo,
+# doas, setsid and chronic were not wrapper words at all. Separately,
+# cs_git_args skipped git's own --git-dir, --work-tree, --namespace and
+# --exec-path only in their = spelling, so the separated form hid the
+# subcommand behind its own value and `git --namespace n push origin main` was
+# not a push. Every one was silent, in the permitting direction, and invisible
+# to all three hooks at once. That is what this file is for and also what it
+# keeps costing: the question is answered once, so an answer that is wrong is
+# wrong everywhere.
 #
 # The answers are approximate on purpose. Splitting more eagerly than a shell
 # would yields extra command candidates, which can only refuse more; it never
@@ -152,9 +166,25 @@ cs_split() {
           line = substr(line, RSTART + RLENGTH)
           changed = 1
         }
-        if (match(line, /^(env|command|xargs|nohup|nice|time|stdbuf|ionice)[[:space:]]+/)) {
+        if (match(line, /^(env|command|xargs|nohup|nice|time|stdbuf|ionice|sudo|doas|setsid|chronic)[[:space:]]+/)) {
           line = substr(line, RSTART + RLENGTH)
           while (match(line, /^-[^[:space:]]*[[:space:]]+/)) {
+            line = substr(line, RSTART + RLENGTH)
+          }
+          changed = 1
+        }
+        # timeout and flock take an operand -- a duration, a lock file -- that
+        # is not an option, so stripping only options left it at the head of
+        # the line and the command word behind it was never at ^. That made
+        # `timeout 30 git push --all origin` invisible to every hook. The
+        # operand is stripped with the word, one token and only if it is not
+        # itself an option.
+        if (match(line, /^(timeout|flock)[[:space:]]+/)) {
+          line = substr(line, RSTART + RLENGTH)
+          while (match(line, /^-[^[:space:]]*[[:space:]]+/)) {
+            line = substr(line, RSTART + RLENGTH)
+          }
+          if (match(line, /^[^-[:space:]][^[:space:]]*[[:space:]]+/)) {
             line = substr(line, RSTART + RLENGTH)
           }
           changed = 1
@@ -181,7 +211,7 @@ cs_git_args() {
       line = $0
       if (line !~ /^git([[:space:]]|$)/) next
       sub(/^git[[:space:]]*/, "", line)
-      while (match(line, /^(-[cC][[:space:]]+[^[:space:]]+|--(git-dir|work-tree|namespace|exec-path)=[^[:space:]]*|-[^[:space:]]+)[[:space:]]+/)) {
+      while (match(line, /^(-[cC][[:space:]]+[^[:space:]]+|--(git-dir|work-tree|namespace|exec-path)([[:space:]]+|=)[^[:space:]]*|-[^[:space:]]+)[[:space:]]+/)) {
         line = substr(line, RSTART + RLENGTH)
       }
       if (line !~ "^" want "([[:space:]]|$)") next
