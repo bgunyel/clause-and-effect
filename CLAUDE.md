@@ -158,8 +158,8 @@ been green for the wrong reasons.
 
 ## Documentation
 
-Four directories with different jobs; the distinction erodes easily
-(`docs/design/README.md` states it in full):
+Five directories with different jobs; the distinction erodes easily
+(`docs/design/README.md` states the first four in full):
 
 | directory | answers | dated? |
 |---|---|---|
@@ -167,6 +167,7 @@ Four directories with different jobs; the distinction erodes easily
 | `docs/lessons-learned/` | how a specific failure happened | yes, **append-only** |
 | `docs/eval-reports/` | what the numbers were at a point in time | yes, **append-only** |
 | `docs/design/` | how a mechanism works **today** | no, revised in place |
+| `docs/adr/` | why a decision was taken, and what was rejected | no, superseded rather than revised |
 
 `docs/todo.md` is the backlog; `docs/evaluation-plan.md` is what the framework
 *should* become, not evidence about what exists. Append-only means old entries
@@ -190,6 +191,44 @@ a claim without a number is a claim to re-measure.
 - A red suite mid-refactor is acceptable — verify against the recorded snapshot
   in the dev-log rather than insisting on green first.
 
+## What an unattended agent may do to this repository
+
+An agent may push the branch of the linked worktree it is working in —
+non-forced, and naming that branch in the command, because a bare `git push`
+takes its destination from configuration an agent can itself change: write
+`git push origin <branch>`. That is the whole of what it may push. It may open a
+pull request, comment on one, edit one and read one, through `gh pr view` or
+through a `gh api` request that does not write. It may not merge one, review one
+with a verdict, close or reopen one, or create or delete a release. `main` and
+`dev-NN` are Bertan's to push; `main` is additionally protected server-side by
+the `main-branch-protection` ruleset, which requires a pull request. Enforced by
+`.claude/hooks/no-git-push.sh` and `no-pr-decisions.sh`, both built on
+`.claude/hooks/lib/command-scan.sh`; `bash .claude/hooks/probe-hooks.sh` checks
+the boundary in both directions. Hooks see only the Bash tool, so Bertan's own
+terminal is not subject to any of this.
+
+`dev-NN` rests on those hooks *because* an agent currently acts with Bertan's
+credentials, so no server-side rule can tell the two apart. That is a
+configuration choice and not a constraint: giving the agent its own actor would
+move the rule to a ruleset. Why it was not done, and what would have to be
+checked first, is in `docs/adr/0001-hooks-not-ruleset.md`.
+
+**Deliberately left open.** These stop mistakes, not adversaries: they read the
+text of a command, so a caller that means to evade them can. Three consequences
+are accepted rather than fixed. A push or a decision inside `sh -c` is refused
+outright rather than assessed, because a destination inside quotes cannot be
+read. A quoted multi-line string whose continuation line begins with one of
+these commands is refused although it is only prose — a blocked comment is
+visible and one edit away, a silently permitted push is neither. And nothing in
+this repository guards `.claude/`: the only `Edit|Write` hook covers three
+`docs/` directories, so the hook files and `settings.json` that carry this
+boundary are not themselves covered by the boundary. Whether an edit to them
+prompts at all is left to the harness's own permission settings, which are
+configuration rather than a rule of this repository. That gap is open by the
+same standard that decides the rest — an agent does not *mistakenly* rewrite the
+hook that just refused it — and closing it would make every future hook change a
+two-person procedure for no gain against the threat actually named.
+
 ## Agent skills
 
 ### Issue tracker
@@ -204,5 +243,5 @@ The five canonical roles, each label string equal to its name. See
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` and `docs/adr/` at the repo root, neither of which
-exists yet. See `docs/agents/domain.md`.
+Single-context: `docs/adr/` holds one ADR; `CONTEXT.md` does not exist yet. See
+`docs/agents/domain.md`.
