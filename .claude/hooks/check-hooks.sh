@@ -150,6 +150,14 @@ fi
 # defects listed at the top of lib/command-scan.sh.
 tok 'gh args, plain' '--base dev-05 --title x' \
     "$(printf 'gh pr create --base dev-05 --title x\n' | cs_gh_args 'pr create')"
+# Skipping happens before every word of the path, so the two positions are
+# pinned separately: a flag before the group, and a flag between the group and
+# the verb. Without the first of these, a helper that skipped options only from
+# the second word onward passed this whole suite while `gh -R o/r pr create` --
+# an ordinary way to work on a repository from another directory -- became
+# invisible to it, which is the permitting direction.
+tok 'gh args, a flag before the group' \
+    '--base main' "$(printf 'gh -R o/r pr create --base main\n' | cs_gh_args 'pr create')"
 tok 'gh args, a flag between the group and the verb' \
     '--base main' "$(printf 'gh pr --repo o/r create --base main\n' | cs_gh_args 'pr create')"
 tok 'gh args, the repo value attached rather than separate' \
