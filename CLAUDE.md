@@ -209,9 +209,15 @@ An agent may push the branch of the linked worktree it is working in —
 non-forced, and naming that branch in the command, because a bare `git push`
 takes its destination from configuration an agent can itself change: write
 `git push origin <branch>`. That is the whole of what it may push. It may open a
-pull request, comment on one, edit one and read one, through `gh pr view` or
-through a `gh api` request that does not write. It may not merge one, review one
-with a verdict, close or reopen one, or create or delete a release. `main` and
+pull request into the active dev branch — naming that base in the command, for
+the reason a push names its branch: with no base given a pull request goes to
+the repository's default branch, which is `main`. Write
+`gh pr create --base dev-NN`, and the same base in whichever of the four
+spellings is used, `gh pr edit --base` and the two `gh api` forms included. It
+may comment on one, edit one without moving its base, and read one, through
+`gh pr view` or through a `gh api` request that does not write. It may not merge
+one, review one with a verdict, close or reopen one, or create or delete a
+release. `main` and
 `dev-NN` are Bertan's to push; `main` is additionally protected server-side by
 the `main-branch-protection` ruleset, which requires a pull request. Enforced by
 `.claude/hooks/no-git-push.sh` and `no-pr-decisions.sh`, both built on
@@ -226,12 +232,15 @@ move the rule to a ruleset. Why it was not done, and what would have to be
 checked first, is in `docs/adr/0001-hooks-not-ruleset.md`.
 
 **Deliberately left open.** These stop mistakes, not adversaries: they read the
-text of a command, so a caller that means to evade them can. Three consequences
-are accepted rather than fixed. A push or a decision inside `sh -c` is refused
-outright rather than assessed, because a destination inside quotes cannot be
-read. A quoted multi-line string whose continuation line begins with one of
-these commands is refused although it is only prose — a blocked comment is
-visible and one edit away, a silently permitted push is neither. And nothing in
+text of a command, so a caller that means to evade them can. Four consequences
+are accepted rather than fixed. A push, a decision or a pull request inside
+`sh -c` is refused outright rather than assessed, because a destination inside
+quotes cannot be read — so opening a pull request from a wrapper is refused even
+into the right base. A quoted multi-line string whose continuation line begins
+with one of these commands is refused although it is only prose — a blocked
+comment is visible and one edit away, a silently permitted push is neither. A
+base written after a command substitution is not seen as that command's, because
+the tokeniser cuts on its parens; name the base first. And nothing in
 this repository guards `.claude/`: the only `Edit|Write` hook covers three
 `docs/` directories, so the hook files and `settings.json` that carry this
 boundary are not themselves covered by the boundary. Whether an edit to them
