@@ -482,6 +482,64 @@ check no-pr-decisions.sh BLOCK 'gh release --repo o/r create v1' 'gh release --r
 check no-pr-decisions.sh ALLOW 'gh pr --repo o/r view 35'       'gh pr --repo o/r view 35'
 check no-pr-decisions.sh ALLOW 'gh pr --repo o/r list'          'gh pr --repo o/r list'
 
+echo "=== REGRESSION: #47, a flag before the group evaded every gh rule ==="
+# The same question one level up, and it had been applied at one level only.
+# GHPR and GHRELEASE skipped options between the group and the verb and never
+# before the group; the two gh api matches skipped none at all. Every BLOCK in
+# this block was PERMITTED by the hook on dev-05, and all but the release are a
+# decision on a pull request. -R/--repo before the group is not an evasion an
+# agent has to construct -- it is the ordinary way to work on a repository from
+# elsewhere. The same flag in front of a wrapped command is still permitted;
+# that is issue #51, and no check here claims otherwise.
+check no-pr-decisions.sh BLOCK 'gh -R o/r pr merge 5'          'gh -R o/r pr merge 5'
+check no-pr-decisions.sh BLOCK 'gh --repo o/r pr merge 5'      'gh --repo o/r pr merge 5'
+check no-pr-decisions.sh BLOCK 'gh -R o/r pr close 5'          'gh -R o/r pr close 5'
+check no-pr-decisions.sh BLOCK 'gh -R o/r pr reopen 5'         'gh -R o/r pr reopen 5'
+check no-pr-decisions.sh BLOCK 'gh -R o/r pr review 5 --approve' 'gh -R o/r pr review 5 --approve'
+check no-pr-decisions.sh BLOCK 'gh -R o/r release create v1'   'gh -R o/r release create v1'
+check no-pr-decisions.sh BLOCK 'gh --hostname h api -X PUT merge' 'gh --hostname h api -X PUT repos/o/r/pulls/5/merge'
+check no-pr-decisions.sh BLOCK 'gh -R o/r api graphql merge in a heredoc' $'gh -R o/r api graphql -f query=@- <<EOF\nmutation { mergePullRequest(input:{pullRequestId:"x"}) { clientMutationId } }\nEOF'
+# The verdict is matched against the arguments cs_gh_args returns, which are
+# this command's own, so it no longer has to say "in the same command as the
+# subcommand" as a regular expression -- and the flag may be the first argument
+# with no space in front of it, which a pattern requiring one would miss.
+check no-pr-decisions.sh BLOCK 'verdict as the first argument'    'gh -R o/r pr review -a 5'
+check no-pr-decisions.sh BLOCK 'bundled verdict, first argument'  'gh -R o/r pr review -ab lgtm 5'
+# A flag before the group does not make an ordinary subcommand a decision.
+check no-pr-decisions.sh ALLOW 'gh -R o/r pr view 5'           'gh -R o/r pr view 5'
+check no-pr-decisions.sh ALLOW 'gh -R o/r pr list'             'gh -R o/r pr list'
+check no-pr-decisions.sh ALLOW 'gh -R o/r pr create --fill'    'gh -R o/r pr create --fill'
+check no-pr-decisions.sh ALLOW 'gh -R o/r pr edit 5 --title x' 'gh -R o/r pr edit 5 --title x'
+check no-pr-decisions.sh ALLOW 'gh -R o/r pr review --comment' 'gh -R o/r pr review --comment -b x 5'
+check no-pr-decisions.sh ALLOW 'gh -R o/r release list'        'gh -R o/r release list'
+# A path word is matched whole, so `release delete` does not cover
+# `release delete-asset` the way the old alternation did. The regular
+# expression carried delete-asset and nothing asked about it; the rule that
+# replaced it names it separately, and this is what would notice if it stopped.
+check no-pr-decisions.sh BLOCK 'gh release delete-asset'       'gh release delete-asset v1.0.0 file.tgz'
+check no-pr-decisions.sh BLOCK 'gh -R o/r release delete-asset' 'gh -R o/r release delete-asset v1.0.0 file.tgz'
+check no-pr-decisions.sh ALLOW 'gh -R o/r api reads a PR'      'gh -R o/r api repos/o/r/pulls/5'
+check no-pr-decisions.sh ALLOW 'gh -R o/r issue close 27'      'gh -R o/r issue close 27'
+
+echo "=== REGRESSION: #47, a second gh command after ; or && is examined ==="
+# Every rule feeds cs_gh_args one command at a time. These three pin that a
+# second command is reached at all: a loop that stopped at the first command,
+# or at the first that is not a match, permits every one of them.
+check no-pr-decisions.sh BLOCK 'a release list, then a create'      'gh release list; gh release create v1'
+check no-pr-decisions.sh BLOCK 'a read api call, then a write'      'gh api repos/o/r/pulls/5 && gh api -X PUT repos/o/r/pulls/5/merge'
+check no-pr-decisions.sh BLOCK 'a pr create, then a merge'          'gh pr create --fill && gh pr merge 5'
+
+echo "=== REGRESSION: #47, cs_gh_args answers about the first match and stops ==="
+# What the three above do NOT pin, and were written believing they did. The
+# helper scans past a command that is not a match, so for a rule with no
+# argument expression the per-command loop and one whole-list call find the
+# same thing and the mutation is invisible. It is a rule *with* one that needs
+# the loop: the first match's arguments come back and a later command's are
+# never seen, so handing cs_gh_args the whole list reads this as the --comment
+# alone and permits the approval. Measured, not reasoned -- the whole-list
+# mutation fails this line and only this line.
+check no-pr-decisions.sh BLOCK 'a comment review, then an approval' 'gh pr review --comment -b x 5 && gh pr review -a 6'
+
 echo "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
 # Closing a PR and publishing a release were refused in the gh spelling and open
 # through gh api, so the boundary was spelling-dependent exactly where the file
