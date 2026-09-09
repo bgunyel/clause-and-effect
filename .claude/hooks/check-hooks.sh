@@ -27,6 +27,16 @@
 # evidence about the cases it names and about nothing else, and every case here
 # was named by someone who went looking for one it had missed.
 #
+# The base checks come from issue #40 rather than from a review: all four
+# spellings that create or retarget a pull request were permitted, and the
+# quietest of them named nothing at all -- with no base given, a pull request
+# goes to the repository's default branch, which is main. They are grouped by
+# what they establish rather than by spelling, because a rule that held for
+# gh pr create and not for gh api would be the defect that ticket was filed
+# against. Each was mutation-checked: weakening the dev-NN test, dropping the
+# missing-base refusal, dropping either gh api rule, and dropping the wrapper
+# rule each turn a named group of them red.
+#
 # One expectation is not a literal but a context: whether pushing this branch is
 # permitted depends on where the suite runs, because that is exactly what
 # no-git-push.sh decides. Run from a linked worktree on a worktree branch, a push
@@ -385,6 +395,82 @@ check no-pr-decisions.sh ALLOW 'PATCH a PR title'            'gh api -X PATCH re
 check no-pr-decisions.sh ALLOW 'GET the releases list'       'gh api repos/o/r/releases'
 check no-pr-decisions.sh ALLOW 'gh pr edit retitles'         'gh pr edit 35 --title newtitle'
 
+echo "=== issue #40, a pull request must name an active dev branch as its base ==="
+# The quietest of the four spellings names nothing at all: with no base given,
+# gh sends the pull request to the repository's default branch, which is main.
+# Nothing in the command mentions main, so a denylist over the text could not
+# have seen it -- the same shape as the bare push, which is answered the same
+# way. The four spellings are checked together because closing one and leaving
+# the others is the defect this ticket was filed against.
+check no-pr-decisions.sh BLOCK 'create into main'                'gh pr create --base main --title x'
+check no-pr-decisions.sh BLOCK 'create into main, --base='       'gh pr create --base=main --title x'
+check no-pr-decisions.sh BLOCK 'create into main, -B'            'gh pr create -B main --title x'
+check no-pr-decisions.sh BLOCK 'create into main, -B attached'   'gh pr create -Bmain --title x'
+check no-pr-decisions.sh BLOCK 'create into main, bundled -dB'   'gh pr create -dB main --title x'
+check no-pr-decisions.sh BLOCK 'create into main, bundled -dBmain' 'gh pr create -dBmain --title x'
+check no-pr-decisions.sh BLOCK 'create naming no base at all'    'gh pr create --title x --body y'
+check no-pr-decisions.sh BLOCK 'a bare create'                   'gh pr create'
+check no-pr-decisions.sh BLOCK 'create with --fill and no base'  'gh pr create --fill'
+check no-pr-decisions.sh BLOCK 'a base flag whose value never came' 'gh pr create --title x -B'
+check no-pr-decisions.sh BLOCK 'create into master'              'gh pr create --base master --title x'
+check no-pr-decisions.sh BLOCK 'create into a worktree branch'   'gh pr create --base worktree-issue-40-pr-base'
+check no-pr-decisions.sh BLOCK 'create into dev-05-ish, not dev-NN' 'gh pr create --base dev-05-old'
+# A flag may sit in front of the verb, which is what cs_gh_args is for; and the
+# check is of every create on the line rather than the first, which is what
+# obliges the loop to hand it one command at a time.
+check no-pr-decisions.sh BLOCK 'flag before the verb, no base'   'gh pr --repo o/r create --title x'
+check no-pr-decisions.sh BLOCK 'a good create, then one into main' 'gh pr create --base dev-05 --title x && gh pr create --base main --title y'
+# Retargeting is choosing the destination a second time.
+check no-pr-decisions.sh BLOCK 'retarget to main'                'gh pr edit 35 --base main'
+check no-pr-decisions.sh BLOCK 'retarget to main, -B'            'gh pr edit 35 -B main'
+check no-pr-decisions.sh BLOCK 'retarget, flag before the verb'  'gh pr --repo o/r edit 35 --base main'
+# The API forms. The gate is the write test the file already had, not the
+# endpoint: matching an endpoint is what once refused a read of a pull request
+# as though it were a decision.
+check no-pr-decisions.sh BLOCK 'REST create into main'           'gh api -X POST repos/o/r/pulls -f base=main -f head=x'
+check no-pr-decisions.sh BLOCK 'REST create, value attached'     'gh api -X POST repos/o/r/pulls -fbase=main'
+check no-pr-decisions.sh BLOCK 'REST create naming no base'      'gh api -X POST repos/o/r/pulls -f head=x -f title=y'
+check no-pr-decisions.sh BLOCK 'REST retarget to main'           'gh api -X PATCH repos/o/r/pulls/35 -f base=main'
+check no-pr-decisions.sh BLOCK 'graphql create into main'        'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:main})}"'
+check no-pr-decisions.sh BLOCK 'graphql create, base quoted'     "gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:\"main\"})}'"
+check no-pr-decisions.sh BLOCK 'graphql create naming no base'   'gh api graphql -f query="mutation{createPullRequest(input:{headRefName:x})}"'
+# A wrapper hides the base behind quotes, where there is no command position to
+# find and nothing to read. Refused outright, as a wrapped push and a wrapped
+# read of a pull request already are.
+check no-pr-decisions.sh BLOCK 'a good create inside bash -c'    "bash -c 'gh pr create --base dev-05 --title x'"
+check no-pr-decisions.sh BLOCK 'a REST create inside bash -c'    "bash -c 'gh api -X POST repos/o/r/pulls -f base=dev-05'"
+# The accepted false positive, recorded rather than worked around: cs_split cuts
+# on the parens of a command substitution, so a base written after one lands in
+# a later fragment and the create no longer names one. Put the base first.
+check no-pr-decisions.sh BLOCK 'base written after a substitution' 'gh pr create --title x --body "$(cat b.md)" --base dev-05'
+
+echo "=== issue #40, a base naming a dev branch is permitted in every spelling ==="
+check no-pr-decisions.sh ALLOW 'create into the dev branch'      'gh pr create --base dev-05 --title x --body y'
+check no-pr-decisions.sh ALLOW 'create into dev, --base='        'gh pr create --base=dev-05 --title x'
+check no-pr-decisions.sh ALLOW 'create into dev, -B'             'gh pr create -B dev-05 --title x'
+check no-pr-decisions.sh ALLOW 'create into dev, -B attached'    'gh pr create -Bdev-05 --title x'
+check no-pr-decisions.sh ALLOW 'create into an older dev-NN'     'gh pr create --base dev-04 --title x'
+check no-pr-decisions.sh ALLOW 'flag before the verb, good base' 'gh pr --repo o/r create --base dev-05 --title x'
+check no-pr-decisions.sh ALLOW 'base first, then a substitution' 'gh pr create --base dev-05 --body "$(cat b.md)"'
+# The browser hand-off creates nothing: a person on the prefilled page chooses
+# the base and confirms. That exempts a missing base and nothing else.
+check no-pr-decisions.sh ALLOW 'browser hand-off, --web'         'gh pr create --web'
+check no-pr-decisions.sh ALLOW 'browser hand-off, -w'            'gh pr create -w'
+check no-pr-decisions.sh BLOCK '--web does not launder a base'   'gh pr create --web --base main'
+check no-pr-decisions.sh ALLOW 'retarget to the dev branch'      'gh pr edit 35 --base dev-05'
+check no-pr-decisions.sh ALLOW 'edit without touching the base'  'gh pr edit 35 --add-label bug'
+check no-pr-decisions.sh ALLOW 'REST create into dev'            'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x'
+check no-pr-decisions.sh ALLOW 'graphql create into dev'         "gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}'"
+# Reads name no destination and are not asked for one, which is what keeps the
+# write test doing this work rather than the endpoint.
+check no-pr-decisions.sh ALLOW 'listing pull requests'           'gh api repos/o/r/pulls'
+check no-pr-decisions.sh ALLOW 'reading one pull request'        'gh api repos/o/r/pulls/35'
+check no-pr-decisions.sh ALLOW 'listing beside another write'    'gh api -X POST repos/o/r/issues -f title=x && gh api repos/o/r/pulls'
+# A write that names no base and creates nothing is not a pull request at all.
+check no-pr-decisions.sh ALLOW 'PATCH a PR body, the -F habit'   'gh api -X PATCH repos/o/r/pulls/35 -F body=@body.md'
+check no-pr-decisions.sh ALLOW 'creating an issue'               'gh api -X POST repos/o/r/issues -f title=x'
+check no-pr-decisions.sh ALLOW 'gh issue create names no base'   'gh issue create --title x --body y'
+
 echo "=== the push argument split does not glob against the worktree ==="
 # `for TOK in $ARGS` is unquoted because the split is the point; set -f stops
 # the same line expanding ? and [...] against the files sitting next to it.
@@ -540,7 +626,7 @@ for c in 'gh pr merge 5' \
 do check no-pr-decisions.sh BLOCK "$c" "$c"; done
 
 echo "=== no-pr-decisions.sh : must ALLOW ==="
-for c in 'gh pr create --title x --body y' \
+for c in 'gh pr create --base dev-05 --title x --body y' \
          'gh pr comment 5 --body "looks fine"' \
          'gh pr review --comment -b "a remark"' \
          'gh pr view 5' \

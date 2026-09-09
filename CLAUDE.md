@@ -209,9 +209,15 @@ An agent may push the branch of the linked worktree it is working in —
 non-forced, and naming that branch in the command, because a bare `git push`
 takes its destination from configuration an agent can itself change: write
 `git push origin <branch>`. That is the whole of what it may push. It may open a
-pull request, comment on one, edit one and read one, through `gh pr view` or
-through a `gh api` request that does not write. It may not merge one, review one
-with a verdict, close or reopen one, or create or delete a release. `main` and
+pull request into the active dev branch — naming that base in the command, for
+the reason a push names its branch: with no base given a pull request goes to
+the repository's default branch, which is `main`. Write
+`gh pr create --base dev-NN`, and the same base in whichever of the four
+spellings is used, `gh pr edit --base` and the two `gh api` forms included. It
+may comment on one, edit one without moving its base, and read one, through
+`gh pr view` or through a `gh api` request that does not write. It may not merge
+one, review one with a verdict, close or reopen one, or create or delete a
+release. `main` and
 `dev-NN` are Bertan's to push; `main` is additionally protected server-side by
 the `main-branch-protection` ruleset, which requires a pull request. Enforced by
 `.claude/hooks/no-git-push.sh` and `no-pr-decisions.sh`, both built on
