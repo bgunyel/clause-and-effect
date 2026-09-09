@@ -1,6 +1,7 @@
 #!/bin/bash
 # Where a command starts, where its arguments end, and how many commands a
-# string holds. Sourced by no-git-push.sh and no-pr-decisions.sh.
+# string holds. Sourced by no-git-push.sh, no-pr-decisions.sh and, since issue
+# #43, no-commit-to-main.sh -- which is every hook that reads a command.
 #
 # This exists because of what the defects in PR #35 turned out to have in
 # common. Every one of them, found by Bertan or by the assistant, was the same
@@ -35,6 +36,19 @@
 # direction, is evidence about the question rather than about the answers: it
 # cannot be got exact by looking more carefully, because that is what the
 # previous two attempts were. The drop is a fail-safe now. See cs_normalise.
+#
+# A fourth review, of the #43 migration, found two more -- both the same shape
+# as the first three, and both here rather than in a hook. A wrapper word was
+# stripped along with its options but not its operand, so `timeout 30 git push
+# --all origin` left a bare `30` where the command word had to be; and sudo,
+# doas, setsid and chronic were not wrapper words at all. Separately,
+# cs_git_args skipped git's own --git-dir, --work-tree, --namespace and
+# --exec-path only in their = spelling, so the separated form hid the
+# subcommand behind its own value and `git --namespace n push origin main` was
+# not a push. Every one was silent, in the permitting direction, and invisible
+# to all three hooks at once. That is what this file is for and also what it
+# keeps costing: the question is answered once, so an answer that is wrong is
+# wrong everywhere.
 #
 # The answers are approximate on purpose. Splitting more eagerly than a shell
 # would yields extra command candidates, which can only refuse more; it never
@@ -141,6 +155,7 @@ cs_split() {
     {
       line = $0
       sub(/^[[:space:]]+/, "", line)
+      wrapped = 0
       changed = 1
       while (changed) {
         changed = 0
@@ -152,16 +167,64 @@ cs_split() {
           line = substr(line, RSTART + RLENGTH)
           changed = 1
         }
-        if (match(line, /^(env|command|xargs|nohup|nice|time|stdbuf|ionice)[[:space:]]+/)) {
+        if (match(line, /^(env|command|xargs|nohup|nice|time|stdbuf|ionice|sudo|doas|setsid|chronic)[[:space:]]+/)) {
           line = substr(line, RSTART + RLENGTH)
           while (match(line, /^-[^[:space:]]*[[:space:]]+/)) {
             line = substr(line, RSTART + RLENGTH)
           }
+          wrapped = 1
+          changed = 1
+        }
+        # timeout and flock take an operand -- a duration, a lock file -- that
+        # is not an option, so stripping only options left it at the head of
+        # the line and the command word behind it was never at ^. That made
+        # `timeout 30 git push --all origin` invisible to every hook. The
+        # operand is stripped with the word, one token and only if it is not
+        # itself an option.
+        if (match(line, /^(timeout|flock)[[:space:]]+/)) {
+          line = substr(line, RSTART + RLENGTH)
+          while (match(line, /^-[^[:space:]]*[[:space:]]+/)) {
+            line = substr(line, RSTART + RLENGTH)
+          }
+          if (match(line, /^[^-[:space:]][^[:space:]]*[[:space:]]+/)) {
+            line = substr(line, RSTART + RLENGTH)
+          }
+          wrapped = 1
           changed = 1
         }
       }
       sub(/[[:space:]]+$/, "", line)
       if (line != "") print line
+      # A wrapper option taking its value as a separate token leaves that value
+      # where the command word has to be, and the command behind it is never at
+      # ^ again: `sudo -u root git push --all origin` left `root`, `nice -n 10`
+      # left `10`, and `timeout -s KILL 30` left `30` even after the operand
+      # strip above took KILL for the duration. Which options take a value is a
+      # list, and two are already kept here -- for the git globals and for the
+      # gh ones -- so a third would be the same answer written a third time,
+      # wrong wherever it is short.
+      #
+      # So the tail is offered as further candidates rather than the head being
+      # trimmed to find one. Offering cannot hide a command; trimming can.
+      # `sudo apt-get install jq` still yields itself, and `install jq` beside
+      # it refuses nothing. It is the rule at the top of this file -- splitting
+      # more eagerly than a shell only ever refuses more -- applied where the
+      # command word cannot be found by looking.
+      #
+      # Three is past the longest real leftover: `timeout -s KILL 30 cmd`
+      # leaves two. A token opening a quote ends it, because what follows is
+      # the text of an argument, and reading text as a command is the mistake
+      # cs_normalise has already made three times.
+      if (wrapped && line != "") {
+        rest = line
+        for (k = 0; k < 3; k++) {
+          if (rest ~ /^["]/ || rest ~ /^[\x27]/) break
+          if (!match(rest, /^[^[:space:]]+[[:space:]]+/)) break
+          rest = substr(rest, RSTART + RLENGTH)
+          if (rest ~ /^["]/ || rest ~ /^[\x27]/) break
+          print rest
+        }
+      }
     }'
 }
 
@@ -181,7 +244,7 @@ cs_git_args() {
       line = $0
       if (line !~ /^git([[:space:]]|$)/) next
       sub(/^git[[:space:]]*/, "", line)
-      while (match(line, /^(-[cC][[:space:]]+[^[:space:]]+|--(git-dir|work-tree|namespace|exec-path)=[^[:space:]]*|-[^[:space:]]+)[[:space:]]+/)) {
+      while (match(line, /^(-[cC][[:space:]]+[^[:space:]]+|--(git-dir|work-tree|namespace|exec-path)([[:space:]]+|=)[^[:space:]]*|-[^[:space:]]+)[[:space:]]+/)) {
         line = substr(line, RSTART + RLENGTH)
       }
       if (line !~ "^" want "([[:space:]]|$)") next
