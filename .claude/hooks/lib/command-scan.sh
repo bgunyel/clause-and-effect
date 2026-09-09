@@ -202,12 +202,14 @@ cs_git_args() {
 # Cobra resolves each level at the first non-flag argument, so a flag may sit
 # between the group and the verb and `gh pr --repo o/r create` still creates;
 # -R/--repo and --hostname take their value as a separate token, which has to be
-# consumed with them or the value reads as the verb and hides it. That is the
-# same shape the GHPR pattern in no-pr-decisions.sh answers with a regular
-# expression of its own. So the question is answered in both places for now, and
-# will stay so while GHPR still carries the merge, review, close and reopen
-# rules; this is the answer the next rule is built on rather than a fourth
-# regular expression, which is the whole reason for adding it before its caller.
+# consumed with them or the value reads as the verb and hides it. That was the
+# same shape the GHPR pattern in no-pr-decisions.sh answered with a regular
+# expression of its own -- and answered one level too late, skipping options
+# between the group and the verb and never before the group, so `gh -R o/r pr
+# merge 5` was permitted while `gh pr --repo o/r merge 5` was refused. Issue #47
+# moved that file's merge, review, close, reopen, release and gh api rules onto
+# this function and deleted GHPR and GHRELEASE, so the question is answered here
+# and in no second place.
 #
 # The exit status is what distinguishes `gh pr create` -- a create whose
 # argument list is empty, which is exactly the shape that lets gh choose the
@@ -230,7 +232,7 @@ cs_git_args() {
 # it is the kind that gets discovered rather than read, and closing it would
 # need a check written against a caller that does not exist.
 #
-# It is written before the rule that uses it, so what it is for is worth saying:
+# It was written before the rule that used it, so what it is for is worth saying:
 # asking whether a flag belongs to *this* command is argument scoping, and
 # scoping answered ad hoc is where two of the five defects above came from --
 # the whole line read an unrelated option as the command's own, and the
