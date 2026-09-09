@@ -1,37 +1,38 @@
 ---
 name: branch-hygiene
-description: Rotate to the next development branch after a PR is merged into main. Use immediately after a dev-NN branch lands in main via pull request, or whenever the repository has stale branches beyond main plus one active dev branch. Covers checkout main, pull, create dev-NN+1, and delete the merged branch locally and remotely.
+description: Report whether the active dev branch is ready to rotate and what branches are stale, and hold Bertan's procedure for the rotation itself. Use after a dev-NN pull request lands in main, or when branches beyond main, one active dev branch and the worktree branches in flight against it are lying around. The rotation is Bertan's; an agent runs only the read-only half.
 ---
 
 # Branch hygiene
 
-This repository holds **exactly two branches at any time**: `main`, and one
-active development branch named `dev-NN`. Work never lands on `main` directly —
-only through a pull request from the active dev branch.
+At any time this repository holds `main`, exactly one **active dev branch**
+named `dev-NN`, and however many **worktree branches** are in flight against it.
+Work never lands on `main` directly — only through a pull request from the
+active dev branch — and an agent's work reaches the active dev branch the same
+way, by a pull request from the worktree branch it was done on. `CONTEXT.md`
+defines all three terms.
 
-When that PR is merged, the dev branch has served its purpose and is rotated:
-the next branch takes the next number, and the merged one is deleted from both
-the local repository and the remote.
+When that pull request into `main` is merged, the dev branch has served its
+purpose and is rotated: the next branch takes the next number, and the merged
+one is deleted from both the local repository and the remote.
 
-## When this applies
+**Rotation is a reserved act.** Rotating the dev branch is one of the four acts
+`CONTEXT.md` names, and advancing the active dev branch on the remote is
+another, so every step of this that changes anything belongs to Bertan.
+`.claude/hooks/no-git-push.sh` refuses both of the pushes a rotation needs — the
+first push of `dev-NN+1`, and the remote deletion of `dev-NN` — from anywhere,
+correctly. Issue #41 considered carving a hook exception for this skill and
+rejected it: the exception would reopen the wholesale and deletion forms that
+PR #35 closed, for a procedure run every few weeks. Bertan runs the procedure
+from his own terminal, where no hook applies.
 
-Apply **after a PR from `dev-NN` into `main` has been merged**, and not before.
-Also apply when the repository has drifted — any branch other than `main` and
-the single active dev branch is stale and should be removed.
+An agent keeps the half that is genuinely useful and changes nothing: confirm
+from the remote that the merge actually happened, and report what is stale.
 
-Do **not** apply while a PR is open, in review, or closed-without-merge. The
-delete step is unrecoverable from the local repository alone, so the merge is
-the precondition for the whole procedure, not just the last step.
+## What an agent does
 
-## The naming rule
-
-The new branch is the merged branch's number plus one, zero-padded to two
-digits. `dev-01` merged → create `dev-02`. `dev-02` merged → create `dev-03`.
-`dev-09` merged → create `dev-10`.
-
-## Procedure
-
-Run these in order. Each step's verification is what makes the next one safe.
+Both steps are reads. Report the answers and stop — do not check out, create,
+push or delete anything, and do not offer to.
 
 ### 1. Confirm the merge really happened
 
@@ -41,9 +42,52 @@ Never take "the merge command ran" as evidence. Ask the remote:
 gh pr view <PR#> --json state,mergedAt,headRefName --jq '{state,mergedAt,headRefName}'
 ```
 
-`state` must be `MERGED` and `mergedAt` must be non-null. If it says `OPEN`
-or `CLOSED`, stop — there is nothing to rotate, and deleting the branch would
-discard the work.
+`state` must be `MERGED` and `mergedAt` must be non-null. If it says `OPEN` or
+`CLOSED`, there is nothing to rotate, and say so plainly: rotating on a
+closed-without-merge pull request would discard the work.
+
+### 2. Report what is stale
+
+```bash
+git fetch --prune
+git branch -a
+gh pr list --state all --limit 30 --json number,headRefName,state,mergedAt \
+  --jq '.[] | "\(.headRefName)\t\(.state)"'
+```
+
+Stale is a branch whose work is over: a `dev-NN` other than the active one, or a
+worktree branch whose pull request is merged or closed. A worktree branch with an
+open pull request is **not** stale — several open at once is the ordinary state
+of this repository, not drift. That is what the invariant at the top of this file
+already says, and it is the half of it most easily read as a mess to tidy.
+
+**A worktree branch with no pull request at all is neither, and saying which it
+is takes more than this skill can see.** A branch freshly cut for work not yet
+started and a branch abandoned after a rotation are both branches with no pull
+request, and ahead/behind does not separate them: a fresh one cut before the dev
+branch moved is `ahead == 0`, and an abandoned one carrying a commit of its own
+is `ahead > 0`, so the count that would condemn the first exonerates the second.
+Only whoever cut it knows. Report it by name with its ahead/behind and its last
+commit date, call it unclassified rather than stale, and stop — the *reserved
+act* entry in `CONTEXT.md` says what to do where nothing enforces.
+
+Two more things to name in the report rather than act on:
+
+- **Open pull requests against `dev-NN`.** Deleting a base branch closes the
+  pull requests that target it, so a rotation waits until they are merged or
+  retargeted. Say which ones are open.
+- **A branch that was never merged.** Its commits exist nowhere else. Report it;
+  losing them should be a decision, not a side effect.
+
+## Bertan's procedure
+
+Run from a terminal, where no hook applies. Each step's verification is what
+makes the next one safe.
+
+### 1. Confirm the merge, and that nothing is in flight
+
+The two reads above, if an agent has not already run them: `state` is `MERGED`
+with a non-null `mergedAt`, and no pull request is open against `dev-NN`.
 
 ### 2. Move to main and pull
 
@@ -61,11 +105,14 @@ git status -sb | head -1
 
 ### 3. Create the new branch
 
+The new branch is the merged branch's number plus one, zero-padded to two
+digits: `dev-01` merged → create `dev-02`; `dev-09` merged → create `dev-10`.
 Derive the number from the branch that was merged, not from whatever happens to
 exist locally:
 
 ```bash
 git checkout -b dev-NN+1
+git push -u origin dev-NN+1
 ```
 
 Verify you are on it before going any further — step 4 cannot delete the branch
@@ -99,32 +146,35 @@ git log --oneline main | head -5
 
 ### 5. Verify the invariant holds
 
-The repository should now show `main` and the new dev branch, and nothing else:
-
 ```bash
 git branch -a
-```
-
-Prune any remote-tracking references left behind by the remote delete:
-
-```bash
 git fetch --prune
 ```
+
+`main`, the new dev branch, and any worktree branch still in flight — nothing
+else. Prune the remote-tracking references left behind by the remote
+delete.
 
 ## What must be true at the end
 
 - `main` contains the merge commit and matches the remote.
-- The new `dev-NN+1` branch exists, is checked out, and is based on the updated
-  `main`.
+- The new `dev-NN+1` branch exists, is checked out, is based on the updated
+  `main`, and is on the remote.
 - The merged `dev-NN` is gone from the local repository and from `origin`.
-- `git branch -a` lists `main` and `dev-NN+1` only.
+- Every other branch present is a worktree branch, and no pull request is left
+  pointing at the deleted `dev-NN`: each was merged before the rotation or
+  retargeted to `dev-NN+1` after it.
 
 ## Notes
 
-- The new branch has no upstream until its first push. Use
-  `git push -u origin dev-NN+1` the first time, plain `git push` after that.
-- Rotate only after a merge, not after each session. A branch spanning several
-  sessions is normal; several branches open at once is not.
-- If a stale branch turns up that was never merged, do not delete it silently.
-  Its commits exist nowhere else — report it and let the decision be made
-  deliberately.
+- Worktrees fork from the current HEAD (`worktree.baseRef: head` in
+  `.claude/settings.json`), so every worktree made after a rotation branches
+  from the new dev branch. One made before it does not, which is the second
+  reason a rotation waits for the branches in flight.
+- Rotate only after a merge, not after each session. A dev branch spanning
+  several sessions is normal; two dev branches at once is not.
+- Push a worktree branch with `git push -u origin <branch>` the first time, as
+  the rotation pushes `dev-NN+1`. Without the upstream, a merged branch whose
+  remote half `delete_branch_on_merge` has removed is indistinguishable from one
+  that was never pushed — both read as having no upstream, and the `[gone]` that
+  says *this branch had a remote and lost it* never appears.

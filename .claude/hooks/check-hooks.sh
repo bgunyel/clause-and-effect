@@ -29,7 +29,7 @@
 #
 # One expectation is not a literal but a context: whether pushing this branch is
 # permitted depends on where the suite runs, because that is exactly what
-# no-git-push.sh decides. Run from a linked worktree on a feature branch, a push
+# no-git-push.sh decides. Run from a linked worktree on a worktree branch, a push
 # of that branch is ALLOW; run from the main checkout, the identical command is
 # BLOCK. OWN_BRANCH_PUSH holds whichever applies, and the banner says which.
 #
