@@ -21,6 +21,11 @@ means to evade them. And they see only the Bash tool inside a Claude Code
 session, so Bertan's own terminal is subject to none of it — which is the
 point, not an oversight.
 
+A hook takes effect only where the harness looks for it: `.claude/settings.json`
+is read from the main checkout, so `no-git-push.sh` and `no-pr-decisions.sh`
+were inert — an agent's `git push` went through unrefused — while they were
+registered only on the branch that adds them.
+
 This decision is about the mechanism and deliberately records no inventory of
 which commands are permitted. That list lives in the hooks and in CLAUDE.md, and
 it will grow; the reason it is a list held in hooks at all is what is recorded
