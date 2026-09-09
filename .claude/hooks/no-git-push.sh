@@ -73,7 +73,7 @@ REFUSE="Blocked: git push. An agent may push only the branch of the linked workt
 # This runs before asking whether there is a push, and must: a wrapped push has
 # no command word for the tokeniser to find, so the question would answer no and
 # the hook would leave. Ordering it the other way let all four wrapper forms
-# through, which the probe suite caught.
+# through, which the check suite caught.
 if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))' \
    && echo "$COMMAND" | grep -qE 'git[[:space:]]+([^;&|]*[[:space:]])?push([^-A-Za-z0-9_]|$)'; then
   echo "Blocked: git push inside a shell wrapper. The destination cannot be read through a quoted payload, so the worktree exception does not apply. Push plainly from the worktree, or leave it to Bertan." >&2
