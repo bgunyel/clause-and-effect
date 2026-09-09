@@ -42,7 +42,12 @@
 # now, has been to report the permitted answer.
 
 # Reduce a raw command to lines that can be scanned: heredoc bodies dropped,
-# line continuations joined.
+# line continuations joined, redirections dropped -- in that order, so that
+# every caller gets a command whose remaining words are its arguments. Where a
+# command's arguments end is the question this file exists to answer once, and
+# a redirect answered it in no-git-push.sh by accident: nothing removed one, so
+# `git push origin <branch> 2>/dev/null` was refused for naming 2>/dev/null as
+# its refspec. See the third pass.
 #
 # A heredoc body is data, not commands. This repository writes dev-log entries
 # and commit messages through a quoted heredoc, and those texts name the very
@@ -108,6 +113,121 @@ cs_normalise() {
         if ((getline nxt) > 0) line = line nxt; else break
       }
       print line
+    }' \
+  | awk '
+    # A redirection is not an argument. Nothing removed one, so its operator or
+    # its target was read as a refspec and every redirect on an otherwise
+    # permitted push was refused -- `git push origin <branch> 2>/dev/null`
+    # answered "This names 2>/dev/null, not <branch>". Issue #50.
+    #
+    # It runs last, so a redirect written across a continuation is joined before
+    # it is read, and so `2>&1` is gone before cs_split reaches the & it would
+    # otherwise split on. That split is what PR #48 reported as the cause; it is
+    # a second effect on top of this one, and `2>/dev/null` holds no & at all.
+    #
+    # Where the last three defects here came from: this is the second step that
+    # hides text rather than exposing it, so the two cases where hiding would
+    # cost something are answered first and answered narrowly.
+    #
+    #   - `<(...)` and `>(...)` carry a command, which is the one thing a drop
+    #     must never swallow. They are not redirections and are left whole.
+    #   - a redirect inside quotes is text. A commit message naming one is the
+    #     mistake the heredoc opener made three times, so quotes are tracked
+    #     character by character rather than matched around.
+    #   - `<<`, `<<-` and `<<<` belong to the heredoc pass above. Answering
+    #     what a heredoc is a second time, here, is how the answers came to
+    #     disagree in the first place; a run of two or more < is emitted whole.
+    #   - the target scan stops at a backtick and at a paren, so a command
+    #     substitution standing where a target would be is left standing.
+    #
+    # The trade, taken knowingly: a quoted redirect target -- `2> "push log"` --
+    # is not consumed, so its text stays in the arguments and refuses the push.
+    # That is the direction this file takes everywhere, and the targets an agent
+    # actually writes (/dev/null, out.txt, push.log) carry no quotes.
+    #
+    # `>|` is left half-standing: the operator goes and the | does not, so the
+    # target becomes a command candidate of its own. That is the over-splitting
+    # this file takes everywhere -- an extra candidate can only refuse more --
+    # and it is preferred to consuming a | , which is a separator everywhere
+    # else and whose loss would hide the command after it.
+    #
+    # Quote state is per line. A string left open at a newline protects nothing
+    # on the next line, which can only drop more, never less -- and dropping
+    # more of a line that is already inside quotes changes no verdict, because
+    # the quoted text was never a command position to begin with.
+    #
+    # Which leaves this pass knowing two things the passes above also know:
+    # what a quote is, and what `<<` is. One answer per question is the premise
+    # of this file, so that is a cost rather than an oversight. It is paid
+    # because the two answers are to different questions. Pass one asks where a
+    # heredoc body ends, and answers it fail-safe, by giving the lines back.
+    # This one asks whether a character is text, and a fail-safe there would
+    # mean dropping nothing, which is the defect being fixed. Unifying them
+    # would put the heredoc fail-safe at risk to save a dozen lines.
+    # BOUND is what an fd digit run may follow; STOP is that plus the quotes,
+    # and ends a redirect target. STOP is derived rather than written twice, so
+    # the two cannot drift apart in a later edit.
+    BEGIN {
+      BOUND = " \t;|&()`<>"
+      STOP  = BOUND "\042\047"
+    }
+    {
+      line = $0
+      n = length(line)
+      out = ""
+      q = ""
+      i = 1
+      while (i <= n) {
+        c = substr(line, i, 1)
+        if (q != "") {
+          if (q == "\042" && c == "\\") { out = out c substr(line, i + 1, 1); i += 2; continue }
+          out = out c
+          if (c == q) q = ""
+          i++
+          continue
+        }
+        if (c == "\\") { out = out c substr(line, i + 1, 1); i += 2; continue }
+        if (c == "\042" || c == "\047") { q = c; out = out c; i++; continue }
+        if (c != ">" && c != "<") { out = out c; i++; continue }
+        nxt = substr(line, i + 1, 1)
+        # Process substitution carries a command. Not a redirection.
+        if (nxt == "(") { out = out c; i++; continue }
+        # A run of two or more < is a heredoc or a here-string, already answered.
+        if (c == "<" && nxt == "<") {
+          while (i <= n && substr(line, i, 1) == "<") { out = out "<"; i++ }
+          continue
+        }
+        # The fd, or the & of &>, sits in front of the operator and belongs to
+        # it. A digit run counts only where it is a word of its own: in
+        # `origin b2>f` the 2 is part of the refspec, and bash reads it that way
+        # too. A single & is the & of &>; two are the separator &&, which ends a
+        # command and must survive, or the command after it disappears.
+        if (match(out, /[0-9]+$/) \
+            && (RSTART == 1 || index(BOUND, substr(out, RSTART - 1, 1)) > 0)) {
+          out = substr(out, 1, RSTART - 1)
+        } else if (c == ">" && substr(out, length(out), 1) == "&" \
+                   && substr(out, length(out) - 1, 1) != "&") {
+          out = substr(out, 1, length(out) - 1)
+        }
+        sub(/[[:space:]]+$/, "", out)
+        i++
+        if (c == ">" && substr(line, i, 1) == ">") i++
+        if (substr(line, i, 1) == "&") i++
+        while (i <= n && (substr(line, i, 1) == " " || substr(line, i, 1) == "\t")) i++
+        while (i <= n) {
+          t = substr(line, i, 1)
+          if (index(STOP, t) > 0) break
+          if (t == "$" && substr(line, i + 1, 1) == "(") break
+          i++
+        }
+        # The drop takes the whitespace on both sides of the redirect with it,
+        # so what stood either side of it must not close up into one word. A
+        # target that was never consumed -- a command substitution standing
+        # where one would be -- is exactly where that happens.
+        t = substr(line, i, 1)
+        if (i <= n && out != "" && t != " " && t != "\t") out = out " "
+      }
+      print out
     }'
 }
 
