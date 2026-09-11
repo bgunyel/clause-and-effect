@@ -197,8 +197,16 @@ says_not() {  # says_not <dir> <script> <fragment> <label> <cmd>
 # A property of a file rather than of a process. See the arming section at the
 # foot of this suite for why one file in .claude/ needs this and the others do
 # not. Fixed strings, not patterns: the expectation is the line as written.
+# Comments are stripped before the search, and that is the whole point rather
+# than a detail: `grep -qF` over raw file text matches a literal that has been
+# commented OUT, so every one of these stayed green while the line it names did
+# nothing. Found by review of PR #64, not by this suite. Comment-out-and-leave
+# is how a shell script ordinarily gets edited, not a constructed evasion, so
+# this is the permitting-direction defect these checks exist to catch, in the
+# checks themselves. None of the literals below contains a `#`, so stripping
+# from the first one is safe for them.
 armed() {  # armed <label> <file> <literal>
-  if grep -qF -- "$3" "$2" 2>/dev/null; then
+  if sed 's/[[:space:]]*#.*$//' "$2" 2>/dev/null | grep -qF -- "$3"; then
     printf '  ok   armed %s\n' "$1"
   else
     printf '  FAIL %s\n         expected %s to contain |%s|\n' "$1" "$2" "$3"
@@ -1732,7 +1740,53 @@ check_in "$WT_NOLOC" no-work-on-stale-branch.sh BLOCK 'no local dev-05: the shor
 check_in "$WT_NOLOC" no-work-on-stale-branch.sh BLOCK 'no local dev-05: refs/heads/dev-05 names nothing either' \
   'git merge refs/heads/dev-05'
 
-# STATE THREE: the dev tip does not resolve to a commit. The hook holds
+# STATE THREE: a local dev-05 merely BEHIND origin/dev-05 -- not forked, just
+# not pulled. THE SECOND HARMLESS CASE THIS FIX GIVES UP, and the one that
+# starts firing as soon as it lands: worktree pull requests merge into dev-05 on
+# GitHub, so origin/dev-05 moves while the local branch sits still, and that is
+# the ordinary state of this repository rather than an edge of it.
+#
+#   root ---- beh-stale, dev-05 ---- origin/dev-05
+#
+# From beh-stale, `git merge dev-05` is `Already up to date.` -- it writes
+# nothing and masks nothing. It is refused anyway, because the test is an
+# identity and the local branch is not origin/dev-05. Separating this case from
+# the forked one means asking about ancestry, and a hook that rev-parses its way
+# to a merge-base decision is a larger claim than this defect needs. Recorded
+# here, in the file header and in the commit message, per the repository's rule
+# that a fix giving up a case says so in all three.
+BEH="$FIXTURES/behind-dev"
+git init -q -b main "$BEH"
+GH_="git -C $BEH -c user.email=checks@example.invalid -c user.name=checks"
+$GH_ remote add origin "$FIXTURES/unreachable-remote.git"
+$GH_ commit -q --allow-empty -m root
+$GH_ commit -q --allow-empty -m "where local dev-05 stopped"
+BEH_LOCAL=$($GH_ rev-parse HEAD)
+$GH_ commit -q --allow-empty -m "where origin/dev-05 went without it"
+$GH_ update-ref refs/remotes/origin/dev-05 "$($GH_ rev-parse HEAD)"
+$GH_ branch dev-05 "$BEH_LOCAL"
+$GH_ branch beh-stale "$BEH_LOCAL"
+$GH_ worktree add -q "$BEH/wt-beh" beh-stale
+WT_BEH="$BEH/wt-beh"
+need_worktree "$WT_BEH" behind-dev
+# Behind, not forked: the worktree branch IS an ancestor of the local branch, so
+# the merge given up here is a no-op rather than a merge commit. That is the
+# difference from STATE ONE, and asserting it is what stops this fixture
+# quietly turning into a copy of that one.
+$GH_ merge-base --is-ancestor refs/heads/beh-stale refs/heads/dev-05 || {
+  echo "beh-stale is not an ancestor of local dev-05, so this is the forked case again; the checks below prove nothing" >&2
+  exit 1
+}
+$GH_ merge-base --is-ancestor refs/heads/dev-05 refs/remotes/origin/dev-05 || {
+  echo "local dev-05 is not behind origin/dev-05; the checks below prove nothing" >&2
+  exit 1
+}
+check_in "$WT_BEH" no-work-on-stale-branch.sh ALLOW 'local dev-05 behind: the remote spelling is the catch-up' \
+  'git merge origin/dev-05'
+check_in "$WT_BEH" no-work-on-stale-branch.sh BLOCK 'local dev-05 behind: a harmless no-op merge, refused, and recorded as given up' \
+  'git merge dev-05'
+
+# STATE FOUR: the dev tip does not resolve to a commit. The hook holds
 # `[ -n "$DEV_OID" ] || return 1` for it, and that line cannot be reached by
 # running the hook: DEV is the short name of the very ref DEV_OID is read from,
 # so a dev tip that will not resolve is one `git rev-list` cannot read either,
@@ -1896,11 +1950,15 @@ armed 'and the report derives it identically' \
 # The carve-out's identity test, pinned as three lines rather than driven as a
 # process. Two of them are driven, by the diverged and no-local fixtures above;
 # the third -- an unresolvable dev tip -- is not reachable by running this hook,
-# because the ancestry read fails first and the file abstains. It is kept
-# because the carve-out is the only permitting path out of a refused state, and
-# a comparison against an empty string is not a comparison at all: drop the
-# line and `TOK_OID` empty would equal `DEV_OID` empty, permitting the merge on
-# exactly the state that could not be read. This says so; nothing above can.
+# because the ancestry read fails first and the file abstains.
+#
+# The guard line is also redundant with the comparison that follows it, and the
+# first version of this suite claimed otherwise -- that dropping it would let an
+# empty TOK_OID equal an empty DEV_OID. That was false: the rev-parse above the
+# comparison returns on failure and prints an OID on success, so TOK_OID is
+# never empty there. What these three lines pin is that the identity test is
+# spelled the way the file says it is; they are not evidence that any one of
+# them decides an outcome, and the middle one does not.
 armed 'the dev tip is resolved to a commit, from the ref the ancestry was read against' \
   "$HOOKS/no-work-on-stale-branch.sh" \
   'DEV_OID=$(git rev-parse --verify --quiet "refs/remotes/$DEV^{commit}" 2>/dev/null)'

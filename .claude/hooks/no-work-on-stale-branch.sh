@@ -112,12 +112,29 @@
 # branch permanently: silent, and in the permitting direction, which is the test
 # for inclusion stated above.
 #
-# THE TRADE THAT MAKES, RECORDED. When no local dev-NN exists at all, the short
-# spelling `git merge dev-NN` is now refused where it used to be permitted.
-# Nothing is lost: run for real in that state the command fails in git anyway,
-# because dev-NN resolves through refs/heads/, refs/tags/ and
-# refs/remotes/<name>/ and a remote-tracking origin/dev-NN is none of those. The
-# refusal message already names origin/dev-NN, which is the spelling that works.
+# THE TRADE THAT MAKES, RECORDED. The test is an identity, so it refuses the
+# short spelling whenever local dev-NN is not exactly origin/dev-NN -- not only
+# when it has forked. TWO HARMLESS CASES ARE GIVEN UP WITH IT, and both are
+# named here rather than left to be discovered:
+#
+# *No local dev-NN at all*, which is what a linked worktree normally sees.
+# `git merge dev-NN` was permitted and is now refused. Nothing is lost: run for
+# real in that state the command fails in git anyway, because dev-NN resolves
+# through refs/heads/, refs/tags/ and refs/remotes/<name>/ and a remote-tracking
+# origin/dev-NN is none of those.
+#
+# *A local dev-NN merely BEHIND origin/dev-NN*, which is the ordinary state here
+# and becomes the common one the moment a pull request lands on GitHub: the
+# remote half moves and the local branch sits still. That merge is a no-op or a
+# fast-forward to a commit this branch is already an ancestor of, so it writes
+# nothing and masks nothing, and it is refused all the same. This is the case
+# the identity test cannot separate from the forked one without asking a
+# question about ancestry that the whitelist exists to not ask -- a hook that
+# rev-parses its way to a merge-base decision is a larger claim than this
+# defect needs.
+#
+# Both refusals cost one edit: the message already names origin/dev-NN, which is
+# the spelling that works in every one of these states.
 #
 # ARMED BY report-stale-branches.sh. Both detectors read remote-tracking refs
 # and are exactly as fresh as the last fetch -- the fallback no less than the
@@ -269,9 +286,11 @@ CMDLIST
 # routinely disagree here, and for the case this now refuses.
 #
 # Resolved here rather than beside DEV because the common path exits above
-# without ever needing it: one rev-parse here, and one more per whitelisted
-# token below, paid only on the carve-out path -- a merge or rebase in an
-# already-refused state, which is rare.
+# without ever needing it. Exactly what that costs, since this placement is the
+# argument for it: one rev-parse here, paid once per command in an
+# already-refused state -- `git status` in a stale worktree pays it too, not
+# only a merge -- and one more per whitelisted token inside names_dev, paid only
+# where the carve-out is actually considered.
 DEV_SHORT=${DEV#origin/}
 DEV_OID=$(git rev-parse --verify --quiet "refs/remotes/$DEV^{commit}" 2>/dev/null)
 names_dev() {
@@ -281,11 +300,21 @@ names_dev() {
     *) return 1 ;;
   esac
   # The whitelist stays the outer gate: this resolves four fixed strings, never
-  # arbitrary command text. An unreadable dev tip is not a licence -- with
-  # nothing to compare against the carve-out is not taken, and the command is
-  # refused with the rest.
+  # arbitrary command text.
+  #
+  # The emptiness test is REDUNDANT WITH THE COMPARISON BELOW and is kept as a
+  # statement of intent, not as a guard that decides anything. Saying so
+  # plainly, because the first version of this file justified it as load-bearing
+  # and that was false: the rev-parse below returns on failure, and on success
+  # prints an OID, so TOK_OID is never empty where the comparison runs, and an
+  # unreadable DEV_OID already fails that comparison. Delete this line and no
+  # outcome changes. An asserted claim about what a guard does is the defect
+  # this whole file was rewritten to stop making.
   [ -n "$DEV_OID" ] || return 1
   TOK_OID=$(git rev-parse --verify --quiet "$1^{commit}" 2>/dev/null) || return 1
+  # This is what refuses an unreadable dev tip: with DEV_OID empty, no resolved
+  # token equals it, so the carve-out is not taken and the command is refused
+  # with the rest.
   [ "$TOK_OID" = "$DEV_OID" ]
 }
 
