@@ -895,9 +895,35 @@ check no-pr-decisions.sh BLOCK 'bash -c a comment naming api'     "bash -c \"gh 
 # of these went ALLOW -> BLOCK.
 check no-pr-decisions.sh BLOCK 'a wrapper elsewhere, then a view'  'bash -c "make test" && gh pr view 5'
 check no-pr-decisions.sh BLOCK 'a wrapper elsewhere, then an api'  'bash -c "echo hi"; gh api repos/o/r/issues/27'
+# Order does not matter, and CLAUDE.md now says so. Both greps are asked of the
+# whole joined command, so neither one knows which side of the line it matched
+# on; a rule that looked only ahead of the wrapper would pass the two above and
+# fail these, which is what this pair is here to catch. The ALLOW two lines
+# down is their arming evidence as much as it is the arming evidence for the
+# pair above: same view, wrapper off the line, permitted.
+check no-pr-decisions.sh BLOCK 'a view, then a wrapper elsewhere'  'gh pr view 5 && bash -c "make test"'
+check no-pr-decisions.sh BLOCK 'an api call, then a wrapper'       'gh api repos/o/r/issues/27; bash -c "echo hi"'
 # The reach needs a wrapper on the line to begin with. Without one these rules
 # never run, which is what keeps the cost to lines that have both.
 check no-pr-decisions.sh ALLOW 'the same view with no wrapper'     'make test && gh pr view 5'
+# And it needs a wrapper in a COMMAND position, not the word in passing. Only
+# the surface half of the pair is the loose one; the wrapper half is anchored,
+# and CLAUDE.md says so rather than calling both of them "anywhere".
+check no-pr-decisions.sh ALLOW 'a wrapper named in passing, then a view' \
+  'echo "run bash -c later" && gh pr view 5'
+check no-pr-decisions.sh ALLOW 'a wrapper named in a comment body' \
+  'gh issue comment 5 -b "try bash -c next" && gh pr view 5'
+# The surface half is wider than the gh group: the REST and graphql spellings
+# of the same decisions name no gh at all, so the reach lands on them too. These
+# are what make "asks for the group name and never looks at the verb" the wrong
+# description of this block -- three of its five alternatives are verbs.
+check no-pr-decisions.sh BLOCK 'a wrapper, then a bare state=closed' 'bash -c "make test" && echo state=closed'
+check no-pr-decisions.sh BLOCK 'a wrapper, then a bare mutation name' 'bash -c "make test" && echo mergePullRequest'
+check no-pr-decisions.sh BLOCK 'a wrapper, then a bare /releases'     'bash -c "make test" && echo /releases'
+# And it stops there: a wrapper beside something that decides nothing is not
+# this file's business, which is what keeps the four BLOCKs above a reach rather
+# than a blanket refusal of every wrapped line.
+check no-pr-decisions.sh ALLOW 'a wrapper, then an ordinary echo'     'bash -c "make test" && echo hello'
 # The rule reaches gh's three deciding surfaces and stops there. A wrapped
 # command that is none of them is answered by whatever else covers it, and by
 # this file not at all.
@@ -1231,6 +1257,42 @@ check no-git-push.sh BLOCK 'a push inside sh -c'               'sh -c "git push"
 check no-git-push.sh BLOCK 'a push inside bash -c'             'bash -c "git push origin dev-05"'
 check no-git-push.sh BLOCK 'a push inside eval'                'eval "git push"'
 check no-git-push.sh BLOCK 'a push inside a heredoc fed to sh' $'bash <<\'EOF\'\ngit push\nEOF'
+
+echo "=== ACCEPTED false positive: the wrapper rule reaches across the line here too ==="
+# This hook's wrapper rule is the same two-grep shape as no-pr-decisions.sh's --
+# a wrapper in a command position, a push anywhere on the line -- and neither
+# grep asks whether the two are the same command. So an otherwise correct push
+# is refused for a wrapper that has nothing to do with it, in either order.
+# Only the second grep is the loose one: the wrapper half is anchored, and a
+# wrapper merely named in passing is pinned below as ALLOW.
+#
+# Run from a linked worktree the third line is ALLOW, and that is the arming
+# evidence for the first two rather than an assertion about them: the same push
+# with the wrapper taken off the line is permitted, so the wrapper is the only
+# thing that differs and it is the wrapper answering rather than the worktree
+# exception. A rule that stopped reaching across the line would land all three
+# on ALLOW. Run from the main checkout on main or dev-NN, OWN_BRANCH_PUSH is
+# BLOCK and the three agree: the pair still passes and shows nothing, which is
+# the caveat the CONTEXT banner at the top of this file already reports.
+check no-git-push.sh BLOCK 'a wrapper elsewhere, then a legit push' \
+  "bash -c \"make test\" && git push origin $CURRENT"
+check no-git-push.sh BLOCK 'a legit push, then a wrapper elsewhere' \
+  "git push origin $CURRENT && bash -c \"make test\""
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'the same push with no wrapper' \
+  "make test && git push origin $CURRENT"
+# And what keeps the two halves different, which CLAUDE.md now claims: the
+# second grep here asks for a push, where no-pr-decisions.sh asks for every
+# surface that decides a pull request or a release. So an ordinary read beside a
+# wrapper is untouched on this side and refused on that one. These two are the
+# measurement behind that sentence; if they ever go BLOCK, the sentence is wrong.
+check no-git-push.sh ALLOW 'a wrapper elsewhere, then git status' 'bash -c "make test" && git status'
+check no-git-push.sh ALLOW 'a wrapper elsewhere, then git log'    'bash -c "make test" && git log --oneline'
+# The wrapper half is anchored at a command position in both hooks, so a wrapper
+# only spoken about is not one. Without this the sentence above could be read as
+# a bare substring match, which is what "anywhere" would mean if it covered both
+# greps rather than the second alone.
+check no-git-push.sh "$OWN_BRANCH_PUSH" 'a wrapper named in passing, then a push' \
+  "echo \"use bash -c\" && git push origin $CURRENT"
 
 echo "=== REGRESSION: PR #35, a denylist could not see a push naming no branch ==="
 # The check refused branches by name, so any spelling that named none was
@@ -2310,6 +2372,33 @@ tok 'one hook runs on an Edit, which is the number the section claims' \
     "$(jq -r '[.hooks.PreToolUse[]? | select((.matcher // "*") as $m
                 | $m == "*" or $m == "" or ("Edit" | test($m)))
               | .hooks[]?] | length' "$SETTINGS" 2>/dev/null)"
+
+# The left-open list states a count at its head, and that count is what went
+# stale: it said four while describing what are really five, because a rule was
+# widened and the sentence describing it was not revised with it (#73). The list
+# is numbered now, so the claim can be checked instead of believed.
+#
+# This asserts the head count against the items and nothing whatever about what
+# the items say. A prose list cannot be checked for being right; it can be
+# checked for being self-consistent, and the arithmetic is the half that has
+# actually drifted. The narrowing above still keeps the hook-name audit off this
+# paragraph, which is a separate question and stays answered the same way.
+LEFT_OPEN=$(awk '/^\*\*Deliberately left open\.\*\*/ {f=1} f' "$SECTION")
+CLAIMED_WORD=$(printf '%s\n' "$LEFT_OPEN" \
+  | sed -n 's/.*[^A-Za-z]\([A-Za-z][a-z]*\) consequences.*/\1/p' | head -1)
+# Spelled out rather than a numeral, so the word is what has to be read. An
+# unrecognised word fails rather than passing as zero: a renamed heading or a
+# reworded head sentence must not answer this check by making it vacuous.
+case "$CLAIMED_WORD" in
+  Two) CLAIMED=2 ;;  Three) CLAIMED=3 ;;  Four) CLAIMED=4 ;;
+  Five) CLAIMED=5 ;; Six) CLAIMED=6 ;;    Seven) CLAIMED=7 ;;
+  *) CLAIMED="no count read from the list head" ;;
+esac
+# Top-level items only: the second consequence carries an indented continuation
+# paragraph, which is part of that item and not a sixth one.
+tok 'the left-open list numbers as many consequences as its head claims' \
+    "$CLAIMED" \
+    "$(printf '%s\n' "$LEFT_OPEN" | grep -cE '^[0-9]+\. ')"
 
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi

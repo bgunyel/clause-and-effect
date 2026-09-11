@@ -254,23 +254,60 @@ move the rule to a ruleset. Why it was not done, and what would have to be
 checked first, is in `docs/adr/0001-hooks-not-ruleset.md`.
 
 **Deliberately left open.** These stop mistakes, not adversaries: they read the
-text of a command, so a caller that means to evade them can. Four consequences
-are accepted rather than fixed. A push, a decision or a pull request inside
-`sh -c` is refused outright rather than assessed, because a destination inside
-quotes cannot be read — so opening a pull request from a wrapper is refused even
-into the right base. A quoted multi-line string whose continuation line begins
-with one of these commands is refused although it is only prose — a blocked
-comment is visible and one edit away, a silently permitted push is neither. A
-base written after a command substitution is not seen as that command's, because
-the tokeniser cuts on its parens; name the base first. And nothing in
-this repository guards `.claude/`: the only `Edit|Write` hook covers three
-`docs/` directories, so the hook files and `settings.json` that carry this
-boundary are not themselves covered by the boundary. Whether an edit to them
-prompts at all is left to the harness's own permission settings, which are
-configuration rather than a rule of this repository. That gap is open by the
-same standard that decides the rest — an agent does not *mistakenly* rewrite the
-hook that just refused it — and closing it would make every future hook change a
-two-person procedure for no gain against the threat actually named.
+text of a command, so a caller that means to evade them can. Five consequences
+are accepted rather than fixed, and they are numbered because the count is the
+part that went stale last time.
+
+1. **A wrapped command is refused outright rather than assessed**, because
+   nothing at all can be read out of a quoted payload — not a destination, not
+   a subcommand, not an HTTP method. So `bash -c "git push origin <branch>"`
+   is refused though it names the one branch an agent may push, and
+   `sh -c "gh pr create --base dev-NN"` though it names the right base, and
+   `bash -c "gh pr view 5"` though the paragraph above grants that read in as
+   many words. Only what a hook guards is refused, so `bash -c "gh issue list"`
+   and `bash -c "make test"` are untouched. Run it unwrapped.
+
+2. **The refusal reaches an unwrapped command that merely shares a line with a
+   wrapper**, in either order: `bash -c "make test" && gh pr view 5` and
+   `gh pr view 5 && bash -c "make test"` are both refused. Each hook asks two
+   questions of the whole line — is a wrapper in a command position, and does
+   the line carry anywhere on it the thing this hook guards — and never asks
+   whether the two are the same command, because telling them apart would mean
+   reading inside the quotes, which is the thing that cannot be done. Only the
+   second question is the loose one: a wrapper named in passing sits in no
+   command position, so `echo "run bash -c later" && gh pr view 5` is
+   untouched.
+
+   The two halves are that one shape with a different second question, and the
+   width of that question is the whole difference between them.
+   `no-git-push.sh` asks for a push, so an ordinary `git status` beside a
+   wrapper is untouched. `no-pr-decisions.sh` asks for every surface that
+   decides a pull request or a release: the `pr|release|api` group after a
+   `gh`, and the REST and graphql spellings of the same decisions, which name
+   no `gh` at all. So it never reaches the verb of a wrapped `gh pr` — every
+   read of that surface is refused with its writes — while
+   `bash -c "make test" && echo state=closed` is refused on the bare word, and
+   so is a `gh issue` command whose body text merely carries `pr`, `release` or
+   `api`, quoted text having no argument structure to say whether a word is a
+   subcommand or prose. `no-pr-decisions.sh` sets that trade out under *The
+   trade, taken knowingly, in three parts*, and `check-hooks.sh` pins each.
+
+3. **A quoted multi-line string whose continuation line begins with one of
+   these commands is refused although it is only prose** — a blocked comment is
+   visible and one edit away, a silently permitted push is neither.
+
+4. **A base written after a command substitution is not seen as that
+   command's**, because the tokeniser cuts on its parens; name the base first.
+
+5. **Nothing in this repository guards `.claude/`**: the only `Edit|Write` hook
+   covers three `docs/` directories, so the hook files and `settings.json` that
+   carry this boundary are not themselves covered by the boundary. Whether an
+   edit to them prompts at all is left to the harness's own permission
+   settings, which are configuration rather than a rule of this repository.
+   That gap is open by the same standard that decides the rest — an agent does
+   not *mistakenly* rewrite the hook that just refused it — and closing it
+   would make every future hook change a two-person procedure for no gain
+   against the threat actually named.
 
 ## Agent skills
 
