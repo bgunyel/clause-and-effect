@@ -1210,6 +1210,57 @@ check no-pr-decisions.sh ALLOW 'bash -c gh issue close'      'bash -c "gh issue 
 check no-pr-decisions.sh ALLOW 'bash -c gh issue list'       'bash -c "gh issue list"'
 check no-pr-decisions.sh ALLOW 'bash -c an ordinary command' 'bash -c "make test"'
 
+echo "=== REGRESSION: #72, gh is a word here and not a suffix ==="
+# "The rule reaches gh's three deciding surfaces and stops there" -- the comment
+# heading the block above -- is the spec, and the pattern did not implement it.
+# (Named rather than pointed at by line count, which any insertion would make
+# wrong.) `gh` was the one token in this file matched unbounded on its left, so any
+# word ENDING in gh satisfied it -- high, enough, through, sigh, dough -- and
+# once a wrapper was on the line, one of those followed by a delimited pr,
+# release or api anywhere later was refused. The first row is the one that
+# matters: it names no gh, calls no GitHub surface, and is the shape of an
+# ordinary commit from inside a wrapper. It was refused with a reason that was
+# false rather than merely conservative -- "a shell wrapper does not change what
+# the command decides" said to a commit that decides nothing.
+#
+# The ALLOW directly above was the only fixture guarding this path, and it
+# carries neither a gh-ending word nor a trigger token, so no regex could have
+# tripped it; its two neighbours exercise the subcommand dimension, not this
+# one. That is the hole this section fills. Measured before the one-line fix:
+# every ALLOW below was BLOCK.
+check no-pr-decisions.sh ALLOW 'bash -c a commit message saying high' \
+  "bash -c \"git commit -m 'refactor high level api client'\""
+check no-pr-decisions.sh ALLOW 'bash -c grep high pr.txt'      'bash -c "grep high pr.txt"'
+check no-pr-decisions.sh ALLOW 'bash -c cat sigh api.md'       'bash -c "cat sigh api.md"'
+check no-pr-decisions.sh ALLOW 'bash -c ls dough api'          'bash -c "ls dough api"'
+check no-pr-decisions.sh ALLOW 'bash -c echo through pr'       'bash -c "echo through pr"'
+check no-pr-decisions.sh ALLOW 'bash -c cat enough release.md' 'bash -c "cat enough release.md"'
+# A left boundary, not a left anchor. A path ends in a character that is none of
+# gh's own, so an invoked gh still matches wherever it is spelled from. Without
+# this pair the boundary could be tightened to `(^|[[:space:]])` -- or the whole
+# group anchored -- and nothing in this suite would notice.
+check no-pr-decisions.sh BLOCK 'bash -c ./gh pr merge'         'bash -c "./gh pr merge 5"'
+check no-pr-decisions.sh BLOCK 'bash -c /usr/bin/gh pr merge'  'bash -c "/usr/bin/gh pr merge 5"'
+# The narrowing the boundary accepts, pinned rather than left for a later review
+# to find. The character class excludes - and _ as every other token in this
+# file does, so a command whose NAME ends in gh behind one of those stops
+# matching. Both are evasion shapes rather than mistakes, and the two BLOCKs
+# above show the spellings that reach gh itself still refuse; accepted under
+# "these stop mistakes, not adversaries". Measured before the fix: both BLOCK.
+# This pair is what would notice if the trade were quietly taken back, or
+# quietly widened past what the comment on the pattern claims.
+check no-pr-decisions.sh ALLOW 'bash -c my-gh pr merge'        'bash -c "my-gh pr merge 5"'
+check no-pr-decisions.sh ALLOW 'bash -c my_gh pr merge'        'bash -c "my_gh pr merge 5"'
+# The third narrowed shape, and the one with the other cause: a literal \n
+# escape puts `n` in front of gh, which no class this file would write admits,
+# so this follows from having a left boundary at all rather than from which one.
+# It is the single verdict the fix changed across the 7,621-command corpus #72
+# sampled. Pinned because the comment on the pattern claims all three are, and a
+# check suite is evidence about the cases it names and about nothing else -- the
+# two rows above cannot speak for this one, having a different cause.
+check no-pr-decisions.sh ALLOW 'bash -c a \n escape before gh' \
+  "bash -c \"printf 'summary\\ngh pr review --approve 5' > /tmp/x\""
+
 echo "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
 # Closing a PR and publishing a release were refused in the gh spelling and open
 # through gh api, so the boundary was spelling-dependent exactly where the file

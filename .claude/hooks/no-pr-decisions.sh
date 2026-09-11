@@ -349,7 +349,39 @@ VERDICT='(^|[[:space:]])(--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[
 # All three are reads or ordinary edits, all are refused with the writes for the
 # same reason the method of a wrapped `gh api` was already not read, and all are
 # one edit away from working. Run them unwrapped, on a line of their own.
-GH_SURFACE_ANYWHERE='gh[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
+#
+# What is NOT part of that trade: `gh` had no left boundary, so any word ending
+# in gh was a gh -- high, enough, through, sigh, dough -- and a wrapped
+# `git commit -m 'refactor high level api client'` was refused as a PR decision
+# though it names no gh and decides nothing. All three parts above presuppose a
+# gh on the line, so that command fell outside every one of them, and the
+# refusal text was false rather than conservative. #72. The left boundary is the
+# one every other token here already has, argued for in as many words: the
+# group's own right edge below, `eval` in the wrapper detector, `release delete`
+# against `release delete-asset`, `rest_bases` anchoring on its field flag to
+# keep `rebase` and `database` the words they are. The pattern is only ever used
+# under `grep -qE` as a boolean, so consuming the boundary character costs
+# nothing.
+#
+# Three shapes stop matching, and they have two different causes -- worth
+# keeping apart, because only one of them is a choice this file made.
+#
+# The boundary EXISTING narrows a literal `\n` escape written immediately before
+# gh: the character in front is then `n`, which no class this file would write
+# admits. `printf 'summary\ngh pr review --approve 5'` inside a wrapper matched
+# before and does not now. That is the single verdict the fix changes across the
+# 7,621-command corpus #72 sampled, and it follows from having a left boundary
+# at all rather than from which one -- measured, both candidate classes agree.
+#
+# The class EXCLUDING `-` and `_`, as every other token here does, separately
+# narrows `my-gh pr merge 5` and `my_gh pr merge 5`.
+#
+# All three are evasion shapes rather than mistakes -- `./gh` and `/usr/bin/gh`
+# still refuse, a path ending in a character that is none of gh's own -- and
+# they are accepted under the same "these stop mistakes, not adversaries" that
+# decides the rest, stated here rather than left for a later review to find.
+# All three are pinned under REGRESSION: #72 in check-hooks.sh.
+GH_SURFACE_ANYWHERE='(^|[^-A-Za-z0-9_])gh[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
 
 # Every base a gh api call names, in the two shapes gh accepts one. Both print
 # the values, one per line, for bases_all_dev -- the same "every, not the last"
