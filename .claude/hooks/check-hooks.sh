@@ -234,6 +234,10 @@ need_worktree() {  # need_worktree <dir> <fixture name>
 # line rather than a trailing remark. Routed through `armed`, such a pin cannot
 # pass: measured, not reasoned, on the boundary-section check that dev-05 is
 # red on today. This reads the file as written, and the name says which.
+prose_count() {  # prose_count <file> <literal> -- how many lines say it
+  grep -cF -- "$2" "$1" 2>/dev/null
+}
+
 written() {  # written <label> <file> <literal> -- the file as written, # and all
   if grep -qF -- "$3" "$2" 2>/dev/null; then
     printf '  ok   written %s\n' "$1"
@@ -2125,13 +2129,34 @@ beside 'the guard names the pairing beside its derivation' \
 beside 'and the report names it identically' \
   "$HOOKS/report-stale-branches.sh" "$PAIRING"
 # A pointer to an argument is worth what the argument is worth, and the report's
-# now points at prose in another file. Nothing kept that prose alive, so delete
-# the guard's header and the report goes on citing a reason that is no longer
-# written anywhere -- the stale-docstring defect moved rather than fixed. This
-# pins the claim itself, both halves of it, in the one place it is now made.
+# now points at prose in another file. Two ways that goes wrong, and the second
+# is the one this branch would otherwise have left open.
+#
+# Delete the guard's header and the report cites a reason no longer written
+# anywhere: the stale-docstring defect moved rather than fixed. Re-add a second
+# copy to the report and the defect is back exactly as it was -- two arguments,
+# nothing holding them to each other -- which is what the report's own new
+# comment says is wrong: "a second copy of an argument goes stale in silence
+# when the first one is corrected." The code duplication got a count for that
+# reason; the prose duplication fixed in the same breath did not, and the
+# asymmetry was the gap. Both directions are counted now, the same shape as the
+# two counts above, and both halves of the claim are in the literal.
+#
+# The limit is the one the counts above have: this finds the argument as
+# written, so a reworded second copy is a second copy uncounted.
 ARGUMENT='sort makes dev-09 beat dev-10, and an unfiltered glob lets origin/dev-foo'
-written 'the argument the report points at is still made in the guard' \
-  "$HOOKS/no-work-on-stale-branch.sh" "$ARGUMENT"
+tok 'the argument the report points at is made in the guard, once' \
+    '1' "$(prose_count "$HOOKS/no-work-on-stale-branch.sh" "$ARGUMENT")"
+tok 'and the report does not argue it a second time' \
+    '0' "$(prose_count "$HOOKS/report-stale-branches.sh" "$ARGUMENT")"
+# And the sentence that does the pointing: without it the report holds a bare
+# pairing pointer and no trace of where its reasoning went. `beside` rather than
+# `written`, because a pointer that is not beside the derivation is not doing
+# the job the pointer exists for -- the same standard the pairing line is held
+# to four lines above.
+POINTER="no-work-on-stale-branch.sh's header, rather than twice here in different words"
+beside 'the report says where the argument was moved to' \
+  "$HOOKS/report-stale-branches.sh" "$POINTER"
 
 # The carve-out's identity test, pinned as three lines rather than driven as a
 # process. Two of them are driven, by the diverged and no-local fixtures above;
