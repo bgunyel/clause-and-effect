@@ -2331,7 +2331,13 @@ echo "=== the documents answer the citations the hooks make into them ==="
 # rather than a check on it -- #70's finding was that the lifetime rule was
 # written down twice, in neither place a reader looking for vocabulary would go.
 # An entry runs from its bolded name to its `_Avoid_:` line, and the extraction
-# is checked from both ends before anything is asserted against it.
+# is checked from both ends before anything is asserted against it -- with one
+# limit named, because the two extractions below are not equally evidenced.
+# *Reserved act* has an entry after it, so its `unarmed` is real evidence that
+# the `_Avoid_:` stop fires. *Worktree branch* is the last entry in the file:
+# nothing follows it for an over-run to swallow, so its `unarmed` tests only
+# that the extraction did not begin too early, and the `_Avoid_:` stop is
+# evidenced there by the other extraction rather than by its own.
 CONTEXT_MD="$HOOKS/../../CONTEXT.md"
 SKILL_MD="$HOOKS/../skills/branch-hygiene/SKILL.md"
 entry() {  # entry <file> <bolded name> -- one glossary entry, name to _Avoid_
@@ -2367,24 +2373,42 @@ unarmed 'and it is that entry rather than the whole glossary' \
 written 'the enumeration names the act the report cites' \
   "$RESERVED_ENTRY" 'removing a worktree or deleting a worktree branch'
 
-# The skill reads that enumeration as closed and counts it. An act added to
-# CONTEXT.md and not to the sentence that counts them leaves the skill asserting
-# a number the glossary has outgrown -- the drift the section above is checked
-# for, one document along. Both directions, because only the second catches a
-# count corrected by deleting the claim instead of fixing it.
-written 'the skill counts the acts as the glossary now enumerates them' \
-  "$SKILL_MD" 'five acts'
-unarmed 'and does not still call the enumeration four' \
+# The skill read that enumeration as closed and counted it -- "one of the four
+# acts CONTEXT.md names" -- and #70 found the count stale the moment a fifth act
+# was needed. Correcting the number to five would have left the same defect with
+# a later expiry date, so the count is gone from the skill altogether and the
+# enumeration is cited instead of counted. CONTEXT.md holds the list, once. That
+# is the pairing convention above -- argue once, point from the other place --
+# applied to prose in a second file.
+#
+# Both spellings are refused, the stale one and the corrected one. Refusing
+# `five acts` is the refusing direction on purpose: re-adding a count that is
+# accurate today turns this red although nothing is wrong yet, and that is a
+# failure which is visible and one edit away. A second copy of a count that is
+# allowed to stand goes stale in silence, which is the direction that matters.
+unarmed 'the skill does not carry the count that went stale' \
   "$SKILL_MD" 'four acts'
+unarmed 'nor a corrected one, which would go stale the same way' \
+  "$SKILL_MD" 'five acts'
+written 'it cites the enumeration instead of counting it' \
+  "$SKILL_MD" 'entry holds the list'
 
 # The third citation, and the one that had gone unwritten rather than merely
 # undocumented: both hooks name a local sweep as what removes a merged worktree
 # branch, and no such procedure existed. The hooks are read for the citation
 # and the skill asserted to answer it, rather than the sweep's existence being
 # asserted on its own -- a procedure nothing cites is a procedure that can go.
+#
+# The literal is the pointer and deliberately not the noun. The first version of
+# this check asked whether each header contained `sweep`, and both contained it
+# at dev-05 already -- once in the guard, three times in the report. That bare
+# word IS the dangling citation #70 found, so the check was satisfied by the
+# defect: it would have stayed green through a revert of every line these two
+# headers gained. Measured on `git show origin/dev-05:` copies of both files,
+# which carry the noun and not the pointer.
+CITATION='"The sweep" in the branch-hygiene skill'
 for hook in no-work-on-stale-branch.sh report-stale-branches.sh; do
-  tok "$hook cites a local sweep" 'cited' \
-      "$([ "$(prose_count "$HOOKS/$hook" 'sweep')" -gt 0 ] && echo cited || echo absent)"
+  written "$hook points at the sweep by name" "$HOOKS/$hook" "$CITATION"
 done
 
 # Extracted for the reason the glossary entries are: `git branch -d` is in this
@@ -2410,8 +2434,18 @@ written 'with the care the rotation takes over the same flag' \
   "$SWEEP_SECTION" 'never `-D`'
 # The report classifies three ways and only one of the three is the sweep's. A
 # sweep that acted on `unclassified` would delete a branch freshly cut for work
-# not yet started, which is the case that classification exists to protect.
-written 'and leaves the unclassified alone' "$SWEEP_SECTION" 'unclassified'
+# not yet started, which is the case that classification exists to protect. The
+# literal is the instruction and not the word: `unclassified` alone is satisfied
+# by a section that says to sweep those too.
+written 'and leaves the unclassified alone' \
+  "$SWEEP_SECTION" 'Leave every unclassified branch alone'
+
+# The cadence is the half that makes both hook headers honest. #70's complaint
+# was not that the sweep was undocumented but that it "is named as a thing that
+# happens", so a sweep written without its cadence would answer the citation and
+# leave the claim behind it as false as it was. Pinned for that reason.
+written 'the sweep says how often it is run, which is by hand and never' \
+  "$SWEEP_SECTION" 'Cadence: manual, and unscheduled'
 
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi

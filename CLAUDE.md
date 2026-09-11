@@ -286,8 +286,10 @@ The five canonical roles, each label string equal to its name. See
 
 ### Domain docs
 
-Single-context: `docs/adr/` holds one ADR; `CONTEXT.md` holds the glossary — the
-distinction between a *check* and a *probe*, and the three terms the boundary
-above is read against: *active dev branch*, *worktree branch*, *reserved act*.
-The last two carry what the hooks cite into them, a worktree branch's lifetime
-and the acts an agent reports rather than performs. See `docs/agents/domain.md`.
+Single-context: `docs/adr/` holds one ADR; `CONTEXT.md` holds the glossary. It
+is written lazily — a term is added when a collision has actually been resolved
+— so it stays short enough to read whole, and this line deliberately does not
+enumerate it: the sentence that did named two terms of five and went stale
+without saying so. Several of the hooks above cite it, and
+`.claude/hooks/check-hooks.sh` holds those citations to what it says. See
+`docs/agents/domain.md`.
