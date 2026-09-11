@@ -210,7 +210,9 @@ def gap_lines(art: LevelScore, chunk: LevelScore, k: int) -> List[str]:
         f"article−chunk gap @{k}: {gap:+.1%}"
         f"   (right article, wrong chunk = chunking/embedding)",
         f"  over the grounded subset only, n={art.scored}: "
-        f"article {art.hit_at_k[k]:.1%} − chunk {chunk.hit_at_k[k]:.1%}."
+        f"article {art.hit_at_k[k]:.1%} ({art.hits[k]}) − "
+        f"chunk {chunk.hit_at_k[k]:.1%} ({chunk.hits[k]}) = "
+        f"{art.hits[k] - chunk.hits[k]} cases."
         f" Not the article table above, which covers every case.",
     ]
 

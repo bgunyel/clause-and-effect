@@ -330,3 +330,6 @@ def test_the_printed_gap_names_its_population():
     assert "article−chunk gap @3: +0.0%" in text
     assert "n=2" in text
     assert "grounded" in text
+    # The gap in cases, not only in points: one of the two grounded cases hits
+    # the article and it is the same one that hits the chunk.
+    assert "article 50.0% (1) − chunk 50.0% (1) = 0 cases" in text
