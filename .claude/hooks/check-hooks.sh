@@ -92,8 +92,11 @@
 # BLOCK)` is the migration's evidence, and reverting the file turns exactly
 # those red with `got` equal to the recorded `was`. An all-green run on both
 # sides would have been evidence that the migration changed nothing. Sixteen
-# invariants, eighteen flips, two that the file fails closed without its
-# library, and four that name which refusal fired.
+# invariants, eighteen flips, and four that name which refusal fired. The two
+# that had this file fail closed without its library are no longer in that class
+# or in this section: issue #84 found the same question asked of one hook of four
+# and one function of three, and moved it to the load-contract section at the foot
+# of this suite, which drives six checks for this file alone.
 #
 # A review of the migration found eight more permitting verdicts of the same
 # kind, seven of them shapes an agent writes without meaning anything by them:
@@ -132,6 +135,13 @@ echo "context: $CONTEXT"
 echo
 
 FAILED=0
+# Where a hook is, given what a check names: a bare filename is one of this
+# repository's, an absolute path is a fixture copy of one. Written once because
+# three helpers below ask it, and they answered it in three identical `case`
+# statements until the load-contract section gave `says` its first fixture.
+hook_path() {  # hook_path <script|/absolute/hook>
+  case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s\n' "$HOOKS/$1" ;; esac
+}
 check() {
   local script="$1" want="$2" label="$3" cmd="$4" got rc
   printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | ./"$script" >/dev/null 2>&1
@@ -162,16 +172,16 @@ ON_DEV="$FIXTURES/on-dev"
   echo "fixtures were not created; git init -b needs git 2.28 or newer" >&2
   exit 1
 }
-# A copy of each hook with no lib/ beside it, to ask what one does when the
-# tokeniser it now depends on is not there.
-mkdir -p "$FIXTURES/nolib"
-cp no-commit-to-main.sh "$FIXTURES/nolib/"
+# The nolib and halflib fixtures are built beside the checks that drive them, at
+# the foot of this suite. They were here, and one hook of four was copied into
+# them; see the load-contract section for why that question is asked in one place
+# now.
 
 # check, with the hook's working directory named rather than inherited. The
 # hook is invoked by absolute path because it sources lib/ relative to $0.
 check_in() {  # check_in <dir> <script|/absolute/hook> <want> <label> <cmd>
   local dir="$1" script="$2" want="$3" label="$4" cmd="$5" got rc hook
-  case "$script" in /*) hook="$script" ;; *) hook="$HOOKS/$script" ;; esac
+  hook=$(hook_path "$script")
   printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
     | ( cd "$dir" && "$hook" ) >/dev/null 2>&1
   rc=$?
@@ -197,10 +207,17 @@ flip() {  # flip <dir> <script> <was> <want> <label> <cmd>
 # message names main and says why main is closed; nothing above can tell the
 # three messages apart, so a change routing every path through one of them
 # would leave the suite green and the file pointless.
-says() {  # says <dir> <script> <fragment> <label> <cmd>
-  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err
+# Both take a fixture path through hook_path, as check_in does: the load-contract
+# section at the foot of this suite drives copies of a hook that sit outside
+# $HOOKS, and which refusal one of those gives is the claim there. says_not has no
+# such caller today and resolves one anyway, because the pair diverging is how the
+# next reader learns the wrong rule about which of the two can be pointed at a
+# fixture.
+says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err hook
+  hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
-        | ( cd "$dir" && "$HOOKS/$script" ) 2>&1 >/dev/null)
+        | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   case "$err" in
     *"$want"*) printf '  ok   says  %s\n' "$label" ;;
     *) printf '  FAIL %s\n         wanted the refusal to say |%s|\n         it said |%s|\n' \
@@ -213,10 +230,11 @@ says() {  # says <dir> <script> <fragment> <label> <cmd>
 # detector cannot tell a merged branch from one cut before the dev branch moved,
 # so a message claiming a merge there would be a claim the hook cannot support.
 # Nothing above can catch a message saying too much.
-says_not() {  # says_not <dir> <script> <fragment> <label> <cmd>
-  local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err
+says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
+  local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err hook
+  hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
-        | ( cd "$dir" && "$HOOKS/$script" ) 2>&1 >/dev/null)
+        | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   case "$err" in
     *"$unwanted"*) printf '  FAIL %s\n         the refusal must not say |%s|\n         it said |%s|\n' \
          "$label" "$unwanted" "$err"
@@ -278,8 +296,17 @@ written() {  # written <label> <file> <literal> -- the file as written, # and al
   fi
 }
 
+# The absence has to be an absence IN a file that was read. `grep -qF` on a file
+# that is not there exits 2, which fell into the else arm and reported ok -- so
+# every pin below would have passed for a file renamed or deleted away, which is
+# the permitting direction and the same shape as the #84 defect these were added
+# for. Found by review of that change, not by this suite.
 unarmed() {  # unarmed <label> <file> <literal>
-  if grep -qF -- "$3" "$2" 2>/dev/null; then
+  if [ ! -r "$2" ]; then
+    printf '  FAIL %s\n         %s cannot be read, so the absence of |%s| is evidence of nothing\n' \
+      "$1" "$2" "$3"
+    FAILED=1
+  elif grep -qF -- "$3" "$2" 2>/dev/null; then
     printf '  FAIL %s\n         %s must not contain |%s|\n' "$1" "$2" "$3"
     FAILED=1
   else
@@ -1889,15 +1916,11 @@ flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'separated --git-dir before com
 flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'separated --namespace before a push to main' \
   'git --namespace n push origin main'
 
-echo "=== the hooks fail closed when the tokeniser is not beside them ==="
-# All three hooks now rest on lib/command-scan.sh, and this one is kept in the
-# tree precisely because it still stands when the broader hook is disabled. An
-# unreadable library left cs_split undefined, the command list empty and every
-# commit on main permitted -- a single point of failure that failed open.
-check_in "$ON_MAIN" "$FIXTURES/nolib/no-commit-to-main.sh" BLOCK 'no lib/, commit on main' \
-  'git commit -m "wip"'
-check_in "$ON_DEV"  "$FIXTURES/nolib/no-commit-to-main.sh" BLOCK 'no lib/, anything at all' \
-  'ls'
+# What this file does when lib/command-scan.sh is not loadable is checked in the
+# load-contract section at the foot of this suite, with the same question asked of
+# the other three hooks. It was asked here, of this hook alone, and issue #84
+# found two hooks with no guard at all and a third probing one function of three
+# while both blocks stayed green.
 
 echo "=== the refusals still name main, which is why this file is kept ==="
 says "$ON_MAIN" no-commit-to-main.sh 'Blocked: committing to main.' \
@@ -2362,28 +2385,12 @@ says_not "$WT_STALE" no-work-on-stale-branch.sh 'merged' \
 says "$WT_STALE" no-work-on-stale-branch.sh 'git merge origin/dev-05 is permitted' \
   'the fallback refusal says how to get out' 'git commit -m "wip"'
 
-echo "--- the guard fails closed when the tokeniser is not beside it, and only where it has an opinion ---"
-cp no-work-on-stale-branch.sh "$FIXTURES/nolib/"
-check_in "$WT_STALE" "$FIXTURES/nolib/no-work-on-stale-branch.sh" BLOCK 'no lib/, on a stale branch' \
-  'git status'
-# Failing closed is scoped to a branch this file has an opinion about. A healthy
-# worktree is not refused because a library is missing.
-check_in "$WT_WORK" "$FIXTURES/nolib/no-work-on-stale-branch.sh" ALLOW 'no lib/, on a branch carrying work' \
-  'git commit -m "wip"'
-# A library that is present but incomplete. cs_git_args is the function whose
-# absence would be silent and permitting: `RAW=$(cs_git_args "$VERB") ||
-# continue` cannot tell "not this verb" from "no such function", so probing
-# cs_split alone left every verb permitted through the check written to stop
-# exactly that. Found by review, not by this suite.
-mkdir -p "$FIXTURES/halflib/lib"
-cp no-work-on-stale-branch.sh "$FIXTURES/halflib/"
-sed 's/^cs_git_args()/cs_renamed_away()/' lib/command-scan.sh > "$FIXTURES/halflib/lib/command-scan.sh"
-grep -q '^cs_renamed_away()' "$FIXTURES/halflib/lib/command-scan.sh" || {
-  echo "the half-library fixture did not rename cs_git_args; the check below proves nothing" >&2
-  exit 1
-}
-check_in "$WT_STALE" "$FIXTURES/halflib/no-work-on-stale-branch.sh" BLOCK 'a library missing only cs_git_args' \
-  'git commit -m "wip"'
+# The nolib and halflib checks for this hook, including the scoping that makes a
+# healthy worktree ALLOW with no library at all, moved to the load-contract
+# section at the foot of this suite. They were the only ones of their kind that
+# covered every function a hook probes, and #84's finding was that the lesson
+# stayed in this one file: keeping them here, where the three hooks that had it
+# wrong have no section, is what let that happen.
 
 echo "=== REGRESSION: #69, a command name matched as a substring ==="
 # First coverage of any kind for these two hooks. Neither sourced
@@ -2581,35 +2588,12 @@ check pytest-via-uv-group.sh ALLOW 'a wrapped bare pytest is not read' \
 check alembic-via-uv-group.sh ALLOW 'a wrapped bare alembic is not read' \
   'sh -c "alembic upgrade head"'
 
-echo "=== #69, the two convention hooks fail closed without the tokeniser ==="
-# They depend on lib/command-scan.sh now, so they answer the question the
-# boundary hooks already answer: a guard's own breakage refuses. Without this
-# the sourcing would leave cs_split undefined, the fragment list empty and
-# every bare invocation permitted.
-cp pytest-via-uv-group.sh alembic-via-uv-group.sh "$FIXTURES/nolib/"
-check_in "$ON_DEV" "$FIXTURES/nolib/pytest-via-uv-group.sh" BLOCK \
-  'no lib/, pytest-via-uv-group.sh refuses anything at all' 'ls'
-check_in "$ON_DEV" "$FIXTURES/nolib/alembic-via-uv-group.sh" BLOCK \
-  'no lib/, alembic-via-uv-group.sh refuses anything at all' 'ls'
-# And a library that is there but missing one of the two functions each file
-# calls. The first version of this guard tested cs_split only -- the function
-# that names the file's subject -- so a library missing cs_normalise left both
-# hooks permitting a bare invocation, silently. Same fixture shape as the
-# cs_git_args one below, and the same reason for it.
-mkdir -p "$FIXTURES/halflib-uv/lib"
-cp pytest-via-uv-group.sh alembic-via-uv-group.sh "$FIXTURES/halflib-uv/"
-sed 's/^cs_normalise()/cs_renamed_away()/' lib/command-scan.sh \
-  > "$FIXTURES/halflib-uv/lib/command-scan.sh"
-# A sed that matched nothing would leave a complete library here, and both
-# checks below would pass without asking anything.
-grep -q '^cs_renamed_away()' "$FIXTURES/halflib-uv/lib/command-scan.sh" || {
-  echo "the half-library fixture still defines cs_normalise; the two checks below prove nothing" >&2
-  exit 1
-}
-check_in "$ON_DEV" "$FIXTURES/halflib-uv/pytest-via-uv-group.sh" BLOCK \
-  'a library missing only cs_normalise, pytest-via-uv-group.sh' 'pytest tests/'
-check_in "$ON_DEV" "$FIXTURES/halflib-uv/alembic-via-uv-group.sh" BLOCK \
-  'a library missing only cs_normalise, alembic-via-uv-group.sh' 'alembic upgrade head'
+# What these two do when lib/command-scan.sh is not loadable is checked in the
+# load-contract section at the foot of this suite, with the same question asked of
+# every file that sources the tokeniser. #69 asked it here, of these two, with its
+# own fixtures and for one of the two functions each calls; #84 found the same
+# question answered three ways in the four boundary hooks at the same time. One
+# question, one place -- and cs_split, which had no fixture here, has one there.
 
 echo "=== append-only: which docs directories are guarded, and which are not ==="
 # First coverage for append-only-docs.sh and its Edit/Write companion. It was
@@ -3404,6 +3388,457 @@ for hook in $CS_NAMED; do
           "$hook" "$CS_SOURCERS"
 done
 set +f
+
+echo "=== issue #84: every hook refuses when lib/command-scan.sh does not load ==="
+# THE LOAD CONTRACT, driven. lib/command-scan.sh states it; the four hooks that
+# source that file have to hold it, and before #84 three of them did not --
+# no-git-push.sh and no-pr-decisions.sh had no guard at all, and
+# no-commit-to-main.sh had one that probed cs_split alone.
+#
+# Asked of all four in one place, rather than in each hook's own section, because
+# what went wrong was exactly that the answer was given in one file and not
+# carried to the others: no-work-on-stale-branch.sh got this right, wrote the
+# trap down in its own comment, and the other three shipped past it. The two
+# blocks this section replaces sat 500 lines apart and between them covered two
+# hooks of four. An omission is visible in a matrix and invisible spread over
+# 2000 lines, so a hook added to the boundary belongs here with the rest of them.
+#
+# Two fixtures, because there are two ways to not load. `nolib` is the file
+# absent. `halflib` is the likelier failure in practice, and the one that found
+# #84: the library present, complete, and loading, with one cs_* function renamed
+# away -- which is what a refactor does rather than what an accident does.
+#
+# ONE FUNCTION AT A TIME is the whole point of halflib, and the reason there is a
+# fixture per hook per function below rather than one per hook. A fixture that
+# renamed every function at once would be satisfied by a guard that probes only
+# the first of them, and probing only one is the defect: no-commit-to-main.sh
+# probed cs_split, cs_split was still there, and `git push origin HEAD:main` was
+# permitted.
+#
+# That is deliberately the inverse of what issue #84 asked for -- "the halflib
+# fixture renames every function the hook under test probes" -- and is recorded as
+# a deviation rather than left to be read as one. One fixture with every name
+# renamed is the weaker test, for the reason just given; thirteen fixtures each
+# missing one name is the stronger, and the assertion the issue did ask for (that
+# the rename took) is made on both directions in mk_halflib below.
+#
+# `ls` is the driving command for the three hooks whose guard is unconditional,
+# and it is deliberately a command none of them has any opinion about: a BLOCK on
+# it can only have come from the guard, where a BLOCK on a forced push or on a
+# `gh pr merge` is over-determined the moment the fix lands and would go on
+# passing if the guard were taken out again. Each is paired with the same command
+# against the real hook, so the ALLOW half of the discrimination is on the page
+# rather than assumed.
+
+# EVERY file that sources the library, as a literal. It is the claim; the
+# derivation at the end of this section is the fact, and asserts these are all of
+# them. Everything between is driven per hook off this list.
+#
+# Six, not the four boundary hooks issue #84 was written about, and that is the
+# merge of #69 talking. #69 rebuilt pytest-via-uv-group.sh and
+# alembic-via-uv-group.sh on the tokeniser and gave each the same guard, having
+# hit the same trap from the other end -- its comment says "Testing cs_split alone
+# left cs_normalise unguarded", which is #84's finding in two more files, found
+# independently and at the same time. Two issues answering one question in two
+# places is what the question was about, so the answer is one section: a file that
+# cannot load the tokeniser must refuse, and the list is whoever loads it.
+LIB_CONSUMERS="alembic-via-uv-group.sh no-commit-to-main.sh no-git-push.sh no-pr-decisions.sh no-work-on-stale-branch.sh pytest-via-uv-group.sh"
+
+# The library absent. One directory for all of them: what makes the fixture is the
+# absence of lib/ beside the hook, not anything about the hook.
+#
+# Every copy is guarded, not one of them, and at the path the checks will drive.
+# The first version of this asked `[ -f ]` about no-git-push.sh alone, which is the
+# mistake mk_halflib records below with the consequence measured: a hook that is
+# not there makes `( cd "$dir" && "$hook" )` exit 127, and check_in reads anything
+# but 2 as ALLOW. So a missing copy turns every BLOCK here red -- visible -- but
+# lets `no lib/, on a branch carrying work` pass vacuously, which is an ALLOW
+# nobody would look at twice. Asking about one of four was itself the #84 shape,
+# and it was not hypothetical: #69's own two checks copied their fixtures in with
+# no guard at all, and this consolidation moved the mkdir below them, so both ran
+# against a hook that was not there until the derivation at the end of this
+# section went red.
+nolib_path() {  # nolib_path <hook> -- where the library-absent copy of it sits
+  printf '%s\n' "$FIXTURES/nolib/$1"
+}
+mkdir -p "$FIXTURES/nolib"
+for hook in $LIB_CONSUMERS; do
+  cp "$HOOKS/$hook" "$(nolib_path "$hook")"
+  [ -x "$(nolib_path "$hook")" ] || {
+    echo "the nolib fixture for $hook is not at $(nolib_path "$hook"), or is not executable; the checks using it prove nothing" >&2
+    exit 1
+  }
+done
+[ ! -d "$FIXTURES/nolib/lib" ] || {
+  echo "the nolib fixture has a lib/ beside it, so it is not the library-absent case at all" >&2
+  exit 1
+}
+
+# The library present and loading, with exactly one function renamed away. Built
+# by a call at the top level and named by convention, rather than returned from a
+# substitution: an `exit 1` inside `$( )` kills the subshell and leaves the suite
+# running, so a fixture guard written that way would report and then be ignored.
+#
+# Where the fixture goes, derived once. The builder below takes its directory
+# from this rather than composing the same path a second time, and that is not
+# tidiness: the first version of mk_halflib wrote
+# `local hook="$1" fn="$2" dir="$FIXTURES/halflib-$fn-$hook"`, and `local`
+# expands all of its arguments before it assigns any of them, so $fn and $hook
+# were still empty and every fixture was built in one directory named
+# `halflib--`. All four fixture guards passed -- they were asked about the
+# directory that had been built, not about the one the checks would drive -- and
+# thirteen checks reported ALLOW against a hook that was not there, which
+# check_in reads as permitted because it is not exit 2. A fixture guard that
+# derives its own path proves nothing about the check beside it.
+halflib_path() {  # halflib_path <hook> <cs_function> -- where that fixture sits
+  printf '%s\n' "$FIXTURES/halflib-$1-$2/$1"
+}
+mk_halflib() {  # mk_halflib <hook> <cs_function>
+  local hook="$1"
+  local fn="$2"
+  local target dir
+  target=$(halflib_path "$hook" "$fn")
+  dir=$(dirname "$target")
+  mkdir -p "$dir/lib"
+  cp "$HOOKS/$hook" "$dir/"
+  sed "s/^$fn()/cs_renamed_away()/" "$HOOKS/lib/command-scan.sh" > "$dir/lib/command-scan.sh"
+  # Both directions on the rename, because a sed that matched nothing leaves a
+  # complete library behind and the check using it would pass with no guard at
+  # all -- which is how these hooks reached dev-05 in the first place.
+  grep -q '^cs_renamed_away()' "$dir/lib/command-scan.sh" || {
+    echo "the half-library for $hook did not rename $fn away; the check using it proves nothing" >&2
+    exit 1
+  }
+  ! grep -q "^$fn()" "$dir/lib/command-scan.sh" || {
+    echo "the half-library for $hook still defines $fn; the check using it proves nothing" >&2
+    exit 1
+  }
+  # And that what is left still loads. A fixture broken some other way would
+  # refuse for a reason this section does not name, and would read as evidence
+  # for the probe.
+  bash -c ". '$dir/lib/command-scan.sh' && command -v cs_renamed_away >/dev/null 2>&1" || {
+    echo "the half-library for $hook does not load at all; the check using it proves nothing" >&2
+    exit 1
+  }
+  # The last guard asks about the path the checks will actually drive, which is
+  # the one the `halflib--` bug got wrong.
+  [ -x "$target" ] || {
+    echo "the half-library fixture for $hook is not at $target, or is not executable; the check using it proves nothing" >&2
+    exit 1
+  }
+}
+# One call per pair the contract names, which is the probe list of each hook. The
+# sets differ, and that difference is the reason the guards cannot share a list:
+# four want cs_git_args, no-pr-decisions.sh wants cs_gh_args and cs_join instead,
+# and the two convention hooks want neither.
+mk_halflib no-git-push.sh cs_normalise
+mk_halflib no-git-push.sh cs_split
+mk_halflib no-git-push.sh cs_git_args
+mk_halflib no-pr-decisions.sh cs_normalise
+mk_halflib no-pr-decisions.sh cs_split
+mk_halflib no-pr-decisions.sh cs_gh_args
+mk_halflib no-pr-decisions.sh cs_join
+mk_halflib no-commit-to-main.sh cs_normalise
+mk_halflib no-commit-to-main.sh cs_split
+mk_halflib no-commit-to-main.sh cs_git_args
+mk_halflib no-work-on-stale-branch.sh cs_normalise
+mk_halflib no-work-on-stale-branch.sh cs_split
+mk_halflib no-work-on-stale-branch.sh cs_git_args
+mk_halflib pytest-via-uv-group.sh cs_normalise
+mk_halflib pytest-via-uv-group.sh cs_split
+mk_halflib alembic-via-uv-group.sh cs_normalise
+mk_halflib alembic-via-uv-group.sh cs_split
+
+echo "--- no-git-push.sh, which had no guard at all ---"
+# The measured #84 case: with no guard, cs_git_args was undefined, the HAVE_PUSH
+# loop found no push, and the hook left without an opinion on a forced push of a
+# reserved branch.
+check_in "$ON_DEV" no-git-push.sh ALLOW 'a command with no push in it, library intact' \
+  'ls'
+check_in "$ON_DEV" "$(nolib_path no-git-push.sh)" BLOCK 'no lib/, anything at all' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-git-push.sh cs_normalise)" BLOCK 'a library missing only cs_normalise' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-git-push.sh cs_split)" BLOCK 'a library missing only cs_split' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-git-push.sh cs_git_args)" BLOCK 'a library missing only cs_git_args' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-git-push.sh cs_git_args)" BLOCK 'a renamed cs_git_args does not permit a forced push' \
+  'git push --force origin dev-05'
+says "$ON_DEV" "$(nolib_path no-git-push.sh)" 'no-git-push.sh could not load' \
+  'the refusal names this hook and not one of its three siblings' 'ls'
+says "$ON_DEV" "$(nolib_path no-git-push.sh)" 'Refusing rather than permitting' \
+  'and says that it is refusing rather than permitting' 'ls'
+
+echo "--- no-pr-decisions.sh, which had no guard at all ---"
+# This file's function set is what makes one shared probe list wrong: cs_gh_args
+# and cs_join, and no cs_git_args at all. Every rule in it reads its arguments
+# through cs_gh_args, so renaming that one permitted `gh pr merge` and
+# `gh pr create --base main` together.
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'a command with no gh in it, library intact' \
+  'ls'
+check_in "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" BLOCK 'no lib/, anything at all' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_normalise)" BLOCK 'a library missing only cs_normalise' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_split)" BLOCK 'a library missing only cs_split' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_gh_args)" BLOCK 'a library missing only cs_gh_args' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_gh_args)" BLOCK 'a renamed cs_gh_args does not permit a merge' \
+  'gh pr merge 81'
+check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_gh_args)" BLOCK 'nor a pull request based on main' \
+  'gh pr create --base main'
+# cs_join is read late, by the wrapper rules alone, so a renamed cs_join is
+# invisible to every check above it. It is probed because the hook calls it and
+# not because a rule was seen to break: the contract is the set, not whichever
+# subset a driving command happens to reach.
+check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_join)" BLOCK 'a library missing only cs_join' \
+  'ls'
+says "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" 'no-pr-decisions.sh could not load' \
+  'the refusal names this hook and not one of its three siblings' 'ls'
+says "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" 'Refusing rather than permitting' \
+  'and says that it is refusing rather than permitting' 'ls'
+
+echo "--- no-commit-to-main.sh, which had a guard and permitted anyway ---"
+# Why a guard naming one function is worse than none: it reads as the question
+# answered. `cs_git_args commit` and `cs_git_args push` fail exactly as a command
+# holding neither does, so with cs_git_args renamed away every commit and every
+# push was permitted while cs_split -- the only name probed -- was still there.
+check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'a command touching nothing, library intact' \
+  'ls'
+check_in "$ON_MAIN" "$(nolib_path no-commit-to-main.sh)" BLOCK 'no lib/, commit on main' \
+  'git commit -m "wip"'
+check_in "$ON_DEV"  "$(nolib_path no-commit-to-main.sh)" BLOCK 'no lib/, anything at all' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-commit-to-main.sh cs_normalise)" BLOCK 'a library missing only cs_normalise' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-commit-to-main.sh cs_split)" BLOCK 'a library missing only cs_split' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-commit-to-main.sh cs_git_args)" BLOCK 'a library missing only cs_git_args' \
+  'ls'
+# The #84 measurement itself, on the fixture that permitted it: a push landing on
+# main, from a checkout that is not main, refused by the guard because the refspec
+# rule that would otherwise catch it cannot run without the tokeniser.
+check_in "$ON_DEV" "$(halflib_path no-commit-to-main.sh cs_git_args)" BLOCK 'a renamed cs_git_args does not permit a push to main' \
+  'git push origin HEAD:main'
+says "$ON_DEV" "$(nolib_path no-commit-to-main.sh)" 'no-commit-to-main.sh could not load' \
+  'the refusal names this hook and not one of its three siblings' 'ls'
+says "$ON_DEV" "$(nolib_path no-commit-to-main.sh)" 'Refusing rather than permitting' \
+  'and says that it is refusing rather than permitting' 'ls'
+
+echo "--- no-work-on-stale-branch.sh, the one that had it right ---"
+# Its guard is the one that is scoped rather than unconditional, and the scope is
+# the reason: this file has no opinion at all about a branch carrying work, so a
+# missing library must not turn a healthy worktree into a refused one. That makes
+# its driving command a real one on a stale branch rather than `ls`, and gives it
+# the ALLOW half that the other three take from the intact-library control.
+check_in "$WT_STALE" "$(nolib_path no-work-on-stale-branch.sh)" BLOCK 'no lib/, on a stale branch' \
+  'git status'
+check_in "$WT_WORK" "$(nolib_path no-work-on-stale-branch.sh)" ALLOW 'no lib/, on a branch carrying work' \
+  'git commit -m "wip"'
+# WHAT THESE ARE AND ARE NOT. Every behavioural check in this block passes against
+# the unfixed hook, because this hook was the one that had the guard right: the two
+# nolib cases and the cs_git_args halflib case are the pre-existing ones moved
+# here, and cs_normalise and cs_split were already probed. So this block is pins,
+# not evidence of a fix, and issue #84's "each failing without the fix" is not met
+# here and cannot be. What did fail for this hook before the change is the pair
+# below, which asked the refusal to name the file rather than say "this hook".
+# cs_normalise and cs_split are driven anyway, because the contract is checked per
+# function everywhere: a check written only where a defect was found is the check
+# that will be missing at the next one.
+check_in "$WT_STALE" "$(halflib_path no-work-on-stale-branch.sh cs_git_args)" BLOCK 'a library missing only cs_git_args' \
+  'git commit -m "wip"'
+check_in "$WT_STALE" "$(halflib_path no-work-on-stale-branch.sh cs_normalise)" BLOCK 'a library missing only cs_normalise' \
+  'git commit -m "wip"'
+check_in "$WT_STALE" "$(halflib_path no-work-on-stale-branch.sh cs_split)" BLOCK 'a library missing only cs_split' \
+  'git commit -m "wip"'
+says "$WT_STALE" "$(nolib_path no-work-on-stale-branch.sh)" 'no-work-on-stale-branch.sh could not load' \
+  'the refusal names this hook and not one of its three siblings' 'git status'
+says "$WT_STALE" "$(nolib_path no-work-on-stale-branch.sh)" 'Refusing rather than permitting' \
+  'and says that it is refusing rather than permitting' 'git status'
+
+echo "--- pytest-via-uv-group.sh and alembic-via-uv-group.sh, from #69 ---"
+# These two are here for the reason the other four are in one place: the question
+# is one question. #69 asked it of them in their own section, with a third and a
+# fourth copy of the fixture idiom, and covered cs_normalise of the two functions
+# each calls -- which is the narrower probe #84 is about, in the fixture rather
+# than in the guard. Both are driven per function now.
+#
+# What these are: pins. Both guards were already right when #69 shipped them, so
+# nothing here fails against the unfixed hooks, and the two nolib checks are that
+# issue's own moved verbatim. cs_split is the fixture #69 did not build.
+check_in "$ON_DEV" pytest-via-uv-group.sh ALLOW 'a command naming no runner, library intact' \
+  'ls'
+check_in "$ON_DEV" "$(nolib_path pytest-via-uv-group.sh)" BLOCK \
+  'no lib/, pytest-via-uv-group.sh refuses anything at all' 'ls'
+check_in "$ON_DEV" "$(halflib_path pytest-via-uv-group.sh cs_normalise)" BLOCK \
+  'a library missing only cs_normalise, pytest-via-uv-group.sh' 'ls'
+check_in "$ON_DEV" "$(halflib_path pytest-via-uv-group.sh cs_split)" BLOCK \
+  'a library missing only cs_split, pytest-via-uv-group.sh' 'ls'
+says "$ON_DEV" "$(nolib_path pytest-via-uv-group.sh)" 'pytest-via-uv-group.sh could not load' \
+  'the refusal names this hook and not its companion' 'ls'
+says "$ON_DEV" "$(nolib_path pytest-via-uv-group.sh)" 'Refusing rather than permitting' \
+  'and says that it is refusing rather than permitting' 'ls'
+check_in "$ON_DEV" alembic-via-uv-group.sh ALLOW 'a command naming no runner, library intact' \
+  'ls'
+check_in "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" BLOCK \
+  'no lib/, alembic-via-uv-group.sh refuses anything at all' 'ls'
+check_in "$ON_DEV" "$(halflib_path alembic-via-uv-group.sh cs_normalise)" BLOCK \
+  'a library missing only cs_normalise, alembic-via-uv-group.sh' 'ls'
+check_in "$ON_DEV" "$(halflib_path alembic-via-uv-group.sh cs_split)" BLOCK \
+  'a library missing only cs_split, alembic-via-uv-group.sh' 'ls'
+says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'alembic-via-uv-group.sh could not load' \
+  'the refusal names this hook and not its companion' 'ls'
+says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'Refusing rather than permitting' \
+  'and says that it is refusing rather than permitting' 'ls'
+
+echo "--- the contract is written where the rename is made ---"
+# The checks above are evidence about four guards as they stand. They say nothing
+# about the next cs_* rename, which is made in lib/command-scan.sh by someone who
+# has no reason to open four hooks -- so the file being edited is where the
+# consequence has to be written, and these hold it there. `written` rather than
+# `armed`: this is prose, and stripping comments would leave nothing to match.
+written 'the library states the load contract' \
+  "$HOOKS/lib/command-scan.sh" 'THE LOAD CONTRACT'
+written 'and says that a rename reaches every consumer and this suite' \
+  "$HOOKS/lib/command-scan.sh" 'RENAMING A cs_* FUNCTION REACHES EVERY FILE THAT SOURCES THIS ONE'
+written 'and records why this is not one sourced preamble' \
+  "$HOOKS/lib/command-scan.sh" 'Not factored into one sourced preamble'
+# The pointer, from each of the four. #84's finding was not that the argument was
+# unwritten but that it was written in one hook and read by nobody editing the
+# other three, so a guard that does not point at the shared statement is a guard
+# whose reasoning is about to be re-derived or dropped.
+for hook in no-git-push.sh no-pr-decisions.sh no-commit-to-main.sh no-work-on-stale-branch.sh; do
+  written "$hook points at the contract by name" "$HOOKS/$hook" 'THE LOAD CONTRACT'
+done
+# And that each guard is live code rather than a commented-out line. `armed`
+# strips comments first, which is the difference that matters: every literal
+# above would match a guard commented out during a debugging session and left
+# that way, and review of PR #64 found exactly that shape in this suite. One
+# literal per hook per function, because that is the claim being made.
+armed 'no-git-push.sh probes cs_normalise' no-git-push.sh 'command -v cs_normalise'
+armed 'no-git-push.sh probes cs_split' no-git-push.sh 'command -v cs_split'
+armed 'no-git-push.sh probes cs_git_args' no-git-push.sh 'command -v cs_git_args'
+armed 'no-pr-decisions.sh probes cs_normalise' no-pr-decisions.sh 'command -v cs_normalise'
+armed 'no-pr-decisions.sh probes cs_split' no-pr-decisions.sh 'command -v cs_split'
+armed 'no-pr-decisions.sh probes cs_gh_args' no-pr-decisions.sh 'command -v cs_gh_args'
+armed 'no-pr-decisions.sh probes cs_join' no-pr-decisions.sh 'command -v cs_join'
+armed 'no-commit-to-main.sh probes cs_normalise' no-commit-to-main.sh 'command -v cs_normalise'
+armed 'no-commit-to-main.sh probes cs_split' no-commit-to-main.sh 'command -v cs_split'
+armed 'no-commit-to-main.sh probes cs_git_args' no-commit-to-main.sh 'command -v cs_git_args'
+armed 'no-work-on-stale-branch.sh probes cs_normalise' no-work-on-stale-branch.sh 'command -v cs_normalise'
+armed 'no-work-on-stale-branch.sh probes cs_split' no-work-on-stale-branch.sh 'command -v cs_split'
+armed 'no-work-on-stale-branch.sh probes cs_git_args' no-work-on-stale-branch.sh 'command -v cs_git_args'
+armed 'pytest-via-uv-group.sh probes cs_normalise' pytest-via-uv-group.sh 'command -v cs_normalise'
+armed 'pytest-via-uv-group.sh probes cs_split' pytest-via-uv-group.sh 'command -v cs_split'
+armed 'alembic-via-uv-group.sh probes cs_normalise' alembic-via-uv-group.sh 'command -v cs_normalise'
+armed 'alembic-via-uv-group.sh probes cs_split' alembic-via-uv-group.sh 'command -v cs_split'
+# The readability test before the source, which no fixture above can tell apart:
+# under bash a `.` of a missing file returns non-zero and carries on, so nolib
+# behaves the same with it and without it. It is held as text for that reason,
+# and because all four comments claim it.
+armed 'no-git-push.sh tests the library before sourcing it' \
+      no-git-push.sh '[ -r "$LIB" ] && . "$LIB"'
+armed 'no-pr-decisions.sh tests the library before sourcing it' \
+      no-pr-decisions.sh '[ -r "$LIB" ] && . "$LIB"'
+armed 'no-commit-to-main.sh tests the library before sourcing it' \
+      no-commit-to-main.sh '[ -r "$LIB" ] && . "$LIB"'
+armed 'no-work-on-stale-branch.sh tests the library before sourcing it' \
+      no-work-on-stale-branch.sh '[ -r "$LIB" ] && . "$LIB"'
+armed 'pytest-via-uv-group.sh tests the library before sourcing it' \
+      pytest-via-uv-group.sh '[ -r "$LIB" ] && . "$LIB"'
+armed 'alembic-via-uv-group.sh tests the library before sourcing it' \
+      alembic-via-uv-group.sh '[ -r "$LIB" ] && . "$LIB"'
+echo "--- the probe list is the call list, and these are all the consumers ---"
+# THE ONE CHECK HERE THAT SURVIVES THE NEXT CHANGE. Every literal above names a
+# file and a function, so all of them together say that these four guards probe
+# these thirteen names -- and none of them says a probe list is COMPLETE. #84 was
+# a probe list narrower than a call set. A fifth cs_* call added to a hook
+# tomorrow, or another file that sources the library, leaves every check above
+# green and is the same defect one turn later. That is not a hypothetical either:
+# #69 added two sourcers while #84 was being written, and this pair of checks is
+# what said so.
+#
+# So both sides are derived from the files and compared with each other, in the
+# direction the boundary section at the foot of this suite uses: the code is the
+# fact, the guard's probe list is the claim asserted against it. Comments are
+# stripped first, for the reason `armed` strips them -- these headers name these
+# functions constantly, and a function named in prose is not a call.
+cs_calls() {  # cs_calls <hook> -- the cs_* functions its code actually calls
+  sed 's/[[:space:]]*#.*$//' "$HOOKS/$1" \
+    | grep -v 'command -v cs_' \
+    | grep -oE 'cs_[a-z_]+' | sort -u | tr '\n' ' '
+}
+cs_probes() {  # cs_probes <hook> -- the cs_* functions its load guard probes
+  sed 's/[[:space:]]*#.*$//' "$HOOKS/$1" \
+    | grep -oE 'command -v cs_[a-z_]+' | sed 's/command -v //' | sort -u | tr '\n' ' '
+}
+for hook in $LIB_CONSUMERS; do
+  CALLS=$(cs_calls "$hook")
+  PROBES=$(cs_probes "$hook")
+  # An empty derivation would make the comparison pass by matching nothing, which
+  # is the permitting direction: a hook whose calls could not be read would report
+  # as agreeing with a guard that probes nothing.
+  if [ -z "$CALLS" ] || [ -z "$PROBES" ]; then
+    printf '  FAIL %s: no cs_* calls or no probes were read out of the file at all\n' "$hook"
+    FAILED=1
+  elif [ "$CALLS" = "$PROBES" ]; then
+    printf '  ok   derived %s probes exactly what it calls: %s\n' "$hook" "${CALLS% }"
+  else
+    printf '  FAIL %s probes a set other than the one it calls\n         calls:  |%s|\n         probes: |%s|\n' \
+      "$hook" "$CALLS" "$PROBES"
+    FAILED=1
+  fi
+done
+# And that LIB_CONSUMERS is all of them -- a file that sources the library and
+# guards nothing is #84 again, and nothing above would see it, because every
+# literal above names a file.
+#
+# $CS_SOURCERS is the #69 audit's derivation, a few checks up: every .sh beside
+# this suite whose code (comments stripped) loads the tokeniser, with this suite
+# itself excluded by name. It is reused rather than re-derived, because a second
+# answer to "who sources this file" is the defect both of these sections are
+# about. #69 asserts the tokeniser's header against it; #84 asserts the list of
+# hooks whose load guard is driven above. Its spacing is its own -- leading and
+# trailing -- so this normalises rather than assuming.
+SOURCERS=$(printf '%s\n' $CS_SOURCERS | sort | tr '\n' ' ')
+CLAIMED=$(printf '%s\n' $LIB_CONSUMERS | sort | tr '\n' ' ')
+if [ -n "$SOURCERS" ] && [ "$SOURCERS" = "$CLAIMED" ]; then
+  printf '  ok   derived the files that load the library are exactly the ones checked here: %s\n' "${SOURCERS% }"
+else
+  printf '  FAIL the files that load the library are not the four this section checks\n         load it: |%s|\n         checked: |%s|\n' \
+    "$SOURCERS" "$CLAIMED"
+  FAILED=1
+fi
+# One property of this suite's own helpers, because nothing else here drives them
+# and `unarmed` reporting ok for a file it never read would make four pins below
+# vacuous. Run in a subshell so its FAILED cannot reach ours.
+if ( FAILED=0; unarmed 'probe' "$FIXTURES/no-such-file" 'anything'; exit $FAILED ) >/dev/null 2>&1
+then
+  printf '  FAIL unarmed reports ok for a file that is not there, so every pin below is vacuous\n'
+  FAILED=1
+else
+  printf '  ok   unarmed fails for a file that is not there, so the pins below are about a file that was read\n'
+fi
+
+# The refusing direction: a hook back to sourcing the library with nothing around
+# it is the #84 shape exactly, and it would satisfy every `written` above. Asked
+# of all four and not only of the two that had it, because a regression is not
+# more likely in the files that carried the defect -- these four are edited
+# together and the shape is one line long.
+unarmed 'no-git-push.sh does not source the library unguarded' \
+        no-git-push.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+unarmed 'no-pr-decisions.sh does not source the library unguarded' \
+        no-pr-decisions.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+unarmed 'no-commit-to-main.sh does not source the library unguarded' \
+        no-commit-to-main.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+unarmed 'no-work-on-stale-branch.sh does not source the library unguarded' \
+        no-work-on-stale-branch.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+unarmed 'pytest-via-uv-group.sh does not source the library unguarded' \
+        pytest-via-uv-group.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+unarmed 'alembic-via-uv-group.sh does not source the library unguarded' \
+        alembic-via-uv-group.sh '. "$(dirname "$0")/lib/command-scan.sh"'
 
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
