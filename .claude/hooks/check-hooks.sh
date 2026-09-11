@@ -2798,7 +2798,159 @@ esac
 tok 'the left-open list numbers as many consequences as its head claims' \
     "$CLAIMED" \
     "$(printf '%s\n' "$LEFT_OPEN" | grep -cE '^[0-9]+\. ')"
+echo "=== the documents answer the citations the hooks make into them ==="
+# A fourth kind of check, and the section above with its direction reversed:
+# there settings.json is the fact and CLAUDE.md the claim; here the hooks are
+# the fact -- they ship, they run, and their headers send a reader somewhere --
+# and the documents are what has to be there when the reader arrives. Issue #70
+# found three such citations landing nowhere. Each had shipped; each is read at
+# the moment a reader has just been refused something; and none of them was
+# wrong in a way this suite could see, because nothing held a hook's pointer to
+# the thing it points at.
+#
+# These are evidence about the three citations named below and nothing else. A
+# fourth pointer added to a hook tomorrow is uncounted here, and so is any of
+# these three reworded, because every literal is the sentence as written.
+#
+# CONTEXT.md's entries are extracted rather than grepped whole, for the reason
+# the boundary paragraph is narrowed above: a glossary-wide grep is satisfied by
+# the word turning up in a neighbouring entry, which is the failure being fixed
+# rather than a check on it -- #70's finding was that the lifetime rule was
+# written down twice, in neither place a reader looking for vocabulary would go.
+# An entry runs from its bolded name to its `_Avoid_:` line, and the extraction
+# is checked from both ends before anything is asserted against it -- with one
+# limit named, because the two extractions below are not equally evidenced.
+# *Reserved act* has an entry after it, so its `unarmed` is real evidence that
+# the `_Avoid_:` stop fires. *Worktree branch* is the last entry in the file:
+# nothing follows it for an over-run to swallow, so its `unarmed` tests only
+# that the extraction did not begin too early, and the `_Avoid_:` stop is
+# evidenced there by the other extraction rather than by its own.
+CONTEXT_MD="$HOOKS/../../CONTEXT.md"
+SKILL_MD="$HOOKS/../skills/branch-hygiene/SKILL.md"
+entry() {  # entry <file> <bolded name> -- one glossary entry, name to _Avoid_
+  awk -v name="**$2**:" '$0 == name {f=1} f {print} f && /^_Avoid_:/ {exit}' "$1" 2>/dev/null
+}
 
+WORKTREE_ENTRY="$FIXTURES/context-worktree-branch.md"
+entry "$CONTEXT_MD" 'Worktree branch' > "$WORKTREE_ENTRY"
+written 'the extracted entry is the worktree branch entry' \
+  "$WORKTREE_ENTRY" '**Worktree branch**:'
+unarmed 'and it is that entry rather than the whole glossary' \
+  "$WORKTREE_ENTRY" '**Reserved act**:'
+
+# no-work-on-stale-branch.sh sends a reader here for what a worktree branch is,
+# and what that hook refuses is a commit on one whose pull request has merged.
+# Before #70 the entry defined the branch and stopped, so a reader who followed
+# the pointer learned everything about it except the fact the refusal turns on.
+written 'the entry says the branch lives for one pull request' \
+  "$WORKTREE_ENTRY" 'exists for exactly one pull request'
+written 'and that the worktree it was made in is not reused after it' \
+  "$WORKTREE_ENTRY" 'is not reused'
+
+RESERVED_ENTRY="$FIXTURES/context-reserved-act.md"
+entry "$CONTEXT_MD" 'Reserved act' > "$RESERVED_ENTRY"
+written 'the extracted entry is the reserved act entry' \
+  "$RESERVED_ENTRY" '**Reserved act**:'
+unarmed 'and it is that entry rather than the whole glossary' \
+  "$RESERVED_ENTRY" '**Worktree branch**:'
+
+# report-stale-branches.sh calls removing a worktree "a reserved act in
+# CONTEXT.md" in its header, and prints the same claim into every session's
+# transcript. The enumeration named four acts and that was not one of them.
+written 'the enumeration names the act the report cites' \
+  "$RESERVED_ENTRY" 'removing a worktree or deleting a worktree branch'
+
+# The skill read that enumeration as closed and counted it -- "one of the four
+# acts CONTEXT.md names" -- and #70 found the count stale the moment a fifth act
+# was needed. Correcting the number to five would have left the same defect with
+# a later expiry date, so the count is gone from the skill altogether and the
+# enumeration is cited instead of counted. CONTEXT.md holds the list, once. That
+# is the pairing convention above -- argue once, point from the other place --
+# applied to prose in a second file.
+#
+# Both spellings are refused, the stale one and the corrected one. Refusing
+# `five acts` is the refusing direction on purpose: re-adding a count that is
+# accurate today turns this red although nothing is wrong yet, and that is a
+# failure which is visible and one edit away. A second copy of a count that is
+# allowed to stand goes stale in silence, which is the direction that matters.
+unarmed 'the skill does not carry the count that went stale' \
+  "$SKILL_MD" 'four acts'
+unarmed 'nor a corrected one, which would go stale the same way' \
+  "$SKILL_MD" 'five acts'
+written 'it cites the enumeration instead of counting it' \
+  "$SKILL_MD" 'entry holds the list'
+
+# The third citation, and the one that had gone unwritten rather than merely
+# undocumented: both hooks name a local sweep as what removes a merged worktree
+# branch, and no such procedure existed. The hooks are read for the citation
+# and the skill asserted to answer it, rather than the sweep's existence being
+# asserted on its own -- a procedure nothing cites is a procedure that can go.
+#
+# The literal is the pointer and deliberately not the noun. The first version of
+# this check asked whether each header contained `sweep`, and both contained it
+# at dev-05 already -- once in the guard, three times in the report. That bare
+# word IS the dangling citation #70 found, so the check was satisfied by the
+# defect: it would have stayed green through a revert of every line these two
+# headers gained. Measured on `git show origin/dev-05:` copies of both files,
+# which carry the noun and not the pointer.
+CITATION='"The sweep" in the branch-hygiene skill'
+for hook in no-work-on-stale-branch.sh report-stale-branches.sh; do
+  written "$hook points at the sweep by name" "$HOOKS/$hook" "$CITATION"
+done
+
+# Extracted for the reason the glossary entries are: `git branch -d` is in this
+# file already, in the rotation, so a file-wide grep for it would pass with no
+# sweep written at all. Stopping at the next `## ` and not at the next heading
+# of any depth, because the sweep is numbered into steps the way the rotation
+# is -- a stop on `### ` would end the section at its own first step and assert
+# the rest of it against nothing.
+SWEEP_SECTION="$FIXTURES/branch-hygiene-sweep.md"
+awk '/^## The sweep/ {f=1; print; next} f && /^## / {exit} f {print}' \
+    "$SKILL_MD" > "$SWEEP_SECTION"
+written 'the extracted section is the sweep' "$SWEEP_SECTION" 'The sweep'
+unarmed 'and it is that section rather than the rotation beside it' \
+  "$SWEEP_SECTION" 'Create the new branch'
+
+# What a sweep has to say to be the thing those two headers name: it deletes the
+# local branch, it removes the worktree standing on it -- the act CONTEXT.md now
+# reserves, and one that no command in this repository's documents performed
+# before #70 -- and it takes the rotation's care over the same flag.
+written 'the sweep removes the worktree' "$SWEEP_SECTION" 'git worktree remove'
+written 'and deletes the local branch' "$SWEEP_SECTION" 'git branch -d'
+# And unlocks it first, without which the other two cannot run here at all.
+# Review of the first two commits found the procedure unable to execute on this
+# repository: EnterWorktree locks every worktree it creates, `git worktree
+# remove` refuses a locked one and names `remove -f -f` as the way out, and
+# `git worktree prune` is exempted from locked worktrees by design -- so it
+# skips one, exits 0, and the closing invariant is never reached with nothing
+# saying why. Reproduced: all four worktrees present at the time carried
+# `locked claude session <name> (pid N start T)`.
+#
+# THE LIMIT, which is the one that let that ship. Every literal in this section
+# asks whether the section CONTAINS a command. None of them runs one, so none is
+# evidence that the procedure succeeds -- a sweep naming three commands that all
+# refuse would pass every check here. What guards the difference is a person
+# running it; these hold the text against the citations, and nothing more.
+written 'and unlocks it first, which is what makes the other two possible' \
+  "$SWEEP_SECTION" 'git worktree unlock'
+written 'and warns that prune will not rescue a worktree still locked' \
+  "$SWEEP_SECTION" 'exempt from pruning by design'
+written 'with the care the rotation takes over the same flag' \
+  "$SWEEP_SECTION" 'never `-D`'
+# The report classifies three ways and only one of the three is the sweep's. A
+# sweep that acted on `unclassified` would delete a branch freshly cut for work
+# not yet started, which is the case that classification exists to protect. The
+# literal is the instruction and not the word: `unclassified` alone is satisfied
+# by a section that says to sweep those too.
+written 'and leaves the unclassified alone' \
+  "$SWEEP_SECTION" 'Leave every unclassified branch alone'
+
+# The cadence is the half that makes both hook headers honest. #70's complaint
+# was not that the sweep was undocumented but that it "is named as a thing that
+# happens", so a sweep written without its cadence would answer the citation and
+# leave the claim behind it as false as it was. Pinned for that reason.
+written 'the sweep says how often it is run, which is by hand and never' \
+  "$SWEEP_SECTION" 'Cadence: manual, and unscheduled'
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
 exit $FAILED

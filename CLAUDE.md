@@ -323,6 +323,10 @@ The five canonical roles, each label string equal to its name. See
 
 ### Domain docs
 
-Single-context: `docs/adr/` holds one ADR; `CONTEXT.md` holds the glossary, so
-far the one distinction between a *check* and a *probe*. See
+Single-context: `docs/adr/` holds one ADR; `CONTEXT.md` holds the glossary. It
+is written lazily — a term is added when a collision has actually been resolved
+— so it stays short enough to read whole, and this line deliberately does not
+enumerate it: the sentence that did named two terms of five and went stale
+without saying so. Several of the hooks above cite it, and
+`.claude/hooks/check-hooks.sh` holds those citations to what it says. See
 `docs/agents/domain.md`.

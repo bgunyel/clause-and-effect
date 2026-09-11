@@ -19,8 +19,10 @@
 # READ-ONLY, by name and by content. Removing a worktree or a branch is Bertan's
 # -- a reserved act in CONTEXT.md, and issue #41 declined to carve a hook
 # exception for the sweep. The name is report- and never sweep- because the
-# filename is where that constraint survives the next reader. The only thing
-# here that writes anything is `git fetch --prune`, which writes
+# filename is where that constraint survives the next reader. The half that does
+# remove things is "The sweep" in the branch-hygiene skill, which reads the
+# report below; what is printed here is the whole of what runs automatically.
+# The only thing here that writes anything is `git fetch --prune`, which writes
 # remote-tracking refs and nothing else: no local branch, no worktree, no
 # checkout.
 #

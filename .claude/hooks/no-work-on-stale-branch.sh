@@ -1,12 +1,19 @@
 #!/bin/bash
 # A worktree branch exists for one pull request. When that pull request merges,
 # the branch has served its purpose: remotely `delete_branch_on_merge` removes
-# it, locally Bertan's sweep does. Nothing stopped work continuing on it in the
-# meantime, and that failure has fired twice -- the probe->check rename was
-# committed onto hooks-push-and-pr-guards after PR #35 had already merged it,
-# and research/non-openrouter-response-bodies sat one commit ahead and nineteen
-# behind with no pull request, loaded to revert nineteen commits the moment
-# anyone proposed it.
+# it, locally "The sweep" in the branch-hygiene skill does. Nothing stopped work
+# continuing on that branch in the meantime, and that failure has fired twice --
+# the probe->check rename was committed onto hooks-push-and-pr-guards after
+# PR #35 had already merged it, and research/non-openrouter-response-bodies sat
+# one commit ahead and nineteen behind with no pull request, loaded to revert
+# nineteen commits the moment anyone proposed it.
+#
+# How often the sweep runs is that section's question and it answers it there;
+# what belongs here is the consequence. The sweep is not triggered by the merge,
+# so the window this guard covers opens when the pull request merges and closes
+# only when someone gets round to sweeping -- it is bounded by nothing, and the
+# guard is what makes that safe rather than merely untidy. CONTEXT.md's
+# *worktree branch* entry carries the lifetime the two halves enforce together.
 #
 # Keyed on running in a linked worktree, the same keying no-git-push.sh uses and
 # deliberately not on the branch's name. CONTEXT.md's *worktree branch* entry
