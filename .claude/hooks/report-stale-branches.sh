@@ -69,11 +69,12 @@ else
   fi
 fi
 
-# The active dev branch: the highest-numbered refs/remotes/origin/dev-*. Sorted
-# with sort -V rather than lexically, and filtered to digits, because both parts
-# matter: a lexical sort makes dev-09 beat dev-10, and an unfiltered glob lets
-# origin/dev-foo -- or origin/dev-05-backup -- win outright. Both were measured
-# on a fixture rather than assumed.
+# The active dev branch: the highest-numbered refs/remotes/origin/dev-*. Why the
+# digit filter and the version sort are both load-bearing is argued once, in
+# no-work-on-stale-branch.sh's header, rather than twice here in different words
+# -- a second copy of an argument goes stale in silence when the first one is
+# corrected. The next two lines stand verbatim in that file as well:
+# check-hooks.sh holds the two equal, so a change here is a change there.
 DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
       | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
 if [ -n "$DEV" ]; then

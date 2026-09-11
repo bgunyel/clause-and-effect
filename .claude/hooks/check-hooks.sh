@@ -225,6 +225,28 @@ need_worktree() {  # need_worktree <dir> <fixture name>
   exit 1
 }
 
+# `armed` strips a shell comment before it looks, so that commenting a line out
+# can no longer satisfy a pin. That makes it a pin on code, and its header says
+# so: none of its literals carries a `#`. Two kinds of file here are not code.
+# Prose in a comment is the whole of what some pins assert -- an argument the
+# other file points at, which lives nowhere but a comment -- and a markdown
+# fixture opens its headings with the same character, so stripping erases the
+# line rather than a trailing remark. Routed through `armed`, such a pin cannot
+# pass: measured, not reasoned, on the boundary-section check that dev-05 is
+# red on today. This reads the file as written, and the name says which.
+prose_count() {  # prose_count <file> <literal> -- how many lines say it
+  grep -cF -- "$2" "$1" 2>/dev/null
+}
+
+written() {  # written <label> <file> <literal> -- the file as written, # and all
+  if grep -qF -- "$3" "$2" 2>/dev/null; then
+    printf '  ok   written %s\n' "$1"
+  else
+    printf '  FAIL %s\n         expected %s to still say |%s|\n' "$1" "$2" "$3"
+    FAILED=1
+  fi
+}
+
 unarmed() {  # unarmed <label> <file> <literal>
   if grep -qF -- "$3" "$2" 2>/dev/null; then
     printf '  FAIL %s\n         %s must not contain |%s|\n' "$1" "$2" "$3"
@@ -235,6 +257,54 @@ unarmed() {  # unarmed <label> <file> <literal>
 }
 
 . ./lib/command-scan.sh
+
+# A property of two files at once, which is what `armed` cannot express: it
+# asks whether a file contains a constant, never whether two files agree. These
+# two read what a file actually derives, so the copies can be compared with each
+# other. Anchored on content rather than on a line range -- a line range goes
+# stale the moment either file gains a line above it, and goes stale silently --
+# and on what the derivation reads rather than on the name it assigns, so a
+# second reader of those refs is counted rather than hidden behind the first.
+#
+# Two limits, both named because a check is evidence about what it names. The
+# count finds readers spelled with for-each-ref, so one written as
+# `git branch -r` would read the same refs uncounted -- the permitting
+# direction, and the reason the pin below is there too. And it counts matching
+# lines anywhere in the file, comments included, so quoting the pipeline in
+# either hook's header turns the suite red although nothing has changed: the
+# refusing direction, visible and one edit away.
+dev_read_count() {  # dev_read_count <file> -- how many lines read the dev refs
+  grep -cE 'for-each-ref.*refs/remotes/origin/dev-' "$1" 2>/dev/null
+}
+
+dev_derivation() {  # dev_derivation <file> -- the derivation, as written
+  awk '/for-each-ref.*refs\/remotes\/origin\/dev-/ { inblock = 1 }
+       inblock                                      { print }
+       inblock && /tail -1\)/                       { inblock = 0 }' \
+      "$1" 2>/dev/null
+}
+
+# The comment block standing immediately above the derivation. `armed` would
+# ask only whether a literal is somewhere in a file, and somewhere is not
+# beside: a pointer that drifted to the head of either file would still satisfy
+# grep while no longer standing where the derivation is read and edited, which
+# is the whole of what a pointer is for. A blank line ends the block, so a
+# pointer separated from the derivation does not count as beside it.
+dev_pointer() {  # dev_pointer <file> -- the comment block above the derivation
+  awk '/^#/ { block = block $0 "\n"; next }
+       /for-each-ref.*refs\/remotes\/origin\/dev-/ { printf "%s", block; exit }
+       { block = "" }' "$1" 2>/dev/null
+}
+
+beside() {  # beside <label> <file> <literal>
+  if dev_pointer "$2" | grep -qF -- "$3"; then
+    printf '  ok   beside %s\n' "$1"
+  else
+    printf '  FAIL %s\n         expected the comment above the derivation in %s\n         to contain |%s|\n' \
+           "$1" "$2" "$3"
+    FAILED=1
+  fi
+}
 
 tok() {  # tok <label> <expected> <actual>
   if [ "$3" = "$2" ]; then
@@ -1997,11 +2067,96 @@ unarmed 'the report deletes nothing on the remote' \
 # command in every worktree whenever a library is missing. The cost of that
 # ordering is two copies, so the copies are pinned instead of shared. A
 # divergence here silently unarms the guard or misreports the branch.
-DEV_DERIVATION="| grep -E '^origin/dev-[0-9]+\$' | sort -V | tail -1)"
-armed 'the guard derives the active dev branch this way' \
-  "$HOOKS/no-work-on-stale-branch.sh" "$DEV_DERIVATION"
-armed 'and the report derives it identically' \
-  "$HOOKS/report-stale-branches.sh" "$DEV_DERIVATION"
+#
+# Issue #62: that pin used to be `armed` against the tail of the pipeline,
+# "| grep -E ... | sort -V | tail -1)". Everything left of the first pipe -- the
+# command, the --format, and the ref glob 'refs/remotes/origin/dev-*' -- was
+# pinned in neither file, and the glob is the half most likely to move: it is
+# what keeps origin/dev-foo and origin/dev-05-backup from winning, so a change
+# to which refs count is a change to it. Changing the glob in one file only left
+# the whole suite green, the second of those two checks labelled "derives it
+# identically".
+#
+# Extending that literal to both lines would not have closed it. `armed` is
+# grep -qF, and grep reads a pattern containing a newline as two patterns, so a
+# two-line fixed string is satisfied by a file holding either line alone --
+# measured on a two-line fixture, not assumed. The derivations are extracted and
+# compared as strings instead, three ways: each file holds exactly one, the two
+# are equal to each other, and each is the derivation as pinned here. The counts
+# ask a question `armed` cannot ask at all -- it wants a constant somewhere in a
+# file, so a second derivation added to either file would have been satisfied by
+# the first -- and they are what closes the case, because two files that both
+# extract to nothing are equal to each other and to nothing else.
+#
+# Be exact about which of the three carry the weight: with both files pinned to
+# the literal, the guard-equals-report check follows by transitivity and proves
+# nothing the pins do not. It is kept as the one line that states the property
+# the duplication actually needs, and because it is the check that still holds
+# the two together the day someone re-pins the literal on purpose -- a
+# coordinated change turns both pins red and leaves it green, which is the pair
+# of answers that says what happened. Each of the five was mutated to confirm it
+# fails for its own reason, and the two counts were mutated to confirm they fail
+# for theirs.
+DEV_DERIVATION=$(cat <<'DERIVATION'
+DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
+      | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
+DERIVATION
+)
+GUARD_DERIVATION=$(dev_derivation "$HOOKS/no-work-on-stale-branch.sh")
+REPORT_DERIVATION=$(dev_derivation "$HOOKS/report-stale-branches.sh")
+tok 'the guard reads the dev refs in exactly one place' \
+    '1' "$(dev_read_count "$HOOKS/no-work-on-stale-branch.sh")"
+tok 'and the report reads them in exactly one place' \
+    '1' "$(dev_read_count "$HOOKS/report-stale-branches.sh")"
+tok 'the guard and the report derive the active dev branch identically' \
+    "$GUARD_DERIVATION" "$REPORT_DERIVATION"
+tok 'the guard derives it as pinned here, glob and --format included' \
+    "$DEV_DERIVATION" "$GUARD_DERIVATION"
+tok 'and the report derives it as pinned here too' \
+    "$DEV_DERIVATION" "$REPORT_DERIVATION"
+
+# The filter and the version sort were argued twice, in different words, at the
+# head of each file, and nothing held those two to each other either: correct
+# one and the other goes on asserting the superseded reason, which CLAUDE.md
+# counts as a defect in its own right. The argument is made once now, in
+# no-work-on-stale-branch.sh's header, and each file carries the same one-line
+# pointer to the pairing in place of its own copy of the reasoning. The pointer
+# is one line because grep is: a literal spanning a line break would match
+# neither file.
+PAIRING='check-hooks.sh holds the two equal, so a change here is a change there'
+beside 'the guard names the pairing beside its derivation' \
+  "$HOOKS/no-work-on-stale-branch.sh" "$PAIRING"
+beside 'and the report names it identically' \
+  "$HOOKS/report-stale-branches.sh" "$PAIRING"
+# A pointer to an argument is worth what the argument is worth, and the report's
+# now points at prose in another file. Two ways that goes wrong, and the second
+# is the one this branch would otherwise have left open.
+#
+# Delete the guard's header and the report cites a reason no longer written
+# anywhere: the stale-docstring defect moved rather than fixed. Re-add a second
+# copy to the report and the defect is back exactly as it was -- two arguments,
+# nothing holding them to each other -- which is what the report's own new
+# comment says is wrong: "a second copy of an argument goes stale in silence
+# when the first one is corrected." The code duplication got a count for that
+# reason; the prose duplication fixed in the same breath did not, and the
+# asymmetry was the gap. Both directions are counted now, the same shape as the
+# two counts above, and both halves of the claim are in the literal.
+#
+# The limit is the one the counts above have: this finds the argument as
+# written, so a reworded second copy is a second copy uncounted.
+ARGUMENT='sort makes dev-09 beat dev-10, and an unfiltered glob lets origin/dev-foo'
+tok 'the argument the report points at is made in the guard, once' \
+    '1' "$(prose_count "$HOOKS/no-work-on-stale-branch.sh" "$ARGUMENT")"
+tok 'and the report does not argue it a second time' \
+    '0' "$(prose_count "$HOOKS/report-stale-branches.sh" "$ARGUMENT")"
+# And the sentence that does the pointing: without it the report holds a bare
+# pairing pointer and no trace of where its reasoning went. `beside` rather than
+# `written`, because a pointer that is not beside the derivation is not doing
+# the job the pointer exists for -- the same standard the pairing line is held
+# to four lines above.
+POINTER="no-work-on-stale-branch.sh's header, rather than twice here in different words"
+beside 'the report says where the argument was moved to' \
+  "$HOOKS/report-stale-branches.sh" "$POINTER"
 
 # The carve-out's identity test, pinned as three lines rather than driven as a
 # process. Two of them are driven, by the diverged and no-local fixtures above;
@@ -2083,7 +2238,7 @@ awk '/^## What an unattended agent may do to this repository$/ {f=1; print; next
 # The extraction is itself a claim about a heading that can be renamed, so it is
 # checked from both ends before anything is asserted against it: the heading is
 # in what came out, and a line from another section is not.
-armed 'the extracted section is the boundary section' \
+written 'the extracted section is the boundary section' \
   "$SECTION" 'What an unattended agent may do to this repository'
 unarmed 'and it is that section rather than the whole file' \
   "$SECTION" 'Import cost is a design constraint'
@@ -2097,7 +2252,7 @@ unarmed 'and it is that section rather than the whole file' \
 # drift one paragraph along.
 PARAGRAPH="$FIXTURES/boundary-paragraph.md"
 awk -v RS= '/Enforced by/' "$SECTION" > "$PARAGRAPH"
-armed 'and the paragraph taken from it is the one that says what is enforced' \
+written 'and the paragraph taken from it is the one that says what is enforced' \
   "$PARAGRAPH" 'Enforced by'
 unarmed 'and it stops short of what is deliberately left unguarded' \
   "$PARAGRAPH" 'Deliberately left open'
@@ -2125,7 +2280,7 @@ HOOK_FILES=$(ls "$HOOKS"/*.sh "$HOOKS"/lib/*.sh 2>/dev/null | sed 's|.*/||' | so
 set -f
 for hook in $REGISTERED; do
   case " $NOT_THE_BOUNDARY " in *" $hook "*) continue ;; esac
-  armed "the paragraph names $hook, which settings.json runs" "$PARAGRAPH" "$hook"
+  written "the paragraph names $hook, which settings.json runs" "$PARAGRAPH" "$hook"
 done
 
 # The other direction: a name in the paragraph that nothing runs any more. Every
