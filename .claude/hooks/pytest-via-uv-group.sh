@@ -20,21 +20,43 @@
 # nothing to do with what the command would run.
 #
 # Saying where a command word is is cs_split's job, and this file asks it now
-# rather than answering it again. That is the whole of the fix: with the
-# command word at ^, an argument and a mention are no longer command positions.
+# rather than answering it again. That is the first rule below.
 #
-# The allowlist went with it, and its replacement is worth writing down because
-# it is not simply a deletion. `uv run --group test pytest tests/` has `uv` as
-# its command word and never matches the first rule, so the rescue had nothing
-# left to rescue. But `uv run pytest` also has `uv` as its command word, and
-# that one was refused before and has to stay refused -- it runs pytest outside
-# the group, which is the failure this hook is about. So the group is asked for
-# on the `uv run` fragment itself, where cs_split has already bounded the
-# arguments to one command, rather than anywhere on the line the way the
-# allowlist did. `uv pip install pytest` is not `uv run` and is untouched.
+# The second rule is the one that took two goes, and what it has to do is not
+# what the old allowlist did. Anchoring at ^ answers "is pytest the command
+# word", and a runner answers that question with its own name: `uv run pytest`,
+# `uvx pytest` and `poetry run pytest` each run pytest outside the group --
+# the failure this hook exists for -- while putting `uv`, `uvx` or `poetry` at
+# ^. The first version of this rule asked only about `uv run`, and review
+# measured four silent permits against the file it replaced. So a runner is a
+# runner however it is spelled, and the list is below. It IS a list, and a
+# runner not on it is permitted; the check suite names each member so that the
+# list is read rather than discovered.
+#
+# Two things that list is not. It is not the tool's own arguments: `--group
+# test` has to be named BEFORE pytest, or `uv run pytest --group test` passes
+# the option to pytest and reads as sanctioned. The prefix is cut at the name
+# for that reason. And it is not every uv subcommand: `uv pip install pytest`
+# and `uv add --group test pytest` install a package rather than running one,
+# which is what naming pytest is for, and neither is a runner.
+#
+# The trade, taken knowingly. A quote is a word boundary here, so the name is
+# found inside a quoted argument to a runner and `uv run echo "pytest lives in
+# the test group"` is refused. The alternative was to treat quoted text as
+# data, and that permits `uv run "pytest"`, which really does run pytest. This
+# file refuses both spellings of the prose rather than permitting one real
+# invocation -- the direction lib/command-scan.sh takes throughout, and the one
+# that makes the pair AGREE. The intermittency above was the defect; which way
+# the pair settles is the smaller question. `echo "pytest lives in the test
+# group"` on its own is untouched: its command word is echo, and no rule here
+# reaches it.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
-if ! command -v cs_split >/dev/null 2>&1; then
+# Both functions this file calls, not just the one that names the file's
+# subject. Testing cs_split alone left cs_normalise unguarded, and a library
+# missing only that one permitted a bare `pytest tests/` silently.
+if ! command -v cs_split >/dev/null 2>&1 \
+   || ! command -v cs_normalise >/dev/null 2>&1; then
   echo "Blocked: pytest-via-uv-group.sh could not load lib/command-scan.sh, so it cannot tell a pytest invocation from a mention of one. Refusing rather than permitting." >&2
   exit 2
 fi
@@ -50,13 +72,30 @@ if printf '%s\n' "$CMDS" \
   exit 2
 fi
 
-# `uv run` that reaches pytest without naming the group.
-if printf '%s\n' "$CMDS" \
-   | grep -E '^uv[[:space:]]+run([[:space:]]|$)' \
-   | grep -E '(^|[[:space:]])pytest([[:space:]]|$)' \
-   | grep -qvE -e '--group[[:space:]]+test([[:space:]]|$)'; then
-  echo "Blocked: uv run reaches pytest without the 'test' dependency group. CLAUDE.md runs tests through that group. Use: make test, or uv run --group test pytest tests/<file>::<test>" >&2
-  exit 2
-fi
+# A runner standing where a command word goes, naming pytest. `uv run` is the
+# sanctioned one and is asked for the group; the rest cannot name a dependency
+# group at all, so naming pytest is enough to refuse.
+UV_RUN='^uv[[:space:]]+run([[:space:]]|$)'
+OTHER_RUNNER='^(uvx|uv[[:space:]]+tool[[:space:]]+run|poetry[[:space:]]+run|pdm[[:space:]]+run|hatch[[:space:]]+run|pipenv[[:space:]]+run|rye[[:space:]]+run|conda[[:space:]]+run|nix[[:space:]]+run)([[:space:]]|$)'
+# A quote ends the name as a space does. See the trade above.
+NAME='(^|[^A-Za-z0-9_.-])pytest([^A-Za-z0-9_.-]|$)'
+
+while IFS= read -r FRAGMENT; do
+  echo "$FRAGMENT" | grep -qE "$NAME" || continue
+  if echo "$FRAGMENT" | grep -qE "$OTHER_RUNNER"; then
+    echo "Blocked: that runner reaches pytest outside the 'test' dependency group, which it cannot name. CLAUDE.md runs tests through that group. Use: make test, or uv run --group test pytest tests/<file>::<test>" >&2
+    exit 2
+  fi
+  echo "$FRAGMENT" | grep -qE "$UV_RUN" || continue
+  # Everything before the name. The group has to be an argument of uv, not of
+  # pytest, and this is what tells the two apart.
+  if ! printf '%s' "${FRAGMENT%%pytest*}" \
+       | grep -qE -e '--group[[:space:]]+test([[:space:]]|$)'; then
+    echo "Blocked: uv run reaches pytest without the 'test' dependency group named first. CLAUDE.md runs tests through that group. Use: make test, or uv run --group test pytest tests/<file>::<test>" >&2
+    exit 2
+  fi
+done <<CS_FRAGMENTS
+$CMDS
+CS_FRAGMENTS
 
 exit 0

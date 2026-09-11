@@ -2418,6 +2418,55 @@ check pytest-via-uv-group.sh ALLOW 'uv add, which is not uv run' \
 check alembic-via-uv-group.sh ALLOW 'uv add, which is not uv run' \
   'uv add --group migrations alembic'
 
+echo "=== REGRESSION: review of #69, ^ narrowed the guard to one runner ==="
+# The first version of the rule above asked only about `uv run`, and review
+# measured five silent permits against the file it replaced: each of these was
+# BLOCK before the migration, by the substring match, and ALLOW after it. Each
+# really does run the tool outside the group, which is the failure these hooks
+# are for. A runner is a runner however it is spelled, and the list in the
+# hooks is checked member by member here rather than read and believed.
+check pytest-via-uv-group.sh BLOCK 'poetry run' 'poetry run pytest tests/'
+check pytest-via-uv-group.sh BLOCK 'uvx'        'uvx pytest'
+check pytest-via-uv-group.sh BLOCK 'uv tool run' 'uv tool run pytest'
+check pytest-via-uv-group.sh BLOCK 'hatch run'  'hatch run pytest'
+check pytest-via-uv-group.sh BLOCK 'pdm run'    'pdm run pytest'
+check pytest-via-uv-group.sh BLOCK 'pipenv run' 'pipenv run pytest'
+check pytest-via-uv-group.sh BLOCK 'rye run'    'rye run pytest'
+check pytest-via-uv-group.sh BLOCK 'conda run'  'conda run pytest'
+check pytest-via-uv-group.sh BLOCK 'nix run'    'nix run pytest'
+check alembic-via-uv-group.sh BLOCK 'poetry run, alembic' 'poetry run alembic upgrade head'
+check alembic-via-uv-group.sh BLOCK 'uvx, alembic'        'uvx alembic upgrade head'
+
+echo "=== REGRESSION: review of #69, the group was matched after the tool ==="
+# `--group test` was looked for anywhere in the fragment, so the tool's own
+# argument rescued the command and the comment claiming the group had to be
+# named by the runner was false. It is named before the tool now: the fragment
+# is cut at the name and only what precedes it is searched. Both were ALLOW.
+check pytest-via-uv-group.sh BLOCK 'the group as an argument of pytest' \
+  'uv run pytest --group test'
+check alembic-via-uv-group.sh BLOCK 'the group as an argument of alembic' \
+  'uv run alembic upgrade head --group migrations'
+
+echo "=== REGRESSION: review of #69, the intermittency survived inside the rule ==="
+# The same quote-versus-space split the migration was supposed to end, one rule
+# further down: the second rule re-matched the name as an argument with a
+# whitespace-only boundary, so `uv run echo "pytest ..."` was ALLOW or BLOCK
+# according to which character preceded the name. A quote is a word boundary
+# now and the pair agrees. It agrees in the refusing direction, which is the
+# trade the hook's header states: treating quoted text as data would permit
+# `uv run "pytest"`, and that really does run pytest.
+check pytest-via-uv-group.sh BLOCK 'runner, name straight after the quote' \
+  'uv run echo "pytest lives in the test group"'
+check pytest-via-uv-group.sh BLOCK 'runner, name after a space' \
+  'uv run echo "we run pytest via the test group"'
+# The pair the issue reported is at top level, where no rule here reaches it,
+# and it stays permitted. Both halves, because it was the disagreement rather
+# than either verdict that was the defect.
+check pytest-via-uv-group.sh ALLOW 'prose is still prose, name after the quote' \
+  'echo "pytest lives in the test group"'
+check pytest-via-uv-group.sh ALLOW 'prose is still prose, name after a space' \
+  'echo "we run pytest via the test group"'
+
 echo "=== ACCEPTED gap: #69, these two carry no wrapper rule ==="
 # The four boundary hooks refuse a wrapped command outright, because nothing
 # can be read out of a quoted payload. These two do not, and both verdicts
@@ -2441,6 +2490,25 @@ check_in "$ON_DEV" "$FIXTURES/nolib/pytest-via-uv-group.sh" BLOCK \
   'no lib/, pytest-via-uv-group.sh refuses anything at all' 'ls'
 check_in "$ON_DEV" "$FIXTURES/nolib/alembic-via-uv-group.sh" BLOCK \
   'no lib/, alembic-via-uv-group.sh refuses anything at all' 'ls'
+# And a library that is there but missing one of the two functions each file
+# calls. The first version of this guard tested cs_split only -- the function
+# that names the file's subject -- so a library missing cs_normalise left both
+# hooks permitting a bare invocation, silently. Same fixture shape as the
+# cs_git_args one below, and the same reason for it.
+mkdir -p "$FIXTURES/halflib-uv/lib"
+cp pytest-via-uv-group.sh alembic-via-uv-group.sh "$FIXTURES/halflib-uv/"
+sed 's/^cs_normalise()/cs_renamed_away()/' lib/command-scan.sh \
+  > "$FIXTURES/halflib-uv/lib/command-scan.sh"
+# A sed that matched nothing would leave a complete library here, and both
+# checks below would pass without asking anything.
+grep -q '^cs_renamed_away()' "$FIXTURES/halflib-uv/lib/command-scan.sh" || {
+  echo "the half-library fixture still defines cs_normalise; the two checks below prove nothing" >&2
+  exit 1
+}
+check_in "$ON_DEV" "$FIXTURES/halflib-uv/pytest-via-uv-group.sh" BLOCK \
+  'a library missing only cs_normalise, pytest-via-uv-group.sh' 'pytest tests/'
+check_in "$ON_DEV" "$FIXTURES/halflib-uv/alembic-via-uv-group.sh" BLOCK \
+  'a library missing only cs_normalise, alembic-via-uv-group.sh' 'alembic upgrade head'
 
 echo "=== append-only: which docs directories are guarded, and which are not ==="
 # First coverage for append-only-docs.sh and its Edit/Write companion. It was
@@ -2479,6 +2547,12 @@ check append-only-docs.sh BLOCK 'mv of the dev-log directory out from under its 
   'mv docs/dev-log docs/archive'
 check append-only-docs.sh BLOCK 'the control it is one character from' \
   'rm -rf docs/dev-log/'
+# The issue's other control on this rule. An equivalent shape is pinned above
+# on docs/eval-reports/, and it is written out here as well because stage 3
+# asked for the verdicts as the issue measured them: an equivalent is evidence
+# about the rule, and the line is evidence about the report.
+check append-only-docs.sh BLOCK 'rm of a single dev-log entry' \
+  'rm docs/dev-log/x.md'
 # The boundary is written out rather than made optional, because a directory
 # whose name merely starts with a guarded one is a different directory. These
 # two are what would break if the fix had been `/?`.
@@ -2488,6 +2562,29 @@ check append-only-docs.sh ALLOW 'a sibling file whose name begins with a guarded
   'rm docs/dev-log.bak'
 check append-only-docs.sh ALLOW 'reading the directory is not removing it' \
   'ls docs/dev-log'
+
+echo "=== REGRESSION: review of #69, the spellings the Bash side still compared ==="
+# The Edit companion was normalised and this one was not, so the same finding
+# stood on this side of the pair: a spelling a shell reduces to the guarded
+# directory was permitted. All four were ALLOW after the first fix. Nothing
+# here can normalise the way the companion does -- the path is embedded in a
+# command rather than handed over as one -- so the two spellings a reader
+# actually writes are matched where they stand, and `docs/foo/../dev-log`
+# stays permitted, which the hook's comment says in as many words.
+check append-only-docs.sh BLOCK 'a doubled slash before the directory' \
+  'rm -rf docs//dev-log'
+check append-only-docs.sh BLOCK 'a dot segment before the directory' \
+  'rm -rf docs/./dev-log'
+check append-only-docs.sh BLOCK 'a doubled slash on the truncate route' \
+  'truncate -s 0 docs//dev-log/x.md'
+check append-only-docs.sh BLOCK 'a dot segment on the in-place edit route' \
+  'sed -i s/a/b/ docs/./dev-log/x.md'
+# What that widening must not swallow. `docs` and the directory name have to
+# stay two path segments with only slashes and dot segments between them.
+check append-only-docs.sh ALLOW 'no separator at all is a different name' \
+  'rm -rf docsdev-log'
+check append-only-docs.sh ALLOW 'a hyphen is not a path separator' \
+  'rm -rf other/docs-dev-log'
 
 echo "=== REGRESSION: #69, overwriting an entry without naming a redirect ==="
 # Both routes overwrite an existing entry in place and neither was reached by
@@ -3171,10 +3268,20 @@ echo "=== the tokeniser's header names every hook that sources it ==="
 CS_LIB="$HOOKS/lib/command-scan.sh"
 CS_HEADER=$(awk 'NR == 1 { next } /^#$/ { exit } /^#/ { print; next } { exit }' "$CS_LIB")
 CS_NAMED=$(printf '%s\n' "$CS_HEADER" | grep -oE '[A-Za-z0-9_-]+\.sh' | sort -u | tr '\n' ' ')
-# Who actually sources it, read off the disk rather than listed here. The
-# literal is the path as every hook spells it when it assigns LIB.
-CS_SOURCERS=$(grep -lF '/lib/command-scan.sh"' "$HOOKS"/*.sh 2>/dev/null \
-  | sed 's|.*/||' | sort -u | tr '\n' ' ')
+# Who actually sources it, read off the disk rather than listed here.
+#
+# Two questions, answered in the order they bite. The needle is the bare file
+# name rather than the path as a hook spells it when it assigns LIB, because
+# keying on one spelling means a hook that sources it differently drops out of
+# this audit silently -- which is the failure the audit exists for. But the
+# loose needle then matches a file that only MENTIONS the library in a comment,
+# and append-only-docs-edit.sh does exactly that: it says in prose why its path
+# normaliser carries no cs_ prefix. So comments are stripped first, the way
+# `armed` strips them, and what is left is the file as it runs.
+CS_SOURCERS=$(for f in "$HOOKS"/*.sh; do
+    sed 's/[[:space:]]*#.*$//' "$f" 2>/dev/null | grep -qF 'command-scan.sh' \
+      && printf '%s\n' "${f##*/}"
+  done | sort -u | tr '\n' ' ')
 # This suite reads that path too, to run this audit, and it is not a consumer.
 # Named here for the reason NOT_THE_BOUNDARY is named above: the exception is
 # the part that would otherwise be discovered rather than read.

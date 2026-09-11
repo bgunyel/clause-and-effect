@@ -44,10 +44,19 @@ FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 # A guarded file reached through a symlink is therefore still permitted; that is
 # a smaller hole than the one being closed, and it is not a spelling anyone
 # writes by accident.
-cs_path_norm() {  # cs_path_norm <absolute path>
+#
+# It carries no cs_ prefix on purpose. That namespace belongs to
+# lib/command-scan.sh, which this hook does not source and which answers a
+# different question -- where a command word is, not what a path reduces to.
+# Its sibling append-only-docs.sh cannot use this function either: the path
+# there is embedded in a command rather than handed over as one, so that file
+# matches the two spellings where they stand and says so.
+norm_path() {  # norm_path <absolute path>
   local seg out="" oldopts=$-
   # The loop splits on / by word splitting, which would also glob each segment
-  # against the tree.
+  # against the tree. Both call sites are command substitutions, so the restore
+  # below has nothing to restore today; it is kept so that a later call which
+  # is NOT a substitution does not leave globbing off for the rest of the hook.
   set -f
   local IFS=/
   for seg in $1; do
@@ -66,8 +75,8 @@ case "$FILE" in
   /*) ABS="$FILE" ;;
   *)  ABS="$ROOT/$FILE" ;;
 esac
-ROOT=$(cs_path_norm "$ROOT")
-ABS=$(cs_path_norm "$ABS")
+ROOT=$(norm_path "$ROOT")
+ABS=$(norm_path "$ABS")
 
 # Anchor to the project root so an identically-named path in another checkout
 # is not caught by a bare substring match. Both sides are normalised first, so

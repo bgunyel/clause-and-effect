@@ -27,7 +27,18 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
 # `.` and `-` are path-name characters here so that `docs/dev-log.bak` and
 # `docs/dev-logbook` are other paths rather than this one; a quote, a space or
 # a separator ends the name and is matched.
-APPEND_ONLY='docs/(dev-log|lessons-learned|eval-reports)(/|[^A-Za-z0-9_.-]|$)'
+#
+# The leading `/+(\./+)*` is the same finding on the other side of the slash,
+# found by review of the fix above rather than by the issue. This hook compares
+# spellings, exactly as append-only-docs-edit.sh did before #69 normalised it,
+# and the spellings that a shell reduces to the same directory were permitted:
+# `rm -rf docs//dev-log` and `rm -rf docs/./dev-log` both were. Nothing here
+# can normalise the way the Edit companion does -- the path is embedded in a
+# command rather than handed over as one -- so the two spellings a reader
+# actually writes are matched where they stand. That is a narrower answer than
+# the companion's and it is named as one: `docs/foo/../dev-log` is still
+# permitted, and closing that would mean parsing paths out of shell text.
+APPEND_ONLY='docs/+(\./+)*(dev-log|lessons-learned|eval-reports)(/|[^A-Za-z0-9_.-]|$)'
 
 if echo "$COMMAND" | grep -qE "$APPEND_ONLY"; then
   # rm / mv / cp over an existing entry, or over the directory itself.
