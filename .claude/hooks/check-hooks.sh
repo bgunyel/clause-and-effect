@@ -42,14 +42,26 @@
 # substitution are pinned side by side, because it was the anchor that decided
 # the verdict and that is the part that reads as arbitrary.
 #
-# The append-only checks from issue #69 are the first here that are not about
-# the boundary at all, and they are the same finding a second time: the hooks
-# that carry a convention had been reviewed only in the refusing direction. The
-# permitting direction was swept and `rm -rf docs/dev-log` turned out to be
-# permitted -- with `rm -rf docs/dev-log/`, one character away, refused. So did
-# every spelling of an entry's path that was not the one literal prefix the
-# Edit companion stripped. Neither was in the original report of that issue,
-# and neither had a check.
+# Issue #69 brought the first checks here that are not about the boundary at
+# all. Four hooks carry a CLAUDE.md convention rather than the agent boundary --
+# pytest-via-uv-group.sh, alembic-via-uv-group.sh, append-only-docs.sh and its
+# Edit companion -- and three of the four had no coverage whatever. What the
+# sweep found in them is the finding this suite keeps making: the reported
+# defect was in the refusing direction, and the serious ones were in the other.
+#
+# The refusing one is that neither uv-group hook sourced lib/command-scan.sh,
+# so a name matched as an argument or as prose and an ordinary
+# `grep -rn pytest docs/` was refused. Intermittently, which is the part worth
+# pinning: the match needed a separator before the name, so a quoted mention
+# was permitted or refused according to whether a quote or a space happened to
+# sit in front of it. Those pairs are checked side by side.
+#
+# The permitting ones were in the append-only guarantee. `rm -rf docs/dev-log`
+# was permitted while `rm -rf docs/dev-log/`, one character away, was refused;
+# truncate and tee overwrote an entry without naming a redirect; and every
+# spelling of an entry's path that did not reduce to the one literal prefix the
+# Edit companion stripped was permitted on a file that exists. None of the
+# three was in the original report of that issue, and none had a check.
 #
 # So the number below is not a measure of the boundary. A check suite is
 # evidence about the cases it names and about nothing else, and every case here
@@ -2322,6 +2334,114 @@ grep -q '^cs_renamed_away()' "$FIXTURES/halflib/lib/command-scan.sh" || {
 check_in "$WT_STALE" "$FIXTURES/halflib/no-work-on-stale-branch.sh" BLOCK 'a library missing only cs_git_args' \
   'git commit -m "wip"'
 
+echo "=== REGRESSION: #69, a command name matched as a substring ==="
+# First coverage of any kind for these two hooks. Neither sourced
+# lib/command-scan.sh, so neither knew where a command word was, and the name
+# matched as an argument and as prose. Every verdict here was measured on
+# dev-05 at 7cb4891, where the six below were BLOCK -- ordinary greps and
+# git log invocations, refused for naming the tool they search for.
+check pytest-via-uv-group.sh ALLOW 'grep for pytest in the docs' \
+  'grep -rn pytest docs/'
+check pytest-via-uv-group.sh ALLOW 'grep for pytest after a pipe' \
+  'ls tests/ | grep pytest'
+check pytest-via-uv-group.sh ALLOW 'git log searching for pytest' \
+  'git log --grep pytest'
+check alembic-via-uv-group.sh ALLOW 'grep for alembic in the docs' \
+  'grep -rn alembic docs/'
+check alembic-via-uv-group.sh ALLOW 'git log searching for alembic' \
+  'git log --grep alembic'
+check alembic-via-uv-group.sh ALLOW 'prose naming the sanctioned invocation' \
+  'echo "we run alembic upgrade head via the group"'
+# The pair that made the old behaviour intermittent, kept side by side. Both
+# were prose; the first was permitted only because a quote sat in front of the
+# name and a quote is not in the separator class, and the second was refused
+# because a space did. Same sentence shape, opposite verdicts. They are one
+# verdict now, and it is the pair rather than either one that says so.
+check pytest-via-uv-group.sh ALLOW 'prose, name straight after the quote' \
+  'echo "pytest lives in the test group"'
+check pytest-via-uv-group.sh ALLOW 'prose, name after a space' \
+  'echo "we run pytest via the test group"'
+
+echo "=== the controls those two hooks are for, which keep their verdicts ==="
+check pytest-via-uv-group.sh BLOCK 'bare pytest' \
+  'pytest tests/'
+check pytest-via-uv-group.sh BLOCK 'bare python -m pytest' \
+  'python -m pytest tests/'
+check pytest-via-uv-group.sh ALLOW 'the sanctioned invocation' \
+  'uv run --group test pytest tests/'
+check pytest-via-uv-group.sh ALLOW 'make test, which is that invocation' \
+  'make test'
+check alembic-via-uv-group.sh BLOCK 'bare alembic' \
+  'alembic upgrade head'
+check alembic-via-uv-group.sh BLOCK 'bare alembic as the second command' \
+  'cd x && alembic upgrade head'
+check alembic-via-uv-group.sh ALLOW 'the sanctioned invocation' \
+  'uv run --group migrations alembic upgrade head'
+# A command word is a command word wherever cs_split finds one. These are the
+# shapes that library was written for, asked of these two hooks for the first
+# time.
+check pytest-via-uv-group.sh BLOCK 'bare pytest behind a wrapper word' \
+  'sudo pytest tests/'
+check pytest-via-uv-group.sh BLOCK 'bare pytest behind a wrapper with an operand' \
+  'timeout 30 pytest tests/'
+check pytest-via-uv-group.sh BLOCK 'bare pytest after a control word' \
+  'if true; then pytest tests/; fi'
+check pytest-via-uv-group.sh ALLOW 'the sanctioned invocation behind a wrapper' \
+  'timeout 300 uv run --group test pytest tests/'
+check pytest-via-uv-group.sh ALLOW 'and behind a wrapper whose option takes a value' \
+  'sudo -u me uv run --group test pytest tests/'
+
+echo "=== #69, what the deleted allowlist covered, asked of the rule that replaced it ==="
+# The allowlist is gone: with the command word at ^, `uv run --group test
+# pytest` never matches the first rule, so there was nothing left to rescue.
+# But `uv run pytest` was refused by it and has to stay refused -- it runs
+# pytest outside the group, which is the failure these hooks are about. The
+# group is asked for on the `uv run` fragment now rather than anywhere on the
+# line, which is the part the allowlist got wrong and which the last two of
+# these pin.
+check pytest-via-uv-group.sh BLOCK 'uv run reaching pytest with no group named' \
+  'uv run pytest tests/'
+check pytest-via-uv-group.sh BLOCK 'uv run naming the wrong group' \
+  'uv run --group dev pytest tests/'
+check pytest-via-uv-group.sh BLOCK 'uv run reaching python -m pytest with no group' \
+  'uv run python -m pytest tests/'
+check alembic-via-uv-group.sh BLOCK 'uv run reaching alembic with no group named' \
+  'uv run alembic upgrade head'
+check pytest-via-uv-group.sh ALLOW 'uv run naming the group, reaching python -m pytest' \
+  'uv run --group test python -m pytest tests/test_chunker.py'
+# uv subcommands that are not `run` install or add a package rather than
+# running one, and naming pytest is what they are for.
+check pytest-via-uv-group.sh ALLOW 'uv pip install, which is not uv run' \
+  'uv pip install pytest'
+check pytest-via-uv-group.sh ALLOW 'uv add, which is not uv run' \
+  'uv add --group test pytest'
+check alembic-via-uv-group.sh ALLOW 'uv add, which is not uv run' \
+  'uv add --group migrations alembic'
+
+echo "=== ACCEPTED gap: #69, these two carry no wrapper rule ==="
+# The four boundary hooks refuse a wrapped command outright, because nothing
+# can be read out of a quoted payload. These two do not, and both verdicts
+# below were ALLOW before this change as well -- by accident rather than by
+# decision, on the same quote that made the prose pair above disagree. It stays
+# a gap rather than becoming a rule: CLAUDE.md's boundary is what a wrapper
+# rule protects, and a dependency group is a convention, so refusing every
+# `bash -c` in the repository would cost more than the convention is worth.
+check pytest-via-uv-group.sh ALLOW 'a wrapped bare pytest is not read' \
+  'bash -c "pytest tests/"'
+check alembic-via-uv-group.sh ALLOW 'a wrapped bare alembic is not read' \
+  'sh -c "alembic upgrade head"'
+
+echo "=== #69, the two convention hooks fail closed without the tokeniser ==="
+# They depend on lib/command-scan.sh now, so they answer the question the
+# boundary hooks already answer: a guard's own breakage refuses. Without this
+# the sourcing would leave cs_split undefined, the fragment list empty and
+# every bare invocation permitted.
+cp pytest-via-uv-group.sh alembic-via-uv-group.sh "$FIXTURES/nolib/"
+check_in "$ON_DEV" "$FIXTURES/nolib/pytest-via-uv-group.sh" BLOCK \
+  'no lib/, pytest-via-uv-group.sh refuses anything at all' 'ls'
+check_in "$ON_DEV" "$FIXTURES/nolib/alembic-via-uv-group.sh" BLOCK \
+  'no lib/, alembic-via-uv-group.sh refuses anything at all' 'ls'
+
 echo "=== append-only: which docs directories are guarded, and which are not ==="
 # First coverage for append-only-docs.sh and its Edit/Write companion. It was
 # added with issue #61, which put a comment in both files saying docs/research/
@@ -3032,6 +3152,51 @@ written 'and leaves the unclassified alone' \
 # leave the claim behind it as false as it was. Pinned for that reason.
 written 'the sweep says how often it is run, which is by hand and never' \
   "$SWEEP_SECTION" 'Cadence: manual, and unscheduled'
+echo "=== the tokeniser's header names every hook that sources it ==="
+# The same audit the section above gets, pointed at the one other sentence in
+# this tree that claims to list the hooks. lib/command-scan.sh opens "which is
+# every hook that reads a command", and that claim has now gone stale twice:
+# #63 found it naming three of the four that sourced the file, and #69 found
+# two more that read a command and were not on the list because they did not
+# source it at all -- true of the hooks it knew about, false of the repository.
+# A sentence that has gone stale twice is checked rather than maintained.
+#
+# It sits here, after the section above, because it uses that section's
+# `present`. Written where it belongs by subject, it ran before the helper
+# existed: twelve `present: command not found` lines, no FAILED set, and the
+# suite green. A check that cannot fail is the thing this file is most for.
+#
+# The paragraph is the first comment block, which is where the claim is made;
+# the rest of the header is history and names files for other reasons.
+CS_LIB="$HOOKS/lib/command-scan.sh"
+CS_HEADER=$(awk 'NR == 1 { next } /^#$/ { exit } /^#/ { print; next } { exit }' "$CS_LIB")
+CS_NAMED=$(printf '%s\n' "$CS_HEADER" | grep -oE '[A-Za-z0-9_-]+\.sh' | sort -u | tr '\n' ' ')
+# Who actually sources it, read off the disk rather than listed here. The
+# literal is the path as every hook spells it when it assigns LIB.
+CS_SOURCERS=$(grep -lF '/lib/command-scan.sh"' "$HOOKS"/*.sh 2>/dev/null \
+  | sed 's|.*/||' | sort -u | tr '\n' ' ')
+# This suite reads that path too, to run this audit, and it is not a consumer.
+# Named here for the reason NOT_THE_BOUNDARY is named above: the exception is
+# the part that would otherwise be discovered rather than read.
+CS_SOURCERS=$(printf '%s' " $CS_SOURCERS " | sed 's| check-hooks.sh | |')
+[ -n "$CS_NAMED" ] && [ -n "$CS_SOURCERS" ] || {
+  echo "no hook names were read out of the tokeniser header or off the disk; the checks below prove nothing" >&2
+  exit 1
+}
+set -f
+for hook in $CS_SOURCERS; do
+  present "the header names $hook, which sources the tokeniser" "$hook" "$CS_NAMED"
+done
+# The other direction: a name in the paragraph that no longer sources the file.
+# check-hooks.sh is named in it as the thing running this audit, which is why it
+# is dropped from the list above rather than from the paragraph.
+for hook in $CS_NAMED; do
+  case "$hook" in check-hooks.sh|command-scan.sh) continue ;; esac
+  present "the header names $hook, and that file sources the tokeniser" \
+          "$hook" "$CS_SOURCERS"
+done
+set +f
+
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
 exit $FAILED
