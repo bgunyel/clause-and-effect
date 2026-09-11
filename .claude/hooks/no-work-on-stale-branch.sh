@@ -268,9 +268,16 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 # cannot tell "not this verb" from "no such function", so a library holding
 # cs_split but not cs_git_args would leave every verb permitted through the very
 # check written to stop that.
+#
+# And the wrapper words with them, since #79. cs_split reads them from a
+# variable now rather than carrying them as a literal, so a library whose three
+# functions are all present and whose list is empty strips no prefix and admits
+# none -- silent, and in the permitting direction, which is the one property
+# every defect in this library has had in common.
 if ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_normalise >/dev/null 2>&1 \
-   || ! command -v cs_git_args >/dev/null 2>&1; then
+   || ! command -v cs_git_args >/dev/null 2>&1 \
+   || [ -z "$CS_WRAP_WORDS" ]; then
   refuse "(This hook could not load lib/command-scan.sh, so it cannot read what this command does. Refusing rather than permitting.)"
 fi
 
@@ -283,7 +290,11 @@ VERBS="commit cherry-pick revert merge am rebase"
 # tokeniser finds nothing -- so this runs on the raw text and before the search
 # for a command word, exactly as the three sibling hooks do. Ordering it the
 # other way would let every wrapped commit through.
-if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))' \
+#
+# The expression is CS_WRAPPER_RE, derived once in lib/command-scan.sh since
+# #79 -- one copy where all four hooks carried their own, and none of the four
+# admitted the prefix words cs_split already strips.
+if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE" \
    && echo "$COMMAND" | grep -qE 'git[[:space:]]+([^;&|]*[[:space:]])?(commit|cherry-pick|revert|merge|am|rebase)([^-A-Za-z0-9_]|$)'; then
   refuse "(That command is wrapped in a shell, so what it would write cannot be read through a quoted payload. Run it plainly.)"
 fi

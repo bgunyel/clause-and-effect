@@ -428,7 +428,13 @@ gql_bases() {
 # do want, and cs_join is that half on its own.
 WRAPTEXT=$(printf '%s\n' "$COMMAND" | cs_join)
 
-if echo "$WRAPTEXT" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))'; then
+# Whether there is a wrapper at all is CS_WRAPPER_RE, derived once in
+# lib/command-scan.sh since #79 -- one copy where all four hooks carried their
+# own, and none of the four admitted the prefix words cs_split already strips,
+# so `timeout 5 sh -c 'gh pr merge 5'` was permitted. The rules below are still
+# this file's own, and still answer the subcommand question one level too late;
+# issue #51 carries that and the header says so.
+if echo "$WRAPTEXT" | grep -qE "$CS_WRAPPER_RE"; then
   if echo "$WRAPTEXT" | grep -qE "$GH_SURFACE_ANYWHERE" \
      || echo "$WRAPTEXT" | grep -qE '/pulls/[^ ]*/(merge|reviews)' \
      || echo "$WRAPTEXT" | grep -qE '/releases([^A-Za-z0-9_-]|$)' \

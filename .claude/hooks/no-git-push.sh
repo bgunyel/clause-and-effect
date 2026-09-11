@@ -74,7 +74,14 @@ REFUSE="Blocked: git push. An agent may push only the branch of the linked workt
 # no command word for the tokeniser to find, so the question would answer no and
 # the hook would leave. Ordering it the other way let all four wrapper forms
 # through, which the check suite caught.
-if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))' \
+#
+# The expression is CS_WRAPPER_RE, derived once in lib/command-scan.sh since
+# #79. All four hooks wrote out their own copy of it before that, and none of
+# the four admitted the prefix words cs_split already strips -- so this file
+# refused `sudo git push --all origin` and permitted
+# `sudo sh -c 'git push --all origin'`. What the anchor admits, where it stops,
+# and the soft spot it keeps are argued there rather than restated here.
+if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE" \
    && echo "$COMMAND" | grep -qE 'git[[:space:]]+([^;&|]*[[:space:]])?push([^-A-Za-z0-9_]|$)'; then
   echo "Blocked: git push inside a shell wrapper. The destination cannot be read through a quoted payload, so the worktree exception does not apply. Push plainly from the worktree, or leave it to Bertan." >&2
   exit 2
