@@ -1060,11 +1060,37 @@ check no-git-push.sh BLOCK 'timeout -s KILL 30 + wrapped'   "timeout -s KILL 30 
 # point -- they measure the number rather than a command.
 check no-git-push.sh BLOCK 'three tokens before the wrapper'     "sudo a b c sh -c 'git push --all origin'"
 check no-git-push.sh ALLOW 'and four is past where it looks'     "sudo a b c d sh -c 'git push --all origin'"
-# What that run admits, where cs_split's tail would stop. cs_split breaks its
-# tail at a token opening a quote; this does not, because nothing here reads a
-# token as a command -- they are skipped on the way to a wrapper word that must
-# still appear. The asymmetry is deliberate, argued at CS_WRAP_TOKEN, and in
-# the refusing direction, so it is pinned as a BLOCK rather than left to be
+# An OPTION standing after a separated option value. The options loop stops at
+# the first token that is not an option, so a second option behind the operand
+# falls to the token class -- and that class excluded a leading dash until
+# review of this branch, which made the anchor stop dead where cs_split walks
+# past and finds the command. Each pair below was BLOCK unwrapped and ALLOW
+# wrapped, which is #79's own asymmetry one option deeper and in the permitting
+# direction, inside the change that fixes it. The unwrapped halves are here too
+# because the pair is the evidence: a single verdict says nothing about which
+# half moved.
+check no-git-push.sh BLOCK 'sudo -n after a separated value, unwrapped' \
+         'sudo -u root -n git push --all origin'
+check no-git-push.sh BLOCK 'sudo -n after a separated value, wrapped' \
+         "sudo -u root -n sh -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'the bare -- after a separated value, unwrapped' \
+         'nice -n 10 -- git push --all origin'
+check no-git-push.sh BLOCK 'the bare -- after a separated value, wrapped' \
+         "nice -n 10 -- sh -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'a long option after an operand, unwrapped' \
+         'timeout -s KILL 30 --preserve-status git push --all origin'
+check no-git-push.sh BLOCK 'a long option after an operand, wrapped' \
+         "timeout -s KILL 30 --preserve-status bash -c 'git push --all origin'"
+# The control that was never broken: with no operand consumed yet, the options
+# loop still has the dash, so this was BLOCK throughout. It is what says the
+# three above are about the token class and not about `--`.
+check no-git-push.sh BLOCK 'a bare -- with no operand before it' \
+         "sudo -- sh -c 'git push --all origin'"
+# What that run admits, where cs_split's tail would stop. The class is now
+# cs_split's exactly; what still differs is the LOOP -- cs_split breaks at a
+# token opening a quote, because it offers candidates to read as commands, and
+# this does not, because nothing here reads a token at all. Deliberate, argued
+# at CS_WRAP_TOKEN, in the refusing direction, and pinned so that it is not
 # rediscovered as a divergence.
 check no-git-push.sh BLOCK 'a quoted token does not end the run' \
          "sudo \"x\" sh -c 'git push --all origin'"

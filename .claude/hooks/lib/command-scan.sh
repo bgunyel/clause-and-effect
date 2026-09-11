@@ -401,10 +401,13 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # to, for this same case and this same reason. A different number here would be
 # the divergence this whole change is about, arriving inside its own fix.
 #
-# The COUNT is what is shared, and not the token class. Review of this change
-# found this paragraph claiming both, when cs_split stops its tail at a token
-# opening a quote and this does not. The difference is deliberate and is argued
-# at CS_WRAP_TOKEN below; what is claimed here is the bound alone.
+# THE CLASS AND THE COUNT, both. The token admitted between the prefix word and
+# the wrapper is cs_split's tail token exactly, and three is cs_split's bound.
+# This paragraph has now been wrong about that twice and in both directions --
+# claiming the classes matched when this one was wider, then claiming only the
+# count was shared when this one had also been narrower in a second respect
+# nobody had noticed. What is left differing is the loop and not the class, and
+# CS_WRAP_TOKEN below is where that is set out.
 #
 # WIDENED, NOT DROPPED, and the difference is the whole of the constraint. The
 # anchor cannot simply go: a wrapper word named anywhere on a line that also
@@ -456,28 +459,46 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # f.sh` was ALLOW and is now BLOCK -- named here so that it is a known cost
 # rather than a discovery. Both spellings of each pair above are checks.
 #
-# A token that may stand between the prefix word and the wrapper word. Not an
-# option -- those are consumed by the loop in front of this one -- and anything
-# else.
+# A token that may stand between the prefix word and the wrapper word: any word
+# at all, which is cs_split's tail token exactly -- `^[^[:space:]]+[[:space:]]+`
+# there, the same class here. Both the class and the bound of three are shared,
+# and that is the whole claim.
 #
-# WIDER THAN cs_split's TAIL TOKEN, deliberately, and this is the one place the
-# two answers differ on purpose. cs_split stops offering candidates at a token
-# that opens a quote, because what follows one is the text of an argument and
-# reading text as a command is the mistake cs_normalise has made three times.
-# Nothing here reads a token as a command: these are skipped, on the way to a
-# wrapper word that has to appear after them. So the reason to stop does not
-# transfer, and stopping anyway would narrow a guard for a reason that does not
-# apply to it.
+# IT EXCLUDED A LEADING DASH UNTIL REVIEW OF THIS BRANCH, and that was #79
+# reproduced inside its own fix, one option deeper and in the permitting
+# direction. The options loop in front of this one stops at the first token
+# that is not an option, so an option appearing AFTER a separated option value
+# was left for this class to admit -- and it refused to. cs_split walks past it
+# and finds the command; the anchor stopped dead. Measured on the branch that
+# had it:
 #
-# Which leaves the direction as the argument, and it is the one this file takes
-# everywhere: admitting a token too many can only refuse more, never hide a
-# wrapper. `sudo "x" sh -c 'git push --all origin'` is refused here and offers
-# no candidate in cs_split, and that asymmetry is in the refusing direction.
+#   BLOCK   sudo -u root -n git push --all origin
+#   ALLOW   sudo -u root -n sh -c 'git push --all origin'
+#   BLOCK   nice -n 10 -- git push --all origin
+#   ALLOW   nice -n 10 -- sh -c 'git push --all origin'
 #
-# Named because review of this change found the comment claiming the token
-# classes matched when only the counts did. The counts matching is the claim;
-# this paragraph is what makes the rest of it true.
-CS_WRAP_TOKEN="[^-[:space:]][^[:space:]]*[[:space:]]+"
+# `sudo -n`, `nice -n 10 --` and `timeout --preserve-status` are ordinary
+# spellings, and `--` defeats an exclusion like that whenever it follows a
+# separated option value. `sudo -- sh -c` was refused throughout, because
+# nothing had consumed an operand yet and the options loop still had the dash.
+#
+# Worse than the gap: the paragraph here named a deliberate difference from
+# cs_split, argued it was safe because admitting a token too many can only
+# refuse more, and did not mention this one, which runs the other way and which
+# that argument does not license. A comment claiming the classes differ in one
+# respect while they differed in two is the shape this file exists to stop,
+# arriving in the change whose subject it is. All three shapes are checks now.
+#
+# ONE DIFFERENCE REMAINS, and it is in the loop rather than the class.
+# cs_split's tail also breaks at a token that OPENS A QUOTE, because it is
+# offering candidates to read as commands and what follows a quote is the text
+# of an argument -- the mistake cs_normalise has made three times. Nothing here
+# reads a token as a command: these are skipped, on the way to a wrapper word
+# that must still appear after them. So the reason to stop does not transfer,
+# and `sudo "x" sh -c 'git push --all origin'` is refused here while cs_split
+# offers no candidate for it. That asymmetry is in the refusing direction and
+# is pinned as a check.
+CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"
 
 # TWO WAYS THE LIST CAN BE MISSING, and the second is the one that needed
 # building for. It is the cost of making the list a variable, and it is paid
