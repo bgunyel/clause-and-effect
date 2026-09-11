@@ -363,14 +363,24 @@ VERDICT='(^|[[:space:]])(--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[
 # under `grep -qE` as a boolean, so consuming the boundary character costs
 # nothing.
 #
-# The class excludes `-` and `_` as the rest of the file does, which narrows
-# three shapes: `my-gh pr merge 5` and `my_gh pr merge 5` stop matching, and so
-# does a literal `\n` escape written immediately before gh. All three are evasion
-# shapes rather than mistakes -- `./gh` and `/usr/bin/gh` still refuse, a path
-# ending in a character that is none of gh's own -- and they are accepted under
-# the same "these stop mistakes, not adversaries" that decides the rest, stated
-# here rather than left for a later review to find. Pinned in both directions
-# under REGRESSION: #72 in check-hooks.sh.
+# Three shapes stop matching, and they have two different causes -- worth
+# keeping apart, because only one of them is a choice this file made.
+#
+# The boundary EXISTING narrows a literal `\n` escape written immediately before
+# gh: the character in front is then `n`, which no class this file would write
+# admits. `printf 'summary\ngh pr review --approve 5'` inside a wrapper matched
+# before and does not now. That is the single verdict the fix changes across the
+# 7,621-command corpus #72 sampled, and it follows from having a left boundary
+# at all rather than from which one -- measured, both candidate classes agree.
+#
+# The class EXCLUDING `-` and `_`, as every other token here does, separately
+# narrows `my-gh pr merge 5` and `my_gh pr merge 5`.
+#
+# All three are evasion shapes rather than mistakes -- `./gh` and `/usr/bin/gh`
+# still refuse, a path ending in a character that is none of gh's own -- and
+# they are accepted under the same "these stop mistakes, not adversaries" that
+# decides the rest, stated here rather than left for a later review to find.
+# All three are pinned under REGRESSION: #72 in check-hooks.sh.
 GH_SURFACE_ANYWHERE='(^|[^-A-Za-z0-9_])gh[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
 
 # Every base a gh api call names, in the two shapes gh accepts one. Both print

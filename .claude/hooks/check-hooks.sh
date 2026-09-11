@@ -932,8 +932,10 @@ check no-pr-decisions.sh ALLOW 'bash -c gh issue list'       'bash -c "gh issue 
 check no-pr-decisions.sh ALLOW 'bash -c an ordinary command' 'bash -c "make test"'
 
 echo "=== REGRESSION: #72, gh is a word here and not a suffix ==="
-# The sentence three lines above is the spec, and the pattern did not implement
-# it. `gh` was the one token in this file matched unbounded on its left, so any
+# "The rule reaches gh's three deciding surfaces and stops there" -- the comment
+# heading the block above -- is the spec, and the pattern did not implement it.
+# (Named rather than pointed at by line count, which any insertion would make
+# wrong.) `gh` was the one token in this file matched unbounded on its left, so any
 # word ENDING in gh satisfied it -- high, enough, through, sigh, dough -- and
 # once a wrapper was on the line, one of those followed by a delimited pr,
 # release or api anywhere later was refused. The first row is the one that
@@ -970,6 +972,15 @@ check no-pr-decisions.sh BLOCK 'bash -c /usr/bin/gh pr merge'  'bash -c "/usr/bi
 # quietly widened past what the comment on the pattern claims.
 check no-pr-decisions.sh ALLOW 'bash -c my-gh pr merge'        'bash -c "my-gh pr merge 5"'
 check no-pr-decisions.sh ALLOW 'bash -c my_gh pr merge'        'bash -c "my_gh pr merge 5"'
+# The third narrowed shape, and the one with the other cause: a literal \n
+# escape puts `n` in front of gh, which no class this file would write admits,
+# so this follows from having a left boundary at all rather than from which one.
+# It is the single verdict the fix changed across the 7,621-command corpus #72
+# sampled. Pinned because the comment on the pattern claims all three are, and a
+# check suite is evidence about the cases it names and about nothing else -- the
+# two rows above cannot speak for this one, having a different cause.
+check no-pr-decisions.sh ALLOW 'bash -c a \n escape before gh' \
+  "bash -c \"printf 'summary\\ngh pr review --approve 5' > /tmp/x\""
 
 echo "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
 # Closing a PR and publishing a release were refused in the gh spelling and open
