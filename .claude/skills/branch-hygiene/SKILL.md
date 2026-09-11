@@ -22,7 +22,11 @@ worktree or deleting a worktree branch are each reserved. `CONTEXT.md`'s
 *reserved act* entry holds the list; this file cites it rather than counting it,
 so that a number here cannot go stale while the list grows there. What it makes
 Bertan's is every step of either procedure that changes something — the whole
-of the rotation below, and step 2 of the sweep.
+of the rotation below, and steps 2 and 3 of the sweep. Step 3 is included
+rather than argued about: `git worktree prune` removes worktree entries too,
+and deciding whether pruning an administrative file is really *removing a
+worktree* is a distinction a reader would have to get right unprompted, for no
+gain over simply reserving both.
 `.claude/hooks/no-git-push.sh` refuses both of the pushes a rotation needs — the
 first push of `dev-NN+1`, and the remote deletion of `dev-NN` — from anywhere,
 correctly. Issue #41 considered carving a hook exception for this skill and
@@ -241,19 +245,49 @@ A branch whose pull request is `CLOSED` rather than `MERGED` is stale by the
 same definition and is **not** swept on that evidence alone: its commits exist
 nowhere else. Report it, decide, and only then remove it.
 
-### 2. Remove the worktree, then the branch
+### 2. Unlock the worktree, remove it, then delete the branch
 
-In that order, and the order is not a preference. A linked worktree holds its
-branch checked out, and git refuses to delete a branch a worktree is standing
-on — `cannot delete branch '<name>' used by worktree at '<path>'` — so reaching
-for the branch first simply fails, in the direction that leaves a half-swept
-pair behind.
+Three commands, and neither ordering is a preference.
+
+**Unlock first, because every worktree here is locked.** `EnterWorktree` locks
+the worktree it creates, so `git worktree remove` refuses one outright:
+
+```
+fatal: cannot remove a locked working tree, lock reason: claude session <name>
+use 'remove -f -f' to override or unlock first
+```
+
+Take the other door. git names `remove -f -f` first and it is the wrong one: a
+lock says a session is using this worktree, and forcing past it discards
+whatever that session has not committed. The lock reason carries what decides
+the question — the session's name, its pid, and that process's start time,
+which is what separates a live session from a stale lock whose pid has since
+been handed to something else:
 
 ```bash
-git worktree list
+git worktree list --porcelain
+```
+
+A session that ends cleanly removes its own worktree, so a locked worktree that
+outlived its session is precisely the sweep's population. Confirm that rather
+than assume it; if the process is alive, this worktree is not the sweep's and
+nothing here applies to it:
+
+```bash
+ps -p <pid>
+```
+
+Then, and only then:
+
+```bash
+git worktree unlock .claude/worktrees/<name>
 git worktree remove .claude/worktrees/<name>
 git branch -d <branch>
 ```
+
+The branch goes last because a linked worktree holds it checked out and git
+refuses to delete a branch a worktree is standing on — `cannot delete branch
+'<name>' used by worktree at '<path>'`.
 
 `git worktree remove` refuses a worktree holding uncommitted changes or
 untracked files — `'<path>' contains modified or untracked files, use --force
@@ -279,6 +313,14 @@ git worktree list
 here to finish step 2. It is for the other way a worktree ends — a directory
 deleted by hand, which leaves an administrative entry behind that `git worktree
 list` still reports.
+
+**`prune` will not rescue a worktree that is still locked, and does not say
+so.** A locked worktree is exempt from pruning by design — holding the
+administrative files against pruning is what `git worktree lock` is for — so if
+the directory went by hand while the lock stood, `prune` skips it, exits 0, and
+`git worktree list` goes on naming it. That is the one failure in this
+procedure that reports success, which is why the invariant below is checked
+against `git worktree list` rather than inferred from the exit codes above.
 
 There is no `git push origin --delete` in this procedure.
 `delete_branch_on_merge` has already taken the remote half, and if it had not,

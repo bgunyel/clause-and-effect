@@ -2430,6 +2430,24 @@ unarmed 'and it is that section rather than the rotation beside it' \
 # before #70 -- and it takes the rotation's care over the same flag.
 written 'the sweep removes the worktree' "$SWEEP_SECTION" 'git worktree remove'
 written 'and deletes the local branch' "$SWEEP_SECTION" 'git branch -d'
+# And unlocks it first, without which the other two cannot run here at all.
+# Review of the first two commits found the procedure unable to execute on this
+# repository: EnterWorktree locks every worktree it creates, `git worktree
+# remove` refuses a locked one and names `remove -f -f` as the way out, and
+# `git worktree prune` is exempted from locked worktrees by design -- so it
+# skips one, exits 0, and the closing invariant is never reached with nothing
+# saying why. Reproduced: all four worktrees present at the time carried
+# `locked claude session <name> (pid N start T)`.
+#
+# THE LIMIT, which is the one that let that ship. Every literal in this section
+# asks whether the section CONTAINS a command. None of them runs one, so none is
+# evidence that the procedure succeeds -- a sweep naming three commands that all
+# refuse would pass every check here. What guards the difference is a person
+# running it; these hold the text against the citations, and nothing more.
+written 'and unlocks it first, which is what makes the other two possible' \
+  "$SWEEP_SECTION" 'git worktree unlock'
+written 'and warns that prune will not rescue a worktree still locked' \
+  "$SWEEP_SECTION" 'exempt from pruning by design'
 written 'with the care the rotation takes over the same flag' \
   "$SWEEP_SECTION" 'never `-D`'
 # The report classifies three ways and only one of the three is the sweep's. A
