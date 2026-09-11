@@ -80,6 +80,33 @@
 # -f, --delete -- that cannot sit behind a quoted free-text argument, because
 # `git push` has no -m-style slot to put one in.
 #
+# That argument is about the hooks whose fragments TRIGGER a refusal, and it was
+# written as though those were all of them. no-work-on-stale-branch.sh is the
+# fourth consumer and the exception: its fragment tests withdraw a carve-out
+# rather than raise a refusal -- `^(cd|pushd|popd)`, the git directory options,
+# and a checkout or switch each set CARVE= -- so there, losing a fragment head
+# RETAINS an exception instead of dropping a refusal, and "a cut can only refuse
+# more" does not transfer to it as written. Found by review of this change, not
+# by the suite.
+#
+# It is nonetheless safe, for a reason that belongs here rather than in that
+# file. A fragment that quote-awareness removes is one bash would never have run
+# as a command, so a carve-out retained past it is retained for a command that
+# does not change directory. The converse -- a real cd that the tracker now
+# hides -- has nowhere to happen: a cd bash would run sits either outside quotes,
+# where it is still cut, or inside a substitution, which sends the whole line to
+# the fallback. The fail-safe is what carries this case, exactly as it carries
+# the others; the difference is only that here it is load-bearing rather than
+# belt-and-braces.
+#
+# One verdict there did change, and it is worth naming because the shape is not
+# the obvious one. The catch-up merge carries no free-text argument that could
+# hold a quoted cd -- -m withdraws the carve-out by itself -- so what reaches
+# this is a quoted separator in a SIBLING command on the same line:
+# `git merge origin/dev-05 && echo 'x; cd /tmp'` was refused for a directory
+# change bash would never have made, and is permitted now. An unquoted cd still
+# withdraws the carve-out. Both are checks.
+#
 # One soft spot, named rather than closed. no-git-push.sh:153 records that "an
 # empty argument list is the permitted case", so a push whose arguments were
 # lost past a cut would read as a bare push. Probed with `git push "|--all

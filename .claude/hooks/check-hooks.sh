@@ -508,6 +508,16 @@ tok 'the bare-push spelling' \
 tok 'the grep alternation over a commit and a push' \
     "grep -n 'git commit|git push origin main' *.sh" \
     "$(printf "grep -n 'git commit|git push origin main' *.sh\n" | cs_split)"
+# The checks above exercise | ; ( and ). The other two separators were right and
+# unpinned, and both have a real spelling: & is a legal sed delimiter, and a
+# backtick inside SINGLE quotes is text to bash, where inside double quotes it
+# would run. Found by review of this change.
+tok 'an ampersand inside quotes is not a separator' \
+    "sed -i 's&git push --all origin&X&' f.sh" \
+    "$(printf "sed -i 's&git push --all origin&X&' f.sh\n" | cs_split)"
+tok 'a backtick inside single quotes is not a separator' \
+    "grep -rn '\`git push --all origin\`' docs/" \
+    "$(printf "grep -rn '\`git push --all origin\`' docs/\n" | cs_split)"
 # Double quotes protect a delimiter too. They protect only the separators,
 # never a substitution -- see the two below.
 tok 'a delimiter written with double quotes' \
@@ -746,6 +756,11 @@ check_in "$ON_MAIN" no-git-push.sh ALLOW 'grep alternation over pushes, from mai
 # runs nothing, because bash expands nothing inside them.
 check no-git-push.sh ALLOW 'sed over a push, double-quoted delimiter (was BLOCK)' \
          'sed -i "s|git push --all origin|X|" f.sh'
+# The other two separators, as verdicts rather than only as fragment lists.
+check no-git-push.sh ALLOW 'sed with & as its delimiter (was BLOCK)' \
+         "sed -i 's&git push --all origin&X&' f.sh"
+check no-git-push.sh ALLOW 'grep for a backticked push in prose (was BLOCK)' \
+         "grep -rn '\`git push --all origin\`' docs/"
 check no-pr-decisions.sh ALLOW 'a merge quoted in single quotes is inert (was BLOCK)' \
          "echo '\$(gh pr merge 5)'"
 # And its control, one character different: in double quotes that substitution
@@ -821,6 +836,16 @@ unarmed 'no-commit-to-main.sh does not match its wrapper rule on the fragments' 
         no-commit-to-main.sh "echo \"\$CMDS\" | grep -qE '$WRAPRE"
 unarmed 'no-pr-decisions.sh does not match its wrapper rule on the fragments' \
         no-pr-decisions.sh "echo \"\$CMDS\" | grep -qE '$WRAPRE"
+# The fourth consumer. It was covered behaviourally by the stale-branch section
+# below and not by a literal, which left "each wrapper detection" met in
+# substance and not in letter -- and this is the one hook where a lost fragment
+# retains a carve-out instead of dropping a refusal, so it is the last one that
+# should rest on an argument rather than a pin. See the header of
+# lib/command-scan.sh for why that shape is still safe.
+armed 'no-work-on-stale-branch.sh matches its wrapper rule on the raw command' \
+      no-work-on-stale-branch.sh "if echo \"\$COMMAND\" | grep -qE '$WRAPRE"
+unarmed 'no-work-on-stale-branch.sh does not match its wrapper rule on the fragments' \
+        no-work-on-stale-branch.sh "echo \"\$CMDS\" | grep -qE '$WRAPRE"
 
 echo "=== REGRESSION: PR #35 review, a command after a control word ==="
 # A separator is not the only thing a command can follow. Splitting on ; left
@@ -1846,6 +1871,29 @@ check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'the catch-up merge after 
   'git checkout fresh-branch && git merge origin/dev-05'
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'the catch-up merge with git pointed elsewhere' \
   'git --git-dir /elsewhere/.git merge origin/dev-05'
+# Issue #68 reaches this file here, and this is the one place in the boundary
+# where a lost fragment RETAINS an exception rather than dropping a refusal --
+# the three tests above set CARVE= from the fragment list. The merge itself
+# carries no free-text argument that could hold a quoted cd, because -m
+# withdraws the carve-out on its own; the shape that reaches it is a quoted
+# separator in a SIBLING command on the same line, which used to produce a
+# fragment headed by cd and refuse the catch-up merge on the strength of a
+# directory change bash would never have made. Measured on this fixture, old
+# split against new.
+#
+# The unquoted control below is what says the withdrawal itself still works.
+# See the header of lib/command-scan.sh for why this direction is safe: not
+# because a cut can only refuse more -- that argument does not hold in this
+# file -- but because the fallback catches every line the tracker cannot read,
+# so a cd bash would actually run is still cut out.
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'a cd quoted in a sibling command (was BLOCK)' \
+  "git merge origin/dev-05 && echo 'x; cd /tmp'"
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'a checkout quoted in a sibling command (was BLOCK)' \
+  "git merge origin/dev-05 && echo 'x; git checkout main'"
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'an unquoted cd still withdraws the carve-out' \
+  'cd /tmp && git merge origin/dev-05'
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'an unquoted checkout still withdraws it' \
+  'git checkout main && git merge origin/dev-05'
 # Every command, not the first: the permitted half does not license the second.
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a permitted merge followed by a commit' \
   'git merge origin/dev-05 && git commit -m "wip"'
