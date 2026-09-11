@@ -30,12 +30,13 @@ _Avoid_: check
 
 **Reserved act**:
 An act that belongs to Bertan and not to an agent: advancing the active dev
-branch on the remote, merging any pull request, rotating the dev branch, and
-publishing a release. Reserved is not a synonym for refused. The hooks refuse
-the ordinary spellings of some of these and they stop mistakes, not adversaries;
-others nothing refuses at all — the local half of a rotation, `git branch -d`,
-passes every hook and is reserved all the same. Where nothing enforces, an agent
-reports what it found and stops.
+branch on the remote, merging any pull request, rotating the dev branch,
+removing a worktree or deleting a worktree branch, and publishing a release.
+Reserved is not a synonym for refused. The hooks refuse the ordinary spellings
+of some of these and they stop mistakes, not adversaries; others nothing refuses
+at all. `git worktree remove`, the whole of the sweep, and `git branch -d`,
+which both the sweep and a rotation end with, pass every hook and are reserved
+all the same. Where nothing enforces, an agent reports what it found and stops.
 _Avoid_: forbidden act, blocked act
 
 **Worktree branch**:
@@ -52,4 +53,17 @@ add -b`, which does not — so a prefix rule would disagree between them; and a
 branch in the main checkout can be given whatever name the rule looks for, which
 would carry the exception to the one place it is meant not to reach. Do not
 "fix" this into a rule about the name.
+
+A worktree branch exists for exactly one pull request. When that pull request
+merges into the active dev branch the branch is finished: on the remote
+`delete_branch_on_merge` removes it, and locally the sweep in the
+`branch-hygiene` skill does — one of the acts the *reserved act* entry above
+names, so an agent reports a branch whose work is over and removes nothing. The
+next unit of work is cut from the active dev branch's tip onto a new branch in
+a new worktree; the worktree that produced the merged branch is not reused. That
+clause is the operative half. A worktree outliving its branch is precisely how
+work gets committed onto a branch whose pull request has already merged, which
+happened twice before anything refused it and is what
+`.claude/hooks/no-work-on-stale-branch.sh` now refuses; that file's header names
+both occasions.
 _Avoid_: feature branch, agent branch

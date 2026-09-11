@@ -1,7 +1,12 @@
 #!/bin/bash
 # A worktree branch exists for one pull request. When that pull request merges,
 # the branch has served its purpose: remotely `delete_branch_on_merge` removes
-# it, locally Bertan's sweep does. Nothing stopped work continuing on it in the
+# it, locally Bertan's sweep does -- "The sweep" in the branch-hygiene skill,
+# which is manual and unscheduled in the way allow_squash_merge below is a
+# setting not yet applied. So the interval this guard covers is however long it
+# is until someone runs it, and is not bounded by anything. CONTEXT.md's
+# *worktree branch* entry carries the lifetime the two of them enforce between
+# them. Nothing stopped work continuing on it in the
 # meantime, and that failure has fired twice -- the probe->check rename was
 # committed onto hooks-push-and-pr-guards after PR #35 had already merged it,
 # and research/non-openrouter-response-bodies sat one commit ahead and nineteen
