@@ -27,6 +27,7 @@ from src.eval.dataset import load_gdpr_articles, load_tier1
 from src.eval.retrieval import (
     DEFAULT_K,
     cutoffs_for_depth,
+    gap_cutoff,
     retrieve_all,
     score_article_level,
     score_chunk_level,
@@ -66,6 +67,8 @@ def main() -> None:
     retrievals = retrieve_all(cases, vector_db.search, max_k=args.top_k, progress=progress)
 
     # Cutoffs come from the depth actually retrieved, never from a constant.
+    # Passed explicitly rather than left to default, so that a future change to
+    # how the script retrieves is refused by the scorers instead of reinterpreted.
     ks = cutoffs_for_depth(args.top_k)
     art = score_article_level(retrievals, ks)
     chunk = score_chunk_level(retrievals, cases, articles, ks)
@@ -80,11 +83,10 @@ def main() -> None:
 
     # Report the gap at the deepest cutoff both levels actually hold, so a
     # shallow --top-k cannot print a gap at a cutoff neither level reached.
-    shared = [k for k in ks if k in art.hit_at_k and k in chunk.hit_at_k]
-    if not shared:
-        print("article−chunk gap: not reportable — one level scored no cases")
+    gap_k = gap_cutoff(art, chunk)
+    if gap_k is None:
+        print("article−chunk gap: not reportable at this depth")
         return
-    gap_k = max(shared)
     gap = art.hit_at_k[gap_k] - chunk.hit_at_k[gap_k]
     print(f"article−chunk gap @{gap_k}: {gap:+.1%}"
           "   (right article, wrong chunk = chunking/embedding)")

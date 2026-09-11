@@ -41,8 +41,17 @@ scorers raise on a cutoff beyond it.
 
 Raising rather than clipping: a clipped Hit@10 is still printed under the label
 Hit@10, which is the defect itself. A caller that wants fewer cutoffs asks for
-fewer — :func:`cutoffs_for_depth` derives them. MRR is bounded the same way and
-is therefore labelled with the depth it was taken at.
+fewer — :func:`cutoffs_for_depth` derives them, and it is what the scorers use
+when no ``ks`` is passed, so the *default* path cannot reintroduce the defect
+and only an explicit over-ask reaches the raise. The check reads the retrieval
+batch rather than the cases that survive exclusion, so the same wrong call
+cannot raise on one run and pass on the next. MRR is bounded the same way and is
+therefore labelled with the depth it was taken at.
+
+The article−chunk gap is bounded too, by :func:`gap_cutoff`, but it is pinned at
+5 rather than following the depth upward: a deeper retrieval must not silently
+move a published diagnostic. What population that gap is computed over is a
+separate, still-open defect (issue #60).
 
 Matching imports :func:`~src.eval.golden_qa.normalize_for_grounding` rather than
 reimplementing it, so the gate that decides a quote is grounded and the metric
@@ -75,6 +84,9 @@ def cutoffs_for_depth(depth: int) -> tuple[int, ...]:
     if depth < 1:
         raise ValueError(f"retrieval depth must be at least 1, got {depth}")
     return tuple(sorted({k for k in DEFAULT_K if k <= depth} | {depth}))
+
+
+GAP_K = 5  # the cutoff the article−chunk gap has always been published at
 
 
 @dataclass(frozen=True)
@@ -129,6 +141,20 @@ class LevelScore:
         return out
 
 
+def gap_cutoff(art: LevelScore, chunk: LevelScore, prefer: int = GAP_K) -> int | None:
+    """The cutoff to report the article−chunk gap at, or None if there is none.
+
+    ``prefer`` — 5, the cutoff the baseline has always been published at —
+    whenever both levels hold it. A shallower retrieval falls back to the
+    deepest cutoff the two share, rather than printing a ``@5`` gap neither
+    level reached. It never goes *deeper* than ``prefer``: a deeper retrieval
+    must not silently move the published diagnostic, and the gap's population
+    defect is issue #60's to settle, not this function's.
+    """
+    shared = [k for k in art.hit_at_k if k in chunk.hit_at_k and k <= prefer]
+    return max(shared) if shared else None
+
+
 def retrieve_all(
     cases: Sequence[TestCase],
     search: SearchFn,
@@ -170,26 +196,40 @@ def _retrieval_depth(retrievals: Sequence[CaseRetrieval]) -> int:
 
     A mixed batch is bounded by its weakest member: a cutoff deeper than that
     would be a miss for some cases only because they were never asked.
+
+    An empty batch has no depth; 0 stands for "unknown", and no cutoff is
+    checked against it because there is nothing to report either way.
     """
     return min((r.max_k for r in retrievals), default=0)
 
 
+def _resolve_ks(ks: Sequence[int] | None, depth: int) -> Sequence[int]:
+    """An explicit ``ks``, or the honest cutoffs for ``depth`` when none given."""
+    if ks is not None:
+        return ks
+    return cutoffs_for_depth(depth) if depth >= 1 else ()
+
+
 def _score(ranks: List[int | None], level: str, excluded: int, reason: str,
            ks: Sequence[int], depth: int) -> LevelScore:
+    # Validated against the batch, before anything is scored: whether a cutoff
+    # is honest is a property of the retrieval depth alone. Deferring the check
+    # until something survives exclusion would make it data-dependent — the same
+    # wrong call raising on one run and passing on the next.
+    if depth >= 1:
+        too_deep = sorted({k for k in ks if k > depth})
+        if too_deep:
+            raise ValueError(
+                f"{level}: cutoffs {too_deep} exceed the retrieval depth {depth}; "
+                f"a Hit@{too_deep[0]} over {depth} ranks would be a Hit@{depth} "
+                f"wearing the wrong label. Retrieve deeper, or ask for fewer cutoffs "
+                f"(see cutoffs_for_depth)."
+            )
     n = len(ranks)
     s = LevelScore(level=level, scored=n, excluded=excluded, excluded_reason=reason,
                    depth=depth)
     if not n:
-        # Nothing is reported, so nothing can be mislabelled.
         return s
-    too_deep = sorted({k for k in ks if k > depth})
-    if too_deep:
-        raise ValueError(
-            f"{level}: cutoffs {too_deep} exceed the retrieval depth {depth}; "
-            f"a Hit@{too_deep[0]} over {depth} ranks would be a Hit@{depth} "
-            f"wearing the wrong label. Retrieve deeper, or ask for fewer cutoffs "
-            f"(see cutoffs_for_depth)."
-        )
     for k in ks:
         hits = sum(1 for r in ranks if r is not None and r <= k)
         s.hits[k] = hits
@@ -199,19 +239,22 @@ def _score(ranks: List[int | None], level: str, excluded: int, reason: str,
 
 
 def score_article_level(retrievals: Sequence[CaseRetrieval],
-                        ks: Sequence[int] = DEFAULT_K) -> LevelScore:
+                        ks: Sequence[int] | None = None) -> LevelScore:
     """Hit@k and MRR against the gold article number. Nothing is excluded.
 
-    Raises ``ValueError`` if any ``k`` is deeper than the retrieval.
+    ``ks`` defaults to :func:`cutoffs_for_depth` over the batch's own depth, so
+    the default path cannot ask for a cutoff the retrieval never reached. An
+    explicit ``ks`` deeper than the retrieval raises ``ValueError``.
     """
+    depth = _retrieval_depth(retrievals)
     ranks = [r.article_rank() for r in retrievals]
-    return _score(list(ranks), "article-level", 0, "", ks, _retrieval_depth(retrievals))
+    return _score(list(ranks), "article-level", 0, "", _resolve_ks(ks, depth), depth)
 
 
 def score_chunk_level(retrievals: Sequence[CaseRetrieval],
                       cases: Sequence[TestCase],
                       articles: Dict[str, Article],
-                      ks: Sequence[int] = DEFAULT_K) -> LevelScore:
+                      ks: Sequence[int] | None = None) -> LevelScore:
     """
     Hit@k and MRR against the chunk holding the gold quote.
 
@@ -220,7 +263,9 @@ def score_chunk_level(retrievals: Sequence[CaseRetrieval],
     including it would score the parser, not the retriever. The count dropped is
     carried on the result so a reader sees the restriction next to the number.
 
-    Raises ``ValueError`` if any ``k`` is deeper than the retrieval.
+    ``ks`` defaults and is bounded exactly as in :func:`score_article_level`.
+    The bound reads the retrieval batch, not the surviving subset, so excluding
+    every case does not quietly excuse a dishonest cutoff.
     """
     by_id = {c.case_id: c for c in cases}
     ranks: List[int | None] = []
@@ -232,5 +277,6 @@ def score_chunk_level(retrievals: Sequence[CaseRetrieval],
             excluded += 1
             continue
         ranks.append(r.chunk_rank(case.supporting_quote))
-    return _score(ranks, "chunk-level", excluded, "quote ungrounded in its article", ks,
-                  _retrieval_depth(retrievals))
+    depth = _retrieval_depth(retrievals)
+    return _score(ranks, "chunk-level", excluded, "quote ungrounded in its article",
+                  _resolve_ks(ks, depth), depth)
