@@ -277,6 +277,15 @@ dev_read_count() {  # dev_read_count <file> -- how many lines read the dev refs
   grep -cE 'for-each-ref.*refs/remotes/origin/dev-' "$1" 2>/dev/null
 }
 
+# `drift`'s "not reported" case arm, as written. Anchored on `null) ` rather
+# than on the whole pattern so that a mutated arm is still extracted and shown
+# in the diff, instead of extracting to nothing and failing as an absence.
+unread_arm() {  # unread_arm <file> -- the arm that records a gap, as written
+  awk '/null\) / { a = 1 }
+       a          { print }
+       a && /;;$/ { exit }' "$1" 2>/dev/null
+}
+
 dev_derivation() {  # dev_derivation <file> -- the derivation, as written
   awk '/for-each-ref.*refs\/remotes\/origin\/dev-/ { inblock = 1 }
        inblock                                      { print }
@@ -2073,6 +2082,30 @@ armed 'the settings read is bounded, so an unreachable API still starts the sess
   "$HOOKS/report-stale-branches.sh" 'timeout "$SETTINGS_TIMEOUT" gh api'
 armed 'a settings read that did not happen says so, rather than reading as fine' \
   "$HOOKS/report-stale-branches.sh" 'merge settings: NOT READ'
+# And a read that half happened is not reported as a read that disagreed. The
+# per-setting line was already careful to say "was not reported by the API"; the
+# heading over it said DRIFTED, which is what a skimmer takes away. Found on
+# review of PR #77, not by this suite -- the pins above all stayed green,
+# because each one asks about a line and none asks what the lines are filed
+# under.
+armed 'an unread setting is reported as unknown, not as a changed one' \
+  "$HOOKS/report-stale-branches.sh" 'merge settings: NOT FULLY READ'
+armed 'and the DRIFTED heading is reached only by a value that came back wrong' \
+  "$HOOKS/report-stale-branches.sh" 'if [ -n "$MISMATCHED" ]; then'
+# Neither of those two notices the mutation that matters most here, which adds
+# a line rather than removing one: setting MISMATCHED on the unread arm as well
+# puts an unknown back under the DRIFTED heading, and both pins above stayed
+# green through it -- measured on this branch, not reasoned. `armed` asks
+# whether a literal is somewhere in a file and cannot ask what else is there.
+# So the arm is extracted and compared as a string, the way the dev derivation
+# is, that being the only shape of pin here that sees an addition.
+UNREAD_ARM=$(cat <<'ARM'
+    ''|null) DRIFTED="$DRIFTED
+  $1 was not reported by the API; the rule requires $3 -- otherwise $4" ;;
+ARM
+)
+tok 'the unread arm records a gap without also calling it a mismatch' \
+    "$UNREAD_ARM" "$(unread_arm "$HOOKS/report-stale-branches.sh")"
 # What the pins above are worth, measured rather than reasoned: commenting out
 # the read turns the first and the third red and leaves the second -- the
 # settings list -- green, because `armed` strips from a `#` on the line it is

@@ -98,12 +98,21 @@ fi
 # empty field is the same answer arriving a different way (a read that exited 0
 # with nothing behind it), so it takes the same sentence rather than printing
 # "is " and a blank.
+#
+# The two cases are counted apart as well as worded apart, because the heading
+# over them is read by people who do not read the lines. A field the API did not
+# report under a heading that says DRIFTED tells a skimmer that a setting
+# changed, when what is true is that it is unknown -- the same shape of error
+# this whole change exists to remove, one level up from the sentence that was
+# careful about it. MISMATCHED is set only where a value came back and was the
+# wrong one.
 drift() {  # drift <setting> <actual> <required> <what rests on it>
   [ "$2" = "$3" ] && return 0
   case "$2" in
     ''|null) DRIFTED="$DRIFTED
   $1 was not reported by the API; the rule requires $3 -- otherwise $4" ;;
-    *) DRIFTED="$DRIFTED
+    *) MISMATCHED=1
+       DRIFTED="$DRIFTED
   $1 is $2; the rule requires $3 -- otherwise $4" ;;
   esac
 }
@@ -131,12 +140,16 @@ else
   REBASE=$(printf '%s' "$MERGE" | cut -f2)
   DELETE=$(printf '%s' "$MERGE" | cut -f3)
   DRIFTED=
+  MISMATCHED=
   drift allow_squash_merge "$SQUASH" false "$FALLBACK"
   drift allow_rebase_merge "$REBASE" false "$FALLBACK"
   drift delete_branch_on_merge "$DELETE" true 'a merged branch is never seen as one whose upstream is gone'
-  if [ -n "$DRIFTED" ]; then
+  if [ -n "$MISMATCHED" ]; then
     echo "merge settings: DRIFTED from what the branch lifecycle rule requires:$DRIFTED"
     echo "       Reported, not fixed -- changing a repository setting is Bertan's."
+  elif [ -n "$DRIFTED" ]; then
+    echo "merge settings: NOT FULLY READ -- the API answered without these, so what"
+    echo "       rests on them is unknown rather than wrong:$DRIFTED"
   else
     echo "merge settings: as required (squash off, rebase off, delete-on-merge on)"
   fi
