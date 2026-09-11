@@ -32,6 +32,16 @@
 # the workaround is to drop the redirect -- and was filed anyway, because the
 # question it gets wrong is the one lib/command-scan.sh exists to answer once.
 #
+# The quoted-separator checks come from a fifth review, of dev-05, and are the
+# second group to name a defect in the refusing direction. They are also the
+# first whose cost lands on the work of editing these files: cs_split cut on a
+# separator inside quotes, so an ordinary `sed -i` substitution written with |
+# as its delimiter yielded a push that does not exist, and it fired twice in a
+# live session against that session's own edits. The pairs matter more than the
+# individual verdicts there -- the anchored and unanchored spellings of one
+# substitution are pinned side by side, because it was the anchor that decided
+# the verdict and that is the part that reads as arbitrary.
+#
 # So the number below is not a measure of the boundary. A check suite is
 # evidence about the cases it names and about nothing else, and every case here
 # was named by someone who went looking for one it had missed.
@@ -461,6 +471,101 @@ git push --mirror origin' \
 tok 'control word removed, brace group' \
     'git push --mirror origin' \
     "$(printf '{ git push --mirror origin; }\n' | cs_split)"
+# Issue #68. The separator pass cut with a plain character class that knew
+# nothing about quoting, so a | inside a quoted argument was a fragment
+# boundary like any other and the second fragment of a sed substitution was a
+# push standing at the head of its own line. Each of these is one fragment now.
+#
+# The firing and the non-firing spellings are pinned side by side because the
+# pair is the evidence: the fragment had to BEGIN with the command word, so a ^
+# in the pattern saved the command by accident and a leading space did not.
+# Two commands doing the same job, one refused and one not, on a difference
+# that has nothing to do with what either would run.
+tok 'a sed delimiter is not a separator' \
+    "sed -i 's|git push --all origin|X|' f.sh" \
+    "$(printf "sed -i 's|git push --all origin|X|' f.sh\n" | cs_split)"
+tok 'the anchored spelling is the same one fragment' \
+    "sed -i 's|^git push --all origin|X|' f.sh" \
+    "$(printf "sed -i 's|^git push --all origin|X|' f.sh\n" | cs_split)"
+tok 'and so is the leading-space spelling that used to fire' \
+    "sed -i 's| git push --all origin|X|' f.sh" \
+    "$(printf "sed -i 's| git push --all origin|X|' f.sh\n" | cs_split)"
+tok 'a grep alternation is not a separator' \
+    "grep -rn 'git push --all|git push -f' .claude/" \
+    "$(printf "grep -rn 'git push --all|git push -f' .claude/\n" | cs_split)"
+tok 'the commit spelling of the same shape' \
+    "sed -i 's|git commit -m x|X|' f.sh" \
+    "$(printf "sed -i 's|git commit -m x|X|' f.sh\n" | cs_split)"
+tok 'the anchored commit spelling, likewise one fragment' \
+    "sed -i 's|^git commit -m x|X|' f.sh" \
+    "$(printf "sed -i 's|^git commit -m x|X|' f.sh\n" | cs_split)"
+tok 'the forced-push spelling' \
+    "sed -i 's|git push -f origin main|X|' f.sh" \
+    "$(printf "sed -i 's|git push -f origin main|X|' f.sh\n" | cs_split)"
+tok 'the bare-push spelling' \
+    "sed -i 's|git push|X|' f.sh" \
+    "$(printf "sed -i 's|git push|X|' f.sh\n" | cs_split)"
+tok 'the grep alternation over a commit and a push' \
+    "grep -n 'git commit|git push origin main' *.sh" \
+    "$(printf "grep -n 'git commit|git push origin main' *.sh\n" | cs_split)"
+# Double quotes protect a delimiter too. They protect only the separators,
+# never a substitution -- see the two below.
+tok 'a delimiter written with double quotes' \
+    'sed -i "s|git push --all origin|X|" f.sh' \
+    "$(printf 'sed -i "s|git push --all origin|X|" f.sh\n' | cs_split)"
+# A closed quote restores the separator. A tracker that treated everything
+# after the first quote as quoted would convert issue #68 into a real hole.
+tok 'a closed quote reopens the separator' \
+    'echo "a"
+git push --all origin' \
+    "$(printf 'echo "a" | git push --all origin\n' | cs_split)"
+# The two fallbacks, both of which split exactly as the plain character class
+# did. Unbalanced quoting is text this cannot read.
+tok 'unbalanced quoting falls back to the old splitting' \
+    "echo 'unclosed
+git push --all origin" \
+    "$(printf "echo 'unclosed | git push --all origin\n" | cs_split)"
+# And a double-quoted span is not inert: a command substitution inside one RUNS,
+# so a line carrying one goes to the same fallback rather than being protected.
+# Getting this wrong would have hidden every command written that way, silently
+# and in the permitting direction.
+tok 'a substitution in double quotes still splits out' \
+    'echo "$
+gh pr merge 5
+"' \
+    "$(printf 'echo "$(gh pr merge 5)"\n' | cs_split)"
+tok 'a backticked span in double quotes still splits out' \
+    'echo "
+git push --all origin
+"' \
+    "$(printf 'echo "`git push --all origin`"\n' | cs_split)"
+# Single quotes need no such exception -- bash runs nothing inside them -- and
+# an escaped substitution in double quotes is text, which is why the backslash
+# is read before the substitution is looked for.
+tok 'a substitution inside single quotes is text' \
+    "grep -n 'git push|\$(x)' ." \
+    "$(printf "grep -n 'git push|\$(x)' .\n" | cs_split)"
+tok 'an escaped substitution in double quotes is text' \
+    'git commit -m "release \$(date) notes"' \
+    "$(printf 'git commit -m "release \\$(date) notes"\n' | cs_split)"
+# The backslash is read for that one purpose. An escaped separator outside
+# quotes still cuts, exactly as it did before, which is the refusing direction.
+tok 'an escaped separator outside quotes still cuts' \
+    'echo a \
+git push --all origin' \
+    "$(printf 'echo a \\| git push --all origin\n' | cs_split)"
+# The other arm of that branch, which the check above does not reach: an escaped
+# quote outside quotes must not OPEN one. Without this the sed argument that
+# follows sits inside a double quote that never closes, the line is unbalanced,
+# and the fallback splits it into a bare push -- so this pair is the check that
+# fails without the escape branch. Every other escape shape tried gave the same
+# answer with the branch and without it, because the fallback agrees with the
+# protected split whenever the quoting is simple.
+tok 'an escaped quote outside quotes does not open one' \
+    'sed -e s/\"/Q/ -e '"'"'s|git push|X|'"'"' f.sh' \
+    "$(printf 'sed -e s/\\"/Q/ -e %ss|git push|X|%s f.sh\n' "'" "'" | cs_split)"
+check no-git-push.sh ALLOW 'and the same command is not a push' \
+         'sed -e s/\"/Q/ -e '"'"'s|git push|X|'"'"' f.sh'
 tok 'git args, plain' 'origin main' "$(printf 'git push origin main\n' | cs_git_args push)"
 tok 'git args, global option with a separate value' \
     '--all' "$(printf 'git -C /x push --all\n' | cs_git_args push)"
@@ -598,10 +703,124 @@ echo "=== ACCEPTED false positive: quoted multi-line string, not a heredoc ==="
 # knowingly, not a bug fix.
 check no-git-push.sh     BLOCK 'multi-line -b string continuing with a push' $'gh issue comment 27 -b "to release:\n  git push origin main"'
 check no-pr-decisions.sh BLOCK 'multi-line -b string continuing with a merge' $'gh issue comment 27 -b "to land it:\n  gh pr merge 35"'
-# And the price of removing control words: a quoted string holding a separator
-# and then one of them reads as a command. Same trade, same reason.
-check no-git-push.sh     BLOCK 'quoted "; then" before a push'  'git commit -m "wait; then git push --all origin"'
-check no-pr-decisions.sh BLOCK 'quoted "; then" before a merge' 'git commit -m "wait; then gh pr merge 35"'
+# The single-line half of that trade is no longer paid, and the two checks that
+# used to sit here now sit in the issue #68 section below -- an `ALLOW (was
+# BLOCK)` is neither accepted nor a false positive, and leaving them under this
+# heading would have made the heading a lie. The multi-line pair above stays,
+# and stays accepted: quote state is per line, so an unbalanced line falls back
+# to the old splitting and the continuation still reads as a command position.
+
+echo "=== REGRESSION: issue #68, a quoted separator refused ordinary sed and grep ==="
+# The six measured over-refusals from the ticket, now ALLOW. Every one is a
+# command that edits or searches text; none of them pushes or commits anything.
+# It fired twice in a live session against that session's own edits to these
+# hooks, which is what makes it worth a suite entry rather than a note: editing
+# the hooks is exactly the work that trips it.
+check no-git-push.sh ALLOW 'sed over a push --all (was BLOCK)'  "sed -i 's|git push --all origin|X|' f.sh"
+check no-git-push.sh ALLOW 'sed over a forced push (was BLOCK)' "sed -i 's|git push -f origin main|X|' f.sh"
+check no-git-push.sh ALLOW 'sed over a bare push (was BLOCK)'   "sed -i 's|git push|X|' f.sh"
+check no-git-push.sh ALLOW 'grep alternation over pushes (was BLOCK)' "grep -rn 'git push --all|git push -f' .claude/"
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'sed over a commit, on main (was BLOCK)' \
+         "sed -i 's|git commit -m x|X|' f.sh"
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'grep alternation over commit and push, on main (was BLOCK)' \
+         "grep -n 'git commit|git push origin main' *.sh"
+# The four above run wherever this suite runs, which is the linked worktree the
+# ticket measured them in. Asked again from the main checkout, where every real
+# push is refused before the worktree exception is reached: an ALLOW there says
+# no push was seen at all, rather than that one was seen and permitted. Both
+# contexts, because the whole complaint is that the verdict turned on something
+# irrelevant to what the command runs.
+check_in "$ON_MAIN" no-git-push.sh ALLOW 'sed over a push --all, from main (was BLOCK)' \
+         "sed -i 's|git push --all origin|X|' f.sh"
+check_in "$ON_MAIN" no-git-push.sh ALLOW 'sed over a forced push, from main (was BLOCK)' \
+         "sed -i 's|git push -f origin main|X|' f.sh"
+check_in "$ON_MAIN" no-git-push.sh ALLOW 'sed over a bare push, from main (was BLOCK)' \
+         "sed -i 's|git push|X|' f.sh"
+check_in "$ON_MAIN" no-git-push.sh ALLOW 'grep alternation over pushes, from main (was BLOCK)' \
+         "grep -rn 'git push --all|git push -f' .claude/"
+# Two more verdicts the fix changed, found by sweeping a corpus of commands
+# against both versions of cs_split rather than by this suite -- which is the
+# reason to write them down here: a check suite is evidence about the cases it
+# names, and neither of these was named. The delimiter spelled with double
+# quotes is the same defect as the six above; a substitution in single quotes
+# runs nothing, because bash expands nothing inside them.
+check no-git-push.sh ALLOW 'sed over a push, double-quoted delimiter (was BLOCK)' \
+         'sed -i "s|git push --all origin|X|" f.sh'
+check no-pr-decisions.sh ALLOW 'a merge quoted in single quotes is inert (was BLOCK)' \
+         "echo '\$(gh pr merge 5)'"
+# And its control, one character different: in double quotes that substitution
+# RUNS, so the line goes to the fallback and the merge is found. This pair is
+# what the substitution fallback exists for, and it is asked as a verdict rather
+# than only as a fragment list -- pinning the split alone would let a hook stop
+# refusing these without anything going red.
+check no-pr-decisions.sh BLOCK 'the same substitution in double quotes' \
+         'echo "$(gh pr merge 5)"'
+check no-git-push.sh BLOCK 'a push substituted inside double quotes' \
+         'echo "$(git push --all origin)"'
+check no-git-push.sh BLOCK 'a push backticked inside double quotes' \
+         'echo "`git push --all origin`"'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'a commit substituted inside double quotes' \
+         'echo "$(git commit -m x)"'
+# The trade above cs_split, partly repaid. A quoted string holding a separator
+# and then a control word in front of a refused command used to read as that
+# command; on one line it is text again. These were written as accepted false
+# positives in the section above and are moved here with the verdict they now
+# return, because that is where the reason for the change is written down.
+check no-git-push.sh     ALLOW 'quoted "; then" before a push (was BLOCK)'  'git commit -m "wait; then git push --all origin"'
+check no-pr-decisions.sh ALLOW 'quoted "; then" before a merge (was BLOCK)' 'git commit -m "wait; then gh pr merge 35"'
+# What did not flip with them, and the reason: the multi-line spelling of the
+# same string leaves a quote open at the newline, so each line falls back and
+# the continuation reads as a command position. Pinned here beside the flip so
+# the two are read together rather than as a contradiction.
+check no-git-push.sh     BLOCK 'the multi-line spelling still refused' \
+         $'gh issue comment 27 -b "to release:\n  git push origin main"'
+# The intermittency, which is the part that reads as arbitrary from inside a
+# session: the anchored spelling was permitted all along and the spelling with a
+# leading space was refused, on a difference that decides nothing about what
+# either command runs. They agree now, and the pair is pinned so that a
+# regression shows up as the disagreement rather than as one lost verdict.
+check no-git-push.sh ALLOW 'the anchored spelling, permitted before and after' \
+         "sed -i 's|^git push --all origin|X|' f.sh"
+check no-git-push.sh ALLOW 'the leading-space spelling (was BLOCK)' \
+         "sed -i 's| git push --all origin|X|' f.sh"
+# The controls. A quote-aware split must not have cost a single real refusal,
+# and these are the three commands the six above only ever mentioned.
+check no-git-push.sh BLOCK 'the control: a real push --all'   'git push --all origin'
+check no-git-push.sh BLOCK 'the control: a real forced push'  'git push -f origin main'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'the control: a real commit on main' 'git commit -m x'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'the control: a real push --all on main' 'git push --all origin'
+# The wrapper detections read the RAW command text, before the split and not
+# from it, and that ordering is load-bearing here: quote-aware splitting means a
+# single-quoted payload is now one fragment with no command position in it at
+# all, so nothing but the raw match can still see these. A BLOCK is therefore
+# evidence about where the rule reads from, which is what makes them checks
+# about issue #68 rather than repeats of the wrapper checks above.
+check no-git-push.sh BLOCK 'wrapped push, invisible to the split' "bash -c 'git push --all origin'"
+check no-pr-decisions.sh BLOCK 'wrapped merge, invisible to the split' "eval 'gh pr merge 5'"
+# On a dev branch, not main, so that the refusal cannot be the branch answering
+# for the wrapper rule.
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'wrapped commit, invisible to the split' \
+         "sh -c 'git commit -m x'"
+# And the same claim asserted as a property of the files rather than inferred
+# from three verdicts. WRAPRE is the distinctive head of the wrapper regex, so
+# each literal below pins both which rule it is and what that rule is handed.
+WRAPRE='(^[[:space:]]*|[;&|(`][[:space:]]*)'
+armed 'no-git-push.sh matches its wrapper rule on the raw command' \
+      no-git-push.sh "if echo \"\$COMMAND\" | grep -qE '$WRAPRE"
+armed 'no-commit-to-main.sh matches its wrapper rule on the raw command' \
+      no-commit-to-main.sh "if echo \"\$COMMAND\" | grep -qE '$WRAPRE"
+# no-pr-decisions.sh joins continuations first and matches on that, which is the
+# half of cs_normalise its wrapper rules do want; both halves are pinned.
+armed 'no-pr-decisions.sh derives its wrapper text from the raw command' \
+      no-pr-decisions.sh "WRAPTEXT=\$(printf '%s\\n' \"\$COMMAND\" | cs_join)"
+armed 'no-pr-decisions.sh matches its wrapper rule on that text' \
+      no-pr-decisions.sh "if echo \"\$WRAPTEXT\" | grep -qE '$WRAPRE"
+unarmed 'no-git-push.sh does not match its wrapper rule on the fragments' \
+        no-git-push.sh "echo \"\$CMDS\" | grep -qE '$WRAPRE"
+unarmed 'no-commit-to-main.sh does not match its wrapper rule on the fragments' \
+        no-commit-to-main.sh "echo \"\$CMDS\" | grep -qE '$WRAPRE"
+unarmed 'no-pr-decisions.sh does not match its wrapper rule on the fragments' \
+        no-pr-decisions.sh "echo \"\$CMDS\" | grep -qE '$WRAPRE"
 
 echo "=== REGRESSION: PR #35 review, a command after a control word ==="
 # A separator is not the only thing a command can follow. Splitting on ; left
