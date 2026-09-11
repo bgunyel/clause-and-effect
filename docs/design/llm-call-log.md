@@ -90,8 +90,11 @@ disconfirming one — are fixed in
 written before the log held a single provider-attributed row. **This document
 cites that entry and never repeats its numerals.** A threshold copied into a file
 that is revised in place is a threshold that drifts, and `docs/design/` is the
-copy that can be edited; the report is append-only, and amendments to it are dated
-appends naming the old value and the reason.
+copy that can be edited; the report is append-only, and it grows by dated appends
+of two kinds — amendments, which owe an old value, and registrations, which have
+none — under the shared timing rule that entry's own
+[§The two kinds of append](../eval-reports/2026-09-05-provider-acceptance-pre-registration.md#the-two-kinds-of-append)
+states and this document does not restate.
 
 The MiniMax table above has a second job under that registration: reproducing it
 from the log's own rows — in rank and direction, on terms the entry fixes — is the
