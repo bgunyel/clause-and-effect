@@ -33,13 +33,30 @@
 # rather than by habit. An assumption a repository setting can silently break is
 # not an assumption; it is a bug with a delay.
 #
-# That is a repository setting and not something this file can assert. At the
-# time of writing it is NOT yet applied -- both are still enabled -- and issue
-# #44 carries it as an acceptance criterion for Bertan, because changing a
-# repository setting is not an act an agent takes. Until it is applied, a branch
-# merged by squash or by rebase defeats this detector: its commits are rewritten
-# on the dev branch, so it is no ancestor and reads as ahead > 0. The gone
-# detector still catches that branch, which is the point of having two.
+# That is a repository setting and not something this file can assert: a
+# PreToolUse hook has five seconds and cannot make a network call. It is also
+# not something to write down here. This paragraph stated the value twice and
+# was wrong both times -- it asserted both settings disabled before they were,
+# corrected on d840e57, and then asserted them unapplied after they had been,
+# which is #71. Neither error was noticed by anything; the second survived three
+# commits to this file in one day. A hand-kept record of live remote state is
+# the sentence above turned on its own mitigation: a record a repository setting
+# can silently falsify is the same bug with the same delay.
+#
+# So the value is read rather than recorded. report-stale-branches.sh runs at
+# SessionStart, is the one component here allowed a network call, and reports
+# allow_squash_merge, allow_rebase_merge and delete_branch_on_merge whenever any
+# has drifted from what this rule requires -- or reports that it could not read
+# them. That report is the live answer, and nothing in this file is.
+#
+# Which detector a drift costs depends on which setting drifted, and saying
+# "the other one still catches it" without that distinction is false in one of
+# the three cases. Squash or rebase merging back on rewrites a merged branch's
+# commits, so it is no ancestor and the fallback reads it as ahead > 0 -- there
+# the gone detector still catches it, which is the point of having two.
+# delete_branch_on_merge back off removes the gone detector itself, and the
+# fallback is then the only one left rather than the backstop. Two detectors
+# cover each other, but one at a time.
 #
 # THE ACTIVE DEV BRANCH is the highest-numbered refs/remotes/origin/dev-*, read
 # with no network because a hook has five seconds. Sorted with `sort -V` and

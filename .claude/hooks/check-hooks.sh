@@ -306,6 +306,11 @@ beside() {  # beside <label> <file> <literal>
   fi
 }
 
+# A guard for the one check below that compares two numbers rather than
+# matching a literal. An absent derivation must not reach `[ -gt ]`, which
+# errors rather than answering.
+numeric() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
+
 tok() {  # tok <label> <expected> <actual>
   if [ "$3" = "$2" ]; then
     printf '  ok   %s\n' "$1"
@@ -2047,6 +2052,71 @@ armed 'the fetch is bounded, so an offline session still starts' \
   "$HOOKS/report-stale-branches.sh" 'timeout "$FETCH_TIMEOUT" git fetch'
 armed 'a failed fetch says so, because neither detector is armed after one' \
   "$HOOKS/report-stale-branches.sh" 'FAILED or timed out'
+
+# THE MERGE SETTINGS, READ RATHER THAN RECORDED. Both detectors rest on a
+# repository setting no bash hook can assert, so #36's Amendment recorded the
+# three values in prose -- "these have no check behind them and this map plus
+# the guard's header are their only durable record." Why that was the wrong
+# answer is argued in no-work-on-stale-branch.sh's header and is not retold
+# here; the pins below hold it where it now lives.
+#
+# Be exact about what these are: pins on the report's code, in the same manner
+# as the fetch pins above. They are not evidence about the repository's
+# settings and cannot be. Nothing in `.claude/` can be that evidence, and a
+# file claiming to be is the defect these replace.
+armed 'the report reads the merge settings rather than trusting a record of them' \
+  "$HOOKS/report-stale-branches.sh" "gh api 'repos/{owner}/{repo}'"
+armed 'and reads all three the branch lifecycle rule depends on' \
+  "$HOOKS/report-stale-branches.sh" \
+  '[.allow_squash_merge, .allow_rebase_merge, .delete_branch_on_merge]'
+armed 'the settings read is bounded, so an unreachable API still starts the session' \
+  "$HOOKS/report-stale-branches.sh" 'timeout "$SETTINGS_TIMEOUT" gh api'
+armed 'a settings read that did not happen says so, rather than reading as fine' \
+  "$HOOKS/report-stale-branches.sh" 'merge settings: NOT READ'
+# What the pins above are worth, measured rather than reasoned: commenting out
+# the read turns the first and the third red and leaves the second -- the
+# settings list -- green, because `armed` strips from a `#` on the line it is
+# reading and the jq filter sits on a continuation line that no one commented.
+# That is why the read and its bound are pinned on their own line rather than
+# the settings list being trusted to stand for all three.
+#
+# The required values, one line each, because the read alone says nothing about
+# what it is compared against -- and a fixed string spanning two lines is
+# satisfied by a file holding either one, measured on a two-line fixture for the
+# derivation pins below.
+armed 'squash merging must be off, or the fallback detector is unsound' \
+  "$HOOKS/report-stale-branches.sh" 'drift allow_squash_merge "$SQUASH" false'
+armed 'rebase merging must be off, for the same reason' \
+  "$HOOKS/report-stale-branches.sh" 'drift allow_rebase_merge "$REBASE" false'
+armed 'and delete_branch_on_merge must be on, which is what the gone detector reads' \
+  "$HOOKS/report-stale-branches.sh" 'drift delete_branch_on_merge "$DELETE" true'
+# The guard's end of it. Its header carried the value in prose and drifted
+# twice; what replaces that is a pointer to the read above, and a pointer is the
+# thing a later edit deletes on its way to writing a value back down. `written`
+# rather than `armed`: this is prose in a comment, which is the whole of what it
+# asserts, and stripping comments would erase the line rather than a remark.
+written 'and the guard points at that report instead of recording a value itself' \
+  "$HOOKS/no-work-on-stale-branch.sh" 'That report is the live answer, and'
+# And the same counting the dev-branch argument gets below, for the same reason
+# and against the same failure. This history is the one thing in the change that
+# is prose rather than code, which is what the last two records of it were --
+# a third copy would be the defect the ticket is about, arriving inside its own
+# fix. It is told in the guard, counted at one there and at zero in the report,
+# and the report carries the pointer instead. This suite tells it nowhere, so
+# there is nothing here to count: a literal written out below would count
+# itself.
+HISTORY='it asserted both settings disabled before they were'
+tok 'the history of the recorded version is told in the guard, once' \
+    '1' "$(prose_count "$HOOKS/no-work-on-stale-branch.sh" "$HISTORY")"
+tok 'and the report does not tell it a second time' \
+    '0' "$(prose_count "$HOOKS/report-stale-branches.sh" "$HISTORY")"
+written 'the report says where that argument lives instead' \
+  "$HOOKS/report-stale-branches.sh" "is in no-work-on-stale-branch.sh's header"
+# What these six pins are NOT evidence of, named because the suite is evidence
+# about the cases it names and nothing else: they read the call sites, not
+# `drift` itself. Mutate that function to return early and all six stay green.
+# Pinning its body was considered and rejected -- the only seam that would drive
+# it is sourcing the report, and sourcing the report runs the fetch.
 # Read-only by name and by content. The name is checked by being the path above;
 # the content is checked here.
 unarmed 'the report removes no worktree' \
@@ -2188,11 +2258,40 @@ tok 'settings.json runs the report at SessionStart' \
 tok 'settings.json runs the guard on every Bash command' \
     '"$CLAUDE_PROJECT_DIR"/.claude/hooks/no-work-on-stale-branch.sh' \
     "$(jq -r '.hooks.PreToolUse[]? | select(.matcher == "Bash") | .hooks[]?.command' "$SETTINGS" 2>/dev/null | grep no-work-on-stale-branch)"
-# The report's timeout must outlast the fetch it waits on, or the hook is killed
-# before it can say that the fetch failed.
-tok 'the report hook outlasts its own fetch' \
-    '30' \
-    "$(jq -r '.hooks.SessionStart[]?.hooks[]? | select(.command | contains("report-stale-branches")) | .timeout' "$SETTINGS" 2>/dev/null)"
+# The report's timeout must outlast the network calls it waits on, or the hook
+# is killed before it can say that one of them failed -- and a killed
+# SessionStart hook takes the whole report with it, not only the line that was
+# pending. There are two such calls now, so the claim is no longer about the
+# fetch alone, and the budgets are read off the file rather than restated.
+#
+# 40 rather than the 30 this was: the second call took the margin over the two
+# budgets from 15s down to 5s, and what has to happen inside that margin is the
+# whole local half of the report -- a worktree listing and an ancestry read per
+# branch. Raising the cap costs nothing the budgets do not already cost, because
+# it is a cap and not a wait: the hook exits the moment it is done, and the two
+# `timeout` calls are what actually bound a dead network.
+REPORT_TIMEOUT=$(jq -r '.hooks.SessionStart[]?.hooks[]? | select(.command | contains("report-stale-branches")) | .timeout' "$SETTINGS" 2>/dev/null)
+tok 'the report hook outlasts its own network calls' '40' "$REPORT_TIMEOUT"
+# Both budgets, summed off the script. The END guard makes a renamed or deleted
+# budget print nothing rather than a smaller sum, which is the permitting
+# direction: a sum that lost a term would compare favourably and say nothing.
+BUDGET_SUM=$(awk -F= '/^FETCH_TIMEOUT=[0-9]+$/ || /^SETTINGS_TIMEOUT=[0-9]+$/ { s += $2; n += 1 }
+                      END { if (n == 2) print s }' "$HOOKS/report-stale-branches.sh")
+tok 'the report sets two budgets, and this is their sum' '25' "$BUDGET_SUM"
+# Redundant with the two literals above by arithmetic, and kept for the reason
+# the guard-equals-report check above is kept: it is the line that states the
+# property the other two only imply, and it is the one still standing the day
+# someone raises a budget and re-pins its literal in the same breath.
+# Each side tested on its own with `numeric`: concatenating them first lets a
+# present number and an absent one read as one number, and `[ 30 -gt "" ]` is a
+# shell error rather than a verdict. Found by running this before the read
+# existed.
+OUTLASTS=unreadable
+if numeric "$REPORT_TIMEOUT" && numeric "$BUDGET_SUM"; then
+  if [ "$REPORT_TIMEOUT" -gt "$BUDGET_SUM" ]; then OUTLASTS=yes; else OUTLASTS=no; fi
+fi
+tok 'and it outlasts them by arithmetic, not by both literals happening to agree' \
+    'yes' "$OUTLASTS"
 
 echo "=== CLAUDE.md names every hook that carries the boundary ==="
 # A third kind of check, and the second here that reads a file rather than

@@ -31,8 +31,9 @@
 # performing it, so dropping --prune from the line below changes nothing
 # visible. The exclusion is not reopened; it is re-argued. Anything in
 # `.claude/` that arms enforcement rather than performing it carries a check
-# asserting its arming property, and check-hooks.sh asserts as a literal that
-# this file's fetch prunes and that settings.json still runs it. That check
+# asserting its arming property, and check-hooks.sh asserts as literals what
+# this file must do: that its fetch prunes, that it reads the merge settings
+# rather than recording them, and that settings.json still runs it. That check
 # announces at the next review rather than on the next push, because this
 # repository has no CI: there is no .github/workflows/, so the suite runs when
 # someone runs it. That is how all the existing checks already behave.
@@ -42,9 +43,28 @@
 # consequence is not cosmetic: neither detector is armed for that session, and
 # the guard will read whatever the last successful fetch left behind.
 #
+# IT READS THE MERGE SETTINGS, BECAUSE IT IS THE ONLY PLACE THAT CAN. Both of
+# that guard's detectors rest on a repository setting no bash hook can assert,
+# and #36's Amendment recorded the three values in prose instead. Why they are
+# read here rather than recorded anywhere, and what the recorded version cost,
+# is in no-work-on-stale-branch.sh's header -- once, rather than twice here in
+# different words, for the reason given beside the dev-branch derivation below.
+# check-hooks.sh counts both copies, so a retelling here turns the suite red.
+#
+# What this file adds is only the opportunity: it already opens with a network
+# call and has a SessionStart budget to spend, so here the claim can be a check
+# instead of a sentence. What it reports is drift, and only drift -- changing a
+# repository setting is Bertan's, like every other reserved act this file
+# declines to perform.
+#
 # Exits 0 always. A SessionStart hook that fails is a session that does not
 # start, and nothing here is worth that.
 FETCH_TIMEOUT=15
+# Its own budget rather than the fetch's, and smaller: one small API request
+# against a fetch of every ref. The two are spent in series and the hook's own
+# timeout in settings.json has to outlast their sum, which check-hooks.sh
+# asserts from these two lines rather than from a third copy of the numbers.
+SETTINGS_TIMEOUT=10
 
 cd "$(dirname "$0")/../.." || exit 0
 git rev-parse --git-dir >/dev/null 2>&1 || exit 0
@@ -66,6 +86,59 @@ else
     echo "       as stale as the last successful fetch, so no-work-on-stale-branch.sh"
     echo "       is not armed for this session."
     FETCHED=
+  fi
+fi
+
+# Drift from the branch lifecycle rule in #36's Amendment, named with the
+# detector that rests on each one, because a reader who has to work that out
+# will not. Reported and never changed: a repository setting is Bertan's, and a
+# file called report- alters nothing. A value the API did not report is its own
+# sentence -- a fine-grained token can be denied these fields, and "is null" put
+# beside "requires false" reads as a setting rather than as a missing answer. An
+# empty field is the same answer arriving a different way (a read that exited 0
+# with nothing behind it), so it takes the same sentence rather than printing
+# "is " and a blank.
+drift() {  # drift <setting> <actual> <required> <what rests on it>
+  [ "$2" = "$3" ] && return 0
+  case "$2" in
+    ''|null) DRIFTED="$DRIFTED
+  $1 was not reported by the API; the rule requires $3 -- otherwise $4" ;;
+    *) DRIFTED="$DRIFTED
+  $1 is $2; the rule requires $3 -- otherwise $4" ;;
+  esac
+}
+
+FALLBACK='a squashed or rebased branch is no ancestor and reads as ahead > 0'
+# Two ways not to get an answer, one sentence about what that costs. Written as
+# a reason and one message rather than as two messages, because the second was a
+# reworded copy of the first the moment it was typed, and this file's own
+# objection to a second copy of an argument is four paragraphs down.
+if ! command -v gh >/dev/null 2>&1; then
+  UNREAD='no gh on PATH'
+elif ! MERGE=$(timeout "$SETTINGS_TIMEOUT" gh api 'repos/{owner}/{repo}' \
+     --jq '[.allow_squash_merge, .allow_rebase_merge, .delete_branch_on_merge] | map(tostring) | @tsv' \
+     2>/dev/null); then
+  UNREAD="gh api failed or timed out after ${SETTINGS_TIMEOUT}s"
+else
+  UNREAD=
+fi
+
+if [ -n "$UNREAD" ]; then
+  echo "merge settings: NOT READ -- ${UNREAD}, so whether either detector in"
+  echo "       no-work-on-stale-branch.sh rests on a true assumption is unknown."
+else
+  SQUASH=$(printf '%s' "$MERGE" | cut -f1)
+  REBASE=$(printf '%s' "$MERGE" | cut -f2)
+  DELETE=$(printf '%s' "$MERGE" | cut -f3)
+  DRIFTED=
+  drift allow_squash_merge "$SQUASH" false "$FALLBACK"
+  drift allow_rebase_merge "$REBASE" false "$FALLBACK"
+  drift delete_branch_on_merge "$DELETE" true 'a merged branch is never seen as one whose upstream is gone'
+  if [ -n "$DRIFTED" ]; then
+    echo "merge settings: DRIFTED from what the branch lifecycle rule requires:$DRIFTED"
+    echo "       Reported, not fixed -- changing a repository setting is Bertan's."
+  else
+    echo "merge settings: as required (squash off, rebase off, delete-on-merge on)"
   fi
 fi
 
