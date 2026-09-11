@@ -44,10 +44,16 @@
 # THE ACTIVE DEV BRANCH is the highest-numbered refs/remotes/origin/dev-*, read
 # with no network because a hook has five seconds. Sorted with `sort -V` and
 # filtered to `^origin/dev-[0-9]+$`, and both halves earn their place: a lexical
-# sort makes dev-09 beat dev-10, and an unfiltered glob lets origin/dev-foo win
-# outright. The branch-hygiene skill mandates two-digit zero-padding, so a
-# lexical sort would be correct today and wrong at dev-10; the version sort does
-# not depend on that mandate holding.
+# sort makes dev-09 beat dev-10, and an unfiltered glob lets origin/dev-foo --
+# or origin/dev-05-backup -- win outright. Both were measured on a fixture
+# rather than assumed. The branch-hygiene skill mandates two-digit
+# zero-padding, so a lexical sort would be correct today and wrong at dev-10;
+# the version sort does not depend on that mandate holding.
+#
+# report-stale-branches.sh derives the same branch from the same two lines and
+# does not re-argue any of this: one argument, for both copies. Why a copy is
+# preferred to a shared helper, and what holds the two copies equal, is in
+# check-hooks.sh at the arming section.
 #
 # When no such ref exists -- a fresh clone, or the rotation window after the
 # merged dev-NN is deleted and its successor is not yet pushed -- the guard
@@ -146,7 +152,9 @@ CURRENT=$(git branch --show-current 2>/dev/null)
 [ -n "$CURRENT" ] || exit 0
 
 # The active dev branch. See the header for why the filter and the version sort
-# are both load-bearing.
+# are both load-bearing. The next two lines stand verbatim in
+# report-stale-branches.sh as well:
+# check-hooks.sh holds the two equal, so a change here is a change there.
 DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
       | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
 

@@ -217,6 +217,29 @@ unarmed() {  # unarmed <label> <file> <literal>
 
 . ./lib/command-scan.sh
 
+# A property of two files at once, which is what `armed` cannot express: it
+# asks whether a file contains a constant, never whether two files agree. These
+# two read what a file actually derives, so the copies can be compared with each
+# other. Anchored on content rather than on a line range -- a line range goes
+# stale the moment either file gains a line above it, and goes stale silently --
+# and on what the derivation reads rather than on the name it assigns, so a
+# second reader of those refs is counted rather than hidden behind the first.
+# What that counts is readers spelled with for-each-ref: one written as
+# `git branch -r` would read the same refs and not be counted, and the suite
+# says nothing about it. The count is here because equality alone does not
+# close the case -- two files that both extract to nothing are equal, so the
+# three checks are needed together and each was mutated to confirm it.
+dev_reads() {  # dev_reads <file> -- how many lines read the dev refs
+  grep -cE 'for-each-ref.*refs/remotes/origin/dev-' "$1" 2>/dev/null
+}
+
+dev_derivation() {  # dev_derivation <file> -- the derivation, as written
+  awk '/for-each-ref.*refs\/remotes\/origin\/dev-/ { inblock = 1 }
+       inblock                                      { print }
+       inblock && /tail -1\)/                       { inblock = 0 }' \
+      "$1" 2>/dev/null
+}
+
 tok() {  # tok <label> <expected> <actual>
   if [ "$3" = "$2" ]; then
     printf '  ok   %s\n' "$1"
@@ -1726,11 +1749,57 @@ unarmed 'the report deletes nothing on the remote' \
 # command in every worktree whenever a library is missing. The cost of that
 # ordering is two copies, so the copies are pinned instead of shared. A
 # divergence here silently unarms the guard or misreports the branch.
-DEV_DERIVATION="| grep -E '^origin/dev-[0-9]+\$' | sort -V | tail -1)"
-armed 'the guard derives the active dev branch this way' \
-  "$HOOKS/no-work-on-stale-branch.sh" "$DEV_DERIVATION"
-armed 'and the report derives it identically' \
-  "$HOOKS/report-stale-branches.sh" "$DEV_DERIVATION"
+#
+# Issue #62: that pin used to be `armed` against the tail of the pipeline,
+# "| grep -E ... | sort -V | tail -1)". Everything left of the first pipe -- the
+# command, the --format, and the ref glob 'refs/remotes/origin/dev-*' -- was
+# pinned in neither file, and the glob is the half most likely to move: it is
+# what keeps origin/dev-foo and origin/dev-05-backup from winning, so a change
+# to which refs count is a change to it. Changing the glob in one file only left
+# the whole suite green, the second of those two checks labelled "derives it
+# identically".
+#
+# Extending that literal to both lines would not have closed it. `armed` is
+# grep -qF, and grep reads a pattern containing a newline as two patterns, so a
+# two-line fixed string is satisfied by a file holding either line alone --
+# measured on a two-line fixture, not assumed. The derivations are extracted and
+# compared as strings instead, three ways: each file holds exactly one, the two
+# are equal to each other, and each is the derivation as pinned here. The first
+# of those is a question `armed` cannot ask at all -- it wants a constant
+# somewhere in a file, so a second derivation added to either file would have
+# been satisfied by the first, and a check that names the tail of a pipeline is
+# evidence about that tail and about nothing else.
+DEV_DERIVATION=$(cat <<'DERIVATION'
+DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
+      | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
+DERIVATION
+)
+GUARD_DERIVATION=$(dev_derivation "$HOOKS/no-work-on-stale-branch.sh")
+REPORT_DERIVATION=$(dev_derivation "$HOOKS/report-stale-branches.sh")
+tok 'the guard reads the dev refs in exactly one place' \
+    '1' "$(dev_reads "$HOOKS/no-work-on-stale-branch.sh")"
+tok 'and the report reads them in exactly one place' \
+    '1' "$(dev_reads "$HOOKS/report-stale-branches.sh")"
+tok 'the guard and the report derive the active dev branch identically' \
+    "$GUARD_DERIVATION" "$REPORT_DERIVATION"
+tok 'the guard derives it as pinned here, glob and --format included' \
+    "$DEV_DERIVATION" "$GUARD_DERIVATION"
+tok 'and the report derives it as pinned here too' \
+    "$DEV_DERIVATION" "$REPORT_DERIVATION"
+
+# The filter and the version sort were argued twice, in different words, at the
+# head of each file, and nothing held those two to each other either: correct
+# one and the other goes on asserting the superseded reason, which CLAUDE.md
+# counts as a defect in its own right. The argument is made once now, in
+# no-work-on-stale-branch.sh's header, and each file carries the same one-line
+# pointer to the pairing in place of its own copy of the reasoning. The pointer
+# is one line because grep is: a literal spanning a line break would match
+# neither file.
+PAIRING='check-hooks.sh holds the two equal, so a change here is a change there'
+armed 'the guard names the pairing beside its derivation' \
+  "$HOOKS/no-work-on-stale-branch.sh" "$PAIRING"
+armed 'and the report names it identically' \
+  "$HOOKS/report-stale-branches.sh" "$PAIRING"
 
 # settings.json is what actually runs either file, so a hook present in the tree
 # and absent from the configuration is a hook that does nothing. jq reads it;
