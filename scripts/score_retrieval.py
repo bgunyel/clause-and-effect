@@ -96,6 +96,15 @@ def main() -> None:
 
     # Report the gap at the deepest cutoff both levels actually hold, so a
     # shallow --top-k cannot print a gap at a cutoff neither level reached.
+    #
+    # What is *not* pinned by a test: that these two lines are handed
+    # `art_grounded` and not `art`. Nothing in tests/ imports this module — it
+    # pulls the Qdrant client at import time, and the import-cost rule in
+    # CLAUDE.md is why that is left alone. So the defect's own site is guarded
+    # at runtime rather than in the suite: article_chunk_gap raises on two
+    # populations, which turns the wrong wiring into a crash on the next run
+    # instead of a plausible number in a report. Writing the subtraction out by
+    # hand here would evade that, and is the one way back to the defect.
     gap_k = gap_cutoff(art_grounded, chunk)
     if gap_k is None:
         print("article−chunk gap: not reportable at this depth")

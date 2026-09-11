@@ -165,8 +165,12 @@ def gap_cutoff(art: LevelScore, chunk: LevelScore, prefer: int = GAP_K) -> int |
     whenever both levels hold it. A shallower retrieval falls back to the
     deepest cutoff the two share, rather than printing a ``@5`` gap neither
     level reached. It never goes *deeper* than ``prefer``: a deeper retrieval
-    must not silently move the published diagnostic, and the gap's population
-    defect is issue #60's to settle, not this function's.
+    must not silently move the published diagnostic.
+
+    Which cutoff, only. Which *population* the gap is taken over is
+    :func:`article_chunk_gap`'s to enforce — pass it the article score over
+    :func:`grounded_retrievals`, and this function sees the same two levels
+    either way.
     """
     shared = [k for k in art.hit_at_k if k in chunk.hit_at_k and k <= prefer]
     return max(shared) if shared else None
@@ -209,9 +213,11 @@ def gap_lines(art: LevelScore, chunk: LevelScore, k: int) -> List[str]:
     return [
         f"article−chunk gap @{k}: {gap:+.1%}"
         f"   (right article, wrong chunk = chunking/embedding)",
+        # Both counts carry their denominator, as every count in LevelScore
+        # does: a bare "(285)" beside an "n=319" reads for a moment as the n.
         f"  over the grounded subset only, n={art.scored}: "
-        f"article {art.hit_at_k[k]:.1%} ({art.hits[k]}) − "
-        f"chunk {chunk.hit_at_k[k]:.1%} ({chunk.hits[k]}) = "
+        f"article {art.hit_at_k[k]:.1%} ({art.hits[k]}/{art.scored}) − "
+        f"chunk {chunk.hit_at_k[k]:.1%} ({chunk.hits[k]}/{chunk.scored}) = "
         f"{art.hits[k] - chunk.hits[k]} cases."
         f" Not the article table above, which covers every case.",
     ]
