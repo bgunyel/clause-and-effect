@@ -1770,10 +1770,25 @@ echo "=== CLAUDE.md names every hook that carries the boundary ==="
 # the section is right not to name. Adding a boundary hook and not the sentence
 # turns this red; adding a hook about documents or commands means adding it
 # here, deliberately, with a reason.
+# A third helper, because the two above read a file and this asks about a list
+# this suite has computed. One membership convention, written once: the spaces
+# belong to the pattern, so no literal carries its own.
+present() {  # present <label> <needle> <space-separated haystack>
+  case " $3 " in
+    *" $2 "*) printf '  ok   %s\n' "$1" ;;
+    *) printf '  FAIL %s\n' "$1"; FAILED=1 ;;
+  esac
+}
+
 CLAUDE_MD="$HOOKS/../../CLAUDE.md"
 SECTION="$FIXTURES/boundary-section.md"
-sed -n '/^## What an unattended agent may do to this repository$/,/^## /p' \
-    "$CLAUDE_MD" | sed '$d' > "$SECTION"
+# awk rather than `sed -n '/start/,/^## /p' | sed '$d'`: that pair drops the last
+# line unconditionally, and when the boundary section is the last in the file
+# there is no following heading to drop -- so it would eat a real line of the
+# section, silently, in the permitting direction.
+awk '/^## What an unattended agent may do to this repository$/ {f=1; print; next}
+     f && /^## / {exit}
+     f {print}' "$CLAUDE_MD" > "$SECTION"
 # The extraction is itself a claim about a heading that can be renamed, so it is
 # checked from both ends before anything is asserted against it: the heading is
 # in what came out, and a line from another section is not.
@@ -1782,57 +1797,73 @@ armed 'the extracted section is the boundary section' \
 unarmed 'and it is that section rather than the whole file' \
   "$SECTION" 'Import cost is a design constraint'
 
+# Narrowed again, to the paragraph that says what is enforced. The section's last
+# paragraph is about what is deliberately NOT guarded, and it discusses
+# .claude/ by name; a hook named only there would satisfy a section-wide grep
+# while telling a reader the opposite of what the grep was taken to prove. This
+# is also what CLAUDE.md now claims -- "this paragraph names every hook that
+# carries it" -- and a check that asserted something wider would be the same
+# drift one paragraph along.
+PARAGRAPH="$FIXTURES/boundary-paragraph.md"
+awk -v RS= '/Enforced by/' "$SECTION" > "$PARAGRAPH"
+armed 'and the paragraph taken from it is the one that says what is enforced' \
+  "$PARAGRAPH" 'Enforced by'
+unarmed 'and it stops short of what is deliberately left unguarded' \
+  "$PARAGRAPH" 'Deliberately left open'
+
 # Registered on Bash or at SessionStart, but about documents or commands rather
 # than about what an agent may do to this repository. Each name here is a
-# decision: these are the hooks the section is correct to leave out.
-NOT_THE_BOUNDARY=" append-only-docs.sh alembic-via-uv-group.sh pytest-via-uv-group.sh "
+# decision: these are the hooks the paragraph is correct to leave out.
+NOT_THE_BOUNDARY="append-only-docs.sh alembic-via-uv-group.sh pytest-via-uv-group.sh"
+# Space-separated, because `present` separates on spaces and a newline between
+# two names is not the separator its pattern looks for -- every name but the
+# first would read as absent. The second sed drops anything after the path, so
+# a hook registered with an argument is still named by its file.
 REGISTERED=$(jq -r '
     (.hooks.PreToolUse[]? | select(.matcher == "Bash") | .hooks[]?.command),
     (.hooks.SessionStart[]?.hooks[]?.command)' "$SETTINGS" 2>/dev/null \
-  | sed 's|.*/||' | sort -u | tr '\n' ' ')
-# Space-separated on purpose: the membership tests below are `case " $REGISTERED "`
-# against `*" $hook "*`, and a newline between two names is not the separator
-# that pattern looks for -- every name but the first would read as absent.
+  | sed 's|.*/||; s|[[:space:]].*||' | sort -u | tr '\n' ' ')
+# Every .sh beside this suite, for the other direction below.
+HOOK_FILES=$(ls "$HOOKS"/*.sh "$HOOKS"/lib/*.sh 2>/dev/null | sed 's|.*/||' | sort -u | tr '\n' ' ')
 # An empty derivation would pass every loop below without asking anything.
-[ -n "$REGISTERED" ] || {
-  echo "no hooks were read out of settings.json; the checks below prove nothing" >&2
+[ -n "$REGISTERED" ] && [ -n "$HOOK_FILES" ] || {
+  echo "no hooks were read out of settings.json or off the disk; the checks below prove nothing" >&2
   exit 1
 }
+# Unglobbed: a name is a word here, never a pattern to expand against the tree.
+set -f
 for hook in $REGISTERED; do
-  case "$NOT_THE_BOUNDARY" in *" $hook "*) continue ;; esac
-  armed "the section names $hook, which settings.json runs" "$SECTION" "$hook"
+  case " $NOT_THE_BOUNDARY " in *" $hook "*) continue ;; esac
+  armed "the paragraph names $hook, which settings.json runs" "$PARAGRAPH" "$hook"
 done
 
-# The other direction: a name in the section that nothing runs any more. Every
-# .sh the section names must exist, which catches a rename that updated the tree
-# and left the sentence behind; and every one named as a no-*.sh guard must
-# still be registered, which catches a guard quietly dropped from settings.json
-# while the document goes on promising it.
-for hook in $(grep -oE '[A-Za-z0-9_-]+\.sh' "$SECTION" | sort -u); do
-  if [ -e "$HOOKS/$hook" ] || [ -e "$HOOKS/lib/$hook" ]; then
-    printf '  ok   armed the section names %s, and that file exists\n' "$hook"
-  else
-    printf '  FAIL the section names %s, which is no file in .claude/hooks\n' "$hook"
-    FAILED=1
-  fi
+# The other direction: a name in the paragraph that nothing runs any more. Every
+# .sh it names must exist, which catches a rename that updated the tree and left
+# the sentence behind; and every one named as a no-*.sh guard must still be
+# registered, which catches a guard quietly dropped from settings.json while the
+# document goes on promising it.
+for hook in $(grep -oE '[A-Za-z0-9_-]+\.sh' "$PARAGRAPH" | sort -u); do
+  present "the paragraph names $hook, and that file exists" "$hook" "$HOOK_FILES"
   case "$hook" in
-    no-*.sh)
-      case " $REGISTERED " in
-        *" $hook "*)
-          printf '  ok   armed the section names %s, and settings.json runs it\n' "$hook" ;;
-        *)
-          printf '  FAIL the section names %s, which settings.json does not run\n' "$hook"
-          FAILED=1 ;;
-      esac ;;
+    no-*.sh) present "the paragraph names $hook, and settings.json runs it" \
+                     "$hook" "$REGISTERED" ;;
   esac
 done
+set +f
 
 # The section also makes a claim of count -- "the only Edit|Write hook" -- and a
 # second one would falsify it as quietly as a fourth Bash hook falsified the
-# sentence above. The expectation is the literal 1.
-tok 'settings.json registers the one Edit|Write hook the section claims' \
+# sentence above. The question is how many hooks would run on an Edit, not how
+# many are registered under that one spelling of the matcher: `Edit`, `*` and an
+# absent matcher all reach the Edit tool, and asking for the literal string
+# "Edit|Write" would answer 1 while a second hook guarded edits under any of
+# them. So the matcher is used as what it is, a pattern, and the expectation is
+# the literal 1.
+tok 'one hook runs on an Edit, which is the number the section claims' \
     '1' \
-    "$(jq -r '[.hooks.PreToolUse[]? | select(.matcher == "Edit|Write") | .hooks[]?] | length' "$SETTINGS" 2>/dev/null)"
+    "$(jq -r '[.hooks.PreToolUse[]? | select((.matcher // "*") as $m
+                | $m == "*" or $m == "" or ("Edit" | test($m)))
+              | .hooks[]?] | length' "$SETTINGS" 2>/dev/null)"
 
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi

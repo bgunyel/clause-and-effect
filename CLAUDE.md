@@ -217,18 +217,16 @@ spellings is used, `gh pr edit --base` and the two `gh api` forms included. It
 may comment on one, edit one without moving its base, and read one, through
 `gh pr view` or through a `gh api` request that does not write. It may not merge
 one, review one with a verdict, close or reopen one, or create or delete a
-release. A worktree branch lives as long as its pull request: once that has
-merged the branch is finished, and the next piece of work starts on a new one.
-`main` and `dev-NN` are Bertan's to push; `main` is additionally protected
-server-side by the `main-branch-protection` ruleset, which requires a pull
-request. Enforced by `.claude/hooks/no-git-push.sh`, `no-pr-decisions.sh` and
-`no-commit-to-main.sh`, all three built on `.claude/hooks/lib/command-scan.sh`,
-and by `no-work-on-stale-branch.sh`, which refuses work in a worktree whose
-branch has outlived its pull request, reading refs that
-`report-stale-branches.sh` prunes for it at the start of every session.
+release. A worktree branch lives as long as its pull request, and work moves to
+a new one once that has merged. `main` and `dev-NN` are Bertan's to push; `main`
+is additionally protected server-side by the `main-branch-protection` ruleset,
+which requires a pull request. Enforced by `.claude/hooks/no-git-push.sh`,
+`no-pr-decisions.sh`, `no-commit-to-main.sh` and `no-work-on-stale-branch.sh`,
+all four built on `.claude/hooks/lib/command-scan.sh`, the last of them reading
+refs that `report-stale-branches.sh` prunes for it each session;
 `bash .claude/hooks/check-hooks.sh` checks the boundary in both directions, and
-checks that this paragraph names every hook that carries it. Hooks see only the
-Bash tool, so Bertan's own terminal is not subject to any of this.
+that this paragraph names every hook that carries it. Hooks see only the Bash
+tool, so Bertan's own terminal is not subject to any of this.
 
 `dev-NN` rests on those hooks *because* an agent currently acts with Bertan's
 credentials, so no server-side rule can tell the two apart. That is a
