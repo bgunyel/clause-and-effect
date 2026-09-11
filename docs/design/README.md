@@ -18,11 +18,32 @@ easy to erode:
 | `lessons-learned/` | how a specific failure happened | yes, append-only |
 | `eval-reports/` | what the numbers were at a point in time | yes, append-only |
 | **`design/`** | **how a mechanism works today** | **no, revised in place** |
+| `adr/` | why a decision was taken, and what was rejected | no, superseded |
+| `research/` | what is true outside this repository | no, revised in place |
 
 Everything above `design/` is a **record**: written once, never edited, because
 editing history destroys its value. A design document is the opposite — it is
 **current state**, and when the mechanism changes the document is rewritten to
 match. Its history lives in git, not in the filename.
+
+The two below it are current state as well, which makes them the neighbours
+this directory is most easily confused with:
+
+- `adr/` answers *why*, once, for a decision. A design document answers *how*,
+  continuously, for a mechanism. When an ADR's decision is reversed the ADR is
+  superseded by a new one rather than rewritten; a design document is rewritten
+  in place, because there is only ever one current answer to "how does this
+  work".
+- `research/` is the closer call, because it is also undated and also revised
+  in place. The line is which side of the repository boundary the subject sits
+  on. A design document describes a mechanism **here** and carries a "Verified
+  against" commit, because the code is the thing it can be checked against. A
+  research document describes something this repository does not control — a
+  provider's response body, a library's behaviour, a specification — and
+  carries the date its sources were read, because there is no commit to check
+  it against. A research finding that changes how a mechanism here is built
+  stays in `research/`; the design document cites it and states the decision
+  taken.
 
 Two documents this is also not:
 

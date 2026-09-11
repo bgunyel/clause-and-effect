@@ -5,6 +5,12 @@
 #
 # Adding a new entry file is the normal case and stays allowed; so does a >>
 # append. What is blocked is destroying or rewriting what is already recorded.
+#
+# docs/research/ was considered for this set and deliberately left out (issue
+# #61). A research document carries [NEEDS OBSERVATION] markers, and clearing
+# one as the observation is made is the edit the directory exists to allow;
+# CLAUDE.md's table marks it "revised in place" for that reason. The same is
+# true of docs/design/. See the companion note in append-only-docs-edit.sh.
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
 
