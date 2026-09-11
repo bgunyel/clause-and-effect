@@ -12,8 +12,11 @@
 # exist is allowed. Touching a file that is already there is what rewrites
 # history, and that is blocked for both tools.
 #
-# docs/design/ is deliberately absent from the guarded set — CLAUDE.md's own
-# table marks it "revised in place".
+# docs/design/ and docs/research/ are deliberately absent from the guarded set —
+# CLAUDE.md's own table marks both "revised in place". For research/ the
+# omission is load-bearing rather than incidental: a research document carries
+# [NEEDS OBSERVATION] markers, and clearing one as the observation is made is
+# the edit the directory exists to allow.
 INPUT=$(cat)
 FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 

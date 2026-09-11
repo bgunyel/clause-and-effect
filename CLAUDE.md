@@ -170,8 +170,9 @@ nothing else.
 
 ## Documentation
 
-Five directories with different jobs; the distinction erodes easily
-(`docs/design/README.md` states the first four in full):
+Six directories with different jobs; the distinction erodes easily
+(`docs/design/README.md` draws the record-vs-current-state split in full, and
+the line between `docs/design/` and `docs/research/`):
 
 | directory | answers | dated? |
 |---|---|---|
@@ -180,10 +181,28 @@ Five directories with different jobs; the distinction erodes easily
 | `docs/eval-reports/` | what the numbers were at a point in time | yes, **append-only** |
 | `docs/design/` | how a mechanism works **today** | no, revised in place |
 | `docs/adr/` | why a decision was taken, and what was rejected | no, superseded rather than revised |
+| `docs/research/` | what is true **outside** this repository — a provider, a library, a spec | no, revised in place; claims carry their source |
 
 `docs/todo.md` is the backlog; `docs/evaluation-plan.md` is what the framework
 *should* become, not evidence about what exists. Append-only means old entries
 are history — corrections go in the newest entry, never backwards.
+
+`ls docs/` returns seven directories, not six. `docs/agents/` is the seventh and
+is deliberately not in the table: it holds agent configuration — the issue
+tracker's conventions, the triage label mapping, the domain glossary — rather
+than documentation of the system, and is described under **Agent skills** below.
+It is counted here so that the next reader does not have to wonder whether it
+was forgotten.
+
+`docs/research/` holds the output of a `wayfinder:research` ticket: a question
+answered against primary sources, every claim attributed, and anything not
+actually observed marked `[NEEDS OBSERVATION]` so a later session can grep the
+file and get a checklist. It is outside the append-only guard deliberately —
+clearing a marker *is* the point, and freezing the file would make the
+checklist unworkable; git holds the history. What it must not become is a
+second `docs/design/`: a research document describes something this repository
+does not control, and stops before the decision it unblocks.
+`docs/research/README.md` states the conventions.
 
 **Dev-log voice.** Sessions are worked jointly by Bertan and an AI assistant.
 Never write a bare "I": name the agent ("the assistant", "Bertan"). Passive is
@@ -217,13 +236,16 @@ spellings is used, `gh pr edit --base` and the two `gh api` forms included. It
 may comment on one, edit one without moving its base, and read one, through
 `gh pr view` or through a `gh api` request that does not write. It may not merge
 one, review one with a verdict, close or reopen one, or create or delete a
-release. `main` and
-`dev-NN` are Bertan's to push; `main` is additionally protected server-side by
-the `main-branch-protection` ruleset, which requires a pull request. Enforced by
-`.claude/hooks/no-git-push.sh` and `no-pr-decisions.sh`, both built on
-`.claude/hooks/lib/command-scan.sh`; `bash .claude/hooks/check-hooks.sh` checks
-the boundary in both directions. Hooks see only the Bash tool, so Bertan's own
-terminal is not subject to any of this.
+release. A worktree branch lives as long as its pull request, and work moves to
+a new one once that has merged. `main` and `dev-NN` are Bertan's to push; `main`
+is additionally protected server-side by the `main-branch-protection` ruleset,
+which requires a pull request. Enforced by `.claude/hooks/no-git-push.sh`,
+`no-pr-decisions.sh`, `no-commit-to-main.sh` and `no-work-on-stale-branch.sh`,
+all four built on `.claude/hooks/lib/command-scan.sh`, the last of them reading
+refs that `report-stale-branches.sh` prunes for it each session;
+`bash .claude/hooks/check-hooks.sh` checks the boundary in both directions, and
+that this paragraph names every hook that carries it. Hooks see only the Bash
+tool, so Bertan's own terminal is not subject to any of this.
 
 `dev-NN` rests on those hooks *because* an agent currently acts with Bertan's
 credentials, so no server-side rule can tell the two apart. That is a
