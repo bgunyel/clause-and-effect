@@ -58,6 +58,67 @@
 # would yields extra command candidates, which can only refuse more; it never
 # hides one. That is the safe direction for a guard whose failure mode, twice
 # now, has been to report the permitted answer.
+#
+# A fifth review, of dev-05, found the first defect here that costs only
+# refusals -- and it costs them on the work of editing these files. cs_split cut
+# on separators with a plain character class that knew nothing about quoting, so
+# a | inside a quoted argument was a fragment boundary like any other. `sed -i
+# 's|git push --all origin|X|' f.sh` yielded four fragments, the second of which
+# is a push standing at the head of its own line, and both no-git-push.sh and
+# no-commit-to-main.sh refused it. Six ordinary sed and grep commands were
+# refused this way, and it fired twice in a live session against that session's
+# own edits to these hooks. Worse than the refusal is that it reads as
+# arbitrary: the fragment has to BEGIN with the command word, so `s|^git push|`
+# is permitted and `s|git push|` is not, on a difference that has nothing to do
+# with what either command would run. Issue #68 made the pass quote-aware; the
+# reasoning, and the three ways that fix could itself have become a hole, are in
+# the comment inside cs_split.
+#
+# The permitting direction was swept before that fix and not found, and the
+# structural reason is worth writing down so it is not re-derived. Splitting
+# never deletes text, it only inserts boundaries, so every "is X present in any
+# fragment" test still sees every character it saw before. The only way a cut
+# can hide evidence is by truncating a verb's argument list, and neither hook
+# judges a verb that way: no-commit-to-main.sh refuses `git commit` on main
+# whatever the arguments, and no-git-push.sh refuses on flags -- --all, --mirror,
+# -f, --delete -- that cannot sit behind a quoted free-text argument, because
+# `git push` has no -m-style slot to put one in.
+#
+# That argument is about the hooks whose fragments TRIGGER a refusal, and it was
+# written as though those were all of them. no-work-on-stale-branch.sh is the
+# fourth consumer and the exception: its fragment tests withdraw a carve-out
+# rather than raise a refusal -- `^(cd|pushd|popd)`, the git directory options,
+# and a checkout or switch each set CARVE= -- so there, losing a fragment head
+# RETAINS an exception instead of dropping a refusal, and "a cut can only refuse
+# more" does not transfer to it as written. Found by review of this change, not
+# by the suite.
+#
+# It is nonetheless safe, for a reason that belongs here rather than in that
+# file. A fragment that quote-awareness removes is one bash would never have run
+# as a command, so a carve-out retained past it is retained for a command that
+# does not change directory. The converse -- a real cd that the tracker now
+# hides -- has nowhere to happen: a cd bash would run sits either outside quotes,
+# where it is still cut, or inside a substitution, which sends the whole line to
+# the fallback. The fail-safe is what carries this case, exactly as it carries
+# the others; the difference is only that here it is load-bearing rather than
+# belt-and-braces.
+#
+# One verdict there did change, and it is worth naming because the shape is not
+# the obvious one. The catch-up merge carries no free-text argument that could
+# hold a quoted cd -- -m withdraws the carve-out by itself -- so what reaches
+# this is a quoted separator in a SIBLING command on the same line:
+# `git merge origin/dev-05 && echo 'x; cd /tmp'` was refused for a directory
+# change bash would never have made, and is permitted now. An unquoted cd still
+# withdraws the carve-out. Both are checks.
+#
+# One soft spot, named rather than closed. no-git-push.sh:153 records that "an
+# empty argument list is the permitted case", so a push whose arguments were
+# lost past a cut would read as a bare push. Probed with `git push "|--all
+# origin"` and `git push "x|--all" origin`: both still blocked. It holds --
+# but it holds because of a property of git push's own CLI, not because of
+# anything this library does, so the honest phrasing is SWEPT AND NOT FOUND,
+# never "cannot happen". Any future hook that judges a verb by a free-text
+# argument reopens the question.
 
 # Reduce a raw command to lines that can be scanned: heredoc bodies dropped,
 # line continuations joined, redirections dropped -- in that order, so that
@@ -270,7 +331,9 @@ cs_join() {
 #
 # Separators are ; && || | ( ) and a backtick. The backtick is there because
 # $( ) was closed by the paren and its twin was not -- the same asymmetry
-# GIT_DIR= had against --git-dir.
+# GIT_DIR= had against --git-dir. Since issue #68 a separator inside quotes is
+# not one, which is where the exceptions and the fallbacks are; the comment
+# inside the function is where that is argued.
 #
 # Removed prefixes: environment assignments, the shell's own control words, and
 # the wrapper words that run another command with their own options. A caller
@@ -283,13 +346,130 @@ cs_join() {
 # saw a push at all; `do`, `else`, `elif`, `{` and `!` each did the same. They
 # are removed rather than matched around, so every caller keeps anchoring at ^.
 #
-# The trade, taken knowingly and checked as such: a quoted string holding a
-# separator and then one of these words in front of a refused command now reads
-# as that command, so `git commit -m "wait; then git push --all origin"` is
-# refused. That is the direction this file has taken throughout -- a blocked
-# comment is visible and one edit away, a silently permitted push is neither.
+# The trade that used to be recorded here -- a quoted string holding a separator
+# and then a control word in front of a refused command read as that command, so
+# `git commit -m "wait; then git push --all origin"` was refused -- was paid by
+# the separator pass not knowing what a quote is. Issue #68 made it know, so on
+# one line that string is text again and the commit is permitted. Two checks in
+# check-hooks.sh carry the flip as `(was BLOCK)`.
+#
+# What is left of the trade is the multi-line spelling, and it is left on
+# purpose: quote state is per line, so a string left open at a newline sends
+# that line to the fallback and the continuation reads as a command position.
+# CLAUDE.md names that one as deliberately open, and it is the direction this
+# file has taken throughout -- a blocked comment is visible and one edit away, a
+# silently permitted push is neither.
 cs_split() {
-  sed -e 's/&&/\n/g' -e 's/||/\n/g' -e 's/[;&|()`]/\n/g' \
+  awk '
+    # The separator pass, quote-aware. Issue #68: it was a character class with
+    # no idea what a quote is, so a sed substitution written with | as its
+    # delimiter cut into four fragments, the second of which is a push that
+    # does not exist, and every hook refused it. See the header of this file.
+    #
+    # No apostrophe appears in these comments: the program is a single-quoted
+    # shell word, so one would end it. That is why the shapes are named in
+    # words rather than quoted.
+    #
+    # Three things it must not become. It must not stop cutting after the first
+    # quote -- `echo "a" | git push --all origin` is two commands and the pipe
+    # is real, so a closed quote reopens the separator. It must not guess: a
+    # line whose quoting does not balance is text this cannot read, and it is
+    # split exactly as it was before quotes were tracked at all. Over-refusing
+    # is what this ticket complains about and is still the right answer where
+    # the text cannot be read.
+    #
+    # And -- the one that would have turned this fix into a hole -- double
+    # quotes do not make text inert. `"$(gh pr merge 5)"` and a backticked span
+    # inside them RUN, so protecting a double-quoted span outright would hide
+    # every command written that way, silently and in the permitting direction,
+    # which is the shape of nine of the defects this file has already had. A
+    # line carrying either one in double quotes goes to the same fallback as
+    # unbalanced quoting: split as before, and let the substitution be cut out
+    # of it as it always was. That is chosen over tracking where a substitution
+    # ends, which is the shell parser the stopping rule in these files refuses
+    # to write -- a nested `)` would decide the verdict.
+    #
+    # Single quotes need no such exception: bash runs nothing inside them, so a
+    # `$(` or a backtick there is text, and the fallback is not triggered by
+    # one. That is what keeps the two reported shapes -- a sed substitution and
+    # a grep alternation, both single-quoted -- protected.
+    #
+    # The fallback is this same walk with quote tracking switched off, not a
+    # second encoding of the separator set. It was written as a pair of gsub
+    # calls first, and that is the shape the header of this file names as the
+    # reason the file exists: the same question answered in two places, so a
+    # separator added to one and not the other is a defect nobody sees. With
+    # `respect` off the walk reproduces the old character class exactly, and
+    # the two cannot drift apart because there is only one of them.
+    #
+    # qopen and dq_substitution are deliberately NOT locals: they are what the
+    # walk reports back about the line it just read.
+    function cut(line, respect,    n, i, c, nx, out) {
+      n = length(line)
+      out = ""
+      qopen = ""
+      dq_substitution = 0
+      i = 1
+      while (i <= n) {
+        c = substr(line, i, 1)
+        if (respect) {
+          if (qopen != "") {
+            # Only double quotes take a backslash escape; inside single quotes a
+            # backslash is a character. Same answer as cs_normalise gives, for
+            # the same reason -- it is what bash does. It is read before the
+            # substitution test below, so an escaped dollar-paren and an escaped
+            # backtick are the text they are and do not send the line to the
+            # fallback.
+            if (qopen == "\042" && c == "\\") { out = out c substr(line, i + 1, 1); i += 2; continue }
+            if (qopen == "\042" && (c == "`" || (c == "$" && substr(line, i + 1, 1) == "("))) dq_substitution = 1
+            out = out c
+            if (c == qopen) qopen = ""
+            i++
+            continue
+          }
+          # A backslash outside quotes is read so that an escaped quote does not
+          # open one that never closes and send the whole line to the fallback.
+          # An escaped separator still cuts, exactly as before.
+          #
+          # It reads one backslash at a time, so a doubled backslash in front of
+          # a quote -- which in bash is a literal backslash and then a quote that
+          # DOES open -- is read here as an escaped quote and no quote opens.
+          # That leaves the rest of the line unprotected and splits it more, so
+          # it is in the refusing direction; it is named because the sentence
+          # above would otherwise read as a claim that it cannot happen.
+          if (c == "\\") {
+            nx = substr(line, i + 1, 1)
+            if (nx == "\042" || nx == "\047") { out = out c nx; i += 2; continue }
+            out = out c
+            i++
+            continue
+          }
+          if (c == "\042" || c == "\047") { qopen = c; out = out c; i++; continue }
+        }
+        if (c == "&" && substr(line, i + 1, 1) == "&") { out = out "\n"; i += 2; continue }
+        if (c == "|" && substr(line, i + 1, 1) == "|") { out = out "\n"; i += 2; continue }
+        if (index(";&|()`", c) > 0) { out = out "\n"; i++; continue }
+        out = out c
+        i++
+      }
+      return out
+    }
+    {
+      out = cut($0, 1)
+      # Quote state is per line, as it is in cs_normalise, so a string left open
+      # at a newline sends that line and no other to the fallback. That is what
+      # keeps the multi-line quoted string CLAUDE.md names as deliberately
+      # refused still refused.
+      #
+      # The fallback is per line too, and so is coarser than it could be: one
+      # substitution in double quotes anywhere on a line takes the whole line
+      # back to the old splitting, and a sed delimiter on that same line loses
+      # the fix. That is the refusing direction, and narrowing it to the span
+      # would mean finding where the substitution ends, which is the parser this
+      # is written to avoid.
+      if (qopen != "" || dq_substitution) out = cut($0, 0)
+      print out
+    }' \
   | awk '
     {
       line = $0
