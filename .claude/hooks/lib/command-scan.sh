@@ -1,11 +1,22 @@
 #!/bin/bash
 # Where a command starts, where its arguments end, and how many commands a
-# string holds. Sourced by no-git-push.sh, no-pr-decisions.sh, and since issue
-# #43 no-commit-to-main.sh and since #44 no-work-on-stale-branch.sh -- which is
-# every hook that reads a command. Issue #63 found this line naming three of the
-# four, the same way it found CLAUDE.md's boundary section naming two of them: a
+# string holds. Sourced by no-git-push.sh, no-pr-decisions.sh, since issue #43
+# no-commit-to-main.sh, since #44 no-work-on-stale-branch.sh, and since #69
+# pytest-via-uv-group.sh and alembic-via-uv-group.sh -- which is every hook that
+# reads a command. Issue #63 found this line naming three of the four there were
+# then, the same way it found CLAUDE.md's boundary section naming two of them: a
 # hook is added, and the sentence saying which hooks there are is not revised
-# with it.
+# with it. #69 found it a second time from the other end -- two hooks that read
+# a command and were not on the list because they did not source this file at
+# all, so the sentence was true of the hooks it knew about and false of the
+# repository. It is checked now rather than maintained: check-hooks.sh reads
+# which files source this one and asserts that this paragraph names each.
+#
+# The last two are the only consumers that are not part of the agent boundary.
+# They enforce a CLAUDE.md convention -- a dependency group -- and the
+# difference shows in what they do not have: no wrapper rule, because a quoted
+# payload is not worth refusing every `bash -c` over. Their fail-closed
+# behaviour is the same as the others', for the same reason.
 #
 # This exists because of what the defects in PR #35 turned out to have in
 # common. Every one of them, found by Bertan or by the assistant, was the same
