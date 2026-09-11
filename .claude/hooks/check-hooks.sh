@@ -2488,6 +2488,56 @@ check pytest-via-uv-group.sh BLOCK 'nix run'    'nix run pytest'
 check alembic-via-uv-group.sh BLOCK 'poetry run, alembic' 'poetry run alembic upgrade head'
 check alembic-via-uv-group.sh BLOCK 'uvx, alembic'        'uvx alembic upgrade head'
 
+echo "=== REGRESSION: review of the #69 PR, the list stopped one family early ==="
+# Review of the fix above found three more, each the sibling of something
+# already on the list: pipx run beside uvx and uv tool run, micromamba run
+# beside conda run, pixi run beside poetry run. All three were BLOCK on dev-05
+# by the substring match and ALLOW once the rule became a list. Recorded as the
+# same finding twice, because that is what it is: narrowing a substring match
+# to a list costs whatever the list omits, and what it omits is found by
+# someone asking rather than by the rule.
+check pytest-via-uv-group.sh BLOCK 'pipx run'       'pipx run pytest'
+check pytest-via-uv-group.sh BLOCK 'micromamba run' 'micromamba run pytest'
+check pytest-via-uv-group.sh BLOCK 'pixi run'       'pixi run pytest'
+check alembic-via-uv-group.sh BLOCK 'pipx run, alembic'       'pipx run alembic upgrade head'
+check alembic-via-uv-group.sh BLOCK 'micromamba run, alembic' 'micromamba run alembic upgrade head'
+check alembic-via-uv-group.sh BLOCK 'pixi run, alembic'       'pixi run alembic upgrade head'
+
+echo "=== ACCEPTED gap: a wrapper word is not a runner, and belongs in #79 ==="
+# These two reach pytest as well, and neither is a runner in the sense the list
+# above means: they take no subcommand and simply run the words after them,
+# which is what cs_split calls a wrapper word and already strips for `time`,
+# `sudo` and the rest. Naming them in the runner list would answer "what is a
+# wrapper word" in a third place -- the habit lib/command-scan.sh exists to end
+# -- and would fix these two hooks while leaving the four boundary hooks just
+# as blind to `xvfb-run git push --all origin`.
+#
+# So they are pinned as permitted rather than fixed here, and the pin is the
+# point: when #79 adds them to cs_split's wrapper list these two flip to BLOCK,
+# and that is the intended outcome rather than a regression. Change them there.
+check pytest-via-uv-group.sh ALLOW 'xvfb-run, a wrapper word cs_split does not strip' \
+  'xvfb-run pytest tests/'
+check pytest-via-uv-group.sh ALLOW 'watch, the same shape' \
+  'watch pytest'
+# The contrast that says why those two are a wrapper question and not a runner
+# question: a wrapper word cs_split DOES strip leaves the command word at ^,
+# and the first rule refuses it with no list involved.
+check pytest-via-uv-group.sh BLOCK 'time, which cs_split does strip' \
+  'time pytest tests/'
+
+echo "=== REGRESSION: #69, the allowlist was matched against the whole string ==="
+# Not named in the PR body, and a silent permit on dev-05 rather than a false
+# refusal: the old allowlist asked whether `uv run ... --group test` appeared
+# anywhere in the command, so one sanctioned invocation rescued a bare one
+# beside it, and a `cd` in front of a bare one did too. Both were ALLOW there.
+# cs_split judges each command on its own, so neither rescue survives.
+check pytest-via-uv-group.sh BLOCK 'a cd in front of a bare pytest' \
+  'cd tests && pytest'
+check pytest-via-uv-group.sh BLOCK 'a sanctioned invocation rescuing a bare one' \
+  'uv run --group test pytest && pytest tests/'
+check alembic-via-uv-group.sh BLOCK 'the same rescue, alembic' \
+  'uv run --group migrations alembic upgrade head && alembic downgrade -1'
+
 echo "=== REGRESSION: review of #69, the group was matched after the tool ==="
 # `--group test` was looked for anywhere in the fragment, so the tool's own
 # argument rescued the command and the comment claiming the group had to be

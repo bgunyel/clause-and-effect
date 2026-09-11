@@ -33,6 +33,25 @@
 # runner not on it is permitted; the check suite names each member so that the
 # list is read rather than discovered.
 #
+# Review of #69 then found the list one family short -- `pipx run` alongside
+# `uvx` and `uv tool run`, `micromamba run` alongside `conda run`, `pixi run`
+# alongside `poetry run`. Each was the sibling of something already on it, so
+# the list had stopped where the writing stopped rather than where the question
+# does. Worth recording as the same finding twice: narrowing a substring match
+# to a list costs whatever the list omits, and the omissions are found by
+# someone asking, not by the rule.
+#
+# Two things it still omits, and on purpose. `xvfb-run pytest` and
+# `watch pytest` reach pytest as well, but neither is a runner in this sense:
+# they take no subcommand and simply run the words after them, which is what
+# cs_split calls a wrapper word and already strips for `time`, `sudo` and the
+# rest. Naming them here would answer "what is a wrapper word" in a third
+# place, which is the habit lib/command-scan.sh exists to end, and would fix
+# these two hooks while leaving the four boundary hooks just as blind. They
+# belong in that list, which is issue #79. The check suite pins both as
+# permitted so the gap is visible; when #79 adds them, those two checks flip to
+# BLOCK and that is the intended outcome, not a regression.
+#
 # Two things that list is not. It is not the tool's own arguments: `--group
 # test` has to be named BEFORE pytest, or `uv run pytest --group test` passes
 # the option to pytest and reads as sanctioned. The prefix is cut at the name
@@ -76,7 +95,7 @@ fi
 # sanctioned one and is asked for the group; the rest cannot name a dependency
 # group at all, so naming pytest is enough to refuse.
 UV_RUN='^uv[[:space:]]+run([[:space:]]|$)'
-OTHER_RUNNER='^(uvx|uv[[:space:]]+tool[[:space:]]+run|poetry[[:space:]]+run|pdm[[:space:]]+run|hatch[[:space:]]+run|pipenv[[:space:]]+run|rye[[:space:]]+run|conda[[:space:]]+run|nix[[:space:]]+run)([[:space:]]|$)'
+OTHER_RUNNER='^(uvx|uv[[:space:]]+tool[[:space:]]+run|poetry[[:space:]]+run|pdm[[:space:]]+run|hatch[[:space:]]+run|pipenv[[:space:]]+run|rye[[:space:]]+run|conda[[:space:]]+run|micromamba[[:space:]]+run|pixi[[:space:]]+run|pipx[[:space:]]+run|nix[[:space:]]+run)([[:space:]]|$)'
 # A quote ends the name as a space does. See the trade above.
 NAME='(^|[^A-Za-z0-9_.-])pytest([^A-Za-z0-9_.-]|$)'
 

@@ -47,7 +47,7 @@ fi
 # sanctioned one and is asked for the group; the rest cannot name a dependency
 # group at all, so naming alembic is enough to refuse.
 UV_RUN='^uv[[:space:]]+run([[:space:]]|$)'
-OTHER_RUNNER='^(uvx|uv[[:space:]]+tool[[:space:]]+run|poetry[[:space:]]+run|pdm[[:space:]]+run|hatch[[:space:]]+run|pipenv[[:space:]]+run|rye[[:space:]]+run|conda[[:space:]]+run|nix[[:space:]]+run)([[:space:]]|$)'
+OTHER_RUNNER='^(uvx|uv[[:space:]]+tool[[:space:]]+run|poetry[[:space:]]+run|pdm[[:space:]]+run|hatch[[:space:]]+run|pipenv[[:space:]]+run|rye[[:space:]]+run|conda[[:space:]]+run|micromamba[[:space:]]+run|pixi[[:space:]]+run|pipx[[:space:]]+run|nix[[:space:]]+run)([[:space:]]|$)'
 # A quote ends the name as a space does. See the trade in the companion file.
 NAME='(^|[^A-Za-z0-9_.-])alembic([^A-Za-z0-9_.-]|$)'
 
