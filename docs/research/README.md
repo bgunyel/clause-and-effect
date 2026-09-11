@@ -24,12 +24,13 @@ The boundary is ownership, not subject matter:
 | `adr/` | why a decision was taken, and what was rejected | no, superseded |
 | `eval-reports/` | what the numbers were at a point in time | yes, append-only |
 
-- **Against `design/`.** A design document describes code this repository owns
-  and carries a **"Verified against"** commit, because the code is what it can
-  be checked against. A research document has no commit to check against, so it
-  carries the date its sources were read instead. When a finding here changes
-  how a mechanism is built, the finding stays here and the design document
-  cites it — copying it across leaves two claims that drift apart.
+- **Against `design/`.** The boundary is ownership: a design document describes
+  code this repository owns, a research document describes something it does
+  not. `docs/design/README.md` draws the line in full, including what each kind
+  can be checked against; it is stated once, there. What matters at this end:
+  when a finding here changes how a mechanism is built, the finding stays here
+  and the design document cites it — copying it across leaves two claims that
+  drift apart.
 - **Against `adr/`.** Research establishes what is true; an ADR records what
   was decided in the light of it. A research document that ends in a
   recommendation has stopped being research.
@@ -38,7 +39,7 @@ The boundary is ownership, not subject matter:
   produces a new report, not an edit to the old one. A research document is not
   a measurement of this system and is not frozen; see below.
 
-## Dated, and why this directory is not append-only
+## Undated, and not append-only
 
 Filenames are **undated** and a document is **revised in place**.
 
@@ -75,8 +76,11 @@ force, because the subject is someone else's system:
 - **Separate what was read from what was seen.** A quotation from a provider's
   documentation and a response body captured from that provider are different
   kinds of evidence. Mark the first; do not present it as the second. Reading
-  library source produced a wrong claim twice on 2026-08-25, which is why the
-  markers are not optional.
+  library source produced a wrong claim twice on 2026-08-25 — that
+  `response_metadata["provider"]` was available for free, asserted from
+  `langchain_openrouter/chat_models.py:870` and absent when measured
+  (`docs/dev-log/devlog_2026-08-25_session-2.md`, "The served provider does not
+  reach the message"). That is why the markers are not optional.
 - **Attribute at the point of the claim**, not in a bibliography at the end —
   a reader checking one row should not have to guess which source it came from.
   Name the version, revision or read date of what was read.
@@ -101,9 +105,11 @@ force, because the subject is someone else's system:
 ## Documents
 
 - [What a non-OpenRouter completions body actually contains](non-openrouter-response-bodies.md)
-  — for each server in `ai_common.enums.LlmServers`, what the response body
-  carries: cost, identifier, usage shape, and whether anything names the
-  machine that served it. Read against each provider's documentation on
+  — for five of the seven servers in `ai_common.enums.LlmServers` (`OPENROUTER`
+  is the baseline the others are measured against; `GOOGLE` was outside the
+  ticket's scope), what the response body carries: cost, identifier, usage
+  shape, and whether anything names the machine that served it. Read against
+  each provider's documentation on
   2026-09-04; **no live API call was made**, and every claim is marked
   accordingly. Feeds `docs/design/llm-call-log.md`, whose socket patch filters
   on the completions path — the document's first finding is that three of the

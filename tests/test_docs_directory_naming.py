@@ -50,6 +50,11 @@ NAMING_FORM = "docs/{name}/"
 
 def _documentation_section() -> list[str]:
     lines = CLAUDE_MD.read_text(encoding="utf-8").splitlines()
+    assert SECTION_HEADING in lines, (
+        f"CLAUDE.md has no {SECTION_HEADING!r} heading. If the section was "
+        "renamed, rename SECTION_HEADING with it — these tests are about that "
+        "section and silently measure nothing without it."
+    )
     start = lines.index(SECTION_HEADING)
     for offset, line in enumerate(lines[start + 1 :], start=start + 1):
         if line.startswith("## "):
@@ -96,4 +101,24 @@ def test_the_stated_directory_count_matches_the_table():
         f"CLAUDE.md says '{stated_word}' directories but the table has "
         f"{len(counted)} rows. The count and the table were revised in the "
         "same window once already and disagreed; see issue #61."
+    )
+
+
+def test_every_table_row_names_a_directory_that_exists():
+    # The inverse of the first test, and the reason it is here: the first one
+    # asks whether each directory is named *somewhere* in CLAUDE.md, and
+    # `docs/research/` is now named in the prose as well as the table. So a
+    # typo in the table row alone — `docs/researchX/` — left both other tests
+    # green when it was tried. This one reads the rows and asks the filesystem.
+    rows = [
+        line for line in _documentation_section() if line.startswith("| `docs/")
+    ]
+    assert rows, "no `docs/...` rows found under the documentation heading"
+
+    named = [line.split("`")[1].removeprefix("docs/").removesuffix("/") for line in rows]
+    missing = [name for name in named if not (DOCS / name).is_dir()]
+    assert not missing, (
+        f"CLAUDE.md's documentation table names directories that do not "
+        f"exist: {missing}. A row describing nothing is worse than no row — "
+        "it reads as a rule someone is already following."
     )

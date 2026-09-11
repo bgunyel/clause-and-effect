@@ -187,6 +187,13 @@ the line between `docs/design/` and `docs/research/`):
 *should* become, not evidence about what exists. Append-only means old entries
 are history — corrections go in the newest entry, never backwards.
 
+`ls docs/` returns seven directories, not six. `docs/agents/` is the seventh and
+is deliberately not in the table: it holds agent configuration — the issue
+tracker's conventions, the triage label mapping, the domain glossary — rather
+than documentation of the system, and is described under **Agent skills** below.
+It is counted here so that the next reader does not have to wonder whether it
+was forgotten.
+
 `docs/research/` holds the output of a `wayfinder:research` ticket: a question
 answered against primary sources, every claim attributed, and anything not
 actually observed marked `[NEEDS OBSERVATION]` so a later session can grep the

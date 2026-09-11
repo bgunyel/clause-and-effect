@@ -1685,6 +1685,62 @@ grep -q '^cs_renamed_away()' "$FIXTURES/halflib/lib/command-scan.sh" || {
 check_in "$WT_STALE" "$FIXTURES/halflib/no-work-on-stale-branch.sh" BLOCK 'a library missing only cs_git_args' \
   'git commit -m "wip"'
 
+echo "=== append-only: which docs directories are guarded, and which are not ==="
+# First coverage for append-only-docs.sh and its Edit/Write companion. It was
+# added with issue #61, which put a comment in both files saying docs/research/
+# is deliberately outside the guarded set -- and a comment is not evidence. The
+# refusing direction is checked alongside it, because an ALLOW for research/
+# that came from the guard having stopped working altogether would look
+# identical to the one intended.
+check append-only-docs.sh BLOCK 'sed -i over a dev-log entry' \
+  "sed -i 's/a/b/' docs/dev-log/devlog_2026-08-25_session-2.md"
+check append-only-docs.sh BLOCK 'rm of an eval report' \
+  'rm docs/eval-reports/some-report.md'
+check append-only-docs.sh BLOCK 'truncating redirect into a lessons-learned entry' \
+  'echo x > docs/lessons-learned/some-lesson.md'
+check append-only-docs.sh ALLOW 'appending to a dev-log entry' \
+  'echo x >> docs/dev-log/devlog_2026-08-25_session-2.md'
+check append-only-docs.sh ALLOW 'sed -i over a research document' \
+  "sed -i 's/a/b/' docs/research/non-openrouter-response-bodies.md"
+check append-only-docs.sh ALLOW 'sed -i over a design document' \
+  "sed -i 's/a/b/' docs/design/llm-call-log.md"
+
+# The Edit/Write companion reads tool_input.file_path rather than .command, and
+# its verdict turns on whether the file already exists -- so it is asked about
+# real paths in this repository, with CLAUDE_PROJECT_DIR naming the root it
+# anchors to. A new seam in this suite, named as one.
+REPO_ROOT=$(cd "$HOOKS/../.." && pwd)
+check_file() {  # check_file <script> <want> <label> <path relative to the repo>
+  local script="$1" want="$2" label="$3" path="$4" got rc
+  printf '%s' "$path" | jq -Rs '{tool_name:"Edit",tool_input:{file_path:.}}' \
+    | CLAUDE_PROJECT_DIR="$REPO_ROOT" ./"$script" >/dev/null 2>&1
+  rc=$?
+  if [ $rc -eq 2 ]; then got=BLOCK; else got=ALLOW; fi
+  if [ "$got" = "$want" ]; then
+    printf '  ok   %-5s %s\n' "$got" "$label"
+  else
+    printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
+    FAILED=1
+  fi
+}
+# An ALLOW that came from the path simply not being there would say nothing
+# about docs/research/, and a BLOCK-expecting case needs its file present for
+# the same reason. Both are asserted rather than assumed.
+[ -e "$REPO_ROOT/docs/dev-log/devlog_2026-08-25_session-2.md" ] \
+  && [ -e "$REPO_ROOT/docs/dev-log/README.md" ] \
+  && [ -e "$REPO_ROOT/docs/research/non-openrouter-response-bodies.md" ] || {
+  echo "the append-only Edit cases name files that are not there; they would prove nothing" >&2
+  exit 1
+}
+check_file append-only-docs-edit.sh BLOCK 'Edit of an existing dev-log entry' \
+  'docs/dev-log/devlog_2026-08-25_session-2.md'
+check_file append-only-docs-edit.sh ALLOW 'Write of a dev-log entry not yet there' \
+  'docs/dev-log/devlog_2099-01-01_session-1.md'
+check_file append-only-docs-edit.sh ALLOW 'Edit of a dev-log README that does exist' \
+  'docs/dev-log/README.md'
+check_file append-only-docs-edit.sh ALLOW 'Edit of an existing research document' \
+  'docs/research/non-openrouter-response-bodies.md'
+
 echo "=== the arming properties, asserted as literals ==="
 # A second kind of check: the ones above drive a hook as a process and read its
 # exit code, and these read a file. It is a new seam in this suite and is named

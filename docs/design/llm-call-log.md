@@ -996,8 +996,11 @@ own documentation in
 [`docs/research/non-openrouter-response-bodies.md`](../research/non-openrouter-response-bodies.md)
 (issue #10). Its first finding bears on the path filter described above:
 `ai_common.llm.get_llm` builds a different client per server, and three of the
-five do not use `/chat/completions` at all, so a filter on that path would see
-almost none of this project's non-OpenRouter traffic as it is wired today. That
+five it charts — OpenAI, Ollama and Anthropic, leaving Groq and vLLM — do not
+use `/chat/completions` at all, so a filter on that path would see almost none
+of this project's non-OpenRouter traffic as it is wired today. Five, not the
+enum's seven: `OPENROUTER` is the baseline the others are measured against, and
+`GOOGLE` was outside that ticket's scope and is uncharted. That
 is a reading of the installed package and of published documentation, not an
 observation of the wire — the research document marks which claims are which,
 and nothing in this design is revised on the strength of it until the
