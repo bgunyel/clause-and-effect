@@ -206,6 +206,17 @@ armed() {  # armed <label> <file> <literal>
   fi
 }
 
+# A fixture guard rather than a check, and it stops the suite rather than
+# failing one line. An unmade worktree makes ( cd "$dir" && hook ) return 1,
+# which reads as ALLOW -- so every ALLOW-expecting check against it would pass
+# without the hook ever running. That is the shape this suite exists to not
+# have, so it is said once here rather than three times below.
+need_worktree() {  # need_worktree <dir> <fixture name>
+  [ -d "$1" ] && return 0
+  echo "the $2 worktree was not created; the checks against it prove nothing" >&2
+  exit 1
+}
+
 unarmed() {  # unarmed <label> <file> <literal>
   if grep -qF -- "$3" "$2" 2>/dev/null; then
     printf '  FAIL %s\n         %s must not contain |%s|\n' "$1" "$2" "$3"
@@ -1452,6 +1463,12 @@ LIFE_TIP=$($GL rev-parse HEAD)
 $GL update-ref refs/remotes/origin/dev-05 "$LIFE_TIP"
 $GL update-ref refs/remotes/origin/dev-foo "$LIFE_BASE"
 $GL update-ref refs/remotes/origin/dev-4 "$LIFE_BASE"
+# A local dev-05 at the same commit, which is the state a checkout-and-pull
+# leaves. Without it the short-spelling and refs/heads/ catch-up checks below
+# were green for the wrong reason: the hook compared two strings against a ref
+# that did not exist here at all, and `git merge dev-05` run for real in this
+# fixture fails in git. The sibling fixtures hold the other two states.
+$GL branch dev-05 "$LIFE_TIP"
 
 # ahead == 0, behind == 1. The fallback detector's case, and nothing else: this
 # branch has no upstream configured, so `[gone]` cannot be what refuses it.
@@ -1569,6 +1586,8 @@ check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up merge, short
   'git merge dev-05'
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up merge, full ref' \
   'git merge refs/remotes/origin/dev-05'
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up merge, local full ref' \
+  'git merge refs/heads/dev-05'
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up merge, --ff-only' \
   'git merge --ff-only origin/dev-05'
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up rebase' \
@@ -1611,6 +1630,148 @@ check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a merge message naming a 
   'git merge -m "wip --continue" some-other-branch'
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'a read is not work' \
   'git status'
+
+echo "--- the catch-up must name the commit the ancestry was read against ---"
+# The whitelist accepts four spellings, and two of them -- dev-NN and
+# refs/heads/dev-NN -- name a local branch, while ahead == 0 was measured
+# against refs/remotes/origin/dev-NN. A pruning fetch moves the second and never
+# the first, so the two disagree as a matter of course here: worktree pull
+# requests merge into dev-NN on GitHub while the local branch sits still.
+#
+# One repository cannot hold the three states, so there are three. Rejected
+# alternative: `git branch -f dev-05 <other>` partway down the list above -- two
+# lines instead of twenty, but it makes check ORDER load-bearing, and an
+# order-dependent suite quietly stops meaning what it says.
+
+# STATE ONE: a local dev-05 that has diverged from origin/dev-05.
+#
+# Diverged means forked, not merely unequal. A local dev-05 sitting one commit
+# AHEAD of origin/dev-05 is unequal and harmless: the worktree branch is an
+# ancestor of both, so the short spelling is still a fast-forward. The harm
+# needs the worktree branch to be an ancestor of origin/dev-05 and of nothing
+# else, which takes a fork:
+#
+#   root ---- div-stale ---- origin/dev-05        (the ancestry the hook reads)
+#     \
+#      ---- dev-05                                (the local branch, forked off)
+#
+# From div-stale, `git merge dev-05` then writes a real merge commit, ahead
+# becomes > 0, and the fallback detector is retired for this branch
+# permanently. A fixture built linearly instead would pass these checks while
+# proving only that two strings differ.
+DIV="$FIXTURES/diverged-dev"
+git init -q -b main "$DIV"
+GD="git -C $DIV -c user.email=checks@example.invalid -c user.name=checks"
+$GD remote add origin "$FIXTURES/unreachable-remote.git"
+$GD commit -q --allow-empty -m root
+DIV_ROOT=$($GD rev-parse HEAD)
+$GD commit -q --allow-empty -m "where the worktree branch was cut"
+DIV_BASE=$($GD rev-parse HEAD)
+$GD commit -q --allow-empty -m advance
+$GD update-ref refs/remotes/origin/dev-05 "$($GD rev-parse HEAD)"
+# The local branch's own commit, written with commit-tree so that building the
+# fork needs no checkout of a second branch.
+DIV_FORK=$($GD commit-tree -p "$DIV_ROOT" -m "local dev-05 forked before the worktree branch was cut" \
+           "$($GD rev-parse "$DIV_ROOT^{tree}")")
+$GD branch dev-05 "$DIV_FORK"
+$GD branch div-stale "$DIV_BASE"
+$GD worktree add -q "$DIV/wt-div" div-stale
+WT_DIV="$DIV/wt-div"
+need_worktree "$WT_DIV" diverged-dev
+# The two halves of the shape drawn above, asserted rather than assumed: the
+# worktree branch is an ancestor of the remote dev tip, and is not an ancestor
+# of the local branch of the same name. The second is what makes the refused
+# merge a real merge commit rather than a fast-forward.
+$GD merge-base --is-ancestor refs/heads/div-stale refs/remotes/origin/dev-05 || {
+  echo "div-stale is not an ancestor of origin/dev-05, so the fallback will not fire; the checks below prove nothing" >&2
+  exit 1
+}
+$GD merge-base --is-ancestor refs/heads/div-stale refs/heads/dev-05 && {
+  echo "div-stale is an ancestor of local dev-05, so the short spelling would be a fast-forward; the checks below prove nothing" >&2
+  exit 1
+}
+check_in "$WT_DIV" no-work-on-stale-branch.sh ALLOW 'diverged local dev-05: the remote spelling is still the fast-forward' \
+  'git merge origin/dev-05'
+check_in "$WT_DIV" no-work-on-stale-branch.sh ALLOW 'diverged local dev-05: and so is its full ref' \
+  'git merge refs/remotes/origin/dev-05'
+check_in "$WT_DIV" no-work-on-stale-branch.sh BLOCK 'diverged local dev-05: the short spelling would write a merge commit' \
+  'git merge dev-05'
+# A rebase writes no merge commit; it replays this branch's commits onto the
+# named branch, which is just as much work on a branch the dev tip has moved
+# past, and it moves ahead the same way.
+check_in "$WT_DIV" no-work-on-stale-branch.sh BLOCK 'diverged local dev-05: a rebase onto its full ref is not the catch-up either' \
+  'git rebase refs/heads/dev-05'
+
+# STATE TWO: no local dev-05 at all, which is what a linked worktree normally
+# sees -- nobody checks out and pulls dev-NN in one. THE TRADE THIS FIX MAKES IS
+# HERE: the short spelling used to be permitted in this state and is now
+# refused. Nothing is lost. Run for real, `git merge dev-05` fails in git
+# anyway, because dev-05 resolves through refs/heads/, refs/tags/ and
+# refs/remotes/<name>/, and a remote-tracking origin/dev-05 is none of those.
+# The refusal names origin/dev-05, which is the spelling that works.
+NOLOC="$FIXTURES/no-local-dev"
+git init -q -b main "$NOLOC"
+GX="git -C $NOLOC -c user.email=checks@example.invalid -c user.name=checks"
+$GX remote add origin "$FIXTURES/unreachable-remote.git"
+$GX commit -q --allow-empty -m base
+NOLOC_BASE=$($GX rev-parse HEAD)
+$GX commit -q --allow-empty -m advance
+$GX update-ref refs/remotes/origin/dev-05 "$($GX rev-parse HEAD)"
+$GX branch noloc-stale "$NOLOC_BASE"
+$GX worktree add -q "$NOLOC/wt-noloc" noloc-stale
+WT_NOLOC="$NOLOC/wt-noloc"
+need_worktree "$WT_NOLOC" no-local-dev
+$GX rev-parse --verify --quiet refs/heads/dev-05 >/dev/null && {
+  echo "a local dev-05 exists in the no-local-dev fixture; the trade check below proves nothing" >&2
+  exit 1
+}
+check_in "$WT_NOLOC" no-work-on-stale-branch.sh ALLOW 'no local dev-05: the remote spelling is the catch-up' \
+  'git merge origin/dev-05'
+check_in "$WT_NOLOC" no-work-on-stale-branch.sh BLOCK 'no local dev-05: the short spelling is refused, and used to be permitted' \
+  'git merge dev-05'
+check_in "$WT_NOLOC" no-work-on-stale-branch.sh BLOCK 'no local dev-05: refs/heads/dev-05 names nothing either' \
+  'git merge refs/heads/dev-05'
+
+# STATE THREE: the dev tip does not resolve to a commit. The hook holds
+# `[ -n "$DEV_OID" ] || return 1` for it, and that line cannot be reached by
+# running the hook: DEV is the short name of the very ref DEV_OID is read from,
+# so a dev tip that will not resolve is one `git rev-list` cannot read either,
+# and the file abstains above before the carve-out is ever considered. So this
+# is checked twice and in two different ways -- the abstention as a process
+# below, and the guard behind it as a property of the file, at the foot of this
+# suite. Saying which is which is the point: a check is evidence about the case
+# it names.
+BADDEV="$FIXTURES/bad-dev-ref"
+git init -q -b main "$BADDEV"
+GB="git -C $BADDEV -c user.email=checks@example.invalid -c user.name=checks"
+$GB remote add origin "$FIXTURES/unreachable-remote.git"
+$GB commit -q --allow-empty -m base
+BAD_BASE=$($GB rev-parse HEAD)
+$GB commit -q --allow-empty -m advance
+$GB branch bad-stale "$BAD_BASE"
+$GB worktree add -q "$BADDEV/wt-bad" bad-stale
+# A ref pointing at a blob: the ref exists, so for-each-ref names it and DEV is
+# set, and nothing it points at is a commit. Written as a loose ref file rather
+# than through update-ref, because update-ref's object-type check is the thing
+# being worked around and its behaviour on refs/remotes/ is a git version
+# detail this fixture should not depend on.
+BAD_BLOB=$(printf 'not a commit' | $GB hash-object -w --stdin)
+mkdir -p "$BADDEV/.git/refs/remotes/origin"
+printf '%s\n' "$BAD_BLOB" > "$BADDEV/.git/refs/remotes/origin/dev-05"
+WT_BAD="$BADDEV/wt-bad"
+need_worktree "$WT_BAD" bad-dev-ref
+[ "$($GB for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null)" = "origin/dev-05" ] || {
+  echo "the bad dev ref is not visible to for-each-ref; the check below proves nothing" >&2
+  exit 1
+}
+$GB rev-parse --verify --quiet 'refs/remotes/origin/dev-05^{commit}' >/dev/null 2>&1 && {
+  echo "the bad dev ref resolves to a commit; the check below proves nothing" >&2
+  exit 1
+}
+# An unreadable count is not a stale branch: the file abstains, which is the
+# same answer it gives when there is no dev ref at all.
+check_in "$WT_BAD" no-work-on-stale-branch.sh ALLOW 'a dev tip that is not a commit: the ancestry is unreadable, so the guard abstains' \
+  'git commit -m "wip"'
 
 echo "--- branches whose life is not over, and the main checkout ---"
 check_in "$WT_WORK"  no-work-on-stale-branch.sh ALLOW 'a branch carrying work of its own, ahead == 1' \
@@ -1731,6 +1892,22 @@ armed 'the guard derives the active dev branch this way' \
   "$HOOKS/no-work-on-stale-branch.sh" "$DEV_DERIVATION"
 armed 'and the report derives it identically' \
   "$HOOKS/report-stale-branches.sh" "$DEV_DERIVATION"
+
+# The carve-out's identity test, pinned as three lines rather than driven as a
+# process. Two of them are driven, by the diverged and no-local fixtures above;
+# the third -- an unresolvable dev tip -- is not reachable by running this hook,
+# because the ancestry read fails first and the file abstains. It is kept
+# because the carve-out is the only permitting path out of a refused state, and
+# a comparison against an empty string is not a comparison at all: drop the
+# line and `TOK_OID` empty would equal `DEV_OID` empty, permitting the merge on
+# exactly the state that could not be read. This says so; nothing above can.
+armed 'the dev tip is resolved to a commit, from the ref the ancestry was read against' \
+  "$HOOKS/no-work-on-stale-branch.sh" \
+  'DEV_OID=$(git rev-parse --verify --quiet "refs/remotes/$DEV^{commit}" 2>/dev/null)'
+armed 'an unresolvable dev tip withdraws the carve-out rather than widening it' \
+  "$HOOKS/no-work-on-stale-branch.sh" '[ -n "$DEV_OID" ] || return 1'
+armed 'and a whitelisted spelling must resolve to that same commit' \
+  "$HOOKS/no-work-on-stale-branch.sh" '[ "$TOK_OID" = "$DEV_OID" ]'
 
 # settings.json is what actually runs either file, so a hook present in the tree
 # and absent from the configuration is a hook that does nothing. jq reads it;

@@ -95,6 +95,30 @@
 # will be: it is the spelling whose whole purpose is to write a merge commit
 # where a fast-forward would do.
 #
+# A SPELLING IS NOT A COMMIT. Two of those four -- dev-NN and refs/heads/dev-NN
+# -- name a local branch, while the ancestry above was read against
+# refs/remotes/origin/dev-NN and against that ref alone. Git does not guarantee
+# the two agree, and in this repository they routinely do not: worktree pull
+# requests merge into dev-NN on GitHub, so origin/dev-NN moves while the local
+# branch sits still, and the pruning fetch that report-stale-branches.sh
+# performs updates refs/remotes/origin/* and leaves refs/heads/* exactly where
+# they were. Nobody checks out and pulls dev-NN in a linked worktree. So each
+# whitelisted token is resolved and required to name the commit the ancestry was
+# read against; the equality is a condition this file checks, not a fact it may
+# assert. Left unchecked, `git merge dev-NN` against a local branch that has
+# forked -- not merely run ahead, since a branch ahead of origin/dev-NN still
+# has this one as an ancestor and the merge still fast-forwards -- writes a real
+# merge commit. ahead becomes > 0, and the fallback detector is retired for that
+# branch permanently: silent, and in the permitting direction, which is the test
+# for inclusion stated above.
+#
+# THE TRADE THAT MAKES, RECORDED. When no local dev-NN exists at all, the short
+# spelling `git merge dev-NN` is now refused where it used to be permitted.
+# Nothing is lost: run for real in that state the command fails in git anyway,
+# because dev-NN resolves through refs/heads/, refs/tags/ and
+# refs/remotes/<name>/ and a remote-tracking origin/dev-NN is none of those. The
+# refusal message already names origin/dev-NN, which is the spelling that works.
+#
 # ARMED BY report-stale-branches.sh. Both detectors read remote-tracking refs
 # and are exactly as fresh as the last fetch -- the fallback no less than the
 # gone test, since origin/dev-NN is a remote-tracking ref too. A hook cannot
@@ -236,15 +260,33 @@ done <<CMDLIST
 $CMDS
 CMDLIST
 
-# The four spellings of the active dev branch. DEV is origin/dev-NN; the local
-# branch of the same name, and both branches' full ref paths, name the same
-# commit for the purpose of a fast-forward.
+# The four spellings of the active dev branch, and the commit every one of them
+# has to name. DEV is origin/dev-NN, a remote-tracking ref, and the ancestry
+# above was read against it: ahead == 0 says this branch is a strict ancestor of
+# refs/remotes/origin/dev-NN, and that -- and only that -- is what makes the
+# fast-forward claim true. Two of the four spellings name a local branch
+# instead, which a pruning fetch never moves; see the header for why they
+# routinely disagree here, and for the case this now refuses.
+#
+# Resolved here rather than beside DEV because the common path exits above
+# without ever needing it: one rev-parse here, and one more per whitelisted
+# token below, paid only on the carve-out path -- a merge or rebase in an
+# already-refused state, which is rare.
 DEV_SHORT=${DEV#origin/}
+DEV_OID=$(git rev-parse --verify --quiet "refs/remotes/$DEV^{commit}" 2>/dev/null)
 names_dev() {
+  local TOK_OID
   case "$1" in
-    "$DEV"|"$DEV_SHORT"|"refs/remotes/$DEV"|"refs/heads/$DEV_SHORT") return 0 ;;
+    "$DEV"|"$DEV_SHORT"|"refs/remotes/$DEV"|"refs/heads/$DEV_SHORT") ;;
     *) return 1 ;;
   esac
+  # The whitelist stays the outer gate: this resolves four fixed strings, never
+  # arbitrary command text. An unreadable dev tip is not a licence -- with
+  # nothing to compare against the carve-out is not taken, and the command is
+  # refused with the rest.
+  [ -n "$DEV_OID" ] || return 1
+  TOK_OID=$(git rev-parse --verify --quiet "$1^{commit}" 2>/dev/null) || return 1
+  [ "$TOK_OID" = "$DEV_OID" ]
 }
 
 # A merge or rebase that is a fast-forward onto the active dev branch and
