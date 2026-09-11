@@ -62,13 +62,21 @@
 # The wrapper words are probed with the function since #79, because cs_split
 # now reads them from a variable rather than carrying them as a literal -- so a
 # library whose functions are all present and whose list is empty strips no
-# prefix and admits none, silently and in the permitting direction. That is the
-# shape of nine of the defects this library has already had, arriving through a
-# variable rather than a regex, and it is the reason the pin exists rather than
-# an argument that it cannot happen.
+# prefix, silently and in the permitting direction. That is the shape of nine of
+# the defects this library has already had, arriving through a variable rather
+# than a regex, and it is the reason the pin exists rather than an argument that
+# it cannot happen.
+#
+# The two halves are probed, not the union CS_WRAP_WORDS derives from them: with
+# both halves empty that union is the string "|", which is not empty and would
+# satisfy a probe written against it. What refuses a verb here even without this
+# probe is the library's own fail-safe -- an empty CS_WRAPPER_RE matches every
+# line -- and that covers all four hooks. This probe adds the message: it says
+# the library is the reason rather than leaving the refusal unexplained.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
-if ! command -v cs_split >/dev/null 2>&1 || [ -z "$CS_WRAP_WORDS" ]; then
+if ! command -v cs_split >/dev/null 2>&1 \
+   || [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then
   echo "Blocked: no-commit-to-main.sh could not load lib/command-scan.sh, so it cannot tell whether this command touches main. Refusing rather than permitting." >&2
   exit 2
 fi

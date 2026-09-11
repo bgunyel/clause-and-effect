@@ -390,6 +390,11 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # to, for this same case and this same reason. A different number here would be
 # the divergence this whole change is about, arriving inside its own fix.
 #
+# The COUNT is what is shared, and not the token class. Review of this change
+# found this paragraph claiming both, when cs_split stops its tail at a token
+# opening a quote and this does not. The difference is deliberate and is argued
+# at CS_WRAP_TOKEN below; what is claimed here is the bound alone.
+#
 # WIDENED, NOT DROPPED, and the difference is the whole of the constraint. The
 # anchor cannot simply go: a wrapper word named anywhere on a line that also
 # names a refused command would then refuse the line, and the shapes that
@@ -440,24 +445,64 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # f.sh` was ALLOW and is now BLOCK -- named here so that it is a known cost
 # rather than a discovery. Both spellings of each pair above are checks.
 #
-# TWO WAYS THE LIST CAN BE MISSING, and they do not fail the same way, which is
-# the thing making it a variable added to this library.
+# A token that may stand between the prefix word and the wrapper word. Not an
+# option -- those are consumed by the loop in front of this one -- and anything
+# else.
 #
-# If the library does not load at all, this is the empty string, `grep -qE ''`
-# matches every line, the wrapper conjunct is always true, and a command naming
-# a refused verb is refused. That is the direction a guard's own breakage has to
-# take, and it needs no guard of its own.
+# WIDER THAN cs_split's TAIL TOKEN, deliberately, and this is the one place the
+# two answers differ on purpose. cs_split stops offering candidates at a token
+# that opens a quote, because what follows one is the text of an argument and
+# reading text as a command is the mistake cs_normalise has made three times.
+# Nothing here reads a token as a command: these are skipped, on the way to a
+# wrapper word that has to appear after them. So the reason to stop does not
+# transfer, and stopping anyway would narrow a guard for a reason that does not
+# apply to it.
 #
-# A library that loads with an empty list is the other way and is not the safe
-# one. cs_split then strips no prefix at all, so `sudo git push --all origin` is
-# permitted again -- the very verdict the fourth review fixed, and silent.
-# Probing for cs_split cannot see it, because the function is there and does
-# less. So the two hooks that probe for the functions probe for CS_WRAP_WORDS as
-# well, and check-hooks.sh builds a library with the list emptied rather than
-# arguing that it cannot happen. Both of those checks had to be written against
-# a command that ONLY the strip reaches: written with a plain `git commit` the
-# stale-branch one was green with its own guard removed.
-CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_WRAP_WORDS)[[:space:]]+(-[^[:space:]]*[[:space:]]+)*([^-[:space:]][^[:space:]]*[[:space:]]+){0,3})*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
+# Which leaves the direction as the argument, and it is the one this file takes
+# everywhere: admitting a token too many can only refuse more, never hide a
+# wrapper. `sudo "x" sh -c 'git push --all origin'` is refused here and offers
+# no candidate in cs_split, and that asymmetry is in the refusing direction.
+#
+# Named because review of this change found the comment claiming the token
+# classes matched when only the counts did. The counts matching is the claim;
+# this paragraph is what makes the rest of it true.
+CS_WRAP_TOKEN="[^-[:space:]][^[:space:]]*[[:space:]]+"
+
+# TWO WAYS THE LIST CAN BE MISSING, and the second is the one that needed
+# building for. It is the cost of making the list a variable, and it is paid
+# here rather than in the hooks.
+#
+# If the library does not load at all, CS_WRAPPER_RE is unset, `grep -qE ''`
+# matches every line, the wrapper conjunct is vacuously true, and every command
+# naming a refused verb is refused. That is the direction a guard's own
+# breakage has to take, and it needs nothing else.
+#
+# A library that LOADS with an empty list is the unsafe way round, and probing
+# for the functions cannot see it: every function is there and cs_split simply
+# strips no prefix, so `sudo git push --all origin` is permitted again -- the
+# verdict the fourth review fixed, silently un-fixed.
+#
+# So the empty case is given the same answer as the missing one, in the one
+# place both are decided. With either half of the list gone, CS_WRAPPER_RE is
+# the empty string, every hook's wrapper conjunct is vacuously true, and each
+# of the four refuses the verb it answers for. Reviewed before this was done
+# and found to matter: no-git-push.sh and no-pr-decisions.sh source this file
+# unguarded, so a per-hook probe would have covered two of four and left
+# `sudo git push --all origin` and `sudo gh pr merge 5` permitted -- a guard
+# half-fitted, which is worse than none because its own comment says it is
+# fitted. The two hooks that already probe for the functions probe for the list
+# too, and that is for the message rather than for the verdict: they say why
+# they refused instead of refusing unexplained.
+#
+# Checked, not argued: check-hooks.sh builds a library with the list emptied in
+# place and asks all four. Those checks have to name a command that ONLY the
+# strip reaches -- written with a plain `git commit`, the stale-branch one was
+# green with its own guard removed.
+if [ -n "$CS_WRAP_OPTION_WORDS" ] && [ -n "$CS_WRAP_OPERAND_WORDS" ]; then
+  CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_WRAP_WORDS)[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
+else
+  CS_WRAPPER_RE=""
+fi
 
 # Print one command per line, with anything that precedes the command word
 # removed, so a caller matches on ^ and never has to describe a command

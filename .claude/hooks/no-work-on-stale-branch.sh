@@ -271,13 +271,17 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 #
 # And the wrapper words with them, since #79. cs_split reads them from a
 # variable now rather than carrying them as a literal, so a library whose three
-# functions are all present and whose list is empty strips no prefix and admits
-# none -- silent, and in the permitting direction, which is the one property
-# every defect in this library has had in common.
+# functions are all present and whose list is empty strips no prefix -- silent,
+# and in the permitting direction, which is the one property every defect in
+# this library has had in common. The two halves are probed and not the union
+# they derive: with both empty that union is the string "|", which is not empty.
+# The verdict is carried by the library's own fail-safe either way; this probe
+# is what makes the refusal say why.
 if ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_normalise >/dev/null 2>&1 \
    || ! command -v cs_git_args >/dev/null 2>&1 \
-   || [ -z "$CS_WRAP_WORDS" ]; then
+   || [ -z "$CS_WRAP_OPTION_WORDS" ] \
+   || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then
   refuse "(This hook could not load lib/command-scan.sh, so it cannot read what this command does. Refusing rather than permitting.)"
 fi
 
