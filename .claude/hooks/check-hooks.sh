@@ -225,6 +225,24 @@ need_worktree() {  # need_worktree <dir> <fixture name>
   exit 1
 }
 
+# `armed` strips a shell comment before it looks, so that commenting a line out
+# can no longer satisfy a pin. That makes it a pin on code, and its header says
+# so: none of its literals carries a `#`. Two kinds of file here are not code.
+# Prose in a comment is the whole of what some pins assert -- an argument the
+# other file points at, which lives nowhere but a comment -- and a markdown
+# fixture opens its headings with the same character, so stripping erases the
+# line rather than a trailing remark. Routed through `armed`, such a pin cannot
+# pass: measured, not reasoned, on the boundary-section check that dev-05 is
+# red on today. This reads the file as written, and the name says which.
+written() {  # written <label> <file> <literal> -- the file as written, # and all
+  if grep -qF -- "$3" "$2" 2>/dev/null; then
+    printf '  ok   written %s\n' "$1"
+  else
+    printf '  FAIL %s\n         expected %s to still say |%s|\n' "$1" "$2" "$3"
+    FAILED=1
+  fi
+}
+
 unarmed() {  # unarmed <label> <file> <literal>
   if grep -qF -- "$3" "$2" 2>/dev/null; then
     printf '  FAIL %s\n         %s must not contain |%s|\n' "$1" "$2" "$3"
@@ -276,7 +294,7 @@ dev_pointer() {  # dev_pointer <file> -- the comment block above the derivation
 
 beside() {  # beside <label> <file> <literal>
   if dev_pointer "$2" | grep -qF -- "$3"; then
-    printf '  ok   armed %s\n' "$1"
+    printf '  ok   beside %s\n' "$1"
   else
     printf '  FAIL %s\n         expected the comment above the derivation in %s\n         to contain |%s|\n' \
            "$1" "$2" "$3"
@@ -2112,7 +2130,7 @@ beside 'and the report names it identically' \
 # written anywhere -- the stale-docstring defect moved rather than fixed. This
 # pins the claim itself, both halves of it, in the one place it is now made.
 ARGUMENT='sort makes dev-09 beat dev-10, and an unfiltered glob lets origin/dev-foo'
-armed 'the argument the report points at is still made in the guard' \
+written 'the argument the report points at is still made in the guard' \
   "$HOOKS/no-work-on-stale-branch.sh" "$ARGUMENT"
 
 # The carve-out's identity test, pinned as three lines rather than driven as a
@@ -2195,7 +2213,7 @@ awk '/^## What an unattended agent may do to this repository$/ {f=1; print; next
 # The extraction is itself a claim about a heading that can be renamed, so it is
 # checked from both ends before anything is asserted against it: the heading is
 # in what came out, and a line from another section is not.
-armed 'the extracted section is the boundary section' \
+written 'the extracted section is the boundary section' \
   "$SECTION" 'What an unattended agent may do to this repository'
 unarmed 'and it is that section rather than the whole file' \
   "$SECTION" 'Import cost is a design constraint'
@@ -2209,7 +2227,7 @@ unarmed 'and it is that section rather than the whole file' \
 # drift one paragraph along.
 PARAGRAPH="$FIXTURES/boundary-paragraph.md"
 awk -v RS= '/Enforced by/' "$SECTION" > "$PARAGRAPH"
-armed 'and the paragraph taken from it is the one that says what is enforced' \
+written 'and the paragraph taken from it is the one that says what is enforced' \
   "$PARAGRAPH" 'Enforced by'
 unarmed 'and it stops short of what is deliberately left unguarded' \
   "$PARAGRAPH" 'Deliberately left open'
@@ -2237,7 +2255,7 @@ HOOK_FILES=$(ls "$HOOKS"/*.sh "$HOOKS"/lib/*.sh 2>/dev/null | sed 's|.*/||' | so
 set -f
 for hook in $REGISTERED; do
   case " $NOT_THE_BOUNDARY " in *" $hook "*) continue ;; esac
-  armed "the paragraph names $hook, which settings.json runs" "$PARAGRAPH" "$hook"
+  written "the paragraph names $hook, which settings.json runs" "$PARAGRAPH" "$hook"
 done
 
 # The other direction: a name in the paragraph that nothing runs any more. Every
