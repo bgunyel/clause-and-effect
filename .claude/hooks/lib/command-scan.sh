@@ -1,7 +1,11 @@
 #!/bin/bash
 # Where a command starts, where its arguments end, and how many commands a
-# string holds. Sourced by no-git-push.sh, no-pr-decisions.sh and, since issue
-# #43, no-commit-to-main.sh -- which is every hook that reads a command.
+# string holds. Sourced by no-git-push.sh, no-pr-decisions.sh, and since issue
+# #43 no-commit-to-main.sh and since #44 no-work-on-stale-branch.sh -- which is
+# every hook that reads a command. Issue #63 found this line naming three of the
+# four, the same way it found CLAUDE.md's boundary section naming two of them: a
+# hook is added, and the sentence saying which hooks there are is not revised
+# with it.
 #
 # This exists because of what the defects in PR #35 turned out to have in
 # common. Every one of them, found by Bertan or by the assistant, was the same
