@@ -1748,6 +1748,92 @@ tok 'the report hook outlasts its own fetch' \
     '30' \
     "$(jq -r '.hooks.SessionStart[]?.hooks[]? | select(.command | contains("report-stale-branches")) | .timeout' "$SETTINGS" 2>/dev/null)"
 
+echo "=== CLAUDE.md names every hook that carries the boundary ==="
+# A third kind of check, and the second here that reads a file rather than
+# driving a process: this one asks whether the document agrees with the
+# configuration.
+#
+# CLAUDE.md's boundary section exists so that the boundary can be audited
+# without reading the hooks, which only works while the section names all of
+# them. Issue #63 found it naming two of four: #43 rebuilt no-commit-to-main.sh
+# on lib/command-scan.sh and #44 added no-work-on-stale-branch.sh, and neither
+# revised the section. That is the ordinary way this kind of claim goes stale,
+# and it goes stale in the direction that matters -- a reader who audits the
+# named files has audited less than half of what runs, and cannot tell from the
+# text that they have.
+#
+# The direction of the check matters too. settings.json is the fact, because it
+# is what actually runs a hook; the section is the claim. So the registered
+# hooks are derived and the section is asserted against them, rather than one
+# list of names being written out here a second time. The single literal is the
+# opposite list: the registered hooks whose subject is not the boundary, which
+# the section is right not to name. Adding a boundary hook and not the sentence
+# turns this red; adding a hook about documents or commands means adding it
+# here, deliberately, with a reason.
+CLAUDE_MD="$HOOKS/../../CLAUDE.md"
+SECTION="$FIXTURES/boundary-section.md"
+sed -n '/^## What an unattended agent may do to this repository$/,/^## /p' \
+    "$CLAUDE_MD" | sed '$d' > "$SECTION"
+# The extraction is itself a claim about a heading that can be renamed, so it is
+# checked from both ends before anything is asserted against it: the heading is
+# in what came out, and a line from another section is not.
+armed 'the extracted section is the boundary section' \
+  "$SECTION" 'What an unattended agent may do to this repository'
+unarmed 'and it is that section rather than the whole file' \
+  "$SECTION" 'Import cost is a design constraint'
+
+# Registered on Bash or at SessionStart, but about documents or commands rather
+# than about what an agent may do to this repository. Each name here is a
+# decision: these are the hooks the section is correct to leave out.
+NOT_THE_BOUNDARY=" append-only-docs.sh alembic-via-uv-group.sh pytest-via-uv-group.sh "
+REGISTERED=$(jq -r '
+    (.hooks.PreToolUse[]? | select(.matcher == "Bash") | .hooks[]?.command),
+    (.hooks.SessionStart[]?.hooks[]?.command)' "$SETTINGS" 2>/dev/null \
+  | sed 's|.*/||' | sort -u | tr '\n' ' ')
+# Space-separated on purpose: the membership tests below are `case " $REGISTERED "`
+# against `*" $hook "*`, and a newline between two names is not the separator
+# that pattern looks for -- every name but the first would read as absent.
+# An empty derivation would pass every loop below without asking anything.
+[ -n "$REGISTERED" ] || {
+  echo "no hooks were read out of settings.json; the checks below prove nothing" >&2
+  exit 1
+}
+for hook in $REGISTERED; do
+  case "$NOT_THE_BOUNDARY" in *" $hook "*) continue ;; esac
+  armed "the section names $hook, which settings.json runs" "$SECTION" "$hook"
+done
+
+# The other direction: a name in the section that nothing runs any more. Every
+# .sh the section names must exist, which catches a rename that updated the tree
+# and left the sentence behind; and every one named as a no-*.sh guard must
+# still be registered, which catches a guard quietly dropped from settings.json
+# while the document goes on promising it.
+for hook in $(grep -oE '[A-Za-z0-9_-]+\.sh' "$SECTION" | sort -u); do
+  if [ -e "$HOOKS/$hook" ] || [ -e "$HOOKS/lib/$hook" ]; then
+    printf '  ok   armed the section names %s, and that file exists\n' "$hook"
+  else
+    printf '  FAIL the section names %s, which is no file in .claude/hooks\n' "$hook"
+    FAILED=1
+  fi
+  case "$hook" in
+    no-*.sh)
+      case " $REGISTERED " in
+        *" $hook "*)
+          printf '  ok   armed the section names %s, and settings.json runs it\n' "$hook" ;;
+        *)
+          printf '  FAIL the section names %s, which settings.json does not run\n' "$hook"
+          FAILED=1 ;;
+      esac ;;
+  esac
+done
+
+# The section also makes a claim of count -- "the only Edit|Write hook" -- and a
+# second one would falsify it as quietly as a fourth Bash hook falsified the
+# sentence above. The expectation is the literal 1.
+tok 'settings.json registers the one Edit|Write hook the section claims' \
+    '1' \
+    "$(jq -r '[.hooks.PreToolUse[]? | select(.matcher == "Edit|Write") | .hooks[]?] | length' "$SETTINGS" 2>/dev/null)"
+
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
 exit $FAILED
