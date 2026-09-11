@@ -58,9 +58,25 @@
 # The file is tested for before it is sourced, and the functions after: a
 # missing file makes `.` end the shell where an `if` around it never runs, so
 # the guard would have been a comment.
+#
+# The wrapper words are probed with the function since #79, because cs_split
+# now reads them from a variable rather than carrying them as a literal -- so a
+# library whose functions are all present and whose list is empty strips no
+# prefix, silently and in the permitting direction. That is the shape of nine of
+# the defects this library has already had, arriving through a variable rather
+# than a regex, and it is the reason the pin exists rather than an argument that
+# it cannot happen.
+#
+# The two halves are probed, not the union CS_WRAP_WORDS derives from them: with
+# both halves empty that union is the string "|", which is not empty and would
+# satisfy a probe written against it. What refuses a verb here even without this
+# probe is the library's own fail-safe -- an empty CS_WRAPPER_RE matches every
+# line -- and that covers all four hooks. This probe adds the message: it says
+# the library is the reason rather than leaving the refusal unexplained.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
-if ! command -v cs_split >/dev/null 2>&1; then
+if ! command -v cs_split >/dev/null 2>&1 \
+   || [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then
   echo "Blocked: no-commit-to-main.sh could not load lib/command-scan.sh, so it cannot tell whether this command touches main. Refusing rather than permitting." >&2
   exit 2
 fi
@@ -90,7 +106,12 @@ ELSEWHERE_REFUSE="Blocked: this command moves git somewhere else before committi
 # The trade, taken knowingly: an `sh -c` anywhere in a command that also commits
 # plainly is refused for the company it keeps. That is the direction this file
 # takes throughout -- a blocked command is visible and one edit away.
-if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))' \
+#
+# The expression is CS_WRAPPER_RE, derived once in lib/command-scan.sh since
+# #79 -- one copy where all four hooks carried their own, and none of the four
+# admitted the prefix words cs_split already strips, so a wrapped commit behind
+# `sudo` or `timeout` was invisible to every one of them.
+if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE" \
    && echo "$COMMAND" | grep -qE 'git[[:space:]]+([^;&|]*[[:space:]])?(commit|push)([^-A-Za-z0-9_]|$)'; then
   echo "Blocked: git commit or push inside a shell wrapper. Whether it lands on main cannot be read through a quoted payload. Run it plainly." >&2
   exit 2
