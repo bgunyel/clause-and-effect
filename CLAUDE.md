@@ -170,8 +170,9 @@ nothing else.
 
 ## Documentation
 
-Five directories with different jobs; the distinction erodes easily
-(`docs/design/README.md` states the first four in full):
+Six directories with different jobs; the distinction erodes easily
+(`docs/design/README.md` draws the record-vs-current-state split in full, and
+the line between `docs/design/` and `docs/research/`):
 
 | directory | answers | dated? |
 |---|---|---|
@@ -180,10 +181,21 @@ Five directories with different jobs; the distinction erodes easily
 | `docs/eval-reports/` | what the numbers were at a point in time | yes, **append-only** |
 | `docs/design/` | how a mechanism works **today** | no, revised in place |
 | `docs/adr/` | why a decision was taken, and what was rejected | no, superseded rather than revised |
+| `docs/research/` | what is true **outside** this repository — a provider, a library, a spec | no, revised in place; claims carry their source |
 
 `docs/todo.md` is the backlog; `docs/evaluation-plan.md` is what the framework
 *should* become, not evidence about what exists. Append-only means old entries
 are history — corrections go in the newest entry, never backwards.
+
+`docs/research/` holds the output of a `wayfinder:research` ticket: a question
+answered against primary sources, every claim attributed, and anything not
+actually observed marked `[NEEDS OBSERVATION]` so a later session can grep the
+file and get a checklist. It is outside the append-only guard deliberately —
+clearing a marker *is* the point, and freezing the file would make the
+checklist unworkable; git holds the history. What it must not become is a
+second `docs/design/`: a research document describes something this repository
+does not control, and stops before the decision it unblocks.
+`docs/research/README.md` states the conventions.
 
 **Dev-log voice.** Sessions are worked jointly by Bertan and an AI assistant.
 Never write a bare "I": name the agent ("the assistant", "Bertan"). Passive is
