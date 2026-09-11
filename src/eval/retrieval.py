@@ -13,6 +13,24 @@ The gap between them is the diagnostic the failure taxonomy (§9) reads: right
 article / wrong chunk is a chunking or embedding problem; wrong article is a
 retrieval problem.
 
+**The gap is a difference, so it is only that diagnostic when both terms are
+taken over the same cases.** Chunk-level scoring drops the ungrounded cases
+(below); the published article-level score keeps all of them, deliberately.
+Subtracting the second from the first mixes a population difference into a
+number whose label claims to measure right-article/wrong-chunk, and the dropped
+cases are not a random sample — they are the ones the parser damaged, so their
+article-level performance biases the result by an unknown amount *and sign*. The
+published +4.2 points of
+``docs/eval-reports/2026-09-09-tier1-retrieval-baseline.md`` was that
+subtraction, ``91.0% (394/433) − 86.8% (277/319)``, and a conclusion about where
+the next work goes rested on it (issue #60). So the gap now subtracts a *second*
+article score taken over :func:`grounded_retrievals` — the same cases chunk
+level scores — while the full-population article score stays exactly as it is,
+because being publishable over all 433 is the whole reason it exists.
+:func:`article_chunk_gap` refuses two scores of unequal ``scored``, so the
+cross-population subtraction cannot be written again by accident, and
+:func:`gap_lines` prints the population and its ``n`` beside the number.
+
 **Why the two levels are not equally trustworthy today.** 114 of the 433 Tier-1
 cases carry a ``supporting_quote`` that is not a substring of its own article —
 the parser damaged them, not the retriever. A quote that is absent from its
@@ -50,8 +68,7 @@ therefore labelled with the depth it was taken at.
 
 The article−chunk gap is bounded too, by :func:`gap_cutoff`, but it is pinned at
 5 rather than following the depth upward: a deeper retrieval must not silently
-move a published diagnostic. What population that gap is computed over is a
-separate, still-open defect (issue #60).
+move a published diagnostic.
 
 Matching imports :func:`~src.eval.golden_qa.normalize_for_grounding` rather than
 reimplementing it, so the gate that decides a quote is grounded and the metric
@@ -155,6 +172,49 @@ def gap_cutoff(art: LevelScore, chunk: LevelScore, prefer: int = GAP_K) -> int |
     return max(shared) if shared else None
 
 
+def article_chunk_gap(art: LevelScore, chunk: LevelScore, k: int) -> float:
+    """Right article, wrong chunk at ``k`` — from two scores over the same cases.
+
+    ``art`` must be the article-level score over :func:`grounded_retrievals`,
+    not the published full-population one. Unequal populations are refused
+    rather than subtracted: the difference of two rates over different case sets
+    is not the quantity this name promises, and the one shape the defect took
+    read exactly like arithmetic (issue #60).
+
+    Equal ``scored`` is a necessary condition, not a sufficient one — two
+    same-sized populations could still be different cases. It is what a
+    :class:`LevelScore` carries, it catches the mistake that was actually made,
+    and the alternative (carrying case ids on every score) buys nothing against
+    a caller who is already constructing scores by hand.
+    """
+    if art.scored != chunk.scored:
+        raise ValueError(
+            f"the article−chunk gap needs two scores over the same cases, got "
+            f"{art.level} over {art.scored} and {chunk.level} over {chunk.scored}. "
+            f"Score the article level over grounded_retrievals(...) for the gap; "
+            f"the full-population article score is for publishing, not subtracting."
+        )
+    return art.hit_at_k[k] - chunk.hit_at_k[k]
+
+
+def gap_lines(art: LevelScore, chunk: LevelScore, k: int) -> List[str]:
+    """The printed gap, naming the population it was taken over.
+
+    Both terms are stated next to the difference, and the ``n`` is named, so the
+    reader is not invited to reconcile the number against the full-population
+    article table printed above it — which is the reconciliation that produced
+    the defect in the first place.
+    """
+    gap = article_chunk_gap(art, chunk, k)
+    return [
+        f"article−chunk gap @{k}: {gap:+.1%}"
+        f"   (right article, wrong chunk = chunking/embedding)",
+        f"  over the grounded subset only, n={art.scored}: "
+        f"article {art.hit_at_k[k]:.1%} − chunk {chunk.hit_at_k[k]:.1%}."
+        f" Not the article table above, which covers every case.",
+    ]
+
+
 def retrieve_all(
     cases: Sequence[TestCase],
     search: SearchFn,
@@ -251,6 +311,31 @@ def score_article_level(retrievals: Sequence[CaseRetrieval],
     return _score(list(ranks), "article-level", 0, "", _resolve_ks(ks, depth), depth)
 
 
+GROUNDING_EXCLUSION = "quote ungrounded in its article"
+
+
+def grounded_retrievals(retrievals: Sequence[CaseRetrieval],
+                        cases: Sequence[TestCase],
+                        articles: Dict[str, Article]) -> List[CaseRetrieval]:
+    """The cases whose quote is grounded in its article — the population
+    chunk-level scoring is restricted to.
+
+    Public, and the one place the restriction is applied, so that a caller who
+    needs the same population for something else (the article−chunk gap, which
+    needs it to be a difference at all) takes it from here rather than writing a
+    second copy of the predicate. Order is preserved.
+    """
+    by_id = {c.case_id: c for c in cases}
+    out: List[CaseRetrieval] = []
+    for r in retrievals:
+        case = by_id[r.case_id]
+        issue = check_quote_grounding(case, articles.get(str(case.article_number)))
+        if issue is not None and issue.severity == "error":
+            continue
+        out.append(r)
+    return out
+
+
 def score_chunk_level(retrievals: Sequence[CaseRetrieval],
                       cases: Sequence[TestCase],
                       articles: Dict[str, Article],
@@ -258,25 +343,24 @@ def score_chunk_level(retrievals: Sequence[CaseRetrieval],
     """
     Hit@k and MRR against the chunk holding the gold quote.
 
-    Restricted to cases whose quote is grounded in its article — exact or
-    normalized. An ungrounded quote is absent from the article by definition, so
-    including it would score the parser, not the retriever. The count dropped is
-    carried on the result so a reader sees the restriction next to the number.
+    Restricted by :func:`grounded_retrievals` to the cases whose quote is
+    grounded in its article — exact or normalized. An ungrounded quote is absent
+    from the article by definition, so including it would score the parser, not
+    the retriever. The count dropped is carried on the result so a reader sees
+    the restriction next to the number.
+
+    The restriction is taken from that function rather than applied again here,
+    for the reason the module docstring gives for importing
+    ``normalize_for_grounding``: the population the gap is scored over and the
+    population this metric covers cannot be allowed to drift apart.
 
     ``ks`` defaults and is bounded exactly as in :func:`score_article_level`.
     The bound reads the retrieval batch, not the surviving subset, so excluding
     every case does not quietly excuse a dishonest cutoff.
     """
     by_id = {c.case_id: c for c in cases}
-    ranks: List[int | None] = []
-    excluded = 0
-    for r in retrievals:
-        case = by_id[r.case_id]
-        issue = check_quote_grounding(case, articles.get(str(case.article_number)))
-        if issue is not None and issue.severity == "error":
-            excluded += 1
-            continue
-        ranks.append(r.chunk_rank(case.supporting_quote))
+    grounded = grounded_retrievals(retrievals, cases, articles)
+    ranks = [r.chunk_rank(by_id[r.case_id].supporting_quote) for r in grounded]
     depth = _retrieval_depth(retrievals)
-    return _score(ranks, "chunk-level", excluded, "quote ungrounded in its article",
-                  _resolve_ks(ks, depth), depth)
+    return _score(ranks, "chunk-level", len(retrievals) - len(grounded),
+                  GROUNDING_EXCLUSION, _resolve_ks(ks, depth), depth)

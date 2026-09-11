@@ -8,6 +8,12 @@ Article-level is publishable today; chunk-level is restricted to the grounded
 subset and says so. See ``src.eval.retrieval`` for why they are not equally
 trustworthy yet.
 
+**Three scores are computed and two are printed as a table.** The gap needs an
+article-level rate over the *same* cases chunk level scores, so it gets its own
+restricted score; the published article-level number keeps every case, and the
+two must not be subtracted from each other (issue #60). The gap line names the
+population it was taken over for that reason.
+
 **The reported cutoffs follow ``--top-k``**, via
 :func:`~src.eval.retrieval.cutoffs_for_depth`: ``--top-k 3`` prints Hit@1 and
 Hit@3 and nothing else, and ``--top-k 20`` prints Hit@1/3/5/10 *and* Hit@20. A
@@ -28,6 +34,8 @@ from src.eval.retrieval import (
     DEFAULT_K,
     cutoffs_for_depth,
     gap_cutoff,
+    gap_lines,
+    grounded_retrievals,
     retrieve_all,
     score_article_level,
     score_chunk_level,
@@ -70,8 +78,13 @@ def main() -> None:
     # Passed explicitly rather than left to default, so that a future change to
     # how the script retrieves is refused by the scorers instead of reinterpreted.
     ks = cutoffs_for_depth(args.top_k)
-    art = score_article_level(retrievals, ks)
-    chunk = score_chunk_level(retrievals, cases, articles, ks)
+    art = score_article_level(retrievals, ks)                     # all cases, published
+    chunk = score_chunk_level(retrievals, cases, articles, ks)    # grounded subset
+
+    # A third score, published nowhere: the article level over the same cases
+    # chunk level scores, so that the gap below is a difference between two
+    # rates and not between two populations (issue #60).
+    art_grounded = score_article_level(grounded_retrievals(retrievals, cases, articles), ks)
 
     print()
     print(f"Tier-1 retrieval — {len(cases)} cases, top_k={args.top_k}, {started:%Y-%m-%d %H:%M UTC}")
@@ -83,13 +96,12 @@ def main() -> None:
 
     # Report the gap at the deepest cutoff both levels actually hold, so a
     # shallow --top-k cannot print a gap at a cutoff neither level reached.
-    gap_k = gap_cutoff(art, chunk)
+    gap_k = gap_cutoff(art_grounded, chunk)
     if gap_k is None:
         print("article−chunk gap: not reportable at this depth")
         return
-    gap = art.hit_at_k[gap_k] - chunk.hit_at_k[gap_k]
-    print(f"article−chunk gap @{gap_k}: {gap:+.1%}"
-          "   (right article, wrong chunk = chunking/embedding)")
+    for line in gap_lines(art_grounded, chunk, gap_k):
+        print(line)
 
 
 if __name__ == "__main__":
