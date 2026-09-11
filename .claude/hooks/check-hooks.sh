@@ -42,6 +42,15 @@
 # substitution are pinned side by side, because it was the anchor that decided
 # the verdict and that is the part that reads as arbitrary.
 #
+# The append-only checks from issue #69 are the first here that are not about
+# the boundary at all, and they are the same finding a second time: the hooks
+# that carry a convention had been reviewed only in the refusing direction. The
+# permitting direction was swept and `rm -rf docs/dev-log` turned out to be
+# permitted -- with `rm -rf docs/dev-log/`, one character away, refused. So did
+# every spelling of an entry's path that was not the one literal prefix the
+# Edit companion stripped. Neither was in the original report of that issue,
+# and neither had a check.
+#
 # So the number below is not a measure of the boundary. A check suite is
 # evidence about the cases it names and about nothing else, and every case here
 # was named by someone who went looking for one it had missed.
@@ -2333,6 +2342,54 @@ check append-only-docs.sh ALLOW 'sed -i over a research document' \
 check append-only-docs.sh ALLOW 'sed -i over a design document' \
   "sed -i 's/a/b/' docs/design/llm-call-log.md"
 
+echo "=== REGRESSION: #69, the whole-directory case the slash hid ==="
+# The pattern required a trailing slash, so the outer guard never fired on the
+# directory itself and the removal that destroys the most history was the one
+# that passed. Every verdict here was measured on dev-05 at 7cb4891, where the
+# first four were ALLOW. The fifth is the control they sit one character away
+# from, and it was already BLOCK: same command, opposite verdict, on a
+# difference that has nothing to do with what it would run.
+check append-only-docs.sh BLOCK 'rm -rf of the dev-log directory, no trailing slash' \
+  'rm -rf docs/dev-log'
+check append-only-docs.sh BLOCK 'rm -rf of the lessons-learned directory' \
+  'rm -rf docs/lessons-learned'
+check append-only-docs.sh BLOCK 'rm -rf of the eval-reports directory' \
+  'rm -rf docs/eval-reports'
+check append-only-docs.sh BLOCK 'mv of the dev-log directory out from under its name' \
+  'mv docs/dev-log docs/archive'
+check append-only-docs.sh BLOCK 'the control it is one character from' \
+  'rm -rf docs/dev-log/'
+# The boundary is written out rather than made optional, because a directory
+# whose name merely starts with a guarded one is a different directory. These
+# two are what would break if the fix had been `/?`.
+check append-only-docs.sh ALLOW 'a directory whose name only begins with a guarded one' \
+  'rm -rf docs/dev-logbook'
+check append-only-docs.sh ALLOW 'a sibling file whose name begins with a guarded one' \
+  'rm docs/dev-log.bak'
+check append-only-docs.sh ALLOW 'reading the directory is not removing it' \
+  'ls docs/dev-log'
+
+echo "=== REGRESSION: #69, overwriting an entry without naming a redirect ==="
+# Both routes overwrite an existing entry in place and neither was reached by
+# the rm/mv/cp list or by the redirect rule, so both were ALLOW at 7cb4891.
+# The third is the control that was already BLOCK.
+check append-only-docs.sh BLOCK 'truncate over a dev-log entry' \
+  'truncate -s 0 docs/dev-log/devlog_2026-08-25_session-2.md'
+check append-only-docs.sh BLOCK 'tee over a dev-log entry' \
+  'tee docs/dev-log/devlog_2026-08-25_session-2.md < new.md'
+check append-only-docs.sh BLOCK 'the control it sits beside' \
+  ': > docs/dev-log/devlog_2026-08-25_session-2.md'
+
+echo "=== ACCEPTED false positive: #69, tee -a appends and is refused anyway ==="
+# The verb is read and its options are not, so the appending spelling of tee
+# goes with the truncating one. `>>` is the documented way to append and stays
+# permitted, which is the check beneath this one. Written down because a fix
+# that gives up a case has to say which case.
+check append-only-docs.sh BLOCK 'tee -a, which appends, refused with the rest of tee' \
+  'tee -a docs/dev-log/devlog_2026-08-25_session-2.md < new.md'
+check append-only-docs.sh ALLOW 'the append that is documented is still permitted' \
+  'echo x >> docs/dev-log/devlog_2026-08-25_session-2.md'
+
 # The Edit/Write companion reads tool_input.file_path rather than .command, and
 # its verdict turns on whether the file already exists -- so it is asked about
 # real paths in this repository, with CLAUDE_PROJECT_DIR naming the root it
@@ -2368,6 +2425,30 @@ check_file append-only-docs-edit.sh ALLOW 'Edit of a dev-log README that does ex
   'docs/dev-log/README.md'
 check_file append-only-docs-edit.sh ALLOW 'Edit of an existing research document' \
   'docs/research/non-openrouter-response-bodies.md'
+
+echo "=== REGRESSION: #69, a spelling of the path that was not the literal prefix ==="
+# The root was stripped by string prefix and the remainder anchored at ^docs/,
+# so the comparison was between spellings rather than between paths. The first
+# two were ALLOW at 7cb4891, on a file that exists. A leading ./ is not an
+# evasion -- it is an ordinary way to write a relative path, which is the shape
+# of the ordinary mistake this hook is for. The absolute spelling is the
+# control that already worked.
+check_file append-only-docs-edit.sh BLOCK 'Edit of an existing entry written with a leading ./' \
+  './docs/dev-log/devlog_2026-08-25_session-2.md'
+check_file append-only-docs-edit.sh BLOCK 'Edit of an existing entry reached through ..' \
+  'docs/../docs/dev-log/devlog_2026-08-25_session-2.md'
+check_file append-only-docs-edit.sh BLOCK 'Edit of an existing entry with a doubled slash' \
+  'docs//dev-log/devlog_2026-08-25_session-2.md'
+check_file append-only-docs-edit.sh BLOCK 'Edit of an existing entry, absolute spelling' \
+  "$REPO_ROOT/docs/dev-log/devlog_2026-08-25_session-2.md"
+# Normalising must not widen the guarded set: the directories left out of it
+# stay out however the path is written, and a new entry stays writable.
+check_file append-only-docs-edit.sh ALLOW 'Edit of a research document written with a leading ./' \
+  './docs/research/non-openrouter-response-bodies.md'
+check_file append-only-docs-edit.sh ALLOW 'Write of a new entry written with a leading ./' \
+  './docs/dev-log/devlog_2099-01-01_session-1.md'
+check_file append-only-docs-edit.sh ALLOW 'Edit of a README written with a leading ./' \
+  './docs/dev-log/README.md'
 
 echo "=== the arming properties, asserted as literals ==="
 # A second kind of check: the ones above drive a hook as a process and read its
