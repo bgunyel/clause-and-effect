@@ -363,9 +363,9 @@ VERDICT='(^|[[:space:]])(--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[
 # under `grep -qE` as a boolean, so consuming the boundary character costs
 # nothing.
 #
-# The class excludes `-` and `_` as the rest of the file does, which narrows two
-# shapes: `my-gh pr merge 5` and `my_gh pr merge 5` stop matching, as does a
-# literal `\n` escape written immediately before gh. All three are evasion
+# The class excludes `-` and `_` as the rest of the file does, which narrows
+# three shapes: `my-gh pr merge 5` and `my_gh pr merge 5` stop matching, and so
+# does a literal `\n` escape written immediately before gh. All three are evasion
 # shapes rather than mistakes -- `./gh` and `/usr/bin/gh` still refuse, a path
 # ending in a character that is none of gh's own -- and they are accepted under
 # the same "these stop mistakes, not adversaries" that decides the rest, stated
