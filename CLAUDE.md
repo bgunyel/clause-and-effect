@@ -168,6 +168,27 @@ two. Every one was silent and in the permitting direction, and the suite was
 green before each round. A check suite is evidence about the cases it names and about
 nothing else.
 
+Issue #84 is the same shape one level out, and it is the reason that last
+sentence is worth re-reading. The defect was not in the tokeniser but in the
+*load* of it: two of the four boundary hooks sourced `lib/command-scan.sh` with
+no guard at all and a third probed one of the three functions it calls, so
+renaming a `cs_*` function — a refactor, not an accident — left a forced push, a
+`gh pr merge`, a `gh pr create --base main` and a push to `main` all permitted.
+The suite was green throughout, 728 checks when the issue was filed and 830 by
+the time it merged, because it asked that question of two hooks of four and of
+one function of three.
+
+`lib/command-scan.sh` now carries THE LOAD CONTRACT: what a guard has to do, and
+why the copies are not one sourced preamble — a preamble is a file, so sourcing
+it needs the same guard one level up. It deliberately does **not** count its
+consumers, and #69 is why. That issue rebuilt the two convention hooks on the
+tokeniser in the same week and hit the identical trap from the other end,
+probing `cs_split` and not `cs_normalise` — so the count was four when #84 was
+filed and six when it landed. `check-hooks.sh` derives the list off the files
+instead, and derives each consumer's call set against its probe set: a fixture
+per consumer per function says the guards are right today, and only the
+derivation survives the next `cs_*` added to one of them.
+
 ## Documentation
 
 Six directories with different jobs; the distinction erodes easily

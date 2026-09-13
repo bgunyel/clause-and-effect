@@ -131,6 +131,62 @@
 # never "cannot happen". Any future hook that judges a verb by a free-text
 # argument reopens the question.
 
+# THE LOAD CONTRACT, which is about this file's absence rather than its
+# contents, and is written here because a rename made here is what breaks it.
+# Every file that sources this one depends on it to find a command word at all.
+# There is no `set -e` in any of them, so an unreadable or incomplete
+# library leaves the cs_* names undefined and every call to one fails silently:
+# `RAW=$(cs_git_args "$VERB") || continue` cannot tell "not this verb" from "no
+# such function", so every verb falls through and the hook exits 0. A guard's
+# own breakage must refuse; it does not wave things through.
+#
+# Issue #84 found that answered three different ways in four files, two of them
+# permitting. no-git-push.sh and no-pr-decisions.sh sourced this file with no
+# guard at all, and no-commit-to-main.sh probed cs_split alone -- so renaming
+# cs_git_args, which is a refactor rather than an accident, permitted a forced
+# push, a `gh pr merge`, a `gh pr create --base main` and a push to main, with
+# the check suite green at 728. That is a tenth defect of the same silent and
+# permitting shape as the nine in this file's body, in the load of it rather
+# than in it.
+#
+# So each of them, before it uses anything here:
+#
+#   - tests the file for readability BEFORE sourcing it and the functions
+#     AFTER. A missing file can make `.` end the shell, where an `if` wrapped
+#     around it never runs, so a guard written that way would have been a
+#     comment.
+#   - probes EVERY cs_* function it calls, and not one of them as a proxy for
+#     the rest. The sets differ, which is why one shared list would be wrong:
+#     no-git-push.sh, no-commit-to-main.sh and no-work-on-stale-branch.sh call
+#     cs_normalise, cs_split and cs_git_args; no-pr-decisions.sh calls
+#     cs_normalise, cs_split, cs_gh_args and cs_join, and no cs_git_args at
+#     all; pytest-via-uv-group.sh and alembic-via-uv-group.sh call cs_normalise
+#     and cs_split and neither of the argument readers. A probe narrower than
+#     the set is the #84 defect exactly, and #69 found the same thing in the
+#     last two from the other end -- cs_split probed, cs_normalise not. The
+#     enumeration here is a convenience and goes stale; check-hooks.sh derives
+#     both sides off the files and compares them, which does not.
+#   - names itself in the refusal and says that it is refusing rather than
+#     permitting. That message is read by someone who has just been stopped by
+#     a guard that is broken rather than by a rule, and the thing they need
+#     from it is which of four near-identical files to open.
+#
+# RENAMING A cs_* FUNCTION REACHES EVERY FILE THAT SOURCES THIS ONE: this file,
+# the guard in each consumer that calls it -- `command -v` on a name that no
+# longer exists is the failure being guarded against, not a detail of it -- and
+# check-hooks.sh, which drives a fixture per consumer per function. The count is
+# deliberately not written down: it was four when #84 was opened and six by the
+# time it merged, because #69 rebuilt the two convention hooks on this file in
+# the same week. check-hooks.sh derives the list instead.
+#
+# Not factored into one sourced preamble, which #84 asked to be considered. A
+# preamble would be a file, so sourcing it needs this same guard one level up,
+# and the question the guard exists to answer -- can this file read a command?
+# -- would then be asked of two files where it is asked of one. What the copies
+# share is four lines of shape; what differs is the function list and the
+# message, which is the whole of their content. So the argument is factored out
+# and lives here, once, and each guard points at it by name; the code is not.
+
 # Reduce a raw command to lines that can be scanned: heredoc bodies dropped,
 # line continuations joined, redirections dropped -- in that order, so that
 # every caller gets a command whose remaining words are its arguments. Where a

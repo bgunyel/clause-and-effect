@@ -35,9 +35,10 @@
 # Behaviour is not preserved by that migration, because this file's behaviour
 # included those defects. What is preserved is its purpose, and the classes of
 # check in check-hooks.sh are the difference: sixteen invariants written in
-# identical literals on both sides, eighteen verdicts that flipped, two that
-# this file refuses rather than permits when its library is not beside it, and
-# four that name the refusal it has to give.
+# identical literals on both sides, eighteen verdicts that flipped, and four that
+# name the refusal it has to give. What this file does when its library is not
+# beside it was two checks here and is the load-contract section now; see the
+# guard below.
 #
 # Not covered, and deliberately: `git merge`, `git rebase`, `git cherry-pick`
 # and `git revert` put commits on main without a `git commit`, and none of them
@@ -49,8 +50,9 @@
 # governs here too: a shape an agent would plausibly write earns a fix, a
 # payload it would have to construct does not.
 #
-# Sourced, not assumed. All three hooks rest on this file now, and this one is
-# kept in the tree because it still stands when the broader hook is disabled --
+# Sourced, not assumed. All four boundary hooks rest on lib/command-scan.sh now,
+# and this one is kept in the tree because it still stands when the broader hook
+# is disabled --
 # which it would not if an unreadable library left cs_split undefined, the
 # command list empty and every commit on main permitted. A guard's own breakage
 # refuses; it does not wave things through.
@@ -58,9 +60,19 @@
 # The file is tested for before it is sourced, and the functions after: a
 # missing file makes `.` end the shell where an `if` around it never runs, so
 # the guard would have been a comment.
+#
+# All three functions this file calls are probed, not cs_split alone. Issue #84
+# found the narrow version, and the narrow version is worse than none: it reads
+# as a guard and it permitted `git push origin HEAD:main` the moment cs_git_args
+# was renamed, because `cs_git_args commit` and `cs_git_args push` fail the same
+# way a command with neither in it does. The sibling hook had already learned
+# this and written it down; the lesson was not carried here.
+# See THE LOAD CONTRACT in lib/command-scan.sh.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
-if ! command -v cs_split >/dev/null 2>&1; then
+if ! command -v cs_normalise >/dev/null 2>&1 \
+   || ! command -v cs_split >/dev/null 2>&1 \
+   || ! command -v cs_git_args >/dev/null 2>&1; then
   echo "Blocked: no-commit-to-main.sh could not load lib/command-scan.sh, so it cannot tell whether this command touches main. Refusing rather than permitting." >&2
   exit 2
 fi
