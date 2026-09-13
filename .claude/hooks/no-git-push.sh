@@ -47,7 +47,24 @@
 # and at least one fix opened the next hole: dropping heredoc bodies stopped a
 # false positive and blinded both hooks to a real command, which b625d64 then
 # closed. Stop when the shapes stop being ones an agent would plausibly write.
-. "$(dirname "$0")/lib/command-scan.sh"
+# Guarded under THE LOAD CONTRACT in lib/command-scan.sh, which says what a guard
+# here has to do and why there are four of them rather than one sourced preamble.
+# Stated there and not restated here: #84's finding was a rule written out in one
+# hook and read by nobody editing the other three.
+#
+# What it cost in this file. Issue #84 found this line bare, so a library that had
+# been renamed or moved left cs_git_args undefined, `cs_git_args push` failed,
+# HAVE_PUSH stayed empty, and a forced push of a reserved branch was permitted --
+# silently, and in the permitting direction, like every defect the tokeniser
+# itself has had.
+LIB="$(dirname "$0")/lib/command-scan.sh"
+[ -r "$LIB" ] && . "$LIB"
+if ! command -v cs_normalise >/dev/null 2>&1 \
+   || ! command -v cs_split >/dev/null 2>&1 \
+   || ! command -v cs_git_args >/dev/null 2>&1; then
+  echo "Blocked: no-git-push.sh could not load lib/command-scan.sh, so it cannot tell whether this command pushes, or where to. Refusing rather than permitting." >&2
+  exit 2
+fi
 
 # check_push splits a push's arguments with `for TOK in $ARGS`, unquoted because
 # the split is the point. That also globs them against the worktree: `*` is

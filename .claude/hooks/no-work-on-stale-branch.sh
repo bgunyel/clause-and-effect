@@ -267,22 +267,16 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 # would be silent and permitting: `RAW=$(cs_git_args "$VERB") || continue`
 # cannot tell "not this verb" from "no such function", so a library holding
 # cs_split but not cs_git_args would leave every verb permitted through the very
-# check written to stop that.
-#
-# And the wrapper words with them, since #79. cs_split reads them from a
-# variable now rather than carrying them as a literal, so a library whose three
-# functions are all present and whose list is empty strips no prefix -- silent,
-# and in the permitting direction, which is the one property every defect in
-# this library has had in common. The two halves are probed and not the union
-# they derive: with both empty that union is the string "|", which is not empty.
-# The verdict is carried by the library's own fail-safe either way; this probe
-# is what makes the refusal say why.
+# check written to stop that. This file had the guard right first and the other
+# three did not; issue #84 carried it to them and moved the argument out to
+# THE LOAD CONTRACT in lib/command-scan.sh, which is where a rename of one of
+# these names is made. What changed here is only the refusal, which now names
+# this file rather than calling itself "this hook": four near-identical guards
+# make the name the part a reader needs.
 if ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_normalise >/dev/null 2>&1 \
-   || ! command -v cs_git_args >/dev/null 2>&1 \
-   || [ -z "$CS_WRAP_OPTION_WORDS" ] \
-   || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then
-  refuse "(This hook could not load lib/command-scan.sh, so it cannot read what this command does. Refusing rather than permitting.)"
+   || ! command -v cs_git_args >/dev/null 2>&1; then
+  refuse "(no-work-on-stale-branch.sh could not load lib/command-scan.sh, so it cannot read what this command does. Refusing rather than permitting.)"
 fi
 
 SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)

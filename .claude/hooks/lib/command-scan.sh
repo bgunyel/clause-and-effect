@@ -144,6 +144,70 @@
 # wrapper expression into the one CS_WRAPPER_RE below. Where that anchor stops,
 # what it cannot reach, and the soft spot it keeps are argued there.
 
+# THE LOAD CONTRACT, which is about this file's absence rather than its
+# contents, and is written here because a rename made here is what breaks it.
+# Every file that sources this one depends on it to find a command word at all.
+# There is no `set -e` in any of them, so an unreadable or incomplete
+# library leaves the cs_* names undefined and every call to one fails silently:
+# `RAW=$(cs_git_args "$VERB") || continue` cannot tell "not this verb" from "no
+# such function", so every verb falls through and the hook exits 0. A guard's
+# own breakage must refuse; it does not wave things through.
+#
+# Issue #84 found that answered three different ways in four files, two of them
+# permitting. no-git-push.sh and no-pr-decisions.sh sourced this file with no
+# guard at all, and no-commit-to-main.sh probed cs_split alone -- so renaming
+# cs_git_args, which is a refactor rather than an accident, permitted a forced
+# push, a `gh pr merge`, a `gh pr create --base main` and a push to main, with
+# the check suite green at 728. That is a tenth defect of the same silent and
+# permitting shape as the nine in this file's body, in the load of it rather
+# than in it.
+#
+# So each of them, before it uses anything here:
+#
+#   - tests the file for readability BEFORE sourcing it and the functions
+#     AFTER. A missing file can make `.` end the shell, where an `if` wrapped
+#     around it never runs, so a guard written that way would have been a
+#     comment.
+#   - probes EVERY cs_* function it calls, and not one of them as a proxy for
+#     the rest. The sets differ, which is why one shared list would be wrong:
+#     no-git-push.sh, no-commit-to-main.sh and no-work-on-stale-branch.sh call
+#     cs_normalise, cs_split and cs_git_args; no-pr-decisions.sh calls
+#     cs_normalise, cs_split, cs_gh_args and cs_join, and no cs_git_args at
+#     all; pytest-via-uv-group.sh and alembic-via-uv-group.sh call cs_normalise
+#     and cs_split and neither of the argument readers. A probe narrower than
+#     the set is the #84 defect exactly, and #69 found the same thing in the
+#     last two from the other end -- cs_split probed, cs_normalise not. The
+#     enumeration here is a convenience and goes stale; check-hooks.sh derives
+#     both sides off the files and compares them, which does not.
+#   - names itself in the refusal and says that it is refusing rather than
+#     permitting. That message is read by someone who has just been stopped by
+#     a guard that is broken rather than by a rule, and the thing they need
+#     from it is which of four near-identical files to open.
+#
+# RENAMING A cs_* FUNCTION REACHES EVERY FILE THAT SOURCES THIS ONE: this file,
+# the guard in each consumer that calls it -- `command -v` on a name that no
+# longer exists is the failure being guarded against, not a detail of it -- and
+# check-hooks.sh, which drives a fixture per consumer per function. The count is
+# deliberately not written down: it was four when #84 was opened and six by the
+# time it merged, because #69 rebuilt the two convention hooks on this file in
+# the same week. check-hooks.sh derives the list instead.
+#
+# Not factored into one sourced preamble, which #84 asked to be considered. A
+# preamble would be a file, so sourcing it needs this same guard one level up,
+# and the question the guard exists to answer -- can this file read a command?
+# -- would then be asked of two files where it is asked of one. What the copies
+# share is four lines of shape; what differs is the function list and the
+# message, which is the whole of their content. So the argument is factored out
+# and lives here, once, and each guard points at it by name; the code is not.
+#
+# "Loads" includes data as well as names. cs_split reads the prefix-word list
+# through a variable, so a library with every function defined and that list
+# empty is not a loaded library, and a probe for names cannot see it. It is not
+# answered in the guards. The library withdraws cs_split itself when the list is
+# incomplete, which reduces the state to a missing function, and every consumer
+# already probes that one. See THE WORD LIST IS PART OF THE LOAD, below
+# cs_split. Issue #79.
+
 # Reduce a raw command to lines that can be scanned: heredoc bodies dropped,
 # line continuations joined, redirections dropped -- in that order, so that
 # every caller gets a command whose remaining words are its arguments. Where a
@@ -500,41 +564,11 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # is pinned as a check.
 CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"
 
-# TWO WAYS THE LIST CAN BE MISSING, and the second is the one that needed
-# building for. It is the cost of making the list a variable, and it is paid
-# here rather than in the hooks.
-#
-# If the library does not load at all, CS_WRAPPER_RE is unset, `grep -qE ''`
-# matches every line, the wrapper conjunct is vacuously true, and every command
-# naming a refused verb is refused. That is the direction a guard's own
-# breakage has to take, and it needs nothing else.
-#
-# A library that LOADS with an empty list is the unsafe way round, and probing
-# for the functions cannot see it: every function is there and cs_split simply
-# strips no prefix, so `sudo git push --all origin` is permitted again -- the
-# verdict the fourth review fixed, silently un-fixed.
-#
-# So the empty case is given the same answer as the missing one, in the one
-# place both are decided. With either half of the list gone, CS_WRAPPER_RE is
-# the empty string, every hook's wrapper conjunct is vacuously true, and each
-# of the four refuses the verb it answers for. Reviewed before this was done
-# and found to matter: no-git-push.sh and no-pr-decisions.sh source this file
-# unguarded, so a per-hook probe would have covered two of four and left
-# `sudo git push --all origin` and `sudo gh pr merge 5` permitted -- a guard
-# half-fitted, which is worse than none because its own comment says it is
-# fitted. The two hooks that already probe for the functions probe for the list
-# too, and that is for the message rather than for the verdict: they say why
-# they refused instead of refusing unexplained.
-#
-# Checked, not argued: check-hooks.sh builds a library with the list emptied in
-# place and asks all four. Those checks have to name a command that ONLY the
-# strip reaches -- written with a plain `git commit`, the stale-branch one was
-# green with its own guard removed.
-if [ -n "$CS_WRAP_OPTION_WORDS" ] && [ -n "$CS_WRAP_OPERAND_WORDS" ]; then
-  CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_WRAP_WORDS)[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
-else
-  CS_WRAPPER_RE=""
-fi
+# Built unconditionally. What happens when the list it interpolates is empty is
+# not decided here: it is decided once, after cs_split, where the list's one
+# reader is withdrawn so that every consumer's load guard refuses. See
+# THE WORD LIST IS PART OF THE LOAD, below cs_split.
+CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_WRAP_WORDS)[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
 
 # Print one command per line, with anything that precedes the command word
 # removed, so a caller matches on ^ and never has to describe a command
@@ -761,6 +795,49 @@ cs_split() {
       }
     }'
 }
+
+# THE WORD LIST IS PART OF THE LOAD. With either half of the prefix-word list
+# empty, cs_split is withdrawn, so that every consumer's load guard -- which
+# probes cs_split, all six of them -- refuses by name.
+#
+# Why it is needed at all. Issue #79 made the list a variable that cs_split
+# reads through awk's -v, and that added a state THE LOAD CONTRACT above cannot
+# see: every function present, the list empty, and cs_split running and doing
+# less. It strips no prefix, so `sudo git push --all origin` has no command word
+# at ^ and is permitted -- the verdict the fourth review fixed, silently
+# un-fixed. A function that does less is worse than a missing one, which is the
+# whole of #84's finding, and a probe that asks whether a name exists cannot
+# tell the two apart.
+#
+# Why here and not in the guards. The first answer to this was a word-list probe
+# in two hooks, then an empty CS_WRAPPER_RE as a library fail-safe on the
+# argument that two other hooks sourced this file unguarded. Review measured
+# both. The probe covered two consumers of four; the fail-safe covered the four
+# that read CS_WRAPPER_RE and missed the two convention hooks, which read
+# cs_split and never the anchor -- with the list empty `sudo pytest tests/` has
+# no pytest at ^ and was permitted. And #84 then made the premise false, by
+# guarding every consumer's load. Each was a guard fitted to part of the set
+# its comment claimed, which is the #84 shape one level out.
+#
+# So the state is reduced to one the contract already answers. The list's only
+# reader is cs_split; withdrawing it makes an incomplete list indistinguishable
+# from a renamed function, and every consumer that could be misled by it -- by
+# construction, every one that calls cs_split -- already probes cs_split,
+# because check-hooks.sh derives each consumer's probe set from its call set.
+# Nothing in any guard has to know the list exists, which is what keeps this
+# from being a seventh copy of a question the contract asks in six.
+#
+# It must stand AFTER cs_split's definition, since `unset -f` on a function not
+# yet defined does nothing and the definition then restores it. That is a
+# position a later edit can break silently, so check-hooks.sh asserts cs_split
+# is undefined in a library with the list emptied, and drives every consumer
+# against one.
+#
+# The two halves and not the union: with both empty CS_WRAP_WORDS is the string
+# "|", which is not empty.
+if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then
+  unset -f cs_split
+fi
 
 # Print the arguments of a git subcommand and succeed, or print nothing and fail
 # if this command is not `git <subcommand>`. Global options are skipped,
