@@ -102,7 +102,12 @@ ELSEWHERE_REFUSE="Blocked: this command moves git somewhere else before committi
 # The trade, taken knowingly: an `sh -c` anywhere in a command that also commits
 # plainly is refused for the company it keeps. That is the direction this file
 # takes throughout -- a blocked command is visible and one edit away.
-if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))' \
+#
+# The expression is CS_WRAPPER_RE, derived once in lib/command-scan.sh since
+# #79 -- one copy where all four hooks carried their own, and none of the four
+# admitted the prefix words cs_split already strips, so a wrapped commit behind
+# `sudo` or `timeout` was invisible to every one of them.
+if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE" \
    && echo "$COMMAND" | grep -qE 'git[[:space:]]+([^;&|]*[[:space:]])?(commit|push)([^-A-Za-z0-9_]|$)'; then
   echo "Blocked: git commit or push inside a shell wrapper. Whether it lands on main cannot be read through a quoted payload. Run it plainly." >&2
   exit 2

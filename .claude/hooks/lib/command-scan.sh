@@ -130,6 +130,19 @@
 # anything this library does, so the honest phrasing is SWEPT AND NOT FOUND,
 # never "cannot happen". Any future hook that judges a verb by a free-text
 # argument reopens the question.
+#
+# A sixth review, of that fix, found the list of prefix words known in one half
+# of this library and invisible in the other. cs_split had stripped sudo, env,
+# xargs, timeout and the rest since the fourth review; the four wrapper regexes
+# in the hooks never consulted it, so `sudo git push --all origin` was refused
+# and `sudo sh -c 'git push --all origin'` was not. One question, two places,
+# two answers -- which is the sentence this header opens with. It is one layer
+# out from PR #35's defect #2:
+# wrapper re-admission sufficed for a heredoc and did nothing for `sh -c`, and
+# then handled `sh -c` and did nothing for `sudo sh -c`. Issue #79 made the
+# words a variable that both halves read, and moved the four copies of the
+# wrapper expression into the one CS_WRAPPER_RE below. Where that anchor stops,
+# what it cannot reach, and the soft spot it keeps are argued there.
 
 # THE LOAD CONTRACT, which is about this file's absence rather than its
 # contents, and is written here because a rename made here is what breaks it.
@@ -186,6 +199,14 @@
 # share is four lines of shape; what differs is the function list and the
 # message, which is the whole of their content. So the argument is factored out
 # and lives here, once, and each guard points at it by name; the code is not.
+#
+# "Loads" includes data as well as names. cs_split reads the prefix-word list
+# through a variable, so a library with every function defined and that list
+# empty is not a loaded library, and a probe for names cannot see it. It is not
+# answered in the guards. The library withdraws cs_split itself when the list is
+# incomplete, which reduces the state to a missing function, and every consumer
+# already probes that one. See THE WORD LIST IS PART OF THE LOAD, below
+# cs_split. Issue #79.
 
 # Reduce a raw command to lines that can be scanned: heredoc bodies dropped,
 # line continuations joined, redirections dropped -- in that order, so that
@@ -392,6 +413,163 @@ cs_join() {
     }'
 }
 
+# The words that run another command with their own options. Two questions are
+# asked of this list, which is why it is a variable and not a regular expression
+# written where it is needed: cs_split strips these to find the command word
+# behind them, and CS_WRAPPER_RE below admits them in front of a wrapper.
+#
+# A sixth review, of #68, found the second question answered by not asking it.
+# The four wrapper regexes in the hooks anchored on ^ or on a separator and knew
+# nothing of this list, so sudo was recognised in one half of this library and
+# invisible in the other, measured:
+#
+#   BLOCK   sudo git push --all origin          cs_split strips sudo, the push is at ^
+#   ALLOW   sudo sh -c 'git push --all origin'  cs_split strips sudo, leaves sh -c
+#                                               where no anchor admits it
+#
+# That is the same question answered in two places with two different answers,
+# which is the defect class the header of this file opens by naming, and it is
+# one layer out from PR #35's defect #2 -- wrapper re-admission sufficed for a
+# heredoc and did nothing for `sh -c`, and then handled `sh -c` and did nothing
+# for `sudo sh -c`. The same held for timeout, xargs, nohup and env. Issue #79.
+#
+# Split in two because cs_split does two different things with them: the first
+# group takes options only, the second takes an operand of its own as well. The
+# union is derived rather than written a third time.
+CS_WRAP_OPTION_WORDS='env|command|xargs|nohup|nice|time|stdbuf|ionice|sudo|doas|setsid|chronic'
+CS_WRAP_OPERAND_WORDS='timeout|flock'
+CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
+
+# Is there a shell wrapper at a command position? Derived once here and grepped
+# by all four hooks, which each carried their own copy of it before #79 -- four
+# copies of one expression, in the file whose header says that is the defect.
+#
+# It is matched against RAW command text, before cs_normalise and before
+# cs_split, and that ordering is load-bearing: a wrapped payload sits in quotes
+# where there is no command position for the tokeniser to find, and
+# cs_normalise drops heredoc bodies while `bash <<EOF` is itself one of these
+# wrappers, so the payload would go with the body. That is why this is an
+# anchored regular expression rather than a pass over cs_split's output.
+#
+# Which is also why the anchor has to say what a command position is a second
+# time, and what it now admits between the position and the wrapper word: an
+# environment assignment, as it always did, and a prefix word from the list
+# above with its options and up to three further tokens.
+#
+# More than one, because the operand a wrapper takes is not always one token.
+# `timeout -s KILL 30 bash -c` leaves KILL and 30 once the option is consumed,
+# `sudo -u root sh -c` leaves root, and `nice -n 10 sh -c` leaves 10 -- the
+# separated option value, which is the case cs_split answers by offering its
+# tail as further candidates rather than by trimming its head. Three rather
+# than some other number because three is the bound cs_split offers that tail
+# to, for this same case and this same reason. A different number here would be
+# the divergence this whole change is about, arriving inside its own fix.
+#
+# THE CLASS AND THE COUNT, both. The token admitted between the prefix word and
+# the wrapper is cs_split's tail token exactly, and three is cs_split's bound.
+# This paragraph has now been wrong about that twice and in both directions --
+# claiming the classes matched when this one was wider, then claiming only the
+# count was shared when this one had also been narrower in a second respect
+# nobody had noticed. What is left differing is the loop and not the class, and
+# CS_WRAP_TOKEN below is where that is set out.
+#
+# WIDENED, NOT DROPPED, and the difference is the whole of the constraint. The
+# anchor cannot simply go: a wrapper word named anywhere on a line that also
+# names a refused command would then refuse the line, and the shapes that
+# regress are exactly the ones a session working on these hooks writes --
+# `grep -rn 'sh -c .*git push' .claude/hooks/` and
+# `echo 'the eval rule refuses git push' >> notes.md` are ALLOW with the anchor
+# and BLOCK without it. Four such shapes are checks, and the mutant that drops
+# the anchor turns exactly those red.
+#
+# NAMED AND NOT CLOSED. The list cannot be complete and this does not pretend
+# to be. A word that runs a command and is not a prefix word is still out of
+# reach: `python3 -c 'import os; os.system("git push --all origin")'` is the
+# example, and `perl -e`, `find . -exec sh -c ... \;`, a make target, and a
+# script written to a file and then run are the rest of the family. The
+# stopping rule is the one already in these files -- a wrapper's payload is
+# refused rather than parsed, and the wrapper words are the ones this library
+# can already name. Everything past that is out of reach, in the manner of the
+# soft spot at no-git-push.sh:153, and not a claim the set is exhaustive.
+#
+# ONE SOFT SPOT, named rather than closed, and it is #68's complaint reaching
+# this rule. The separator class below carries its own idea of what ends a
+# command and knows nothing about quoting, so a verdict still turns on a sed
+# delimiter:
+#
+#   BLOCK   sed -i 's|sh -c git push --all|X|' f.sh   the | satisfies the anchor
+#   ALLOW   sed -i 's/sh -c git push --all/X/' f.sh   same command, other delimiter
+#
+# Why it is left, and stated without the convenient version. The convenient
+# version is that this one cannot be fixed because the rule must read raw text.
+# That is not true, and writing it down would be the kind of claim this file
+# keeps having to correct. cs_split is quote-aware since #68; it does NOT drop
+# heredoc bodies, which is cs_normalise; and a wrapper word sits OUTSIDE the
+# payload's quotes, so `bash -c '...'` and `bash <<EOF` both stand at the head
+# of a fragment where an anchor at ^ would find them. Asking cs_split would
+# answer the quote question here, and would answer it once.
+#
+# What stops it is not that it cannot work. It is that the check suite pins, as
+# a property of all four files, that this rule is handed the raw command and
+# not the fragments -- and inverting that is a different change from widening
+# an anchor, with its own sweep to do over every shape the two texts differ on.
+# Issue #79 scoped it out in as many words. So the soft spot stays, on two
+# grounds that hold meanwhile: it costs refusals and never permits, and the
+# refusal is visible and one edit away. It is a candidate for a ticket of its
+# own rather than a limit of the design, and this paragraph is the record of
+# that decision rather than of an obstacle.
+#
+# Widening the anchor widens this with it -- `sed -i 's|sudo sh -c git push|X|'
+# f.sh` was ALLOW and is now BLOCK -- named here so that it is a known cost
+# rather than a discovery. Both spellings of each pair above are checks.
+#
+# A token that may stand between the prefix word and the wrapper word: any word
+# at all, which is cs_split's tail token exactly -- `^[^[:space:]]+[[:space:]]+`
+# there, the same class here. Both the class and the bound of three are shared,
+# and that is the whole claim.
+#
+# IT EXCLUDED A LEADING DASH UNTIL REVIEW OF THIS BRANCH, and that was #79
+# reproduced inside its own fix, one option deeper and in the permitting
+# direction. The options loop in front of this one stops at the first token
+# that is not an option, so an option appearing AFTER a separated option value
+# was left for this class to admit -- and it refused to. cs_split walks past it
+# and finds the command; the anchor stopped dead. Measured on the branch that
+# had it:
+#
+#   BLOCK   sudo -u root -n git push --all origin
+#   ALLOW   sudo -u root -n sh -c 'git push --all origin'
+#   BLOCK   nice -n 10 -- git push --all origin
+#   ALLOW   nice -n 10 -- sh -c 'git push --all origin'
+#
+# `sudo -n`, `nice -n 10 --` and `timeout --preserve-status` are ordinary
+# spellings, and `--` defeats an exclusion like that whenever it follows a
+# separated option value. `sudo -- sh -c` was refused throughout, because
+# nothing had consumed an operand yet and the options loop still had the dash.
+#
+# Worse than the gap: the paragraph here named a deliberate difference from
+# cs_split, argued it was safe because admitting a token too many can only
+# refuse more, and did not mention this one, which runs the other way and which
+# that argument does not license. A comment claiming the classes differ in one
+# respect while they differed in two is the shape this file exists to stop,
+# arriving in the change whose subject it is. All three shapes are checks now.
+#
+# ONE DIFFERENCE REMAINS, and it is in the loop rather than the class.
+# cs_split's tail also breaks at a token that OPENS A QUOTE, because it is
+# offering candidates to read as commands and what follows a quote is the text
+# of an argument -- the mistake cs_normalise has made three times. Nothing here
+# reads a token as a command: these are skipped, on the way to a wrapper word
+# that must still appear after them. So the reason to stop does not transfer,
+# and `sudo "x" sh -c 'git push --all origin'` is refused here while cs_split
+# offers no candidate for it. That asymmetry is in the refusing direction and
+# is pinned as a check.
+CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"
+
+# Built unconditionally. What happens when the list it interpolates is empty is
+# not decided here: it is decided once, after cs_split, where the list's one
+# reader is withdrawn so that every consumer's load guard refuses. See
+# THE WORD LIST IS PART OF THE LOAD, below cs_split.
+CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_WRAP_WORDS)[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
+
 # Print one command per line, with anything that precedes the command word
 # removed, so a caller matches on ^ and never has to describe a command
 # position again.
@@ -537,7 +715,8 @@ cs_split() {
       if (qopen != "" || dq_substitution) out = cut($0, 0)
       print out
     }' \
-  | awk '
+  | awk -v wrapwords="$CS_WRAP_OPTION_WORDS" \
+        -v operandwords="$CS_WRAP_OPERAND_WORDS" '
     {
       line = $0
       sub(/^[[:space:]]+/, "", line)
@@ -553,7 +732,10 @@ cs_split() {
           line = substr(line, RSTART + RLENGTH)
           changed = 1
         }
-        if (match(line, /^(env|command|xargs|nohup|nice|time|stdbuf|ionice|sudo|doas|setsid|chronic)[[:space:]]+/)) {
+        # The list arrives as a variable rather than standing here as a literal,
+        # so that the wrapper anchor can admit the same words without a second
+        # copy of them. Issue #79; see CS_WRAP_OPTION_WORDS above.
+        if (match(line, "^(" wrapwords ")[[:space:]]+")) {
           line = substr(line, RSTART + RLENGTH)
           while (match(line, /^-[^[:space:]]*[[:space:]]+/)) {
             line = substr(line, RSTART + RLENGTH)
@@ -567,7 +749,7 @@ cs_split() {
         # `timeout 30 git push --all origin` invisible to every hook. The
         # operand is stripped with the word, one token and only if it is not
         # itself an option.
-        if (match(line, /^(timeout|flock)[[:space:]]+/)) {
+        if (match(line, "^(" operandwords ")[[:space:]]+")) {
           line = substr(line, RSTART + RLENGTH)
           while (match(line, /^-[^[:space:]]*[[:space:]]+/)) {
             line = substr(line, RSTART + RLENGTH)
@@ -613,6 +795,49 @@ cs_split() {
       }
     }'
 }
+
+# THE WORD LIST IS PART OF THE LOAD. With either half of the prefix-word list
+# empty, cs_split is withdrawn, so that every consumer's load guard -- which
+# probes cs_split, all six of them -- refuses by name.
+#
+# Why it is needed at all. Issue #79 made the list a variable that cs_split
+# reads through awk's -v, and that added a state THE LOAD CONTRACT above cannot
+# see: every function present, the list empty, and cs_split running and doing
+# less. It strips no prefix, so `sudo git push --all origin` has no command word
+# at ^ and is permitted -- the verdict the fourth review fixed, silently
+# un-fixed. A function that does less is worse than a missing one, which is the
+# whole of #84's finding, and a probe that asks whether a name exists cannot
+# tell the two apart.
+#
+# Why here and not in the guards. The first answer to this was a word-list probe
+# in two hooks, then an empty CS_WRAPPER_RE as a library fail-safe on the
+# argument that two other hooks sourced this file unguarded. Review measured
+# both. The probe covered two consumers of four; the fail-safe covered the four
+# that read CS_WRAPPER_RE and missed the two convention hooks, which read
+# cs_split and never the anchor -- with the list empty `sudo pytest tests/` has
+# no pytest at ^ and was permitted. And #84 then made the premise false, by
+# guarding every consumer's load. Each was a guard fitted to part of the set
+# its comment claimed, which is the #84 shape one level out.
+#
+# So the state is reduced to one the contract already answers. The list's only
+# reader is cs_split; withdrawing it makes an incomplete list indistinguishable
+# from a renamed function, and every consumer that could be misled by it -- by
+# construction, every one that calls cs_split -- already probes cs_split,
+# because check-hooks.sh derives each consumer's probe set from its call set.
+# Nothing in any guard has to know the list exists, which is what keeps this
+# from being a seventh copy of a question the contract asks in six.
+#
+# It must stand AFTER cs_split's definition, since `unset -f` on a function not
+# yet defined does nothing and the definition then restores it. That is a
+# position a later edit can break silently, so check-hooks.sh asserts cs_split
+# is undefined in a library with the list emptied, and drives every consumer
+# against one.
+#
+# The two halves and not the union: with both empty CS_WRAP_WORDS is the string
+# "|", which is not empty.
+if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then
+  unset -f cs_split
+fi
 
 # Print the arguments of a git subcommand and succeed, or print nothing and fail
 # if this command is not `git <subcommand>`. Global options are skipped,

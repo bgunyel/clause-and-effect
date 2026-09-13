@@ -949,35 +949,269 @@ check no-pr-decisions.sh BLOCK 'wrapped merge, invisible to the split' "eval 'gh
 check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'wrapped commit, invisible to the split' \
          "sh -c 'git commit -m x'"
 # And the same claim asserted as a property of the files rather than inferred
-# from three verdicts. WRAPRE is the distinctive head of the wrapper regex, so
-# each literal below pins both which rule it is and what that rule is handed.
-WRAPRE='(^[[:space:]]*|[;&|(`][[:space:]]*)'
-armed 'no-git-push.sh matches its wrapper rule on the raw command' \
-      no-git-push.sh "if echo \"\$COMMAND\" | grep -qE '$WRAPRE"
-armed 'no-commit-to-main.sh matches its wrapper rule on the raw command' \
-      no-commit-to-main.sh "if echo \"\$COMMAND\" | grep -qE '$WRAPRE"
+# from three verdicts. Each literal below pins both which rule it is and what
+# that rule is handed -- the raw command, never the fragments.
+#
+# Since #79 the expression itself is CS_WRAPPER_RE, derived once in
+# lib/command-scan.sh, so the literal names the shared variable rather than the
+# head of a regex each hook carried its own copy of. What is pinned is
+# unchanged: which text the rule reads.
+armed 'no-git-push.sh matches the shared wrapper rule on the raw command' \
+      no-git-push.sh 'if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE"'
+armed 'no-commit-to-main.sh matches the shared wrapper rule on the raw command' \
+      no-commit-to-main.sh 'if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE"'
 # no-pr-decisions.sh joins continuations first and matches on that, which is the
 # half of cs_normalise its wrapper rules do want; both halves are pinned.
 armed 'no-pr-decisions.sh derives its wrapper text from the raw command' \
       no-pr-decisions.sh "WRAPTEXT=\$(printf '%s\\n' \"\$COMMAND\" | cs_join)"
-armed 'no-pr-decisions.sh matches its wrapper rule on that text' \
-      no-pr-decisions.sh "if echo \"\$WRAPTEXT\" | grep -qE '$WRAPRE"
+armed 'no-pr-decisions.sh matches the shared wrapper rule on that text' \
+      no-pr-decisions.sh 'if echo "$WRAPTEXT" | grep -qE "$CS_WRAPPER_RE"'
 unarmed 'no-git-push.sh does not match its wrapper rule on the fragments' \
-        no-git-push.sh "echo \"\$CMDS\" | grep -qE '$WRAPRE"
+        no-git-push.sh 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
 unarmed 'no-commit-to-main.sh does not match its wrapper rule on the fragments' \
-        no-commit-to-main.sh "echo \"\$CMDS\" | grep -qE '$WRAPRE"
+        no-commit-to-main.sh 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
 unarmed 'no-pr-decisions.sh does not match its wrapper rule on the fragments' \
-        no-pr-decisions.sh "echo \"\$CMDS\" | grep -qE '$WRAPRE"
+        no-pr-decisions.sh 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
 # The fourth consumer. It was covered behaviourally by the stale-branch section
 # below and not by a literal, which left "each wrapper detection" met in
 # substance and not in letter -- and this is the one hook where a lost fragment
 # retains a carve-out instead of dropping a refusal, so it is the last one that
 # should rest on an argument rather than a pin. See the header of
 # lib/command-scan.sh for why that shape is still safe.
-armed 'no-work-on-stale-branch.sh matches its wrapper rule on the raw command' \
-      no-work-on-stale-branch.sh "if echo \"\$COMMAND\" | grep -qE '$WRAPRE"
+armed 'no-work-on-stale-branch.sh matches the shared wrapper rule on the raw command' \
+      no-work-on-stale-branch.sh 'if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE"'
 unarmed 'no-work-on-stale-branch.sh does not match its wrapper rule on the fragments' \
-        no-work-on-stale-branch.sh "echo \"\$CMDS\" | grep -qE '$WRAPRE"
+        no-work-on-stale-branch.sh 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
+# And that no hook carries its own copy of the anchor any more. WRAPRE is the
+# head each of the four wrote out before #79; four copies of one expression, in
+# the file whose header names that as the defect. A hook that re-derives it
+# would pass every check above and answer the list differently again.
+WRAPRE='(^[[:space:]]*|[;&|(`][[:space:]]*)'
+unarmed 'no-git-push.sh does not carry its own copy of the anchor' \
+        no-git-push.sh "grep -qE '$WRAPRE"
+unarmed 'nor no-commit-to-main.sh' \
+        no-commit-to-main.sh "grep -qE '$WRAPRE"
+unarmed 'nor no-pr-decisions.sh' \
+        no-pr-decisions.sh "grep -qE '$WRAPRE"
+unarmed 'nor no-work-on-stale-branch.sh' \
+        no-work-on-stale-branch.sh "grep -qE '$WRAPRE"
+# In either spelling. The four pins above name the single-quoted one, which is
+# how all four hooks wrote it; a re-derivation reached for with double quotes
+# would satisfy every one of them and answer the list a second time anyway.
+# Found by review of this change: a pin on one spelling of a literal is
+# evidence about that spelling and about nothing else.
+unarmed 'no-git-push.sh does not carry it double-quoted either' \
+        no-git-push.sh "grep -qE \"$WRAPRE"
+unarmed 'nor no-commit-to-main.sh' \
+        no-commit-to-main.sh "grep -qE \"$WRAPRE"
+unarmed 'nor no-pr-decisions.sh' \
+        no-pr-decisions.sh "grep -qE \"$WRAPRE"
+unarmed 'nor no-work-on-stale-branch.sh' \
+        no-work-on-stale-branch.sh "grep -qE \"$WRAPRE"
+
+echo "=== REGRESSION: issue #79, the wrapper rules did not know the prefix words ==="
+# cs_split has always stripped the words that run another command -- sudo, env,
+# xargs, nohup, nice, time, stdbuf, ionice, command, doas, setsid, chronic, and
+# timeout and flock with their operand. The four wrapper regexes did not consult
+# that list; they answered "is this a wrapper?" independently and anchored on ^
+# or on a separator, so sudo was recognised in one half of the library and
+# invisible in the other:
+#
+#   BLOCK   sudo git push --all origin            the push is at a command position
+#   ALLOW   sudo sh -c 'git push --all origin'    the wrapper is not at ^
+#
+# Every check in the first group below was ALLOW before the anchor was widened
+# to admit that list. They are asked of no-git-push.sh and of
+# no-commit-to-main.sh both, because the defect was in an expression all four
+# hooks carried a copy of, and a fix that reached one file would be the shape
+# this suite exists to catch.
+check no-git-push.sh BLOCK 'sudo + wrapped push'            "sudo sh -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'timeout + wrapped push'         "timeout 5 bash -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'xargs + wrapped push'           "xargs sh -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'env + wrapped push'             "env FOO=1 sh -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'nohup + wrapped push'           "nohup sh -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'sudo + wrapped eval push'       "sudo eval 'git push --all origin'"
+# The separated option value, which is the shape cs_split answers by offering
+# its tail as further candidates rather than by trimming its head. The anchor
+# admits three further tokens for the same reason and to the same bound: `-u`,
+# `-n` and `-s` are consumed as options and leave `root`, `10` and `KILL 30`
+# standing where the wrapper word has to be.
+check no-git-push.sh BLOCK 'sudo -u root + wrapped push'    "sudo -u root sh -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'nice -n 10 + wrapped push'      "nice -n 10 sh -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'timeout -s KILL 30 + wrapped'   "timeout -s KILL 30 bash -c 'git push --all origin'"
+# And where that run stops, pinned from both sides. Three is the bound cs_split
+# already offers its tail to, and a bound is only a claim if the check names the
+# token past it: neither of these two is a shape anyone writes, and that is the
+# point -- they measure the number rather than a command.
+check no-git-push.sh BLOCK 'three tokens before the wrapper'     "sudo a b c sh -c 'git push --all origin'"
+check no-git-push.sh ALLOW 'and four is past where it looks'     "sudo a b c d sh -c 'git push --all origin'"
+# An OPTION standing after a separated option value. The options loop stops at
+# the first token that is not an option, so a second option behind the operand
+# falls to the token class -- and that class excluded a leading dash until
+# review of this branch, which made the anchor stop dead where cs_split walks
+# past and finds the command. Each pair below was BLOCK unwrapped and ALLOW
+# wrapped, which is #79's own asymmetry one option deeper and in the permitting
+# direction, inside the change that fixes it. The unwrapped halves are here too
+# because the pair is the evidence: a single verdict says nothing about which
+# half moved.
+check no-git-push.sh BLOCK 'sudo -n after a separated value, unwrapped' \
+         'sudo -u root -n git push --all origin'
+check no-git-push.sh BLOCK 'sudo -n after a separated value, wrapped' \
+         "sudo -u root -n sh -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'the bare -- after a separated value, unwrapped' \
+         'nice -n 10 -- git push --all origin'
+check no-git-push.sh BLOCK 'the bare -- after a separated value, wrapped' \
+         "nice -n 10 -- sh -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'a long option after an operand, unwrapped' \
+         'timeout -s KILL 30 --preserve-status git push --all origin'
+check no-git-push.sh BLOCK 'a long option after an operand, wrapped' \
+         "timeout -s KILL 30 --preserve-status bash -c 'git push --all origin'"
+# The control that was never broken: with no operand consumed yet, the options
+# loop still has the dash, so this was BLOCK throughout. It is what says the
+# three above are about the token class and not about `--`.
+check no-git-push.sh BLOCK 'a bare -- with no operand before it' \
+         "sudo -- sh -c 'git push --all origin'"
+# What that run admits, where cs_split's tail would stop. The class is now
+# cs_split's exactly; what still differs is the LOOP -- cs_split breaks at a
+# token opening a quote, because it offers candidates to read as commands, and
+# this does not, because nothing here reads a token at all. Deliberate, argued
+# at CS_WRAP_TOKEN, in the refusing direction, and pinned so that it is not
+# rediscovered as a divergence.
+check no-git-push.sh BLOCK 'a quoted token does not end the run' \
+         "sudo \"x\" sh -c 'git push --all origin'"
+# On a dev branch, so that the branch cannot be what answers for the wrapper
+# rule -- the same care the #68 wrapped-commit check takes above.
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'sudo + wrapped commit' \
+         "sudo sh -c 'git commit -m x'"
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'timeout + wrapped commit' \
+         "timeout 5 bash -c 'git commit -m x'"
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'xargs + wrapped push' \
+         "xargs sh -c 'git push --all origin'"
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'env + wrapped push' \
+         "env FOO=1 sh -c 'git push --all origin'"
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'nohup + wrapped push' \
+         "nohup sh -c 'git push --all origin'"
+# The third consumer. A decision is what this hook answers for, and it carried
+# the same blind spot.
+#
+# The fourth is no-work-on-stale-branch.sh, and it is NOT here: its verdicts
+# need a worktree on a branch whose life is over, and those fixtures are built
+# further down. Its prefix-word checks are in that section, beside its other
+# wrapper ones. This comment said "the third and fourth consumers" with three
+# no-pr-decisions checks under it and nothing for the fourth anywhere -- found
+# by review of this change, which is the letter of "no fix lands without a
+# check that fails without the fix" going unmet while an armed pin on
+# CS_WRAPPER_RE carried the substance.
+check no-pr-decisions.sh BLOCK 'timeout + wrapped merge'    "timeout 5 sh -c 'gh pr merge 5'"
+check no-pr-decisions.sh BLOCK 'sudo + wrapped release'     "sudo bash -c 'gh release create v1'"
+check no-pr-decisions.sh BLOCK 'nohup + wrapped eval merge' "nohup eval 'gh pr merge 5'"
+# The controls: the unwrapped shape the list already reached, and the wrapped
+# shape with no prefix in front of it. Both were BLOCK before and must stay so,
+# or the widening has moved the rule rather than extended it.
+check no-git-push.sh BLOCK 'the control: sudo + a bare push'   'sudo git push --all origin'
+check no-git-push.sh BLOCK 'the control: timeout + a push'     'timeout 30 git push --all origin'
+check no-git-push.sh BLOCK 'the control: a wrapper on its own' "bash -c 'git push --all origin'"
+check no-git-push.sh BLOCK 'the control: an assignment prefix' "FOO=1 sh -c 'git push --all origin'"
+
+echo "=== issue #79: the anchor was widened and not dropped ==="
+# The constraint that decides this fix. Dropping the anchor would pass every
+# check above and refuse a wrapper word named anywhere on a line that also names
+# a refused command -- which is exactly what a session working on these hooks
+# writes. The obvious example does not show it: `grep -rn "sh -c" .claude/` is
+# ALLOW either way, because the rule is a conjunction and that command names no
+# push. The shapes that regress name a wrapper word and a push on one line, and
+# each of these three is ALLOW with the anchor and BLOCK without it.
+check no-git-push.sh ALLOW 'grepping for the sh -c rule'  "grep -rn 'sh -c .*git push' .claude/hooks/"
+check no-git-push.sh ALLOW 'grepping for the eval rule'   "grep -rn 'eval .*git push' .claude/hooks/"
+check no-git-push.sh ALLOW 'a note about what eval does'  "echo 'the eval rule refuses git push --all origin' >> notes.md"
+check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'grepping for the sh -c rule' \
+         "grep -rn 'sh -c .*git commit' .claude/hooks/"
+
+echo "=== issue #79: named and not closed -- the list cannot be complete ==="
+# A word that runs a command and is not a prefix word is out of reach, and the
+# header of lib/command-scan.sh says so rather than implying the set is
+# exhaustive. These are ALLOW and are pinned as ALLOW: a check that named them
+# and wanted BLOCK would be a claim the fix does not make.
+check no-git-push.sh ALLOW 'python3 -c is out of reach' \
+         "python3 -c 'import os; os.system(\"git push --all origin\")'"
+check no-git-push.sh ALLOW 'perl -e is out of reach' \
+         "perl -e 'system(\"git push --all origin\")'"
+# find runs its operand after -exec rather than as a prefix, so it is not one of
+# cs_split's words and adding it there would strip find and leave the path where
+# the command word has to be. Named with the family above rather than closed.
+check no-git-push.sh ALLOW 'find -exec sh -c is out of reach' \
+         "find . -exec sh -c 'git push --all origin' \\;"
+
+echo "=== issue #79: the soft spot the anchor keeps, and what widening cost it ==="
+# The anchor carries its own separator class, and that class knows nothing about
+# quoting -- so a verdict still turns on a sed delimiter, which is the complaint
+# #68 was filed about. It is deferred rather than impossible, and the reason is
+# argued once, at CS_WRAPPER_RE in lib/command-scan.sh: asking cs_split WOULD
+# answer it, and what stops this rule asking is that the pins above assert it is
+# handed the raw command. This banner said "cannot fix it here" and gave the
+# raw-text reason, which is the version that header examines and rejects --
+# found by review of this change, one file asserting what the other disowns,
+# which is the shape #63 found in CLAUDE.md and the header found in itself.
+# Both spellings are pinned side by side, because it is the delimiter that
+# decides the verdict and that is the part that reads as arbitrary in session.
+check no-git-push.sh BLOCK 'the pipe delimiter satisfies the anchor' \
+         "sed -i 's|sh -c git push --all|X|' f.sh"
+check no-git-push.sh ALLOW 'the slash delimiter does not' \
+         "sed -i 's/sh -c git push --all/X/' f.sh"
+# And the cost of widening, named so that it is a known trade rather than a
+# discovery: the prefix words are admitted after that same quote-blind
+# separator, so prose naming one of them in front of a wrapper is refused where
+# it was not before. It costs a refusal and never a permission, and the refusal
+# is visible and one edit away.
+check no-git-push.sh BLOCK 'a prefix word in prose, after a pipe (was ALLOW)' \
+         "sed -i 's|sudo sh -c git push --all|X|' f.sh"
+check no-git-push.sh ALLOW 'the same prose with the other delimiter' \
+         "sed -i 's/sudo sh -c git push --all/X/' f.sh"
+
+echo "=== issue #79: the prefix words are written once ==="
+# The point of the fix, asserted as a property of the file rather than inferred
+# from the verdicts above. A second copy of those fourteen words in four hook
+# regexes would be the same defect one more time, so the list is a variable that
+# cs_split reads through awk's -v and the anchor interpolates.
+#
+# `stdbuf` and `ionice` are counted because they appear in the assignment and
+# nowhere in the prose around it: sudo, timeout, xargs, nohup and env are named
+# in the header's worked example, so counting one of those would count the
+# explanation as a copy.
+tok 'the option words are written once in the library' \
+    '1' "$(prose_count "$HOOKS/lib/command-scan.sh" 'stdbuf')"
+tok 'and so is the second of them' \
+    '1' "$(prose_count "$HOOKS/lib/command-scan.sh" 'ionice')"
+armed 'the union is derived rather than written a third time' \
+      lib/command-scan.sh 'CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"'
+armed 'cs_split reads the option words as a variable' \
+      lib/command-scan.sh '-v wrapwords="$CS_WRAP_OPTION_WORDS"'
+armed 'and the operand words the same way' \
+      lib/command-scan.sh '-v operandwords="$CS_WRAP_OPERAND_WORDS"'
+armed 'cs_split strips whatever that variable holds' \
+      lib/command-scan.sh 'match(line, "^(" wrapwords ")[[:space:]]+")'
+armed 'and the anchor admits whatever the union holds' \
+      lib/command-scan.sh '($CS_WRAP_WORDS)[[:space:]]+'
+armed 'the intervening token is named once and used once' \
+      lib/command-scan.sh '($CS_WRAP_TOKEN){0,3}'
+# What an empty list does is not pinned here. It is part of the load, so it is
+# driven where the load is driven: the word-list block of the load-contract
+# section at the foot of this suite, per consumer, with the rest of the contract.
+#
+# This comment and two pins used to stand here for a different mechanism -- an
+# empty CS_WRAPPER_RE, justified as answering for "the two hooks that do not
+# guard their own load". #84 guarded all six and pinned the opposite, and the
+# anchor never reached the two convention hooks at all. Both pins went with the
+# mechanism; see THE WORD LIST IS PART OF THE LOAD in lib/command-scan.sh.
+# The literal cs_split carried before #79. It is the second copy this fix
+# removes, and a re-derivation would restore it.
+unarmed 'cs_split no longer carries the list as a literal' \
+        lib/command-scan.sh '/^(env|command|xargs'
+# What these pins are NOT evidence of, named because a check is evidence about
+# what it names: they read the derivation, not the verdict. A list that is
+# written once and is wrong is wrong in both places at once, which is what the
+# header of lib/command-scan.sh says this file keeps costing. The behavioural
+# groups above are what say the list is right for the words they name.
 
 echo "=== REGRESSION: PR #35 review, a command after a control word ==="
 # A separator is not the only thing a command can follow. Splitting on ; left
@@ -2059,6 +2293,22 @@ check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a commit wrapped in a shel
   "sh -c 'git commit -m \"wip\"'"
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a cherry-pick wrapped in eval' \
   'eval "git cherry-pick 1234abc"'
+# The fourth consumer's share of issue #79: the same two commands behind a
+# prefix word this hook's wrapper rule could not see. Each was ALLOW before the
+# anchor was widened, and the #79 section above says these live here rather
+# than beside its own checks, because the verdicts need these fixtures.
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'sudo + a wrapped commit' \
+  "sudo sh -c 'git commit -m \"wip\"'"
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'timeout + a wrapped commit' \
+  "timeout 5 bash -c 'git commit -m \"wip\"'"
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'xargs + a wrapped cherry-pick' \
+  "xargs sh -c 'git cherry-pick 1234abc'"
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'nohup + a wrapped eval merge' \
+  "nohup eval 'git merge other-branch'"
+# And the control from the same section: a wrapper named in prose is not one,
+# so the widening did not cost this hook a read either.
+check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'grepping for the sudo sh -c rule' \
+  "grep -rn 'sudo sh -c .*git commit' .claude/hooks/"
 
 echo "--- the fallback: ahead == 0, behind > 0 against the active dev branch ---"
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'commit on a branch dev has moved past' \
@@ -3692,6 +3942,179 @@ says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'alembic-via-uv-group.sh 
   'the refusal names this hook and not its companion' 'ls'
 says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'Refusing rather than permitting' \
   'and says that it is refusing rather than permitting' 'ls'
+
+echo "--- issue #79: the word list is part of the load ---"
+# A third way to not load, beside nolib and halflib, and the one a probe for
+# names cannot see. Issue #79 made cs_split read the prefix-word list through a
+# variable, so a library can be present, define every cs_* function, and have
+# that list empty -- and then cs_split runs and strips nothing. `sudo git push
+# --all origin` has no command word at ^ and is permitted: the fourth review's
+# fix, silently undone. lib/command-scan.sh answers it by withdrawing cs_split
+# when either half of the list is empty, which reduces this state to a halflib
+# one every consumer already refuses.
+#
+# HERE AND NOT IN EACH HOOK'S SECTION, for #84's reason. These checks were
+# first written inside four per-hook sections, beside a fail-safe argued from
+# "two hooks source the library unguarded". #84 moved every load check here,
+# made that premise false, and resolving the merge the natural way -- taking
+# #84's side of each hunk -- deleted all nine of them with the suite still
+# green, because a deleted check cannot fail. Review of PR #89 measured that
+# before it happened. They are rebuilt here, per consumer, off LIB_CONSUMERS.
+#
+# ALL SIX CONSUMERS, not the four boundary hooks, and that is a correction.
+# The fail-safe these replace was an empty CS_WRAPPER_RE, which reached the four
+# hooks that read the anchor and not the two convention hooks, which call
+# cs_split and never the anchor: `sudo pytest tests/` and `sudo alembic upgrade
+# head` were permitted by an emptied list the whole time that fail-safe was
+# described as the answer. Driving the loop off LIB_CONSUMERS is what makes a
+# seventh consumer land here without anyone remembering to add it.
+#
+# TWO KINDS OF CHECK PER CONSUMER, and neither is enough alone. A command none
+# of the hooks has any opinion about -- `ls`, or `git status` on a stale branch
+# for the scoped hook -- can only be refused by the guard, so it says the guard
+# fired. A command the hook refuses ONLY through cs_split's prefix strip says
+# what the state costs when nothing fires: each of those is BLOCK against the
+# intact library too, so its discrimination is against a library that empties
+# the list without withdrawing cs_split, which is the mutant that has to go red.
+emptylist_path() {  # emptylist_path <hook> -- where the emptied-list copy of it sits
+  printf '%s\n' "$FIXTURES/emptylist-$1/$1"
+}
+mk_emptylist() {  # mk_emptylist <hook>
+  local hook="$1"
+  local target dir
+  target=$(emptylist_path "$hook")
+  dir=$(dirname "$target")
+  mkdir -p "$dir/lib"
+  cp "$HOOKS/$hook" "$dir/"
+  # Emptied IN PLACE. Appending would land after CS_WRAPPER_RE is derived and
+  # after the withdrawal has already run against a full list, so the fixture
+  # would test nothing the library does on load; the first version of these
+  # appended, and was green for that reason.
+  sed -E 's/^CS_WRAP_OPTION_WORDS=.*/CS_WRAP_OPTION_WORDS=""/;
+          s/^CS_WRAP_OPERAND_WORDS=.*/CS_WRAP_OPERAND_WORDS=""/' \
+      "$HOOKS/lib/command-scan.sh" > "$dir/lib/command-scan.sh"
+  # Both directions on the edit, as mk_halflib does on its rename: a sed that
+  # matched nothing leaves a complete library, and the checks against it pass.
+  grep -q '^CS_WRAP_OPTION_WORDS=""$' "$dir/lib/command-scan.sh" \
+    && grep -q '^CS_WRAP_OPERAND_WORDS=""$' "$dir/lib/command-scan.sh" || {
+    echo "the emptied-list library for $hook did not empty both halves; the checks using it prove nothing" >&2
+    exit 1
+  }
+  ! grep -qE "^CS_WRAP_(OPTION|OPERAND)_WORDS='" "$dir/lib/command-scan.sh" || {
+    echo "the emptied-list library for $hook still assigns a full list; the checks using it prove nothing" >&2
+    exit 1
+  }
+  # And that it still loads with every OTHER function defined, so a refusal
+  # against it is the list's doing and not a library broken some other way.
+  # cs_split is deliberately not asked here: whether it is withdrawn is the
+  # mechanism, and a fixture guard exits the suite rather than failing a check,
+  # which would report a removed mechanism as an aborted run instead of as red.
+  bash -c ". '$dir/lib/command-scan.sh' && command -v cs_normalise && command -v cs_git_args \
+           && command -v cs_gh_args && command -v cs_join" >/dev/null 2>&1 || {
+    echo "the emptied-list library for $hook does not load with its other functions; the checks using it prove nothing" >&2
+    exit 1
+  }
+  [ -x "$target" ] || {
+    echo "the emptied-list fixture for $hook is not at $target, or is not executable; the checks using it prove nothing" >&2
+    exit 1
+  }
+}
+for hook in $LIB_CONSUMERS; do
+  mk_emptylist "$hook"
+done
+
+# The mechanism itself, as a check rather than a fixture guard. Both halves, and
+# each half alone: `unset -f` placed above cs_split's definition does nothing and
+# the definition restores it, and a test written as `&&` instead of `||` would
+# withdraw it only when both are empty.
+cs_split_after_loading() {  # cs_split_after_loading <library> -- present or absent
+  bash -c ". '$1'; command -v cs_split >/dev/null 2>&1 && echo present || echo absent"
+}
+tok 'the intact library defines cs_split' \
+    'present' "$(cs_split_after_loading "$HOOKS/lib/command-scan.sh")"
+tok 'a library with both halves of the word list empty withdraws it' \
+    'absent' "$(cs_split_after_loading "$(dirname "$(emptylist_path no-git-push.sh)")/lib/command-scan.sh")"
+sed -E 's/^CS_WRAP_OPTION_WORDS=.*/CS_WRAP_OPTION_WORDS=""/' "$HOOKS/lib/command-scan.sh" \
+  > "$FIXTURES/emptylist-option-half.sh"
+sed -E 's/^CS_WRAP_OPERAND_WORDS=.*/CS_WRAP_OPERAND_WORDS=""/' "$HOOKS/lib/command-scan.sh" \
+  > "$FIXTURES/emptylist-operand-half.sh"
+tok 'and so does one with only the option words empty' \
+    'absent' "$(cs_split_after_loading "$FIXTURES/emptylist-option-half.sh")"
+tok 'and one with only the operand words empty' \
+    'absent' "$(cs_split_after_loading "$FIXTURES/emptylist-operand-half.sh")"
+
+# no-git-push.sh: the measured #79 case. Intact, `ls` is ALLOW -- the #84 block
+# above pins that -- so the BLOCK here is the guard. The prefixed push is the
+# verdict an emptied list permits when cs_split is left running.
+check_in "$ON_DEV" "$(emptylist_path no-git-push.sh)" BLOCK \
+  'no-git-push.sh, a library with no wrapper words, anything at all' 'ls'
+check_in "$ON_DEV" "$(emptylist_path no-git-push.sh)" BLOCK \
+  'no-git-push.sh, a library with no wrapper words, a prefixed push' 'sudo git push --all origin'
+says "$ON_DEV" "$(emptylist_path no-git-push.sh)" 'no-git-push.sh could not load' \
+  'no-git-push.sh names itself for an emptied list, as for a missing function' 'ls'
+
+check_in "$ON_DEV" "$(emptylist_path no-pr-decisions.sh)" BLOCK \
+  'no-pr-decisions.sh, a library with no wrapper words, anything at all' 'ls'
+check_in "$ON_DEV" "$(emptylist_path no-pr-decisions.sh)" BLOCK \
+  'no-pr-decisions.sh, a library with no wrapper words, a prefixed merge' 'sudo gh pr merge 5'
+says "$ON_DEV" "$(emptylist_path no-pr-decisions.sh)" 'no-pr-decisions.sh could not load' \
+  'no-pr-decisions.sh names itself for an emptied list' 'ls'
+
+check_in "$ON_DEV" "$(emptylist_path no-commit-to-main.sh)" BLOCK \
+  'no-commit-to-main.sh, a library with no wrapper words, anything at all' 'ls'
+check_in "$ON_MAIN" "$(emptylist_path no-commit-to-main.sh)" BLOCK \
+  'no-commit-to-main.sh, a library with no wrapper words, a prefixed commit on main' 'sudo git commit -m "wip"'
+says "$ON_DEV" "$(emptylist_path no-commit-to-main.sh)" 'no-commit-to-main.sh could not load' \
+  'no-commit-to-main.sh names itself for an emptied list' 'ls'
+
+# The scoped guard. `git status` on a stale branch, as in the #84 block, because
+# a plain commit there is refused whatever the library holds and so says nothing
+# about the guard -- measured: written that way first, it stayed green with the
+# guard removed. And a healthy worktree is not refused for an emptied list, any
+# more than for a missing one.
+check_in "$WT_STALE" "$(emptylist_path no-work-on-stale-branch.sh)" BLOCK \
+  'no-work-on-stale-branch.sh, a library with no wrapper words, on a stale branch' 'git status'
+check_in "$WT_STALE" "$(emptylist_path no-work-on-stale-branch.sh)" BLOCK \
+  'no-work-on-stale-branch.sh, a library with no wrapper words, a prefixed commit' 'sudo git commit -m "wip"'
+check_in "$WT_WORK" "$(emptylist_path no-work-on-stale-branch.sh)" ALLOW \
+  'no-work-on-stale-branch.sh, a library with no wrapper words, on a branch carrying work' 'sudo git commit -m "wip"'
+says "$WT_STALE" "$(emptylist_path no-work-on-stale-branch.sh)" 'no-work-on-stale-branch.sh could not load' \
+  'no-work-on-stale-branch.sh names itself for an emptied list' 'git status'
+
+# The two the empty-anchor fail-safe never reached. Each prefixed runner is BLOCK
+# against the intact library only because cs_split strips `sudo` and finds the
+# runner behind it.
+check_in "$ON_DEV" "$(emptylist_path pytest-via-uv-group.sh)" BLOCK \
+  'pytest-via-uv-group.sh, a library with no wrapper words, anything at all' 'ls'
+check_in "$ON_DEV" "$(emptylist_path pytest-via-uv-group.sh)" BLOCK \
+  'pytest-via-uv-group.sh, a library with no wrapper words, a prefixed pytest' 'sudo pytest tests/'
+check_in "$ON_DEV" pytest-via-uv-group.sh BLOCK \
+  'pytest-via-uv-group.sh, and that prefixed pytest is refused intact' 'sudo pytest tests/'
+says "$ON_DEV" "$(emptylist_path pytest-via-uv-group.sh)" 'pytest-via-uv-group.sh could not load' \
+  'pytest-via-uv-group.sh names itself for an emptied list' 'ls'
+check_in "$ON_DEV" "$(emptylist_path alembic-via-uv-group.sh)" BLOCK \
+  'alembic-via-uv-group.sh, a library with no wrapper words, anything at all' 'ls'
+check_in "$ON_DEV" "$(emptylist_path alembic-via-uv-group.sh)" BLOCK \
+  'alembic-via-uv-group.sh, a library with no wrapper words, a prefixed alembic' 'sudo alembic upgrade head'
+check_in "$ON_DEV" alembic-via-uv-group.sh BLOCK \
+  'alembic-via-uv-group.sh, and that prefixed alembic is refused intact' 'sudo alembic upgrade head'
+says "$ON_DEV" "$(emptylist_path alembic-via-uv-group.sh)" 'alembic-via-uv-group.sh could not load' \
+  'alembic-via-uv-group.sh names itself for an emptied list' 'ls'
+
+# The mechanism as text, beside the mechanism as verdicts. `armed`, so a withdrawal
+# commented out during a debugging session and left that way does not satisfy it.
+armed 'the library withdraws cs_split when the word list is incomplete' \
+      lib/command-scan.sh 'unset -f cs_split'
+armed 'on either half, and not on the union' \
+      lib/command-scan.sh 'if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then'
+# And that no guard learned about the list instead. A word-list probe in a hook
+# is a second answer to a question the library now answers once, and it is the
+# shape the first version of this took, in two hooks of six.
+for hook in $LIB_CONSUMERS; do
+  unarmed "$hook does not probe the word list itself" "$HOOKS/$hook" 'CS_WRAP_OPTION_WORDS'
+done
+written 'the load contract says the word list is part of the load' \
+  "$HOOKS/lib/command-scan.sh" 'THE WORD LIST IS PART OF THE LOAD'
 
 echo "--- the contract is written where the rename is made ---"
 # The checks above are evidence about four guards as they stand. They say nothing

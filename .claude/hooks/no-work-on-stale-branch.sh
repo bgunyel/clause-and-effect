@@ -288,7 +288,11 @@ VERBS="commit cherry-pick revert merge am rebase"
 # tokeniser finds nothing -- so this runs on the raw text and before the search
 # for a command word, exactly as the three sibling hooks do. Ordering it the
 # other way would let every wrapped commit through.
-if echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|(`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|$))' \
+#
+# The expression is CS_WRAPPER_RE, derived once in lib/command-scan.sh since
+# #79 -- one copy where all four hooks carried their own, and none of the four
+# admitted the prefix words cs_split already strips.
+if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE" \
    && echo "$COMMAND" | grep -qE 'git[[:space:]]+([^;&|]*[[:space:]])?(commit|cherry-pick|revert|merge|am|rebase)([^-A-Za-z0-9_]|$)'; then
   refuse "(That command is wrapped in a shell, so what it would write cannot be read through a quoted payload. Run it plainly.)"
 fi
