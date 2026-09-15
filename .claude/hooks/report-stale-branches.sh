@@ -59,14 +59,66 @@
 # repository setting is Bertan's, like every other reserved act this file
 # declines to perform.
 #
+# IT CLASSIFIES BY PULL REQUEST, BECAUSE THE SWEEP DOES. "The sweep" defines
+# stale as a worktree branch whose pull request merged or closed, clear as one
+# whose pull request is open, and unclassified as one with none -- and until
+# #100 this file never read a pull request. It classified by ref state instead,
+# and the two disagreed in exactly the cases the sweep acts on. Here they
+# disagreed on nearly every merged branch. A worktree branch is pushed as
+# `git push origin <branch>`, which sets no upstream -- on 2026-09-15 three
+# branches present on origin had none locally, and the two that had one tracked
+# origin/dev-05, which never goes away -- so there is no upstream to go
+# `[gone]`, and a merged branch read as unclassified, the class the sweep leaves
+# alone. Changing the skill to describe the ref-state classes was the other fix
+# #100 offered, and was not taken for that reason: the sweep would have had
+# almost nothing to act on. This is the one place that argument is made; the
+# skill points here.
+#
+# One read of every pull request, bounded, after the settings read, and skipped
+# when that read found gh missing or unreachable -- an offline session already
+# waits out the fetch, and should not wait out two gh calls behind it as well.
+# It fails open the way the settings read does: when the pull requests could not
+# be read, the report says so and falls back to the ref-state classes it
+# computed before, worded as ref state so that they are not read under the
+# pull-request meanings. The sweep's definitions name both.
+#
+# WHICH PULL REQUEST DECIDES, AND WHEN IT MAY NOT. A branch with an open pull
+# request is in flight whatever else it has. Otherwise the newest by number
+# decides, so a branch closed after it merged carries the closed one's warning
+# that its commits may exist nowhere else. By number and not by list position,
+# so nothing rests on the order gh returns them in.
+#
+# A merged or closed pull request calls a branch stale only if the branch is at
+# or behind that pull request's head commit. Pull requests are matched to
+# branches by head name, and without this test a branch cut fresh under a name
+# an earlier pull request had used read as that pull request's: stale, the one
+# class the sweep deletes, and the lowercase branch delete would not have stopped
+# it, because a branch with no commit of its own is exactly what that flag
+# permits. Found on review of this change. A branch that is not at or behind the
+# head -- a reused name, work committed after the merge, a fork's pull request
+# under the same name -- is unclassified, and the line says why.
+#
+# Two limits. The read stops at the newest 1000 pull requests, so a branch whose
+# only pull request is older reads as having none: unclassified, the safe
+# direction. And the head test is ancestry, not identity, so a branch cut under a
+# reused name at a commit the earlier head already contains, and never worked
+# on, still reads as stale -- the permitting direction, taken knowingly. Every
+# commit on such a branch is already in that head, so a sweep of it loses the
+# name and not a commit; and identity would call unclassified every merged branch
+# whose local copy lagged its remote.
+#
 # Exits 0 always. A SessionStart hook that fails is a session that does not
 # start, and nothing here is worth that.
 FETCH_TIMEOUT=15
 # Its own budget rather than the fetch's, and smaller: one small API request
-# against a fetch of every ref. The two are spent in series and the hook's own
+# against a fetch of every ref. The calls are spent in series and the hook's own
 # timeout in settings.json has to outlast their sum, which check-hooks.sh
-# asserts from these two lines rather than from a third copy of the numbers.
+# asserts from these lines rather than from another copy of the numbers.
 SETTINGS_TIMEOUT=10
+# The pull request read. It measured 0.60-0.80s over five runs against the 38
+# pull requests this repository had on 2026-09-15; the budget is for a slow
+# network, not for the read.
+PRS_TIMEOUT=10
 
 cd "$(dirname "$0")/../.." || exit 0
 git rev-parse --git-dir >/dev/null 2>&1 || exit 0
@@ -157,6 +209,40 @@ else
   fi
 fi
 
+# Every pull request, as head, state, number and head commit. See the header for
+# why it is read at all and why it is skipped when the settings read could not
+# reach gh; the settings read's reason is then this one's too.
+PRS=
+PRS_READ=
+PRS_UNREAD=$UNREAD
+if [ -z "$PRS_UNREAD" ]; then
+  if PRS=$(timeout "$PRS_TIMEOUT" gh pr list --state all --limit 1000 \
+       --json headRefName,state,number,headRefOid \
+       --jq '.[] | "\(.headRefName)\t\(.state)\t\(.number)\t\(.headRefOid)"' \
+       2>/dev/null); then
+    PRS_READ=1
+  else
+    PRS_UNREAD="gh pr list failed or timed out after ${PRS_TIMEOUT}s"
+  fi
+fi
+if [ -n "$PRS_READ" ]; then
+  echo "pull requests: read -- branches are classified by their pull request's state"
+else
+  echo "pull requests: NOT READ -- ${PRS_UNREAD}, so branches are"
+  echo "       classified by ref state alone, which cannot see a pull request."
+fi
+
+# The pull request that decides a branch, as the line gh printed for it, or
+# nothing when the branch has none: an open one if there is one, and otherwise
+# the newest by number. The header says why.
+pr_of() {  # pr_of <branch>
+  printf '%s\n' "$PRS" | awk -F'\t' -v b="$1" '
+    $1 != b { next }
+    { k = ($2 == "OPEN") * 1000000000 + $3 }
+    k > best { best = k; line = $0 }
+    END { if (best) print line }'
+}
+
 # The active dev branch: the highest-numbered refs/remotes/origin/dev-*. Why the
 # digit filter and the version sort are both load-bearing is argued once, in
 # no-work-on-stale-branch.sh's header, rather than twice here in different words
@@ -203,21 +289,68 @@ while IFS=$'\t' read -r BRANCH TRACK; do
     continue
   fi
 
+  AHEAD=
+  BEHIND=
+  if [ -n "$DEV" ]; then
+    COUNTS=$(git rev-list --left-right --count "$DEV...refs/heads/$BRANCH" 2>/dev/null)
+    BEHIND=$(printf '%s' "$COUNTS" | cut -f1)
+    AHEAD=$(printf '%s' "$COUNTS" | cut -f2)
+  fi
+
+  # The sweep's three classes, as it defines them.
+  if [ -n "$PRS_READ" ]; then
+    PR=$(pr_of "$BRANCH")
+    PR_STATE=$(printf '%s' "$PR" | cut -f2)
+    PR_NUM=$(printf '%s' "$PR" | cut -f3)
+    PR_HEAD=$(printf '%s' "$PR" | cut -f4)
+    # At or behind the pull request's head, or that pull request is not this
+    # branch's to decide. A head this clone does not have is not an ancestor.
+    AT_HEAD=
+    case "$PR_STATE" in MERGED|CLOSED)
+      [ -n "$PR_HEAD" ] \
+        && git merge-base --is-ancestor "refs/heads/$BRANCH" "$PR_HEAD" 2>/dev/null \
+        && AT_HEAD=1 ;;
+    esac
+    if [ -n "$AHEAD" ]; then
+      AHEAD_BEHIND="; $AHEAD ahead of $DEV, $BEHIND behind it"
+    else
+      AHEAD_BEHIND=
+    fi
+    case "$PR_STATE" in
+      OPEN)
+        CLEAR=$((CLEAR + 1)) ;;
+      MERGED|CLOSED)
+        if [ -z "$AT_HEAD" ]; then
+          REPORT="$REPORT
+  $BRANCH -- pull request #$PR_NUM is $(printf '%s' "$PR_STATE" | tr 'A-Z' 'a-z'), but this branch is not at or behind its head$AHEAD_BEHIND (unclassified: a reused name, or work after it)$HERE"
+          UNCLASSIFIED=$((UNCLASSIFIED + 1))
+        elif [ "$PR_STATE" = MERGED ]; then
+          REPORT="$REPORT
+  $BRANCH -- merged: pull request #$PR_NUM$HERE"
+          STALE=$((STALE + 1))
+        else
+          REPORT="$REPORT
+  $BRANCH -- closed without merging: pull request #$PR_NUM; its commits may exist nowhere else$HERE"
+          STALE=$((STALE + 1))
+        fi ;;
+      *)
+        REPORT="$REPORT
+  $BRANCH -- no pull request$AHEAD_BEHIND (unclassified: cut and not yet worked, or abandoned)$HERE"
+        UNCLASSIFIED=$((UNCLASSIFIED + 1)) ;;
+    esac
+    continue
+  fi
+
+  # Ref state alone, when the pull requests could not be read. A gone upstream
+  # is what delete_branch_on_merge leaves, and also what deleting the branch of
+  # a closed pull request by hand leaves, so it is not called merged.
   if [ "$TRACK" = "[gone]" ]; then
     REPORT="$REPORT
-  $BRANCH -- merged: its branch on the remote is gone$HERE"
+  $BRANCH -- stale by ref state: its branch on the remote is gone (merged, or closed and deleted)$HERE"
     STALE=$((STALE + 1))
     continue
   fi
 
-  if [ -z "$DEV" ]; then
-    CLEAR=$((CLEAR + 1))
-    continue
-  fi
-
-  COUNTS=$(git rev-list --left-right --count "$DEV...refs/heads/$BRANCH" 2>/dev/null)
-  BEHIND=$(printf '%s' "$COUNTS" | cut -f1)
-  AHEAD=$(printf '%s' "$COUNTS" | cut -f2)
   if [ -z "$AHEAD" ]; then
     CLEAR=$((CLEAR + 1))
     continue
