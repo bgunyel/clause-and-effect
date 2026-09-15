@@ -144,8 +144,9 @@ HOOKS=$(pwd)
 FAILED=0
 # Where a hook is, given what a check names: a bare filename is one of this
 # repository's, an absolute path is a fixture copy of one. Written once because
-# three helpers below ask it, and they answered it in three identical `case`
-# statements until the load-contract section gave `says` its first fixture.
+# three helpers below asked it, and they answered it in three identical `case`
+# statements until the load-contract section gave `says` its first fixture; five
+# ask it now, `feed` and `feed_says` having come with #95.
 hook_path() {  # hook_path <script|/absolute/hook>
   case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s\n' "$HOOKS/$1" ;; esac
 }
@@ -4562,7 +4563,8 @@ for hook in alembic-via-uv-group.sh no-commit-to-main.sh no-git-push.sh no-pr-de
 done
 # The two #95 made consumers, whole: they had no library to fail to load before,
 # so every check here is new. feed rather than check_in, because the Edit hook
-# reads file_path and because the verdict should be exact.
+# reads file_path. #95 gave a second, that feed's verdict was exact; #98 made
+# every helper's exact, so it no longer separates the two.
 feed "$PATH" append-only-docs.sh ALLOW 'append-only-docs.sh, a command naming no guarded path, library intact' \
   '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
 feed "$PATH" "$(nolib_path append-only-docs.sh)" BLOCK 'no lib/, append-only-docs.sh refuses anything at all' \
@@ -5291,8 +5293,8 @@ for helper in $DRIVEN_VERDICT; do
       'FAIL' "$(drive_helper "$helper" crash-127 BLOCK)"
 done
 
-# The message helpers. A refusal is the only thing either can pass on, so the
-# passing case is exit 2 alone.
+# The message helpers. A refusal is the only thing any of them can pass on, so
+# the passing case is exit 2 alone.
 for helper in $DRIVEN_MESSAGE; do
   tok "$helper: a hook that exits 2 passes" \
       'ok' "$(drive_helper "$helper" block-2 -)"
