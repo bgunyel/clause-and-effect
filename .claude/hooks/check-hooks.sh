@@ -3568,6 +3568,38 @@ tok 'and it outlasts them by arithmetic, not by both literals happening to agree
 # The main ancestry line below adds a read and no budget: it asks git about two
 # refs already on disk, so neither number above moves and neither literal does.
 
+# worktree.baseRef, which decides where EnterWorktree forks a new branch when
+# the agent skips the step CLAUDE.md's boundary section gives it: a new worktree
+# branch is set to origin/dev-NN at creation. With that step taken the value
+# decides nothing, so what it is chosen for is the direction it fails in when
+# the step is skipped, and the two values the harness offers fail in opposite
+# ones.
+#
+# `head` forks from the session's own HEAD -- inside a worktree, that worktree's
+# HEAD, not the main checkout's. So it starts ahead of the active dev branch
+# whenever that HEAD carries commits origin/dev-NN lacks: Bertan's unpushed
+# commits on local dev-NN, another branch checked out, or any worktree session.
+# no-work-on-stale-branch.sh refuses only a branch with nothing of its own, so a
+# branch that starts ahead is permitted in silence, and its pull request carries
+# someone else's commits under the agent's number. `fresh` forks from
+# origin/HEAD, which is origin/main: behind, and refused at the first commit.
+# #36 Stage 0 chose `head` before the ahead case was seen; #99 Q5 reverses it.
+#
+# The price is a much staler base when the step is skipped -- origin/dev-05 was
+# 115 commits ahead of origin/main on 2026-09-15. And the refusal is only as good
+# as one assumption: it holds while origin/main is an ancestor of the active dev
+# branch. That is read each session rather than recorded here -- the report's
+# main ancestry line, driven in the section below.
+#
+# TWO LIMITS, named because this is a check on configuration and not on
+# behaviour. It cannot show the harness honours the value; the live runbook
+# does that (#110 section 1). And it cannot see .claude/settings.local.json,
+# which is gitignored and overrides this file on the one machine that has it.
+# So the sentence "changing baseRef leaves the suite green" is true of the
+# harness's behaviour and false of this file, which is the half this pins.
+tok 'settings.json forks a worktree from origin/main, which is refused, and not from HEAD' \
+    'fresh' "$(jq -r '.worktree.baseRef' "$SETTINGS" 2>/dev/null)"
+
 echo "=== #99: the report reads whether a branch cut from origin/main fails closed ==="
 # `worktree.baseRef: fresh` cuts a branch from origin/main, and is chosen because
 # such a branch starts behind the active dev branch and is refused at its first
