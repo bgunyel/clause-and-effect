@@ -210,13 +210,41 @@
 
 set -f
 
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+# The library is loaded here, before the command is read, and that is issue #95
+# rather than preference. It used to be loaded only once the branch was found
+# stale or gone, so a missing library left a healthy worktree permitted; but the
+# tool call is read through cs_tool_input now -- THE INPUT READ in the library,
+# the one reader every hook shares -- and a file that cannot read its input has
+# no command to have an opinion about. So the missing library refuses on every
+# branch, which is the trade, recorded: it gives up the ALLOW this file used to
+# return there, and gives up nothing an agent would notice, because every other
+# Bash hook sources the library and already refuses every command without it.
+# Tested for before it is sourced and the reader after, for THE LOAD CONTRACT's
+# reason; the three functions the rules need are probed below, where they were.
+LIB="$(dirname "$0")/lib/command-scan.sh"
+[ -r "$LIB" ] && . "$LIB"
+if ! command -v cs_tool_input >/dev/null 2>&1 \
+   || ! command -v cs_within_cap >/dev/null 2>&1; then
+  echo "Blocked: no-work-on-stale-branch.sh could not load lib/command-scan.sh, so it cannot read the tool call it was handed. Refusing rather than permitting." >&2
+  exit 2
+fi
+
+COMMAND=$(cs_tool_input command) || exit 2
+# THE LINE CAP, in lib/command-scan.sh, and held here -- before the bail on a
+# command with no git in it and before the branch is read -- because the library
+# is loaded here since #95, so the cap costs nothing on a healthy branch and this
+# file refuses an over-long line wherever it runs, as every other Bash hook does.
+# It used to be held only on a stale or gone branch, where the library used to be
+# loaded. Issue #96.
+if ! printf '%s\n' "$COMMAND" | cs_within_cap; then
+  echo "Blocked: no-work-on-stale-branch.sh: $CS_LINE_CAP_REFUSAL" >&2
+  exit 2
+fi
 
 # Every command this file refuses is a git subcommand, so text with no `git` in
 # it anywhere cannot hold one -- a wrapped payload included, since the payload
-# still carries the word. This bail runs before the library is needed and before
-# any git process is started, so `ls` in a stale worktree costs one grep.
+# still carries the word. This bail runs before any git process is started, so
+# `ls` in a stale worktree costs one grep.
 echo "$COMMAND" | grep -q 'git' || exit 0
 
 # The exception is keyed on where the command runs, not on what the branch is
@@ -278,12 +306,8 @@ refuse() {
 # The branch is stale or gone, so from here the file has an opinion and must be
 # able to read the command to hold it. Without the tokeniser it cannot find a
 # command word at all, and every commit on a merged branch would be permitted.
-# A guard's own breakage refuses; it does not wave things through. Tested for
-# before it is sourced and the functions after: a missing file makes `.` end the
-# shell where an `if` around it never runs, so the guard would have been a
-# comment.
-LIB="$(dirname "$0")/lib/command-scan.sh"
-[ -r "$LIB" ] && . "$LIB"
+# A guard's own breakage refuses; it does not wave things through. The library
+# was sourced at the top of this file, where the input is read.
 #
 # All three functions are probed, not one. cs_git_args is the one whose absence
 # would be silent and permitting: `RAW=$(cs_git_args "$VERB") || continue`
@@ -297,16 +321,8 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 # make the name the part a reader needs.
 if ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_normalise >/dev/null 2>&1 \
-   || ! command -v cs_git_args >/dev/null 2>&1 \
-   || ! command -v cs_within_cap >/dev/null 2>&1; then
+   || ! command -v cs_git_args >/dev/null 2>&1; then
   refuse "(no-work-on-stale-branch.sh could not load lib/command-scan.sh, so it cannot read what this command does. Refusing rather than permitting.)"
-fi
-
-# THE LINE CAP, in lib/command-scan.sh: a line longer than 16 KB is refused
-# before any pass reads it, because a hook still reading when the harness
-# timeout kills it permits. Issue #96.
-if ! printf '%s\n' "$COMMAND" | cs_within_cap; then
-  refuse "(no-work-on-stale-branch.sh: $CS_LINE_CAP_REFUSAL)"
 fi
 
 SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)

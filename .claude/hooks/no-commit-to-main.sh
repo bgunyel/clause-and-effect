@@ -73,6 +73,7 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 if ! command -v cs_normalise >/dev/null 2>&1 \
    || ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_git_args >/dev/null 2>&1 \
+   || ! command -v cs_tool_input >/dev/null 2>&1 \
    || ! command -v cs_within_cap >/dev/null 2>&1; then
   echo "Blocked: no-commit-to-main.sh could not load lib/command-scan.sh, so it cannot tell whether this command touches main. Refusing rather than permitting." >&2
   exit 2
@@ -83,8 +84,8 @@ fi
 # Nothing here needs pathname expansion.
 set -f
 
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+# A tool call that cannot be read refuses; see THE INPUT READ in the library.
+COMMAND=$(cs_tool_input command) || exit 2
 # THE LINE CAP, in lib/command-scan.sh: a line longer than 16 KB is refused
 # before any pass reads it, because a hook still reading when the harness
 # timeout kills it permits. Issue #96.

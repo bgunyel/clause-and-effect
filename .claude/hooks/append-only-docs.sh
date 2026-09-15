@@ -21,25 +21,26 @@
 # It is not simply made optional, because `docs/dev-logbook/` is a different
 # directory and must stay untouched.
 #
-# Issue #96 is the only reason this file sources lib/command-scan.sh, and it
-# calls one function from it. Every Bash hook runs under the 5 s timeout in
-# settings.json, a hook the harness kills permits, and the cap on line length
-# that stops that is answered once, in the library -- so this hook, which reads
-# the text with grep and nothing else, loads the library for the cap alone.
-# Its grep passes answered a 300 KB line in 0.03 s and were never the risk; the
-# cap is here because a rule that reaches every Bash hook but one is the
-# shape #84 was filed against. The load is guarded as THE LOAD CONTRACT in
-# that file says, so a missing library refuses everything here, as it does in
-# every other hook that loads it.
+# Issue #95: the command was read with its own `jq -r`, so jq missing or a tool
+# call that was not JSON left it empty and every overwrite permitted. It is read
+# through cs_tool_input now, the reader every hook shares; see THE INPUT READ in
+# lib/command-scan.sh. Issue #96 is the other function this file takes from the
+# library: every Bash hook runs under the 5 s timeout in settings.json, a hook
+# the harness kills permits, and the cap on line length that stops that is
+# answered once, there. Its grep passes answered a 300 KB line in 0.03 s and
+# were never the risk; the cap is here because a rule that reaches every Bash
+# hook but one is the shape #84 was filed against. This file still matches paths
+# where they stand rather than through the tokeniser. The library is tested for
+# before it is sourced, and both functions after, for THE LOAD CONTRACT's reason.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
-if ! command -v cs_within_cap >/dev/null 2>&1; then
-  echo "Blocked: append-only-docs.sh could not load lib/command-scan.sh, so it cannot hold the line cap every Bash hook holds. Refusing rather than permitting." >&2
+if ! command -v cs_tool_input >/dev/null 2>&1 \
+   || ! command -v cs_within_cap >/dev/null 2>&1; then
+  echo "Blocked: append-only-docs.sh could not load lib/command-scan.sh, so it cannot read the command it was handed, or hold the line cap every Bash hook holds. Refusing rather than permitting." >&2
   exit 2
 fi
 
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+COMMAND=$(cs_tool_input command) || exit 2
 # THE LINE CAP, in lib/command-scan.sh: a line longer than 16 KB is refused
 # before any pass reads it, because a hook still reading when the harness
 # timeout kills it permits. Issue #96.

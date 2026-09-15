@@ -3245,6 +3245,47 @@ check_file() {  # check_file <script> <want> <label> <path relative to the repo>
     FAILED=1
   fi
 }
+
+# feed and feed_says: a hook handed raw stdin rather than a command. Every
+# helper above builds its payload with jq from a string, so none of them can hand
+# a hook a tool call that is not JSON, or one whose field is not a string --
+# which is the seam issue #95 is about, and its section at the foot of this suite
+# is where these are mostly driven. The hook runs in $ON_DEV with
+# CLAUDE_PROJECT_DIR naming this repository, so one helper serves the Bash hooks
+# and the Edit hook alike, and PATH is an argument so that jq can be taken off it.
+#
+# The verdict is exact, which check and check_in are not yet (#98): 0 is ALLOW, 2
+# is BLOCK, and any other exit is reported as itself and fails. That matters more
+# here than anywhere. A hook that dies on malformed input exits 1 or 127, the
+# harness treats that as a non-blocking error and runs the command, and a helper
+# reading "not 2" as ALLOW would pass it as a permit nobody looks at twice.
+feed() {  # feed <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin>
+  local path="$1" script="$2" want="$3" label="$4" payload="$5" got rc hook
+  hook=$(hook_path "$script")
+  printf '%s' "$payload" \
+    | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) >/dev/null 2>&1
+  rc=$?
+  case $rc in 0) got=ALLOW ;; 2) got=BLOCK ;; *) got="exit-$rc" ;; esac
+  if [ "$got" = "$want" ]; then
+    printf '  ok   %-5s %s\n' "$got" "$label"
+  else
+    printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
+    FAILED=1
+  fi
+}
+feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <raw stdin>
+  local path="$1" script="$2" want="$3" label="$4" payload="$5" err hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$payload" \
+        | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
+  case "$err" in
+    *"$want"*) printf '  ok   says  %s\n' "$label" ;;
+    *) printf '  FAIL %s\n         wanted the refusal to say |%s|\n         it said |%s|\n' \
+         "$label" "$want" "$err"
+       FAILED=1 ;;
+  esac
+}
+
 # An ALLOW that came from the path simply not being there would say nothing
 # about docs/research/, and a BLOCK-expecting case needs its file present for
 # the same reason. Both are asserted rather than assumed.
@@ -3979,12 +4020,25 @@ echo "=== issue #84: every hook refuses when lib/command-scan.sh does not load =
 # places is what the question was about, so the answer is one section: a file that
 # cannot load the tokeniser must refuse, and the list is whoever loads it.
 #
-# Since #96 the list includes append-only-docs.sh. It reads a command
-# with grep and needs nothing the tokeniser answers, but the line cap is a rule
-# every Bash hook holds and it is written once, in the library, as cs_within_cap
-# -- so that hook loads the library for one function, and is held to the same
-# contract for it as the other six are for theirs.
-LIB_CONSUMERS="alembic-via-uv-group.sh append-only-docs.sh no-commit-to-main.sh no-git-push.sh no-pr-decisions.sh no-work-on-stale-branch.sh pytest-via-uv-group.sh"
+# Eight since #95, which moved every hook's input read into cs_tool_input: the two
+# append-only hooks source the library for that function alone, and are driven
+# here with the rest because a file that cannot load its reader is the same
+# question.
+LIB_CONSUMERS="alembic-via-uv-group.sh append-only-docs-edit.sh append-only-docs.sh no-commit-to-main.sh no-git-push.sh no-pr-decisions.sh no-work-on-stale-branch.sh pytest-via-uv-group.sh"
+# Since #96 every Bash hook among them calls cs_within_cap as well, and
+# append-only-docs.sh takes that function from the library beside its reader.
+# Which consumers call it is read off their code rather than listed, for the
+# reason this list is checked against the files below: a list goes stale. The
+# issue #96 section asserts that those are exactly the Bash hooks settings.json
+# registers.
+CAP_CONSUMERS=$(for hook in $LIB_CONSUMERS; do
+    sed 's/[[:space:]]*#.*$//' "$HOOKS/$hook" 2>/dev/null | grep -q 'cs_within_cap' \
+      && printf '%s\n' "$hook"
+  done | tr '\n' ' ')
+[ -n "$CAP_CONSUMERS" ] || {
+  echo "no hook was read as calling cs_within_cap; the checks driven off that list prove nothing" >&2
+  exit 1
+}
 
 # The library absent. One directory for all of them: what makes the fixture is the
 # absence of lib/ beside the hook, not anything about the hook.
@@ -4091,7 +4145,12 @@ mk_halflib pytest-via-uv-group.sh cs_normalise
 mk_halflib pytest-via-uv-group.sh cs_split
 mk_halflib alembic-via-uv-group.sh cs_normalise
 mk_halflib alembic-via-uv-group.sh cs_split
+# The input reader, which every consumer calls since #95 and two call alone.
 for hook in $LIB_CONSUMERS; do
+  mk_halflib "$hook" cs_tool_input
+done
+# The line cap, which every Bash hook calls since #96.
+for hook in $CAP_CONSUMERS; do
   mk_halflib "$hook" cs_within_cap
 done
 
@@ -4185,9 +4244,20 @@ echo "--- no-work-on-stale-branch.sh, the one that had it right ---"
 # missing library must not turn a healthy worktree into a refused one. That makes
 # its driving command a real one on a stale branch rather than `ls`, and gives it
 # the ALLOW half that the other three take from the intact-library control.
+#
+# Issue #95 took the first half of that back, and the flip below is the record.
+# The tool call is read through cs_tool_input, which lives in the library, so a
+# missing library leaves this file with no command to scope anything by, and it
+# refuses on every branch like the other consumers. What that gives up is nothing
+# an agent sees: with lib/ gone every other Bash hook refuses every command
+# anyway. The scope survives where it still means something -- a library missing
+# only a tokeniser function, or with its word list emptied, is still an ALLOW on
+# a branch carrying work, and those checks are unchanged.
 check_in "$WT_STALE" "$(nolib_path no-work-on-stale-branch.sh)" BLOCK 'no lib/, on a stale branch' \
   'git status'
-check_in "$WT_WORK" "$(nolib_path no-work-on-stale-branch.sh)" ALLOW 'no lib/, on a branch carrying work' \
+check_in "$WT_WORK" "$(halflib_path no-work-on-stale-branch.sh cs_tool_input)" BLOCK \
+  'a library missing only cs_tool_input, on a branch carrying work' 'ls'
+flip "$WT_WORK" "$(nolib_path no-work-on-stale-branch.sh)" ALLOW BLOCK 'no lib/, on a branch carrying work' \
   'git commit -m "wip"'
 # WHAT THESE ARE AND ARE NOT. Every behavioural check in this block passes against
 # the unfixed hook, because this hook was the one that had the guard right: the two
@@ -4251,38 +4321,64 @@ says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'alembic-via-uv-group.sh 
 says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'Refusing rather than permitting' \
   'and says that it is refusing rather than permitting' 'ls'
 
-echo "--- append-only-docs.sh, from #96 ---"
-# The seventh consumer, which loads the library for cs_within_cap alone. Its
-# guard is new, so unlike the two blocks above these fail against the hook as
-# it was: it had no guard because it had no library, and `ls` was permitted
-# with the library gone because nothing was asked of it.
-check_in "$ON_DEV" append-only-docs.sh ALLOW 'a command naming no docs directory, library intact' \
-  'ls'
-check_in "$ON_DEV" "$(nolib_path append-only-docs.sh)" BLOCK \
-  'no lib/, append-only-docs.sh refuses anything at all' 'ls'
+echo "--- cs_tool_input, the reader every consumer calls since #95 ---"
+# The eighth function in the contract and the first every consumer shares. A
+# library missing only it leaves COMMAND=$(cs_tool_input command) empty with a
+# non-zero status, and the one thing between that and the #95 defect -- an empty
+# command, exit 0 -- is the probe. So each consumer is driven with it renamed
+# away, on a command every one of them otherwise permits. no-work-on-stale-branch.sh
+# is driven in its own block above, on the branch where its scope used to permit.
+for hook in alembic-via-uv-group.sh no-commit-to-main.sh no-git-push.sh no-pr-decisions.sh pytest-via-uv-group.sh; do
+  check_in "$ON_DEV" "$(halflib_path "$hook" cs_tool_input)" BLOCK \
+    "a library missing only cs_tool_input, $hook" 'ls'
+done
+# The two #95 made consumers, whole: they had no library to fail to load before,
+# so every check here is new. feed rather than check_in, because the Edit hook
+# reads file_path and because the verdict should be exact.
+feed "$PATH" append-only-docs.sh ALLOW 'append-only-docs.sh, a command naming no guarded path, library intact' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+feed "$PATH" "$(nolib_path append-only-docs.sh)" BLOCK 'no lib/, append-only-docs.sh refuses anything at all' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+feed "$PATH" "$(halflib_path append-only-docs.sh cs_tool_input)" BLOCK 'a library missing only cs_tool_input, append-only-docs.sh' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+feed_says "$PATH" "$(nolib_path append-only-docs.sh)" 'append-only-docs.sh could not load' \
+  'the refusal names this hook and not its Edit companion' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+feed_says "$PATH" "$(nolib_path append-only-docs.sh)" 'Refusing rather than permitting' \
+  'and says that it is refusing rather than permitting' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+EDIT_CONTROL=$(jq -cn --arg p "$REPO_ROOT/src/config.py" '{tool_name:"Edit",tool_input:{file_path:$p}}')
+feed "$PATH" append-only-docs-edit.sh ALLOW 'append-only-docs-edit.sh, an edit outside the guarded directories, library intact' \
+  "$EDIT_CONTROL"
+feed "$PATH" "$(nolib_path append-only-docs-edit.sh)" BLOCK 'no lib/, append-only-docs-edit.sh refuses any edit at all' \
+  "$EDIT_CONTROL"
+feed "$PATH" "$(halflib_path append-only-docs-edit.sh cs_tool_input)" BLOCK 'a library missing only cs_tool_input, append-only-docs-edit.sh' \
+  "$EDIT_CONTROL"
+feed_says "$PATH" "$(nolib_path append-only-docs-edit.sh)" 'append-only-docs-edit.sh could not load' \
+  'the refusal names this hook and not its Bash companion' "$EDIT_CONTROL"
+feed_says "$PATH" "$(nolib_path append-only-docs-edit.sh)" 'Refusing rather than permitting' \
+  'and says that it is refusing rather than permitting' "$EDIT_CONTROL"
+
+echo "--- cs_within_cap, the line cap every Bash hook calls since #96 ---"
+# append-only-docs.sh takes this function from the library beside its reader, so
+# it is driven here with the rest: the other consumers' halflib checks for it
+# stand in their own blocks above.
 check_in "$ON_DEV" "$(halflib_path append-only-docs.sh cs_within_cap)" BLOCK \
   'a library missing only cs_within_cap, append-only-docs.sh' 'ls'
-says "$ON_DEV" "$(nolib_path append-only-docs.sh)" 'append-only-docs.sh could not load' \
-  'the refusal names this hook and not one of its siblings' 'ls'
-says "$ON_DEV" "$(nolib_path append-only-docs.sh)" 'Refusing rather than permitting' \
-  'and says that it is refusing rather than permitting' 'ls'
-
-echo "--- cs_within_cap is refused by the guard, not by its own absence ---"
-# Every halflib check above for cs_within_cap is over-determined, and that is
-# what this block is for. Each hook calls it as `if ! ... | cs_within_cap`, so
-# with the function renamed away the call exits 127 and the hook refuses -- with
-# or without the probe. The BLOCK cannot tell a guard that names cs_within_cap
-# from one that does not. Which message the refusal carries can: the guard says
-# the library could not load, the fall-through says only that a line is long.
-# One per consumer, off the list, so the next one is asked too.
-for hook in $LIB_CONSUMERS; do
+# Every halflib check for cs_within_cap is over-determined, and that is what
+# this loop is for. Each hook calls it as `if ! ... | cs_within_cap`, so with the
+# function renamed away the call exits 127 and the hook refuses -- with or
+# without the probe. The BLOCK cannot tell a guard that names cs_within_cap from
+# one that does not. Which message the refusal carries can: the guard says the
+# library could not load, the fall-through says only that a line is long. One
+# per hook that calls it, off the derived list, so the next one is asked too.
+for hook in $CAP_CONSUMERS; do
   case "$hook" in
-    no-work-on-stale-branch.sh) dir=$WT_STALE cmd='git status' ;;
-    no-git-push.sh) dir=$PUSH_WT cmd='ls' ;;
-    *) dir=$ON_DEV cmd='ls' ;;
+    no-git-push.sh) dir=$PUSH_WT ;;
+    *) dir=$ON_DEV ;;
   esac
   says "$dir" "$(halflib_path "$hook" cs_within_cap)" "$hook could not load" \
-    "$hook, a library missing only cs_within_cap, refused by its guard" "$cmd"
+    "$hook, a library missing only cs_within_cap, refused by its guard" 'ls'
 done
 
 echo "--- issue #79: the word list is part of the load ---"
@@ -4519,6 +4615,9 @@ armed 'no-work-on-stale-branch.sh probes cs_within_cap' no-work-on-stale-branch.
 armed 'pytest-via-uv-group.sh probes cs_within_cap' pytest-via-uv-group.sh 'command -v cs_within_cap'
 armed 'alembic-via-uv-group.sh probes cs_within_cap' alembic-via-uv-group.sh 'command -v cs_within_cap'
 armed 'append-only-docs.sh probes cs_within_cap' append-only-docs.sh 'command -v cs_within_cap'
+for hook in $LIB_CONSUMERS; do
+  armed "$hook probes cs_tool_input" "$hook" 'command -v cs_tool_input'
+done
 # The readability test before the source, which no fixture above can tell apart:
 # under bash a `.` of a missing file returns non-zero and carries on, so nolib
 # behaves the same with it and without it. It is held as text for that reason,
@@ -4537,6 +4636,8 @@ armed 'alembic-via-uv-group.sh tests the library before sourcing it' \
       alembic-via-uv-group.sh '[ -r "$LIB" ] && . "$LIB"'
 armed 'append-only-docs.sh tests the library before sourcing it' \
       append-only-docs.sh '[ -r "$LIB" ] && . "$LIB"'
+armed 'append-only-docs-edit.sh tests the library before sourcing it' \
+      append-only-docs-edit.sh '[ -r "$LIB" ] && . "$LIB"'
 echo "--- the probe list is the call list, and these are all the consumers ---"
 # THE ONE CHECK HERE THAT SURVIVES THE NEXT CHANGE. Every literal above names a
 # file and a function, so all of them together say that these guards probe
@@ -4628,6 +4729,271 @@ unarmed 'alembic-via-uv-group.sh does not source the library unguarded' \
         alembic-via-uv-group.sh '. "$(dirname "$0")/lib/command-scan.sh"'
 unarmed 'append-only-docs.sh does not source the library unguarded' \
         append-only-docs.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+unarmed 'append-only-docs-edit.sh does not source the library unguarded' \
+        append-only-docs-edit.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+
+echo "=== issue #95: every hook refuses when it cannot read its input ==="
+# #84 made a hook that cannot load lib/command-scan.sh refuse. It did not reach
+# the step before that: every hook read its input with its own `jq` call, and when
+# the read failed the command was empty and the hook exited 0. Measured at
+# dev-05 e8c132f, all eight hooks, each condition below: exit 0 in every cell,
+# including `git push --force origin main` and `gh pr merge 5` with jq off PATH.
+# No check asked, because every helper above builds its payload with jq from a
+# command string -- none of them can hand a hook stdin that is not JSON, or a
+# command that is not a string. The harness's half of the seam was assumed.
+#
+# The fail direction is #103's Q19, stated in #95: refuse when jq is absent, when
+# stdin is not valid JSON, and when the field the hook reads is missing or not a
+# string; permit only an empty command string, which has nothing to run. A change
+# to the harness's payload then shows as every Bash call refused, not as every
+# guard switched off without a word -- CLAUDE.md's left-open item 3.
+#
+# Both directions, and they do not fail the same way. Every BLOCK here fails at
+# e8c132f. The ALLOWs pass there and are not evidence about the fix; they are
+# evidence about the fix going too far, and each names the over-fix it catches.
+#
+# The checks drive feed and feed_says, which hand a hook raw stdin; they are
+# defined beside check_file, because the load-contract section above needs them
+# for the two consumers #95 added.
+
+# jq off PATH, built here rather than assumed about the machine: a directory of
+# symlinks to every executable on this suite's own PATH, and a copy of it with jq
+# removed. Every tool, not the ones a hook is known to call today -- a list of
+# those would be a claim, and the next hook to call a new tool would refuse
+# without jq for a reason no check names.
+#
+# The with-jq twin is the control that makes the other one evidence. A hook that
+# refuses under the jq-less PATH might be refusing because the fixture is broken
+# -- a tool missing, a link dangling -- and that refusal would read as the fix. So
+# every jq-less BLOCK below stands beside the same payload under the twin, which
+# must ALLOW, and the guard asserts the two directories differ by jq and nothing
+# else.
+WITH_JQ_BIN="$FIXTURES/path-with-jq"
+NO_JQ_BIN="$FIXTURES/path-without-jq"
+mkdir -p "$WITH_JQ_BIN"
+IFS=: read -ra SUITE_PATH_DIRS <<< "$PATH"
+for d in "${SUITE_PATH_DIRS[@]}"; do
+  [ -d "$d" ] || continue
+  # ln -t without -f keeps the first of two same-named tools, which is the one
+  # PATH lookup would have found; the "File exists" for the second is expected.
+  find "$d" -maxdepth 1 \( -type f -o -type l \) -perm -u+x \
+    -exec ln -s -t "$WITH_JQ_BIN" {} + 2>/dev/null
+done
+cp -a "$WITH_JQ_BIN" "$NO_JQ_BIN"
+rm -f "$NO_JQ_BIN/jq"
+[ -n "$( PATH="$WITH_JQ_BIN"; command -v jq )" ] \
+  && [ -z "$( PATH="$NO_JQ_BIN"; command -v jq )" ] \
+  && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$NO_JQ_BIN") | grep -c '^[<>]')" = 1 ] \
+  && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$NO_JQ_BIN") | grep '^[<>]')" = '< jq' ] || {
+  echo "the jq-less PATH fixture is not the with-jq one minus jq; the checks using it prove nothing" >&2
+  exit 1
+}
+[ -e "$REPO_ROOT/src/config.py" ] || {
+  echo "src/config.py is not there, so the Edit hook's controls would permit for want of a file; they would prove nothing" >&2
+  exit 1
+}
+
+# The hooks, as literals, split by the field they read. The derivation at the end
+# of this section asserts these are every hook settings.json registers -- #84's
+# lesson, that the literal list is the claim and the files are the fact.
+INPUT_BASH_HOOKS="alembic-via-uv-group.sh append-only-docs.sh no-commit-to-main.sh no-git-push.sh no-pr-decisions.sh no-work-on-stale-branch.sh pytest-via-uv-group.sh"
+INPUT_EDIT_HOOKS="append-only-docs-edit.sh"
+
+echo "--- the seven Bash hooks, tool_input.command ---"
+for hook in $INPUT_BASH_HOOKS; do
+  feed "$WITH_JQ_BIN" "$hook" ALLOW "$hook: control, the symlinked PATH with jq in it permits ls" \
+    '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+  feed "$NO_JQ_BIN" "$hook" BLOCK "$hook: jq not on PATH, and the command is only ls" \
+    '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+  feed_says "$NO_JQ_BIN" "$hook" 'jq is not on PATH' \
+    "$hook: and the refusal names the cause, so the fix is one install away" \
+    '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+
+  # Not valid JSON. The trailing-text case is the one a reader that checks only
+  # for output gets wrong: jq prints the command from the first value and then
+  # exits non-zero on the rest.
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is plain text, not JSON" \
+    'git push --force origin main'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is JSON cut off before its closing braces" \
+    '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is a JSON object with text after it" \
+    '{"tool_name":"Bash","tool_input":{"command":"ls"}} trailing'
+  # Two values is a stream jq reads happily, one command per value, and not one
+  # tool call. The harness sends one; a reader that took the first would judge a
+  # command other than the second, so neither is read.
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is two JSON objects, one after the other" \
+    '{"tool_name":"Bash","tool_input":{"command":"ls"}}{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+  # Empty stdin is not an error to jq: it reads no values, prints nothing and
+  # exits 0. A fix that trusts jq's exit status alone permits this one.
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is empty" \
+    ''
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is the JSON value null" \
+    'null'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is a JSON array" \
+    '[]'
+
+  # Valid JSON, and the field is not there.
+  feed "$PATH" "$hook" BLOCK "$hook: no tool_input at all" \
+    '{"tool_name":"Bash"}'
+  feed "$PATH" "$hook" BLOCK "$hook: tool_input is a string, not an object" \
+    '{"tool_name":"Bash","tool_input":"ls"}'
+  feed "$PATH" "$hook" BLOCK "$hook: tool_input with no command, the row #95 measured" \
+    '{"tool_name":"Bash","tool_input":{}}'
+  feed "$PATH" "$hook" BLOCK "$hook: an Edit payload, whose file_path is not the field this hook reads" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"ls"}}'
+
+  # The field is there and is not a string.
+  feed "$PATH" "$hook" BLOCK "$hook: command is null" \
+    '{"tool_name":"Bash","tool_input":{"command":null}}'
+  feed "$PATH" "$hook" BLOCK "$hook: command is a number" \
+    '{"tool_name":"Bash","tool_input":{"command":42}}'
+  feed "$PATH" "$hook" BLOCK "$hook: command is an array of words" \
+    '{"tool_name":"Bash","tool_input":{"command":["git","push","--force","origin","main"]}}'
+  feed "$PATH" "$hook" BLOCK "$hook: command is an object" \
+    '{"tool_name":"Bash","tool_input":{"command":{"text":"ls"}}}'
+
+  # The permitting direction. An empty string is the one fail-open condition #95
+  # names: there is nothing to run. A fix that refuses whenever the command is
+  # empty, rather than whenever it was not read, turns this red.
+  feed "$PATH" "$hook" ALLOW "$hook: command is the empty string, which runs nothing" \
+    '{"tool_name":"Bash","tool_input":{"command":""}}'
+  # `jq -r` prints a JSON null as the four letters null. A fix that compares its
+  # output to "null" refuses this string; one that does not compare permits the
+  # null above. Only reading the type answers both.
+  feed "$PATH" "$hook" ALLOW "$hook: command is the string \"null\", which is a string" \
+    '{"tool_name":"Bash","tool_input":{"command":"null"}}'
+done
+
+echo "--- the trade, taken knowingly: without jq the convention hooks refuse what they permit ---"
+# #95 records this rather than only the fix. With jq absent every Bash command is
+# refused, the ones these two hooks exist to permit included. Each refusal stands
+# beside its twin under the with-jq PATH, so the pair says the command is one the
+# hook permits and that jq's absence alone is what turns it.
+feed "$WITH_JQ_BIN" pytest-via-uv-group.sh ALLOW 'pytest the way CLAUDE.md says to run it, jq on PATH' \
+  '{"tool_name":"Bash","tool_input":{"command":"uv run --group test pytest tests/"}}'
+feed "$NO_JQ_BIN" pytest-via-uv-group.sh BLOCK 'the same pytest, jq not on PATH' \
+  '{"tool_name":"Bash","tool_input":{"command":"uv run --group test pytest tests/"}}'
+feed "$WITH_JQ_BIN" alembic-via-uv-group.sh ALLOW 'alembic the way CLAUDE.md says to run it, jq on PATH' \
+  '{"tool_name":"Bash","tool_input":{"command":"uv run --group migrations alembic upgrade head"}}'
+feed "$NO_JQ_BIN" alembic-via-uv-group.sh BLOCK 'the same alembic, jq not on PATH' \
+  '{"tool_name":"Bash","tool_input":{"command":"uv run --group migrations alembic upgrade head"}}'
+
+echo "--- append-only-docs-edit.sh, tool_input.file_path ---"
+# The Edit hook read `.tool_input.file_path // empty`, so null, false and a
+# missing field all became "no file" and were permitted before the path was ever
+# compared. The controls name a file that exists outside the guarded directories,
+# by absolute path as the harness sends one, so their ALLOW is the hook's answer
+# about the path and not about a file that is not there.
+#
+# An empty file_path string is permitted, and pinned below. #95 names the empty
+# string as the fail-open case for a command and says nothing about a path, so
+# the fix decided it: an empty path names no file, there is nothing to protect,
+# and it is what the hook returned before. Recorded in the hook, and here.
+# EDIT_CONTROL is built once, in the load-contract section above.
+for hook in $INPUT_EDIT_HOOKS; do
+  feed "$WITH_JQ_BIN" "$hook" ALLOW "$hook: control, the symlinked PATH with jq in it permits an edit of src/config.py" \
+    "$EDIT_CONTROL"
+  feed "$NO_JQ_BIN" "$hook" BLOCK "$hook: jq not on PATH, and the file is outside every guarded directory" \
+    "$EDIT_CONTROL"
+  feed_says "$NO_JQ_BIN" "$hook" 'jq is not on PATH' \
+    "$hook: and the refusal names the cause" \
+    "$EDIT_CONTROL"
+
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is plain text, not JSON" \
+    'docs/dev-log/devlog_2026-08-25_session-2.md'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is JSON cut off before its closing braces" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"docs/dev-log/devlog_2026-08-25_session-2.md"'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is a JSON object with text after it" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"src/config.py"}} trailing'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is two JSON objects, one after the other" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"src/config.py"}}{"tool_name":"Edit","tool_input":{"file_path":"src/config.py"}}'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is empty" \
+    ''
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is the JSON value null" \
+    'null'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is a JSON array" \
+    '[]'
+
+  feed "$PATH" "$hook" BLOCK "$hook: no tool_input at all" \
+    '{"tool_name":"Edit"}'
+  feed "$PATH" "$hook" BLOCK "$hook: tool_input is a string, not an object" \
+    '{"tool_name":"Edit","tool_input":"src/config.py"}'
+  feed "$PATH" "$hook" BLOCK "$hook: tool_input with no file_path" \
+    '{"tool_name":"Edit","tool_input":{}}'
+  feed "$PATH" "$hook" BLOCK "$hook: a Bash payload, whose command is not the field this hook reads" \
+    '{"tool_name":"Bash","tool_input":{"command":"docs/dev-log/devlog_2026-08-25_session-2.md"}}'
+
+  feed "$PATH" "$hook" BLOCK "$hook: file_path is null" \
+    '{"tool_name":"Edit","tool_input":{"file_path":null}}'
+  feed "$PATH" "$hook" BLOCK "$hook: file_path is false, which // empty also swallowed" \
+    '{"tool_name":"Edit","tool_input":{"file_path":false}}'
+  feed "$PATH" "$hook" BLOCK "$hook: file_path is a number" \
+    '{"tool_name":"Edit","tool_input":{"file_path":42}}'
+  feed "$PATH" "$hook" BLOCK "$hook: file_path is an array" \
+    '{"tool_name":"Edit","tool_input":{"file_path":["docs","dev-log"]}}'
+  feed "$PATH" "$hook" BLOCK "$hook: file_path is an object" \
+    '{"tool_name":"Edit","tool_input":{"file_path":{"path":"src/config.py"}}}'
+
+  # The permitting direction, and the trade the fix decided: see the note above.
+  feed "$PATH" "$hook" ALLOW "$hook: file_path is the empty string, which names no file" \
+    '{"tool_name":"Edit","tool_input":{"file_path":""}}'
+  feed "$PATH" "$hook" ALLOW "$hook: file_path is the string \"null\", which is a path that is not there" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"null"}}'
+done
+
+echo "--- every registered hook is one of these, and the read is written once ---"
+# The two lists above are the claim; settings.json is the fact. A hook registered
+# tomorrow with its own input read is #95 again, and every literal above would
+# stay green, so the lists are derived from the registration and compared. A
+# matcher is split on | so that a hook registered for Bash|Edit lands in both.
+registered_for() {  # registered_for <tool> -- hook basenames whose matcher names it
+  jq -r --arg t "$1" \
+    '.hooks.PreToolUse[] | select(any(.matcher | split("|")[]; . == $t)) | .hooks[].command' \
+    "$REPO_ROOT/.claude/settings.json" 2>/dev/null \
+    | sed 's#^.*/##; s#"$##' | sort -u | tr '\n' ' '
+}
+for pair in "Bash:$INPUT_BASH_HOOKS" "Edit:$INPUT_EDIT_HOOKS" "Write:$INPUT_EDIT_HOOKS"; do
+  tool=${pair%%:*}
+  REGISTERED=$(registered_for "$tool")
+  CLAIMED=$(printf '%s\n' ${pair#*:} | sort -u | tr '\n' ' ')
+  # Empty is the permitting direction: a settings.json that could not be read
+  # would agree with an empty list.
+  if [ -n "$REGISTERED" ] && [ "$REGISTERED" = "$CLAIMED" ]; then
+    printf '  ok   derived the hooks registered for %s are exactly the ones checked here: %s\n' "$tool" "${REGISTERED% }"
+  else
+    printf '  FAIL the hooks registered for %s are not the ones this section checks\n         registered: |%s|\n         checked:    |%s|\n' \
+      "$tool" "$REGISTERED" "$CLAIMED"
+    FAILED=1
+  fi
+done
+# #103's Q27: the read moves into one shared reader in lib/command-scan.sh, so
+# that eight copies cannot disagree. Comments are stripped first, for the reason
+# `armed` strips them. The Edit hook is asked too: #95 let it keep its own copy
+# if the pull request recorded why, and it took the shared reader instead.
+# The strip has `armed`'s soft spot, named rather than closed: it cuts at the
+# `#` of a parameter expansion too, so a jq call later on a line holding `${x#y}`
+# would be hidden from this text check. What would still hold is the behavioural
+# half: the checks above take jq off PATH and feed malformed input whatever a
+# hook's text says, so a hidden second copy could disagree with the reader only
+# where they do not look.
+for hook in $INPUT_BASH_HOOKS $INPUT_EDIT_HOOKS; do
+  if sed 's/[[:space:]]*#.*$//' "$HOOKS/$hook" | grep -qw jq; then
+    printf '  FAIL %s still calls jq itself rather than the shared reader\n' "$hook"
+    FAILED=1
+  else
+    printf '  ok   derived %s does not call jq itself\n' "$hook"
+  fi
+done
+# And the reader is the library's, in live code. `armed` strips comments, so a
+# reader commented out would not satisfy it; the behavioural checks above would
+# go red too, but this one names where.
+armed 'the library defines the shared reader' lib/command-scan.sh 'cs_tool_input() {'
+# #95's acceptance: the fail direction for each condition stated in one place.
+# `written`, because it is prose.
+written 'the library states the fail direction of the input read' \
+  "$HOOKS/lib/command-scan.sh" 'THE INPUT READ'
+written 'and records the trade an environment without jq pays' \
+  "$HOOKS/lib/command-scan.sh" 'THE TRADE, taken knowingly'
 
 echo "--- issue #96: a line long enough to outlast the timeout ---"
 # The harness kills a hook that runs past its "timeout" in settings.json, and a
@@ -4701,19 +5067,19 @@ echo "--- issue #96: a line long enough to outlast the timeout ---"
 # passes, not in them.
 #
 # EVERY BASH HOOK, read off settings.json rather than listed, which is the
-# criterion's wording. append-only-docs.sh was not a consumer of the library,
-# and sources it now for the cap alone; see its header.
+# criterion's wording, and asserted below to be exactly the hooks whose code
+# calls cs_within_cap. append-only-docs.sh takes the function from the library
+# beside the reader #95 gave it; see its header.
 #
-# no-work-on-stale-branch.sh holds the cap where it holds an opinion, and
-# nowhere else, and the fixtures are shaped by that. It leaves without reading a
-# command on a branch carrying work, or on any command that does not contain
-# the word git, and both exits come before its library is loaded -- a missing
-# library is not refused there, and the load-contract section pins that. A
-# timeout on either path permits what the hook permits anyway, so no hole is
-# there to close, and loading the library first would cost that pin. So every
-# fixture below that names nothing still says `git` in passing -- `echo git`,
-# and a python3 string holding the word -- which is harmless to every hook and
-# is what sends this one past its first exit. It is asked on a stale branch.
+# no-work-on-stale-branch.sh was first written to hold the cap only on a stale
+# or gone branch, and only for a command naming git, because its library was
+# loaded only past those two exits. #95 moved the load and the read to the top
+# of that file, so the cap moved with them and now holds wherever the hook runs.
+# Every fixture below that names nothing still says `git` in passing -- `echo
+# git`, and a python3 string holding the word -- from when that mattered; it is
+# harmless to every hook, and it keeps the stale branch's rules, which sit
+# behind that bail, inside what these checks reach. It is asked on a stale
+# branch for the same reason, and on a branch carrying work once, below.
 #
 # NOT HERE, and named because a check suite is evidence about what it names:
 # the cost is per command as well as per line. 2,500 lines of `echo <75 a>`
@@ -4764,6 +5130,17 @@ cap_refused() {  # cap_refused <hook>
     append-only-docs.sh) printf '%s' 'rm -rf docs/dev-log' ;;
   esac
 }
+# The hooks that call cs_within_cap, derived off their code in the load-contract
+# section, are the Bash hooks settings.json registers -- no more, since the Edit
+# hook reads no command, and no fewer, which is the #84 shape.
+CAPPED=$(printf '%s\n' $CAP_CONSUMERS | sort | tr '\n' ' ')
+if [ "$CAPPED" = "$BASH_HOOKS" ]; then
+  printf '  ok   derived the hooks that call cs_within_cap are exactly the Bash hooks: %s\n' "${CAPPED% }"
+else
+  printf '  FAIL the hooks that call cs_within_cap are not the Bash hooks settings.json registers\n         call it: |%s|\n         Bash:    |%s|\n' \
+    "$CAPPED" "$BASH_HOOKS"
+  FAILED=1
+fi
 for hook in $BASH_HOOKS; do
   if [ ! -x "$HOOKS/$hook" ]; then
     printf '  FAIL settings.json runs %s, which is not an executable file beside this suite\n' "$hook"
@@ -4973,6 +5350,13 @@ $refused"
   under_a_second "$hook, a command whose longest line is exactly 16384 bytes" \
     "$(cap_timed "$dir" "$hook" "$(cap_line 16384 "; $refused")")"
 done
+
+# no-work-on-stale-branch.sh on a branch carrying work, where it has no other
+# opinion: the cap holds there too since #95 moved the read to the top.
+check_in "$WT_WORK" no-work-on-stale-branch.sh ALLOW \
+  'no-work-on-stale-branch.sh, control: a commit on a branch carrying work' 'git commit -m wip'
+check_in "$WT_WORK" no-work-on-stale-branch.sh BLOCK \
+  'no-work-on-stale-branch.sh, one line of 16385 bytes, on a branch carrying work' "$OVER_CAP"
 
 # The linear passes, through the library and past the cap: 512 KB, thirty-two
 # times it, where the quadratic passes take seconds apiece and linear ones take

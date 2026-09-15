@@ -29,13 +29,14 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 # missing only that one permitted a bare `alembic upgrade head` silently.
 if ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_normalise >/dev/null 2>&1 \
+   || ! command -v cs_tool_input >/dev/null 2>&1 \
    || ! command -v cs_within_cap >/dev/null 2>&1; then
   echo "Blocked: alembic-via-uv-group.sh could not load lib/command-scan.sh, so it cannot tell an alembic invocation from a mention of one. Refusing rather than permitting." >&2
   exit 2
 fi
 
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+# A tool call that cannot be read refuses; see THE INPUT READ in the library.
+COMMAND=$(cs_tool_input command) || exit 2
 # THE LINE CAP, in lib/command-scan.sh: a line longer than 16 KB is refused
 # before any pass reads it, because a hook still reading when the harness
 # timeout kills it permits. Issue #96.
