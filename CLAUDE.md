@@ -29,7 +29,7 @@ make verify         # audit + scan
 make upgrade-safe   # resolve an upgrade, run BOTH tiers, revert unless clean
 ```
 
-`make upgrade-safe` must pass before a PR closes. `make scan`/`upgrade-safe`
+`make upgrade-safe` must pass before a PR is merged into main branch. `make scan`/`upgrade-safe`
 accept `GUARDDOG_BUDGET=<seconds>`; **exit 75 means unfinished, not pass** —
 `make` collapses it to 2, so a caller that must tell the two apart runs
 `uv run guarddog-cached --time-budget N <file>` directly. Findings are
@@ -171,9 +171,10 @@ nothing else.
 Issue #84 is the same shape one level out, and it is the reason that last
 sentence is worth re-reading. The defect was not in the tokeniser but in the
 *load* of it: two of the four boundary hooks sourced `lib/command-scan.sh` with
-no guard at all and a third probed one of the three functions it calls, so
-renaming a `cs_*` function — a refactor, not an accident — left a forced push, a
-`gh pr merge`, a `gh pr create --base main` and a push to `main` all permitted.
+no guard at all and a third guarded only one of the three functions it calls,
+so renaming a `cs_*` function — a refactor, not an accident — left a forced
+push, a `gh pr merge`, a `gh pr create --base main` and a push to `main` all
+permitted.
 The suite was green throughout, 728 checks when the issue was filed and 830 by
 the time it merged, because it asked that question of two hooks of four and of
 one function of three.
@@ -183,10 +184,10 @@ why the copies are not one sourced preamble — a preamble is a file, so sourcin
 it needs the same guard one level up. It deliberately does **not** count its
 consumers, and #69 is why. That issue rebuilt the two convention hooks on the
 tokeniser in the same week and hit the identical trap from the other end,
-probing `cs_split` and not `cs_normalise` — so the count was four when #84 was
-filed and six when it landed. `check-hooks.sh` derives the list off the files
-instead, and derives each consumer's call set against its probe set: a fixture
-per consumer per function says the guards are right today, and only the
+requiring `cs_split` and not `cs_normalise` — so the count was four when #84
+was filed and six when it landed. `check-hooks.sh` derives the list off the
+files instead, and derives each consumer's call set against its required set: a
+fixture per consumer per function says the guards are right today, and only the
 derivation survives the next `cs_*` added to one of them.
 
 ## Documentation
@@ -245,6 +246,11 @@ a claim without a number is a claim to re-measure.
 
 ## What an unattended agent may do to this repository
 
+* **Unless otherwise stated, an agent shall create a dedicated worktree for its work.**
+* **Unless otherwise stated, an agent shall create its own dedicated worktree for its work.**
+* **Unless otherwise stated, an agent shall not work on a worktree created by someone else.**
+* **If an agent finds out that a worktree already exists, it shall ask the user for permission to work in that worktree.**
+
 An agent may push the branch of the linked worktree it is working in —
 non-forced, and naming that branch in the command, because a bare `git push`
 takes its destination from configuration an agent can itself change: write
@@ -256,9 +262,11 @@ the repository's default branch, which is `main`. Write
 spellings is used, `gh pr edit --base` and the two `gh api` forms included. It
 may comment on one, edit one without moving its base, and read one, through
 `gh pr view` or through a `gh api` request that does not write. It may not merge
-one, review one with a verdict, close or reopen one, or create or delete a
-release. A worktree branch lives as long as its pull request, and work moves to
-a new one once that has merged. `main` and `dev-NN` are Bertan's to push; `main`
+one, review one with a verdict, close or reopen one, or make any write to a
+release; it may read one, through `gh release list`, `view`, `download`, `verify`
+or `verify-asset`, and through a `gh api` request that does not write. A
+worktree branch lives as long as its pull request, and work moves to a new one
+once that has merged. `main` and `dev-NN` are Bertan's to push; `main`
 is additionally protected server-side by the `main-branch-protection` ruleset,
 which requires a pull request. Enforced by `.claude/hooks/no-git-push.sh`,
 `no-pr-decisions.sh`, `no-commit-to-main.sh` and `no-work-on-stale-branch.sh`,
@@ -294,10 +302,9 @@ A subagent that needs a parent's state runs without `isolation: "worktree"`.
 Nothing enforces this rule. A branch that skipped it starts where
 `worktree.baseRef` in `.claude/settings.json` puts it, which is `origin/main`
 unless a machine's own `settings.local.json` says otherwise. The stale-branch
-guard refuses its first commit
-only while `origin/main` is an ancestor of the active dev branch — which the
-SessionStart report reads every session, as its `main ancestry` line, and
-argues beside that read.
+guard refuses its first commit only while `origin/main` is an ancestor of the
+active dev branch — which the SessionStart report reads every session, as its
+`main ancestry` line, and argues beside that read.
 
 **Deliberately left open.** These stop mistakes, not adversaries: they read the
 text of a command, so a caller that means to evade them can. Five consequences

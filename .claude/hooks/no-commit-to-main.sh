@@ -61,7 +61,7 @@
 # missing file makes `.` end the shell where an `if` around it never runs, so
 # the guard would have been a comment.
 #
-# All three functions this file calls are probed, not cs_split alone. Issue #84
+# Every function this file calls is required, not cs_split alone. Issue #84
 # found the narrow version, and the narrow version is worse than none: it reads
 # as a guard and it permitted `git push origin HEAD:main` the moment cs_git_args
 # was renamed, because `cs_git_args commit` and `cs_git_args push` fail the same
@@ -72,7 +72,8 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
 if ! command -v cs_normalise >/dev/null 2>&1 \
    || ! command -v cs_split >/dev/null 2>&1 \
-   || ! command -v cs_git_args >/dev/null 2>&1; then
+   || ! command -v cs_git_args >/dev/null 2>&1 \
+   || ! command -v cs_tool_input >/dev/null 2>&1; then
   echo "Blocked: no-commit-to-main.sh could not load lib/command-scan.sh, so it cannot tell whether this command touches main. Refusing rather than permitting." >&2
   exit 2
 fi
@@ -82,8 +83,8 @@ fi
 # Nothing here needs pathname expansion.
 set -f
 
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+# A tool call that cannot be read refuses; see THE INPUT READ in the library.
+COMMAND=$(cs_tool_input command) || exit 2
 SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)
 CMDS=$(printf '%s\n' "$SCAN" | cs_split)
 
