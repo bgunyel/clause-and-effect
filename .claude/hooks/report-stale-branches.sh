@@ -172,6 +172,38 @@ else
   echo "       no-work-on-stale-branch.sh abstains rather than refusing."
 fi
 
+# Whether origin/main is an ancestor of the active dev branch. A worktree whose
+# creation skipped the step that sets its fork point starts wherever
+# worktree.baseRef in settings.json puts it, and `fresh` puts it at origin/main
+# -- behind the dev branch, and refused at its first commit by the ahead/behind
+# test. That holds only while
+# origin/main is an ancestor. A dev-NN merged into main before rotation, or any
+# change landed on main another way, turns it false, and then the same branch
+# starts ahead and is permitted in silence. So the assumption is read here each
+# session rather than written down anywhere it could go stale.
+#
+# Three outcomes, because `git merge-base --is-ancestor` has three answers: 0 is
+# yes, 1 is no, and anything else -- 128 when a ref does not resolve -- is no
+# answer. An unanswered question printed as NOT would be a warning about an
+# ancestry nobody saw. No network: it reads refs already on disk, so neither
+# budget above is spent on it. After a failed fetch those refs are whatever the
+# last successful one left, and every outcome says so, the positive one most of
+# all -- an ancestry that has since broken still reads as intact.
+if [ -n "$DEV" ]; then
+  STALE_REFS=
+  [ -n "$FETCHED" ] || STALE_REFS=' (read against refs the failed fetch left behind)'
+  git merge-base --is-ancestor refs/remotes/origin/main "refs/remotes/$DEV" 2>/dev/null
+  ANCESTRY=$?
+  case "$ANCESTRY" in
+    0) echo "main ancestry: origin/main is an ancestor of $DEV$STALE_REFS" ;;
+    1) echo "main ancestry: origin/main is NOT an ancestor of $DEV -- a branch cut"
+       echo "       from origin/main starts ahead of the active dev branch, and the ahead/behind"
+       echo "       test in no-work-on-stale-branch.sh passes a branch that is ahead.$STALE_REFS" ;;
+    *) echo "main ancestry: NOT READ -- git merge-base exited $ANCESTRY, so origin/main or"
+       echo "       $DEV does not resolve to a commit here$STALE_REFS" ;;
+  esac
+fi
+
 # Which branch is checked out in which worktree, so a stale branch can be
 # reported with the directory somebody is standing in.
 WT=$(git worktree list --porcelain 2>/dev/null | awk '

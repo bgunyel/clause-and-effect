@@ -3565,6 +3565,231 @@ if numeric "$REPORT_TIMEOUT" && numeric "$BUDGET_SUM"; then
 fi
 tok 'and it outlasts them by arithmetic, not by both literals happening to agree' \
     'yes' "$OUTLASTS"
+# The main ancestry line below adds a read and no budget: it asks git about two
+# refs already on disk, so neither number above moves and neither literal does.
+
+echo "=== #99: the report reads whether a branch cut from origin/main fails closed ==="
+# `worktree.baseRef: fresh` cuts a branch from origin/main, and is chosen because
+# such a branch starts behind the active dev branch and is refused at its first
+# commit. That is true only
+# while origin/main is an ancestor of origin/dev-NN, and it stops being true
+# after a dev-NN into main merge that lands before rotation, or after any change
+# reaches main another way. Then a branch cut from origin/main starts AHEAD, and
+# the ahead/behind test permits it. So the report reads the ancestry every
+# session and says which of three things it found -- #99 Q11 and Q12.
+#
+# Driven rather than pinned, because the outcomes are the claim and a literal
+# on the read says nothing about which exit code prints which sentence. Each
+# fixture is its own repository with a copy of the report beside it, so the
+# report's own `cd` lands in the fixture. Origin is a local repository and the
+# refs are fetched before the report runs, so a fixture is in the state it names
+# whatever the report does with its own fetch. gh is a stub that fails: the
+# merge settings read has an answer of its own, and nothing here reaches an API.
+#
+# Present, not only absent. A deleted read prints no line at all, so every
+# "does not say NOT" below would pass against a report that reads nothing; each
+# fixture with a dev ref asserts the line it expects to be there.
+ANC_BIN="$FIXTURES/ancestry-bin"
+mkdir -p "$ANC_BIN"
+printf '#!/bin/sh\nexit 1\n' > "$ANC_BIN/gh"
+chmod +x "$ANC_BIN/gh"
+
+anc_commit() {  # anc_commit <repo> <message> [parent...] -- an empty-tree commit's OID
+  local repo="$1" msg="$2" parents=() p
+  shift 2
+  for p in "$@"; do parents+=(-p "$p"); done
+  git -C "$repo" -c user.email=checks@example.invalid -c user.name=checks \
+    commit-tree "$(git -C "$repo" mktree </dev/null)" "${parents[@]}" -m "$msg"
+}
+anc_fixture() {  # anc_fixture <dir> <origin url> -- a repository with the report in it
+  git init -q -b scratch "$1"
+  git -C "$1" remote add origin "$2"
+  mkdir -p "$1/.claude/hooks"
+  cp -p "$HOOKS/report-stale-branches.sh" "$1/.claude/hooks/"
+}
+anc_report() {  # anc_report <repo> -- the report's output, run as that repository's hook
+  ( cd / && PATH="$ANC_BIN:$PATH" "$1/.claude/hooks/report-stale-branches.sh" ) 2>/dev/null
+}
+# The line and its indented continuations, and nothing after them: a NOT is
+# three lines, and a phrase from the line after it must not count as its own.
+anc_line() {  # anc_line <report output>
+  printf '%s\n' "$1" | awk '/^main ancestry: / { f = 1; print; next }
+                            f && /^       [^ ]/  { print; next }
+                            f                    { exit }'
+}
+anc_count() {  # anc_count <report output> -- how many main ancestry lines it printed
+  printf '%s\n' "$1" | grep -c '^main ancestry: '
+}
+holds() {  # holds <label> <text> <literal>
+  case "$2" in
+    *"$3"*) printf '  ok   holds %s\n' "$1" ;;
+    *) printf '  FAIL %s\n         expected |%s|\n         in |%s|\n' "$1" "$3" "$2"
+       FAILED=1 ;;
+  esac
+}
+# The absence has to be an absence in something that was read, for the reason
+# `unarmed` gives: an empty line is what a deleted read prints.
+lacks() {  # lacks <label> <text> <literal>
+  if [ -z "$2" ]; then
+    printf '  FAIL %s\n         nothing was read, so the absence of |%s| is evidence of nothing\n' "$1" "$3"
+    FAILED=1
+  else
+    case "$2" in
+      *"$3"*) printf '  FAIL %s\n         must not contain |%s|\n         in |%s|\n' "$1" "$3" "$2"
+              FAILED=1 ;;
+      *) printf '  ok   lacks %s\n' "$1" ;;
+    esac
+  fi
+}
+anc_need() {  # anc_need <repo> <ref>... -- a fixture guard, as need_worktree is
+  local repo="$1" ref
+  shift
+  for ref in "$@"; do
+    git -C "$repo" rev-parse --verify --quiet "$ref^{commit}" >/dev/null && continue
+    echo "the ancestry fixture $repo has no $ref; the checks against it prove nothing" >&2
+    exit 1
+  done
+}
+anc_lack() {  # anc_lack <repo> <ref> -- the guard's other half: a ref that must be absent
+  git -C "$1" rev-parse --verify --quiet "$2" >/dev/null || return 0
+  echo "the ancestry fixture $1 has $2; the checks against it prove nothing" >&2
+  exit 1
+}
+STALE_SUFFIX='(read against refs the failed fetch left behind)'
+NOT_LINE='main ancestry: origin/main is NOT an ancestor of origin/dev-05'
+IS_LINE='main ancestry: origin/main is an ancestor of origin/dev-05'
+UNREAD_LINE='main ancestry: NOT READ -- '
+
+# NOT: main carries a merge commit the dev branch lacks. A decoy dev-4 has main
+# in its history, so a report that picked its dev branch by any sort other than
+# the pinned version sort reads the decoy and answers "is an ancestor".
+ANC_NOT_ORIGIN="$FIXTURES/ancestry-not-origin"
+git init -q -b main "$ANC_NOT_ORIGIN"
+A=$(anc_commit "$ANC_NOT_ORIGIN" base)
+A_DEV=$(anc_commit "$ANC_NOT_ORIGIN" dev "$A")
+A_SIDE=$(anc_commit "$ANC_NOT_ORIGIN" side "$A")
+A_MERGE=$(anc_commit "$ANC_NOT_ORIGIN" 'merge into main' "$A" "$A_SIDE")
+git -C "$ANC_NOT_ORIGIN" update-ref refs/heads/main "$A_MERGE"
+git -C "$ANC_NOT_ORIGIN" update-ref refs/heads/dev-05 "$A_DEV"
+git -C "$ANC_NOT_ORIGIN" update-ref refs/heads/dev-4 "$A_MERGE"
+ANC_NOT="$FIXTURES/ancestry-not"
+anc_fixture "$ANC_NOT" "$ANC_NOT_ORIGIN"
+git -C "$ANC_NOT" fetch -q origin
+anc_need "$ANC_NOT" refs/remotes/origin/main refs/remotes/origin/dev-05 refs/remotes/origin/dev-4
+OUT=$(anc_report "$ANC_NOT")
+LINE=$(anc_line "$OUT")
+holds 'main with a merge the dev branch lacks is reported as NOT an ancestor' "$LINE" "$NOT_LINE"
+holds 'and the report says what that costs, in the guard it costs it in' "$LINE" \
+  'passes a branch that is ahead'
+lacks 'and it is not called unread' "$LINE" 'NOT READ'
+lacks 'and a fetch that succeeded does not say it failed' "$LINE" "$STALE_SUFFIX"
+tok 'and the report prints one main ancestry line, not one per outcome' '1' "$(anc_count "$OUT")"
+
+# The ancestor case, asserted as the whole line: presence is the evidence that
+# the read ran, and equality is what rules out a NOT, a suffix, or both. The
+# decoy is reversed -- dev-4 is an unrelated root, so a report reading it says
+# NOT here.
+ANC_IS_ORIGIN="$FIXTURES/ancestry-is-origin"
+git init -q -b main "$ANC_IS_ORIGIN"
+A=$(anc_commit "$ANC_IS_ORIGIN" base)
+A_DEV=$(anc_commit "$ANC_IS_ORIGIN" dev "$A")
+A_ROOT=$(anc_commit "$ANC_IS_ORIGIN" 'unrelated root')
+git -C "$ANC_IS_ORIGIN" update-ref refs/heads/main "$A"
+git -C "$ANC_IS_ORIGIN" update-ref refs/heads/dev-05 "$A_DEV"
+git -C "$ANC_IS_ORIGIN" update-ref refs/heads/dev-4 "$A_ROOT"
+ANC_IS="$FIXTURES/ancestry-is"
+anc_fixture "$ANC_IS" "$ANC_IS_ORIGIN"
+git -C "$ANC_IS" fetch -q origin
+anc_need "$ANC_IS" refs/remotes/origin/main refs/remotes/origin/dev-05 refs/remotes/origin/dev-4
+OUT=$(anc_report "$ANC_IS")
+tok 'main as an ancestor is reported in exactly the positive line' "$IS_LINE" "$(anc_line "$OUT")"
+
+# No origin/main at all: `git merge-base --is-ancestor` exits 128 rather than 1,
+# and an unanswered question is not a negative answer. A report that read every
+# nonzero exit as NOT would print a warning about an ancestry it never saw.
+ANC_NOMAIN_ORIGIN="$FIXTURES/ancestry-nomain-origin"
+git init -q -b dev-05 "$ANC_NOMAIN_ORIGIN"
+A=$(anc_commit "$ANC_NOMAIN_ORIGIN" base)
+git -C "$ANC_NOMAIN_ORIGIN" update-ref refs/heads/dev-05 "$A"
+ANC_NOMAIN="$FIXTURES/ancestry-nomain"
+anc_fixture "$ANC_NOMAIN" "$ANC_NOMAIN_ORIGIN"
+git -C "$ANC_NOMAIN" fetch -q origin
+anc_need "$ANC_NOMAIN" refs/remotes/origin/dev-05
+anc_lack "$ANC_NOMAIN" refs/remotes/origin/main
+OUT=$(anc_report "$ANC_NOMAIN")
+LINE=$(anc_line "$OUT")
+holds 'no origin/main is reported as NOT READ' "$LINE" "$UNREAD_LINE"
+lacks 'and not as NOT an ancestor, which is an answer' "$LINE" 'is NOT an ancestor'
+lacks 'and not as an ancestor either' "$LINE" 'is an ancestor of'
+
+# No dev ref: nothing to be an ancestor of, and no line. The first check is what
+# makes the second one evidence -- a report that did not run also prints no line.
+ANC_NODEV_ORIGIN="$FIXTURES/ancestry-nodev-origin"
+git init -q -b main "$ANC_NODEV_ORIGIN"
+A=$(anc_commit "$ANC_NODEV_ORIGIN" base)
+git -C "$ANC_NODEV_ORIGIN" update-ref refs/heads/main "$A"
+ANC_NODEV="$FIXTURES/ancestry-nodev"
+anc_fixture "$ANC_NODEV" "$ANC_NODEV_ORIGIN"
+git -C "$ANC_NODEV" fetch -q origin
+anc_need "$ANC_NODEV" refs/remotes/origin/main
+OUT=$(anc_report "$ANC_NODEV")
+holds 'with no dev ref the report ran and says it found none' "$OUT" 'active dev branch: none'
+tok 'and it prints no main ancestry line' '0' "$(anc_count "$OUT")"
+
+# After a failed fetch every outcome says the refs it read are the ones the last
+# successful fetch left, because each of the three can be stale: an ancestry
+# that has since broken reads as intact. Origin names a path that does not exist,
+# so the fetch fails at once, and the refs are written with update-ref. The
+# suffix is asserted anywhere in the line, not at its end: where a three-line NOT
+# carries it is the report's to decide.
+ANC_GONE_REMOTE="$FIXTURES/ancestry-no-such-remote.git"
+[ ! -e "$ANC_GONE_REMOTE" ] || {
+  echo "$ANC_GONE_REMOTE exists, so the failed-fetch fixtures would fetch; the checks against them prove nothing" >&2
+  exit 1
+}
+anc_stale() {  # anc_stale <dir> <main: merged|ancestor|none> -- origin refs by update-ref
+  local dir="$1" base dev side
+  anc_fixture "$dir" "$ANC_GONE_REMOTE"
+  base=$(anc_commit "$dir" base)
+  dev=$(anc_commit "$dir" dev "$base")
+  git -C "$dir" update-ref refs/remotes/origin/dev-05 "$dev"
+  case "$2" in
+    merged)   side=$(anc_commit "$dir" side "$base")
+              git -C "$dir" update-ref refs/remotes/origin/main \
+                "$(anc_commit "$dir" 'merge into main' "$base" "$side")" ;;
+    ancestor) git -C "$dir" update-ref refs/remotes/origin/main "$base" ;;
+  esac
+}
+anc_stale "$FIXTURES/ancestry-stale-not" merged
+anc_need "$FIXTURES/ancestry-stale-not" refs/remotes/origin/main refs/remotes/origin/dev-05
+OUT=$(anc_report "$FIXTURES/ancestry-stale-not")
+LINE=$(anc_line "$OUT")
+holds 'after a failed fetch, NOT is still reported' "$LINE" "$NOT_LINE"
+holds 'and says which refs it was read against' "$LINE" "$STALE_SUFFIX"
+
+anc_stale "$FIXTURES/ancestry-stale-is" ancestor
+anc_need "$FIXTURES/ancestry-stale-is" refs/remotes/origin/main refs/remotes/origin/dev-05
+OUT=$(anc_report "$FIXTURES/ancestry-stale-is")
+LINE=$(anc_line "$OUT")
+holds 'after a failed fetch, an ancestor is still reported' "$LINE" "$IS_LINE"
+holds 'and says which refs it was read against, which matters most here' "$LINE" "$STALE_SUFFIX"
+
+anc_stale "$FIXTURES/ancestry-stale-nomain" none
+anc_need "$FIXTURES/ancestry-stale-nomain" refs/remotes/origin/dev-05
+anc_lack "$FIXTURES/ancestry-stale-nomain" refs/remotes/origin/main
+OUT=$(anc_report "$FIXTURES/ancestry-stale-nomain")
+LINE=$(anc_line "$OUT")
+holds 'after a failed fetch, NOT READ is still reported' "$LINE" "$UNREAD_LINE"
+holds 'and says which refs it was read against' "$LINE" "$STALE_SUFFIX"
+
+# The read as a literal as well, beside the arming pins above: the fixtures say
+# what each outcome prints, and this says the answer is git's and not a record.
+armed 'the report reads the ancestry with git rather than recording it' \
+  "$HOOKS/report-stale-branches.sh" 'merge-base --is-ancestor'
+# #99 Q16: the report cites nothing new for this line -- the reasoning is beside
+# the read, and the decisions it rests on are cited from the documents.
+unarmed 'the report cites no issue for the ancestry line' \
+  "$HOOKS/report-stale-branches.sh" '#99'
 
 echo "=== CLAUDE.md names every hook that carries the boundary ==="
 # A third kind of check, and the second here that reads a file rather than
