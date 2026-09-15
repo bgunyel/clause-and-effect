@@ -5676,13 +5676,16 @@ echo "--- issue #96: a line long enough to outlast the timeout ---"
 #     missing one, and that was measured by planting one: reading awk's status
 #     alone turned the missing-cs_join check red and nothing else.
 #
-# Five defects were planted to see each group go red, and each did: the cap
+# Eight defects were planted to see each group go red, and each did: the cap
 # written as >= (the at-the-cap verdicts), measured on raw lines (the continued
 # pair), the pipeline status dropped (the missing-cs_join check), one hook's
-# probe removed (its guard message, its armed pin and its derived probe set),
-# and a quadratic string build put back in the separator cut (the 512 KB
-# cs_split timing). A check suite is evidence about the cases it names; those
-# are five of them.
+# cs_within_cap guard removed (its guard message, its armed pin and its derived
+# required set), a quadratic string build put back in the separator cut (the
+# 512 KB cs_split timing), each old pass restored alone (its scaling check), a
+# copied awk helper drifted (the identical-copies check), and cs_git_args
+# renamed away under the scaling checks (their exit status). This comment
+# said five until review of PR #123 counted the eight its description listed.
+# A check suite is evidence about the cases it names; those are eight of them.
 #
 # TWO ADDITIONS TO THE ISSUE'S LIST, both measured before they were written.
 #
@@ -5723,13 +5726,18 @@ echo "--- issue #96: a line long enough to outlast the timeout ---"
 # branch for the same reason, and on a branch carrying work once, below.
 #
 # NOT HERE, and named because a check suite is evidence about what it names:
-# the cost is per command as well as per line. 2,500 lines of `echo <75 a>`
+# the cost is per command as well as per line, and so THE CAP DOES NOT BOUND A
+# HOOK'S RUNNING TIME -- only the length of a line. 2,500 lines of `echo <75 a>`
 # and a `gh pr merge 5` -- 202 KB, no line over 80 bytes -- took
 # no-pr-decisions.sh 5.9 s and no-commit-to-main.sh 4.4 s, fastest of three,
-# and the harness permits past 5 s. It is linear, about 2.4 ms a command in
-# no-pr-decisions.sh, so it is not the defect #96 is about; neither remedy that
-# issue decided reaches it, and a check for it would be a decision it did not
-# take. A first figure written here, 10 s for 250 lines, was taken on a loaded
+# and the harness permits past 5 s. It is linear, a few milliseconds a
+# fragment, since each fragment cs_split emits starts an awk or more. That
+# first made it look like a matter of size, which it is not: review of PR #123
+# put the 2,500 on one line as `t;`, 5,014 bytes and a third of the cap, and
+# no-pr-decisions.sh took 6.4 s idle; filled to the cap, 8,192 of them and a
+# push outlasted all three boundary hooks. Neither remedy #96 decided reaches
+# it, and a check for it would be a decision that issue did not take: it is
+# #127. A first figure written here, 10 s for 250 lines, was taken on a loaded
 # machine and did not reproduce: those 250 take 0.66 s.
 #
 # THE SECOND TRADE, found by review of this section: the cap joins
@@ -6116,6 +6124,32 @@ scales_linearly trailing cs_split 'git push origin'
 scales_linearly continued cs_join 'aaaaaaa aaaaaaa git push'
 scales_linearly gitglobals 'cs_git_args push' 'origin x'
 scales_linearly ghglobals "cs_gh_args 'pr merge'" '5'
+
+# The option skip in both argument readers looks a token up in its list of
+# valued options with index(), which finds `-c|-C` in `|-c|-C|...|` as readily
+# as `-c`. The expression it replaced matched one name, so such a token was
+# skipped alone there, and here it took the word after it -- the subcommand --
+# as its value, and the reader answered "not a push". Not a hole: through
+# cs_split a token holding `|` stands only inside quotes, and the same quotes
+# cover the verb, so bash runs no push there either. But the rewrite is claimed
+# identical, and this is where it was not. Found by review of PR #123, by
+# reading the diff; the differential fuzz did not reach it. Every expected value
+# is what the reader at dev-05 870bb3f printed for the same line, and each one
+# was empty before the fix.
+PIPED_GIT_C=$(printf 'git -c|-C push origin main\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_git_args push" 2>/dev/null)
+PIPED_GIT_LONG=$(printf 'git --work-tree|--namespace push origin main\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_git_args push" 2>/dev/null)
+PIPED_GH_R=$(printf 'gh -R|--repo pr merge 5\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_gh_args 'pr merge'" 2>/dev/null)
+PIPED_GH_LONG=$(printf 'gh --repo|--hostname pr merge 5\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_gh_args 'pr merge'" 2>/dev/null)
+tok 'cs_git_args reads -c|-C as one option taking no value, as before #96' \
+    'origin main' "$PIPED_GIT_C"
+tok 'and --work-tree|--namespace' 'origin main' "$PIPED_GIT_LONG"
+tok 'cs_gh_args reads -R|--repo as one option taking no value, as before #96' \
+    '5' "$PIPED_GH_R"
+tok 'and --repo|--hostname' '5' "$PIPED_GH_LONG"
 
 # The linear passes carry copies of two awk helpers -- tokend and skipblank in
 # three programs, skipopts in two -- because an awk program cannot source

@@ -1013,8 +1013,18 @@ fi
 # `echo <300 KB>; git push --force origin main` on one line took the three
 # boundary hooks 5.75 to 6.67 s, and was permitted by all three. Nothing inside
 # a hook can make the harness kill fail closed, so the only remedy is to never
-# be slow, and the only way to guarantee that whatever the passes cost is a
-# bound on what they are handed.
+# be slow, and a bound on what the passes are handed is what keeps them fast
+# whatever a later edit to one costs.
+#
+# WHAT THIS CAP DOES NOT BOUND, which #96 first claimed it did: a hook's running
+# time. It bounds the length of a line and nothing else. A hook starts an awk
+# or more per fragment cs_split emits, so its time grows with the number of
+# fragments as well, and a short line can hold thousands: 2,500 `t;` and a
+# `gh pr merge 5` on the next line -- 5,014 bytes, a third of the cap -- took
+# no-pr-decisions.sh 6.4 s idle, found by review of PR #123. That is #127. And
+# a heredoc opener ending in a backslash lets cs_normalise emit a line past the
+# cap from lines within it, so the cap does not bound what the passes are handed
+# either. That is #128.
 #
 # Why the passes were slow is fixed too, and is the other half of #96. Six of
 # them grew a string one character or one token at a time -- cs_normalise's
@@ -1022,7 +1032,14 @@ fi
 # the option skip in cs_git_args and in cs_gh_args -- and the prefix strip
 # also trimmed trailing blanks with an expression mawk retries from every
 # position. Each is linear now, and held to identical output: every rewrite was
-# fuzzed against the version before it, byte for byte. Each carries its
+# fuzzed against the version before it, byte for byte, under mawk and busybox
+# awk in the C and a UTF-8 locale and under gawk in C. Not under gawk in a UTF-8
+# locale, where the old expressions split on Unicode blanks such as U+3000 and
+# the new character walks do not; every difference found there involved such a
+# blank, which bash does not split on either. And the fuzz missed one difference
+# that review found by reading: a token holding `|`, such as `-c|-C`, in the
+# option skip of both argument readers. That is fixed where it stands, and
+# check-hooks.sh pins it. Each carries its
 # measurement where it stands, and every one of those numbers is from a single
 # run -- mawk 1.3.4, LC_ALL=C, fastest of three -- because an earlier set taken
 # in a UTF-8 locale ran about twice as slow and did not agree with the rest.
@@ -1033,7 +1050,9 @@ fi
 # Why 16 KB. It was decided, not derived (#103, Q28): far past any command an
 # agent writes on purpose, and far below the size where the passes cost
 # anything. Measured on the linear passes, every hook answers a command whose
-# longest line is exactly at the cap in about a tenth of a second.
+# longest line is exactly at the cap in about a tenth of a second -- when that
+# line is plain. The same 16 KB cut into 8,192 fragments took no-git-push.sh
+# 7.3 s and the other two boundary hooks far longer; see #127.
 #
 # Why the JOINED line. The passes see a continued line as one, so 3,800 lines
 # of 84 bytes each ending in a backslash are one 300 KB line to them -- and
@@ -1110,7 +1129,10 @@ cs_git_args() {
         if (q > n || q - p < 2 || substr(line, p, 1) != "-") return
         r = substr(line, p, q - p)
         p = skipblank(q)
-        if (index(valued, "|" r "|") > 0) {
+        # A token holding "|" is never one name, and index() would find
+        # `-c|-C` in the list as readily as `-c`; the expression this replaced
+        # matched a name, so that token took no value behind it there either.
+        if (index(r, "|") == 0 && index(valued, "|" r "|") > 0) {
           q = tokend(p)
           if (q > p && q <= n) p = skipblank(q)
         }
@@ -1205,7 +1227,10 @@ cs_gh_args() {
         if (q > n || q - p < 2 || substr(line, p, 1) != "-") return
         r = substr(line, p, q - p)
         p = skipblank(q)
-        if (index(valued, "|" r "|") > 0) {
+        # A token holding "|" is never one name, and index() would find
+        # `-c|-C` in the list as readily as `-c`; the expression this replaced
+        # matched a name, so that token took no value behind it there either.
+        if (index(r, "|") == 0 && index(valued, "|" r "|") > 0) {
           q = tokend(p)
           if (q > p && q <= n) p = skipblank(q)
         }
