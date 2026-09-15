@@ -101,11 +101,15 @@ The suite fails on each of these, and `--matrix` shows the rest:
   with a `verify` that does not resolve, and `seam: none` with checks tagged with
   it after all;
 - a check recording a direction other than refuse, permit and static;
-- a shape other than the one the suite holds as a literal: the number of entries
-  in each family, with each status, and verified each way. Every route out of the
-  coverage check -- a gap, a retirement, a drift, a supersession, a move to
-  `seam: none`, a deletion -- moves one of those numbers, so each is made twice,
-  here and in the suite, and the second is what makes it visible;
+- a shape other than the one the suite holds as a literal: every entry by ID,
+  with whatever takes it off the both-directions rule beside it -- a status
+  other than `active`, a declared `direction`, and `seam: none` with the kind of
+  its `verify`. Those are everything the coverage check reads off an entry, so
+  an edit here that changes what the check asks of a requirement -- a marker
+  added, taken off or moved to another entry, a direction declared, a move to
+  `seam: none`, a deletion -- is made twice, here and in the suite, and the
+  second is what makes it visible. Which checks carry a tag is not in it: a
+  check tagged with an ID it does not establish covers that ID all the same;
 - a criterion of #37–#41 with no mapping, a mapping naming an unknown ID, or a
   number of criteria for an issue other than the number that issue has;
 - a `#<n>` cited in `check-hooks.sh` with neither an entry nor a listing under
