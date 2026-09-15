@@ -256,9 +256,11 @@ the repository's default branch, which is `main`. Write
 spellings is used, `gh pr edit --base` and the two `gh api` forms included. It
 may comment on one, edit one without moving its base, and read one, through
 `gh pr view` or through a `gh api` request that does not write. It may not merge
-one, review one with a verdict, close or reopen one, or create or delete a
-release. A worktree branch lives as long as its pull request, and work moves to
-a new one once that has merged. `main` and `dev-NN` are Bertan's to push; `main`
+one, review one with a verdict, close or reopen one, or make any write to a
+release; it may read one, through `gh release list`, `view`, `download`, `verify`
+or `verify-asset`, and through a `gh api` request that does not write. A
+worktree branch lives as long as its pull request, and work moves to a new one
+once that has merged. `main` and `dev-NN` are Bertan's to push; `main`
 is additionally protected server-side by the `main-branch-protection` ruleset,
 which requires a pull request. Enforced by `.claude/hooks/no-git-push.sh`,
 `no-pr-decisions.sh`, `no-commit-to-main.sh` and `no-work-on-stale-branch.sh`,

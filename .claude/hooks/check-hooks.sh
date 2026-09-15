@@ -1348,7 +1348,10 @@ check no-pr-decisions.sh ALLOW 'gh -R o/r release list'        'gh -R o/r releas
 # A path word is matched whole, so `release delete` does not cover
 # `release delete-asset` the way the old alternation did. The regular
 # expression carried delete-asset and nothing asked about it; the rule that
-# replaced it names it separately, and this is what would notice if it stopped.
+# replaced it named it separately, and these were what would notice if it
+# stopped. #97 replaced that rule in turn with an allowlist of read verbs, which
+# names no write at all, so these now ask whether delete-asset is still outside
+# the list -- and #97's section below asks the rest.
 check no-pr-decisions.sh BLOCK 'gh release delete-asset'       'gh release delete-asset v1.0.0 file.tgz'
 check no-pr-decisions.sh BLOCK 'gh -R o/r release delete-asset' 'gh -R o/r release delete-asset v1.0.0 file.tgz'
 check no-pr-decisions.sh ALLOW 'gh -R o/r api reads a PR'      'gh -R o/r api repos/o/r/pulls/5'
@@ -1539,6 +1542,190 @@ check no-pr-decisions.sh BLOCK 'graphql state on updatePR'   'gh api graphql -f 
 check no-pr-decisions.sh ALLOW 'PATCH a PR title'            'gh api -X PATCH repos/o/r/pulls/35 -f title=newtitle'
 check no-pr-decisions.sh ALLOW 'GET the releases list'       'gh api repos/o/r/releases'
 check no-pr-decisions.sh ALLOW 'gh pr edit retitles'         'gh pr edit 35 --title newtitle'
+
+echo "=== issue #97, a release may be read and not written ==="
+# Release actions were refused by name -- create, delete, delete-asset -- and the
+# list was a denylist with two writes missing from it. `gh release edit v1
+# --draft=false` publishes a draft and `gh release upload` changes a published
+# release's assets, and both were permitted. #103's grilling (Q26) settled the
+# rule the other way round rather than lengthening the list: the read verbs
+# list, view, download, verify and verify-asset are permitted, and every other
+# `gh release` subcommand is refused, including one a future gh adds. What was
+# rejected is refusing only the acts that publish or destroy, because that means
+# reading per-flag release state out of the arguments, and argument parsing is
+# where most of this boundary's defects have lived.
+#
+# The rows that `flip` records were measured against no-pr-decisions.sh at
+# origin/dev-05 e8c132f before any fix, and each prints the verdict it had then.
+# Reverting the fix fails exactly those, with got equal to the recorded was. The
+# `check` rows are the same verdict on both sides and are not evidence about the
+# fix. They are what an allowlist has to keep: the reads it must not refuse, the
+# refusals the denylist already had, and the gh api half, which already refused
+# a write to /releases and permitted a read through gh_api_is_write.
+#
+# graphql has nothing to check here. The issue refuses a release write through a
+# mutation "if one exists", and none does: GitHub's graphql schema listed 259
+# mutations on 2026-09-15 and no name among them contains "release", read with
+# `gh api graphql -f query='{__schema{mutationType{fields{name}}}}' --jq
+# '.data.__schema.mutationType.fields[].name'`. The
+# createRelease, updateRelease and deleteRelease names this hook matches are
+# refused text rather than mutations, and the check above that pins one of them
+# is evidence about the text.
+echo "--- every write verb is refused, and so is a verb gh does not have yet ---"
+check no-pr-decisions.sh BLOCK 'gh release create'                   'gh release create v1'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release edit --draft=false publishes a draft' \
+  'gh release edit v1 --draft=false'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release edit without --draft=false' \
+  'gh release edit v1 --title x'
+check no-pr-decisions.sh BLOCK 'gh release delete'                   'gh release delete v1 --yes'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release upload' \
+  'gh release upload v1 a.tgz'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release upload --clobber replaces an asset' \
+  'gh release upload v1 a.tgz --clobber'
+check no-pr-decisions.sh BLOCK 'gh release delete-asset'             'gh release delete-asset v1 a.tgz'
+# The row that shows the rule is an allowlist and not a longer denylist: no list
+# of writes can name a subcommand that does not exist yet.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'an unknown gh release subcommand' \
+  'gh release frobnicate v1'
+# And a write the denylist never knew it had: `new` is gh's alias for create
+# (gh 2.45.0, `gh help release create`), so the list named create and missed it.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release new, the alias of create' \
+  'gh release new v1'
+echo "--- every read verb is permitted ---"
+check no-pr-decisions.sh ALLOW 'gh release list'                     'gh release list'
+check no-pr-decisions.sh ALLOW 'gh release view'                     'gh release view v1'
+check no-pr-decisions.sh ALLOW 'gh release download'                 "gh release download v1 -p '*.tgz'"
+check no-pr-decisions.sh ALLOW 'gh release verify'                   'gh release verify v1'
+check no-pr-decisions.sh ALLOW 'gh release verify-asset'             'gh release verify-asset v1 a.tgz'
+echo "--- the trade: three reads that are refused, and where to go instead ---"
+# The hook's comment above its release rule names these as its three-part trade,
+# and a trade written down without a check is a claim, so each part is pinned.
+# None of them writes, all are refused, and each is one edit away.
+#
+# 1. `ls` is gh's alias for list. The allowlist is the five verbs #103 decided,
+#    not the five plus whatever gh aliases them to, which is a list that has to
+#    track gh's own. The refusal names the five.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release ls, an alias of a read, is refused' \
+  'gh release ls'
+# 2. No subcommand, and a write verb's help page. Allowing these means telling
+#    "no subcommand" from "some other subcommand", which means skipping options
+#    outside cs_gh_args. The first version of the rule did, with its own copy of
+#    the library's skip list, and review of it found the copy. `gh release
+#    create --help` was already refused by the denylist, so it is a check.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release with no subcommand' \
+  'gh release'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release --help' \
+  'gh release --help'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release -R o/r, no subcommand' \
+  'gh release -R o/r'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a write verb'"'"'s help page' \
+  'gh release upload --help'
+check no-pr-decisions.sh BLOCK 'a help page the denylist already refused' \
+  'gh release create --help'
+#    Help is somewhere else, and that has to stay permitted or the trade is not
+#    one edit away: `gh help` is not a gh release command at all.
+check no-pr-decisions.sh ALLOW 'gh help release'                     'gh help release'
+check no-pr-decisions.sh ALLOW 'gh help release upload'              'gh help release upload'
+says "$ON_DEV" no-pr-decisions.sh 'gh help release' \
+  'the refusal of bare gh release says where help is' 'gh release'
+# 3. A quoted verb is matched as written and refused, rather than unquoted into
+#    a read -- the generous reading gh_pr_web gives its reasons for not taking.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a quoted read verb' \
+  'gh release "view" v1'
+echo "--- a flag before the subcommand does not change the verdict ---"
+# cs_gh_args skips options before every word of a path, and a subcommand read
+# some other way skips none. -R/--repo is the ordinary way to name a repository
+# from elsewhere, so each group has both verdicts here, with the flag before the
+# verb and with it before the group.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release -R o/r edit' \
+  'gh release -R o/r edit v1'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release --repo o/r upload' \
+  'gh release --repo o/r upload v1 a.tgz'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release --repo=o/r edit --draft=false' \
+  'gh release --repo=o/r edit v1 --draft=false'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh -R o/r release upload' \
+  'gh -R o/r release upload v1 a.tgz'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release -R o/r with an unknown subcommand' \
+  'gh release -R o/r frobnicate v1'
+check no-pr-decisions.sh ALLOW 'gh release -R o/r view'              'gh release -R o/r view v1'
+check no-pr-decisions.sh ALLOW 'gh -R o/r release download'          'gh -R o/r release download v1'
+check no-pr-decisions.sh ALLOW 'gh release --repo o/r verify-asset'  'gh release --repo o/r verify-asset v1 a.tgz'
+echo "--- the verb is the subcommand word, matched whole, and not any word ---"
+# An allowlist asked whether a read verb appears ANYWHERE in the arguments would
+# be satisfied by a tag. Release tags are free text, so a tag named view or list
+# is an ordinary one to write. The first two rows are the permitting direction.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'an upload to a tag named view' \
+  'gh release upload view a.tgz'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'an edit of a tag named list' \
+  'gh release edit list --draft=false'
+# The same rule from the other side: a read of a tag named upload is a read.
+check no-pr-decisions.sh ALLOW 'a view of a tag named upload'        'gh release view upload'
+# A read verb matched as a prefix permits whatever begins with it -- verify
+# matched without a right edge also matches verify-asset, and so matches a
+# subcommand that is neither. The row is invented because an unknown subcommand
+# is the case the rule exists for.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a subcommand that only begins with a read verb' \
+  'gh release verify-and-publish v1'
+echo "--- every gh release command on the line is judged ---"
+# cs_gh_args answers about the first match and stops, so a rule that asks it
+# about `release` once, over the whole line, reads the first command's verb and
+# never sees the second. A read in front of a write is the ordinary shape of
+# "look, then change it".
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a view, then an upload' \
+  'gh release view v1 && gh release upload v1 a.tgz'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a list, then an edit that publishes' \
+  'gh release list; gh release edit v1 --draft=false'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a PR read, then an unknown release subcommand' \
+  'gh pr view 5 && gh release frobnicate v1'
+# The allowlist is about subcommands of gh release, not about text that names one.
+check no-pr-decisions.sh ALLOW 'an issue comment naming a release upload' \
+  'gh issue comment 97 --body "gh release upload v1 a.tgz is refused now"'
+echo "--- the gh api spelling: a write to /releases is refused, a read is not ---"
+check no-pr-decisions.sh BLOCK 'POST to the releases collection'     'gh api -X POST repos/o/r/releases'
+check no-pr-decisions.sh BLOCK 'PATCH a release'                     'gh api -X PATCH repos/o/r/releases/1'
+check no-pr-decisions.sh BLOCK 'DELETE a release'                    'gh api -X DELETE repos/o/r/releases/1'
+# No method written, and still a write: a field flag makes gh send POST. This is
+# gh_api_is_write's question, and the row is what fails if the rule asks -X alone.
+check no-pr-decisions.sh BLOCK 'a field makes a releases call a write' \
+  'gh api repos/o/r/releases/1 -f draft=false'
+# gh release upload's own request, written out. The host is uploads.github.com and
+# not api.github.com, so a rule anchored on the API host misses it.
+check no-pr-decisions.sh BLOCK 'POST an asset to the uploads host' \
+  "gh api --method POST 'https://uploads.github.com/repos/o/r/releases/1/assets?name=a.tgz' --input a.tgz"
+check no-pr-decisions.sh BLOCK 'DELETE a release asset'              'gh api -X DELETE repos/o/r/releases/assets/7'
+check no-pr-decisions.sh BLOCK 'gh -R o/r api PATCH a release'       'gh -R o/r api -X PATCH repos/o/r/releases/1 -F draft=false'
+check no-pr-decisions.sh BLOCK 'a releases read, then a releases write' \
+  'gh api repos/o/r/releases && gh api -X PATCH repos/o/r/releases/1 -F draft=false'
+check no-pr-decisions.sh ALLOW 'GET the releases collection'         'gh api repos/o/r/releases'
+check no-pr-decisions.sh ALLOW 'GET the latest release'              'gh api repos/o/r/releases/latest'
+check no-pr-decisions.sh ALLOW 'GET a release by tag, method named'  'gh api -X GET repos/o/r/releases/tags/v1'
+check no-pr-decisions.sh ALLOW 'GET a release'"'"'s assets'          'gh api repos/o/r/releases/1/assets'
+echo "--- the refusal says what the rule is ---"
+# A refusal that names only publishing and deleting is false for an upload, and
+# says nothing about what an agent may still do. The literals below are the
+# wording #97 settled on for CLAUDE.md and CONTEXT.md, so the message and the
+# documents say the same thing. Every `says` is red on the dev-05 hook, whose
+# message is "publishing or deleting a GitHub release is Bertan's call". The
+# `says_not` is green there for no good reason, since nothing refused the upload
+# at all. It is the pair with the `says` above it that means something.
+says "$ON_DEV" no-pr-decisions.sh "any write to a release is Bertan's" \
+  'gh release refusal: a release write is Bertan'"'"'s' 'gh release upload v1 a.tgz'
+says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted' \
+  'gh release refusal: reading is permitted' 'gh release upload v1 a.tgz'
+says_not "$ON_DEV" no-pr-decisions.sh 'publishing or deleting' \
+  'gh release refusal: an upload is not described as publishing or deleting' 'gh release upload v1 a.tgz'
+says "$ON_DEV" no-pr-decisions.sh "any write to a release is Bertan's" \
+  'unknown subcommand refusal: a release write is Bertan'"'"'s' 'gh release frobnicate v1'
+says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted' \
+  'unknown subcommand refusal: reading is permitted' 'gh release frobnicate v1'
+says "$ON_DEV" no-pr-decisions.sh "any write to a release is Bertan's" \
+  'gh api refusal: a release write is Bertan'"'"'s' 'gh api -X PATCH repos/o/r/releases/1'
+says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted' \
+  'gh api refusal: reading is permitted' 'gh api -X PATCH repos/o/r/releases/1'
+# Unlike the upload's, this `says_not` is red on dev-05: the gh api spelling was
+# refused there, in the old words, so a revert of this message alone shows here.
+says_not "$ON_DEV" no-pr-decisions.sh 'publishing or deleting' \
+  'gh api refusal: a PATCH is not described as publishing or deleting' 'gh api -X PATCH repos/o/r/releases/1'
 
 echo "=== issue #40, a pull request must name an active dev branch as its base ==="
 # The quietest of the four spellings names nothing at all: with no base given,
@@ -3492,6 +3679,37 @@ unarmed 'and it is that entry rather than the whole glossary' \
 # transcript. The enumeration named four acts and that was not one of them.
 written 'the enumeration names the act the report cites' \
   "$RESERVED_ENTRY" 'removing a worktree or deleting a worktree branch'
+
+# #97 widened the release rule from publishing and deleting to any write, and
+# the two documents that state the rule are widened with it -- no-pr-decisions.sh
+# refuses in their words, and a refusal narrower or wider than the document it
+# points a reader to is the drift this section exists for. Both the new phrase
+# and the absence of each old one are asserted, because a document that gained
+# the new phrase and kept the old would state two rules.
+#
+# Asserted against the text with its line breaks joined. `written` and `unarmed`
+# match within a line, and CLAUDE.md wraps "create or delete a" and "release"
+# onto two lines, so an `unarmed` over the paragraph as written passes while the
+# phrase still stands in it. Measured on dev-05: the absence check read ok there
+# unjoined, and is red joined.
+# An extraction that found nothing flattens to an empty file, and `unarmed` over
+# an empty file reads ok. Each `unarmed` below is therefore paired with a
+# `written` over the same file, which is the one that fails then.
+flatten() {  # flatten <file> -- one line, every run of whitespace one space
+  tr -s '[:space:]' ' ' < "$1"
+}
+RESERVED_FLAT="$FIXTURES/context-reserved-act.flat"
+flatten "$RESERVED_ENTRY" > "$RESERVED_FLAT"
+PARAGRAPH_FLAT="$FIXTURES/boundary-paragraph.flat"
+flatten "$PARAGRAPH" > "$PARAGRAPH_FLAT"
+written 'the reserved act entry reserves any write to a release' \
+  "$RESERVED_FLAT" 'any write to a release'
+unarmed 'and no longer narrows it to publishing one' \
+  "$RESERVED_FLAT" 'publishing a release'
+written 'the boundary paragraph refuses any write to a release' \
+  "$PARAGRAPH_FLAT" 'any write to a release'
+unarmed 'and no longer narrows it to creating or deleting one' \
+  "$PARAGRAPH_FLAT" 'create or delete a release'
 
 # The skill read that enumeration as closed and counted it -- "one of the four
 # acts CONTEXT.md names" -- and #70 found the count stale the moment a fifth act
