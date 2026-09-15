@@ -21,6 +21,21 @@
 # prefixes the branch, and a branch in the main checkout can be given whatever
 # name a rule looks for.
 #
+# EQUAL AS DIRECTORIES, NOT AS STRINGS. Issue #94. The two halves of that test,
+# `git rev-parse --git-dir` and `--git-common-dir`, were compared as the text git
+# printed. At the root of a checkout git 2.43 prints both relatively, `.git` and
+# `.git`; one directory down it prints --git-dir absolute and --git-common-dir
+# relative, `/.../r/.git` against `../.git`. So below the root the main checkout
+# read as a linked worktree and the lifecycle rules were applied to it. Measured
+# on check-hooks.sh's lifecycle fixture, whose main checkout stands at the stale
+# worktree branch's commit, with `git commit -m "wip"`: ALLOW at the root, BLOCK
+# from `src/` and from `src/deep/` -- the refusing direction, where
+# no-git-push.sh made the same comparison and failed the permitting one. Its
+# header carries why the fix is `pwd -P` rather than
+# `rev-parse --path-format=absolute`. canonical_dir below is a copy of the one
+# there; check-hooks.sh drives both hooks two directories deep and through a
+# symlink, which is what holds the copies to one answer.
+#
 # TWO DETECTORS, EACH COVERING THE OTHER'S BLIND SPOT.
 #
 # *The upstream is gone.* With delete_branch_on_merge on, a merged worktree
@@ -207,9 +222,15 @@ echo "$COMMAND" | grep -q 'git' || exit 0
 # called: in a linked worktree --git-dir is .git/worktrees/<name> while
 # --git-common-dir is .git; in the main checkout the two are equal. The main
 # checkout is unaffected by this file.
-GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null)
-GIT_COMMON_PATH=$(git rev-parse --git-common-dir 2>/dev/null)
-[ -n "$GIT_DIR_PATH" ] || exit 0
+# Compared as directories, not as the text git printed: issue #94, in the header.
+# A path that will not resolve abstains, as an empty one always did.
+canonical_dir() {
+  [ -n "$1" ] || return 1
+  (cd -- "$1" >/dev/null 2>&1 && pwd -P)
+}
+GIT_DIR_PATH=$(canonical_dir "$(git rev-parse --git-dir 2>/dev/null)")
+GIT_COMMON_PATH=$(canonical_dir "$(git rev-parse --git-common-dir 2>/dev/null)")
+[ -n "$GIT_DIR_PATH" ] && [ -n "$GIT_COMMON_PATH" ] || exit 0
 [ "$GIT_DIR_PATH" = "$GIT_COMMON_PATH" ] && exit 0
 
 CURRENT=$(git branch --show-current 2>/dev/null)
