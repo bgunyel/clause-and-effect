@@ -61,7 +61,8 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
 if ! command -v cs_normalise >/dev/null 2>&1 \
    || ! command -v cs_split >/dev/null 2>&1 \
-   || ! command -v cs_git_args >/dev/null 2>&1; then
+   || ! command -v cs_git_args >/dev/null 2>&1 \
+   || ! command -v cs_tool_input >/dev/null 2>&1; then
   echo "Blocked: no-git-push.sh could not load lib/command-scan.sh, so it cannot tell whether this command pushes, or where to. Refusing rather than permitting." >&2
   exit 2
 fi
@@ -74,8 +75,8 @@ fi
 # to become one. Nothing in this file needs pathname expansion.
 set -f
 
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+# A tool call that cannot be read refuses; see THE INPUT READ in the library.
+COMMAND=$(cs_tool_input command) || exit 2
 SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)
 CMDS=$(printf '%s\n' "$SCAN" | cs_split)
 

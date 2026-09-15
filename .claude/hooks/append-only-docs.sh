@@ -20,8 +20,21 @@
 # or any character that cannot continue a path name, or the end of the string.
 # It is not simply made optional, because `docs/dev-logbook/` is a different
 # directory and must stay untouched.
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+#
+# Issue #95: the command was read with its own `jq -r`, so jq missing or a tool
+# call that was not JSON left it empty and every overwrite permitted. It is read
+# through cs_tool_input now, the reader every hook shares; see THE INPUT READ in
+# lib/command-scan.sh. The library is sourced for that function alone -- this
+# file still matches paths where they stand rather than through the tokeniser --
+# and tested for before it is sourced, for THE LOAD CONTRACT's reason.
+LIB="$(dirname "$0")/lib/command-scan.sh"
+[ -r "$LIB" ] && . "$LIB"
+if ! command -v cs_tool_input >/dev/null 2>&1; then
+  echo "Blocked: append-only-docs.sh could not load lib/command-scan.sh, so it cannot read the command it was handed. Refusing rather than permitting." >&2
+  exit 2
+fi
+
+COMMAND=$(cs_tool_input command) || exit 2
 
 # The trailing group is the directory boundary, and it is what #69 was about.
 # `.` and `-` are path-name characters here so that `docs/dev-log.bak` and
