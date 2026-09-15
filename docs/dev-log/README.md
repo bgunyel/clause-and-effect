@@ -285,4 +285,17 @@ thing in the record.
   rather than moved — the channel constants no longer sit behind a module that
   imports `ai_common`. Also found: **`src/config.py` modified by nobody this
   session**, committed separately rather than folded into the refactor.
+- [2026-09-13 · session 1](devlog_2026-09-13_session-1.md) — the agent boundary
+  audited against #36, its own specification, in a grilling session that changed
+  no files: nothing connected 32 stories and the decisions to the 499 checks meant
+  to verify them, and the audit found nine defects, filed as #94–#102. The
+  decisions, numbered Q1–Q35, are #103's, and the work is its seven sub-issues.
+  Written two days later, from that record.
+- [2026-09-15 · session 1](devlog_2026-09-15_session-1.md) — #104:
+  `requirements.md` gives 150 requirements permanent IDs, every one of 1846
+  checks is tagged, and the suite fails on an uncovered active requirement; the
+  19 known gaps are marked rather than gated. Review of the first commit found
+  eight defects in the coverage machinery, four of them permitting — among them a
+  renamed heading that made a family of requirements vanish, and an awk exit
+  status nobody read.
 

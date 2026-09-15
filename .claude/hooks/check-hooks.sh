@@ -205,7 +205,7 @@ pass() {  # pass <refuse|permit|static> <format> [arguments...] -- an ok line, r
   shift 2
   printf -v line "$fmt" "$@"
   printf '  ok   %s\n' "$line"
-  record "$dir" ok "$line"
+  record "$dir" ok "${line%%$'\n'*}"
 }
 fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, recorded
   local dir="$1" fmt="$2" line
@@ -5449,7 +5449,7 @@ holds 'a closed pull request is a decision, not a command' "$HK_NOTDUE" \
 lacks 'so its branch is not deleted' "$HK_NOTDUE" 'git branch -d hk-closed'
 
 echo "--- rotated-past dev branches: the first #126 finding ---"
-req US-28 FR-24
+req US-29 GH-100
 holds 'a rotated-past branch whose pull request into main is open is held' "$HK_NOTDUE" \
   '#   dev-04 -- rotated past, held: its pull request into main, #9, is open.'
 lacks 'and is not deleted locally' "$HK_NOTDUE" 'git branch -d dev-04'
@@ -5467,7 +5467,7 @@ git branch -d dev-03
 git push origin --delete dev-03"
 
 echo "--- the rotation of the active dev branch ---"
-req US-28 FR-24
+req US-29 GH-100
 holds 'no pull request into main is not due' "$HK_NOTDUE" \
   '# dev-05 is not due to rotate: it has no pull request into main.'
 holds 'merged with a pull request open against it is not due' "$HK_HELD" \
@@ -5487,7 +5487,7 @@ for out in "$HK_NOTDUE" "$HK_HELD" "$HK_DUE"; do
 done
 
 echo "--- the printed plan, executed ---"
-req GH-70.2 US-28
+req GH-70.2 US-29
 # The not-due plan, run as Bertan would run it. What it removes and what it
 # leaves are both asserted: a plan that stopped at its first command would pass
 # every `holds` above.
@@ -7540,7 +7540,9 @@ section "=== issue #104: every requirement is covered, and every check says whic
 # names the issue that owns it is listed by --matrix and not asked about here.
 # The trade, taken knowingly: a gap that has since been covered stays marked
 # until someone takes the marker off, which errs toward claiming less coverage
-# than there is. A check that failed a covered gap was considered and rejected,
+# than there is, and the matrix says of such a gap that its tags now meet
+# coverage, so whoever owns it can see the marker is ready to come off. A check
+# that failed a covered gap was considered and rejected,
 # because a gap is often a requirement covered in part -- a story whose message
 # is checked for one hook and not for two others -- and coverage here is one bit
 # per ID.
@@ -7562,6 +7564,14 @@ section "=== issue #104: every requirement is covered, and every check says whic
 # the issues and not off requirements.md, which is what makes a criterion deleted
 # from the provenance section fail rather than shorten the count it is held to.
 PROVENANCE_COUNTS='37:8 38:6 39:6 40:13 41:8'
+# How many requirements the coverage check does not ask about: those marked a
+# gap, and those active with no seam and verified by review. Both are a way out
+# of the check, and marking entries that way in bulk kept "every active
+# requirement is covered" green -- found by review of #104, not by this suite.
+# So the number is a literal here. Taking a gap marker off, as #105 will, turns
+# this red until the literal is lowered with it: the refusing direction, and one
+# edit away.
+UNASKED_COUNTS='gap:19 review:15'
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
   function emit(res, tags, text) { printf "%s\t%s\t%s\n", res, tags, text }
@@ -7600,7 +7610,7 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
     part = ""; cur = ""
     while ((getline line < reqs) > 0) {
       if (line ~ /^## /) {
-        cur = ""
+        cur = ""; heading = substr(line, 4)
         if (line ~ /^## Provenance/) part = "prov"
         else if (line ~ /^## Citations that are not requirements/) part = "cite"
         else if (line ~ /^## (User stories|Functional requirements|Boundary issues)$/) part = "req"
@@ -7609,7 +7619,11 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       }
       if (line ~ /^### /) {
         if (part == "req" || part == "prov") open_entry(trim(substr(line, 5)))
-        else cur = ""
+        else {
+          cur = ""; hid = trim(substr(line, 5))
+          if (hid ~ /^(US|FR|GH)-[0-9]/ || hid ~ /^#[0-9]+\.[0-9]+$/)
+            problem[++nproblem] = hid ": an entry under the heading \"" heading "\", where no entry is read"
+        }
         continue
       }
       if (part == "cite" && line ~ /^- #[0-9]+: ./) {
@@ -7633,7 +7647,7 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
     runbook_read = 0
     while ((getline line < runbook) > 0) {
       runbook_read = 1
-      if (line ~ /^## §[0-9]+( |$)/) { s = line; sub(/^## §/, "", s); sub(/[^0-9].*$/, "", s); section[s] = 1 }
+      if (line ~ /^## §[0-9]+( |$)/) { s = line; sub(/^## §/, "", s); sub(/[^0-9].*$/, "", s); rbsec[s] = 1 }
     }
     close(runbook)
 
@@ -7663,9 +7677,9 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       if (hasseam && hasverify && kw != "gap") {
         v = get(id, "verify")
         if (v == "review") { }
-        else if (v ~ /^tests\/[^ ]+$/) { vf = root "/" v; if ((getline x < vf) < 0) problem[++nproblem] = id ": verify names " v ", which is not there"; close(vf) }
-        else if (v ~ /^runbook §[0-9]+$/) { s = v; sub(/^runbook §/, "", s); if (!(s in section)) problem[++nproblem] = id ": verify names runbook §" s ", which " (runbook_read ? "has no such section" : "is not written") }
-        else problem[++nproblem] = id ": verify is " v ", which is none of review, tests/<file> and runbook §<n>"
+        else if (v ~ /^tests\/[A-Za-z0-9_.-]+\.py$/) { vf = root "/" v; if ((getline x < vf) < 0) problem[++nproblem] = id ": verify names " v ", which is not there"; close(vf) }
+        else if (v ~ /^runbook §[0-9]+$/) { s = v; sub(/^runbook §/, "", s); if (!(s in rbsec)) problem[++nproblem] = id ": verify names runbook §" s ", which " (runbook_read ? "has no such section" : "is not written") }
+        else problem[++nproblem] = id ": verify is " v ", which is none of review, tests/<file>.py and runbook §<n>"
       }
     }
 
@@ -7694,6 +7708,7 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       nres++
       split(line, f, "\t")
       if (f[1] == "") untagged[++nuntagged] = f[4]
+      if (f[2] != "refuse" && f[2] != "permit" && f[2] != "static") baddir[++nbaddir] = f[2] ": " f[4]
       nt = split(f[1], t, " ")
       for (j = 1; j <= nt; j++) {
         if (t[j] in isreq) {
@@ -7703,6 +7718,21 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       }
     }
     close(ledger)
+    # A requirement no check can reach that has checks after all is saying two
+    # things, and the one that lets the coverage check pass is the one believed.
+    for (i = 1; i <= nreq; i++) {
+      id = order[i]
+      if (get(id, "seam") == "none" && cnt[id, "refuse"] + cnt[id, "permit"] + cnt[id, "static"] > 0)
+        problem[++nproblem] = id ": seam: none, and " counts(id) " are tagged with it"
+    }
+    ngapped = 0; nreview = 0
+    for (i = 1; i <= nreq; i++) {
+      id = order[i]
+      if (keyword(get(id, "status")) == "gap") ngapped++
+      if (get(id, "status") == "active" && get(id, "verify") == "review") nreview++
+    }
+    split(unasked_literal, ua, " ")
+    for (j in ua) { split(ua[j], kv, ":"); expected[kv[1]] = kv[2] }
 
     # --- the citations -----------------------------------------------------------
     while ((getline line < suite) > 0) {
@@ -7724,12 +7754,13 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       printf "requirements matrix: %d requirements; %d active, %d of them covered; %d marked a gap; %d check results recorded\n", nreq, nactive, ncovered, ngap, nres
       for (i = 1; i <= nreq; i++) {
         id = order[i]; st = get(id, "status"); kw = keyword(st)
-        if (kw == "active") verdict = covered(id) ? "covered" : "NOT COVERED"
-        else verdict = "not asked"
+        if (kw == "active") mverdict = covered(id) ? "covered" : "NOT COVERED"
+        else if (kw == "gap" && covered(id)) mverdict = "not asked, though its tags now meet coverage"
+        else mverdict = "not asked"
         extra = ""
         if ((id, "direction") in field) extra = extra ", " keyword(get(id, "direction"))
         if (get(id, "seam") == "none") extra = extra ", seam: none, verify: " get(id, "verify")
-        printf "\n%s  %s  %s (%s%s)", id, st, verdict, counts(id), extra
+        printf "\n%s  %s  %s (%s%s)", id, st, mverdict, counts(id), extra
         printf "%s\n", checks[id]
       }
       exit
@@ -7742,8 +7773,9 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
     if (nunknown == 0) emit("ok", "GH-104.2", "every tag names a requirement")
     for (i = 1; i <= nunknown; i++) emit("FAIL", "GH-104.2", "a check is tagged " unknownorder[i] ", which is not in the requirements file: " unknown[unknownorder[i]])
     if (nres == 0) emit("FAIL", "GH-104.1", "no check result was recorded, so no tag was read")
-    else if (nuntagged == 0) emit("ok", "GH-104.1", "every check carries a tag")
+    else if (nuntagged == 0 && nbaddir == 0) emit("ok", "GH-104.1", "every check carries a tag and a direction")
     for (i = 1; i <= nuntagged; i++) emit("FAIL", "GH-104.1", "a check carries no tag: " untagged[i])
+    for (i = 1; i <= nbaddir; i++) emit("FAIL", "GH-104.1", "a check records a direction that is none of refuse, permit and static: " baddir[i])
     nuncovered = 0
     for (i = 1; i <= nreq; i++) {
       id = order[i]
@@ -7753,6 +7785,10 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       emit("FAIL", "FR-46 FR-33", id " is active and not covered: " counts(id) (d == "" ? "" : ", declared " d))
     }
     if (nuncovered == 0) emit("ok", "FR-46 FR-33", "every active requirement is covered")
+    if (ngapped == expected["gap"] + 0 && nreview == expected["review"] + 0)
+      emit("ok", "FR-46", "the requirements coverage does not ask about number as this suite expects: " ngapped " marked a gap, " nreview " verified by review")
+    else
+      emit("FAIL", "FR-46", "the requirements coverage does not ask about have moved: " ngapped " marked a gap and " nreview " verified by review, where this suite expects " (expected["gap"] + 0) " and " (expected["review"] + 0))
     if (nprov == 0) emit("ok", "FR-47", "every stage-ticket criterion is carried or dropped, and each ticket has all of its criteria")
     for (i = 1; i <= nprov; i++) emit("FAIL", "FR-47", provproblem[i])
     nbad = 0
@@ -7766,9 +7802,9 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
   }
 AWK
 )
-requirements_read() {  # requirements_read <findings|matrix> <requirements> <ledger> <suite> <root> <runbook> <counts>
+requirements_read() {  # requirements_read <findings|matrix> <requirements> <ledger> <suite> <root> <runbook> <counts> <unasked>
   awk -v mode="$1" -v reqs="$2" -v ledger="$3" -v suite="$4" -v root="$5" \
-      -v runbook="$6" -v counts_literal="$7" "$REQUIREMENTS_AWK" </dev/null
+      -v runbook="$6" -v counts_literal="$7" -v unasked_literal="$8" "$REQUIREMENTS_AWK" </dev/null
 }
 
 echo "--- the findings, against a fixture whose every answer is written here ---"
@@ -7859,7 +7895,7 @@ printf '%s\t%s\t%s\t%s\n' \
 printf 'a suite citing %s5 and %s9\n' "$H" "$H" > "$REQ_FIX/clean/suite"
 req_fixture() {  # req_fixture <dir> -- the findings for the fixture in <dir>
   requirements_read findings "$1/requirements.md" "$1/ledger" "$1/suite" \
-    "$1/root" "$1/runbook.md" '37:2'
+    "$1/root" "$1/runbook.md" '37:2' 'gap:1 review:0'
 }
 # A mutant is the clean fixture with one file edited, and the edit is asserted to
 # have taken: a sed that matched nothing leaves the clean fixture, and every FAIL
@@ -7880,8 +7916,9 @@ tok 'the clean fixture: every finding holds, one line each' \
 "ok${TAB}FR-45${TAB}the requirements file holds 7 requirements and 2 criteria
 ok${TAB}FR-45${TAB}every requirement entry is well formed
 ok${TAB}GH-104.2${TAB}every tag names a requirement
-ok${TAB}GH-104.1${TAB}every check carries a tag
+ok${TAB}GH-104.1${TAB}every check carries a tag and a direction
 ok${TAB}FR-46 FR-33${TAB}every active requirement is covered
+ok${TAB}FR-46${TAB}the requirements coverage does not ask about number as this suite expects: 1 marked a gap, 0 verified by review
 ok${TAB}FR-47${TAB}every stage-ticket criterion is carried or dropped, and each ticket has all of its criteria
 ok${TAB}GH-104.3${TAB}every issue the suite cites has an entry or a reason" \
   "$(req_fixture "$REQ_FIX/clean")"
@@ -7921,7 +7958,7 @@ holds 'a check with no tag fails, and is named' "$OUT" \
 lacks 'and the suite does not also say every check carries one' "$OUT" 'every check carries a tag'
 printf '' > "$REQ_FIX/empty-ledger"
 OUT=$(requirements_read findings "$REQ_FIX/clean/requirements.md" "$REQ_FIX/empty-ledger" \
-        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2')
+        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' 'gap:1 review:0')
 holds 'a ledger that recorded nothing fails, rather than having no untagged check in it' "$OUT" \
   "FAIL${TAB}GH-104.1${TAB}no check result was recorded, so no tag was read"
 req FR-46 FR-33
@@ -7984,9 +8021,37 @@ holds 'a runbook section with no runbook written fails' "$OUT" \
 printf '## §1 the fork point\n' > "$REQ_FIX/verify-runbook/runbook.md"
 OUT=$(req_fixture "$REQ_FIX/verify-runbook")
 lacks 'and passes once the runbook has that section' "$OUT" 'verify names runbook'
+# Found by review of #104, each with the suite green before it.
+req_mutant renamed-heading requirements.md 's/^## Functional requirements$/## Functional requirements (hooks)/'
+OUT=$(req_fixture "$REQ_FIX/renamed-heading")
+holds 'a renamed family heading does not make its entries vanish' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}FR-1: an entry under the heading \"Functional requirements (hooks)\", where no entry is read"
+req_mutant seam-with-checks ledger 's/^FR-1\tstatic\t/FR-1 FR-2\tstatic\t/'
+OUT=$(req_fixture "$REQ_FIX/seam-with-checks")
+holds 'a requirement no check can reach, with a check tagged with it, fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}FR-2: seam: none, and 0 refusing, 0 permitting, 1 static are tagged with it"
+req_mutant verify-a-directory requirements.md 's|^- verify: tests/present.py$|- verify: tests/|'
+OUT=$(req_fixture "$REQ_FIX/verify-a-directory")
+holds 'a verify naming a directory is refused before it is read, which would abort the program' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}FR-2: verify is tests/, which is none of review, tests/<file>.py and runbook §<n>"
+req GH-104.1
+req_mutant misspelled-direction ledger 's/^US-2\trefuse\t/US-2\trefues\t/'
+OUT=$(req_fixture "$REQ_FIX/misspelled-direction")
+holds 'a check recording a direction that is not one fails' "$OUT" \
+  "FAIL${TAB}GH-104.1${TAB}a check records a direction that is none of refuse, permit and static: refues: says three"
+req FR-46
+req_mutant gap-added requirements.md 's/^- status: superseded-by: FR-1$/- status: gap → '"${H}"'8/'
+OUT=$(req_fixture "$REQ_FIX/gap-added")
+holds 'a second entry marked a gap moves a count this suite holds as a literal' "$OUT" \
+  "FAIL${TAB}FR-46${TAB}the requirements coverage does not ask about have moved: 2 marked a gap and 0 verified by review, where this suite expects 1 and 0"
+req_mutant review-added requirements.md 's|^- verify: tests/present.py$|- verify: review|'
+OUT=$(req_fixture "$REQ_FIX/review-added")
+holds 'and so does an entry moved to verification by review' "$OUT" \
+  "FAIL${TAB}FR-46${TAB}the requirements coverage does not ask about have moved: 1 marked a gap and 1 verified by review, where this suite expects 1 and 0"
+req FR-45
 printf '' > "$REQ_FIX/empty-requirements.md"
 OUT=$(requirements_read findings "$REQ_FIX/empty-requirements.md" "$REQ_FIX/clean/ledger" \
-        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2')
+        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' 'gap:1 review:0')
 holds 'a requirements file that holds nothing fails, rather than covering everything' "$OUT" \
   "FAIL${TAB}FR-45${TAB}nothing was read out of the requirements file, so every finding below is evidence of nothing"
 
@@ -8014,20 +8079,33 @@ FR-4  superseded-by: FR-1  not asked (0 refusing, 0 permitting, 0 static)
 GH-5.1  active  covered (0 refusing, 1 permitting, 0 static, permit-only)
     ok   ALLOW two" \
   "$(requirements_read matrix "$REQ_FIX/clean/requirements.md" "$REQ_FIX/clean/ledger" \
-       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2')"
+       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' 'gap:1 review:0')"
+
+# A gap whose tags now meet coverage is not asked about, and the matrix says the
+# tags meet it, so whoever owns the gap sees that the marker can come off.
+req GH-104.4
+req_mutant gap-covered ledger 's/^US-1\trefuse\t/US-1 FR-3\trefuse\t/; s/^US-1 GH-5.1\tpermit\t/US-1 GH-5.1 FR-3\tpermit\t/'
+holds 'the matrix names a gap whose tags now meet coverage' \
+  "$(requirements_read matrix "$REQ_FIX/gap-covered/requirements.md" "$REQ_FIX/gap-covered/ledger" \
+       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' 'gap:1 review:0')" \
+  "FR-3  gap → ${H}7  not asked, though its tags now meet coverage (1 refusing, 1 permitting, 0 static)"
 
 echo "--- every result goes through pass and fail ---"
 # A result printed any other way is printed and not recorded, so it covers
 # nothing and is refused for having no tag by nothing. The lines that print a
 # result are read off this file, comments stripped, and must be exactly the two
-# in pass and fail. The pattern is split across two quoted words and each
-# expected line breaks its word with a quote, so that neither is among its own
-# matches.
+# in pass and fail. Any quoted string opening with a result's prefix counts,
+# whatever prints it, so `printf '%s\n' "  ok ..."` and `echo -e` are found too;
+# the first version asked for printf or echo followed by the quote and missed
+# both, found by review of #104. The limit, named: stripping comments cuts at a
+# `#` inside a string, so a result printed on a line holding one before it is
+# not seen. The pattern is split across two quoted words and each expected line
+# breaks its word with a quote, so that neither is among its own matches.
 req GH-104.1
 tok 'the only lines that print a check result are the two in pass and fail' \
 "  printf '  o"'k'"   %s\n' \"\$line\"
   printf '  F"'AIL'" %s\n' \"\$line\"" \
-  "$(sed 's/[[:space:]]*#.*$//' "$HOOKS/check-hooks.sh" | grep -E "(printf|echo) +['\"] +(ok|FAIL)"' ')"
+  "$(sed 's/[[:space:]]*#.*$//' "$HOOKS/check-hooks.sh" | grep -E "['\"]  (ok   |FAI""L )")"
 
 echo "--- this repository ---"
 # The record is copied before it is read, because every line printed below is
@@ -8035,11 +8113,15 @@ echo "--- this repository ---"
 # check above this line; their own results reach the matrix and not this reading.
 cp "$LEDGER" "$FIXTURES/ledger-read"
 FINDINGS=$(requirements_read findings "$HOOKS/requirements.md" "$FIXTURES/ledger-read" \
-             "$HOOKS/check-hooks.sh" "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS")
-# An awk that failed prints nothing, and a loop over nothing passes by asking
-# nothing -- the permitting direction.
+             "$HOOKS/check-hooks.sh" "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$UNASKED_COUNTS")
+FINDINGS_STATUS=$?
+# An awk that failed may print nothing, or only the findings before the failure,
+# and a loop over what it printed passes by asking too little -- the permitting
+# direction. So its status is read as well as its output: under mawk a read of a
+# directory aborts the program with exit 2, found by review of #104.
 req FR-45 FR-46 GH-104.1
-[ -n "$FINDINGS" ] || fail static 'the requirements were not read at all: the program printed no finding'
+[ "$FINDINGS_STATUS" = 0 ] || fail static 'the requirements program exited %s, so its findings are not all of them' "$FINDINGS_STATUS"
+[ -n "$FINDINGS" ] || fail static 'the requirements program printed no finding at all'
 while IFS="$TAB" read -r RESULT TAGS TEXT; do
   req $TAGS
   case "$RESULT" in
@@ -8052,8 +8134,13 @@ done <<< "$FINDINGS"
 # above included, and then the verdict line the run would have printed.
 if [ -n "$MATRIX" ]; then
   requirements_read matrix "$HOOKS/requirements.md" "$LEDGER" "$HOOKS/check-hooks.sh" \
-    "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" >&3
+    "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$UNASKED_COUNTS" >&3
+  MATRIX_STATUS=$?
   exec >&3
+  if [ "$MATRIX_STATUS" != 0 ]; then
+    echo "the matrix program exited $MATRIX_STATUS, so the matrix above is not the whole of it"
+    FAILED=1
+  fi
 fi
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi

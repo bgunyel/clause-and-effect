@@ -61,7 +61,8 @@ field, a value continuing onto lines indented by two spaces.
 - `direction`: `refuse-only: <reason>`, `permit-only: <reason>` or
   `static: <reason>`, for a requirement that is one-sided (Q15). See below.
 - `seam: none` together with `verify: runbook §<n>`, `verify: review` or
-  `verify: tests/<file>`, for a requirement no check can reach (Q17).
+  `verify: tests/<file>.py`, for a requirement no check can reach (Q17).
+- `note`: anything a reader of the entry needs that is not one of the above.
 
 ## What covers a requirement
 
@@ -86,18 +87,23 @@ An `active` requirement is **covered** (Q15) when it has
   because a third of these requirements are of that kind; declaring it is what
   keeps a behavioural requirement from being covered by a pin on its text.
 
-A requirement with `seam: none` needs no check, and its `verify` must resolve:
-`tests/<file>` to a file that exists, `runbook §<n>` to a heading `## §<n>` in
+A requirement with `seam: none` needs no check, and has none tagged with it; its
+`verify` must resolve: `tests/<file>.py` to a file that exists, `runbook §<n>` to a heading `## §<n>` in
 `.claude/hooks/runbook.md`.
 
 The suite fails on each of these, and `--matrix` shows the rest:
 
 - an `active` requirement that is not covered;
 - a check with no tags, or a tag naming an ID not in this file;
-- an entry that is malformed: an ID out of family, one used twice, a missing
-  field, an unknown status or kind, a `superseded-by` naming no entry, a
-  `direction` with no reason, `seam: none` with a `verify` that does not
-  resolve;
+- an entry that is malformed: an ID out of family, one used twice, one under a
+  `##` heading that holds no entries, a missing field, an unknown status or kind,
+  a `superseded-by` naming no entry, a `direction` with no reason, `seam: none`
+  with a `verify` that does not resolve, and `seam: none` with checks tagged with
+  it after all;
+- a check recording a direction other than refuse, permit and static;
+- a number of entries marked a gap, or active and verified by review, other than
+  the number the suite holds as a literal, because both take an entry out of the
+  coverage check, and marking entries that way in bulk would keep it green;
 - a criterion of #37–#41 with no mapping, a mapping naming an unknown ID, or a
   number of criteria for an issue other than the number that issue has;
 - a `#<n>` cited in `check-hooks.sh` with neither an entry nor a listing under
@@ -219,6 +225,9 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #36, User Stories, 15; widened for releases by #36's Amendment of
   2026-09-13, which is FR-48
 - status: active
+- note: active rather than superseded-by, because the Amendment widened what the
+  story refuses and replaced none of it; every act the story names is still
+  refused
 
 ### US-16
 - text: As a reviewer of this repository, I want to know what an unattended agent
@@ -379,11 +388,14 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - text: A command is judged where it stands in a command position, wherever an
   agent would plausibly write it: after `;`, `&&`, `||`, `|` or a newline, after a
   control word, indented, inside `$( )` or backticks, joined across a line
-  continuation, and behind an environment assignment or a prefix word. Text that
+  continuation, and behind an environment assignment. Text that
   only names a command is not one: a heredoc body, a quoted argument, a word in
   prose.
-- from: #36, Implementation Decisions, Stage 0, the stopping rule ("Indentation,
-  `&&` chains and control words clear that bar")
+- from: #36, Implementation Decisions, Stage 0, the stopping rule, which names three
+  shapes ("Indentation, `&&` chains and control words clear that bar"); the others
+  are the review findings on PR #35 that the rule was written after, as this
+  suite's header records them. Prefix words and quoted separators are not here:
+  they are GH-43.6, GH-79.1 and GH-68.1
 - status: active
 
 ### FR-4
@@ -392,7 +404,9 @@ The suite fails on each of these, and `--matrix` shows the rest:
   assessed, because nothing can be read out of a quoted payload. A wrapper
   around anything else is not.
 - from: #36, Implementation Decisions, Stage 0, the stopping rule ("refusing
-  wrappers outright is the designed answer and not a limitation")
+  wrappers outright is the designed answer and not a limitation"). Its last
+  sentence is not #36's: it is CLAUDE.md's left-open item 1, "Only what a hook
+  guards is refused", as #51 and #73 settled it
 - status: active
 
 ### FR-5
@@ -900,18 +914,19 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #58
 - kind: defect-permitting
 - status: active
-- direction: permit-only: no running hook reaches that line, because the ancestry
-  read fails first and the guard abstains; the abstention is the verdict, and the
-  line itself is pinned as text
+- direction: static: no running hook reaches that line, because the ancestry read
+  fails first and the guard abstains, so the line is pinned as text; the
+  abstention beside it is GH-44.6's verdict
 
 ### GH-61
-- text: `docs/research/` is named in CLAUDE.md's documentation table, and stays
-  outside the append-only guard.
+- text: `docs/research/` stays outside the append-only guard. That it is named in
+  CLAUDE.md's documentation table is held by tests/test_docs_directory_naming.py,
+  which is pytest and not a check.
 - from: #61
 - kind: doc-claim
 - status: active
-- seam: none
-- verify: tests/test_docs_directory_naming.py
+- direction: permit-only: the guard's refusals of the directories it does hold are
+  GH-69.2's
 
 ### GH-62
 - text: The two derivations of the active dev branch, in the guard and in the
@@ -1366,11 +1381,11 @@ criterion deleted from here fails as surely as one left unmapped.
 ### #38.5
 - criterion: The suite passes with a count identical to before — 207, measured at
   `b625d64`
-- maps: FR-12
+- dropped: a property of that one change, recorded as FR-12 and retired with it
 
 ### #38.6
 - criterion: No hook changes what it refuses or permits
-- maps: FR-12
+- dropped: a property of that one change, recorded as FR-12 and retired with it
 
 ### #39.1
 - criterion: `cs_gh_args` exists beside the git-argument helper, taking a subcommand
@@ -1499,8 +1514,8 @@ criterion deleted from here fails as surely as one left unmapped.
 
 ### #41.8
 - criterion: The check suite passes
-- dropped: a condition of every change rather than a requirement of this one; its
-  standing form is FR-46
+- dropped: a condition of every change rather than a requirement of this one; no
+  requirement here is "the suite passes", which is what running it answers
 
 ## Citations that are not requirements
 
@@ -1529,6 +1544,7 @@ it has no entry above (Q16).
 - #77: a pull request, for #71
 - #89: a pull request, for #79
 - #103: the audit that decided this file; its decisions are cited as Q-numbers
+- #105: the gap-fill issue that owns most `gap` markers; it adds checks, not requirements
 - #110: the live acceptance runbook, not yet written; `verify: runbook §<n>` names
   its sections
 - #111: a pull request, for #94
