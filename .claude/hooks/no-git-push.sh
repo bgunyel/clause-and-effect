@@ -17,6 +17,44 @@
 # anyway. In a linked worktree `git rev-parse --git-dir` is .git/worktrees/<name>
 # while --git-common-dir is .git; in the main checkout the two are equal.
 #
+# EQUAL AS DIRECTORIES, NOT AS STRINGS. Issue #94. They were compared as the
+# text git printed, and git does not print them in one form. At the root of a
+# checkout git 2.43 prints both relatively, `.git` and `.git`; one directory
+# down it prints --git-dir absolute and --git-common-dir relative, `/.../r/.git`
+# against `../.git`. So below the root the main checkout read as a linked
+# worktree. Measured in a throwaway repository on feature-x, piping
+# `git push origin feature-x` in: exit 2 at the root, and exit 0 from `src/` and
+# from `src/deep/`. An agent in the main checkout pushed any branch it liked
+# from any directory but one -- silently, and in the permitting direction.
+#
+# Each path is now resolved to the directory it names with `cd` and `pwd -P`,
+# and those are compared. The -P is load-bearing: a plain `pwd` after a `cd`
+# that followed a symlinked $PWD spells the path through the link, while git
+# prints the absolute one through the real directory, and the two differ again.
+# `git rev-parse --path-format=absolute` gave the same answers at every depth
+# measured, symlinked working directories included, and was not taken because
+# of what it does on a git older than 2.31: rev-parse echoes an option it does
+# not know as an output line, so both values would gain the same first line and
+# go on differing in the second -- this defect again, from a version check
+# nobody would think to make. `pwd -P` asks nothing of the git version.
+#
+# A path that will not resolve is refused with a message of its own, because
+# the alternative reads an unreadable path as a linked worktree, and because
+# the main-checkout message is a claim this file cannot support there. No
+# repository reaches it; check-hooks.sh reaches it with a git shim that fakes
+# --git-common-dir.
+#
+# The cd is run with CDPATH emptied. git prints `.git` at the root of a checkout,
+# and `cd .git` looks that name up through CDPATH before the working directory.
+# No verdict turned on it, since both halves are `.git` there and would move
+# alike, but a function that answers "which directory is this" should not
+# answer with another one.
+#
+# canonical_dir below is the second copy of a function in
+# no-work-on-stale-branch.sh. check-hooks.sh holds the two texts identical, and
+# drives both hooks from a main checkout and a linked worktree two directories
+# deep and through a symlink.
+#
 # That check is the only signal available here that separates Bertan from an
 # agent, because an agent pushes as bgunyel today. A server-side ruleset cannot
 # tell those two apart while they share one account: on dev-* it would block
@@ -128,9 +166,19 @@ if echo "$SCAN" | grep -qE '(GIT_DIR|GIT_WORK_TREE|GIT_COMMON_DIR)='; then
   exit 2
 fi
 
-GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null)
-GIT_COMMON_PATH=$(git rev-parse --git-common-dir 2>/dev/null)
-if [ -z "$GIT_DIR_PATH" ] || [ "$GIT_DIR_PATH" = "$GIT_COMMON_PATH" ]; then
+# The directory a path names, with every symlink resolved; empty if it names
+# none. Compared as directories, not as the text git printed -- see the header.
+canonical_dir() {
+  [ -n "$1" ] || return 1
+  (CDPATH= cd -- "$1" >/dev/null 2>&1 && pwd -P)
+}
+GIT_DIR_PATH=$(canonical_dir "$(git rev-parse --git-dir 2>/dev/null)")
+GIT_COMMON_PATH=$(canonical_dir "$(git rev-parse --git-common-dir 2>/dev/null)")
+if [ -z "$GIT_DIR_PATH" ] || [ -z "$GIT_COMMON_PATH" ]; then
+  echo "$REFUSE The repository directory git reports here could not be resolved, so whether this runs in a linked worktree cannot be judged from here." >&2
+  exit 2
+fi
+if [ "$GIT_DIR_PATH" = "$GIT_COMMON_PATH" ]; then
   echo "$REFUSE This is the main checkout, not a linked worktree. Leave the commits on the branch and say what is ready to push." >&2
   exit 2
 fi
