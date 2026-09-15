@@ -3976,9 +3976,11 @@ echo "=== the documents answer the citations the hooks make into them ==="
 # wrong in a way this suite could see, because nothing held a hook's pointer to
 # the thing it points at.
 #
-# These are evidence about the three citations named below and nothing else. A
-# fourth pointer added to a hook tomorrow is uncounted here, and so is any of
-# these three reworded, because every literal is the sentence as written.
+# These are evidence about the citations named below and nothing else. A pointer
+# added to a hook tomorrow is uncounted here, and so is any of these reworded,
+# because every literal is the sentence as written. The count that sentence
+# carried is gone rather than raised: #99 added a fourth citation, and a count
+# corrected to four is the skill's `four acts` again, one file along.
 #
 # CONTEXT.md's entries are extracted rather than grepped whole, for the reason
 # the boundary paragraph is narrowed above: a glossary-wide grep is satisfied by
@@ -3987,12 +3989,14 @@ echo "=== the documents answer the citations the hooks make into them ==="
 # written down twice, in neither place a reader looking for vocabulary would go.
 # An entry runs from its bolded name to its `_Avoid_:` line, and the extraction
 # is checked from both ends before anything is asserted against it -- with one
-# limit named, because the two extractions below are not equally evidenced.
+# limit named, because the extractions below are not equally evidenced.
 # *Reserved act* has an entry after it, so its `unarmed` is real evidence that
 # the `_Avoid_:` stop fires. *Worktree branch* is the last entry in the file:
 # nothing follows it for an over-run to swallow, so its `unarmed` tests only
 # that the extraction did not begin too early, and the `_Avoid_:` stop is
-# evidenced there by the other extraction rather than by its own.
+# evidenced there by the other extraction rather than by its own. *Active dev
+# branch* is the first entry, the mirror case: its `unarmed` is real evidence of
+# the stop, and nothing before it can show a start that came too early.
 CONTEXT_MD="$HOOKS/../../CONTEXT.md"
 SKILL_MD="$HOOKS/../skills/branch-hygiene/SKILL.md"
 entry() {  # entry <file> <bolded name> -- one glossary entry, name to _Avoid_
@@ -4119,6 +4123,85 @@ written 'and leaves the unclassified alone' \
 # leave the claim behind it as false as it was. Pinned for that reason.
 written 'the sweep says how often it is run, which is by hand and never' \
   "$SWEEP_SECTION" 'Cadence: manual, and unscheduled'
+
+# #99, the fourth citation: where a new worktree branch starts. The report's
+# header points at the rule and at the glossary entry beside the fetch that
+# makes origin/dev-NN what it is, and the documents are held to answering it.
+# A pointer only -- the argument stays in CLAUDE.md, and the header is asserted
+# not to carry the routes, which are the part a retelling would copy.
+REPORT_HEADER="$FIXTURES/report-header.txt"
+awk 'NR == 1 { next } /^#/ { print; next } { exit }' \
+    "$HOOKS/report-stale-branches.sh" > "$REPORT_HEADER"
+written 'the extracted header is the report header' \
+  "$REPORT_HEADER" 'THE ARMING PROPERTY IS NOT SELF-ANNOUNCING'
+unarmed 'and it stops at the first line of code' "$REPORT_HEADER" 'FETCH_TIMEOUT='
+written 'the report points at the rule for where a worktree branch starts' \
+  "$REPORT_HEADER" 'WHERE A NEW WORKTREE BRANCH STARTS is a rule in CLAUDE.md, not argued here'
+written 'and at the glossary entry that says what the tip is' \
+  "$REPORT_HEADER" "CONTEXT.md's *active dev branch* entry"
+unarmed 'and does not carry the first route itself' "$REPORT_HEADER" '--no-track'
+unarmed 'nor the second' "$REPORT_HEADER" 'reset --hard'
+
+# #99 Q1: what the tip is. The entry is where a reader of the pointer arrives.
+ACTIVE_ENTRY="$FIXTURES/context-active-dev-branch.md"
+entry "$CONTEXT_MD" 'Active dev branch' > "$ACTIVE_ENTRY"
+written 'the extracted entry is the active dev branch entry' \
+  "$ACTIVE_ENTRY" '**Active dev branch**:'
+unarmed 'and it is that entry rather than the whole glossary' \
+  "$ACTIVE_ENTRY" '**Check**:'
+written 'the entry says the tip is the remote-tracking ref as the last fetch left it' \
+  "$ACTIVE_ENTRY" 'as the last fetch left it'
+written 'and that the local dev branch is a working copy' \
+  "$ACTIVE_ENTRY" 'is a working copy'
+written 'which a worktree branch is never cut from' \
+  "$ACTIVE_ENTRY" 'never cut from'
+
+# #99 Q2: moving a local main or dev-NN is reserved, and like the sweep it is
+# reserved without being refused. The entry names what passes every hook, the
+# way it names `git worktree remove`, because an act nothing refuses is only
+# reserved in a document a reader can find. Written apart from the enumeration
+# literal checked above, which has to survive the addition unbroken.
+written 'the enumeration reserves moving a local main or dev branch' \
+  "$RESERVED_ENTRY" 'moving a local `main` or `dev-NN`'
+written 'and names moving the ref without a push, which passes every hook' \
+  "$RESERVED_ENTRY" 'git branch -f'
+written 'and a fetch into the local branch, which passes every hook too' \
+  "$RESERVED_ENTRY" 'git fetch origin dev-NN:dev-NN'
+
+# #99 Q9 and Q13: the rule, in the boundary section this suite already
+# extracted and checked from both ends. Both routes, the qualifier that keeps
+# the second one from discarding a worktree's commits, and the sentence saying
+# nothing enforces it -- with the one assumption the refusal of a skipped step
+# rests on, which is what the report's main ancestry line reads.
+written 'the boundary section gives the first route, untracked' \
+  "$SECTION" 'git worktree add --no-track -b <branch> <path> origin/dev-NN'
+written 'and the second' "$SECTION" 'git reset --hard origin/dev-NN'
+written 'and confines the second to a worktree EnterWorktree has just created' \
+  "$SECTION" 'just created'
+written 'and says that nothing enforces the rule' "$SECTION" 'Nothing enforces'
+written 'and what a skipped step rests on instead' \
+  "$SECTION" 'only while `origin/main` is an ancestor'
+written 'and points at the glossary rather than re-arguing it' \
+  "$SECTION" '*active dev branch*'
+# Pointing, not re-arguing, counted in the direction a retelling takes: the
+# commands that pass every hook are the glossary's to list, once.
+tok 'the boundary section does not restate what the glossary reserves' \
+    '0' "$(prose_count "$CLAUDE_MD" 'git fetch origin dev-NN:dev-NN')"
+# #99 Q13: not a sixth consequence. Those are consequences of the hooks, and
+# this rule has no hook.
+LEFT_OPEN_FILE="$FIXTURES/boundary-left-open.md"
+printf '%s\n' "$LEFT_OPEN" > "$LEFT_OPEN_FILE"
+written 'the extracted list is the left-open list' \
+  "$LEFT_OPEN_FILE" 'Deliberately left open'
+unarmed 'and the unenforced rule is not one of its items' \
+  "$LEFT_OPEN_FILE" 'git reset --hard origin/dev-NN'
+
+# The count removed from this section's head, held removed. Split across two
+# quoted words so that this line does not contain the phrase it refuses.
+unarmed 'this section counts none of its citations' \
+  "$HOOKS/check-hooks.sh" "three citations"" named below"
+unarmed 'and does not count them again at four' \
+  "$HOOKS/check-hooks.sh" "four citations"" named below"
 echo "=== the tokeniser's header names every hook that sources it ==="
 # The same audit the section above gets, pointed at the one other sentence in
 # this tree that claims to list the hooks. lib/command-scan.sh opens "which is

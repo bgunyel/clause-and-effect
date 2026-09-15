@@ -14,6 +14,14 @@ proposed into it by pull request; it reaches `main` only through a pull request
 Bertan merges. There is exactly one at a time, and advancing it on the remote is
 a reserved act — `.claude/hooks/no-git-push.sh` refuses a push of `main` or of
 any `dev-<digits>` branch from anywhere.
+
+Its tip is `origin/dev-NN` as the last fetch left it. The local `dev-NN`
+is a working copy, not the branch: it is usually checked out in Bertan's main
+checkout with edits in progress, and it can sit behind the remote or ahead of it
+with commits nobody has pushed. A worktree branch is therefore never cut from
+it. Bringing it up to date is not an agent's to do either — moving it is a
+reserved act, below — so the tip an agent reads is the remote-tracking ref, which
+the SessionStart fetch in `.claude/hooks/report-stale-branches.sh` refreshes.
 _Avoid_: development branch, current branch
 
 **Check**:
@@ -31,12 +39,18 @@ _Avoid_: check
 **Reserved act**:
 An act that belongs to Bertan and not to an agent: advancing the active dev
 branch on the remote, merging any pull request, rotating the dev branch,
-removing a worktree or deleting a worktree branch, and publishing a release.
+removing a worktree or deleting a worktree branch, publishing a release, and
+moving a local `main` or `dev-NN` — its ref, or the working tree of the
+checkout it is checked out in.
 Reserved is not a synonym for refused. The hooks refuse the ordinary spellings
 of some of these and they stop mistakes, not adversaries; others nothing refuses
 at all. `git worktree remove`, the whole of the sweep, and `git branch -d`,
 which both the sweep and a rotation end with, pass every hook and are reserved
-all the same. Where nothing enforces, an agent reports what it found and stops.
+all the same. So do `git branch -f`, `git fetch origin dev-NN:dev-NN` and a
+fast-forward in the main checkout: each moves a local branch Bertan owns, and a
+fast-forward also rewrites files with edits in progress, while moving the ref
+alone splits HEAD from the working tree. Where nothing enforces, an agent
+reports what it found and stops.
 _Avoid_: forbidden act, blocked act
 
 **Worktree branch**:

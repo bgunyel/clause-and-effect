@@ -59,6 +59,10 @@
 # repository setting is Bertan's, like every other reserved act this file
 # declines to perform.
 #
+# WHERE A NEW WORKTREE BRANCH STARTS is a rule in CLAUDE.md, not argued here.
+# It starts at the remote-tracking ref the fetch below writes, and why that ref
+# and never the local dev-NN is CONTEXT.md's *active dev branch* entry.
+#
 # Exits 0 always. A SessionStart hook that fails is a session that does not
 # start, and nothing here is worth that.
 FETCH_TIMEOUT=15
