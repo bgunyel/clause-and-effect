@@ -9,39 +9,52 @@
 # file makes the report specific enough to paste. Every line that is not a
 # command begins with `#`, so a block can be copied whole.
 #
-# ONE CLASSIFICATION, NOT TWO. Which branch is stale is decided by
+# ONE CLASSIFICATION, NOT TWO. Which worktree branch is stale is decided by
 # report-stale-branches.sh, whose rules -- the pull request that decides a
 # branch, and the ancestry test against its head -- are argued in its header
 # and were found wrong on review more than once. This file runs that report and
 # reads its lines rather than re-deriving them, so a correction there is a
 # correction here. It is run fresh rather than taken from the session start,
 # because a pull request merged since then is a branch the start-of-session
-# report has not reclassified. The coupling is to the report's wording, which
-# check-hooks.sh already pins against the sweep's definitions.
+# report has not reclassified. The coupling is to the report's wording:
+# check-hooks.sh holds every phrase read below equal in both files, and drives
+# this file against the real report in a fixture repository.
 #
 # WHAT IT ADDS is only what the sweep asks a person to check before a removal
 # and the report does not print:
 #   - a lock whose session is alive. A lock reason carries the pid and that
 #     process's start time (field 22 of /proc/<pid>/stat); a pid that exists
 #     with a different start time was handed to something else, and the lock is
-#     stale. Where either cannot be read the session is taken as live, so the
-#     unknown case prints no removal.
-#   - a worktree with uncommitted or untracked files, which `git worktree
-#     remove` refuses and which is somebody's unread work.
+#     stale. Where either cannot be read the session is taken as live.
+#   - a worktree with uncommitted or untracked files, or whose status cannot be
+#     read -- `git worktree remove` refuses the first, and the second is not
+#     evidence of the first's absence.
 #   - a branch checked out in the main checkout, which no worktree removal
 #     reaches.
-#   - worktree entries whose directory is gone, which `git worktree prune`
-#     clears -- unless locked, when prune skips them and exits 0.
-#   - whether the active dev branch is due to rotate: its newest pull request
-#     into main is merged, the branch is contained in origin/main, and nothing
-#     is open against it.
+#   - worktree entries whose directory is gone. `git worktree prune` skips a
+#     locked entry and exits 0, so every stale unlock is printed before the one
+#     prune, never after it. Review of #126 found a second unlock landing after
+#     the prune and its entry left behind.
+#
+# A DEV BRANCH IS DELETED ON THE SAME EVIDENCE WHETHER IT IS ACTIVE OR NOT. The
+# report calls every local dev-NN below the highest origin/dev-* `rotated past`,
+# which is true as soon as the next one is pushed -- before the old one's pull
+# request into main has merged. Review of #126 found the first version printing
+# `git branch -d` and `git push origin --delete` for such a branch on the
+# report's word alone, and `-d` did not catch it: it accepts a branch merged
+# into its own upstream. So `hold` below asks the same four questions of the
+# active dev branch before a rotation and of every rotated-past one before its
+# delete: its newest pull request into main merged; both its local and its
+# remote copy contained in origin/main; nothing open against it; not checked
+# out in a worktree the commands cannot move off it.
 #
 # WHAT IT DECLINES. A branch whose pull request closed without merging is
 # listed with no command, because its commits may exist nowhere else and the
-# sweep makes that a decision. An unclassified branch is not mentioned beyond
-# the count. When the report could not read pull requests or could not fetch,
-# nothing is printed but the reason: the sweep says to take no list from that
-# report.
+# sweep makes that a decision. An unclassified branch gets nothing, including
+# an unlock of its worktree. Where anything cannot be read -- the fetch, the
+# report's pull requests, or this file's own pull request read -- nothing is
+# printed but the reason: the sweep takes no list from a report it cannot trust,
+# and a plan that silently omits the rotation reads as "not due".
 #
 # Exits 0 when it printed a plan (possibly an empty one) and 1 when it declined
 # to, so a caller can tell "nothing to do" from "could not tell".
@@ -49,11 +62,10 @@ PRS_TIMEOUT=10
 
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd) || exit 1
 cd "$ROOT" || exit 1
-REPORT_SH="$ROOT/.claude/hooks/report-stale-branches.sh"
 
-REPORT=$(bash "$REPORT_SH" 2>/dev/null)
+REPORT=$(bash "$ROOT/.claude/hooks/report-stale-branches.sh" 2>/dev/null)
 
-if printf '%s\n' "$REPORT" | grep -q '^fetch: \(FAILED\|SKIPPED\)'; then
+if printf '%s\n' "$REPORT" | grep -q -e '^fetch: FAILED' -e '^fetch: SKIPPED'; then
   echo "# No commands: the fetch did not complete, so the report classified against"
   echo "# stale remote-tracking refs. Re-run when origin is reachable."
   exit 1
@@ -70,8 +82,18 @@ if ! printf '%s\n' "$REPORT" | grep -q '^pull requests: read'; then
   exit 1
 fi
 
-# path, branch, locked (reason or empty), one per worktree. The first is the
-# main checkout.
+# Number, head, base, state. The report's own read has no base, and every dev
+# branch question below is a question about a base.
+if ! PRS=$(timeout "$PRS_TIMEOUT" gh pr list --state all --limit 1000 \
+     --json number,headRefName,baseRefName,state \
+     --jq '.[] | "\(.number)\t\(.headRefName)\t\(.baseRefName)\t\(.state)"' 2>/dev/null); then
+  echo "# No commands: the pull request read for the dev branch checks failed or timed"
+  echo "# out after ${PRS_TIMEOUT}s. Re-run when gh works."
+  exit 1
+fi
+
+# path, branch, lock reason (empty when unlocked), one per worktree. The first
+# is the main checkout.
 WORKTREES=$(git worktree list --porcelain | awk '
   function flush() { if (path != "") print path "\t" branch "\t" lock }
   /^worktree / { flush(); path = substr($0, 10); branch = ""; lock = "" }
@@ -94,10 +116,50 @@ live() {
 
 q() { printf '%q' "$1"; }
 
+# hold <dev-NN> <main checkout may hold it: yes|no> -- why the branch may not be
+# deleted, or nothing. The header says why the active and the rotated-past dev
+# branches are asked the same questions. The active one may stand in the main
+# checkout, because the rotation's first command moves that checkout to main.
+hold() {
+  local dev=$1 into n s ref rc open at
+  into=$(printf '%s\n' "$PRS" | awk -F'\t' -v d="$dev" \
+    '$2 == d && $3 == "main" && $1 + 0 > n { n = $1 + 0; s = $4 } END { if (n) print n "\t" s }')
+  if [ -z "$into" ]; then
+    echo "it has no pull request into main"; return
+  fi
+  n=${into%%$'\t'*}
+  s=${into#*$'\t'}
+  if [ "$s" != MERGED ]; then
+    echo "its pull request into main, #$n, is $(printf '%s' "$s" | tr 'A-Z' 'a-z')"; return
+  fi
+  for ref in "refs/remotes/origin/$dev" "refs/heads/$dev"; do
+    git rev-parse -q --verify "$ref^{commit}" >/dev/null || continue
+    git merge-base --is-ancestor "$ref" refs/remotes/origin/main 2>/dev/null
+    rc=$?
+    case "$rc" in
+      0) ;;
+      1) echo "${ref#refs/} has commits that are not in origin/main"; return ;;
+      *) echo "${ref#refs/} could not be compared with origin/main"; return ;;
+    esac
+  done
+  open=$(printf '%s\n' "$PRS" | awk -F'\t' -v d="$dev" \
+    '$3 == d && $4 == "OPEN" { printf "%s#%s", sep, $1; sep = " " }')
+  if [ -n "$open" ]; then
+    echo "pull requests are open against it ($open), and deleting it would close them"; return
+  fi
+  at=$(printf '%s\n' "$WORKTREES" | awk -F'\t' -v b="$dev" -v m="$2" \
+    'NR == 1 && m == "yes" { next } $2 == b { print $1; exit }')
+  if [ -n "$at" ]; then
+    echo "it is checked out at $at"; return
+  fi
+}
+
 SWEEP=
 NOTES=
+GONE_UNLOCKS=
+GONE_DELETES=
 PRUNE=
-DEV_LOCAL_DELETE=
+ROTATED_PAST=
 HANDLED=
 
 while IFS= read -r LINE; do
@@ -111,21 +173,21 @@ while IFS= read -r LINE; do
     WT=${WT%]}
     REST=${REST%'   [worktree: '*} ;;
   esac
+  [ -n "$WT" ] && HANDLED="$HANDLED
+$WT"
 
   case "$REST" in
-    'merged: pull request #'*) ;;
-    'closed without merging: pull request #'*)
+    'merged: pull request'*) ;;
+    'closed without merging: pull request'*)
       NOTES="$NOTES
 #   $BRANCH -- ${REST%%;*}. Its commits may exist nowhere else: decide, then sweep it by hand."
       continue ;;
     'rotated past'*)
-      DEV_LOCAL_DELETE="$DEV_LOCAL_DELETE $BRANCH"
+      ROTATED_PAST="$ROTATED_PAST $BRANCH"
       continue ;;
     *) continue ;;
   esac
   PR=${REST#merged: }
-  [ -n "$WT" ] && HANDLED="$HANDLED
-$WT"
 
   if [ -z "$WT" ]; then
     SWEEP="$SWEEP
@@ -148,25 +210,24 @@ git branch -d $(q "$BRANCH")"
     continue
   fi
 
-  UNLOCK=
-  [ -n "$LOCK" ] && UNLOCK="git worktree unlock $(q "$WT")
-"
   if [ ! -d "$WT" ]; then
-    # A directory already gone: prune clears the entry, once it is unlocked.
     PRUNE=1
-    SWEEP="$SWEEP
-# $BRANCH -- $PR, worktree directory already gone
-${UNLOCK}git worktree prune
+    [ -n "$LOCK" ] && GONE_UNLOCKS="$GONE_UNLOCKS
+git worktree unlock $(q "$WT")"
+    GONE_DELETES="$GONE_DELETES
 git branch -d $(q "$BRANCH")"
     continue
   fi
 
-  if [ -n "$(git -C "$WT" status --porcelain 2>/dev/null)" ]; then
+  if ! STATUS=$(git -C "$WT" status --porcelain 2>/dev/null) || [ -n "$STATUS" ]; then
     NOTES="$NOTES
-#   $BRANCH -- $PR, but $WT holds uncommitted or untracked files; look before --force."
+#   $BRANCH -- $PR, but $WT holds uncommitted or untracked files, or its status could not be read; look before --force."
     continue
   fi
 
+  UNLOCK=
+  [ -n "$LOCK" ] && UNLOCK="git worktree unlock $(q "$WT")
+"
   SWEEP="$SWEEP
 # $BRANCH -- $PR
 ${UNLOCK}git worktree remove $(q "$WT")
@@ -175,20 +236,27 @@ done <<REPORT_LINES
 $REPORT
 REPORT_LINES
 
-# Worktree entries whose directory is gone and whose branch was not handled
-# above. A locked one needs its unlock written out, because prune skips it
-# silently.
-while IFS=$'\t' read -r WT BRANCH LOCK; do
-  [ -n "$WT" ] && [ ! -d "$WT" ] || continue
+# A detached worktree whose directory is gone. The report lists branches, so it
+# never names one, and there is no branch to classify: its entry is all there
+# is. An entry holding a branch the report did not call merged is left alone.
+#
+# The fields are split by hand. `IFS=$'\t' read` collapses the two tabs around
+# a detached entry's empty branch, so its lock reason was read as a branch and
+# the entry skipped; found by check-hooks.sh on its first run, not by eye.
+while IFS= read -r ENTRY; do
+  WT=${ENTRY%%$'\t'*}
+  REST=${ENTRY#*$'\t'}
+  BRANCH=${REST%%$'\t'*}
+  LOCK=${REST#*$'\t'}
+  [ -n "$WT" ] && [ -z "$BRANCH" ] && [ ! -d "$WT" ] || continue
   printf '%s\n' "$HANDLED" | grep -qxF -- "$WT" && continue
   if [ -n "$LOCK" ]; then
     if live "$LOCK"; then
       NOTES="$NOTES
-#   $WT -- directory gone, but locked by a session that may still be running."
+#   $WT -- detached, directory gone, but locked by a session that may still be running."
       continue
     fi
-    SWEEP="$SWEEP
-# $WT -- directory gone, lock stale
+    GONE_UNLOCKS="$GONE_UNLOCKS
 git worktree unlock $(q "$WT")"
   fi
   PRUNE=1
@@ -196,69 +264,56 @@ done <<WT_LINES
 $(printf '%s\n' "$WORKTREES" | tail -n +2)
 WT_LINES
 if [ -n "$PRUNE" ]; then
-  case "$SWEEP" in *'git worktree prune'*) ;; *)
-    SWEEP="$SWEEP
-# worktree entries whose directory is gone
-git worktree prune" ;;
-  esac
+  SWEEP="$SWEEP
+# worktree entries whose directory is gone: every unlock before the one prune$GONE_UNLOCKS
+git worktree prune$GONE_DELETES"
 fi
 
-# The rotation. Due only when all three hold; each one that does not is said.
+# The rotation of the active dev branch.
 DEV=$(printf '%s\n' "$REPORT" | sed -n 's/^active dev branch: origin\/\(dev-[0-9][0-9]*\)$/\1/p')
 ROTATION=
-if [ -n "$DEV" ]; then
-  if PRS=$(timeout "$PRS_TIMEOUT" gh pr list --state all --limit 1000 \
-       --json number,headRefName,baseRefName,state \
-       --jq '.[] | "\(.number)\t\(.headRefName)\t\(.baseRefName)\t\(.state)"' 2>/dev/null); then
-    INTO_MAIN=$(printf '%s\n' "$PRS" | awk -F'\t' -v d="$DEV" \
-      '$2 == d && $3 == "main" && $1 > n { n = $1; s = $4 } END { if (n) print n "\t" s }')
-    OPEN_ON_DEV=$(printf '%s\n' "$PRS" | awk -F'\t' -v d="$DEV" \
-      '$3 == d && $4 == "OPEN" { printf "%s#%s", sep, $1; sep = " " }')
-    if [ -z "$INTO_MAIN" ]; then
-      ROTATION="# $DEV has no pull request into main; not due."
-    elif [ "$(printf '%s' "$INTO_MAIN" | cut -f2)" != MERGED ]; then
-      ROTATION="# $DEV -> main is pull request #$(printf '%s' "$INTO_MAIN" | cut -f1), $(printf '%s' "$INTO_MAIN" | cut -f2 | tr 'A-Z' 'a-z'); not due."
-    elif ! git merge-base --is-ancestor "origin/$DEV" origin/main 2>/dev/null; then
-      ROTATION="# $DEV -> main merged as #$(printf '%s' "$INTO_MAIN" | cut -f1), but origin/$DEV has commits since that are not in origin/main; not due."
-    elif [ -n "$OPEN_ON_DEV" ]; then
-      ROTATION="# $DEV -> main merged, but these pull requests are open against $DEV: $OPEN_ON_DEV
-# Merge or retarget them first; deleting $DEV would close them."
-    else
-      NUM=${DEV#dev-}
-      NEXT=$(printf 'dev-%02d' $((10#$NUM + 1)))
-      ROTATION="# $DEV -> main merged as #$(printf '%s' "$INTO_MAIN" | cut -f1), and nothing is open against it.
-cd $(q "$MAIN_CHECKOUT")
+if [ -z "$DEV" ]; then
+  ROTATION="# no active dev branch found; nothing to check"
+else
+  WHY=$(hold "$DEV" yes)
+  if [ -n "$WHY" ]; then
+    ROTATION="# $DEV is not due to rotate: $WHY."
+  else
+    NEXT=$(printf 'dev-%02d' $((10#${DEV#dev-} + 1)))
+    LOCAL_DELETE=
+    git show-ref --verify --quiet "refs/heads/$DEV" && LOCAL_DELETE="
+git branch -d $DEV"
+    ROTATION="# $DEV is due: merged into main, contained in origin/main, nothing open against it.
 git checkout main
 git pull --ff-only origin main
 git checkout -b $NEXT
 git push -u origin $NEXT
-git branch --show-current   # must print $NEXT before the next two
-git branch -d $DEV
+git branch --show-current   # must print $NEXT before the deletes$LOCAL_DELETE
 git push origin --delete $DEV"
-    fi
-  else
-    ROTATION="# Could not read pull requests for the rotation check; no rotation commands."
   fi
 fi
-for OLD in $DEV_LOCAL_DELETE; do
-  if git show-ref --verify --quiet "refs/remotes/origin/$OLD"; then
-    ROTATION="$ROTATION
-# $OLD -- rotated past, still on origin
-git branch -d $OLD
-git push origin --delete $OLD"
-  else
-    ROTATION="$ROTATION
-# $OLD -- rotated past
-git branch -d $OLD"
+for OLD in $ROTATED_PAST; do
+  WHY=$(hold "$OLD" no)
+  if [ -n "$WHY" ]; then
+    NOTES="$NOTES
+#   $OLD -- rotated past, held: $WHY."
+    continue
   fi
+  ROTATION="$ROTATION
+# $OLD -- rotated past: merged into main, contained in origin/main, nothing open against it
+git branch -d $OLD"
+  git show-ref --verify --quiet "refs/remotes/origin/$OLD" && ROTATION="$ROTATION
+git push origin --delete $OLD"
 done
 
 echo "# Housekeeping for $(basename "$MAIN_CHECKOUT"), from a report run just now."
 echo "# Nothing has been run. Run these from your own terminal."
+if [ -n "$SWEEP" ] || printf '%s\n' "$ROTATION" | grep -q '^git '; then
+  echo "cd $(q "$MAIN_CHECKOUT")"
+fi
 echo
 echo "# == sweep: merged worktree branches =="
 if [ -n "$SWEEP" ]; then
-  echo "cd $(q "$MAIN_CHECKOUT")"
   printf '%s\n' "${SWEEP#?}"
 else
   echo "# nothing to sweep"
@@ -270,8 +325,8 @@ if [ -n "$NOTES" ]; then
 fi
 echo
 echo "# == rotation =="
-printf '%s\n' "${ROTATION:-# no active dev branch found; nothing to check}"
-if [ -n "$SWEEP" ] || [ -n "$DEV_LOCAL_DELETE" ] || printf '%s' "$ROTATION" | grep -q '^git '; then
+printf '%s\n' "$ROTATION"
+if [ -n "$SWEEP" ] || printf '%s\n' "$ROTATION" | grep -q '^git '; then
   echo
   echo "# == verify =="
   echo "git fetch --prune"
