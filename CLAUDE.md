@@ -292,10 +292,12 @@ pull request targets the active dev branch and would carry the parent's commits.
 A subagent that needs a parent's state runs without `isolation: "worktree"`.
 
 Nothing enforces this rule. A branch that skipped it starts where
-`worktree.baseRef` puts it, which is `origin/main`, and the stale-branch guard
-refuses its first commit only while `origin/main` is an ancestor of the active
-dev branch — which the SessionStart report reads every session, as its
-`main ancestry` line.
+`worktree.baseRef` in `.claude/settings.json` puts it, which is `origin/main`
+unless a machine's own `settings.local.json` says otherwise. The stale-branch
+guard refuses its first commit
+only while `origin/main` is an ancestor of the active dev branch — which the
+SessionStart report reads every session, as its `main ancestry` line, and
+argues beside that read.
 
 **Deliberately left open.** These stop mistakes, not adversaries: they read the
 text of a command, so a caller that means to evade them can. Five consequences

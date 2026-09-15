@@ -47,10 +47,11 @@ of some of these and they stop mistakes, not adversaries; others nothing refuses
 at all. `git worktree remove`, the whole of the sweep, and `git branch -d`,
 which both the sweep and a rotation end with, pass every hook and are reserved
 all the same. So do `git branch -f`, `git fetch origin dev-NN:dev-NN` and a
-fast-forward in the main checkout: each moves a local branch Bertan owns, and a
-fast-forward also rewrites files with edits in progress, while moving the ref
-alone splits HEAD from the working tree. Where nothing enforces, an agent
-reports what it found and stops.
+fast-forward in the main checkout, each of which moves a local branch Bertan
+owns. Git refuses the first two while that branch is checked out anywhere, so
+they reach one that is not; the fast-forward reaches the checked-out one, and
+rewrites files with edits in progress. Where nothing enforces, an agent reports
+what it found and stops.
 _Avoid_: forbidden act, blocked act
 
 **Worktree branch**:

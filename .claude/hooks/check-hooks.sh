@@ -3582,33 +3582,31 @@ tok 'and it outlasts them by arithmetic, not by both literals happening to agree
 # no-work-on-stale-branch.sh refuses only a branch with nothing of its own, so a
 # branch that starts ahead is permitted in silence, and its pull request carries
 # someone else's commits under the agent's number. `fresh` forks from
-# origin/HEAD, which is origin/main: behind, and refused at the first commit.
-# #36 Stage 0 chose `head` before the ahead case was seen; #99 Q5 reverses it.
+# origin/HEAD, which is origin/main: behind, and refused at the first commit --
+# on one assumption, which the report reads rather than this suite restating
+# it; the comment above its main ancestry line argues it, once. #36 Stage 0
+# chose `head` before the ahead case was seen; #99 Q5 reverses it.
 #
-# The price is a much staler base when the step is skipped -- origin/dev-05 was
-# 115 commits ahead of origin/main on 2026-09-15. And the refusal is only as good
-# as one assumption: it holds while origin/main is an ancestor of the active dev
-# branch. That is read each session rather than recorded here -- the report's
-# main ancestry line, driven in the section below.
+# THE TRADE, taken knowingly: a skipped step now starts from a much staler base.
+# origin/dev-05 was 115 commits ahead of origin/main when #99 was triaged and 118
+# by the time this line was written, on the same day. Nothing pins that number,
+# because it moves with every merge; a skipped step shows it as a large behind
+# count in the refusal, which is where it costs anything.
 #
 # TWO LIMITS, named because this is a check on configuration and not on
 # behaviour. It cannot show the harness honours the value; the live runbook
 # does that (#110 section 1). And it cannot see .claude/settings.local.json,
 # which is gitignored and overrides this file on the one machine that has it.
-# So the sentence "changing baseRef leaves the suite green" is true of the
-# harness's behaviour and false of this file, which is the half this pins.
+# #36 said changing baseRef "leaves the suite green", which was true of the
+# harness's behaviour and is false of this file now, which is the half this pins.
 tok 'settings.json forks a worktree from origin/main, which is refused, and not from HEAD' \
     'fresh' "$(jq -r '.worktree.baseRef' "$SETTINGS" 2>/dev/null)"
 
 echo "=== #99: the report reads whether a branch cut from origin/main fails closed ==="
-# `worktree.baseRef: fresh` cuts a branch from origin/main, and is chosen because
-# such a branch starts behind the active dev branch and is refused at its first
-# commit. That is true only
-# while origin/main is an ancestor of origin/dev-NN, and it stops being true
-# after a dev-NN into main merge that lands before rotation, or after any change
-# reaches main another way. Then a branch cut from origin/main starts AHEAD, and
-# the ahead/behind test permits it. So the report reads the ancestry every
-# session and says which of three things it found -- #99 Q11 and Q12.
+# Why the report reads this is argued once, in the comment above the read in
+# report-stale-branches.sh, and not retold here. What this section holds is the
+# three outcomes that comment names, a fourth case with no line, and the suffix
+# on refs no fetch refreshed -- #99 Q11 and Q12.
 #
 # Driven rather than pinned, because the outcomes are the claim and a literal
 # on the read says nothing about which exit code prints which sentence. Each
@@ -3692,9 +3690,13 @@ NOT_LINE='main ancestry: origin/main is NOT an ancestor of origin/dev-05'
 IS_LINE='main ancestry: origin/main is an ancestor of origin/dev-05'
 UNREAD_LINE='main ancestry: NOT READ -- '
 
-# NOT: main carries a merge commit the dev branch lacks. A decoy dev-4 has main
-# in its history, so a report that picked its dev branch by any sort other than
-# the pinned version sort reads the decoy and answers "is an ancestor".
+# NOT: main carries a merge commit the dev branch lacks. A decoy dev-4 stands
+# beside it for a report that sorted the dev refs any other way than the pinned
+# version sort. What catches that report is the name -- every line literal here
+# says origin/dev-05 -- and not the graph, measured by sorting lexically: three
+# checks turned red on the name. The decoy has main in its history anyway, so
+# that report's answer is wrong as well as misnamed, and a line rewritten not to
+# name the dev branch would still be caught.
 ANC_NOT_ORIGIN="$FIXTURES/ancestry-not-origin"
 git init -q -b main "$ANC_NOT_ORIGIN"
 A=$(anc_commit "$ANC_NOT_ORIGIN" base)
@@ -3813,6 +3815,30 @@ OUT=$(anc_report "$FIXTURES/ancestry-stale-nomain")
 LINE=$(anc_line "$OUT")
 holds 'after a failed fetch, NOT READ is still reported' "$LINE" "$UNREAD_LINE"
 holds 'and says which refs it was read against' "$LINE" "$STALE_SUFFIX"
+
+# A fetch that never ran did not fail. With no remote named origin the report
+# skips its fetch, and refs under refs/remotes/origin/ can still be there from a
+# remote since removed or renamed. Those are unrefreshed too, so the line still
+# says so -- but not that a fetch failed, which is a claim about an attempt.
+# Found on review of the first version, which printed the failed-fetch suffix
+# for both.
+ANC_SKIPPED="$FIXTURES/ancestry-skipped"
+git init -q -b scratch "$ANC_SKIPPED"
+mkdir -p "$ANC_SKIPPED/.claude/hooks"
+cp -p "$HOOKS/report-stale-branches.sh" "$ANC_SKIPPED/.claude/hooks/"
+A=$(anc_commit "$ANC_SKIPPED" base)
+git -C "$ANC_SKIPPED" update-ref refs/remotes/origin/main "$A"
+git -C "$ANC_SKIPPED" update-ref refs/remotes/origin/dev-05 "$(anc_commit "$ANC_SKIPPED" dev "$A")"
+anc_need "$ANC_SKIPPED" refs/remotes/origin/main refs/remotes/origin/dev-05
+git -C "$ANC_SKIPPED" remote | grep -q . && {
+  echo "the skipped-fetch fixture has a remote, so the report would fetch; the checks against it prove nothing" >&2
+  exit 1
+}
+OUT=$(anc_report "$ANC_SKIPPED")
+LINE=$(anc_line "$OUT")
+holds 'with no origin remote, the ancestry is still reported' "$LINE" "$IS_LINE"
+holds 'and says no fetch refreshed the refs' "$LINE" '(read against refs no fetch refreshed)'
+lacks 'and does not say a fetch failed that never ran' "$LINE" "$STALE_SUFFIX"
 
 # The read as a literal as well, beside the arming pins above: the fixtures say
 # what each outcome prints, and this says the answer is git's and not a record.
@@ -4184,23 +4210,31 @@ written 'and what a skipped step rests on instead' \
 written 'and points at the glossary rather than re-arguing it' \
   "$SECTION" '*active dev branch*'
 # Pointing, not re-arguing, counted in the direction a retelling takes: the
-# commands that pass every hook are the glossary's to list, once.
-tok 'the boundary section does not restate what the glossary reserves' \
+# commands that pass every hook are the glossary's to list, once. Counted over
+# the whole of CLAUDE.md rather than the section, which is stricter.
+tok 'CLAUDE.md does not restate the glossary'"'"'s fetch into a local branch' \
     '0' "$(prose_count "$CLAUDE_MD" 'git fetch origin dev-NN:dev-NN')"
+tok 'nor its forced branch move' \
+    '0' "$(prose_count "$CLAUDE_MD" 'git branch -f')"
 # #99 Q13: not a sixth consequence. Those are consequences of the hooks, and
-# this rule has no hook.
-LEFT_OPEN_FILE="$FIXTURES/boundary-left-open.md"
-printf '%s\n' "$LEFT_OPEN" > "$LEFT_OPEN_FILE"
-written 'the extracted list is the left-open list' \
-  "$LEFT_OPEN_FILE" 'Deliberately left open'
-unarmed 'and the unenforced rule is not one of its items' \
-  "$LEFT_OPEN_FILE" 'git reset --hard origin/dev-NN'
+# this rule has no hook. $LEFT_OPEN is a string, so the string helpers.
+holds 'the extracted list is the left-open list' "$LEFT_OPEN" 'Deliberately left open'
+lacks 'and the unenforced rule is not one of its items' \
+  "$LEFT_OPEN" 'git reset --hard origin/dev-NN'
+
+# #99 Q5 took `head` out of settings.json, and the branch-hygiene skill's notes
+# went on arguing from it: every worktree made after a rotation branched from
+# the new dev branch because it forked from HEAD. Found on review of #99, not by
+# this suite. The value is refused
+# rather than the sentence, because the sentence can be reworded around it.
+unarmed 'the branch-hygiene skill does not describe worktrees forking from HEAD' \
+  "$SKILL_MD" 'worktree.baseRef: head'
 
 # The count removed from this section's head, held removed. Split across two
 # quoted words so that this line does not contain the phrase it refuses.
-unarmed 'this section counts none of its citations' \
+unarmed 'this section'"'"'s head no longer counts its citations at three' \
   "$HOOKS/check-hooks.sh" "three citations"" named below"
-unarmed 'and does not count them again at four' \
+unarmed 'nor at four, the number a correction would have reached for' \
   "$HOOKS/check-hooks.sh" "four citations"" named below"
 echo "=== the tokeniser's header names every hook that sources it ==="
 # The same audit the section above gets, pointed at the one other sentence in

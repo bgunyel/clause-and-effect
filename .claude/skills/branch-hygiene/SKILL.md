@@ -332,10 +332,11 @@ untouched, and `git worktree list` names no worktree without a branch.
 
 ## Notes
 
-- Worktrees fork from the current HEAD (`worktree.baseRef: head` in
-  `.claude/settings.json`), so every worktree made after a rotation branches
-  from the new dev branch. One made before it does not, which is the second
-  reason a rotation waits for the branches in flight.
+- A new worktree branch starts at `origin/dev-NN`, set when the worktree is
+  created — the rule is in CLAUDE.md's boundary section — so every worktree
+  made after a rotation branches from the new dev branch. One made before it
+  does not, which is the second reason a rotation waits for the branches in
+  flight.
 - Rotate only after a merge, not after each session. A dev branch spanning
   several sessions is normal; two dev branches at once is not.
 - Push a worktree branch with `git push -u origin <branch>` the first time, as
