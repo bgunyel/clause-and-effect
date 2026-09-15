@@ -5,7 +5,8 @@
 # pytest-via-uv-group.sh and alembic-via-uv-group.sh, and since #95
 # append-only-docs.sh and append-only-docs-edit.sh -- which is every hook there
 # is. The last two source it for cs_tool_input alone, the reader every hook
-# shares, and not for the tokeniser. Issue #63 found this line naming three of
+# shares, and not for the tokeniser; since #96 append-only-docs.sh takes THE LINE
+# CAP from it as well. Issue #63 found this line naming three of
 # the four there were then, the same way it found CLAUDE.md's boundary section
 # naming two of them: a hook is added, and the sentence saying which hooks there
 # are is not revised with it. #69 found it a second time from the other end --
@@ -179,13 +180,15 @@
 #     cs_normalise, cs_split, cs_gh_args and cs_join, and no cs_git_args at
 #     all; pytest-via-uv-group.sh and alembic-via-uv-group.sh call cs_normalise
 #     and cs_split and neither of the argument readers. Every one of them calls
-#     cs_tool_input as well, and append-only-docs.sh and
-#     append-only-docs-edit.sh call nothing else. A required list
-#     narrower than the set is the #84 defect exactly, and #69 found the same
-#     thing in the last two from the other end -- cs_split required,
-#     cs_normalise not. The enumeration here is a convenience and goes stale;
-#     check-hooks.sh derives both sides off the files and compares them, which
-#     does not.
+#     cs_tool_input as well, and every Bash hook among them calls cs_within_cap
+#     (#96); append-only-docs.sh calls those two and nothing else, and
+#     append-only-docs-edit.sh only cs_tool_input. cs_within_cap calls cs_join,
+#     which no required list names: it answers for that itself, by failing when
+#     any part of its pipeline does. A required list narrower than the set is
+#     the #84 defect exactly, and #69 found the same thing in the last two from
+#     the other end -- cs_split required, cs_normalise not. The enumeration here
+#     is a convenience and goes stale; check-hooks.sh derives both sides off the
+#     files and compares them, which does not.
 #   - names itself in the refusal and says that it is refusing rather than
 #     permitting. That message is read by someone who has just been stopped by
 #     a guard that is broken rather than by a rule, and the thing they need
@@ -404,34 +407,45 @@ cs_normalise() {
     # BOUND is what an fd digit run may follow; STOP is that plus the quotes,
     # and ends a redirect target. STOP is derived rather than written twice, so
     # the two cannot drift apart in a later edit.
+    #
+    # The output is an array of one character per cell, not a string, and that
+    # is issue #96 rather than style. `out = out c` copies the whole of out to
+    # add one character, so this pass was quadratic in the length of a line:
+    # 1.9 s for one line of 256 KB and 9.3 s for 512 KB, where it takes 0.24 s
+    # now, and the harness kills a hook at 5 s, which permits. The operator branch still reads and trims the end of what has been
+    # emitted, so the cells are kept until the line is done rather than printed
+    # as they arrive; every read of the tail walks back over cells, and the walk
+    # stops at the first character that is not a digit, an & or whitespace.
+    # See THE LINE CAP, below cs_split.
     BEGIN {
       BOUND = " \t;|&()`<>"
       STOP  = BOUND "\042\047"
+      SPACE = " \t\n\v\f\r"
     }
     {
       line = $0
       n = length(line)
-      out = ""
+      np = 0
       q = ""
       i = 1
       while (i <= n) {
         c = substr(line, i, 1)
         if (q != "") {
-          if (q == "\042" && c == "\\") { out = out c substr(line, i + 1, 1); i += 2; continue }
-          out = out c
+          if (q == "\042" && c == "\\") { o[++np] = c; o[++np] = substr(line, i + 1, 1); i += 2; continue }
+          o[++np] = c
           if (c == q) q = ""
           i++
           continue
         }
-        if (c == "\\") { out = out c substr(line, i + 1, 1); i += 2; continue }
-        if (c == "\042" || c == "\047") { q = c; out = out c; i++; continue }
-        if (c != ">" && c != "<") { out = out c; i++; continue }
+        if (c == "\\") { o[++np] = c; o[++np] = substr(line, i + 1, 1); i += 2; continue }
+        if (c == "\042" || c == "\047") { q = c; o[++np] = c; i++; continue }
+        if (c != ">" && c != "<") { o[++np] = c; i++; continue }
         nxt = substr(line, i + 1, 1)
         # Process substitution carries a command. Not a redirection.
-        if (nxt == "(") { out = out c; i++; continue }
+        if (nxt == "(") { o[++np] = c; i++; continue }
         # A run of two or more < is a heredoc or a here-string, already answered.
         if (c == "<" && nxt == "<") {
-          while (i <= n && substr(line, i, 1) == "<") { out = out "<"; i++ }
+          while (i <= n && substr(line, i, 1) == "<") { o[++np] = "<"; i++ }
           continue
         }
         # The fd, or the & of &>, sits in front of the operator and belongs to
@@ -439,14 +453,19 @@ cs_normalise() {
         # `origin b2>f` the 2 is part of the refspec, and bash reads it that way
         # too. A single & is the & of &>; two are the separator &&, which ends a
         # command and must survive, or the command after it disappears.
-        if (match(out, /[0-9]+$/) \
-            && (RSTART == 1 || index(BOUND, substr(out, RSTART - 1, 1)) > 0)) {
-          out = substr(out, 1, RSTART - 1)
-        } else if (c == ">" && substr(out, length(out), 1) == "&" \
-                   && substr(out, length(out) - 1, 1) != "&") {
-          out = substr(out, 1, length(out) - 1)
+        k = np
+        while (k > 0 && o[k] ~ /^[0-9]$/) k--
+        if (k < np && (k == 0 || index(BOUND, o[k]) > 0)) {
+          np = k
+        } else if (c == ">" && np > 0 && o[np] == "&" && o[np > 1 ? np - 1 : 1] != "&") {
+          # o[1] and not nothing when & is the only character: the string
+          # version read substr(out, 0, 1), which mawk answers with the first
+          # character, so `&>f` at the head of a line kept its &. Kept as it
+          # was -- a standing & is a separator to cs_split and changes no
+          # verdict -- because this rewrite is held to identical output.
+          np--
         }
-        sub(/[[:space:]]+$/, "", out)
+        while (np > 0 && o[np] != "" && index(SPACE, o[np]) > 0) np--
         i++
         if (c == ">" && substr(line, i, 1) == ">") i++
         if (substr(line, i, 1) == "&") i++
@@ -462,9 +481,10 @@ cs_normalise() {
         # target that was never consumed -- a command substitution standing
         # where one would be -- is exactly where that happens.
         t = substr(line, i, 1)
-        if (i <= n && out != "" && t != " " && t != "\t") out = out " "
+        if (i <= n && np > 0 && t != " " && t != "\t") o[++np] = " "
       }
-      print out
+      for (k = 1; k <= np; k++) printf "%s", o[k]
+      printf "\n"
     }'
 }
 
@@ -479,15 +499,43 @@ cs_normalise() {
 #
 # Extracted rather than copied. A rule written twice is answered twice, which is
 # the thing this file exists to stop.
+#
+# Printed as it goes rather than grown and printed once, since issue #96. The
+# joined line was built by appending each continuation to it, which copies all
+# of it every time: 51,200 continued lines of ten bytes, 512 KB, took 5.9 s,
+# and take 34 ms now. The rule is unchanged and deliberately so -- a line ending in any backslash, an escaped
+# one included, is joined to the next, and the trailing backslash is taken off
+# the joined text rather than the physical line. That second half is why the
+# run of backslashes at the end of what has been printed so far is held back
+# as a count: with an empty line after it, the next one taken off is from that
+# run, which a character already printed could not give back.
 cs_join() {
   awk '
+    function slashes(k) { while (k-- > 0) printf "\\" }
     {
-      line = $0
-      while (line ~ /\\$/) {
-        sub(/\\$/, "", line)
-        if ((getline nxt) > 0) line = line nxt; else break
+      cur = $0
+      held = 0
+      while (1) {
+        if (cur == "") {
+          if (held == 0) break
+          held--
+        } else {
+          n = length(cur)
+          r = 0
+          while (r < n && substr(cur, n - r, 1) == "\\") r++
+          if (r == 0) break
+          if (r == n) {
+            held += r - 1
+          } else {
+            slashes(held)
+            printf "%s", substr(cur, 1, n - r)
+            held = r - 1
+          }
+        }
+        if ((getline nxt) > 0) cur = nxt; else { cur = ""; break }
       }
-      print line
+      slashes(held)
+      print cur
     }'
 }
 
@@ -726,10 +774,19 @@ cs_split() {
     # the two cannot drift apart because there is only one of them.
     #
     # qopen and dq_substitution are deliberately NOT locals: they are what the
-    # walk reports back about the line it just read.
-    function cut(line, respect,    n, i, c, nx, out) {
+    # walk reports back about the line it just read. So are ncut, at and width,
+    # which are where it cut.
+    #
+    # Where, and not what. Every character this walk keeps it keeps unchanged
+    # and in order, and every separator it replaces with one newline, so the
+    # output is the line itself with ncut spans taken out -- and emit prints it
+    # as the slices between them. It built that output a character at a time
+    # before issue #96, and a string grown by one character is a string copied
+    # whole, so one plain line of 512 KB took cs_split 10.8 s, nearly all of it
+    # here; it takes 0.17 s now. See THE LINE CAP, below.
+    function cut(line, respect,    n, i, c, nx) {
       n = length(line)
-      out = ""
+      ncut = 0
       qopen = ""
       dq_substitution = 0
       i = 1
@@ -743,9 +800,8 @@ cs_split() {
             # substitution test below, so an escaped dollar-paren and an escaped
             # backtick are the text they are and do not send the line to the
             # fallback.
-            if (qopen == "\042" && c == "\\") { out = out c substr(line, i + 1, 1); i += 2; continue }
+            if (qopen == "\042" && c == "\\") { i += 2; continue }
             if (qopen == "\042" && (c == "`" || (c == "$" && substr(line, i + 1, 1) == "("))) dq_substitution = 1
-            out = out c
             if (c == qopen) qopen = ""
             i++
             continue
@@ -762,23 +818,28 @@ cs_split() {
           # above would otherwise read as a claim that it cannot happen.
           if (c == "\\") {
             nx = substr(line, i + 1, 1)
-            if (nx == "\042" || nx == "\047") { out = out c nx; i += 2; continue }
-            out = out c
+            if (nx == "\042" || nx == "\047") { i += 2; continue }
             i++
             continue
           }
-          if (c == "\042" || c == "\047") { qopen = c; out = out c; i++; continue }
+          if (c == "\042" || c == "\047") { qopen = c; i++; continue }
         }
-        if (c == "&" && substr(line, i + 1, 1) == "&") { out = out "\n"; i += 2; continue }
-        if (c == "|" && substr(line, i + 1, 1) == "|") { out = out "\n"; i += 2; continue }
-        if (index(";&|()`", c) > 0) { out = out "\n"; i++; continue }
-        out = out c
+        if (c == "&" && substr(line, i + 1, 1) == "&") { at[++ncut] = i; width[ncut] = 2; i += 2; continue }
+        if (c == "|" && substr(line, i + 1, 1) == "|") { at[++ncut] = i; width[ncut] = 2; i += 2; continue }
+        if (index(";&|()`", c) > 0) { at[++ncut] = i; width[ncut] = 1; i++; continue }
         i++
       }
-      return out
+    }
+    function emit(line,    k, from) {
+      from = 1
+      for (k = 1; k <= ncut; k++) {
+        printf "%s\n", substr(line, from, at[k] - from)
+        from = at[k] + width[k]
+      }
+      print substr(line, from)
     }
     {
-      out = cut($0, 1)
+      cut($0, 1)
       # Quote state is per line, as it is in cs_normalise, so a string left open
       # at a newline sends that line and no other to the fallback. That is what
       # keeps the multi-line quoted string CLAUDE.md names as deliberately
@@ -790,34 +851,46 @@ cs_split() {
       # the fix. That is the refusing direction, and narrowing it to the span
       # would mean finding where the substitution ends, which is the parser this
       # is written to avoid.
-      if (qopen != "" || dq_substitution) out = cut($0, 0)
-      print out
+      if (qopen != "" || dq_substitution) cut($0, 0)
+      emit($0)
     }' \
   | awk -v wrapwords="$CS_WRAP_OPTION_WORDS" \
         -v operandwords="$CS_WRAP_OPERAND_WORDS" '
+    # Each strip below moves p past a token rather than cutting the line down to
+    # what follows it. They were substr calls on the line, and every one copied
+    # the rest of it, so a long run of prefixes was quadratic: 512 KB of sudo
+    # took 1.8 s and 512 KB of assignments 1.7 s, where they take 0.54 and
+    # 0.78 s now. Issue #96. A token is a run of non-blank
+    # characters, and each rule reads the one at p and asks what the expression
+    # it replaced asked of the head of the line -- including whether blanks
+    # follow it, which is what separates `sudo git` from a line ending in sudo.
+    function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
+    function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
     {
       line = $0
-      sub(/^[[:space:]]+/, "", line)
+      n = length(line)
+      p = skipblank(1)
       wrapped = 0
       changed = 1
       while (changed) {
         changed = 0
-        if (match(line, /^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+/)) {
-          line = substr(line, RSTART + RLENGTH)
+        q = tokend(p)
+        if (q <= n && substr(line, p, q - p) ~ /^[A-Za-z_][A-Za-z0-9_]*=/) {
+          p = skipblank(q)
           changed = 1
         }
-        if (match(line, /^([{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|select|function|coproc)([[:space:]]+|$)/)) {
-          line = substr(line, RSTART + RLENGTH)
+        q = tokend(p)
+        if (substr(line, p, q - p) ~ /^([{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|select|function|coproc)$/) {
+          p = skipblank(q)
           changed = 1
         }
         # The list arrives as a variable rather than standing here as a literal,
         # so that the wrapper anchor can admit the same words without a second
         # copy of them. Issue #79; see CS_WRAP_OPTION_WORDS above.
-        if (match(line, "^(" wrapwords ")[[:space:]]+")) {
-          line = substr(line, RSTART + RLENGTH)
-          while (match(line, /^-[^[:space:]]*[[:space:]]+/)) {
-            line = substr(line, RSTART + RLENGTH)
-          }
+        q = tokend(p)
+        if (q <= n && substr(line, p, q - p) ~ ("^(" wrapwords ")$")) {
+          p = skipblank(q)
+          while ((q = tokend(p)) <= n && substr(line, p, 1) == "-") p = skipblank(q)
           wrapped = 1
           changed = 1
         }
@@ -827,20 +900,25 @@ cs_split() {
         # `timeout 30 git push --all origin` invisible to every hook. The
         # operand is stripped with the word, one token and only if it is not
         # itself an option.
-        if (match(line, "^(" operandwords ")[[:space:]]+")) {
-          line = substr(line, RSTART + RLENGTH)
-          while (match(line, /^-[^[:space:]]*[[:space:]]+/)) {
-            line = substr(line, RSTART + RLENGTH)
-          }
-          if (match(line, /^[^-[:space:]][^[:space:]]*[[:space:]]+/)) {
-            line = substr(line, RSTART + RLENGTH)
-          }
+        q = tokend(p)
+        if (q <= n && substr(line, p, q - p) ~ ("^(" operandwords ")$")) {
+          p = skipblank(q)
+          while ((q = tokend(p)) <= n && substr(line, p, 1) == "-") p = skipblank(q)
+          q = tokend(p)
+          if (q <= n && q > p && substr(line, p, 1) != "-") p = skipblank(q)
           wrapped = 1
           changed = 1
         }
       }
-      sub(/[[:space:]]+$/, "", line)
-      if (line != "") print line
+      # Walked back rather than matched. An expression ending in $ with no ^ is
+      # tried from every position, and from each blank it runs to the end of
+      # that run before failing on what follows it -- so a long run of blanks
+      # anywhere but the end of a line made this quadratic, and one of 256 KB
+      # before a final character ran past 30 s, where it takes 78 ms now.
+      # Issue #96.
+      e = n
+      while (e >= p && index(" \t\n\v\f\r", substr(line, e, 1)) > 0) e--
+      if (e >= p) print substr(line, p, e - p + 1)
       # A wrapper option taking its value as a separate token leaves that value
       # where the command word has to be, and the command behind it is never at
       # ^ again: `sudo -u root git push --all origin` left `root`, `nice -n 10`
@@ -861,14 +939,17 @@ cs_split() {
       # leaves two. A token opening a quote ends it, because what follows is
       # the text of an argument, and reading text as a command is the mistake
       # cs_normalise has already made three times.
-      if (wrapped && line != "") {
-        rest = line
+      if (wrapped && e >= p) {
+        r = p
         for (k = 0; k < 3; k++) {
-          if (rest ~ /^["]/ || rest ~ /^[\x27]/) break
-          if (!match(rest, /^[^[:space:]]+[[:space:]]+/)) break
-          rest = substr(rest, RSTART + RLENGTH)
-          if (rest ~ /^["]/ || rest ~ /^[\x27]/) break
-          print rest
+          c = substr(line, r, 1)
+          if (c == "\042" || c == "\047") break
+          q = tokend(r)
+          if (q > e) break
+          r = skipblank(q)
+          c = substr(line, r, 1)
+          if (c == "\042" || c == "\047") break
+          print substr(line, r, e - r + 1)
         }
       }
     }'
@@ -877,7 +958,8 @@ cs_split() {
 # THE WORD LIST IS PART OF THE LOAD. With either half of the prefix-word list
 # empty, cs_split is withdrawn, so that the load guard of every consumer that
 # calls cs_split -- and each of those requires it -- refuses by name. The two #95
-# consumers call only cs_tool_input and read no list, so they are not reached.
+# consumers call only cs_tool_input and, for append-only-docs.sh, cs_within_cap,
+# and neither reads the list, so they are not reached.
 #
 # Why it is needed at all. Issue #79 made the list a variable that cs_split
 # reads through awk's -v, and that added a state THE LOAD CONTRACT above cannot
@@ -919,6 +1001,105 @@ if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then
   unset -f cs_split
 fi
 
+# THE LINE CAP. A command holding a line longer than 16 KB -- 16384 bytes, once
+# backslash continuations are joined -- is refused unread, by every Bash hook,
+# before any pass in this file runs over it. Issue #96.
+#
+# Why a bound and not a fail direction. The harness kills a hook that runs past
+# the "timeout" in settings.json, 5 s for every one of these, and a killed hook
+# never exits 2, which is the only refusal the harness reads. So time is part
+# of a verdict, and a guard whose running time the caller chooses is a guard
+# the caller can switch off. It was measured switched off: at dev-05 750aace,
+# `echo <300 KB>; git push --force origin main` on one line took the three
+# boundary hooks 5.75 to 6.67 s, and was permitted by all three. Nothing inside
+# a hook can make the harness kill fail closed, so the only remedy is to never
+# be slow, and a bound on what the passes are handed is what keeps them fast
+# whatever a later edit to one costs.
+#
+# WHAT THIS CAP DOES NOT BOUND, which #96 first claimed it did: a hook's running
+# time. It bounds the length of a line and nothing else. A hook starts an awk
+# or more per fragment cs_split emits, so its time grows with the number of
+# fragments as well, and a short line can hold thousands: 2,500 `t;` and a
+# `gh pr merge 5` on the next line -- 5,014 bytes, a third of the cap -- took
+# no-pr-decisions.sh 6.4 s idle, found by review of PR #123. That is #127. And
+# a heredoc opener ending in a backslash lets cs_normalise emit a line past the
+# cap from lines within it, so the cap does not bound what the passes are handed
+# either. That is #128.
+#
+# Why the passes were slow is fixed too, and is the other half of #96. Six of
+# them grew a string one character or one token at a time -- cs_normalise's
+# redirect pass, cs_split's separator cut and its prefix strip, cs_join, and
+# the option skip in cs_git_args and in cs_gh_args -- and the prefix strip
+# also trimmed trailing blanks with an expression mawk retries from every
+# position. Each is linear now, and held to identical output: every rewrite was
+# fuzzed against the version before it, byte for byte, under mawk and busybox
+# awk in the C and a UTF-8 locale and under gawk in C. Not under gawk in a UTF-8
+# locale, where the old expressions split on Unicode blanks such as U+3000 and
+# the new character walks do not; every difference found there involved such a
+# blank, which bash does not split on either. And the fuzz missed one difference
+# that review found by reading: a token holding `|`, such as `-c|-C`, in the
+# option skip of both argument readers. That is fixed where it stands, and
+# check-hooks.sh pins it. Each carries its
+# measurement where it stands, and every one of those numbers is from a single
+# run -- mawk 1.3.4, LC_ALL=C, fastest of three -- because an earlier set taken
+# in a UTF-8 locale ran about twice as slow and did not agree with the rest.
+# With the passes linear, one line of 512 KB costs cs_normalise 0.24 s and
+# cs_split 0.17 s, against 9.3 and 10.8 s before, so the cap is not what makes a
+# hook fast; it is what makes a hook fast whatever a later edit to a pass does.
+#
+# Why 16 KB. It was decided, not derived (#103, Q28): far past any command an
+# agent writes on purpose, and far below the size where the passes cost
+# anything. Measured on the linear passes, every hook answers a command whose
+# longest line is exactly at the cap in about a tenth of a second -- when that
+# line is plain. The same 16 KB cut into 8,192 fragments took no-git-push.sh
+# 7.3 s and the other two boundary hooks far longer; see #127.
+#
+# Why the JOINED line. The passes see a continued line as one, so 3,800 lines
+# of 84 bytes each ending in a backslash are one 300 KB line to them -- and
+# that took the three boundary hooks 5.7 to 9.7 s before this fix, with no
+# physical line anywhere near the cap. A cap on raw lines would never have
+# fired on it.
+#
+# THE SECOND TRADE, which follows from that and was found by review rather
+# than chosen: the join does not know what a quoted heredoc is, and bash does
+# not join lines inside one. So 300 body lines of 80 bytes, each ending in a
+# backslash, are refused as a 24 KB line although no line of the command is
+# longer than 80 bytes and bash would never read them as one. Taken rather than
+# fixed, because answering it means cs_within_cap deciding where a heredoc
+# ends -- the question cs_normalise has got wrong three times, asked a fourth
+# time in a second place -- and a body whose every line ends in a backslash is
+# not something a commit message or a dev-log entry holds. check-hooks.sh pins
+# the refusal.
+#
+# Why heredoc bodies count. They are dropped by cs_normalise, but that drop is
+# a fail-safe that hands the lines back when no terminator arrives, and
+# no-pr-decisions.sh reads the raw text as well. A body line past 16 KB is not
+# something a commit message or a dev-log entry holds.
+#
+# THE TRADE, taken knowingly: a legitimate one-line command longer than 16 KB --
+# a long `python3 -c`, an inline JSON payload -- is refused, and the refusal
+# says what to do instead: split the line, or write the content to a file and
+# name the file. check-hooks.sh pins the refusal of exactly that one-liner, one
+# byte over, so that raising the cap is a decision and not a surprise.
+#
+# Bytes, not characters, and LC_ALL=C is what makes it bytes: mawk counts bytes
+# anyway, gawk in a UTF-8 locale would count characters, and the cost of every
+# pass above is in bytes.
+#
+# FAIL-CLOSED BY CONSTRUCTION, because this is a function the load contract has
+# to reach: cs_within_cap succeeds only when every line is within the cap AND
+# both halves of its pipeline succeeded. A library missing cs_join therefore
+# makes it fail -- which refuses -- where reading only awk's status would have
+# counted the lines of no input at all and passed everything. And it is called
+# as `if ! ... | cs_within_cap`, so a consumer whose copy of it is missing
+# refuses on the 127 as well as through its guard.
+CS_LINE_CAP=16384
+CS_LINE_CAP_REFUSAL="a line of this command is longer than 16 KB (16384 bytes, with backslash continuations joined), which is refused unread: a hook still reading it when the harness timeout kills it would permit it. To run it, split the line, or write the content to a file and pass the file."
+cs_within_cap() {  # stdin: a command. Succeeds only if no joined line exceeds the cap.
+  cs_join | LC_ALL=C awk -v cap="$CS_LINE_CAP" 'length($0) > cap + 0 { over = 1; exit } END { exit over }'
+  [ "${PIPESTATUS[0]}:${PIPESTATUS[1]}" = "0:0" ]
+}
+
 # Print the arguments of a git subcommand and succeed, or print nothing and fail
 # if this command is not `git <subcommand>`. Global options are skipped,
 # including the two that take a separate value: without that, -C /path ends the
@@ -930,14 +1111,42 @@ fi
 # which is the habit this file exists to end.
 cs_git_args() {
   awk -v want="$1" '
+    # The global options are skipped by moving p past them rather than cutting
+    # the line down after each one: every cut copied the rest of the line, so
+    # a long run of options was quadratic. Issue #96. What is skipped is what
+    # the expression it replaced matched at the head of the line -- any token
+    # of two or more characters that opens with a dash and has blanks after it,
+    # and for the options named in VALUED the value token behind it too, when
+    # that value has blanks after it in turn. The same two helpers stand in
+    # cs_split and in the other argument reader: an awk program cannot source
+    # another, and a shared definition passed in as a variable would be one
+    # more thing a load could leave empty.
+    function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
+    function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
+    function skipopts(valued,    q, r) {
+      while (1) {
+        q = tokend(p)
+        if (q > n || q - p < 2 || substr(line, p, 1) != "-") return
+        r = substr(line, p, q - p)
+        p = skipblank(q)
+        # A token holding "|" is never one name, and index() would find
+        # `-c|-C` in the list as readily as `-c`; the expression this replaced
+        # matched a name, so that token took no value behind it there either.
+        if (index(r, "|") == 0 && index(valued, "|" r "|") > 0) {
+          q = tokend(p)
+          if (q > p && q <= n) p = skipblank(q)
+        }
+      }
+    }
     BEGIN { found = 0 }
     {
       line = $0
       if (line !~ /^git([[:space:]]|$)/) next
       sub(/^git[[:space:]]*/, "", line)
-      while (match(line, /^(-[cC][[:space:]]+[^[:space:]]+|--(git-dir|work-tree|namespace|exec-path)([[:space:]]+|=)[^[:space:]]*|-[^[:space:]]+)[[:space:]]+/)) {
-        line = substr(line, RSTART + RLENGTH)
-      }
+      n = length(line)
+      p = 1
+      skipopts("|-c|-C|--git-dir|--work-tree|--namespace|--exec-path|")
+      line = substr(line, p)
       if (line !~ "^" want "([[:space:]]|$)") next
       sub("^" want "[[:space:]]*", "", line)
       print line
@@ -1000,16 +1209,44 @@ cs_git_args() {
 # command look bare.
 cs_gh_args() {
   awk -v want="$1" '
-    BEGIN { found = 0; n = split(want, part, /[[:space:]]+/) }
+    # The global options are skipped by moving p past them rather than cutting
+    # the line down after each one: every cut copied the rest of the line, so
+    # a long run of options was quadratic. Issue #96. What is skipped is what
+    # the expression it replaced matched at the head of the line -- any token
+    # of two or more characters that opens with a dash and has blanks after it,
+    # and for the options named in VALUED the value token behind it too, when
+    # that value has blanks after it in turn. The same two helpers stand in
+    # cs_split and in cs_git_args: an awk program cannot source
+    # another, and a shared definition passed in as a variable would be one
+    # more thing a load could leave empty.
+    function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
+    function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
+    function skipopts(valued,    q, r) {
+      while (1) {
+        q = tokend(p)
+        if (q > n || q - p < 2 || substr(line, p, 1) != "-") return
+        r = substr(line, p, q - p)
+        p = skipblank(q)
+        # A token holding "|" is never one name, and index() would find
+        # `-c|-C` in the list as readily as `-c`; the expression this replaced
+        # matched a name, so that token took no value behind it there either.
+        if (index(r, "|") == 0 && index(valued, "|" r "|") > 0) {
+          q = tokend(p)
+          if (q > p && q <= n) p = skipblank(q)
+        }
+      }
+    }
+    BEGIN { found = 0; nparts = split(want, part, /[[:space:]]+/) }
     {
       line = $0
       if (line !~ /^gh([[:space:]]|$)/) next
       sub(/^gh[[:space:]]*/, "", line)
       matched = 1
-      for (i = 1; i <= n; i++) {
-        while (match(line, /^((-R|--repo|--hostname)[[:space:]]+[^[:space:]]+|-[^[:space:]]+)[[:space:]]+/)) {
-          line = substr(line, RSTART + RLENGTH)
-        }
+      for (i = 1; i <= nparts; i++) {
+        n = length(line)
+        p = 1
+        skipopts("|-R|--repo|--hostname|")
+        line = substr(line, p)
         if (line !~ "^" part[i] "([[:space:]]|$)") { matched = 0; break }
         line = substr(line, length(part[i]) + 1)
         sub(/^[[:space:]]*/, "", line)

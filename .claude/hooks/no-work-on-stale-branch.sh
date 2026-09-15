@@ -223,12 +223,23 @@ set -f
 # reason; the three functions the rules need are required below, as before.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
-if ! command -v cs_tool_input >/dev/null 2>&1; then
+if ! command -v cs_tool_input >/dev/null 2>&1 \
+   || ! command -v cs_within_cap >/dev/null 2>&1; then
   echo "Blocked: no-work-on-stale-branch.sh could not load lib/command-scan.sh, so it cannot read the tool call it was handed. Refusing rather than permitting." >&2
   exit 2
 fi
 
 COMMAND=$(cs_tool_input command) || exit 2
+# THE LINE CAP, in lib/command-scan.sh, and held here -- before the bail on a
+# command with no git in it and before the branch is read -- because the library
+# is loaded here since #95, so the cap costs nothing on a healthy branch and this
+# file refuses an over-long line wherever it runs, as every other Bash hook does.
+# It used to be held only on a stale or gone branch, where the library used to be
+# loaded. Issue #96.
+if ! printf '%s\n' "$COMMAND" | cs_within_cap; then
+  echo "Blocked: no-work-on-stale-branch.sh: $CS_LINE_CAP_REFUSAL" >&2
+  exit 2
+fi
 
 # Every command this file refuses is a git subcommand, so text with no `git` in
 # it anywhere cannot hold one -- a wrapped payload included, since the payload

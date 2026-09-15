@@ -1302,8 +1302,15 @@ armed 'cs_split reads the option words as a variable' \
       lib/command-scan.sh '-v wrapwords="$CS_WRAP_OPTION_WORDS"'
 armed 'and the operand words the same way' \
       lib/command-scan.sh '-v operandwords="$CS_WRAP_OPERAND_WORDS"'
+# The literal moved in #96, not the claim. The strip used to match the list at the
+# head of the line and cut the line after it, and each cut copied the rest of the
+# line; it now asks the same list of the one token at the head and moves past it.
+# Whether that is the same question is argued in cs_split and was fuzzed there,
+# byte for byte against the version before.
 armed 'cs_split strips whatever that variable holds' \
-      lib/command-scan.sh 'match(line, "^(" wrapwords ")[[:space:]]+")'
+      lib/command-scan.sh '~ ("^(" wrapwords ")$")'
+armed 'and whatever the operand variable holds' \
+      lib/command-scan.sh '~ ("^(" operandwords ")$")'
 armed 'and the anchor admits whatever the union holds' \
       lib/command-scan.sh '($CS_WRAP_WORDS)[[:space:]]+'
 armed 'the intervening token is named once and used once' \
@@ -5281,8 +5288,9 @@ unarmed 'and it points at no number below it, since none is there' \
   "$SELF_WHOLE_HEADER" 'the number below'
 
 echo "=== issue #84: every hook refuses when lib/command-scan.sh does not load ==="
-# THE LOAD CONTRACT, driven. lib/command-scan.sh states it; the four hooks that
-# source that file have to hold it, and before #84 three of them did not --
+# THE LOAD CONTRACT, driven. lib/command-scan.sh states it; the hooks that
+# source that file have to hold it, and before #84 three of the four there
+# were then did not --
 # no-git-push.sh and no-pr-decisions.sh had no guard at all, and
 # no-commit-to-main.sh had one that required cs_split alone.
 #
@@ -5339,6 +5347,20 @@ echo "=== issue #84: every hook refuses when lib/command-scan.sh does not load =
 # here with the rest because a file that cannot load its reader is the same
 # question.
 LIB_CONSUMERS="alembic-via-uv-group.sh append-only-docs-edit.sh append-only-docs.sh no-commit-to-main.sh no-git-push.sh no-pr-decisions.sh no-work-on-stale-branch.sh pytest-via-uv-group.sh"
+# Since #96 every Bash hook among them calls cs_within_cap as well, and
+# append-only-docs.sh takes that function from the library beside its reader.
+# Which consumers call it is read off their code rather than listed, for the
+# reason this list is checked against the files below: a list goes stale. The
+# issue #96 section asserts that those are exactly the Bash hooks settings.json
+# registers.
+CAP_CONSUMERS=$(for hook in $LIB_CONSUMERS; do
+    sed 's/[[:space:]]*#.*$//' "$HOOKS/$hook" 2>/dev/null | grep -q 'cs_within_cap' \
+      && printf '%s\n' "$hook"
+  done | tr '\n' ' ')
+[ -n "$CAP_CONSUMERS" ] || {
+  echo "no hook was read as calling cs_within_cap; the checks driven off that list prove nothing" >&2
+  exit 1
+}
 
 # The library absent. One directory for all of them: what makes the fixture is the
 # absence of lib/ beside the hook, not anything about the hook.
@@ -5428,7 +5450,8 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
 # One call per pair the contract names, which is the required list of each hook. The
 # sets differ, and that difference is the reason the guards cannot share a list:
 # four want cs_git_args, no-pr-decisions.sh wants cs_gh_args and cs_join instead,
-# and the two convention hooks want neither.
+# and the two convention hooks want neither. Since #96 every one of them wants
+# cs_within_cap, and append-only-docs.sh wants nothing else.
 mk_halflib no-git-push.sh cs_normalise
 mk_halflib no-git-push.sh cs_split
 mk_halflib no-git-push.sh cs_git_args
@@ -5450,6 +5473,10 @@ mk_halflib alembic-via-uv-group.sh cs_split
 for hook in $LIB_CONSUMERS; do
   mk_halflib "$hook" cs_tool_input
 done
+# The line cap, which every Bash hook calls since #96.
+for hook in $CAP_CONSUMERS; do
+  mk_halflib "$hook" cs_within_cap
+done
 
 echo "--- no-git-push.sh, which had no guard at all ---"
 # The measured #84 case: with no guard, cs_git_args was undefined, the HAVE_PUSH
@@ -5464,6 +5491,8 @@ check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_normalise)" BLOCK 'a libra
 check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_split)" BLOCK 'a library missing only cs_split' \
   'ls'
 check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_git_args)" BLOCK 'a library missing only cs_git_args' \
+  'ls'
+check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_within_cap)" BLOCK 'a library missing only cs_within_cap' \
   'ls'
 check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_git_args)" BLOCK 'a renamed cs_git_args does not permit a forced push' \
   'git push --force origin dev-05'
@@ -5497,6 +5526,8 @@ check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_gh_args)" BLOCK 'nor a 
 # subset a driving command happens to reach.
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_join)" BLOCK 'a library missing only cs_join' \
   'ls'
+check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_within_cap)" BLOCK 'a library missing only cs_within_cap' \
+  'ls'
 says "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" 'no-pr-decisions.sh could not load' \
   'the refusal names this hook and not one of its three siblings' 'ls'
 says "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" 'Refusing rather than permitting' \
@@ -5518,6 +5549,8 @@ check_in "$ON_DEV" "$(halflib_path no-commit-to-main.sh cs_normalise)" BLOCK 'a 
 check_in "$ON_DEV" "$(halflib_path no-commit-to-main.sh cs_split)" BLOCK 'a library missing only cs_split' \
   'ls'
 check_in "$ON_DEV" "$(halflib_path no-commit-to-main.sh cs_git_args)" BLOCK 'a library missing only cs_git_args' \
+  'ls'
+check_in "$ON_DEV" "$(halflib_path no-commit-to-main.sh cs_within_cap)" BLOCK 'a library missing only cs_within_cap' \
   'ls'
 # The #84 measurement itself, on the fixture that permitted it: a push landing on
 # main, from a checkout that is not main, refused by the guard because the refspec
@@ -5566,6 +5599,8 @@ check_in "$WT_STALE" "$(halflib_path no-work-on-stale-branch.sh cs_normalise)" B
   'git commit -m "wip"'
 check_in "$WT_STALE" "$(halflib_path no-work-on-stale-branch.sh cs_split)" BLOCK 'a library missing only cs_split' \
   'git commit -m "wip"'
+check_in "$WT_STALE" "$(halflib_path no-work-on-stale-branch.sh cs_within_cap)" BLOCK 'a library missing only cs_within_cap' \
+  'git status'
 says "$WT_STALE" "$(nolib_path no-work-on-stale-branch.sh)" 'no-work-on-stale-branch.sh could not load' \
   'the refusal names this hook and not one of its three siblings' 'git status'
 says "$WT_STALE" "$(nolib_path no-work-on-stale-branch.sh)" 'Refusing rather than permitting' \
@@ -5589,6 +5624,8 @@ check_in "$ON_DEV" "$(halflib_path pytest-via-uv-group.sh cs_normalise)" BLOCK \
   'a library missing only cs_normalise, pytest-via-uv-group.sh' 'ls'
 check_in "$ON_DEV" "$(halflib_path pytest-via-uv-group.sh cs_split)" BLOCK \
   'a library missing only cs_split, pytest-via-uv-group.sh' 'ls'
+check_in "$ON_DEV" "$(halflib_path pytest-via-uv-group.sh cs_within_cap)" BLOCK \
+  'a library missing only cs_within_cap, pytest-via-uv-group.sh' 'ls'
 says "$ON_DEV" "$(nolib_path pytest-via-uv-group.sh)" 'pytest-via-uv-group.sh could not load' \
   'the refusal names this hook and not its companion' 'ls'
 says "$ON_DEV" "$(nolib_path pytest-via-uv-group.sh)" 'Refusing rather than permitting' \
@@ -5601,6 +5638,8 @@ check_in "$ON_DEV" "$(halflib_path alembic-via-uv-group.sh cs_normalise)" BLOCK 
   'a library missing only cs_normalise, alembic-via-uv-group.sh' 'ls'
 check_in "$ON_DEV" "$(halflib_path alembic-via-uv-group.sh cs_split)" BLOCK \
   'a library missing only cs_split, alembic-via-uv-group.sh' 'ls'
+check_in "$ON_DEV" "$(halflib_path alembic-via-uv-group.sh cs_within_cap)" BLOCK \
+  'a library missing only cs_within_cap, alembic-via-uv-group.sh' 'ls'
 says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'alembic-via-uv-group.sh could not load' \
   'the refusal names this hook and not its companion' 'ls'
 says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'Refusing rather than permitting' \
@@ -5645,6 +5684,28 @@ feed_says "$PATH" "$(nolib_path append-only-docs-edit.sh)" 'append-only-docs-edi
 feed_says "$PATH" "$(nolib_path append-only-docs-edit.sh)" 'Refusing rather than permitting' \
   'and says that it is refusing rather than permitting' "$EDIT_CONTROL"
 
+echo "--- cs_within_cap, the line cap every Bash hook calls since #96 ---"
+# append-only-docs.sh takes this function from the library beside its reader, so
+# it is driven here with the rest: the other consumers' halflib checks for it
+# stand in their own blocks above.
+check_in "$ON_DEV" "$(halflib_path append-only-docs.sh cs_within_cap)" BLOCK \
+  'a library missing only cs_within_cap, append-only-docs.sh' 'ls'
+# Every halflib check for cs_within_cap is over-determined, and that is what
+# this loop is for. Each hook calls it as `if ! ... | cs_within_cap`, so with the
+# function renamed away the call exits 127 and the hook refuses -- with or
+# without the probe. The BLOCK cannot tell a guard that names cs_within_cap from
+# one that does not. Which message the refusal carries can: the guard says the
+# library could not load, the fall-through says only that a line is long. One
+# per hook that calls it, off the derived list, so the next one is asked too.
+for hook in $CAP_CONSUMERS; do
+  case "$hook" in
+    no-git-push.sh) dir=$PUSH_WT ;;
+    *) dir=$ON_DEV ;;
+  esac
+  says "$dir" "$(halflib_path "$hook" cs_within_cap)" "$hook could not load" \
+    "$hook, a library missing only cs_within_cap, refused by its guard" 'ls'
+done
+
 echo "--- issue #79: the word list is part of the load ---"
 # A third way to not load, beside nolib and halflib, and the one a guard on
 # names cannot see. Issue #79 made cs_split read the prefix-word list through a
@@ -5663,7 +5724,8 @@ echo "--- issue #79: the word list is part of the load ---"
 # green, because a deleted check cannot fail. Review of PR #89 measured that
 # before it happened. They are rebuilt here, per consumer, off LIB_CONSUMERS.
 #
-# ALL SIX CONSUMERS, not the four boundary hooks, and that is a correction.
+# EVERY CONSUMER THAT CALLS cs_split, not the four boundary hooks, and that is
+# a correction.
 # The fail-safe these replace was an empty CS_WRAPPER_RE, which reached the four
 # hooks that read the anchor and not the two convention hooks, which call
 # cs_split and never the anchor: `sudo pytest tests/` and `sudo alembic upgrade
@@ -5803,6 +5865,16 @@ check_in "$ON_DEV" alembic-via-uv-group.sh BLOCK \
 says "$ON_DEV" "$(emptylist_path alembic-via-uv-group.sh)" 'alembic-via-uv-group.sh could not load' \
   'alembic-via-uv-group.sh names itself for an emptied list' 'ls'
 
+# And the one consumer the word list does not reach. append-only-docs.sh calls
+# cs_within_cap and nothing else, so withdrawing cs_split leaves it loaded, and
+# an emptied list must not become a refusal of every command there. The
+# fixture is built for it by the loop above because it is on LIB_CONSUMERS;
+# this is what that fixture is for.
+check_in "$ON_DEV" "$(emptylist_path append-only-docs.sh)" ALLOW \
+  'append-only-docs.sh, a library with no wrapper words, still permits ls: it calls no cs_split' 'ls'
+check_in "$ON_DEV" "$(emptylist_path append-only-docs.sh)" BLOCK \
+  'append-only-docs.sh, a library with no wrapper words, still holds its own rule' 'rm -rf docs/dev-log'
+
 # The mechanism as text, beside the mechanism as verdicts. `armed`, so a withdrawal
 # commented out during a debugging session and left that way does not satisfy it.
 armed 'the library withdraws cs_split when the word list is incomplete' \
@@ -5837,6 +5909,8 @@ written 'and records why this is not one sourced preamble' \
 for hook in no-git-push.sh no-pr-decisions.sh no-commit-to-main.sh no-work-on-stale-branch.sh; do
   written "$hook points at the contract by name" "$HOOKS/$hook" 'THE LOAD CONTRACT'
 done
+written 'append-only-docs.sh points at the contract by name, having taken a guard in #96' \
+  "$HOOKS/append-only-docs.sh" 'THE LOAD CONTRACT'
 # And that each guard is live code rather than a commented-out line. `armed`
 # strips comments first, which is the difference that matters: every literal
 # above would match a guard commented out during a debugging session and left
@@ -5859,6 +5933,13 @@ armed 'pytest-via-uv-group.sh requires cs_normalise' pytest-via-uv-group.sh 'com
 armed 'pytest-via-uv-group.sh requires cs_split' pytest-via-uv-group.sh 'command -v cs_split'
 armed 'alembic-via-uv-group.sh requires cs_normalise' alembic-via-uv-group.sh 'command -v cs_normalise'
 armed 'alembic-via-uv-group.sh requires cs_split' alembic-via-uv-group.sh 'command -v cs_split'
+armed 'no-git-push.sh requires cs_within_cap' no-git-push.sh 'command -v cs_within_cap'
+armed 'no-pr-decisions.sh requires cs_within_cap' no-pr-decisions.sh 'command -v cs_within_cap'
+armed 'no-commit-to-main.sh requires cs_within_cap' no-commit-to-main.sh 'command -v cs_within_cap'
+armed 'no-work-on-stale-branch.sh requires cs_within_cap' no-work-on-stale-branch.sh 'command -v cs_within_cap'
+armed 'pytest-via-uv-group.sh requires cs_within_cap' pytest-via-uv-group.sh 'command -v cs_within_cap'
+armed 'alembic-via-uv-group.sh requires cs_within_cap' alembic-via-uv-group.sh 'command -v cs_within_cap'
+armed 'append-only-docs.sh requires cs_within_cap' append-only-docs.sh 'command -v cs_within_cap'
 for hook in $LIB_CONSUMERS; do
   armed "$hook requires cs_tool_input" "$hook" 'command -v cs_tool_input'
 done
@@ -5884,8 +5965,8 @@ armed 'append-only-docs-edit.sh tests the library before sourcing it' \
       append-only-docs-edit.sh '[ -r "$LIB" ] && . "$LIB"'
 echo "--- the required list is the call list, and these are all the consumers ---"
 # THE ONE CHECK HERE THAT SURVIVES THE NEXT CHANGE. Every literal above names a
-# file and a function, so all of them together say that these four guards require
-# these thirteen names -- and none of them says a required list is COMPLETE. #84 was
+# file and a function, so all of them together say that these guards require
+# these names -- and none of them says a required list is COMPLETE. #84 was
 # a required list narrower than a call set. A fifth cs_* call added to a hook
 # tomorrow, or another file that sources the library, leaves every check above
 # green and is the same defect one turn later. That is not a hypothetical either:
@@ -6239,6 +6320,585 @@ written 'the library states the fail direction of the input read' \
 written 'and records the trade an environment without jq pays' \
   "$HOOKS/lib/command-scan.sh" 'THE TRADE, taken knowingly'
 
+echo "--- issue #96: a line long enough to outlast the timeout ---"
+# The harness kills a hook that runs past its "timeout" in settings.json, and a
+# killed hook never exits 2 -- which is the only refusal `check` reads, because
+# it is the only one the harness reads. So how long a hook runs is part of its
+# verdict. The issue measured all three boundary hooks past their 5 s on one
+# line of 300 KB, and `echo <300 KB>; git push --force origin main` was
+# permitted by every one of them. The cost is cs_normalise and cs_split, each
+# quadratic in the length of a single line: measured at e8c132f under mawk
+# 1.3.4, LC_ALL=C, fastest of three, cs_normalise took 1.03 s at 200 KB, 1.9 s
+# at 256 KB and 9.3 s at 512 KB, and cs_split 1.07, 1.9 and 10.8 s.
+#
+# Decided in the grilling recorded on #103 (Q28), and every number below is a
+# literal from it: a line longer than 16 KB -- 16384 bytes -- is refused, with a
+# message that says so and says to split the line or write the content to a
+# file; the quadratic passes are made linear; and each hook finishes a command
+# whose longest line sits at the cap in under 1 s, fastest of three runs.
+#
+# #96 asks that every new check fail with the fix reverted. Not all of these
+# can, and which is which is the part worth reading. Measured, not reasoned:
+# this suite was run against the hooks and library as they stood before the fix.
+#
+#   - RED against the unfixed hooks: every over-the-cap BLOCK and every cap
+#     message, in every spelling below, the two library timings, the cap
+#     succeeding at exactly 16384 bytes, and every load-contract check for
+#     cs_within_cap and for append-only-docs.sh's new guard.
+#   - PINS, green against them: the at-the-cap verdicts, the controls, the
+#     200 KB heredoc, the timeout in settings.json, and the per-hook timing at
+#     the cap. A 16 KB line costs the unfixed hooks about 0.1 s, so a 1 s bound
+#     AT the cap cannot tell the fix from its absence. It is the bound the issue
+#     decided, and it guards against the next pass that is slower again. What
+#     holds the linear passes is the library timing, and it is here for that
+#     reason. The output checks beside those timings are green unfixed too:
+#     the passes were right and slow, and those checks are there for the cap
+#     that would be fast by being wrong.
+#   - GREEN FOR A REASON THAT IS NOT THE FIX: the three cs_within_cap checks
+#     expecting `over`, since the function did not exist and bash -c answers
+#     127. What they are evidence about is a wrong cs_within_cap rather than a
+#     missing one, and that was measured by planting one: reading awk's status
+#     alone turned the missing-cs_join check red and nothing else.
+#
+# Eight defects were planted to see each group go red, and each did: the cap
+# written as >= (the at-the-cap verdicts), measured on raw lines (the continued
+# pair), the pipeline status dropped (the missing-cs_join check), one hook's
+# cs_within_cap guard removed (its guard message, its armed pin and its derived
+# required set), a quadratic string build put back in the separator cut (the
+# 512 KB cs_split timing), each old pass restored alone (its scaling check), a
+# copied awk helper drifted (the identical-copies check), and cs_git_args
+# renamed away under the scaling checks (their exit status). This comment
+# said five until review of PR #123 counted the eight its description listed.
+# A check suite is evidence about the cases it names; those are eight of them.
+#
+# TWO ADDITIONS TO THE ISSUE'S LIST, both measured before they were written.
+#
+# The cap is on the line the passes see, which is the line after cs_join and
+# not the raw one. 3,800 lines of 84 bytes, each ending in a backslash, are one
+# 300 KB line once joined, and with a push after them took the three boundary
+# hooks 5.7 to 9.7 s. No raw line there is near 16 KB, so a cap that reads raw
+# lines never fires on it. The criterion "200 KB spread across 80-column lines
+# is judged on its content" is kept, in the shape the audit measured it in: a
+# heredoc body, which is dropped rather than joined.
+#
+# The linear passes get checks of their own, aimed at the library rather than
+# through a hook, because once the cap is in no hook can be handed a line long
+# enough to show them. One long plain line holds cs_normalise and cs_split's
+# separator cut. cs_join, the prefix strip and both argument readers were
+# quadratic too, but in how many continuations, prefix words or options a line
+# held, so they are held by the scaling checks at the end of this section. Each
+# rewrite was also fuzzed against the version before it for identical output;
+# that is recorded in the library, and is not something a check here repeats.
+# Every one of these checks asserts what comes back as well as how fast, so a
+# cap placed INSIDE cs_normalise or cs_split -- fast because it returns early
+# -- turns them red rather than green. The cap belongs in front of those
+# passes, not in them.
+#
+# EVERY BASH HOOK, read off settings.json rather than listed, which is the
+# criterion's wording, and asserted below to be exactly the hooks whose code
+# calls cs_within_cap. append-only-docs.sh takes the function from the library
+# beside the reader #95 gave it; see its header.
+#
+# no-work-on-stale-branch.sh was first written to hold the cap only on a stale
+# or gone branch, and only for a command naming git, because its library was
+# loaded only past those two exits. #95 moved the load and the read to the top
+# of that file, so the cap moved with them and now holds wherever the hook runs.
+# Every fixture below that names nothing still says `git` in passing -- `echo
+# git`, and a python3 string holding the word -- from when that mattered; it is
+# harmless to every hook, and it keeps the stale branch's rules, which sit
+# behind that bail, inside what these checks reach. It is asked on a stale
+# branch for the same reason, and on a branch carrying work once, below.
+#
+# NOT HERE, and named because a check suite is evidence about what it names:
+# the cost is per command as well as per line, and so THE CAP DOES NOT BOUND A
+# HOOK'S RUNNING TIME -- only the length of a line. 2,500 lines of `echo <75 a>`
+# and a `gh pr merge 5` -- 202 KB, no line over 80 bytes -- took
+# no-pr-decisions.sh 5.9 s and no-commit-to-main.sh 4.4 s, fastest of three,
+# and the harness permits past 5 s. It is linear, a few milliseconds a
+# fragment, since each fragment cs_split emits starts an awk or more. That
+# first made it look like a matter of size, which it is not: review of PR #123
+# put the 2,500 on one line as `t;`, 5,014 bytes and a third of the cap, and
+# no-pr-decisions.sh took 6.4 s idle; filled to the cap, 8,192 of them and a
+# push outlasted all three boundary hooks. Neither remedy #96 decided reaches
+# it, and a check for it would be a decision that issue did not take: it is
+# #127. A first figure written here, 10 s for 250 lines, was taken on a loaded
+# machine and did not reproduce: those 250 take 0.66 s.
+#
+# THE SECOND TRADE, found by review of this section: the cap joins
+# continuations without knowing what a quoted heredoc is, so a body of short
+# lines that each end in a backslash is refused as one long line, which bash
+# would never read it as. Recorded in the library under THE LINE CAP, and
+# pinned below.
+BASH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command' \
+               "$HOOKS/../settings.json" 2>/dev/null | sed 's|.*/||' | sort | tr '\n' ' ')
+[ -n "$BASH_HOOKS" ] || {
+  echo "no Bash hooks were read out of settings.json; the checks below prove nothing" >&2
+  exit 1
+}
+tok 'every Bash hook runs under the 5 s timeout the 1 s bound is set against' \
+    '5' "$(jq -r '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].timeout]
+                  | unique | map(tostring) | join(" ")' "$HOOKS/../settings.json")"
+
+# Where each hook holds an opinion, and one short command it refuses on its
+# content. Literals per hook, so that an at-the-cap refusal can be told apart
+# from the cap's; a hook added to settings.json with no row here fails below
+# rather than going unasked.
+cap_dir() {  # cap_dir <hook>
+  case "$1" in
+    no-commit-to-main.sh) printf '%s\n' "$ON_MAIN" ;;
+    no-work-on-stale-branch.sh) printf '%s\n' "$WT_STALE" ;;
+    # Every no-git-push.sh check runs in the push fixture #94 built, so that
+    # where the command runs is a named directory and not the suite's own.
+    no-git-push.sh) printf '%s\n' "$PUSH_WT" ;;
+    *) printf '%s\n' "$ON_DEV" ;;
+  esac
+}
+cap_refused() {  # cap_refused <hook>
+  case "$1" in
+    no-git-push.sh) printf '%s' 'git push --force origin main' ;;
+    no-pr-decisions.sh) printf '%s' 'gh pr merge 5' ;;
+    no-commit-to-main.sh|no-work-on-stale-branch.sh) printf '%s' 'git commit -m wip' ;;
+    pytest-via-uv-group.sh) printf '%s' 'pytest tests/' ;;
+    alembic-via-uv-group.sh) printf '%s' 'alembic upgrade head' ;;
+    append-only-docs.sh) printf '%s' 'rm -rf docs/dev-log' ;;
+  esac
+}
+# The hooks that call cs_within_cap, derived off their code in the load-contract
+# section, are the Bash hooks settings.json registers -- no more, since the Edit
+# hook reads no command, and no fewer, which is the #84 shape.
+CAPPED=$(printf '%s\n' $CAP_CONSUMERS | sort | tr '\n' ' ')
+if [ "$CAPPED" = "$BASH_HOOKS" ]; then
+  printf '  ok   derived the hooks that call cs_within_cap are exactly the Bash hooks: %s\n' "${CAPPED% }"
+else
+  printf '  FAIL the hooks that call cs_within_cap are not the Bash hooks settings.json registers\n         call it: |%s|\n         Bash:    |%s|\n' \
+    "$CAPPED" "$BASH_HOOKS"
+  FAILED=1
+fi
+for hook in $BASH_HOOKS; do
+  if [ ! -x "$HOOKS/$hook" ]; then
+    printf '  FAIL settings.json runs %s, which is not an executable file beside this suite\n' "$hook"
+    FAILED=1
+  elif [ -z "$(cap_refused "$hook")" ]; then
+    printf '  FAIL %s is a Bash hook with no row in cap_refused, so the cap is not asked of it\n' "$hook"
+    FAILED=1
+  fi
+done
+
+# The fixtures. Each is built to a byte count and then measured, because a
+# builder one byte out turns the 16384/16385 pair into 16383/16384 and every
+# check below still runs -- against the wrong side of the cap.
+cap_pad() {  # cap_pad <bytes> -- that many a's
+  head -c "$1" /dev/zero | tr '\0' a
+}
+cap_line() {  # cap_line <bytes> [tail] -- `echo git `, padding, tail: exactly <bytes> bytes
+  printf 'echo git %s%s' "$(cap_pad $(( $1 - 9 - $(printf '%s' "${2:-}" | wc -c) )))" "${2:-}"
+}
+cap_python() {  # cap_python <bytes> -- a python3 -c one-liner of exactly <bytes> bytes
+  printf "python3 -c \"x = 'git %s'\"" "$(cap_pad $(( $1 - 23 )))"
+}
+cap_continued() {  # cap_continued <bytes> -- cap_line <bytes>, cut into 80-byte continued lines
+  cap_line "$1" | fold -b -w 79 | sed '$!s/$/\\/'
+}
+cap_wide() {  # cap_wide <bytes> -- `echo git ` and two-byte characters, and an a if the count is odd
+  local n=$(( $1 - 9 ))
+  printf 'echo git %s' "$(printf '\303\251%.0s' $(seq 1 $(( n / 2 ))))"
+  [ $(( n % 2 )) -eq 0 ] || printf a
+}
+# check_in, encoding the command with --rawfile rather than -Rs, and used only by
+# the two wide checks below. jq 1.7's -Rs -- which every other helper here
+# encodes with -- splits a multibyte character near its read-buffer boundary into
+# two U+FFFD: measured, the 16384-byte wide line reached the hook as 16392 bytes,
+# over the cap, and was refused for that. Aligning the characters to an even
+# offset did not avoid it, and --rawfile and --arg both hand it over intact. The
+# hooks' own `jq -r` decodes the harness's JSON intact too, so the defect is in
+# this suite's encode alone, and no check before this section carries a multibyte
+# command long enough to meet it.
+#
+# It reads the status through `verdict`, as check_in does. Its first version read
+# it as one bit, the #98 defect itself: a crashed hook passed the wide ALLOW.
+# Found by review of PR #123 once #98 was merged in, not by this suite.
+check_rawfile_in() {  # check_rawfile_in <dir> <script> <want> <label> <cmd>
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" rc err
+  printf '%s' "$cmd" > "$FIXTURES/rawfile.txt"
+  err=$(jq -n --rawfile c "$FIXTURES/rawfile.txt" '{tool_name:"Bash",tool_input:{command:$c}}' \
+    | ( cd "$dir" && "$(hook_path "$script")" ) 2>&1 >/dev/null)
+  rc=$?
+  verdict "$want" "$rc" "$err" "$label"
+}
+cap_bytes() {  # cap_bytes <string>
+  printf '%s' "$1" | wc -c | tr -d ' '
+}
+cap_guard() {  # cap_guard <fixture> <want> <got>
+  [ "$2" = "$3" ] && return 0
+  echo "the $1 fixture measures $3 where it was built to be $2; the checks using it prove nothing" >&2
+  exit 1
+}
+AT_CAP=$(cap_line 16384)
+OVER_CAP=$(cap_line 16385)
+PY_AT=$(cap_python 16384)
+PY_OVER=$(cap_python 16385)
+CONT_AT=$(cap_continued 16384)
+CONT_OVER=$(cap_continued 16385)
+WIDE_AT=$(cap_wide 16384)
+WIDE_OVER=$(cap_wide 16385)
+HEREDOC_200K="cat <<'EOF'
+$(for i in $(seq 1 2500); do cap_pad 79; printf '\n'; done)
+EOF"
+cap_guard 'at-the-cap line' 16384 "$(cap_bytes "$AT_CAP")"
+cap_guard 'over-the-cap line' 16385 "$(cap_bytes "$OVER_CAP")"
+cap_guard 'at-the-cap one-liner' 16384 "$(cap_bytes "$PY_AT")"
+cap_guard 'over-the-cap one-liner' 16385 "$(cap_bytes "$PY_OVER")"
+# A continued fixture is a long line only once joined, and short before it.
+cap_guard 'at-the-cap continued, joined' 16384 "$(printf '%s' "$CONT_AT" | tr -d '\\\n' | wc -c | tr -d ' ')"
+cap_guard 'over-the-cap continued, joined' 16385 "$(printf '%s' "$CONT_OVER" | tr -d '\\\n' | wc -c | tr -d ' ')"
+cap_guard 'over-the-cap continued, longest raw line' 80 \
+  "$(printf '%s\n' "$CONT_OVER" | LC_ALL=C awk '{ if (length($0) > m) m = length($0) } END { print m }')"
+# A wide fixture is over the cap in bytes and well under it in characters, and
+# that is only true where the locale counts characters; without C.UTF-8 the two
+# counts agree and the pair would ask nothing.
+cap_guard 'at-the-cap wide line' 16384 "$(cap_bytes "$WIDE_AT")"
+cap_guard 'over-the-cap wide line' 16385 "$(cap_bytes "$WIDE_OVER")"
+cap_guard 'over-the-cap wide line, in characters' 8197 \
+  "$(printf '%s' "$WIDE_OVER" | LC_ALL=C.UTF-8 wc -m | tr -d ' ')"
+# And as a hook receives it: check_rawfile_in's encode, the hooks' decode.
+printf '%s' "$WIDE_AT" > "$FIXTURES/wide-at.txt"
+printf '%s' "$WIDE_OVER" > "$FIXTURES/wide-over.txt"
+cap_guard 'at-the-cap wide line, as a hook receives it' 16384 \
+  "$(LC_ALL=C.UTF-8 jq -n --rawfile c "$FIXTURES/wide-at.txt" '{tool_input:{command:$c}}' \
+     | LC_ALL=C.UTF-8 jq -j '.tool_input.command' | wc -c | tr -d ' ')"
+cap_guard 'over-the-cap wide line, as a hook receives it' 16385 \
+  "$(LC_ALL=C.UTF-8 jq -n --rawfile c "$FIXTURES/wide-over.txt" '{tool_input:{command:$c}}' \
+     | LC_ALL=C.UTF-8 jq -j '.tool_input.command' | wc -c | tr -d ' ')"
+# 300 lines of 80 bytes in a quoted heredoc, each ending in a backslash: 24 KB
+# once joined, which bash never does to a quoted heredoc body.
+HEREDOC_SLASHED="cat <<'EOF'
+$(for i in $(seq 1 300); do printf 'echo git %s\\\n' "$(cap_pad 70)"; done)
+EOF"
+cap_guard 'slashed heredoc, longest line' 80 \
+  "$(printf '%s\n' "$HEREDOC_SLASHED" | LC_ALL=C awk '{ if (length($0) > m) m = length($0) } END { print m }')"
+cap_guard 'slashed heredoc, lines ending in a backslash' 300 \
+  "$(printf '%s\n' "$HEREDOC_SLASHED" | grep -c '\\$')"
+cap_guard '80-column heredoc, longest line' 79 \
+  "$(printf '%s\n' "$HEREDOC_200K" | tail -n +2 | LC_ALL=C awk '{ if (length($0) > m) m = length($0) } END { print m }')"
+cap_guard '80-column heredoc, body' 200000 \
+  "$(printf '%s\n' "$HEREDOC_200K" | sed '1d;$d' | wc -c | tr -d ' ')"
+
+# The fastest of three runs, stopping at the first one under the bound, since
+# the fastest is then under it too. Only a run that refused is timed: a hook
+# that dies before reading anything is fast as well, so a time with no verdict
+# beside it would pass for a hook that is not there.
+cap_timed() {  # cap_timed <dir> <hook|/absolute/hook> <cmd> -- "<ms>", or "exit <rc>" for a run that did not refuse
+  local i s e ms rc best=
+  printf '%s' "$3" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' > "$FIXTURES/timed.json"
+  for i in 1 2 3; do
+    s=$(date +%s%N)
+    ( cd "$1" && "$(hook_path "$2")" ) < "$FIXTURES/timed.json" >/dev/null 2>&1
+    rc=$?
+    e=$(date +%s%N)
+    [ $rc -eq 2 ] || { printf 'exit %s\n' "$rc"; return; }
+    ms=$(( (e - s) / 1000000 ))
+    if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms; fi
+    [ "$best" -lt 1000 ] && break
+  done
+  printf '%s\n' "$best"
+}
+under_a_second() {  # under_a_second <label> <cap_timed output>
+  case "$2" in
+    exit*) printf '  FAIL %s\n         the timed command was not refused (%s), so its time is not the judged path\n' "$1" "$2"
+           FAILED=1 ;;
+    *) if [ "$2" -lt 1000 ]; then
+         printf '  ok   timed %s: fastest %s ms\n' "$1" "$2"
+       else
+         printf '  FAIL %s\n         fastest of three was %s ms; the bound is 1000\n' "$1" "$2"
+         FAILED=1
+       fi ;;
+  esac
+}
+
+for hook in $BASH_HOOKS; do
+  dir=$(cap_dir "$hook")
+  refused=$(cap_refused "$hook")
+  [ -n "$refused" ] || continue
+  # The controls: what this hook does with a short command either way, without
+  # which neither verdict at the cap says whose it is.
+  check_in "$dir" "$hook" ALLOW "$hook, control: a short echo" 'echo ok'
+  check_in "$dir" "$hook" BLOCK "$hook, control: $refused" "$refused"
+
+  # At the cap, judged on its content in both directions -- and the refusal is
+  # the content's, which is what catches a cap written as >= instead of >.
+  check_in "$dir" "$hook" ALLOW "$hook, one line of exactly 16384 bytes naming nothing" "$AT_CAP"
+  check_in "$dir" "$hook" BLOCK "$hook, one line of exactly 16384 bytes ending in $refused" \
+    "$(cap_line 16384 "; $refused")"
+  says_not "$dir" "$hook" 'longer than 16 KB' "$hook, and that refusal is the content's rather than the cap's" \
+    "$(cap_line 16384 "; $refused")"
+
+  # One byte over, on a line that names nothing, so the BLOCK is the cap's.
+  check_in "$dir" "$hook" BLOCK "$hook, one line of 16385 bytes naming nothing" "$OVER_CAP"
+  says "$dir" "$hook" 'longer than 16 KB' "$hook, the cap's refusal says the line is over 16 KB" "$OVER_CAP"
+  says "$dir" "$hook" 'split the line' "$hook, and says to split it" "$OVER_CAP"
+  says "$dir" "$hook" 'to a file' "$hook, or to write the content to a file" "$OVER_CAP"
+
+  # Wherever the line sits. A cap that reads the first line, or the text left
+  # after cs_normalise has dropped heredoc bodies, passes the check above.
+  check_in "$dir" "$hook" BLOCK "$hook, the 16385-byte line second of three" "echo first
+$OVER_CAP
+echo last"
+  check_in "$dir" "$hook" BLOCK "$hook, the 16385-byte line inside a heredoc body" "cat <<'EOF'
+$OVER_CAP
+EOF"
+
+  # The line the passes see. Every raw line of these is 80 bytes.
+  check_in "$dir" "$hook" ALLOW "$hook, 16384 bytes once joined, as 80-byte continued lines" "$CONT_AT"
+  check_in "$dir" "$hook" BLOCK "$hook, 16385 bytes once joined, as 80-byte continued lines" "$CONT_OVER"
+  says "$dir" "$hook" 'longer than 16 KB' "$hook, and that refusal is the cap's" "$CONT_OVER"
+
+  # Bytes, as the issue writes it -- 16 KB and one byte. In a UTF-8 locale a
+  # character count of the over-the-cap line is 8197, well under the cap.
+  LC_ALL=C.UTF-8 check_rawfile_in "$dir" "$hook" ALLOW \
+    "$hook, 16384 bytes of two-byte characters, in a UTF-8 locale" "$WIDE_AT"
+  LC_ALL=C.UTF-8 check_rawfile_in "$dir" "$hook" BLOCK \
+    "$hook, 16385 bytes of two-byte characters, 8197 characters, in a UTF-8 locale" "$WIDE_OVER"
+
+  # THE TRADE, taken knowingly in #96: a legitimate one-liner over the cap is
+  # refused, and the remedy is to split it or write it to a file.
+  check_in "$dir" "$hook" ALLOW "$hook, a python3 -c one-liner of 16384 bytes" "$PY_AT"
+  check_in "$dir" "$hook" BLOCK "$hook, a python3 -c one-liner of 16385 bytes, refused: the trade" "$PY_OVER"
+
+  # THE SECOND TRADE: short lines in a quoted heredoc, each ending in a
+  # backslash, are joined by the cap though bash does not join them.
+  check_in "$dir" "$hook" BLOCK "$hook, a quoted heredoc of 80-byte lines ending in backslashes, refused: the second trade" \
+    "$HEREDOC_SLASHED"
+  says "$dir" "$hook" 'longer than 16 KB' "$hook, and that refusal is the cap's" "$HEREDOC_SLASHED"
+
+  # 200 KB spread across 80-column lines is judged on its content, not capped.
+  check_in "$dir" "$hook" ALLOW "$hook, 200 KB of heredoc in 80-column lines" "$HEREDOC_200K"
+  check_in "$dir" "$hook" BLOCK "$hook, 200 KB of heredoc in 80-column lines, then $refused" "$HEREDOC_200K
+$refused"
+  says_not "$dir" "$hook" 'longer than 16 KB' "$hook, and that refusal is the content's" "$HEREDOC_200K
+$refused"
+
+  # The bound. Against the unfixed hooks this is green -- see the header.
+  under_a_second "$hook, a command whose longest line is exactly 16384 bytes" \
+    "$(cap_timed "$dir" "$hook" "$(cap_line 16384 "; $refused")")"
+done
+
+# no-work-on-stale-branch.sh on a branch carrying work, where it has no other
+# opinion: the cap holds there too since #95 moved the read to the top.
+check_in "$WT_WORK" no-work-on-stale-branch.sh ALLOW \
+  'no-work-on-stale-branch.sh, control: a commit on a branch carrying work' 'git commit -m wip'
+check_in "$WT_WORK" no-work-on-stale-branch.sh BLOCK \
+  'no-work-on-stale-branch.sh, one line of 16385 bytes, on a branch carrying work' "$OVER_CAP"
+
+# The linear passes, through the library and past the cap: 512 KB, thirty-two
+# times it, where the quadratic passes take seconds apiece and linear ones take
+# a fraction of the bound. Loaded fresh in a subshell, so nothing an earlier
+# section did to this shell's copy of the functions is what is timed.
+LIB_LONG="$FIXTURES/line-512k.txt"
+{ cap_line 524288 '; git push --force origin main'; printf '\n'; } > "$LIB_LONG"
+cap_guard '512 KB library line' 524289 "$(wc -c < "$LIB_LONG" | tr -d ' ')"
+# One helper for every library timing below. It prints "<ms> <exit>" for the
+# fastest of three runs, leaves the last run's output in the named file, and
+# cuts a run off at 20 s. The exit status is printed because a time with no
+# verdict beside it would pass for a function that is not there: renamed away,
+# a call fails in a few milliseconds at every size, and the first version of the
+# scaling checks below reported that as linear. Found by review, not by this
+# suite.
+lib_run() {  # lib_run <input> <out> <call> -- "<ms> <exit>", fastest of three
+  local i s e ms rc best= bestrc=
+  for i in 1 2 3; do
+    s=$(date +%s%N)
+    timeout 20 bash -c ". '$HOOKS/lib/command-scan.sh' && $3" < "$1" > "$2" 2>/dev/null
+    rc=$?
+    e=$(date +%s%N)
+    ms=$(( (e - s) / 1000000 ))
+    if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms bestrc=$rc; fi
+  done
+  printf '%s %s\n' "$best" "$bestrc"
+}
+library_under_a_second() {  # library_under_a_second <label> <call> <out>
+  local r
+  r=$(lib_run "$LIB_LONG" "$3" "$2")
+  if [ "${r#* }" != 0 ]; then
+    printf '  FAIL %s\n         %s exited %s, so its time is not the time of the pass\n' "$1" "$2" "${r#* }"
+    FAILED=1
+  else
+    under_a_second "$1" "${r% *}"
+  fi
+}
+library_under_a_second 'cs_normalise over one 512 KB line' cs_normalise "$FIXTURES/normalised.txt"
+tok 'cs_normalise hands that line back whole, rather than capping it' \
+    'whole' "$(cmp -s "$LIB_LONG" "$FIXTURES/normalised.txt" && echo whole || echo changed)"
+library_under_a_second 'cs_split over one 512 KB line' cs_split "$FIXTURES/split.txt"
+tok 'cs_split still finds the push behind that line' \
+    'git push --force origin main' "$(sed -n 2p "$FIXTURES/split.txt")"
+tok 'in two fragments, and not one or none' \
+    '2' "$(wc -l < "$FIXTURES/split.txt" | tr -d ' ')"
+
+# The shapes the plain line above does not have. cs_join, cs_split's prefix
+# strip and both argument readers were quadratic in how MANY continuations,
+# prefix words, options, assignments or blanks a line held, not in how long it
+# was, so a long line of a's passes through them in one step and says nothing
+# about them. Each shape is timed at 128 KB and at 512 KB, and the check is on
+# the ratio rather than on a bound: four times the input costs a linear pass
+# about four times as much and a quadratic one about sixteen, so 8 is the line
+# between them, and a ratio does not move with the speed of the machine the way
+# a bound does. Measured, against libraries with just that one pass put back as
+# it was: every shape here went past 8 on its old pass -- 10.5 for the prefix
+# words, the lowest -- where the new ones stay near 4 or under, under where
+# process start-up is most of what is timed. One shape was written and
+# dropped: a line of redirects does not separate the old cs_normalise from the
+# new, because the old pass dropped each target and its output never grew.
+# The 512 KB line above is what holds that pass.
+#
+# Each check also asks what came back, at both sizes: the exit status, and the
+# last line of the output with runs of blanks squeezed and cut to its last 24
+# characters -- enough to say the prefixes were stripped, the continuations
+# joined, the options skipped. Each shape is built of whole words, counted,
+# rather than cut to a byte count: cut, the prefix shape ended in `sugit push`,
+# and the check was timing a strip that had nothing left to strip. Found by
+# review.
+#
+# Each size's fastest of three is taken; a pass that runs past 20 s at either
+# size is cut off and fails. A ratio over a small denominator is noise, so the
+# smaller time is floored at 10 ms before dividing.
+shape_prefixes() { yes sudo | head -n $(( $1 / 5 )) | tr '\n' ' '; printf 'git push --all origin\n'; }
+shape_options() { printf 'sudo '; yes -- -a | head -n $(( $1 / 3 )) | tr '\n' ' '; printf 'git push\n'; }
+shape_assigns() { yes A=1 | head -n $(( $1 / 4 )) | tr '\n' ' '; printf 'git push\n'; }
+shape_trailing() { printf 'git push'; head -c "$1" /dev/zero | tr '\0' ' '; printf 'origin\n'; }
+shape_continued() { yes 'aaaaaaa \' | head -n $(( $1 / 10 )); printf 'git push\n'; }
+shape_gitglobals() { printf 'git '; yes -- '-c a=b' | head -n $(( $1 / 7 )) | tr '\n' ' '; printf 'push origin x\n'; }
+shape_ghglobals() { printf 'gh '; yes -- '-R o/r' | head -n $(( $1 / 7 )) | tr '\n' ' '; printf 'pr merge 5\n'; }
+shape_tail() {  # shape_tail <file> -- the last line, blanks squeezed, last 24 characters
+  awk 'END { s = $0; gsub(/[ \t]+/, " ", s); n = length(s); print substr(s, n > 24 ? n - 23 : 1) }' "$1"
+}
+scales_linearly() {  # scales_linearly <shape> <call> <expected tail>
+  local small large tsmall tlarge
+  "shape_$1" 128000 > "$FIXTURES/shape-small.txt"
+  "shape_$1" 512000 > "$FIXTURES/shape-large.txt"
+  small=$(lib_run "$FIXTURES/shape-small.txt" "$FIXTURES/shape-small.out" "$2")
+  large=$(lib_run "$FIXTURES/shape-large.txt" "$FIXTURES/shape-large.out" "$2")
+  tsmall=$(shape_tail "$FIXTURES/shape-small.out")
+  tlarge=$(shape_tail "$FIXTURES/shape-large.out")
+  if [ "${small#* }" != 0 ] || [ "${large#* }" != 0 ]; then
+    printf '  FAIL %s over the %s shape did not run: exit %s at 128 KB, %s at 512 KB\n' \
+      "$2" "$1" "${small#* }" "${large#* }"
+    FAILED=1
+    return
+  fi
+  if [ "$tsmall" != "$3" ] || [ "$tlarge" != "$3" ]; then
+    printf '  FAIL %s over the %s shape returned the wrong thing\n         want |%s|\n         got  |%s| at 128 KB, |%s| at 512 KB\n' \
+      "$2" "$1" "$3" "$tsmall" "$tlarge"
+    FAILED=1
+    return
+  fi
+  small=${small% *} large=${large% *}
+  [ "$small" -ge 10 ] || small=10
+  if [ $(( large * 10 / small )) -lt 80 ]; then
+    printf '  ok   scaled %s over %s shape: %s ms at 128 KB, %s ms at 512 KB\n' "$2" "$1" "$small" "$large"
+  else
+    printf '  FAIL %s over the %s shape is not linear\n         %s ms at 128 KB, %s ms at 512 KB; four times the input may cost at most eight times\n' \
+      "$2" "$1" "$small" "$large"
+    FAILED=1
+  fi
+}
+scales_linearly prefixes cs_split 'origin'
+scales_linearly options cs_split 'push'
+scales_linearly assigns cs_split 'git push'
+scales_linearly trailing cs_split 'git push origin'
+scales_linearly continued cs_join 'aaaaaaa aaaaaaa git push'
+scales_linearly gitglobals 'cs_git_args push' 'origin x'
+scales_linearly ghglobals "cs_gh_args 'pr merge'" '5'
+
+# The option skip in both argument readers looks a token up in its list of
+# valued options with index(), which finds `-c|-C` in `|-c|-C|...|` as readily
+# as `-c`. The expression it replaced matched one name, so such a token was
+# skipped alone there, and here it took the word after it -- the subcommand --
+# as its value, and the reader answered "not a push". Not a hole: through
+# cs_split a token holding `|` stands only inside quotes, and the same quotes
+# cover the verb, so bash runs no push there either. But the rewrite is claimed
+# identical, and this is where it was not. Found by review of PR #123, by
+# reading the diff; the differential fuzz did not reach it. Every expected value
+# is what the reader at dev-05 870bb3f printed for the same line, and each one
+# was empty before the fix.
+PIPED_GIT_C=$(printf 'git -c|-C push origin main\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_git_args push" 2>/dev/null)
+PIPED_GIT_LONG=$(printf 'git --work-tree|--namespace push origin main\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_git_args push" 2>/dev/null)
+PIPED_GH_R=$(printf 'gh -R|--repo pr merge 5\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_gh_args 'pr merge'" 2>/dev/null)
+PIPED_GH_LONG=$(printf 'gh --repo|--hostname pr merge 5\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_gh_args 'pr merge'" 2>/dev/null)
+tok 'cs_git_args reads -c|-C as one option taking no value, as before #96' \
+    'origin main' "$PIPED_GIT_C"
+tok 'and --work-tree|--namespace' 'origin main' "$PIPED_GIT_LONG"
+tok 'cs_gh_args reads -R|--repo as one option taking no value, as before #96' \
+    '5' "$PIPED_GH_R"
+tok 'and --repo|--hostname' '5' "$PIPED_GH_LONG"
+
+# The linear passes carry copies of two awk helpers -- tokend and skipblank in
+# three programs, skipopts in two -- because an awk program cannot source
+# another. A rule written twice is answered twice, which is the sentence
+# lib/command-scan.sh opens with, so the copies are held to each other here:
+# every definition of each is extracted off the file and all must be identical.
+# Derived rather than counted, so a fourth copy is compared with the rest.
+awk_copies() {  # awk_copies <function> -- each definition, one per line, newlines as |
+  awk -v fn="$1" '
+    $0 ~ "^[[:space:]]*function " fn "\\(" { body = ""; grab = 1; indent = match($0, /[^[:space:]]/) }
+    grab { body = body substr($0, indent) "|"; if ($0 ~ /}[[:space:]]*$/ && (match($0, /[^[:space:]]/) == indent)) { print body; grab = 0 } }
+  ' "$HOOKS/lib/command-scan.sh"
+}
+for fn in tokend skipblank skipopts; do
+  total=$(awk_copies "$fn" | wc -l | tr -d ' ')
+  distinct=$(awk_copies "$fn" | sort -u | wc -l | tr -d ' ')
+  if [ "$total" -lt 2 ]; then
+    printf '  FAIL %s: fewer than two definitions were read out of the library (%s), so there is nothing to compare\n' "$fn" "$total"
+    FAILED=1
+  elif [ "$distinct" = 1 ]; then
+    printf '  ok   derived every copy of the awk helper %s is identical (%s copies)\n' "$fn" "$total"
+  else
+    printf '  FAIL the %s copies of the awk helper %s have drifted apart into %s versions\n' "$total" "$fn" "$distinct"
+    FAILED=1
+  fi
+done
+
+# Where the argument is written. Prose, so `written`: the header that states the
+# cap is where someone raising it will look for what it gives up.
+written 'the library states the line cap' "$HOOKS/lib/command-scan.sh" 'THE LINE CAP'
+
+# cs_within_cap, as a function rather than through a hook. Fail-closed is the
+# claim that matters most here and no hook check can make it: every consumer
+# requires cs_within_cap, but none requires cs_join, which cs_within_cap calls.
+# A version reading only awk's status counts the lines of no input when cs_join
+# is gone and succeeds -- the whole cap switched off by a rename one function
+# away, and every check above still green, because each consumer's own load
+# guard is satisfied.
+within_cap() {  # within_cap <library> <input file> -- within, or over
+  bash -c ". '$1' && cs_within_cap < '$2'" >/dev/null 2>&1 && echo within || echo over
+}
+printf '%s\n' "$AT_CAP" > "$FIXTURES/cap-at.txt"
+printf '%s\n' "$OVER_CAP" > "$FIXTURES/cap-over.txt"
+printf 'ls\n' > "$FIXTURES/cap-short.txt"
+tok 'cs_within_cap succeeds on a line of exactly 16384 bytes' \
+    'within' "$(within_cap "$HOOKS/lib/command-scan.sh" "$FIXTURES/cap-at.txt")"
+tok 'and fails on one of 16385' \
+    'over' "$(within_cap "$HOOKS/lib/command-scan.sh" "$FIXTURES/cap-over.txt")"
+sed 's/^cs_join()/cs_renamed_away()/' "$HOOKS/lib/command-scan.sh" > "$FIXTURES/cap-no-join.sh"
+grep -q '^cs_renamed_away()' "$FIXTURES/cap-no-join.sh" || {
+  echo "the cs_join-less library was not built; the check using it proves nothing" >&2
+  exit 1
+}
+tok 'and fails on a short command when the library is missing cs_join, which it calls' \
+    'over' "$(within_cap "$FIXTURES/cap-no-join.sh" "$FIXTURES/cap-short.txt")"
+sed 's/^CS_LINE_CAP=.*/CS_LINE_CAP=/' "$HOOKS/lib/command-scan.sh" > "$FIXTURES/cap-empty.sh"
+grep -q '^CS_LINE_CAP=$' "$FIXTURES/cap-empty.sh" || {
+  echo "the empty-cap library was not built; the check using it proves nothing" >&2
+  exit 1
+}
+tok 'and on a short command when the cap itself is empty' \
+    'over' "$(within_cap "$FIXTURES/cap-empty.sh" "$FIXTURES/cap-short.txt")"
+armed 'the cap is 16384 bytes, written as the literal the issue decided' \
+      lib/command-scan.sh 'CS_LINE_CAP=16384'
+
 echo "=== the exit-status helpers themselves: #98 ==="
 # The rule, and what it replaced, is written above `verdict`. Nothing else in this
 # suite drives a helper with a hook that crashes, so these ask the helpers
@@ -6288,7 +6948,9 @@ EXITS_OUTPUT="$EXITS/output"
 # fragment where the others take a verdict: the fixture's own name, which is in
 # everything a fixture says, so `says` and `feed_says` have something to find --
 # a crashed fixture included, which is what makes their crash cases evidence --
-# and `says_not` is given something it never sees.
+# and `says_not` is given something it never sees. `cap_timed` and `lib_run` are
+# driven through the helper that reads what they return, under_a_second and
+# library_under_a_second, since neither reads a verdict of its own.
 drive_helper() {  # drive_helper <helper> <fixture> <want>
   local helper="$1" fixture="$2" want="$3" result
   rm -f "$EXITS/ran-$fixture"
@@ -6297,6 +6959,9 @@ drive_helper() {  # drive_helper <helper> <fixture> <want>
        case "$helper" in
          check)      check "$fixture.sh" "$want" 'self-test' 'true' ;;
          check_in)   check_in "$EXITS" "$EXITS/$fixture.sh" "$want" 'self-test' 'true' ;;
+         check_rawfile_in) check_rawfile_in "$EXITS" "$EXITS/$fixture.sh" "$want" 'self-test' 'true' ;;
+         cap_timed)  under_a_second 'self-test' "$(cap_timed "$EXITS" "$EXITS/$fixture.sh" 'true')" ;;
+         lib_run)    library_under_a_second 'self-test' "$EXITS/$fixture.sh" "$EXITS/lib-run-out" ;;
          flip)       flip "$EXITS" "$EXITS/$fixture.sh" ALLOW "$want" 'self-test' 'true' ;;
          check_file) check_file "$fixture.sh" "$want" 'self-test' 'docs/x.md' ;;
          says)       says "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
@@ -6327,8 +6992,9 @@ failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
 # The helpers this self-test drives, named once: each loop below runs off its list,
 # and the derivation at the end of this section is asserted against both. A
 # helper added to neither is red there; one added to a list is driven.
-DRIVEN_VERDICT='check check_in flip check_file feed'
+DRIVEN_VERDICT='check check_in flip check_file feed check_rawfile_in'
 DRIVEN_MESSAGE='says says_not feed_says'
+DRIVEN_TIMED='cap_timed lib_run'
 
 for helper in $DRIVEN_VERDICT; do
   tok "$helper: a hook that exits 0 passes an ALLOW expectation" \
@@ -6364,8 +7030,37 @@ for helper in $DRIVEN_MESSAGE; do
       127 'crash-127 fixture stderr'
 done
 
+# The timed helpers, from #96. Each times one outcome and hands any other back as
+# the status it saw: cap_timed times only a refusal, lib_run only a function that
+# succeeded. So each has one passing exit, and every other exit -- 0 or 2 among
+# them -- must fail with its status on the failure line, since a time with no
+# verdict beside it would pass for a hook or a function that is not there. Their
+# failure lines carry no stderr, so only the status is asked for.
+timed_line_says() {  # timed_line_says <label> <literal>
+  if grep -qF -- "$2" "$EXITS_OUTPUT"; then
+    printf '  ok   %s\n' "$1"
+  else
+    printf '  FAIL %s\n         wanted |%s| on the failure line\n         it said |%s|\n' \
+      "$1" "$2" "$(cat "$EXITS_OUTPUT")"
+    FAILED=1
+  fi
+}
+for helper in $DRIVEN_TIMED; do
+  case "$helper" in
+    cap_timed) passes=block-2 fails='allow-0:0 crash-1:1 crash-127:127' spelled='(exit %s)' ;;
+    lib_run)   passes=allow-0 fails='block-2:2 crash-1:1 crash-127:127' spelled='exited %s,' ;;
+    *) printf '  FAIL %s is in DRIVEN_TIMED with no case here, so nothing drives it\n' "$helper"
+       FAILED=1; continue ;;
+  esac
+  tok "$helper: the $passes hook passes" 'ok' "$(drive_helper "$helper" "$passes" -)"
+  for f in $fails; do
+    tok "$helper: a hook that exits ${f#*:} fails" 'FAIL' "$(drive_helper "$helper" "${f%:*}" -)"
+    timed_line_says "$helper: that failure line names exit ${f#*:}" "$(printf "$spelled" "${f#*:}")"
+  done
+done
+
 # And that the helpers driven above are all of them. The helpers that read a hook's
-# exit status are derived from this file, and each must be in one of the two lists
+# exit status are derived from this file, and each must be in one of the three lists
 # the loops above run off -- so a new reader is either driven or red here. `flip`
 # reads no status of its own -- it hands its verdict to check_in -- so it is driven
 # because #98 names it, and is not in the derived set.
@@ -6394,7 +7089,7 @@ if [ -z "$STATUS_READERS" ]; then
 fi
 for reader in $STATUS_READERS; do
   present "derived $reader reads a hook exit status, and the #98 self-test drives it" \
-          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE"
+          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE $DRIVEN_TIMED"
 done
 
 echo "--- issue #101: a load guard requires a function ---"
