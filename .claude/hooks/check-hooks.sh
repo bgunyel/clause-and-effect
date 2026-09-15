@@ -6,7 +6,9 @@
 # The session report, report-stale-branches.sh, and the tokeniser most of them
 # source, lib/command-scan.sh. And the files that run or describe them: the
 # settings.json that registers them, and CLAUDE.md, CONTEXT.md and the
-# branch-hygiene skill's SKILL.md. Most checks run a hook as a process and read
+# branch-hygiene skill's SKILL.md. And the one script outside .claude/hooks/
+# that reads the session report, the housekeeping skill's
+# housekeeping-commands.sh. Most checks run a hook as a process and read
 # its verdict; the rest read one of these files, and each kind is introduced
 # where it begins. The section "this suite's header names every file it checks"
 # holds this paragraph to settings.json, to the disk and to what the suite reads.
@@ -4903,6 +4905,308 @@ for hook in $CS_NAMED; do
 done
 set +f
 
+echo "=== the housekeeping generator prints only what the sweep and rotation permit ==="
+# .claude/skills/housekeeping/housekeeping-commands.sh turns the report into
+# commands for Bertan to run: `git worktree remove`, `git branch -d` and
+# `git push origin --delete`. It runs none of them, but a person pasting its
+# output runs all of them, so what it prints is held here the way a hook's
+# verdict is -- as a process, against a fixture, with the expected lines written
+# out. Its header argues the rules; this section is their evidence.
+#
+# Review of #126 found two defects with the suite green, because nothing here
+# ran the generator. A rotated-past dev branch was printed a local and a remote
+# delete on the report's word alone, with its pull request into main still open
+# and its commits in no other branch; `-d` let it through, because it accepts a
+# branch merged into its own upstream. And a stale lock was unlocked after the
+# one `git worktree prune`, so its entry was left behind. Both repros are rows
+# of the fixture below, and the printed plan is executed at the end, because a
+# check that a plan CONTAINS a command is no evidence that the plan succeeds --
+# the limit the sweep section names for its own literals.
+#
+# The generator and the real report are copied into a fixture repository whose
+# origin is a bare repository beside it, as the #100 section does. gh is a
+# stand-in answering the report's read and the generator's read from separate
+# files, dispatched on the fields asked for. The --jq filters are not run by it
+# and are pinned as literals at the end.
+HK_GEN="$HOOKS/../skills/housekeeping/housekeeping-commands.sh"
+HK="$FIXTURES/hk"
+HK_ORIGIN="$FIXTURES/hk-origin.git"
+HK_BIN="$FIXTURES/hk-bin"
+HK_DIR="$FIXTURES/hk worktrees"
+mkdir -p "$HK_BIN" "$HK_DIR"
+git init -q -b main "$HK"
+HG="git -C $HK -c user.email=checks@example.invalid -c user.name=checks"
+$HG commit -q --allow-empty -m base
+HK_BASE=$($HG rev-parse HEAD)
+hk_commit() { $HG commit-tree -p "$2" -m "$1" "$HK_BASE^{tree}"; }
+# dev-02, dev-03 and dev-05 are in main; dev-01 and dev-04 each carry a commit
+# main does not. dev-04 is cut from dev-03, as each dev branch is cut after the
+# one before it merged: the plan's `git branch -d dev-03` runs from a checkout
+# standing on dev-04, and `-d` refuses a branch its HEAD does not contain.
+HK_DEV01=$(hk_commit dev-01 "$HK_BASE")
+HK_DEV02=$(hk_commit dev-02 "$HK_BASE")
+HK_DEV03=$(hk_commit dev-03 "$HK_BASE")
+HK_DEV04=$(hk_commit dev-04 "$HK_DEV03")
+HK_DEV05=$(hk_commit dev-05 "$HK_BASE")
+HK_MAIN=$($HG commit-tree -p "$HK_BASE" -p "$HK_DEV02" -p "$HK_DEV03" -p "$HK_DEV05" \
+  -m "merge dev-02, dev-03 and dev-05" "$HK_BASE^{tree}")
+$HG update-ref refs/heads/main "$HK_MAIN"
+$HG branch dev-01 "$HK_DEV01"
+$HG branch dev-02 "$HK_DEV02"
+$HG branch dev-03 "$HK_DEV03"
+$HG branch dev-04 "$HK_DEV04"
+$HG branch dev-05 "$HK_DEV05"
+for b in hk-merged hk-dirty hk-broken hk-live hk-plain hk-gone hk-gone-unclassified \
+    hk-gone-open hk-closed; do
+  $HG branch "$b" "$HK_BASE"
+done
+git clone -q --bare "$HK" "$HK_ORIGIN"
+$HG remote add origin "$HK_ORIGIN"
+$HG fetch -q origin
+mkdir -p "$HK/.claude/hooks" "$HK/.claude/skills/housekeeping"
+cp "$HOOKS/report-stale-branches.sh" "$HK/.claude/hooks/"
+cp "$HK_GEN" "$HK/.claude/skills/housekeeping/"
+echo '.claude/' >> "$HK/.git/info/exclude"
+# The main checkout stands on dev-04, the shape of the #126 repro.
+$HG checkout -q dev-04
+for b in hk-merged hk-dirty hk-broken hk-live hk-gone hk-gone-unclassified hk-gone-open dev-02; do
+  $HG worktree add -q "$HK_DIR/$b" "$b"
+done
+$HG worktree add -q --detach "$HK_DIR/detached" "$HK_BASE"
+for d in hk-merged hk-dirty hk-broken hk-live hk-gone hk-gone-unclassified hk-gone-open \
+    dev-02 detached; do
+  need_worktree "$HK_DIR/$d" "housekeeping $d"
+done
+HK_DIR=$(cd -P "$HK_DIR" && pwd)
+# Paths as the generator prints them: %q, and the only character in these that
+# it escapes is the space.
+HK_Q=${HK_DIR// /\\ }
+touch "$HK_DIR/hk-dirty/untracked"
+# A worktree whose status cannot be read: its .git file points nowhere, so
+# `git -C <it> status` fails, and empty output from a failed read is not a clean
+# tree. The first version read it as one.
+echo 'gitdir: /nonexistent/hk-broken' > "$HK_DIR/hk-broken/.git"
+# Live: this suite's own process and its real start time. Stale: the same pid
+# with a start time it never had, which is a pid handed to something else; and a
+# pid above any pid_max, which is a process that is gone.
+HK_SELF_START=$(awk '{ sub(/^.*\) /, ""); print $20 }' "/proc/$$/stat" 2>/dev/null)
+$HG worktree lock --reason "claude session live (pid $$ start $HK_SELF_START)" "$HK_DIR/hk-live"
+$HG worktree lock --reason "claude session reused (pid $$ start 1)" "$HK_DIR/hk-merged"
+# hk-gone-open is the case the report cannot help with: a branch with an open
+# pull request is clear, so the report never names it, and only the generator's
+# own test for a branch keeps its worktree's lock. A mutation that dropped that
+# test passed the suite until this row was added; the unclassified row is named
+# by the report and skipped before the test is reached.
+for d in hk-gone hk-gone-unclassified hk-gone-open detached; do
+  $HG worktree lock --reason "claude session gone (pid 4194399 start 1)" "$HK_DIR/$d"
+  rm -rf "${HK_DIR:?}/$d"
+done
+
+cat > "$HK_BIN/gh" <<'GH'
+#!/bin/bash
+# The settings as required; the report's pull request read from HK_PRS_REPORT
+# and the generator's from HK_PRS_GEN, told apart by the one field only the
+# generator asks for. An unset file is a failed read.
+case "$1" in
+  api) printf 'false\tfalse\ttrue\n' ;;
+  pr)
+    case "$*" in
+      *baseRefName*) [ -n "$HK_PRS_GEN" ] && cat "$HK_PRS_GEN" ;;
+      *)             [ -n "$HK_PRS_REPORT" ] && cat "$HK_PRS_REPORT" ;;
+    esac ;;
+  *) exit 1 ;;
+esac
+GH
+chmod +x "$HK_BIN/gh"
+# The report's columns: head, state, number, head commit.
+HK_PRS_R="$FIXTURES/hk-prs-report.tsv"
+printf '%s\t%s\t%s\t%s\n' \
+  hk-merged MERGED 1 "$HK_BASE" \
+  hk-dirty MERGED 2 "$HK_BASE" \
+  hk-live MERGED 3 "$HK_BASE" \
+  hk-plain MERGED 4 "$HK_BASE" \
+  hk-gone MERGED 5 "$HK_BASE" \
+  hk-closed CLOSED 6 "$HK_BASE" \
+  hk-broken MERGED 11 "$HK_BASE" \
+  hk-gone-open OPEN 13 "$HK_BASE" > "$HK_PRS_R"
+# The generator's columns: number, head, base, state. dev-04 is the #126 repro:
+# its pull request into main open, and another open against it. dev-01's merged,
+# and it carries a commit since that main does not have. dev-02 and dev-03 are
+# merged and contained; dev-02 alone is checked out somewhere.
+HK_PRS_BASE="$FIXTURES/hk-prs-gen-base.tsv"
+printf '%s\t%s\t%s\t%s\n' \
+  12 dev-01 main MERGED \
+  7 dev-02 main MERGED \
+  8 dev-03 main MERGED \
+  9 dev-04 main OPEN \
+  10 hk-on-dev-04 dev-04 OPEN > "$HK_PRS_BASE"
+HK_PRS_HELD="$FIXTURES/hk-prs-gen-held.tsv"
+HK_PRS_DUE="$FIXTURES/hk-prs-gen-due.tsv"
+cp "$HK_PRS_BASE" "$HK_PRS_HELD"
+printf '20\tdev-05\tmain\tMERGED\n21\thk-in-flight\tdev-05\tOPEN\n' >> "$HK_PRS_HELD"
+cp "$HK_PRS_BASE" "$HK_PRS_DUE"
+printf '20\tdev-05\tmain\tMERGED\n' >> "$HK_PRS_DUE"
+
+hk_run() {  # hk_run <repo> <report prs file> <generator prs file> -- output, then the exit status
+  ( cd / && PATH="$HK_BIN:$PATH" HK_PRS_REPORT="$2" HK_PRS_GEN="$3" \
+      bash "$1/.claude/skills/housekeeping/housekeeping-commands.sh" 2>/dev/null
+    echo "exit=$?" )
+}
+HK_NOTDUE=$(hk_run "$HK" "$HK_PRS_R" "$HK_PRS_BASE")
+HK_HELD=$(hk_run "$HK" "$HK_PRS_R" "$HK_PRS_HELD")
+HK_DUE=$(hk_run "$HK" "$HK_PRS_R" "$HK_PRS_DUE")
+# Seven worktree branches and four rotated-past dev branches are stale; main,
+# dev-05 and hk-gone-open are clear; hk-gone-unclassified has no pull request.
+case "$HK_NOTDUE" in *'# report: 3 other branch(es) are clear; 11 stale, 1 unclassified.'*) ;; *)
+  echo "the housekeeping fixture's report did not classify its branches as built; the checks against it prove nothing" >&2
+  printf '%s\n' "$HK_NOTDUE" >&2
+  exit 1 ;;
+esac
+
+echo "--- the sweep ---"
+holds 'a merged worktree with a stale lock is unlocked, removed, then its branch deleted' "$HK_NOTDUE" \
+"# hk-merged -- pull request #1
+git worktree unlock $HK_Q/hk-merged
+git worktree remove $HK_Q/hk-merged
+git branch -d hk-merged"
+holds 'a merged branch in no worktree is deleted' "$HK_NOTDUE" \
+"# hk-plain -- pull request #4, no worktree
+git branch -d hk-plain"
+# The second #126 finding. Every unlock stands before the one prune: a merged
+# branch's gone worktree and a detached one's, whose unlock the first version
+# printed after that prune.
+holds 'gone worktrees: every unlock, then one prune, then the branch deletes' "$HK_NOTDUE" \
+"# worktree entries whose directory is gone: every unlock before the one prune
+git worktree unlock $HK_Q/hk-gone
+git worktree unlock $HK_Q/detached
+git worktree prune
+git branch -d hk-gone"
+tok 'and the prune is printed once' '1' "$(printf '%s\n' "$HK_NOTDUE" | grep -cxF 'git worktree prune')"
+lacks 'a gone worktree whose branch is not merged is not unlocked' "$HK_NOTDUE" \
+  "git worktree unlock $HK_Q/hk-gone-unclassified"
+lacks 'nor one whose branch has an open pull request, which the report never names' "$HK_NOTDUE" \
+  "git worktree unlock $HK_Q/hk-gone-open"
+holds 'a worktree with untracked files is held back' "$HK_NOTDUE" \
+  '#   hk-dirty -- pull request #2, but '
+lacks 'and not removed' "$HK_NOTDUE" "git worktree remove $HK_Q/hk-dirty"
+lacks 'nor its branch deleted' "$HK_NOTDUE" 'git branch -d hk-dirty'
+holds 'a worktree whose status cannot be read is held back, not read as clean' "$HK_NOTDUE" \
+  '#   hk-broken -- pull request #11, but '
+lacks 'and not removed' "$HK_NOTDUE" "git worktree remove $HK_Q/hk-broken"
+lacks 'nor its branch deleted' "$HK_NOTDUE" 'git branch -d hk-broken'
+holds 'a worktree locked by a live session is held back' "$HK_NOTDUE" \
+  '#   hk-live -- pull request #3, but its worktree is locked by a session that may still be running:'
+lacks 'and not unlocked' "$HK_NOTDUE" "git worktree unlock $HK_Q/hk-live"
+lacks 'nor its branch deleted' "$HK_NOTDUE" 'git branch -d hk-live'
+holds 'a closed pull request is a decision, not a command' "$HK_NOTDUE" \
+  '#   hk-closed -- closed without merging: pull request #6. Its commits may exist nowhere else'
+lacks 'so its branch is not deleted' "$HK_NOTDUE" 'git branch -d hk-closed'
+
+echo "--- rotated-past dev branches: the first #126 finding ---"
+holds 'a rotated-past branch whose pull request into main is open is held' "$HK_NOTDUE" \
+  '#   dev-04 -- rotated past, held: its pull request into main, #9, is open.'
+lacks 'and is not deleted locally' "$HK_NOTDUE" 'git branch -d dev-04'
+lacks 'nor on origin' "$HK_NOTDUE" 'git push origin --delete dev-04'
+holds 'one whose pull request merged but which carries commits since is held' "$HK_NOTDUE" \
+  '#   dev-01 -- rotated past, held: remotes/origin/dev-01 has commits that are not in origin/main.'
+lacks 'and is not deleted locally' "$HK_NOTDUE" 'git branch -d dev-01'
+lacks 'nor on origin' "$HK_NOTDUE" 'git push origin --delete dev-01'
+holds 'one merged and contained but checked out in a worktree is held' "$HK_NOTDUE" \
+  "#   dev-02 -- rotated past, held: it is checked out at $HK_DIR/dev-02."
+lacks 'and is not deleted' "$HK_NOTDUE" 'git branch -d dev-02'
+holds 'one merged, contained, with nothing open and nowhere checked out, is deleted in both places' "$HK_NOTDUE" \
+"# dev-03 -- rotated past: merged into main, contained in origin/main, nothing open against it
+git branch -d dev-03
+git push origin --delete dev-03"
+
+echo "--- the rotation of the active dev branch ---"
+holds 'no pull request into main is not due' "$HK_NOTDUE" \
+  '# dev-05 is not due to rotate: it has no pull request into main.'
+holds 'merged with a pull request open against it is not due' "$HK_HELD" \
+  '# dev-05 is not due to rotate: pull requests are open against it (#21), and deleting it would close them.'
+lacks 'and prints no rotation' "$HK_HELD" 'git checkout -b dev-06'
+holds 'merged, contained and with nothing open, the rotation is printed' "$HK_DUE" \
+"# dev-05 is due: merged into main, contained in origin/main, nothing open against it.
+git checkout main
+git pull --ff-only origin main
+git checkout -b dev-06
+git push -u origin dev-06
+git branch --show-current   # must print dev-06 before the deletes
+git branch -d dev-05
+git push origin --delete dev-05"
+for out in "$HK_NOTDUE" "$HK_HELD" "$HK_DUE"; do
+  holds 'a plan printed exits 0' "$out" 'exit=0'
+done
+
+echo "--- the printed plan, executed ---"
+# The not-due plan, run as Bertan would run it. What it removes and what it
+# leaves are both asserted: a plan that stopped at its first command would pass
+# every `holds` above.
+HK_PLAN="$FIXTURES/hk-plan.sh"
+printf '%s\n' "$HK_NOTDUE" | grep -v '^exit=' > "$HK_PLAN"
+( cd / && bash -e "$HK_PLAN" ) >/dev/null 2>&1
+tok 'the plan runs to its end under bash -e' '0' "$?"
+tok 'the swept branches are gone, and dev-03 with them' '' \
+  "$($HG branch --list hk-merged hk-plain hk-gone dev-03)"
+tok 'every held-back branch is still there' \
+  'dev-01 dev-02 dev-04 hk-broken hk-closed hk-dirty hk-gone-unclassified hk-live' \
+  "$($HG for-each-ref --format='%(refname:short)' refs/heads/dev-01 refs/heads/dev-02 refs/heads/dev-04 \
+      refs/heads/hk-broken refs/heads/hk-closed refs/heads/hk-dirty \
+      refs/heads/hk-gone-unclassified refs/heads/hk-live \
+      | sort | tr '\n' ' ' | sed 's/ $//')"
+# A newline after each path, so hk-gone is not found inside hk-gone-unclassified.
+HK_AFTER="$($HG worktree list --porcelain)"$'\n'
+lacks 'the gone worktree of a merged branch is pruned' "$HK_AFTER" "worktree $HK_DIR/hk-gone"$'\n'
+lacks 'and the detached one, unlocked before the prune' "$HK_AFTER" "worktree $HK_DIR/detached"$'\n'
+holds 'the one whose branch is not merged is left as it was' "$HK_AFTER" "worktree $HK_DIR/hk-gone-unclassified"$'\n'
+holds 'and so is the one whose pull request is open' "$HK_AFTER" "worktree $HK_DIR/hk-gone-open"$'\n'
+tok 'dev-03 is deleted on origin, and dev-01 and dev-04 are not' 'dev-01 dev-04' \
+  "$(git -C "$HK_ORIGIN" for-each-ref --format='%(refname:short)' refs/heads/dev-01 refs/heads/dev-03 refs/heads/dev-04 \
+      | tr '\n' ' ' | sed 's/ $//')"
+
+echo "--- where it cannot tell, it prints no command and exits 1 ---"
+# A repository with no origin, one whose origin cannot be reached, a report
+# that could not read pull requests, and a generator whose own read failed.
+hk_bare_fixture() {  # hk_bare_fixture <dir> [origin url]
+  git init -q -b main "$1"
+  git -C "$1" -c user.email=checks@example.invalid -c user.name=checks commit -q --allow-empty -m base
+  [ -n "$2" ] && git -C "$1" remote add origin "$2"
+  mkdir -p "$1/.claude/hooks" "$1/.claude/skills/housekeeping"
+  cp "$HOOKS/report-stale-branches.sh" "$1/.claude/hooks/"
+  cp "$HK_GEN" "$1/.claude/skills/housekeeping/"
+}
+hk_bare_fixture "$FIXTURES/hk-noorigin"
+hk_bare_fixture "$FIXTURES/hk-unreachable" "$FIXTURES/hk-no-such-origin.git"
+HK_NOORIGIN=$(hk_run "$FIXTURES/hk-noorigin" "$HK_PRS_R" "$HK_PRS_BASE")
+HK_UNREACHABLE=$(hk_run "$FIXTURES/hk-unreachable" "$HK_PRS_R" "$HK_PRS_BASE")
+HK_REPORT_UNREAD=$(hk_run "$HK" '' "$HK_PRS_BASE")
+HK_GEN_UNREAD=$(hk_run "$HK" "$HK_PRS_R" '')
+holds 'no origin: the fetch did not complete' "$HK_NOORIGIN" '# No commands: the fetch did not complete'
+holds 'an unreachable origin: the fetch did not complete' "$HK_UNREACHABLE" '# No commands: the fetch did not complete'
+holds 'the report could not read pull requests' "$HK_REPORT_UNREAD" '# No commands: the report could not read pull requests'
+holds 'its own pull request read failed, which was an exit 0 before review of #126' "$HK_GEN_UNREAD" \
+  '# No commands: the pull request read for the dev branch checks failed'
+for out in "$HK_NOORIGIN" "$HK_UNREACHABLE" "$HK_REPORT_UNREAD" "$HK_GEN_UNREAD"; do
+  holds 'a declined plan exits 1' "$out" 'exit=1'
+  tok 'and prints no command' '0' "$(printf '%s\n' "$out" | grep -c '^git ')"
+done
+
+echo "--- the report's wording, held equal in both files ---"
+# The coupling the generator's header names. Each phrase is printed by the
+# report and matched by the generator; a rewording on either side turns its own
+# line red, where the fixture above would say only that some plan changed. The
+# `#` after "pull request" is left off because `armed` strips from a spaced `#`.
+for phrase in 'fetch: FAILED' 'fetch: SKIPPED' 'pull requests: NOT READ' \
+    'pull requests: read' 'active dev branch: ' 'merged: pull request' \
+    'closed without merging: pull request' 'rotated past' '   [worktree: '; do
+  armed "the report prints |$phrase|" "$HOOKS/report-stale-branches.sh" "$phrase"
+  armed "the generator reads |$phrase|" "$HK_GEN" "$phrase"
+done
+armed "the generator's own read asks for the base" "$HK_GEN" \
+  '--json number,headRefName,baseRefName,state'
+armed 'in the column order the stand-in above answers in' "$HK_GEN" \
+  "--jq '.[] | \"\\(.number)\\t\\(.headRefName)\\t\\(.baseRefName)\\t\\(.state)\"'"
+
 echo "=== this suite's header names every file it checks ==="
 # The same audit again, pointed at this file. Its header opened by naming four
 # hooks while the suite also checked five more, the library, settings.json and
@@ -4940,7 +5244,10 @@ RUN_BY_SETTINGS=$(jq -r '.hooks[][]?.hooks[]?.command' "$SETTINGS" 2>/dev/null \
 # today is spelled this way and widening the pattern reaches the fixture paths
 # the append-only checks name, which are not files this suite audits. The
 # pattern carries a backslash, so this line is not among its own matches.
-READ_DOCS=$(grep -oE '"\$HOOKS/\.\./[^"]*\.(json|md)"' "$HOOKS/check-hooks.sh" \
+# `sh` is among the extensions because housekeeping-commands.sh is read from
+# outside .claude/hooks/ and so is on no disk listing above; at the review of
+# #126 it was the only `.sh` path spelled this way.
+READ_DOCS=$(grep -oE '"\$HOOKS/\.\./[^"]*\.(json|md|sh)"' "$HOOKS/check-hooks.sh" \
   | sed 's|.*/||; s|"$||' | sort -u | tr '\n' ' ')
 [ -n "$SELF_NAMED" ] && [ -n "$RUN_BY_SETTINGS" ] && [ -n "$READ_DOCS" ] \
   && [ -n "$HOOK_FILES" ] || {
