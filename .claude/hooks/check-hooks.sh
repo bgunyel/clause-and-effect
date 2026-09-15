@@ -3700,7 +3700,7 @@ check append-only-docs.sh BLOCK 'truncating redirect into a lessons-learned entr
   'echo x > docs/lessons-learned/some-lesson.md'
 check append-only-docs.sh ALLOW 'appending to a dev-log entry' \
   'echo x >> docs/dev-log/devlog_2026-08-25_session-2.md'
-req GH-69.2 GH-61
+req GH-69.2
 check append-only-docs.sh ALLOW 'sed -i over a research document' \
   "sed -i 's/a/b/' docs/research/non-openrouter-response-bodies.md"
 check append-only-docs.sh ALLOW 'sed -i over a design document' \
@@ -3861,7 +3861,7 @@ check_file append-only-docs-edit.sh ALLOW 'Write of a dev-log entry not yet ther
   'docs/dev-log/devlog_2099-01-01_session-1.md'
 check_file append-only-docs-edit.sh ALLOW 'Edit of a dev-log README that does exist' \
   'docs/dev-log/README.md'
-req GH-69.3 GH-61
+req GH-69.3
 check_file append-only-docs-edit.sh ALLOW 'Edit of an existing research document' \
   'docs/research/non-openrouter-response-bodies.md'
 
@@ -7564,14 +7564,20 @@ section "=== issue #104: every requirement is covered, and every check says whic
 # the issues and not off requirements.md, which is what makes a criterion deleted
 # from the provenance section fail rather than shorten the count it is held to.
 PROVENANCE_COUNTS='37:8 38:6 39:6 40:13 41:8'
-# How many requirements the coverage check does not ask about: those marked a
-# gap, and those active with no seam and verified by review. Both are a way out
-# of the check, and marking entries that way in bulk kept "every active
-# requirement is covered" green -- found by review of #104, not by this suite.
-# So the number is a literal here. Taking a gap marker off, as #105 will, turns
-# this red until the literal is lowered with it: the refusing direction, and one
-# edit away.
-UNASKED_COUNTS='gap:19 review:15'
+# THE SHAPE OF requirements.md, as a literal: how many entries each family
+# holds, how many carry each status, and how many are verified each way. Every
+# route out of the coverage check is one of these numbers moving -- an entry
+# marked a gap, retired, drifted or superseded, moved to a seam-less `verify`, or
+# deleted outright -- and each of those turned an uncovered requirement green
+# with no finding at all. The first version of this pinned only `gap` and
+# `review`, after review of #104 found those two; Bertan's review of the pull
+# request found the rest, including deletion, which the file's header forbids and
+# nothing enforced. Every entry appended, every marker taken off and every
+# status changed moves this literal, which is the point: the change is written
+# down twice, once in requirements.md and once here, and the second copy is
+# the one that makes a quiet re-marking loud. The refusing direction, one edit
+# away.
+REQUIREMENT_SHAPE='US:32 FR:49 GH:69 active:126 gap:19 retired:1 drifted:2 superseded-by:2 review:15 tests:1 runbook:3'
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
   function emit(res, tags, text) { printf "%s\t%s\t%s\n", res, tags, text }
@@ -7725,14 +7731,18 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       if (get(id, "seam") == "none" && cnt[id, "refuse"] + cnt[id, "permit"] + cnt[id, "static"] > 0)
         problem[++nproblem] = id ": seam: none, and " counts(id) " are tagged with it"
     }
-    ngapped = 0; nreview = 0
     for (i = 1; i <= nreq; i++) {
       id = order[i]
-      if (keyword(get(id, "status")) == "gap") ngapped++
-      if (get(id, "status") == "active" && get(id, "verify") == "review") nreview++
+      fam = id; sub(/-.*$/, "", fam); shape[fam]++
+      shape[keyword(get(id, "status"))]++
+      v = get(id, "verify")
+      if (v == "review") shape["review"]++
+      else if (v ~ /^tests\//) shape["tests"]++
+      else if (v ~ /^runbook /) shape["runbook"]++
     }
-    split(unasked_literal, ua, " ")
-    for (j in ua) { split(ua[j], kv, ":"); expected[kv[1]] = kv[2] }
+    nkeys = split("US FR GH active gap retired drifted superseded-by review tests runbook", shapekeys, " ")
+    actual_shape = ""
+    for (j = 1; j <= nkeys; j++) actual_shape = actual_shape (j > 1 ? " " : "") shapekeys[j] ":" (shape[shapekeys[j]] + 0)
 
     # --- the citations -----------------------------------------------------------
     while ((getline line < suite) > 0) {
@@ -7785,10 +7795,10 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       emit("FAIL", "FR-46 FR-33", id " is active and not covered: " counts(id) (d == "" ? "" : ", declared " d))
     }
     if (nuncovered == 0) emit("ok", "FR-46 FR-33", "every active requirement is covered")
-    if (ngapped == expected["gap"] + 0 && nreview == expected["review"] + 0)
-      emit("ok", "FR-46", "the requirements coverage does not ask about number as this suite expects: " ngapped " marked a gap, " nreview " verified by review")
+    if (actual_shape == shape_literal)
+      emit("ok", "FR-45 FR-46", "requirements.md has the shape this suite holds: " actual_shape)
     else
-      emit("FAIL", "FR-46", "the requirements coverage does not ask about have moved: " ngapped " marked a gap and " nreview " verified by review, where this suite expects " (expected["gap"] + 0) " and " (expected["review"] + 0))
+      emit("FAIL", "FR-45 FR-46", "requirements.md has changed shape: " actual_shape ", where this suite holds " shape_literal)
     if (nprov == 0) emit("ok", "FR-47", "every stage-ticket criterion is carried or dropped, and each ticket has all of its criteria")
     for (i = 1; i <= nprov; i++) emit("FAIL", "FR-47", provproblem[i])
     nbad = 0
@@ -7802,9 +7812,9 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
   }
 AWK
 )
-requirements_read() {  # requirements_read <findings|matrix> <requirements> <ledger> <suite> <root> <runbook> <counts> <unasked>
+requirements_read() {  # requirements_read <findings|matrix> <requirements> <ledger> <suite> <root> <runbook> <counts> <shape>
   awk -v mode="$1" -v reqs="$2" -v ledger="$3" -v suite="$4" -v root="$5" \
-      -v runbook="$6" -v counts_literal="$7" -v unasked_literal="$8" "$REQUIREMENTS_AWK" </dev/null
+      -v runbook="$6" -v counts_literal="$7" -v shape_literal="$8" "$REQUIREMENTS_AWK" </dev/null
 }
 
 echo "--- the findings, against a fixture whose every answer is written here ---"
@@ -7893,9 +7903,10 @@ printf '%s\t%s\t%s\t%s\n' \
   'US-2' refuse ok 'says three' \
   'FR-1' static FAIL 'tok four' > "$REQ_FIX/clean/ledger"
 printf 'a suite citing %s5 and %s9\n' "$H" "$H" > "$REQ_FIX/clean/suite"
+FIX_SHAPE='US:2 FR:4 GH:1 active:5 gap:1 retired:0 drifted:0 superseded-by:1 review:0 tests:1 runbook:0'
 req_fixture() {  # req_fixture <dir> -- the findings for the fixture in <dir>
   requirements_read findings "$1/requirements.md" "$1/ledger" "$1/suite" \
-    "$1/root" "$1/runbook.md" '37:2' 'gap:1 review:0'
+    "$1/root" "$1/runbook.md" '37:2' "$FIX_SHAPE"
 }
 # A mutant is the clean fixture with one file edited, and the edit is asserted to
 # have taken: a sed that matched nothing leaves the clean fixture, and every FAIL
@@ -7918,7 +7929,7 @@ ok${TAB}FR-45${TAB}every requirement entry is well formed
 ok${TAB}GH-104.2${TAB}every tag names a requirement
 ok${TAB}GH-104.1${TAB}every check carries a tag and a direction
 ok${TAB}FR-46 FR-33${TAB}every active requirement is covered
-ok${TAB}FR-46${TAB}the requirements coverage does not ask about number as this suite expects: 1 marked a gap, 0 verified by review
+ok${TAB}FR-45 FR-46${TAB}requirements.md has the shape this suite holds: US:2 FR:4 GH:1 active:5 gap:1 retired:0 drifted:0 superseded-by:1 review:0 tests:1 runbook:0
 ok${TAB}FR-47${TAB}every stage-ticket criterion is carried or dropped, and each ticket has all of its criteria
 ok${TAB}GH-104.3${TAB}every issue the suite cites has an entry or a reason" \
   "$(req_fixture "$REQ_FIX/clean")"
@@ -7958,7 +7969,7 @@ holds 'a check with no tag fails, and is named' "$OUT" \
 lacks 'and the suite does not also say every check carries one' "$OUT" 'every check carries a tag'
 printf '' > "$REQ_FIX/empty-ledger"
 OUT=$(requirements_read findings "$REQ_FIX/clean/requirements.md" "$REQ_FIX/empty-ledger" \
-        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' 'gap:1 review:0')
+        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")
 holds 'a ledger that recorded nothing fails, rather than having no untagged check in it' "$OUT" \
   "FAIL${TAB}GH-104.1${TAB}no check result was recorded, so no tag was read"
 req FR-46 FR-33
@@ -8039,19 +8050,39 @@ req_mutant misspelled-direction ledger 's/^US-2\trefuse\t/US-2\trefues\t/'
 OUT=$(req_fixture "$REQ_FIX/misspelled-direction")
 holds 'a check recording a direction that is not one fails' "$OUT" \
   "FAIL${TAB}GH-104.1${TAB}a check records a direction that is none of refuse, permit and static: refues: says three"
-req FR-46
+# Every route out of the coverage check moves the shape, one mutant each. The
+# first two were closed after review of #104; the rest after Bertan's review of
+# its pull request found each turning an uncovered requirement green with no
+# finding at all.
+req FR-45 FR-46
 req_mutant gap-added requirements.md 's/^- status: superseded-by: FR-1$/- status: gap → '"${H}"'8/'
 OUT=$(req_fixture "$REQ_FIX/gap-added")
-holds 'a second entry marked a gap moves a count this suite holds as a literal' "$OUT" \
-  "FAIL${TAB}FR-46${TAB}the requirements coverage does not ask about have moved: 2 marked a gap and 0 verified by review, where this suite expects 1 and 0"
+holds 'an entry marked a gap changes the shape this suite holds' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape: US:2 FR:4 GH:1 active:5 gap:2 retired:0 drifted:0 superseded-by:0 review:0 tests:1 runbook:0, where this suite holds US:2 FR:4 GH:1 active:5 gap:1 retired:0 drifted:0 superseded-by:1 review:0 tests:1 runbook:0"
 req_mutant review-added requirements.md 's|^- verify: tests/present.py$|- verify: review|'
 OUT=$(req_fixture "$REQ_FIX/review-added")
 holds 'and so does an entry moved to verification by review' "$OUT" \
-  "FAIL${TAB}FR-46${TAB}the requirements coverage does not ask about have moved: 1 marked a gap and 1 verified by review, where this suite expects 1 and 0"
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape: US:2 FR:4 GH:1 active:5 gap:1 retired:0 drifted:0 superseded-by:1 review:1 tests:0 runbook:0, where this suite holds US:2 FR:4 GH:1 active:5 gap:1 retired:0 drifted:0 superseded-by:1 review:0 tests:1 runbook:0"
+req_mutant retired-marked requirements.md '/^### GH-5.1$/,/^- direction:/s/^- status: active$/- status: retired: a reason/'
+OUT=$(req_fixture "$REQ_FIX/retired-marked")
+holds 'and an active entry marked retired' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape: US:2 FR:4 GH:1 active:4 gap:1 retired:1 drifted:0 superseded-by:1 review:0 tests:1 runbook:0, where this suite holds US:2 FR:4 GH:1 active:5 gap:1 retired:0 drifted:0 superseded-by:1 review:0 tests:1 runbook:0"
+req_mutant drifted-marked requirements.md '/^### GH-5.1$/,/^- direction:/s/^- status: active$/- status: drifted: some evidence/'
+OUT=$(req_fixture "$REQ_FIX/drifted-marked")
+holds 'and one marked drifted' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape: US:2 FR:4 GH:1 active:4 gap:1 retired:0 drifted:1 superseded-by:1 review:0 tests:1 runbook:0, where this suite holds US:2 FR:4 GH:1 active:5 gap:1 retired:0 drifted:0 superseded-by:1 review:0 tests:1 runbook:0"
+req_mutant tests-verified requirements.md 's/^- direction: refuse-only: a reason$/- seam: none\n- verify: tests\/present.py/'
+OUT=$(req_fixture "$REQ_FIX/tests-verified")
+holds 'and one moved to no seam, verified by a test file that is there' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape: US:2 FR:4 GH:1 active:5 gap:1 retired:0 drifted:0 superseded-by:1 review:0 tests:2 runbook:0, where this suite holds US:2 FR:4 GH:1 active:5 gap:1 retired:0 drifted:0 superseded-by:1 review:0 tests:1 runbook:0"
+req_mutant entry-deleted requirements.md '/^### US-2$/,/^- direction: refuse-only: a reason$/d'
+OUT=$(req_fixture "$REQ_FIX/entry-deleted")
+holds 'and an entry deleted outright, which the header forbids' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape: US:1 FR:4 GH:1 active:4 gap:1 retired:0 drifted:0 superseded-by:1 review:0 tests:1 runbook:0, where this suite holds US:2 FR:4 GH:1 active:5 gap:1 retired:0 drifted:0 superseded-by:1 review:0 tests:1 runbook:0"
 req FR-45
 printf '' > "$REQ_FIX/empty-requirements.md"
 OUT=$(requirements_read findings "$REQ_FIX/empty-requirements.md" "$REQ_FIX/clean/ledger" \
-        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' 'gap:1 review:0')
+        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")
 holds 'a requirements file that holds nothing fails, rather than covering everything' "$OUT" \
   "FAIL${TAB}FR-45${TAB}nothing was read out of the requirements file, so every finding below is evidence of nothing"
 
@@ -8079,7 +8110,7 @@ FR-4  superseded-by: FR-1  not asked (0 refusing, 0 permitting, 0 static)
 GH-5.1  active  covered (0 refusing, 1 permitting, 0 static, permit-only)
     ok   ALLOW two" \
   "$(requirements_read matrix "$REQ_FIX/clean/requirements.md" "$REQ_FIX/clean/ledger" \
-       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' 'gap:1 review:0')"
+       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")"
 
 # A gap whose tags now meet coverage is not asked about, and the matrix says the
 # tags meet it, so whoever owns the gap sees that the marker can come off.
@@ -8087,7 +8118,7 @@ req GH-104.4
 req_mutant gap-covered ledger 's/^US-1\trefuse\t/US-1 FR-3\trefuse\t/; s/^US-1 GH-5.1\tpermit\t/US-1 GH-5.1 FR-3\tpermit\t/'
 holds 'the matrix names a gap whose tags now meet coverage' \
   "$(requirements_read matrix "$REQ_FIX/gap-covered/requirements.md" "$REQ_FIX/gap-covered/ledger" \
-       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' 'gap:1 review:0')" \
+       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")" \
   "FR-3  gap → ${H}7  not asked, though its tags now meet coverage (1 refusing, 1 permitting, 0 static)"
 # A gap no check can reach has no tags to meet anything with, and a first version
 # of the line above said its tags met coverage all the same, because `seam: none`
@@ -8095,7 +8126,7 @@ holds 'the matrix names a gap whose tags now meet coverage' \
 req_mutant seam-gap requirements.md "s/^- status: active\$/&/; /^### FR-2\$/,/^- verify:/s/^- status: active\$/- status: gap → ${H}7/"
 holds 'and does not say it of a gap no check can reach' \
   "$(requirements_read matrix "$REQ_FIX/seam-gap/requirements.md" "$REQ_FIX/clean/ledger" \
-       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' 'gap:2 review:0')" \
+       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")" \
   "FR-2  gap → ${H}7  not asked (0 refusing, 0 permitting, 0 static, seam: none, verify: tests/present.py)"
 
 echo "--- every result goes through pass and fail ---"
@@ -8121,7 +8152,7 @@ echo "--- this repository ---"
 # check above this line; their own results reach the matrix and not this reading.
 cp "$LEDGER" "$FIXTURES/ledger-read"
 FINDINGS=$(requirements_read findings "$HOOKS/requirements.md" "$FIXTURES/ledger-read" \
-             "$HOOKS/check-hooks.sh" "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$UNASKED_COUNTS")
+             "$HOOKS/check-hooks.sh" "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE")
 FINDINGS_STATUS=$?
 # An awk that failed may print nothing, or only the findings before the failure,
 # and a loop over what it printed passes by asking too little -- the permitting
@@ -8142,7 +8173,7 @@ done <<< "$FINDINGS"
 # above included, and then the verdict line the run would have printed.
 if [ -n "$MATRIX" ]; then
   requirements_read matrix "$HOOKS/requirements.md" "$LEDGER" "$HOOKS/check-hooks.sh" \
-    "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$UNASKED_COUNTS" >&3
+    "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE" >&3
   MATRIX_STATUS=$?
   exec >&3
   if [ "$MATRIX_STATUS" != 0 ]; then

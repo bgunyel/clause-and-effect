@@ -88,8 +88,8 @@ An `active` requirement is **covered** (Q15) when it has
   keeps a behavioural requirement from being covered by a pin on its text.
 
 A requirement with `seam: none` needs no check, and has none tagged with it; its
-`verify` must resolve: `tests/<file>.py` to a file that exists, `runbook §<n>` to a heading `## §<n>` in
-`.claude/hooks/runbook.md`.
+`verify` must resolve: `tests/<file>.py` to a file that exists, and
+`runbook §<n>` to a heading `## §<n>` in `.claude/hooks/runbook.md`.
 
 The suite fails on each of these, and `--matrix` shows the rest:
 
@@ -101,9 +101,11 @@ The suite fails on each of these, and `--matrix` shows the rest:
   with a `verify` that does not resolve, and `seam: none` with checks tagged with
   it after all;
 - a check recording a direction other than refuse, permit and static;
-- a number of entries marked a gap, or active and verified by review, other than
-  the number the suite holds as a literal, because both take an entry out of the
-  coverage check, and marking entries that way in bulk would keep it green;
+- a shape other than the one the suite holds as a literal: the number of entries
+  in each family, with each status, and verified each way. Every route out of the
+  coverage check -- a gap, a retirement, a drift, a supersession, a move to
+  `seam: none`, a deletion -- moves one of those numbers, so each is made twice,
+  here and in the suite, and the second is what makes it visible;
 - a criterion of #37–#41 with no mapping, a mapping naming an unknown ID, or a
   number of criteria for an issue other than the number that issue has;
 - a `#<n>` cited in `check-hooks.sh` with neither an entry nor a listing under
@@ -919,14 +921,16 @@ The suite fails on each of these, and `--matrix` shows the rest:
   abstention beside it is GH-44.6's verdict
 
 ### GH-61
-- text: `docs/research/` stays outside the append-only guard. That it is named in
-  CLAUDE.md's documentation table is held by tests/test_docs_directory_naming.py,
-  which is pytest and not a check.
+- text: `docs/research/` is named in CLAUDE.md's documentation table, and stays
+  outside the append-only guard.
 - from: #61
 - kind: doc-claim
 - status: active
-- direction: permit-only: the guard's refusals of the directories it does hold are
-  GH-69.2's
+- seam: none
+- verify: tests/test_docs_directory_naming.py
+- note: in the shape #103 Q30 gave it. The checks that `docs/research/` stays
+  writable carry GH-69.2 and GH-69.3, whose rules they exercise; tagged GH-61 as
+  well, they would contradict its `seam: none`
 
 ### GH-62
 - text: The two derivations of the active dev branch, in the guard and in the
@@ -1553,4 +1557,4 @@ it has no entry above (Q16).
 - #120: a pull request, for #100
 - #123: a pull request, for #96
 - #126: a pull request with no issue behind it, the housekeeping skill; its checks carry
-  the IDs of the procedures its generator prints, GH-70.2, GH-100, US-28 and FR-24
+  the IDs of the procedures its generator prints, GH-70.2, GH-100 and US-29

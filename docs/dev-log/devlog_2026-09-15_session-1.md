@@ -106,3 +106,37 @@ reason.
   in a section inherits its IDs. Named in the suite, not closed.
 - #105 fills the gaps; #110 writes the runbook three `verify: runbook §n`
   entries point at; one mutation per FR is a new `docs/todo.md` item (Q8).
+
+## Bertan's review of the pull request found the shape pin two routes short, and deletion unguarded
+
+Bertan's review of #129 re-checked all six of #104's acceptance criteria and
+confirmed each independently. It ran the four named mutations against copies of
+the whole tree, beside a control copy, not only against the fixture. It also
+found a hole the second commit had narrowed and not closed. That commit pinned
+the number of entries marked `gap` or verified by `review`. But an uncovered
+requirement also left the coverage check with no finding when it was:
+
+- marked `retired` or `drifted`;
+- moved to `seam: none` with `verify: tests/<file>.py` naming a file that exists;
+- deleted outright, which the file's header forbids and nothing enforced.
+
+The assistant had answered the Standards reviewer's bulk-marking finding with a
+literal over the two routes that finding named. It did not ask what the other
+routes were. That is the same shape as the defects the literal was fixing.
+
+`REQUIREMENT_SHAPE` now pins the whole shape: entries per family, per status,
+and per `verify` kind. Each of Bertan's routes is a fixture mutant, red with the
+literal and green without it. Against copies of the full tree, each was also
+applied to a real entry whose checks had been untagged (GH-72), and each was red
+with exactly that one finding beside a green control.
+
+The review's other points were:
+
+- **GH-61** had been moved off the shape #103 Q30 gave it. It is back to
+  `seam: none, verify: tests/test_docs_directory_naming.py`. Its three checks
+  keep the GH-69 tags whose rules they exercise.
+- **#126's citation reason** still named US-28 and FR-24.
+- **The FR-46 finding text** was garbled.
+- **The CLAUDE.md reflow** left an orphan line.
+
+All four are corrected. Suite: 1900 results, and dev-05's 1846 are unchanged.
