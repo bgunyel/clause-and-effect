@@ -1,7 +1,7 @@
 #!/bin/bash
 # Agents may open pull requests and talk on them; they may not decide them, and
 # may propose one only into the active dev branch. Accepting, rejecting, merging
-# or reopening a PR is Bertan's call, and so is publishing a release.
+# or reopening a PR is Bertan's call, and so is any write to a release.
 #
 # CLAUDE.md: "merge into main by PR only, never commit to main." Opening the
 # pull request is the agent's half of that sentence; closing it is not. Where
@@ -33,9 +33,10 @@
 #
 # Still allowed: creating a PR into a dev-NN branch, commenting on one, editing
 # one without moving its base, viewing, listing, diffing and checking one,
-# reviewing with --comment, every gh issue subcommand, and reading a PR through
-# gh api -- including the two endpoints that decide one when they are written
-# to. GET /pulls/N/reviews lists reviews and GET /pulls/N/merge reports whether
+# reviewing with --comment, every gh issue subcommand, reading a release through
+# gh release list, view, download, verify and verify-asset, and reading a PR
+# through gh api -- including the two endpoints that decide one when they are
+# written to. GET /pulls/N/reviews lists reviews and GET /pulls/N/merge reports whether
 # the PR is merged; refusing those by endpoint refused a listing, not a
 # decision, which the review on PR #35 caught. The method is what separates
 # them, so the method is what is tested -- and it is what gates the base rule
@@ -97,7 +98,8 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 if ! command -v cs_normalise >/dev/null 2>&1 \
    || ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_gh_args >/dev/null 2>&1 \
-   || ! command -v cs_join >/dev/null 2>&1; then
+   || ! command -v cs_join >/dev/null 2>&1 \
+   || ! command -v cs_tool_input >/dev/null 2>&1; then
   echo "Blocked: no-pr-decisions.sh could not load lib/command-scan.sh, so it cannot tell whether this command decides a pull request or a release. Refusing rather than permitting." >&2
   exit 2
 fi
@@ -109,8 +111,8 @@ fi
 # asymmetry between the two, a third time, is not worth having.
 set -f
 
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+# A tool call that cannot be read refuses; see THE INPUT READ in the library.
+COMMAND=$(cs_tool_input command) || exit 2
 SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)
 CMDS=$(printf '%s\n' "$SCAN" | cs_split)
 
@@ -264,9 +266,13 @@ BASELIST
 }
 
 # Every rule over an ordinary command asks through here, and none of them
-# describes where in a command the subcommand sits. The two that do not are the
-# wrapper block, which has no command word to find and is discussed in the
-# header, and the API_WRITE loop, which needs the command itself and says why.
+# describes where in a command the subcommand sits. The three that do not are
+# the wrapper block, which has no command word to find and is discussed in the
+# header; the API_WRITE loop, which needs the command itself and says why; and
+# the release loop, which asks which of five reads a command is, where gh_rule
+# asks whether it is one subcommand. The last two still find the subcommand
+# through cs_gh_args, so only the wrapper block answers the position question
+# itself.
 #
 # cs_gh_args answers the position question: it skips options before every word
 # of the path, so `gh -R o/r pr merge 5`, `gh pr --repo o/r merge 5` and
@@ -374,11 +380,11 @@ VERDICT='(^|[[:space:]])(--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[
 # gh on the line, so that command fell outside every one of them, and the
 # refusal text was false rather than conservative. #72. The left boundary is the
 # one every other token here already has, argued for in as many words: the
-# group's own right edge below, `eval` in the wrapper detector, `release delete`
-# against `release delete-asset`, `rest_bases` anchoring on its field flag to
-# keep `rebase` and `database` the words they are. The pattern is only ever used
-# under `grep -qE` as a boolean, so consuming the boundary character costs
-# nothing.
+# group's own right edge below, `eval` in the wrapper detector, a release verb
+# compared whole so that `verify` is not `verify-and-anything`, `rest_bases`
+# anchoring on its field flag to keep `rebase` and `database` the words they
+# are. The pattern is only ever used under `grep -qE` as a boolean, so consuming
+# the boundary character costs nothing.
 #
 # Three shapes stop matching, and they have two different causes -- worth
 # keeping apart, because only one of them is a choice this file made.
@@ -481,14 +487,75 @@ if gh_rule 'pr close' || gh_rule 'pr reopen'; then
   exit 2
 fi
 
-# Outward-facing publication. This repository is public. delete-asset is named
-# separately because a path word is matched whole: `release delete` does not
-# match `gh release delete-asset`, which is the same shape that keeps
-# `gh pr create` out of the `pr close` rule.
-if gh_rule 'release create' || gh_rule 'release delete' || gh_rule 'release delete-asset'; then
-  echo "Blocked: publishing or deleting a GitHub release is Bertan's call. This repository is public; a release is visible the moment it exists." >&2
-  exit 2
-fi
+# A release may be read and not written, and the rule is an ALLOWLIST OF READ
+# VERBS. It was a denylist -- create, delete, delete-asset -- and the list was
+# short by two writes an agent writes without meaning anything by them: `gh
+# release edit v1 --draft=false` publishes a draft, and `gh release upload`
+# changes a published release's assets. It was short by a third nobody had
+# counted: `new` is gh's own alias for create (gh 2.45.0, `gh help release
+# create`). #97, decided as Q26 of #103.
+#
+# Lengthening the list was the rejected answer. A list of writes has to be kept
+# in step with gh, and misses a subcommand a future gh adds; refusing only what
+# publishes or destroys means reading per-flag release state -- is this edit
+# setting --draft=false? -- and argument parsing is where most of this file's
+# defects have lived. No agent here has a release-shaped task, so the list worth
+# keeping is the short one of what reads.
+#
+# The trade, taken knowingly, in three parts. Each is a read or a help page, each
+# is refused, and each is one edit away.
+#
+#   1. `ls` is gh's alias for list. The five below are the five decided, not the
+#      five plus whatever gh aliases them to, which would be a list tracking
+#      gh's again. The refusal names the five.
+#   2. No verb at all -- `gh release`, `gh release --help`, `gh release -R o/r` --
+#      is refused, and so is a write verb asking for its help page, `gh release
+#      upload --help`. Neither writes anything, and telling "no subcommand" apart
+#      from "some other subcommand" means skipping options outside cs_gh_args.
+#      The first version of this rule did that, in a copy of the library's own
+#      skip list, and review of it found the copy: lib/command-scan.sh answers
+#      that question in one place and says so. Group help is `gh help release`
+#      and a verb's is `gh help release upload`; neither is a gh release
+#      command, and neither is refused. The refusal says so.
+#   3. A quoted verb, `gh release "view" v1`, is refused with the writes. The
+#      verb is matched as written, and unquoting a word to grant a read is the
+#      generous reading gh_pr_web gives its reasons for not taking.
+#
+# The verb is the subcommand word and nothing else: each read is asked of
+# cs_gh_args as a whole path, `release view`, which skips options before each
+# word of it, so `gh release -R o/r view v1` and `gh -R o/r release view v1` are
+# one read. A read verb anywhere in the arguments would be satisfied by a tag,
+# and tags are free text -- `gh release upload view a.tgz` uploads to a tag
+# named view. A path word is matched whole, so `verify` does not admit
+# `verify-and-anything`.
+RELEASE_READ_VERBS="list view download verify verify-asset"
+RELEASE_WRITE="any write to a release is Bertan's call"
+RELEASE="Blocked: $RELEASE_WRITE, and this repository is public, so a release is visible the moment it changes. Reading one is permitted, as gh release followed by one of: $RELEASE_READ_VERBS. Help is gh help release, or gh help release <verb>."
+
+# Is this one command a gh release read? Asked of cs_gh_args once per verb, so
+# the option-position question stays answered in the library and nowhere here.
+release_is_read() {  # release_is_read <one command>
+  local VERB
+  for VERB in $RELEASE_READ_VERBS; do
+    cs_gh_args "release $VERB" <<<"$1" >/dev/null && return 0
+  done
+  return 1
+}
+
+# One command at a time, for the reason gh_rule gives: cs_gh_args answers about
+# the first match and stops, so asked once over the line it finds the `gh
+# release view v1` and never sees the `gh release upload` after it. gh_rule
+# cannot express this one, being a question with five right answers and not one
+# -- the third exception the note above gh_rule names.
+while IFS= read -r CMD; do
+  cs_gh_args release <<<"$CMD" >/dev/null || continue
+  if ! release_is_read "$CMD"; then
+    echo "$RELEASE" >&2
+    exit 2
+  fi
+done <<CMDLIST
+$CMDS
+CMDLIST
 
 # The base of every create and every retarget on the line, not the first.
 # cs_gh_args answers about the first match in what it is handed and stops, so it
@@ -598,8 +665,15 @@ if [ -n "$API_WRITE" ]; then
     echo "$DECIDE Setting a pull request's state through gh api closes or reopens it, which is the same decision by another name." >&2
     exit 2
   fi
+  # The gh api spelling of the release rule above. It already refused a write
+  # and permitted a read before #97 brought the gh release spelling to the same
+  # rule, because this block is reached only once gh_api_is_write has found a
+  # write. Found on the line and not on this command, though: the endpoint is
+  # asked of the whole text, so a read of /releases beside a write to an issue is
+  # refused with it. The bleed the base rule no longer has, still here, in the
+  # refusing direction; #97 did not ask for it and did not change it.
   if echo "$SCAN" | grep -qE '/releases([^A-Za-z0-9_-]|$)'; then
-    echo "Blocked: publishing or deleting a GitHub release is Bertan's call, reached through gh api no less than through gh release. This repository is public; a release is visible the moment it exists." >&2
+    echo "Blocked: $RELEASE_WRITE, reached through gh api no less than through gh release. Reading one is permitted: a gh api request to /releases that does not write, or gh release followed by one of: $RELEASE_READ_VERBS." >&2
     exit 2
   fi
   if echo "$SCAN" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then

@@ -2,21 +2,25 @@
 # Where a command starts, where its arguments end, and how many commands a
 # string holds. Sourced by no-git-push.sh, no-pr-decisions.sh, since issue #43
 # no-commit-to-main.sh, since #44 no-work-on-stale-branch.sh, and since #69
-# pytest-via-uv-group.sh and alembic-via-uv-group.sh -- which is every hook that
-# reads a command. Issue #63 found this line naming three of the four there were
-# then, the same way it found CLAUDE.md's boundary section naming two of them: a
-# hook is added, and the sentence saying which hooks there are is not revised
-# with it. #69 found it a second time from the other end -- two hooks that read
+# pytest-via-uv-group.sh and alembic-via-uv-group.sh, and since #95
+# append-only-docs.sh and append-only-docs-edit.sh -- which is every hook there
+# is. The last two source it for cs_tool_input alone, the reader every hook
+# shares, and not for the tokeniser. Issue #63 found this line naming three of
+# the four there were then, the same way it found CLAUDE.md's boundary section
+# naming two of them: a hook is added, and the sentence saying which hooks there
+# are is not revised with it. #69 found it a second time from the other end --
+# two hooks that read
 # a command and were not on the list because they did not source this file at
 # all, so the sentence was true of the hooks it knew about and false of the
 # repository. It is checked now rather than maintained: check-hooks.sh reads
 # which files source this one and asserts that this paragraph names each.
 #
-# The last two are the only consumers that are not part of the agent boundary.
-# They enforce a CLAUDE.md convention -- a dependency group -- and the
-# difference shows in what they do not have: no wrapper rule, because a quoted
-# payload is not worth refusing every `bash -c` over. Their fail-closed
-# behaviour is the same as the others', for the same reason.
+# The #69 pair and the #95 pair are the consumers that are not part of the agent
+# boundary. They enforce CLAUDE.md conventions -- a dependency group, and the
+# append-only directories -- and the difference shows in what they do not have:
+# no wrapper rule, because a quoted payload is not worth refusing every `bash -c`
+# over. Their fail-closed behaviour is the same as the others', for the same
+# reason.
 #
 # This exists because of what the defects in PR #35 turned out to have in
 # common. Every one of them, found by Bertan or by the assistant, was the same
@@ -174,7 +178,9 @@
 #     cs_normalise, cs_split and cs_git_args; no-pr-decisions.sh calls
 #     cs_normalise, cs_split, cs_gh_args and cs_join, and no cs_git_args at
 #     all; pytest-via-uv-group.sh and alembic-via-uv-group.sh call cs_normalise
-#     and cs_split and neither of the argument readers. A required list
+#     and cs_split and neither of the argument readers. Every one of them calls
+#     cs_tool_input as well, and append-only-docs.sh and
+#     append-only-docs-edit.sh call nothing else. A required list
 #     narrower than the set is the #84 defect exactly, and #69 found the same
 #     thing in the last two from the other end -- cs_split required,
 #     cs_normalise not. The enumeration here is a convenience and goes stale;
@@ -183,7 +189,7 @@
 #   - names itself in the refusal and says that it is refusing rather than
 #     permitting. That message is read by someone who has just been stopped by
 #     a guard that is broken rather than by a rule, and the thing they need
-#     from it is which of four near-identical files to open.
+#     from it is which of several near-identical files to open.
 #
 # RENAMING A cs_* FUNCTION REACHES EVERY FILE THAT SOURCES THIS ONE: this file,
 # the guard in each consumer that calls it -- `command -v` on a name that no
@@ -208,6 +214,77 @@
 # incomplete, which reduces the state to a missing function, and every consumer
 # already requires that one. See THE WORD LIST IS PART OF THE LOAD, below
 # cs_split. Issue #79.
+
+# THE INPUT READ, which is the step before the load contract and was the same
+# defect one step earlier. Every hook read its tool call with its own
+# `jq -r '.tool_input.command'`, and when that read failed the command was empty
+# and the hook exited 0. Issue #95 measured three hooks at dev-05 750aace: with
+# jq off PATH, and for no-git-push.sh with stdin that was not JSON, empty, or had
+# no command in it, `git push --force origin main` and `gh pr merge 5` were
+# permitted. check-hooks.sh widened it to all eight at e8c132f and found every
+# condition permitted in every hook. Eight
+# copies of one line is also how eight answers happen, so the read is here, once,
+# and every hook calls it -- including append-only-docs-edit.sh, which sources
+# this file for nothing else.
+#
+# The fail direction, for every condition, in this one place (#103 Q19):
+#
+#   jq is not on PATH                                refuse, and say so by name
+#   stdin is not exactly one JSON value              refuse
+#     (plain text, cut off, text after the value,
+#      two values, or nothing at all)
+#   that value is not an object, or its tool_input
+#     is missing or not an object                    refuse
+#   tool_input.<field> is missing, or is null, a
+#     number, a boolean, an array or an object       refuse
+#   tool_input.<field> is a string                   read it; the hook decides
+#   ... and that string is empty                     read it; there is nothing
+#                                                    to run, so the command hooks
+#                                                    permit, and the Edit hook
+#                                                    has no path and permits
+#
+# Refusing is the direction CLAUDE.md's left-open item 3 argues: a blocked
+# command is visible and one edit away, a silently permitted push is neither.
+# It also decides what a change to the harness's payload format looks like -- every
+# call refused, not every guard switched off without a word.
+#
+# THE TRADE, taken knowingly. An environment without jq refuses every Bash
+# command and every Edit and Write, including the `uv run --group test pytest`
+# the convention hooks exist to permit. The refusal names jq so the fix is one
+# install away. check-hooks.sh pins both halves of that.
+#
+# Empty stdin is the case that shapes the implementation. jq given no input reads
+# no values, prints nothing and exits 0, so trusting its exit status alone permits
+# it; and text after a valid value makes jq print the field from the first value
+# before it fails, so trusting its output alone permits that. Slurping answers
+# both: the whole input is parsed before anything is printed, and the filter asks
+# for exactly one value. A JSON null printed by `jq -r` is the four letters null,
+# indistinguishable from the command `null`, so the type is asked inside jq rather
+# than read off the output.
+#
+# The refusal names the hook through $0, which in a sourced function is still the
+# hook's own path, for THE LOAD CONTRACT's reason: near-identical files.
+cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool_input.<field>
+  local hook="${0##*/}"
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'Blocked: jq is not on PATH, so %s cannot read the tool call it was handed. Refusing rather than permitting; installing jq lifts this.\n' \
+      "$hook" >&2
+    return 2
+  fi
+  # No test that the value or its tool_input is an object: indexing a string, a
+  # number or an array is itself a jq error, and indexing null yields null, which
+  # is not a string -- so every shape that is not an object already refuses, and
+  # a mutation check found the two lines that asked it could be deleted unseen.
+  jq -rs --arg f "$1" '
+    if length == 1 and (.[0].tool_input[$f] | type) == "string"
+    then .[0].tool_input[$f]
+    else error("unreadable")
+    end' 2>/dev/null || {
+    printf 'Blocked: %s could not read tool_input.%s as a string from the tool call it was handed -- the input is not one JSON object, or the field is missing or not a string. Refusing rather than permitting.\n' \
+      "$hook" "$1" >&2
+    return 2
+  }
+}
 
 # Reduce a raw command to lines that can be scanned: heredoc bodies dropped,
 # line continuations joined, redirections dropped -- in that order, so that
@@ -798,8 +875,9 @@ cs_split() {
 }
 
 # THE WORD LIST IS PART OF THE LOAD. With either half of the prefix-word list
-# empty, cs_split is withdrawn, so that every consumer's load guard -- which
-# requires cs_split, all six of them -- refuses by name.
+# empty, cs_split is withdrawn, so that the load guard of every consumer that
+# calls cs_split -- and each of those requires it -- refuses by name. The two #95
+# consumers call only cs_tool_input and read no list, so they are not reached.
 #
 # Why it is needed at all. Issue #79 made the list a variable that cs_split
 # reads through awk's -v, and that added a state THE LOAD CONTRACT above cannot
@@ -826,7 +904,8 @@ cs_split() {
 # construction, every one that calls cs_split -- already requires cs_split,
 # because check-hooks.sh derives each consumer's required set from its call set.
 # Nothing in any guard has to know the list exists, which is what keeps this
-# from being a seventh copy of a question the contract asks in six.
+# from being one more copy of a question the contract already asks in each of
+# them.
 #
 # It must stand AFTER cs_split's definition, since `unset -f` on a function not
 # yet defined does nothing and the definition then restores it. That is a
