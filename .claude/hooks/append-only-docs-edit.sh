@@ -25,16 +25,37 @@
 # and `docs/../docs/dev-log/<entry>` both were. A leading `./` is not an evasion;
 # it is an ordinary way to write a relative path, which is the shape of the
 # ordinary mistake this hook exists to stop.
-INPUT=$(cat)
-FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
+#
+# Issue #95: the path was read with `jq -r '.tool_input.file_path // empty'`, so
+# jq missing, stdin that was not JSON, and a file_path that was null, false or
+# absent all became "no file" and were permitted before any path was compared.
+# The read is cs_tool_input now, the one reader every hook shares, and THE INPUT
+# READ in lib/command-scan.sh states what it refuses. This file sources the
+# library for that function alone -- the tokeniser's questions are not this
+# file's -- because a second copy of the read is a second answer to it, and #95
+# found eight. Tested for before it is sourced and the reader after, for THE
+# LOAD CONTRACT's reason.
+LIB="$(dirname "$0")/lib/command-scan.sh"
+[ -r "$LIB" ] && . "$LIB"
+if ! command -v cs_tool_input >/dev/null 2>&1; then
+  echo "Blocked: append-only-docs-edit.sh could not load lib/command-scan.sh, so it cannot read which file this edit touches. Refusing rather than permitting." >&2
+  exit 2
+fi
 
+FILE=$(cs_tool_input file_path) || exit 2
+
+# An empty file_path string is read and permitted, as it was. #95 names the
+# empty string as the one fail-open case for a command, where there is nothing
+# to run; an empty path names no file, so there is nothing here to protect
+# either. Recorded because the issue left it to this file, and pinned.
 [ -z "$FILE" ] && exit 0
 
 # Collapse `.`, `..` and repeated slashes, lexically. This is what `realpath -ms`
 # does, written out rather than shelled out to: the hook already depends on jq,
-# and a second external tool would be a second thing that can be absent -- with
-# no answer to what this guard should do when it is, other than refusing every
-# edit in the repository.
+# and a second external tool would be a second thing that can be absent. Since
+# #95 the answer to jq being absent is to refuse every edit in the repository,
+# which is a trade taken once and named; a second tool would take it twice, on
+# a tool the reader does not need.
 #
 # Lexical, not physical: no symlink is resolved. That is deliberate as well as
 # cheap. Resolving the file and not the root, or either through a root that is
@@ -46,8 +67,9 @@ FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 # writes by accident.
 #
 # It carries no cs_ prefix on purpose. That namespace belongs to
-# lib/command-scan.sh, which this hook does not source and which answers a
-# different question -- where a command word is, not what a path reduces to.
+# lib/command-scan.sh, which this hook sources for its input reader alone and
+# which otherwise answers a different question -- where a command word is, not
+# what a path reduces to.
 # Its sibling append-only-docs.sh cannot use this function either: the path
 # there is embedded in a command rather than handed over as one, so that file
 # matches the two spellings where they stand and says so.

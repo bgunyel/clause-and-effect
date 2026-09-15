@@ -130,6 +130,13 @@
 # neither. `git branch --show-current` reports an unborn branch, so the
 # fixtures need no commits.
 #
+# Issue #98 is about the evidence rather than the hooks: a hook that crashed, or
+# was never found, passed every ALLOW-expecting check here. The comments beside
+# several fixture guards named that for the one cause each guarded; nothing named
+# the class. Every helper that runs a hook now reads its exit status one way --
+# exit 0 is ALLOW, exit 2 is BLOCK, anything else FAILs the check whatever it
+# expected -- and `verdict`, below, is where that is answered and argued.
+#
 # Run: bash .claude/hooks/check-hooks.sh
 cd "$(dirname "$0")" || exit 1
 HOOKS=$(pwd)
@@ -137,22 +144,51 @@ HOOKS=$(pwd)
 FAILED=0
 # Where a hook is, given what a check names: a bare filename is one of this
 # repository's, an absolute path is a fixture copy of one. Written once because
-# three helpers below ask it, and they answered it in three identical `case`
-# statements until the load-contract section gave `says` its first fixture.
+# three helpers below asked it, and they answered it in three identical `case`
+# statements until the load-contract section gave `says` its first fixture; five
+# ask it now, `feed` and `feed_says` having come with #95.
 hook_path() {  # hook_path <script|/absolute/hook>
   case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s\n' "$HOOKS/$1" ;; esac
 }
-check() {
-  local script="$1" want="$2" label="$3" cmd="$4" got rc
-  printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | ./"$script" >/dev/null 2>&1
-  rc=$?
-  if [ $rc -eq 2 ]; then got=BLOCK; else got=ALLOW; fi
+# What a hook's exit status means, answered once for every helper that runs a
+# hook and reads one: exit 0 is ALLOW, exit 2 is BLOCK, and anything else FAILs
+# the check whatever it expected. `says`, `says_not` and `feed_says` ask only for
+# 2, because every one of their claims is about a refusal.
+#
+# Until #98 each helper read the status as one bit -- 2 was BLOCK and everything
+# else ALLOW -- and `says_not` did not read it at all. So a hook that did not run
+# passed every ALLOW-expecting check it was given, and every message a crashed
+# hook's stderr happened not to contain: 127 for a hook, interpreter or tool that
+# is not there, 1 for a `cd` into a fixture that is not there. Several fixture
+# guards below carry their own account of one of those causes; this is the class.
+# The #103 audit found every committed hook exiting only 0 or 2, and tightening
+# the reading turned no check here red.
+#
+# The failure line carries the exit status and what the hook wrote to stderr,
+# because FAIL alone names no cause and a crash is the case where the cause is the
+# whole finding. The self-test at the foot of this suite drives every such helper
+# with a hook that exits 1 and one that exits 127.
+#
+# One case this does not close, measured rather than reasoned: a bash syntax
+# error exits 2, not 1, so a hook that does not parse reads as BLOCK and passes
+# every BLOCK-expecting `check` against it. `says` is what separates the two,
+# where a check has one beside it.
+verdict() {  # verdict <want> <exit status> <stderr> <label>
+  local want="$1" rc="$2" err="$3" label="$4" got
+  case "$rc" in 0) got=ALLOW ;; 2) got=BLOCK ;; *) got=FAIL ;; esac
   if [ "$got" = "$want" ]; then
     printf '  ok   %-5s %s\n' "$got" "$label"
   else
-    printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
+    printf '  FAIL want=%s got=%s exit=%s  %s\n         stderr |%s|\n' \
+      "$want" "$got" "$rc" "$label" "$err"
     FAILED=1
   fi
+}
+check() {  # check <script> <want> <label> <cmd>, run from $HOOKS
+  local script="$1" want="$2" label="$3" cmd="$4" rc err
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | ./"$script" 2>&1 >/dev/null)
+  rc=$?
+  verdict "$want" "$rc" "$err" "$label"
 }
 
 # Two throwaway repositories, one on main and one on a dev branch, so that a
@@ -165,9 +201,10 @@ git init -q -b main "$FIXTURES/on-main"
 git init -q -b dev-99 "$FIXTURES/on-dev"
 ON_MAIN="$FIXTURES/on-main"
 ON_DEV="$FIXTURES/on-dev"
-# An unmade fixture would make ( cd "$dir" && hook ) return 1, which reads as
-# ALLOW -- so every ALLOW-expecting check below would pass without running the
-# hook at all. `git init -b` needs git 2.28.
+# An unmade fixture makes ( cd "$dir" && hook ) return 1, which `verdict` FAILs
+# (see there for when it did not). The guard stays so that it is reported once,
+# as what it is, rather than as a column of FAILs each blaming its own check.
+# `git init -b` needs git 2.28.
 [ -d "$ON_MAIN/.git" ] && [ -d "$ON_DEV/.git" ] || {
   echo "fixtures were not created; git init -b needs git 2.28 or newer" >&2
   exit 1
@@ -205,8 +242,9 @@ PUSH_MAIN_LINK="$FIXTURES/push-main-link"
 PUSH_WT_LINK="$FIXTURES/push-wt-link"
 ln -s "$PUSH_MAIN" "$PUSH_MAIN_LINK"
 ln -s "$PUSH_WT" "$PUSH_WT_LINK"
-# Every directory guarded: a check against a directory that is not
-# there exits 1 from the cd, which reads as ALLOW. The branch halves are guarded
+# Every directory guarded: a check against a directory that is not there exits 1
+# from the cd, which `verdict` FAILs; this names the directory once, where a
+# column of FAILs would each blame its own check. The branch halves are guarded
 # too, because a worktree on the wrong branch turns every own-branch ALLOW into a
 # refusal for a reason no check names.
 for d in "$PUSH_MAIN" "$PUSH_MAIN/src" "$PUSH_MAIN/src/deep" \
@@ -233,18 +271,12 @@ done
 # check, with the hook's working directory named rather than inherited. The
 # hook is invoked by absolute path because it sources lib/ relative to $0.
 check_in() {  # check_in <dir> <script|/absolute/hook> <want> <label> <cmd>
-  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" got rc hook
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" rc err hook
   hook=$(hook_path "$script")
-  printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
-    | ( cd "$dir" && "$hook" ) >/dev/null 2>&1
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+    | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   rc=$?
-  if [ $rc -eq 2 ]; then got=BLOCK; else got=ALLOW; fi
-  if [ "$got" = "$want" ]; then
-    printf '  ok   %-5s %s\n' "$got" "$label"
-  else
-    printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
-    FAILED=1
-  fi
+  verdict "$want" "$rc" "$err" "$label"
 }
 
 # A check whose verdict the #43 migration changed. Both verdicts are literals:
@@ -266,11 +298,20 @@ flip() {  # flip <dir> <script> <was> <want> <label> <cmd>
 # such caller today and resolves one anyway, because the pair diverging is how the
 # next reader learns the wrong rule about which of the two can be pointed at a
 # fixture.
+# Both FAIL unless the hook refused, with exit 2: see `verdict`. A crashed hook's
+# stderr is not a refusal, and it passed `says_not` whenever it lacked the fragment.
 says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
-  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err hook
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err rc hook
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  if [ "$rc" != 2 ]; then
+    printf '  FAIL %s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|\n' \
+      "$label" "$want" "$rc" "$err"
+    FAILED=1
+    return
+  fi
   case "$err" in
     *"$want"*) printf '  ok   says  %s\n' "$label" ;;
     *) printf '  FAIL %s\n         wanted the refusal to say |%s|\n         it said |%s|\n' \
@@ -284,10 +325,17 @@ says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
 # so a message claiming a merge there would be a claim the hook cannot support.
 # Nothing above can catch a message saying too much.
 says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
-  local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err hook
+  local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err rc hook
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  if [ "$rc" != 2 ]; then
+    printf '  FAIL %s\n         wanted a refusal not saying |%s|, got exit=%s\n         stderr |%s|\n' \
+      "$label" "$unwanted" "$rc" "$err"
+    FAILED=1
+    return
+  fi
   case "$err" in
     *"$unwanted"*) printf '  FAIL %s\n         the refusal must not say |%s|\n         it said |%s|\n' \
          "$label" "$unwanted" "$err"
@@ -318,9 +366,8 @@ armed() {  # armed <label> <file> <literal>
 
 # A fixture guard rather than a check, and it stops the suite rather than
 # failing one line. An unmade worktree makes ( cd "$dir" && hook ) return 1,
-# which reads as ALLOW -- so every ALLOW-expecting check against it would pass
-# without the hook ever running. That is the shape this suite exists to not
-# have, so it is said once here rather than three times below.
+# which `verdict` FAILs; this names the cause once, where a column of FAILs would
+# each blame its own check. Said once here rather than three times below.
 need_worktree() {  # need_worktree <dir> <fixture name>
   [ -d "$1" ] && return 0
   echo "the $2 worktree was not created; the checks against it prove nothing" >&2
@@ -1402,7 +1449,10 @@ check no-pr-decisions.sh ALLOW 'gh -R o/r release list'        'gh -R o/r releas
 # A path word is matched whole, so `release delete` does not cover
 # `release delete-asset` the way the old alternation did. The regular
 # expression carried delete-asset and nothing asked about it; the rule that
-# replaced it names it separately, and this is what would notice if it stopped.
+# replaced it named it separately, and these were what would notice if it
+# stopped. #97 replaced that rule in turn with an allowlist of read verbs, which
+# names no write at all, so these now ask whether delete-asset is still outside
+# the list -- and #97's section below asks the rest.
 check no-pr-decisions.sh BLOCK 'gh release delete-asset'       'gh release delete-asset v1.0.0 file.tgz'
 check no-pr-decisions.sh BLOCK 'gh -R o/r release delete-asset' 'gh -R o/r release delete-asset v1.0.0 file.tgz'
 check no-pr-decisions.sh ALLOW 'gh -R o/r api reads a PR'      'gh -R o/r api repos/o/r/pulls/5'
@@ -1593,6 +1643,190 @@ check no-pr-decisions.sh BLOCK 'graphql state on updatePR'   'gh api graphql -f 
 check no-pr-decisions.sh ALLOW 'PATCH a PR title'            'gh api -X PATCH repos/o/r/pulls/35 -f title=newtitle'
 check no-pr-decisions.sh ALLOW 'GET the releases list'       'gh api repos/o/r/releases'
 check no-pr-decisions.sh ALLOW 'gh pr edit retitles'         'gh pr edit 35 --title newtitle'
+
+echo "=== issue #97, a release may be read and not written ==="
+# Release actions were refused by name -- create, delete, delete-asset -- and the
+# list was a denylist with two writes missing from it. `gh release edit v1
+# --draft=false` publishes a draft and `gh release upload` changes a published
+# release's assets, and both were permitted. #103's grilling (Q26) settled the
+# rule the other way round rather than lengthening the list: the read verbs
+# list, view, download, verify and verify-asset are permitted, and every other
+# `gh release` subcommand is refused, including one a future gh adds. What was
+# rejected is refusing only the acts that publish or destroy, because that means
+# reading per-flag release state out of the arguments, and argument parsing is
+# where most of this boundary's defects have lived.
+#
+# The rows that `flip` records were measured against no-pr-decisions.sh at
+# origin/dev-05 e8c132f before any fix, and each prints the verdict it had then.
+# Reverting the fix fails exactly those, with got equal to the recorded was. The
+# `check` rows are the same verdict on both sides and are not evidence about the
+# fix. They are what an allowlist has to keep: the reads it must not refuse, the
+# refusals the denylist already had, and the gh api half, which already refused
+# a write to /releases and permitted a read through gh_api_is_write.
+#
+# graphql has nothing to check here. The issue refuses a release write through a
+# mutation "if one exists", and none does: GitHub's graphql schema listed 259
+# mutations on 2026-09-15 and no name among them contains "release", read with
+# `gh api graphql -f query='{__schema{mutationType{fields{name}}}}' --jq
+# '.data.__schema.mutationType.fields[].name'`. The
+# createRelease, updateRelease and deleteRelease names this hook matches are
+# refused text rather than mutations, and the check above that pins one of them
+# is evidence about the text.
+echo "--- every write verb is refused, and so is a verb gh does not have yet ---"
+check no-pr-decisions.sh BLOCK 'gh release create'                   'gh release create v1'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release edit --draft=false publishes a draft' \
+  'gh release edit v1 --draft=false'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release edit without --draft=false' \
+  'gh release edit v1 --title x'
+check no-pr-decisions.sh BLOCK 'gh release delete'                   'gh release delete v1 --yes'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release upload' \
+  'gh release upload v1 a.tgz'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release upload --clobber replaces an asset' \
+  'gh release upload v1 a.tgz --clobber'
+check no-pr-decisions.sh BLOCK 'gh release delete-asset'             'gh release delete-asset v1 a.tgz'
+# The row that shows the rule is an allowlist and not a longer denylist: no list
+# of writes can name a subcommand that does not exist yet.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'an unknown gh release subcommand' \
+  'gh release frobnicate v1'
+# And a write the denylist never knew it had: `new` is gh's alias for create
+# (gh 2.45.0, `gh help release create`), so the list named create and missed it.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release new, the alias of create' \
+  'gh release new v1'
+echo "--- every read verb is permitted ---"
+check no-pr-decisions.sh ALLOW 'gh release list'                     'gh release list'
+check no-pr-decisions.sh ALLOW 'gh release view'                     'gh release view v1'
+check no-pr-decisions.sh ALLOW 'gh release download'                 "gh release download v1 -p '*.tgz'"
+check no-pr-decisions.sh ALLOW 'gh release verify'                   'gh release verify v1'
+check no-pr-decisions.sh ALLOW 'gh release verify-asset'             'gh release verify-asset v1 a.tgz'
+echo "--- the trade: three reads that are refused, and where to go instead ---"
+# The hook's comment above its release rule names these as its three-part trade,
+# and a trade written down without a check is a claim, so each part is pinned.
+# None of them writes, all are refused, and each is one edit away.
+#
+# 1. `ls` is gh's alias for list. The allowlist is the five verbs #103 decided,
+#    not the five plus whatever gh aliases them to, which is a list that has to
+#    track gh's own. The refusal names the five.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release ls, an alias of a read, is refused' \
+  'gh release ls'
+# 2. No subcommand, and a write verb's help page. Allowing these means telling
+#    "no subcommand" from "some other subcommand", which means skipping options
+#    outside cs_gh_args. The first version of the rule did, with its own copy of
+#    the library's skip list, and review of it found the copy. `gh release
+#    create --help` was already refused by the denylist, so it is a check.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release with no subcommand' \
+  'gh release'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release --help' \
+  'gh release --help'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release -R o/r, no subcommand' \
+  'gh release -R o/r'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a write verb'"'"'s help page' \
+  'gh release upload --help'
+check no-pr-decisions.sh BLOCK 'a help page the denylist already refused' \
+  'gh release create --help'
+#    Help is somewhere else, and that has to stay permitted or the trade is not
+#    one edit away: `gh help` is not a gh release command at all.
+check no-pr-decisions.sh ALLOW 'gh help release'                     'gh help release'
+check no-pr-decisions.sh ALLOW 'gh help release upload'              'gh help release upload'
+says "$ON_DEV" no-pr-decisions.sh 'gh help release' \
+  'the refusal of bare gh release says where help is' 'gh release'
+# 3. A quoted verb is matched as written and refused, rather than unquoted into
+#    a read -- the generous reading gh_pr_web gives its reasons for not taking.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a quoted read verb' \
+  'gh release "view" v1'
+echo "--- a flag before the subcommand does not change the verdict ---"
+# cs_gh_args skips options before every word of a path, and a subcommand read
+# some other way skips none. -R/--repo is the ordinary way to name a repository
+# from elsewhere, so each group has both verdicts here, with the flag before the
+# verb and with it before the group.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release -R o/r edit' \
+  'gh release -R o/r edit v1'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release --repo o/r upload' \
+  'gh release --repo o/r upload v1 a.tgz'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release --repo=o/r edit --draft=false' \
+  'gh release --repo=o/r edit v1 --draft=false'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh -R o/r release upload' \
+  'gh -R o/r release upload v1 a.tgz'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release -R o/r with an unknown subcommand' \
+  'gh release -R o/r frobnicate v1'
+check no-pr-decisions.sh ALLOW 'gh release -R o/r view'              'gh release -R o/r view v1'
+check no-pr-decisions.sh ALLOW 'gh -R o/r release download'          'gh -R o/r release download v1'
+check no-pr-decisions.sh ALLOW 'gh release --repo o/r verify-asset'  'gh release --repo o/r verify-asset v1 a.tgz'
+echo "--- the verb is the subcommand word, matched whole, and not any word ---"
+# An allowlist asked whether a read verb appears ANYWHERE in the arguments would
+# be satisfied by a tag. Release tags are free text, so a tag named view or list
+# is an ordinary one to write. The first two rows are the permitting direction.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'an upload to a tag named view' \
+  'gh release upload view a.tgz'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'an edit of a tag named list' \
+  'gh release edit list --draft=false'
+# The same rule from the other side: a read of a tag named upload is a read.
+check no-pr-decisions.sh ALLOW 'a view of a tag named upload'        'gh release view upload'
+# A read verb matched as a prefix permits whatever begins with it -- verify
+# matched without a right edge also matches verify-asset, and so matches a
+# subcommand that is neither. The row is invented because an unknown subcommand
+# is the case the rule exists for.
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a subcommand that only begins with a read verb' \
+  'gh release verify-and-publish v1'
+echo "--- every gh release command on the line is judged ---"
+# cs_gh_args answers about the first match and stops, so a rule that asks it
+# about `release` once, over the whole line, reads the first command's verb and
+# never sees the second. A read in front of a write is the ordinary shape of
+# "look, then change it".
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a view, then an upload' \
+  'gh release view v1 && gh release upload v1 a.tgz'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a list, then an edit that publishes' \
+  'gh release list; gh release edit v1 --draft=false'
+flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a PR read, then an unknown release subcommand' \
+  'gh pr view 5 && gh release frobnicate v1'
+# The allowlist is about subcommands of gh release, not about text that names one.
+check no-pr-decisions.sh ALLOW 'an issue comment naming a release upload' \
+  'gh issue comment 97 --body "gh release upload v1 a.tgz is refused now"'
+echo "--- the gh api spelling: a write to /releases is refused, a read is not ---"
+check no-pr-decisions.sh BLOCK 'POST to the releases collection'     'gh api -X POST repos/o/r/releases'
+check no-pr-decisions.sh BLOCK 'PATCH a release'                     'gh api -X PATCH repos/o/r/releases/1'
+check no-pr-decisions.sh BLOCK 'DELETE a release'                    'gh api -X DELETE repos/o/r/releases/1'
+# No method written, and still a write: a field flag makes gh send POST. This is
+# gh_api_is_write's question, and the row is what fails if the rule asks -X alone.
+check no-pr-decisions.sh BLOCK 'a field makes a releases call a write' \
+  'gh api repos/o/r/releases/1 -f draft=false'
+# gh release upload's own request, written out. The host is uploads.github.com and
+# not api.github.com, so a rule anchored on the API host misses it.
+check no-pr-decisions.sh BLOCK 'POST an asset to the uploads host' \
+  "gh api --method POST 'https://uploads.github.com/repos/o/r/releases/1/assets?name=a.tgz' --input a.tgz"
+check no-pr-decisions.sh BLOCK 'DELETE a release asset'              'gh api -X DELETE repos/o/r/releases/assets/7'
+check no-pr-decisions.sh BLOCK 'gh -R o/r api PATCH a release'       'gh -R o/r api -X PATCH repos/o/r/releases/1 -F draft=false'
+check no-pr-decisions.sh BLOCK 'a releases read, then a releases write' \
+  'gh api repos/o/r/releases && gh api -X PATCH repos/o/r/releases/1 -F draft=false'
+check no-pr-decisions.sh ALLOW 'GET the releases collection'         'gh api repos/o/r/releases'
+check no-pr-decisions.sh ALLOW 'GET the latest release'              'gh api repos/o/r/releases/latest'
+check no-pr-decisions.sh ALLOW 'GET a release by tag, method named'  'gh api -X GET repos/o/r/releases/tags/v1'
+check no-pr-decisions.sh ALLOW 'GET a release'"'"'s assets'          'gh api repos/o/r/releases/1/assets'
+echo "--- the refusal says what the rule is ---"
+# A refusal that names only publishing and deleting is false for an upload, and
+# says nothing about what an agent may still do. The literals below are the
+# wording #97 settled on for CLAUDE.md and CONTEXT.md, so the message and the
+# documents say the same thing. Every `says` is red on the dev-05 hook, whose
+# message is "publishing or deleting a GitHub release is Bertan's call". The
+# `says_not` is green there for no good reason, since nothing refused the upload
+# at all. It is the pair with the `says` above it that means something.
+says "$ON_DEV" no-pr-decisions.sh "any write to a release is Bertan's" \
+  'gh release refusal: a release write is Bertan'"'"'s' 'gh release upload v1 a.tgz'
+says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted' \
+  'gh release refusal: reading is permitted' 'gh release upload v1 a.tgz'
+says_not "$ON_DEV" no-pr-decisions.sh 'publishing or deleting' \
+  'gh release refusal: an upload is not described as publishing or deleting' 'gh release upload v1 a.tgz'
+says "$ON_DEV" no-pr-decisions.sh "any write to a release is Bertan's" \
+  'unknown subcommand refusal: a release write is Bertan'"'"'s' 'gh release frobnicate v1'
+says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted' \
+  'unknown subcommand refusal: reading is permitted' 'gh release frobnicate v1'
+says "$ON_DEV" no-pr-decisions.sh "any write to a release is Bertan's" \
+  'gh api refusal: a release write is Bertan'"'"'s' 'gh api -X PATCH repos/o/r/releases/1'
+says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted' \
+  'gh api refusal: reading is permitted' 'gh api -X PATCH repos/o/r/releases/1'
+# Unlike the upload's, this `says_not` is red on dev-05: the gh api spelling was
+# refused there, in the old words, so a revert of this message alone shows here.
+says_not "$ON_DEV" no-pr-decisions.sh 'publishing or deleting' \
+  'gh api refusal: a PATCH is not described as publishing or deleting' 'gh api -X PATCH repos/o/r/releases/1'
 
 echo "=== issue #40, a pull request must name an active dev branch as its base ==="
 # The quietest of the four spellings names nothing at all: with no base given,
@@ -2283,7 +2517,7 @@ flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'separated --namespace before a
 # What this file does when lib/command-scan.sh is not loadable is checked in the
 # load-contract section at the foot of this suite, with the same question asked of
 # the other three hooks. It was asked here, of this hook alone, and issue #84
-# found two hooks with no guard at all and a third probing one function of three
+# found two hooks with no guard at all and a third requiring one function of three
 # while both blocks stayed green.
 
 echo "=== the refusals still name main, which is why this file is kept ==="
@@ -2916,7 +3150,7 @@ says "$WT_STALE" no-work-on-stale-branch.sh 'git merge origin/dev-05 is permitte
 # The nolib and halflib checks for this hook, including the scoping that makes a
 # healthy worktree ALLOW with no library at all, moved to the load-contract
 # section at the foot of this suite. They were the only ones of their kind that
-# covered every function a hook probes, and #84's finding was that the lesson
+# covered every function a hook requires, and #84's finding was that the lesson
 # stayed in this one file: keeping them here, where the three hooks that had it
 # wrong have no section, is what let that happen.
 
@@ -3226,18 +3460,60 @@ check append-only-docs.sh ALLOW 'the append that is documented is still permitte
 # anchors to. A new seam in this suite, named as one.
 REPO_ROOT=$(cd "$HOOKS/../.." && pwd)
 check_file() {  # check_file <script> <want> <label> <path relative to the repo>
-  local script="$1" want="$2" label="$3" path="$4" got rc
-  printf '%s' "$path" | jq -Rs '{tool_name:"Edit",tool_input:{file_path:.}}' \
-    | CLAUDE_PROJECT_DIR="$REPO_ROOT" ./"$script" >/dev/null 2>&1
+  local script="$1" want="$2" label="$3" path="$4" rc err
+  err=$(printf '%s' "$path" | jq -Rs '{tool_name:"Edit",tool_input:{file_path:.}}' \
+    | CLAUDE_PROJECT_DIR="$REPO_ROOT" ./"$script" 2>&1 >/dev/null)
   rc=$?
-  if [ $rc -eq 2 ]; then got=BLOCK; else got=ALLOW; fi
-  if [ "$got" = "$want" ]; then
-    printf '  ok   %-5s %s\n' "$got" "$label"
-  else
-    printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
-    FAILED=1
-  fi
+  verdict "$want" "$rc" "$err" "$label"
 }
+
+# feed and feed_says: a hook handed raw stdin rather than a command. Every
+# helper above builds its payload with jq from a string, so none of them can hand
+# a hook a tool call that is not JSON, or one whose field is not a string --
+# which is the seam issue #95 is about, and its section at the foot of this suite
+# is where these are mostly driven. The hook runs in $ON_DEV with
+# CLAUDE_PROJECT_DIR naming this repository, so one helper serves the Bash hooks
+# and the Edit hook alike, and PATH is an argument so that jq can be taken off it.
+#
+# Both read the exit status as every helper above does since #98, `feed` through
+# `verdict` and `feed_says` as `says` does. That matters more here than anywhere.
+# A hook that dies on malformed input exits 1 or 127, the harness treats that as a
+# non-blocking error and runs the command, and a helper reading "not 2" as ALLOW
+# would pass it as a permit nobody looks at twice.
+#
+# They were written for #95 with a reading of their own, and merged with #98's
+# beside it rather than under it (#124): `feed` mapped the status itself and threw
+# the hook's stderr away, so its failure line named no cause, and `feed_says` did
+# not read the status at all, so a hook that crashed printing the fragment passed.
+# That second shape is the one #98 removed from `says`.
+feed() {  # feed <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin>
+  local path="$1" script="$2" want="$3" label="$4" payload="$5" rc err hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$payload" \
+        | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  verdict "$want" "$rc" "$err" "$label"
+}
+feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <raw stdin>
+  local path="$1" script="$2" want="$3" label="$4" payload="$5" err rc hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$payload" \
+        | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  if [ "$rc" != 2 ]; then
+    printf '  FAIL %s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|\n' \
+      "$label" "$want" "$rc" "$err"
+    FAILED=1
+    return
+  fi
+  case "$err" in
+    *"$want"*) printf '  ok   says  %s\n' "$label" ;;
+    *) printf '  FAIL %s\n         wanted the refusal to say |%s|\n         it said |%s|\n' \
+         "$label" "$want" "$err"
+       FAILED=1 ;;
+  esac
+}
+
 # An ALLOW that came from the path simply not being there would say nothing
 # about docs/research/, and a BLOCK-expecting case needs its file present for
 # the same reason. Both are asserted rather than assumed.
@@ -4001,6 +4277,37 @@ unarmed 'and it is that entry rather than the whole glossary' \
 written 'the enumeration names the act the report cites' \
   "$RESERVED_ENTRY" 'removing a worktree or deleting a worktree branch'
 
+# #97 widened the release rule from publishing and deleting to any write, and
+# the two documents that state the rule are widened with it -- no-pr-decisions.sh
+# refuses in their words, and a refusal narrower or wider than the document it
+# points a reader to is the drift this section exists for. Both the new phrase
+# and the absence of each old one are asserted, because a document that gained
+# the new phrase and kept the old would state two rules.
+#
+# Asserted against the text with its line breaks joined. `written` and `unarmed`
+# match within a line, and CLAUDE.md wraps "create or delete a" and "release"
+# onto two lines, so an `unarmed` over the paragraph as written passes while the
+# phrase still stands in it. Measured on dev-05: the absence check read ok there
+# unjoined, and is red joined.
+# An extraction that found nothing flattens to an empty file, and `unarmed` over
+# an empty file reads ok. Each `unarmed` below is therefore paired with a
+# `written` over the same file, which is the one that fails then.
+flatten() {  # flatten <file> -- one line, every run of whitespace one space
+  tr -s '[:space:]' ' ' < "$1"
+}
+RESERVED_FLAT="$FIXTURES/context-reserved-act.flat"
+flatten "$RESERVED_ENTRY" > "$RESERVED_FLAT"
+PARAGRAPH_FLAT="$FIXTURES/boundary-paragraph.flat"
+flatten "$PARAGRAPH" > "$PARAGRAPH_FLAT"
+written 'the reserved act entry reserves any write to a release' \
+  "$RESERVED_FLAT" 'any write to a release'
+unarmed 'and no longer narrows it to publishing one' \
+  "$RESERVED_FLAT" 'publishing a release'
+written 'the boundary paragraph refuses any write to a release' \
+  "$PARAGRAPH_FLAT" 'any write to a release'
+unarmed 'and no longer narrows it to creating or deleting one' \
+  "$PARAGRAPH_FLAT" 'create or delete a release'
+
 # The skill read that enumeration as closed and counted it -- "one of the four
 # acts CONTEXT.md names" -- and #70 found the count stale the moment a fifth act
 # was needed. Correcting the number to five would have left the same defect with
@@ -4170,7 +4477,7 @@ echo "=== issue #84: every hook refuses when lib/command-scan.sh does not load =
 # THE LOAD CONTRACT, driven. lib/command-scan.sh states it; the four hooks that
 # source that file have to hold it, and before #84 three of them did not --
 # no-git-push.sh and no-pr-decisions.sh had no guard at all, and
-# no-commit-to-main.sh had one that probed cs_split alone.
+# no-commit-to-main.sh had one that required cs_split alone.
 #
 # Asked of all four in one place, rather than in each hook's own section, because
 # what went wrong was exactly that the answer was given in one file and not
@@ -4187,13 +4494,13 @@ echo "=== issue #84: every hook refuses when lib/command-scan.sh does not load =
 #
 # ONE FUNCTION AT A TIME is the whole point of halflib, and the reason there is a
 # fixture per hook per function below rather than one per hook. A fixture that
-# renamed every function at once would be satisfied by a guard that probes only
-# the first of them, and probing only one is the defect: no-commit-to-main.sh
-# probed cs_split, cs_split was still there, and `git push origin HEAD:main` was
+# renamed every function at once would be satisfied by a guard that requires only
+# the first of them, and requiring only one is the defect: no-commit-to-main.sh
+# required cs_split, cs_split was still there, and `git push origin HEAD:main` was
 # permitted.
 #
-# That is deliberately the inverse of what issue #84 asked for -- "the halflib
-# fixture renames every function the hook under test probes" -- and is recorded as
+# That is deliberately the inverse of what issue #84 asked for -- one halflib
+# fixture renaming every function the hook under test requires -- and is recorded as
 # a deviation rather than left to be read as one. One fixture with every name
 # renamed is the weaker test, for the reason just given; thirteen fixtures each
 # missing one name is the stronger, and the assertion the issue did ask for (that
@@ -4219,7 +4526,12 @@ echo "=== issue #84: every hook refuses when lib/command-scan.sh does not load =
 # independently and at the same time. Two issues answering one question in two
 # places is what the question was about, so the answer is one section: a file that
 # cannot load the tokeniser must refuse, and the list is whoever loads it.
-LIB_CONSUMERS="alembic-via-uv-group.sh no-commit-to-main.sh no-git-push.sh no-pr-decisions.sh no-work-on-stale-branch.sh pytest-via-uv-group.sh"
+#
+# Eight since #95, which moved every hook's input read into cs_tool_input: the two
+# append-only hooks source the library for that function alone, and are driven
+# here with the rest because a file that cannot load its reader is the same
+# question.
+LIB_CONSUMERS="alembic-via-uv-group.sh append-only-docs-edit.sh append-only-docs.sh no-commit-to-main.sh no-git-push.sh no-pr-decisions.sh no-work-on-stale-branch.sh pytest-via-uv-group.sh"
 
 # The library absent. One directory for all of them: what makes the fixture is the
 # absence of lib/ beside the hook, not anything about the hook.
@@ -4227,10 +4539,11 @@ LIB_CONSUMERS="alembic-via-uv-group.sh no-commit-to-main.sh no-git-push.sh no-pr
 # Every copy is guarded, not one of them, and at the path the checks will drive.
 # The first version of this asked `[ -f ]` about no-git-push.sh alone, which is the
 # mistake mk_halflib records below with the consequence measured: a hook that is
-# not there makes `( cd "$dir" && "$hook" )` exit 127, and check_in reads anything
-# but 2 as ALLOW. So a missing copy turns every BLOCK here red -- visible -- but
-# lets `no lib/, on a branch carrying work` pass vacuously, which is an ALLOW
-# nobody would look at twice. Asking about one of four was itself the #84 shape,
+# not there makes `( cd "$dir" && "$hook" )` exit 127, which check_in read as
+# ALLOW before #98 (see `verdict`). So a missing copy turned every BLOCK here red
+# -- visible -- but let `no lib/, on a branch carrying work` pass vacuously. The
+# guard stays because it names the copy that is missing, which a FAIL on the
+# check does not. Asking about one of four was itself the #84 shape,
 # and it was not hypothetical: #69's own two checks copied their fixtures in with
 # no guard at all, and this consolidation moved the mkdir below them, so both ran
 # against a hook that was not there until the derivation at the end of this
@@ -4265,7 +4578,8 @@ done
 # `halflib--`. All four fixture guards passed -- they were asked about the
 # directory that had been built, not about the one the checks would drive -- and
 # thirteen checks reported ALLOW against a hook that was not there, which
-# check_in reads as permitted because it is not exit 2. A fixture guard that
+# check_in read as permitted because it was not exit 2 (see `verdict`, where
+# those thirteen would each FAIL today). A fixture guard that
 # derives its own path proves nothing about the check beside it.
 halflib_path() {  # halflib_path <hook> <cs_function> -- where that fixture sits
   printf '%s\n' "$FIXTURES/halflib-$1-$2/$1"
@@ -4292,7 +4606,7 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
   }
   # And that what is left still loads. A fixture broken some other way would
   # refuse for a reason this section does not name, and would read as evidence
-  # for the probe.
+  # for the guard.
   bash -c ". '$dir/lib/command-scan.sh' && command -v cs_renamed_away >/dev/null 2>&1" || {
     echo "the half-library for $hook does not load at all; the check using it proves nothing" >&2
     exit 1
@@ -4304,7 +4618,7 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
     exit 1
   }
 }
-# One call per pair the contract names, which is the probe list of each hook. The
+# One call per pair the contract names, which is the required list of each hook. The
 # sets differ, and that difference is the reason the guards cannot share a list:
 # four want cs_git_args, no-pr-decisions.sh wants cs_gh_args and cs_join instead,
 # and the two convention hooks want neither.
@@ -4325,6 +4639,10 @@ mk_halflib pytest-via-uv-group.sh cs_normalise
 mk_halflib pytest-via-uv-group.sh cs_split
 mk_halflib alembic-via-uv-group.sh cs_normalise
 mk_halflib alembic-via-uv-group.sh cs_split
+# The input reader, which every consumer calls since #95 and two call alone.
+for hook in $LIB_CONSUMERS; do
+  mk_halflib "$hook" cs_tool_input
+done
 
 echo "--- no-git-push.sh, which had no guard at all ---"
 # The measured #84 case: with no guard, cs_git_args was undefined, the HAVE_PUSH
@@ -4348,7 +4666,7 @@ says "$PUSH_WT" "$(nolib_path no-git-push.sh)" 'Refusing rather than permitting'
   'and says that it is refusing rather than permitting' 'ls'
 
 echo "--- no-pr-decisions.sh, which had no guard at all ---"
-# This file's function set is what makes one shared probe list wrong: cs_gh_args
+# This file's function set is what makes one shared required list wrong: cs_gh_args
 # and cs_join, and no cs_git_args at all. Every rule in it reads its arguments
 # through cs_gh_args, so renaming that one permitted `gh pr merge` and
 # `gh pr create --base main` together.
@@ -4367,7 +4685,7 @@ check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_gh_args)" BLOCK 'a rena
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_gh_args)" BLOCK 'nor a pull request based on main' \
   'gh pr create --base main'
 # cs_join is read late, by the wrapper rules alone, so a renamed cs_join is
-# invisible to every check above it. It is probed because the hook calls it and
+# invisible to every check above it. It is required because the hook calls it and
 # not because a rule was seen to break: the contract is the set, not whichever
 # subset a driving command happens to reach.
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_join)" BLOCK 'a library missing only cs_join' \
@@ -4381,7 +4699,7 @@ echo "--- no-commit-to-main.sh, which had a guard and permitted anyway ---"
 # Why a guard naming one function is worse than none: it reads as the question
 # answered. `cs_git_args commit` and `cs_git_args push` fail exactly as a command
 # holding neither does, so with cs_git_args renamed away every commit and every
-# push was permitted while cs_split -- the only name probed -- was still there.
+# push was permitted while cs_split -- the only name required -- was still there.
 check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'a command touching nothing, library intact' \
   'ls'
 check_in "$ON_MAIN" "$(nolib_path no-commit-to-main.sh)" BLOCK 'no lib/, commit on main' \
@@ -4410,14 +4728,25 @@ echo "--- no-work-on-stale-branch.sh, the one that had it right ---"
 # missing library must not turn a healthy worktree into a refused one. That makes
 # its driving command a real one on a stale branch rather than `ls`, and gives it
 # the ALLOW half that the other three take from the intact-library control.
+#
+# Issue #95 took the first half of that back, and the flip below is the record.
+# The tool call is read through cs_tool_input, which lives in the library, so a
+# missing library leaves this file with no command to scope anything by, and it
+# refuses on every branch like the other consumers. What that gives up is nothing
+# an agent sees: with lib/ gone every other Bash hook refuses every command
+# anyway. The scope survives where it still means something -- a library missing
+# only a tokeniser function, or with its word list emptied, is still an ALLOW on
+# a branch carrying work, and those checks are unchanged.
 check_in "$WT_STALE" "$(nolib_path no-work-on-stale-branch.sh)" BLOCK 'no lib/, on a stale branch' \
   'git status'
-check_in "$WT_WORK" "$(nolib_path no-work-on-stale-branch.sh)" ALLOW 'no lib/, on a branch carrying work' \
+check_in "$WT_WORK" "$(halflib_path no-work-on-stale-branch.sh cs_tool_input)" BLOCK \
+  'a library missing only cs_tool_input, on a branch carrying work' 'ls'
+flip "$WT_WORK" "$(nolib_path no-work-on-stale-branch.sh)" ALLOW BLOCK 'no lib/, on a branch carrying work' \
   'git commit -m "wip"'
 # WHAT THESE ARE AND ARE NOT. Every behavioural check in this block passes against
 # the unfixed hook, because this hook was the one that had the guard right: the two
 # nolib cases and the cs_git_args halflib case are the pre-existing ones moved
-# here, and cs_normalise and cs_split were already probed. So this block is pins,
+# here, and cs_normalise and cs_split were already required. So this block is pins,
 # not evidence of a fix, and issue #84's "each failing without the fix" is not met
 # here and cannot be. What did fail for this hook before the change is the pair
 # below, which asked the refusal to name the file rather than say "this hook".
@@ -4439,7 +4768,7 @@ echo "--- pytest-via-uv-group.sh and alembic-via-uv-group.sh, from #69 ---"
 # These two are here for the reason the other four are in one place: the question
 # is one question. #69 asked it of them in their own section, with a third and a
 # fourth copy of the fixture idiom, and covered cs_normalise of the two functions
-# each calls -- which is the narrower probe #84 is about, in the fixture rather
+# each calls -- which is the narrower set #84 is about, in the fixture rather
 # than in the guard. Both are driven per function now.
 #
 # What these are: pins. Both guards were already right when #69 shipped them, so
@@ -4470,8 +4799,47 @@ says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'alembic-via-uv-group.sh 
 says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'Refusing rather than permitting' \
   'and says that it is refusing rather than permitting' 'ls'
 
+echo "--- cs_tool_input, the reader every consumer calls since #95 ---"
+# The eighth function in the contract and the first every consumer shares. A
+# library missing only it leaves COMMAND=$(cs_tool_input command) empty with a
+# non-zero status, and the one thing between that and the #95 defect -- an empty
+# command, exit 0 -- is the guard. So each consumer is driven with it renamed
+# away, on a command every one of them otherwise permits. no-work-on-stale-branch.sh
+# is driven in its own block above, on the branch where its scope used to permit.
+for hook in alembic-via-uv-group.sh no-commit-to-main.sh no-git-push.sh no-pr-decisions.sh pytest-via-uv-group.sh; do
+  check_in "$ON_DEV" "$(halflib_path "$hook" cs_tool_input)" BLOCK \
+    "a library missing only cs_tool_input, $hook" 'ls'
+done
+# The two #95 made consumers, whole: they had no library to fail to load before,
+# so every check here is new. feed rather than check_in, because the Edit hook
+# reads file_path. #95 gave a second, that feed's verdict was exact; #98 made
+# every helper's exact, so it no longer separates the two.
+feed "$PATH" append-only-docs.sh ALLOW 'append-only-docs.sh, a command naming no guarded path, library intact' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+feed "$PATH" "$(nolib_path append-only-docs.sh)" BLOCK 'no lib/, append-only-docs.sh refuses anything at all' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+feed "$PATH" "$(halflib_path append-only-docs.sh cs_tool_input)" BLOCK 'a library missing only cs_tool_input, append-only-docs.sh' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+feed_says "$PATH" "$(nolib_path append-only-docs.sh)" 'append-only-docs.sh could not load' \
+  'the refusal names this hook and not its Edit companion' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+feed_says "$PATH" "$(nolib_path append-only-docs.sh)" 'Refusing rather than permitting' \
+  'and says that it is refusing rather than permitting' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+EDIT_CONTROL=$(jq -cn --arg p "$REPO_ROOT/src/config.py" '{tool_name:"Edit",tool_input:{file_path:$p}}')
+feed "$PATH" append-only-docs-edit.sh ALLOW 'append-only-docs-edit.sh, an edit outside the guarded directories, library intact' \
+  "$EDIT_CONTROL"
+feed "$PATH" "$(nolib_path append-only-docs-edit.sh)" BLOCK 'no lib/, append-only-docs-edit.sh refuses any edit at all' \
+  "$EDIT_CONTROL"
+feed "$PATH" "$(halflib_path append-only-docs-edit.sh cs_tool_input)" BLOCK 'a library missing only cs_tool_input, append-only-docs-edit.sh' \
+  "$EDIT_CONTROL"
+feed_says "$PATH" "$(nolib_path append-only-docs-edit.sh)" 'append-only-docs-edit.sh could not load' \
+  'the refusal names this hook and not its Bash companion' "$EDIT_CONTROL"
+feed_says "$PATH" "$(nolib_path append-only-docs-edit.sh)" 'Refusing rather than permitting' \
+  'and says that it is refusing rather than permitting' "$EDIT_CONTROL"
+
 echo "--- issue #79: the word list is part of the load ---"
-# A third way to not load, beside nolib and halflib, and the one a probe for
+# A third way to not load, beside nolib and halflib, and the one a guard on
 # names cannot see. Issue #79 made cs_split read the prefix-word list through a
 # variable, so a library can be present, define every cs_* function, and have
 # that list empty -- and then cs_split runs and strips nothing. `sudo git push
@@ -4634,11 +5002,11 @@ armed 'the library withdraws cs_split when the word list is incomplete' \
       lib/command-scan.sh 'unset -f cs_split'
 armed 'on either half, and not on the union' \
       lib/command-scan.sh 'if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then'
-# And that no guard learned about the list instead. A word-list probe in a hook
+# And that no guard learned about the list instead. A word-list guard in a hook
 # is a second answer to a question the library now answers once, and it is the
 # shape the first version of this took, in two hooks of six.
 for hook in $LIB_CONSUMERS; do
-  unarmed "$hook does not probe the word list itself" "$HOOKS/$hook" 'CS_WRAP_OPTION_WORDS'
+  unarmed "$hook does not require the word list itself" "$HOOKS/$hook" 'CS_WRAP_OPTION_WORDS'
 done
 written 'the load contract says the word list is part of the load' \
   "$HOOKS/lib/command-scan.sh" 'THE WORD LIST IS PART OF THE LOAD'
@@ -4667,23 +5035,26 @@ done
 # above would match a guard commented out during a debugging session and left
 # that way, and review of PR #64 found exactly that shape in this suite. One
 # literal per hook per function, because that is the claim being made.
-armed 'no-git-push.sh probes cs_normalise' no-git-push.sh 'command -v cs_normalise'
-armed 'no-git-push.sh probes cs_split' no-git-push.sh 'command -v cs_split'
-armed 'no-git-push.sh probes cs_git_args' no-git-push.sh 'command -v cs_git_args'
-armed 'no-pr-decisions.sh probes cs_normalise' no-pr-decisions.sh 'command -v cs_normalise'
-armed 'no-pr-decisions.sh probes cs_split' no-pr-decisions.sh 'command -v cs_split'
-armed 'no-pr-decisions.sh probes cs_gh_args' no-pr-decisions.sh 'command -v cs_gh_args'
-armed 'no-pr-decisions.sh probes cs_join' no-pr-decisions.sh 'command -v cs_join'
-armed 'no-commit-to-main.sh probes cs_normalise' no-commit-to-main.sh 'command -v cs_normalise'
-armed 'no-commit-to-main.sh probes cs_split' no-commit-to-main.sh 'command -v cs_split'
-armed 'no-commit-to-main.sh probes cs_git_args' no-commit-to-main.sh 'command -v cs_git_args'
-armed 'no-work-on-stale-branch.sh probes cs_normalise' no-work-on-stale-branch.sh 'command -v cs_normalise'
-armed 'no-work-on-stale-branch.sh probes cs_split' no-work-on-stale-branch.sh 'command -v cs_split'
-armed 'no-work-on-stale-branch.sh probes cs_git_args' no-work-on-stale-branch.sh 'command -v cs_git_args'
-armed 'pytest-via-uv-group.sh probes cs_normalise' pytest-via-uv-group.sh 'command -v cs_normalise'
-armed 'pytest-via-uv-group.sh probes cs_split' pytest-via-uv-group.sh 'command -v cs_split'
-armed 'alembic-via-uv-group.sh probes cs_normalise' alembic-via-uv-group.sh 'command -v cs_normalise'
-armed 'alembic-via-uv-group.sh probes cs_split' alembic-via-uv-group.sh 'command -v cs_split'
+armed 'no-git-push.sh requires cs_normalise' no-git-push.sh 'command -v cs_normalise'
+armed 'no-git-push.sh requires cs_split' no-git-push.sh 'command -v cs_split'
+armed 'no-git-push.sh requires cs_git_args' no-git-push.sh 'command -v cs_git_args'
+armed 'no-pr-decisions.sh requires cs_normalise' no-pr-decisions.sh 'command -v cs_normalise'
+armed 'no-pr-decisions.sh requires cs_split' no-pr-decisions.sh 'command -v cs_split'
+armed 'no-pr-decisions.sh requires cs_gh_args' no-pr-decisions.sh 'command -v cs_gh_args'
+armed 'no-pr-decisions.sh requires cs_join' no-pr-decisions.sh 'command -v cs_join'
+armed 'no-commit-to-main.sh requires cs_normalise' no-commit-to-main.sh 'command -v cs_normalise'
+armed 'no-commit-to-main.sh requires cs_split' no-commit-to-main.sh 'command -v cs_split'
+armed 'no-commit-to-main.sh requires cs_git_args' no-commit-to-main.sh 'command -v cs_git_args'
+armed 'no-work-on-stale-branch.sh requires cs_normalise' no-work-on-stale-branch.sh 'command -v cs_normalise'
+armed 'no-work-on-stale-branch.sh requires cs_split' no-work-on-stale-branch.sh 'command -v cs_split'
+armed 'no-work-on-stale-branch.sh requires cs_git_args' no-work-on-stale-branch.sh 'command -v cs_git_args'
+armed 'pytest-via-uv-group.sh requires cs_normalise' pytest-via-uv-group.sh 'command -v cs_normalise'
+armed 'pytest-via-uv-group.sh requires cs_split' pytest-via-uv-group.sh 'command -v cs_split'
+armed 'alembic-via-uv-group.sh requires cs_normalise' alembic-via-uv-group.sh 'command -v cs_normalise'
+armed 'alembic-via-uv-group.sh requires cs_split' alembic-via-uv-group.sh 'command -v cs_split'
+for hook in $LIB_CONSUMERS; do
+  armed "$hook requires cs_tool_input" "$hook" 'command -v cs_tool_input'
+done
 # The readability test before the source, which no fixture above can tell apart:
 # under bash a `.` of a missing file returns non-zero and carries on, so nolib
 # behaves the same with it and without it. It is held as text for that reason,
@@ -4700,11 +5071,15 @@ armed 'pytest-via-uv-group.sh tests the library before sourcing it' \
       pytest-via-uv-group.sh '[ -r "$LIB" ] && . "$LIB"'
 armed 'alembic-via-uv-group.sh tests the library before sourcing it' \
       alembic-via-uv-group.sh '[ -r "$LIB" ] && . "$LIB"'
-echo "--- the probe list is the call list, and these are all the consumers ---"
+armed 'append-only-docs.sh tests the library before sourcing it' \
+      append-only-docs.sh '[ -r "$LIB" ] && . "$LIB"'
+armed 'append-only-docs-edit.sh tests the library before sourcing it' \
+      append-only-docs-edit.sh '[ -r "$LIB" ] && . "$LIB"'
+echo "--- the required list is the call list, and these are all the consumers ---"
 # THE ONE CHECK HERE THAT SURVIVES THE NEXT CHANGE. Every literal above names a
-# file and a function, so all of them together say that these four guards probe
-# these thirteen names -- and none of them says a probe list is COMPLETE. #84 was
-# a probe list narrower than a call set. A fifth cs_* call added to a hook
+# file and a function, so all of them together say that these four guards require
+# these thirteen names -- and none of them says a required list is COMPLETE. #84 was
+# a required list narrower than a call set. A fifth cs_* call added to a hook
 # tomorrow, or another file that sources the library, leaves every check above
 # green and is the same defect one turn later. That is not a hypothetical either:
 # #69 added two sourcers while #84 was being written, and this pair of checks is
@@ -4712,7 +5087,7 @@ echo "--- the probe list is the call list, and these are all the consumers ---"
 #
 # So both sides are derived from the files and compared with each other, in the
 # direction the boundary section at the foot of this suite uses: the code is the
-# fact, the guard's probe list is the claim asserted against it. Comments are
+# fact, the guard's required list is the claim asserted against it. Comments are
 # stripped first, for the reason `armed` strips them -- these headers name these
 # functions constantly, and a function named in prose is not a call.
 cs_calls() {  # cs_calls <hook> -- the cs_* functions its code actually calls
@@ -4720,24 +5095,24 @@ cs_calls() {  # cs_calls <hook> -- the cs_* functions its code actually calls
     | grep -v 'command -v cs_' \
     | grep -oE 'cs_[a-z_]+' | sort -u | tr '\n' ' '
 }
-cs_probes() {  # cs_probes <hook> -- the cs_* functions its load guard probes
+cs_required() {  # cs_required <hook> -- the cs_* functions its load guard requires
   sed 's/[[:space:]]*#.*$//' "$HOOKS/$1" \
     | grep -oE 'command -v cs_[a-z_]+' | sed 's/command -v //' | sort -u | tr '\n' ' '
 }
 for hook in $LIB_CONSUMERS; do
   CALLS=$(cs_calls "$hook")
-  PROBES=$(cs_probes "$hook")
+  REQUIRED=$(cs_required "$hook")
   # An empty derivation would make the comparison pass by matching nothing, which
   # is the permitting direction: a hook whose calls could not be read would report
-  # as agreeing with a guard that probes nothing.
-  if [ -z "$CALLS" ] || [ -z "$PROBES" ]; then
-    printf '  FAIL %s: no cs_* calls or no probes were read out of the file at all\n' "$hook"
+  # as agreeing with a guard that requires nothing.
+  if [ -z "$CALLS" ] || [ -z "$REQUIRED" ]; then
+    printf '  FAIL %s: no cs_* calls or no required names were read out of the file at all\n' "$hook"
     FAILED=1
-  elif [ "$CALLS" = "$PROBES" ]; then
-    printf '  ok   derived %s probes exactly what it calls: %s\n' "$hook" "${CALLS% }"
+  elif [ "$CALLS" = "$REQUIRED" ]; then
+    printf '  ok   derived %s requires exactly what it calls: %s\n' "$hook" "${CALLS% }"
   else
-    printf '  FAIL %s probes a set other than the one it calls\n         calls:  |%s|\n         probes: |%s|\n' \
-      "$hook" "$CALLS" "$PROBES"
+    printf '  FAIL %s requires a set other than the one it calls\n         calls:    |%s|\n         requires: |%s|\n' \
+      "$hook" "$CALLS" "$REQUIRED"
     FAILED=1
   fi
 done
@@ -4764,7 +5139,7 @@ fi
 # One property of this suite's own helpers, because nothing else here drives them
 # and `unarmed` reporting ok for a file it never read would make four pins below
 # vacuous. Run in a subshell so its FAILED cannot reach ours.
-if ( FAILED=0; unarmed 'probe' "$FIXTURES/no-such-file" 'anything'; exit $FAILED ) >/dev/null 2>&1
+if ( FAILED=0; unarmed 'self-check' "$FIXTURES/no-such-file" 'anything'; exit $FAILED ) >/dev/null 2>&1
 then
   printf '  FAIL unarmed reports ok for a file that is not there, so every pin below is vacuous\n'
   FAILED=1
@@ -4789,6 +5164,493 @@ unarmed 'pytest-via-uv-group.sh does not source the library unguarded' \
         pytest-via-uv-group.sh '. "$(dirname "$0")/lib/command-scan.sh"'
 unarmed 'alembic-via-uv-group.sh does not source the library unguarded' \
         alembic-via-uv-group.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+unarmed 'append-only-docs.sh does not source the library unguarded' \
+        append-only-docs.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+unarmed 'append-only-docs-edit.sh does not source the library unguarded' \
+        append-only-docs-edit.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+
+echo "=== issue #95: every hook refuses when it cannot read its input ==="
+# #84 made a hook that cannot load lib/command-scan.sh refuse. It did not reach
+# the step before that: every hook read its input with its own `jq` call, and when
+# the read failed the command was empty and the hook exited 0. Measured at
+# dev-05 e8c132f, all eight hooks, each condition below: exit 0 in every cell,
+# including `git push --force origin main` and `gh pr merge 5` with jq off PATH.
+# No check asked, because every helper above builds its payload with jq from a
+# command string -- none of them can hand a hook stdin that is not JSON, or a
+# command that is not a string. The harness's half of the seam was assumed.
+#
+# The fail direction is #103's Q19, stated in #95: refuse when jq is absent, when
+# stdin is not valid JSON, and when the field the hook reads is missing or not a
+# string; permit only an empty command string, which has nothing to run. A change
+# to the harness's payload then shows as every Bash call refused, not as every
+# guard switched off without a word -- CLAUDE.md's left-open item 3.
+#
+# Both directions, and they do not fail the same way. Every BLOCK here fails at
+# e8c132f. The ALLOWs pass there and are not evidence about the fix; they are
+# evidence about the fix going too far, and each names the over-fix it catches.
+#
+# The checks drive feed and feed_says, which hand a hook raw stdin; they are
+# defined beside check_file, because the load-contract section above needs them
+# for the two consumers #95 added.
+
+# jq off PATH, built here rather than assumed about the machine: a directory of
+# symlinks to every executable on this suite's own PATH, and a copy of it with jq
+# removed. Every tool, not the ones a hook is known to call today -- a list of
+# those would be a claim, and the next hook to call a new tool would refuse
+# without jq for a reason no check names.
+#
+# The with-jq twin is the control that makes the other one evidence. A hook that
+# refuses under the jq-less PATH might be refusing because the fixture is broken
+# -- a tool missing, a link dangling -- and that refusal would read as the fix. So
+# every jq-less BLOCK below stands beside the same payload under the twin, which
+# must ALLOW, and the guard asserts the two directories differ by jq and nothing
+# else.
+WITH_JQ_BIN="$FIXTURES/path-with-jq"
+NO_JQ_BIN="$FIXTURES/path-without-jq"
+mkdir -p "$WITH_JQ_BIN"
+IFS=: read -ra SUITE_PATH_DIRS <<< "$PATH"
+for d in "${SUITE_PATH_DIRS[@]}"; do
+  [ -d "$d" ] || continue
+  # ln -t without -f keeps the first of two same-named tools, which is the one
+  # PATH lookup would have found; the "File exists" for the second is expected.
+  find "$d" -maxdepth 1 \( -type f -o -type l \) -perm -u+x \
+    -exec ln -s -t "$WITH_JQ_BIN" {} + 2>/dev/null
+done
+cp -a "$WITH_JQ_BIN" "$NO_JQ_BIN"
+rm -f "$NO_JQ_BIN/jq"
+[ -n "$( PATH="$WITH_JQ_BIN"; command -v jq )" ] \
+  && [ -z "$( PATH="$NO_JQ_BIN"; command -v jq )" ] \
+  && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$NO_JQ_BIN") | grep -c '^[<>]')" = 1 ] \
+  && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$NO_JQ_BIN") | grep '^[<>]')" = '< jq' ] || {
+  echo "the jq-less PATH fixture is not the with-jq one minus jq; the checks using it prove nothing" >&2
+  exit 1
+}
+[ -e "$REPO_ROOT/src/config.py" ] || {
+  echo "src/config.py is not there, so the Edit hook's controls would permit for want of a file; they would prove nothing" >&2
+  exit 1
+}
+
+# The hooks, as literals, split by the field they read. The derivation at the end
+# of this section asserts these are every hook settings.json registers -- #84's
+# lesson, that the literal list is the claim and the files are the fact.
+INPUT_BASH_HOOKS="alembic-via-uv-group.sh append-only-docs.sh no-commit-to-main.sh no-git-push.sh no-pr-decisions.sh no-work-on-stale-branch.sh pytest-via-uv-group.sh"
+INPUT_EDIT_HOOKS="append-only-docs-edit.sh"
+
+echo "--- the seven Bash hooks, tool_input.command ---"
+for hook in $INPUT_BASH_HOOKS; do
+  feed "$WITH_JQ_BIN" "$hook" ALLOW "$hook: control, the symlinked PATH with jq in it permits ls" \
+    '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+  feed "$NO_JQ_BIN" "$hook" BLOCK "$hook: jq not on PATH, and the command is only ls" \
+    '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+  feed_says "$NO_JQ_BIN" "$hook" 'jq is not on PATH' \
+    "$hook: and the refusal names the cause, so the fix is one install away" \
+    '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+
+  # Not valid JSON. The trailing-text case is the one a reader that checks only
+  # for output gets wrong: jq prints the command from the first value and then
+  # exits non-zero on the rest.
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is plain text, not JSON" \
+    'git push --force origin main'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is JSON cut off before its closing braces" \
+    '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is a JSON object with text after it" \
+    '{"tool_name":"Bash","tool_input":{"command":"ls"}} trailing'
+  # Two values is a stream jq reads happily, one command per value, and not one
+  # tool call. The harness sends one; a reader that took the first would judge a
+  # command other than the second, so neither is read.
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is two JSON objects, one after the other" \
+    '{"tool_name":"Bash","tool_input":{"command":"ls"}}{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+  # Empty stdin is not an error to jq: it reads no values, prints nothing and
+  # exits 0. A fix that trusts jq's exit status alone permits this one.
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is empty" \
+    ''
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is the JSON value null" \
+    'null'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is a JSON array" \
+    '[]'
+
+  # Valid JSON, and the field is not there.
+  feed "$PATH" "$hook" BLOCK "$hook: no tool_input at all" \
+    '{"tool_name":"Bash"}'
+  feed "$PATH" "$hook" BLOCK "$hook: tool_input is a string, not an object" \
+    '{"tool_name":"Bash","tool_input":"ls"}'
+  feed "$PATH" "$hook" BLOCK "$hook: tool_input with no command, the row #95 measured" \
+    '{"tool_name":"Bash","tool_input":{}}'
+  feed "$PATH" "$hook" BLOCK "$hook: an Edit payload, whose file_path is not the field this hook reads" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"ls"}}'
+
+  # The field is there and is not a string.
+  feed "$PATH" "$hook" BLOCK "$hook: command is null" \
+    '{"tool_name":"Bash","tool_input":{"command":null}}'
+  feed "$PATH" "$hook" BLOCK "$hook: command is a number" \
+    '{"tool_name":"Bash","tool_input":{"command":42}}'
+  feed "$PATH" "$hook" BLOCK "$hook: command is an array of words" \
+    '{"tool_name":"Bash","tool_input":{"command":["git","push","--force","origin","main"]}}'
+  feed "$PATH" "$hook" BLOCK "$hook: command is an object" \
+    '{"tool_name":"Bash","tool_input":{"command":{"text":"ls"}}}'
+
+  # The permitting direction. An empty string is the one fail-open condition #95
+  # names: there is nothing to run. A fix that refuses whenever the command is
+  # empty, rather than whenever it was not read, turns this red.
+  feed "$PATH" "$hook" ALLOW "$hook: command is the empty string, which runs nothing" \
+    '{"tool_name":"Bash","tool_input":{"command":""}}'
+  # `jq -r` prints a JSON null as the four letters null. A fix that compares its
+  # output to "null" refuses this string; one that does not compare permits the
+  # null above. Only reading the type answers both.
+  feed "$PATH" "$hook" ALLOW "$hook: command is the string \"null\", which is a string" \
+    '{"tool_name":"Bash","tool_input":{"command":"null"}}'
+done
+
+echo "--- the trade, taken knowingly: without jq the convention hooks refuse what they permit ---"
+# #95 records this rather than only the fix. With jq absent every Bash command is
+# refused, the ones these two hooks exist to permit included. Each refusal stands
+# beside its twin under the with-jq PATH, so the pair says the command is one the
+# hook permits and that jq's absence alone is what turns it.
+feed "$WITH_JQ_BIN" pytest-via-uv-group.sh ALLOW 'pytest the way CLAUDE.md says to run it, jq on PATH' \
+  '{"tool_name":"Bash","tool_input":{"command":"uv run --group test pytest tests/"}}'
+feed "$NO_JQ_BIN" pytest-via-uv-group.sh BLOCK 'the same pytest, jq not on PATH' \
+  '{"tool_name":"Bash","tool_input":{"command":"uv run --group test pytest tests/"}}'
+feed "$WITH_JQ_BIN" alembic-via-uv-group.sh ALLOW 'alembic the way CLAUDE.md says to run it, jq on PATH' \
+  '{"tool_name":"Bash","tool_input":{"command":"uv run --group migrations alembic upgrade head"}}'
+feed "$NO_JQ_BIN" alembic-via-uv-group.sh BLOCK 'the same alembic, jq not on PATH' \
+  '{"tool_name":"Bash","tool_input":{"command":"uv run --group migrations alembic upgrade head"}}'
+
+echo "--- append-only-docs-edit.sh, tool_input.file_path ---"
+# The Edit hook read `.tool_input.file_path // empty`, so null, false and a
+# missing field all became "no file" and were permitted before the path was ever
+# compared. The controls name a file that exists outside the guarded directories,
+# by absolute path as the harness sends one, so their ALLOW is the hook's answer
+# about the path and not about a file that is not there.
+#
+# An empty file_path string is permitted, and pinned below. #95 names the empty
+# string as the fail-open case for a command and says nothing about a path, so
+# the fix decided it: an empty path names no file, there is nothing to protect,
+# and it is what the hook returned before. Recorded in the hook, and here.
+# EDIT_CONTROL is built once, in the load-contract section above.
+for hook in $INPUT_EDIT_HOOKS; do
+  feed "$WITH_JQ_BIN" "$hook" ALLOW "$hook: control, the symlinked PATH with jq in it permits an edit of src/config.py" \
+    "$EDIT_CONTROL"
+  feed "$NO_JQ_BIN" "$hook" BLOCK "$hook: jq not on PATH, and the file is outside every guarded directory" \
+    "$EDIT_CONTROL"
+  feed_says "$NO_JQ_BIN" "$hook" 'jq is not on PATH' \
+    "$hook: and the refusal names the cause" \
+    "$EDIT_CONTROL"
+
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is plain text, not JSON" \
+    'docs/dev-log/devlog_2026-08-25_session-2.md'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is JSON cut off before its closing braces" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"docs/dev-log/devlog_2026-08-25_session-2.md"'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is a JSON object with text after it" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"src/config.py"}} trailing'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is two JSON objects, one after the other" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"src/config.py"}}{"tool_name":"Edit","tool_input":{"file_path":"src/config.py"}}'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is empty" \
+    ''
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is the JSON value null" \
+    'null'
+  feed "$PATH" "$hook" BLOCK "$hook: stdin is a JSON array" \
+    '[]'
+
+  feed "$PATH" "$hook" BLOCK "$hook: no tool_input at all" \
+    '{"tool_name":"Edit"}'
+  feed "$PATH" "$hook" BLOCK "$hook: tool_input is a string, not an object" \
+    '{"tool_name":"Edit","tool_input":"src/config.py"}'
+  feed "$PATH" "$hook" BLOCK "$hook: tool_input with no file_path" \
+    '{"tool_name":"Edit","tool_input":{}}'
+  feed "$PATH" "$hook" BLOCK "$hook: a Bash payload, whose command is not the field this hook reads" \
+    '{"tool_name":"Bash","tool_input":{"command":"docs/dev-log/devlog_2026-08-25_session-2.md"}}'
+
+  feed "$PATH" "$hook" BLOCK "$hook: file_path is null" \
+    '{"tool_name":"Edit","tool_input":{"file_path":null}}'
+  feed "$PATH" "$hook" BLOCK "$hook: file_path is false, which // empty also swallowed" \
+    '{"tool_name":"Edit","tool_input":{"file_path":false}}'
+  feed "$PATH" "$hook" BLOCK "$hook: file_path is a number" \
+    '{"tool_name":"Edit","tool_input":{"file_path":42}}'
+  feed "$PATH" "$hook" BLOCK "$hook: file_path is an array" \
+    '{"tool_name":"Edit","tool_input":{"file_path":["docs","dev-log"]}}'
+  feed "$PATH" "$hook" BLOCK "$hook: file_path is an object" \
+    '{"tool_name":"Edit","tool_input":{"file_path":{"path":"src/config.py"}}}'
+
+  # The permitting direction, and the trade the fix decided: see the note above.
+  feed "$PATH" "$hook" ALLOW "$hook: file_path is the empty string, which names no file" \
+    '{"tool_name":"Edit","tool_input":{"file_path":""}}'
+  feed "$PATH" "$hook" ALLOW "$hook: file_path is the string \"null\", which is a path that is not there" \
+    '{"tool_name":"Edit","tool_input":{"file_path":"null"}}'
+done
+
+echo "--- every registered hook is one of these, and the read is written once ---"
+# The two lists above are the claim; settings.json is the fact. A hook registered
+# tomorrow with its own input read is #95 again, and every literal above would
+# stay green, so the lists are derived from the registration and compared. A
+# matcher is split on | so that a hook registered for Bash|Edit lands in both.
+registered_for() {  # registered_for <tool> -- hook basenames whose matcher names it
+  jq -r --arg t "$1" \
+    '.hooks.PreToolUse[] | select(any(.matcher | split("|")[]; . == $t)) | .hooks[].command' \
+    "$REPO_ROOT/.claude/settings.json" 2>/dev/null \
+    | sed 's#^.*/##; s#"$##' | sort -u | tr '\n' ' '
+}
+for pair in "Bash:$INPUT_BASH_HOOKS" "Edit:$INPUT_EDIT_HOOKS" "Write:$INPUT_EDIT_HOOKS"; do
+  tool=${pair%%:*}
+  REGISTERED=$(registered_for "$tool")
+  CLAIMED=$(printf '%s\n' ${pair#*:} | sort -u | tr '\n' ' ')
+  # Empty is the permitting direction: a settings.json that could not be read
+  # would agree with an empty list.
+  if [ -n "$REGISTERED" ] && [ "$REGISTERED" = "$CLAIMED" ]; then
+    printf '  ok   derived the hooks registered for %s are exactly the ones checked here: %s\n' "$tool" "${REGISTERED% }"
+  else
+    printf '  FAIL the hooks registered for %s are not the ones this section checks\n         registered: |%s|\n         checked:    |%s|\n' \
+      "$tool" "$REGISTERED" "$CLAIMED"
+    FAILED=1
+  fi
+done
+# #103's Q27: the read moves into one shared reader in lib/command-scan.sh, so
+# that eight copies cannot disagree. Comments are stripped first, for the reason
+# `armed` strips them. The Edit hook is asked too: #95 let it keep its own copy
+# if the pull request recorded why, and it took the shared reader instead.
+# The strip has `armed`'s soft spot, named rather than closed: it cuts at the
+# `#` of a parameter expansion too, so a jq call later on a line holding `${x#y}`
+# would be hidden from this text check. What would still hold is the behavioural
+# half: the checks above take jq off PATH and feed malformed input whatever a
+# hook's text says, so a hidden second copy could disagree with the reader only
+# where they do not look.
+for hook in $INPUT_BASH_HOOKS $INPUT_EDIT_HOOKS; do
+  if sed 's/[[:space:]]*#.*$//' "$HOOKS/$hook" | grep -qw jq; then
+    printf '  FAIL %s still calls jq itself rather than the shared reader\n' "$hook"
+    FAILED=1
+  else
+    printf '  ok   derived %s does not call jq itself\n' "$hook"
+  fi
+done
+# And the reader is the library's, in live code. `armed` strips comments, so a
+# reader commented out would not satisfy it; the behavioural checks above would
+# go red too, but this one names where.
+armed 'the library defines the shared reader' lib/command-scan.sh 'cs_tool_input() {'
+# #95's acceptance: the fail direction for each condition stated in one place.
+# `written`, because it is prose.
+written 'the library states the fail direction of the input read' \
+  "$HOOKS/lib/command-scan.sh" 'THE INPUT READ'
+written 'and records the trade an environment without jq pays' \
+  "$HOOKS/lib/command-scan.sh" 'THE TRADE, taken knowingly'
+
+echo "=== the exit-status helpers themselves: #98 ==="
+# The rule, and what it replaced, is written above `verdict`. Nothing else in this
+# suite drives a helper with a hook that crashes, so these ask the helpers
+# directly, in the manner of the `unarmed` self-test above: the helper runs in a
+# subshell with its own FAILED, and what is asserted is the FAILED it leaves --
+# the helper's result, not the fixture's exit status. The crash-1 fixture gets its
+# 1 from `set -e`, which no hook uses; it stands for any exit that is neither 0
+# nor 2, and 1 is the one the old reading and the new disagree about.
+#
+# Each fixture leaves a marker before it exits, and the marker is asserted too.
+# `check` and `check_file` run `./<script>` from the working directory, so a
+# fixture the helper could not find would exit 127 on its own account and a
+# crash-1 case would FAIL for that reason rather than the one it names.
+#
+# The passing cases per helper are about this harness rather than the rule:
+# without them a harness that reported FAIL for everything would pass every
+# crash case below. And the crash cases that expect BLOCK are not evidence
+# against a revert -- the one-bit reading failed those too -- but against the
+# other wrong reading, every nonzero exit as BLOCK, which they were measured to
+# catch.
+EXITS="$FIXTURES/exits"
+mkdir -p "$EXITS"
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-allow-0"\nexit 0\n' > "$EXITS/allow-0.sh"
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-block-2"\necho "block-2 refuses" >&2\nexit 2\n' > "$EXITS/block-2.sh"
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-crash-1"\necho "crash-1 fixture stderr" >&2\nset -e\nfalse\nexit 0\n' > "$EXITS/crash-1.sh"
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-crash-127"\necho "crash-127 fixture stderr" >&2\nno-such-tool-for-check-hooks\n' > "$EXITS/crash-127.sh"
+chmod +x "$EXITS"/*.sh
+for f in allow-0 block-2 crash-1 crash-127; do
+  [ -x "$EXITS/$f.sh" ] || {
+    echo "the exit-status fixture $f.sh was not created; the self-test using it proves nothing" >&2
+    exit 1
+  }
+done
+
+# Where drive_helper leaves what the helper printed, for failure_line_says to read.
+# Only its stdout: stderr goes to a file nothing reads, so a helper that let the
+# hook's stderr through instead of printing it cannot pass for having printed it.
+# Found by review of #98, which had both in one file.
+EXITS_OUTPUT="$EXITS/output"
+
+# Run one helper against one fixture in a subshell, and print ok or FAIL for the
+# FAILED it left. The call shapes differ because the helpers take their hook
+# differently: check and check_file by a name run from the working directory, the
+# rest by an absolute path. `feed` and `feed_says` take a PATH and a raw payload
+# rather than a command; the PATH is the suite's own, because the fixtures call
+# `dirname` to leave their marker. `says`, `says_not` and `feed_says` take a
+# fragment where the others take a verdict: the fixture's own name, which is in
+# everything a fixture says, so `says` and `feed_says` have something to find --
+# a crashed fixture included, which is what makes their crash cases evidence --
+# and `says_not` is given something it never sees.
+drive_helper() {  # drive_helper <helper> <fixture> <want>
+  local helper="$1" fixture="$2" want="$3" result
+  rm -f "$EXITS/ran-$fixture"
+  if ( FAILED=0
+       cd "$EXITS" || exit 3
+       case "$helper" in
+         check)      check "$fixture.sh" "$want" 'self-test' 'true' ;;
+         check_in)   check_in "$EXITS" "$EXITS/$fixture.sh" "$want" 'self-test' 'true' ;;
+         flip)       flip "$EXITS" "$EXITS/$fixture.sh" ALLOW "$want" 'self-test' 'true' ;;
+         check_file) check_file "$fixture.sh" "$want" 'self-test' 'docs/x.md' ;;
+         says)       says "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
+         says_not)   says_not "$EXITS" "$EXITS/$fixture.sh" 'never-said' 'self-test' 'true' ;;
+         feed)       feed "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
+         feed_says)  feed_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' '{}' ;;
+         *)          exit 3 ;;
+       esac
+       exit $FAILED ) >"$EXITS_OUTPUT" 2>"$EXITS/stray-stderr"
+  then result=ok; else result=FAIL; fi
+  [ -e "$EXITS/ran-$fixture" ] || result="$result, and the fixture never ran"
+  printf '%s\n' "$result"
+}
+
+# The failure line names what happened: the exit status, and what the hook said.
+# `exit=<status>` and `stderr |<what it said>` are the spellings pinned here.
+failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
+  if grep -qE "exit=$2([^0-9]|\$)" "$EXITS_OUTPUT" \
+     && grep -qF -- "stderr |$3" "$EXITS_OUTPUT"; then
+    printf '  ok   %s\n' "$1"
+  else
+    printf '  FAIL %s\n         wanted exit=%s and |stderr |%s| on the failure line\n         it said |%s|\n' \
+      "$1" "$2" "$3" "$(cat "$EXITS_OUTPUT")"
+    FAILED=1
+  fi
+}
+
+# The helpers this self-test drives, named once: each loop below runs off its list,
+# and the derivation at the end of this section is asserted against both. A
+# helper added to neither is red there; one added to a list is driven.
+DRIVEN_VERDICT='check check_in flip check_file feed'
+DRIVEN_MESSAGE='says says_not feed_says'
+
+for helper in $DRIVEN_VERDICT; do
+  tok "$helper: a hook that exits 0 passes an ALLOW expectation" \
+      'ok' "$(drive_helper "$helper" allow-0 ALLOW)"
+  tok "$helper: a hook that exits 2 passes a BLOCK expectation" \
+      'ok' "$(drive_helper "$helper" block-2 BLOCK)"
+  tok "$helper: a hook that exits 1 fails an ALLOW expectation" \
+      'FAIL' "$(drive_helper "$helper" crash-1 ALLOW)"
+  failure_line_says "$helper: that failure line names exit 1 and the hook's stderr" \
+      1 'crash-1 fixture stderr'
+  tok "$helper: a hook that exits 1 fails a BLOCK expectation" \
+      'FAIL' "$(drive_helper "$helper" crash-1 BLOCK)"
+  tok "$helper: a hook that exits 127 fails an ALLOW expectation" \
+      'FAIL' "$(drive_helper "$helper" crash-127 ALLOW)"
+  failure_line_says "$helper: that failure line names exit 127 and the hook's stderr" \
+      127 'crash-127 fixture stderr'
+  tok "$helper: a hook that exits 127 fails a BLOCK expectation" \
+      'FAIL' "$(drive_helper "$helper" crash-127 BLOCK)"
+done
+
+# The message helpers. A refusal is the only thing any of them can pass on, so
+# the passing case is exit 2 alone.
+for helper in $DRIVEN_MESSAGE; do
+  tok "$helper: a hook that exits 2 passes" \
+      'ok' "$(drive_helper "$helper" block-2 -)"
+  tok "$helper: a hook that exits 1 fails, whatever its stderr says" \
+      'FAIL' "$(drive_helper "$helper" crash-1 -)"
+  failure_line_says "$helper: that failure line names exit 1 and the hook's stderr" \
+      1 'crash-1 fixture stderr'
+  tok "$helper: a hook that exits 127 fails, whatever its stderr says" \
+      'FAIL' "$(drive_helper "$helper" crash-127 -)"
+  failure_line_says "$helper: that failure line names exit 127 and the hook's stderr" \
+      127 'crash-127 fixture stderr'
+done
+
+# And that the helpers driven above are all of them. The helpers that read a hook's
+# exit status are derived from this file, and each must be in one of the two lists
+# the loops above run off -- so a new reader is either driven or red here. `flip`
+# reads no status of its own -- it hands its verdict to check_in -- so it is driven
+# because #98 names it, and is not in the derived set.
+#
+# The first version compared the derivation with a third literal, which nothing
+# tied to the loops: a one-bit reader added to that literal alone left the suite
+# green and the reader undriven. Found by review of PR #116, not by this suite.
+#
+# What the derivation does not find, named because a check is evidence about what
+# it names: a reader spelled other than `rc=$?`, such as `if "$hook"; then`; and a
+# function defined indented, whose body therefore has no `}` at the start of a
+# line to end it. Both are the permitting direction. It does find names with
+# capitals or digits, and the `function` keyword with or without parens. Comments
+# are stripped first, as cs_calls strips them.
+STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$HOOKS/check-hooks.sh" \
+  | awk '/^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
+           fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
+         }
+         /^\}/                 { fn = "" }
+         fn != "" && /rc=\$\?/ { print fn }' \
+  | sort -u | tr '\n' ' ')
+# An empty derivation would make every membership below pass by asking nothing.
+if [ -z "$STATUS_READERS" ]; then
+  printf '  FAIL no helper that reads a hook exit status was derived from this file at all\n'
+  FAILED=1
+fi
+for reader in $STATUS_READERS; do
+  present "derived $reader reads a hook exit status, and the #98 self-test drives it" \
+          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE"
+done
+
+echo "--- issue #101: a load guard requires a function ---"
+# CONTEXT.md keeps "check" for an assertion written out in advance and "probe"
+# for a measurement whose answer is not known until it runs, and #38 renamed this
+# suite for that reason. #84 then wrote "probe" for a `command -v` test in the
+# library and every guard, which is neither, and #101 renamed it "requires". The
+# drift arrived with the contract's own prose, so the prose is what is held:
+# the library and each consumer, read as written with comments included, since
+# nearly every use was in a comment. Case-folded, and "probing" as well as
+# "probe", because the drift reached CLAUDE.md in that spelling.
+#
+# One use in these files is correct and stays: no-work-on-stale-branch.sh's
+# header names the probe->check rename itself. It is exempt as that whole line
+# in that one file, rather than by line number, which goes stale the moment a
+# line is added above; a copy of it elsewhere, or a word appended to it, is not
+# exempt. Text that stops matching exempts nothing, and the scan then fails on
+# that file: the refusing direction, visible and one edit away.
+#
+# Two files are not scanned, and that is a trade rather than an oversight. This
+# suite's own header uses the word correctly, and the block holding the rule
+# cannot avoid naming the word it rules on, so its check labels are held by
+# review. Naming is all it may do: review of PR #119 found the heading and the
+# ok label using the word for a load guard ("does not probe one"), which a scan
+# of this file would have caught and this block's own text did not. The word is
+# not retired -- CONTEXT.md still means a measurement by it -- only that use is.
+# Review of the merge across #95 found a second: a #95 comment calling the
+# cs_tool_input guard "the probe", reachable by no check because it is here.
+# CLAUDE.md carries correct uses (the judge's probe harness, scripts/probe_*.py)
+# beside the #84 paragraph, so the same scan there would need an exemption per
+# correct use, and #101 names .claude/hooks/ as its scope.
+#
+# The file list is $LIB_CONSUMERS. It is written by hand, but the #84 section
+# asserts it equal to the files that actually source the library, so a seventh
+# consumer turns that check red until it is added -- and is then scanned here.
+#
+# awk rather than grep, for two reasons. The exemption has to be a whole line
+# in one file, which a grep -v filter over "N:text" output cannot say. And a
+# read error has to fail: grep exits 2 into a pipeline that reads as "no hits",
+# which is the permitting direction, where awk's status is kept and asked.
+VOCAB_EXEMPT_FILE=no-work-on-stale-branch.sh
+VOCAB_EXEMPT='# the probe->check rename was committed onto hooks-push-and-pr-guards after'
+for f in lib/command-scan.sh $LIB_CONSUMERS; do
+  EXEMPT=
+  [ "$f" = "$VOCAB_EXEMPT_FILE" ] && EXEMPT=$VOCAB_EXEMPT
+  if [ ! -r "$HOOKS/$f" ] || [ -d "$HOOKS/$f" ]; then
+    printf '  FAIL %s cannot be read, so the absence of "probe" in it is evidence of nothing\n' "$f"
+    FAILED=1
+    continue
+  fi
+  if ! HITS=$(awk -v ex="$EXEMPT" \
+      'tolower($0) ~ /prob(e|ing)/ && !(ex != "" && $0 == ex) { print FNR ": " $0 }' \
+      "$HOOKS/$f" 2>/dev/null); then
+    printf '  FAIL %s could not be scanned, so the absence of "probe" in it is evidence of nothing\n' "$f"
+    FAILED=1
+  elif [ -z "$HITS" ]; then
+    printf '  ok   written %s says a guard requires a function\n' "$f"
+  else
+    printf '  FAIL %s uses "probe", which CONTEXT.md keeps for a measurement:\n%s\n' \
+      "$f" "$(printf '%s\n' "$HITS" | sed 's/^/         /')"
+    FAILED=1
+  fi
+done
 
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
