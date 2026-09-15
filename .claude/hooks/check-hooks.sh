@@ -7755,7 +7755,7 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       for (i = 1; i <= nreq; i++) {
         id = order[i]; st = get(id, "status"); kw = keyword(st)
         if (kw == "active") mverdict = covered(id) ? "covered" : "NOT COVERED"
-        else if (kw == "gap" && covered(id)) mverdict = "not asked, though its tags now meet coverage"
+        else if (kw == "gap" && get(id, "seam") != "none" && covered(id)) mverdict = "not asked, though its tags now meet coverage"
         else mverdict = "not asked"
         extra = ""
         if ((id, "direction") in field) extra = extra ", " keyword(get(id, "direction"))
@@ -8089,6 +8089,14 @@ holds 'the matrix names a gap whose tags now meet coverage' \
   "$(requirements_read matrix "$REQ_FIX/gap-covered/requirements.md" "$REQ_FIX/gap-covered/ledger" \
        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' 'gap:1 review:0')" \
   "FR-3  gap → ${H}7  not asked, though its tags now meet coverage (1 refusing, 1 permitting, 0 static)"
+# A gap no check can reach has no tags to meet anything with, and a first version
+# of the line above said its tags met coverage all the same, because `seam: none`
+# is covered by definition. Found reading this branch's own matrix.
+req_mutant seam-gap requirements.md "s/^- status: active\$/&/; /^### FR-2\$/,/^- verify:/s/^- status: active\$/- status: gap → ${H}7/"
+holds 'and does not say it of a gap no check can reach' \
+  "$(requirements_read matrix "$REQ_FIX/seam-gap/requirements.md" "$REQ_FIX/clean/ledger" \
+       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' 'gap:2 review:0')" \
+  "FR-2  gap → ${H}7  not asked (0 refusing, 0 permitting, 0 static, seam: none, verify: tests/present.py)"
 
 echo "--- every result goes through pass and fail ---"
 # A result printed any other way is printed and not recorded, so it covers
