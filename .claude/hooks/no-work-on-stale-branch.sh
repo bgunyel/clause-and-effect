@@ -32,9 +32,10 @@
 # from `src/` and from `src/deep/` -- the refusing direction, where
 # no-git-push.sh made the same comparison and failed the permitting one. Its
 # header carries why the fix is `pwd -P` rather than
-# `rev-parse --path-format=absolute`. canonical_dir below is a copy of the one
-# there; check-hooks.sh drives both hooks two directories deep and through a
-# symlink, which is what holds the copies to one answer.
+# `rev-parse --path-format=absolute`, and why CDPATH is emptied for the cd.
+# canonical_dir below is a copy of the one there: check-hooks.sh holds the two
+# texts identical, and drives both hooks two directories deep and through a
+# symlink.
 #
 # TWO DETECTORS, EACH COVERING THE OTHER'S BLIND SPOT.
 #
@@ -226,7 +227,7 @@ echo "$COMMAND" | grep -q 'git' || exit 0
 # A path that will not resolve abstains, as an empty one always did.
 canonical_dir() {
   [ -n "$1" ] || return 1
-  (cd -- "$1" >/dev/null 2>&1 && pwd -P)
+  (CDPATH= cd -- "$1" >/dev/null 2>&1 && pwd -P)
 }
 GIT_DIR_PATH=$(canonical_dir "$(git rev-parse --git-dir 2>/dev/null)")
 GIT_COMMON_PATH=$(canonical_dir "$(git rev-parse --git-common-dir 2>/dev/null)")

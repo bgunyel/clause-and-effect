@@ -2753,6 +2753,126 @@ check_in "$LIFE_LINK/src/deep" no-work-on-stale-branch.sh ALLOW 'main checkout t
 check_in "$LIFE_LINK/wt-stale/src/deep" no-work-on-stale-branch.sh BLOCK 'stale worktree through a symlink, src/deep/: a commit is still refused' \
   'git commit -m "wip"'
 
+echo "=== review of #111: the #94 comparison when it has nothing to compare, and its two copies ==="
+# Three points from the review of the #94 pull request, each checked here.
+#
+# ONE. A --git-common-dir that will not resolve. no-git-push.sh refused it, which
+# is the right direction, but through the main-checkout message, which is a claim
+# it could not support on that path -- and the #94 pull request recorded the path
+# as reached by no check. No repository reaches it: git that cannot find its
+# common directory cannot find the repository either. So git is made to report
+# one: a shim first on PATH answers --git-common-dir with a directory that does
+# not exist and hands every other call to the real git. It is a fixture of the
+# kind halflib is, a component made to fail one way at a time, and it is driven
+# in the linked worktree, where a hook that read the unresolved path as a
+# worktree would permit the push -- so the BLOCK there is the guard and nothing
+# else.
+REAL_GIT=$(command -v git)
+GIT_SHIM="$FIXTURES/git-shim"
+mkdir -p "$GIT_SHIM"
+printf '#!/bin/bash\nfor a in "$@"; do\n  [ "$a" = --git-common-dir ] && { echo /nonexistent-111/.git; exit 0; }\ndone\nexec %s "$@"\n' \
+  "$REAL_GIT" > "$GIT_SHIM/git"
+chmod +x "$GIT_SHIM/git"
+# Both halves of the shim, asserted: the one answer it fakes, and the answers it
+# must not, or the checks below would be refused for a reason they do not name.
+[ "$(cd "$PUSH_WT" && PATH="$GIT_SHIM:$PATH" git rev-parse --git-common-dir)" = /nonexistent-111/.git ] \
+  && [ -d "$(cd "$PUSH_WT" && PATH="$GIT_SHIM:$PATH" git rev-parse --git-dir)" ] \
+  && [ "$(cd "$PUSH_WT" && PATH="$GIT_SHIM:$PATH" git branch --show-current)" = "$PUSH_BRANCH" ] || {
+  echo "the git shim does not fake --git-common-dir alone; the checks using it prove nothing" >&2
+  exit 1
+}
+# A variable set in front of a function call reaches the processes it starts, so
+# the hook check_in runs sees the shim first.
+PATH="$GIT_SHIM:$PATH" check_in "$PUSH_WT" no-git-push.sh BLOCK \
+  'an unresolvable --git-common-dir, in a linked worktree: a push of its own branch is refused' \
+  "git push origin $PUSH_BRANCH"
+PATH="$GIT_SHIM:$PATH" says "$PUSH_WT" no-git-push.sh 'could not be resolved' \
+  'and the refusal says what it could not resolve' "git push origin $PUSH_BRANCH"
+PATH="$GIT_SHIM:$PATH" says_not "$PUSH_WT" no-git-push.sh 'This is the main checkout' \
+  'and does not claim this is the main checkout' "git push origin $PUSH_BRANCH"
+# The stale guard abstains on the same path, as it always did on an empty one.
+# In the stale worktree a guard that read the unresolved path as a worktree would
+# refuse, so the ALLOW is the abstention.
+PATH="$GIT_SHIM:$PATH" check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW \
+  'an unresolvable --git-common-dir, in a stale worktree: the guard abstains' \
+  'git commit -m "wip"'
+# Outside any repository --git-dir is empty too, and that was the main-checkout
+# message as well. Guarded, because a directory that turned out to sit inside a
+# repository would be refused for a different reason.
+NOT_A_REPO="$FIXTURES/not-a-repo"
+mkdir -p "$NOT_A_REPO"
+! git -C "$NOT_A_REPO" rev-parse --git-dir >/dev/null 2>&1 || {
+  echo "$NOT_A_REPO is inside a git repository; the checks using it prove nothing" >&2
+  exit 1
+}
+check_in "$NOT_A_REPO" no-git-push.sh BLOCK 'outside any repository: a push is refused' \
+  'git push origin feature-x'
+says "$NOT_A_REPO" no-git-push.sh 'could not be resolved' \
+  'and the refusal does not call it the main checkout' 'git push origin feature-x'
+
+# TWO AND THREE. canonical_dir is a copy in each hook -- the stale guard compares
+# before it loads lib/command-scan.sh, so a shared function would cost a library
+# load on every git command -- and the behavioural checks above held the copies
+# to one answer only at the cases they name. So the text is held too, the way the
+# dev-branch derivation is: each file defines it once, the two are equal, and
+# each is the function as pinned here.
+#
+# CDPATH is why the text matters. git prints `.git` at the root of a checkout,
+# and `cd .git` looks that name up through CDPATH before the working directory,
+# so a CDPATH holding a directory with a .git in it moved the cd somewhere else.
+# No verdict ever turned on it -- both halves are `.git` at the root and moved
+# alike, and below the root git prints ../.git or an absolute path, which CDPATH
+# does not consult -- so no check that runs a hook can see it. The function is
+# run on its own instead: extracted from each hook, evaluated in a subshell, and
+# pointed at a decoy. That is not seam 1, and it is said so here rather than left
+# to be noticed.
+canonical_dir_text() {  # canonical_dir_text <file> -- the function, as written
+  awk '/^canonical_dir\(\) \{$/ { f = 1 }
+       f                        { print }
+       f && /^\}$/              { exit }' "$1" 2>/dev/null
+}
+CANONICAL_DIR=$(cat <<'CANONICAL'
+canonical_dir() {
+  [ -n "$1" ] || return 1
+  (CDPATH= cd -- "$1" >/dev/null 2>&1 && pwd -P)
+}
+CANONICAL
+)
+tok 'no-git-push.sh defines canonical_dir exactly once' \
+    '1' "$(grep -c '^canonical_dir() {$' "$HOOKS/no-git-push.sh")"
+tok 'and no-work-on-stale-branch.sh defines it exactly once' \
+    '1' "$(grep -c '^canonical_dir() {$' "$HOOKS/no-work-on-stale-branch.sh")"
+tok 'the two copies of canonical_dir are identical' \
+    "$(canonical_dir_text "$HOOKS/no-git-push.sh")" \
+    "$(canonical_dir_text "$HOOKS/no-work-on-stale-branch.sh")"
+tok 'no-git-push.sh holds canonical_dir as pinned here' \
+    "$CANONICAL_DIR" "$(canonical_dir_text "$HOOKS/no-git-push.sh")"
+tok 'and no-work-on-stale-branch.sh does too' \
+    "$CANONICAL_DIR" "$(canonical_dir_text "$HOOKS/no-work-on-stale-branch.sh")"
+
+CDPATH_DECOY="$FIXTURES/cdpath-decoy"
+mkdir -p "$CDPATH_DECOY/.git"
+# The hazard reproduced before it is checked for: a plain cd at the fixture's
+# root does follow CDPATH to the decoy. readlink rather than pwd -P for the
+# expected paths, so the expectation is not read through the mechanism under
+# test.
+[ "$(export CDPATH="$CDPATH_DECOY"; cd "$PUSH_MAIN" && cd -- .git >/dev/null 2>&1 && pwd -P)" \
+  = "$(readlink -f "$CDPATH_DECOY/.git")" ] || {
+  echo "a plain cd does not follow CDPATH to the decoy here; the CDPATH checks prove nothing" >&2
+  exit 1
+}
+canonical_dir_under_cdpath() {  # canonical_dir_under_cdpath <hook> -- .git at the push fixture's root
+  (
+    eval "$(canonical_dir_text "$HOOKS/$1")"
+    export CDPATH="$CDPATH_DECOY"
+    cd "$PUSH_MAIN" && canonical_dir .git
+  )
+}
+tok 'no-git-push.sh: canonical_dir resolves .git in the working directory, not through CDPATH' \
+    "$(readlink -f "$PUSH_MAIN/.git")" "$(canonical_dir_under_cdpath no-git-push.sh)"
+tok 'no-work-on-stale-branch.sh: likewise' \
+    "$(readlink -f "$PUSH_MAIN/.git")" "$(canonical_dir_under_cdpath no-work-on-stale-branch.sh)"
+
 echo "--- abstaining when there is no active dev branch to compare against ---"
 # A fresh clone, or the rotation window after the merged dev-NN is deleted and
 # its successor is not yet pushed.

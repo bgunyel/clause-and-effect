@@ -38,13 +38,22 @@
 # go on differing in the second -- this defect again, from a version check
 # nobody would think to make. `pwd -P` asks nothing of the git version.
 #
-# A path that will not resolve reads as no repository, which this file refuses.
-# No repository the check suite can build reaches that for --git-common-dir
-# alone; it is kept because the alternative reads an unreadable path as a
-# linked worktree. canonical_dir below is the second copy of a function in
-# no-work-on-stale-branch.sh; check-hooks.sh drives both hooks from a main
-# checkout and a linked worktree two directories deep and through a symlink,
-# which is what holds the copies to the same answer.
+# A path that will not resolve is refused with a message of its own, because
+# the alternative reads an unreadable path as a linked worktree, and because
+# the main-checkout message is a claim this file cannot support there. No
+# repository reaches it; check-hooks.sh reaches it with a git shim that fakes
+# --git-common-dir.
+#
+# The cd is run with CDPATH emptied. git prints `.git` at the root of a checkout,
+# and `cd .git` looks that name up through CDPATH before the working directory.
+# No verdict turned on it, since both halves are `.git` there and would move
+# alike, but a function that answers "which directory is this" should not
+# answer with another one.
+#
+# canonical_dir below is the second copy of a function in
+# no-work-on-stale-branch.sh. check-hooks.sh holds the two texts identical, and
+# drives both hooks from a main checkout and a linked worktree two directories
+# deep and through a symlink.
 #
 # That check is the only signal available here that separates Bertan from an
 # agent, because an agent pushes as bgunyel today. A server-side ruleset cannot
@@ -160,12 +169,15 @@ fi
 # none. Compared as directories, not as the text git printed -- see the header.
 canonical_dir() {
   [ -n "$1" ] || return 1
-  (cd -- "$1" >/dev/null 2>&1 && pwd -P)
+  (CDPATH= cd -- "$1" >/dev/null 2>&1 && pwd -P)
 }
 GIT_DIR_PATH=$(canonical_dir "$(git rev-parse --git-dir 2>/dev/null)")
 GIT_COMMON_PATH=$(canonical_dir "$(git rev-parse --git-common-dir 2>/dev/null)")
-if [ -z "$GIT_DIR_PATH" ] || [ -z "$GIT_COMMON_PATH" ] \
-   || [ "$GIT_DIR_PATH" = "$GIT_COMMON_PATH" ]; then
+if [ -z "$GIT_DIR_PATH" ] || [ -z "$GIT_COMMON_PATH" ]; then
+  echo "$REFUSE The repository directory git reports here could not be resolved, so whether this runs in a linked worktree cannot be judged from here." >&2
+  exit 2
+fi
+if [ "$GIT_DIR_PATH" = "$GIT_COMMON_PATH" ]; then
   echo "$REFUSE This is the main checkout, not a linked worktree. Leave the commits on the branch and say what is ready to push." >&2
   exit 2
 fi
