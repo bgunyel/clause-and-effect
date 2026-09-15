@@ -220,7 +220,7 @@ set -f
 # return there, and gives up nothing an agent would notice, because every other
 # Bash hook sources the library and already refuses every command without it.
 # Tested for before it is sourced and the reader after, for THE LOAD CONTRACT's
-# reason; the three functions the rules need are probed below, where they were.
+# reason; the three functions the rules need are required below, as before.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
 if ! command -v cs_tool_input >/dev/null 2>&1; then
@@ -298,7 +298,7 @@ refuse() {
 # A guard's own breakage refuses; it does not wave things through. The library
 # was sourced at the top of this file, where the input is read.
 #
-# All three functions are probed, not one. cs_git_args is the one whose absence
+# All three are required, not one. cs_git_args is the one whose absence
 # would be silent and permitting: `RAW=$(cs_git_args "$VERB") || continue`
 # cannot tell "not this verb" from "no such function", so a library holding
 # cs_split but not cs_git_args would leave every verb permitted through the very

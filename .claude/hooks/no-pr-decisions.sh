@@ -87,7 +87,7 @@
 # Guarded under THE LOAD CONTRACT in lib/command-scan.sh, which is where the
 # argument lives rather than in four copies of it.
 #
-# What it cost in this file, and why the probe list below is this file's own and
+# What it cost in this file, and why the required list below is its own and
 # not a list shared with its siblings. Issue #84 found this line bare here too,
 # and this hook's set is the one that makes a shared list wrong: it calls
 # cs_gh_args and cs_join, and no cs_git_args at all. Every rule in this file reads
