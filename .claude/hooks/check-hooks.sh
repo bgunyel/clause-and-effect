@@ -2283,7 +2283,7 @@ flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'separated --namespace before a
 # What this file does when lib/command-scan.sh is not loadable is checked in the
 # load-contract section at the foot of this suite, with the same question asked of
 # the other three hooks. It was asked here, of this hook alone, and issue #84
-# found two hooks with no guard at all and a third probing one function of three
+# found two hooks with no guard at all and a third requiring one function of three
 # while both blocks stayed green.
 
 echo "=== the refusals still name main, which is why this file is kept ==="
@@ -2916,7 +2916,7 @@ says "$WT_STALE" no-work-on-stale-branch.sh 'git merge origin/dev-05 is permitte
 # The nolib and halflib checks for this hook, including the scoping that makes a
 # healthy worktree ALLOW with no library at all, moved to the load-contract
 # section at the foot of this suite. They were the only ones of their kind that
-# covered every function a hook probes, and #84's finding was that the lesson
+# covered every function a hook requires, and #84's finding was that the lesson
 # stayed in this one file: keeping them here, where the three hooks that had it
 # wrong have no section, is what let that happen.
 
@@ -3921,7 +3921,7 @@ echo "=== issue #84: every hook refuses when lib/command-scan.sh does not load =
 # THE LOAD CONTRACT, driven. lib/command-scan.sh states it; the four hooks that
 # source that file have to hold it, and before #84 three of them did not --
 # no-git-push.sh and no-pr-decisions.sh had no guard at all, and
-# no-commit-to-main.sh had one that probed cs_split alone.
+# no-commit-to-main.sh had one that required cs_split alone.
 #
 # Asked of all four in one place, rather than in each hook's own section, because
 # what went wrong was exactly that the answer was given in one file and not
@@ -3938,13 +3938,13 @@ echo "=== issue #84: every hook refuses when lib/command-scan.sh does not load =
 #
 # ONE FUNCTION AT A TIME is the whole point of halflib, and the reason there is a
 # fixture per hook per function below rather than one per hook. A fixture that
-# renamed every function at once would be satisfied by a guard that probes only
-# the first of them, and probing only one is the defect: no-commit-to-main.sh
-# probed cs_split, cs_split was still there, and `git push origin HEAD:main` was
+# renamed every function at once would be satisfied by a guard that requires only
+# the first of them, and requiring only one is the defect: no-commit-to-main.sh
+# required cs_split, cs_split was still there, and `git push origin HEAD:main` was
 # permitted.
 #
-# That is deliberately the inverse of what issue #84 asked for -- "the halflib
-# fixture renames every function the hook under test probes" -- and is recorded as
+# That is deliberately the inverse of what issue #84 asked for -- one halflib
+# fixture renaming every function the hook under test requires -- and is recorded as
 # a deviation rather than left to be read as one. One fixture with every name
 # renamed is the weaker test, for the reason just given; thirteen fixtures each
 # missing one name is the stronger, and the assertion the issue did ask for (that
@@ -4043,7 +4043,7 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
   }
   # And that what is left still loads. A fixture broken some other way would
   # refuse for a reason this section does not name, and would read as evidence
-  # for the probe.
+  # for the guard.
   bash -c ". '$dir/lib/command-scan.sh' && command -v cs_renamed_away >/dev/null 2>&1" || {
     echo "the half-library for $hook does not load at all; the check using it proves nothing" >&2
     exit 1
@@ -4055,7 +4055,7 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
     exit 1
   }
 }
-# One call per pair the contract names, which is the probe list of each hook. The
+# One call per pair the contract names, which is the required list of each hook. The
 # sets differ, and that difference is the reason the guards cannot share a list:
 # four want cs_git_args, no-pr-decisions.sh wants cs_gh_args and cs_join instead,
 # and the two convention hooks want neither.
@@ -4099,7 +4099,7 @@ says "$PUSH_WT" "$(nolib_path no-git-push.sh)" 'Refusing rather than permitting'
   'and says that it is refusing rather than permitting' 'ls'
 
 echo "--- no-pr-decisions.sh, which had no guard at all ---"
-# This file's function set is what makes one shared probe list wrong: cs_gh_args
+# This file's function set is what makes one shared required list wrong: cs_gh_args
 # and cs_join, and no cs_git_args at all. Every rule in it reads its arguments
 # through cs_gh_args, so renaming that one permitted `gh pr merge` and
 # `gh pr create --base main` together.
@@ -4118,7 +4118,7 @@ check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_gh_args)" BLOCK 'a rena
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_gh_args)" BLOCK 'nor a pull request based on main' \
   'gh pr create --base main'
 # cs_join is read late, by the wrapper rules alone, so a renamed cs_join is
-# invisible to every check above it. It is probed because the hook calls it and
+# invisible to every check above it. It is required because the hook calls it and
 # not because a rule was seen to break: the contract is the set, not whichever
 # subset a driving command happens to reach.
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_join)" BLOCK 'a library missing only cs_join' \
@@ -4132,7 +4132,7 @@ echo "--- no-commit-to-main.sh, which had a guard and permitted anyway ---"
 # Why a guard naming one function is worse than none: it reads as the question
 # answered. `cs_git_args commit` and `cs_git_args push` fail exactly as a command
 # holding neither does, so with cs_git_args renamed away every commit and every
-# push was permitted while cs_split -- the only name probed -- was still there.
+# push was permitted while cs_split -- the only name required -- was still there.
 check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'a command touching nothing, library intact' \
   'ls'
 check_in "$ON_MAIN" "$(nolib_path no-commit-to-main.sh)" BLOCK 'no lib/, commit on main' \
@@ -4168,7 +4168,7 @@ check_in "$WT_WORK" "$(nolib_path no-work-on-stale-branch.sh)" ALLOW 'no lib/, o
 # WHAT THESE ARE AND ARE NOT. Every behavioural check in this block passes against
 # the unfixed hook, because this hook was the one that had the guard right: the two
 # nolib cases and the cs_git_args halflib case are the pre-existing ones moved
-# here, and cs_normalise and cs_split were already probed. So this block is pins,
+# here, and cs_normalise and cs_split were already required. So this block is pins,
 # not evidence of a fix, and issue #84's "each failing without the fix" is not met
 # here and cannot be. What did fail for this hook before the change is the pair
 # below, which asked the refusal to name the file rather than say "this hook".
@@ -4190,7 +4190,7 @@ echo "--- pytest-via-uv-group.sh and alembic-via-uv-group.sh, from #69 ---"
 # These two are here for the reason the other four are in one place: the question
 # is one question. #69 asked it of them in their own section, with a third and a
 # fourth copy of the fixture idiom, and covered cs_normalise of the two functions
-# each calls -- which is the narrower probe #84 is about, in the fixture rather
+# each calls -- which is the narrower required list #84 is about, in the fixture rather
 # than in the guard. Both are driven per function now.
 #
 # What these are: pins. Both guards were already right when #69 shipped them, so
@@ -4222,7 +4222,7 @@ says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'Refusing rather than per
   'and says that it is refusing rather than permitting' 'ls'
 
 echo "--- issue #79: the word list is part of the load ---"
-# A third way to not load, beside nolib and halflib, and the one a probe for
+# A third way to not load, beside nolib and halflib, and the one requiring
 # names cannot see. Issue #79 made cs_split read the prefix-word list through a
 # variable, so a library can be present, define every cs_* function, and have
 # that list empty -- and then cs_split runs and strips nothing. `sudo git push
@@ -4385,11 +4385,11 @@ armed 'the library withdraws cs_split when the word list is incomplete' \
       lib/command-scan.sh 'unset -f cs_split'
 armed 'on either half, and not on the union' \
       lib/command-scan.sh 'if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then'
-# And that no guard learned about the list instead. A word-list probe in a hook
+# And that no guard learned about the list instead. A word-list guard in a hook
 # is a second answer to a question the library now answers once, and it is the
 # shape the first version of this took, in two hooks of six.
 for hook in $LIB_CONSUMERS; do
-  unarmed "$hook does not probe the word list itself" "$HOOKS/$hook" 'CS_WRAP_OPTION_WORDS'
+  unarmed "$hook does not require the word list itself" "$HOOKS/$hook" 'CS_WRAP_OPTION_WORDS'
 done
 written 'the load contract says the word list is part of the load' \
   "$HOOKS/lib/command-scan.sh" 'THE WORD LIST IS PART OF THE LOAD'
@@ -4418,23 +4418,23 @@ done
 # above would match a guard commented out during a debugging session and left
 # that way, and review of PR #64 found exactly that shape in this suite. One
 # literal per hook per function, because that is the claim being made.
-armed 'no-git-push.sh probes cs_normalise' no-git-push.sh 'command -v cs_normalise'
-armed 'no-git-push.sh probes cs_split' no-git-push.sh 'command -v cs_split'
-armed 'no-git-push.sh probes cs_git_args' no-git-push.sh 'command -v cs_git_args'
-armed 'no-pr-decisions.sh probes cs_normalise' no-pr-decisions.sh 'command -v cs_normalise'
-armed 'no-pr-decisions.sh probes cs_split' no-pr-decisions.sh 'command -v cs_split'
-armed 'no-pr-decisions.sh probes cs_gh_args' no-pr-decisions.sh 'command -v cs_gh_args'
-armed 'no-pr-decisions.sh probes cs_join' no-pr-decisions.sh 'command -v cs_join'
-armed 'no-commit-to-main.sh probes cs_normalise' no-commit-to-main.sh 'command -v cs_normalise'
-armed 'no-commit-to-main.sh probes cs_split' no-commit-to-main.sh 'command -v cs_split'
-armed 'no-commit-to-main.sh probes cs_git_args' no-commit-to-main.sh 'command -v cs_git_args'
-armed 'no-work-on-stale-branch.sh probes cs_normalise' no-work-on-stale-branch.sh 'command -v cs_normalise'
-armed 'no-work-on-stale-branch.sh probes cs_split' no-work-on-stale-branch.sh 'command -v cs_split'
-armed 'no-work-on-stale-branch.sh probes cs_git_args' no-work-on-stale-branch.sh 'command -v cs_git_args'
-armed 'pytest-via-uv-group.sh probes cs_normalise' pytest-via-uv-group.sh 'command -v cs_normalise'
-armed 'pytest-via-uv-group.sh probes cs_split' pytest-via-uv-group.sh 'command -v cs_split'
-armed 'alembic-via-uv-group.sh probes cs_normalise' alembic-via-uv-group.sh 'command -v cs_normalise'
-armed 'alembic-via-uv-group.sh probes cs_split' alembic-via-uv-group.sh 'command -v cs_split'
+armed 'no-git-push.sh requires cs_normalise' no-git-push.sh 'command -v cs_normalise'
+armed 'no-git-push.sh requires cs_split' no-git-push.sh 'command -v cs_split'
+armed 'no-git-push.sh requires cs_git_args' no-git-push.sh 'command -v cs_git_args'
+armed 'no-pr-decisions.sh requires cs_normalise' no-pr-decisions.sh 'command -v cs_normalise'
+armed 'no-pr-decisions.sh requires cs_split' no-pr-decisions.sh 'command -v cs_split'
+armed 'no-pr-decisions.sh requires cs_gh_args' no-pr-decisions.sh 'command -v cs_gh_args'
+armed 'no-pr-decisions.sh requires cs_join' no-pr-decisions.sh 'command -v cs_join'
+armed 'no-commit-to-main.sh requires cs_normalise' no-commit-to-main.sh 'command -v cs_normalise'
+armed 'no-commit-to-main.sh requires cs_split' no-commit-to-main.sh 'command -v cs_split'
+armed 'no-commit-to-main.sh requires cs_git_args' no-commit-to-main.sh 'command -v cs_git_args'
+armed 'no-work-on-stale-branch.sh requires cs_normalise' no-work-on-stale-branch.sh 'command -v cs_normalise'
+armed 'no-work-on-stale-branch.sh requires cs_split' no-work-on-stale-branch.sh 'command -v cs_split'
+armed 'no-work-on-stale-branch.sh requires cs_git_args' no-work-on-stale-branch.sh 'command -v cs_git_args'
+armed 'pytest-via-uv-group.sh requires cs_normalise' pytest-via-uv-group.sh 'command -v cs_normalise'
+armed 'pytest-via-uv-group.sh requires cs_split' pytest-via-uv-group.sh 'command -v cs_split'
+armed 'alembic-via-uv-group.sh requires cs_normalise' alembic-via-uv-group.sh 'command -v cs_normalise'
+armed 'alembic-via-uv-group.sh requires cs_split' alembic-via-uv-group.sh 'command -v cs_split'
 # The readability test before the source, which no fixture above can tell apart:
 # under bash a `.` of a missing file returns non-zero and carries on, so nolib
 # behaves the same with it and without it. It is held as text for that reason,
@@ -4451,11 +4451,11 @@ armed 'pytest-via-uv-group.sh tests the library before sourcing it' \
       pytest-via-uv-group.sh '[ -r "$LIB" ] && . "$LIB"'
 armed 'alembic-via-uv-group.sh tests the library before sourcing it' \
       alembic-via-uv-group.sh '[ -r "$LIB" ] && . "$LIB"'
-echo "--- the probe list is the call list, and these are all the consumers ---"
+echo "--- the required list is the call list, and these are all the consumers ---"
 # THE ONE CHECK HERE THAT SURVIVES THE NEXT CHANGE. Every literal above names a
-# file and a function, so all of them together say that these four guards probe
-# these thirteen names -- and none of them says a probe list is COMPLETE. #84 was
-# a probe list narrower than a call set. A fifth cs_* call added to a hook
+# file and a function, so all of them together say that these four guards require
+# these thirteen names -- and none of them says a required list is COMPLETE. #84 was
+# a required list narrower than a call set. A fifth cs_* call added to a hook
 # tomorrow, or another file that sources the library, leaves every check above
 # green and is the same defect one turn later. That is not a hypothetical either:
 # #69 added two sourcers while #84 was being written, and this pair of checks is
@@ -4463,7 +4463,7 @@ echo "--- the probe list is the call list, and these are all the consumers ---"
 #
 # So both sides are derived from the files and compared with each other, in the
 # direction the boundary section at the foot of this suite uses: the code is the
-# fact, the guard's probe list is the claim asserted against it. Comments are
+# fact, the guard's required list is the claim asserted against it. Comments are
 # stripped first, for the reason `armed` strips them -- these headers name these
 # functions constantly, and a function named in prose is not a call.
 cs_calls() {  # cs_calls <hook> -- the cs_* functions its code actually calls
@@ -4471,24 +4471,24 @@ cs_calls() {  # cs_calls <hook> -- the cs_* functions its code actually calls
     | grep -v 'command -v cs_' \
     | grep -oE 'cs_[a-z_]+' | sort -u | tr '\n' ' '
 }
-cs_probes() {  # cs_probes <hook> -- the cs_* functions its load guard probes
+cs_required() {  # cs_required <hook> -- the cs_* functions its load guard requires
   sed 's/[[:space:]]*#.*$//' "$HOOKS/$1" \
     | grep -oE 'command -v cs_[a-z_]+' | sed 's/command -v //' | sort -u | tr '\n' ' '
 }
 for hook in $LIB_CONSUMERS; do
   CALLS=$(cs_calls "$hook")
-  PROBES=$(cs_probes "$hook")
+  REQUIRED=$(cs_required "$hook")
   # An empty derivation would make the comparison pass by matching nothing, which
   # is the permitting direction: a hook whose calls could not be read would report
-  # as agreeing with a guard that probes nothing.
-  if [ -z "$CALLS" ] || [ -z "$PROBES" ]; then
-    printf '  FAIL %s: no cs_* calls or no probes were read out of the file at all\n' "$hook"
+  # as agreeing with a guard that requires nothing.
+  if [ -z "$CALLS" ] || [ -z "$REQUIRED" ]; then
+    printf '  FAIL %s: no cs_* calls or no required names were read out of the file at all\n' "$hook"
     FAILED=1
-  elif [ "$CALLS" = "$PROBES" ]; then
-    printf '  ok   derived %s probes exactly what it calls: %s\n' "$hook" "${CALLS% }"
+  elif [ "$CALLS" = "$REQUIRED" ]; then
+    printf '  ok   derived %s requires exactly what it calls: %s\n' "$hook" "${CALLS% }"
   else
-    printf '  FAIL %s probes a set other than the one it calls\n         calls:  |%s|\n         probes: |%s|\n' \
-      "$hook" "$CALLS" "$PROBES"
+    printf '  FAIL %s requires a set other than the one it calls\n         calls:    |%s|\n         requires: |%s|\n' \
+      "$hook" "$CALLS" "$REQUIRED"
     FAILED=1
   fi
 done
@@ -4515,7 +4515,7 @@ fi
 # One property of this suite's own helpers, because nothing else here drives them
 # and `unarmed` reporting ok for a file it never read would make four pins below
 # vacuous. Run in a subshell so its FAILED cannot reach ours.
-if ( FAILED=0; unarmed 'probe' "$FIXTURES/no-such-file" 'anything'; exit $FAILED ) >/dev/null 2>&1
+if ( FAILED=0; unarmed 'self-check' "$FIXTURES/no-such-file" 'anything'; exit $FAILED ) >/dev/null 2>&1
 then
   printf '  FAIL unarmed reports ok for a file that is not there, so every pin below is vacuous\n'
   FAILED=1

@@ -285,7 +285,7 @@ refuse() {
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
 #
-# All three functions are probed, not one. cs_git_args is the one whose absence
+# All three functions are required, not one. cs_git_args is the one whose absence
 # would be silent and permitting: `RAW=$(cs_git_args "$VERB") || continue`
 # cannot tell "not this verb" from "no such function", so a library holding
 # cs_split but not cs_git_args would leave every verb permitted through the very
