@@ -4190,7 +4190,7 @@ echo "--- pytest-via-uv-group.sh and alembic-via-uv-group.sh, from #69 ---"
 # These two are here for the reason the other four are in one place: the question
 # is one question. #69 asked it of them in their own section, with a third and a
 # fourth copy of the fixture idiom, and covered cs_normalise of the two functions
-# each calls -- which is the narrower required list #84 is about, in the fixture rather
+# each calls -- which is the narrower set #84 is about, in the fixture rather
 # than in the guard. Both are driven per function now.
 #
 # What these are: pins. Both guards were already right when #69 shipped them, so
@@ -4222,7 +4222,7 @@ says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'Refusing rather than per
   'and says that it is refusing rather than permitting' 'ls'
 
 echo "--- issue #79: the word list is part of the load ---"
-# A third way to not load, beside nolib and halflib, and the one requiring
+# A third way to not load, beside nolib and halflib, and the one a guard on
 # names cannot see. Issue #79 made cs_split read the prefix-word list through a
 # variable, so a library can be present, define every cs_* function, and have
 # that list empty -- and then cs_split runs and strips nothing. `sudo git push
@@ -4548,29 +4548,47 @@ echo "--- issue #101: a load guard requires a function, it does not probe one --
 # library and every guard, which is neither, and #101 renamed it "requires". The
 # drift arrived with the contract's own prose, so the prose is what is held:
 # the library and each consumer, read as written with comments included, since
-# nearly every use was in a comment. Case-folded, and "probing" too -- the first
-# sweep for #101 missed exactly that spelling.
+# nearly every use was in a comment. Case-folded, and "probing" as well as
+# "probe", because the drift reached CLAUDE.md in that spelling.
 #
 # One use in these files is correct and stays: no-work-on-stale-branch.sh's
-# header names the probe->check rename itself. It is exempt by its exact text
-# rather than by line number, which goes stale the moment a line is added above.
-# Text that stops matching exempts nothing, and the scan then fails on that
-# file: the refusing direction, visible and one edit away.
-# The suite's own header is correct as well, and this suite is not scanned --
-# the block holding the rule cannot avoid the word it rules on.
+# header names the probe->check rename itself. It is exempt as that whole line
+# in that one file, rather than by line number, which goes stale the moment a
+# line is added above; a copy of it elsewhere, or a word appended to it, is not
+# exempt. Text that stops matching exempts nothing, and the scan then fails on
+# that file: the refusing direction, visible and one edit away.
 #
-# The consumer list is $LIB_CONSUMERS, which the #84 section derives and asserts
-# complete against what actually sources the library, so a seventh consumer is
-# scanned without anyone remembering to add it here.
+# Two files are not scanned, and that is a trade rather than an oversight. This
+# suite's own header uses the word correctly, and the block holding the rule
+# cannot avoid the word it rules on, so its check labels are held by review.
+# CLAUDE.md carries correct uses (the judge's probe harness, scripts/probe_*.py)
+# beside the #84 paragraph, so the same scan there would need an exemption per
+# correct use, and #101 names .claude/hooks/ as its scope.
+#
+# The file list is $LIB_CONSUMERS. It is written by hand, but the #84 section
+# asserts it equal to the files that actually source the library, so a seventh
+# consumer turns that check red until it is added -- and is then scanned here.
+#
+# awk rather than grep, for two reasons. The exemption has to be a whole line
+# in one file, which a grep -v filter over "N:text" output cannot say. And a
+# read error has to fail: grep exits 2 into a pipeline that reads as "no hits",
+# which is the permitting direction, where awk's status is kept and asked.
+VOCAB_EXEMPT_FILE=no-work-on-stale-branch.sh
 VOCAB_EXEMPT='# the probe->check rename was committed onto hooks-push-and-pr-guards after'
 for f in lib/command-scan.sh $LIB_CONSUMERS; do
-  if [ ! -r "$HOOKS/$f" ]; then
+  EXEMPT=
+  [ "$f" = "$VOCAB_EXEMPT_FILE" ] && EXEMPT=$VOCAB_EXEMPT
+  if [ ! -r "$HOOKS/$f" ] || [ -d "$HOOKS/$f" ]; then
     printf '  FAIL %s cannot be read, so the absence of "probe" in it is evidence of nothing\n' "$f"
     FAILED=1
     continue
   fi
-  HITS=$(grep -niE 'prob(e|ing)' "$HOOKS/$f" | grep -vF -- "$VOCAB_EXEMPT")
-  if [ -z "$HITS" ]; then
+  if ! HITS=$(awk -v ex="$EXEMPT" \
+      'tolower($0) ~ /prob(e|ing)/ && !(ex != "" && $0 == ex) { print FNR ": " $0 }' \
+      "$HOOKS/$f" 2>/dev/null); then
+    printf '  FAIL %s could not be scanned, so the absence of "probe" in it is evidence of nothing\n' "$f"
+    FAILED=1
+  elif [ -z "$HITS" ]; then
     printf '  ok   written %s says a guard requires a function, never probes one\n' "$f"
   else
     printf '  FAIL %s uses "probe", which CONTEXT.md keeps for a measurement:\n%s\n' \

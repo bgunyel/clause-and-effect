@@ -177,9 +177,9 @@
 #     and cs_split and neither of the argument readers. A required list
 #     narrower than the set is the #84 defect exactly, and #69 found the same
 #     thing in the last two from the other end -- cs_split required,
-#     cs_normalise not. The
-#     enumeration here is a convenience and goes stale; check-hooks.sh derives
-#     both sides off the files and compares them, which does not.
+#     cs_normalise not. The enumeration here is a convenience and goes stale;
+#     check-hooks.sh derives both sides off the files and compares them, which
+#     does not.
 #   - names itself in the refusal and says that it is refusing rather than
 #     permitting. That message is read by someone who has just been stopped by
 #     a guard that is broken rather than by a rule, and the thing they need
@@ -203,7 +203,7 @@
 #
 # "Loads" includes data as well as names. cs_split reads the prefix-word list
 # through a variable, so a library with every function defined and that list
-# empty is not a loaded library, and requiring names cannot see it. It is not
+# empty is not a loaded library, and a guard on names cannot see it. It is not
 # answered in the guards. The library withdraws cs_split itself when the list is
 # incomplete, which reduces the state to a missing function, and every consumer
 # already requires that one. See THE WORD LIST IS PART OF THE LOAD, below

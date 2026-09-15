@@ -183,10 +183,10 @@ why the copies are not one sourced preamble — a preamble is a file, so sourcin
 it needs the same guard one level up. It deliberately does **not** count its
 consumers, and #69 is why. That issue rebuilt the two convention hooks on the
 tokeniser in the same week and hit the identical trap from the other end,
-requiring `cs_split` and not `cs_normalise` — so the count was four when #84 was
-filed and six when it landed. `check-hooks.sh` derives the list off the files
-instead, and derives each consumer's call set against its required set: a fixture
-per consumer per function says the guards are right today, and only the
+requiring `cs_split` and not `cs_normalise` — so the count was four when #84
+was filed and six when it landed. `check-hooks.sh` derives the list off the
+files instead, and derives each consumer's call set against its required set: a
+fixture per consumer per function says the guards are right today, and only the
 derivation survives the next `cs_*` added to one of them.
 
 ## Documentation
