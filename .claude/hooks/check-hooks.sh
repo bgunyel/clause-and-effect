@@ -133,7 +133,9 @@
 # Issue #98 is about the evidence rather than the hooks: a hook that crashed, or
 # was never found, passed every ALLOW-expecting check here. The comments beside
 # several fixture guards named that for the one cause each guarded; nothing named
-# the class. `verdict`, below, is where the class is answered and said.
+# the class. Every helper that runs a hook now reads its exit status one way --
+# exit 0 is ALLOW, exit 2 is BLOCK, anything else FAILs the check whatever it
+# expected -- and `verdict`, below, is where that is answered and argued.
 #
 # Run: bash .claude/hooks/check-hooks.sh
 cd "$(dirname "$0")" || exit 1
@@ -4660,7 +4662,13 @@ failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
   fi
 }
 
-for helper in check check_in flip check_file; do
+# The helpers this self-test drives, named once: each loop below runs off its list,
+# and the derivation at the end of this section is asserted against both. A
+# helper added to neither is red there; one added to a list is driven.
+DRIVEN_VERDICT='check check_in flip check_file'
+DRIVEN_MESSAGE='says says_not'
+
+for helper in $DRIVEN_VERDICT; do
   tok "$helper: a hook that exits 0 passes an ALLOW expectation" \
       'ok' "$(drive_helper "$helper" allow-0 ALLOW)"
   tok "$helper: a hook that exits 2 passes a BLOCK expectation" \
@@ -4681,7 +4689,7 @@ done
 
 # The message helpers. A refusal is the only thing either can pass on, so the
 # passing case is exit 2 alone.
-for helper in says says_not; do
+for helper in $DRIVEN_MESSAGE; do
   tok "$helper: a hook that exits 2 passes" \
       'ok' "$(drive_helper "$helper" block-2 -)"
   tok "$helper: a hook that exits 1 fails, whatever its stderr says" \
@@ -4694,22 +4702,38 @@ for helper in says says_not; do
       127 'crash-127 fixture stderr'
 done
 
-# And that the helpers driven above are all of them. The list is a literal; the
-# helpers that read a hook's exit status are derived from this file, so a new one
-# written with its own reading is red here rather than silently outside the
-# self-test. `flip` reads no status of its own -- it hands its verdict to
-# check_in -- so it is driven above because #98 names it, and is not in the
-# derived set. The derivation finds a reader spelled `rc=$?`; one written as
-# `if "$hook"; then` would read the status unfound, which is the permitting
-# direction and is named because a check is evidence about what it names.
-# Comments are stripped first, as cs_calls strips them.
+# And that the helpers driven above are all of them. The helpers that read a hook's
+# exit status are derived from this file, and each must be in one of the two lists
+# the loops above run off -- so a new reader is either driven or red here. `flip`
+# reads no status of its own -- it hands its verdict to check_in -- so it is driven
+# because #98 names it, and is not in the derived set.
+#
+# The first version compared the derivation with a third literal, which nothing
+# tied to the loops: a one-bit reader added to that literal alone left the suite
+# green and the reader undriven. Found by review of PR #116, not by this suite.
+#
+# What the derivation does not find, named because a check is evidence about what
+# it names: a reader spelled other than `rc=$?`, such as `if "$hook"; then`; and a
+# function defined indented, whose body therefore has no `}` at the start of a
+# line to end it. Both are the permitting direction. It does find names with
+# capitals or digits, and the `function` keyword with or without parens. Comments
+# are stripped first, as cs_calls strips them.
 STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$HOOKS/check-hooks.sh" \
-  | awk '/^[a-z_]+\(\) *\{/ { fn = $1; sub(/\(\).*/, "", fn) }
-         /^\}/                { fn = "" }
+  | awk '/^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
+           fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
+         }
+         /^\}/                 { fn = "" }
          fn != "" && /rc=\$\?/ { print fn }' \
   | sort -u | tr '\n' ' ')
-tok 'derived the helpers that read a hook exit status are exactly check, check_file, check_in, says and says_not' \
-    'check check_file check_in says says_not ' "$STATUS_READERS"
+# An empty derivation would make every membership below pass by asking nothing.
+if [ -z "$STATUS_READERS" ]; then
+  printf '  FAIL no helper that reads a hook exit status was derived from this file at all\n'
+  FAILED=1
+fi
+for reader in $STATUS_READERS; do
+  present "derived $reader reads a hook exit status, and the #98 self-test drives it" \
+          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE"
+done
 
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
