@@ -1,10 +1,21 @@
 #!/bin/bash
-# Regression checks for no-git-push.sh, no-pr-decisions.sh,
-# no-commit-to-main.sh and no-work-on-stale-branch.sh.
+# Regression checks for the hooks under .claude/hooks/ and what they rest on.
+# The boundary hooks: no-git-push.sh, no-pr-decisions.sh, no-commit-to-main.sh
+# and no-work-on-stale-branch.sh. The convention hooks: pytest-via-uv-group.sh,
+# alembic-via-uv-group.sh, append-only-docs.sh and append-only-docs-edit.sh.
+# The session report, report-stale-branches.sh, and the tokeniser most of them
+# source, lib/command-scan.sh. And the files that run or describe them: the
+# settings.json that registers them, and CLAUDE.md, CONTEXT.md and the
+# branch-hygiene skill's SKILL.md. Most checks run a hook as a process and read
+# its verdict; the rest read one of these files, and each kind is introduced
+# where it begins. The section "this suite's header names every file it checks"
+# holds this paragraph to settings.json, to the disk and to what the suite reads.
 #
-# A hook is a process, so the only way to test one is to run it; what the rule
-# against calling the function under test forbids is deriving the expectation
-# from it, and every verdict below is written as a literal BLOCK or ALLOW.
+# A hook is a process, so the only way to test its verdict is to run it; what
+# the rule against calling the function under test forbids is deriving the
+# expectation from it. So every verdict below is written as a literal BLOCK or
+# ALLOW, and every check that reads a file instead holds it to a literal
+# written here or to another file it must agree with.
 #
 # Check, not probe: every expected verdict is written out in advance, so this
 # suite asserts rather than measures. The measuring is scripts/probe_*.py, whose
@@ -63,9 +74,9 @@
 # Edit companion stripped was permitted on a file that exists. None of the
 # three was in the original report of that issue, and none had a check.
 #
-# So the number below is not a measure of the boundary. A check suite is
-# evidence about the cases it names and about nothing else, and every case here
-# was named by someone who went looking for one it had missed.
+# So a green run is not a measure of the boundary. A check suite is evidence
+# about the cases it names and about nothing else, and every case here was
+# named by someone who went looking for one it had missed.
 #
 # The base checks come from issue #40 rather than from a review: all four
 # spellings that create or retarget a pull request were permitted, and the
@@ -3879,7 +3890,11 @@ echo "=== the tokeniser's header names every hook that sources it ==="
 # The paragraph is the first comment block, which is where the claim is made;
 # the rest of the header is history and names files for other reasons.
 CS_LIB="$HOOKS/lib/command-scan.sh"
-CS_HEADER=$(awk 'NR == 1 { next } /^#$/ { exit } /^#/ { print; next } { exit }' "$CS_LIB")
+# Written once, because this suite's own header is audited the same way below.
+first_comment_block() {  # first_comment_block <file> -- after the shebang, up to the first bare #
+  awk 'NR == 1 { next } /^#$/ { exit } /^#/ { print; next } { exit }' "$1" 2>/dev/null
+}
+CS_HEADER=$(first_comment_block "$CS_LIB")
 CS_NAMED=$(printf '%s\n' "$CS_HEADER" | grep -oE '[A-Za-z0-9_-]+\.sh' | sort -u | tr '\n' ' ')
 # Who actually sources it, read off the disk rather than listed here.
 #
@@ -3916,6 +3931,83 @@ for hook in $CS_NAMED; do
           "$hook" "$CS_SOURCERS"
 done
 set +f
+
+echo "=== this suite's header names every file it checks ==="
+# The same audit again, pointed at this file. Its header opened by naming four
+# hooks while the suite also checked five more, the library, settings.json and
+# three documents, and further down it pointed at "the number below" after the
+# number had been removed (#102). Nothing had gone wrong in any one edit: each
+# issue that widened the suite added its history to the header and left the
+# first sentence as it was, which is how every list checked above went stale.
+#
+# The header enumerates rather than naming categories, so a reader learns what
+# is covered without reading four thousand lines, and this is what keeps the
+# enumeration true. The paragraph is the first comment block, as for the
+# tokeniser: the rest of the header is history and names files for other
+# reasons. That history names every one of these files too, so an extraction
+# that ran on past the paragraph would answer every check below whatever the
+# paragraph said -- which is why it is checked from both ends first, the way
+# the boundary section's is. Uses SETTINGS, HOOK_FILES and `present` from the
+# boundary-section audit above, so it has to stay below it.
+SELF_PARAGRAPH="$FIXTURES/check-hooks-first-paragraph.txt"
+first_comment_block "$HOOKS/check-hooks.sh" > "$SELF_PARAGRAPH"
+written 'the extracted paragraph is the one that states the scope' \
+  "$SELF_PARAGRAPH" 'Regression checks for'
+unarmed 'and it stops before the paragraph after it' \
+  "$SELF_PARAGRAPH" 'A hook is a process'
+SELF_NAMED=$(grep -oE '[A-Za-z0-9_.-]+\.(sh|json|md)' "$SELF_PARAGRAPH" | sort -u | tr '\n' ' ')
+# Every hook settings.json runs, on any event and any matcher -- wider than
+# REGISTERED above, which leaves out the Edit companion because the boundary
+# paragraph is right to. This is the direction #102 asks for by name; the disk
+# loop after it overlaps it, and differs by a hook registered with no file.
+RUN_BY_SETTINGS=$(jq -r '.hooks[][]?.hooks[]?.command' "$SETTINGS" 2>/dev/null \
+  | sed 's|.*/||; s|[[:space:]].*||' | sort -u | tr '\n' ' ')
+# The documents this suite reads, derived off its own text: each is assigned
+# from a quoted path under $HOOKS/.. . A document read through any other
+# spelling -- $REPO_ROOT, say -- is not found here, and the header is not held
+# to it; that limit is taken rather than closed, because every document read
+# today is spelled this way and widening the pattern reaches the fixture paths
+# the append-only checks name, which are not files this suite audits. The
+# pattern carries a backslash, so this line is not among its own matches.
+READ_DOCS=$(grep -oE '"\$HOOKS/\.\./[^"]*\.(json|md)"' "$HOOKS/check-hooks.sh" \
+  | sed 's|.*/||; s|"$||' | sort -u | tr '\n' ' ')
+[ -n "$SELF_NAMED" ] && [ -n "$RUN_BY_SETTINGS" ] && [ -n "$READ_DOCS" ] \
+  && [ -n "$HOOK_FILES" ] || {
+  echo "nothing was read out of this suite's header, settings.json, the disk or this suite's text; the checks below prove nothing" >&2
+  exit 1
+}
+set -f
+for hook in $RUN_BY_SETTINGS; do
+  present "the header names $hook, which settings.json runs" "$hook" "$SELF_NAMED"
+done
+# The library and anything else beside the hooks that settings.json does not run.
+for hook in $HOOK_FILES; do
+  case "$hook" in check-hooks.sh) continue ;; esac
+  present "the header names $hook, which is on the disk" "$hook" "$SELF_NAMED"
+done
+for doc in $READ_DOCS; do
+  present "the header names $doc, which this suite reads" "$doc" "$SELF_NAMED"
+done
+# The other direction: a name in the paragraph that is neither a file beside
+# this suite nor a document it reads, which is a rename the header was not
+# revised with.
+for name in $SELF_NAMED; do
+  present "the header names $name, and this suite checks it" \
+          "$name" "$HOOK_FILES $READ_DOCS"
+done
+set +f
+
+# The other half of #102: the header's history said "the number below" after
+# the number it meant had gone. A pin on that phrase, over the whole header
+# rather than the paragraph, because that is where the sentence lived -- it
+# says nothing about a pointer reworded some other way, and is here so that
+# restoring the old sentence turns something red.
+SELF_WHOLE_HEADER="$FIXTURES/check-hooks-header.txt"
+awk 'NR == 1 { next } /^#/ { print; next } { exit }' "$HOOKS/check-hooks.sh" > "$SELF_WHOLE_HEADER"
+written 'the whole header runs on past the first paragraph' \
+  "$SELF_WHOLE_HEADER" 'A hook is a process'
+unarmed 'and it points at no number below it, since none is there' \
+  "$SELF_WHOLE_HEADER" 'the number below'
 
 echo "=== issue #84: every hook refuses when lib/command-scan.sh does not load ==="
 # THE LOAD CONTRACT, driven. lib/command-scan.sh states it; the four hooks that
