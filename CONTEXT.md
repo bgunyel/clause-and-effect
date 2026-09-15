@@ -31,7 +31,7 @@ _Avoid_: check
 **Reserved act**:
 An act that belongs to Bertan and not to an agent: advancing the active dev
 branch on the remote, merging any pull request, rotating the dev branch,
-removing a worktree or deleting a worktree branch, and publishing a release.
+removing a worktree or deleting a worktree branch, and any write to a release.
 Reserved is not a synonym for refused. The hooks refuse the ordinary spellings
 of some of these and they stop mistakes, not adversaries; others nothing refuses
 at all. `git worktree remove`, the whole of the sweep, and `git branch -d`,
