@@ -76,15 +76,22 @@ failed, neither detector is armed for that session.
 ```bash
 git fetch --prune
 git branch -a
-gh pr list --state all --limit 30 --json number,headRefName,state,mergedAt \
-  --jq '.[] | "\(.headRefName)\t\(.state)"'
+git for-each-ref --sort=-committerdate \
+  --format='%(refname:short)%09%(committerdate:short)' refs/heads/
+gh pr list --state all --limit 30 --json number,headRefName,state \
+  --jq '.[] | "#\(.number)\t\(.headRefName)\t\(.state)"'
 ```
 
 Stale is a branch whose work is over: a `dev-NN` other than the active one, or a
-worktree branch whose pull request is merged or closed. A worktree branch with an
-open pull request is **not** stale — several open at once is the ordinary state
-of this repository, not drift. That is what the invariant at the top of this file
-already says, and it is the half of it most easily read as a mess to tidy.
+worktree branch whose pull request is merged or closed and which is
+at or behind that pull request's head commit. A name match alone does not make
+the pull request this branch's: a name reused for new work, or work committed
+after the merge, is ahead of that head, and is unclassified, not stale. The read
+above does not carry the head; the one in *The sweep*, step 1, does, with the
+ancestry test the report runs. A worktree branch with an open pull request is
+**not** stale — several open at once is the ordinary state of this repository,
+not drift. That is what the invariant at the top of this file already says, and
+it is the half of it most easily read as a mess to tidy.
 
 **A worktree branch with no pull request at all is neither, and saying which it
 is takes more than this skill can see.** A branch freshly cut for work not yet
@@ -221,9 +228,10 @@ Run from a terminal, where no hook applies.
 ### 1. Take the list from the report, and act only on the merged
 
 The report classifies three ways and exactly one of the three is the sweep's.
-It reads every pull request when the session starts and matches each to a
-worktree branch by head name. Where a branch has several, an open one decides;
-otherwise the newest does.
+It reads every pull request when the session starts and matches them by head
+name to every local branch but `main` and a `dev-NN`, which it classifies
+without one. Where a branch has several, an open one decides; otherwise the
+newest does.
 
 - **stale** — a worktree branch whose pull request is merged or closed, and
   which is at or behind that pull request's head commit. The report prints

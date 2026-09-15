@@ -3920,17 +3920,21 @@ for b in gone-nopr-branch merged-branch closed-branch; do
   $GR config "branch.$b.remote" origin
   $GR config "branch.$b.merge" "refs/heads/$b"
 done
-# Three of them checked out in worktrees, so that the lines the sweep's step 2
+# Four of them checked out in worktrees, so that the lines the sweep's step 2
 # reads a worktree path from are asserted with that path. The suffix was
 # droppable from any of them with the suite green; found on review of #120. The
-# path is resolved with cd -P because git records the physical one.
+# second review found it droppable still from the `not at or behind its head`
+# line, whose one fixture was in no worktree; reclosed-branch now is. The path
+# is resolved with cd -P because git records the physical one.
 REPORT_WT_MERGED="$FIXTURES/report-wt-merged"
 REPORT_WT_CLOSED="$FIXTURES/report-wt-closed"
 REPORT_WT_GONE="$FIXTURES/report-wt-gone"
+REPORT_WT_RECLOSED="$FIXTURES/report-wt-reclosed"
 $GR worktree add -q "$REPORT_WT_MERGED" merged-branch
 $GR worktree add -q "$REPORT_WT_CLOSED" closed-branch
 $GR worktree add -q "$REPORT_WT_GONE" gone-nopr-branch
-for d in "$REPORT_WT_MERGED" "$REPORT_WT_CLOSED" "$REPORT_WT_GONE"; do
+$GR worktree add -q "$REPORT_WT_RECLOSED" reclosed-branch
+for d in "$REPORT_WT_MERGED" "$REPORT_WT_CLOSED" "$REPORT_WT_GONE" "$REPORT_WT_RECLOSED"; do
   [ -d "$d" ] || {
     echo "the report worktree $d was not created; the checks against it prove nothing" >&2
     exit 1
@@ -3939,6 +3943,7 @@ done
 REPORT_WT_MERGED=$(cd -P "$REPORT_WT_MERGED" && pwd)
 REPORT_WT_CLOSED=$(cd -P "$REPORT_WT_CLOSED" && pwd)
 REPORT_WT_GONE=$(cd -P "$REPORT_WT_GONE" && pwd)
+REPORT_WT_RECLOSED=$(cd -P "$REPORT_WT_RECLOSED" && pwd)
 mkdir -p "$REPORT_FIX/.claude/hooks" "$FAKE_GH"
 cp "$HOOKS/report-stale-branches.sh" "$REPORT_FIX/.claude/hooks/"
 cat > "$FAKE_GH/gh" <<'GH'
@@ -4022,7 +4027,7 @@ written 'and a close by a newer one decides over an older merge, keeping its war
 written 'a reused name is not stale off a pull request whose head it is not behind' \
   "$REPORT_READ" '  reused-branch -- pull request #12 is merged, but this branch is not at or behind its head; 0 ahead of origin/dev-05, 0 behind it (unclassified: a reused name, or work after it)'
 written 'and not stale off a closed one either, where its commits exist nowhere else' \
-  "$REPORT_READ" '  reclosed-branch -- pull request #14 is closed, but this branch is not at or behind its head; 1 ahead of origin/dev-05, 0 behind it (unclassified: a reused name, or work after it)'
+  "$REPORT_READ" "  reclosed-branch -- pull request #14 is closed, but this branch is not at or behind its head; 1 ahead of origin/dev-05, 0 behind it (unclassified: a reused name, or work after it)   [worktree: $REPORT_WT_RECLOSED]"
 written 'a branch strictly behind its merged pull request head is stale, not only one at it' \
   "$REPORT_READ" '  lagging-branch -- merged: pull request #15'
 unarmed 'an open pull request is in flight and is not listed' \
@@ -4418,6 +4423,32 @@ written 'and says what the classes are when the report could not read pull reque
   "$SWEEP_SECTION" '`pull requests: NOT READ`'
 written 'where a gone upstream is stale by ref state' \
   "$SWEEP_SECTION" '`stale by ref state`'
+
+# The sweep is not the only place the skill defines stale. *Report what is
+# stale*, which an agent follows to produce the report a person reads, kept the
+# definition #100 replaced -- merged or closed, and nothing about the head --
+# through the change that fixed the sweep, because the checks above extract the
+# sweep alone. Found on the second review of #120. That sentence erred toward
+# deletion: a reused name after a merged pull request was stale by it and
+# unclassified by the report. Extracted for the reason the sweep is: the head
+# test is stated in the sweep already, so a file-wide grep would pass with this
+# section still saying the old thing. Stopped at the next heading of depth two
+# or three, which is `## Bertan's procedure`.
+STALE_SECTION="$FIXTURES/branch-hygiene-report.md"
+awk '/^### 2\. Report what is stale/ {f=1; print; next} f && /^###? / {exit} f {print}' \
+    "$SKILL_MD" > "$STALE_SECTION"
+written 'the extracted section is Report what is stale' \
+  "$STALE_SECTION" 'Report what is stale'
+unarmed 'and it stops before the procedure that follows it' \
+  "$STALE_SECTION" "Bertan's procedure"
+written 'it defines stale with the head test the report applies' \
+  "$STALE_SECTION" "at or behind that pull request's head commit"
+written 'and calls a name matched off a head it is ahead of unclassified' \
+  "$STALE_SECTION" 'is unclassified, not stale'
+# It also says its commands cover the last commit dates, which none of them
+# printed; the second review of #120 found that too.
+written 'and one of its commands prints the commit dates it says they cover' \
+  "$STALE_SECTION" '%(committerdate:short)'
 echo "=== the tokeniser's header names every hook that sources it ==="
 # The same audit the section above gets, pointed at the one other sentence in
 # this tree that claims to list the hooks. lib/command-scan.sh opens "which is
