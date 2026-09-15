@@ -810,8 +810,8 @@ cs_split() {
 # whole of #84's finding, and a guard that asks whether a name exists cannot
 # tell the two apart.
 #
-# Why here and not in the guards. The first answer to this was a guard on the
-# word list in two hooks, then an empty CS_WRAPPER_RE as a library fail-safe on the
+# Why here and not in the guards. The first answer to this was a word-list guard
+# in two hooks, then an empty CS_WRAPPER_RE as a library fail-safe on the
 # argument that two other hooks sourced this file unguarded. Review measured
 # both. That guard covered two consumers of four; the fail-safe covered the four
 # that read CS_WRAPPER_RE and missed the two convention hooks, which read

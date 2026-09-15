@@ -171,9 +171,10 @@ nothing else.
 Issue #84 is the same shape one level out, and it is the reason that last
 sentence is worth re-reading. The defect was not in the tokeniser but in the
 *load* of it: two of the four boundary hooks sourced `lib/command-scan.sh` with
-no guard at all and a third required one of the three functions it calls, so
-renaming a `cs_*` function — a refactor, not an accident — left a forced push, a
-`gh pr merge`, a `gh pr create --base main` and a push to `main` all permitted.
+no guard at all and a third guarded only one of the three functions it calls,
+so renaming a `cs_*` function — a refactor, not an accident — left a forced
+push, a `gh pr merge`, a `gh pr create --base main` and a push to `main` all
+permitted.
 The suite was green throughout, 728 checks when the issue was filed and 830 by
 the time it merged, because it asked that question of two hooks of four and of
 one function of three.

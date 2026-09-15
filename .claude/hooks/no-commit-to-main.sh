@@ -61,7 +61,7 @@
 # missing file makes `.` end the shell where an `if` around it never runs, so
 # the guard would have been a comment.
 #
-# All three functions this file calls are required, not cs_split alone. Issue #84
+# Every function this file calls is required, not cs_split alone. Issue #84
 # found the narrow version, and the narrow version is worse than none: it reads
 # as a guard and it permitted `git push origin HEAD:main` the moment cs_git_args
 # was renamed, because `cs_git_args commit` and `cs_git_args push` fail the same

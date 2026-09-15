@@ -4541,7 +4541,7 @@ unarmed 'pytest-via-uv-group.sh does not source the library unguarded' \
 unarmed 'alembic-via-uv-group.sh does not source the library unguarded' \
         alembic-via-uv-group.sh '. "$(dirname "$0")/lib/command-scan.sh"'
 
-echo "--- issue #101: a load guard requires a function, it does not probe one ---"
+echo "--- issue #101: a load guard requires a function ---"
 # CONTEXT.md keeps "check" for an assertion written out in advance and "probe"
 # for a measurement whose answer is not known until it runs, and #38 renamed this
 # suite for that reason. #84 then wrote "probe" for a `command -v` test in the
@@ -4560,7 +4560,10 @@ echo "--- issue #101: a load guard requires a function, it does not probe one --
 #
 # Two files are not scanned, and that is a trade rather than an oversight. This
 # suite's own header uses the word correctly, and the block holding the rule
-# cannot avoid the word it rules on, so its check labels are held by review.
+# cannot avoid naming the word it rules on, so its check labels are held by
+# review. Naming is all it may do: review of PR #119 found the heading and the
+# ok label using the word in the retired sense ("does not probe one"), which a
+# scan of this file would have caught and this block's own text did not.
 # CLAUDE.md carries correct uses (the judge's probe harness, scripts/probe_*.py)
 # beside the #84 paragraph, so the same scan there would need an exemption per
 # correct use, and #101 names .claude/hooks/ as its scope.
@@ -4589,7 +4592,7 @@ for f in lib/command-scan.sh $LIB_CONSUMERS; do
     printf '  FAIL %s could not be scanned, so the absence of "probe" in it is evidence of nothing\n' "$f"
     FAILED=1
   elif [ -z "$HITS" ]; then
-    printf '  ok   written %s says a guard requires a function, never probes one\n' "$f"
+    printf '  ok   written %s says a guard requires a function\n' "$f"
   else
     printf '  FAIL %s uses "probe", which CONTEXT.md keeps for a measurement:\n%s\n' \
       "$f" "$(printf '%s\n' "$HITS" | sed 's/^/         /')"
