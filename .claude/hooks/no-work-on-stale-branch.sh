@@ -210,13 +210,30 @@
 
 set -f
 
-INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+# The library is loaded here, before the command is read, and that is issue #95
+# rather than preference. It used to be loaded only once the branch was found
+# stale or gone, so a missing library left a healthy worktree permitted; but the
+# tool call is read through cs_tool_input now -- THE INPUT READ in the library,
+# the one reader every hook shares -- and a file that cannot read its input has
+# no command to have an opinion about. So the missing library refuses on every
+# branch, which is the trade, recorded: it gives up the ALLOW this file used to
+# return there, and gives up nothing an agent would notice, because every other
+# Bash hook sources the library and already refuses every command without it.
+# Tested for before it is sourced and the reader after, for THE LOAD CONTRACT's
+# reason; the three functions the rules need are probed below, where they were.
+LIB="$(dirname "$0")/lib/command-scan.sh"
+[ -r "$LIB" ] && . "$LIB"
+if ! command -v cs_tool_input >/dev/null 2>&1; then
+  echo "Blocked: no-work-on-stale-branch.sh could not load lib/command-scan.sh, so it cannot read the tool call it was handed. Refusing rather than permitting." >&2
+  exit 2
+fi
+
+COMMAND=$(cs_tool_input command) || exit 2
 
 # Every command this file refuses is a git subcommand, so text with no `git` in
 # it anywhere cannot hold one -- a wrapped payload included, since the payload
-# still carries the word. This bail runs before the library is needed and before
-# any git process is started, so `ls` in a stale worktree costs one grep.
+# still carries the word. This bail runs before any git process is started, so
+# `ls` in a stale worktree costs one grep.
 echo "$COMMAND" | grep -q 'git' || exit 0
 
 # The exception is keyed on where the command runs, not on what the branch is
@@ -278,12 +295,8 @@ refuse() {
 # The branch is stale or gone, so from here the file has an opinion and must be
 # able to read the command to hold it. Without the tokeniser it cannot find a
 # command word at all, and every commit on a merged branch would be permitted.
-# A guard's own breakage refuses; it does not wave things through. Tested for
-# before it is sourced and the functions after: a missing file makes `.` end the
-# shell where an `if` around it never runs, so the guard would have been a
-# comment.
-LIB="$(dirname "$0")/lib/command-scan.sh"
-[ -r "$LIB" ] && . "$LIB"
+# A guard's own breakage refuses; it does not wave things through. The library
+# was sourced at the top of this file, where the input is read.
 #
 # All three functions are probed, not one. cs_git_args is the one whose absence
 # would be silent and permitting: `RAW=$(cs_git_args "$VERB") || continue`
