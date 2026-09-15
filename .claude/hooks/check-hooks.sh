@@ -239,8 +239,9 @@ PUSH_MAIN_LINK="$FIXTURES/push-main-link"
 PUSH_WT_LINK="$FIXTURES/push-wt-link"
 ln -s "$PUSH_MAIN" "$PUSH_MAIN_LINK"
 ln -s "$PUSH_WT" "$PUSH_WT_LINK"
-# Every directory guarded: a check against a directory that is not
-# there exits 1 from the cd, which reads as ALLOW. The branch halves are guarded
+# Every directory guarded: a check against a directory that is not there exits 1
+# from the cd, which `verdict` FAILs; this names the directory once, where a
+# column of FAILs would each blame its own check. The branch halves are guarded
 # too, because a worktree on the wrong branch turns every own-branch ALLOW into a
 # refusal for a reason no check names.
 for d in "$PUSH_MAIN" "$PUSH_MAIN/src" "$PUSH_MAIN/src/deep" \
