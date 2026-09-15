@@ -4541,6 +4541,44 @@ unarmed 'pytest-via-uv-group.sh does not source the library unguarded' \
 unarmed 'alembic-via-uv-group.sh does not source the library unguarded' \
         alembic-via-uv-group.sh '. "$(dirname "$0")/lib/command-scan.sh"'
 
+echo "--- issue #101: a load guard requires a function, it does not probe one ---"
+# CONTEXT.md keeps "check" for an assertion written out in advance and "probe"
+# for a measurement whose answer is not known until it runs, and #38 renamed this
+# suite for that reason. #84 then wrote "probe" for a `command -v` test in the
+# library and every guard, which is neither, and #101 renamed it "requires". The
+# drift arrived with the contract's own prose, so the prose is what is held:
+# the library and each consumer, read as written with comments included, since
+# nearly every use was in a comment. Case-folded, and "probing" too -- the first
+# sweep for #101 missed exactly that spelling.
+#
+# One use in these files is correct and stays: no-work-on-stale-branch.sh's
+# header names the probe->check rename itself. It is exempt by its exact text
+# rather than by line number, which goes stale the moment a line is added above.
+# Text that stops matching exempts nothing, and the scan then fails on that
+# file: the refusing direction, visible and one edit away.
+# The suite's own header is correct as well, and this suite is not scanned --
+# the block holding the rule cannot avoid the word it rules on.
+#
+# The consumer list is $LIB_CONSUMERS, which the #84 section derives and asserts
+# complete against what actually sources the library, so a seventh consumer is
+# scanned without anyone remembering to add it here.
+VOCAB_EXEMPT='# the probe->check rename was committed onto hooks-push-and-pr-guards after'
+for f in lib/command-scan.sh $LIB_CONSUMERS; do
+  if [ ! -r "$HOOKS/$f" ]; then
+    printf '  FAIL %s cannot be read, so the absence of "probe" in it is evidence of nothing\n' "$f"
+    FAILED=1
+    continue
+  fi
+  HITS=$(grep -niE 'prob(e|ing)' "$HOOKS/$f" | grep -vF -- "$VOCAB_EXEMPT")
+  if [ -z "$HITS" ]; then
+    printf '  ok   written %s says a guard requires a function, never probes one\n' "$f"
+  else
+    printf '  FAIL %s uses "probe", which CONTEXT.md keeps for a measurement:\n%s\n' \
+      "$f" "$(printf '%s\n' "$HITS" | sed 's/^/         /')"
+    FAILED=1
+  fi
+done
+
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
 exit $FAILED
