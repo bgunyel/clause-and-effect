@@ -3534,23 +3534,26 @@ tok 'settings.json runs the guard on every Bash command' \
 # The report's timeout must outlast the network calls it waits on, or the hook
 # is killed before it can say that one of them failed -- and a killed
 # SessionStart hook takes the whole report with it, not only the line that was
-# pending. There are two such calls now, so the claim is no longer about the
+# pending. There are three such calls now, so the claim is no longer about the
 # fetch alone, and the budgets are read off the file rather than restated.
 #
 # 40 rather than the 30 this was: the second call took the margin over the two
 # budgets from 15s down to 5s, and what has to happen inside that margin is the
 # whole local half of the report -- a worktree listing and an ancestry read per
 # branch. Raising the cap costs nothing the budgets do not already cost, because
-# it is a cap and not a wait: the hook exits the moment it is done, and the two
+# it is a cap and not a wait: the hook exits the moment it is done, and the
 # `timeout` calls are what actually bound a dead network.
+#
+# 50 rather than 40: #100 added a third call, the pull request read, and the
+# same 15s margin is kept over the three budgets for the same reason.
 REPORT_TIMEOUT=$(jq -r '.hooks.SessionStart[]?.hooks[]? | select(.command | contains("report-stale-branches")) | .timeout' "$SETTINGS" 2>/dev/null)
-tok 'the report hook outlasts its own network calls' '40' "$REPORT_TIMEOUT"
-# Both budgets, summed off the script. The END guard makes a renamed or deleted
-# budget print nothing rather than a smaller sum, which is the permitting
+tok 'the report hook outlasts its own network calls' '50' "$REPORT_TIMEOUT"
+# All three budgets, summed off the script. The END guard makes a renamed or
+# deleted budget print nothing rather than a smaller sum, which is the permitting
 # direction: a sum that lost a term would compare favourably and say nothing.
-BUDGET_SUM=$(awk -F= '/^FETCH_TIMEOUT=[0-9]+$/ || /^SETTINGS_TIMEOUT=[0-9]+$/ { s += $2; n += 1 }
-                      END { if (n == 2) print s }' "$HOOKS/report-stale-branches.sh")
-tok 'the report sets two budgets, and this is their sum' '25' "$BUDGET_SUM"
+BUDGET_SUM=$(awk -F= '/^FETCH_TIMEOUT=[0-9]+$/ || /^SETTINGS_TIMEOUT=[0-9]+$/ || /^PRS_TIMEOUT=[0-9]+$/ { s += $2; n += 1 }
+                      END { if (n == 3) print s }' "$HOOKS/report-stale-branches.sh")
+tok 'the report sets three budgets, and this is their sum' '35' "$BUDGET_SUM"
 # Redundant with the two literals above by arithmetic, and kept for the reason
 # the guard-equals-report check above is kept: it is the line that states the
 # property the other two only imply, and it is the one still standing the day
@@ -3565,6 +3568,198 @@ if numeric "$REPORT_TIMEOUT" && numeric "$BUDGET_SUM"; then
 fi
 tok 'and it outlasts them by arithmetic, not by both literals happening to agree' \
     'yes' "$OUTLASTS"
+
+echo "=== issue #100: the report classifies by pull request, as the sweep does ==="
+# The branch-hygiene sweep defines its three classes by pull request state and
+# acts on one of them; the report it acts on classified by ref state and never
+# read a pull request. Why the report was the side changed is argued in its
+# header, once.
+#
+# These drive the report as a process rather than pinning its lines, because the
+# claim is about what it prints for a given state. The report cds to the
+# repository it sits in, so a copy of it is placed in a fixture repository; that
+# repository's origin is a bare repository beside it, so the pruning fetch runs
+# for real and reaches nothing; and gh is a stand-in on PATH that answers the two
+# reads the report makes with what the real reads' --jq filters print. That last
+# part is a limit and is named: the filters themselves are not run here, so they
+# are pinned as literals below instead.
+REPORT_FIX="$FIXTURES/report"
+REPORT_ORIGIN="$FIXTURES/report-origin.git"
+FAKE_GH="$FIXTURES/fake-gh"
+git init -q -b main "$REPORT_FIX"
+GR="git -C $REPORT_FIX -c user.email=checks@example.invalid -c user.name=checks"
+$GR commit -q --allow-empty -m base
+REPORT_BASE=$($GR rev-parse HEAD)
+$GR commit -q --allow-empty -m advance
+REPORT_TIP=$($GR rev-parse HEAD)
+$GR branch dev-05 "$REPORT_TIP"
+# A commit of a branch's own, made without a checkout, so that no worktree is
+# needed for a branch to be ahead of the dev branch.
+own_commit() { $GR commit-tree -p "$REPORT_TIP" -m "$1" "$REPORT_TIP^{tree}"; }
+# The table in #100, one branch per row. merged-branch has no commit of its own
+# and is behind the dev branch -- what a merge commit leaves -- and closed-branch
+# carries a commit nothing else has. Both track a remote branch that is still
+# there, which is what the table's first two rows say.
+CLOSED_OWN=$(own_commit closed)
+$GR branch merged-branch "$REPORT_BASE"
+$GR branch closed-branch "$CLOSED_OWN"
+$GR branch nopr-branch "$(own_commit nopr)"
+# The class the sweep must not touch.
+$GR branch open-branch "$(own_commit open)"
+# Branches with two pull requests each, one per ordering the decision has to get
+# right: an open one beside a closed one and beside a newer merged one -- open
+# decides both -- and a merged one beside a closed one in each order, where the
+# newer decides. A decision by list position, or by merged over closed, or by
+# merged over open, turns one of these red.
+REOPENED_OWN=$(own_commit reopened)
+TWICE_OWN=$(own_commit twice)
+LATE_CLOSED_OWN=$(own_commit late-closed)
+OPEN_MERGED_OWN=$(own_commit open-merged)
+$GR branch reopened-branch "$REOPENED_OWN"
+$GR branch twice-branch "$TWICE_OWN"
+$GR branch late-closed-branch "$LATE_CLOSED_OWN"
+$GR branch open-merged-branch "$OPEN_MERGED_OWN"
+# A name reused: cut fresh at the dev tip under the name of a branch whose pull
+# request merged at the base commit. Matched by name it is that pull request's,
+# and stale; it is not at or behind that head, so it is not.
+$GR branch reused-branch "$REPORT_TIP"
+# And the ref-state detector's own case with no pull request behind it: an
+# upstream configured whose remote half is gone. Stale by ref state,
+# unclassified by pull request, because nothing says a pull request ever merged.
+$GR branch gone-nopr-branch "$REPORT_TIP"
+git clone -q --bare "$REPORT_FIX" "$REPORT_ORIGIN"
+git -C "$REPORT_ORIGIN" update-ref -d refs/heads/gone-nopr-branch
+$GR remote add origin "$REPORT_ORIGIN"
+for b in gone-nopr-branch merged-branch closed-branch; do
+  $GR config "branch.$b.remote" origin
+  $GR config "branch.$b.merge" "refs/heads/$b"
+done
+mkdir -p "$REPORT_FIX/.claude/hooks" "$FAKE_GH"
+cp "$HOOKS/report-stale-branches.sh" "$REPORT_FIX/.claude/hooks/"
+cat > "$FAKE_GH/gh" <<'GH'
+#!/bin/bash
+# The merge settings as required -- or a failed read when FAKE_GH_API_FAIL is
+# set -- and the pull request list from the file named by FAKE_GH_PRS, or a
+# failed read when none is named.
+case "$1" in
+  api) [ -z "$FAKE_GH_API_FAIL" ] && printf 'false\tfalse\ttrue\n' ;;
+  pr)  [ -n "$FAKE_GH_PRS" ] && cat "$FAKE_GH_PRS" ;;
+  *)   exit 1 ;;
+esac
+GH
+chmod +x "$FAKE_GH/gh"
+# Head, state, number, head commit -- the real read's four columns. Not in
+# number order, so that nothing passes by the order gh happens to list them in.
+# An older pull request on a branch points at the base commit, which the branch
+# is not behind: were it allowed to decide, it would read as a reused name.
+REPORT_PRS="$FIXTURES/report-prs.tsv"
+printf '%s\t%s\t%s\t%s\n' \
+  twice-branch CLOSED 6 "$REPORT_BASE" \
+  merged-branch MERGED 1 "$REPORT_BASE" \
+  dev-05 MERGED 13 "$REPORT_TIP" \
+  reopened-branch OPEN 5 "$REOPENED_OWN" \
+  late-closed-branch CLOSED 9 "$LATE_CLOSED_OWN" \
+  open-branch OPEN 3 "$REPORT_TIP" \
+  reopened-branch CLOSED 4 "$REPORT_BASE" \
+  open-merged-branch MERGED 11 "$OPEN_MERGED_OWN" \
+  twice-branch MERGED 7 "$TWICE_OWN" \
+  closed-branch CLOSED 2 "$CLOSED_OWN" \
+  late-closed-branch MERGED 8 "$REPORT_BASE" \
+  reused-branch MERGED 12 "$REPORT_BASE" \
+  open-merged-branch OPEN 10 "$REPORT_BASE" > "$REPORT_PRS"
+
+REPORT_READ="$FIXTURES/report-read.txt"
+REPORT_UNREAD="$FIXTURES/report-unread.txt"
+PATH="$FAKE_GH:$PATH" FAKE_GH_PRS="$REPORT_PRS" \
+  "$REPORT_FIX/.claude/hooks/report-stale-branches.sh" > "$REPORT_READ" 2>&1
+PATH="$FAKE_GH:$PATH" FAKE_GH_PRS= \
+  "$REPORT_FIX/.claude/hooks/report-stale-branches.sh" > "$REPORT_UNREAD" 2>&1
+# gh unreachable for the settings read, and a pull request list that would have
+# answered: the second read is skipped, not merely failed.
+REPORT_NOAPI="$FIXTURES/report-noapi.txt"
+PATH="$FAKE_GH:$PATH" FAKE_GH_PRS="$REPORT_PRS" FAKE_GH_API_FAIL=1 \
+  "$REPORT_FIX/.claude/hooks/report-stale-branches.sh" > "$REPORT_NOAPI" 2>&1
+grep -qxF 'fetch: pruned origin' "$REPORT_NOAPI" \
+  && grep -qxF 'active dev branch: origin/dev-05' "$REPORT_NOAPI" || {
+  echo "the report fixture did not fetch and find its dev branch with the settings read failing; the checks against it prove nothing" >&2
+  cat "$REPORT_NOAPI" >&2
+  exit 1
+}
+# Every `unarmed` below passes on an empty file, and every classification below
+# is a different one if the fetch did not run or the dev branch was not found.
+for out in "$REPORT_READ" "$REPORT_UNREAD"; do
+  grep -qxF 'fetch: pruned origin' "$out" \
+    && grep -qxF 'active dev branch: origin/dev-05' "$out" \
+    && grep -qxF 'merge settings: as required (squash off, rebase off, delete-on-merge on)' "$out" || {
+    echo "the report fixture did not fetch, find its dev branch and read its settings; the checks against it prove nothing" >&2
+    cat "$out" >&2
+    exit 1
+  }
+done
+
+echo "--- pull requests read: each row of the table in #100 ---"
+written 'the report says it read the pull requests' \
+  "$REPORT_READ" 'pull requests: read'
+written 'row 1: a pull request closed unmerged, remote branch present, is stale' \
+  "$REPORT_READ" '  closed-branch -- closed without merging: pull request #2; its commits may exist nowhere else'
+written 'row 2: a pull request merged, remote branch not yet pruned, is stale' \
+  "$REPORT_READ" '  merged-branch -- merged: pull request #1'
+written 'row 3: commits of its own and no pull request ever opened is unclassified' \
+  "$REPORT_READ" '  nopr-branch -- no pull request; 1 ahead of origin/dev-05, 0 behind it (unclassified: cut and not yet worked, or abandoned)'
+written 'an upstream gone with no pull request is unclassified, not stale' \
+  "$REPORT_READ" '  gone-nopr-branch -- no pull request; 0 ahead of origin/dev-05, 0 behind it (unclassified: cut and not yet worked, or abandoned)'
+written 'a merge by a newer pull request decides over an older closed one' \
+  "$REPORT_READ" '  twice-branch -- merged: pull request #7'
+written 'and a close by a newer one decides over an older merge, keeping its warning' \
+  "$REPORT_READ" '  late-closed-branch -- closed without merging: pull request #9; its commits may exist nowhere else'
+written 'a reused name is not stale off a pull request whose head it is not behind' \
+  "$REPORT_READ" '  reused-branch -- pull request #12 is merged, but this branch is not at or behind its head; 0 ahead of origin/dev-05, 0 behind it (unclassified: a reused name, or work after it)'
+unarmed 'an open pull request is in flight and is not listed' \
+  "$REPORT_READ" '  open-branch --'
+unarmed 'nor is a branch with an open pull request beside an older closed one' \
+  "$REPORT_READ" '  reopened-branch --'
+unarmed 'nor one with an open pull request beside a newer merged one' \
+  "$REPORT_READ" '  open-merged-branch --'
+unarmed 'and the active dev branch is not called stale off its own merged pull request' \
+  "$REPORT_READ" '  dev-05 --'
+# The counts line is what decides each class exactly: main, dev-05, open-branch,
+# reopened-branch and open-merged-branch clear; four stale; three unclassified.
+written 'and every branch lands in the class the sweep defines' \
+  "$REPORT_READ" '5 other branch(es) are clear; 4 stale, 3 unclassified.'
+
+echo "--- pull requests not read: the report falls back to ref state and says so ---"
+# Fails open, as the settings read does: a session whose gh cannot answer still
+# starts, and the report says which computation it ran rather than printing the
+# ref-state classes under the pull-request meanings.
+written 'a pull request read that failed says so' \
+  "$REPORT_UNREAD" 'pull requests: NOT READ'
+written 'and names the computation it ran instead' \
+  "$REPORT_UNREAD" 'classified by ref state alone'
+written 'by ref state, an upstream gone is stale, without claiming it merged' \
+  "$REPORT_UNREAD" '  gone-nopr-branch -- stale by ref state: its branch on the remote is gone (merged, or closed and deleted)'
+written 'and no work of its own is unclassified' \
+  "$REPORT_UNREAD" '  merged-branch -- no work of its own; origin/dev-05 is 1 ahead of it (unclassified: merged, or cut and not yet worked)'
+unarmed 'a closed branch with commits of its own reads as clear by ref state' \
+  "$REPORT_UNREAD" '  closed-branch --'
+written 'the ref-state counts, which are the ones #100 found disagreeing' \
+  "$REPORT_UNREAD" '10 other branch(es) are clear; 1 stale, 1 unclassified.'
+# The settings read could not reach gh, so the pull request read is not
+# attempted, and the report gives the settings read's reason for both.
+written 'a settings read that failed skips the pull request read and says why' \
+  "$REPORT_NOAPI" 'pull requests: NOT READ -- gh api failed or timed out after 10s, so branches are'
+written 'and the classes are the ref-state ones, though the list would have answered' \
+  "$REPORT_NOAPI" '10 other branch(es) are clear; 1 stale, 1 unclassified.'
+
+# The filters the stand-in does not run, pinned as they are written, one line
+# each for the reason the settings list above is.
+armed 'the report reads every pull request, closed and merged included' \
+  "$HOOKS/report-stale-branches.sh" 'timeout "$PRS_TIMEOUT" gh pr list --state all --limit 1000'
+armed 'and reads the head, the state, the number and the head commit of each' \
+  "$HOOKS/report-stale-branches.sh" '--json headRefName,state,number,headRefOid'
+armed 'in the column order the stand-in above answers in' \
+  "$HOOKS/report-stale-branches.sh" "--jq '.[] | \"\\(.headRefName)\\t\\(.state)\\t\\(.number)\\t\\(.headRefOid)\"'"
+# The skill's side of #100 is asserted with the rest of the sweep's text, below,
+# where that section is extracted.
 
 echo "=== CLAUDE.md names every hook that carries the boundary ==="
 # A third kind of check, and the second here that reads a file rather than
@@ -3862,6 +4057,25 @@ written 'and leaves the unclassified alone' \
 # leave the claim behind it as false as it was. Pinned for that reason.
 written 'the sweep says how often it is run, which is by hand and never' \
   "$SWEEP_SECTION" 'Cadence: manual, and unscheduled'
+
+# Issue #100: the sweep defined its classes by pull request state and the report
+# it acts on computed them from refs. The report now reads pull requests, and
+# the section above drives it; what is asserted here is that the sweep's
+# definitions name the wording the report prints for each class, which the
+# report fixture above asserts as well. A definition that drifts from what the
+# report prints turns one side or the other red.
+written 'the sweep defines stale by what the report prints for a merged pull request' \
+  "$SWEEP_SECTION" '`merged: pull request #N`'
+written 'and for a closed one' \
+  "$SWEEP_SECTION" '`closed without merging: pull request #N`'
+written 'and unclassified by what it prints for a branch with no pull request' \
+  "$SWEEP_SECTION" '`no pull request`'
+written 'and for one that is not at or behind its pull request head' \
+  "$SWEEP_SECTION" '`not at or behind its head`'
+written 'and says what the classes are when the report could not read pull requests' \
+  "$SWEEP_SECTION" '`pull requests: NOT READ`'
+written 'where a gone upstream is stale by ref state' \
+  "$SWEEP_SECTION" '`stale by ref state`'
 echo "=== the tokeniser's header names every hook that sources it ==="
 # The same audit the section above gets, pointed at the one other sentence in
 # this tree that claims to list the hooks. lib/command-scan.sh opens "which is
