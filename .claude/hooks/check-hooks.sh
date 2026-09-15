@@ -77,11 +77,27 @@
 # missing-base refusal, dropping either gh api rule, and dropping the wrapper
 # rule each turn a named group of them red.
 #
-# One expectation is not a literal but a context: whether pushing this branch is
-# permitted depends on where the suite runs, because that is exactly what
-# no-git-push.sh decides. Run from a linked worktree on a worktree branch, a push
-# of that branch is ALLOW; run from the main checkout, the identical command is
-# BLOCK. OWN_BRANCH_PUSH holds whichever applies, and the banner says which.
+# No expectation here depends on where the suite is run. One used to: whether
+# pushing "this branch" was permitted was read off the invoker's own checkout,
+# held in a variable and announced by a banner, and most no-git-push.sh checks
+# ran with the invoker's working directory. Issue #94 is what that cost. Run
+# from the main checkout, which normally sits on a reserved branch, every own-branch
+# push was refused by the reserved-branch rule as well, so a mutant that
+# permitted the main checkout outright left this suite green; and the rules
+# behind that refusal were exercised only when someone happened to run the
+# suite from a linked worktree, where the issue's mutants turned it red 95
+# times against 0 from the main checkout. The banner decided which run had
+# happened by comparing `git rev-parse --git-dir` with `--git-common-dir` as
+# strings, the very comparison the defect was in.
+#
+# So every no-git-push.sh check now runs in a named directory of one fixture
+# this suite builds -- a main checkout on an ordinary branch and a linked
+# worktree, with a subdirectory two levels deep in each, and a symlink to each
+# -- which is PUSH_MAIN and PUSH_WT below. no-work-on-stale-branch.sh checks
+# already ran in named fixtures of their own, one per lifecycle state, because
+# a stale branch, a merged one and a diverged dev branch cannot share one
+# repository; #94 adds the subdirectories and the symlink to the lifecycle
+# fixture, where the main checkout and the stale worktree stand.
 #
 # no-commit-to-main.sh is checked in two classes, because issue #43 rebuilt it
 # on lib/command-scan.sh and did not preserve its behaviour -- that file's
@@ -117,22 +133,6 @@
 # Run: bash .claude/hooks/check-hooks.sh
 cd "$(dirname "$0")" || exit 1
 HOOKS=$(pwd)
-
-CURRENT=$(git branch --show-current 2>/dev/null)
-GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null)
-GIT_COMMON_PATH=$(git rev-parse --git-common-dir 2>/dev/null)
-
-if [ -n "$GIT_DIR_PATH" ] && [ "$GIT_DIR_PATH" != "$GIT_COMMON_PATH" ] \
-   && [ -n "$CURRENT" ] && [ "$CURRENT" != "main" ] \
-   && ! echo "$CURRENT" | grep -qE '^dev-[0-9]+$'; then
-  OWN_BRANCH_PUSH=ALLOW
-  CONTEXT="linked worktree on $CURRENT -- a push of this branch is permitted"
-else
-  OWN_BRANCH_PUSH=BLOCK
-  CONTEXT="main checkout or a reserved branch (${CURRENT:-none}) -- every push is refused"
-fi
-echo "context: $CONTEXT"
-echo
 
 FAILED=0
 # Where a hook is, given what a check names: a bare filename is one of this
@@ -170,6 +170,59 @@ ON_DEV="$FIXTURES/on-dev"
 # hook at all. `git init -b` needs git 2.28.
 [ -d "$ON_MAIN/.git" ] && [ -d "$ON_DEV/.git" ] || {
   echo "fixtures were not created; git init -b needs git 2.28 or newer" >&2
+  exit 1
+}
+
+# Where no-git-push.sh checks run: issue #94. A main checkout and a linked
+# worktree of one repository, each with a subdirectory two levels deep, so that
+# the one thing that separates a permitted push from a refused one -- where the
+# command runs -- is a named directory rather than wherever the suite was
+# started from.
+#
+# The main checkout is on an ordinary branch and not on main. On main a push is
+# refused by the reserved-branch rule as well, so a main checkout mistaken for a
+# linked worktree would still be refused and the mistake would not show; on
+# feature-x the main-checkout refusal is the only thing standing between the
+# command and a permitted push, which is what makes a check of it evidence.
+#
+# origin exists because the hook requires the first bare argument of a push to
+# be a remote of this repository. Nothing here ever reaches its URL. One commit,
+# because `git worktree add` needs something to check out.
+PUSH_MAIN="$FIXTURES/push-main"
+PUSH_WT="$FIXTURES/push-wt"
+PUSH_BRANCH=wt-branch
+git init -q -b feature-x "$PUSH_MAIN"
+GP="git -C $PUSH_MAIN -c user.email=checks@example.invalid -c user.name=checks"
+$GP remote add origin "$FIXTURES/unreachable-remote.git"
+$GP commit -q --allow-empty -m base
+$GP worktree add -q -b "$PUSH_BRANCH" "$PUSH_WT"
+mkdir -p "$PUSH_MAIN/src/deep" "$PUSH_WT/src/deep"
+# The same two checkouts reached through a symlink. check_in's `cd` is logical,
+# so the hook starts with $PWD naming the link while git reports the real path:
+# a canonicalisation that followed $PWD rather than the directory would compare
+# the one against the other and read the main checkout as a worktree again.
+PUSH_MAIN_LINK="$FIXTURES/push-main-link"
+PUSH_WT_LINK="$FIXTURES/push-wt-link"
+ln -s "$PUSH_MAIN" "$PUSH_MAIN_LINK"
+ln -s "$PUSH_WT" "$PUSH_WT_LINK"
+# Every directory guarded: a check against a directory that is not
+# there exits 1 from the cd, which reads as ALLOW. The branch halves are guarded
+# too, because a worktree on the wrong branch turns every own-branch ALLOW into a
+# refusal for a reason no check names.
+for d in "$PUSH_MAIN" "$PUSH_MAIN/src" "$PUSH_MAIN/src/deep" \
+         "$PUSH_WT" "$PUSH_WT/src" "$PUSH_WT/src/deep" \
+         "$PUSH_MAIN_LINK/src/deep" "$PUSH_WT_LINK/src/deep"; do
+  [ -d "$d" ] || {
+    echo "the push fixture directory $d was not created; the checks against it prove nothing" >&2
+    exit 1
+  }
+done
+# And origin: without it every push is refused as naming no remote, so each
+# BLOCK below would pass for that reason rather than the one it names.
+[ "$(git -C "$PUSH_MAIN" branch --show-current)" = feature-x ] \
+  && [ "$(git -C "$PUSH_WT" branch --show-current)" = "$PUSH_BRANCH" ] \
+  && git -C "$PUSH_WT" remote | grep -qx origin || {
+  echo "the push fixture is not on feature-x and $PUSH_BRANCH with an origin remote; the checks against it prove nothing" >&2
   exit 1
 }
 # The nolib and halflib fixtures are built beside the checks that drive them, at
@@ -706,7 +759,7 @@ git push --all origin' \
 tok 'an escaped quote outside quotes does not open one' \
     'sed -e s/\"/Q/ -e '"'"'s|git push|X|'"'"' f.sh' \
     "$(printf 'sed -e s/\\"/Q/ -e %ss|git push|X|%s f.sh\n' "'" "'" | cs_split)"
-check no-git-push.sh ALLOW 'and the same command is not a push' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'and the same command is not a push' \
          'sed -e s/\"/Q/ -e '"'"'s|git push|X|'"'"' f.sh'
 tok 'git args, plain' 'origin main' "$(printf 'git push origin main\n' | cs_git_args push)"
 tok 'git args, global option with a separate value' \
@@ -798,36 +851,36 @@ fi
 echo "=== REGRESSION: PR #35, only the first push on a line was validated ==="
 # The scope found the first push, validated its arguments, and stopped. So a
 # legitimate push carried an illegitimate one after ; or && on its coat-tails.
-check no-git-push.sh BLOCK 'legit push ; push origin main'  "git push origin $CURRENT; git push origin main"
-check no-git-push.sh BLOCK 'legit push && push --all'       "git push origin $CURRENT && git push --all origin"
-check no-git-push.sh BLOCK 'bare push && forced push'       "git push && git push --force origin $CURRENT"
-check no-git-push.sh BLOCK 'three pushes, last one bad'     "git push; git push origin $CURRENT; git push --mirror origin"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'legit push ; push origin main'  "git push origin $PUSH_BRANCH; git push origin main"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'legit push && push --all'       "git push origin $PUSH_BRANCH && git push --all origin"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'bare push && forced push'       "git push && git push --force origin $PUSH_BRANCH"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'three pushes, last one bad'     "git push; git push origin $PUSH_BRANCH; git push --mirror origin"
 check no-pr-decisions.sh BLOCK 'gh pr view ; gh pr merge'   'gh pr view 5; gh pr merge 5'
 
 echo "=== REGRESSION: PR #35, backticks and command prefixes ==="
 # $( ) was closed by the paren in the separator class and its twin was not --
 # the same asymmetry GIT_DIR= had against --git-dir. Both hooks were open.
-check no-git-push.sh     BLOCK 'backticked push'      'echo `git push --mirror origin`'
-check no-git-push.sh     BLOCK 'dollar-paren push'    'echo $(git push --mirror origin)'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'backticked push'      'echo `git push --mirror origin`'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'dollar-paren push'    'echo $(git push --mirror origin)'
 check no-pr-decisions.sh BLOCK 'backticked merge'     'echo `gh pr merge 35`'
 check no-pr-decisions.sh BLOCK 'dollar-paren merge'   'echo $(gh pr merge 35)'
-check no-git-push.sh     BLOCK 'push through xargs'   'echo origin | xargs git push --mirror'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push through xargs'   'echo origin | xargs git push --mirror'
 check no-pr-decisions.sh BLOCK 'merge through xargs'  'echo 35 | xargs gh pr merge'
 
 echo "=== REGRESSION: heredoc prose that blocked its own commit ==="
 COMMIT_MSG=$'git commit -q -F - <<\'EOF\'\nLeave pushing and deciding a PR to Bertan\n\nno-git-push.sh refuses every push; no-pr-decisions.sh refuses\ngh pr review --approve and --request-changes, gh pr close and reopen.\ngit push origin main is refused in every form.\ngh pr merge 5 would also be refused.\nEOF'
-check no-git-push.sh     ALLOW 'commit msg naming git push in heredoc' "$COMMIT_MSG"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'commit msg naming git push in heredoc' "$COMMIT_MSG"
 check no-pr-decisions.sh ALLOW 'commit msg naming gh pr verbs in heredoc' "$COMMIT_MSG"
 NOTE=$'cat > /tmp/note.md <<\'MD\'\ngh pr merge is now refused by a hook.\ngit push origin main likewise.\nMD'
-check no-git-push.sh     ALLOW 'heredoc body naming git push' "$NOTE"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'heredoc body naming git push' "$NOTE"
 check no-pr-decisions.sh ALLOW 'heredoc body naming gh pr merge' "$NOTE"
 
 echo "=== REGRESSION: PR #35, indentation defeated the anchor ==="
 # Each names a refused destination, so these assert that the command is still
 # *found* when indented, independently of the worktree exception.
-check no-git-push.sh     BLOCK 'if/then + indented push to dev-05' $'if true; then\n    git push origin dev-05\nfi'
-check no-git-push.sh     BLOCK 'for loop + indented push to main'  $'for r in a b; do\n  git push origin main\ndone'
-check no-git-push.sh     BLOCK 'deeply indented push to main'      $'if true; then\n  if true; then\n        git push origin main\n  fi\nfi'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'if/then + indented push to dev-05' $'if true; then\n    git push origin dev-05\nfi'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'for loop + indented push to main'  $'for r in a b; do\n  git push origin main\ndone'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'deeply indented push to main'      $'if true; then\n  if true; then\n        git push origin main\n  fi\nfi'
 check no-pr-decisions.sh BLOCK 'if/then + indented merge'          $'if true; then\n    gh pr merge 35\nfi'
 check no-pr-decisions.sh BLOCK 'for loop + indented close'         $'for n in 1 2; do\n  gh pr close $n\ndone'
 
@@ -843,7 +896,7 @@ echo "=== ACCEPTED false positive: quoted multi-line string, not a heredoc ==="
 # blocked comment is visible and one edit away, a silently permitted push is
 # neither. If a later change makes these ALLOW, that is a decision to take
 # knowingly, not a bug fix.
-check no-git-push.sh     BLOCK 'multi-line -b string continuing with a push' $'gh issue comment 27 -b "to release:\n  git push origin main"'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'multi-line -b string continuing with a push' $'gh issue comment 27 -b "to release:\n  git push origin main"'
 check no-pr-decisions.sh BLOCK 'multi-line -b string continuing with a merge' $'gh issue comment 27 -b "to land it:\n  gh pr merge 35"'
 # The single-line half of that trade is no longer paid, and the two checks that
 # used to sit here now sit in the issue #68 section below -- an `ALLOW (was
@@ -858,27 +911,28 @@ echo "=== REGRESSION: issue #68, a quoted separator refused ordinary sed and gre
 # It fired twice in a live session against that session's own edits to these
 # hooks, which is what makes it worth a suite entry rather than a note: editing
 # the hooks is exactly the work that trips it.
-check no-git-push.sh ALLOW 'sed over a push --all (was BLOCK)'  "sed -i 's|git push --all origin|X|' f.sh"
-check no-git-push.sh ALLOW 'sed over a forced push (was BLOCK)' "sed -i 's|git push -f origin main|X|' f.sh"
-check no-git-push.sh ALLOW 'sed over a bare push (was BLOCK)'   "sed -i 's|git push|X|' f.sh"
-check no-git-push.sh ALLOW 'grep alternation over pushes (was BLOCK)' "grep -rn 'git push --all|git push -f' .claude/"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'sed over a push --all (was BLOCK)'  "sed -i 's|git push --all origin|X|' f.sh"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'sed over a forced push (was BLOCK)' "sed -i 's|git push -f origin main|X|' f.sh"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'sed over a bare push (was BLOCK)'   "sed -i 's|git push|X|' f.sh"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'grep alternation over pushes (was BLOCK)' "grep -rn 'git push --all|git push -f' .claude/"
 check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'sed over a commit, on main (was BLOCK)' \
          "sed -i 's|git commit -m x|X|' f.sh"
 check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'grep alternation over commit and push, on main (was BLOCK)' \
          "grep -n 'git commit|git push origin main' *.sh"
-# The four above run wherever this suite runs, which is the linked worktree the
-# ticket measured them in. Asked again from the main checkout, where every real
-# push is refused before the worktree exception is reached: an ALLOW there says
-# no push was seen at all, rather than that one was seen and permitted. Both
-# contexts, because the whole complaint is that the verdict turned on something
-# irrelevant to what the command runs.
-check_in "$ON_MAIN" no-git-push.sh ALLOW 'sed over a push --all, from main (was BLOCK)' \
+# The four no-git-push.sh checks above the two no-commit-to-main.sh ones run in
+# the fixture worktree, which is where the ticket measured them. Asked again
+# from the fixture's main checkout, where every real push is refused before the
+# worktree exception is reached: an ALLOW there says no push was seen at all,
+# rather than that one was seen and permitted. Both contexts, because the whole
+# complaint is that the verdict turned on something irrelevant to what the
+# command runs.
+check_in "$PUSH_MAIN" no-git-push.sh ALLOW 'sed over a push --all, from the main checkout (was BLOCK)\' \
          "sed -i 's|git push --all origin|X|' f.sh"
-check_in "$ON_MAIN" no-git-push.sh ALLOW 'sed over a forced push, from main (was BLOCK)' \
+check_in "$PUSH_MAIN" no-git-push.sh ALLOW 'sed over a forced push, from the main checkout (was BLOCK)\' \
          "sed -i 's|git push -f origin main|X|' f.sh"
-check_in "$ON_MAIN" no-git-push.sh ALLOW 'sed over a bare push, from main (was BLOCK)' \
+check_in "$PUSH_MAIN" no-git-push.sh ALLOW 'sed over a bare push, from the main checkout (was BLOCK)\' \
          "sed -i 's|git push|X|' f.sh"
-check_in "$ON_MAIN" no-git-push.sh ALLOW 'grep alternation over pushes, from main (was BLOCK)' \
+check_in "$PUSH_MAIN" no-git-push.sh ALLOW 'grep alternation over pushes, from the main checkout (was BLOCK)\' \
          "grep -rn 'git push --all|git push -f' .claude/"
 # Two more verdicts the fix changed, found by sweeping a corpus of commands
 # against both versions of cs_split rather than by this suite -- which is the
@@ -886,12 +940,12 @@ check_in "$ON_MAIN" no-git-push.sh ALLOW 'grep alternation over pushes, from mai
 # names, and neither of these was named. The delimiter spelled with double
 # quotes is the same defect as the six above; a substitution in single quotes
 # runs nothing, because bash expands nothing inside them.
-check no-git-push.sh ALLOW 'sed over a push, double-quoted delimiter (was BLOCK)' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'sed over a push, double-quoted delimiter (was BLOCK)' \
          'sed -i "s|git push --all origin|X|" f.sh'
 # The other two separators, as verdicts rather than only as fragment lists.
-check no-git-push.sh ALLOW 'sed with & as its delimiter (was BLOCK)' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'sed with & as its delimiter (was BLOCK)' \
          "sed -i 's&git push --all origin&X&' f.sh"
-check no-git-push.sh ALLOW 'grep for a backticked push in prose (was BLOCK)' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'grep for a backticked push in prose (was BLOCK)' \
          "grep -rn '\`git push --all origin\`' docs/"
 check no-pr-decisions.sh ALLOW 'a merge quoted in single quotes is inert (was BLOCK)' \
          "echo '\$(gh pr merge 5)'"
@@ -902,9 +956,9 @@ check no-pr-decisions.sh ALLOW 'a merge quoted in single quotes is inert (was BL
 # refusing these without anything going red.
 check no-pr-decisions.sh BLOCK 'the same substitution in double quotes' \
          'echo "$(gh pr merge 5)"'
-check no-git-push.sh BLOCK 'a push substituted inside double quotes' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push substituted inside double quotes' \
          'echo "$(git push --all origin)"'
-check no-git-push.sh BLOCK 'a push backticked inside double quotes' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push backticked inside double quotes' \
          'echo "`git push --all origin`"'
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'a commit substituted inside double quotes' \
          'echo "$(git commit -m x)"'
@@ -913,27 +967,27 @@ check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'a commit substituted inside doub
 # command; on one line it is text again. These were written as accepted false
 # positives in the section above and are moved here with the verdict they now
 # return, because that is where the reason for the change is written down.
-check no-git-push.sh     ALLOW 'quoted "; then" before a push (was BLOCK)'  'git commit -m "wait; then git push --all origin"'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'quoted "; then" before a push (was BLOCK)'  'git commit -m "wait; then git push --all origin"'
 check no-pr-decisions.sh ALLOW 'quoted "; then" before a merge (was BLOCK)' 'git commit -m "wait; then gh pr merge 35"'
 # What did not flip with them, and the reason: the multi-line spelling of the
 # same string leaves a quote open at the newline, so each line falls back and
 # the continuation reads as a command position. Pinned here beside the flip so
 # the two are read together rather than as a contradiction.
-check no-git-push.sh     BLOCK 'the multi-line spelling still refused' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the multi-line spelling still refused' \
          $'gh issue comment 27 -b "to release:\n  git push origin main"'
 # The intermittency, which is the part that reads as arbitrary from inside a
 # session: the anchored spelling was permitted all along and the spelling with a
 # leading space was refused, on a difference that decides nothing about what
 # either command runs. They agree now, and the pair is pinned so that a
 # regression shows up as the disagreement rather than as one lost verdict.
-check no-git-push.sh ALLOW 'the anchored spelling, permitted before and after' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'the anchored spelling, permitted before and after' \
          "sed -i 's|^git push --all origin|X|' f.sh"
-check no-git-push.sh ALLOW 'the leading-space spelling (was BLOCK)' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'the leading-space spelling (was BLOCK)' \
          "sed -i 's| git push --all origin|X|' f.sh"
 # The controls. A quote-aware split must not have cost a single real refusal,
 # and these are the three commands the six above only ever mentioned.
-check no-git-push.sh BLOCK 'the control: a real push --all'   'git push --all origin'
-check no-git-push.sh BLOCK 'the control: a real forced push'  'git push -f origin main'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: a real push --all'   'git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: a real forced push'  'git push -f origin main'
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'the control: a real commit on main' 'git commit -m x'
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'the control: a real push --all on main' 'git push --all origin'
 # The wrapper detections read the RAW command text, before the split and not
@@ -942,7 +996,7 @@ check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'the control: a real push --all o
 # all, so nothing but the raw match can still see these. A BLOCK is therefore
 # evidence about where the rule reads from, which is what makes them checks
 # about issue #68 rather than repeats of the wrapper checks above.
-check no-git-push.sh BLOCK 'wrapped push, invisible to the split' "bash -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'wrapped push, invisible to the split' "bash -c 'git push --all origin'"
 check no-pr-decisions.sh BLOCK 'wrapped merge, invisible to the split' "eval 'gh pr merge 5'"
 # On a dev branch, not main, so that the refusal cannot be the branch answering
 # for the wrapper rule.
@@ -1025,26 +1079,26 @@ echo "=== REGRESSION: issue #79, the wrapper rules did not know the prefix words
 # no-commit-to-main.sh both, because the defect was in an expression all four
 # hooks carried a copy of, and a fix that reached one file would be the shape
 # this suite exists to catch.
-check no-git-push.sh BLOCK 'sudo + wrapped push'            "sudo sh -c 'git push --all origin'"
-check no-git-push.sh BLOCK 'timeout + wrapped push'         "timeout 5 bash -c 'git push --all origin'"
-check no-git-push.sh BLOCK 'xargs + wrapped push'           "xargs sh -c 'git push --all origin'"
-check no-git-push.sh BLOCK 'env + wrapped push'             "env FOO=1 sh -c 'git push --all origin'"
-check no-git-push.sh BLOCK 'nohup + wrapped push'           "nohup sh -c 'git push --all origin'"
-check no-git-push.sh BLOCK 'sudo + wrapped eval push'       "sudo eval 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'sudo + wrapped push'            "sudo sh -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'timeout + wrapped push'         "timeout 5 bash -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'xargs + wrapped push'           "xargs sh -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'env + wrapped push'             "env FOO=1 sh -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'nohup + wrapped push'           "nohup sh -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'sudo + wrapped eval push'       "sudo eval 'git push --all origin'"
 # The separated option value, which is the shape cs_split answers by offering
 # its tail as further candidates rather than by trimming its head. The anchor
 # admits three further tokens for the same reason and to the same bound: `-u`,
 # `-n` and `-s` are consumed as options and leave `root`, `10` and `KILL 30`
 # standing where the wrapper word has to be.
-check no-git-push.sh BLOCK 'sudo -u root + wrapped push'    "sudo -u root sh -c 'git push --all origin'"
-check no-git-push.sh BLOCK 'nice -n 10 + wrapped push'      "nice -n 10 sh -c 'git push --all origin'"
-check no-git-push.sh BLOCK 'timeout -s KILL 30 + wrapped'   "timeout -s KILL 30 bash -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'sudo -u root + wrapped push'    "sudo -u root sh -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'nice -n 10 + wrapped push'      "nice -n 10 sh -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'timeout -s KILL 30 + wrapped'   "timeout -s KILL 30 bash -c 'git push --all origin'"
 # And where that run stops, pinned from both sides. Three is the bound cs_split
 # already offers its tail to, and a bound is only a claim if the check names the
 # token past it: neither of these two is a shape anyone writes, and that is the
 # point -- they measure the number rather than a command.
-check no-git-push.sh BLOCK 'three tokens before the wrapper'     "sudo a b c sh -c 'git push --all origin'"
-check no-git-push.sh ALLOW 'and four is past where it looks'     "sudo a b c d sh -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'three tokens before the wrapper'     "sudo a b c sh -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'and four is past where it looks'     "sudo a b c d sh -c 'git push --all origin'"
 # An OPTION standing after a separated option value. The options loop stops at
 # the first token that is not an option, so a second option behind the operand
 # falls to the token class -- and that class excluded a leading dash until
@@ -1054,22 +1108,22 @@ check no-git-push.sh ALLOW 'and four is past where it looks'     "sudo a b c d s
 # direction, inside the change that fixes it. The unwrapped halves are here too
 # because the pair is the evidence: a single verdict says nothing about which
 # half moved.
-check no-git-push.sh BLOCK 'sudo -n after a separated value, unwrapped' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'sudo -n after a separated value, unwrapped' \
          'sudo -u root -n git push --all origin'
-check no-git-push.sh BLOCK 'sudo -n after a separated value, wrapped' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'sudo -n after a separated value, wrapped' \
          "sudo -u root -n sh -c 'git push --all origin'"
-check no-git-push.sh BLOCK 'the bare -- after a separated value, unwrapped' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the bare -- after a separated value, unwrapped' \
          'nice -n 10 -- git push --all origin'
-check no-git-push.sh BLOCK 'the bare -- after a separated value, wrapped' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the bare -- after a separated value, wrapped' \
          "nice -n 10 -- sh -c 'git push --all origin'"
-check no-git-push.sh BLOCK 'a long option after an operand, unwrapped' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a long option after an operand, unwrapped' \
          'timeout -s KILL 30 --preserve-status git push --all origin'
-check no-git-push.sh BLOCK 'a long option after an operand, wrapped' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a long option after an operand, wrapped' \
          "timeout -s KILL 30 --preserve-status bash -c 'git push --all origin'"
 # The control that was never broken: with no operand consumed yet, the options
 # loop still has the dash, so this was BLOCK throughout. It is what says the
 # three above are about the token class and not about `--`.
-check no-git-push.sh BLOCK 'a bare -- with no operand before it' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a bare -- with no operand before it' \
          "sudo -- sh -c 'git push --all origin'"
 # What that run admits, where cs_split's tail would stop. The class is now
 # cs_split's exactly; what still differs is the LOOP -- cs_split breaks at a
@@ -1077,7 +1131,7 @@ check no-git-push.sh BLOCK 'a bare -- with no operand before it' \
 # this does not, because nothing here reads a token at all. Deliberate, argued
 # at CS_WRAP_TOKEN, in the refusing direction, and pinned so that it is not
 # rediscovered as a divergence.
-check no-git-push.sh BLOCK 'a quoted token does not end the run' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a quoted token does not end the run' \
          "sudo \"x\" sh -c 'git push --all origin'"
 # On a dev branch, so that the branch cannot be what answers for the wrapper
 # rule -- the same care the #68 wrapped-commit check takes above.
@@ -1108,10 +1162,10 @@ check no-pr-decisions.sh BLOCK 'nohup + wrapped eval merge' "nohup eval 'gh pr m
 # The controls: the unwrapped shape the list already reached, and the wrapped
 # shape with no prefix in front of it. Both were BLOCK before and must stay so,
 # or the widening has moved the rule rather than extended it.
-check no-git-push.sh BLOCK 'the control: sudo + a bare push'   'sudo git push --all origin'
-check no-git-push.sh BLOCK 'the control: timeout + a push'     'timeout 30 git push --all origin'
-check no-git-push.sh BLOCK 'the control: a wrapper on its own' "bash -c 'git push --all origin'"
-check no-git-push.sh BLOCK 'the control: an assignment prefix' "FOO=1 sh -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: sudo + a bare push'   'sudo git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: timeout + a push'     'timeout 30 git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: a wrapper on its own' "bash -c 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: an assignment prefix' "FOO=1 sh -c 'git push --all origin'"
 
 echo "=== issue #79: the anchor was widened and not dropped ==="
 # The constraint that decides this fix. Dropping the anchor would pass every
@@ -1121,9 +1175,9 @@ echo "=== issue #79: the anchor was widened and not dropped ==="
 # ALLOW either way, because the rule is a conjunction and that command names no
 # push. The shapes that regress name a wrapper word and a push on one line, and
 # each of these three is ALLOW with the anchor and BLOCK without it.
-check no-git-push.sh ALLOW 'grepping for the sh -c rule'  "grep -rn 'sh -c .*git push' .claude/hooks/"
-check no-git-push.sh ALLOW 'grepping for the eval rule'   "grep -rn 'eval .*git push' .claude/hooks/"
-check no-git-push.sh ALLOW 'a note about what eval does'  "echo 'the eval rule refuses git push --all origin' >> notes.md"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'grepping for the sh -c rule'  "grep -rn 'sh -c .*git push' .claude/hooks/"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'grepping for the eval rule'   "grep -rn 'eval .*git push' .claude/hooks/"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a note about what eval does'  "echo 'the eval rule refuses git push --all origin' >> notes.md"
 check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'grepping for the sh -c rule' \
          "grep -rn 'sh -c .*git commit' .claude/hooks/"
 
@@ -1132,14 +1186,14 @@ echo "=== issue #79: named and not closed -- the list cannot be complete ==="
 # header of lib/command-scan.sh says so rather than implying the set is
 # exhaustive. These are ALLOW and are pinned as ALLOW: a check that named them
 # and wanted BLOCK would be a claim the fix does not make.
-check no-git-push.sh ALLOW 'python3 -c is out of reach' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'python3 -c is out of reach' \
          "python3 -c 'import os; os.system(\"git push --all origin\")'"
-check no-git-push.sh ALLOW 'perl -e is out of reach' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'perl -e is out of reach' \
          "perl -e 'system(\"git push --all origin\")'"
 # find runs its operand after -exec rather than as a prefix, so it is not one of
 # cs_split's words and adding it there would strip find and leave the path where
 # the command word has to be. Named with the family above rather than closed.
-check no-git-push.sh ALLOW 'find -exec sh -c is out of reach' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'find -exec sh -c is out of reach' \
          "find . -exec sh -c 'git push --all origin' \\;"
 
 echo "=== issue #79: the soft spot the anchor keeps, and what widening cost it ==="
@@ -1154,18 +1208,18 @@ echo "=== issue #79: the soft spot the anchor keeps, and what widening cost it =
 # which is the shape #63 found in CLAUDE.md and the header found in itself.
 # Both spellings are pinned side by side, because it is the delimiter that
 # decides the verdict and that is the part that reads as arbitrary in session.
-check no-git-push.sh BLOCK 'the pipe delimiter satisfies the anchor' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the pipe delimiter satisfies the anchor' \
          "sed -i 's|sh -c git push --all|X|' f.sh"
-check no-git-push.sh ALLOW 'the slash delimiter does not' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'the slash delimiter does not' \
          "sed -i 's/sh -c git push --all/X/' f.sh"
 # And the cost of widening, named so that it is a known trade rather than a
 # discovery: the prefix words are admitted after that same quote-blind
 # separator, so prose naming one of them in front of a wrapper is refused where
 # it was not before. It costs a refusal and never a permission, and the refusal
 # is visible and one edit away.
-check no-git-push.sh BLOCK 'a prefix word in prose, after a pipe (was ALLOW)' \
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a prefix word in prose, after a pipe (was ALLOW)' \
          "sed -i 's|sudo sh -c git push --all|X|' f.sh"
-check no-git-push.sh ALLOW 'the same prose with the other delimiter' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'the same prose with the other delimiter' \
          "sed -i 's/sudo sh -c git push --all/X/' f.sh"
 
 echo "=== issue #79: the prefix words are written once ==="
@@ -1218,10 +1272,10 @@ echo "=== REGRESSION: PR #35 review, a command after a control word ==="
 # `then` in front of the command word, so the anchor never saw the command at
 # all, and `do`, `else`, `elif`, `{` and `!` did the same. Every check here was
 # ALLOW before the control words were removed in cs_split.
-check no-git-push.sh     BLOCK 'then + push --mirror'     'if true; then git push --mirror origin; fi'
-check no-git-push.sh     BLOCK 'do + push --all'          'while true; do git push --all origin; done'
-check no-git-push.sh     BLOCK 'brace group + push'       '{ git push --mirror origin; }'
-check no-git-push.sh     BLOCK 'then + push to dev-05'    'if true; then git push origin dev-05; fi'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'then + push --mirror'     'if true; then git push --mirror origin; fi'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'do + push --all'          'while true; do git push --all origin; done'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'brace group + push'       '{ git push --mirror origin; }'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'then + push to dev-05'    'if true; then git push origin dev-05; fi'
 check no-pr-decisions.sh BLOCK 'then + gh pr merge'       'if true; then gh pr merge 35; fi'
 check no-pr-decisions.sh BLOCK 'do + gh pr merge'         'for x in a; do gh pr merge 35; done'
 check no-pr-decisions.sh BLOCK 'until/do + gh pr merge'   'until false; do gh pr merge 35; done'
@@ -1240,12 +1294,12 @@ echo "=== REGRESSION: PR #35 review, heredoc detection dropped live commands ===
 # exact comparison never matched. Either one discarded every following line, so
 # the hook saw an empty command and returned 0.
 check no-pr-decisions.sh BLOCK 'here-string then a merge'  $'cat <<< "hello"\ngh pr merge 35'
-check no-git-push.sh     BLOCK 'here-string then a push'   $'cat <<< "hello"\ngit push --mirror origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'here-string then a push'   $'cat <<< "hello"\ngit push --mirror origin'
 check no-pr-decisions.sh BLOCK '<<- tab terminator, then a merge' $'cat <<-EOF\n\thello\n\tEOF\ngh pr merge 35'
-check no-git-push.sh     BLOCK '<<- tab terminator, then a push'  $'cat <<-EOF\n\thello\n\tEOF\ngit push --mirror origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK '<<- tab terminator, then a push'  $'cat <<-EOF\n\thello\n\tEOF\ngit push --mirror origin'
 # The body of a real heredoc is still data, tab-indented or not.
 check no-pr-decisions.sh ALLOW '<<- body naming a merge'   $'cat <<-EOF\n\tgh pr merge 35 would be refused\n\tEOF\necho done'
-check no-git-push.sh     ALLOW '<<- body naming a push'    $'cat <<-EOF\n\tgit push --all origin is refused\n\tEOF\necho done'
+check_in "$PUSH_WT" no-git-push.sh ALLOW '<<- body naming a push'    $'cat <<-EOF\n\tgit push --all origin is refused\n\tEOF\necho done'
 
 echo "=== REGRESSION: PR #35 review, reading a PR through gh api ==="
 # The endpoint does not say whether a call decides anything. GET /pulls/N/reviews
@@ -1277,10 +1331,10 @@ echo "=== REGRESSION: review of 02a14d8, a heredoc that never was ==="
 # command -- reachable by writing a commit message about this very file. Third
 # wrong answer to what counts as a heredoc, so the drop is no longer trusted:
 # lines held for a heredoc that does not terminate are given back at END.
-check no-git-push.sh     BLOCK 'commit msg naming <<EOF, then --all'    $'git commit -m "hooks: fix <<EOF handling in cs_normalise"\n    git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'commit msg naming <<EOF, then --all'    $'git commit -m "hooks: fix <<EOF handling in cs_normalise"\n    git push --all origin'
 check no-pr-decisions.sh BLOCK 'pr comment naming <<, then a merge'     $'gh pr comment 35 -b "the << operator confused it"\n    gh pr merge 35'
-check no-git-push.sh     BLOCK 'left shift << in a message, then --all' $'git commit -m "left shift << done"\n    git push --all origin'
-check no-git-push.sh     BLOCK 'issue comment naming <<, then --mirror' $'gh issue comment 1 -b "see << notes"\n    git push --mirror origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'left shift << in a message, then --all' $'git commit -m "left shift << done"\n    git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'issue comment naming <<, then --mirror' $'gh issue comment 1 -b "see << notes"\n    git push --mirror origin'
 # A heredoc that does terminate is still data, so the older checks above still
 # ALLOW -- that is what says the fail-safe did not simply disable the drop.
 
@@ -1902,22 +1956,22 @@ check no-pr-decisions.sh BLOCK 'a wrapped baseless create'   'bash -c "gh pr cre
 echo "=== the push argument split does not glob against the worktree ==="
 # `for TOK in $ARGS` is unquoted because the split is the point; set -f stops
 # the same line expanding ? and [...] against the files sitting next to it.
-check no-git-push.sh BLOCK 'a ? wildcard refspec'     'git push origin ?'
-check no-git-push.sh BLOCK 'a [...] wildcard refspec' 'git push origin [a-z]*'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a ? wildcard refspec'     'git push origin ?'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a [...] wildcard refspec' 'git push origin [a-z]*'
 
 echo "=== worktree exception: pushing this worktree's own branch ==="
 # Every permitted push names the branch. That is the whole exception: a push
 # that does not name it is answered by configuration instead, and configuration
 # is not a thing this hook can hold still. See the bare-push section below.
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push naming this branch'          "git push origin $CURRENT"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push after a commit'              "git commit -m msg && git push origin $CURRENT"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push in a subshell'               "(git push origin $CURRENT)"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with a trailing ;'           "git push origin $CURRENT;"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'git push -u origin <this branch>' "git push -u origin $CURRENT"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'indented push, own branch'        $'if true; then\n    git push origin '"$CURRENT"$'\nfi'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push naming this branch'          "git push origin $PUSH_BRANCH"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push after a commit'              "git commit -m msg && git push origin $PUSH_BRANCH"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push in a subshell'               "(git push origin $PUSH_BRANCH)"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with a trailing ;'           "git push origin $PUSH_BRANCH;"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'git push -u origin <this branch>' "git push -u origin $PUSH_BRANCH"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'indented push, own branch'        $'if true; then\n    git push origin '"$PUSH_BRANCH"$'\nfi'
 # An unrelated -f elsewhere on the line is not the push's own flag. Every option
 # check reads the push's arguments, not the whole command, so this still passes.
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'rm -f before an ordinary push'    "rm -f notes.md && git push origin $CURRENT"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'rm -f before an ordinary push'    "rm -f notes.md && git push origin $PUSH_BRANCH"
 
 echo "=== REGRESSION: issue #50, a redirect was read as a refspec ==="
 # Nothing removed redirections, so `2>/dev/null` was the refspec and the message
@@ -1928,30 +1982,30 @@ echo "=== REGRESSION: issue #50, a redirect was read as a refspec ==="
 # PR #48 reported the `2>&1` spelling and blamed the split on &. That is true of
 # that spelling and was not the cause: `2>/dev/null` holds no & and was refused
 # just the same. cs_normalise drops the redirection now, before cs_split sees it.
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with 2>/dev/null'     "git push origin $CURRENT 2>/dev/null"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with > out.txt'       "git push origin $CURRENT > out.txt"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with 2>> push.log'    "git push origin $CURRENT 2>> push.log"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with >/dev/null 2>&1' "git push origin $CURRENT >/dev/null 2>&1"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with 2>&1 | tail -3'  "git push origin $CURRENT 2>&1 | tail -3"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with &> out.txt'      "git push origin $CURRENT &> out.txt"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with >& out.txt'      "git push origin $CURRENT >& out.txt"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with a redirect first' "git push origin >out.txt $CURRENT"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push with >| out.txt'      "git push origin $CURRENT >| out.txt"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with 2>/dev/null'     "git push origin $PUSH_BRANCH 2>/dev/null"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with > out.txt'       "git push origin $PUSH_BRANCH > out.txt"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with 2>> push.log'    "git push origin $PUSH_BRANCH 2>> push.log"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with >/dev/null 2>&1' "git push origin $PUSH_BRANCH >/dev/null 2>&1"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with 2>&1 | tail -3'  "git push origin $PUSH_BRANCH 2>&1 | tail -3"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with &> out.txt'      "git push origin $PUSH_BRANCH &> out.txt"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with >& out.txt'      "git push origin $PUSH_BRANCH >& out.txt"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with a redirect first' "git push origin >out.txt $PUSH_BRANCH"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with >| out.txt'      "git push origin $PUSH_BRANCH >| out.txt"
 # The redirect changes what the hook can see, never what it decides. Every
 # refused destination is still refused wearing one, and so is every refused
 # form -- the drop must not carry the flag off with the redirect.
-check no-git-push.sh BLOCK 'push to main with 2>/dev/null'    'git push origin main 2>/dev/null'
-check no-git-push.sh BLOCK 'push to dev-05 with > out.txt'    'git push origin dev-05 > out.txt'
-check no-git-push.sh BLOCK 'push to main with 2>> push.log'   'git push origin main 2>> push.log'
-check no-git-push.sh BLOCK 'push to dev-05, >/dev/null 2>&1'  'git push origin dev-05 >/dev/null 2>&1'
-check no-git-push.sh BLOCK 'push to main with 2>&1 | tail'    'git push origin main 2>&1 | tail -3'
-check no-git-push.sh BLOCK 'push --all with a redirect'       'git push --all origin >/dev/null 2>&1'
-check no-git-push.sh BLOCK 'push --mirror with a redirect'    'git push --mirror origin 2>&1'
-check no-git-push.sh BLOCK 'forced push of own branch, redirected' "git push -f origin $CURRENT 2>/dev/null"
-check no-git-push.sh BLOCK 'bare push with a redirect'        'git push 2>/dev/null'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push to main with 2>/dev/null'    'git push origin main 2>/dev/null'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push to dev-05 with > out.txt'    'git push origin dev-05 > out.txt'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push to main with 2>> push.log'   'git push origin main 2>> push.log'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push to dev-05, >/dev/null 2>&1'  'git push origin dev-05 >/dev/null 2>&1'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push to main with 2>&1 | tail'    'git push origin main 2>&1 | tail -3'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push --all with a redirect'       'git push --all origin >/dev/null 2>&1'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push --mirror with a redirect'    'git push --mirror origin 2>&1'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'forced push of own branch, redirected' "git push -f origin $PUSH_BRANCH 2>/dev/null"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'bare push with a redirect'        'git push 2>/dev/null'
 # A pipe is not a redirect and still ends the command, so what follows one is
 # still a command. Dropping must never hide it.
-check no-git-push.sh BLOCK 'legit push 2>&1 then push --all'  "git push origin $CURRENT 2>&1 | tail -3; git push --all origin"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'legit push 2>&1 then push --all'  "git push origin $PUSH_BRANCH 2>&1 | tail -3; git push --all origin"
 check no-pr-decisions.sh BLOCK 'gh pr merge with a redirect'  'gh pr merge 35 >/dev/null 2>&1'
 check no-pr-decisions.sh BLOCK 'gh pr review -a, redirected'  'gh pr review -a 35 2>&1 | tail -1'
 check no-pr-decisions.sh ALLOW 'gh pr view with a redirect'   'gh pr view 35 > /tmp/pr.json'
@@ -1971,8 +2025,8 @@ echo "=== ACCEPTED false positive: a quoted redirect target ==="
 tok 'a quoted target is left in the arguments' \
     'git push origin b "push log"' \
     "$(printf 'git push origin b 2> "push log"\n' | cs_normalise)"
-check no-git-push.sh BLOCK 'push with a quoted redirect target' "git push origin $CURRENT 2> \"push log\""
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'the same target unquoted' "git push origin $CURRENT 2> push.log"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push with a quoted redirect target' "git push origin $PUSH_BRANCH 2> \"push log\""
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'the same target unquoted' "git push origin $PUSH_BRANCH 2> push.log"
 
 echo "=== REGRESSION: issue #50, the drop must not hide a command ==="
 # Dropping is the one step in cs_normalise that hides text rather than exposing
@@ -1980,10 +2034,10 @@ echo "=== REGRESSION: issue #50, the drop must not hide a command ==="
 # direction. A process substitution carries a command, so it is not a redirect;
 # a command substitution used as a target is not a target. Both are pinned here
 # with a refused command inside, so hiding one would show up as ALLOW.
-check no-git-push.sh     BLOCK 'push inside <( )'             'cat <(git push --all origin)'
-check no-git-push.sh     BLOCK 'push inside >( )'             'tee >(git push --all origin)'
-check no-git-push.sh     BLOCK 'push as a backticked target'  'echo > `git push --all origin`'
-check no-git-push.sh     BLOCK 'push as a $( ) target'        'echo > $(git push --all origin)'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push inside <( )'             'cat <(git push --all origin)'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push inside >( )'             'tee >(git push --all origin)'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push as a backticked target'  'echo > `git push --all origin`'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push as a $( ) target'        'echo > $(git push --all origin)'
 check no-pr-decisions.sh BLOCK 'merge inside <( )'            'cat <(gh pr merge 35)'
 check no-pr-decisions.sh BLOCK 'merge as a $( ) target'       'echo > $(gh pr merge 35)'
 
@@ -1997,44 +2051,44 @@ echo "=== REGRESSION: PR #35 review, a bare push is answered by configuration ==
 # The trade, taken knowingly: `git push` and `git push origin` were permitted
 # and are refused now. The destination has to be in the command, which is what
 # CLAUDE.md already asked for -- a push "positively naming that branch".
-check no-git-push.sh BLOCK 'bare git push'                     'git push'
-check no-git-push.sh BLOCK 'push naming only the remote'       'git push origin'
-check no-git-push.sh BLOCK 'bare push after a commit'          'git commit -m msg && git push'
-check no-git-push.sh BLOCK 'bare push in a subshell'           '(git push)'
-check no-git-push.sh BLOCK 'push.default set for this command' 'git -c push.default=matching push'
-check no-git-push.sh BLOCK 'push.default=upstream for one'     'git -c push.default=upstream push origin'
-check no-git-push.sh BLOCK 'config set by --config-env'        'git --config-env=push.default=PD push'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'bare git push'                     'git push'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push naming only the remote'       'git push origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'bare push after a commit'          'git commit -m msg && git push'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'bare push in a subshell'           '(git push)'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push.default set for this command' 'git -c push.default=matching push'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'push.default=upstream for one'     'git -c push.default=upstream push origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'config set by --config-env'        'git --config-env=push.default=PD push'
 # -c is refused even alongside a refspec that does name this branch: the hook
 # cannot know which setting the override was for.
-check no-git-push.sh BLOCK '-c with an explicit refspec'       "git -c http.sslVerify=false push origin $CURRENT"
+check_in "$PUSH_WT" no-git-push.sh BLOCK '-c with an explicit refspec'       "git -c http.sslVerify=false push origin $PUSH_BRANCH"
 
 echo "=== forced pushes, refused in every spelling ==="
 # Forcing rewrites what the remote already has, which for this branch is the
 # history an open pull request is showing. --force-with-lease is refused with
 # the rest: it guards against clobbering another person's work, not against
 # rewriting a PR under its reviewer.
-check no-git-push.sh BLOCK 'git push -f'                   'git push -f'
-check no-git-push.sh BLOCK 'git push --force'              'git push --force'
-check no-git-push.sh BLOCK 'git push --force-with-lease'   'git push --force-with-lease'
-check no-git-push.sh BLOCK 'lease with a value'            "git push --force-with-lease=$CURRENT origin"
-check no-git-push.sh BLOCK 'git push --force-if-includes'  'git push --force-if-includes origin'
-check no-git-push.sh BLOCK 'bundled short flags -fu'       "git push -fu origin $CURRENT"
-check no-git-push.sh BLOCK 'forced by leading + on refspec' "git push origin +$CURRENT"
-check no-git-push.sh BLOCK 'forced push of own branch'     "git push -f origin $CURRENT"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push -f'                   'git push -f'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --force'              'git push --force'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --force-with-lease'   'git push --force-with-lease'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'lease with a value'            "git push --force-with-lease=$PUSH_BRANCH origin"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --force-if-includes'  'git push --force-if-includes origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'bundled short flags -fu'       "git push -fu origin $PUSH_BRANCH"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'forced by leading + on refspec' "git push origin +$PUSH_BRANCH"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'forced push of own branch'     "git push -f origin $PUSH_BRANCH"
 
 echo "=== worktree exception does not extend to ==="
-check no-git-push.sh BLOCK 'another branch by name: main'      'git push origin main'
-check no-git-push.sh BLOCK 'another branch by name: dev-05'    'git push origin dev-05'
-check no-git-push.sh BLOCK 'a refspec destination: HEAD:main'  'git push origin HEAD:main'
-check no-git-push.sh BLOCK 'a forced push to dev-05'           'git push -f origin dev-05'
-check no-git-push.sh BLOCK 'a cd before the push'              'cd /tmp && git push'
-check no-git-push.sh BLOCK 'a cd before the push, with ;'      'cd /tmp; git push'
-check no-git-push.sh BLOCK 'git redirected with -C'            'git -C /home/bgunyel/source/ai/clause-and-effect push'
-check no-git-push.sh BLOCK 'git redirected with --git-dir'     'git --git-dir=/elsewhere/.git push'
-check no-git-push.sh BLOCK 'a push inside sh -c'               'sh -c "git push"'
-check no-git-push.sh BLOCK 'a push inside bash -c'             'bash -c "git push origin dev-05"'
-check no-git-push.sh BLOCK 'a push inside eval'                'eval "git push"'
-check no-git-push.sh BLOCK 'a push inside a heredoc fed to sh' $'bash <<\'EOF\'\ngit push\nEOF'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'another branch by name: main'      'git push origin main'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'another branch by name: dev-05'    'git push origin dev-05'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a refspec destination: HEAD:main'  'git push origin HEAD:main'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a forced push to dev-05'           'git push -f origin dev-05'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a cd before the push'              'cd /tmp && git push'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a cd before the push, with ;'      'cd /tmp; git push'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'git redirected with -C'            'git -C /home/bgunyel/source/ai/clause-and-effect push'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'git redirected with --git-dir'     'git --git-dir=/elsewhere/.git push'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push inside sh -c'               'sh -c "git push"'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push inside bash -c'             'bash -c "git push origin dev-05"'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push inside eval'                'eval "git push"'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push inside a heredoc fed to sh' $'bash <<\'EOF\'\ngit push\nEOF'
 
 echo "=== ACCEPTED false positive: the wrapper rule reaches across the line here too ==="
 # This hook's wrapper rule is the same two-grep shape as no-pr-decisions.sh's --
@@ -2049,57 +2103,57 @@ echo "=== ACCEPTED false positive: the wrapper rule reaches across the line here
 # with the wrapper taken off the line is permitted, so the wrapper is the only
 # thing that differs and it is the wrapper answering rather than the worktree
 # exception. A rule that stopped reaching across the line would land all three
-# on ALLOW. Run from the main checkout on main or dev-NN, OWN_BRANCH_PUSH is
-# BLOCK and the three agree: the pair still passes and shows nothing, which is
-# the caveat the CONTEXT banner at the top of this file already reports.
-check no-git-push.sh BLOCK 'a wrapper elsewhere, then a legit push' \
-  "bash -c \"make test\" && git push origin $CURRENT"
-check no-git-push.sh BLOCK 'a legit push, then a wrapper elsewhere' \
-  "git push origin $CURRENT && bash -c \"make test\""
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'the same push with no wrapper' \
-  "make test && git push origin $CURRENT"
+# on ALLOW. These used to run wherever the suite was started, and from the main
+# checkout all three were BLOCK and the pair showed nothing; since #94 they run
+# in the fixture worktree, so the discrimination is made on every run.
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a wrapper elsewhere, then a legit push' \
+  "bash -c \"make test\" && git push origin $PUSH_BRANCH"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a legit push, then a wrapper elsewhere' \
+  "git push origin $PUSH_BRANCH && bash -c \"make test\""
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'the same push with no wrapper' \
+  "make test && git push origin $PUSH_BRANCH"
 # And what keeps the two halves different, which CLAUDE.md now claims: the
 # second grep here asks for a push, where no-pr-decisions.sh asks for every
 # surface that decides a pull request or a release. So an ordinary read beside a
 # wrapper is untouched on this side and refused on that one. These two are the
 # measurement behind that sentence; if they ever go BLOCK, the sentence is wrong.
-check no-git-push.sh ALLOW 'a wrapper elsewhere, then git status' 'bash -c "make test" && git status'
-check no-git-push.sh ALLOW 'a wrapper elsewhere, then git log'    'bash -c "make test" && git log --oneline'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a wrapper elsewhere, then git status' 'bash -c "make test" && git status'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a wrapper elsewhere, then git log'    'bash -c "make test" && git log --oneline'
 # The wrapper half is anchored at a command position in both hooks, so a wrapper
 # only spoken about is not one. Without this the sentence above could be read as
 # a bare substring match, which is what "anywhere" would mean if it covered both
 # greps rather than the second alone.
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'a wrapper named in passing, then a push' \
-  "echo \"use bash -c\" && git push origin $CURRENT"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a wrapper named in passing, then a push' \
+  "echo \"use bash -c\" && git push origin $PUSH_BRANCH"
 
 echo "=== REGRESSION: PR #35, a denylist could not see a push naming no branch ==="
 # The check refused branches by name, so any spelling that named none was
 # invisible: --all advanced main and dev-05 from any worktree, and --mirror
 # deleted every remote branch absent locally, closing open pull requests. The
 # check is now an allowlist -- the push must positively name this branch.
-check no-git-push.sh BLOCK 'git push --all origin'      'git push --all origin'
-check no-git-push.sh BLOCK 'git push --mirror origin'   'git push --mirror origin'
-check no-git-push.sh BLOCK 'git push --prune origin'    'git push --prune origin'
-check no-git-push.sh BLOCK 'git push origin --tags'     'git push origin --tags'
-check no-git-push.sh BLOCK 'git push --follow-tags'     'git push --follow-tags origin'
-check no-git-push.sh BLOCK 'wildcard refspec, forced'   'git push origin +refs/heads/*:refs/heads/*'
-check no-git-push.sh BLOCK 'deleting a remote branch'   "git push origin --delete $CURRENT"
-check no-git-push.sh BLOCK 'deleting by empty source'   'git push origin :main'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --all origin'      'git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --mirror origin'   'git push --mirror origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --prune origin'    'git push --prune origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push origin --tags'     'git push origin --tags'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --follow-tags'     'git push --follow-tags origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'wildcard refspec, forced'   'git push origin +refs/heads/*:refs/heads/*'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'deleting a remote branch'   "git push origin --delete $PUSH_BRANCH"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'deleting by empty source'   'git push origin :main'
 
 echo "=== REGRESSION: PR #35, redirects and cd forms the rules did not reach ==="
 # An environment assignment precedes the command, so git was not at a command
 # position and the push was never even detected; the anchors now allow a VAR=
 # prefix. pushd changes directory exactly as cd does.
-check no-git-push.sh     BLOCK 'GIT_DIR= prefix'     'GIT_DIR=/other/.git git push origin main'
-check no-git-push.sh     BLOCK 'GIT_WORK_TREE= prefix' 'GIT_WORK_TREE=/other git push'
-check no-git-push.sh     BLOCK 'pushd before a push'  'pushd /some/repo && git push'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'GIT_DIR= prefix'     'GIT_DIR=/other/.git git push origin main'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'GIT_WORK_TREE= prefix' 'GIT_WORK_TREE=/other git push'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'pushd before a push'  'pushd /some/repo && git push'
 check no-pr-decisions.sh BLOCK 'env prefix before gh' 'FOO=1 gh pr merge 35'
 
 echo "=== the allowlist still admits an ordinary push of this branch ==="
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin HEAD'           "git push origin HEAD"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin HEAD:<branch>'  "git push origin HEAD:$CURRENT"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'git push origin <b>:<b>'        "git push origin $CURRENT:$CURRENT"
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'push option with a value'       "git push -o ci.skip origin $CURRENT"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'git push origin HEAD'           "git push origin HEAD"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'git push origin HEAD:<branch>'  "git push origin HEAD:$PUSH_BRANCH"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'git push origin <b>:<b>'        "git push origin $PUSH_BRANCH:$PUSH_BRANCH"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'push option with a value'       "git push -o ci.skip origin $PUSH_BRANCH"
 
 echo "=== REGRESSION: PR #35, a line continuation emptied the argument scope ==="
 # The scope ran from push to the next shell separator; a newline ended it, and
@@ -2107,24 +2161,24 @@ echo "=== REGRESSION: PR #35, a line continuation emptied the argument scope ===
 # wrapped line turned any push into an ordinary one -- --mirror included, which
 # deletes remote branches and closes open PRs. Continuations are now joined
 # before anything is matched.
-check no-git-push.sh BLOCK 'continued --mirror'  $'git push \\\n  --mirror origin'
-check no-git-push.sh BLOCK 'continued --all'     $'git push \\\n  --all origin'
-check no-git-push.sh BLOCK 'continued force'     $'git push \\\n  --force-with-lease origin main'
-check no-git-push.sh BLOCK 'continued origin main' $'git push \\\n  origin main'
-check no-git-push.sh BLOCK 'continuation over three lines' $'git push \\\n  --all \\\n  origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'continued --mirror'  $'git push \\\n  --mirror origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'continued --all'     $'git push \\\n  --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'continued force'     $'git push \\\n  --force-with-lease origin main'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'continued origin main' $'git push \\\n  origin main'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'continuation over three lines' $'git push \\\n  --all \\\n  origin'
 # A trailing backslash with nothing after it is not a continuation of anything.
 # The command is a bare push, which used to be the permitted shape and is now
 # refused for naming no destination -- the join still has to consume the
 # backslash, or this would be refused for being unreadable instead.
-check no-git-push.sh BLOCK 'trailing backslash, nothing after' $'git push \\'
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'continued push of this branch'     $'git push \\\n  origin '"$CURRENT"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'trailing backslash, nothing after' $'git push \\'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'continued push of this branch'     $'git push \\\n  origin '"$PUSH_BRANCH"
 
 echo "=== the remote must be a remote of this repository ==="
 # Nothing required the first bare token to be a remote, so a URL or a typo was
 # admitted whenever the refspec named this branch. Raised on PR #35.
-check no-git-push.sh BLOCK 'a foreign remote URL'    'git push git@github.com:someone/else.git HEAD'
-check no-git-push.sh BLOCK 'an undefined remote name' 'git push upstream HEAD'
-check no-git-push.sh "$OWN_BRANCH_PUSH" 'origin is a real remote' "git push origin $CURRENT"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a foreign remote URL'    'git push git@github.com:someone/else.git HEAD'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'an undefined remote name' 'git push upstream HEAD'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'origin is a real remote' "git push origin $PUSH_BRANCH"
 
 echo "=== no-git-push.sh : not a push at all ==="
 for c in 'git status' \
@@ -2136,7 +2190,83 @@ for c in 'git status' \
          'grep -rn "git push" src/' \
          'git pull --rebase' \
          'make test'
-do check no-git-push.sh ALLOW "$c" "$c"; done
+do check_in "$PUSH_WT" no-git-push.sh ALLOW "$c" "$c"; done
+
+echo "=== REGRESSION: issue #94, a subdirectory of the main checkout read as a linked worktree ==="
+# no-git-push.sh tells the main checkout from a linked worktree by comparing
+# `git rev-parse --git-dir` with `--git-common-dir`, and compared them as
+# strings. At the root of a checkout git 2.43 prints both relatively, `.git` and
+# `.git`. Below the root it prints --git-dir absolute and --git-common-dir
+# relative, `/.../r/.git` against `../.git`, so the two never compare equal and
+# the main checkout read as a linked worktree: a push of the checked-out branch
+# was refused at the root and permitted from `src/` and from `src/deep/`.
+# Silent, and in the permitting direction.
+#
+# Nothing here could see it. The push checks ran from .claude/hooks, which is
+# below the root and so was already a place the defect showed -- but in the
+# main checkout this suite normally runs from, the branch is dev-NN or main,
+# and every push of it was refused by the reserved-branch rule whether or not
+# the main checkout was recognised. So each location is asked both ways, and
+# the fixture's main checkout sits on feature-x, where the main-checkout
+# refusal is the only one standing.
+#
+# Whether this git still prints the two differently is a fact about git rather
+# than about the hook, so it is reported rather than asserted: if a later git
+# prints them equal, these checks still pin the verdicts, but no longer
+# reproduce the defect they were written against.
+if [ "$(cd "$PUSH_MAIN/src/deep" && git rev-parse --git-dir)" = \
+     "$(cd "$PUSH_MAIN/src/deep" && git rev-parse --git-common-dir)" ]; then
+  echo "  note this git prints --git-dir and --git-common-dir identically below the root, so the #94 checks do not reproduce the string mismatch"
+fi
+echo "--- the main checkout, at its root and below it ---"
+check_in "$PUSH_MAIN"          no-git-push.sh BLOCK 'main checkout, root: a push of its own branch' \
+  'git push origin feature-x'
+check_in "$PUSH_MAIN/src"      no-git-push.sh BLOCK 'main checkout, src/: a push of its own branch' \
+  'git push origin feature-x'
+check_in "$PUSH_MAIN/src/deep" no-git-push.sh BLOCK 'main checkout, src/deep/: a push of its own branch' \
+  'git push origin feature-x'
+# Which refusal, and not merely that one fired: below the root the command is
+# otherwise a plain push naming the checked-out branch, so a message from any
+# other rule would mean the main checkout was still not recognised.
+says "$PUSH_MAIN/src/deep" no-git-push.sh 'This is the main checkout, not a linked worktree' \
+  'main checkout, src/deep/: refused as the main checkout' 'git push origin feature-x'
+# The permitting half at the same three depths. What the directory decides is
+# whether a push is permitted, not whether git may be used at all.
+check_in "$PUSH_MAIN"          no-git-push.sh ALLOW 'main checkout, root: a fetch is not a push' \
+  'git fetch origin'
+check_in "$PUSH_MAIN/src"      no-git-push.sh ALLOW 'main checkout, src/: a fetch is not a push' \
+  'git fetch origin'
+check_in "$PUSH_MAIN/src/deep" no-git-push.sh ALLOW 'main checkout, src/deep/: a fetch is not a push' \
+  'git fetch origin'
+echo "--- the linked worktree, at its root and below it ---"
+# A fix that canonicalised the main checkout into equality and the worktree
+# with it would refuse every push an agent is allowed; these are what say it
+# did not.
+check_in "$PUSH_WT"            no-git-push.sh ALLOW 'linked worktree, root: a push naming its own branch' \
+  "git push origin $PUSH_BRANCH"
+check_in "$PUSH_WT/src"        no-git-push.sh ALLOW 'linked worktree, src/: a push naming its own branch' \
+  "git push origin $PUSH_BRANCH"
+check_in "$PUSH_WT/src/deep"   no-git-push.sh ALLOW 'linked worktree, src/deep/: a push naming its own branch' \
+  "git push origin $PUSH_BRANCH"
+check_in "$PUSH_WT"            no-git-push.sh BLOCK 'linked worktree, root: a push of main' \
+  'git push origin main'
+check_in "$PUSH_WT/src"        no-git-push.sh BLOCK 'linked worktree, src/: a push of main' \
+  'git push origin main'
+check_in "$PUSH_WT/src/deep"   no-git-push.sh BLOCK 'linked worktree, src/deep/: a push of main' \
+  'git push origin main'
+check_in "$PUSH_WT"            no-git-push.sh BLOCK 'linked worktree, root: a push of a dev branch' \
+  'git push origin dev-99'
+check_in "$PUSH_WT/src"        no-git-push.sh BLOCK 'linked worktree, src/: a push of a dev branch' \
+  'git push origin dev-99'
+check_in "$PUSH_WT/src/deep"   no-git-push.sh BLOCK 'linked worktree, src/deep/: a push of a dev branch' \
+  'git push origin dev-99'
+echo "--- both, reached through a symlink ---"
+# Resolving each path by the directory it names, and not by the spelling $PWD
+# gives it, is half of the fix; these are what fail if the -P on pwd is dropped.
+check_in "$PUSH_MAIN_LINK/src/deep" no-git-push.sh BLOCK 'main checkout through a symlink, src/deep/: a push of its own branch' \
+  'git push origin feature-x'
+check_in "$PUSH_WT_LINK/src/deep"   no-git-push.sh ALLOW 'linked worktree through a symlink, src/deep/: a push naming its own branch' \
+  "git push origin $PUSH_BRANCH"
 
 echo "=== no-pr-decisions.sh : must BLOCK ==="
 for c in 'gh pr merge 5' \
@@ -2184,15 +2314,15 @@ echo "=== REGRESSION: review of #43, prefixes and separated options hid commands
 # setsid and chronic were not wrapper words at all; and cs_git_args skipped
 # --git-dir only in its = form, so the separated one hid the subcommand behind
 # its own value.
-check no-git-push.sh     BLOCK 'timeout before a wholesale push' 'timeout 5 git push --all origin'
-check no-git-push.sh     BLOCK 'sudo before a mirror push'       'sudo git push --mirror origin'
-check no-git-push.sh     BLOCK 'separated --git-dir before a push' 'git --git-dir /tmp/other/.git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'timeout before a wholesale push' 'timeout 5 git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'sudo before a mirror push'       'sudo git push --mirror origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'separated --git-dir before a push' 'git --git-dir /tmp/other/.git push --all origin'
 check no-pr-decisions.sh BLOCK 'setsid before a merge'           'setsid gh pr merge 5'
 check no-pr-decisions.sh BLOCK 'sudo before a merge'             'sudo gh pr merge 5'
 # The operand strip takes one token and only if it is not an option, so an
 # ordinary command that begins with one of these words is still itself.
-check no-git-push.sh     ALLOW 'timeout in front of something else' 'timeout 5 make test'
-check no-git-push.sh     ALLOW 'sudo in front of something else'    'sudo apt-get install jq'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'timeout in front of something else' 'timeout 5 make test'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'sudo in front of something else'    'sudo apt-get install jq'
 
 # Found by reviewing PR #49, and the same defect one turn further on. Stripping
 # a wrapper word and its options leaves the value of any option that took one
@@ -2200,19 +2330,19 @@ check no-git-push.sh     ALLOW 'sudo in front of something else'    'sudo apt-ge
 # 30` and not `timeout -s KILL 30`, and closes nothing at all for the wrapper
 # words that have no operand rule. cs_split offers the tail as further
 # candidates rather than keeping a third list of which options take a value.
-check no-git-push.sh BLOCK 'sudo with a separated option value'   'sudo -u root git push --all origin'
-check no-git-push.sh BLOCK 'nice with a separated niceness'       'nice -n 10 git push --all origin'
-check no-git-push.sh BLOCK 'ionice with a separated class'        'ionice -c 2 git push --all origin'
-check no-git-push.sh BLOCK 'timeout whose signal took the operand' 'timeout -s KILL 30 git push --all origin'
-check no-git-push.sh BLOCK 'xargs with a separated count'         'xargs -n 1 git push --all origin'
-check no-git-push.sh BLOCK 'env with a separated directory'       'env -C /tmp git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'sudo with a separated option value'   'sudo -u root git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'nice with a separated niceness'       'nice -n 10 git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'ionice with a separated class'        'ionice -c 2 git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'timeout whose signal took the operand' 'timeout -s KILL 30 git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'xargs with a separated count'         'xargs -n 1 git push --all origin'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'env with a separated directory'       'env -C /tmp git push --all origin'
 check no-pr-decisions.sh BLOCK 'sudo with a separated option value, before a merge' \
   'sudo -u root gh pr merge 5'
 # The tail only ever adds candidates, so an ordinary command that begins with a
 # wrapper word still yields itself and the additions refuse nothing.
-check no-git-push.sh ALLOW 'a wrapper option value in front of something else' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a wrapper option value in front of something else' \
   'sudo -u root apt-get install jq'
-check no-git-push.sh ALLOW 'a commit whose message quotes a push, behind a wrapper' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a commit whose message quotes a push, behind a wrapper' \
   'sudo git commit -m "git push --all origin"'
 
 echo "=== no-commit-to-main.sh : invariants, identical literals across #43 ==="
@@ -2418,8 +2548,16 @@ WT_STALE="$LIFE/wt-stale"
 WT_GONE="$LIFE/wt-gone"
 WT_FRESH="$LIFE/wt-fresh"
 WT_WORK="$LIFE/wt-work"
+# Two levels below the root of the main checkout and of the stale worktree, for
+# issue #94: below the root is where git stops printing --git-dir and
+# --git-common-dir in the same form.
+mkdir -p "$LIFE/src/deep" "$WT_STALE/src/deep"
+LIFE_LINK="$FIXTURES/lifecycle-link"
+ln -s "$LIFE" "$LIFE_LINK"
 
-[ -d "$WT_STALE" ] && [ -d "$WT_GONE" ] && [ -d "$WT_WORK" ] && [ -d "$WT_FRESH" ] || {
+[ -d "$WT_STALE" ] && [ -d "$WT_GONE" ] && [ -d "$WT_WORK" ] && [ -d "$WT_FRESH" ] \
+  && [ -d "$LIFE/src/deep" ] && [ -d "$WT_STALE/src/deep" ] && [ -d "$LIFE_LINK/src/deep" ] \
+  && [ -d "$LIFE_LINK/wt-stale/src/deep" ] || {
   echo "the lifecycle worktrees were not created; every check below would pass without running the hook" >&2
   exit 1
 }
@@ -2781,6 +2919,146 @@ check_in "$WT_FRESH" no-work-on-stale-branch.sh ALLOW 'a fresh branch at the dev
 # unaffected, because the guard keys on the linked worktree.
 check_in "$LIFE" no-work-on-stale-branch.sh ALLOW 'the main checkout at the stale branch own commit' \
   'git commit -m "wip"'
+# Issue #94, the refusing half. This file made the same string comparison as
+# no-git-push.sh and failed the other way: below the root of the main checkout
+# --git-dir and --git-common-dir printed differently, the main checkout read as
+# a linked worktree, and the lifecycle rules refused an ordinary commit there --
+# this checkout stands exactly where the stale worktree branch does, so the
+# fallback fired on it. The check above is at the root, the one depth where the
+# strings happened to agree. The worktree half at the same depths is what says
+# the fix did not buy this by switching the guard off.
+check_in "$LIFE/src"          no-work-on-stale-branch.sh ALLOW 'main checkout, src/: an ordinary commit is not lifecycle work' \
+  'git commit -m "wip"'
+check_in "$LIFE/src/deep"     no-work-on-stale-branch.sh ALLOW 'main checkout, src/deep/: an ordinary commit is not lifecycle work' \
+  'git commit -m "wip"'
+check_in "$WT_STALE/src"      no-work-on-stale-branch.sh BLOCK 'stale worktree, src/: a commit is still refused' \
+  'git commit -m "wip"'
+check_in "$WT_STALE/src/deep" no-work-on-stale-branch.sh BLOCK 'stale worktree, src/deep/: a commit is still refused' \
+  'git commit -m "wip"'
+check_in "$LIFE_LINK/src/deep" no-work-on-stale-branch.sh ALLOW 'main checkout through a symlink, src/deep/: an ordinary commit' \
+  'git commit -m "wip"'
+check_in "$LIFE_LINK/wt-stale/src/deep" no-work-on-stale-branch.sh BLOCK 'stale worktree through a symlink, src/deep/: a commit is still refused' \
+  'git commit -m "wip"'
+
+echo "=== review of #111: the #94 comparison when it has nothing to compare, and its two copies ==="
+# Three points from the review of the #94 pull request, each checked here.
+#
+# ONE. A --git-common-dir that will not resolve. no-git-push.sh refused it, which
+# is the right direction, but through the main-checkout message, which is a claim
+# it could not support on that path -- and the #94 pull request recorded the path
+# as reached by no check. No repository reaches it: git that cannot find its
+# common directory cannot find the repository either. So git is made to report
+# one: a shim first on PATH answers --git-common-dir with a directory that does
+# not exist and hands every other call to the real git. It is a fixture of the
+# kind halflib is, a component made to fail one way at a time, and it is driven
+# in the linked worktree, where a hook that read the unresolved path as a
+# worktree would permit the push -- so the BLOCK there is the guard and nothing
+# else.
+REAL_GIT=$(command -v git)
+GIT_SHIM="$FIXTURES/git-shim"
+mkdir -p "$GIT_SHIM"
+printf '#!/bin/bash\nfor a in "$@"; do\n  [ "$a" = --git-common-dir ] && { echo /nonexistent-111/.git; exit 0; }\ndone\nexec %s "$@"\n' \
+  "$REAL_GIT" > "$GIT_SHIM/git"
+chmod +x "$GIT_SHIM/git"
+# Both halves of the shim, asserted: the one answer it fakes, and the answers it
+# must not, or the checks below would be refused for a reason they do not name.
+[ "$(cd "$PUSH_WT" && PATH="$GIT_SHIM:$PATH" git rev-parse --git-common-dir)" = /nonexistent-111/.git ] \
+  && [ -d "$(cd "$PUSH_WT" && PATH="$GIT_SHIM:$PATH" git rev-parse --git-dir)" ] \
+  && [ "$(cd "$PUSH_WT" && PATH="$GIT_SHIM:$PATH" git branch --show-current)" = "$PUSH_BRANCH" ] || {
+  echo "the git shim does not fake --git-common-dir alone; the checks using it prove nothing" >&2
+  exit 1
+}
+# A variable set in front of a function call reaches the processes it starts, so
+# the hook check_in runs sees the shim first.
+PATH="$GIT_SHIM:$PATH" check_in "$PUSH_WT" no-git-push.sh BLOCK \
+  'an unresolvable --git-common-dir, in a linked worktree: a push of its own branch is refused' \
+  "git push origin $PUSH_BRANCH"
+PATH="$GIT_SHIM:$PATH" says "$PUSH_WT" no-git-push.sh 'could not be resolved' \
+  'and the refusal says what it could not resolve' "git push origin $PUSH_BRANCH"
+PATH="$GIT_SHIM:$PATH" says_not "$PUSH_WT" no-git-push.sh 'This is the main checkout' \
+  'and does not claim this is the main checkout' "git push origin $PUSH_BRANCH"
+# The stale guard abstains on the same path, as it always did on an empty one.
+# In the stale worktree a guard that read the unresolved path as a worktree would
+# refuse, so the ALLOW is the abstention.
+PATH="$GIT_SHIM:$PATH" check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW \
+  'an unresolvable --git-common-dir, in a stale worktree: the guard abstains' \
+  'git commit -m "wip"'
+# Outside any repository --git-dir is empty too, and that was the main-checkout
+# message as well. Guarded, because a directory that turned out to sit inside a
+# repository would be refused for a different reason.
+NOT_A_REPO="$FIXTURES/not-a-repo"
+mkdir -p "$NOT_A_REPO"
+! git -C "$NOT_A_REPO" rev-parse --git-dir >/dev/null 2>&1 || {
+  echo "$NOT_A_REPO is inside a git repository; the checks using it prove nothing" >&2
+  exit 1
+}
+check_in "$NOT_A_REPO" no-git-push.sh BLOCK 'outside any repository: a push is refused' \
+  'git push origin feature-x'
+says "$NOT_A_REPO" no-git-push.sh 'could not be resolved' \
+  'and the refusal does not call it the main checkout' 'git push origin feature-x'
+
+# TWO AND THREE. canonical_dir is a copy in each hook -- the stale guard compares
+# before it loads lib/command-scan.sh, so a shared function would cost a library
+# load on every git command -- and the behavioural checks above held the copies
+# to one answer only at the cases they name. So the text is held too, the way the
+# dev-branch derivation is: each file defines it once, the two are equal, and
+# each is the function as pinned here.
+#
+# CDPATH is why the text matters. git prints `.git` at the root of a checkout,
+# and `cd .git` looks that name up through CDPATH before the working directory,
+# so a CDPATH holding a directory with a .git in it moved the cd somewhere else.
+# No verdict ever turned on it -- both halves are `.git` at the root and moved
+# alike, and below the root git prints ../.git or an absolute path, which CDPATH
+# does not consult -- so no check that runs a hook can see it. The function is
+# run on its own instead: extracted from each hook, evaluated in a subshell, and
+# pointed at a decoy. That is not seam 1, and it is said so here rather than left
+# to be noticed.
+canonical_dir_text() {  # canonical_dir_text <file> -- the function, as written
+  awk '/^canonical_dir\(\) \{$/ { f = 1 }
+       f                        { print }
+       f && /^\}$/              { exit }' "$1" 2>/dev/null
+}
+CANONICAL_DIR=$(cat <<'CANONICAL'
+canonical_dir() {
+  [ -n "$1" ] || return 1
+  (CDPATH= cd -- "$1" >/dev/null 2>&1 && pwd -P)
+}
+CANONICAL
+)
+tok 'no-git-push.sh defines canonical_dir exactly once' \
+    '1' "$(grep -c '^canonical_dir() {$' "$HOOKS/no-git-push.sh")"
+tok 'and no-work-on-stale-branch.sh defines it exactly once' \
+    '1' "$(grep -c '^canonical_dir() {$' "$HOOKS/no-work-on-stale-branch.sh")"
+tok 'the two copies of canonical_dir are identical' \
+    "$(canonical_dir_text "$HOOKS/no-git-push.sh")" \
+    "$(canonical_dir_text "$HOOKS/no-work-on-stale-branch.sh")"
+tok 'no-git-push.sh holds canonical_dir as pinned here' \
+    "$CANONICAL_DIR" "$(canonical_dir_text "$HOOKS/no-git-push.sh")"
+tok 'and no-work-on-stale-branch.sh does too' \
+    "$CANONICAL_DIR" "$(canonical_dir_text "$HOOKS/no-work-on-stale-branch.sh")"
+
+CDPATH_DECOY="$FIXTURES/cdpath-decoy"
+mkdir -p "$CDPATH_DECOY/.git"
+# The hazard reproduced before it is checked for: a plain cd at the fixture's
+# root does follow CDPATH to the decoy. readlink rather than pwd -P for the
+# expected paths, so the expectation is not read through the mechanism under
+# test.
+[ "$(export CDPATH="$CDPATH_DECOY"; cd "$PUSH_MAIN" && cd -- .git >/dev/null 2>&1 && pwd -P)" \
+  = "$(readlink -f "$CDPATH_DECOY/.git")" ] || {
+  echo "a plain cd does not follow CDPATH to the decoy here; the CDPATH checks prove nothing" >&2
+  exit 1
+}
+canonical_dir_under_cdpath() {  # canonical_dir_under_cdpath <hook> -- .git at the push fixture's root
+  (
+    eval "$(canonical_dir_text "$HOOKS/$1")"
+    export CDPATH="$CDPATH_DECOY"
+    cd "$PUSH_MAIN" && canonical_dir .git
+  )
+}
+tok 'no-git-push.sh: canonical_dir resolves .git in the working directory, not through CDPATH' \
+    "$(readlink -f "$PUSH_MAIN/.git")" "$(canonical_dir_under_cdpath no-git-push.sh)"
+tok 'no-work-on-stale-branch.sh: likewise' \
+    "$(readlink -f "$PUSH_MAIN/.git")" "$(canonical_dir_under_cdpath no-work-on-stale-branch.sh)"
 
 echo "--- abstaining when there is no active dev branch to compare against ---"
 # A fresh clone, or the rotation window after the merged dev-NN is deleted and
@@ -4021,21 +4299,21 @@ echo "--- no-git-push.sh, which had no guard at all ---"
 # The measured #84 case: with no guard, cs_git_args was undefined, the HAVE_PUSH
 # loop found no push, and the hook left without an opinion on a forced push of a
 # reserved branch.
-check_in "$ON_DEV" no-git-push.sh ALLOW 'a command with no push in it, library intact' \
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a command with no push in it, library intact' \
   'ls'
-check_in "$ON_DEV" "$(nolib_path no-git-push.sh)" BLOCK 'no lib/, anything at all' \
+check_in "$PUSH_WT" "$(nolib_path no-git-push.sh)" BLOCK 'no lib/, anything at all' \
   'ls'
-check_in "$ON_DEV" "$(halflib_path no-git-push.sh cs_normalise)" BLOCK 'a library missing only cs_normalise' \
+check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_normalise)" BLOCK 'a library missing only cs_normalise' \
   'ls'
-check_in "$ON_DEV" "$(halflib_path no-git-push.sh cs_split)" BLOCK 'a library missing only cs_split' \
+check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_split)" BLOCK 'a library missing only cs_split' \
   'ls'
-check_in "$ON_DEV" "$(halflib_path no-git-push.sh cs_git_args)" BLOCK 'a library missing only cs_git_args' \
+check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_git_args)" BLOCK 'a library missing only cs_git_args' \
   'ls'
-check_in "$ON_DEV" "$(halflib_path no-git-push.sh cs_git_args)" BLOCK 'a renamed cs_git_args does not permit a forced push' \
+check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_git_args)" BLOCK 'a renamed cs_git_args does not permit a forced push' \
   'git push --force origin dev-05'
-says "$ON_DEV" "$(nolib_path no-git-push.sh)" 'no-git-push.sh could not load' \
+says "$PUSH_WT" "$(nolib_path no-git-push.sh)" 'no-git-push.sh could not load' \
   'the refusal names this hook and not one of its three siblings' 'ls'
-says "$ON_DEV" "$(nolib_path no-git-push.sh)" 'Refusing rather than permitting' \
+says "$PUSH_WT" "$(nolib_path no-git-push.sh)" 'Refusing rather than permitting' \
   'and says that it is refusing rather than permitting' 'ls'
 
 echo "--- no-pr-decisions.sh, which had no guard at all ---"
@@ -4264,11 +4542,11 @@ tok 'and one with only the operand words empty' \
 # no-git-push.sh: the measured #79 case. Intact, `ls` is ALLOW -- the #84 block
 # above pins that -- so the BLOCK here is the guard. The prefixed push is the
 # verdict an emptied list permits when cs_split is left running.
-check_in "$ON_DEV" "$(emptylist_path no-git-push.sh)" BLOCK \
+check_in "$PUSH_WT" "$(emptylist_path no-git-push.sh)" BLOCK \
   'no-git-push.sh, a library with no wrapper words, anything at all' 'ls'
-check_in "$ON_DEV" "$(emptylist_path no-git-push.sh)" BLOCK \
+check_in "$PUSH_WT" "$(emptylist_path no-git-push.sh)" BLOCK \
   'no-git-push.sh, a library with no wrapper words, a prefixed push' 'sudo git push --all origin'
-says "$ON_DEV" "$(emptylist_path no-git-push.sh)" 'no-git-push.sh could not load' \
+says "$PUSH_WT" "$(emptylist_path no-git-push.sh)" 'no-git-push.sh could not load' \
   'no-git-push.sh names itself for an emptied list, as for a missing function' 'ls'
 
 check_in "$ON_DEV" "$(emptylist_path no-pr-decisions.sh)" BLOCK \
