@@ -130,6 +130,13 @@
 # neither. `git branch --show-current` reports an unborn branch, so the
 # fixtures need no commits.
 #
+# Issue #98 is about the evidence rather than the hooks: a hook that crashed, or
+# was never found, passed every ALLOW-expecting check here. The comments beside
+# several fixture guards named that for the one cause each guarded; nothing named
+# the class. Every helper that runs a hook now reads its exit status one way --
+# exit 0 is ALLOW, exit 2 is BLOCK, anything else FAILs the check whatever it
+# expected -- and `verdict`, below, is where that is answered and argued.
+#
 # Run: bash .claude/hooks/check-hooks.sh
 cd "$(dirname "$0")" || exit 1
 HOOKS=$(pwd)
@@ -142,17 +149,45 @@ FAILED=0
 hook_path() {  # hook_path <script|/absolute/hook>
   case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s\n' "$HOOKS/$1" ;; esac
 }
-check() {
-  local script="$1" want="$2" label="$3" cmd="$4" got rc
-  printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | ./"$script" >/dev/null 2>&1
-  rc=$?
-  if [ $rc -eq 2 ]; then got=BLOCK; else got=ALLOW; fi
+# What a hook's exit status means, answered once for every helper that runs a
+# hook and reads one: exit 0 is ALLOW, exit 2 is BLOCK, and anything else FAILs
+# the check whatever it expected. `says` and `says_not` ask only for 2, because
+# every one of their claims is about a refusal.
+#
+# Until #98 each helper read the status as one bit -- 2 was BLOCK and everything
+# else ALLOW -- and `says_not` did not read it at all. So a hook that did not run
+# passed every ALLOW-expecting check it was given, and every message a crashed
+# hook's stderr happened not to contain: 127 for a hook, interpreter or tool that
+# is not there, 1 for a `cd` into a fixture that is not there. Several fixture
+# guards below carry their own account of one of those causes; this is the class.
+# The #103 audit found every committed hook exiting only 0 or 2, and tightening
+# the reading turned no check here red.
+#
+# The failure line carries the exit status and what the hook wrote to stderr,
+# because FAIL alone names no cause and a crash is the case where the cause is the
+# whole finding. The self-test at the foot of this suite drives every such helper
+# with a hook that exits 1 and one that exits 127.
+#
+# One case this does not close, measured rather than reasoned: a bash syntax
+# error exits 2, not 1, so a hook that does not parse reads as BLOCK and passes
+# every BLOCK-expecting `check` against it. `says` is what separates the two,
+# where a check has one beside it.
+verdict() {  # verdict <want> <exit status> <stderr> <label>
+  local want="$1" rc="$2" err="$3" label="$4" got
+  case "$rc" in 0) got=ALLOW ;; 2) got=BLOCK ;; *) got=FAIL ;; esac
   if [ "$got" = "$want" ]; then
     printf '  ok   %-5s %s\n' "$got" "$label"
   else
-    printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
+    printf '  FAIL want=%s got=%s exit=%s  %s\n         stderr |%s|\n' \
+      "$want" "$got" "$rc" "$label" "$err"
     FAILED=1
   fi
+}
+check() {  # check <script> <want> <label> <cmd>, run from $HOOKS
+  local script="$1" want="$2" label="$3" cmd="$4" rc err
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | ./"$script" 2>&1 >/dev/null)
+  rc=$?
+  verdict "$want" "$rc" "$err" "$label"
 }
 
 # Two throwaway repositories, one on main and one on a dev branch, so that a
@@ -165,9 +200,10 @@ git init -q -b main "$FIXTURES/on-main"
 git init -q -b dev-99 "$FIXTURES/on-dev"
 ON_MAIN="$FIXTURES/on-main"
 ON_DEV="$FIXTURES/on-dev"
-# An unmade fixture would make ( cd "$dir" && hook ) return 1, which reads as
-# ALLOW -- so every ALLOW-expecting check below would pass without running the
-# hook at all. `git init -b` needs git 2.28.
+# An unmade fixture makes ( cd "$dir" && hook ) return 1, which `verdict` FAILs
+# (see there for when it did not). The guard stays so that it is reported once,
+# as what it is, rather than as a column of FAILs each blaming its own check.
+# `git init -b` needs git 2.28.
 [ -d "$ON_MAIN/.git" ] && [ -d "$ON_DEV/.git" ] || {
   echo "fixtures were not created; git init -b needs git 2.28 or newer" >&2
   exit 1
@@ -205,8 +241,9 @@ PUSH_MAIN_LINK="$FIXTURES/push-main-link"
 PUSH_WT_LINK="$FIXTURES/push-wt-link"
 ln -s "$PUSH_MAIN" "$PUSH_MAIN_LINK"
 ln -s "$PUSH_WT" "$PUSH_WT_LINK"
-# Every directory guarded: a check against a directory that is not
-# there exits 1 from the cd, which reads as ALLOW. The branch halves are guarded
+# Every directory guarded: a check against a directory that is not there exits 1
+# from the cd, which `verdict` FAILs; this names the directory once, where a
+# column of FAILs would each blame its own check. The branch halves are guarded
 # too, because a worktree on the wrong branch turns every own-branch ALLOW into a
 # refusal for a reason no check names.
 for d in "$PUSH_MAIN" "$PUSH_MAIN/src" "$PUSH_MAIN/src/deep" \
@@ -233,18 +270,12 @@ done
 # check, with the hook's working directory named rather than inherited. The
 # hook is invoked by absolute path because it sources lib/ relative to $0.
 check_in() {  # check_in <dir> <script|/absolute/hook> <want> <label> <cmd>
-  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" got rc hook
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" rc err hook
   hook=$(hook_path "$script")
-  printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
-    | ( cd "$dir" && "$hook" ) >/dev/null 2>&1
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+    | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   rc=$?
-  if [ $rc -eq 2 ]; then got=BLOCK; else got=ALLOW; fi
-  if [ "$got" = "$want" ]; then
-    printf '  ok   %-5s %s\n' "$got" "$label"
-  else
-    printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
-    FAILED=1
-  fi
+  verdict "$want" "$rc" "$err" "$label"
 }
 
 # A check whose verdict the #43 migration changed. Both verdicts are literals:
@@ -266,11 +297,20 @@ flip() {  # flip <dir> <script> <was> <want> <label> <cmd>
 # such caller today and resolves one anyway, because the pair diverging is how the
 # next reader learns the wrong rule about which of the two can be pointed at a
 # fixture.
+# Both FAIL unless the hook refused, with exit 2: see `verdict`. A crashed hook's
+# stderr is not a refusal, and it passed `says_not` whenever it lacked the fragment.
 says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
-  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err hook
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err rc hook
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  if [ "$rc" != 2 ]; then
+    printf '  FAIL %s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|\n' \
+      "$label" "$want" "$rc" "$err"
+    FAILED=1
+    return
+  fi
   case "$err" in
     *"$want"*) printf '  ok   says  %s\n' "$label" ;;
     *) printf '  FAIL %s\n         wanted the refusal to say |%s|\n         it said |%s|\n' \
@@ -284,10 +324,17 @@ says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
 # so a message claiming a merge there would be a claim the hook cannot support.
 # Nothing above can catch a message saying too much.
 says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
-  local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err hook
+  local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err rc hook
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  if [ "$rc" != 2 ]; then
+    printf '  FAIL %s\n         wanted a refusal not saying |%s|, got exit=%s\n         stderr |%s|\n' \
+      "$label" "$unwanted" "$rc" "$err"
+    FAILED=1
+    return
+  fi
   case "$err" in
     *"$unwanted"*) printf '  FAIL %s\n         the refusal must not say |%s|\n         it said |%s|\n' \
          "$label" "$unwanted" "$err"
@@ -318,9 +365,8 @@ armed() {  # armed <label> <file> <literal>
 
 # A fixture guard rather than a check, and it stops the suite rather than
 # failing one line. An unmade worktree makes ( cd "$dir" && hook ) return 1,
-# which reads as ALLOW -- so every ALLOW-expecting check against it would pass
-# without the hook ever running. That is the shape this suite exists to not
-# have, so it is said once here rather than three times below.
+# which `verdict` FAILs; this names the cause once, where a column of FAILs would
+# each blame its own check. Said once here rather than three times below.
 need_worktree() {  # need_worktree <dir> <fixture name>
   [ -d "$1" ] && return 0
   echo "the $2 worktree was not created; the checks against it prove nothing" >&2
@@ -3413,17 +3459,11 @@ check append-only-docs.sh ALLOW 'the append that is documented is still permitte
 # anchors to. A new seam in this suite, named as one.
 REPO_ROOT=$(cd "$HOOKS/../.." && pwd)
 check_file() {  # check_file <script> <want> <label> <path relative to the repo>
-  local script="$1" want="$2" label="$3" path="$4" got rc
-  printf '%s' "$path" | jq -Rs '{tool_name:"Edit",tool_input:{file_path:.}}' \
-    | CLAUDE_PROJECT_DIR="$REPO_ROOT" ./"$script" >/dev/null 2>&1
+  local script="$1" want="$2" label="$3" path="$4" rc err
+  err=$(printf '%s' "$path" | jq -Rs '{tool_name:"Edit",tool_input:{file_path:.}}' \
+    | CLAUDE_PROJECT_DIR="$REPO_ROOT" ./"$script" 2>&1 >/dev/null)
   rc=$?
-  if [ $rc -eq 2 ]; then got=BLOCK; else got=ALLOW; fi
-  if [ "$got" = "$want" ]; then
-    printf '  ok   %-5s %s\n' "$got" "$label"
-  else
-    printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
-    FAILED=1
-  fi
+  verdict "$want" "$rc" "$err" "$label"
 }
 
 # feed and feed_says: a hook handed raw stdin rather than a command. Every
@@ -4242,10 +4282,11 @@ LIB_CONSUMERS="alembic-via-uv-group.sh append-only-docs-edit.sh append-only-docs
 # Every copy is guarded, not one of them, and at the path the checks will drive.
 # The first version of this asked `[ -f ]` about no-git-push.sh alone, which is the
 # mistake mk_halflib records below with the consequence measured: a hook that is
-# not there makes `( cd "$dir" && "$hook" )` exit 127, and check_in reads anything
-# but 2 as ALLOW. So a missing copy turns every BLOCK here red -- visible -- but
-# lets `no lib/, on a branch carrying work` pass vacuously, which is an ALLOW
-# nobody would look at twice. Asking about one of four was itself the #84 shape,
+# not there makes `( cd "$dir" && "$hook" )` exit 127, which check_in read as
+# ALLOW before #98 (see `verdict`). So a missing copy turned every BLOCK here red
+# -- visible -- but let `no lib/, on a branch carrying work` pass vacuously. The
+# guard stays because it names the copy that is missing, which a FAIL on the
+# check does not. Asking about one of four was itself the #84 shape,
 # and it was not hypothetical: #69's own two checks copied their fixtures in with
 # no guard at all, and this consolidation moved the mkdir below them, so both ran
 # against a hook that was not there until the derivation at the end of this
@@ -4280,7 +4321,8 @@ done
 # `halflib--`. All four fixture guards passed -- they were asked about the
 # directory that had been built, not about the one the checks would drive -- and
 # thirteen checks reported ALLOW against a hook that was not there, which
-# check_in reads as permitted because it is not exit 2. A fixture guard that
+# check_in read as permitted because it was not exit 2 (see `verdict`, where
+# those thirteen would each FAIL today). A fixture guard that
 # derives its own path proves nothing about the check beside it.
 halflib_path() {  # halflib_path <hook> <cs_function> -- where that fixture sits
   printf '%s\n' "$FIXTURES/halflib-$1-$2/$1"
@@ -5131,6 +5173,158 @@ written 'the library states the fail direction of the input read' \
   "$HOOKS/lib/command-scan.sh" 'THE INPUT READ'
 written 'and records the trade an environment without jq pays' \
   "$HOOKS/lib/command-scan.sh" 'THE TRADE, taken knowingly'
+
+echo "=== the exit-status helpers themselves: #98 ==="
+# The rule, and what it replaced, is written above `verdict`. Nothing else in this
+# suite drives a helper with a hook that crashes, so these ask the helpers
+# directly, in the manner of the `unarmed` self-test above: the helper runs in a
+# subshell with its own FAILED, and what is asserted is the FAILED it leaves --
+# the helper's result, not the fixture's exit status. The crash-1 fixture gets its
+# 1 from `set -e`, which no hook uses; it stands for any exit that is neither 0
+# nor 2, and 1 is the one the old reading and the new disagree about.
+#
+# Each fixture leaves a marker before it exits, and the marker is asserted too.
+# `check` and `check_file` run `./<script>` from the working directory, so a
+# fixture the helper could not find would exit 127 on its own account and a
+# crash-1 case would FAIL for that reason rather than the one it names.
+#
+# The passing cases per helper are about this harness rather than the rule:
+# without them a harness that reported FAIL for everything would pass every
+# crash case below. And the crash cases that expect BLOCK are not evidence
+# against a revert -- the one-bit reading failed those too -- but against the
+# other wrong reading, every nonzero exit as BLOCK, which they were measured to
+# catch.
+EXITS="$FIXTURES/exits"
+mkdir -p "$EXITS"
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-allow-0"\nexit 0\n' > "$EXITS/allow-0.sh"
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-block-2"\necho "block-2 refuses" >&2\nexit 2\n' > "$EXITS/block-2.sh"
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-crash-1"\necho "crash-1 fixture stderr" >&2\nset -e\nfalse\nexit 0\n' > "$EXITS/crash-1.sh"
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-crash-127"\necho "crash-127 fixture stderr" >&2\nno-such-tool-for-check-hooks\n' > "$EXITS/crash-127.sh"
+chmod +x "$EXITS"/*.sh
+for f in allow-0 block-2 crash-1 crash-127; do
+  [ -x "$EXITS/$f.sh" ] || {
+    echo "the exit-status fixture $f.sh was not created; the self-test using it proves nothing" >&2
+    exit 1
+  }
+done
+
+# Where drive_helper leaves what the helper printed, for failure_line_says to read.
+# Only its stdout: stderr goes to a file nothing reads, so a helper that let the
+# hook's stderr through instead of printing it cannot pass for having printed it.
+# Found by review of #98, which had both in one file.
+EXITS_OUTPUT="$EXITS/output"
+
+# Run one helper against one fixture in a subshell, and print ok or FAIL for the
+# FAILED it left. The call shapes differ because the helpers take their hook
+# differently: check and check_file by a name run from the working directory, the
+# rest by an absolute path. `says` and `says_not` take a fragment where the others
+# take a verdict: the fixture's own name, which is in everything a fixture says, so
+# `says` has something to find and `says_not` is given something it never sees.
+drive_helper() {  # drive_helper <helper> <fixture> <want>
+  local helper="$1" fixture="$2" want="$3" result
+  rm -f "$EXITS/ran-$fixture"
+  if ( FAILED=0
+       cd "$EXITS" || exit 3
+       case "$helper" in
+         check)      check "$fixture.sh" "$want" 'self-test' 'true' ;;
+         check_in)   check_in "$EXITS" "$EXITS/$fixture.sh" "$want" 'self-test' 'true' ;;
+         flip)       flip "$EXITS" "$EXITS/$fixture.sh" ALLOW "$want" 'self-test' 'true' ;;
+         check_file) check_file "$fixture.sh" "$want" 'self-test' 'docs/x.md' ;;
+         says)       says "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
+         says_not)   says_not "$EXITS" "$EXITS/$fixture.sh" 'never-said' 'self-test' 'true' ;;
+         *)          exit 3 ;;
+       esac
+       exit $FAILED ) >"$EXITS_OUTPUT" 2>"$EXITS/stray-stderr"
+  then result=ok; else result=FAIL; fi
+  [ -e "$EXITS/ran-$fixture" ] || result="$result, and the fixture never ran"
+  printf '%s\n' "$result"
+}
+
+# The failure line names what happened: the exit status, and what the hook said.
+# `exit=<status>` and `stderr |<what it said>` are the spellings pinned here.
+failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
+  if grep -qE "exit=$2([^0-9]|\$)" "$EXITS_OUTPUT" \
+     && grep -qF -- "stderr |$3" "$EXITS_OUTPUT"; then
+    printf '  ok   %s\n' "$1"
+  else
+    printf '  FAIL %s\n         wanted exit=%s and |stderr |%s| on the failure line\n         it said |%s|\n' \
+      "$1" "$2" "$3" "$(cat "$EXITS_OUTPUT")"
+    FAILED=1
+  fi
+}
+
+# The helpers this self-test drives, named once: each loop below runs off its list,
+# and the derivation at the end of this section is asserted against both. A
+# helper added to neither is red there; one added to a list is driven.
+DRIVEN_VERDICT='check check_in flip check_file'
+DRIVEN_MESSAGE='says says_not'
+
+for helper in $DRIVEN_VERDICT; do
+  tok "$helper: a hook that exits 0 passes an ALLOW expectation" \
+      'ok' "$(drive_helper "$helper" allow-0 ALLOW)"
+  tok "$helper: a hook that exits 2 passes a BLOCK expectation" \
+      'ok' "$(drive_helper "$helper" block-2 BLOCK)"
+  tok "$helper: a hook that exits 1 fails an ALLOW expectation" \
+      'FAIL' "$(drive_helper "$helper" crash-1 ALLOW)"
+  failure_line_says "$helper: that failure line names exit 1 and the hook's stderr" \
+      1 'crash-1 fixture stderr'
+  tok "$helper: a hook that exits 1 fails a BLOCK expectation" \
+      'FAIL' "$(drive_helper "$helper" crash-1 BLOCK)"
+  tok "$helper: a hook that exits 127 fails an ALLOW expectation" \
+      'FAIL' "$(drive_helper "$helper" crash-127 ALLOW)"
+  failure_line_says "$helper: that failure line names exit 127 and the hook's stderr" \
+      127 'crash-127 fixture stderr'
+  tok "$helper: a hook that exits 127 fails a BLOCK expectation" \
+      'FAIL' "$(drive_helper "$helper" crash-127 BLOCK)"
+done
+
+# The message helpers. A refusal is the only thing either can pass on, so the
+# passing case is exit 2 alone.
+for helper in $DRIVEN_MESSAGE; do
+  tok "$helper: a hook that exits 2 passes" \
+      'ok' "$(drive_helper "$helper" block-2 -)"
+  tok "$helper: a hook that exits 1 fails, whatever its stderr says" \
+      'FAIL' "$(drive_helper "$helper" crash-1 -)"
+  failure_line_says "$helper: that failure line names exit 1 and the hook's stderr" \
+      1 'crash-1 fixture stderr'
+  tok "$helper: a hook that exits 127 fails, whatever its stderr says" \
+      'FAIL' "$(drive_helper "$helper" crash-127 -)"
+  failure_line_says "$helper: that failure line names exit 127 and the hook's stderr" \
+      127 'crash-127 fixture stderr'
+done
+
+# And that the helpers driven above are all of them. The helpers that read a hook's
+# exit status are derived from this file, and each must be in one of the two lists
+# the loops above run off -- so a new reader is either driven or red here. `flip`
+# reads no status of its own -- it hands its verdict to check_in -- so it is driven
+# because #98 names it, and is not in the derived set.
+#
+# The first version compared the derivation with a third literal, which nothing
+# tied to the loops: a one-bit reader added to that literal alone left the suite
+# green and the reader undriven. Found by review of PR #116, not by this suite.
+#
+# What the derivation does not find, named because a check is evidence about what
+# it names: a reader spelled other than `rc=$?`, such as `if "$hook"; then`; and a
+# function defined indented, whose body therefore has no `}` at the start of a
+# line to end it. Both are the permitting direction. It does find names with
+# capitals or digits, and the `function` keyword with or without parens. Comments
+# are stripped first, as cs_calls strips them.
+STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$HOOKS/check-hooks.sh" \
+  | awk '/^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
+           fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
+         }
+         /^\}/                 { fn = "" }
+         fn != "" && /rc=\$\?/ { print fn }' \
+  | sort -u | tr '\n' ' ')
+# An empty derivation would make every membership below pass by asking nothing.
+if [ -z "$STATUS_READERS" ]; then
+  printf '  FAIL no helper that reads a hook exit status was derived from this file at all\n'
+  FAILED=1
+fi
+for reader in $STATUS_READERS; do
+  present "derived $reader reads a hook exit status, and the #98 self-test drives it" \
+          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE"
+done
 
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
