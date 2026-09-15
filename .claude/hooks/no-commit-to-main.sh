@@ -73,7 +73,8 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 if ! command -v cs_normalise >/dev/null 2>&1 \
    || ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_git_args >/dev/null 2>&1 \
-   || ! command -v cs_tool_input >/dev/null 2>&1; then
+   || ! command -v cs_tool_input >/dev/null 2>&1 \
+   || ! command -v cs_within_cap >/dev/null 2>&1; then
   echo "Blocked: no-commit-to-main.sh could not load lib/command-scan.sh, so it cannot tell whether this command touches main. Refusing rather than permitting." >&2
   exit 2
 fi
@@ -85,6 +86,13 @@ set -f
 
 # A tool call that cannot be read refuses; see THE INPUT READ in the library.
 COMMAND=$(cs_tool_input command) || exit 2
+# THE LINE CAP, in lib/command-scan.sh: a line longer than 16 KB is refused
+# before any pass reads it, because a hook still reading when the harness
+# timeout kills it permits. Issue #96.
+if ! printf '%s\n' "$COMMAND" | cs_within_cap; then
+  echo "Blocked: no-commit-to-main.sh: $CS_LINE_CAP_REFUSAL" >&2
+  exit 2
+fi
 SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)
 CMDS=$(printf '%s\n' "$SCAN" | cs_split)
 
