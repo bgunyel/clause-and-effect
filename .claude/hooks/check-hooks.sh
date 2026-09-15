@@ -3623,6 +3623,16 @@ $GR branch open-merged-branch "$OPEN_MERGED_OWN"
 # request merged at the base commit. Matched by name it is that pull request's,
 # and stale; it is not at or behind that head, so it is not.
 $GR branch reused-branch "$REPORT_TIP"
+# The same after a closed pull request, carrying a commit of its own -- the case
+# where getting it wrong deletes commits that exist nowhere else. Review of #120
+# found the head test skippable for CLOSED alone with every check green, because
+# reused-branch is merged.
+$GR branch reclosed-branch "$(own_commit reclosed)"
+# Strictly behind its merged pull request's head, which is what a local copy
+# that never pulled the last push looks like. Stale: the report's header rejects
+# an identity test because it would call this unclassified, and until review of
+# #120 no branch here said so.
+$GR branch lagging-branch "$REPORT_BASE"
 # And the ref-state detector's own case with no pull request behind it: an
 # upstream configured whose remote half is gone. Stale by ref state,
 # unclassified by pull request, because nothing says a pull request ever merged.
@@ -3634,6 +3644,25 @@ for b in gone-nopr-branch merged-branch closed-branch; do
   $GR config "branch.$b.remote" origin
   $GR config "branch.$b.merge" "refs/heads/$b"
 done
+# Three of them checked out in worktrees, so that the lines the sweep's step 2
+# reads a worktree path from are asserted with that path. The suffix was
+# droppable from any of them with the suite green; found on review of #120. The
+# path is resolved with cd -P because git records the physical one.
+REPORT_WT_MERGED="$FIXTURES/report-wt-merged"
+REPORT_WT_CLOSED="$FIXTURES/report-wt-closed"
+REPORT_WT_GONE="$FIXTURES/report-wt-gone"
+$GR worktree add -q "$REPORT_WT_MERGED" merged-branch
+$GR worktree add -q "$REPORT_WT_CLOSED" closed-branch
+$GR worktree add -q "$REPORT_WT_GONE" gone-nopr-branch
+for d in "$REPORT_WT_MERGED" "$REPORT_WT_CLOSED" "$REPORT_WT_GONE"; do
+  [ -d "$d" ] || {
+    echo "the report worktree $d was not created; the checks against it prove nothing" >&2
+    exit 1
+  }
+done
+REPORT_WT_MERGED=$(cd -P "$REPORT_WT_MERGED" && pwd)
+REPORT_WT_CLOSED=$(cd -P "$REPORT_WT_CLOSED" && pwd)
+REPORT_WT_GONE=$(cd -P "$REPORT_WT_GONE" && pwd)
 mkdir -p "$REPORT_FIX/.claude/hooks" "$FAKE_GH"
 cp "$HOOKS/report-stale-branches.sh" "$REPORT_FIX/.claude/hooks/"
 cat > "$FAKE_GH/gh" <<'GH'
@@ -3666,6 +3695,8 @@ printf '%s\t%s\t%s\t%s\n' \
   closed-branch CLOSED 2 "$CLOSED_OWN" \
   late-closed-branch MERGED 8 "$REPORT_BASE" \
   reused-branch MERGED 12 "$REPORT_BASE" \
+  lagging-branch MERGED 15 "$REPORT_TIP" \
+  reclosed-branch CLOSED 14 "$REPORT_BASE" \
   open-merged-branch OPEN 10 "$REPORT_BASE" > "$REPORT_PRS"
 
 REPORT_READ="$FIXTURES/report-read.txt"
@@ -3701,19 +3732,23 @@ echo "--- pull requests read: each row of the table in #100 ---"
 written 'the report says it read the pull requests' \
   "$REPORT_READ" 'pull requests: read'
 written 'row 1: a pull request closed unmerged, remote branch present, is stale' \
-  "$REPORT_READ" '  closed-branch -- closed without merging: pull request #2; its commits may exist nowhere else'
+  "$REPORT_READ" "  closed-branch -- closed without merging: pull request #2; its commits may exist nowhere else   [worktree: $REPORT_WT_CLOSED]"
 written 'row 2: a pull request merged, remote branch not yet pruned, is stale' \
-  "$REPORT_READ" '  merged-branch -- merged: pull request #1'
+  "$REPORT_READ" "  merged-branch -- merged: pull request #1   [worktree: $REPORT_WT_MERGED]"
 written 'row 3: commits of its own and no pull request ever opened is unclassified' \
   "$REPORT_READ" '  nopr-branch -- no pull request; 1 ahead of origin/dev-05, 0 behind it (unclassified: cut and not yet worked, or abandoned)'
 written 'an upstream gone with no pull request is unclassified, not stale' \
-  "$REPORT_READ" '  gone-nopr-branch -- no pull request; 0 ahead of origin/dev-05, 0 behind it (unclassified: cut and not yet worked, or abandoned)'
+  "$REPORT_READ" "  gone-nopr-branch -- no pull request; 0 ahead of origin/dev-05, 0 behind it (unclassified: cut and not yet worked, or abandoned)   [worktree: $REPORT_WT_GONE]"
 written 'a merge by a newer pull request decides over an older closed one' \
   "$REPORT_READ" '  twice-branch -- merged: pull request #7'
 written 'and a close by a newer one decides over an older merge, keeping its warning' \
   "$REPORT_READ" '  late-closed-branch -- closed without merging: pull request #9; its commits may exist nowhere else'
 written 'a reused name is not stale off a pull request whose head it is not behind' \
   "$REPORT_READ" '  reused-branch -- pull request #12 is merged, but this branch is not at or behind its head; 0 ahead of origin/dev-05, 0 behind it (unclassified: a reused name, or work after it)'
+written 'and not stale off a closed one either, where its commits exist nowhere else' \
+  "$REPORT_READ" '  reclosed-branch -- pull request #14 is closed, but this branch is not at or behind its head; 1 ahead of origin/dev-05, 0 behind it (unclassified: a reused name, or work after it)'
+written 'a branch strictly behind its merged pull request head is stale, not only one at it' \
+  "$REPORT_READ" '  lagging-branch -- merged: pull request #15'
 unarmed 'an open pull request is in flight and is not listed' \
   "$REPORT_READ" '  open-branch --'
 unarmed 'nor is a branch with an open pull request beside an older closed one' \
@@ -3723,9 +3758,9 @@ unarmed 'nor one with an open pull request beside a newer merged one' \
 unarmed 'and the active dev branch is not called stale off its own merged pull request' \
   "$REPORT_READ" '  dev-05 --'
 # The counts line is what decides each class exactly: main, dev-05, open-branch,
-# reopened-branch and open-merged-branch clear; four stale; three unclassified.
+# reopened-branch and open-merged-branch clear; five stale; four unclassified.
 written 'and every branch lands in the class the sweep defines' \
-  "$REPORT_READ" '5 other branch(es) are clear; 4 stale, 3 unclassified.'
+  "$REPORT_READ" '5 other branch(es) are clear; 5 stale, 4 unclassified.'
 
 echo "--- pull requests not read: the report falls back to ref state and says so ---"
 # Fails open, as the settings read does: a session whose gh cannot answer still
@@ -3736,19 +3771,19 @@ written 'a pull request read that failed says so' \
 written 'and names the computation it ran instead' \
   "$REPORT_UNREAD" 'classified by ref state alone'
 written 'by ref state, an upstream gone is stale, without claiming it merged' \
-  "$REPORT_UNREAD" '  gone-nopr-branch -- stale by ref state: its branch on the remote is gone (merged, or closed and deleted)'
+  "$REPORT_UNREAD" "  gone-nopr-branch -- stale by ref state: its branch on the remote is gone (merged, or closed and deleted)   [worktree: $REPORT_WT_GONE]"
 written 'and no work of its own is unclassified' \
   "$REPORT_UNREAD" '  merged-branch -- no work of its own; origin/dev-05 is 1 ahead of it (unclassified: merged, or cut and not yet worked)'
 unarmed 'a closed branch with commits of its own reads as clear by ref state' \
   "$REPORT_UNREAD" '  closed-branch --'
 written 'the ref-state counts, which are the ones #100 found disagreeing' \
-  "$REPORT_UNREAD" '10 other branch(es) are clear; 1 stale, 1 unclassified.'
+  "$REPORT_UNREAD" '11 other branch(es) are clear; 1 stale, 2 unclassified.'
 # The settings read could not reach gh, so the pull request read is not
 # attempted, and the report gives the settings read's reason for both.
 written 'a settings read that failed skips the pull request read and says why' \
   "$REPORT_NOAPI" 'pull requests: NOT READ -- gh api failed or timed out after 10s, so branches are'
 written 'and the classes are the ref-state ones, though the list would have answered' \
-  "$REPORT_NOAPI" '10 other branch(es) are clear; 1 stale, 1 unclassified.'
+  "$REPORT_NOAPI" '11 other branch(es) are clear; 1 stale, 2 unclassified.'
 
 # The filters the stand-in does not run, pinned as they are written, one line
 # each for the reason the settings list above is.

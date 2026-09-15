@@ -237,10 +237,10 @@ otherwise the newest does.
   `no pull request` with its ahead/behind. A branch freshly cut for work not
   yet started and a branch abandoned after a rotation read identically, and
   ahead/behind does not separate them; the reasoning is at the end of *Report
-  what is stale* above. Also a branch whose merged or closed pull request's
-  head it is `not at or behind its head` — a name reused for new work, or work
-  committed after the merge. Leave every unclassified branch alone. Sweeping
-  one deletes work that was about to start.
+  what is stale* above. Also a branch whose pull request is merged or closed
+  but which is `not at or behind its head` — a name reused for new work, or
+  work committed after the merge. Leave every unclassified branch alone.
+  Sweeping one deletes work that was about to start.
 
 The report's header, in `report-stale-branches.sh`, gives the reasons for these
 rules and the limits they leave.
@@ -255,15 +255,18 @@ clear. That fallback misses most merged branches here, for the reason the
 header gives, and calls a branch closed with commits of its own clear. Take no
 list from that report. Classify by the read below instead.
 
-Confirm from the remote rather than from the report, the same read the rotation
-opens with — the report's classification is as fresh as its fetch, and a pull
-request merged or closed since then is a branch it has not reclassified. The
-head commit is there so that a branch can be checked against the pull request's
-head with `git merge-base --is-ancestor <branch> <headRefOid>`, as the report
-does. A name match alone does not show it is the same branch:
+Confirm from the remote rather than from the report — the report's
+classification is as fresh as its fetch, and a pull request merged or closed
+since then is a branch it has not reclassified. This is the report's own read,
+with the same limit of 1000, plus `mergedAt`. It is wider than the read in
+*Report what is stale*: that one lists recent pull requests for a person to
+look over, and this one has to find every branch the report could have named.
+The head commit is there so that a branch can be checked against the pull
+request's head with `git merge-base --is-ancestor <branch> <headRefOid>`, as the
+report does. A name match alone does not show it is the same branch:
 
 ```bash
-gh pr list --state all --limit 30 --json number,headRefName,state,mergedAt,headRefOid \
+gh pr list --state all --limit 1000 --json number,headRefName,state,mergedAt,headRefOid \
   --jq '.[] | "\(.headRefName)\t\(.state)\t\(.mergedAt)\t\(.headRefOid)"'
 ```
 
