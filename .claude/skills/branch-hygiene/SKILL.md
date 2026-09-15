@@ -57,12 +57,12 @@ closed-without-merge pull request would discard the work.
 ### 2. Report what is stale
 
 Part of this now runs on its own. `.claude/hooks/report-stale-branches.sh` is a
-`SessionStart` hook that does the pruning fetch and reports stale branches and
-the worktrees standing on them — the read-only half of this step, and nothing
-else: it removes nothing, which is why it is named `report-` and not `sweep-`.
-Its output is already in the session; read it before running the commands below,
-and run them for what it does not cover — the pull request state, which needs
-`gh`, and the last commit dates.
+`SessionStart` hook that does the pruning fetch, reads every pull request, and
+reports stale branches and the worktrees standing on them — the read-only half
+of this step, and nothing else: it removes nothing, which is why it is named
+`report-` and not `sweep-`. Its output is already in the session; read it before
+running the commands below, and run them for what it does not cover — the last
+commit dates, and any pull request merged or closed since the session started.
 
 **The sweep** below is the other half — what acts on that report. It is
 Bertan's, for the reason the rotation is, and an agent that has produced the
@@ -76,15 +76,22 @@ failed, neither detector is armed for that session.
 ```bash
 git fetch --prune
 git branch -a
-gh pr list --state all --limit 30 --json number,headRefName,state,mergedAt \
-  --jq '.[] | "\(.headRefName)\t\(.state)"'
+git for-each-ref --sort=-committerdate \
+  --format='%(refname:short)%09%(committerdate:short)' refs/heads/
+gh pr list --state all --limit 30 --json number,headRefName,state \
+  --jq '.[] | "#\(.number)\t\(.headRefName)\t\(.state)"'
 ```
 
 Stale is a branch whose work is over: a `dev-NN` other than the active one, or a
-worktree branch whose pull request is merged or closed. A worktree branch with an
-open pull request is **not** stale — several open at once is the ordinary state
-of this repository, not drift. That is what the invariant at the top of this file
-already says, and it is the half of it most easily read as a mess to tidy.
+worktree branch whose pull request is merged or closed and which is
+at or behind that pull request's head commit. A name match alone does not make
+the pull request this branch's: a name reused for new work, or work committed
+after the merge, is ahead of that head, and is unclassified, not stale. The read
+above does not carry the head; the one in *The sweep*, step 1, does, with the
+ancestry test the report runs. A worktree branch with an open pull request is
+**not** stale — several open at once is the ordinary state of this repository,
+not drift. That is what the invariant at the top of this file already says, and
+it is the half of it most easily read as a mess to tidy.
 
 **A worktree branch with no pull request at all is neither, and saying which it
 is takes more than this skill can see.** A branch freshly cut for work not yet
@@ -221,24 +228,54 @@ Run from a terminal, where no hook applies.
 ### 1. Take the list from the report, and act only on the merged
 
 The report classifies three ways and exactly one of the three is the sweep's.
+It reads every pull request when the session starts and matches them by head
+name to every local branch but `main` and a `dev-NN`, which it classifies
+without one. Where a branch has several, an open one decides; otherwise the
+newest does.
 
-- **stale** — a worktree branch whose pull request is merged or closed. These
-  are the sweep's, and only these.
-- **clear** — a worktree branch with an open pull request. It is in flight.
-  Several at once is the ordinary state of this repository, not drift.
-- **unclassified** — a branch with no pull request at all. A branch freshly cut
-  for work not yet started and a branch abandoned after a rotation read
-  identically, and ahead/behind does not separate them; the reasoning is at the
-  end of *Report what is stale* above. Leave every unclassified branch alone.
+- **stale** — a worktree branch whose pull request is merged or closed, and
+  which is at or behind that pull request's head commit. The report prints
+  `merged: pull request #N` or `closed without merging: pull request #N`.
+  These are the sweep's, and only these. (A `dev-NN` other than the active one
+  is stale too, printed as `rotated past`; that one is the rotation's.)
+- **clear** — a worktree branch with an open pull request. The report counts
+  it and does not list it. It is in flight. Several at once is the ordinary
+  state of this repository, not drift.
+- **unclassified** — a branch with no pull request at all, printed as
+  `no pull request` with its ahead/behind. A branch freshly cut for work not
+  yet started and a branch abandoned after a rotation read identically, and
+  ahead/behind does not separate them; the reasoning is at the end of *Report
+  what is stale* above. Also a branch whose pull request is merged or closed
+  but which is `not at or behind its head` — a name reused for new work, or
+  work committed after the merge. Leave every unclassified branch alone.
   Sweeping one deletes work that was about to start.
 
-Confirm from the remote rather than from the report, the same read the rotation
-opens with — the report's classification is as fresh as its fetch, and a pull
-request merged or closed since then is a branch it has not reclassified:
+The report's header, in `report-stale-branches.sh`, gives the reasons for these
+rules and the limits they leave.
+
+**When the report says `pull requests: NOT READ`, it did not compute those
+classes.** `gh` was missing or did not answer, and the report fell back to ref
+state, which cannot see a pull request. By ref state, a branch whose upstream is
+gone is `stale by ref state` — merged, or closed and its branch deleted by hand.
+A branch with no commit of its own that the dev branch has moved past is
+unclassified, `merged, or cut and not yet worked`. Everything else is counted
+clear. That fallback misses most merged branches here, for the reason the
+header gives, and calls a branch closed with commits of its own clear. Take no
+list from that report. Classify by the read below instead.
+
+Confirm from the remote rather than from the report — the report's
+classification is as fresh as its fetch, and a pull request merged or closed
+since then is a branch it has not reclassified. This is the report's own read,
+with the same limit of 1000, plus `mergedAt`. It is wider than the read in
+*Report what is stale*: that one lists recent pull requests for a person to
+look over, and this one has to find every branch the report could have named.
+The head commit is there so that a branch can be checked against the pull
+request's head with `git merge-base --is-ancestor <branch> <headRefOid>`, as the
+report does. A name match alone does not show it is the same branch:
 
 ```bash
-gh pr list --state all --limit 30 --json number,headRefName,state,mergedAt \
-  --jq '.[] | "\(.headRefName)\t\(.state)\t\(.mergedAt)"'
+gh pr list --state all --limit 1000 --json number,headRefName,state,mergedAt,headRefOid \
+  --jq '.[] | "\(.headRefName)\t\(.state)\t\(.mergedAt)\t\(.headRefOid)"'
 ```
 
 A branch whose pull request is `CLOSED` rather than `MERGED` is stale by the
@@ -343,4 +380,8 @@ untouched, and `git worktree list` names no worktree without a branch.
   the rotation pushes `dev-NN+1`. Without the upstream, a merged branch whose
   remote half `delete_branch_on_merge` has removed is indistinguishable from one
   that was never pushed — both read as having no upstream, and the `[gone]` that
-  says *this branch had a remote and lost it* never appears.
+  says *this branch had a remote and lost it* never appears. What reads that
+  `[gone]` is `no-work-on-stale-branch.sh`'s first detector, and the report when
+  it could not read pull requests. When it can, the report classifies by pull
+  request and does not need the upstream. Most worktree branches here are pushed
+  without `-u`, so do not count on this note having been followed.
