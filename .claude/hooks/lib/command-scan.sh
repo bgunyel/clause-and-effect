@@ -129,7 +129,7 @@
 #
 # One soft spot, named rather than closed. no-git-push.sh:153 records that "an
 # empty argument list is the permitted case", so a push whose arguments were
-# lost past a cut would read as a bare push. Probed with `git push "|--all
+# lost past a cut would read as a bare push. Tried with `git push "|--all
 # origin"` and `git push "x|--all" origin`: both still blocked. It holds --
 # but it holds because of a property of git push's own CLI, not because of
 # anything this library does, so the honest phrasing is SWEPT AND NOT FOUND,
@@ -160,7 +160,7 @@
 #
 # Issue #84 found that answered three different ways in four files, two of them
 # permitting. no-git-push.sh and no-pr-decisions.sh sourced this file with no
-# guard at all, and no-commit-to-main.sh probed cs_split alone -- so renaming
+# guard at all, and no-commit-to-main.sh required cs_split alone -- so renaming
 # cs_git_args, which is a refactor rather than an accident, permitted a forced
 # push, a `gh pr merge`, a `gh pr create --base main` and a push to main, with
 # the check suite green at 728. That is a tenth defect of the same silent and
@@ -173,7 +173,7 @@
 #     AFTER. A missing file can make `.` end the shell, where an `if` wrapped
 #     around it never runs, so a guard written that way would have been a
 #     comment.
-#   - probes EVERY cs_* function it calls, and not one of them as a proxy for
+#   - requires EVERY cs_* function it calls, and not one of them as a proxy for
 #     the rest. The sets differ, which is why one shared list would be wrong:
 #     no-git-push.sh, no-commit-to-main.sh and no-work-on-stale-branch.sh call
 #     cs_normalise, cs_split and cs_git_args; no-pr-decisions.sh calls
@@ -183,12 +183,12 @@
 #     cs_tool_input as well, and every Bash hook among them calls cs_within_cap
 #     (#96); append-only-docs.sh calls those two and nothing else, and
 #     append-only-docs-edit.sh only cs_tool_input. cs_within_cap calls cs_join,
-#     which no probe names: it answers for that itself, by failing when any part
-#     of its pipeline does. A probe narrower than
-#     the set is the #84 defect exactly, and #69 found the same thing in the
-#     last two from the other end -- cs_split probed, cs_normalise not. The
-#     enumeration here is a convenience and goes stale; check-hooks.sh derives
-#     both sides off the files and compares them, which does not.
+#     which no required list names: it answers for that itself, by failing when
+#     any part of its pipeline does. A required list narrower than the set is
+#     the #84 defect exactly, and #69 found the same thing in the last two from
+#     the other end -- cs_split required, cs_normalise not. The enumeration here
+#     is a convenience and goes stale; check-hooks.sh derives both sides off the
+#     files and compares them, which does not.
 #   - names itself in the refusal and says that it is refusing rather than
 #     permitting. That message is read by someone who has just been stopped by
 #     a guard that is broken rather than by a rule, and the thing they need
@@ -212,10 +212,10 @@
 #
 # "Loads" includes data as well as names. cs_split reads the prefix-word list
 # through a variable, so a library with every function defined and that list
-# empty is not a loaded library, and a probe for names cannot see it. It is not
+# empty is not a loaded library, and a guard on names cannot see it. It is not
 # answered in the guards. The library withdraws cs_split itself when the list is
 # incomplete, which reduces the state to a missing function, and every consumer
-# already probes that one. See THE WORD LIST IS PART OF THE LOAD, below
+# already requires that one. See THE WORD LIST IS PART OF THE LOAD, below
 # cs_split. Issue #79.
 
 # THE INPUT READ, which is the step before the load contract and was the same
@@ -957,7 +957,7 @@ cs_split() {
 
 # THE WORD LIST IS PART OF THE LOAD. With either half of the prefix-word list
 # empty, cs_split is withdrawn, so that the load guard of every consumer that
-# calls cs_split -- and each of those probes it -- refuses by name. The two #95
+# calls cs_split -- and each of those requires it -- refuses by name. The two #95
 # consumers call only cs_tool_input and, for append-only-docs.sh, cs_within_cap,
 # and neither reads the list, so they are not reached.
 #
@@ -967,13 +967,13 @@ cs_split() {
 # less. It strips no prefix, so `sudo git push --all origin` has no command word
 # at ^ and is permitted -- the verdict the fourth review fixed, silently
 # un-fixed. A function that does less is worse than a missing one, which is the
-# whole of #84's finding, and a probe that asks whether a name exists cannot
+# whole of #84's finding, and a guard that asks whether a name exists cannot
 # tell the two apart.
 #
-# Why here and not in the guards. The first answer to this was a word-list probe
+# Why here and not in the guards. The first answer to this was a word-list guard
 # in two hooks, then an empty CS_WRAPPER_RE as a library fail-safe on the
 # argument that two other hooks sourced this file unguarded. Review measured
-# both. The probe covered two consumers of four; the fail-safe covered the four
+# both. That guard covered two consumers of four; the fail-safe covered the four
 # that read CS_WRAPPER_RE and missed the two convention hooks, which read
 # cs_split and never the anchor -- with the list empty `sudo pytest tests/` has
 # no pytest at ^ and was permitted. And #84 then made the premise false, by
@@ -983,8 +983,8 @@ cs_split() {
 # So the state is reduced to one the contract already answers. The list's only
 # reader is cs_split; withdrawing it makes an incomplete list indistinguishable
 # from a renamed function, and every consumer that could be misled by it -- by
-# construction, every one that calls cs_split -- already probes cs_split,
-# because check-hooks.sh derives each consumer's probe set from its call set.
+# construction, every one that calls cs_split -- already requires cs_split,
+# because check-hooks.sh derives each consumer's required set from its call set.
 # Nothing in any guard has to know the list exists, which is what keeps this
 # from being one more copy of a question the contract already asks in each of
 # them.
@@ -1073,7 +1073,7 @@ fi
 # makes it fail -- which refuses -- where reading only awk's status would have
 # counted the lines of no input at all and passed everything. And it is called
 # as `if ! ... | cs_within_cap`, so a consumer whose copy of it is missing
-# refuses on the 127 as well as through its probe.
+# refuses on the 127 as well as through its guard.
 CS_LINE_CAP=16384
 CS_LINE_CAP_REFUSAL="a line of this command is longer than 16 KB (16384 bytes, with backslash continuations joined), which is refused unread: a hook still reading it when the harness timeout kills it would permit it. To run it, split the line, or write the content to a file and pass the file."
 cs_within_cap() {  # stdin: a command. Succeeds only if no joined line exceeds the cap.
