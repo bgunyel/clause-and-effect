@@ -28,7 +28,7 @@ _Avoid_: development branch, current branch
 An assertion whose expected verdict is written out in advance, so running it can
 only agree or disagree with what was already claimed. Every assertion in
 `.claude/hooks/check-hooks.sh` is a check.
-_Avoid_: probe
+_Avoid_: probe, test
 
 **Probe**:
 An empirical measurement whose answer is not known until it runs. Each

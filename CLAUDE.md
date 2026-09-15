@@ -161,7 +161,9 @@ because a defect there corrupts every measurement taken on it. `.claude/hooks/`
 is neither: a defect there corrupts no measurement, and it can permit an act
 that closes every open pull request. Its evidence is the check suite —
 `bash .claude/hooks/check-hooks.sh` — and no fix lands without a check that
-fails without the fix. The shared tokeniser alone has had nine defects found by
+fails without the fix. That fix also appends its issue's `GH-<n>` entry to
+`.claude/hooks/requirements.md` and tags the check with it, so the suite's
+coverage check can see the requirement it establishes. The shared tokeniser alone has had nine defects found by
 review rather than by the suite: five in one round on PR #35, three in a second,
 one in a third — and two of those five arrived with the fixes to the previous
 two. Every one was silent and in the permitting direction, and the suite was
