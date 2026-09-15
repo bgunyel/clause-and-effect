@@ -151,8 +151,8 @@ hook_path() {  # hook_path <script|/absolute/hook>
 }
 # What a hook's exit status means, answered once for every helper that runs a
 # hook and reads one: exit 0 is ALLOW, exit 2 is BLOCK, and anything else FAILs
-# the check whatever it expected. `says` and `says_not` ask only for 2, because
-# every one of their claims is about a refusal.
+# the check whatever it expected. `says`, `says_not` and `feed_says` ask only for
+# 2, because every one of their claims is about a refusal.
 #
 # Until #98 each helper read the status as one bit -- 2 was BLOCK and everything
 # else ALLOW -- and `says_not` did not read it at all. So a hook that did not run
@@ -3474,30 +3474,37 @@ check_file() {  # check_file <script> <want> <label> <path relative to the repo>
 # CLAUDE_PROJECT_DIR naming this repository, so one helper serves the Bash hooks
 # and the Edit hook alike, and PATH is an argument so that jq can be taken off it.
 #
-# The verdict is exact, which check and check_in are not yet (#98): 0 is ALLOW, 2
-# is BLOCK, and any other exit is reported as itself and fails. That matters more
-# here than anywhere. A hook that dies on malformed input exits 1 or 127, the
-# harness treats that as a non-blocking error and runs the command, and a helper
-# reading "not 2" as ALLOW would pass it as a permit nobody looks at twice.
+# Both read the exit status as every helper above does since #98, `feed` through
+# `verdict` and `feed_says` as `says` does. That matters more here than anywhere.
+# A hook that dies on malformed input exits 1 or 127, the harness treats that as a
+# non-blocking error and runs the command, and a helper reading "not 2" as ALLOW
+# would pass it as a permit nobody looks at twice.
+#
+# They were written for #95 with a reading of their own, and merged with #98's
+# beside it rather than under it (#124): `feed` mapped the status itself and threw
+# the hook's stderr away, so its failure line named no cause, and `feed_says` did
+# not read the status at all, so a hook that crashed printing the fragment passed.
+# That second shape is the one #98 removed from `says`.
 feed() {  # feed <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin>
-  local path="$1" script="$2" want="$3" label="$4" payload="$5" got rc hook
-  hook=$(hook_path "$script")
-  printf '%s' "$payload" \
-    | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) >/dev/null 2>&1
-  rc=$?
-  case $rc in 0) got=ALLOW ;; 2) got=BLOCK ;; *) got="exit-$rc" ;; esac
-  if [ "$got" = "$want" ]; then
-    printf '  ok   %-5s %s\n' "$got" "$label"
-  else
-    printf '  FAIL want=%s got=%s  %s\n' "$want" "$got" "$label"
-    FAILED=1
-  fi
-}
-feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <raw stdin>
-  local path="$1" script="$2" want="$3" label="$4" payload="$5" err hook
+  local path="$1" script="$2" want="$3" label="$4" payload="$5" rc err hook
   hook=$(hook_path "$script")
   err=$(printf '%s' "$payload" \
         | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  verdict "$want" "$rc" "$err" "$label"
+}
+feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <raw stdin>
+  local path="$1" script="$2" want="$3" label="$4" payload="$5" err rc hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$payload" \
+        | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  if [ "$rc" != 2 ]; then
+    printf '  FAIL %s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|\n' \
+      "$label" "$want" "$rc" "$err"
+    FAILED=1
+    return
+  fi
   case "$err" in
     *"$want"*) printf '  ok   says  %s\n' "$label" ;;
     *) printf '  FAIL %s\n         wanted the refusal to say |%s|\n         it said |%s|\n' \
@@ -5217,9 +5224,13 @@ EXITS_OUTPUT="$EXITS/output"
 # Run one helper against one fixture in a subshell, and print ok or FAIL for the
 # FAILED it left. The call shapes differ because the helpers take their hook
 # differently: check and check_file by a name run from the working directory, the
-# rest by an absolute path. `says` and `says_not` take a fragment where the others
-# take a verdict: the fixture's own name, which is in everything a fixture says, so
-# `says` has something to find and `says_not` is given something it never sees.
+# rest by an absolute path. `feed` and `feed_says` take a PATH and a raw payload
+# rather than a command; the PATH is the suite's own, because the fixtures call
+# `dirname` to leave their marker. `says`, `says_not` and `feed_says` take a
+# fragment where the others take a verdict: the fixture's own name, which is in
+# everything a fixture says, so `says` and `feed_says` have something to find --
+# a crashed fixture included, which is what makes their crash cases evidence --
+# and `says_not` is given something it never sees.
 drive_helper() {  # drive_helper <helper> <fixture> <want>
   local helper="$1" fixture="$2" want="$3" result
   rm -f "$EXITS/ran-$fixture"
@@ -5232,6 +5243,8 @@ drive_helper() {  # drive_helper <helper> <fixture> <want>
          check_file) check_file "$fixture.sh" "$want" 'self-test' 'docs/x.md' ;;
          says)       says "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
          says_not)   says_not "$EXITS" "$EXITS/$fixture.sh" 'never-said' 'self-test' 'true' ;;
+         feed)       feed "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
+         feed_says)  feed_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' '{}' ;;
          *)          exit 3 ;;
        esac
        exit $FAILED ) >"$EXITS_OUTPUT" 2>"$EXITS/stray-stderr"
@@ -5256,8 +5269,8 @@ failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
 # The helpers this self-test drives, named once: each loop below runs off its list,
 # and the derivation at the end of this section is asserted against both. A
 # helper added to neither is red there; one added to a list is driven.
-DRIVEN_VERDICT='check check_in flip check_file'
-DRIVEN_MESSAGE='says says_not'
+DRIVEN_VERDICT='check check_in flip check_file feed'
+DRIVEN_MESSAGE='says says_not feed_says'
 
 for helper in $DRIVEN_VERDICT; do
   tok "$helper: a hook that exits 0 passes an ALLOW expectation" \
