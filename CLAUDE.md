@@ -29,7 +29,7 @@ make verify         # audit + scan
 make upgrade-safe   # resolve an upgrade, run BOTH tiers, revert unless clean
 ```
 
-`make upgrade-safe` must pass before a PR closes. `make scan`/`upgrade-safe`
+`make upgrade-safe` must pass before a PR is merged into main branch. `make scan`/`upgrade-safe`
 accept `GUARDDOG_BUDGET=<seconds>`; **exit 75 means unfinished, not pass** —
 `make` collapses it to 2, so a caller that must tell the two apart runs
 `uv run guarddog-cached --time-budget N <file>` directly. Findings are
@@ -245,6 +245,11 @@ a claim without a number is a claim to re-measure.
   in the dev-log rather than insisting on green first.
 
 ## What an unattended agent may do to this repository
+
+* **Unless otherwise stated, an agent shall create a dedicated worktree for its work.**
+* **Unless otherwise stated, an agent shall create its own dedicated worktree for its work.**
+* **Unless otherwise stated, an agent shall not work on a worktree created by someone else.**
+* **If an agent finds out that a worktree already exists, it shall ask the user for permission to work in that worktree.**
 
 An agent may push the branch of the linked worktree it is working in —
 non-forced, and naming that branch in the command, because a bare `git push`
