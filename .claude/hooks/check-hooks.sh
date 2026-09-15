@@ -10,8 +10,11 @@
 # that reads the session report, the housekeeping skill's
 # housekeeping-commands.sh. Most checks run a hook as a process and read
 # its verdict; the rest read one of these files, and each kind is introduced
-# where it begins. The section "this suite's header names every file it checks"
-# holds this paragraph to settings.json, to the disk and to what the suite reads.
+# where it begins. Every check carries the IDs of the requirements it
+# establishes, which requirements.md beside this suite defines, and a requirement
+# no check reaches points at the runbook.md it is verified by once that is
+# written. The section "this suite's header names every file it checks" holds
+# this paragraph to settings.json, to the disk and to what the suite reads.
 #
 # A hook is a process, so the only way to test its verdict is to run it; what
 # the rule against calling the function under test forbids is deriving the
@@ -151,10 +154,74 @@
 # expected -- and `verdict`, below, is where that is answered and argued.
 #
 # Run: bash .claude/hooks/check-hooks.sh
+#      bash .claude/hooks/check-hooks.sh --matrix   the requirements matrix, issue #104
 cd "$(dirname "$0")" || exit 1
 HOOKS=$(pwd)
 
+case "${1:-}" in
+  '') MATRIX= ;;
+  --matrix) MATRIX=1 ;;
+  *) echo "usage: bash .claude/hooks/check-hooks.sh [--matrix]" >&2; exit 64 ;;
+esac
+# With --matrix the check lines go nowhere and the matrix is what is printed, on
+# the stdout this line keeps as fd 3. A fixture guard still speaks on stderr.
+if [ -n "$MATRIX" ]; then exec 3>&1 >/dev/null; fi
+
 FAILED=0
+# EVERY RESULT IS RECORDED, WITH THE REQUIREMENTS IT ESTABLISHES. Issue #104.
+# Nothing connected the requirements in requirements.md to the checks meant to
+# verify them, so "is this requirement verified?" had no answer short of reading
+# this file, and a requirement no check names was invisible. Each check now
+# carries the IDs it establishes, and the suite reads them back at its foot: an
+# active requirement with no covering check fails it, and --matrix prints every
+# ID with its checks and their results.
+#
+# A tag is the value of REQ when a check prints its result, set by `req` and
+# cleared by `section`, so a new section cannot inherit the tags of the one above
+# it: a check written under a fresh heading with no `req` is untagged, and an
+# untagged check fails. The association is made at runtime, by the one call that
+# prints the result, rather than by a comment nothing reads (#103 Q2).
+#
+# `pass` and `fail` are that call, and nothing else prints a result: the #104
+# section derives that from this file. Each takes the direction of the check,
+# which requirements.md defines -- refuse for a BLOCK or a refusal's message,
+# permit for an ALLOW, static for a check that reads no verdict -- because a
+# requirement is covered by a refusing and a permitting check, not by a count.
+#
+# A result printed by a subshell is not recorded. The #98 self-test drives each
+# helper inside one, against hooks built to crash, and what it asserts is the
+# helper's own result, which is recorded where it prints; the helper's inner
+# line is about a fixture and establishes nothing. The limit, named: a real check
+# run inside a subshell would print and go uncounted, so it would neither cover
+# its tags nor be refused for having none.
+LEDGER=
+REQ=
+record() {  # record <refuse|permit|static> <ok|FAIL> <label>
+  [ -n "$LEDGER" ] && [ "$BASHPID" = "$$" ] || return 0
+  printf '%s\t%s\t%s\t%s\n' "$REQ" "$1" "$2" "${3//$'\t'/ }" >> "$LEDGER"
+}
+pass() {  # pass <refuse|permit|static> <format> [arguments...] -- an ok line, recorded
+  local dir="$1" fmt="$2" line
+  shift 2
+  printf -v line "$fmt" "$@"
+  printf '  ok   %s\n' "$line"
+  record "$dir" ok "${line%%$'\n'*}"
+}
+fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, recorded
+  local dir="$1" fmt="$2" line
+  shift 2
+  printf -v line "$fmt" "$@"
+  printf '  FAIL %s\n' "$line"
+  FAILED=1
+  record "$dir" FAIL "${line%%$'\n'*}"
+}
+req() {  # req <ID>... -- the requirements the checks after this establish
+  REQ="$*"
+}
+section() {  # section <heading> -- print it, and let no tag carry across it
+  REQ=
+  printf '%s\n' "$1"
+}
 # Where a hook is, given what a check names: a bare filename is one of this
 # repository's, an absolute path is a fixture copy of one. Written once because
 # three helpers below asked it, and they answered it in three identical `case`
@@ -187,14 +254,14 @@ hook_path() {  # hook_path <script|/absolute/hook>
 # every BLOCK-expecting `check` against it. `says` is what separates the two,
 # where a check has one beside it.
 verdict() {  # verdict <want> <exit status> <stderr> <label>
-  local want="$1" rc="$2" err="$3" label="$4" got
+  local want="$1" rc="$2" err="$3" label="$4" got dir
   case "$rc" in 0) got=ALLOW ;; 2) got=BLOCK ;; *) got=FAIL ;; esac
+  case "$want" in BLOCK) dir=refuse ;; ALLOW) dir=permit ;; *) dir=static ;; esac
   if [ "$got" = "$want" ]; then
-    printf '  ok   %-5s %s\n' "$got" "$label"
+    pass "$dir" '%-5s %s' "$got" "$label"
   else
-    printf '  FAIL want=%s got=%s exit=%s  %s\n         stderr |%s|\n' \
+    fail "$dir" 'want=%s got=%s exit=%s  %s\n         stderr |%s|' \
       "$want" "$got" "$rc" "$label" "$err"
-    FAILED=1
   fi
 }
 check() {  # check <script> <want> <label> <cmd>, run from $HOOKS
@@ -210,6 +277,8 @@ check() {  # check <script> <want> <label> <cmd>, run from $HOOKS
 # branch is still reported by name, and nothing here reaches a remote.
 FIXTURES=$(mktemp -d)
 trap 'rm -rf "$FIXTURES"' EXIT
+LEDGER="$FIXTURES/ledger"
+: > "$LEDGER"
 git init -q -b main "$FIXTURES/on-main"
 git init -q -b dev-99 "$FIXTURES/on-dev"
 ON_MAIN="$FIXTURES/on-main"
@@ -320,16 +389,14 @@ says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   rc=$?
   if [ "$rc" != 2 ]; then
-    printf '  FAIL %s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|\n' \
+    fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
       "$label" "$want" "$rc" "$err"
-    FAILED=1
     return
   fi
   case "$err" in
-    *"$want"*) printf '  ok   says  %s\n' "$label" ;;
-    *) printf '  FAIL %s\n         wanted the refusal to say |%s|\n         it said |%s|\n' \
-         "$label" "$want" "$err"
-       FAILED=1 ;;
+    *"$want"*) pass refuse 'says  %s' "$label" ;;
+    *) fail refuse '%s\n         wanted the refusal to say |%s|\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
   esac
 }
 
@@ -344,16 +411,14 @@ says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   rc=$?
   if [ "$rc" != 2 ]; then
-    printf '  FAIL %s\n         wanted a refusal not saying |%s|, got exit=%s\n         stderr |%s|\n' \
+    fail refuse '%s\n         wanted a refusal not saying |%s|, got exit=%s\n         stderr |%s|' \
       "$label" "$unwanted" "$rc" "$err"
-    FAILED=1
     return
   fi
   case "$err" in
-    *"$unwanted"*) printf '  FAIL %s\n         the refusal must not say |%s|\n         it said |%s|\n' \
-         "$label" "$unwanted" "$err"
-       FAILED=1 ;;
-    *) printf '  ok   says  %s\n' "$label" ;;
+    *"$unwanted"*) fail refuse '%s\n         the refusal must not say |%s|\n         it said |%s|' \
+         "$label" "$unwanted" "$err" ;;
+    *) pass refuse 'says  %s' "$label" ;;
   esac
 }
 
@@ -370,10 +435,9 @@ says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
 # from the first one is safe for them.
 armed() {  # armed <label> <file> <literal>
   if sed 's/[[:space:]]*#.*$//' "$2" 2>/dev/null | grep -qF -- "$3"; then
-    printf '  ok   armed %s\n' "$1"
+    pass static 'armed %s' "$1"
   else
-    printf '  FAIL %s\n         expected %s to contain |%s|\n' "$1" "$2" "$3"
-    FAILED=1
+    fail static '%s\n         expected %s to contain |%s|' "$1" "$2" "$3"
   fi
 }
 
@@ -402,10 +466,9 @@ prose_count() {  # prose_count <file> <literal> -- how many lines say it
 
 written() {  # written <label> <file> <literal> -- the file as written, # and all
   if grep -qF -- "$3" "$2" 2>/dev/null; then
-    printf '  ok   written %s\n' "$1"
+    pass static 'written %s' "$1"
   else
-    printf '  FAIL %s\n         expected %s to still say |%s|\n' "$1" "$2" "$3"
-    FAILED=1
+    fail static '%s\n         expected %s to still say |%s|' "$1" "$2" "$3"
   fi
 }
 
@@ -416,14 +479,12 @@ written() {  # written <label> <file> <literal> -- the file as written, # and al
 # for. Found by review of that change, not by this suite.
 unarmed() {  # unarmed <label> <file> <literal>
   if [ ! -r "$2" ]; then
-    printf '  FAIL %s\n         %s cannot be read, so the absence of |%s| is evidence of nothing\n' \
+    fail static '%s\n         %s cannot be read, so the absence of |%s| is evidence of nothing' \
       "$1" "$2" "$3"
-    FAILED=1
   elif grep -qF -- "$3" "$2" 2>/dev/null; then
-    printf '  FAIL %s\n         %s must not contain |%s|\n' "$1" "$2" "$3"
-    FAILED=1
+    fail static '%s\n         %s must not contain |%s|' "$1" "$2" "$3"
   else
-    printf '  ok   armed %s\n' "$1"
+    pass static 'armed %s' "$1"
   fi
 }
 
@@ -478,11 +539,10 @@ dev_pointer() {  # dev_pointer <file> -- the comment block above the derivation
 
 beside() {  # beside <label> <file> <literal>
   if dev_pointer "$2" | grep -qF -- "$3"; then
-    printf '  ok   beside %s\n' "$1"
+    pass static 'beside %s' "$1"
   else
-    printf '  FAIL %s\n         expected the comment above the derivation in %s\n         to contain |%s|\n' \
+    fail static '%s\n         expected the comment above the derivation in %s\n         to contain |%s|' \
            "$1" "$2" "$3"
-    FAILED=1
   fi
 }
 
@@ -493,17 +553,17 @@ numeric() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 
 tok() {  # tok <label> <expected> <actual>
   if [ "$3" = "$2" ]; then
-    printf '  ok   %s\n' "$1"
+    pass static '%s' "$1"
   else
-    printf '  FAIL %s\n         want |%s|\n         got  |%s|\n' "$1" "$2" "$3"
-    FAILED=1
+    fail static '%s\n         want |%s|\n         got  |%s|' "$1" "$2" "$3"
   fi
 }
 
-echo "=== the tokeniser itself ==="
+section "=== the tokeniser itself ==="
 # Every defect on PR #35 was one question -- how far around a matched token to
 # look -- answered differently in a different place. It is answered once in
 # lib/command-scan.sh, so these aim at it rather than through a hook.
+req FR-3
 tok 'split on ; && || |' \
     'a
 b
@@ -588,6 +648,7 @@ tok 'unterminated heredoc gives its lines back' \
 # they are the ones where it would hide something: a process substitution
 # carries a command, and a redirect inside quotes is text. Both are written
 # before the drops themselves for that reason.
+req GH-50.2
 tok 'process substitution is not a redirect, <(' \
     'cat <(git push --all origin)' \
     "$(printf 'cat <(git push --all origin)\n' | cs_normalise)"
@@ -619,6 +680,7 @@ tok 'a $( ) target ends the target scan' \
     'echo $(git push --all origin)' \
     "$(printf 'echo > $(git push --all origin)\n' | cs_normalise)"
 # Now the drops. Every spelling, with and without a space before the target.
+req GH-50.1
 tok 'redirect dropped, > with a space' \
     'git push origin b' \
     "$(printf 'git push origin b > out.txt\n' | cs_normalise)"
@@ -703,12 +765,14 @@ cat' \
 tok '>| leaves its pipe standing' \
     'git push origin b | out.txt' \
     "$(printf 'git push origin b >| out.txt\n' | cs_normalise)"
+req GH-50.2 FR-3
 tok 'the heredoc operator survives the redirect drop' \
     'cat <<EOF' \
     "$(printf 'cat <<EOF\nbody\nEOF\n' | cs_normalise)"
 tok 'the here-string operator survives the redirect drop' \
     'cat <<< "hello"' \
     "$(printf 'cat <<< "hello"\n' | cs_normalise)"
+req FR-3
 tok 'control word removed, then/fi' \
     'true
 git push --mirror origin' \
@@ -726,6 +790,7 @@ tok 'control word removed, brace group' \
 # in the pattern saved the command by accident and a leading space did not.
 # Two commands doing the same job, one refused and one not, on a difference
 # that has nothing to do with what either would run.
+req GH-68.1
 tok 'a sed delimiter is not a separator' \
     "sed -i 's|git push --all origin|X|' f.sh" \
     "$(printf "sed -i 's|git push --all origin|X|' f.sh\n" | cs_split)"
@@ -770,6 +835,7 @@ tok 'a delimiter written with double quotes' \
     "$(printf 'sed -i "s|git push --all origin|X|" f.sh\n' | cs_split)"
 # A closed quote restores the separator. A tracker that treated everything
 # after the first quote as quoted would convert issue #68 into a real hole.
+req GH-68.2
 tok 'a closed quote reopens the separator' \
     'echo "a"
 git push --all origin' \
@@ -797,6 +863,7 @@ git push --all origin
 # Single quotes need no such exception -- bash runs nothing inside them -- and
 # an escaped substitution in double quotes is text, which is why the backslash
 # is read before the substitution is looked for.
+req GH-68.1
 tok 'a substitution inside single quotes is text' \
     "grep -n 'git push|\$(x)' ." \
     "$(printf "grep -n 'git push|\$(x)' .\n" | cs_split)"
@@ -805,6 +872,7 @@ tok 'an escaped substitution in double quotes is text' \
     "$(printf 'git commit -m "release \\$(date) notes"\n' | cs_split)"
 # The backslash is read for that one purpose. An escaped separator outside
 # quotes still cuts, exactly as it did before, which is the refusing direction.
+req GH-68.2
 tok 'an escaped separator outside quotes still cuts' \
     'echo a \
 git push --all origin' \
@@ -819,8 +887,10 @@ git push --all origin' \
 tok 'an escaped quote outside quotes does not open one' \
     'sed -e s/\"/Q/ -e '"'"'s|git push|X|'"'"' f.sh' \
     "$(printf 'sed -e s/\\"/Q/ -e %ss|git push|X|%s f.sh\n' "'" "'" | cs_split)"
+req GH-68.1
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'and the same command is not a push' \
          'sed -e s/\"/Q/ -e '"'"'s|git push|X|'"'"' f.sh'
+req FR-3 US-3
 tok 'git args, plain' 'origin main' "$(printf 'git push origin main\n' | cs_git_args push)"
 tok 'git args, global option with a separate value' \
     '--all' "$(printf 'git -C /x push --all\n' | cs_git_args push)"
@@ -842,6 +912,7 @@ fi
 # yet -- it is the footing the base rule is built on, rather than a fourth raw
 # match over the whole line, which is the shape that produced two of the five
 # defects listed at the top of lib/command-scan.sh.
+req FR-22
 tok 'gh args, plain' '--base dev-05 --title x' \
     "$(printf 'gh pr create --base dev-05 --title x\n' | cs_gh_args 'pr create')"
 # Skipping happens before every word of the path, so the two positions are
@@ -869,8 +940,10 @@ tok 'gh args, an option on a neighbouring command' '--base dev-05' \
 # list would never see the second -- the fifth defect in command-scan.sh's list.
 # no-git-push.sh loops per command over cs_split's output for exactly that
 # reason; this is what obliges the base rule to do the same.
+req FR-22 GH-47.2
 tok 'gh args, the first match only, and the rest unseen' '' \
     "$(printf 'gh pr create\ngh pr create --base dev-05\n' | cs_gh_args 'pr create')"
+req FR-22
 if printf 'gh pr create\n' | cs_gh_args 'pr create' >/dev/null; then
   tok 'bare create succeeds, so empty args mean a create' 'found' 'found'
 else
@@ -908,26 +981,33 @@ else
   tok 'a pr create is not a gh api call' 'not found' 'not found'
 fi
 
-echo "=== REGRESSION: PR #35, only the first push on a line was validated ==="
+section "=== REGRESSION: PR #35, only the first push on a line was validated ==="
 # The scope found the first push, validated its arguments, and stopped. So a
 # legitimate push carried an illegitimate one after ; or && on its coat-tails.
+req FR-3 US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'legit push ; push origin main'  "git push origin $PUSH_BRANCH; git push origin main"
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'legit push && push --all'       "git push origin $PUSH_BRANCH && git push --all origin"
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'bare push && forced push'       "git push && git push --force origin $PUSH_BRANCH"
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'three pushes, last one bad'     "git push; git push origin $PUSH_BRANCH; git push --mirror origin"
+req FR-3 US-15
 check no-pr-decisions.sh BLOCK 'gh pr view ; gh pr merge'   'gh pr view 5; gh pr merge 5'
 
-echo "=== REGRESSION: PR #35, backticks and command prefixes ==="
+section "=== REGRESSION: PR #35, backticks and command prefixes ==="
 # $( ) was closed by the paren in the separator class and its twin was not --
 # the same asymmetry GIT_DIR= had against --git-dir. Both hooks were open.
+req FR-3 US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'backticked push'      'echo `git push --mirror origin`'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'dollar-paren push'    'echo $(git push --mirror origin)'
+req FR-3 US-15
 check no-pr-decisions.sh BLOCK 'backticked merge'     'echo `gh pr merge 35`'
 check no-pr-decisions.sh BLOCK 'dollar-paren merge'   'echo $(gh pr merge 35)'
+req FR-3 US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'push through xargs'   'echo origin | xargs git push --mirror'
+req FR-3 US-15
 check no-pr-decisions.sh BLOCK 'merge through xargs'  'echo 35 | xargs gh pr merge'
 
-echo "=== REGRESSION: heredoc prose that blocked its own commit ==="
+section "=== REGRESSION: heredoc prose that blocked its own commit ==="
+req FR-3
 COMMIT_MSG=$'git commit -q -F - <<\'EOF\'\nLeave pushing and deciding a PR to Bertan\n\nno-git-push.sh refuses every push; no-pr-decisions.sh refuses\ngh pr review --approve and --request-changes, gh pr close and reopen.\ngit push origin main is refused in every form.\ngh pr merge 5 would also be refused.\nEOF'
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'commit msg naming git push in heredoc' "$COMMIT_MSG"
 check no-pr-decisions.sh ALLOW 'commit msg naming gh pr verbs in heredoc' "$COMMIT_MSG"
@@ -935,27 +1015,32 @@ NOTE=$'cat > /tmp/note.md <<\'MD\'\ngh pr merge is now refused by a hook.\ngit p
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'heredoc body naming git push' "$NOTE"
 check no-pr-decisions.sh ALLOW 'heredoc body naming gh pr merge' "$NOTE"
 
-echo "=== REGRESSION: PR #35, indentation defeated the anchor ==="
+section "=== REGRESSION: PR #35, indentation defeated the anchor ==="
 # Each names a refused destination, so these assert that the command is still
 # *found* when indented, independently of the worktree exception.
+req FR-3 US-3 US-2
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'if/then + indented push to dev-05' $'if true; then\n    git push origin dev-05\nfi'
+req FR-3 US-3 US-1
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'for loop + indented push to main'  $'for r in a b; do\n  git push origin main\ndone'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'deeply indented push to main'      $'if true; then\n  if true; then\n        git push origin main\n  fi\nfi'
+req FR-3 US-15
 check no-pr-decisions.sh BLOCK 'if/then + indented merge'          $'if true; then\n    gh pr merge 35\nfi'
 check no-pr-decisions.sh BLOCK 'for loop + indented close'         $'for n in 1 2; do\n  gh pr close $n\ndone'
 
-echo "=== REGRESSION: PR #35, no-pr-decisions.sh had no wrapper rule ==="
+section "=== REGRESSION: PR #35, no-pr-decisions.sh had no wrapper rule ==="
+req FR-4 US-15
 check no-pr-decisions.sh BLOCK 'bash -c gh pr merge'  "bash -c 'gh pr merge 35'"
 check no-pr-decisions.sh BLOCK 'sh -c gh pr merge'    'sh -c "gh pr merge 35"'
 check no-pr-decisions.sh BLOCK 'eval gh pr merge'     "eval 'gh pr merge 35'"
 check no-pr-decisions.sh BLOCK 'graphql mutation via heredoc' $'gh api graphql -f query=@- <<EOF\nmutation { mergePullRequest(input:{pullRequestId:"x"}) { clientMutationId } }\nEOF'
 check no-pr-decisions.sh BLOCK 'REST merge via heredoc body'  $'gh api -X PUT --input - <<EOF\n{"path":"/repos/o/r/pulls/5/merge"}\nEOF'
 
-echo "=== ACCEPTED false positive: quoted multi-line string, not a heredoc ==="
+section "=== ACCEPTED false positive: quoted multi-line string, not a heredoc ==="
 # The price of allowing leading whitespace in the anchor. Kept on purpose: a
 # blocked comment is visible and one edit away, a silently permitted push is
 # neither. If a later change makes these ALLOW, that is a decision to take
 # knowingly, not a bug fix.
+req FR-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'multi-line -b string continuing with a push' $'gh issue comment 27 -b "to release:\n  git push origin main"'
 check no-pr-decisions.sh BLOCK 'multi-line -b string continuing with a merge' $'gh issue comment 27 -b "to land it:\n  gh pr merge 35"'
 # The single-line half of that trade is no longer paid, and the two checks that
@@ -965,12 +1050,13 @@ check no-pr-decisions.sh BLOCK 'multi-line -b string continuing with a merge' $'
 # and stays accepted: quote state is per line, so an unbalanced line falls back
 # to the old splitting and the continuation still reads as a command position.
 
-echo "=== REGRESSION: issue #68, a quoted separator refused ordinary sed and grep ==="
+section "=== REGRESSION: issue #68, a quoted separator refused ordinary sed and grep ==="
 # The six measured over-refusals from the ticket, now ALLOW. Every one is a
 # command that edits or searches text; none of them pushes or commits anything.
 # It fired twice in a live session against that session's own edits to these
 # hooks, which is what makes it worth a suite entry rather than a note: editing
 # the hooks is exactly the work that trips it.
+req GH-68.1
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'sed over a push --all (was BLOCK)'  "sed -i 's|git push --all origin|X|' f.sh"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'sed over a forced push (was BLOCK)' "sed -i 's|git push -f origin main|X|' f.sh"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'sed over a bare push (was BLOCK)'   "sed -i 's|git push|X|' f.sh"
@@ -1007,6 +1093,7 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'sed with & as its delimiter (was BLOCK
          "sed -i 's&git push --all origin&X&' f.sh"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'grep for a backticked push in prose (was BLOCK)' \
          "grep -rn '\`git push --all origin\`' docs/"
+req GH-68.1 GH-68.2
 check no-pr-decisions.sh ALLOW 'a merge quoted in single quotes is inert (was BLOCK)' \
          "echo '\$(gh pr merge 5)'"
 # And its control, one character different: in double quotes that substitution
@@ -1014,12 +1101,14 @@ check no-pr-decisions.sh ALLOW 'a merge quoted in single quotes is inert (was BL
 # what the substitution fallback exists for, and it is asked as a verdict rather
 # than only as a fragment list -- pinning the split alone would let a hook stop
 # refusing these without anything going red.
+req GH-68.2
 check no-pr-decisions.sh BLOCK 'the same substitution in double quotes' \
          'echo "$(gh pr merge 5)"'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push substituted inside double quotes' \
          'echo "$(git push --all origin)"'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push backticked inside double quotes' \
          'echo "`git push --all origin`"'
+req GH-68.2 GH-43.1
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'a commit substituted inside double quotes' \
          'echo "$(git commit -m x)"'
 # The trade above cs_split, partly repaid. A quoted string holding a separator
@@ -1027,12 +1116,14 @@ check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'a commit substituted inside doub
 # command; on one line it is text again. These were written as accepted false
 # positives in the section above and are moved here with the verdict they now
 # return, because that is where the reason for the change is written down.
+req GH-68.1 FR-3
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'quoted "; then" before a push (was BLOCK)'  'git commit -m "wait; then git push --all origin"'
 check no-pr-decisions.sh ALLOW 'quoted "; then" before a merge (was BLOCK)' 'git commit -m "wait; then gh pr merge 35"'
 # What did not flip with them, and the reason: the multi-line spelling of the
 # same string leaves a quote open at the newline, so each line falls back and
 # the continuation reads as a command position. Pinned here beside the flip so
 # the two are read together rather than as a contradiction.
+req GH-68.2
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'the multi-line spelling still refused' \
          $'gh issue comment 27 -b "to release:\n  git push origin main"'
 # The intermittency, which is the part that reads as arbitrary from inside a
@@ -1040,14 +1131,17 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'the multi-line spelling still refused'
 # leading space was refused, on a difference that decides nothing about what
 # either command runs. They agree now, and the pair is pinned so that a
 # regression shows up as the disagreement rather than as one lost verdict.
+req GH-68.1
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'the anchored spelling, permitted before and after' \
          "sed -i 's|^git push --all origin|X|' f.sh"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'the leading-space spelling (was BLOCK)' \
          "sed -i 's| git push --all origin|X|' f.sh"
 # The controls. A quote-aware split must not have cost a single real refusal,
 # and these are the three commands the six above only ever mentioned.
+req GH-68.1 US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: a real push --all'   'git push --all origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: a real forced push'  'git push -f origin main'
+req GH-68.1 US-1
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'the control: a real commit on main' 'git commit -m x'
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'the control: a real push --all on main' 'git push --all origin'
 # The wrapper detections read the RAW command text, before the split and not
@@ -1056,6 +1150,7 @@ check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'the control: a real push --all o
 # all, so nothing but the raw match can still see these. A BLOCK is therefore
 # evidence about where the rule reads from, which is what makes them checks
 # about issue #68 rather than repeats of the wrapper checks above.
+req GH-68.3 FR-4
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'wrapped push, invisible to the split' "bash -c 'git push --all origin'"
 check no-pr-decisions.sh BLOCK 'wrapped merge, invisible to the split' "eval 'gh pr merge 5'"
 # On a dev branch, not main, so that the refusal cannot be the branch answering
@@ -1070,6 +1165,7 @@ check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'wrapped commit, invisible to the 
 # lib/command-scan.sh, so the literal names the shared variable rather than the
 # head of a regex each hook carried its own copy of. What is pinned is
 # unchanged: which text the rule reads.
+req GH-68.3 GH-79.4
 armed 'no-git-push.sh matches the shared wrapper rule on the raw command' \
       no-git-push.sh 'if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE"'
 armed 'no-commit-to-main.sh matches the shared wrapper rule on the raw command' \
@@ -1100,6 +1196,7 @@ unarmed 'no-work-on-stale-branch.sh does not match its wrapper rule on the fragm
 # head each of the four wrote out before #79; four copies of one expression, in
 # the file whose header names that as the defect. A hook that re-derives it
 # would pass every check above and answer the list differently again.
+req GH-79.4
 WRAPRE='(^[[:space:]]*|[;&|(`][[:space:]]*)'
 unarmed 'no-git-push.sh does not carry its own copy of the anchor' \
         no-git-push.sh "grep -qE '$WRAPRE"
@@ -1123,7 +1220,7 @@ unarmed 'nor no-pr-decisions.sh' \
 unarmed 'nor no-work-on-stale-branch.sh' \
         no-work-on-stale-branch.sh "grep -qE \"$WRAPRE"
 
-echo "=== REGRESSION: issue #79, the wrapper rules did not know the prefix words ==="
+section "=== REGRESSION: issue #79, the wrapper rules did not know the prefix words ==="
 # cs_split has always stripped the words that run another command -- sudo, env,
 # xargs, nohup, nice, time, stdbuf, ionice, command, doas, setsid, chronic, and
 # timeout and flock with their operand. The four wrapper regexes did not consult
@@ -1139,6 +1236,7 @@ echo "=== REGRESSION: issue #79, the wrapper rules did not know the prefix words
 # no-commit-to-main.sh both, because the defect was in an expression all four
 # hooks carried a copy of, and a fix that reached one file would be the shape
 # this suite exists to catch.
+req GH-79.1 FR-4
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'sudo + wrapped push'            "sudo sh -c 'git push --all origin'"
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'timeout + wrapped push'         "timeout 5 bash -c 'git push --all origin'"
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'xargs + wrapped push'           "xargs sh -c 'git push --all origin'"
@@ -1195,6 +1293,7 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'a quoted token does not end the run' \
          "sudo \"x\" sh -c 'git push --all origin'"
 # On a dev branch, so that the branch cannot be what answers for the wrapper
 # rule -- the same care the #68 wrapped-commit check takes above.
+req GH-79.1 FR-4 GH-43.3
 check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'sudo + wrapped commit' \
          "sudo sh -c 'git commit -m x'"
 check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'timeout + wrapped commit' \
@@ -1216,18 +1315,20 @@ check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'nohup + wrapped push' \
 # by review of this change, which is the letter of "no fix lands without a
 # check that fails without the fix" going unmet while an armed pin on
 # CS_WRAPPER_RE carried the substance.
+req GH-79.1 FR-4 US-15
 check no-pr-decisions.sh BLOCK 'timeout + wrapped merge'    "timeout 5 sh -c 'gh pr merge 5'"
 check no-pr-decisions.sh BLOCK 'sudo + wrapped release'     "sudo bash -c 'gh release create v1'"
 check no-pr-decisions.sh BLOCK 'nohup + wrapped eval merge' "nohup eval 'gh pr merge 5'"
 # The controls: the unwrapped shape the list already reached, and the wrapped
 # shape with no prefix in front of it. Both were BLOCK before and must stay so,
 # or the widening has moved the rule rather than extended it.
+req GH-79.1 FR-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: sudo + a bare push'   'sudo git push --all origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: timeout + a push'     'timeout 30 git push --all origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: a wrapper on its own' "bash -c 'git push --all origin'"
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: an assignment prefix' "FOO=1 sh -c 'git push --all origin'"
 
-echo "=== issue #79: the anchor was widened and not dropped ==="
+section "=== issue #79: the anchor was widened and not dropped ==="
 # The constraint that decides this fix. Dropping the anchor would pass every
 # check above and refuse a wrapper word named anywhere on a line that also names
 # a refused command -- which is exactly what a session working on these hooks
@@ -1235,17 +1336,20 @@ echo "=== issue #79: the anchor was widened and not dropped ==="
 # ALLOW either way, because the rule is a conjunction and that command names no
 # push. The shapes that regress name a wrapper word and a push on one line, and
 # each of these three is ALLOW with the anchor and BLOCK without it.
+req GH-79.2
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'grepping for the sh -c rule'  "grep -rn 'sh -c .*git push' .claude/hooks/"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'grepping for the eval rule'   "grep -rn 'eval .*git push' .claude/hooks/"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'a note about what eval does'  "echo 'the eval rule refuses git push --all origin' >> notes.md"
+req GH-79.2 GH-43.3
 check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'grepping for the sh -c rule' \
          "grep -rn 'sh -c .*git commit' .claude/hooks/"
 
-echo "=== issue #79: named and not closed -- the list cannot be complete ==="
+section "=== issue #79: named and not closed -- the list cannot be complete ==="
 # A word that runs a command and is not a prefix word is out of reach, and the
 # header of lib/command-scan.sh says so rather than implying the set is
 # exhaustive. These are ALLOW and are pinned as ALLOW: a check that named them
 # and wanted BLOCK would be a claim the fix does not make.
+req GH-79.3
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'python3 -c is out of reach' \
          "python3 -c 'import os; os.system(\"git push --all origin\")'"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'perl -e is out of reach' \
@@ -1256,7 +1360,7 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'perl -e is out of reach' \
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'find -exec sh -c is out of reach' \
          "find . -exec sh -c 'git push --all origin' \\;"
 
-echo "=== issue #79: the soft spot the anchor keeps, and what widening cost it ==="
+section "=== issue #79: the soft spot the anchor keeps, and what widening cost it ==="
 # The anchor carries its own separator class, and that class knows nothing about
 # quoting -- so a verdict still turns on a sed delimiter, which is the complaint
 # #68 was filed about. It is deferred rather than impossible, and the reason is
@@ -1268,6 +1372,7 @@ echo "=== issue #79: the soft spot the anchor keeps, and what widening cost it =
 # which is the shape #63 found in CLAUDE.md and the header found in itself.
 # Both spellings are pinned side by side, because it is the delimiter that
 # decides the verdict and that is the part that reads as arbitrary in session.
+req GH-79.2
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'the pipe delimiter satisfies the anchor' \
          "sed -i 's|sh -c git push --all|X|' f.sh"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'the slash delimiter does not' \
@@ -1282,7 +1387,7 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'a prefix word in prose, after a pipe (
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'the same prose with the other delimiter' \
          "sed -i 's/sudo sh -c git push --all/X/' f.sh"
 
-echo "=== issue #79: the prefix words are written once ==="
+section "=== issue #79: the prefix words are written once ==="
 # The point of the fix, asserted as a property of the file rather than inferred
 # from the verdicts above. A second copy of those fourteen words in four hook
 # regexes would be the same defect one more time, so the list is a variable that
@@ -1292,6 +1397,7 @@ echo "=== issue #79: the prefix words are written once ==="
 # nowhere in the prose around it: sudo, timeout, xargs, nohup and env are named
 # in the header's worked example, so counting one of those would count the
 # explanation as a copy.
+req GH-79.4
 tok 'the option words are written once in the library' \
     '1' "$(prose_count "$HOOKS/lib/command-scan.sh" 'stdbuf')"
 tok 'and so is the second of them' \
@@ -1334,15 +1440,17 @@ unarmed 'cs_split no longer carries the list as a literal' \
 # header of lib/command-scan.sh says this file keeps costing. The behavioural
 # groups above are what say the list is right for the words they name.
 
-echo "=== REGRESSION: PR #35 review, a command after a control word ==="
+section "=== REGRESSION: PR #35 review, a command after a control word ==="
 # A separator is not the only thing a command can follow. Splitting on ; left
 # `then` in front of the command word, so the anchor never saw the command at
 # all, and `do`, `else`, `elif`, `{` and `!` did the same. Every check here was
 # ALLOW before the control words were removed in cs_split.
+req FR-3 US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'then + push --mirror'     'if true; then git push --mirror origin; fi'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'do + push --all'          'while true; do git push --all origin; done'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'brace group + push'       '{ git push --mirror origin; }'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'then + push to dev-05'    'if true; then git push origin dev-05; fi'
+req FR-3 US-15
 check no-pr-decisions.sh BLOCK 'then + gh pr merge'       'if true; then gh pr merge 35; fi'
 check no-pr-decisions.sh BLOCK 'do + gh pr merge'         'for x in a; do gh pr merge 35; done'
 check no-pr-decisions.sh BLOCK 'until/do + gh pr merge'   'until false; do gh pr merge 35; done'
@@ -1352,14 +1460,16 @@ check no-pr-decisions.sh BLOCK '! negation + gh pr merge' '! gh pr merge 35'
 check no-pr-decisions.sh BLOCK 'brace group + gh pr close' '{ gh pr close 35; }'
 # The words are removed at the start of a command only, so an ordinary sentence
 # that happens to contain one is untouched.
+req FR-3
 check no-pr-decisions.sh ALLOW 'a control word mid-sentence' 'echo "then run gh pr merge 35" >> notes.md'
 
-echo "=== REGRESSION: PR #35 review, heredoc detection dropped live commands ==="
+section "=== REGRESSION: PR #35 review, heredoc detection dropped live commands ==="
 # Dropping a heredoc body is the one step that hides commands, so both ends of
 # it have to be exact. `<<<` is a here-string and was read as a heredoc whose
 # terminator never arrives; `<<-` ends on a tab-indented terminator that an
 # exact comparison never matched. Either one discarded every following line, so
 # the hook saw an empty command and returned 0.
+req FR-3
 check no-pr-decisions.sh BLOCK 'here-string then a merge'  $'cat <<< "hello"\ngh pr merge 35'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'here-string then a push'   $'cat <<< "hello"\ngit push --mirror origin'
 check no-pr-decisions.sh BLOCK '<<- tab terminator, then a merge' $'cat <<-EOF\n\thello\n\tEOF\ngh pr merge 35'
@@ -1368,19 +1478,21 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK '<<- tab terminator, then a push'  $'ca
 check no-pr-decisions.sh ALLOW '<<- body naming a merge'   $'cat <<-EOF\n\tgh pr merge 35 would be refused\n\tEOF\necho done'
 check_in "$PUSH_WT" no-git-push.sh ALLOW '<<- body naming a push'    $'cat <<-EOF\n\tgit push --all origin is refused\n\tEOF\necho done'
 
-echo "=== REGRESSION: PR #35 review, reading a PR through gh api ==="
+section "=== REGRESSION: PR #35 review, reading a PR through gh api ==="
 # The endpoint does not say whether a call decides anything. GET /pulls/N/reviews
 # lists reviews and GET /pulls/N/merge reports whether the PR is merged; both are
 # reading a pull request, which CLAUDE.md allows in the sentence that forbids
 # deciding one, and both were refused. The method separates them, so the method
 # is what is tested -- gh sends GET unless a --method or a field flag says
 # otherwise.
+req FR-20 US-13
 check no-pr-decisions.sh ALLOW 'GET the reviews list'    'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews'
 check no-pr-decisions.sh ALLOW 'GET the merge state'     'gh api repos/bgunyel/clause-and-effect/pulls/35/merge'
 check no-pr-decisions.sh ALLOW 'GET named explicitly'    'gh api -X GET repos/bgunyel/clause-and-effect/pulls/35/reviews'
 check no-pr-decisions.sh ALLOW 'GET with --paginate'     'gh api --paginate repos/bgunyel/clause-and-effect/pulls/35/reviews'
 check no-pr-decisions.sh ALLOW 'GET with --jq'           'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews --jq ".[].state"'
 # The writes to those same endpoints are refused exactly as before.
+req US-15 FR-20
 check no-pr-decisions.sh BLOCK 'POST a review verdict'   'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews -f event=APPROVE'
 check no-pr-decisions.sh BLOCK 'value attached to -f'    'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews -fevent=APPROVE'
 check no-pr-decisions.sh BLOCK 'method attached to -X'   'gh api -XPUT repos/bgunyel/clause-and-effect/pulls/35/merge'
@@ -1389,15 +1501,17 @@ check no-pr-decisions.sh BLOCK 'a review body by --input' 'gh api repos/bgunyel/
 check no-pr-decisions.sh BLOCK 'DELETE a review'         'gh api -X DELETE repos/bgunyel/clause-and-effect/pulls/35/reviews'
 # A read wrapped in a shell is still refused: inside quotes the method cannot be
 # read any more than the endpoint can. Run it unwrapped.
+req FR-4 GH-51.2
 check no-pr-decisions.sh BLOCK 'a GET inside bash -c'    "bash -c 'gh api repos/bgunyel/clause-and-effect/pulls/35/reviews'"
 
-echo "=== REGRESSION: review of 02a14d8, a heredoc that never was ==="
+section "=== REGRESSION: review of 02a14d8, a heredoc that never was ==="
 # `<<` inside double quotes is text, not a redirection, and the opener was
 # matched anywhere on the line. The terminator it took never arrives, so every
 # following line was dropped and both hooks went blind for the rest of the
 # command -- reachable by writing a commit message about this very file. Third
 # wrong answer to what counts as a heredoc, so the drop is no longer trusted:
 # lines held for a heredoc that does not terminate are given back at END.
+req FR-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'commit msg naming <<EOF, then --all'    $'git commit -m "hooks: fix <<EOF handling in cs_normalise"\n    git push --all origin'
 check no-pr-decisions.sh BLOCK 'pr comment naming <<, then a merge'     $'gh pr comment 35 -b "the << operator confused it"\n    gh pr merge 35'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'left shift << in a message, then --all' $'git commit -m "left shift << done"\n    git push --all origin'
@@ -1405,34 +1519,38 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'issue comment naming <<, then --mirror
 # A heredoc that does terminate is still data, so the older checks above still
 # ALLOW -- that is what says the fail-safe did not simply disable the drop.
 
-echo "=== REGRESSION: review of 02a14d8, bundled gh shorthand flags ==="
+section "=== REGRESSION: review of 02a14d8, bundled gh shorthand flags ==="
 # gh takes shorthand flags together, so -ab is --approve --body and approves.
 # no-git-push.sh had already answered this for -fu and this file had not: the
 # same asymmetry between the siblings, in a second place.
+req US-15
 check no-pr-decisions.sh BLOCK 'gh pr review -ab "lgtm" 35'  'gh pr review -ab "lgtm" 35'
 check no-pr-decisions.sh BLOCK 'gh pr review 35 -ab lgtm'    'gh pr review 35 -ab lgtm'
 check no-pr-decisions.sh BLOCK 'gh pr review -rb "no" 35'    'gh pr review -rb "no" 35'
 check no-pr-decisions.sh BLOCK 'verdict letter last, -ba'    'gh pr review -ba "lgtm" 35'
 # A bundle carrying no verdict letter is still a comment, and a long flag must
 # not match on a letter it happens to contain -- --repo is not --request-changes.
+req US-15 US-13
 check no-pr-decisions.sh ALLOW 'gh pr review -cb "a remark"' 'gh pr review -cb "a remark" 35'
 check no-pr-decisions.sh ALLOW 'review --comment with --repo' 'gh pr review --comment --repo o/r -b x 35'
 
-echo "=== REGRESSION: review of 02a14d8, a flag before the subcommand ==="
+section "=== REGRESSION: review of 02a14d8, a flag before the subcommand ==="
 # Cobra resolves the subcommand at the first non-flag argument, so a flag may
 # sit in front of it and every rule here wanted it as the third word. -R/--repo
 # takes its value as a separate token, which would otherwise be read as the
 # subcommand and hide it just as effectively.
+req GH-47.1 US-15
 check no-pr-decisions.sh BLOCK 'gh pr --repo o/r merge 35'      'gh pr --repo o/r merge 35'
 check no-pr-decisions.sh BLOCK 'gh pr -R o/r close 35'          'gh pr -R o/r close 35'
 check no-pr-decisions.sh BLOCK 'gh pr --repo=o/r reopen 35'     'gh pr --repo=o/r reopen 35'
 check no-pr-decisions.sh BLOCK 'gh pr --repo o/r review -a 35'  'gh pr --repo o/r review -a 35'
 check no-pr-decisions.sh BLOCK 'gh release --repo o/r create v1' 'gh release --repo o/r create v1'
 # An ordinary subcommand behind a flag is still ordinary.
+req GH-47.1 US-13
 check no-pr-decisions.sh ALLOW 'gh pr --repo o/r view 35'       'gh pr --repo o/r view 35'
 check no-pr-decisions.sh ALLOW 'gh pr --repo o/r list'          'gh pr --repo o/r list'
 
-echo "=== REGRESSION: #47, a flag before the group evaded every gh rule ==="
+section "=== REGRESSION: #47, a flag before the group evaded every gh rule ==="
 # The same question one level up, and it had been applied at one level only.
 # GHPR and GHRELEASE skipped options between the group and the verb and never
 # before the group; the two gh api matches skipped none at all. Every BLOCK in
@@ -1441,6 +1559,7 @@ echo "=== REGRESSION: #47, a flag before the group evaded every gh rule ==="
 # agent has to construct -- it is the ordinary way to work on a repository from
 # elsewhere. The same flag in front of a wrapped command was permitted too;
 # that is issue #51, and the sections below close it.
+req GH-47.1 US-15
 check no-pr-decisions.sh BLOCK 'gh -R o/r pr merge 5'          'gh -R o/r pr merge 5'
 check no-pr-decisions.sh BLOCK 'gh --repo o/r pr merge 5'      'gh --repo o/r pr merge 5'
 check no-pr-decisions.sh BLOCK 'gh -R o/r pr close 5'          'gh -R o/r pr close 5'
@@ -1456,15 +1575,20 @@ check no-pr-decisions.sh BLOCK 'gh -R o/r api graphql merge in a heredoc' $'gh -
 check no-pr-decisions.sh BLOCK 'verdict as the first argument'    'gh -R o/r pr review -a 5'
 check no-pr-decisions.sh BLOCK 'bundled verdict, first argument'  'gh -R o/r pr review -ab lgtm 5'
 # A flag before the group does not make an ordinary subcommand a decision.
+req GH-47.1 US-13
 check no-pr-decisions.sh ALLOW 'gh -R o/r pr view 5'           'gh -R o/r pr view 5'
 check no-pr-decisions.sh ALLOW 'gh -R o/r pr list'             'gh -R o/r pr list'
+req GH-47.1 FR-16
 check no-pr-decisions.sh ALLOW 'gh -R o/r pr create, based' 'gh -R o/r pr create --base dev-05 --fill'
 # The baseless spelling made this point until #40 gave a create a base to
 # name. It is refused now, and for the base rather than for the flag, which
 # is what the line above still has to show.
+req GH-47.1 FR-14
 check no-pr-decisions.sh BLOCK 'gh -R o/r pr create --fill'  'gh -R o/r pr create --fill'
+req GH-47.1 US-13
 check no-pr-decisions.sh ALLOW 'gh -R o/r pr edit 5 --title x' 'gh -R o/r pr edit 5 --title x'
 check no-pr-decisions.sh ALLOW 'gh -R o/r pr review --comment' 'gh -R o/r pr review --comment -b x 5'
+req GH-47.1 FR-48
 check no-pr-decisions.sh ALLOW 'gh -R o/r release list'        'gh -R o/r release list'
 # A path word is matched whole, so `release delete` does not cover
 # `release delete-asset` the way the old alternation did. The regular
@@ -1473,20 +1597,24 @@ check no-pr-decisions.sh ALLOW 'gh -R o/r release list'        'gh -R o/r releas
 # stopped. #97 replaced that rule in turn with an allowlist of read verbs, which
 # names no write at all, so these now ask whether delete-asset is still outside
 # the list -- and #97's section below asks the rest.
+req GH-97.1 FR-48 US-15
 check no-pr-decisions.sh BLOCK 'gh release delete-asset'       'gh release delete-asset v1.0.0 file.tgz'
 check no-pr-decisions.sh BLOCK 'gh -R o/r release delete-asset' 'gh -R o/r release delete-asset v1.0.0 file.tgz'
+req GH-47.1 FR-20
 check no-pr-decisions.sh ALLOW 'gh -R o/r api reads a PR'      'gh -R o/r api repos/o/r/pulls/5'
+req GH-47.1 US-14
 check no-pr-decisions.sh ALLOW 'gh -R o/r issue close 27'      'gh -R o/r issue close 27'
 
-echo "=== REGRESSION: #47, a second gh command after ; or && is examined ==="
+section "=== REGRESSION: #47, a second gh command after ; or && is examined ==="
 # Every rule feeds cs_gh_args one command at a time. These three pin that a
 # second command is reached at all: a loop that stopped at the first command,
 # or at the first that is not a match, permits every one of them.
+req GH-47.2 US-15
 check no-pr-decisions.sh BLOCK 'a release list, then a create'      'gh release list; gh release create v1'
 check no-pr-decisions.sh BLOCK 'a read api call, then a write'      'gh api repos/o/r/pulls/5 && gh api -X PUT repos/o/r/pulls/5/merge'
 check no-pr-decisions.sh BLOCK 'a pr create, then a merge'          'gh pr create --fill && gh pr merge 5'
 
-echo "=== REGRESSION: #47, cs_gh_args answers about the first match and stops ==="
+section "=== REGRESSION: #47, cs_gh_args answers about the first match and stops ==="
 # What the three above do NOT pin, and were written believing they did. The
 # helper scans past a command that is not a match, so for a rule with no
 # argument expression the per-command loop and one whole-list call find the
@@ -1495,9 +1623,10 @@ echo "=== REGRESSION: #47, cs_gh_args answers about the first match and stops ==
 # never seen, so handing cs_gh_args the whole list reads this as the --comment
 # alone and permits the approval. Measured, not reasoned -- the whole-list
 # mutation fails this line and only this line.
+req GH-47.2 US-15
 check no-pr-decisions.sh BLOCK 'a comment review, then an approval' 'gh pr review --comment -b x 5 && gh pr review -a 6'
 
-echo "=== REGRESSION: #51, a flag before the group evaded the wrapper rules ==="
+section "=== REGRESSION: #51, a flag before the group evaded the wrapper rules ==="
 # The wrapper rules carried the blind spot the section above removed from the
 # ordinary ones, one word earlier. They are unanchored, but `pr` still had to
 # follow `gh` immediately, so a global flag in front of the group hid it and
@@ -1505,6 +1634,7 @@ echo "=== REGRESSION: #51, a flag before the group evaded the wrapper rules ==="
 # eight rows below was PERMITTED by no-pr-decisions.sh on dev-05 (6f2434c),
 # measured before the fix; each is a reserved act. The ninth row is the boundary
 # they marked and was refused there already.
+req GH-51.1 FR-4 US-15
 check no-pr-decisions.sh BLOCK 'bash -c gh -R o/r pr merge'       'bash -c "gh -R o/r pr merge 5"'
 check no-pr-decisions.sh BLOCK 'bash -c gh --repo o/r pr merge'   'bash -c "gh --repo o/r pr merge 5"'
 check no-pr-decisions.sh BLOCK 'bash -c gh --hostname h pr merge' 'bash -c "gh --hostname h pr merge 5"'
@@ -1518,7 +1648,7 @@ check no-pr-decisions.sh BLOCK 'eval gh -R o/r release delete'    'eval "gh -R o
 # escaped. Kept so a later change cannot lose the half that worked.
 check no-pr-decisions.sh BLOCK 'bash -c gh pr --repo o/r merge'   'bash -c "gh pr --repo o/r merge 5"'
 
-echo "=== REGRESSION: review of #51, a continuation split the payload ==="
+section "=== REGRESSION: review of #51, a continuation split the payload ==="
 # These rules read raw text, because cs_normalise drops heredoc bodies and
 # `bash <<EOF` is a wrapper. Raw text is line-oriented and grep matches within a
 # line, so a backslash continuation between the command word and the group hid
@@ -1527,20 +1657,24 @@ echo "=== REGRESSION: review of #51, a continuation split the payload ==="
 # which measured the claim "anything may stand between gh and the group" rather
 # than taking it. The joining half of cs_normalise is cs_join now, and these
 # rules call it.
+req GH-51.1
 check no-pr-decisions.sh BLOCK 'continuation between gh and pr'   $'bash -c "gh \\\n pr merge 5"'
 check no-pr-decisions.sh BLOCK 'continuation after a repo flag'   $'bash -c "gh -R o/r \\\n pr merge 5"'
 check no-pr-decisions.sh BLOCK 'continuation before the wrapper'  $'bash \\\n -c "gh pr merge 5"'
 # The ordinary rules were never blind to this, and still are not.
+req FR-3 US-15
 check no-pr-decisions.sh BLOCK 'continuation, unwrapped merge'    $'gh \\\n pr merge 5'
 # Joining is not dropping: a continuation inside heredoc prose is still prose.
+req FR-3 GH-51.1
 check no-pr-decisions.sh ALLOW 'a continuation in heredoc prose'  $'cat > /tmp/n.md <<\'MD\'\nthe hook refuses a wrapped \\\ngh pr merge 5\nMD'
 
-echo "=== ACCEPTED false positive: #51, the verb is not read inside a wrapper ==="
+section "=== ACCEPTED false positive: #51, the verb is not read inside a wrapper ==="
 # What refusing the group outright gives up. These are reads and ordinary edits,
 # refused with the writes because a wrapped payload is quoted text with no
 # command word in it -- the same reason the method of a wrapped `gh api` is not
 # read either, which is the check at 'a GET inside bash -c' above. Every one is
 # one edit away from working: run it unwrapped.
+req GH-51.2 FR-4
 check no-pr-decisions.sh BLOCK 'bash -c gh pr view'          'bash -c "gh pr view 5"'
 check no-pr-decisions.sh BLOCK 'bash -c gh pr list'          'bash -c "gh pr list"'
 check no-pr-decisions.sh BLOCK 'bash -c gh release list'     'bash -c "gh release list"'
@@ -1557,6 +1691,7 @@ check no-pr-decisions.sh BLOCK 'bash -c a comment naming api'     "bash -c \"gh 
 # the old rules only merge|close|reopen reached across the line like this;
 # naming the group widens the reach to the reads. Measured dev-05 -> here, each
 # of these went ALLOW -> BLOCK.
+req GH-51.2 GH-73
 check no-pr-decisions.sh BLOCK 'a wrapper elsewhere, then a view'  'bash -c "make test" && gh pr view 5'
 check no-pr-decisions.sh BLOCK 'a wrapper elsewhere, then an api'  'bash -c "echo hi"; gh api repos/o/r/issues/27'
 # Order does not matter, and CLAUDE.md now says so. Both greps are asked of the
@@ -1569,10 +1704,12 @@ check no-pr-decisions.sh BLOCK 'a view, then a wrapper elsewhere'  'gh pr view 5
 check no-pr-decisions.sh BLOCK 'an api call, then a wrapper'       'gh api repos/o/r/issues/27; bash -c "echo hi"'
 # The reach needs a wrapper on the line to begin with. Without one these rules
 # never run, which is what keeps the cost to lines that have both.
+req GH-51.2 GH-73 US-13
 check no-pr-decisions.sh ALLOW 'the same view with no wrapper'     'make test && gh pr view 5'
 # And it needs a wrapper in a COMMAND position, not the word in passing. Only
 # the surface half of the pair is the loose one; the wrapper half is anchored,
 # and CLAUDE.md says so rather than calling both of them "anywhere".
+req GH-51.2 GH-73
 check no-pr-decisions.sh ALLOW 'a wrapper named in passing, then a view' \
   'echo "run bash -c later" && gh pr view 5'
 check no-pr-decisions.sh ALLOW 'a wrapper named in a comment body' \
@@ -1581,21 +1718,25 @@ check no-pr-decisions.sh ALLOW 'a wrapper named in a comment body' \
 # of the same decisions name no gh at all, so the reach lands on them too. These
 # are what make "asks for the group name and never looks at the verb" the wrong
 # description of this block -- three of its five alternatives are verbs.
+req GH-51.2
 check no-pr-decisions.sh BLOCK 'a wrapper, then a bare state=closed' 'bash -c "make test" && echo state=closed'
 check no-pr-decisions.sh BLOCK 'a wrapper, then a bare mutation name' 'bash -c "make test" && echo mergePullRequest'
 check no-pr-decisions.sh BLOCK 'a wrapper, then a bare /releases'     'bash -c "make test" && echo /releases'
 # And it stops there: a wrapper beside something that decides nothing is not
 # this file's business, which is what keeps the four BLOCKs above a reach rather
 # than a blanket refusal of every wrapped line.
+req GH-51.2 FR-4
 check no-pr-decisions.sh ALLOW 'a wrapper, then an ordinary echo'     'bash -c "make test" && echo hello'
 # The rule reaches gh's three deciding surfaces and stops there. A wrapped
 # command that is none of them is answered by whatever else covers it, and by
 # this file not at all.
+req FR-4 US-14 GH-51.2
 check no-pr-decisions.sh ALLOW 'bash -c gh issue close'      'bash -c "gh issue close 27"'
 check no-pr-decisions.sh ALLOW 'bash -c gh issue list'       'bash -c "gh issue list"'
+req FR-4
 check no-pr-decisions.sh ALLOW 'bash -c an ordinary command' 'bash -c "make test"'
 
-echo "=== REGRESSION: #72, gh is a word here and not a suffix ==="
+section "=== REGRESSION: #72, gh is a word here and not a suffix ==="
 # "The rule reaches gh's three deciding surfaces and stops there" -- the comment
 # heading the block above -- is the spec, and the pattern did not implement it.
 # (Named rather than pointed at by line count, which any insertion would make
@@ -1613,6 +1754,7 @@ echo "=== REGRESSION: #72, gh is a word here and not a suffix ==="
 # tripped it; its two neighbours exercise the subcommand dimension, not this
 # one. That is the hole this section fills. Measured before the one-line fix:
 # every ALLOW below was BLOCK.
+req GH-72
 check no-pr-decisions.sh ALLOW 'bash -c a commit message saying high' \
   "bash -c \"git commit -m 'refactor high level api client'\""
 check no-pr-decisions.sh ALLOW 'bash -c grep high pr.txt'      'bash -c "grep high pr.txt"'
@@ -1646,25 +1788,33 @@ check no-pr-decisions.sh ALLOW 'bash -c my_gh pr merge'        'bash -c "my_gh p
 check no-pr-decisions.sh ALLOW 'bash -c a \n escape before gh' \
   "bash -c \"printf 'summary\\ngh pr review --approve 5' > /tmp/x\""
 
-echo "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
+section "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
 # Closing a PR and publishing a release were refused in the gh spelling and open
 # through gh api, so the boundary was spelling-dependent exactly where the file
 # says it is not. PATCH /pulls/N is also how gh pr edit retitles, which stays
 # allowed, so the field decides this one rather than the endpoint.
+req US-15
 check no-pr-decisions.sh BLOCK 'PATCH a PR to state=closed'  'gh api -X PATCH repos/o/r/pulls/35 -f state=closed'
 check no-pr-decisions.sh BLOCK 'PATCH a PR to state=open'    'gh api -X PATCH repos/o/r/pulls/35 -f state=open'
+req US-15 FR-48
 check no-pr-decisions.sh BLOCK 'POST a release'              'gh api -X POST repos/o/r/releases -f tag_name=v1'
 check no-pr-decisions.sh BLOCK 'DELETE a release'            'gh api -X DELETE repos/o/r/releases/123'
+req US-15
 check no-pr-decisions.sh BLOCK 'graphql closePullRequest'    'gh api graphql -f query="mutation{closePullRequest(input:{x:1})}"'
+req US-15 FR-48
 check no-pr-decisions.sh BLOCK 'graphql createRelease'       'gh api graphql -f query="mutation{createRelease(input:{x:1})}"'
+req US-15
 check no-pr-decisions.sh BLOCK 'graphql state on updatePR'   'gh api graphql -f query="mutation{updatePullRequest(input:{state:CLOSED})}"'
 # Retitling through that same endpoint is editing, and listing releases is
 # reading. Both stay allowed, which is what makes the field test worth having.
+req US-13 FR-20
 check no-pr-decisions.sh ALLOW 'PATCH a PR title'            'gh api -X PATCH repos/o/r/pulls/35 -f title=newtitle'
+req FR-48
 check no-pr-decisions.sh ALLOW 'GET the releases list'       'gh api repos/o/r/releases'
+req US-13
 check no-pr-decisions.sh ALLOW 'gh pr edit retitles'         'gh pr edit 35 --title newtitle'
 
-echo "=== issue #97, a release may be read and not written ==="
+section "=== issue #97, a release may be read and not written ==="
 # Release actions were refused by name -- create, delete, delete-asset -- and the
 # list was a denylist with two writes missing from it. `gh release edit v1
 # --draft=false` publishes a draft and `gh release upload` changes a published
@@ -1693,6 +1843,7 @@ echo "=== issue #97, a release may be read and not written ==="
 # refused text rather than mutations, and the check above that pins one of them
 # is evidence about the text.
 echo "--- every write verb is refused, and so is a verb gh does not have yet ---"
+req GH-97.1 FR-48 US-15
 check no-pr-decisions.sh BLOCK 'gh release create'                   'gh release create v1'
 flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release edit --draft=false publishes a draft' \
   'gh release edit v1 --draft=false'
@@ -1713,6 +1864,7 @@ flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'an unknown gh release subcommand'
 flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release new, the alias of create' \
   'gh release new v1'
 echo "--- every read verb is permitted ---"
+req GH-97.1 FR-48
 check no-pr-decisions.sh ALLOW 'gh release list'                     'gh release list'
 check no-pr-decisions.sh ALLOW 'gh release view'                     'gh release view v1'
 check no-pr-decisions.sh ALLOW 'gh release download'                 "gh release download v1 -p '*.tgz'"
@@ -1726,6 +1878,7 @@ echo "--- the trade: three reads that are refused, and where to go instead ---"
 # 1. `ls` is gh's alias for list. The allowlist is the five verbs #103 decided,
 #    not the five plus whatever gh aliases them to, which is a list that has to
 #    track gh's own. The refusal names the five.
+req GH-97.1 FR-48
 flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release ls, an alias of a read, is refused' \
   'gh release ls'
 # 2. No subcommand, and a write verb's help page. Allowing these means telling
@@ -1747,10 +1900,12 @@ check no-pr-decisions.sh BLOCK 'a help page the denylist already refused' \
 #    one edit away: `gh help` is not a gh release command at all.
 check no-pr-decisions.sh ALLOW 'gh help release'                     'gh help release'
 check no-pr-decisions.sh ALLOW 'gh help release upload'              'gh help release upload'
+req GH-97.2 US-7
 says "$ON_DEV" no-pr-decisions.sh 'gh help release' \
   'the refusal of bare gh release says where help is' 'gh release'
 # 3. A quoted verb is matched as written and refused, rather than unquoted into
 #    a read -- the generous reading gh_pr_web gives its reasons for not taking.
+req GH-97.1 FR-48
 flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a quoted read verb' \
   'gh release "view" v1'
 echo "--- a flag before the subcommand does not change the verdict ---"
@@ -1758,6 +1913,7 @@ echo "--- a flag before the subcommand does not change the verdict ---"
 # some other way skips none. -R/--repo is the ordinary way to name a repository
 # from elsewhere, so each group has both verdicts here, with the flag before the
 # verb and with it before the group.
+req GH-97.1 GH-47.1
 flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release -R o/r edit' \
   'gh release -R o/r edit v1'
 flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'gh release --repo o/r upload' \
@@ -1775,6 +1931,7 @@ echo "--- the verb is the subcommand word, matched whole, and not any word ---"
 # An allowlist asked whether a read verb appears ANYWHERE in the arguments would
 # be satisfied by a tag. Release tags are free text, so a tag named view or list
 # is an ordinary one to write. The first two rows are the permitting direction.
+req GH-97.1
 flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'an upload to a tag named view' \
   'gh release upload view a.tgz'
 flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'an edit of a tag named list' \
@@ -1792,6 +1949,7 @@ echo "--- every gh release command on the line is judged ---"
 # about `release` once, over the whole line, reads the first command's verb and
 # never sees the second. A read in front of a write is the ordinary shape of
 # "look, then change it".
+req GH-97.1 GH-47.2
 flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a view, then an upload' \
   'gh release view v1 && gh release upload v1 a.tgz'
 flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a list, then an edit that publishes' \
@@ -1799,9 +1957,11 @@ flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a list, then an edit that publish
 flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a PR read, then an unknown release subcommand' \
   'gh pr view 5 && gh release frobnicate v1'
 # The allowlist is about subcommands of gh release, not about text that names one.
+req GH-97.1 US-14
 check no-pr-decisions.sh ALLOW 'an issue comment naming a release upload' \
   'gh issue comment 97 --body "gh release upload v1 a.tgz is refused now"'
 echo "--- the gh api spelling: a write to /releases is refused, a read is not ---"
+req GH-97.1 FR-20 US-15
 check no-pr-decisions.sh BLOCK 'POST to the releases collection'     'gh api -X POST repos/o/r/releases'
 check no-pr-decisions.sh BLOCK 'PATCH a release'                     'gh api -X PATCH repos/o/r/releases/1'
 check no-pr-decisions.sh BLOCK 'DELETE a release'                    'gh api -X DELETE repos/o/r/releases/1'
@@ -1817,6 +1977,7 @@ check no-pr-decisions.sh BLOCK 'DELETE a release asset'              'gh api -X 
 check no-pr-decisions.sh BLOCK 'gh -R o/r api PATCH a release'       'gh -R o/r api -X PATCH repos/o/r/releases/1 -F draft=false'
 check no-pr-decisions.sh BLOCK 'a releases read, then a releases write' \
   'gh api repos/o/r/releases && gh api -X PATCH repos/o/r/releases/1 -F draft=false'
+req GH-97.1 FR-20
 check no-pr-decisions.sh ALLOW 'GET the releases collection'         'gh api repos/o/r/releases'
 check no-pr-decisions.sh ALLOW 'GET the latest release'              'gh api repos/o/r/releases/latest'
 check no-pr-decisions.sh ALLOW 'GET a release by tag, method named'  'gh api -X GET repos/o/r/releases/tags/v1'
@@ -1829,6 +1990,7 @@ echo "--- the refusal says what the rule is ---"
 # message is "publishing or deleting a GitHub release is Bertan's call". The
 # `says_not` is green there for no good reason, since nothing refused the upload
 # at all. It is the pair with the `says` above it that means something.
+req GH-97.2 US-7
 says "$ON_DEV" no-pr-decisions.sh "any write to a release is Bertan's" \
   'gh release refusal: a release write is Bertan'"'"'s' 'gh release upload v1 a.tgz'
 says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted' \
@@ -1848,56 +2010,70 @@ says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted' \
 says_not "$ON_DEV" no-pr-decisions.sh 'publishing or deleting' \
   'gh api refusal: a PATCH is not described as publishing or deleting' 'gh api -X PATCH repos/o/r/releases/1'
 
-echo "=== issue #40, a pull request must name an active dev branch as its base ==="
+section "=== issue #40, a pull request must name an active dev branch as its base ==="
 # The quietest of the four spellings names nothing at all: with no base given,
 # gh sends the pull request to the repository's default branch, which is main.
 # Nothing in the command mentions main, so a denylist over the text could not
 # have seen it -- the same shape as the bare push, which is answered the same
 # way. The four spellings are checked together because closing one and leaving
 # the others is the defect this ticket was filed against.
+req FR-16 FR-15 US-8
 check no-pr-decisions.sh BLOCK 'create into main'                'gh pr create --base main --title x'
 check no-pr-decisions.sh BLOCK 'create into main, --base='       'gh pr create --base=main --title x'
 check no-pr-decisions.sh BLOCK 'create into main, -B'            'gh pr create -B main --title x'
 check no-pr-decisions.sh BLOCK 'create into main, -B attached'   'gh pr create -Bmain --title x'
 check no-pr-decisions.sh BLOCK 'create into main, bundled -dB'   'gh pr create -dB main --title x'
 check no-pr-decisions.sh BLOCK 'create into main, bundled -dBmain' 'gh pr create -dBmain --title x'
+req FR-14 FR-16 US-9
 check no-pr-decisions.sh BLOCK 'create naming no base at all'    'gh pr create --title x --body y'
 check no-pr-decisions.sh BLOCK 'a bare create'                   'gh pr create'
 check no-pr-decisions.sh BLOCK 'create with --fill and no base'  'gh pr create --fill'
 check no-pr-decisions.sh BLOCK 'a base flag whose value never came' 'gh pr create --title x -B'
+req FR-15 FR-16 US-8
 check no-pr-decisions.sh BLOCK 'create into master'              'gh pr create --base master --title x'
 check no-pr-decisions.sh BLOCK 'create into a worktree branch'   'gh pr create --base worktree-issue-40-pr-base'
 check no-pr-decisions.sh BLOCK 'create into dev-05-ish, not dev-NN' 'gh pr create --base dev-05-old'
 # A flag may sit in front of the verb, which is what cs_gh_args is for; and the
 # check is of every create on the line rather than the first, which is what
 # obliges the loop to hand it one command at a time.
+req FR-14 GH-47.1
 check no-pr-decisions.sh BLOCK 'flag before the verb, no base'   'gh pr --repo o/r create --title x'
+req FR-15 GH-47.2
 check no-pr-decisions.sh BLOCK 'a good create, then one into main' 'gh pr create --base dev-05 --title x && gh pr create --base main --title y'
 # Retargeting is choosing the destination a second time.
+req FR-17 FR-15 US-10
 check no-pr-decisions.sh BLOCK 'retarget to main'                'gh pr edit 35 --base main'
 check no-pr-decisions.sh BLOCK 'retarget to main, -B'            'gh pr edit 35 -B main'
 check no-pr-decisions.sh BLOCK 'retarget, flag before the verb'  'gh pr --repo o/r edit 35 --base main'
 # The API forms. The gate is the write test the file already had, not the
 # endpoint: matching an endpoint is what once refused a read of a pull request
 # as though it were a decision.
+req FR-18 FR-15 US-11
 check no-pr-decisions.sh BLOCK 'REST create into main'           'gh api -X POST repos/o/r/pulls -f base=main -f head=x'
 check no-pr-decisions.sh BLOCK 'REST create, value attached'     'gh api -X POST repos/o/r/pulls -fbase=main'
+req FR-18 FR-14 US-11
 check no-pr-decisions.sh BLOCK 'REST create naming no base'      'gh api -X POST repos/o/r/pulls -f head=x -f title=y'
+req FR-18 FR-17 US-10
 check no-pr-decisions.sh BLOCK 'REST retarget to main'           'gh api -X PATCH repos/o/r/pulls/35 -f base=main'
+req FR-19 FR-15 US-11
 check no-pr-decisions.sh BLOCK 'graphql create into main'        'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:main})}"'
 check no-pr-decisions.sh BLOCK 'graphql create, base quoted'     "gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:\"main\"})}'"
+req FR-19 FR-14 US-11
 check no-pr-decisions.sh BLOCK 'graphql create naming no base'   'gh api graphql -f query="mutation{createPullRequest(input:{headRefName:x})}"'
 # A wrapper hides the base behind quotes, where there is no command position to
 # find and nothing to read. Refused outright, as a wrapped push and a wrapped
 # read of a pull request already are.
+req FR-4 GH-51.2
 check no-pr-decisions.sh BLOCK 'a good create inside bash -c'    "bash -c 'gh pr create --base dev-05 --title x'"
 check no-pr-decisions.sh BLOCK 'a REST create inside bash -c'    "bash -c 'gh api -X POST repos/o/r/pulls -f base=dev-05'"
 # The accepted false positive, recorded rather than worked around: cs_split cuts
 # on the parens of a command substitution, so a base written after one lands in
 # a later fragment and the create no longer names one. Put the base first.
+req FR-14
 check no-pr-decisions.sh BLOCK 'base written after a substitution' 'gh pr create --title x --body "$(cat b.md)" --base dev-05'
 
-echo "=== issue #40, a base naming a dev branch is permitted in every spelling ==="
+section "=== issue #40, a base naming a dev branch is permitted in every spelling ==="
+req FR-14 FR-15 FR-16 US-8 US-9
 check no-pr-decisions.sh ALLOW 'create into the dev branch'      'gh pr create --base dev-05 --title x --body y'
 check no-pr-decisions.sh ALLOW 'create into dev, --base='        'gh pr create --base=dev-05 --title x'
 check no-pr-decisions.sh ALLOW 'create into dev, -B'             'gh pr create -B dev-05 --title x'
@@ -1907,24 +2083,32 @@ check no-pr-decisions.sh ALLOW 'flag before the verb, good base' 'gh pr --repo o
 check no-pr-decisions.sh ALLOW 'base first, then a substitution' 'gh pr create --base dev-05 --body "$(cat b.md)"'
 # The browser hand-off creates nothing: a person on the prefilled page chooses
 # the base and confirms. That exempts a missing base and nothing else.
+req FR-21 US-12
 check no-pr-decisions.sh ALLOW 'browser hand-off, --web'         'gh pr create --web'
 check no-pr-decisions.sh ALLOW 'browser hand-off, -w'            'gh pr create -w'
 check no-pr-decisions.sh BLOCK '--web does not launder a base'   'gh pr create --web --base main'
+req FR-17 US-10 FR-15
 check no-pr-decisions.sh ALLOW 'retarget to the dev branch'      'gh pr edit 35 --base dev-05'
+req US-13 FR-17
 check no-pr-decisions.sh ALLOW 'edit without touching the base'  'gh pr edit 35 --add-label bug'
+req FR-18 US-11 FR-15
 check no-pr-decisions.sh ALLOW 'REST create into dev'            'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x'
+req FR-19 US-11 FR-15
 check no-pr-decisions.sh ALLOW 'graphql create into dev'         "gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}'"
 # Reads name no destination and are not asked for one, which is what keeps the
 # write test doing this work rather than the endpoint.
+req FR-20 US-13
 check no-pr-decisions.sh ALLOW 'listing pull requests'           'gh api repos/o/r/pulls'
 check no-pr-decisions.sh ALLOW 'reading one pull request'        'gh api repos/o/r/pulls/35'
 check no-pr-decisions.sh ALLOW 'listing beside another write'    'gh api -X POST repos/o/r/issues -f title=x && gh api repos/o/r/pulls'
 # A write that names no base and creates nothing is not a pull request at all.
 check no-pr-decisions.sh ALLOW 'PATCH a PR body, the -F habit'   'gh api -X PATCH repos/o/r/pulls/35 -F body=@body.md'
+req FR-20 US-14
 check no-pr-decisions.sh ALLOW 'creating an issue'               'gh api -X POST repos/o/r/issues -f title=x'
+req US-14 FR-14
 check no-pr-decisions.sh ALLOW 'gh issue create names no base'   'gh issue create --title x --body y'
 
-echo "=== REGRESSION: review of be0e3c7, the base rule's own permitting holes ==="
+section "=== REGRESSION: review of be0e3c7, the base rule's own permitting holes ==="
 # Four found by review, none of them named by the section above, which was green.
 # The pattern of this repository holds a fifth time: every one was silent and in
 # the permitting direction.
@@ -1933,12 +2117,14 @@ echo "=== REGRESSION: review of be0e3c7, the base rule's own permitting holes ==
 # that had already shown a dev branch could name main after it and go there.
 # Every base must now be dev-NN, which does not depend on knowing gh's
 # precedence.
+req FR-15 FR-16
 check no-pr-decisions.sh BLOCK 'good base, then a bad one'   'gh pr create --base dev-05 -B main'
 check no-pr-decisions.sh BLOCK 'bad base, then a good one'   'gh pr create -B main --base dev-05'
 check no-pr-decisions.sh BLOCK 'two long bases disagreeing'  'gh pr create --base dev-05 --base main'
 # 2. The web exemption read any single-dash token holding a w, and read it out of
 # quoted prose. Both halves mattered: a label value, and a title naming a flag --
 # a title a session working on this very file would write.
+req FR-21 FR-14
 check no-pr-decisions.sh BLOCK 'a label value beginning -w'  'gh pr create -l -wip --title x'
 check no-pr-decisions.sh BLOCK 'a bundle holding w'          'gh pr create -twibble --body y'
 check no-pr-decisions.sh BLOCK 'a title naming -w'           'gh pr create --title "Handle -w in gh_pr_web" --body y'
@@ -1948,9 +2134,11 @@ check no-pr-decisions.sh BLOCK 'a body naming -watch'        'gh pr create --tit
 # flag, and inventing a --base in a command that named none removes a refusal
 # just as inventing a -w does, which is the half this comment used to miss. See
 # base_args, and group 5.
+req FR-21 US-12
 check no-pr-decisions.sh ALLOW 'the web form, unbundled'     'gh pr create -w --title x'
 check no-pr-decisions.sh ALLOW 'the web form, long'          'gh pr create --web --title x'
 # Still refused, and now for naming no base rather than for naming a bad one.
+req FR-14
 check no-pr-decisions.sh BLOCK 'a title naming -B main'      'gh pr create --title "-B main" --body y'
 
 # 5. A base read out of prose. `tr -d` deleted the quote characters and kept
@@ -1961,17 +2149,20 @@ check no-pr-decisions.sh BLOCK 'a title naming -B main'      'gh pr create --tit
 # the command it is about is how the pull requests in this repository are
 # written. base_args drops a quoted span whole and unquotes only a base flag own
 # value.
+req FR-14
 check no-pr-decisions.sh BLOCK 'a base named only in a body'      'gh pr create --title t --body "--base dev-05"'
 check no-pr-decisions.sh BLOCK 'a base named only in a title'     'gh pr create --title "--base dev-05" --body b'
 check no-pr-decisions.sh BLOCK 'a body quoting the command'       'gh pr create --title x --body "Write: gh pr create --base dev-05 --title ..."'
 check no-pr-decisions.sh BLOCK 'a shorthand base in a body'       'gh pr create --title t --body "-B dev-05"'
 # The other direction, which the same defect caused: prose naming the flag made
 # a correct create refuse.
+req FR-14 FR-15
 check no-pr-decisions.sh ALLOW 'a body naming the base flag'      'gh pr create --base dev-05 --title t --body "the --base flag"'
 check no-pr-decisions.sh ALLOW 'a body naming a main retarget'    'gh pr create --base dev-05 --title t --body "use -B main to retarget"'
 check no-pr-decisions.sh ALLOW 'an edit titled after the flag'    'gh pr edit 5 --title "--base main"'
 # A base flag own value is the one quoted span that is kept, in either quote,
 # because gh takes either. Dropping it would refuse a correctly based create.
+req FR-15
 check no-pr-decisions.sh ALLOW 'a double-quoted base value'       'gh pr create --base "dev-05" --title t'
 check no-pr-decisions.sh ALLOW 'a single-quoted base value'       "gh pr create --base 'dev-05' --title t"
 check no-pr-decisions.sh BLOCK 'a quoted base naming main'        'gh pr create --base "main" --title t'
@@ -1980,12 +2171,14 @@ check no-pr-decisions.sh BLOCK 'a quoted retarget to main'        'gh pr edit 5 
 # commonly escapes those quotes. gql_bases read the backslash as the whole value
 # and refused a dev-NN base for not being one. Refusing direction, so it sat
 # behind the two spellings that did work, both of which are pinned above.
+req FR-19 FR-15
 check no-pr-decisions.sh ALLOW 'graphql into dev, escaped'        'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}"'
 check no-pr-decisions.sh BLOCK 'graphql into main, escaped'       'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"main\"})}"'
 # 3. The gh api base was read from the whole line, so a neighbouring command
 # answered for this one -- in both directions. This is the first of the five
 # defects lib/command-scan.sh exists to end, reintroduced for gh api after being
 # fixed for gh pr.
+req FR-18 GH-47.2 FR-14
 check no-pr-decisions.sh BLOCK 'a base on a neighbour'       'echo base=dev-05 && gh api -X POST repos/o/r/pulls -f head=x'
 check no-pr-decisions.sh BLOCK 'good create, then one to main' 'gh api -X POST repos/o/r/pulls -f base=dev-05 && gh api -X POST repos/o/r/pulls -f base=main'
 check no-pr-decisions.sh BLOCK 'a dev base hidden in a title' 'gh api -X POST repos/o/r/pulls -f base=main -f title="retarget of base=dev-05"'
@@ -1999,10 +2192,12 @@ check no-pr-decisions.sh BLOCK 'two REST bases disagreeing'  'gh api -X POST rep
 # the suite would not notice -- which is exactly what a mutation run showed.
 check no-pr-decisions.sh BLOCK 'a base belonging to another write' 'gh api -X POST repos/o/r/issues -f base=dev-05 && gh api -X POST repos/o/r/pulls -f head=x'
 # ... and an unrelated write must not be refused by a neighbour either.
+req FR-20 US-14
 check no-pr-decisions.sh ALLOW 'an issue write beside prose' 'gh api -X POST repos/o/r/issues -f title=x && echo "base=main"'
 check no-pr-decisions.sh ALLOW 'an issue write naming rebase' 'gh api -X POST repos/o/r/issues -f title="rebase onto main"'
 # The graphql retarget carries the same field as the create, and is refused with
 # it rather than by naming the verb.
+req FR-19 FR-17
 check no-pr-decisions.sh BLOCK 'graphql retarget to main'    'gh api graphql -f query="mutation{updatePullRequest(input:{baseRefName:main})}"'
 # 4. These two were pinned ALLOW while #40 carried a wrapper rule of its own,
 # which read the payload far enough to tell a listing from a create. #51
@@ -2010,6 +2205,7 @@ check no-pr-decisions.sh BLOCK 'graphql retarget to main'    'gh api graphql -f 
 # gh pr, gh release and gh api whatever follows, so #40 no longer has a
 # wrapper rule and these are refused with the rest of that surface. Both are
 # one edit away from working: run them unwrapped.
+req GH-51.2 FR-4
 check no-pr-decisions.sh BLOCK 'a wrapped listing'           "bash -c 'gh api repos/o/r/pulls'"
 check no-pr-decisions.sh BLOCK 'a wrapped label edit'        "bash -c 'gh pr edit 35 --add-label bug'"
 check no-pr-decisions.sh BLOCK 'a wrapped retarget'          "bash -c 'gh pr edit 35 --base main'"
@@ -2020,16 +2216,18 @@ check no-pr-decisions.sh BLOCK 'a wrapped create into main'  'bash -c "gh pr cre
 check no-pr-decisions.sh BLOCK 'a wrapped create, flag first' 'bash -c "gh -R o/r pr create --base main"'
 check no-pr-decisions.sh BLOCK 'a wrapped baseless create'   'bash -c "gh pr create --fill"'
 
-echo "=== the push argument split does not glob against the worktree ==="
+section "=== the push argument split does not glob against the worktree ==="
 # `for TOK in $ARGS` is unquoted because the split is the point; set -f stops
 # the same line expanding ? and [...] against the files sitting next to it.
+req US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a ? wildcard refspec'     'git push origin ?'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a [...] wildcard refspec' 'git push origin [a-z]*'
 
-echo "=== worktree exception: pushing this worktree's own branch ==="
+section "=== worktree exception: pushing this worktree's own branch ==="
 # Every permitted push names the branch. That is the whole exception: a push
 # that does not name it is answered by configuration instead, and configuration
 # is not a thing this hook can hold still. See the bare-push section below.
+req US-3 US-4
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'push naming this branch'          "git push origin $PUSH_BRANCH"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'push after a commit'              "git commit -m msg && git push origin $PUSH_BRANCH"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'push in a subshell'               "(git push origin $PUSH_BRANCH)"
@@ -2040,7 +2238,7 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'indented push, own branch'        $'if
 # check reads the push's arguments, not the whole command, so this still passes.
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'rm -f before an ordinary push'    "rm -f notes.md && git push origin $PUSH_BRANCH"
 
-echo "=== REGRESSION: issue #50, a redirect was read as a refspec ==="
+section "=== REGRESSION: issue #50, a redirect was read as a refspec ==="
 # Nothing removed redirections, so `2>/dev/null` was the refspec and the message
 # said so in as many words. A stderr redirect is a shape an agent writes without
 # meaning anything by it -- `2>&1 | tail -3` on a push is how you read the result
@@ -2049,6 +2247,7 @@ echo "=== REGRESSION: issue #50, a redirect was read as a refspec ==="
 # PR #48 reported the `2>&1` spelling and blamed the split on &. That is true of
 # that spelling and was not the cause: `2>/dev/null` holds no & and was refused
 # just the same. cs_normalise drops the redirection now, before cs_split sees it.
+req GH-50.1 US-4
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with 2>/dev/null'     "git push origin $PUSH_BRANCH 2>/dev/null"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with > out.txt'       "git push origin $PUSH_BRANCH > out.txt"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with 2>> push.log'    "git push origin $PUSH_BRANCH 2>> push.log"
@@ -2061,6 +2260,7 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'push with >| out.txt'      "git push o
 # The redirect changes what the hook can see, never what it decides. Every
 # refused destination is still refused wearing one, and so is every refused
 # form -- the drop must not carry the flag off with the redirect.
+req GH-50.1 US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'push to main with 2>/dev/null'    'git push origin main 2>/dev/null'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'push to dev-05 with > out.txt'    'git push origin dev-05 > out.txt'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'push to main with 2>> push.log'   'git push origin main 2>> push.log'
@@ -2072,12 +2272,15 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'forced push of own branch, redirected'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'bare push with a redirect'        'git push 2>/dev/null'
 # A pipe is not a redirect and still ends the command, so what follows one is
 # still a command. Dropping must never hide it.
+req GH-50.2 US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'legit push 2>&1 then push --all'  "git push origin $PUSH_BRANCH 2>&1 | tail -3; git push --all origin"
+req GH-50.1 US-15
 check no-pr-decisions.sh BLOCK 'gh pr merge with a redirect'  'gh pr merge 35 >/dev/null 2>&1'
 check no-pr-decisions.sh BLOCK 'gh pr review -a, redirected'  'gh pr review -a 35 2>&1 | tail -1'
+req GH-50.1 US-13
 check no-pr-decisions.sh ALLOW 'gh pr view with a redirect'   'gh pr view 35 > /tmp/pr.json'
 
-echo "=== ACCEPTED false positive: a quoted redirect target ==="
+section "=== ACCEPTED false positive: a quoted redirect target ==="
 # The target scan stops at a quote, so a quoted target is not consumed and its
 # text stays in the push's arguments, where it reads as a refspec. Issue #50
 # asked for every redirect on a permitted push to be allowed and granted no
@@ -2089,18 +2292,20 @@ echo "=== ACCEPTED false positive: a quoted redirect target ==="
 #
 # Pinned in both directions so a later change cannot move it silently. If these
 # become ALLOW, that is a decision to take knowingly, not a bug fix.
+req GH-50.3
 tok 'a quoted target is left in the arguments' \
     'git push origin b "push log"' \
     "$(printf 'git push origin b 2> "push log"\n' | cs_normalise)"
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'push with a quoted redirect target' "git push origin $PUSH_BRANCH 2> \"push log\""
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'the same target unquoted' "git push origin $PUSH_BRANCH 2> push.log"
 
-echo "=== REGRESSION: issue #50, the drop must not hide a command ==="
+section "=== REGRESSION: issue #50, the drop must not hide a command ==="
 # Dropping is the one step in cs_normalise that hides text rather than exposing
 # it, and the heredoc question was got wrong three times in exactly that
 # direction. A process substitution carries a command, so it is not a redirect;
 # a command substitution used as a target is not a target. Both are pinned here
 # with a refused command inside, so hiding one would show up as ALLOW.
+req GH-50.2
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'push inside <( )'             'cat <(git push --all origin)'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'push inside >( )'             'tee >(git push --all origin)'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'push as a backticked target'  'echo > `git push --all origin`'
@@ -2108,7 +2313,7 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'push as a $( ) target'        'echo > 
 check no-pr-decisions.sh BLOCK 'merge inside <( )'            'cat <(gh pr merge 35)'
 check no-pr-decisions.sh BLOCK 'merge as a $( ) target'       'echo > $(gh pr merge 35)'
 
-echo "=== REGRESSION: PR #35 review, a bare push is answered by configuration ==="
+section "=== REGRESSION: PR #35 review, a bare push is answered by configuration ==="
 # A push naming no refspec is sent where push.default, a remote.<name>.push
 # refspec, or the branch's upstream says -- and -c sets any of those for one
 # command, past whatever this hook reads back afterwards. The old check read
@@ -2118,6 +2323,7 @@ echo "=== REGRESSION: PR #35 review, a bare push is answered by configuration ==
 # The trade, taken knowingly: `git push` and `git push origin` were permitted
 # and are refused now. The destination has to be in the command, which is what
 # CLAUDE.md already asked for -- a push "positively naming that branch".
+req US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'bare git push'                     'git push'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'push naming only the remote'       'git push origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'bare push after a commit'          'git commit -m msg && git push'
@@ -2129,11 +2335,12 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'config set by --config-env'        'gi
 # cannot know which setting the override was for.
 check_in "$PUSH_WT" no-git-push.sh BLOCK '-c with an explicit refspec'       "git -c http.sslVerify=false push origin $PUSH_BRANCH"
 
-echo "=== forced pushes, refused in every spelling ==="
+section "=== forced pushes, refused in every spelling ==="
 # Forcing rewrites what the remote already has, which for this branch is the
 # history an open pull request is showing. --force-with-lease is refused with
 # the rest: it guards against clobbering another person's work, not against
 # rewriting a PR under its reviewer.
+req US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push -f'                   'git push -f'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --force'              'git push --force'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --force-with-lease'   'git push --force-with-lease'
@@ -2143,21 +2350,27 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'bundled short flags -fu'       "git pu
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'forced by leading + on refspec' "git push origin +$PUSH_BRANCH"
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'forced push of own branch'     "git push -f origin $PUSH_BRANCH"
 
-echo "=== worktree exception does not extend to ==="
+section "=== worktree exception does not extend to ==="
+req US-3 US-1
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'another branch by name: main'      'git push origin main'
+req US-3 US-2
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'another branch by name: dev-05'    'git push origin dev-05'
+req US-3 US-1
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a refspec destination: HEAD:main'  'git push origin HEAD:main'
+req US-3 US-2
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a forced push to dev-05'           'git push -f origin dev-05'
+req US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a cd before the push'              'cd /tmp && git push'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a cd before the push, with ;'      'cd /tmp; git push'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'git redirected with -C'            'git -C /home/bgunyel/source/ai/clause-and-effect push'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'git redirected with --git-dir'     'git --git-dir=/elsewhere/.git push'
+req US-3 FR-4
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push inside sh -c'               'sh -c "git push"'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push inside bash -c'             'bash -c "git push origin dev-05"'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push inside eval'                'eval "git push"'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push inside a heredoc fed to sh' $'bash <<\'EOF\'\ngit push\nEOF'
 
-echo "=== ACCEPTED false positive: the wrapper rule reaches across the line here too ==="
+section "=== ACCEPTED false positive: the wrapper rule reaches across the line here too ==="
 # This hook's wrapper rule is the same two-grep shape as no-pr-decisions.sh's --
 # a wrapper in a command position, a push anywhere on the line -- and neither
 # grep asks whether the two are the same command. So an otherwise correct push
@@ -2173,6 +2386,7 @@ echo "=== ACCEPTED false positive: the wrapper rule reaches across the line here
 # on ALLOW. These used to run wherever the suite was started, and from the main
 # checkout all three were BLOCK and the pair showed nothing; since #94 they run
 # in the fixture worktree, so the discrimination is made on every run.
+req GH-73 FR-4
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a wrapper elsewhere, then a legit push' \
   "bash -c \"make test\" && git push origin $PUSH_BRANCH"
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a legit push, then a wrapper elsewhere' \
@@ -2193,11 +2407,12 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'a wrapper elsewhere, then git log'    
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'a wrapper named in passing, then a push' \
   "echo \"use bash -c\" && git push origin $PUSH_BRANCH"
 
-echo "=== REGRESSION: PR #35, a denylist could not see a push naming no branch ==="
+section "=== REGRESSION: PR #35, a denylist could not see a push naming no branch ==="
 # The check refused branches by name, so any spelling that named none was
 # invisible: --all advanced main and dev-05 from any worktree, and --mirror
 # deleted every remote branch absent locally, closing open pull requests. The
 # check is now an allowlist -- the push must positively name this branch.
+req US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --all origin'      'git push --all origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --mirror origin'   'git push --mirror origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'git push --prune origin'    'git push --prune origin'
@@ -2207,27 +2422,31 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'wildcard refspec, forced'   'git push 
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'deleting a remote branch'   "git push origin --delete $PUSH_BRANCH"
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'deleting by empty source'   'git push origin :main'
 
-echo "=== REGRESSION: PR #35, redirects and cd forms the rules did not reach ==="
+section "=== REGRESSION: PR #35, redirects and cd forms the rules did not reach ==="
 # An environment assignment precedes the command, so git was not at a command
 # position and the push was never even detected; the anchors now allow a VAR=
 # prefix. pushd changes directory exactly as cd does.
+req US-3 FR-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'GIT_DIR= prefix'     'GIT_DIR=/other/.git git push origin main'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'GIT_WORK_TREE= prefix' 'GIT_WORK_TREE=/other git push'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'pushd before a push'  'pushd /some/repo && git push'
+req FR-3 US-15
 check no-pr-decisions.sh BLOCK 'env prefix before gh' 'FOO=1 gh pr merge 35'
 
-echo "=== the allowlist still admits an ordinary push of this branch ==="
+section "=== the allowlist still admits an ordinary push of this branch ==="
+req US-3 US-4
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'git push origin HEAD'           "git push origin HEAD"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'git push origin HEAD:<branch>'  "git push origin HEAD:$PUSH_BRANCH"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'git push origin <b>:<b>'        "git push origin $PUSH_BRANCH:$PUSH_BRANCH"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'push option with a value'       "git push -o ci.skip origin $PUSH_BRANCH"
 
-echo "=== REGRESSION: PR #35, a line continuation emptied the argument scope ==="
+section "=== REGRESSION: PR #35, a line continuation emptied the argument scope ==="
 # The scope ran from push to the next shell separator; a newline ended it, and
 # an empty scope fell through to the bare-push case, the permitted one. So one
 # wrapped line turned any push into an ordinary one -- --mirror included, which
 # deletes remote branches and closes open PRs. Continuations are now joined
 # before anything is matched.
+req FR-3 US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'continued --mirror'  $'git push \\\n  --mirror origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'continued --all'     $'git push \\\n  --all origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'continued force'     $'git push \\\n  --force-with-lease origin main'
@@ -2238,16 +2457,19 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'continuation over three lines' $'git p
 # refused for naming no destination -- the join still has to consume the
 # backslash, or this would be refused for being unreadable instead.
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'trailing backslash, nothing after' $'git push \\'
+req FR-3 US-4
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'continued push of this branch'     $'git push \\\n  origin '"$PUSH_BRANCH"
 
-echo "=== the remote must be a remote of this repository ==="
+section "=== the remote must be a remote of this repository ==="
 # Nothing required the first bare token to be a remote, so a URL or a typo was
 # admitted whenever the refspec named this branch. Raised on PR #35.
+req US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'a foreign remote URL'    'git push git@github.com:someone/else.git HEAD'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'an undefined remote name' 'git push upstream HEAD'
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'origin is a real remote' "git push origin $PUSH_BRANCH"
 
-echo "=== no-git-push.sh : not a push at all ==="
+section "=== no-git-push.sh : not a push at all ==="
+req US-3
 for c in 'git status' \
          'git commit -m "explain how to git push later"' \
          'echo "run git push when ready" >> notes.md' \
@@ -2259,7 +2481,7 @@ for c in 'git status' \
          'make test'
 do check_in "$PUSH_WT" no-git-push.sh ALLOW "$c" "$c"; done
 
-echo "=== REGRESSION: issue #94, a subdirectory of the main checkout read as a linked worktree ==="
+section "=== REGRESSION: issue #94, a subdirectory of the main checkout read as a linked worktree ==="
 # no-git-push.sh tells the main checkout from a linked worktree by comparing
 # `git rev-parse --git-dir` with `--git-common-dir`, and compared them as
 # strings. At the root of a checkout git 2.43 prints both relatively, `.git` and
@@ -2286,6 +2508,7 @@ if [ "$(cd "$PUSH_MAIN/src/deep" && git rev-parse --git-dir)" = \
   echo "  note this git prints --git-dir and --git-common-dir identically below the root, so the #94 checks do not reproduce the string mismatch"
 fi
 echo "--- the main checkout, at its root and below it ---"
+req GH-94.1 US-3 US-25
 check_in "$PUSH_MAIN"          no-git-push.sh BLOCK 'main checkout, root: a push of its own branch' \
   'git push origin feature-x'
 check_in "$PUSH_MAIN/src"      no-git-push.sh BLOCK 'main checkout, src/: a push of its own branch' \
@@ -2295,10 +2518,12 @@ check_in "$PUSH_MAIN/src/deep" no-git-push.sh BLOCK 'main checkout, src/deep/: a
 # Which refusal, and not merely that one fired: below the root the command is
 # otherwise a plain push naming the checked-out branch, so a message from any
 # other rule would mean the main checkout was still not recognised.
+req GH-94.1
 says "$PUSH_MAIN/src/deep" no-git-push.sh 'This is the main checkout, not a linked worktree' \
   'main checkout, src/deep/: refused as the main checkout' 'git push origin feature-x'
 # The permitting half at the same three depths. What the directory decides is
 # whether a push is permitted, not whether git may be used at all.
+req GH-94.1 US-25
 check_in "$PUSH_MAIN"          no-git-push.sh ALLOW 'main checkout, root: a fetch is not a push' \
   'git fetch origin'
 check_in "$PUSH_MAIN/src"      no-git-push.sh ALLOW 'main checkout, src/: a fetch is not a push' \
@@ -2309,18 +2534,21 @@ echo "--- the linked worktree, at its root and below it ---"
 # A fix that canonicalised the main checkout into equality and the worktree
 # with it would refuse every push an agent is allowed; these are what say it
 # did not.
+req GH-94.1 US-4 US-25
 check_in "$PUSH_WT"            no-git-push.sh ALLOW 'linked worktree, root: a push naming its own branch' \
   "git push origin $PUSH_BRANCH"
 check_in "$PUSH_WT/src"        no-git-push.sh ALLOW 'linked worktree, src/: a push naming its own branch' \
   "git push origin $PUSH_BRANCH"
 check_in "$PUSH_WT/src/deep"   no-git-push.sh ALLOW 'linked worktree, src/deep/: a push naming its own branch' \
   "git push origin $PUSH_BRANCH"
+req GH-94.1 US-1
 check_in "$PUSH_WT"            no-git-push.sh BLOCK 'linked worktree, root: a push of main' \
   'git push origin main'
 check_in "$PUSH_WT/src"        no-git-push.sh BLOCK 'linked worktree, src/: a push of main' \
   'git push origin main'
 check_in "$PUSH_WT/src/deep"   no-git-push.sh BLOCK 'linked worktree, src/deep/: a push of main' \
   'git push origin main'
+req GH-94.1 US-2
 check_in "$PUSH_WT"            no-git-push.sh BLOCK 'linked worktree, root: a push of a dev branch' \
   'git push origin dev-99'
 check_in "$PUSH_WT/src"        no-git-push.sh BLOCK 'linked worktree, src/: a push of a dev branch' \
@@ -2330,12 +2558,15 @@ check_in "$PUSH_WT/src/deep"   no-git-push.sh BLOCK 'linked worktree, src/deep/:
 echo "--- both, reached through a symlink ---"
 # Resolving each path by the directory it names, and not by the spelling $PWD
 # gives it, is half of the fix; these are what fail if the -P on pwd is dropped.
+req GH-94.1 US-3 US-25
 check_in "$PUSH_MAIN_LINK/src/deep" no-git-push.sh BLOCK 'main checkout through a symlink, src/deep/: a push of its own branch' \
   'git push origin feature-x'
+req GH-94.1 US-4 US-25
 check_in "$PUSH_WT_LINK/src/deep"   no-git-push.sh ALLOW 'linked worktree through a symlink, src/deep/: a push naming its own branch' \
   "git push origin $PUSH_BRANCH"
 
-echo "=== no-pr-decisions.sh : must BLOCK ==="
+section "=== no-pr-decisions.sh : must BLOCK ==="
+req US-15
 for c in 'gh pr merge 5' \
          'gh pr merge --auto --squash 5' \
          'cd /tmp && gh pr merge 5' \
@@ -2354,7 +2585,7 @@ for c in 'gh pr merge 5' \
          'gh api graphql -f query="mutation { addPullRequestReview(input:{event:APPROVE}) }"'
 do check no-pr-decisions.sh BLOCK "$c" "$c"; done
 
-echo "=== no-pr-decisions.sh : must ALLOW ==="
+section "=== no-pr-decisions.sh : must ALLOW ==="
 for c in 'gh pr create --base dev-05 --title x --body y' \
          'gh pr comment 5 --body "looks fine"' \
          'gh pr review --comment -b "a remark"' \
@@ -2371,9 +2602,21 @@ for c in 'gh pr create --base dev-05 --title x --body y' \
          'gh api repos/bgunyel/clause-and-effect/issues/27/comments' \
          'echo "then run gh pr merge 5 to land it" >> notes.md' \
          'git push'
-do check no-pr-decisions.sh ALLOW "$c" "$c"; done
+do
+  # One loop, several requirements: each spelling is tagged with the one it keeps.
+  case "$c" in
+    'gh issue '*)     req US-14 ;;
+    'gh release '*)   req FR-48 ;;
+    'gh api '*)       req FR-20 US-13 ;;
+    'gh pr create '*) req FR-15 FR-16 US-8 ;;
+    'gh pr review '*) req US-13 US-15 ;;
+    'gh pr '*)        req US-13 ;;
+    *)                req FR-3 ;;
+  esac
+  check no-pr-decisions.sh ALLOW "$c" "$c"
+done
 
-echo "=== REGRESSION: review of #43, prefixes and separated options hid commands ==="
+section "=== REGRESSION: review of #43, prefixes and separated options hid commands ==="
 # Found by reviewing the #43 migration, fixed in lib/command-scan.sh, and
 # therefore not about no-commit-to-main.sh: every hook was blind to these.
 # cs_split stripped a wrapper word and its options but not an operand, so
@@ -2381,13 +2624,16 @@ echo "=== REGRESSION: review of #43, prefixes and separated options hid commands
 # setsid and chronic were not wrapper words at all; and cs_git_args skipped
 # --git-dir only in its = form, so the separated one hid the subcommand behind
 # its own value.
+req GH-43.6 US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'timeout before a wholesale push' 'timeout 5 git push --all origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'sudo before a mirror push'       'sudo git push --mirror origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'separated --git-dir before a push' 'git --git-dir /tmp/other/.git push --all origin'
+req GH-43.6 US-15
 check no-pr-decisions.sh BLOCK 'setsid before a merge'           'setsid gh pr merge 5'
 check no-pr-decisions.sh BLOCK 'sudo before a merge'             'sudo gh pr merge 5'
 # The operand strip takes one token and only if it is not an option, so an
 # ordinary command that begins with one of these words is still itself.
+req GH-43.6
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'timeout in front of something else' 'timeout 5 make test'
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'sudo in front of something else'    'sudo apt-get install jq'
 
@@ -2397,25 +2643,29 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'sudo in front of something else'    's
 # 30` and not `timeout -s KILL 30`, and closes nothing at all for the wrapper
 # words that have no operand rule. cs_split offers the tail as further
 # candidates rather than keeping a third list of which options take a value.
+req GH-43.6 US-3
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'sudo with a separated option value'   'sudo -u root git push --all origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'nice with a separated niceness'       'nice -n 10 git push --all origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'ionice with a separated class'        'ionice -c 2 git push --all origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'timeout whose signal took the operand' 'timeout -s KILL 30 git push --all origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'xargs with a separated count'         'xargs -n 1 git push --all origin'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'env with a separated directory'       'env -C /tmp git push --all origin'
+req GH-43.6 US-15
 check no-pr-decisions.sh BLOCK 'sudo with a separated option value, before a merge' \
   'sudo -u root gh pr merge 5'
 # The tail only ever adds candidates, so an ordinary command that begins with a
 # wrapper word still yields itself and the additions refuse nothing.
+req GH-43.6 FR-3
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'a wrapper option value in front of something else' \
   'sudo -u root apt-get install jq'
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'a commit whose message quotes a push, behind a wrapper' \
   'sudo git commit -m "git push --all origin"'
 
-echo "=== no-commit-to-main.sh : invariants, identical literals across #43 ==="
+section "=== no-commit-to-main.sh : invariants, identical literals across #43 ==="
 # What the migration preserved. These six were written before it, are green on
 # both sides of it, and are the whole of what this file is for: main is not
 # committed to, and main is not pushed to.
+req US-1
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'commit while standing on main' \
   'git commit -m "wip"'
 check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'commit on a dev branch' \
@@ -2426,24 +2676,30 @@ check_in "$ON_DEV"  no-commit-to-main.sh BLOCK 'the HEAD:main refspec' \
   'git push origin HEAD:main'
 check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'main on the source side only' \
   'git push origin main:spike'
+req US-1 GH-43.4
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'a bare push while on main' \
   'git push'
 # The other side of the bare push, and the commands this file has no opinion
 # about at all. Also invariant: a commit message may name a push, and a push of
 # a dev branch is no business of this file's.
+req US-1 GH-43.4
 check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'a bare push on a dev branch' \
   'git push'
 check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'push of a dev branch' \
   'git push origin dev-99'
+req GH-43.1
 check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'commit message naming a push' \
   'git commit -m "explain how to git push later"'
+req US-1
 check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'neither a commit nor a push' \
   'git status'
+req FR-3 US-1 GH-43.1
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'commit after a control word' \
   'if true; then git commit -m "wip"; fi'
 # A commit message is the one argument here that carries arbitrary prose, so
 # the directory options are matched only where git accepts them. Permitted
 # before the migration for a weaker reason -- they were not matched at all.
+req GH-43.2
 check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'a commit message naming -C' \
   'git commit -m "stop matching -C everywhere"'
 # A prefix word the old anchor did not care about, because it looked only for a
@@ -2451,6 +2707,7 @@ check_in "$ON_DEV"  no-commit-to-main.sh ALLOW 'a commit message naming -C' \
 # options, and these were not in its list -- so the migration first lost these
 # four, in the permitting direction, and lib/command-scan.sh was corrected
 # rather than the loss being recorded. Found reviewing the migration.
+req GH-43.6 US-1
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'sudo in front of a commit on main' \
   'sudo git commit -m "wip"'
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'timeout, whose operand is not an option' \
@@ -2460,7 +2717,7 @@ check_in "$ON_DEV"  no-commit-to-main.sh BLOCK 'timeout in front of a push to ma
 check_in "$ON_DEV"  no-commit-to-main.sh BLOCK 'sudo in front of a push to main' \
   'sudo git push origin main'
 
-echo "=== no-commit-to-main.sh : what #43 changed, verdict by verdict ==="
+section "=== no-commit-to-main.sh : what #43 changed, verdict by verdict ==="
 # Written before the migration against the file as it stood, so each `was` is
 # a measurement of the old file and not a guess about it. Reverting the
 # migration fails exactly this section.
@@ -2471,6 +2728,7 @@ echo "=== no-commit-to-main.sh : what #43 changed, verdict by verdict ==="
 # blocked the writing of issue #36 -- a ticket cannot quote the command it is
 # about. The quoted-string cases are the same false positive the sibling hooks
 # were rebuilt to stop.
+req GH-43.1
 flip "$ON_DEV"  no-commit-to-main.sh BLOCK ALLOW 'heredoc body quoting a push to main' \
   $'cat >> notes.md <<EOF\ngit push origin main is refused here\nEOF\necho written'
 flip "$ON_MAIN" no-commit-to-main.sh BLOCK ALLOW 'a commit named inside a quoted string' \
@@ -2481,6 +2739,7 @@ flip "$ON_DEV"  no-commit-to-main.sh BLOCK ALLOW 'a push named inside a quoted s
 # working directory, which is the session's and not necessarily the command's,
 # while nothing refused a command that changed directory. #40 refused to
 # compute a merge base here for exactly this reason.
+req GH-43.2
 flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'cd into a repository on main, then commit' \
   "cd $ON_MAIN && git commit -m 'on main'"
 flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'GIT_DIR pointed at a repository on main' \
@@ -2490,6 +2749,7 @@ flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'git -C into another repository
 # A wrapper's payload sits in quotes, where the old anchor found no command at
 # all: a wrapped commit was permitted on main itself. Refused outright now,
 # as in both sibling hooks.
+req GH-43.3 FR-4
 flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'sh -c wrapping a commit, on main' \
   "sh -c 'git commit -m \"wip\"'"
 flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'eval wrapping a push to main' \
@@ -2497,6 +2757,7 @@ flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'eval wrapping a push to main' 
 # Matching main by name could not see a spelling that named no branch, which is
 # the hole PR #35 closed in no-git-push.sh and left open here. Both of these
 # advance main from a dev branch.
+req GH-43.4 US-1
 flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'push --all advances main too' \
   'git push --all origin'
 flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'push --mirror advances main too' \
@@ -2516,11 +2777,13 @@ flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'push -u origin HEAD while on m
   'git push -u origin HEAD'
 flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'the @ spelling of HEAD' \
   'git push origin @'
+req GH-43.4
 check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'HEAD off main still names a dev branch' \
   'git push origin HEAD'
 # Changing branch defeats the branch read exactly as changing directory does,
 # and is the likelier of the two. Refusing directory moves while permitting
 # this left the soundness claim half-made. Found reviewing the migration.
+req GH-43.2
 flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'checkout main, then commit' \
   'git checkout main && git commit -m "wip"'
 flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'switch to main, then commit' \
@@ -2529,6 +2792,7 @@ flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'switch to main, then commit' \
 # --git-dir only in its = form, so the separated one left the path at the head
 # of the line, the subcommand was never found, and this file left without an
 # opinion -- with `main` written in the command. Found reviewing the migration.
+req GH-43.2 GH-43.6
 flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'separated --git-dir before commit' \
   "git --git-dir $ON_MAIN/.git commit -m 'on main'"
 flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'separated --namespace before a push to main' \
@@ -2540,17 +2804,19 @@ flip "$ON_DEV"  no-commit-to-main.sh ALLOW BLOCK 'separated --namespace before a
 # found two hooks with no guard at all and a third requiring one function of three
 # while both blocks stayed green.
 
-echo "=== the refusals still name main, which is why this file is kept ==="
+section "=== the refusals still name main, which is why this file is kept ==="
+req GH-43.5
 says "$ON_MAIN" no-commit-to-main.sh 'Blocked: committing to main.' \
   'a commit on main is refused as a commit on main' 'git commit -m "wip"'
 says "$ON_DEV"  no-commit-to-main.sh 'Blocked: pushing to main.' \
   'a push to main is refused as a push to main' 'git push origin main'
 says "$ON_MAIN" no-commit-to-main.sh "bare 'git push' while on main" \
   'the bare push keeps its own wording' 'git push'
+req GH-43.5 GH-43.2
 says "$ON_DEV"  no-commit-to-main.sh 'whether it lands on main' \
   'a directory move says what cannot be judged' "cd $ON_MAIN && git commit -m 'wip'"
 
-echo "=== no-work-on-stale-branch.sh: a branch whose life is over ==="
+section "=== no-work-on-stale-branch.sh: a branch whose life is over ==="
 # Three lifecycle states in one throwaway repository, all built locally: the
 # remote-tracking refs are written with update-ref, so nothing here reaches a
 # network. Unlike the fixtures above, these need real commits -- ahead/behind
@@ -2630,6 +2896,7 @@ ln -s "$LIFE" "$LIFE_LINK"
 }
 
 echo "--- upstream gone: the branch was merged and its remote half is pruned ---"
+req GH-44.1 FR-38
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'commit on a merged branch' \
   'git commit -m "wip"'
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'cherry-pick, the recovery procedure own command' \
@@ -2640,11 +2907,13 @@ check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'am on a merged branch' \
   'git am /tmp/patch.mbox'
 # Merging into a branch that no longer exists on the remote is meaningless, so
 # the carve-out that exists under the fallback does not exist here.
+req GH-44.3 GH-44.1
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'merge naming the dev branch is still refused' \
   'git merge origin/dev-05'
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'rebase naming the dev branch is still refused' \
   'git rebase origin/dev-05'
 # A refusal mid-rebase strands state the agent cannot exit.
+req GH-44.4
 check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'rebase --continue' \
   'git rebase --continue'
 check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'merge --abort' \
@@ -2659,6 +2928,7 @@ check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'cherry-pick --skip' \
 # Silent, and in the permitting direction. Found by review, not by this suite:
 # every continuation check here drove the bare flag, which is exactly the case
 # that already worked.
+req GH-44.4
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a commit message naming a continuation flag' \
   'git commit -m "permit rebase --continue"'
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a commit message naming --skip' \
@@ -2677,10 +2947,12 @@ check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a continuation flag traili
   'git cherry-pick 1234abc --continue'
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a continuation flag behind an option' \
   'git rebase --quiet --continue'
+req GH-44.1 FR-38
 check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'a read is not work' \
   'git log --oneline -5'
 check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'a command with no git in it at all' \
   'ls -la'
+req FR-4 GH-44.1
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a commit wrapped in a shell' \
   "sh -c 'git commit -m \"wip\"'"
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a cherry-pick wrapped in eval' \
@@ -2689,6 +2961,7 @@ check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a cherry-pick wrapped in e
 # prefix word this hook's wrapper rule could not see. Each was ALLOW before the
 # anchor was widened, and the #79 section above says these live here rather
 # than beside its own checks, because the verdicts need these fixtures.
+req GH-79.1
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'sudo + a wrapped commit' \
   "sudo sh -c 'git commit -m \"wip\"'"
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'timeout + a wrapped commit' \
@@ -2699,10 +2972,12 @@ check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'nohup + a wrapped eval mer
   "nohup eval 'git merge other-branch'"
 # And the control from the same section: a wrapper named in prose is not one,
 # so the widening did not cost this hook a read either.
+req GH-79.2
 check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'grepping for the sudo sh -c rule' \
   "grep -rn 'sudo sh -c .*git commit' .claude/hooks/"
 
 echo "--- the fallback: ahead == 0, behind > 0 against the active dev branch ---"
+req GH-44.2 FR-38
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'commit on a branch dev has moved past' \
   'git commit -m "wip"'
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'cherry-pick' \
@@ -2715,6 +2990,7 @@ check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'am' \
 # is a fast-forward: it creates no commit and masks nothing. Refusing it would
 # deadlock the branch -- no commit, no catch-up, and removing a worktree is a
 # reserved act.
+req GH-44.3
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up merge, remote spelling' \
   'git merge origin/dev-05'
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'the catch-up merge, short spelling' \
@@ -2769,23 +3045,28 @@ check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'the catch-up merge with g
 # because a cut can only refuse more -- that argument does not hold in this
 # file -- but because the fallback catches every line the tracker cannot read,
 # so a cd bash would actually run is still cut out.
+req GH-44.3 GH-68.1
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'a cd quoted in a sibling command (was BLOCK)' \
   "git merge origin/dev-05 && echo 'x; cd /tmp'"
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'a checkout quoted in a sibling command (was BLOCK)' \
   "git merge origin/dev-05 && echo 'x; git checkout main'"
+req GH-44.3
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'an unquoted cd still withdraws the carve-out' \
   'cd /tmp && git merge origin/dev-05'
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'an unquoted checkout still withdraws it' \
   'git checkout main && git merge origin/dev-05'
 # Every command, not the first: the permitted half does not license the second.
+req GH-44.3 GH-44.2
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a permitted merge followed by a commit' \
   'git merge origin/dev-05 && git commit -m "wip"'
+req GH-44.4
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'rebase --continue' \
   'git rebase --continue'
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a commit message naming a continuation flag' \
   'git commit -m "permit rebase --continue"'
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'a merge message naming a continuation flag' \
   'git merge -m "wip --continue" some-other-branch'
+req GH-44.2
 check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'a read is not work' \
   'git status'
 
@@ -2848,6 +3129,7 @@ $GD merge-base --is-ancestor refs/heads/div-stale refs/heads/dev-05 && {
   echo "div-stale is an ancestor of local dev-05, so the short spelling would be a fast-forward; the checks below prove nothing" >&2
   exit 1
 }
+req GH-58.1
 check_in "$WT_DIV" no-work-on-stale-branch.sh ALLOW 'diverged local dev-05: the remote spelling is still the fast-forward' \
   'git merge origin/dev-05'
 check_in "$WT_DIV" no-work-on-stale-branch.sh ALLOW 'diverged local dev-05: and so is its full ref' \
@@ -2974,16 +3256,19 @@ $GB rev-parse --verify --quiet 'refs/remotes/origin/dev-05^{commit}' >/dev/null 
 }
 # An unreadable count is not a stale branch: the file abstains, which is the
 # same answer it gives when there is no dev ref at all.
+req GH-58.2 GH-44.6
 check_in "$WT_BAD" no-work-on-stale-branch.sh ALLOW 'a dev tip that is not a commit: the ancestry is unreadable, so the guard abstains' \
   'git commit -m "wip"'
 
 echo "--- branches whose life is not over, and the main checkout ---"
+req GH-44.5 FR-38
 check_in "$WT_WORK"  no-work-on-stale-branch.sh ALLOW 'a branch carrying work of its own, ahead == 1' \
   'git commit -m "wip"'
 check_in "$WT_FRESH" no-work-on-stale-branch.sh ALLOW 'a fresh branch at the dev tip, ahead == 0 behind == 0' \
   'git commit -m "wip"'
 # The same commit, the same state, the same command -- and the main checkout is
 # unaffected, because the guard keys on the linked worktree.
+req GH-44.5 US-25
 check_in "$LIFE" no-work-on-stale-branch.sh ALLOW 'the main checkout at the stale branch own commit' \
   'git commit -m "wip"'
 # Issue #94, the refusing half. This file made the same string comparison as
@@ -2994,20 +3279,24 @@ check_in "$LIFE" no-work-on-stale-branch.sh ALLOW 'the main checkout at the stal
 # fallback fired on it. The check above is at the root, the one depth where the
 # strings happened to agree. The worktree half at the same depths is what says
 # the fix did not buy this by switching the guard off.
+req GH-94.2 US-25
 check_in "$LIFE/src"          no-work-on-stale-branch.sh ALLOW 'main checkout, src/: an ordinary commit is not lifecycle work' \
   'git commit -m "wip"'
 check_in "$LIFE/src/deep"     no-work-on-stale-branch.sh ALLOW 'main checkout, src/deep/: an ordinary commit is not lifecycle work' \
   'git commit -m "wip"'
+req GH-94.2 GH-44.2 GH-44.5
 check_in "$WT_STALE/src"      no-work-on-stale-branch.sh BLOCK 'stale worktree, src/: a commit is still refused' \
   'git commit -m "wip"'
 check_in "$WT_STALE/src/deep" no-work-on-stale-branch.sh BLOCK 'stale worktree, src/deep/: a commit is still refused' \
   'git commit -m "wip"'
+req GH-94.2 US-25
 check_in "$LIFE_LINK/src/deep" no-work-on-stale-branch.sh ALLOW 'main checkout through a symlink, src/deep/: an ordinary commit' \
   'git commit -m "wip"'
+req GH-94.2 GH-44.2
 check_in "$LIFE_LINK/wt-stale/src/deep" no-work-on-stale-branch.sh BLOCK 'stale worktree through a symlink, src/deep/: a commit is still refused' \
   'git commit -m "wip"'
 
-echo "=== review of #111: the #94 comparison when it has nothing to compare, and its two copies ==="
+section "=== review of #111: the #94 comparison when it has nothing to compare, and its two copies ==="
 # Three points from the review of the #94 pull request, each checked here.
 #
 # ONE. A --git-common-dir that will not resolve. no-git-push.sh refused it, which
@@ -3037,6 +3326,7 @@ chmod +x "$GIT_SHIM/git"
 }
 # A variable set in front of a function call reaches the processes it starts, so
 # the hook check_in runs sees the shim first.
+req GH-94.4
 PATH="$GIT_SHIM:$PATH" check_in "$PUSH_WT" no-git-push.sh BLOCK \
   'an unresolvable --git-common-dir, in a linked worktree: a push of its own branch is refused' \
   "git push origin $PUSH_BRANCH"
@@ -3047,6 +3337,7 @@ PATH="$GIT_SHIM:$PATH" says_not "$PUSH_WT" no-git-push.sh 'This is the main chec
 # The stale guard abstains on the same path, as it always did on an empty one.
 # In the stale worktree a guard that read the unresolved path as a worktree would
 # refuse, so the ALLOW is the abstention.
+req GH-94.4 GH-44.6
 PATH="$GIT_SHIM:$PATH" check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW \
   'an unresolvable --git-common-dir, in a stale worktree: the guard abstains' \
   'git commit -m "wip"'
@@ -3059,6 +3350,7 @@ mkdir -p "$NOT_A_REPO"
   echo "$NOT_A_REPO is inside a git repository; the checks using it prove nothing" >&2
   exit 1
 }
+req GH-94.4
 check_in "$NOT_A_REPO" no-git-push.sh BLOCK 'outside any repository: a push is refused' \
   'git push origin feature-x'
 says "$NOT_A_REPO" no-git-push.sh 'could not be resolved' \
@@ -3143,12 +3435,14 @@ $GN branch nodev-gone-branch "$NODEV_BASE"
 $GN config -f "$NODEV/.git/config" branch.nodev-gone-branch.remote origin
 $GN config -f "$NODEV/.git/config" branch.nodev-gone-branch.merge refs/heads/nodev-gone-branch
 $GN worktree add -q "$NODEV/wt-nodev-gone" nodev-gone-branch
+req GH-44.6
 check_in "$NODEV/wt-behind" no-work-on-stale-branch.sh ALLOW 'no origin/dev-* ref, so the fallback abstains' \
   'git commit -m "wip"'
 # The gone detector reads the remote's existence, not ancestry against a dev
 # branch, so it is not the fallback and does not abstain with it. A branch whose
 # remote half has been pruned away is merged whether or not this clone has ever
 # seen a dev branch.
+req GH-44.6 GH-44.1
 check_in "$NODEV/wt-nodev-gone" no-work-on-stale-branch.sh BLOCK 'upstream gone still refuses with no dev ref' \
   'git commit -m "wip"'
 
@@ -3156,14 +3450,17 @@ echo "--- the two refusals say different things, because they know different thi
 # `upstream: gone` fires only on the genuinely merged case, so it may say
 # merged. The fallback cannot tell a merged branch from one cut before the dev
 # branch moved, so it must not.
+req GH-44.1
 says "$WT_GONE"  no-work-on-stale-branch.sh 'has been merged' \
   'the gone refusal names the merge' 'git commit -m "wip"'
+req GH-44.2
 says "$WT_STALE" no-work-on-stale-branch.sh 'no work of its own' \
   'the fallback refusal is about state' 'git commit -m "wip"'
 says_not "$WT_STALE" no-work-on-stale-branch.sh 'merged' \
   'the fallback refusal does not claim a merge' 'git commit -m "wip"'
 # The deadlock the carve-out exists to avoid is named in the refusal that would
 # otherwise cause it.
+req GH-44.3 US-7
 says "$WT_STALE" no-work-on-stale-branch.sh 'git merge origin/dev-05 is permitted' \
   'the fallback refusal says how to get out' 'git commit -m "wip"'
 
@@ -3174,12 +3471,13 @@ says "$WT_STALE" no-work-on-stale-branch.sh 'git merge origin/dev-05 is permitte
 # stayed in this one file: keeping them here, where the three hooks that had it
 # wrong have no section, is what let that happen.
 
-echo "=== REGRESSION: #69, a command name matched as a substring ==="
+section "=== REGRESSION: #69, a command name matched as a substring ==="
 # First coverage of any kind for these two hooks. Neither sourced
 # lib/command-scan.sh, so neither knew where a command word was, and the name
 # matched as an argument and as prose. Every verdict here was measured on
 # dev-05 at 7cb4891, where the six below were BLOCK -- ordinary greps and
 # git log invocations, refused for naming the tool they search for.
+req GH-69.1
 check pytest-via-uv-group.sh ALLOW 'grep for pytest in the docs' \
   'grep -rn pytest docs/'
 check pytest-via-uv-group.sh ALLOW 'grep for pytest after a pipe' \
@@ -3202,7 +3500,8 @@ check pytest-via-uv-group.sh ALLOW 'prose, name straight after the quote' \
 check pytest-via-uv-group.sh ALLOW 'prose, name after a space' \
   'echo "we run pytest via the test group"'
 
-echo "=== the controls those two hooks are for, which keep their verdicts ==="
+section "=== the controls those two hooks are for, which keep their verdicts ==="
+req GH-69.1
 check pytest-via-uv-group.sh BLOCK 'bare pytest' \
   'pytest tests/'
 check pytest-via-uv-group.sh BLOCK 'bare python -m pytest' \
@@ -3231,7 +3530,8 @@ check pytest-via-uv-group.sh ALLOW 'the sanctioned invocation behind a wrapper' 
 check pytest-via-uv-group.sh ALLOW 'and behind a wrapper whose option takes a value' \
   'sudo -u me uv run --group test pytest tests/'
 
-echo "=== #69, what the deleted allowlist covered, asked of the rule that replaced it ==="
+section "=== #69, what the deleted allowlist covered, asked of the rule that replaced it ==="
+req GH-69.1
 # The allowlist is gone: with the command word at ^, `uv run --group test
 # pytest` never matches the first rule, so there was nothing left to rescue.
 # But `uv run pytest` was refused by it and has to stay refused -- it runs
@@ -3258,7 +3558,8 @@ check pytest-via-uv-group.sh ALLOW 'uv add, which is not uv run' \
 check alembic-via-uv-group.sh ALLOW 'uv add, which is not uv run' \
   'uv add --group migrations alembic'
 
-echo "=== REGRESSION: review of #69, ^ narrowed the guard to one runner ==="
+section "=== REGRESSION: review of #69, ^ narrowed the guard to one runner ==="
+req GH-69.1
 # The first version of the rule above asked only about `uv run`, and review
 # measured five silent permits against the file it replaced: each of these was
 # BLOCK before the migration, by the substring match, and ALLOW after it. Each
@@ -3277,7 +3578,8 @@ check pytest-via-uv-group.sh BLOCK 'nix run'    'nix run pytest'
 check alembic-via-uv-group.sh BLOCK 'poetry run, alembic' 'poetry run alembic upgrade head'
 check alembic-via-uv-group.sh BLOCK 'uvx, alembic'        'uvx alembic upgrade head'
 
-echo "=== REGRESSION: review of the #69 PR, the list stopped one family early ==="
+section "=== REGRESSION: review of the #69 PR, the list stopped one family early ==="
+req GH-69.1
 # Review of the fix above found three more, each the sibling of something
 # already on the list: pipx run beside uvx and uv tool run, micromamba run
 # beside conda run, pixi run beside poetry run. All three were BLOCK on dev-05
@@ -3292,7 +3594,8 @@ check alembic-via-uv-group.sh BLOCK 'pipx run, alembic'       'pipx run alembic 
 check alembic-via-uv-group.sh BLOCK 'micromamba run, alembic' 'micromamba run alembic upgrade head'
 check alembic-via-uv-group.sh BLOCK 'pixi run, alembic'       'pixi run alembic upgrade head'
 
-echo "=== ACCEPTED gap: a wrapper word is not a runner, and belongs in #79 ==="
+section "=== ACCEPTED gap: a wrapper word is not a runner, and belongs in #79 ==="
+req GH-69.1 GH-79.3
 # These two reach pytest as well, and neither is a runner in the sense the list
 # above means: they take no subcommand and simply run the words after them,
 # which is what cs_split calls a wrapper word and already strips for `time`,
@@ -3314,7 +3617,8 @@ check pytest-via-uv-group.sh ALLOW 'watch, the same shape' \
 check pytest-via-uv-group.sh BLOCK 'time, which cs_split does strip' \
   'time pytest tests/'
 
-echo "=== REGRESSION: #69, the allowlist was matched against the whole string ==="
+section "=== REGRESSION: #69, the allowlist was matched against the whole string ==="
+req GH-69.1
 # Not named in the PR body, and a silent permit on dev-05 rather than a false
 # refusal: the old allowlist asked whether `uv run ... --group test` appeared
 # anywhere in the command, so one sanctioned invocation rescued a bare one
@@ -3327,7 +3631,8 @@ check pytest-via-uv-group.sh BLOCK 'a sanctioned invocation rescuing a bare one'
 check alembic-via-uv-group.sh BLOCK 'the same rescue, alembic' \
   'uv run --group migrations alembic upgrade head && alembic downgrade -1'
 
-echo "=== REGRESSION: review of #69, the group was matched after the tool ==="
+section "=== REGRESSION: review of #69, the group was matched after the tool ==="
+req GH-69.1
 # `--group test` was looked for anywhere in the fragment, so the tool's own
 # argument rescued the command and the comment claiming the group had to be
 # named by the runner was false. It is named before the tool now: the fragment
@@ -3337,7 +3642,8 @@ check pytest-via-uv-group.sh BLOCK 'the group as an argument of pytest' \
 check alembic-via-uv-group.sh BLOCK 'the group as an argument of alembic' \
   'uv run alembic upgrade head --group migrations'
 
-echo "=== REGRESSION: review of #69, the intermittency survived inside the rule ==="
+section "=== REGRESSION: review of #69, the intermittency survived inside the rule ==="
+req GH-69.1
 # The same quote-versus-space split the migration was supposed to end, one rule
 # further down: the second rule re-matched the name as an argument with a
 # whitespace-only boundary, so `uv run echo "pytest ..."` was ALLOW or BLOCK
@@ -3357,7 +3663,8 @@ check pytest-via-uv-group.sh ALLOW 'prose is still prose, name after the quote' 
 check pytest-via-uv-group.sh ALLOW 'prose is still prose, name after a space' \
   'echo "we run pytest via the test group"'
 
-echo "=== ACCEPTED gap: #69, these two carry no wrapper rule ==="
+section "=== ACCEPTED gap: #69, these two carry no wrapper rule ==="
+req GH-69.1
 # The four boundary hooks refuse a wrapped command outright, because nothing
 # can be read out of a quoted payload. These two do not, and both verdicts
 # below were ALLOW before this change as well -- by accident rather than by
@@ -3377,13 +3684,14 @@ check alembic-via-uv-group.sh ALLOW 'a wrapped bare alembic is not read' \
 # question answered three ways in the four boundary hooks at the same time. One
 # question, one place -- and cs_split, which had no fixture here, has one there.
 
-echo "=== append-only: which docs directories are guarded, and which are not ==="
+section "=== append-only: which docs directories are guarded, and which are not ==="
 # First coverage for append-only-docs.sh and its Edit/Write companion. It was
 # added with issue #61, which put a comment in both files saying docs/research/
 # is deliberately outside the guarded set -- and a comment is not evidence. The
 # refusing direction is checked alongside it, because an ALLOW for research/
 # that came from the guard having stopped working altogether would look
 # identical to the one intended.
+req GH-69.2
 check append-only-docs.sh BLOCK 'sed -i over a dev-log entry' \
   "sed -i 's/a/b/' docs/dev-log/devlog_2026-08-25_session-2.md"
 check append-only-docs.sh BLOCK 'rm of an eval report' \
@@ -3392,18 +3700,20 @@ check append-only-docs.sh BLOCK 'truncating redirect into a lessons-learned entr
   'echo x > docs/lessons-learned/some-lesson.md'
 check append-only-docs.sh ALLOW 'appending to a dev-log entry' \
   'echo x >> docs/dev-log/devlog_2026-08-25_session-2.md'
+req GH-69.2
 check append-only-docs.sh ALLOW 'sed -i over a research document' \
   "sed -i 's/a/b/' docs/research/non-openrouter-response-bodies.md"
 check append-only-docs.sh ALLOW 'sed -i over a design document' \
   "sed -i 's/a/b/' docs/design/llm-call-log.md"
 
-echo "=== REGRESSION: #69, the whole-directory case the slash hid ==="
+section "=== REGRESSION: #69, the whole-directory case the slash hid ==="
 # The pattern required a trailing slash, so the outer guard never fired on the
 # directory itself and the removal that destroys the most history was the one
 # that passed. Every verdict here was measured on dev-05 at 7cb4891, where the
 # first four were ALLOW. The fifth is the control they sit one character away
 # from, and it was already BLOCK: same command, opposite verdict, on a
 # difference that has nothing to do with what it would run.
+req GH-69.2
 check append-only-docs.sh BLOCK 'rm -rf of the dev-log directory, no trailing slash' \
   'rm -rf docs/dev-log'
 check append-only-docs.sh BLOCK 'rm -rf of the lessons-learned directory' \
@@ -3430,7 +3740,8 @@ check append-only-docs.sh ALLOW 'a sibling file whose name begins with a guarded
 check append-only-docs.sh ALLOW 'reading the directory is not removing it' \
   'ls docs/dev-log'
 
-echo "=== REGRESSION: review of #69, the spellings the Bash side still compared ==="
+section "=== REGRESSION: review of #69, the spellings the Bash side still compared ==="
+req GH-69.2
 # The Edit companion was normalised and this one was not, so the same finding
 # stood on this side of the pair: a spelling a shell reduces to the guarded
 # directory was permitted. All four were ALLOW after the first fix. Nothing
@@ -3453,7 +3764,8 @@ check append-only-docs.sh ALLOW 'no separator at all is a different name' \
 check append-only-docs.sh ALLOW 'a hyphen is not a path separator' \
   'rm -rf other/docs-dev-log'
 
-echo "=== REGRESSION: #69, overwriting an entry without naming a redirect ==="
+section "=== REGRESSION: #69, overwriting an entry without naming a redirect ==="
+req GH-69.2
 # Both routes overwrite an existing entry in place and neither was reached by
 # the rm/mv/cp list or by the redirect rule, so both were ALLOW at 7cb4891.
 # The third is the control that was already BLOCK.
@@ -3464,7 +3776,8 @@ check append-only-docs.sh BLOCK 'tee over a dev-log entry' \
 check append-only-docs.sh BLOCK 'the control it sits beside' \
   ': > docs/dev-log/devlog_2026-08-25_session-2.md'
 
-echo "=== ACCEPTED false positive: #69, tee -a appends and is refused anyway ==="
+section "=== ACCEPTED false positive: #69, tee -a appends and is refused anyway ==="
+req GH-69.2
 # The verb is read and its options are not, so the appending spelling of tee
 # goes with the truncating one. `>>` is the documented way to append and stays
 # permitted, which is the check beneath this one. Written down because a fix
@@ -3521,16 +3834,14 @@ feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <ra
         | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
   rc=$?
   if [ "$rc" != 2 ]; then
-    printf '  FAIL %s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|\n' \
+    fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
       "$label" "$want" "$rc" "$err"
-    FAILED=1
     return
   fi
   case "$err" in
-    *"$want"*) printf '  ok   says  %s\n' "$label" ;;
-    *) printf '  FAIL %s\n         wanted the refusal to say |%s|\n         it said |%s|\n' \
-         "$label" "$want" "$err"
-       FAILED=1 ;;
+    *"$want"*) pass refuse 'says  %s' "$label" ;;
+    *) fail refuse '%s\n         wanted the refusal to say |%s|\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
   esac
 }
 
@@ -3543,22 +3854,25 @@ feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <ra
   echo "the append-only Edit cases name files that are not there; they would prove nothing" >&2
   exit 1
 }
+req GH-69.3
 check_file append-only-docs-edit.sh BLOCK 'Edit of an existing dev-log entry' \
   'docs/dev-log/devlog_2026-08-25_session-2.md'
 check_file append-only-docs-edit.sh ALLOW 'Write of a dev-log entry not yet there' \
   'docs/dev-log/devlog_2099-01-01_session-1.md'
 check_file append-only-docs-edit.sh ALLOW 'Edit of a dev-log README that does exist' \
   'docs/dev-log/README.md'
+req GH-69.3
 check_file append-only-docs-edit.sh ALLOW 'Edit of an existing research document' \
   'docs/research/non-openrouter-response-bodies.md'
 
-echo "=== REGRESSION: #69, a spelling of the path that was not the literal prefix ==="
+section "=== REGRESSION: #69, a spelling of the path that was not the literal prefix ==="
 # The root was stripped by string prefix and the remainder anchored at ^docs/,
 # so the comparison was between spellings rather than between paths. The first
 # two were ALLOW at 7cb4891, on a file that exists. A leading ./ is not an
 # evasion -- it is an ordinary way to write a relative path, which is the shape
 # of the ordinary mistake this hook is for. The absolute spelling is the
 # control that already worked.
+req GH-69.3
 check_file append-only-docs-edit.sh BLOCK 'Edit of an existing entry written with a leading ./' \
   './docs/dev-log/devlog_2026-08-25_session-2.md'
 check_file append-only-docs-edit.sh BLOCK 'Edit of an existing entry reached through ..' \
@@ -3576,7 +3890,7 @@ check_file append-only-docs-edit.sh ALLOW 'Write of a new entry written with a l
 check_file append-only-docs-edit.sh ALLOW 'Edit of a README written with a leading ./' \
   './docs/dev-log/README.md'
 
-echo "=== the arming properties, asserted as literals ==="
+section "=== the arming properties, asserted as literals ==="
 # A second kind of check: the ones above drive a hook as a process and read its
 # exit code, and these read a file. It is a new seam in this suite and is named
 # as one.
@@ -3591,6 +3905,7 @@ echo "=== the arming properties, asserted as literals ==="
 # This announces at the next review rather than on the next push: the repository
 # has no CI, so the suite runs when someone runs it. That is how every check
 # above already behaves.
+req GH-44.7 FR-40
 armed 'the report fetches with an explicit prune' \
   "$HOOKS/report-stale-branches.sh" 'git fetch --prune --quiet origin'
 armed 'the fetch is bounded, so an offline session still starts' \
@@ -3609,11 +3924,13 @@ armed 'a failed fetch says so, because neither detector is armed after one' \
 # as the fetch pins above. They are not evidence about the repository's
 # settings and cannot be. Nothing in `.claude/` can be that evidence, and a
 # file claiming to be is the defect these replace.
+req FR-41 FR-43 GH-71
 armed 'the report reads the merge settings rather than trusting a record of them' \
   "$HOOKS/report-stale-branches.sh" "gh api 'repos/{owner}/{repo}'"
 armed 'and reads all three the branch lifecycle rule depends on' \
   "$HOOKS/report-stale-branches.sh" \
   '[.allow_squash_merge, .allow_rebase_merge, .delete_branch_on_merge]'
+req FR-42 FR-43
 armed 'the settings read is bounded, so an unreachable API still starts the session' \
   "$HOOKS/report-stale-branches.sh" 'timeout "$SETTINGS_TIMEOUT" gh api'
 armed 'a settings read that did not happen says so, rather than reading as fine' \
@@ -3624,6 +3941,7 @@ armed 'a settings read that did not happen says so, rather than reading as fine'
 # review of PR #77, not by this suite -- the pins above all stayed green,
 # because each one asks about a line and none asks what the lines are filed
 # under.
+req FR-41 FR-42
 armed 'an unread setting is reported as unknown, not as a changed one' \
   "$HOOKS/report-stale-branches.sh" 'merge settings: NOT FULLY READ'
 armed 'and the DRIFTED heading is reached only by a value that came back wrong' \
@@ -3653,6 +3971,7 @@ tok 'the unread arm records a gap without also calling it a mismatch' \
 # what it is compared against -- and a fixed string spanning two lines is
 # satisfied by a file holding either one, measured on a two-line fixture for the
 # derivation pins below.
+req FR-41 FR-43
 armed 'squash merging must be off, or the fallback detector is unsound' \
   "$HOOKS/report-stale-branches.sh" 'drift allow_squash_merge "$SQUASH" false'
 armed 'rebase merging must be off, for the same reason' \
@@ -3664,6 +3983,7 @@ armed 'and delete_branch_on_merge must be on, which is what the gone detector re
 # thing a later edit deletes on its way to writing a value back down. `written`
 # rather than `armed`: this is prose in a comment, which is the whole of what it
 # asserts, and stripping comments would erase the line rather than a remark.
+req FR-44 GH-71
 written 'and the guard points at that report instead of recording a value itself' \
   "$HOOKS/no-work-on-stale-branch.sh" 'That report is the live answer, and'
 # And the same counting the dev-branch argument gets below, for the same reason
@@ -3688,6 +4008,7 @@ written 'the report says where that argument lives instead' \
 # it is sourcing the report, and sourcing the report runs the fetch.
 # Read-only by name and by content. The name is checked by being the path above;
 # the content is checked here.
+req GH-44.7
 unarmed 'the report removes no worktree' \
   "$HOOKS/report-stale-branches.sh" 'worktree remove'
 unarmed 'the report deletes no branch' \
@@ -3743,6 +4064,7 @@ DERIVATION
 )
 GUARD_DERIVATION=$(dev_derivation "$HOOKS/no-work-on-stale-branch.sh")
 REPORT_DERIVATION=$(dev_derivation "$HOOKS/report-stale-branches.sh")
+req GH-62
 tok 'the guard reads the dev refs in exactly one place' \
     '1' "$(dev_read_count "$HOOKS/no-work-on-stale-branch.sh")"
 tok 'and the report reads them in exactly one place' \
@@ -3809,6 +4131,7 @@ beside 'the report says where the argument was moved to' \
 # never empty there. What these three lines pin is that the identity test is
 # spelled the way the file says it is; they are not evidence that any one of
 # them decides an outcome, and the middle one does not.
+req GH-58.2
 armed 'the dev tip is resolved to a commit, from the ref the ancestry was read against' \
   "$HOOKS/no-work-on-stale-branch.sh" \
   'DEV_OID=$(git rev-parse --verify --quiet "refs/remotes/$DEV^{commit}" 2>/dev/null)'
@@ -3821,6 +4144,7 @@ armed 'and a whitelisted spelling must resolve to that same commit' \
 # and absent from the configuration is a hook that does nothing. jq reads it;
 # the expectation is a literal.
 SETTINGS="$HOOKS/../settings.json"
+req GH-44.7 FR-40
 tok 'settings.json runs the report at SessionStart' \
     '"$CLAUDE_PROJECT_DIR"/.claude/hooks/report-stale-branches.sh' \
     "$(jq -r '.hooks.SessionStart[]?.hooks[]?.command' "$SETTINGS" 2>/dev/null | grep report-stale-branches)"
@@ -3843,6 +4167,7 @@ tok 'settings.json runs the guard on every Bash command' \
 # 50 rather than 40: #100 added a third call, the pull request read, and the
 # same 15s margin is kept over the three budgets for the same reason.
 REPORT_TIMEOUT=$(jq -r '.hooks.SessionStart[]?.hooks[]? | select(.command | contains("report-stale-branches")) | .timeout' "$SETTINGS" 2>/dev/null)
+req FR-43
 tok 'the report hook outlasts its own network calls' '50' "$REPORT_TIMEOUT"
 # All three budgets, summed off the script. The END guard makes a renamed or
 # deleted budget print nothing rather than a smaller sum, which is the permitting
@@ -3898,10 +4223,11 @@ tok 'and it outlasts them by arithmetic, not by both literals happening to agree
 # which is gitignored and overrides this file on the one machine that has it.
 # #36 said changing baseRef "leaves the suite green", which was true of the
 # harness's behaviour and is false of this file now, which is the half this pins.
+req GH-99.2
 tok 'settings.json forks a worktree from origin/main, which is refused, and not from HEAD' \
     'fresh' "$(jq -r '.worktree.baseRef' "$SETTINGS" 2>/dev/null)"
 
-echo "=== #99: the report reads whether a branch cut from origin/main fails closed ==="
+section "=== #99: the report reads whether a branch cut from origin/main fails closed ==="
 # Why the report reads this is argued once, in the comment above the read in
 # report-stale-branches.sh, and not retold here. What this section holds is the
 # three outcomes that comment names, a fourth case with no line, and the suffix
@@ -3951,22 +4277,19 @@ anc_count() {  # anc_count <report output> -- how many main ancestry lines it pr
 }
 holds() {  # holds <label> <text> <literal>
   case "$2" in
-    *"$3"*) printf '  ok   holds %s\n' "$1" ;;
-    *) printf '  FAIL %s\n         expected |%s|\n         in |%s|\n' "$1" "$3" "$2"
-       FAILED=1 ;;
+    *"$3"*) pass static 'holds %s' "$1" ;;
+    *) fail static '%s\n         expected |%s|\n         in |%s|' "$1" "$3" "$2" ;;
   esac
 }
 # The absence has to be an absence in something that was read, for the reason
 # `unarmed` gives: an empty line is what a deleted read prints.
 lacks() {  # lacks <label> <text> <literal>
   if [ -z "$2" ]; then
-    printf '  FAIL %s\n         nothing was read, so the absence of |%s| is evidence of nothing\n' "$1" "$3"
-    FAILED=1
+    fail static '%s\n         nothing was read, so the absence of |%s| is evidence of nothing' "$1" "$3"
   else
     case "$2" in
-      *"$3"*) printf '  FAIL %s\n         must not contain |%s|\n         in |%s|\n' "$1" "$3" "$2"
-              FAILED=1 ;;
-      *) printf '  ok   lacks %s\n' "$1" ;;
+      *"$3"*) fail static '%s\n         must not contain |%s|\n         in |%s|' "$1" "$3" "$2" ;;
+      *) pass static 'lacks %s' "$1" ;;
     esac
   fi
 }
@@ -4011,6 +4334,7 @@ git -C "$ANC_NOT" fetch -q origin
 anc_need "$ANC_NOT" refs/remotes/origin/main refs/remotes/origin/dev-05 refs/remotes/origin/dev-4
 OUT=$(anc_report "$ANC_NOT")
 LINE=$(anc_line "$OUT")
+req GH-99.3
 holds 'main with a merge the dev branch lacks is reported as NOT an ancestor' "$LINE" "$NOT_LINE"
 holds 'and the report says what that costs, in the guard it costs it in' "$LINE" \
   'passes a branch that is ahead'
@@ -4144,6 +4468,7 @@ lacks 'and does not say a fetch failed that never ran' "$LINE" "$STALE_SUFFIX"
 # The literal runs on to the ref: the NOT READ message names the command too,
 # and is not a comment `armed` strips, so the bare command stayed green with the
 # read replaced by `true`.
+req GH-99.3 FR-40
 armed 'the report reads the ancestry with git rather than recording it' \
   "$HOOKS/report-stale-branches.sh" 'git merge-base --is-ancestor refs/remotes/origin/main'
 # #99 Q16: the report cites nothing new for this line -- the reasoning is beside
@@ -4151,7 +4476,7 @@ armed 'the report reads the ancestry with git rather than recording it' \
 unarmed 'the report cites no issue for the ancestry line' \
   "$HOOKS/report-stale-branches.sh" '#99'
 
-echo "=== issue #100: the report classifies by pull request, as the sweep does ==="
+section "=== issue #100: the report classifies by pull request, as the sweep does ==="
 # The branch-hygiene sweep defines its three classes by pull request state and
 # acts on one of them; the report it acts on classified by ref state and never
 # read a pull request. Why the report was the side changed is argued in its
@@ -4316,6 +4641,7 @@ for out in "$REPORT_READ" "$REPORT_UNREAD"; do
 done
 
 echo "--- pull requests read: each row of the table in #100 ---"
+req GH-100
 written 'the report says it read the pull requests' \
   "$REPORT_READ" 'pull requests: read'
 written 'row 1: a pull request closed unmerged, remote branch present, is stale' \
@@ -4383,7 +4709,7 @@ armed 'in the column order the stand-in above answers in' \
 # The skill's side of #100 is asserted with the rest of the sweep's text, below,
 # where that section is extracted.
 
-echo "=== CLAUDE.md names every hook that carries the boundary ==="
+section "=== CLAUDE.md names every hook that carries the boundary ==="
 # A third kind of check, and the second here that reads a file rather than
 # driving a process: this one asks whether the document agrees with the
 # configuration.
@@ -4410,8 +4736,8 @@ echo "=== CLAUDE.md names every hook that carries the boundary ==="
 # belong to the pattern, so no literal carries its own.
 present() {  # present <label> <needle> <space-separated haystack>
   case " $3 " in
-    *" $2 "*) printf '  ok   %s\n' "$1" ;;
-    *) printf '  FAIL %s\n' "$1"; FAILED=1 ;;
+    *" $2 "*) pass static '%s' "$1" ;;
+    *) fail static '%s' "$1" ;;
   esac
 }
 
@@ -4427,6 +4753,7 @@ awk '/^## What an unattended agent may do to this repository$/ {f=1; print; next
 # The extraction is itself a claim about a heading that can be renamed, so it is
 # checked from both ends before anything is asserted against it: the heading is
 # in what came out, and a line from another section is not.
+req GH-63 US-16
 written 'the extracted section is the boundary section' \
   "$SECTION" 'What an unattended agent may do to this repository'
 unarmed 'and it is that section rather than the whole file' \
@@ -4494,6 +4821,7 @@ set +f
 # "Edit|Write" would answer 1 while a second hook guarded edits under any of
 # them. So the matcher is used as what it is, a pattern, and the expectation is
 # the literal 1.
+req FR-6 US-19
 tok 'one hook runs on an Edit, which is the number the section claims' \
     '1' \
     "$(jq -r '[.hooks.PreToolUse[]? | select((.matcher // "*") as $m
@@ -4523,10 +4851,11 @@ case "$CLAIMED_WORD" in
 esac
 # Top-level items only: the second consequence carries an indented continuation
 # paragraph, which is part of that item and not a sixth one.
+req GH-73
 tok 'the left-open list numbers as many consequences as its head claims' \
     "$CLAIMED" \
     "$(printf '%s\n' "$LEFT_OPEN" | grep -cE '^[0-9]+\. ')"
-echo "=== the documents answer the citations the hooks make into them ==="
+section "=== the documents answer the citations the hooks make into them ==="
 # A fourth kind of check, and the section above with its direction reversed:
 # there settings.json is the fact and CLAUDE.md the claim; here the hooks are
 # the fact -- they ship, they run, and their headers send a reader somewhere --
@@ -4565,6 +4894,7 @@ entry() {  # entry <file> <bolded name> -- one glossary entry, name to _Avoid_
 
 WORKTREE_ENTRY="$FIXTURES/context-worktree-branch.md"
 entry "$CONTEXT_MD" 'Worktree branch' > "$WORKTREE_ENTRY"
+req GH-70.1 FR-27 US-24 FR-37
 written 'the extracted entry is the worktree branch entry' \
   "$WORKTREE_ENTRY" '**Worktree branch**:'
 unarmed 'and it is that entry rather than the whole glossary' \
@@ -4581,6 +4911,7 @@ written 'and that the worktree it was made in is not reused after it' \
 
 RESERVED_ENTRY="$FIXTURES/context-reserved-act.md"
 entry "$CONTEXT_MD" 'Reserved act' > "$RESERVED_ENTRY"
+req GH-70.3 FR-27 US-26
 written 'the extracted entry is the reserved act entry' \
   "$RESERVED_ENTRY" '**Reserved act**:'
 unarmed 'and it is that entry rather than the whole glossary' \
@@ -4589,6 +4920,7 @@ unarmed 'and it is that entry rather than the whole glossary' \
 # report-stale-branches.sh calls removing a worktree "a reserved act in
 # CONTEXT.md" in its header, and prints the same claim into every session's
 # transcript. The enumeration named four acts and that was not one of them.
+req GH-70.3 FR-29 US-26
 written 'the enumeration names the act the report cites' \
   "$RESERVED_ENTRY" 'removing a worktree or deleting a worktree branch'
 
@@ -4614,6 +4946,7 @@ RESERVED_FLAT="$FIXTURES/context-reserved-act.flat"
 flatten "$RESERVED_ENTRY" > "$RESERVED_FLAT"
 PARAGRAPH_FLAT="$FIXTURES/boundary-paragraph.flat"
 flatten "$PARAGRAPH" > "$PARAGRAPH_FLAT"
+req GH-97.2 FR-29
 written 'the reserved act entry reserves any write to a release' \
   "$RESERVED_FLAT" 'any write to a release'
 unarmed 'and no longer narrows it to publishing one' \
@@ -4636,6 +4969,7 @@ unarmed 'and no longer narrows it to creating or deleting one' \
 # accurate today turns this red although nothing is wrong yet, and that is a
 # failure which is visible and one edit away. A second copy of a count that is
 # allowed to stand goes stale in silence, which is the direction that matters.
+req GH-70.3
 unarmed 'the skill does not carry the count that went stale' \
   "$SKILL_MD" 'four acts'
 unarmed 'nor a corrected one, which would go stale the same way' \
@@ -4656,6 +4990,7 @@ written 'it cites the enumeration instead of counting it' \
 # defect: it would have stayed green through a revert of every line these two
 # headers gained. Measured on `git show origin/dev-05:` copies of both files,
 # which carry the noun and not the pointer.
+req GH-70.2 FR-38
 CITATION='"The sweep" in the branch-hygiene skill'
 for hook in no-work-on-stale-branch.sh report-stale-branches.sh; do
   written "$hook points at the sweep by name" "$HOOKS/$hook" "$CITATION"
@@ -4721,6 +5056,7 @@ written 'the sweep says how often it is run, which is by hand and never' \
 # definitions name the wording the report prints for each class, which the
 # report fixture above asserts as well. A definition that drifts from what the
 # report prints turns one side or the other red.
+req GH-100
 written 'the sweep defines stale by what the report prints for a merged pull request' \
   "$SWEEP_SECTION" '`merged: pull request #N`'
 written 'and for a closed one' \
@@ -4747,6 +5083,7 @@ written 'where a gone upstream is stale by ref state' \
 STALE_SECTION="$FIXTURES/branch-hygiene-report.md"
 awk '/^### 2\. Report what is stale/ {f=1; print; next} f && /^###? / {exit} f {print}' \
     "$SKILL_MD" > "$STALE_SECTION"
+req GH-100 US-29
 written 'the extracted section is Report what is stale' \
   "$STALE_SECTION" 'Report what is stale'
 unarmed 'and it stops before the procedure that follows it' \
@@ -4768,6 +5105,7 @@ written 'and one of its commands prints the commit dates it says they cover' \
 REPORT_HEADER="$FIXTURES/report-header.txt"
 awk 'NR == 1 { next } /^#/ { print; next } { exit }' \
     "$HOOKS/report-stale-branches.sh" > "$REPORT_HEADER"
+req GH-99.1
 written 'the extracted header is the report header' \
   "$REPORT_HEADER" 'THE ARMING PROPERTY IS NOT SELF-ANNOUNCING'
 unarmed 'and it stops at the first line of code' "$REPORT_HEADER" 'FETCH_TIMEOUT='
@@ -4781,6 +5119,7 @@ unarmed 'nor the second' "$REPORT_HEADER" 'reset --hard'
 # #99 Q1: what the tip is. The entry is where a reader of the pointer arrives.
 ACTIVE_ENTRY="$FIXTURES/context-active-dev-branch.md"
 entry "$CONTEXT_MD" 'Active dev branch' > "$ACTIVE_ENTRY"
+req GH-99.1 FR-27 US-24
 written 'the extracted entry is the active dev branch entry' \
   "$ACTIVE_ENTRY" '**Active dev branch**:'
 unarmed 'and it is that entry rather than the whole glossary' \
@@ -4797,6 +5136,7 @@ written 'which a worktree branch is never cut from' \
 # way it names `git worktree remove`, because an act nothing refuses is only
 # reserved in a document a reader can find. Written apart from the enumeration
 # literal checked above, which has to survive the addition unbroken.
+req GH-99.1 US-26
 written 'the enumeration reserves moving a local main or dev branch' \
   "$RESERVED_ENTRY" 'moving a local `main` or `dev-NN`'
 written 'and names moving the ref without a push, which passes every hook' \
@@ -4809,6 +5149,7 @@ written 'and a fetch into the local branch, which passes every hook too' \
 # the second one from discarding a worktree's commits, and the sentence saying
 # nothing enforces it -- with the one assumption the refusal of a skipped step
 # rests on, which is what the report's main ancestry line reads.
+req GH-99.1 FR-37
 written 'the boundary section gives the first route, untracked' \
   "$SECTION" 'git worktree add --no-track -b <branch> <path> origin/dev-NN'
 written 'and the second' "$SECTION" 'git reset --hard origin/dev-NN'
@@ -4828,6 +5169,7 @@ tok 'nor its forced branch move' \
     '0' "$(prose_count "$CLAUDE_MD" 'git branch -f')"
 # #99 Q13: not a sixth consequence. Those are consequences of the hooks, and
 # this rule has no hook. $LEFT_OPEN is a string, so the string helpers.
+req GH-99.1 GH-73
 holds 'the extracted list is the left-open list' "$LEFT_OPEN" 'Deliberately left open'
 lacks 'and the unenforced rule is not one of its items' \
   "$LEFT_OPEN" 'git reset --hard origin/dev-NN'
@@ -4837,16 +5179,18 @@ lacks 'and the unenforced rule is not one of its items' \
 # the new dev branch because it forked from HEAD. Found on review of #99, not by
 # this suite. The value is refused
 # rather than the sentence, because the sentence can be reworded around it.
+req GH-99.2
 unarmed 'the branch-hygiene skill does not describe worktrees forking from HEAD' \
   "$SKILL_MD" 'worktree.baseRef: head'
 
 # The count removed from this section's head, held removed. Split across two
 # quoted words so that this line does not contain the phrase it refuses.
+req GH-99.1
 unarmed 'this section'"'"'s head no longer counts its citations at three' \
   "$HOOKS/check-hooks.sh" "three citations"" named below"
 unarmed 'nor at four, the number a correction would have reached for' \
   "$HOOKS/check-hooks.sh" "four citations"" named below"
-echo "=== the tokeniser's header names every hook that sources it ==="
+section "=== the tokeniser's header names every hook that sources it ==="
 # The same audit the section above gets, pointed at the one other sentence in
 # this tree that claims to list the hooks. lib/command-scan.sh opens "which is
 # every hook that reads a command", and that claim has now gone stale twice:
@@ -4867,6 +5211,7 @@ CS_LIB="$HOOKS/lib/command-scan.sh"
 first_comment_block() {  # first_comment_block <file> -- after the shebang, up to the first bare #
   awk 'NR == 1 { next } /^#$/ { exit } /^#/ { print; next } { exit }' "$1" 2>/dev/null
 }
+req GH-63
 CS_HEADER=$(first_comment_block "$CS_LIB")
 CS_NAMED=$(printf '%s\n' "$CS_HEADER" | grep -oE '[A-Za-z0-9_-]+\.sh' | sort -u | tr '\n' ' ')
 # Who actually sources it, read off the disk rather than listed here.
@@ -4905,7 +5250,7 @@ for hook in $CS_NAMED; do
 done
 set +f
 
-echo "=== the housekeeping generator prints only what the sweep and rotation permit ==="
+section "=== the housekeeping generator prints only what the sweep and rotation permit ==="
 # .claude/skills/housekeeping/housekeeping-commands.sh turns the report into
 # commands for Bertan to run: `git worktree remove`, `git branch -d` and
 # `git push origin --delete`. It runs none of them, but a person pasting its
@@ -5064,6 +5409,7 @@ case "$HK_NOTDUE" in *'# report: 3 other branch(es) are clear; 11 stale, 1 uncla
 esac
 
 echo "--- the sweep ---"
+req GH-70.2
 holds 'a merged worktree with a stale lock is unlocked, removed, then its branch deleted' "$HK_NOTDUE" \
 "# hk-merged -- pull request #1
 git worktree unlock $HK_Q/hk-merged
@@ -5103,6 +5449,7 @@ holds 'a closed pull request is a decision, not a command' "$HK_NOTDUE" \
 lacks 'so its branch is not deleted' "$HK_NOTDUE" 'git branch -d hk-closed'
 
 echo "--- rotated-past dev branches: the first #126 finding ---"
+req US-29 GH-100
 holds 'a rotated-past branch whose pull request into main is open is held' "$HK_NOTDUE" \
   '#   dev-04 -- rotated past, held: its pull request into main, #9, is open.'
 lacks 'and is not deleted locally' "$HK_NOTDUE" 'git branch -d dev-04'
@@ -5120,6 +5467,7 @@ git branch -d dev-03
 git push origin --delete dev-03"
 
 echo "--- the rotation of the active dev branch ---"
+req US-29 GH-100
 holds 'no pull request into main is not due' "$HK_NOTDUE" \
   '# dev-05 is not due to rotate: it has no pull request into main.'
 holds 'merged with a pull request open against it is not due' "$HK_HELD" \
@@ -5139,6 +5487,7 @@ for out in "$HK_NOTDUE" "$HK_HELD" "$HK_DUE"; do
 done
 
 echo "--- the printed plan, executed ---"
+req GH-70.2 US-29
 # The not-due plan, run as Bertan would run it. What it removes and what it
 # leaves are both asserted: a plan that stopped at its first command would pass
 # every `holds` above.
@@ -5165,6 +5514,7 @@ tok 'dev-03 is deleted on origin, and dev-01 and dev-04 are not' 'dev-01 dev-04'
       | tr '\n' ' ' | sed 's/ $//')"
 
 echo "--- where it cannot tell, it prints no command and exits 1 ---"
+req GH-100
 # A repository with no origin, one whose origin cannot be reached, a report
 # that could not read pull requests, and a generator whose own read failed.
 hk_bare_fixture() {  # hk_bare_fixture <dir> [origin url]
@@ -5192,6 +5542,7 @@ for out in "$HK_NOORIGIN" "$HK_UNREACHABLE" "$HK_REPORT_UNREAD" "$HK_GEN_UNREAD"
 done
 
 echo "--- the report's wording, held equal in both files ---"
+req GH-100
 # The coupling the generator's header names. Each phrase is printed by the
 # report and matched by the generator; a rewording on either side turns its own
 # line red, where the fixture above would say only that some plan changed. The
@@ -5207,7 +5558,7 @@ armed "the generator's own read asks for the base" "$HK_GEN" \
 armed 'in the column order the stand-in above answers in' "$HK_GEN" \
   "--jq '.[] | \"\\(.number)\\t\\(.headRefName)\\t\\(.baseRefName)\\t\\(.state)\"'"
 
-echo "=== this suite's header names every file it checks ==="
+section "=== this suite's header names every file it checks ==="
 # The same audit again, pointed at this file. Its header opened by naming four
 # hooks while the suite also checked five more, the library, settings.json and
 # three documents, and further down it pointed at "the number below" after the
@@ -5224,6 +5575,7 @@ echo "=== this suite's header names every file it checks ==="
 # paragraph said -- which is why it is checked from both ends first, the way
 # the boundary section's is. Uses SETTINGS, HOOK_FILES and `present` from the
 # boundary-section audit above, so it has to stay below it.
+req GH-102
 SELF_PARAGRAPH="$FIXTURES/check-hooks-first-paragraph.txt"
 first_comment_block "$HOOKS/check-hooks.sh" > "$SELF_PARAGRAPH"
 written 'the extracted paragraph is the one that states the scope' \
@@ -5238,16 +5590,19 @@ SELF_NAMED=$(grep -oE '[A-Za-z0-9_.-]+\.(sh|json|md)' "$SELF_PARAGRAPH" | sort -
 RUN_BY_SETTINGS=$(jq -r '.hooks[][]?.hooks[]?.command' "$SETTINGS" 2>/dev/null \
   | sed 's|.*/||; s|[[:space:]].*||' | sort -u | tr '\n' ' ')
 # The documents this suite reads, derived off its own text: each is assigned
-# from a quoted path under $HOOKS/.. . A document read through any other
-# spelling -- $REPO_ROOT, say -- is not found here, and the header is not held
-# to it; that limit is taken rather than closed, because every document read
+# from a quoted path under $HOOKS/.. , or, since #104 read requirements.md and
+# runbook.md beside this suite, under $HOOKS itself. A document read through any
+# other spelling -- $REPO_ROOT, say -- is not found here, and the header is not
+# held to it; that limit is taken rather than closed, because every document read
 # today is spelled this way and widening the pattern reaches the fixture paths
 # the append-only checks name, which are not files this suite audits. The
 # pattern carries a backslash, so this line is not among its own matches.
 # `sh` is among the extensions because housekeeping-commands.sh is read from
 # outside .claude/hooks/ and so is on no disk listing above; at the review of
-# #126 it was the only `.sh` path spelled this way.
-READ_DOCS=$(grep -oE '"\$HOOKS/\.\./[^"]*\.(json|md|sh)"' "$HOOKS/check-hooks.sh" \
+# #126 it was the only `.sh` path spelled this way. Beside this suite, under
+# $HOOKS itself, only `md` is read this way: every `.sh` there is on the disk
+# listing already, this suite among them, and the header does not name itself.
+READ_DOCS=$(grep -oE '"\$HOOKS/(\.\./[^"]*\.(json|md|sh)|[^"/]*\.md)"' "$HOOKS/check-hooks.sh" \
   | sed 's|.*/||; s|"$||' | sort -u | tr '\n' ' ')
 [ -n "$SELF_NAMED" ] && [ -n "$RUN_BY_SETTINGS" ] && [ -n "$READ_DOCS" ] \
   && [ -n "$HOOK_FILES" ] || {
@@ -5287,7 +5642,7 @@ written 'the whole header runs on past the first paragraph' \
 unarmed 'and it points at no number below it, since none is there' \
   "$SELF_WHOLE_HEADER" 'the number below'
 
-echo "=== issue #84: every hook refuses when lib/command-scan.sh does not load ==="
+section "=== issue #84: every hook refuses when lib/command-scan.sh does not load ==="
 # THE LOAD CONTRACT, driven. lib/command-scan.sh states it; the hooks that
 # source that file have to hold it, and before #84 three of the four there
 # were then did not --
@@ -5482,6 +5837,7 @@ echo "--- no-git-push.sh, which had no guard at all ---"
 # The measured #84 case: with no guard, cs_git_args was undefined, the HAVE_PUSH
 # loop found no push, and the hook left without an opinion on a forced push of a
 # reserved branch.
+req GH-84.1
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'a command with no push in it, library intact' \
   'ls'
 check_in "$PUSH_WT" "$(nolib_path no-git-push.sh)" BLOCK 'no lib/, anything at all' \
@@ -5494,8 +5850,10 @@ check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_git_args)" BLOCK 'a librar
   'ls'
 check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_within_cap)" BLOCK 'a library missing only cs_within_cap' \
   'ls'
+req GH-84.1 US-3
 check_in "$PUSH_WT" "$(halflib_path no-git-push.sh cs_git_args)" BLOCK 'a renamed cs_git_args does not permit a forced push' \
   'git push --force origin dev-05'
+req GH-84.1
 says "$PUSH_WT" "$(nolib_path no-git-push.sh)" 'no-git-push.sh could not load' \
   'the refusal names this hook and not one of its three siblings' 'ls'
 says "$PUSH_WT" "$(nolib_path no-git-push.sh)" 'Refusing rather than permitting' \
@@ -5506,6 +5864,7 @@ echo "--- no-pr-decisions.sh, which had no guard at all ---"
 # and cs_join, and no cs_git_args at all. Every rule in it reads its arguments
 # through cs_gh_args, so renaming that one permitted `gh pr merge` and
 # `gh pr create --base main` together.
+req GH-84.1
 check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'a command with no gh in it, library intact' \
   'ls'
 check_in "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" BLOCK 'no lib/, anything at all' \
@@ -5516,14 +5875,17 @@ check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_split)" BLOCK 'a librar
   'ls'
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_gh_args)" BLOCK 'a library missing only cs_gh_args' \
   'ls'
+req GH-84.1 US-15
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_gh_args)" BLOCK 'a renamed cs_gh_args does not permit a merge' \
   'gh pr merge 81'
+req GH-84.1 FR-15
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_gh_args)" BLOCK 'nor a pull request based on main' \
   'gh pr create --base main'
 # cs_join is read late, by the wrapper rules alone, so a renamed cs_join is
 # invisible to every check above it. It is required because the hook calls it and
 # not because a rule was seen to break: the contract is the set, not whichever
 # subset a driving command happens to reach.
+req GH-84.1
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_join)" BLOCK 'a library missing only cs_join' \
   'ls'
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_within_cap)" BLOCK 'a library missing only cs_within_cap' \
@@ -5538,6 +5900,7 @@ echo "--- no-commit-to-main.sh, which had a guard and permitted anyway ---"
 # answered. `cs_git_args commit` and `cs_git_args push` fail exactly as a command
 # holding neither does, so with cs_git_args renamed away every commit and every
 # push was permitted while cs_split -- the only name required -- was still there.
+req GH-84.1
 check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'a command touching nothing, library intact' \
   'ls'
 check_in "$ON_MAIN" "$(nolib_path no-commit-to-main.sh)" BLOCK 'no lib/, commit on main' \
@@ -5555,8 +5918,10 @@ check_in "$ON_DEV" "$(halflib_path no-commit-to-main.sh cs_within_cap)" BLOCK 'a
 # The #84 measurement itself, on the fixture that permitted it: a push landing on
 # main, from a checkout that is not main, refused by the guard because the refspec
 # rule that would otherwise catch it cannot run without the tokeniser.
+req GH-84.1 US-1
 check_in "$ON_DEV" "$(halflib_path no-commit-to-main.sh cs_git_args)" BLOCK 'a renamed cs_git_args does not permit a push to main' \
   'git push origin HEAD:main'
+req GH-84.1
 says "$ON_DEV" "$(nolib_path no-commit-to-main.sh)" 'no-commit-to-main.sh could not load' \
   'the refusal names this hook and not one of its three siblings' 'ls'
 says "$ON_DEV" "$(nolib_path no-commit-to-main.sh)" 'Refusing rather than permitting' \
@@ -5577,6 +5942,7 @@ echo "--- no-work-on-stale-branch.sh, the one that had it right ---"
 # anyway. The scope survives where it still means something -- a library missing
 # only a tokeniser function, or with its word list emptied, is still an ALLOW on
 # a branch carrying work, and those checks are unchanged.
+req GH-84.1 GH-95.2
 check_in "$WT_STALE" "$(nolib_path no-work-on-stale-branch.sh)" BLOCK 'no lib/, on a stale branch' \
   'git status'
 check_in "$WT_WORK" "$(halflib_path no-work-on-stale-branch.sh cs_tool_input)" BLOCK \
@@ -5593,6 +5959,7 @@ flip "$WT_WORK" "$(nolib_path no-work-on-stale-branch.sh)" ALLOW BLOCK 'no lib/,
 # cs_normalise and cs_split are driven anyway, because the contract is checked per
 # function everywhere: a check written only where a defect was found is the check
 # that will be missing at the next one.
+req GH-84.1
 check_in "$WT_STALE" "$(halflib_path no-work-on-stale-branch.sh cs_git_args)" BLOCK 'a library missing only cs_git_args' \
   'git commit -m "wip"'
 check_in "$WT_STALE" "$(halflib_path no-work-on-stale-branch.sh cs_normalise)" BLOCK 'a library missing only cs_normalise' \
@@ -5616,6 +5983,7 @@ echo "--- pytest-via-uv-group.sh and alembic-via-uv-group.sh, from #69 ---"
 # What these are: pins. Both guards were already right when #69 shipped them, so
 # nothing here fails against the unfixed hooks, and the two nolib checks are that
 # issue's own moved verbatim. cs_split is the fixture #69 did not build.
+req GH-84.1
 check_in "$ON_DEV" pytest-via-uv-group.sh ALLOW 'a command naming no runner, library intact' \
   'ls'
 check_in "$ON_DEV" "$(nolib_path pytest-via-uv-group.sh)" BLOCK \
@@ -5652,6 +6020,7 @@ echo "--- cs_tool_input, the reader every consumer calls since #95 ---"
 # command, exit 0 -- is the guard. So each consumer is driven with it renamed
 # away, on a command every one of them otherwise permits. no-work-on-stale-branch.sh
 # is driven in its own block above, on the branch where its scope used to permit.
+req GH-84.1 GH-95.2
 for hook in alembic-via-uv-group.sh no-commit-to-main.sh no-git-push.sh no-pr-decisions.sh pytest-via-uv-group.sh; do
   check_in "$ON_DEV" "$(halflib_path "$hook" cs_tool_input)" BLOCK \
     "a library missing only cs_tool_input, $hook" 'ls'
@@ -5660,6 +6029,7 @@ done
 # so every check here is new. feed rather than check_in, because the Edit hook
 # reads file_path. #95 gave a second, that feed's verdict was exact; #98 made
 # every helper's exact, so it no longer separates the two.
+req GH-84.1 GH-95.2
 feed "$PATH" append-only-docs.sh ALLOW 'append-only-docs.sh, a command naming no guarded path, library intact' \
   '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
 feed "$PATH" "$(nolib_path append-only-docs.sh)" BLOCK 'no lib/, append-only-docs.sh refuses anything at all' \
@@ -5688,6 +6058,7 @@ echo "--- cs_within_cap, the line cap every Bash hook calls since #96 ---"
 # append-only-docs.sh takes this function from the library beside its reader, so
 # it is driven here with the rest: the other consumers' halflib checks for it
 # stand in their own blocks above.
+req GH-84.1 GH-96.3
 check_in "$ON_DEV" "$(halflib_path append-only-docs.sh cs_within_cap)" BLOCK \
   'a library missing only cs_within_cap, append-only-docs.sh' 'ls'
 # Every halflib check for cs_within_cap is over-determined, and that is what
@@ -5794,6 +6165,7 @@ done
 cs_split_after_loading() {  # cs_split_after_loading <library> -- present or absent
   bash -c ". '$1'; command -v cs_split >/dev/null 2>&1 && echo present || echo absent"
 }
+req GH-79.4
 tok 'the intact library defines cs_split' \
     'present' "$(cs_split_after_loading "$HOOKS/lib/command-scan.sh")"
 tok 'a library with both halves of the word list empty withdraws it' \
@@ -5810,6 +6182,7 @@ tok 'and one with only the operand words empty' \
 # no-git-push.sh: the measured #79 case. Intact, `ls` is ALLOW -- the #84 block
 # above pins that -- so the BLOCK here is the guard. The prefixed push is the
 # verdict an emptied list permits when cs_split is left running.
+req GH-79.4 GH-84.1
 check_in "$PUSH_WT" "$(emptylist_path no-git-push.sh)" BLOCK \
   'no-git-push.sh, a library with no wrapper words, anything at all' 'ls'
 check_in "$PUSH_WT" "$(emptylist_path no-git-push.sh)" BLOCK \
@@ -5877,6 +6250,7 @@ check_in "$ON_DEV" "$(emptylist_path append-only-docs.sh)" BLOCK \
 
 # The mechanism as text, beside the mechanism as verdicts. `armed`, so a withdrawal
 # commented out during a debugging session and left that way does not satisfy it.
+req GH-79.4
 armed 'the library withdraws cs_split when the word list is incomplete' \
       lib/command-scan.sh 'unset -f cs_split'
 armed 'on either half, and not on the union' \
@@ -5896,6 +6270,7 @@ echo "--- the contract is written where the rename is made ---"
 # has no reason to open four hooks -- so the file being edited is where the
 # consequence has to be written, and these hold it there. `written` rather than
 # `armed`: this is prose, and stripping comments would leave nothing to match.
+req GH-84.3
 written 'the library states the load contract' \
   "$HOOKS/lib/command-scan.sh" 'THE LOAD CONTRACT'
 written 'and says that a rename reaches every consumer and this suite' \
@@ -5916,6 +6291,7 @@ written 'append-only-docs.sh points at the contract by name, having taken a guar
 # above would match a guard commented out during a debugging session and left
 # that way, and review of PR #64 found exactly that shape in this suite. One
 # literal per hook per function, because that is the claim being made.
+req GH-84.2
 armed 'no-git-push.sh requires cs_normalise' no-git-push.sh 'command -v cs_normalise'
 armed 'no-git-push.sh requires cs_split' no-git-push.sh 'command -v cs_split'
 armed 'no-git-push.sh requires cs_git_args' no-git-push.sh 'command -v cs_git_args'
@@ -5987,6 +6363,7 @@ cs_required() {  # cs_required <hook> -- the cs_* functions its load guard requi
   sed 's/[[:space:]]*#.*$//' "$HOOKS/$1" \
     | grep -oE 'command -v cs_[a-z_]+' | sed 's/command -v //' | sort -u | tr '\n' ' '
 }
+req GH-84.2
 for hook in $LIB_CONSUMERS; do
   CALLS=$(cs_calls "$hook")
   REQUIRED=$(cs_required "$hook")
@@ -5994,14 +6371,12 @@ for hook in $LIB_CONSUMERS; do
   # is the permitting direction: a hook whose calls could not be read would report
   # as agreeing with a guard that requires nothing.
   if [ -z "$CALLS" ] || [ -z "$REQUIRED" ]; then
-    printf '  FAIL %s: no cs_* calls or no required names were read out of the file at all\n' "$hook"
-    FAILED=1
+    fail static '%s: no cs_* calls or no required names were read out of the file at all' "$hook"
   elif [ "$CALLS" = "$REQUIRED" ]; then
-    printf '  ok   derived %s requires exactly what it calls: %s\n' "$hook" "${CALLS% }"
+    pass static 'derived %s requires exactly what it calls: %s' "$hook" "${CALLS% }"
   else
-    printf '  FAIL %s requires a set other than the one it calls\n         calls:    |%s|\n         requires: |%s|\n' \
+    fail static '%s requires a set other than the one it calls\n         calls:    |%s|\n         requires: |%s|' \
       "$hook" "$CALLS" "$REQUIRED"
-    FAILED=1
   fi
 done
 # And that LIB_CONSUMERS is all of them -- a file that sources the library and
@@ -6018,21 +6393,19 @@ done
 SOURCERS=$(printf '%s\n' $CS_SOURCERS | sort | tr '\n' ' ')
 CLAIMED=$(printf '%s\n' $LIB_CONSUMERS | sort | tr '\n' ' ')
 if [ -n "$SOURCERS" ] && [ "$SOURCERS" = "$CLAIMED" ]; then
-  printf '  ok   derived the files that load the library are exactly the ones checked here: %s\n' "${SOURCERS% }"
+  pass static 'derived the files that load the library are exactly the ones checked here: %s' "${SOURCERS% }"
 else
-  printf '  FAIL the files that load the library are not the four this section checks\n         load it: |%s|\n         checked: |%s|\n' \
+  fail static 'the files that load the library are not the four this section checks\n         load it: |%s|\n         checked: |%s|' \
     "$SOURCERS" "$CLAIMED"
-  FAILED=1
 fi
 # One property of this suite's own helpers, because nothing else here drives them
 # and `unarmed` reporting ok for a file it never read would make four pins below
 # vacuous. Run in a subshell so its FAILED cannot reach ours.
 if ( FAILED=0; unarmed 'self-check' "$FIXTURES/no-such-file" 'anything'; exit $FAILED ) >/dev/null 2>&1
 then
-  printf '  FAIL unarmed reports ok for a file that is not there, so every pin below is vacuous\n'
-  FAILED=1
+  fail static 'unarmed reports ok for a file that is not there, so every pin below is vacuous'
 else
-  printf '  ok   unarmed fails for a file that is not there, so the pins below are about a file that was read\n'
+  pass static 'unarmed fails for a file that is not there, so the pins below are about a file that was read'
 fi
 
 # The refusing direction: a hook back to sourcing the library with nothing around
@@ -6057,7 +6430,7 @@ unarmed 'append-only-docs.sh does not source the library unguarded' \
 unarmed 'append-only-docs-edit.sh does not source the library unguarded' \
         append-only-docs-edit.sh '. "$(dirname "$0")/lib/command-scan.sh"'
 
-echo "=== issue #95: every hook refuses when it cannot read its input ==="
+section "=== issue #95: every hook refuses when it cannot read its input ==="
 # #84 made a hook that cannot load lib/command-scan.sh refuse. It did not reach
 # the step before that: every hook read its input with its own `jq` call, and when
 # the read failed the command was empty and the hook exited 0. Measured at
@@ -6125,6 +6498,7 @@ INPUT_BASH_HOOKS="alembic-via-uv-group.sh append-only-docs.sh no-commit-to-main.
 INPUT_EDIT_HOOKS="append-only-docs-edit.sh"
 
 echo "--- the seven Bash hooks, tool_input.command ---"
+req GH-95.1 FR-49
 for hook in $INPUT_BASH_HOOKS; do
   feed "$WITH_JQ_BIN" "$hook" ALLOW "$hook: control, the symlinked PATH with jq in it permits ls" \
     '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
@@ -6194,6 +6568,7 @@ echo "--- the trade, taken knowingly: without jq the convention hooks refuse wha
 # refused, the ones these two hooks exist to permit included. Each refusal stands
 # beside its twin under the with-jq PATH, so the pair says the command is one the
 # hook permits and that jq's absence alone is what turns it.
+req GH-95.2 FR-49
 feed "$WITH_JQ_BIN" pytest-via-uv-group.sh ALLOW 'pytest the way CLAUDE.md says to run it, jq on PATH' \
   '{"tool_name":"Bash","tool_input":{"command":"uv run --group test pytest tests/"}}'
 feed "$NO_JQ_BIN" pytest-via-uv-group.sh BLOCK 'the same pytest, jq not on PATH' \
@@ -6215,6 +6590,7 @@ echo "--- append-only-docs-edit.sh, tool_input.file_path ---"
 # the fix decided it: an empty path names no file, there is nothing to protect,
 # and it is what the hook returned before. Recorded in the hook, and here.
 # EDIT_CONTROL is built once, in the load-contract section above.
+req GH-95.1 FR-49
 for hook in $INPUT_EDIT_HOOKS; do
   feed "$WITH_JQ_BIN" "$hook" ALLOW "$hook: control, the symlinked PATH with jq in it permits an edit of src/config.py" \
     "$EDIT_CONTROL"
@@ -6277,6 +6653,7 @@ registered_for() {  # registered_for <tool> -- hook basenames whose matcher name
     "$REPO_ROOT/.claude/settings.json" 2>/dev/null \
     | sed 's#^.*/##; s#"$##' | sort -u | tr '\n' ' '
 }
+req GH-95.2
 for pair in "Bash:$INPUT_BASH_HOOKS" "Edit:$INPUT_EDIT_HOOKS" "Write:$INPUT_EDIT_HOOKS"; do
   tool=${pair%%:*}
   REGISTERED=$(registered_for "$tool")
@@ -6284,11 +6661,10 @@ for pair in "Bash:$INPUT_BASH_HOOKS" "Edit:$INPUT_EDIT_HOOKS" "Write:$INPUT_EDIT
   # Empty is the permitting direction: a settings.json that could not be read
   # would agree with an empty list.
   if [ -n "$REGISTERED" ] && [ "$REGISTERED" = "$CLAIMED" ]; then
-    printf '  ok   derived the hooks registered for %s are exactly the ones checked here: %s\n' "$tool" "${REGISTERED% }"
+    pass static 'derived the hooks registered for %s are exactly the ones checked here: %s' "$tool" "${REGISTERED% }"
   else
-    printf '  FAIL the hooks registered for %s are not the ones this section checks\n         registered: |%s|\n         checked:    |%s|\n' \
+    fail static 'the hooks registered for %s are not the ones this section checks\n         registered: |%s|\n         checked:    |%s|' \
       "$tool" "$REGISTERED" "$CLAIMED"
-    FAILED=1
   fi
 done
 # #103's Q27: the read moves into one shared reader in lib/command-scan.sh, so
@@ -6303,10 +6679,9 @@ done
 # where they do not look.
 for hook in $INPUT_BASH_HOOKS $INPUT_EDIT_HOOKS; do
   if sed 's/[[:space:]]*#.*$//' "$HOOKS/$hook" | grep -qw jq; then
-    printf '  FAIL %s still calls jq itself rather than the shared reader\n' "$hook"
-    FAILED=1
+    fail static '%s still calls jq itself rather than the shared reader' "$hook"
   else
-    printf '  ok   derived %s does not call jq itself\n' "$hook"
+    pass static 'derived %s does not call jq itself' "$hook"
   fi
 done
 # And the reader is the library's, in live code. `armed` strips comments, so a
@@ -6435,6 +6810,7 @@ BASH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].
   echo "no Bash hooks were read out of settings.json; the checks below prove nothing" >&2
   exit 1
 }
+req GH-96.2
 tok 'every Bash hook runs under the 5 s timeout the 1 s bound is set against' \
     '5' "$(jq -r '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].timeout]
                   | unique | map(tostring) | join(" ")' "$HOOKS/../settings.json")"
@@ -6466,21 +6842,19 @@ cap_refused() {  # cap_refused <hook>
 # The hooks that call cs_within_cap, derived off their code in the load-contract
 # section, are the Bash hooks settings.json registers -- no more, since the Edit
 # hook reads no command, and no fewer, which is the #84 shape.
+req GH-96.1
 CAPPED=$(printf '%s\n' $CAP_CONSUMERS | sort | tr '\n' ' ')
 if [ "$CAPPED" = "$BASH_HOOKS" ]; then
-  printf '  ok   derived the hooks that call cs_within_cap are exactly the Bash hooks: %s\n' "${CAPPED% }"
+  pass static 'derived the hooks that call cs_within_cap are exactly the Bash hooks: %s' "${CAPPED% }"
 else
-  printf '  FAIL the hooks that call cs_within_cap are not the Bash hooks settings.json registers\n         call it: |%s|\n         Bash:    |%s|\n' \
+  fail static 'the hooks that call cs_within_cap are not the Bash hooks settings.json registers\n         call it: |%s|\n         Bash:    |%s|' \
     "$CAPPED" "$BASH_HOOKS"
-  FAILED=1
 fi
 for hook in $BASH_HOOKS; do
   if [ ! -x "$HOOKS/$hook" ]; then
-    printf '  FAIL settings.json runs %s, which is not an executable file beside this suite\n' "$hook"
-    FAILED=1
+    fail static 'settings.json runs %s, which is not an executable file beside this suite' "$hook"
   elif [ -z "$(cap_refused "$hook")" ]; then
-    printf '  FAIL %s is a Bash hook with no row in cap_refused, so the cap is not asked of it\n' "$hook"
-    FAILED=1
+    fail static '%s is a Bash hook with no row in cap_refused, so the cap is not asked of it' "$hook"
   fi
 done
 
@@ -6604,18 +6978,17 @@ cap_timed() {  # cap_timed <dir> <hook|/absolute/hook> <cmd> -- "<ms>", or "exit
 }
 under_a_second() {  # under_a_second <label> <cap_timed output>
   case "$2" in
-    exit*) printf '  FAIL %s\n         the timed command was not refused (%s), so its time is not the judged path\n' "$1" "$2"
-           FAILED=1 ;;
+    exit*) fail static '%s\n         the timed command was not refused (%s), so its time is not the judged path' "$1" "$2" ;;
     *) if [ "$2" -lt 1000 ]; then
-         printf '  ok   timed %s: fastest %s ms\n' "$1" "$2"
+         pass static 'timed %s: fastest %s ms' "$1" "$2"
        else
-         printf '  FAIL %s\n         fastest of three was %s ms; the bound is 1000\n' "$1" "$2"
-         FAILED=1
+         fail static '%s\n         fastest of three was %s ms; the bound is 1000' "$1" "$2"
        fi ;;
   esac
 }
 
 for hook in $BASH_HOOKS; do
+  req GH-96.1
   dir=$(cap_dir "$hook")
   refused=$(cap_refused "$hook")
   [ -n "$refused" ] || continue
@@ -6678,12 +7051,14 @@ $refused"
 $refused"
 
   # The bound. Against the unfixed hooks this is green -- see the header.
+  req GH-96.2
   under_a_second "$hook, a command whose longest line is exactly 16384 bytes" \
     "$(cap_timed "$dir" "$hook" "$(cap_line 16384 "; $refused")")"
 done
 
 # no-work-on-stale-branch.sh on a branch carrying work, where it has no other
 # opinion: the cap holds there too since #95 moved the read to the top.
+req GH-96.1
 check_in "$WT_WORK" no-work-on-stale-branch.sh ALLOW \
   'no-work-on-stale-branch.sh, control: a commit on a branch carrying work' 'git commit -m wip'
 check_in "$WT_WORK" no-work-on-stale-branch.sh BLOCK \
@@ -6719,12 +7094,12 @@ library_under_a_second() {  # library_under_a_second <label> <call> <out>
   local r
   r=$(lib_run "$LIB_LONG" "$3" "$2")
   if [ "${r#* }" != 0 ]; then
-    printf '  FAIL %s\n         %s exited %s, so its time is not the time of the pass\n' "$1" "$2" "${r#* }"
-    FAILED=1
+    fail static '%s\n         %s exited %s, so its time is not the time of the pass' "$1" "$2" "${r#* }"
   else
     under_a_second "$1" "${r% *}"
   fi
 }
+req GH-96.2
 library_under_a_second 'cs_normalise over one 512 KB line' cs_normalise "$FIXTURES/normalised.txt"
 tok 'cs_normalise hands that line back whole, rather than capping it' \
     'whole' "$(cmp -s "$LIB_LONG" "$FIXTURES/normalised.txt" && echo whole || echo changed)"
@@ -6780,25 +7155,22 @@ scales_linearly() {  # scales_linearly <shape> <call> <expected tail>
   tsmall=$(shape_tail "$FIXTURES/shape-small.out")
   tlarge=$(shape_tail "$FIXTURES/shape-large.out")
   if [ "${small#* }" != 0 ] || [ "${large#* }" != 0 ]; then
-    printf '  FAIL %s over the %s shape did not run: exit %s at 128 KB, %s at 512 KB\n' \
+    fail static '%s over the %s shape did not run: exit %s at 128 KB, %s at 512 KB' \
       "$2" "$1" "${small#* }" "${large#* }"
-    FAILED=1
     return
   fi
   if [ "$tsmall" != "$3" ] || [ "$tlarge" != "$3" ]; then
-    printf '  FAIL %s over the %s shape returned the wrong thing\n         want |%s|\n         got  |%s| at 128 KB, |%s| at 512 KB\n' \
+    fail static '%s over the %s shape returned the wrong thing\n         want |%s|\n         got  |%s| at 128 KB, |%s| at 512 KB' \
       "$2" "$1" "$3" "$tsmall" "$tlarge"
-    FAILED=1
     return
   fi
   small=${small% *} large=${large% *}
   [ "$small" -ge 10 ] || small=10
   if [ $(( large * 10 / small )) -lt 80 ]; then
-    printf '  ok   scaled %s over %s shape: %s ms at 128 KB, %s ms at 512 KB\n' "$2" "$1" "$small" "$large"
+    pass static 'scaled %s over %s shape: %s ms at 128 KB, %s ms at 512 KB' "$2" "$1" "$small" "$large"
   else
-    printf '  FAIL %s over the %s shape is not linear\n         %s ms at 128 KB, %s ms at 512 KB; four times the input may cost at most eight times\n' \
+    fail static '%s over the %s shape is not linear\n         %s ms at 128 KB, %s ms at 512 KB; four times the input may cost at most eight times' \
       "$2" "$1" "$small" "$large"
-    FAILED=1
   fi
 }
 scales_linearly prefixes cs_split 'origin'
@@ -6820,6 +7192,7 @@ scales_linearly ghglobals "cs_gh_args 'pr merge'" '5'
 # reading the diff; the differential fuzz did not reach it. Every expected value
 # is what the reader at dev-05 870bb3f printed for the same line, and each one
 # was empty before the fix.
+req GH-96.3
 PIPED_GIT_C=$(printf 'git -c|-C push origin main\n' \
   | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_git_args push" 2>/dev/null)
 PIPED_GIT_LONG=$(printf 'git --work-tree|--namespace push origin main\n' \
@@ -6851,18 +7224,17 @@ for fn in tokend skipblank skipopts; do
   total=$(awk_copies "$fn" | wc -l | tr -d ' ')
   distinct=$(awk_copies "$fn" | sort -u | wc -l | tr -d ' ')
   if [ "$total" -lt 2 ]; then
-    printf '  FAIL %s: fewer than two definitions were read out of the library (%s), so there is nothing to compare\n' "$fn" "$total"
-    FAILED=1
+    fail static '%s: fewer than two definitions were read out of the library (%s), so there is nothing to compare' "$fn" "$total"
   elif [ "$distinct" = 1 ]; then
-    printf '  ok   derived every copy of the awk helper %s is identical (%s copies)\n' "$fn" "$total"
+    pass static 'derived every copy of the awk helper %s is identical (%s copies)' "$fn" "$total"
   else
-    printf '  FAIL the %s copies of the awk helper %s have drifted apart into %s versions\n' "$total" "$fn" "$distinct"
-    FAILED=1
+    fail static 'the %s copies of the awk helper %s have drifted apart into %s versions' "$total" "$fn" "$distinct"
   fi
 done
 
 # Where the argument is written. Prose, so `written`: the header that states the
 # cap is where someone raising it will look for what it gives up.
+req GH-96.1
 written 'the library states the line cap' "$HOOKS/lib/command-scan.sh" 'THE LINE CAP'
 
 # cs_within_cap, as a function rather than through a hook. Fail-closed is the
@@ -6875,6 +7247,7 @@ written 'the library states the line cap' "$HOOKS/lib/command-scan.sh" 'THE LINE
 within_cap() {  # within_cap <library> <input file> -- within, or over
   bash -c ". '$1' && cs_within_cap < '$2'" >/dev/null 2>&1 && echo within || echo over
 }
+req GH-96.3
 printf '%s\n' "$AT_CAP" > "$FIXTURES/cap-at.txt"
 printf '%s\n' "$OVER_CAP" > "$FIXTURES/cap-over.txt"
 printf 'ls\n' > "$FIXTURES/cap-short.txt"
@@ -6899,7 +7272,7 @@ tok 'and on a short command when the cap itself is empty' \
 armed 'the cap is 16384 bytes, written as the literal the issue decided' \
       lib/command-scan.sh 'CS_LINE_CAP=16384'
 
-echo "=== the exit-status helpers themselves: #98 ==="
+section "=== the exit-status helpers themselves: #98 ==="
 # The rule, and what it replaced, is written above `verdict`. Nothing else in this
 # suite drives a helper with a hook that crashes, so these ask the helpers
 # directly, in the manner of the `unarmed` self-test above: the helper runs in a
@@ -6981,11 +7354,10 @@ drive_helper() {  # drive_helper <helper> <fixture> <want>
 failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
   if grep -qE "exit=$2([^0-9]|\$)" "$EXITS_OUTPUT" \
      && grep -qF -- "stderr |$3" "$EXITS_OUTPUT"; then
-    printf '  ok   %s\n' "$1"
+    pass static '%s' "$1"
   else
-    printf '  FAIL %s\n         wanted exit=%s and |stderr |%s| on the failure line\n         it said |%s|\n' \
+    fail static '%s\n         wanted exit=%s and |stderr |%s| on the failure line\n         it said |%s|' \
       "$1" "$2" "$3" "$(cat "$EXITS_OUTPUT")"
-    FAILED=1
   fi
 }
 
@@ -6996,6 +7368,7 @@ DRIVEN_VERDICT='check check_in flip check_file feed check_rawfile_in'
 DRIVEN_MESSAGE='says says_not feed_says'
 DRIVEN_TIMED='cap_timed lib_run'
 
+req GH-98 GH-124
 for helper in $DRIVEN_VERDICT; do
   tok "$helper: a hook that exits 0 passes an ALLOW expectation" \
       'ok' "$(drive_helper "$helper" allow-0 ALLOW)"
@@ -7038,19 +7411,18 @@ done
 # failure lines carry no stderr, so only the status is asked for.
 timed_line_says() {  # timed_line_says <label> <literal>
   if grep -qF -- "$2" "$EXITS_OUTPUT"; then
-    printf '  ok   %s\n' "$1"
+    pass static '%s' "$1"
   else
-    printf '  FAIL %s\n         wanted |%s| on the failure line\n         it said |%s|\n' \
+    fail static '%s\n         wanted |%s| on the failure line\n         it said |%s|' \
       "$1" "$2" "$(cat "$EXITS_OUTPUT")"
-    FAILED=1
   fi
 }
 for helper in $DRIVEN_TIMED; do
   case "$helper" in
     cap_timed) passes=block-2 fails='allow-0:0 crash-1:1 crash-127:127' spelled='(exit %s)' ;;
     lib_run)   passes=allow-0 fails='block-2:2 crash-1:1 crash-127:127' spelled='exited %s,' ;;
-    *) printf '  FAIL %s is in DRIVEN_TIMED with no case here, so nothing drives it\n' "$helper"
-       FAILED=1; continue ;;
+    *) fail static '%s is in DRIVEN_TIMED with no case here, so nothing drives it' "$helper"
+       continue ;;
   esac
   tok "$helper: the $passes hook passes" 'ok' "$(drive_helper "$helper" "$passes" -)"
   for f in $fails; do
@@ -7084,8 +7456,7 @@ STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$HOOKS/check-hooks.sh" \
   | sort -u | tr '\n' ' ')
 # An empty derivation would make every membership below pass by asking nothing.
 if [ -z "$STATUS_READERS" ]; then
-  printf '  FAIL no helper that reads a hook exit status was derived from this file at all\n'
-  FAILED=1
+  fail static 'no helper that reads a hook exit status was derived from this file at all'
 fi
 for reader in $STATUS_READERS; do
   present "derived $reader reads a hook exit status, and the #98 self-test drives it" \
@@ -7130,30 +7501,766 @@ echo "--- issue #101: a load guard requires a function ---"
 # in one file, which a grep -v filter over "N:text" output cannot say. And a
 # read error has to fail: grep exits 2 into a pipeline that reads as "no hits",
 # which is the permitting direction, where awk's status is kept and asked.
+req GH-101 US-22 US-23
 VOCAB_EXEMPT_FILE=no-work-on-stale-branch.sh
 VOCAB_EXEMPT='# the probe->check rename was committed onto hooks-push-and-pr-guards after'
 for f in lib/command-scan.sh $LIB_CONSUMERS; do
   EXEMPT=
   [ "$f" = "$VOCAB_EXEMPT_FILE" ] && EXEMPT=$VOCAB_EXEMPT
   if [ ! -r "$HOOKS/$f" ] || [ -d "$HOOKS/$f" ]; then
-    printf '  FAIL %s cannot be read, so the absence of "probe" in it is evidence of nothing\n' "$f"
-    FAILED=1
+    fail static '%s cannot be read, so the absence of "probe" in it is evidence of nothing' "$f"
     continue
   fi
   if ! HITS=$(awk -v ex="$EXEMPT" \
       'tolower($0) ~ /prob(e|ing)/ && !(ex != "" && $0 == ex) { print FNR ": " $0 }' \
       "$HOOKS/$f" 2>/dev/null); then
-    printf '  FAIL %s could not be scanned, so the absence of "probe" in it is evidence of nothing\n' "$f"
-    FAILED=1
+    fail static '%s could not be scanned, so the absence of "probe" in it is evidence of nothing' "$f"
   elif [ -z "$HITS" ]; then
-    printf '  ok   written %s says a guard requires a function\n' "$f"
+    pass static 'written %s says a guard requires a function' "$f"
   else
-    printf '  FAIL %s uses "probe", which CONTEXT.md keeps for a measurement:\n%s\n' \
+    fail static '%s uses "probe", which CONTEXT.md keeps for a measurement:\n%s' \
       "$f" "$(printf '%s\n' "$HITS" | sed 's/^/         /')"
-    FAILED=1
   fi
 done
 
+section "=== issue #104: every requirement is covered, and every check says which ==="
+# The suite reads requirements.md and the tags every check above carries, and
+# fails when the two do not meet. requirements.md says what a requirement is,
+# what its fields mean and what covers one; this section is where that is
+# computed, and it is the only place.
+#
+# Every check above is recorded as it prints, with its tags and its direction --
+# see `record` near the head of this suite. What is read here is that record,
+# and nothing in it is derived by running a hook a second time.
+#
+# THE KNOWN GAPS ARE MARKED, NOT HIDDEN. An active requirement with no covering
+# check fails the suite. #103's audit found several before this section existed,
+# and #104 was told to land either with a failing count gated to a later issue
+# or with each gap recorded. It records them: an entry whose status is `gap` and
+# names the issue that owns it is listed by --matrix and not asked about here.
+# The trade, taken knowingly: a gap that has since been covered stays marked
+# until someone takes the marker off, which errs toward claiming less coverage
+# than there is, and the matrix says of such a gap that its tags now meet
+# coverage, so whoever owns it can see the marker is ready to come off. A check
+# that failed a covered gap was considered and rejected,
+# because a gap is often a requirement covered in part -- a story whose message
+# is checked for one hook and not for two others -- and coverage here is one bit
+# per ID.
+#
+# WHAT THIS IS NOT EVIDENCE OF, named because a check is evidence about what it
+# names. A tag says a check establishes a requirement; nothing here can say the
+# check is right about it, or that the checks tagged together are all of what the
+# requirement asks. Coverage is the floor -- a refusing and a permitting check,
+# or a declared direction -- and not the whole requirement. Whether the checks
+# can fail is mutation's question, which this section does not ask.
+#
+# The logic is one awk program, run in two modes: `findings` prints one line per
+# finding, each carrying the IDs it establishes, and `matrix` prints every
+# requirement with its checks. It is driven below against a fixture first, with
+# every expectation a literal, and only then against this repository -- so a
+# finding that would pass by computing nothing is red before it is trusted.
+#
+# The number of acceptance criteria each of #36's stage tickets has, counted off
+# the issues and not off requirements.md, which is what makes a criterion deleted
+# from the provenance section fail rather than shorten the count it is held to.
+PROVENANCE_COUNTS='37:8 38:6 39:6 40:13 41:8'
+# THE SHAPE OF requirements.md, as a literal: every entry by ID, and beside each
+# one whatever takes it off the both-directions rule -- a status other than
+# active, a declared direction, and `seam: none` with the kind of its `verify`.
+# Those three are everything the coverage check reads off an entry, so an edit
+# to requirements.md that changes what the check asks of any requirement changes
+# this literal: a marker added, taken off or moved to another entry, a direction
+# declared, a move to no seam, a deletion. Each of those turned an uncovered
+# requirement green with no finding at all.
+#
+# The first two versions of this held counts: of gaps and reviews, after review
+# of #104, then of every family, status and verify kind, after Bertan's review
+# of the pull request. Bertan's re-review found the two routes no count sees. A
+# direction declared moved no number the literal held, and a gap marker moved
+# from one entry to another leaves every count where it was. A count says how
+# many entries are off the rule, and only a list says which. The change is
+# written down twice, once in requirements.md and once here, and the second copy
+# is the one a reviewer sees move in the diff. The refusing direction, one edit
+# away.
+#
+# What it does not hold, named. The tags: a check tagged with an ID it does not
+# establish covers that ID all the same, and only reading the check says so. And
+# the direction each check records, which is this file's code, not
+# requirements.md's.
+REQUIREMENT_SHAPE='
+US-1:refuse-only US-2:refuse-only US-3 US-4:permit-only US-5:gap,runbook
+US-6:gap,runbook US-7:gap,refuse-only US-8 US-9 US-10 US-11 US-12
+US-13:permit-only US-14:gap,permit-only US-15 US-16:static US-17:review
+US-18:review US-19:static US-20:gap,static US-21:review US-22:static
+US-23:static US-24:static US-25 US-26:static US-27:gap,static US-28:gap,static
+US-29:gap,static US-30:review US-31:gap,static US-32:review
+FR-1:superseded-by FR-2:gap,static FR-3 FR-4 FR-5:review FR-6:static
+FR-7:drifted FR-8:review FR-9:review FR-10:review FR-11:gap,static FR-12:retired
+FR-13:review FR-14 FR-15 FR-16 FR-17 FR-18 FR-19 FR-20 FR-21 FR-22:static
+FR-23:gap,refuse-only FR-24:gap,static FR-25:gap,static FR-26:gap,static
+FR-27:static FR-28:gap,static FR-29:static FR-30:review FR-31:drifted
+FR-32:review FR-33:static FR-34:superseded-by FR-35:gap,static FR-36:review
+FR-37:static FR-38 FR-39:gap,runbook FR-40:static FR-41:static FR-42:static
+FR-43:static FR-44:static FR-45:static FR-46:static FR-47:static FR-48 FR-49
+GH-43.1 GH-43.2 GH-43.3 GH-43.4 GH-43.5:refuse-only GH-43.6 GH-44.1 GH-44.2
+GH-44.3 GH-44.4 GH-44.5 GH-44.6 GH-44.7:static GH-47.1 GH-47.2:refuse-only
+GH-50.1 GH-50.2:refuse-only GH-50.3 GH-51.1 GH-51.2 GH-58.1 GH-58.2:static
+GH-61:tests GH-62:static GH-63:static GH-68.1 GH-68.2 GH-68.3:refuse-only
+GH-69.1 GH-69.2 GH-69.3 GH-70.1:static GH-70.2:static GH-70.3:static
+GH-71:static GH-72 GH-73 GH-79.1 GH-79.2 GH-79.3:permit-only GH-79.4 GH-84.1
+GH-84.2:static GH-84.3:static GH-94.1 GH-94.2 GH-94.3:review GH-94.4 GH-95.1
+GH-95.2 GH-96.1 GH-96.2:static GH-96.3:static GH-97.1 GH-97.2:refuse-only
+GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
+GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
+GH-104.4:static GH-104.5:review GH-124:static GH-127:gap
+'
+REQUIREMENTS_AWK=$(cat <<'AWK'
+  function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+  function emit(res, tags, text) { printf "%s\t%s\t%s\n", res, tags, text }
+  function get(id, key) { return ((id, key) in field) ? field[id, key] : "" }
+  function keyword(v) { sub(/[: ].*$/, "", v); return v }
+  function after_colon(v) { if (index(v, ":") == 0) return ""; return trim(substr(v, index(v, ":") + 1)) }
+  function open_entry(id) {
+    cur = id; curpart = part; lastkey = ""
+    if (part == "req") {
+      if (id in isreq) problem[++nproblem] = id ": the ID is used twice"
+      else { isreq[id] = 1; order[++nreq] = id }
+      if (id ~ /^GH-[0-9]+\.[0-9]+$/) { b = id; sub(/^GH-/, "", b); sub(/\..*$/, "", b); ghbase[b] = 1 }
+      else if (id ~ /^GH-[0-9]+$/) { b = id; sub(/^GH-/, "", b); ghbase[b] = 1 }
+      else if (id !~ /^(US|FR)-[0-9]+$/) problem[++nproblem] = id ": not an ID of the US, FR or GH family"
+    } else if (part == "prov") {
+      if (id ~ /^#[0-9]+\.[0-9]+$/) {
+        crit[++ncrit] = id
+        b = id; sub(/^#/, "", b); sub(/\..*$/, "", b); ccount[b]++
+      } else problem[++nproblem] = id ": a provenance heading that names no criterion"
+    }
+  }
+  function covered(id,   d, r, p, s) {
+    if (get(id, "seam") == "none") return 1
+    d = keyword(get(id, "direction")); r = cnt[id, "refuse"] + 0; p = cnt[id, "permit"] + 0; s = cnt[id, "static"] + 0
+    if (d == "refuse-only") return r > 0
+    if (d == "permit-only") return p > 0
+    if (d == "static") return r + p + s > 0
+    return r > 0 && p > 0
+  }
+  function counts(id) {
+    return (cnt[id, "refuse"] + 0) " refusing, " (cnt[id, "permit"] + 0) " permitting, " (cnt[id, "static"] + 0) " static"
+  }
+  BEGIN {
+    H = "#"
+    # --- the requirements file ---------------------------------------------------
+    part = ""; cur = ""
+    while ((getline line < reqs) > 0) {
+      if (line ~ /^## /) {
+        cur = ""; heading = substr(line, 4)
+        if (line ~ /^## Provenance/) part = "prov"
+        else if (line ~ /^## Citations that are not requirements/) part = "cite"
+        else if (line ~ /^## (User stories|Functional requirements|Boundary issues)$/) part = "req"
+        else part = "other"
+        continue
+      }
+      if (line ~ /^### /) {
+        if (part == "req" || part == "prov") open_entry(trim(substr(line, 5)))
+        else {
+          cur = ""; hid = trim(substr(line, 5))
+          if (hid ~ /^(US|FR|GH)-[0-9]/ || hid ~ /^#[0-9]+\.[0-9]+$/)
+            problem[++nproblem] = hid ": an entry under the heading \"" heading "\", where no entry is read"
+        }
+        continue
+      }
+      if (part == "cite" && line ~ /^- #[0-9]+: ./) {
+        n = line; sub(/^- #/, "", n); sub(/:.*$/, "", n); exempt[n] = 1
+        continue
+      }
+      if (cur != "" && line ~ /^- [a-z-]+:/) {
+        key = line; sub(/^- /, "", key); sub(/:.*$/, "", key)
+        val = line; sub(/^- [a-z-]+:/, "", val); val = trim(val)
+        if ((cur, key) in field) problem[++nproblem] = cur ": the field " key " is given twice"
+        field[cur, key] = val; lastkey = key
+        continue
+      }
+      if (cur != "" && lastkey != "" && line ~ /^  [^ ]/) {
+        field[cur, lastkey] = field[cur, lastkey] " " trim(line)
+        continue
+      }
+      if (line !~ /^[ \t]*$/) lastkey = ""
+    }
+    close(reqs)
+    runbook_read = 0
+    while ((getline line < runbook) > 0) {
+      runbook_read = 1
+      if (line ~ /^## §[0-9]+( |$)/) { s = line; sub(/^## §/, "", s); sub(/[^0-9].*$/, "", s); rbsec[s] = 1 }
+    }
+    close(runbook)
+
+    # --- the entries -------------------------------------------------------------
+    for (i = 1; i <= nreq; i++) {
+      id = order[i]
+      if (get(id, "text") == "") problem[++nproblem] = id ": no text"
+      if (get(id, "from") == "") problem[++nproblem] = id ": no from"
+      st = get(id, "status"); kw = keyword(st)
+      if (st == "") problem[++nproblem] = id ": no status"
+      else if (kw == "active") { if (st != "active") problem[++nproblem] = id ": active carries nothing after it" }
+      else if (kw == "retired" || kw == "drifted") { if (after_colon(st) == "") problem[++nproblem] = id ": " kw " with no reason" }
+      else if (kw == "superseded-by") { tgt = after_colon(st); if (!(tgt in isreq)) problem[++nproblem] = id ": superseded by " tgt ", which is not a requirement" }
+      else if (kw == "gap") { if (st !~ /^gap → #[0-9]+$/) problem[++nproblem] = id ": a gap names no issue that owns it" }
+      else problem[++nproblem] = id ": the status " kw " is not one this file defines"
+      k = get(id, "kind")
+      if (id ~ /^GH-/) { if (k != "defect-permitting" && k != "defect-refusing" && k != "doc-claim") problem[++nproblem] = id ": the kind " (k == "" ? "is missing" : k " is not one this file defines") }
+      else if ((id, "kind") in field) problem[++nproblem] = id ": a kind on an entry that is not a GH- one"
+      if ((id, "direction") in field) {
+        d = get(id, "direction"); dk = keyword(d)
+        if (dk != "refuse-only" && dk != "permit-only" && dk != "static") problem[++nproblem] = id ": the direction " dk " is not one this file defines"
+        else if (after_colon(d) == "") problem[++nproblem] = id ": the direction " dk " gives no reason"
+      }
+      hasseam = (id, "seam") in field; hasverify = (id, "verify") in field
+      if (hasseam && get(id, "seam") != "none") problem[++nproblem] = id ": the seam is " get(id, "seam") ", and none is the only value"
+      if (hasseam != hasverify) problem[++nproblem] = id ": seam and verify come together or not at all"
+      if (hasseam && hasverify && kw != "gap") {
+        v = get(id, "verify")
+        if (v == "review") { }
+        else if (v ~ /^tests\/[A-Za-z0-9_.-]+\.py$/) { vf = root "/" v; if ((getline x < vf) < 0) problem[++nproblem] = id ": verify names " v ", which is not there"; close(vf) }
+        else if (v ~ /^runbook §[0-9]+$/) { s = v; sub(/^runbook §/, "", s); if (!(s in rbsec)) problem[++nproblem] = id ": verify names runbook §" s ", which " (runbook_read ? "has no such section" : "is not written") }
+        else problem[++nproblem] = id ": verify is " v ", which is none of review, tests/<file>.py and runbook §<n>"
+      }
+    }
+
+    # --- the provenance ----------------------------------------------------------
+    for (i = 1; i <= ncrit; i++) {
+      c = crit[i]
+      if (get(c, "criterion") == "") provproblem[++nprov] = c " quotes no criterion"
+      hasmaps = (c, "maps") in field; hasdropped = (c, "dropped") in field
+      if (hasmaps && hasdropped) provproblem[++nprov] = c " is both mapped and dropped"
+      else if (!hasmaps && !hasdropped) provproblem[++nprov] = c " is neither mapped nor dropped"
+      else if (hasdropped && get(c, "dropped") == "") provproblem[++nprov] = c " is dropped with no reason"
+      else if (hasmaps) {
+        m = split(get(c, "maps"), ids, /, */)
+        if (m == 0) provproblem[++nprov] = c " maps to nothing"
+        for (j = 1; j <= m; j++) if (!(ids[j] in isreq)) provproblem[++nprov] = c " maps to " ids[j] ", which is not a requirement"
+      }
+    }
+    m = split(counts_literal, pairs, " ")
+    for (j = 1; j <= m; j++) {
+      split(pairs[j], kv, ":")
+      if ((ccount[kv[1]] + 0) != kv[2] + 0) provproblem[++nprov] = H kv[1] " has " (ccount[kv[1]] + 0) " criteria here, where the issue has " kv[2]
+    }
+
+    # --- the ledger --------------------------------------------------------------
+    while ((getline line < ledger) > 0) {
+      nres++
+      split(line, f, "\t")
+      if (f[1] == "") untagged[++nuntagged] = f[4]
+      if (f[2] != "refuse" && f[2] != "permit" && f[2] != "static") baddir[++nbaddir] = f[2] ": " f[4]
+      nt = split(f[1], t, " ")
+      for (j = 1; j <= nt; j++) {
+        if (t[j] in isreq) {
+          cnt[t[j], f[2]]++
+          checks[t[j]] = checks[t[j]] "\n    " (f[3] == "ok" ? "ok  " : "FAIL") " " f[4]
+        } else if (!(t[j] in unknown)) { unknown[t[j]] = f[4]; unknownorder[++nunknown] = t[j] }
+      }
+    }
+    close(ledger)
+    # A requirement no check can reach that has checks after all is saying two
+    # things, and the one that lets the coverage check pass is the one believed.
+    for (i = 1; i <= nreq; i++) {
+      id = order[i]
+      if (get(id, "seam") == "none" && cnt[id, "refuse"] + cnt[id, "permit"] + cnt[id, "static"] > 0)
+        problem[++nproblem] = id ": seam: none, and " counts(id) " are tagged with it"
+    }
+    # --- the shape -----------------------------------------------------------------
+    # An entry is its ID, and beside it, comma-joined, whatever the coverage check
+    # reads off it that departs from the both-directions rule: status, direction,
+    # then the kind of verify a seam-less entry names. The two sides are compared
+    # as sets, so a finding names the entries that changed and not the whole of
+    # both.
+    for (i = 1; i <= nreq; i++) {
+      id = order[i]; marks = ""
+      kw = keyword(get(id, "status"))
+      if (kw != "active") marks = kw
+      if ((id, "direction") in field) marks = marks (marks == "" ? "" : ",") keyword(get(id, "direction"))
+      if (get(id, "seam") == "none") {
+        v = get(id, "verify")
+        if (v == "review") vk = "review"
+        else if (v ~ /^tests\//) vk = "tests"
+        else if (v ~ /^runbook /) vk = "runbook"
+        else vk = "none"
+        marks = marks (marks == "" ? "" : ",") vk
+      }
+      if (marks != "") noffrule++
+      filetok[i] = id (marks == "" ? "" : ":" marks)
+      infile[filetok[i]] = 1
+    }
+    lit = shape_literal; gsub(/^[ \t\n]+|[ \t\n]+$/, "", lit)
+    nlit = (lit == "") ? 0 : split(lit, littok, /[ \t\n]+/)
+    for (j = 1; j <= nlit; j++) inlit[littok[j]] = 1
+    onlyfile = ""; onlylit = ""
+    for (i = 1; i <= nreq; i++) if (!(filetok[i] in inlit)) onlyfile = onlyfile " " filetok[i]
+    for (j = 1; j <= nlit; j++) if (!(littok[j] in infile)) onlylit = onlylit " " littok[j]
+
+    # --- the citations -----------------------------------------------------------
+    while ((getline line < suite) > 0) {
+      s = line
+      while (match(s, /#[0-9]+/)) {
+        n = substr(s, RSTART + 1, RLENGTH - 1); s = substr(s, RSTART + RLENGTH)
+        if (!(n in cited)) { cited[n] = 1; citedorder[++ncited] = n }
+      }
+    }
+    close(suite)
+
+    if (mode == "matrix") {
+      ncovered = 0; nactive = 0; ngap = 0
+      for (i = 1; i <= nreq; i++) {
+        id = order[i]; kw = keyword(get(id, "status"))
+        if (kw == "active") { nactive++; if (covered(id)) ncovered++ }
+        if (kw == "gap") ngap++
+      }
+      printf "requirements matrix: %d requirements; %d active, %d of them covered; %d marked a gap; %d check results recorded\n", nreq, nactive, ncovered, ngap, nres
+      for (i = 1; i <= nreq; i++) {
+        id = order[i]; st = get(id, "status"); kw = keyword(st)
+        if (kw == "active") mverdict = covered(id) ? "covered" : "NOT COVERED"
+        else if (kw == "gap" && get(id, "seam") != "none" && covered(id)) mverdict = "not asked, though its tags now meet coverage"
+        else mverdict = "not asked"
+        extra = ""
+        if ((id, "direction") in field) extra = extra ", " keyword(get(id, "direction"))
+        if (get(id, "seam") == "none") extra = extra ", seam: none, verify: " get(id, "verify")
+        printf "\n%s  %s  %s (%s%s)", id, st, mverdict, counts(id), extra
+        printf "%s\n", checks[id]
+      }
+      exit
+    }
+
+    if (nreq == 0) emit("FAIL", "FR-45", "nothing was read out of the requirements file, so every finding below is evidence of nothing")
+    else emit("ok", "FR-45", "the requirements file holds " nreq " requirements and " ncrit " criteria")
+    if (nproblem == 0) emit("ok", "FR-45", "every requirement entry is well formed")
+    for (i = 1; i <= nproblem; i++) emit("FAIL", "FR-45", problem[i])
+    if (nunknown == 0) emit("ok", "GH-104.2", "every tag names a requirement")
+    for (i = 1; i <= nunknown; i++) emit("FAIL", "GH-104.2", "a check is tagged " unknownorder[i] ", which is not in the requirements file: " unknown[unknownorder[i]])
+    if (nres == 0) emit("FAIL", "GH-104.1", "no check result was recorded, so no tag was read")
+    else if (nuntagged == 0 && nbaddir == 0) emit("ok", "GH-104.1", "every check carries a tag and a direction")
+    for (i = 1; i <= nuntagged; i++) emit("FAIL", "GH-104.1", "a check carries no tag: " untagged[i])
+    for (i = 1; i <= nbaddir; i++) emit("FAIL", "GH-104.1", "a check records a direction that is none of refuse, permit and static: " baddir[i])
+    nuncovered = 0
+    for (i = 1; i <= nreq; i++) {
+      id = order[i]
+      if (get(id, "status") != "active" || covered(id)) continue
+      nuncovered++
+      d = keyword(get(id, "direction"))
+      emit("FAIL", "FR-46 FR-33", id " is active and not covered: " counts(id) (d == "" ? "" : ", declared " d))
+    }
+    if (nuncovered == 0) emit("ok", "FR-46 FR-33", "every active requirement is covered")
+    if (onlyfile == "" && onlylit == "")
+      emit("ok", "FR-45 FR-46", "requirements.md has the shape this suite holds: " nreq " entries by ID, " (noffrule + 0) " of them off the both-directions rule")
+    else {
+      shapemsg = "requirements.md has changed shape"
+      if (onlyfile != "") shapemsg = shapemsg "; only it holds" onlyfile
+      if (onlylit != "") shapemsg = shapemsg "; only this suite holds" onlylit
+      emit("FAIL", "FR-45 FR-46", shapemsg)
+    }
+    if (nprov == 0) emit("ok", "FR-47", "every stage-ticket criterion is carried or dropped, and each ticket has all of its criteria")
+    for (i = 1; i <= nprov; i++) emit("FAIL", "FR-47", provproblem[i])
+    nbad = 0
+    for (i = 1; i <= ncited; i++) {
+      n = citedorder[i]
+      if ((n in exempt) || (n in ghbase)) continue
+      nbad++
+      emit("FAIL", "GH-104.3", "the suite cites " H n ", which has no entry and no reason")
+    }
+    if (nbad == 0) emit("ok", "GH-104.3", "every issue the suite cites has an entry or a reason")
+  }
+AWK
+)
+requirements_read() {  # requirements_read <findings|matrix> <requirements> <ledger> <suite> <root> <runbook> <counts> <shape>
+  awk -v mode="$1" -v reqs="$2" -v ledger="$3" -v suite="$4" -v root="$5" \
+      -v runbook="$6" -v counts_literal="$7" -v shape_literal="$8" "$REQUIREMENTS_AWK" </dev/null
+}
+
+echo "--- the findings, against a fixture whose every answer is written here ---"
+# The fixture holds one requirement of each shape the rules distinguish: a story
+# covered in both directions, a one-sided one, a static one whose only check
+# failed (a failed check still covers; its failure is its own line above), one
+# with no seam, a gap, a superseded one, and a GH sub-issue that is permit-only.
+# `#` is spelled through H wherever a number follows it, because this suite's
+# own citations are read by the same program and a fixture citation is not one.
+H='#'
+REQ_FIX="$FIXTURES/requirements-fixture"
+mkdir -p "$REQ_FIX/clean/root/tests"
+: > "$REQ_FIX/clean/root/tests/present.py"
+cat > "$REQ_FIX/clean/requirements.md" <<REQS
+# A fixture
+
+## What covers a requirement
+
+### not an entry, because this section holds none
+
+## User stories
+
+### US-1
+- text: a story covered in both directions
+- from: the fixture
+- status: active
+
+### US-2
+- text: a story that is one-sided
+- from: the fixture
+- status: active
+- direction: refuse-only: a reason
+
+## Functional requirements
+
+### FR-1
+- text: a requirement about what a file says,
+  continued on a second line
+- from: the fixture
+- status: active
+- direction: static: a reason
+
+### FR-2
+- text: a requirement no check reaches
+- from: the fixture
+- status: active
+- seam: none
+- verify: tests/present.py
+
+### FR-3
+- text: a gap
+- from: the fixture
+- status: gap → ${H}7
+
+### FR-4
+- text: a requirement replaced by another
+- from: the fixture
+- status: superseded-by: FR-1
+
+## Boundary issues
+
+### GH-5.1
+- text: a sub-issue that is permit-only
+- from: the fixture
+- kind: defect-permitting
+- status: active
+- direction: permit-only: a reason
+
+## Provenance: the fixture's criteria
+
+### ${H}37.1
+- criterion: a criterion
+- maps: US-1, FR-1
+
+### ${H}37.2
+- criterion: another
+- dropped: a reason
+
+## Citations that are not requirements
+
+- ${H}9: a reason
+REQS
+printf '%s\t%s\t%s\t%s\n' \
+  'US-1' refuse ok 'BLOCK one' \
+  'US-1 GH-5.1' permit ok 'ALLOW two' \
+  'US-2' refuse ok 'says three' \
+  'FR-1' static FAIL 'tok four' > "$REQ_FIX/clean/ledger"
+printf 'a suite citing %s5 and %s9\n' "$H" "$H" > "$REQ_FIX/clean/suite"
+FIX_SHAPE='US-1 US-2:refuse-only FR-1:static FR-2:tests FR-3:gap FR-4:superseded-by GH-5.1:permit-only'
+req_fixture() {  # req_fixture <dir> -- the findings for the fixture in <dir>
+  requirements_read findings "$1/requirements.md" "$1/ledger" "$1/suite" \
+    "$1/root" "$1/runbook.md" '37:2' "$FIX_SHAPE"
+}
+# A mutant is the clean fixture with one file edited, and the edit is asserted to
+# have taken: a sed that matched nothing leaves the clean fixture, and every FAIL
+# expected of it would be missing for that reason rather than the one it names.
+req_mutant() {  # req_mutant <name> <file> <sed script> -- prints the mutant's directory
+  local dir="$REQ_FIX/$1"
+  cp -r "$REQ_FIX/clean" "$dir"
+  sed -i -e "$3" "$dir/$2"
+  if cmp -s "$REQ_FIX/clean/$2" "$dir/$2"; then
+    echo "the requirements mutant $1 did not change $2; the checks against it prove nothing" >&2
+    exit 1
+  fi
+}
+TAB=$'\t'
+
+req GH-104.1 GH-104.2 GH-104.3 FR-45 FR-46 FR-47 FR-33
+tok 'the clean fixture: every finding holds, one line each' \
+"ok${TAB}FR-45${TAB}the requirements file holds 7 requirements and 2 criteria
+ok${TAB}FR-45${TAB}every requirement entry is well formed
+ok${TAB}GH-104.2${TAB}every tag names a requirement
+ok${TAB}GH-104.1${TAB}every check carries a tag and a direction
+ok${TAB}FR-46 FR-33${TAB}every active requirement is covered
+ok${TAB}FR-45 FR-46${TAB}requirements.md has the shape this suite holds: 7 entries by ID, 6 of them off the both-directions rule
+ok${TAB}FR-47${TAB}every stage-ticket criterion is carried or dropped, and each ticket has all of its criteria
+ok${TAB}GH-104.3${TAB}every issue the suite cites has an entry or a reason" \
+  "$(req_fixture "$REQ_FIX/clean")"
+
+# The four mutations #104 names, each one edit to one file of the fixture.
+req FR-46 FR-33
+req_mutant drop-a-tag ledger 's/^US-1 GH-5.1\t/GH-5.1\t/'
+OUT=$(req_fixture "$REQ_FIX/drop-a-tag")
+holds 'a tag dropped from the only permitting check leaves its requirement uncovered' "$OUT" \
+  "FAIL${TAB}FR-46 FR-33${TAB}US-1 is active and not covered: 1 refusing, 0 permitting, 0 static"
+lacks 'and the suite does not also say every requirement is covered' "$OUT" 'every active requirement is covered'
+req GH-104.2
+req_mutant unknown-tag ledger 's/^US-2\t/US-9\t/'
+OUT=$(req_fixture "$REQ_FIX/unknown-tag")
+holds 'a tag naming an ID not in the file fails, and names the check carrying it' "$OUT" \
+  "FAIL${TAB}GH-104.2${TAB}a check is tagged US-9, which is not in the requirements file: says three"
+lacks 'and the suite does not also say every tag names a requirement' "$OUT" 'every tag names a requirement'
+req FR-47
+req_mutant delete-a-mapping requirements.md '/^- maps: US-1, FR-1$/d'
+OUT=$(req_fixture "$REQ_FIX/delete-a-mapping")
+holds 'a criterion whose mapping is deleted fails' "$OUT" \
+  "FAIL${TAB}FR-47${TAB}${H}37.1 is neither mapped nor dropped"
+lacks 'and the provenance is not called whole' "$OUT" 'every stage-ticket criterion is carried'
+req GH-104.3
+req_mutant cite-unknown suite "s/${H}9/${H}6/"
+OUT=$(req_fixture "$REQ_FIX/cite-unknown")
+holds 'a number the suite cites with no entry and no reason fails' "$OUT" \
+  "FAIL${TAB}GH-104.3${TAB}the suite cites ${H}6, which has no entry and no reason"
+lacks 'and the citations are not called answered' "$OUT" 'every issue the suite cites has an entry'
+
+# The rest of what the file's rules say fails, one mutant each.
+req GH-104.1
+req_mutant untagged ledger 's/^FR-1\t/\t/'
+OUT=$(req_fixture "$REQ_FIX/untagged")
+holds 'a check with no tag fails, and is named' "$OUT" \
+  "FAIL${TAB}GH-104.1${TAB}a check carries no tag: tok four"
+lacks 'and the suite does not also say every check carries one' "$OUT" 'every check carries a tag'
+printf '' > "$REQ_FIX/empty-ledger"
+OUT=$(requirements_read findings "$REQ_FIX/clean/requirements.md" "$REQ_FIX/empty-ledger" \
+        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")
+holds 'a ledger that recorded nothing fails, rather than having no untagged check in it' "$OUT" \
+  "FAIL${TAB}GH-104.1${TAB}no check result was recorded, so no tag was read"
+req FR-46 FR-33
+req_mutant no-direction requirements.md '/^- direction: refuse-only: a reason$/d'
+OUT=$(req_fixture "$REQ_FIX/no-direction")
+holds 'a one-sided story that stops declaring it needs a permitting check' "$OUT" \
+  "FAIL${TAB}FR-46 FR-33${TAB}US-2 is active and not covered: 1 refusing, 0 permitting, 0 static"
+req_mutant permit-only-refused ledger 's/^US-1 GH-5.1\tpermit\t/US-1 GH-5.1\trefuse\t/'
+OUT=$(req_fixture "$REQ_FIX/permit-only-refused")
+holds 'a permit-only requirement is not covered by a refusing check' "$OUT" \
+  "FAIL${TAB}FR-46 FR-33${TAB}GH-5.1 is active and not covered: 1 refusing, 0 permitting, 0 static, declared permit-only"
+req_mutant static-unchecked ledger '/^FR-1\t/d'
+OUT=$(req_fixture "$REQ_FIX/static-unchecked")
+holds 'a static requirement with no check at all is not covered' "$OUT" \
+  "FAIL${TAB}FR-46 FR-33${TAB}FR-1 is active and not covered: 0 refusing, 0 permitting, 0 static, declared static"
+req_mutant gap-activated requirements.md "s/^- status: gap → ${H}7$/- status: active/"
+OUT=$(req_fixture "$REQ_FIX/gap-activated")
+holds 'a gap marked active is asked about like any other' "$OUT" \
+  "FAIL${TAB}FR-46 FR-33${TAB}FR-3 is active and not covered: 0 refusing, 0 permitting, 0 static"
+req FR-47
+req_mutant map-unknown requirements.md 's/^- maps: US-1, FR-1$/- maps: US-1, FR-9/'
+OUT=$(req_fixture "$REQ_FIX/map-unknown")
+holds 'a mapping naming an ID not in the file fails' "$OUT" \
+  "FAIL${TAB}FR-47${TAB}${H}37.1 maps to FR-9, which is not a requirement"
+req_mutant criterion-deleted requirements.md "/^### ${H}37.2$/,/^- dropped: a reason$/d"
+OUT=$(req_fixture "$REQ_FIX/criterion-deleted")
+holds 'a criterion deleted whole fails on the count the issue has' "$OUT" \
+  "FAIL${TAB}FR-47${TAB}${H}37 has 1 criteria here, where the issue has 2"
+req FR-45
+req_mutant used-twice requirements.md 's/^### US-2$/### US-1/'
+OUT=$(req_fixture "$REQ_FIX/used-twice")
+holds 'an ID used twice fails' "$OUT" "FAIL${TAB}FR-45${TAB}US-1: the ID is used twice"
+req_mutant out-of-family requirements.md 's/^### FR-4$/### XR-4/'
+OUT=$(req_fixture "$REQ_FIX/out-of-family")
+holds 'a heading outside the three families fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}XR-4: not an ID of the US, FR or GH family"
+req_mutant unknown-status requirements.md '0,/^- status: active$/s//- status: pending/'
+OUT=$(req_fixture "$REQ_FIX/unknown-status")
+holds 'a status the file does not define fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}US-1: the status pending is not one this file defines"
+req_mutant superseded-unknown requirements.md 's/^- status: superseded-by: FR-1$/- status: superseded-by: FR-9/'
+OUT=$(req_fixture "$REQ_FIX/superseded-unknown")
+holds 'a supersession naming no entry fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}FR-4: superseded by FR-9, which is not a requirement"
+req_mutant no-kind requirements.md '/^- kind: defect-permitting$/d'
+OUT=$(req_fixture "$REQ_FIX/no-kind")
+holds 'a GH entry with no kind fails' "$OUT" "FAIL${TAB}FR-45${TAB}GH-5.1: the kind is missing"
+req_mutant no-reason requirements.md 's/^- direction: static: a reason$/- direction: static:/'
+OUT=$(req_fixture "$REQ_FIX/no-reason")
+holds 'a direction declared with no reason fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}FR-1: the direction static gives no reason"
+req_mutant verify-absent requirements.md 's|^- verify: tests/present.py$|- verify: tests/absent.py|'
+OUT=$(req_fixture "$REQ_FIX/verify-absent")
+holds 'a seam-less requirement verified by a test that is not there fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}FR-2: verify names tests/absent.py, which is not there"
+req_mutant verify-runbook requirements.md 's|^- verify: tests/present.py$|- verify: runbook §1|'
+OUT=$(req_fixture "$REQ_FIX/verify-runbook")
+holds 'a runbook section with no runbook written fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}FR-2: verify names runbook §1, which is not written"
+printf '## §1 the fork point\n' > "$REQ_FIX/verify-runbook/runbook.md"
+OUT=$(req_fixture "$REQ_FIX/verify-runbook")
+lacks 'and passes once the runbook has that section' "$OUT" 'verify names runbook'
+# Found by review of #104, each with the suite green before it.
+req_mutant renamed-heading requirements.md 's/^## Functional requirements$/## Functional requirements (hooks)/'
+OUT=$(req_fixture "$REQ_FIX/renamed-heading")
+holds 'a renamed family heading does not make its entries vanish' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}FR-1: an entry under the heading \"Functional requirements (hooks)\", where no entry is read"
+req_mutant seam-with-checks ledger 's/^FR-1\tstatic\t/FR-1 FR-2\tstatic\t/'
+OUT=$(req_fixture "$REQ_FIX/seam-with-checks")
+holds 'a requirement no check can reach, with a check tagged with it, fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}FR-2: seam: none, and 0 refusing, 0 permitting, 1 static are tagged with it"
+req_mutant verify-a-directory requirements.md 's|^- verify: tests/present.py$|- verify: tests/|'
+OUT=$(req_fixture "$REQ_FIX/verify-a-directory")
+holds 'a verify naming a directory is refused before it is read, which would abort the program' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}FR-2: verify is tests/, which is none of review, tests/<file>.py and runbook §<n>"
+req GH-104.1
+req_mutant misspelled-direction ledger 's/^US-2\trefuse\t/US-2\trefues\t/'
+OUT=$(req_fixture "$REQ_FIX/misspelled-direction")
+holds 'a check recording a direction that is not one fails' "$OUT" \
+  "FAIL${TAB}GH-104.1${TAB}a check records a direction that is none of refuse, permit and static: refues: says three"
+# Every route out of the coverage check changes the shape, one mutant each. The
+# first two were closed after review of #104, the next four after Bertan's
+# review of its pull request, and the last two after Bertan's re-review found
+# them green against a literal of counts: a direction declared, and a gap marker
+# moved from one entry to another.
+req FR-45 FR-46
+req_mutant gap-added requirements.md 's/^- status: superseded-by: FR-1$/- status: gap → '"${H}"'8/'
+OUT=$(req_fixture "$REQ_FIX/gap-added")
+holds 'an entry marked a gap changes the shape this suite holds' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds FR-4:gap; only this suite holds FR-4:superseded-by"
+req_mutant review-added requirements.md 's|^- verify: tests/present.py$|- verify: review|'
+OUT=$(req_fixture "$REQ_FIX/review-added")
+holds 'and so does an entry moved to verification by review' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds FR-2:review; only this suite holds FR-2:tests"
+req_mutant retired-marked requirements.md '/^### GH-5.1$/,/^- direction:/s/^- status: active$/- status: retired: a reason/'
+OUT=$(req_fixture "$REQ_FIX/retired-marked")
+holds 'and an active entry marked retired' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds GH-5.1:retired,permit-only; only this suite holds GH-5.1:permit-only"
+req_mutant drifted-marked requirements.md '/^### GH-5.1$/,/^- direction:/s/^- status: active$/- status: drifted: some evidence/'
+OUT=$(req_fixture "$REQ_FIX/drifted-marked")
+holds 'and one marked drifted' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds GH-5.1:drifted,permit-only; only this suite holds GH-5.1:permit-only"
+req_mutant tests-verified requirements.md 's/^- direction: refuse-only: a reason$/- seam: none\n- verify: tests\/present.py/'
+OUT=$(req_fixture "$REQ_FIX/tests-verified")
+holds 'and one moved to no seam, verified by a test file that is there' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds US-2:tests; only this suite holds US-2:refuse-only"
+req_mutant entry-deleted requirements.md '/^### US-2$/,/^- direction: refuse-only: a reason$/d'
+OUT=$(req_fixture "$REQ_FIX/entry-deleted")
+holds 'and an entry deleted outright, which the header forbids' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only this suite holds US-2:refuse-only"
+# A story covered in both directions declares itself one-sided, which no count
+# held: every entry's direction is its own.
+req_mutant direction-added requirements.md '/^### US-1$/,/^### US-2$/s/^- status: active$/&\n- direction: permit-only: a reason/'
+OUT=$(req_fixture "$REQ_FIX/direction-added")
+tok 'a direction declared changes the shape, and that is the only finding' \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds US-1:permit-only; only this suite holds US-1" \
+  "$(grep "^FAIL" <<< "$OUT")"
+# A gap whose tags meet coverage is made active, and its marker is put on an
+# entry that is active: the count of every status stays where it was. The ledger
+# is the one that meets FR-3's coverage, so the coverage check has nothing to
+# say, and the shape alone is what turns it red.
+req_mutant gap-swapped ledger 's/^US-1\trefuse\t/US-1 FR-3\trefuse\t/; s/^US-1 GH-5.1\tpermit\t/US-1 GH-5.1 FR-3\tpermit\t/'
+sed -i -e "/^### FR-3\$/,/^### FR-4\$/s/^- status: gap → ${H}7\$/- status: active/" \
+       -e "/^### US-1\$/,/^### US-2\$/s/^- status: active\$/- status: gap → ${H}7/" "$REQ_FIX/gap-swapped/requirements.md"
+if cmp -s "$REQ_FIX/clean/requirements.md" "$REQ_FIX/gap-swapped/requirements.md"; then
+  echo "the requirements mutant gap-swapped did not change requirements.md; the checks against it prove nothing" >&2
+  exit 1
+fi
+OUT=$(req_fixture "$REQ_FIX/gap-swapped")
+tok 'a gap marker moved from one entry to another changes the shape, and that is the only finding' \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds US-1:gap FR-3; only this suite holds US-1 FR-3:gap" \
+  "$(grep "^FAIL" <<< "$OUT")"
+req FR-45
+printf '' > "$REQ_FIX/empty-requirements.md"
+OUT=$(requirements_read findings "$REQ_FIX/empty-requirements.md" "$REQ_FIX/clean/ledger" \
+        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")
+holds 'a requirements file that holds nothing fails, rather than covering everything' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}nothing was read out of the requirements file, so every finding below is evidence of nothing"
+
+echo "--- the matrix, against the same fixture ---"
+req GH-104.4
+tok 'the matrix names each requirement, its status, its coverage and its checks' \
+"requirements matrix: 7 requirements; 5 active, 5 of them covered; 1 marked a gap; 4 check results recorded
+
+US-1  active  covered (1 refusing, 1 permitting, 0 static)
+    ok   BLOCK one
+    ok   ALLOW two
+
+US-2  active  covered (1 refusing, 0 permitting, 0 static, refuse-only)
+    ok   says three
+
+FR-1  active  covered (0 refusing, 0 permitting, 1 static, static)
+    FAIL tok four
+
+FR-2  active  covered (0 refusing, 0 permitting, 0 static, seam: none, verify: tests/present.py)
+
+FR-3  gap → ${H}7  not asked (0 refusing, 0 permitting, 0 static)
+
+FR-4  superseded-by: FR-1  not asked (0 refusing, 0 permitting, 0 static)
+
+GH-5.1  active  covered (0 refusing, 1 permitting, 0 static, permit-only)
+    ok   ALLOW two" \
+  "$(requirements_read matrix "$REQ_FIX/clean/requirements.md" "$REQ_FIX/clean/ledger" \
+       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")"
+
+# A gap whose tags now meet coverage is not asked about, and the matrix says the
+# tags meet it, so whoever owns the gap sees that the marker can come off.
+req GH-104.4
+req_mutant gap-covered ledger 's/^US-1\trefuse\t/US-1 FR-3\trefuse\t/; s/^US-1 GH-5.1\tpermit\t/US-1 GH-5.1 FR-3\tpermit\t/'
+holds 'the matrix names a gap whose tags now meet coverage' \
+  "$(requirements_read matrix "$REQ_FIX/gap-covered/requirements.md" "$REQ_FIX/gap-covered/ledger" \
+       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")" \
+  "FR-3  gap → ${H}7  not asked, though its tags now meet coverage (1 refusing, 1 permitting, 0 static)"
+# A gap no check can reach has no tags to meet anything with, and a first version
+# of the line above said its tags met coverage all the same, because `seam: none`
+# is covered by definition. Found reading this branch's own matrix.
+req_mutant seam-gap requirements.md "s/^- status: active\$/&/; /^### FR-2\$/,/^- verify:/s/^- status: active\$/- status: gap → ${H}7/"
+holds 'and does not say it of a gap no check can reach' \
+  "$(requirements_read matrix "$REQ_FIX/seam-gap/requirements.md" "$REQ_FIX/clean/ledger" \
+       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")" \
+  "FR-2  gap → ${H}7  not asked (0 refusing, 0 permitting, 0 static, seam: none, verify: tests/present.py)"
+
+echo "--- every result goes through pass and fail ---"
+# A result printed any other way is printed and not recorded, so it covers
+# nothing and is refused for having no tag by nothing. The lines that print a
+# result are read off this file, comments stripped, and must be exactly the two
+# in pass and fail. Any quoted string opening with a result's prefix counts,
+# whatever prints it, so `printf '%s\n' "  ok ..."` and `echo -e` are found too;
+# the first version asked for printf or echo followed by the quote and missed
+# both, found by review of #104. The limit, named: stripping comments cuts at a
+# `#` inside a string, so a result printed on a line holding one before it is
+# not seen. The pattern is split across two quoted words and each expected line
+# breaks its word with a quote, so that neither is among its own matches.
+req GH-104.1
+tok 'the only lines that print a check result are the two in pass and fail' \
+"  printf '  o"'k'"   %s\n' \"\$line\"
+  printf '  F"'AIL'" %s\n' \"\$line\"" \
+  "$(sed 's/[[:space:]]*#.*$//' "$HOOKS/check-hooks.sh" | grep -E "['\"]  (ok   |FAI""L )")"
+
+echo "--- this repository ---"
+# The record is copied before it is read, because every line printed below is
+# appended to it while the program runs. What these findings count is every
+# check above this line; their own results reach the matrix and not this reading.
+cp "$LEDGER" "$FIXTURES/ledger-read"
+FINDINGS=$(requirements_read findings "$HOOKS/requirements.md" "$FIXTURES/ledger-read" \
+             "$HOOKS/check-hooks.sh" "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE")
+FINDINGS_STATUS=$?
+# An awk that failed may print nothing, or only the findings before the failure,
+# and a loop over what it printed passes by asking too little -- the permitting
+# direction. So its status is read as well as its output: under mawk a read of a
+# directory aborts the program with exit 2, found by review of #104.
+req FR-45 FR-46 GH-104.1
+[ "$FINDINGS_STATUS" = 0 ] || fail static 'the requirements program exited %s, so its findings are not all of them' "$FINDINGS_STATUS"
+[ -n "$FINDINGS" ] || fail static 'the requirements program printed no finding at all'
+while IFS="$TAB" read -r RESULT TAGS TEXT; do
+  req $TAGS
+  case "$RESULT" in
+    ok) pass static '%s' "$TEXT" ;;
+    *)  fail static '%s' "$TEXT" ;;
+  esac
+done <<< "$FINDINGS"
+
+# --matrix: every requirement, from the record as it stands now, the findings
+# above included, and then the verdict line the run would have printed.
+if [ -n "$MATRIX" ]; then
+  requirements_read matrix "$HOOKS/requirements.md" "$LEDGER" "$HOOKS/check-hooks.sh" \
+    "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE" >&3
+  MATRIX_STATUS=$?
+  exec >&3
+  if [ "$MATRIX_STATUS" != 0 ]; then
+    echo "the matrix program exited $MATRIX_STATUS, so the matrix above is not the whole of it"
+    FAILED=1
+  fi
+fi
 echo
 if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
 exit $FAILED

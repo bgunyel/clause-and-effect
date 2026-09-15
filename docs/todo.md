@@ -1280,6 +1280,14 @@ per the priority order above.
 
 ## 🟡 Tooling
 
+- [ ] **Register one mutation per FR in `mutate-hooks.sh`, so every functional
+  requirement has a proof that its checks can fail.** Deferred from #103 Q8.
+  `.claude/hooks/check-hooks.sh --matrix` says which checks each requirement has;
+  it cannot say whether any of them would go red if the rule they name were
+  broken, and several suites in this repository have been green for the wrong
+  reasons. #107 builds the harness and registers mutations only for the rules
+  that gain checks under #103; this item is the rest.
+
 - [ ] **One high-severity Dependabot alert on `main` — reported 2026-09-04** on
   pushing `dev-04`, at `security/dependabot/6`. Not looked at: neither the
   package nor the advisory has been read, so nothing here says whether the
