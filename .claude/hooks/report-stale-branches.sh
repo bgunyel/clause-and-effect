@@ -107,6 +107,10 @@
 # name and not a commit; and identity would call unclassified every merged branch
 # whose local copy lagged its remote.
 #
+# WHERE A NEW WORKTREE BRANCH STARTS is a rule in CLAUDE.md, not argued here.
+# It starts at the remote-tracking ref the fetch below writes, and why that ref
+# and never the local dev-NN is CONTEXT.md's *active dev branch* entry.
+#
 # Exits 0 always. A SessionStart hook that fails is a session that does not
 # start, and nothing here is worth that.
 FETCH_TIMEOUT=15
@@ -129,17 +133,22 @@ if ! git remote | grep -qxF origin; then
   echo "fetch: SKIPPED -- this repository has no remote named origin, so neither"
   echo "       staleness detector in no-work-on-stale-branch.sh is armed."
   FETCHED=
+  # Set with the fetch's outcome, for the main ancestry line below: a fetch that
+  # never ran did not fail, and saying so would be a claim about an attempt.
+  STALE_REFS=' (read against refs no fetch refreshed)'
 else
   # --prune written out rather than left to fetch.prune. See the header: this is
   # the arming property, and check-hooks.sh asserts this line as a literal.
   if timeout "$FETCH_TIMEOUT" git fetch --prune --quiet origin 2>/dev/null; then
     echo "fetch: pruned origin"
     FETCHED=1
+    STALE_REFS=
   else
     echo "fetch: FAILED or timed out after ${FETCH_TIMEOUT}s -- remote-tracking refs are"
     echo "       as stale as the last successful fetch, so no-work-on-stale-branch.sh"
     echo "       is not armed for this session."
     FETCHED=
+    STALE_REFS=' (read against refs the failed fetch left behind)'
   fi
 fi
 
@@ -256,6 +265,38 @@ if [ -n "$DEV" ]; then
 else
   echo "active dev branch: none -- no refs/remotes/origin/dev-* exists, so"
   echo "       no-work-on-stale-branch.sh abstains rather than refusing."
+fi
+
+# Whether origin/main is an ancestor of the active dev branch. This is the one
+# place the argument for reading it is made; check-hooks.sh and CLAUDE.md point
+# here. A worktree whose creation skipped the step that sets its fork point
+# starts wherever worktree.baseRef in settings.json puts it, and `fresh` puts it
+# at origin/main -- behind the dev branch, and refused at its first commit by
+# the ahead/behind test. That holds only while origin/main is an ancestor. A
+# dev-NN merged into main before rotation, or any change landed on main another
+# way, turns it false, and then the same branch starts ahead and is permitted in
+# silence. So the assumption is read here each session rather than written down
+# anywhere it could go stale.
+#
+# Three outcomes, because `git merge-base --is-ancestor` has three answers: 0 is
+# yes, 1 is no, and anything else -- 128 when a ref does not resolve, or a
+# repository git cannot read -- is no answer. An unanswered question printed as
+# NOT would be a warning about an ancestry nobody saw. No network: it reads refs
+# already on disk, so none of the three budgets above is spent on it. When no fetch
+# succeeded those refs are whatever the last successful one left, and every
+# outcome says so, the positive one most of all -- an ancestry that has since
+# broken still reads as intact.
+if [ -n "$DEV" ]; then
+  git merge-base --is-ancestor refs/remotes/origin/main "refs/remotes/$DEV" 2>/dev/null
+  ANCESTRY=$?
+  case "$ANCESTRY" in
+    0) echo "main ancestry: origin/main is an ancestor of $DEV$STALE_REFS" ;;
+    1) echo "main ancestry: origin/main is NOT an ancestor of $DEV -- a branch cut"
+       echo "       from origin/main starts ahead of the active dev branch, and the ahead/behind"
+       echo "       test in no-work-on-stale-branch.sh passes a branch that is ahead.$STALE_REFS" ;;
+    *) echo "main ancestry: NOT READ -- git merge-base --is-ancestor exited $ANCESTRY rather"
+       echo "       than answering; 128 is a ref that does not resolve to a commit$STALE_REFS" ;;
+  esac
 fi
 
 # Which branch is checked out in which worktree, so a stale branch can be

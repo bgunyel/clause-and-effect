@@ -282,6 +282,30 @@ configuration choice and not a constraint: giving the agent its own actor would
 move the rule to a ruleset. Why it was not done, and what would have to be
 checked first, is in `docs/adr/0001-hooks-not-ruleset.md`.
 
+**Where a worktree branch starts.** A new worktree branch starts at the active
+dev branch's tip, which is `origin/dev-NN` and never the local `dev-NN` — the
+*active dev branch* entry in `CONTEXT.md` says why — and its fork point is set
+when the worktree is created, by one of two routes:
+
+- `git worktree add --no-track -b <branch> <path> origin/dev-NN`. Without
+  `--no-track` git makes `origin/dev-NN` the branch's upstream, which reads
+  `[gone]` once the dev branch is deleted, and the stale-branch guard then calls
+  a branch merged that was not.
+- `git reset --hard origin/dev-NN` as the first act in a worktree
+  `EnterWorktree` has just created — never in one it entered, where the reset
+  discards that worktree's commits.
+
+A worktree branch is never cut from another worktree branch's unmerged work: its
+pull request targets the active dev branch and would carry the parent's commits.
+A subagent that needs a parent's state runs without `isolation: "worktree"`.
+
+Nothing enforces this rule. A branch that skipped it starts where
+`worktree.baseRef` in `.claude/settings.json` puts it, which is `origin/main`
+unless a machine's own `settings.local.json` says otherwise. The stale-branch
+guard refuses its first commit only while `origin/main` is an ancestor of the
+active dev branch — which the SessionStart report reads every session, as its
+`main ancestry` line, and argues beside that read.
+
 **Deliberately left open.** These stop mistakes, not adversaries: they read the
 text of a command, so a caller that means to evade them can. Five consequences
 are accepted rather than fixed, and they are numbered because the count is the
