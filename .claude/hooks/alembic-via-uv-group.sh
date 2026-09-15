@@ -28,13 +28,21 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 # subject. Testing cs_split alone left cs_normalise unguarded, and a library
 # missing only that one permitted a bare `alembic upgrade head` silently.
 if ! command -v cs_split >/dev/null 2>&1 \
-   || ! command -v cs_normalise >/dev/null 2>&1; then
+   || ! command -v cs_normalise >/dev/null 2>&1 \
+   || ! command -v cs_within_cap >/dev/null 2>&1; then
   echo "Blocked: alembic-via-uv-group.sh could not load lib/command-scan.sh, so it cannot tell an alembic invocation from a mention of one. Refusing rather than permitting." >&2
   exit 2
 fi
 
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+# THE LINE CAP, in lib/command-scan.sh: a line longer than 16 KB is refused
+# before any pass reads it, because a hook still reading when the harness
+# timeout kills it permits. Issue #96.
+if ! printf '%s\n' "$COMMAND" | cs_within_cap; then
+  echo "Blocked: alembic-via-uv-group.sh: $CS_LINE_CAP_REFUSAL" >&2
+  exit 2
+fi
 CMDS=$(printf '%s\n' "$COMMAND" | cs_normalise | cs_split)
 
 # alembic standing where a command word goes.

@@ -297,8 +297,16 @@ LIB="$(dirname "$0")/lib/command-scan.sh"
 # make the name the part a reader needs.
 if ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_normalise >/dev/null 2>&1 \
-   || ! command -v cs_git_args >/dev/null 2>&1; then
+   || ! command -v cs_git_args >/dev/null 2>&1 \
+   || ! command -v cs_within_cap >/dev/null 2>&1; then
   refuse "(no-work-on-stale-branch.sh could not load lib/command-scan.sh, so it cannot read what this command does. Refusing rather than permitting.)"
+fi
+
+# THE LINE CAP, in lib/command-scan.sh: a line longer than 16 KB is refused
+# before any pass reads it, because a hook still reading when the harness
+# timeout kills it permits. Issue #96.
+if ! printf '%s\n' "$COMMAND" | cs_within_cap; then
+  refuse "(no-work-on-stale-branch.sh: $CS_LINE_CAP_REFUSAL)"
 fi
 
 SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)

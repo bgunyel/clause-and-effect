@@ -20,8 +20,33 @@
 # or any character that cannot continue a path name, or the end of the string.
 # It is not simply made optional, because `docs/dev-logbook/` is a different
 # directory and must stay untouched.
+#
+# Issue #96 is the only reason this file sources lib/command-scan.sh, and it
+# calls one function from it. Every Bash hook runs under the 5 s timeout in
+# settings.json, a hook the harness kills permits, and the cap on line length
+# that stops that is answered once, in the library -- so this hook, which reads
+# the text with grep and nothing else, loads the library for the cap alone.
+# Its grep passes answered a 300 KB line in 0.03 s and were never the risk; the
+# cap is here because a rule that reaches every Bash hook but one is the
+# shape #84 was filed against. The load is guarded as THE LOAD CONTRACT in
+# that file says, so a missing library refuses everything here, as it does in
+# every other hook that loads it.
+LIB="$(dirname "$0")/lib/command-scan.sh"
+[ -r "$LIB" ] && . "$LIB"
+if ! command -v cs_within_cap >/dev/null 2>&1; then
+  echo "Blocked: append-only-docs.sh could not load lib/command-scan.sh, so it cannot hold the line cap every Bash hook holds. Refusing rather than permitting." >&2
+  exit 2
+fi
+
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command')
+# THE LINE CAP, in lib/command-scan.sh: a line longer than 16 KB is refused
+# before any pass reads it, because a hook still reading when the harness
+# timeout kills it permits. Issue #96.
+if ! printf '%s\n' "$COMMAND" | cs_within_cap; then
+  echo "Blocked: append-only-docs.sh: $CS_LINE_CAP_REFUSAL" >&2
+  exit 2
+fi
 
 # The trailing group is the directory boundary, and it is what #69 was about.
 # `.` and `-` are path-name characters here so that `docs/dev-log.bak` and
