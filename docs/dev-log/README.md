@@ -305,4 +305,13 @@ thing in the record.
   US-14 were filed rather than pinned (#130, #131). Review of the assistant's
   own commit then found three more in it, none of which any run would have
   caught.
+- [2026-09-16 · session 2](devlog_2026-09-16_session-2.md) — Bertan's review of
+  #132 found four defects, every one of them in what a check *claims* rather than
+  what it does: a row tagged US-7 whose message names a create when the one-step
+  correction for a refused retarget is a permitted `gh pr edit --base dev-NN`
+  (filed as #133), the same tag dilution eight lines below one the assistant had
+  just fixed, a `no-` prefix standing in for a decision so that a renamed boundary
+  hook drops out of a loop in silence — measured, three of four — and a mutation
+  count stale in four places. The count is 22; session 1's entry stands as
+  written, since append-only means the correction comes forward.
 

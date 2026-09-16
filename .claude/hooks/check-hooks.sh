@@ -2583,6 +2583,19 @@ section "=== issue #105: a refusal names the permitted spelling ==="
 # The four base spellings are asked separately because #40's finding was a rule
 # that held for `gh pr create` and not for `gh api`. A message that held for one
 # spelling and not the others is that defect arriving as prose.
+#
+# The retarget's two rows are tagged FR-23 and not US-7, and #133 is why. One
+# constant for four refusals is what FR-23 asks for, and for three of the four it
+# is also the one-step correction US-7 asks for. For a retarget it is not:
+# `gh pr edit 5 --base dev-05` is permitted, so the correction is one word of the
+# command already written, and the message names a create -- which, acted on,
+# leaves the mis-targeted pull request open and opens a second beside it. The
+# same fact is evidence for one requirement and against the other, so the rows
+# say only the half that holds. Pinning them under US-7 would have made this
+# suite evidence that the message answers a story it does not answer, which is
+# what #103's Q18 forbids and what #130 and #131 were filed rather than pinned
+# for. Message content is #109's; the rows stay, because FR-23's claim is true
+# and is the claim that would go if the constant were split per arm.
 req US-7 FR-23
 says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
   'gh pr create with no base names the permitted spelling' \
@@ -2590,9 +2603,11 @@ says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
 says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
   'gh pr create into main names the permitted spelling' \
   'gh pr create --base main --title x'
+req FR-23
 says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
   'a retarget to main names the permitted spelling' \
   'gh pr edit 5 --base main'
+req US-7 FR-23
 says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
   'the REST spelling names the permitted spelling' \
   'gh api -X POST repos/o/r/pulls -f base=main'
@@ -2609,9 +2624,14 @@ says "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
 says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch' \
   'a create into main says which branch it named' \
   'gh pr create --base main --title x'
+# FR-23 alone again, and this tail is the worse half of #133: read against a
+# refusal whose subject is the base, "edit anything else" says the base is the
+# one thing that may not be edited, when editing it to dev-NN is what is allowed.
+req FR-23
 says "$ON_DEV" no-pr-decisions.sh 'Edit anything else you like' \
   'a retarget says what editing is still permitted' \
   'gh pr edit 5 --base main'
+req US-7 FR-23
 says "$ON_DEV" no-pr-decisions.sh 'the same destination under another spelling' \
   'the REST spelling says it is the same destination named differently' \
   'gh api -X POST repos/o/r/pulls -f base=main'
@@ -4999,26 +5019,41 @@ section "=== issue #105: the boundary hooks carry the stopping rule ==="
 # `written` reads the file as written, and here the file's argument IS the
 # requirement.
 #
-# The four files are derived off the paragraph audited immediately above rather
-# than listed again. That section holds the paragraph to settings.json and to
-# the disk in both directions, so a boundary hook added without being named
-# there is already red, and one named there arrives here and is asked for the
-# rule. The `no-` prefix is what separates the four from report-stale-branches.sh,
-# which the paragraph names as the thing that prunes refs for the fourth and
-# which judges no command.
+# The four files are derived rather than listed again, by the same subtraction
+# the paragraph audit immediately above makes: what settings.json registers, less
+# the hooks that are about documents or commands, less the one that judges no
+# command. That audit holds the paragraph and settings.json to each other in both
+# directions, so the set derived here is the set the paragraph names, and a
+# boundary hook arrives here whatever it is called.
+#
+# It was derived off the paragraph, by a `no-` prefix, until Bertan's review of
+# #132. That reads as equivalent and is not. A boundary hook named under some
+# other prefix passes the paragraph audit and then drops out of this loop in
+# silence -- never asked for the rule, no check missing that anything counts,
+# while the comment above goes on saying it arrives. The prefix was doing the
+# work of a decision without being one, which is the shape #84 was filed against:
+# a question asked of two hooks of four. The exclusion is a named list now, for
+# the reason NOT_THE_BOUNDARY is one.
 #
 # The loop asks for the test itself, in the two short spellings every one of
 # them carries, because the four word the rule differently on purpose: two state
 # it and two cite no-git-push.sh for it. A citation whose referent has gone is
 # exactly the drift this part of the suite exists for, so the citations are
 # checked below against the file the loop has just asked.
-BOUNDARY_HOOKS=$(grep -oE 'no-[A-Za-z0-9_-]+\.sh' "$PARAGRAPH" | sort -u | tr '\n' ' ')
+# Registered, named in the paragraph, and judging no command: it prunes the refs
+# the fourth hook reads each session. There is no evasion for it to stop fixing,
+# so there is no stopping rule for it to carry.
+JUDGES_NO_COMMAND="report-stale-branches.sh"
+set -f
+BOUNDARY_HOOKS=$(for hook in $REGISTERED; do
+    case " $NOT_THE_BOUNDARY $JUDGES_NO_COMMAND " in *" $hook "*) continue ;; esac
+    printf '%s\n' "$hook"
+  done | sort -u | tr '\n' ' ')
 [ -n "$BOUNDARY_HOOKS" ] || {
-  echo "no boundary hook names were read out of CLAUDE.md's paragraph; the checks below prove nothing" >&2
+  echo "no boundary hooks were derived from settings.json; the checks below prove nothing" >&2
   exit 1
 }
 req US-20 FR-2
-set -f
 for hook in $BOUNDARY_HOOKS; do
   written "$hook carries the test a fix has to pass" \
     "$HOOKS/$hook" 'would plausibly write'
@@ -5431,7 +5466,14 @@ echo "--- issue #105: the worktree branch entry records what the boundary keys o
 # shorter and reading as tidier, and the entry's answer is that it is wrong
 # twice over. Both halves of that count are pinned, because one of them alone
 # leaves the instruction looking like a preference.
-req FR-28 US-24 FR-27
+#
+# FR-28 alone. It was `req FR-28 US-24 FR-27` until Bertan's review of #132 --
+# the same dilution found on the FR-11 block one round earlier, surviving one
+# round of looking for it. These eight checks read the keying rationale, which is
+# FR-28's text and no one else's; US-24 asks for the branch words and FR-27 names
+# three terms this block does not establish, and both are covered by the #70
+# block above, so the extra tags bought nothing and claimed something.
+req FR-28
 written 'the entry says the permission keys on where the command runs' \
   "$WORKTREE_ENTRY" 'keys on **where the command runs**'
 written 'and deliberately not on what the branch is called' \
@@ -7996,7 +8038,7 @@ GH-95.2 GH-96.1 GH-96.2:static GH-96.3:static GH-97.1 GH-97.2:refuse-only
 GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-124:static GH-127:gap GH-130:gap
-GH-131:gap
+GH-131:gap GH-133:gap
 '
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }

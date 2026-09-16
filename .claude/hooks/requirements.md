@@ -1344,6 +1344,21 @@ The suite fails on each of these, and `--matrix` shows the rest:
   creating spellings unpinned rather than pinning a verdict that may be wrong
   (Q18). US-14 is covered by the other twelve rows.
 
+### GH-133
+- text: A refused retarget names the correction for a retarget. `gh pr edit <n>
+  --base dev-NN` is permitted, so the one-step correction is one word of the
+  command already written, not the create the four base refusals share.
+- from: #133, found by Bertan's review of #132
+- kind: defect-refusing
+- status: gap → #133
+- note: one `BASE` constant for four refusals is what FR-23 asks for, and for the
+  three creating arms it is US-7's one-step correction too. For the retarget arm
+  it is not, and "Edit anything else you like" reads as saying the base may not
+  be edited when editing it to `dev-NN` is what is allowed. So the same message
+  is evidence for FR-23 and against US-7: #105's two retarget rows are tagged
+  FR-23 alone, and US-7 stays covered by the other twenty-one refusing checks.
+  Message content is #109's.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that
@@ -1580,7 +1595,11 @@ it has no entry above (Q16).
 - #103: the audit that decided this file; its decisions are cited as Q-numbers
 - #105: the gap-fill issue that owned fifteen of the nineteen `gap` markers #104
   left and has taken all fifteen off; it adds checks, not requirements of its own,
-  and the two defects found doing it are #130 and #131, which have entries above
+  and the three defects found doing it are #130, #131 and #133, which have entries
+  above
+- #109: the issue that owns what a refusal says; cited where a message is pinned
+  for its words, so that a reworded message is changed in one place and checked in
+  another. The defect #133 records is its to fix
 - #110: the live acceptance runbook, not yet written; `verify: runbook §<n>` names
   its sections
 - #111: a pull request, for #94
@@ -1590,3 +1609,5 @@ it has no entry above (Q16).
 - #123: a pull request, for #96
 - #126: a pull request with no issue behind it, the housekeeping skill; its checks carry
   the IDs of the procedures its generator prints, GH-70.2, GH-100 and US-29
+- #132: a pull request, for #105; cited where its review changed a check, because a
+  tag dropped for a reason is only auditable if the reason is reachable
