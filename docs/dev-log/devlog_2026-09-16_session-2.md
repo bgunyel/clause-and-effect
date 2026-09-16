@@ -285,3 +285,49 @@ assistant had run behaved, and both defects are invisible to any run, because a
 label is not executable. Bertan found them by asking, of a check, what would
 happen if the thing its label mentions were deleted — which is the mutation the
 assistant should have run for each label it wrote, and ran only for some.
+
+## Third round: independent verification, and the two open questions closed
+
+Bertan verified `bd9905f` from a fresh clone — nobody but the assistant had run
+the suite against the final commit. Full suite and `--matrix`, sorted result lines
+compared against both the `43fb767` base and the `153c8c2` round-one run, the four
+mutations from the assistant's round-two table re-run in parallel scratch copies,
+and two of his own added: deleting `` named `dev-NN` `` from the invariant, and
+emptying `JUDGES_NO_COMMAND`. All six matched. Suite 1988 results, no failures;
+matrix `153 requirements; 141 active, 141 of them covered; 7 marked a gap`. He
+recorded the acceptance criteria as met and the branch as ready to merge.
+
+**Two questions the assistant had left open are now decided, both in favour of
+what is committed.** They are written here because a decision that lives only in a
+pull request comment is one a later session will re-litigate, and the second of
+them was flagged in this very entry as "worth a look".
+
+*An unrecognised fence stops the run rather than failing one check.* Kept. It
+matches the idiom of the two guards beside it, and a stopped run is noticed where
+one red line among 1988 can be skimmed past. The trade the comment beside it
+records — a genuinely non-command fence in that section stops the suite until it
+is named or moved — is accepted, because that section is a procedure and its
+blocks are commands.
+
+*`append-only-docs-edit.sh` firing on file existence rather than on commit state
+is intended.* Kept, and not to be reopened. A file under `docs/dev-log/` is a
+record from the moment it is written, not from the moment it is committed, and
+`>>` is the right door for a correction. So the immutability the assistant ran
+into twice in this session — on a draft it had created twenty minutes earlier — is
+the guard working, not a gap in it. The alternative the assistant rejected, writing
+the file from a script the Bash guard cannot read into, remains the evasion
+CLAUDE.md's left-open list says these hooks neither stop nor try to.
+
+Bertan also corrected his own round-one comment: it said nine mutations where the
+table listed eight, the ninth having been a failed first attempt at the
+`gh_rule issue` mutation that he should not have counted. The assistant had copied
+that nine into this entry without reading the table under it, and the correction
+appended above stands as written.
+
+Three review rounds, nine findings, and every one of them about what an artefact
+*claimed* rather than what it did: six tags or labels that named more than their
+literals asked, two extractions that read part of their material and reported the
+whole, and a count restated in four places from a table four lines away. Not one
+was a wrong verdict, a wrong rule, or a check that failed to fire on the thing it
+actually asked. The suite is good at the question it is pointed at; what needed
+three readers was whether it was pointed where the label said.
