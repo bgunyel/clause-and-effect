@@ -1303,6 +1303,63 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - seam: none
 - verify: review
 
+### GH-106
+- text: Every spelling variant of a seeded command reaches that seed's verdict, or a
+  verdict the suite declares for that pair with its reason. The seeds are a
+  literal table covering every requirement with a command spelling in both
+  directions; the variants come from a fixed list of transformations; and every
+  departure is declared, either by design or as a gap naming the issue that owns
+  it.
+- from: #106
+- kind: defect-permitting
+- status: active
+- direction: static: a property of the seed table, the transformation list and the
+  departure table. The variants themselves establish the requirements their seeds
+  are tagged with, one refusing or permitting check each; what is left for this
+  entry is that the three tables say what they claim to, which is read off them
+- note: the departures are not a second opinion about a hook. A `design` row is a
+  verdict the hook's own comment argues for; a `gap` row is a verdict that is
+  wrong today, written at the right one and owned by an issue. #103 Q18 forbids
+  the third thing, which is calling a defect a design exception
+
+### GH-117
+- text: A command word spelled as a path, quoted or backslash-escaped is the command
+  it spells: `/usr/bin/gh pr merge 5`, `./gh …`, `"git" push origin main`, `'git'
+  …` and `\git …` reach the verdict their bare-name spelling reaches, in every
+  hook.
+- from: #117, found reviewing PR #115
+- kind: defect-permitting
+- status: gap → #117
+- note: #106's families pin the five spellings as permitted against every refused
+  seed, one row per spelling rather than one per seed, so the claim held is the
+  class the issue measured. Those rows go red when #117 lands, which is the
+  intended outcome.
+
+### GH-118
+- text: A `gh` command carrying any option other than `-R`, `--repo` or
+  `--hostname` before a word of a guarded subcommand path is refused as
+  unreadable, whatever verb it appears to name. A shorthand that is unknown or
+  takes a value consumes the next word, so the verb the hook reads is not the
+  verb `gh` runs: `gh pr -t view merge 5` is a merge and `gh release -t list
+  create v1` is a create.
+- from: #118, found reviewing PR #115; the refuse-the-shape decision is that
+  issue's agent brief, and the spelling is corrected by the measurement in #106's
+  comment on it
+- kind: defect-permitting
+- status: gap → #118
+- note: the spelling matters and the issue's original example is not one `gh`
+  runs. Cobra treats an unknown LONGHAND as a boolean, so `gh pr --squash view 5`
+  returns `unknown flag: --squash` and eats nothing; it is a shorthand that
+  consumes the next word. Measured on gh 2.45.0.
+  The requirement is a refusal of the shape and not a reading of the verb, so it
+  is not verdict-preserving in either direction: #106's families pin every
+  refused `gh pr` and `gh release` seed as permitted, and also six PERMITTED
+  seeds whose right verdict is BLOCK although their seed's is ALLOW --
+  `gh pr -t view view 5` is a read the rule refuses. That second set is why the
+  departure table carries a right verdict of its own. `gh issue` is not a guarded
+  group, so `gh issue -t list list` stays ALLOW; `gh api` takes no group, so the
+  shape does not arise there.
+
 ### GH-124
 - text: `feed` and `feed_says` read a hook's exit status as every other helper does,
   and the #98 self-test drives both.
@@ -1358,6 +1415,79 @@ The suite fails on each of these, and `--matrix` shows the rest:
   is evidence for FR-23 and against US-7: #105's two retarget rows are tagged
   FR-23 alone, and US-7 stays covered by the other twenty-one refusing checks.
   Message content is #109's.
+
+### GH-134
+- text: A shell wrapper is refused wherever it stands in a command position,
+  control words included: `if true; then bash -c "…"; fi`, the `for`, `while`,
+  `until`, `case` and `else` bodies, a function body and `{ …; }` are each a
+  command position, as they already are for the unwrapped command.
+- from: #134, found by #106's invariance families
+- kind: defect-permitting
+- status: gap → #134
+- note: `CS_WRAPPER_RE` is matched against raw text and so carries its own
+  command-position class -- start of line and `;` `&` `|` `(` and a backtick --
+  where every other rule reads `cs_split`, which strips control words. The two
+  answers disagree, which is the defect class `lib/command-scan.sh` exists to
+  end. #106 pins the three control words it generates against its three wrapped
+  seeds.
+
+### GH-135
+- text: A quoted group or subcommand word is the word it spells: `git "push" --all
+  origin`, `git "commit" -m x` on main, `gh "pr" merge 5`, `gh pr "merge" 5`,
+  `gh "api" …` and `gh "release" create v1` reach the verdicts their unquoted
+  spellings reach.
+- from: #135, found by #106's invariance families
+- kind: defect-permitting
+- status: gap → #135
+- note: one word past #117, and a different fix site: the command word is found by
+  an anchor, the group and verb by `cs_git_args`, `cs_gh_args` and the verb tests.
+  The contrast that makes it a defect rather than a policy is that a quoted VALUE
+  is read correctly -- `--base "dev-05"` is permitted and `--base "main"` refused
+  -- so `base_args` knows what a quote is and the group and verb tests do not.
+  Both directions are this entry. The permitting half is above; the refusing half
+  is `gh release "view" v1`, refused because the read-verb allowlist is
+  `cs_gh_args "release <verb>"` per verb and cannot read a quoted one. #106 first
+  declared that one by design, citing the allowlist's fail-closed comment, and
+  Bertan's review of PR #140 corrected it: that comment argues for refusing a
+  subcommand `gh` adds later, and a quoted `view` is not one. It is a gap here,
+  in the function this entry already names as the fix site.
+  What is NOT this entry is the `base_args` family -- `gh pr create "--web"` and
+  `gh pr create "--base" dev-05` -- which #106 declares by design, citing the
+  comment that argues quoted text may trigger a refusal and may not grant an
+  exemption. Those four rows hold only if #139 is fixed by refusing on the
+  retarget and `--web` arms rather than by teaching `base_args` to read a quoted
+  flag everywhere; #139 records that, so whoever takes it decides rather than
+  discovers it.
+
+### GH-136
+- text: The dependency group is named whichever way `uv` and bash accept it: `uv run
+  --group=test …`, `--group "test"` and `"--group" test` are the sanctioned
+  invocation that `--group test` is, in both uv-group hooks.
+- from: #136, found by #106's invariance families
+- kind: defect-refusing
+- status: gap → #136
+- note: the hooks' own header argues a different quoting trade knowingly -- that a
+  command name inside a quoted argument is treated as an invocation, so prose is
+  refused -- and this is not that. `--group=test` is the shape the base rule
+  already handles as `--base=main`, one file away.
+
+### GH-139
+- text: A quoted base flag is still a base flag where its absence would be permitted:
+  `gh pr edit <n> "--base" main`, `"--base=main"` and `"-B" main`, and
+  `gh pr create --web "--base" main`, are refused as their unquoted spellings are.
+- from: #139, found by #106's invariance families once they quoted a fifth
+  argument position
+- kind: defect-permitting
+- status: gap → #139
+- note: `base_args` drops a quoted span whole, and its comment argues that
+  deleting a span cannot invent a flag. True, and not the whole of it: on the
+  retarget arm and under `--web`, naming no base is permitted, so deleting the
+  span removes a refusal rather than adding one. On the three creating arms the
+  same drop is safe, because a create naming no base is refused for naming none
+  -- which is why this stood. The refusing consequences of the same drop are not
+  this entry; #106 declares those by design, citing the comment that argues them.
+  The second time the retarget arm has differed from the creating arms in a way
+  their shared reasoning missed, after #133.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -1593,6 +1723,15 @@ it has no entry above (Q16).
 - #77: a pull request, for #71
 - #89: a pull request, for #79
 - #103: the audit that decided this file; its decisions are cited as Q-numbers
+- #115: a pull request, for #97; Bertan's review of it found #117 and #118, which
+  have entries above
+- #140: a pull request, for #106; Bertan's review of it is cited where the four
+  things it corrected stand
+- #141: the issue that owns deciding which non-FR requirements the invariance
+  families seed; it adds no requirement of its own until that is decided
+- #107: the issue that owns a standing mutation harness; #106's section cites it
+  when writing out its own three mutations, which are run by hand until it lands.
+  It adds no requirement of its own
 - #105: the gap-fill issue that owned fifteen of the nineteen `gap` markers #104
   left and has taken all fifteen off; it adds checks, not requirements of its own,
   and the three defects found doing it are #130, #131 and #133, which have entries

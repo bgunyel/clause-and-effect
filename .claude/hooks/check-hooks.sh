@@ -83,6 +83,21 @@
 # about the cases it names and about nothing else, and every case here was
 # named by someone who went looking for one it had missed.
 #
+# Issue #106 is the first attempt to widen that sentence rather than repeat it.
+# Nearly every defect above was a SPELLING of a command already judged correctly
+# -- indentation, a flag before the subcommand, a redirect read as a refspec, a
+# separator inside quotes, sudo in front of a wrapper -- so the invariance
+# families near the foot of this suite take a seed command with a literal verdict,
+# rewrite it under a fixed list of transformations, and assert that every variant
+# reaches the seed's verdict or one declared beside it with its reason. It is
+# still evidence about the cases it names: the transformations are a list someone
+# wrote. What it changes is the cost of the next one, which is asked of every seed
+# at once rather than of the command whose review found it. Its first run found
+# four defects -- #134, #135, #136 and #139, three of them in the permitting
+# direction -- and this suite was green before each. Two of the four needed a
+# transformation widened before they appeared, which is this section's own
+# thesis one level up and is recorded where each widening stands.
+#
 # The base checks come from issue #40 rather than from a review: all four
 # spellings that create or retarget a pull request were permitted, and the
 # quietest of them named nothing at all -- with no base given, a pull request
@@ -367,6 +382,30 @@ check_in() {  # check_in <dir> <script|/absolute/hook> <want> <label> <cmd>
 # the migration fails exactly these, reporting got=<was>.
 flip() {  # flip <dir> <script> <was> <want> <label> <cmd>
   check_in "$1" "$2" "$4" "$5 (was $3)" "$6"
+}
+
+# A check whose verdict is WRONG today, and whose right verdict is written down
+# beside it. Issue #106's invariance families generate variants faster than the
+# defects they find can be fixed, and #103's Q18 says what to do with one: file
+# it, write the check at the correct verdict, and mark it a gap -- never declare
+# it an exception, which is what silencing it would look like.
+#
+# Both verdicts are literals, as `flip`'s are, and the difference between the
+# two helpers is which way the arrow points. `flip` records a verdict a change
+# deliberately moved, correct on both sides of it. `gap` records one that is
+# wrong now: `right` is what the hook should return and `today` what it does, so
+# the run asserts `today` and says in its own line that it is not the answer. The
+# issue closing turns exactly these red, with got equal to `right`, and the fix
+# rewrites them as ordinary checks. That is the intended outcome and not a
+# regression, in the manner of the accepted-gap sections above.
+#
+# It covers nothing. A gap's tags are the requirement its issue owns, which
+# requirements.md marks `gap → #<n>`, so the #104 coverage check does not ask
+# about it; and the direction it records is the one it actually reads, which is
+# today's verdict, because a matrix saying a permitted command is refused
+# somewhere would be this file lying in the permitting direction.
+gap() {  # gap <dir> <script> <right> <today> <label> <cmd>
+  check_in "$1" "$2" "$4" "$5 [gap: $3 is the right verdict, $4 is today's]" "$6"
 }
 
 # Which refusal fired, not just that one did. no-commit-to-main.sh is kept
@@ -7808,6 +7847,7 @@ drive_helper() {  # drive_helper <helper> <fixture> <want>
          cap_timed)  under_a_second 'self-test' "$(cap_timed "$EXITS" "$EXITS/$fixture.sh" 'true')" ;;
          lib_run)    library_under_a_second 'self-test' "$EXITS/$fixture.sh" "$EXITS/lib-run-out" ;;
          flip)       flip "$EXITS" "$EXITS/$fixture.sh" ALLOW "$want" 'self-test' 'true' ;;
+         gap)        gap "$EXITS" "$EXITS/$fixture.sh" BLOCK "$want" 'self-test' 'true' ;;
          check_file) check_file "$fixture.sh" "$want" 'self-test' 'docs/x.md' ;;
          says)       says "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
          says_not)   says_not "$EXITS" "$EXITS/$fixture.sh" 'never-said' 'self-test' 'true' ;;
@@ -7836,7 +7876,7 @@ failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
 # The helpers this self-test drives, named once: each loop below runs off its list,
 # and the derivation at the end of this section is asserted against both. A
 # helper added to neither is red there; one added to a list is driven.
-DRIVEN_VERDICT='check check_in flip check_file feed check_rawfile_in'
+DRIVEN_VERDICT='check check_in flip gap check_file feed check_rawfile_in'
 DRIVEN_MESSAGE='says says_not feed_says'
 DRIVEN_TIMED='cap_timed lib_run'
 
@@ -7906,8 +7946,10 @@ done
 # And that the helpers driven above are all of them. The helpers that read a hook's
 # exit status are derived from this file, and each must be in one of the three lists
 # the loops above run off -- so a new reader is either driven or red here. `flip`
-# reads no status of its own -- it hands its verdict to check_in -- so it is driven
-# because #98 names it, and is not in the derived set.
+# and `gap` read no status of their own -- each hands its verdict to check_in -- so
+# neither is in the derived set: `flip` is driven because #98 names it, and `gap`
+# because a helper this suite writes a verdict through is one this self-test should
+# have found had it crashed, whether or not the derivation can reach it.
 #
 # The first version compared the derivation with a third literal, which nothing
 # tied to the loops: a one-bit reader added to that literal alone left the suite
@@ -7995,6 +8037,676 @@ for f in lib/command-scan.sh $LIB_CONSUMERS; do
   fi
 done
 
+section "=== issue #106: every spelling of a judged command reaches its verdict ==="
+# THE FAMILIES. Almost every defect this boundary has had in the permitting
+# direction was a spelling variant of a command the suite already judged
+# correctly: indentation inside an `if`, a flag before the subcommand, a
+# redirect read as a refspec, a separator inside quotes, `sudo sh -c`, a
+# `--base` scoped to the wrong command. Each was fixed with a check naming that
+# one variant, so the next variant was caught only if someone happened to think
+# of it, and nine rounds of review found nine of them with the suite green
+# before each round.
+#
+# This section asks generatively what those checks each asked once. A seed is a
+# command with a literal verdict; a transformation rewrites its text without
+# changing which command runs; and the invariance is that every variant reaches
+# the seed's verdict. Where a variant legitimately reaches a different one the
+# pair is declared below with that verdict and the reason; where it reaches the
+# WRONG one the pair is declared a gap naming the issue that owns it, never a
+# design exception, since declaring one is what silencing a defect would look
+# like (#103 Q18).
+#
+# WHAT IS LITERAL HERE, the rule this whole file rests on. The seed verdicts are
+# written out. The invariance -- variant reaches seed -- is written out, as this
+# paragraph. Every departure from it is written out with its reason. Nothing
+# below asks a hook what it returns and then expects that.
+#
+# WHAT A GREEN RUN HERE IS NOT EVIDENCE OF. The transformations are a list
+# someone wrote, so this is still evidence about the cases it names: wider than
+# the one-variant checks above it by the number of transformations, and no wider
+# than that. The next transformation is the one nobody has thought of, and two
+# of the twelve here arrived that way -- #117 and #118 came out of Bertan's
+# review of PR #115, after the first ten had been settled. What changes is the
+# cost of the next one: a transformation added to the list below is asked of
+# every seed at once, rather than of the one command whose review found it.
+#
+# MUTATION, which is the only thing that says these can fail. Three historical
+# defects were re-introduced in lib/command-scan.sh, one at a time, each restored
+# from a copy taken beside the run rather than from git -- `git checkout --` in a
+# throwaway harness eats whatever else is uncommitted in the worktree. Each is
+# one edit, written out so the run is reproducible from this file rather than
+# from a harness that no longer exists (a standing one is #107's):
+#
+#   1. delete `sudo|` from CS_WRAP_OPTION_WORDS
+#   2. delete `nohup|` from CS_WRAP_OPTION_WORDS
+#   3. in cs_split's prefix pass, replace the control-word alternation
+#      `^([{}!]|if|then|…|coproc)$` with one that matches nothing
+#
+# The counts are family rows against the rest of this suite:
+#
+#   drop `sudo` from the prefix words (#79's fix)        48 FAIL, 22 here
+#   drop `nohup` from the same list                      26 FAIL, 22 here
+#   stop stripping the shell control words in cs_split   72 FAIL, 57 here
+#
+# The middle one is the one worth reading. `nohup` was covered by four checks in
+# the whole of the rest of this suite; the families ask it of every seed, and the
+# same holds for every other word on that list -- which is the shape of #79
+# itself, a fix that handled `sh -c`, then `sudo sh -c`, one word per round.
+# The tree was green before each mutation and green after each restore.
+#
+# The guards this section carries about ITSELF are mutation-checked the same
+# way, each by one edit, and each fires: a name dropped from INV_TRANSFORMS
+# while its `inv_apply` arm stays; a transformation added that applies to no
+# seed; a departure row naming a seed that does not exist; a gap row whose right
+# verdict is dropped so it becomes the one it asserts; a right verdict added to
+# a design row; and a seed re-spelled so a transformation only ever regenerates
+# another seed's command.
+#
+# Two of those mutations did not apply on their first attempt -- the patch text
+# did not match, and a third reverted one of the two seeds it needed to revert.
+# Each run was green for that reason and not for the one it claimed. A mutation
+# that silently fails to apply reads exactly like evidence and is none, so the
+# harness now asserts its own edit landed before it trusts the run.
+
+# WHERE A SEED RUNS. A symbolic name rather than a path, so the table below can
+# be a quoted heredoc and hold every command exactly as written -- a `$` or a
+# backtick in a seed would be text and not an expansion.
+inv_dir() {  # inv_dir <name> -- the fixture directory a seed names
+  case "$1" in
+    hooks)     printf '%s' "$HOOKS" ;;
+    push-wt)   printf '%s' "$PUSH_WT" ;;
+    push-main) printf '%s' "$PUSH_MAIN" ;;
+    on-main)   printf '%s' "$ON_MAIN" ;;
+    on-dev)    printf '%s' "$ON_DEV" ;;
+    wt-stale)  printf '%s' "$WT_STALE" ;;
+    wt-work)   printf '%s' "$WT_WORK" ;;
+    *)         return 1 ;;
+  esac
+}
+
+# THE SEEDS, one per line: <fixture>|<hook>|<verdict>|<tags>|<key>|<command>.
+# Both directions for every requirement with a command spelling, because a
+# permitting seed is as much of the family as a refusing one: two of the defect
+# rounds these families generalise were refusals of ordinary commands, and a
+# generator run only against refusals would have reported neither.
+#
+# Two requirements name commands and are not seeded. FR-13 says the base rule
+# lives in the pull-request hook and adds no seventh hook, which is a claim
+# about where code sits and carries `seam: none`; a check tagged with it would
+# fail the #104 section rather than cover it. FR-49's subject is not a spelling
+# but what a hook does when it cannot read its input at all -- no jq, stdin that
+# is not JSON, no command field -- and its permitting half is the empty command
+# string, which has no variant; the #95 section above holds it. Every other
+# FUNCTIONAL requirement whose text names a command is seeded here in both
+# directions, and the derivation at the foot of this section holds the table to
+# that.
+#
+# Functional, and not every requirement: the derivation reads `FR-` tags and
+# nothing else. Several `GH-` entries name commands too -- GH-43.6, GH-68.1,
+# GH-72 and the GH-79 family among them -- and are not seeded, and GH-94.1 is
+# seeded in one direction. That is the scope #106 asked for ("at least one per FR
+# with a command spelling"), written down here because the sentence above it read
+# for one revision as though it covered all three families.
+#
+# It is also the scope's weakest point, and #141 owns deciding it rather than
+# this comment: what is seeded is what any future transformation can ever be
+# asked of, and the FR set is where the specification happened to land in
+# 2026-09 rather than where the defects have been. Some of those entries name a
+# TRANSFORMATION and not a seed -- GH-79.x is transformation 4 -- so the answer
+# is not a dozen more rows here.
+#
+# `|` is the field separator and no seed command contains one; the loop below
+# fails on a seed whose command field came out empty rather than leaving one
+# silently cut in half.
+INV_SEEDS=$(cat <<'SEEDS'
+push-wt|no-git-push.sh|BLOCK|FR-3 US-2|push-all|git push --all origin
+push-wt|no-git-push.sh|BLOCK|FR-3 US-1|push-main|git push origin main
+push-wt|no-git-push.sh|BLOCK|FR-3 US-3|push-force|git push --force origin wt-branch
+push-wt|no-git-push.sh|BLOCK|FR-4|push-wrapped|bash -c "git push origin wt-branch"
+push-wt|no-git-push.sh|ALLOW|FR-3 US-3 US-4|push-own|git push origin wt-branch
+push-wt|no-git-push.sh|ALLOW|FR-3|push-status|git status
+push-main|no-git-push.sh|BLOCK|GH-94.1 US-3|push-from-main-checkout|git push origin feature-x
+hooks|no-pr-decisions.sh|BLOCK|US-15|pr-merge|gh pr merge 5
+hooks|no-pr-decisions.sh|BLOCK|FR-4|pr-merge-wrapped|bash -c "gh pr merge 5"
+hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-base-main|gh pr create --base main --title x
+hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-base-main-eq|gh pr create --base=main --body y
+hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-bundled|gh pr create -dB main --body y
+hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-short-flags|gh pr create -d -B main --title x
+hooks|no-pr-decisions.sh|BLOCK|FR-14 FR-16 US-9|pr-no-base|gh pr create --title x --body y
+hooks|no-pr-decisions.sh|BLOCK|FR-17 FR-15 US-10|pr-retarget|gh pr edit 35 --base main
+hooks|no-pr-decisions.sh|BLOCK|FR-21 FR-15|pr-web-main|gh pr create --web --base main
+hooks|no-pr-decisions.sh|BLOCK|FR-18 FR-20 FR-15 US-11|api-rest-main|gh api -X POST repos/o/r/pulls -f base=main -f head=x
+hooks|no-pr-decisions.sh|BLOCK|FR-19 FR-15 US-11|api-graphql-main|gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:main})}'
+hooks|no-pr-decisions.sh|BLOCK|FR-48 US-15|release-create|gh release create v1
+hooks|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8|pr-base-dev|gh pr create --base dev-05 --title x
+hooks|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8|pr-base-dev-eq|gh pr create --base=dev-05 --body y
+hooks|no-pr-decisions.sh|ALLOW|FR-17 FR-15 US-10|pr-retarget-dev|gh pr edit 35 --base dev-05
+hooks|no-pr-decisions.sh|ALLOW|US-13|pr-view|gh pr view 5
+hooks|no-pr-decisions.sh|ALLOW|FR-21 US-12|pr-web|gh pr create --web
+hooks|no-pr-decisions.sh|ALLOW|FR-20 US-13|api-read|gh api repos/o/r/pulls/35
+hooks|no-pr-decisions.sh|ALLOW|FR-18 FR-15 US-11|api-rest-dev|gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x
+hooks|no-pr-decisions.sh|ALLOW|FR-19 FR-15 US-11|api-graphql-dev|gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:"dev-05"})}'
+hooks|no-pr-decisions.sh|ALLOW|FR-48|release-view|gh release view v1
+hooks|no-pr-decisions.sh|ALLOW|US-14|issue-list|gh issue list
+hooks|no-pr-decisions.sh|ALLOW|FR-4|wrap-benign|bash -c "gh issue list"
+on-main|no-commit-to-main.sh|BLOCK|US-1|commit-main|git commit -m wip
+on-main|no-commit-to-main.sh|BLOCK|FR-4|commit-wrapped|bash -c "git commit -m wip"
+on-dev|no-commit-to-main.sh|ALLOW|US-4|commit-dev|git commit -m wip
+wt-stale|no-work-on-stale-branch.sh|BLOCK|FR-38|commit-stale|git commit -m wip
+wt-work|no-work-on-stale-branch.sh|ALLOW|FR-38|commit-work|git commit -m wip
+hooks|pytest-via-uv-group.sh|BLOCK|GH-69.1|pytest-bare|pytest tests/
+hooks|pytest-via-uv-group.sh|ALLOW|GH-69.1|pytest-uv|uv run --group test pytest tests/
+hooks|alembic-via-uv-group.sh|BLOCK|GH-69.1|alembic-bare|alembic upgrade head
+hooks|alembic-via-uv-group.sh|ALLOW|GH-69.1|alembic-uv|uv run --group migrations alembic upgrade head
+SEEDS
+)
+
+# THE TRANSFORMATIONS, #103's ten and the two Bertan's review of PR #115 added,
+# each family spelled out one variant per spelling it has:
+#
+#   1 leading indentation      indent-spaces indent-tab
+#   2 separators               before-* after-*, one per separator and side
+#   3 control words            word-if word-for word-brace word-subshell
+#   4 prefix words cs_split strips   pre-sudo pre-env pre-command pre-nohup pre-time
+#   5 --flag=value / --flag value    flag-attached flag-separated
+#   6 bundled / separate short flags short-bundled short-separate
+#   7 a global flag before the subcommand   global-flag
+#   8 quoted / unquoted arguments    quote-double-* quote-single-*, by position
+#   9 a line continuation between arguments  continuation
+#  10 a trailing redirection          redirect-null redirect-dup
+#  11 the command word itself (#117)  word-path word-dot word-dquoted
+#                                     word-squoted word-escaped
+#  12 an option before the subcommand that consumes the next word (#118)
+#                                     option-eats-verb
+#
+# A transformation that cannot apply to a seed -- no value-taking long flag, no
+# second short flag to bundle with, no subcommand to put a global flag before --
+# emits nothing, and that skip is counted. A transformation that applies to NO
+# seed at all is a check that has silently stopped existing, so it is failed by
+# name at the foot of this section rather than counted into an aggregate.
+#
+# That guard is here because this comment claimed it before it was written, and
+# the claim was found by review rather than by the suite. The aggregate count
+# that stood here said how many variants were skipped and never which
+# transformation did no work, and a transformation applying to nothing is
+# exactly the case the aggregate cannot show: it is one more number in a total
+# of 269.
+INV_TRANSFORMS='
+  indent-spaces indent-tab
+  before-semi before-and before-or before-pipe before-newline
+  after-semi after-and after-or after-pipe after-newline
+  word-if word-for word-brace word-subshell
+  pre-sudo pre-env pre-command pre-nohup pre-time
+  flag-attached flag-separated short-bundled short-separate
+  global-flag option-eats-verb
+  quote-double-2 quote-double-3 quote-double-4 quote-double-5 quote-double-last
+  quote-single-2 quote-single-3 quote-single-4 quote-single-5 quote-single-last
+  continuation
+  redirect-null redirect-dup
+  word-path word-dot word-dquoted word-squoted word-escaped
+'
+
+# A rewrite that prints nothing when it changed nothing, which is how a
+# transformation says it does not apply to this seed.
+inv_rewrite() {  # inv_rewrite <command> <sed -E script>
+  local out
+  out=$(printf '%s' "$1" | sed -E "$2")
+  [ "$out" != "$1" ] && printf '%s' "$out"
+  return 0
+}
+# The value-taking long flags the seeds use, named rather than derived: a
+# transformation that attached a value to a flag which takes none would write a
+# command git or gh rejects, and a verdict on one of those says less than it
+# looks like it says.
+INV_VALUE_FLAGS='base|title|body|group'
+# A global option before the subcommand, in the spelling each tool takes.
+inv_global() {  # inv_global <command>
+  case "$1" in
+    'gh '*)  printf 'gh -R o/r %s' "${1#gh }" ;;
+    'git '*) printf 'git -C . %s' "${1#git }" ;;
+  esac
+}
+# #118: an option before the subcommand that takes a value consumes the next
+# word, so a read verb written after it is eaten and the verb after THAT is what
+# runs.
+#
+# `-t`, a SHORTHAND, and not #118's own `--squash`. That spelling was written
+# here first, straight out of the issue, and it is a command gh rejects: cobra
+# treats an unknown longhand as a boolean, so `gh pr --squash view 5` returns
+# `unknown flag: --squash` and no verb is eaten. Measured on gh 2.45.0. An
+# unknown or value-taking SHORTHAND does consume the next word, and `-t`
+# (`--template`) is one at each of the three group levels: `gh pr -t view view 5`
+# runs `gh pr view 5`, which then complains that `--template` needs `--json` --
+# the complaint is the evidence, since it proves the second `view` became the
+# subcommand.
+#
+# The distinction is not pedantry, and this file sets the bar for it one screen
+# up, at INV_VALUE_FLAGS: a variant gh will not execute is a variant whose
+# verdict says less than it looks like it says. A gap row pinning one would
+# claim a permitted command that cannot be run.
+#
+# `gh release -t list create v1` is the shape at its worst, and it is permitted:
+# a review of this branch ran it and it created a real release on this
+# repository. That is not a hypothetical about what gh would do.
+inv_eats() {  # inv_eats <command>
+  case "$1" in
+    'gh pr '*)      printf 'gh pr -t view %s' "${1#gh pr }" ;;
+    'gh release '*) printf 'gh release -t list %s' "${1#gh release }" ;;
+    'gh issue '*)   printf 'gh issue -t list %s' "${1#gh issue }" ;;
+  esac
+}
+# One argument quoted, by position. Not the command word, which is #117's
+# transformation and is asked separately.
+#
+# By POSITION and not just the last argument, which is what the first version of
+# this did and is the reason this comment is here: quoting the last argument of
+# `gh pr merge 5` quotes the number, and the number is not what any rule reads.
+# The word a rule does read is the subcommand, two and three words in, and
+# `gh pr "merge" 5` and `git "push" --all origin` are permitted. Found by hand
+# after this transformation had been written and run, which is the shape this
+# whole section is about: the family asked the right question of the wrong word.
+#
+# Five fixed positions and not four, for the same reason one position further
+# out: position 5 is a flag's VALUE in the longest seeds -- `gh pr create --base
+# dev-05 --title x` -- and a quoted base value is the contrast GH-135's entry
+# rests on, `--base "dev-05"` being read correctly where `"--base" dev-05` is
+# not. With four, the families generated the half of that contrast that fails
+# and not the half that passes. Also found by review rather than here.
+#
+# A command carrying a quote already is skipped whole rather than at the target
+# word. The rejoin below splits on whitespace, so a quoted span is several words
+# to it, and quoting one of them would put a quote inside a payload -- a command
+# nobody would write, whose verdict says nothing.
+inv_quote_at() {  # inv_quote_at <command> <quote character> <index, or "last">
+  local cmd="$1" q="$2" want="$3" n target i=0 w out=
+  case "$cmd" in *\'*|*\"*) return 0 ;; esac
+  # Split on whitespace with globbing off, and put globbing back: every other
+  # `set -f` in this file is paired, and a caller that reached this one through
+  # something other than a command substitution would otherwise leave it off for
+  # the rest of the run. That every caller today is `$(inv_apply …)` is a reason
+  # this has not bitten, not a reason to leave it unpaired.
+  set -f
+  set -- $cmd
+  set +f
+  n=$#
+  case "$want" in
+    # `last` is for the arguments the fixed positions do not reach, and is
+    # skipped where it would be one of them: the same command checked twice
+    # under two names reads in the matrix as two checks and is one.
+    last) target=$n; [ "$n" -gt 5 ] || return 0 ;;
+    *)    target=$want; [ "$n" -ge "$target" ] || return 0 ;;
+  esac
+  [ "$target" -gt 1 ] || return 0
+  for w in "$@"; do
+    i=$((i + 1))
+    [ "$i" = "$target" ] && w="$q$w$q"
+    out="${out:+$out }$w"
+  done
+  printf '%s' "$out"
+}
+# A line continuation between the last two arguments.
+inv_continuation() {  # inv_continuation <command>
+  local head="${1% *}" last="${1##* }"
+  [ "$head" != "$1" ] || return 0
+  printf '%s \\\n  %s' "$head" "$last"
+}
+# #117: the command word as a path, quoted or escaped. bash runs all five, and
+# not one of the other eleven transformations changes the command word at all.
+inv_cmdword() {  # inv_cmdword <command> <prefix> <suffix>
+  local word="${1%% *}" rest="${1#* }"
+  case "$word" in */*|*\'*|*\"*|'') return 0 ;; esac
+  [ "$rest" != "$1" ] || rest=
+  printf '%s%s%s%s' "$2" "$word" "$3" "${rest:+ $rest}"
+}
+inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
+  case "$1" in
+    indent-spaces)    printf '    %s' "$2" ;;
+    indent-tab)       printf '\t%s' "$2" ;;
+    before-semi)      printf 'echo x ; %s' "$2" ;;
+    before-and)       printf 'echo x && %s' "$2" ;;
+    before-or)        printf 'echo x || %s' "$2" ;;
+    before-pipe)      printf 'echo x | %s' "$2" ;;
+    before-newline)   printf 'echo x\n%s' "$2" ;;
+    after-semi)       printf '%s ; echo x' "$2" ;;
+    after-and)        printf '%s && echo x' "$2" ;;
+    after-or)         printf '%s || echo x' "$2" ;;
+    after-pipe)       printf '%s | cat' "$2" ;;
+    after-newline)    printf '%s\necho x' "$2" ;;
+    word-if)          printf 'if true; then %s; fi' "$2" ;;
+    word-for)         printf 'for x in 1; do %s; done' "$2" ;;
+    word-brace)       printf '{ %s; }' "$2" ;;
+    word-subshell)    printf '( %s )' "$2" ;;
+    pre-sudo)         printf 'sudo %s' "$2" ;;
+    pre-env)          printf 'env X=1 %s' "$2" ;;
+    pre-command)      printf 'command %s' "$2" ;;
+    pre-nohup)        printf 'nohup %s' "$2" ;;
+    pre-time)         printf 'time %s' "$2" ;;
+    flag-attached)    inv_rewrite "$2" "s/(--($INV_VALUE_FLAGS)) ([^ -][^ ]*)/\\1=\\3/" ;;
+    flag-separated)   inv_rewrite "$2" "s/(--($INV_VALUE_FLAGS))=([^ ]+)/\\1 \\3/" ;;
+    short-bundled)    inv_rewrite "$2" 's/ -([A-Za-z]) -([A-Za-z]) / -\1\2 /' ;;
+    short-separate)   inv_rewrite "$2" 's/ -([A-Za-z])([A-Za-z]) / -\1 -\2 /' ;;
+    global-flag)      inv_global "$2" ;;
+    option-eats-verb) inv_eats "$2" ;;
+    quote-double-2)   inv_quote_at "$2" '"' 2 ;;
+    quote-double-3)   inv_quote_at "$2" '"' 3 ;;
+    quote-double-4)   inv_quote_at "$2" '"' 4 ;;
+    quote-double-5)   inv_quote_at "$2" '"' 5 ;;
+    quote-double-last) inv_quote_at "$2" '"' last ;;
+    quote-single-2)   inv_quote_at "$2" "'" 2 ;;
+    quote-single-3)   inv_quote_at "$2" "'" 3 ;;
+    quote-single-4)   inv_quote_at "$2" "'" 4 ;;
+    quote-single-5)   inv_quote_at "$2" "'" 5 ;;
+    quote-single-last) inv_quote_at "$2" "'" last ;;
+    continuation)     inv_continuation "$2" ;;
+    redirect-null)    printf '%s >/dev/null' "$2" ;;
+    redirect-dup)     printf '%s 2>&1' "$2" ;;
+    word-path)        inv_cmdword "$2" '/usr/bin/' '' ;;
+    word-dot)         inv_cmdword "$2" './' '' ;;
+    word-dquoted)     inv_cmdword "$2" '"' '"' ;;
+    word-squoted)     inv_cmdword "$2" "'" "'" ;;
+    word-escaped)     inv_cmdword "$2" '\' '' ;;
+    *)                return 1 ;;
+  esac
+  return 0
+}
+# A variant on one line, for a label and for the ledger. `record` keeps only what
+# precedes the first newline, so a variant carrying one would reach the matrix as
+# half of itself and two variants would read there as the same check.
+inv_show() {  # inv_show <variant>
+  local s=${1//$'\n'/\\n}
+  printf '%s' "${s//$'\t'/\\t}"
+}
+
+# THE DECLARED DEPARTURES, one per line:
+# <seed keys or verdict class>|<transformation>|<verdict>|<kind>|<tags>|<reason>
+# and, for a gap whose right verdict is not the seed's, a seventh field holding
+# that verdict.
+#
+# `design` is a variant that reaches a different verdict and is right to: the
+# transformation changed what the command does, or it put the command where
+# CLAUDE.md's deliberately-left-open list says a hook stops reading. Its verdict
+# is a literal and its reason names what decides it.
+#
+# `gap` is a variant that reaches the WRONG verdict today. The check is written
+# at the correct verdict, which `gap` prints, and asserts the wrong one until
+# the issue named closes, at which point it goes red and is rewritten as an
+# ordinary check. Its tags are the gap's own requirement ID and never the
+# seed's, so a gap covers nothing: requirements.md marks those entries
+# `gap → #<n>` and the coverage check does not ask about them.
+#
+# A SEVENTH FIELD carries the right verdict where it is not the seed's, and this
+# is the case the first version of this table could not say at all. A gap was
+# "wrong today, and the seed's verdict is the right one", because `gap` was
+# handed `$swant`. #118's triage decision is not of that shape: on a guarded
+# group, ANY option before a subcommand word makes the command unreadable and
+# must be refused, so the right verdict is BLOCK for a permitted seed as much as
+# for a refused one. `gh pr -t view view 5` is a read of a pull request that the
+# hook must refuse once #118 lands, and its seed `gh pr view 5` is ALLOW.
+#
+# Without the field those six rows carried no departure at all, so they asserted
+# ALLOW as the invariant and would have gone red on #118's fix looking like
+# regressions rather than like gaps closing. The transformation is not
+# verdict-preserving on a guarded group in EITHER direction, and a table that
+# can only express one of the two directions hides the other. Found by Bertan's
+# review of PR #140; the check's own definition of a gap was narrower than the
+# defects it was finding.
+#
+# The first field is either a space-separated list of seed keys, or a verdict
+# class -- `BLOCK:*` or `ALLOW:*` -- which declares the departure for every seed
+# of that direction at once. A class is used where the finding is about the
+# class rather than about particular commands. #117 is exactly that: every
+# refused seed of every hook is permitted under all five spellings of its
+# command word. One row is a stronger claim than thirty-eight copies of it and
+# not a weaker one -- a refused seed that turned out to be refused under
+# `/usr/bin/` after all fails this row, where its own row would have passed and
+# said nothing. #135 is deliberately NOT a class: the word two in is the group
+# for `git push` and `gh pr` and an ordinary argument for `pytest tests/`, so a
+# class there would claim something of `pytest "tests/"` that is not true of it.
+#
+# An exact key wins over a class, and a class applies only where no exact key
+# does. Every row must be used: a seed renamed or a transformation that has
+# stopped applying leaves a row declaring nothing, and the guard below fails on
+# it rather than letting the table rot into a list of things that were once so.
+INV_DEPARTURES=$(cat <<'EX'
+push-own|global-flag|BLOCK|design|US-3|git -C moves git's working directory, so where the push would land cannot be judged from here
+commit-dev|global-flag|BLOCK|design|GH-43.2|git -C moves git's working directory, so whether the commit lands on main cannot be judged from here
+pr-web|quote-double-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span whole, and quoted text may not grant an exemption
+pr-web|quote-single-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span whole, and quoted text may not grant an exemption
+pr-base-dev pr-base-dev-eq|quote-double-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
+pr-base-dev pr-base-dev-eq|quote-single-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
+release-view|quote-double-3|BLOCK|gap|GH-135|the release verb in double quotes, refused by the allowlist that cannot read it
+release-view|quote-single-3|BLOCK|gap|GH-135|the release verb in single quotes, refused by the allowlist that cannot read it
+BLOCK:*|word-path|ALLOW|gap|GH-117|the command word as an absolute path
+BLOCK:*|word-dot|ALLOW|gap|GH-117|the command word as a relative path
+BLOCK:*|word-dquoted|ALLOW|gap|GH-117|the command word in double quotes
+BLOCK:*|word-squoted|ALLOW|gap|GH-117|the command word in single quotes
+BLOCK:*|word-escaped|ALLOW|gap|GH-117|the command word behind a backslash
+BLOCK:*|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand eats the read verb after it
+pr-view pr-base-dev pr-base-dev-eq pr-retarget-dev pr-web release-view|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand makes a guarded path unreadable, and the right verdict is a refusal whatever the seed's is|BLOCK
+push-wrapped pr-merge-wrapped commit-wrapped|word-if|ALLOW|gap|GH-134|a wrapper after a control word
+push-wrapped pr-merge-wrapped commit-wrapped|word-for|ALLOW|gap|GH-134|a wrapper after a control word
+push-wrapped pr-merge-wrapped commit-wrapped|word-brace|ALLOW|gap|GH-134|a wrapper after a control word
+push-all push-main push-force push-from-main-checkout commit-main commit-stale api-rest-main release-create pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-double-2|ALLOW|gap|GH-135|the group word in double quotes
+push-all push-main push-force push-from-main-checkout commit-main commit-stale api-rest-main release-create pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-single-2|ALLOW|gap|GH-135|the group word in single quotes
+pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-double-3|ALLOW|gap|GH-135|the subcommand verb in double quotes
+pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-single-3|ALLOW|gap|GH-135|the subcommand verb in single quotes
+pytest-uv alembic-uv|flag-attached|BLOCK|gap|GH-136|the dependency group named with an attached value
+pytest-uv alembic-uv|quote-double-3|BLOCK|gap|GH-136|the group flag in double quotes
+pytest-uv alembic-uv|quote-single-3|BLOCK|gap|GH-136|the group flag in single quotes
+pytest-uv alembic-uv|quote-double-4|BLOCK|gap|GH-136|the group value in double quotes
+pytest-uv alembic-uv|quote-single-4|BLOCK|gap|GH-136|the group value in single quotes
+pr-retarget pr-web-main|quote-double-5|ALLOW|gap|GH-139|the base flag in double quotes, on an arm where naming no base is permitted
+pr-retarget pr-web-main|quote-single-5|ALLOW|gap|GH-139|the base flag in single quotes, on an arm where naming no base is permitted
+EX
+)
+
+# Tagged before the table is read, not after. Every check this section prints is
+# one of its own claims about its own tables, and the two loops below print one
+# before any seed has been reached -- so without this they are untagged, the #104
+# tag check reports each a second time as carrying no tag, and a reader chasing
+# two red lines finds one defect. Bertan's round-two review of PR #140 found it
+# by mutating a design row and reading what came back.
+req GH-106
+declare -A INV_DEP
+declare -A INV_DEP_USED
+INV_DEP_ROWS=0
+while IFS='|' read -r dkeys dtrans dwant dkind dtags dreason dright; do
+  [ -n "$dkeys" ] || continue
+  INV_DEP_ROWS=$((INV_DEP_ROWS + 1))
+  case "$dkind" in
+    design)
+      [ -z "$dright" ] || fail static \
+        'the departure %s + %s is a design row with a right verdict; a design row IS the right verdict' \
+        "$dkeys" "$dtrans" ;;
+  esac
+  # Globbing off for the split: a class key is the literal `BLOCK:*`, and with
+  # globbing on a file named `BLOCK:x` beside this suite would expand it and
+  # silently retarget the row at a seed key that is not a class at all.
+  set -f
+  for dkey in $dkeys; do
+    INV_DEP["$dkey|$dtrans"]="$dwant|$dkind|$dtags|$dreason|$dright"
+    INV_DEP_USED["$dkey|$dtrans"]=0
+  done
+  set +f
+done <<< "$INV_DEPARTURES"
+
+# The generator. One seed at a time: its own verdict first, since the invariance
+# is about reaching that verdict and a family whose seed is wrong establishes
+# nothing, and then every transformation that applies to it.
+declare -A INV_APPLIED
+# Every seed's command, so a variant that IS another seed's command can be
+# skipped rather than checked twice under two names. `flag-separated` on
+# `pr-base-main-eq` regenerates `pr-base-main` exactly, and `short-bundled` on
+# `pr-short-flags` regenerates `pr-bundled`; both are already checked as seeds,
+# and the ledger would carry one command as two results. `quote-*-last` took
+# this trouble from the start and the other transformations did not, which is
+# one rule applied unevenly -- Bertan's review of PR #140 named it.
+declare -A INV_IS_SEED
+while IFS='|' read -r _ _ _ _ _ scmd0; do
+  [ -n "$scmd0" ] && INV_IS_SEED["$scmd0"]=1
+done <<< "$INV_SEEDS"
+INV_SEED_COUNT=0
+INV_VARIANTS=0
+INV_SKIPPED=0
+INV_REGENERATED=0
+INV_DESIGN=0
+INV_GAPS=0
+while IFS='|' read -r sdir shook swant stags skey scmd; do
+  [ -n "$skey" ] || continue
+  # And again per seed, before the two guards below, since `req $stags` is set
+  # only once a seed has survived them: on the first iteration REQ would be the
+  # departure loop's, and on any later one the PREVIOUS seed's tags, which is
+  # worse than none -- a malformed seed would be reported as evidence about
+  # whatever requirement the seed before it established.
+  req GH-106
+  if ! sfix=$(inv_dir "$sdir"); then
+    fail static 'the seed %s names the fixture %s, which inv_dir does not resolve' "$skey" "$sdir"
+    continue
+  fi
+  if [ -z "$scmd" ]; then
+    fail static 'the seed %s has no command, so the field separator has cut it' "$skey"
+    continue
+  fi
+  INV_SEED_COUNT=$((INV_SEED_COUNT + 1))
+  req $stags
+  check_in "$sfix" "$shook" "$swant" "seed $skey: $scmd" "$scmd"
+  for trans in $INV_TRANSFORMS; do
+    # And a third time per variant, for the same reason one loop further in.
+    # Three guards below fire before the `req` of the branch they sit in -- the
+    # transformation with no rewrite, the gap whose right verdict is the one it
+    # asserts, and the kind that is neither. Each would otherwise carry the tags
+    # of the PREVIOUS variant's check_in, or of this seed's own, and a table
+    # defect would be filed as evidence about FR-14 or FR-48. The three `req`s
+    # below this line stay where they are: they must win for the verdict checks.
+    req GH-106
+    if ! variant=$(inv_apply "$trans" "$scmd"); then
+      fail static 'the transformation %s is in the list with no rewrite of its own' "$trans"
+      continue
+    fi
+    if [ -z "$variant" ]; then
+      INV_SKIPPED=$((INV_SKIPPED + 1))
+      continue
+    fi
+    # A variant that is another seed's command is that seed's check, not a
+    # variant of this one. Its own seed row asserts it, with the same verdict.
+    if [ "$variant" != "$scmd" ] && [ -n "${INV_IS_SEED["$variant"]:-}" ]; then
+      INV_REGENERATED=$((INV_REGENERATED + 1))
+      continue
+    fi
+    INV_VARIANTS=$((INV_VARIANTS + 1))
+    INV_APPLIED["$trans"]=$(( ${INV_APPLIED["$trans"]:-0} + 1 ))
+    dep=${INV_DEP["$skey|$trans"]:-}
+    if [ -n "$dep" ]; then
+      INV_DEP_USED["$skey|$trans"]=1
+    else
+      dep=${INV_DEP["$swant:*|$trans"]:-}
+      [ -z "$dep" ] || INV_DEP_USED["$swant:*|$trans"]=1
+    fi
+    if [ -z "$dep" ]; then
+      req $stags
+      check_in "$sfix" "$shook" "$swant" "$skey + $trans: $(inv_show "$variant")" "$variant"
+      continue
+    fi
+    IFS='|' read -r dwant dkind dtags dreason dright <<< "$dep"
+    case "$dkind" in
+      design)
+        INV_DESIGN=$((INV_DESIGN + 1))
+        req ${dtags:-$stags}
+        check_in "$sfix" "$shook" "$dwant" \
+          "$skey + $trans, by design ($dreason): $(inv_show "$variant")" "$variant" ;;
+      gap)
+        # A gap whose right verdict is the one it asserts is not a gap, and it
+        # would pass for as long as the defect it names survives the fix.
+        if [ "${dright:-$swant}" = "$dwant" ]; then
+          fail static 'the departure %s + %s is a gap whose right verdict is the one it asserts' \
+            "$skey" "$trans"
+          continue
+        fi
+        INV_GAPS=$((INV_GAPS + 1))
+        req $dtags
+        gap "$sfix" "$shook" "${dright:-$swant}" "$dwant" \
+          "$skey + $trans, $dreason: $(inv_show "$variant")" "$variant" ;;
+      *)
+        fail static 'the departure %s + %s has the kind %s, which is neither design nor gap' \
+          "$skey" "$trans" "$dkind" ;;
+    esac
+  done
+done <<< "$INV_SEEDS"
+
+# THE SEED TABLE COVERS WHAT IT CLAIMS TO. Derived off the table, held to a
+# literal: every functional requirement the table seeds, and both verdicts
+# beside each. A seed deleted, retagged or flipped to one direction moves this.
+# FR-13 and FR-49 are absent for the two reasons given where the table stands.
+#
+# WHAT THIS DOES NOT SAY, since the first version of this comment said it. The
+# literal is the set someone chose, so this catches a table that has drifted
+# from the choice and cannot catch the choice being wrong -- an FR that names a
+# command and was never seeded is missing from both sides at once. What stands
+# behind the choice is a reading of FR-1 to FR-49, done twice: once writing the
+# table, and once by a reviewer of this branch who was asked to derive the set
+# independently and got the same twelve.
+req GH-106
+tok 'the seeds cover every requirement with a command spelling, in both directions' \
+  'FR-14 ALLOW BLOCK;FR-15 ALLOW BLOCK;FR-16 ALLOW BLOCK;FR-17 ALLOW BLOCK;FR-18 ALLOW BLOCK;FR-19 ALLOW BLOCK;FR-20 ALLOW BLOCK;FR-21 ALLOW BLOCK;FR-3 ALLOW BLOCK;FR-38 ALLOW BLOCK;FR-4 ALLOW BLOCK;FR-48 ALLOW BLOCK;' \
+  "$(printf '%s\n' "$INV_SEEDS" \
+     | awk -F'|' 'NF >= 6 { n = split($4, t, " "); for (i = 1; i <= n; i++) if (t[i] ~ /^FR-/) print t[i], $3 }' \
+     | LC_ALL=C sort -u \
+     | awk '{ v[$1] = v[$1] " " $2 } END { for (k in v) print k v[k] }' \
+     | LC_ALL=C sort | tr '\n' ';')"
+
+# EVERY TRANSFORMATION DOES WORK, and the list is the same list twice over.
+#
+# Two questions, and the second is #84's shape: a literal list beside the code it
+# names goes stale, and the stale half is the one nobody reads. `inv_apply`'s
+# case arms are what can actually rewrite a command, so they are the truth and
+# INV_TRANSFORMS is derived against them -- an arm never listed is dead code that
+# runs for nobody, and a name listed with no arm is caught by `inv_apply`'s own
+# `*) return 1`, which the loop above fails on. The `*` arm and the case's own
+# closing are excluded by name.
+#
+# Comments are stripped first, as cs_calls and STATUS_READERS strip them, so an
+# arm named in the prose above does not count as one.
+req GH-106
+INV_ARMS=$(sed -n '/^inv_apply() {/,/^}/p' "$HOOKS/check-hooks.sh" \
+  | sed 's/[[:space:]]*#.*$//' \
+  | awk 'match($0, /^[[:space:]]+[a-z0-9-]+\)/) {
+           a = substr($0, RSTART, RLENGTH); sub(/[[:space:]]*/, "", a); sub(/\)$/, "", a)
+           if (a != "*") print a }' \
+  | LC_ALL=C sort | tr '\n' ' ')
+tok 'the transformation list is exactly the rewrites inv_apply has arms for' \
+  "$(printf '%s ' $INV_TRANSFORMS | tr ' ' '\n' | grep -v '^$' | LC_ALL=C sort | tr '\n' ' ')" \
+  "$INV_ARMS"
+[ -n "$INV_ARMS" ] || fail static 'no transformation arm was derived from inv_apply at all'
+for trans in $INV_TRANSFORMS; do
+  [ "${INV_APPLIED["$trans"]:-0}" -gt 0 ] \
+    && pass static 'the transformation %s applied to %s seeds' "$trans" "${INV_APPLIED["$trans"]}" \
+    || fail static 'the transformation %s applied to no seed at all, so it checks nothing' "$trans"
+done
+
+# EVERY DECLARED DEPARTURE IS USED. A departure is a claim about a variant this
+# generator produces, so one naming a seed that has been renamed or a
+# transformation that no longer applies to it claims nothing -- and claims it
+# silently, in the permitting direction, since a gap left unreachable is a defect
+# nothing asks about any more. Each pair is asked for by key, so the row that
+# declares a whole verdict class is satisfied by the first seed it reaches and
+# says nothing about the rest; that is what the class rows' own reasoning above
+# rests on instead.
+req GH-106
+for key in "${!INV_DEP_USED[@]}"; do
+  [ "${INV_DEP_USED[$key]}" = 1 ] \
+    && pass static 'the departure %s is declared and reached' "$key" \
+    || fail static 'the departure %s is declared and no variant reaches it' "$key"
+done
+
+# What the families came to. Not a verdict of its own -- a count cannot say a
+# check is right -- but a transformation that applies to nothing, and a seed
+# table an edit has cut in half, are both invisible without it.
+req GH-106
+[ "$INV_SEED_COUNT" -gt 0 ] || fail static 'the seed table yielded no seed at all'
+[ "$INV_VARIANTS" -gt 0 ] || fail static 'the transformations yielded no variant at all'
+[ "$INV_DEP_ROWS" -gt 0 ] || fail static 'the departure table yielded no row at all'
+pass static 'invariance families: %d seeds, %d variants (%d not applicable, %d another seed), %d by design, %d a gap' \
+  "$INV_SEED_COUNT" "$INV_VARIANTS" "$INV_SKIPPED" "$INV_REGENERATED" "$INV_DESIGN" "$INV_GAPS"
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and
 # fails when the two do not meet. requirements.md says what a requirement is,
@@ -8084,8 +8796,9 @@ GH-84.2:static GH-84.3:static GH-94.1 GH-94.2 GH-94.3:review GH-94.4 GH-95.1
 GH-95.2 GH-96.1 GH-96.2:static GH-96.3:static GH-97.1 GH-97.2:refuse-only
 GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
-GH-104.4:static GH-104.5:review GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:gap
+GH-104.4:static GH-104.5:review GH-106:static GH-117:gap GH-118:gap
+GH-124:static GH-127:gap GH-130:gap
+GH-131:gap GH-133:gap GH-134:gap GH-135:gap GH-136:gap GH-139:gap
 '
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
