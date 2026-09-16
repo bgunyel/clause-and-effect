@@ -93,8 +93,10 @@
 # still evidence about the cases it names: the transformations are a list someone
 # wrote. What it changes is the cost of the next one, which is asked of every seed
 # at once rather than of the command whose review found it. Its first run found
-# three defects, #134, #135 and #136, two of them in the permitting direction, and
-# this suite was green before it.
+# four defects -- #134, #135, #136 and #139, three of them in the permitting
+# direction -- and this suite was green before each. Two of the four needed a
+# transformation widened before they appeared, which is this section's own
+# thesis one level up and is recorded where each widening stands.
 #
 # The base checks come from issue #40 rather than from a review: all four
 # spellings that create or retarget a pull request were permitted, and the
@@ -8091,6 +8093,20 @@ section "=== issue #106: every spelling of a judged command reaches its verdict 
 # same holds for every other word on that list -- which is the shape of #79
 # itself, a fix that handled `sh -c`, then `sudo sh -c`, one word per round.
 # The tree was green before each mutation and green after each restore.
+#
+# The guards this section carries about ITSELF are mutation-checked the same
+# way, each by one edit, and each fires: a name dropped from INV_TRANSFORMS
+# while its `inv_apply` arm stays; a transformation added that applies to no
+# seed; a departure row naming a seed that does not exist; a gap row whose right
+# verdict is dropped so it becomes the one it asserts; a right verdict added to
+# a design row; and a seed re-spelled so a transformation only ever regenerates
+# another seed's command.
+#
+# Two of those mutations did not apply on their first attempt -- the patch text
+# did not match, and a third reverted one of the two seeds it needed to revert.
+# Each run was green for that reason and not for the one it claimed. A mutation
+# that silently fails to apply reads exactly like evidence and is none, so the
+# harness now asserts its own edit landed before it trusts the run.
 
 # WHERE A SEED RUNS. A symbolic name rather than a path, so the table below can
 # be a quoted heredoc and hold every command exactly as written -- a `$` or a
@@ -8132,6 +8148,13 @@ inv_dir() {  # inv_dir <name> -- the fixture directory a seed names
 # with a command spelling"), written down here because the sentence above it read
 # for one revision as though it covered all three families.
 #
+# It is also the scope's weakest point, and #141 owns deciding it rather than
+# this comment: what is seeded is what any future transformation can ever be
+# asked of, and the FR set is where the specification happened to land in
+# 2026-09 rather than where the defects have been. Some of those entries name a
+# TRANSFORMATION and not a seed -- GH-79.x is transformation 4 -- so the answer
+# is not a dozen more rows here.
+#
 # `|` is the field separator and no seed command contains one; the loop below
 # fails on a seed whose command field came out empty rather than leaving one
 # silently cut in half.
@@ -8146,8 +8169,8 @@ push-main|no-git-push.sh|BLOCK|GH-94.1 US-3|push-from-main-checkout|git push ori
 hooks|no-pr-decisions.sh|BLOCK|US-15|pr-merge|gh pr merge 5
 hooks|no-pr-decisions.sh|BLOCK|FR-4|pr-merge-wrapped|bash -c "gh pr merge 5"
 hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-base-main|gh pr create --base main --title x
-hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-base-main-eq|gh pr create --base=main --title x
-hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-bundled|gh pr create -dB main --title x
+hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-base-main-eq|gh pr create --base=main --body y
+hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-bundled|gh pr create -dB main --body y
 hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-short-flags|gh pr create -d -B main --title x
 hooks|no-pr-decisions.sh|BLOCK|FR-14 FR-16 US-9|pr-no-base|gh pr create --title x --body y
 hooks|no-pr-decisions.sh|BLOCK|FR-17 FR-15 US-10|pr-retarget|gh pr edit 35 --base main
@@ -8156,7 +8179,7 @@ hooks|no-pr-decisions.sh|BLOCK|FR-18 FR-20 FR-15 US-11|api-rest-main|gh api -X P
 hooks|no-pr-decisions.sh|BLOCK|FR-19 FR-15 US-11|api-graphql-main|gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:main})}'
 hooks|no-pr-decisions.sh|BLOCK|FR-48 US-15|release-create|gh release create v1
 hooks|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8|pr-base-dev|gh pr create --base dev-05 --title x
-hooks|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8|pr-base-dev-eq|gh pr create --base=dev-05 --title x
+hooks|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8|pr-base-dev-eq|gh pr create --base=dev-05 --body y
 hooks|no-pr-decisions.sh|ALLOW|FR-17 FR-15 US-10|pr-retarget-dev|gh pr edit 35 --base dev-05
 hooks|no-pr-decisions.sh|ALLOW|US-13|pr-view|gh pr view 5
 hooks|no-pr-decisions.sh|ALLOW|FR-21 US-12|pr-web|gh pr create --web
@@ -8395,7 +8418,9 @@ inv_show() {  # inv_show <variant>
 }
 
 # THE DECLARED DEPARTURES, one per line:
-# <seed key or verdict class>|<transformation>|<verdict>|<kind>|<tags>|<reason>.
+# <seed keys or verdict class>|<transformation>|<verdict>|<kind>|<tags>|<reason>
+# and, for a gap whose right verdict is not the seed's, a seventh field holding
+# that verdict.
 #
 # `design` is a variant that reaches a different verdict and is right to: the
 # transformation changed what the command does, or it put the command where
@@ -8403,11 +8428,28 @@ inv_show() {  # inv_show <variant>
 # is a literal and its reason names what decides it.
 #
 # `gap` is a variant that reaches the WRONG verdict today. The check is written
-# at the correct verdict -- the seed's, which `gap` prints -- and asserts the
-# wrong one until the issue named closes, at which point it goes red and is
-# rewritten as an ordinary check. Its tags are the gap's own requirement ID and
-# never the seed's, so a gap covers nothing: requirements.md marks those entries
+# at the correct verdict, which `gap` prints, and asserts the wrong one until
+# the issue named closes, at which point it goes red and is rewritten as an
+# ordinary check. Its tags are the gap's own requirement ID and never the
+# seed's, so a gap covers nothing: requirements.md marks those entries
 # `gap → #<n>` and the coverage check does not ask about them.
+#
+# A SEVENTH FIELD carries the right verdict where it is not the seed's, and this
+# is the case the first version of this table could not say at all. A gap was
+# "wrong today, and the seed's verdict is the right one", because `gap` was
+# handed `$swant`. #118's triage decision is not of that shape: on a guarded
+# group, ANY option before a subcommand word makes the command unreadable and
+# must be refused, so the right verdict is BLOCK for a permitted seed as much as
+# for a refused one. `gh pr -t view view 5` is a read of a pull request that the
+# hook must refuse once #118 lands, and its seed `gh pr view 5` is ALLOW.
+#
+# Without the field those six rows carried no departure at all, so they asserted
+# ALLOW as the invariant and would have gone red on #118's fix looking like
+# regressions rather than like gaps closing. The transformation is not
+# verdict-preserving on a guarded group in EITHER direction, and a table that
+# can only express one of the two directions hides the other. Found by Bertan's
+# review of PR #140; the check's own definition of a gap was narrower than the
+# defects it was finding.
 #
 # The first field is either a space-separated list of seed keys, or a verdict
 # class -- `BLOCK:*` or `ALLOW:*` -- which declares the departure for every seed
@@ -8432,14 +8474,15 @@ pr-web|quote-double-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span who
 pr-web|quote-single-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span whole, and quoted text may not grant an exemption
 pr-base-dev pr-base-dev-eq|quote-double-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
 pr-base-dev pr-base-dev-eq|quote-single-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
-release-view|quote-double-3|BLOCK|design|FR-48|the read-verb allowlist fails closed on a spelling it does not name
-release-view|quote-single-3|BLOCK|design|FR-48|the read-verb allowlist fails closed on a spelling it does not name
+release-view|quote-double-3|BLOCK|gap|GH-135|the release verb in double quotes, refused by the allowlist that cannot read it
+release-view|quote-single-3|BLOCK|gap|GH-135|the release verb in single quotes, refused by the allowlist that cannot read it
 BLOCK:*|word-path|ALLOW|gap|GH-117|the command word as an absolute path
 BLOCK:*|word-dot|ALLOW|gap|GH-117|the command word as a relative path
 BLOCK:*|word-dquoted|ALLOW|gap|GH-117|the command word in double quotes
 BLOCK:*|word-squoted|ALLOW|gap|GH-117|the command word in single quotes
 BLOCK:*|word-escaped|ALLOW|gap|GH-117|the command word behind a backslash
 BLOCK:*|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand eats the read verb after it
+pr-view pr-base-dev pr-base-dev-eq pr-retarget-dev pr-web release-view|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand makes a guarded path unreadable, and the right verdict is a refusal whatever the seed's is|BLOCK
 push-wrapped pr-merge-wrapped commit-wrapped|word-if|ALLOW|gap|GH-134|a wrapper after a control word
 push-wrapped pr-merge-wrapped commit-wrapped|word-for|ALLOW|gap|GH-134|a wrapper after a control word
 push-wrapped pr-merge-wrapped commit-wrapped|word-brace|ALLOW|gap|GH-134|a wrapper after a control word
@@ -8460,15 +8503,21 @@ EX
 declare -A INV_DEP
 declare -A INV_DEP_USED
 INV_DEP_ROWS=0
-while IFS='|' read -r dkeys dtrans dwant dkind dtags dreason; do
+while IFS='|' read -r dkeys dtrans dwant dkind dtags dreason dright; do
   [ -n "$dkeys" ] || continue
   INV_DEP_ROWS=$((INV_DEP_ROWS + 1))
+  case "$dkind" in
+    design)
+      [ -z "$dright" ] || fail static \
+        'the departure %s + %s is a design row with a right verdict; a design row IS the right verdict' \
+        "$dkeys" "$dtrans" ;;
+  esac
   # Globbing off for the split: a class key is the literal `BLOCK:*`, and with
   # globbing on a file named `BLOCK:x` beside this suite would expand it and
   # silently retarget the row at a seed key that is not a class at all.
   set -f
   for dkey in $dkeys; do
-    INV_DEP["$dkey|$dtrans"]="$dwant|$dkind|$dtags|$dreason"
+    INV_DEP["$dkey|$dtrans"]="$dwant|$dkind|$dtags|$dreason|$dright"
     INV_DEP_USED["$dkey|$dtrans"]=0
   done
   set +f
@@ -8478,9 +8527,21 @@ done <<< "$INV_DEPARTURES"
 # is about reaching that verdict and a family whose seed is wrong establishes
 # nothing, and then every transformation that applies to it.
 declare -A INV_APPLIED
+# Every seed's command, so a variant that IS another seed's command can be
+# skipped rather than checked twice under two names. `flag-separated` on
+# `pr-base-main-eq` regenerates `pr-base-main` exactly, and `short-bundled` on
+# `pr-short-flags` regenerates `pr-bundled`; both are already checked as seeds,
+# and the ledger would carry one command as two results. `quote-*-last` took
+# this trouble from the start and the other transformations did not, which is
+# one rule applied unevenly -- Bertan's review of PR #140 named it.
+declare -A INV_IS_SEED
+while IFS='|' read -r _ _ _ _ _ scmd0; do
+  [ -n "$scmd0" ] && INV_IS_SEED["$scmd0"]=1
+done <<< "$INV_SEEDS"
 INV_SEED_COUNT=0
 INV_VARIANTS=0
 INV_SKIPPED=0
+INV_REGENERATED=0
 INV_DESIGN=0
 INV_GAPS=0
 while IFS='|' read -r sdir shook swant stags skey scmd; do
@@ -8505,6 +8566,12 @@ while IFS='|' read -r sdir shook swant stags skey scmd; do
       INV_SKIPPED=$((INV_SKIPPED + 1))
       continue
     fi
+    # A variant that is another seed's command is that seed's check, not a
+    # variant of this one. Its own seed row asserts it, with the same verdict.
+    if [ "$variant" != "$scmd" ] && [ -n "${INV_IS_SEED["$variant"]:-}" ]; then
+      INV_REGENERATED=$((INV_REGENERATED + 1))
+      continue
+    fi
     INV_VARIANTS=$((INV_VARIANTS + 1))
     INV_APPLIED["$trans"]=$(( ${INV_APPLIED["$trans"]:-0} + 1 ))
     dep=${INV_DEP["$skey|$trans"]:-}
@@ -8519,7 +8586,7 @@ while IFS='|' read -r sdir shook swant stags skey scmd; do
       check_in "$sfix" "$shook" "$swant" "$skey + $trans: $(inv_show "$variant")" "$variant"
       continue
     fi
-    IFS='|' read -r dwant dkind dtags dreason <<< "$dep"
+    IFS='|' read -r dwant dkind dtags dreason dright <<< "$dep"
     case "$dkind" in
       design)
         INV_DESIGN=$((INV_DESIGN + 1))
@@ -8527,9 +8594,16 @@ while IFS='|' read -r sdir shook swant stags skey scmd; do
         check_in "$sfix" "$shook" "$dwant" \
           "$skey + $trans, by design ($dreason): $(inv_show "$variant")" "$variant" ;;
       gap)
+        # A gap whose right verdict is the one it asserts is not a gap, and it
+        # would pass for as long as the defect it names survives the fix.
+        if [ "${dright:-$swant}" = "$dwant" ]; then
+          fail static 'the departure %s + %s is a gap whose right verdict is the one it asserts' \
+            "$skey" "$trans"
+          continue
+        fi
         INV_GAPS=$((INV_GAPS + 1))
         req $dtags
-        gap "$sfix" "$shook" "$swant" "$dwant" \
+        gap "$sfix" "$shook" "${dright:-$swant}" "$dwant" \
           "$skey + $trans, $dreason: $(inv_show "$variant")" "$variant" ;;
       *)
         fail static 'the departure %s + %s has the kind %s, which is neither design nor gap' \
@@ -8610,8 +8684,8 @@ req GH-106
 [ "$INV_SEED_COUNT" -gt 0 ] || fail static 'the seed table yielded no seed at all'
 [ "$INV_VARIANTS" -gt 0 ] || fail static 'the transformations yielded no variant at all'
 [ "$INV_DEP_ROWS" -gt 0 ] || fail static 'the departure table yielded no row at all'
-pass static 'invariance families: %d seeds, %d variants (%d not applicable), %d by design, %d a gap' \
-  "$INV_SEED_COUNT" "$INV_VARIANTS" "$INV_SKIPPED" "$INV_DESIGN" "$INV_GAPS"
+pass static 'invariance families: %d seeds, %d variants (%d not applicable, %d another seed), %d by design, %d a gap' \
+  "$INV_SEED_COUNT" "$INV_VARIANTS" "$INV_SKIPPED" "$INV_REGENERATED" "$INV_DESIGN" "$INV_GAPS"
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and
 # fails when the two do not meet. requirements.md says what a requirement is,

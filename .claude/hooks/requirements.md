@@ -1336,14 +1336,29 @@ The suite fails on each of these, and `--matrix` shows the rest:
   intended outcome.
 
 ### GH-118
-- text: An option before a `gh` subcommand that `gh` does not know as a boolean
-  consumes the next word, so the verb after it is what runs: `gh pr --squash view
-  merge 5` is a merge and `gh release -t list create v1` is a create.
-- from: #118, found reviewing PR #115
+- text: A `gh` command carrying any option other than `-R`, `--repo` or
+  `--hostname` before a word of a guarded subcommand path is refused as
+  unreadable, whatever verb it appears to name. A shorthand that is unknown or
+  takes a value consumes the next word, so the verb the hook reads is not the
+  verb `gh` runs: `gh pr -t view merge 5` is a merge and `gh release -t list
+  create v1` is a create.
+- from: #118, found reviewing PR #115; the refuse-the-shape decision is that
+  issue's agent brief, and the spelling is corrected by the measurement in #106's
+  comment on it
 - kind: defect-permitting
 - status: gap → #118
-- note: #106's families pin it as permitted against every refused `gh pr` and `gh
-  release` seed. `gh api` takes no group, so the shape does not arise there.
+- note: the spelling matters and the issue's original example is not one `gh`
+  runs. Cobra treats an unknown LONGHAND as a boolean, so `gh pr --squash view 5`
+  returns `unknown flag: --squash` and eats nothing; it is a shorthand that
+  consumes the next word. Measured on gh 2.45.0.
+  The requirement is a refusal of the shape and not a reading of the verb, so it
+  is not verdict-preserving in either direction: #106's families pin every
+  refused `gh pr` and `gh release` seed as permitted, and also six PERMITTED
+  seeds whose right verdict is BLOCK although their seed's is ALLOW --
+  `gh pr -t view view 5` is a read the rule refuses. That second set is why the
+  departure table carries a right verdict of its own. `gh issue` is not a guarded
+  group, so `gh issue -t list list` stays ALLOW; `gh api` takes no group, so the
+  shape does not arise there.
 
 ### GH-124
 - text: `feed` and `feed_says` read a hook's exit status as every other helper does,
@@ -1429,9 +1444,20 @@ The suite fails on each of these, and `--matrix` shows the rest:
   The contrast that makes it a defect rather than a policy is that a quoted VALUE
   is read correctly -- `--base "dev-05"` is permitted and `--base "main"` refused
   -- so `base_args` knows what a quote is and the group and verb tests do not.
-  The refusals that follow from the same raw comparison are not this entry: they
-  are declared by design in #106's departure table, each citing the comment that
-  argues it.
+  Both directions are this entry. The permitting half is above; the refusing half
+  is `gh release "view" v1`, refused because the read-verb allowlist is
+  `cs_gh_args "release <verb>"` per verb and cannot read a quoted one. #106 first
+  declared that one by design, citing the allowlist's fail-closed comment, and
+  Bertan's review of PR #140 corrected it: that comment argues for refusing a
+  subcommand `gh` adds later, and a quoted `view` is not one. It is a gap here,
+  in the function this entry already names as the fix site.
+  What is NOT this entry is the `base_args` family -- `gh pr create "--web"` and
+  `gh pr create "--base" dev-05` -- which #106 declares by design, citing the
+  comment that argues quoted text may trigger a refusal and may not grant an
+  exemption. Those four rows hold only if #139 is fixed by refusing on the
+  retarget and `--web` arms rather than by teaching `base_args` to read a quoted
+  flag everywhere; #139 records that, so whoever takes it decides rather than
+  discovers it.
 
 ### GH-136
 - text: The dependency group is named whichever way `uv` and bash accept it: `uv run
@@ -1699,6 +1725,10 @@ it has no entry above (Q16).
 - #103: the audit that decided this file; its decisions are cited as Q-numbers
 - #115: a pull request, for #97; Bertan's review of it found #117 and #118, which
   have entries above
+- #140: a pull request, for #106; Bertan's review of it is cited where the four
+  things it corrected stand
+- #141: the issue that owns deciding which non-FR requirements the invariance
+  families seed; it adds no requirement of its own until that is decided
 - #107: the issue that owns a standing mutation harness; #106's section cites it
   when writing out its own three mutations, which are run by hand until it lands.
   It adds no requirement of its own
