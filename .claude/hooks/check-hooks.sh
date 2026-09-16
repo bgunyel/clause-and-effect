@@ -8500,6 +8500,13 @@ pr-retarget pr-web-main|quote-single-5|ALLOW|gap|GH-139|the base flag in single 
 EX
 )
 
+# Tagged before the table is read, not after. Every check this section prints is
+# one of its own claims about its own tables, and the two loops below print one
+# before any seed has been reached -- so without this they are untagged, the #104
+# tag check reports each a second time as carrying no tag, and a reader chasing
+# two red lines finds one defect. Bertan's round-two review of PR #140 found it
+# by mutating a design row and reading what came back.
+req GH-106
 declare -A INV_DEP
 declare -A INV_DEP_USED
 INV_DEP_ROWS=0
@@ -8546,6 +8553,12 @@ INV_DESIGN=0
 INV_GAPS=0
 while IFS='|' read -r sdir shook swant stags skey scmd; do
   [ -n "$skey" ] || continue
+  # And again per seed, before the two guards below, since `req $stags` is set
+  # only once a seed has survived them: on the first iteration REQ would be the
+  # departure loop's, and on any later one the PREVIOUS seed's tags, which is
+  # worse than none -- a malformed seed would be reported as evidence about
+  # whatever requirement the seed before it established.
+  req GH-106
   if ! sfix=$(inv_dir "$sdir"); then
     fail static 'the seed %s names the fixture %s, which inv_dir does not resolve' "$skey" "$sdir"
     continue
