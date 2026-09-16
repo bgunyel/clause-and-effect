@@ -298,4 +298,11 @@ thing in the record.
   eight defects in the coverage machinery, four of them permitting — among them a
   renamed heading that made a family of requirements vanish, and an awk exit
   status nobody read.
+- [2026-09-16 · session 1](devlog_2026-09-16_session-1.md) — #105: the fifteen
+  coverage gaps #104 left are closed by 85 checks, suite 1902 → 1987 with every
+  earlier result unchanged, and `--matrix` drops from 19 gaps to 6 — three
+  awaiting #110's runbook, three filed bugs. Two defects found while covering
+  US-14 were filed rather than pinned (#130, #131). Review of the assistant's
+  own commit then found three more in it, none of which any run would have
+  caught.
 
