@@ -171,7 +171,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - text: As an unattended agent, I want a refusal to tell me the permitted spelling,
   so that I can correct myself in one step instead of guessing.
 - from: #36, User Stories, 7
-- status: gap → #105
+- status: active
 - direction: refuse-only: a message is written only on a refusal
 
 ### US-8
@@ -222,7 +222,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - text: As an unattended agent, I want every issue subcommand to stay available, so
   that issue work is unaffected by a rule about pull requests.
 - from: #36, User Stories, 14
-- status: gap → #105
+- status: active
 - direction: permit-only: the story names what stays permitted
 
 ### US-15
@@ -274,7 +274,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
   evasion earns a fix, so that the file stops growing when the shapes stop
   being ones an agent would plausibly write.
 - from: #36, User Stories, 20
-- status: gap → #105
+- status: active
 - direction: static: a claim about what the hook files say
 
 ### US-21
@@ -329,7 +329,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
   what I can actually do, so that I do not run a procedure whose middle steps
   are refused.
 - from: #36, User Stories, 27
-- status: gap → #105
+- status: active
 - direction: static: a claim about what the branch-hygiene skill says
 
 ### US-28
@@ -337,7 +337,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
   one procedure that advances the integration branch and destroys a branch is
   not delegated.
 - from: #36, User Stories, 28
-- status: gap → #105
+- status: active
 - direction: static: a claim about what the branch-hygiene skill says
 
 ### US-29
@@ -345,7 +345,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
   confirming the merge really happened and reporting what is stale — so that
   the skill stays worth invoking.
 - from: #36, User Stories, 29
-- status: gap → #105
+- status: active
 - direction: static: a claim about what the skill says and the report prints
 
 ### US-30
@@ -362,7 +362,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
   that I remember it was green while an indented wholesale push inside an `if`
   was permitted.
 - from: #36, User Stories, 31
-- status: gap → #105
+- status: active
 - direction: static: a claim about what the suite's header says
 
 ### US-32
@@ -387,7 +387,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
   only if it is a shape an agent would plausibly write, not one it would have to
   construct.
 - from: #36, Implementation Decisions, Stage 0
-- status: gap → #105
+- status: active
 - direction: static: a claim about what the hook files say
 
 ### FR-3
@@ -471,7 +471,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - text: `CONTEXT.md` at the repository root defines *check* and *probe* against each
   other.
 - from: #36, Implementation Decisions, Stage 1
-- status: gap → #105
+- status: active
 - direction: static: a claim about what CONTEXT.md says
 
 ### FR-12
@@ -546,28 +546,28 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - text: The base rule's refusal messages name the permitted spelling, consistent
   with the existing ones.
 - from: #36, Implementation Decisions, Stage 2
-- status: gap → #105
+- status: active
 - direction: refuse-only: a message is written only on a refusal
 
 ### FR-24
 - text: `branch-hygiene` is Bertan's procedure: rotation is described as his, and
   an agent is instructed to run nothing the hooks refuse.
 - from: #36, Implementation Decisions, Stage 3
-- status: gap → #105
+- status: active
 - direction: static: a claim about what the skill says
 
 ### FR-25
 - text: The agent's half of `branch-hygiene` stays: confirm from the remote that the
   merge happened, and report what is stale.
 - from: #36, Implementation Decisions, Stage 3
-- status: gap → #105
+- status: active
 - direction: static: a claim about what the skill says and the report prints
 
 ### FR-26
 - text: The skill's invariant is one active dev branch plus `main`, with worktree
   branches in flight against the former.
 - from: #36, Implementation Decisions, Stage 3
-- status: gap → #105
+- status: active
 - direction: static: a claim about what the skill says
 
 ### FR-27
@@ -582,7 +582,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
   the command runs in a linked worktree and deliberately not on the branch's name,
   and why.
 - from: #36, Implementation Decisions, Stage 3
-- status: gap → #105
+- status: active
 - direction: static: a claim about what CONTEXT.md says
 
 ### FR-29
@@ -637,7 +637,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
   wholesale push inside an `if` was permitted, and that a check suite is evidence
   about the cases it names and nothing else.
 - from: #36, Testing Decisions
-- status: gap → #105
+- status: active
 - direction: static: a claim about what the suite's header says
 
 ### FR-36
@@ -1318,6 +1318,47 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - kind: defect-permitting
 - status: gap → #127
 
+### GH-130
+- text: A `gh api` write to an issue is judged on that command's own arguments, with
+  quoted spans dropped: an issue body naming `/releases`, `repos/o/r/pulls` or
+  `state=closed` is prose, and a read of `/releases` beside an unrelated issue
+  write on the same line is a read.
+- from: #130, found while covering US-14 for #105
+- kind: defect-refusing
+- status: gap → #130
+- note: the four refusals are in `no-pr-decisions.sh`'s `$SCAN`-wide rules and the
+  `API_NO_BASE` arm. The `gh issue` spelling of the same text is permitted, so the
+  boundary is spelling-dependent where #36 says it is not. Not CLAUDE.md's
+  left-open item 2: that item's subject is a line carrying a wrapper, and none of
+  these does.
+
+### GH-131
+- text: `gh issue develop` creates a branch on the remote, which is a ref-creating
+  write no hook sees; what an agent may do with it is decided rather than left to
+  whichever rule happens not to match.
+- from: #131, found while covering US-14 for #105
+- kind: defect-permitting
+- status: gap → #131
+- note: US-14 says every issue subcommand stays available and this is one by name,
+  so #105 pins the read spelling `gh issue develop --list` and leaves the two
+  creating spellings unpinned rather than pinning a verdict that may be wrong
+  (Q18). US-14 is covered by the other twelve rows.
+
+### GH-133
+- text: A refused retarget names the correction for a retarget. `gh pr edit <n>
+  --base dev-NN` is permitted, so the one-step correction is one word of the
+  command already written, not the create the four base refusals share.
+- from: #133, found by Bertan's review of #132
+- kind: defect-refusing
+- status: gap → #133
+- note: one `BASE` constant for four refusals is what FR-23 asks for, and for the
+  three creating arms it is US-7's one-step correction too. For the retarget arm
+  it is not, and "Edit anything else you like" reads as saying the base may not
+  be edited when editing it to `dev-NN` is what is allowed. So the same message
+  is evidence for FR-23 and against US-7: #105's two retarget rows are tagged
+  FR-23 alone, and US-7 stays covered by the other twenty-one refusing checks.
+  Message content is #109's.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that
@@ -1552,7 +1593,13 @@ it has no entry above (Q16).
 - #77: a pull request, for #71
 - #89: a pull request, for #79
 - #103: the audit that decided this file; its decisions are cited as Q-numbers
-- #105: the gap-fill issue that owns most `gap` markers; it adds checks, not requirements
+- #105: the gap-fill issue that owned fifteen of the nineteen `gap` markers #104
+  left and has taken all fifteen off; it adds checks, not requirements of its own,
+  and the three defects found doing it are #130, #131 and #133, which have entries
+  above
+- #109: the issue that owns what a refusal says; cited where a message is pinned
+  for its words, so that a reworded message is changed in one place and checked in
+  another. The defect #133 records is its to fix
 - #110: the live acceptance runbook, not yet written; `verify: runbook §<n>` names
   its sections
 - #111: a pull request, for #94
@@ -1562,3 +1609,5 @@ it has no entry above (Q16).
 - #123: a pull request, for #96
 - #126: a pull request with no issue behind it, the housekeeping skill; its checks carry
   the IDs of the procedures its generator prints, GH-70.2, GH-100 and US-29
+- #132: a pull request, for #105; cited where its review changed a check, because a
+  tag dropped for a reason is only auditable if the reason is reachable

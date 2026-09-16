@@ -298,4 +298,25 @@ thing in the record.
   eight defects in the coverage machinery, four of them permitting — among them a
   renamed heading that made a family of requirements vanish, and an awk exit
   status nobody read.
+- [2026-09-16 · session 1](devlog_2026-09-16_session-1.md) — #105: the fifteen
+  coverage gaps #104 left are closed by 85 checks, suite 1902 → 1987 with every
+  earlier result unchanged, and `--matrix` drops from 19 gaps to 6 — three
+  awaiting #110's runbook, three filed bugs. Two defects found while covering
+  US-14 were filed rather than pinned (#130, #131). Review of the assistant's
+  own commit then found three more in it, none of which any run would have
+  caught.
+- [2026-09-16 · session 2](devlog_2026-09-16_session-2.md) — Bertan's review of
+  #132 found four defects, every one of them in what a check *claims* rather than
+  what it does: a row tagged US-7 whose message names a create when the one-step
+  correction for a refused retarget is a permitted `gh pr edit --base dev-NN`
+  (filed as #133), the same tag dilution eight lines below one the assistant had
+  just fixed, a `no-` prefix standing in for a decision so that a renamed boundary
+  hook drops out of a loop in silence — measured, three of four — and a mutation
+  count stale in four places. The count is 22; session 1's entry stands as
+  written, since append-only means the correction comes forward. A second review
+  round then found two more of the same family one level down — labels claiming
+  more than their literals ask: an invariant check that named `main` and never
+  looked for it, and a fenced-block extraction that read ```bash and skipped
+  every other spelling in silence, so an `sh`-fenced refused push sat in the
+  agent procedure with all 1987 checks green.
 

@@ -2565,6 +2565,102 @@ req GH-94.1 US-4 US-25
 check_in "$PUSH_WT_LINK/src/deep"   no-git-push.sh ALLOW 'linked worktree through a symlink, src/deep/: a push naming its own branch' \
   "git push origin $PUSH_BRANCH"
 
+section "=== issue #105: a refusal names the permitted spelling ==="
+# US-7 and FR-23. Every refusal in these two files was read for its verdict, and
+# only the release rule's was read for its words, by #97's `says` block above.
+# So the base rule's message and the bare push's could each have been emptied to
+# "Blocked." and this suite would have stayed green: the verdict is what it asked
+# about, and the verdict would not have moved.
+#
+# Two claims per message, and they fail apart. The SPELLING is the constant half
+# and is what the story asks for -- `gh pr create --base dev-NN`, and
+# `git push <remote> <branch>`. The TAIL is what separates one refusal from the
+# three beside it, so a change routing every base refusal through one sentence
+# leaves the spelling checks green and turns the tails red. That is the shape
+# no-commit-to-main.sh's three messages are already pinned against, and for the
+# same reason: nothing else here can tell one refusal from another.
+#
+# The four base spellings are asked separately because #40's finding was a rule
+# that held for `gh pr create` and not for `gh api`. A message that held for one
+# spelling and not the others is that defect arriving as prose.
+#
+# The retarget's two rows are tagged FR-23 and not US-7, and #133 is why. One
+# constant for four refusals is what FR-23 asks for, and for three of the four it
+# is also the one-step correction US-7 asks for. For a retarget it is not:
+# `gh pr edit 5 --base dev-05` is permitted, so the correction is one word of the
+# command already written, and the message names a create -- which, acted on,
+# leaves the mis-targeted pull request open and opens a second beside it. The
+# same fact is evidence for one requirement and against the other, so the rows
+# say only the half that holds. Pinning them under US-7 would have made this
+# suite evidence that the message answers a story it does not answer, which is
+# what #103's Q18 forbids and what #130 and #131 were filed rather than pinned
+# for. Message content is #109's; the rows stay, because FR-23's claim is true
+# and is the claim that would go if the constant were split per arm.
+req US-7 FR-23
+says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
+  'gh pr create with no base names the permitted spelling' \
+  'gh pr create --title x --body y'
+says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
+  'gh pr create into main names the permitted spelling' \
+  'gh pr create --base main --title x'
+req FR-23
+says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
+  'a retarget to main names the permitted spelling' \
+  'gh pr edit 5 --base main'
+req US-7 FR-23
+says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
+  'the REST spelling names the permitted spelling' \
+  'gh api -X POST repos/o/r/pulls -f base=main'
+says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
+  'the graphql spelling names the permitted spelling' \
+  'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"main\"})}"'
+# And the tails: which of the four refusals fired, and what it says is wrong. A
+# create that named no base and one that named main are the two halves of #40,
+# and a message that cannot tell them apart tells an agent to name a base it has
+# already named.
+says "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
+  'a create with no base says the base is missing' \
+  'gh pr create --title x --body y'
+says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch' \
+  'a create into main says which branch it named' \
+  'gh pr create --base main --title x'
+# FR-23 alone again, and this tail is the worse half of #133: read against a
+# refusal whose subject is the base, "edit anything else" says the base is the
+# one thing that may not be edited, when editing it to dev-NN is what is allowed.
+req FR-23
+says "$ON_DEV" no-pr-decisions.sh 'Edit anything else you like' \
+  'a retarget says what editing is still permitted' \
+  'gh pr edit 5 --base main'
+req US-7 FR-23
+says "$ON_DEV" no-pr-decisions.sh 'the same destination under another spelling' \
+  'the REST spelling says it is the same destination named differently' \
+  'gh api -X POST repos/o/r/pulls -f base=main'
+# Four spellings, four tails, and five rows: the REST and graphql spellings reach
+# one sentence, both setting API_BAD_BASE, so this asks whether graphql arrives at
+# the informative one rather than at some bare refusal of its own. The first
+# version of this block pinned the constant half for graphql and left the tail to
+# the REST row -- an asymmetry review found, and the shape #40 was filed for: a
+# rule, or here a message, that holds for one spelling and not another.
+says "$ON_DEV" no-pr-decisions.sh 'the same destination under another spelling' \
+  'and the graphql spelling reaches that same sentence' \
+  'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"main\"})}"'
+
+# no-git-push.sh's bare-push refusal, the other message #105 found unread. It
+# interpolates the branch the worktree is actually on, and that is the whole of
+# what makes the correction one step: an agent reading `git push <remote>
+# <branch>` still has to work out what <branch> is here, and one reading the
+# name does not. The literal carries $PUSH_BRANCH, so a message reverted to a
+# placeholder -- or naming some other branch -- turns this red.
+req US-7
+says "$PUSH_WT" no-git-push.sh "Name the branch: git push <remote> $PUSH_BRANCH." \
+  'a push naming no refspec names this worktree'"'"'s own branch' 'git push'
+says "$PUSH_WT" no-git-push.sh "Name the branch: git push <remote> $PUSH_BRANCH." \
+  'a push naming a remote and no refspec names it too' 'git push origin'
+# And the reason, which is what stops an agent answering the refusal with
+# `git config` instead of with a branch name.
+says "$PUSH_WT" no-git-push.sh 'takes its destination from configuration, which this command could have set for itself' \
+  'the bare-push refusal says why configuration is not read' 'git push'
+
 section "=== no-pr-decisions.sh : must BLOCK ==="
 req US-15
 for c in 'gh pr merge 5' \
@@ -2615,6 +2711,66 @@ do
   esac
   check no-pr-decisions.sh ALLOW "$c" "$c"
 done
+
+section "=== issue #105: every gh issue subcommand stays available ==="
+# US-14, asked of the whole story rather than of the three spellings that
+# happened to get written down in the loop above. no-pr-decisions.sh reaches gh
+# through the group `pr|release|api`, so `gh issue` is untouched by
+# construction -- and by construction is what this suite exists not to take on
+# trust. #69 is the precedent: a command name matched as a substring refused
+# ordinary greps, and nothing in a group's spelling says that `issue` cannot be
+# reached the same way by the next edit.
+#
+# The list is gh's own, off `gh issue --help`: fifteen verbs, of which create,
+# close and comment are pinned above and develop is answered below rather than
+# here. These are the other eleven, plus develop's read spelling. A verb gh adds
+# later is one line here.
+#
+# Two reasons for one verdict, worth separating because they would fail apart.
+# A read -- list, status, view -- names no decision at all. A write -- delete,
+# transfer, lock -- IS a decision, and it is an issue's, which is not what this
+# boundary reserves: nothing here is a pull request or a release.
+#
+# Measured rather than reasoned, on the three mutations an edit to this file
+# would plausibly make. `gh_rule issue` added beside the rules above -- a
+# subcommand path one word short of the verb whoever added it meant to name --
+# turns 18 checks red: every one of the twelve below, and six gh issue commands
+# already pinned elsewhere in this suite. Nothing that is not a gh issue command
+# goes red, which is the half that says the rows are asking about this and not
+# about the hook generally. The narrower accident,
+# `gh_rule 'issue delete' || gh_rule 'issue transfer'`, turns exactly two of the
+# twelve. And widening the WRAPPER rule's group to `pr|release|api|issue` turns
+# none of them: that rule reads only a wrapped line, so it is the two wrapped
+# issue commands in the #51 section above that go red instead -- worth recording
+# because it is the mutation a reader guesses first, and it is the wrong one.
+req US-14
+for c in 'gh issue list' \
+         'gh issue status' \
+         'gh issue view 27' \
+         'gh issue reopen 27' \
+         'gh issue edit 27 --add-label bug' \
+         'gh issue delete 27 --yes' \
+         'gh issue transfer 27 o/other' \
+         'gh issue lock 27' \
+         'gh issue unlock 27' \
+         'gh issue pin 27' \
+         'gh issue unpin 27' \
+         'gh issue develop --list 27'
+do check no-pr-decisions.sh ALLOW "$c" "$c"; done
+# THE ONE VERB THIS SECTION DOES NOT PIN, and why the absence is written down
+# rather than left as a gap in a list. `gh issue develop 27` creates a linked
+# branch ON THE REMOTE: an issue subcommand by name, a ref-creating write by
+# effect, and permitted today by every hook because none of them matches
+# anything but `git push`. CLAUDE.md says pushing this worktree's branch "is the
+# whole of what it may push", so the verdict may be wrong, and #103 Q18 forbids
+# pinning a verdict that may be wrong -- a check written to keep today's answer
+# is how a defect stops being visible. Filed as #131, which sets out the three
+# answers available and whose they are; the check that pins the one taken
+# arrives with it. `--list` above is a read and is pinned as one.
+#
+# US-14 is covered either way: coverage is one bit per requirement, and the
+# twelve rows above carry it. So the matrix does not hide this, and neither
+# does this file.
 
 section "=== REGRESSION: review of #43, prefixes and separated options hid commands ==="
 # Found by reviewing the #43 migration, fixed in lib/command-scan.sh, and
@@ -4855,6 +5011,81 @@ req GH-73
 tok 'the left-open list numbers as many consequences as its head claims' \
     "$CLAIMED" \
     "$(printf '%s\n' "$LEFT_OPEN" | grep -cE '^[0-9]+\. ')"
+
+section "=== issue #105: the boundary hooks carry the stopping rule ==="
+# US-20 and FR-2. The rule that says when to stop fixing evasions is the reason
+# this suite is finite rather than a race, and it lives in a comment -- which is
+# the one thing `armed` cannot pin, because it strips a comment before it looks.
+# `written` reads the file as written, and here the file's argument IS the
+# requirement.
+#
+# The four files are derived rather than listed again, by the same subtraction
+# the paragraph audit immediately above makes: what settings.json registers, less
+# the hooks that are about documents or commands, less the one that judges no
+# command. That audit holds the paragraph and settings.json to each other in both
+# directions, so the set derived here is the set the paragraph names, and a
+# boundary hook arrives here whatever it is called.
+#
+# It was derived off the paragraph, by a `no-` prefix, until Bertan's review of
+# #132. That reads as equivalent and is not. A boundary hook named under some
+# other prefix passes the paragraph audit and then drops out of this loop in
+# silence -- never asked for the rule, no check missing that anything counts,
+# while the comment above goes on saying it arrives. The prefix was doing the
+# work of a decision without being one, which is the shape #84 was filed against:
+# a question asked of two hooks of four. The exclusion is a named list now, for
+# the reason NOT_THE_BOUNDARY is one.
+#
+# The loop asks for the test itself, in the two short spellings every one of
+# them carries, because the four word the rule differently on purpose: two state
+# it and two cite no-git-push.sh for it. A citation whose referent has gone is
+# exactly the drift this part of the suite exists for, so the citations are
+# checked below against the file the loop has just asked.
+# Registered, named in the paragraph, and judging no command: it prunes the refs
+# the fourth hook reads each session. There is no evasion for it to stop fixing,
+# so there is no stopping rule for it to carry.
+JUDGES_NO_COMMAND="report-stale-branches.sh"
+set -f
+BOUNDARY_HOOKS=$(for hook in $REGISTERED; do
+    case " $NOT_THE_BOUNDARY $JUDGES_NO_COMMAND " in *" $hook "*) continue ;; esac
+    printf '%s\n' "$hook"
+  done | sort -u | tr '\n' ' ')
+[ -n "$BOUNDARY_HOOKS" ] || {
+  echo "no boundary hooks were derived from settings.json; the checks below prove nothing" >&2
+  exit 1
+}
+req US-20 FR-2
+for hook in $BOUNDARY_HOOKS; do
+  written "$hook carries the test a fix has to pass" \
+    "$HOOKS/$hook" 'would plausibly write'
+  written "and the shape that does not earn one, in $hook" \
+    "$HOOKS/$hook" 'have to construct'
+done
+set +f
+# The two that state it in full, named because a check is evidence about what it
+# names and the loop above is satisfied by the phrase alone.
+written 'no-git-push.sh writes the rule out under its own heading' \
+  "$HOOKS/no-git-push.sh" 'STOPPING RULE. A newly found evasion earns a fix only if it is a shape an'
+written 'and says where to stop' \
+  "$HOOKS/no-git-push.sh" 'closed. Stop when the shapes stop being ones an agent would plausibly write.'
+written 'no-pr-decisions.sh writes it out too' \
+  "$HOOKS/no-pr-decisions.sh" 'STOPPING RULE. A newly found evasion earns a fix only if it is a shape an'
+written 'and applies it to the endpoint list that is its own growth' \
+  "$HOOKS/no-pr-decisions.sh" 'growing when the spellings stop being ones an agent would plausibly write.'
+# The two that cite rather than restate. Both name no-git-push.sh, which the
+# loop above has just asked for the rule, so a citation and its referent are
+# checked together rather than one at a time -- the #84 shape, one level out.
+written 'no-commit-to-main.sh cites the rule rather than restating it' \
+  "$HOOKS/no-commit-to-main.sh" 'This stops mistakes, not adversaries. The stopping rule in no-git-push.sh'
+written 'no-work-on-stale-branch.sh inherits it by name' \
+  "$HOOKS/no-work-on-stale-branch.sh" 'STOPPING RULE, inherited from no-git-push.sh. A newly found evasion earns a'
+# What the rule is for, in the sentence the four exist under. Not derived off the
+# loop: no-pr-decisions.sh does not carry it, and a loop asking for it would pin
+# three files and a hole.
+written 'no-git-push.sh says what standard it is held to' \
+  "$HOOKS/no-git-push.sh" 'This stops mistakes, not adversaries.'
+written 'and so does no-work-on-stale-branch.sh' \
+  "$HOOKS/no-work-on-stale-branch.sh" 'This stops mistakes, not adversaries.'
+
 section "=== the documents answer the citations the hooks make into them ==="
 # A fourth kind of check, and the section above with its direction reversed:
 # there settings.json is the fact and CLAUDE.md the claim; here the hooks are
@@ -5190,6 +5421,229 @@ unarmed 'this section'"'"'s head no longer counts its citations at three' \
   "$HOOKS/check-hooks.sh" "three citations"" named below"
 unarmed 'nor at four, the number a correction would have reached for' \
   "$HOOKS/check-hooks.sh" "four citations"" named below"
+echo "--- issue #105: CONTEXT.md defines check and probe against each other ---"
+# FR-11. The distinction this suite's own header cites -- "Check, not probe" --
+# and the collision CONTEXT.md was started for (#38). It is a PAIR of
+# definitions, and a pair is what a one-sided pin cannot hold: either entry
+# alone reads perfectly well with the other deleted, and the word this
+# repository actually confused would be back in use the same week. So both are
+# extracted, each is asked for its own test, and each is asked for the other's
+# name in its `_Avoid_` line -- which is the half that makes them define each
+# other rather than merely stand beside each other.
+CHECK_ENTRY="$FIXTURES/context-check.md"
+PROBE_ENTRY="$FIXTURES/context-probe.md"
+entry "$CONTEXT_MD" 'Check' > "$CHECK_ENTRY"
+entry "$CONTEXT_MD" 'Probe' > "$PROBE_ENTRY"
+# Tagged FR-11 alone. FR-27 names *worktree branch*, *active dev branch* and
+# *reserved act*, and US-24 asks for the branch words; neither is what these two
+# entries say, and a check tagged with an ID it does not establish covers that ID
+# all the same -- the one dilution requirements.md names and no check can catch.
+# Found by review of this change.
+req FR-11
+written 'the extracted entry is the check entry' "$CHECK_ENTRY" '**Check**:'
+unarmed 'and it is that entry rather than the pair' "$CHECK_ENTRY" '**Probe**:'
+written 'the extracted entry is the probe entry' "$PROBE_ENTRY" '**Probe**:'
+unarmed 'and it is that entry rather than the rest of the glossary' \
+  "$PROBE_ENTRY" '**Reserved act**:'
+written 'a check has its expected verdict written out in advance' \
+  "$CHECK_ENTRY" 'written out in advance'
+written 'so running it can only agree or disagree with what was already claimed' \
+  "$CHECK_ENTRY" 'only agree or disagree with what was already claimed'
+written 'and every assertion in this suite is one' \
+  "$CHECK_ENTRY" '`.claude/hooks/check-hooks.sh` is a check.'
+written 'a probe has no answer until it runs' \
+  "$PROBE_ENTRY" 'not known until it runs'
+written 'and each scripts/probe_*.py is one' "$PROBE_ENTRY" '`scripts/probe_*.py` is a probe'
+written 'the check entry warns against calling one a probe' "$CHECK_ENTRY" '_Avoid_: probe'
+written 'and the probe entry against calling one a check' "$PROBE_ENTRY" '_Avoid_: check'
+
+echo "--- issue #105: the worktree branch entry records what the boundary keys on ---"
+# FR-28. The same entry the #70 block above extracts, asked its other half --
+# and the half a reader following no-git-push.sh's pointer arrives for. The rule
+# keys on where the command runs, and the entry has to say so, and say why: "do
+# not fix this into a rule about the name" holds only while the two reasons
+# behind it are legible. A naming rule is what someone reaches for first, being
+# shorter and reading as tidier, and the entry's answer is that it is wrong
+# twice over. Both halves of that count are pinned, because one of them alone
+# leaves the instruction looking like a preference.
+#
+# FR-28 alone. It was `req FR-28 US-24 FR-27` until Bertan's review of #132 --
+# the same dilution found on the FR-11 block one round earlier, surviving one
+# round of looking for it. These eight checks read the keying rationale, which is
+# FR-28's text and no one else's; US-24 asks for the branch words and FR-27 names
+# three terms this block does not establish, and both are covered by the #70
+# block above, so the extra tags bought nothing and claimed something.
+req FR-28
+written 'the entry says the permission keys on where the command runs' \
+  "$WORKTREE_ENTRY" 'keys on **where the command runs**'
+written 'and deliberately not on what the branch is called' \
+  "$WORKTREE_ENTRY" 'deliberately not on what the'
+written 'it names the comparison the hook makes' \
+  "$WORKTREE_ENTRY" 'compares `git rev-parse'
+written 'against the other half of that comparison' \
+  "$WORKTREE_ENTRY" '--git-dir` with `--git-common-dir`'
+written 'and says a naming rule was available and is wrong twice over' \
+  "$WORKTREE_ENTRY" 'naming rule was available and is wrong twice over'
+written 'the first reason: the two ways a worktree is made here disagree on the prefix' \
+  "$WORKTREE_ENTRY" 'so a prefix rule would disagree between them'
+written 'the second: a branch in the main checkout can be given the name the rule looks for' \
+  "$WORKTREE_ENTRY" 'can be given whatever name the rule looks for'
+written 'and it tells the next reader not to fix it into one' \
+  "$WORKTREE_ENTRY" '"fix" this into a rule about the name.'
+
+echo "--- issue #105: the rotation is Bertan's, and the agent's half is reads ---"
+# US-27, US-28, FR-24, FR-25 and FR-26. The sweep half of this skill is already
+# checked, by #100's block above and by the housekeeping generator's section
+# below; the rotation half and the invariant the file opens with were read by
+# nothing. What US-27 asks is that an agent following the skill does not run a
+# procedure whose middle steps are refused, so the strongest form of the check
+# is not a literal at all: it is the skill's own commands, put through the hooks.
+# That is what the last part of this block does. The literals before it are for
+# the claims no command can carry -- whose the procedure is, and why.
+HYGIENE_HEAD="$FIXTURES/branch-hygiene-head.md"
+awk '/^# Branch hygiene$/ {f=1} f && /^## What an agent does$/ {exit} f {print}' \
+    "$SKILL_MD" > "$HYGIENE_HEAD"
+req FR-26 US-28 FR-24
+written 'the extracted head is the opening of the skill' \
+  "$HYGIENE_HEAD" '# Branch hygiene'
+unarmed 'and it stops before what an agent does' \
+  "$HYGIENE_HEAD" '## What an agent does'
+# FR-26, the invariant. Three terms and a count, and the count is the part that
+# reads as a mess to tidy when it is not written down.
+#
+# FR-26 says the invariant is one active dev branch PLUS `main`, with worktree
+# branches in flight against the former, so each of those three components is
+# asked for separately and each label names only what its own literal
+# establishes. The first row used to read "names main and exactly one active dev
+# branch" while asking only for the count: deleting `main` from the invariant
+# left all 1987 checks green, under a label that said `main` was checked. Found
+# by Bertan's second review of #132. The label described the requirement and the
+# literal described less, which is the same defect as a tag naming a requirement
+# its check does not establish -- one sentence further down.
+written 'the invariant names main, and exactly one active dev branch beside it' \
+  "$HYGIENE_HEAD" 'holds `main`, exactly one **active dev branch**'
+written 'and gives that branch the name the rest of the file uses' \
+  "$HYGIENE_HEAD" 'named `dev-NN`'
+written 'with however many worktree branches in flight against it' \
+  "$HYGIENE_HEAD" 'however many **worktree branches** are in flight against it'
+written 'and sends a reader to CONTEXT.md for all three terms' \
+  "$HYGIENE_HEAD" 'defines all three terms'
+# US-28 and FR-24: whose the rotation is, and that it is reserved rather than
+# merely discouraged.
+written 'rotation is declared a reserved act in the skill'"'"'s own words' \
+  "$HYGIENE_HEAD" '**Rotation is a reserved act, and so are the sweep'
+written 'and the skill cites the entry that holds the list rather than counting it' \
+  "$HYGIENE_HEAD" '*reserved act* entry holds the list'
+written 'it says the hooks refuse both pushes a rotation needs, and are right to' \
+  "$HYGIENE_HEAD" 'refuses both of the pushes a rotation needs'
+written 'and that Bertan runs it where no hook applies' \
+  "$HYGIENE_HEAD" 'Bertan runs the procedure'
+written 'from his own terminal' "$HYGIENE_HEAD" 'from his own terminal, where no hook applies.'
+# FR-25 and US-29: the half that stays, and that it is a read of the remote
+# rather than of the command that ran.
+AGENT_SECTION="$FIXTURES/branch-hygiene-agent.md"
+awk '/^## What an agent does$/ {f=1} f && /^## Bertan/ {exit} f {print}' \
+    "$SKILL_MD" > "$AGENT_SECTION"
+req FR-25 US-27 US-29
+written 'the extracted section is what an agent does' \
+  "$AGENT_SECTION" '## What an agent does'
+unarmed 'and it stops before the procedure that is not an agent'"'"'s' \
+  "$AGENT_SECTION" "## Bertan's procedure"
+written 'both steps are reads, and the agent stops after them' \
+  "$AGENT_SECTION" 'Both steps are reads. Report the answers and stop'
+written 'naming the four acts it is not to take, nor offer to' \
+  "$AGENT_SECTION" 'push or delete anything, and do not offer to.'
+written 'the merge is confirmed from the remote, never from the command that ran' \
+  "$AGENT_SECTION" 'Never take "the merge command ran" as evidence'
+written 'and the two fields that confirm it are named' \
+  "$AGENT_SECTION" '`state` must be `MERGED` and `mergedAt` must be non-null'
+written 'the sweep below is named as the other half, and not an agent'"'"'s' \
+  "$AGENT_SECTION" 'an agent that has produced the'
+# US-27 and FR-24, driven rather than read: every command the agent's half
+# instructs is put through the two hooks that judge these surfaces, from a linked
+# worktree, and must be permitted. A skill whose middle step is refused is the
+# failure the story names, and no literal above would catch one arriving -- the
+# commands sit in fenced blocks nothing reads. The blocks are fed whole, as a
+# session would paste them, so a continuation line is judged joined to its
+# opener the way the hook would see it.
+#
+# It reads $AGENT_SECTION, which the extraction above has already bounded and
+# which the `written`/`unarmed` pair above has already checked from both ends --
+# not $SKILL_MD with the heading pair written a second time. The first draft did
+# walk it twice, with two awk programs carrying the same two headings, so one
+# renaming would have had to be fixed in two places and the second copy would
+# have gone on extracting whatever it still matched. That is #84's shape arriving
+# in the change that cites it; found by review.
+# The fence spellings this extraction reads. It read ```bash and nothing else
+# until Bertan's second review of #132, and the defect was not that a spelling
+# was missing -- it was that an unknown one was SKIPPED IN SILENCE. He put an
+# ```sh block carrying `git push origin --delete dev-05` into the agent section
+# and all 1987 checks stayed green, under a check whose own label reads "permits
+# every command the agent half instructs". Spelled ```bash, the same line turns
+# it red: the driven check was right and was simply never shown the command.
+#
+# Widening the list alone would move the hole rather than close it, ```console or
+# a bare fence being the next one skipped. So the list is widened AND the
+# extraction is made total by the guard below. A block the extraction cannot see
+# is a block the hooks are never asked about, and a question asked of some of the
+# material and reported as asked of all of it is #84's shape once more.
+SHELL_FENCES='bash|sh|shell|zsh'
+fenced_shell() {  # fenced_shell <langs> <file> -- the body of every shell block
+  awk -v langs="$1" '
+    BEGIN { n = split(langs, a, "|"); for (i = 1; i <= n; i++) ok["```" a[i]] = 1 }
+    { if (inb) { if ($0 == "```") inb = 0; else print }
+      else if ($0 in ok) inb = 1 }' "$2" 2>/dev/null
+}
+unread_fences() {  # unread_fences <langs> <file> -- the openers it would skip
+  awk -v langs="$1" '
+    BEGIN { n = split(langs, a, "|"); for (i = 1; i <= n; i++) ok["```" a[i]] = 1 }
+    /^```/ { if (inb) { inb = 0; next }
+             inb = 1
+             if (!($0 in ok)) print (length($0) > 3 ? substr($0, 4) : "(bare)") }' \
+    "$2" 2>/dev/null | sort -u | tr '\n' ' '
+}
+AGENT_CMDS=$(fenced_shell "$SHELL_FENCES" "$AGENT_SECTION")
+# An empty extraction would pass both checks below without asking anything, and
+# it is one renamed heading away.
+printf '%s' "$AGENT_CMDS" | grep -q 'gh pr view' || {
+  echo "no commands were read out of the branch-hygiene agent section; the checks below prove nothing" >&2
+  exit 1
+}
+# And a partial extraction would pass them while asking less than it reports, so
+# an opener this does not read stops the suite rather than failing one check.
+# That is the idiom the two guards above use and it is the stronger answer: the
+# trade, taken knowingly, is that a genuinely non-command fence added to this
+# section -- sample output under ```text, say -- stops the suite until it is
+# either named here or moved. The section is a procedure and its blocks are
+# commands, so that is a cheap price for never silently reading part of it.
+UNREAD_FENCES=$(unread_fences "$SHELL_FENCES" "$AGENT_SECTION")
+[ -z "$UNREAD_FENCES" ] || {
+  echo "the branch-hygiene agent section carries fenced blocks this extraction does not read: $UNREAD_FENCES-- the commands in them would never reach the hooks, so the checks below prove less than they say" >&2
+  exit 1
+}
+req US-27 FR-24
+check_in "$PUSH_WT" no-git-push.sh ALLOW \
+  'no-git-push.sh permits every command the agent half instructs' "$AGENT_CMDS"
+check_in "$PUSH_WT" no-pr-decisions.sh ALLOW \
+  'no-pr-decisions.sh permits them too' "$AGENT_CMDS"
+# The other direction, and the claim the head makes in as many words: the two
+# pushes a rotation needs are refused, from a linked worktree as from anywhere.
+#
+# Written out here rather than extracted, and the reason is about WHERE the
+# placeholder sits rather than about running anything -- nothing here is run, and
+# the agent block above is fed `gh pr view <PR#>`, which no shell would accept
+# either. `<PR#>` sits in an argument position no rule reads, so it is judged
+# exactly as a number would be. `dev-NN+1` sits in the branch-name position,
+# which is the one thing the push rule does read, so feeding the rotation block
+# as written would ask these hooks about a branch name no rotation ever uses.
+# These are what Bertan would run once he has substituted. Found by review, which
+# read the first version of this comment and the agent block against each other.
+req US-28 FR-24
+check_in "$PUSH_WT" no-git-push.sh BLOCK \
+  'the first push of the new dev branch is refused' 'git push -u origin dev-06'
+check_in "$PUSH_WT" no-git-push.sh BLOCK \
+  'and the remote deletion of the merged one' 'git push origin --delete dev-05'
+
 section "=== the tokeniser's header names every hook that sources it ==="
 # The same audit the section above gets, pointed at the one other sentence in
 # this tree that claims to list the hooks. lib/command-scan.sh opens "which is
@@ -5641,6 +6095,24 @@ written 'the whole header runs on past the first paragraph' \
   "$SELF_WHOLE_HEADER" 'A hook is a process'
 unarmed 'and it points at no number below it, since none is there' \
   "$SELF_WHOLE_HEADER" 'the number below'
+
+# US-31 and FR-35: the header states what a green run is worth. Two sentences,
+# and the suite would be no less green without either -- which is the point of
+# pinning them. The first is the concrete one, and it is concrete on purpose: a
+# reviewer who reads "evidence about the cases it names" and nothing else can
+# take it as modesty, where `if true; then git push --mirror origin; fi` names
+# the run that was green while a wholesale push was permitted. Both are on the
+# whole header rather than the first paragraph, which is the scope enumeration
+# and says nothing about worth.
+req US-31 FR-35
+written 'the header names the green run that permitted a wholesale push' \
+  "$SELF_WHOLE_HEADER" 'the suite passed while `if true; then git push --mirror origin;'
+written 'and the second occasion beside it' \
+  "$SELF_WHOLE_HEADER" 'fi` was permitted, and passed again while a commit message mentioning `<<EOF`'
+written 'and states what a check suite is evidence of' \
+  "$SELF_WHOLE_HEADER" 'So a green run is not a measure of the boundary. A check suite is evidence'
+written 'and of what it is not' \
+  "$SELF_WHOLE_HEADER" 'about the cases it names and about nothing else'
 
 section "=== issue #84: every hook refuses when lib/command-scan.sh does not load ==="
 # THE LOAD CONTRACT, driven. lib/command-scan.sh states it; the hooks that
@@ -7589,17 +8061,17 @@ PROVENANCE_COUNTS='37:8 38:6 39:6 40:13 41:8'
 # requirements.md's.
 REQUIREMENT_SHAPE='
 US-1:refuse-only US-2:refuse-only US-3 US-4:permit-only US-5:gap,runbook
-US-6:gap,runbook US-7:gap,refuse-only US-8 US-9 US-10 US-11 US-12
-US-13:permit-only US-14:gap,permit-only US-15 US-16:static US-17:review
-US-18:review US-19:static US-20:gap,static US-21:review US-22:static
-US-23:static US-24:static US-25 US-26:static US-27:gap,static US-28:gap,static
-US-29:gap,static US-30:review US-31:gap,static US-32:review
-FR-1:superseded-by FR-2:gap,static FR-3 FR-4 FR-5:review FR-6:static
-FR-7:drifted FR-8:review FR-9:review FR-10:review FR-11:gap,static FR-12:retired
+US-6:gap,runbook US-7:refuse-only US-8 US-9 US-10 US-11 US-12
+US-13:permit-only US-14:permit-only US-15 US-16:static US-17:review
+US-18:review US-19:static US-20:static US-21:review US-22:static
+US-23:static US-24:static US-25 US-26:static US-27:static US-28:static
+US-29:static US-30:review US-31:static US-32:review
+FR-1:superseded-by FR-2:static FR-3 FR-4 FR-5:review FR-6:static
+FR-7:drifted FR-8:review FR-9:review FR-10:review FR-11:static FR-12:retired
 FR-13:review FR-14 FR-15 FR-16 FR-17 FR-18 FR-19 FR-20 FR-21 FR-22:static
-FR-23:gap,refuse-only FR-24:gap,static FR-25:gap,static FR-26:gap,static
-FR-27:static FR-28:gap,static FR-29:static FR-30:review FR-31:drifted
-FR-32:review FR-33:static FR-34:superseded-by FR-35:gap,static FR-36:review
+FR-23:refuse-only FR-24:static FR-25:static FR-26:static
+FR-27:static FR-28:static FR-29:static FR-30:review FR-31:drifted
+FR-32:review FR-33:static FR-34:superseded-by FR-35:static FR-36:review
 FR-37:static FR-38 FR-39:gap,runbook FR-40:static FR-41:static FR-42:static
 FR-43:static FR-44:static FR-45:static FR-46:static FR-47:static FR-48 FR-49
 GH-43.1 GH-43.2 GH-43.3 GH-43.4 GH-43.5:refuse-only GH-43.6 GH-44.1 GH-44.2
@@ -7612,7 +8084,8 @@ GH-84.2:static GH-84.3:static GH-94.1 GH-94.2 GH-94.3:review GH-94.4 GH-95.1
 GH-95.2 GH-96.1 GH-96.2:static GH-96.3:static GH-97.1 GH-97.2:refuse-only
 GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
-GH-104.4:static GH-104.5:review GH-124:static GH-127:gap
+GH-104.4:static GH-104.5:review GH-124:static GH-127:gap GH-130:gap
+GH-131:gap GH-133:gap
 '
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
