@@ -313,5 +313,10 @@ thing in the record.
   just fixed, a `no-` prefix standing in for a decision so that a renamed boundary
   hook drops out of a loop in silence — measured, three of four — and a mutation
   count stale in four places. The count is 22; session 1's entry stands as
-  written, since append-only means the correction comes forward.
+  written, since append-only means the correction comes forward. A second review
+  round then found two more of the same family one level down — labels claiming
+  more than their literals ask: an invariant check that named `main` and never
+  looked for it, and a fenced-block extraction that read ```bash and skipped
+  every other spelling in silence, so an `sh`-fenced refused push sat in the
+  agent procedure with all 1987 checks green.
 

@@ -5510,10 +5510,22 @@ unarmed 'and it stops before what an agent does' \
   "$HYGIENE_HEAD" '## What an agent does'
 # FR-26, the invariant. Three terms and a count, and the count is the part that
 # reads as a mess to tidy when it is not written down.
-written 'the invariant names main and exactly one active dev branch' \
-  "$HYGIENE_HEAD" 'exactly one **active dev branch**'
+#
+# FR-26 says the invariant is one active dev branch PLUS `main`, with worktree
+# branches in flight against the former, so each of those three components is
+# asked for separately and each label names only what its own literal
+# establishes. The first row used to read "names main and exactly one active dev
+# branch" while asking only for the count: deleting `main` from the invariant
+# left all 1987 checks green, under a label that said `main` was checked. Found
+# by Bertan's second review of #132. The label described the requirement and the
+# literal described less, which is the same defect as a tag naming a requirement
+# its check does not establish -- one sentence further down.
+written 'the invariant names main, and exactly one active dev branch beside it' \
+  "$HYGIENE_HEAD" 'holds `main`, exactly one **active dev branch**'
+written 'and gives that branch the name the rest of the file uses' \
+  "$HYGIENE_HEAD" 'named `dev-NN`'
 written 'with however many worktree branches in flight against it' \
-  "$HYGIENE_HEAD" 'are in flight against it'
+  "$HYGIENE_HEAD" 'however many **worktree branches** are in flight against it'
 written 'and sends a reader to CONTEXT.md for all three terms' \
   "$HYGIENE_HEAD" 'defines all three terms'
 # US-28 and FR-24: whose the rotation is, and that it is reserved rather than
@@ -5562,16 +5574,51 @@ written 'the sweep below is named as the other half, and not an agent'"'"'s' \
 # renaming would have had to be fixed in two places and the second copy would
 # have gone on extracting whatever it still matched. That is #84's shape arriving
 # in the change that cites it; found by review.
-fenced_bash() {  # fenced_bash <file> -- the body of every ```bash block in it
-  awk '/^```bash$/  { inb = 1; next }
-       inb && /^```$/ { inb = 0; next }
-       inb            { print }' "$1" 2>/dev/null
+# The fence spellings this extraction reads. It read ```bash and nothing else
+# until Bertan's second review of #132, and the defect was not that a spelling
+# was missing -- it was that an unknown one was SKIPPED IN SILENCE. He put an
+# ```sh block carrying `git push origin --delete dev-05` into the agent section
+# and all 1987 checks stayed green, under a check whose own label reads "permits
+# every command the agent half instructs". Spelled ```bash, the same line turns
+# it red: the driven check was right and was simply never shown the command.
+#
+# Widening the list alone would move the hole rather than close it, ```console or
+# a bare fence being the next one skipped. So the list is widened AND the
+# extraction is made total by the guard below. A block the extraction cannot see
+# is a block the hooks are never asked about, and a question asked of some of the
+# material and reported as asked of all of it is #84's shape once more.
+SHELL_FENCES='bash|sh|shell|zsh'
+fenced_shell() {  # fenced_shell <langs> <file> -- the body of every shell block
+  awk -v langs="$1" '
+    BEGIN { n = split(langs, a, "|"); for (i = 1; i <= n; i++) ok["```" a[i]] = 1 }
+    { if (inb) { if ($0 == "```") inb = 0; else print }
+      else if ($0 in ok) inb = 1 }' "$2" 2>/dev/null
 }
-AGENT_CMDS=$(fenced_bash "$AGENT_SECTION")
+unread_fences() {  # unread_fences <langs> <file> -- the openers it would skip
+  awk -v langs="$1" '
+    BEGIN { n = split(langs, a, "|"); for (i = 1; i <= n; i++) ok["```" a[i]] = 1 }
+    /^```/ { if (inb) { inb = 0; next }
+             inb = 1
+             if (!($0 in ok)) print (length($0) > 3 ? substr($0, 4) : "(bare)") }' \
+    "$2" 2>/dev/null | sort -u | tr '\n' ' '
+}
+AGENT_CMDS=$(fenced_shell "$SHELL_FENCES" "$AGENT_SECTION")
 # An empty extraction would pass both checks below without asking anything, and
 # it is one renamed heading away.
 printf '%s' "$AGENT_CMDS" | grep -q 'gh pr view' || {
   echo "no commands were read out of the branch-hygiene agent section; the checks below prove nothing" >&2
+  exit 1
+}
+# And a partial extraction would pass them while asking less than it reports, so
+# an opener this does not read stops the suite rather than failing one check.
+# That is the idiom the two guards above use and it is the stronger answer: the
+# trade, taken knowingly, is that a genuinely non-command fence added to this
+# section -- sample output under ```text, say -- stops the suite until it is
+# either named here or moved. The section is a procedure and its blocks are
+# commands, so that is a cheap price for never silently reading part of it.
+UNREAD_FENCES=$(unread_fences "$SHELL_FENCES" "$AGENT_SECTION")
+[ -z "$UNREAD_FENCES" ] || {
+  echo "the branch-hygiene agent section carries fenced blocks this extraction does not read: $UNREAD_FENCES-- the commands in them would never reach the hooks, so the checks below prove less than they say" >&2
   exit 1
 }
 req US-27 FR-24

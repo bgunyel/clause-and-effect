@@ -221,3 +221,67 @@ uncommitted draft to be immutable, and the alternative the assistant rejected �
 writing the file from a Python script, which the Bash guard cannot read into — is
 exactly the evasion CLAUDE.md's left-open list says these hooks do not stop and
 are not meant to.
+
+## Second review round, at `6df0847`: two more checks that claimed more than they asked
+
+Bertan reviewed again and found the four first-round findings addressed and two
+coverage gaps remaining, both in checks the assistant added in session 1, both of
+the same kind, and both measured in scratch copies before they were reported.
+
+That kind is worth naming, because it is now the whole of what four rounds of
+review have found. A check has a label and a literal. The label says what the
+check establishes; the literal says what it actually asks. Session 1's review and
+the first round of Bertan's found tags that named requirements their checks did
+not establish. These two are the same defect one level down: labels that named
+claims their literals did not ask for. In both cases the requirement was reported
+covered, the suite was green, and the thing the label promised was unchecked.
+
+**The invariant check asked for one of FR-26's three components.** FR-26 says the
+invariant is one active dev branch *plus* `main`, with worktree branches in flight
+against the former. The row was labelled "the invariant names main and exactly one
+active dev branch" and its literal was `exactly one **active dev branch**`.
+Deleting `` `main`, `` from the skill's opening sentence left all 1987 checks
+passing — the assistant confirmed this against the committed code before fixing
+it. The three components are asked separately now, and `named \`dev-NN\`` with
+them.
+
+**The agent-procedure extraction read one fence spelling and skipped the rest in
+silence.** `fenced_bash` matched ```` ```bash ```` exactly. Bertan put an
+```` ```sh ```` block carrying `git push origin --delete dev-05` into the agent
+section — a command `no-git-push.sh` refuses, in the half of the skill an agent
+follows — and all 1987 checks stayed green, under a check whose own label reads
+"permits every command the agent half instructs". Spelled ```` ```bash ````, the
+same line turns it red. The driven check was right all along and was simply never
+shown the command.
+
+The assistant's first instinct was to add `sh` to the list, and that is the wrong
+fix by itself: it moves the hole to ```` ```console ```` or to a bare fence. What
+was wrong was not the list but that an unrecognised opener was *skipped* rather
+than *refused*. So the list is widened and the extraction is made total — every
+opener in the agent section must be one the extraction reads, and one that is not
+stops the suite and names it, which is the idiom the two guards beside it already
+use. The trade is written down beside it: a genuinely non-command fence added to
+that section stops the suite until it is named or moved. The section is a
+procedure and its blocks are commands, so that is cheap.
+
+Measured, all in scratch copies of the worktree:
+
+| mutation | against `6df0847` | with the fix |
+|---|---|---|
+| ```` ```sh ```` block with `git push origin --delete dev-05` in the agent section | **green, 1987 passing** | 1 red: the driven `no-git-push.sh` check |
+| ```` ```console ```` block, same command | green | suite stops: "carries fenced blocks this extraction does not read: console" |
+| `` `main`, `` deleted from the invariant | **green, 1987 passing** | 1 red: the invariant's first row |
+| `are in flight against it` removed (Bertan's control) | 1 red | 1 red |
+
+Suite 1987 → **1988** results, all passing: one invariant row became three, and
+comparing sorted result lines against the previous run shows nothing else moved.
+`--matrix` unchanged at `153 requirements; 141 active, 141 of them covered; 7
+marked a gap`. FR-26 goes from 9 static checks to 11.
+
+Worth recording plainly, again. Both of these were in checks the assistant wrote,
+reviewed itself, had reviewed once by Bertan, and revised in response — and they
+survived all of it. The suite was green at every point, every mutation the
+assistant had run behaved, and both defects are invisible to any run, because a
+label is not executable. Bertan found them by asking, of a check, what would
+happen if the thing its label mentions were deleted — which is the mutation the
+assistant should have run for each label it wrote, and ran only for some.
