@@ -1303,6 +1303,48 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - seam: none
 - verify: review
 
+### GH-106
+- text: Every spelling variant of a seeded command reaches that seed's verdict, or a
+  verdict the suite declares for that pair with its reason. The seeds are a
+  literal table covering every requirement with a command spelling in both
+  directions; the variants come from a fixed list of transformations; and every
+  departure is declared, either by design or as a gap naming the issue that owns
+  it.
+- from: #106
+- kind: defect-permitting
+- status: active
+- direction: static: a property of the seed table, the transformation list and the
+  departure table. The variants themselves establish the requirements their seeds
+  are tagged with, one refusing or permitting check each; what is left for this
+  entry is that the three tables say what they claim to, which is read off them
+- note: the departures are not a second opinion about a hook. A `design` row is a
+  verdict the hook's own comment argues for; a `gap` row is a verdict that is
+  wrong today, written at the right one and owned by an issue. #103 Q18 forbids
+  the third thing, which is calling a defect a design exception
+
+### GH-117
+- text: A command word spelled as a path, quoted or backslash-escaped is the command
+  it spells: `/usr/bin/gh pr merge 5`, `./gh …`, `"git" push origin main`, `'git'
+  …` and `\git …` reach the verdict their bare-name spelling reaches, in every
+  hook.
+- from: #117, found reviewing PR #115
+- kind: defect-permitting
+- status: gap → #117
+- note: #106's families pin the five spellings as permitted against every refused
+  seed, one row per spelling rather than one per seed, so the claim held is the
+  class the issue measured. Those rows go red when #117 lands, which is the
+  intended outcome.
+
+### GH-118
+- text: An option before a `gh` subcommand that `gh` does not know as a boolean
+  consumes the next word, so the verb after it is what runs: `gh pr --squash view
+  merge 5` is a merge and `gh release -t list create v1` is a create.
+- from: #118, found reviewing PR #115
+- kind: defect-permitting
+- status: gap → #118
+- note: #106's families pin it as permitted against every refused `gh pr` and `gh
+  release` seed. `gh api` takes no group, so the shape does not arise there.
+
 ### GH-124
 - text: `feed` and `feed_says` read a hook's exit status as every other helper does,
   and the #98 self-test drives both.
@@ -1358,6 +1400,50 @@ The suite fails on each of these, and `--matrix` shows the rest:
   is evidence for FR-23 and against US-7: #105's two retarget rows are tagged
   FR-23 alone, and US-7 stays covered by the other twenty-one refusing checks.
   Message content is #109's.
+
+### GH-134
+- text: A shell wrapper is refused wherever it stands in a command position,
+  control words included: `if true; then bash -c "…"; fi`, the `for`, `while`,
+  `until`, `case` and `else` bodies, a function body and `{ …; }` are each a
+  command position, as they already are for the unwrapped command.
+- from: #134, found by #106's invariance families
+- kind: defect-permitting
+- status: gap → #134
+- note: `CS_WRAPPER_RE` is matched against raw text and so carries its own
+  command-position class -- start of line and `;` `&` `|` `(` and a backtick --
+  where every other rule reads `cs_split`, which strips control words. The two
+  answers disagree, which is the defect class `lib/command-scan.sh` exists to
+  end. #106 pins the three control words it generates against its three wrapped
+  seeds.
+
+### GH-135
+- text: A quoted group or subcommand word is the word it spells: `git "push" --all
+  origin`, `git "commit" -m x` on main, `gh "pr" merge 5`, `gh pr "merge" 5`,
+  `gh "api" …` and `gh "release" create v1` reach the verdicts their unquoted
+  spellings reach.
+- from: #135, found by #106's invariance families
+- kind: defect-permitting
+- status: gap → #135
+- note: one word past #117, and a different fix site: the command word is found by
+  an anchor, the group and verb by `cs_git_args`, `cs_gh_args` and the verb tests.
+  The contrast that makes it a defect rather than a policy is that a quoted VALUE
+  is read correctly -- `--base "dev-05"` is permitted and `--base "main"` refused
+  -- so `base_args` knows what a quote is and the group and verb tests do not.
+  The refusals that follow from the same raw comparison are not this entry: they
+  are declared by design in #106's departure table, each citing the comment that
+  argues it.
+
+### GH-136
+- text: The dependency group is named whichever way `uv` and bash accept it: `uv run
+  --group=test …`, `--group "test"` and `"--group" test` are the sanctioned
+  invocation that `--group test` is, in both uv-group hooks.
+- from: #136, found by #106's invariance families
+- kind: defect-refusing
+- status: gap → #136
+- note: the hooks' own header argues a different quoting trade knowingly -- that a
+  command name inside a quoted argument is treated as an invocation, so prose is
+  refused -- and this is not that. `--group=test` is the shape the base rule
+  already handles as `--base=main`, one file away.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -1593,6 +1679,8 @@ it has no entry above (Q16).
 - #77: a pull request, for #71
 - #89: a pull request, for #79
 - #103: the audit that decided this file; its decisions are cited as Q-numbers
+- #115: a pull request, for #97; Bertan's review of it found #117 and #118, which
+  have entries above
 - #105: the gap-fill issue that owned fifteen of the nineteen `gap` markers #104
   left and has taken all fifteen off; it adds checks, not requirements of its own,
   and the three defects found doing it are #130, #131 and #133, which have entries
