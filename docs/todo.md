@@ -1285,8 +1285,14 @@ per the priority order above.
   `.claude/hooks/check-hooks.sh --matrix` says which checks each requirement has;
   it cannot say whether any of them would go red if the rule they name were
   broken, and several suites in this repository have been green for the wrong
-  reasons. #107 builds the harness and registers mutations only for the rules
-  that gain checks under #103; this item is the rest.
+  reasons. #107 built the harness — `bash .claude/hooks/mutate-hooks.sh`, ten
+  registered rows and about sixteen minutes — with eight real mutations against
+  six rules of #105's and #106's, naming ten requirement IDs. This item is the
+  rest: those two issues gained checks for some twenty-five requirements, so a
+  row per FR is most of the work, and #108's and #109's rules arrive with them.
+  Two kinds of rule the harness cannot reach at all — one living in
+  `check-hooks.sh`, and a claim about a file outside `.claude/hooks/` — are
+  recorded in its header and need a different answer, not another row.
 
 - [ ] **One high-severity Dependabot alert on `main` — reported 2026-09-04** on
   pushing `dev-04`, at `security/dependabot/6`. Not looked at: neither the

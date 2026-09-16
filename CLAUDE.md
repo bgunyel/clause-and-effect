@@ -170,6 +170,15 @@ arrived with the fixes to the previous two. Every one was silent and in the
 permitting direction, and the suite was green before each round. A check suite
 is evidence about the cases it names and about nothing else.
 
+Whether those checks can fail is a second question, and `bash
+.claude/hooks/mutate-hooks.sh` is where it is asked (#107). It breaks one
+registered rule at a time in a copy of `.claude/hooks/` — never in this one — and
+a mutation counts as caught only when every requirement ID the registry names for
+it has a failing check. About sixteen minutes for the registry, so nothing runs
+it for you; two of its rows are self-tests, one whose edit matches nothing and one
+registered against a requirement its edit cannot reach, because an edit that
+silently fails to apply reads exactly like evidence and is none.
+
 Issue #84 is the same shape one level out, and it is the reason that last
 sentence is worth re-reading. The defect was not in the tokeniser but in the
 *load* of it: two of the four boundary hooks sourced `lib/command-scan.sh` with

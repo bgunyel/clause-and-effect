@@ -319,4 +319,15 @@ thing in the record.
   looked for it, and a fenced-block extraction that read ```bash and skipped
   every other spelling in silence, so an `sh`-fenced refused push sat in the
   agent procedure with all 1987 checks green.
+- [2026-09-16 · session 3](devlog_2026-09-16_session-3.md) — #107: the suite's
+  two dozen prose claims of "mutation-checked" become re-runnable.
+  `mutate-hooks.sh` breaks one registered rule at a time in a copy of
+  `.claude/hooks/` and requires the requirement IDs that row names to go red;
+  `check-hooks.sh` gains `$CHECK_HOOKS_DIR`, splitting what it judges from what
+  it judges against. Ten rows, eight of them real and two self-tests, sixteen
+  minutes, all as declared — and the harness's own baseline check fired on the
+  first run, on a file the new harness had made the suite red by existing. Review
+  of the assistant's own change then found six defects, five of them permitting,
+  the first being two new checks green for the wrong reason in a change whose
+  whole subject is checks that cannot fail.
 

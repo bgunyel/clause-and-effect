@@ -8,7 +8,11 @@
 # settings.json that registers them, and CLAUDE.md, CONTEXT.md and the
 # branch-hygiene skill's SKILL.md. And the one script outside .claude/hooks/
 # that reads the session report, the housekeeping skill's
-# housekeeping-commands.sh. Most checks run a hook as a process and read
+# housekeeping-commands.sh. And the one file beside this suite that nothing here
+# runs, mutate-hooks.sh, which runs THIS suite against a mutated copy of the
+# hooks: its registry and its guards are checked as text, in the #107 section,
+# and its own runs are the evidence that the checks here can fail.
+# Most checks run a hook as a process and read
 # its verdict; the rest read one of these files, and each kind is introduced
 # where it begins. Every check carries the IDs of the requirements it
 # establishes, which requirements.md beside this suite defines, and a requirement
@@ -170,8 +174,52 @@
 #
 # Run: bash .claude/hooks/check-hooks.sh
 #      bash .claude/hooks/check-hooks.sh --matrix   the requirements matrix, issue #104
+#      CHECK_HOOKS_DIR=<dir> bash .claude/hooks/check-hooks.sh
+#          judge the hooks in <dir> instead of the ones beside this file, which is
+#          how mutate-hooks.sh runs this suite against a mutated copy (#107)
 cd "$(dirname "$0")" || exit 1
-HOOKS=$(pwd)
+# TWO DIRECTORIES, ONE OF THEM BY DEFAULT THE OTHER. $HOOKS is what is JUDGED:
+# the hook files run as processes, the library they source, the text of each and
+# requirements.md beside them. $SUITE_DIR is what they are judged AGAINST and
+# where this file itself lives: settings.json, CLAUDE.md, CONTEXT.md, the two
+# skills, and this suite's own text. Every path below is one or the other on
+# purpose, and the split is what #107's harness needs -- it copies the hooks to
+# a temporary directory, breaks one rule there and asks this suite whether
+# anything goes red, and the documents that copy is held to have to be this
+# repository's rather than copies nobody edits.
+#
+# Three things stay on the SUITE side that read as though they belong on the
+# other, and each would be a check about a file nothing ran:
+#   - this file. $HOOKS/check-hooks.sh under an override is a copy that is not
+#     the program running, so the self-audits below -- the header naming every
+#     file, `pass` and `fail` being the only printers -- would be evidence about
+#     text nobody executed.
+#   - the working directory a hook is run in. It has to be inside a git
+#     repository, because half the verdicts here are read off `git branch
+#     --show-current` and the branch state around it; a temporary copy is not
+#     one. So `check` and `inv_dir hooks` run in this directory and invoke the
+#     hook out of $HOOKS.
+#   - $REPO_ROOT and every document derived from it.
+SUITE_DIR=$(pwd)
+HOOKS=$SUITE_DIR
+# An override that names a directory missing one of the files beside this suite
+# would turn most of this suite red for that reason, and a harness reading the
+# result would count every mutation as caught -- its permitting direction. So
+# the files are derived off this directory and each one required over there,
+# and a missing one stops the run rather than failing a check.
+if [ -n "${CHECK_HOOKS_DIR:-}" ]; then
+  HOOKS=$(cd "$CHECK_HOOKS_DIR" 2>/dev/null && pwd) || {
+    echo "CHECK_HOOKS_DIR=$CHECK_HOOKS_DIR is not a directory; nothing was judged" >&2
+    exit 1
+  }
+  for f in "$SUITE_DIR"/*.sh "$SUITE_DIR"/lib/*.sh "$SUITE_DIR"/*.md; do
+    [ -r "$f" ] || continue
+    [ -r "$HOOKS/${f#"$SUITE_DIR"/}" ] || {
+      echo "CHECK_HOOKS_DIR=$HOOKS does not hold ${f#"$SUITE_DIR"/}, which is beside this suite; the checks against it would prove nothing" >&2
+      exit 1
+    }
+  done
+fi
 
 case "${1:-}" in
   '') MATRIX= ;;
@@ -279,9 +327,10 @@ verdict() {  # verdict <want> <exit status> <stderr> <label>
       "$want" "$got" "$rc" "$label" "$err"
   fi
 }
-check() {  # check <script> <want> <label> <cmd>, run from $HOOKS
-  local script="$1" want="$2" label="$3" cmd="$4" rc err
-  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | ./"$script" 2>&1 >/dev/null)
+check() {  # check <script|/absolute/hook> <want> <label> <cmd>, run in $SUITE_DIR
+  local script="$1" want="$2" label="$3" cmd="$4" rc err hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | "$hook" 2>&1 >/dev/null)
   rc=$?
   verdict "$want" "$rc" "$err" "$label"
 }
@@ -527,7 +576,10 @@ unarmed() {  # unarmed <label> <file> <literal>
   fi
 }
 
-. ./lib/command-scan.sh
+# The library UNDER CHECK, not the one beside this file: the checks below call
+# its functions directly, and under #107's override the copy being judged is the
+# one they have to call.
+. "$HOOKS/lib/command-scan.sh"
 
 # A property of two files at once, which is what `armed` cannot express: it
 # asks whether a file contains a constant, never whether two files agree. These
@@ -3986,11 +4038,12 @@ check append-only-docs.sh ALLOW 'the append that is documented is still permitte
 # its verdict turns on whether the file already exists -- so it is asked about
 # real paths in this repository, with CLAUDE_PROJECT_DIR naming the root it
 # anchors to. A new seam in this suite, named as one.
-REPO_ROOT=$(cd "$HOOKS/../.." && pwd)
-check_file() {  # check_file <script> <want> <label> <path relative to the repo>
-  local script="$1" want="$2" label="$3" path="$4" rc err
+REPO_ROOT=$(cd "$SUITE_DIR/../.." && pwd)
+check_file() {  # check_file <script|/absolute/hook> <want> <label> <path relative to the repo>
+  local script="$1" want="$2" label="$3" path="$4" rc err hook
+  hook=$(hook_path "$script")
   err=$(printf '%s' "$path" | jq -Rs '{tool_name:"Edit",tool_input:{file_path:.}}' \
-    | CLAUDE_PROJECT_DIR="$REPO_ROOT" ./"$script" 2>&1 >/dev/null)
+    | CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" 2>&1 >/dev/null)
   rc=$?
   verdict "$want" "$rc" "$err" "$label"
 }
@@ -4338,7 +4391,7 @@ armed 'and a whitelisted spelling must resolve to that same commit' \
 # settings.json is what actually runs either file, so a hook present in the tree
 # and absent from the configuration is a hook that does nothing. jq reads it;
 # the expectation is a literal.
-SETTINGS="$HOOKS/../settings.json"
+SETTINGS="$SUITE_DIR/../settings.json"
 req GH-44.7 FR-40
 tok 'settings.json runs the report at SessionStart' \
     '"$CLAUDE_PROJECT_DIR"/.claude/hooks/report-stale-branches.sh' \
@@ -4936,7 +4989,7 @@ present() {  # present <label> <needle> <space-separated haystack>
   esac
 }
 
-CLAUDE_MD="$HOOKS/../../CLAUDE.md"
+CLAUDE_MD="$SUITE_DIR/../../CLAUDE.md"
 SECTION="$FIXTURES/boundary-section.md"
 # awk rather than `sed -n '/start/,/^## /p' | sed '$d'`: that pair drops the last
 # line unconditionally, and when the boundary section is the last in the file
@@ -5156,8 +5209,8 @@ section "=== the documents answer the citations the hooks make into them ==="
 # evidenced there by the other extraction rather than by its own. *Active dev
 # branch* is the first entry, the mirror case: its `unarmed` is real evidence of
 # the stop, and nothing before it can show a start that came too early.
-CONTEXT_MD="$HOOKS/../../CONTEXT.md"
-SKILL_MD="$HOOKS/../skills/branch-hygiene/SKILL.md"
+CONTEXT_MD="$SUITE_DIR/../../CONTEXT.md"
+SKILL_MD="$SUITE_DIR/../skills/branch-hygiene/SKILL.md"
 entry() {  # entry <file> <bolded name> -- one glossary entry, name to _Avoid_
   awk -v name="**$2**:" '$0 == name {f=1} f {print} f && /^_Avoid_:/ {exit}' "$1" 2>/dev/null
 }
@@ -5457,9 +5510,9 @@ unarmed 'the branch-hygiene skill does not describe worktrees forking from HEAD'
 # quoted words so that this line does not contain the phrase it refuses.
 req GH-99.1
 unarmed 'this section'"'"'s head no longer counts its citations at three' \
-  "$HOOKS/check-hooks.sh" "three citations"" named below"
+  "$SUITE_DIR/check-hooks.sh" "three citations"" named below"
 unarmed 'nor at four, the number a correction would have reached for' \
-  "$HOOKS/check-hooks.sh" "four citations"" named below"
+  "$SUITE_DIR/check-hooks.sh" "four citations"" named below"
 echo "--- issue #105: CONTEXT.md defines check and probe against each other ---"
 # FR-11. The distinction this suite's own header cites -- "Check, not probe" --
 # and the collision CONTEXT.md was started for (#38). It is a PAIR of
@@ -5721,10 +5774,19 @@ CS_SOURCERS=$(for f in "$HOOKS"/*.sh; do
     sed 's/[[:space:]]*#.*$//' "$f" 2>/dev/null | grep -qF 'command-scan.sh' \
       && printf '%s\n' "${f##*/}"
   done | sort -u | tr '\n' ' ')
-# This suite reads that path too, to run this audit, and it is not a consumer.
-# Named here for the reason NOT_THE_BOUNDARY is named above: the exception is
-# the part that would otherwise be discovered rather than read.
-CS_SOURCERS=$(printf '%s' " $CS_SOURCERS " | sed 's| check-hooks.sh | |')
+# Two files beside the hooks NAME that path without loading it, and neither is a
+# consumer. This suite reads it to run this audit; mutate-hooks.sh names it as
+# the target of three registered mutations (#107). Named here for the reason
+# NOT_THE_BOUNDARY is named above: the exception is the part that would
+# otherwise be discovered rather than read. The needle stays the loose one -- a
+# hook that sources the library by some other spelling has to stay in this
+# audit, which is the failure it exists for -- so what is written down is who
+# may mention the file without loading it.
+CS_NOT_CONSUMERS="check-hooks.sh mutate-hooks.sh"
+CS_SOURCERS=$(for f in $CS_SOURCERS; do
+    case " $CS_NOT_CONSUMERS " in *" $f "*) continue ;; esac
+    printf '%s\n' "$f"
+  done | tr '\n' ' ')
 [ -n "$CS_NAMED" ] && [ -n "$CS_SOURCERS" ] || {
   echo "no hook names were read out of the tokeniser header or off the disk; the checks below prove nothing" >&2
   exit 1
@@ -5766,7 +5828,7 @@ section "=== the housekeeping generator prints only what the sweep and rotation 
 # stand-in answering the report's read and the generator's read from separate
 # files, dispatched on the fields asked for. The --jq filters are not run by it
 # and are pinned as literals at the end.
-HK_GEN="$HOOKS/../skills/housekeeping/housekeeping-commands.sh"
+HK_GEN="$SUITE_DIR/../skills/housekeeping/housekeeping-commands.sh"
 HK="$FIXTURES/hk"
 HK_ORIGIN="$FIXTURES/hk-origin.git"
 HK_BIN="$FIXTURES/hk-bin"
@@ -6070,7 +6132,7 @@ section "=== this suite's header names every file it checks ==="
 # boundary-section audit above, so it has to stay below it.
 req GH-102
 SELF_PARAGRAPH="$FIXTURES/check-hooks-first-paragraph.txt"
-first_comment_block "$HOOKS/check-hooks.sh" > "$SELF_PARAGRAPH"
+first_comment_block "$SUITE_DIR/check-hooks.sh" > "$SELF_PARAGRAPH"
 written 'the extracted paragraph is the one that states the scope' \
   "$SELF_PARAGRAPH" 'Regression checks for'
 unarmed 'and it stops before the paragraph after it' \
@@ -6083,10 +6145,13 @@ SELF_NAMED=$(grep -oE '[A-Za-z0-9_.-]+\.(sh|json|md)' "$SELF_PARAGRAPH" | sort -
 RUN_BY_SETTINGS=$(jq -r '.hooks[][]?.hooks[]?.command' "$SETTINGS" 2>/dev/null \
   | sed 's|.*/||; s|[[:space:]].*||' | sort -u | tr '\n' ' ')
 # The documents this suite reads, derived off its own text: each is assigned
-# from a quoted path under $HOOKS/.. , or, since #104 read requirements.md and
-# runbook.md beside this suite, under $HOOKS itself. A document read through any
-# other spelling -- $REPO_ROOT, say -- is not found here, and the header is not
-# held to it; that limit is taken rather than closed, because every document read
+# from a quoted path under $SUITE_DIR/.. , or, since #104 read requirements.md
+# and runbook.md beside this suite, under $HOOKS itself. Both spellings, because
+# #107 split the two -- a document outside .claude/hooks/ is this repository's
+# whatever is being judged, and the two files inside it follow what is judged.
+# A document read through any other spelling -- $REPO_ROOT, say -- is not found
+# here, and the header is not held to it; that limit is taken rather than
+# closed, because every document read
 # today is spelled this way and widening the pattern reaches the fixture paths
 # the append-only checks name, which are not files this suite audits. The
 # pattern carries a backslash, so this line is not among its own matches.
@@ -6095,7 +6160,7 @@ RUN_BY_SETTINGS=$(jq -r '.hooks[][]?.hooks[]?.command' "$SETTINGS" 2>/dev/null \
 # #126 it was the only `.sh` path spelled this way. Beside this suite, under
 # $HOOKS itself, only `md` is read this way: every `.sh` there is on the disk
 # listing already, this suite among them, and the header does not name itself.
-READ_DOCS=$(grep -oE '"\$HOOKS/(\.\./[^"]*\.(json|md|sh)|[^"/]*\.md)"' "$HOOKS/check-hooks.sh" \
+READ_DOCS=$(grep -oE '"\$(SUITE_DIR/\.\./[^"]*\.(json|md|sh)|HOOKS/[^"/]*\.md)"' "$SUITE_DIR/check-hooks.sh" \
   | sed 's|.*/||; s|"$||' | sort -u | tr '\n' ' ')
 [ -n "$SELF_NAMED" ] && [ -n "$RUN_BY_SETTINGS" ] && [ -n "$READ_DOCS" ] \
   && [ -n "$HOOK_FILES" ] || {
@@ -6129,7 +6194,7 @@ set +f
 # says nothing about a pointer reworded some other way, and is here so that
 # restoring the old sentence turns something red.
 SELF_WHOLE_HEADER="$FIXTURES/check-hooks-header.txt"
-awk 'NR == 1 { next } /^#/ { print; next } { exit }' "$HOOKS/check-hooks.sh" > "$SELF_WHOLE_HEADER"
+awk 'NR == 1 { next } /^#/ { print; next } { exit }' "$SUITE_DIR/check-hooks.sh" > "$SELF_WHOLE_HEADER"
 written 'the whole header runs on past the first paragraph' \
   "$SELF_WHOLE_HEADER" 'A hook is a process'
 unarmed 'and it points at no number below it, since none is there' \
@@ -6895,9 +6960,10 @@ done
 # literal above names a file.
 #
 # $CS_SOURCERS is the #69 audit's derivation, a few checks up: every .sh beside
-# this suite whose code (comments stripped) loads the tokeniser, with this suite
-# itself excluded by name. It is reused rather than re-derived, because a second
-# answer to "who sources this file" is the defect both of these sections are
+# this suite whose code (comments stripped) loads the tokeniser, less the two
+# that name the file without loading it -- this suite and mutate-hooks.sh --
+# which are excluded there by name. It is reused rather than re-derived, because
+# a second answer to "who sources this file" is the defect both of these sections are
 # about. #69 asserts the tokeniser's header against it; #84 asserts the list of
 # hooks whose load guard is driven above. Its spacing is its own -- leading and
 # trailing -- so this normalises rather than assuming.
@@ -7316,7 +7382,7 @@ echo "--- issue #96: a line long enough to outlast the timeout ---"
 # would never read it as. Recorded in the library under THE LINE CAP, and
 # pinned below.
 BASH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command' \
-               "$HOOKS/../settings.json" 2>/dev/null | sed 's|.*/||' | sort | tr '\n' ' ')
+               "$SUITE_DIR/../settings.json" 2>/dev/null | sed 's|.*/||' | sort | tr '\n' ' ')
 [ -n "$BASH_HOOKS" ] || {
   echo "no Bash hooks were read out of settings.json; the checks below prove nothing" >&2
   exit 1
@@ -7324,7 +7390,7 @@ BASH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].
 req GH-96.2
 tok 'every Bash hook runs under the 5 s timeout the 1 s bound is set against' \
     '5' "$(jq -r '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].timeout]
-                  | unique | map(tostring) | join(" ")' "$HOOKS/../settings.json")"
+                  | unique | map(tostring) | join(" ")' "$SUITE_DIR/../settings.json")"
 
 # Where each hook holds an opinion, and one short command it refuses on its
 # content. Literals per hook, so that an at-the-cap refusal can be told apart
@@ -7793,9 +7859,8 @@ section "=== the exit-status helpers themselves: #98 ==="
 # nor 2, and 1 is the one the old reading and the new disagree about.
 #
 # Each fixture leaves a marker before it exits, and the marker is asserted too.
-# `check` and `check_file` run `./<script>` from the working directory, so a
-# fixture the helper could not find would exit 127 on its own account and a
-# crash-1 case would FAIL for that reason rather than the one it names.
+# A fixture the helper could not find would exit 127 on its own account, and a
+# crash-1 case would then FAIL for that reason rather than the one it names.
 #
 # The passing cases per helper are about this harness rather than the rule:
 # without them a harness that reported FAIL for everything would pass every
@@ -7824,9 +7889,10 @@ done
 EXITS_OUTPUT="$EXITS/output"
 
 # Run one helper against one fixture in a subshell, and print ok or FAIL for the
-# FAILED it left. The call shapes differ because the helpers take their hook
-# differently: check and check_file by a name run from the working directory, the
-# rest by an absolute path. `feed` and `feed_says` take a PATH and a raw payload
+# FAILED it left. Every helper takes its hook the same way since #107 -- through
+# `hook_path`, so an absolute path is the fixture's and a bare name is one of
+# $HOOKS's -- and each is given the absolute path of its fixture here.
+# `feed` and `feed_says` take a PATH and a raw payload
 # rather than a command; the PATH is the suite's own, because the fixtures call
 # `dirname` to leave their marker. `says`, `says_not` and `feed_says` take a
 # fragment where the others take a verdict: the fixture's own name, which is in
@@ -7841,14 +7907,14 @@ drive_helper() {  # drive_helper <helper> <fixture> <want>
   if ( FAILED=0
        cd "$EXITS" || exit 3
        case "$helper" in
-         check)      check "$fixture.sh" "$want" 'self-test' 'true' ;;
+         check)      check "$EXITS/$fixture.sh" "$want" 'self-test' 'true' ;;
          check_in)   check_in "$EXITS" "$EXITS/$fixture.sh" "$want" 'self-test' 'true' ;;
          check_rawfile_in) check_rawfile_in "$EXITS" "$EXITS/$fixture.sh" "$want" 'self-test' 'true' ;;
          cap_timed)  under_a_second 'self-test' "$(cap_timed "$EXITS" "$EXITS/$fixture.sh" 'true')" ;;
          lib_run)    library_under_a_second 'self-test' "$EXITS/$fixture.sh" "$EXITS/lib-run-out" ;;
          flip)       flip "$EXITS" "$EXITS/$fixture.sh" ALLOW "$want" 'self-test' 'true' ;;
          gap)        gap "$EXITS" "$EXITS/$fixture.sh" BLOCK "$want" 'self-test' 'true' ;;
-         check_file) check_file "$fixture.sh" "$want" 'self-test' 'docs/x.md' ;;
+         check_file) check_file "$EXITS/$fixture.sh" "$want" 'self-test' 'docs/x.md' ;;
          says)       says "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
          says_not)   says_not "$EXITS" "$EXITS/$fixture.sh" 'never-said' 'self-test' 'true' ;;
          feed)       feed "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
@@ -7961,7 +8027,7 @@ done
 # line to end it. Both are the permitting direction. It does find names with
 # capitals or digits, and the `function` keyword with or without parens. Comments
 # are stripped first, as cs_calls strips them.
-STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$HOOKS/check-hooks.sh" \
+STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$SUITE_DIR/check-hooks.sh" \
   | awk '/^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
            fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
          }
@@ -8113,7 +8179,11 @@ section "=== issue #106: every spelling of a judged command reaches its verdict 
 # backtick in a seed would be text and not an expansion.
 inv_dir() {  # inv_dir <name> -- the fixture directory a seed names
   case "$1" in
-    hooks)     printf '%s' "$HOOKS" ;;
+    # A working directory inside this repository, which is what `hooks` is here
+    # for -- the hook run in it is still $HOOKS's. Under #107's override a copy
+    # in /tmp is not a git repository, and the seeds run here read the branch
+    # they are standing on.
+    hooks)     printf '%s' "$SUITE_DIR" ;;
     push-wt)   printf '%s' "$PUSH_WT" ;;
     push-main) printf '%s' "$PUSH_MAIN" ;;
     on-main)   printf '%s' "$ON_MAIN" ;;
@@ -8667,7 +8737,7 @@ tok 'the seeds cover every requirement with a command spelling, in both directio
 # Comments are stripped first, as cs_calls and STATUS_READERS strip them, so an
 # arm named in the prose above does not count as one.
 req GH-106
-INV_ARMS=$(sed -n '/^inv_apply() {/,/^}/p' "$HOOKS/check-hooks.sh" \
+INV_ARMS=$(sed -n '/^inv_apply() {/,/^}/p' "$SUITE_DIR/check-hooks.sh" \
   | sed 's/[[:space:]]*#.*$//' \
   | awk 'match($0, /^[[:space:]]+[a-z0-9-]+\)/) {
            a = substr($0, RSTART, RLENGTH); sub(/[[:space:]]*/, "", a); sub(/\)$/, "", a)
@@ -8707,6 +8777,200 @@ req GH-106
 [ "$INV_DEP_ROWS" -gt 0 ] || fail static 'the departure table yielded no row at all'
 pass static 'invariance families: %d seeds, %d variants (%d not applicable, %d another seed), %d by design, %d a gap' \
   "$INV_SEED_COUNT" "$INV_VARIANTS" "$INV_SKIPPED" "$INV_REGENERATED" "$INV_DESIGN" "$INV_GAPS"
+section "=== issue #107: the mutation harness, and the hooks directory it judges ==="
+# The claims this suite makes about its own mutation-checking are prose: about
+# two dozen of them, each a run someone did by hand against a harness that no
+# longer exists. #107 makes them re-runnable, and what it added is two things
+# that can go wrong independently of each other.
+#
+# GH-107.1 is the alternative hooks directory. $CHECK_HOOKS_DIR moves what this
+# suite JUDGES -- the hook files, the library, their text, requirements.md --
+# and moves nothing it judges them AGAINST, which stays this repository's:
+# settings.json, CLAUDE.md, CONTEXT.md, the two skills, the working directory a
+# hook is run in, and this file. The head of this suite argues that split; what
+# is checked here is the guard on it, in the refusing direction, because the
+# permitting direction is a full run of this suite against a copy and this
+# suite cannot ask for one of itself. That run is mutate-hooks.sh's baseline,
+# which is where the evidence for it is, and it is evidence made outside this
+# file rather than in it. Named rather than left as a silence.
+#
+# THE RECURSION, and why it is bounded. The two checks below run this suite
+# again, with an override the guard must refuse, so they cost what the guard
+# costs and nothing more -- it exits before the first fixture is made. A guard
+# that did NOT refuse would run the whole suite instead, which would reach this
+# section, which would run it again: unbounded, at 95 s a level. So the inner
+# run is marked, this section asks its two questions only when unmarked, and
+# each check asserts the guard's MESSAGE and not merely a non-zero exit -- an
+# inner run that went the whole way would exit 1 for its own uncovered
+# requirement and say nothing about a directory.
+#
+# GH-107.2 is the harness itself, held here as text: it never edits this
+# repository's hooks, a mutation that does not apply is a failure rather than a
+# pass, the baseline has to be green, and its registry names files and
+# requirement IDs that exist. That last one is what keeps the registry from
+# rotting quietly -- a row naming a renamed file reports did-not-apply, which is
+# loud, but a row naming a requirement that has been retired would report
+# `survived` for ever and read as a defect in the hooks rather than in the row.
+MUT="$HOOKS/mutate-hooks.sh"
+req GH-107.1
+if [ -n "${CHECK_HOOKS_NESTED:-}" ]; then
+  pass static 'the override guard is not asked of a run that is already one, so nothing recurses'
+else
+  NESTED_ERR=$(CHECK_HOOKS_NESTED=1 CHECK_HOOKS_DIR="$FIXTURES/no-such-directory-at-all" \
+    bash "$SUITE_DIR/check-hooks.sh" 2>&1 >/dev/null)
+  NESTED_STATUS=$?
+  case "$NESTED_STATUS:$NESTED_ERR" in
+    1:*"is not a directory"*) pass static 'an override naming no directory stops the suite, saying so' ;;
+    *) fail static 'an override naming no directory must stop the suite saying it is not a directory\n         exit=%s stderr |%s|' \
+         "$NESTED_STATUS" "$NESTED_ERR" ;;
+  esac
+  # A directory that is there and is missing one of the files beside this suite.
+  # Everything but lib/, so that the file named in the refusal is the one left
+  # out and not the first of a dozen.
+  PARTIAL="$FIXTURES/partial-hooks"
+  mkdir -p "$PARTIAL/lib"
+  cp -p "$SUITE_DIR"/*.sh "$SUITE_DIR"/*.md "$PARTIAL/" 2>/dev/null
+  [ -r "$PARTIAL/check-hooks.sh" ] && [ ! -e "$PARTIAL/lib/command-scan.sh" ] || {
+    echo "the partial hooks fixture was not built as one file short; the check against it proves nothing" >&2
+    exit 1
+  }
+  NESTED_ERR=$(CHECK_HOOKS_NESTED=1 CHECK_HOOKS_DIR="$PARTIAL" \
+    bash "$SUITE_DIR/check-hooks.sh" 2>&1 >/dev/null)
+  NESTED_STATUS=$?
+  case "$NESTED_STATUS:$NESTED_ERR" in
+    1:*"does not hold lib/command-scan.sh"*) pass static 'an override missing a file beside this suite stops it, naming the file' ;;
+    *) fail static 'an override missing lib/command-scan.sh must stop the suite naming that file\n         exit=%s stderr |%s|' \
+         "$NESTED_STATUS" "$NESTED_ERR" ;;
+  esac
+fi
+# And the two assignments themselves, so that a default quietly changed to
+# something other than "the files beside this file" is visible here.
+#
+# Each literal is written in two quoted halves that bash joins, so that the line
+# making the claim does not contain the text it looks for -- the idiom the
+# citation pins above use, and for the same reason: `armed` greps this file, so a
+# needle spelled whole here would be found on this line and both checks would
+# stay green with the assignments deleted. Measured rather than reasoned: with
+# the halves joined, `sed 's/#.*//' check-hooks.sh | grep -c` answers 2 for each
+# needle, and 1 with them split.
+#
+# These two cannot be mutation-checked by mutate-hooks.sh, which refuses to
+# mutate this file for the reason its registry states. They are held by the split
+# above and by review, which is what the harness's own limit paragraph says of
+# every rule that lives in this file.
+armed 'the hooks under check default to the ones beside this suite' \
+      "$SUITE_DIR/check-hooks.sh" 'HOOKS=$SUITE''_DIR'
+armed 'and $CHECK_HOOKS_DIR is what moves them' \
+      "$SUITE_DIR/check-hooks.sh" 'HOOKS=$(cd "$CHECK_HOOKS''_DIR" 2>/dev/null && pwd)'
+
+req GH-107.2
+# The harness is not a hook. It runs this suite; nothing runs it but a person.
+# An absence, so it is asked of the derivation `present` reads rather than
+# through it -- that helper answers membership, and there is no spelling of it
+# that means "and not this one".
+case " $RUN_BY_SETTINGS " in
+  *" mutate-hooks.sh "*)
+    fail static 'settings.json registers mutate-hooks.sh, which judges no command and runs this suite' ;;
+  *)
+    pass static 'settings.json does not register the mutation harness' ;;
+esac
+written 'the harness says how it is run' "$MUT" 'bash .claude/hooks/mutate-hooks.sh'
+written 'and roughly what it costs, which is why nothing runs it for you' \
+        "$MUT" 'ABOUT SIXTEEN MINUTES'
+written 'and what its exit status means, the two self-tests included' \
+        "$MUT" 'EXIT STATUS: non-zero when any row reports something other than'
+written 'the harness refuses to mutate the hooks directory it stands in' \
+        "$MUT" 'refusing to mutate it'
+armed 'and asks that before the first delete, of the resolved paths and of the filesystem' \
+      "$MUT" '[ "$WORK_REAL" = "$SRC_REAL" ] || [ "$WORK" -ef "$SRC" ]'
+# Neither directory inside the other, which the equality above does not answer:
+# mktemp reads $TMPDIR, and a temporary directory under .claude/hooks/ is not the
+# same directory as it. Both spellings, since the containment can be either way
+# round.
+armed 'and that neither directory is inside the other, which equality does not say' \
+      "$MUT" 'case "$WORK_REAL/" in "$SRC_REAL"/*)'
+armed 'in both directions' \
+      "$MUT" 'case "$SRC_REAL/" in "$WORK_REAL"/*)'
+# And that a row cannot name its way out of the copy. The audit below asks the
+# same of the registry as written; this asks whether the harness would refuse one
+# that got there another way, which is the half a static read of the table cannot
+# answer.
+armed 'a row naming an absolute path or climbing out with .. is refused before the write' \
+      "$MUT" '/*|*/../*|../*|*/..|..)'
+armed 'an edit that leaves its target byte-identical is did-not-apply' \
+      "$MUT" 'if cmp -s "$TARGET" "$WORK_ROOT/mutated"; then'
+written 'and that is a failure rather than a pass, with the reason' \
+        "$MUT" 'A MUTATION THAT DOES NOT APPLY IS A FAILURE'
+armed 'an unmutated copy has to be green before any mutation is believed' \
+      "$MUT" 'if [ "$BASELINE_STATUS" != 0 ] || [ "$(matrix_size "$RUN_OUT")" = 0 ]; then'
+armed 'and the hooks directory is summed before and after the whole run' \
+      "$MUT" 'if [ -n "$SUM_AFTER" ] && [ "$SUM_BEFORE" = "$SUM_AFTER" ]; then'
+# A run that hangs is not a run that caught anything. Nothing in this suite bounds
+# a hook it runs, so a mutation that left one looping would stop the harness
+# rather than be reported by it.
+armed 'and each run of this suite is bounded, a killed one printing no matrix' \
+      "$MUT" 'timeout "$RUN_BOUND" env CHECK_HOOKS_DIR="$WORK" bash "$SUITE" --matrix'
+
+# THE REGISTRY, held to this repository. Read out of the harness rather than
+# listed again here: a row names a file, the requirement IDs whose checks must go
+# red, and what the harness must then report.
+MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
+                f && /^MUTATIONS$/ { exit }
+                f' "$MUT")
+[ -n "$MUT_ROWS" ] || {
+  echo "no mutation rows were read out of mutate-hooks.sh; the checks below prove nothing" >&2
+  exit 1
+}
+# A count, as a literal, for the reason every derived list here carries one: a
+# heredoc whose marker moved would otherwise shorten this audit in silence. It
+# moves when a mutation is registered, which is the edit it is here to make
+# visible.
+tok 'the registry holds as many mutations as this suite expects' \
+    '10' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+MUT_BAD=
+MUT_OUTCOMES=
+while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
+  [ -n "$MID" ] || continue
+  MUT_OUTCOMES="$MUT_OUTCOMES$MWANT
+"
+  [ -n "$MFILE" ] && [ -n "$MEDIT" ] && [ -n "$MREQS" ] && [ -n "$MWANT" ] \
+    || { MUT_BAD="$MUT_BAD  $MID: the row does not split into five fields
+"; continue; }
+  case "$MFILE" in check-hooks.sh) MUT_BAD="$MUT_BAD  $MID: targets this suite, which the harness runs rather than judges
+" ;; esac
+  # A path INSIDE the hooks directory, asked of the table as written. An absolute
+  # one, or one climbing out with .., names a file the copy does not hold and the
+  # edit would land wherever it points. The harness refuses such a row itself;
+  # this is the same question asked of the registry rather than of the run, so a
+  # row of that shape is red here without anyone running it.
+  case "$MFILE" in /*|*/../*|../*|*/..|..)
+    MUT_BAD="$MUT_BAD  $MID: names $MFILE, which is not a path inside the hooks directory
+" ;; esac
+  [ -r "$HOOKS/$MFILE" ] || MUT_BAD="$MUT_BAD  $MID: names $MFILE, which is not a file in the hooks directory
+"
+  for MR in $MREQS; do
+    grep -qx -- "### $MR" "$HOOKS/requirements.md" \
+      || MUT_BAD="$MUT_BAD  $MID: names $MR, which requirements.md has no entry for
+"
+  done
+done <<< "$MUT_ROWS"
+if [ -z "$MUT_BAD" ]; then
+  pass static 'every registered mutation names a file and requirements that exist'
+else
+  fail static 'a registered mutation names something that is not there:\n%s' \
+    "$(printf '%s' "$MUT_BAD" | sed 's/^/       /')"
+fi
+# THE SELF-TESTS ARE REGISTERED, which is #107's acceptance criterion and the
+# only thing that says the two words this harness reports are read off anything.
+# One row whose edit matches nothing, one registered against a requirement its
+# edit cannot reach, and every other row expecting to be caught.
+tok 'one registered mutation is expected not to apply' \
+    '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^did-not-apply$')"
+tok 'and one is expected to survive, being registered against the wrong requirement' \
+    '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
+tok 'and every other registered mutation is expected to be caught' \
+    '8' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and
 # fails when the two do not meet. requirements.md says what a requirement is,
@@ -8799,6 +9063,7 @@ GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117:gap GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
 GH-131:gap GH-133:gap GH-134:gap GH-135:gap GH-136:gap GH-139:gap
+GH-107.1:static GH-107.2:static
 '
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
@@ -9410,7 +9675,7 @@ req GH-104.1
 tok 'the only lines that print a check result are the two in pass and fail' \
 "  printf '  o"'k'"   %s\n' \"\$line\"
   printf '  F"'AIL'" %s\n' \"\$line\"" \
-  "$(sed 's/[[:space:]]*#.*$//' "$HOOKS/check-hooks.sh" | grep -E "['\"]  (ok   |FAI""L )")"
+  "$(sed 's/[[:space:]]*#.*$//' "$SUITE_DIR/check-hooks.sh" | grep -E "['\"]  (ok   |FAI""L )")"
 
 echo "--- this repository ---"
 # The record is copied before it is read, because every line printed below is
@@ -9418,7 +9683,7 @@ echo "--- this repository ---"
 # check above this line; their own results reach the matrix and not this reading.
 cp "$LEDGER" "$FIXTURES/ledger-read"
 FINDINGS=$(requirements_read findings "$HOOKS/requirements.md" "$FIXTURES/ledger-read" \
-             "$HOOKS/check-hooks.sh" "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE")
+             "$SUITE_DIR/check-hooks.sh" "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE")
 FINDINGS_STATUS=$?
 # An awk that failed may print nothing, or only the findings before the failure,
 # and a loop over what it printed passes by asking too little -- the permitting
@@ -9438,7 +9703,7 @@ done <<< "$FINDINGS"
 # --matrix: every requirement, from the record as it stands now, the findings
 # above included, and then the verdict line the run would have printed.
 if [ -n "$MATRIX" ]; then
-  requirements_read matrix "$HOOKS/requirements.md" "$LEDGER" "$HOOKS/check-hooks.sh" \
+  requirements_read matrix "$HOOKS/requirements.md" "$LEDGER" "$SUITE_DIR/check-hooks.sh" \
     "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE" >&3
   MATRIX_STATUS=$?
   exec >&3

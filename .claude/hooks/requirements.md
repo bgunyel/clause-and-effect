@@ -1489,6 +1489,58 @@ The suite fails on each of these, and `--matrix` shows the rest:
   The second time the retarget arm has differed from the creating arms in a way
   their shared reasoning missed, after #133.
 
+### GH-107.1
+- text: `check-hooks.sh` judges the hooks in `$CHECK_HOOKS_DIR` when that names a
+  directory, and the ones beside itself when it does not. What moves with it is
+  what is judged — the hooks run as processes, the library they source, the text
+  of both, and `requirements.md`. What does not move is what they are judged
+  against: `settings.json`, `CLAUDE.md`, `CONTEXT.md`, the two skills, the working
+  directory a hook is run in, and the suite itself. An override naming no
+  directory, or one missing a file that sits beside the suite, stops the run and
+  says which.
+- from: #107
+- kind: doc-claim
+- status: active
+- direction: static: the two checks that can be made here read the guard's exit
+  status and its message, which is no hook's verdict. The permitting direction is
+  a whole run of this suite against a copy, which this suite cannot ask of
+  itself; it is mutate-hooks.sh's baseline run, and every caught mutation depends
+  on it
+- note: the guard is checked by running this suite again with an override it must
+  refuse. The inner run is marked so that a guard which failed to refuse cannot
+  recurse, and each check asserts the refusal's message rather than only a
+  non-zero exit — an inner run that went the whole way would exit 1 for its own
+  uncovered requirement and say nothing about a directory.
+
+### GH-107.2
+- text: `mutate-hooks.sh` re-runs the mutation claims this suite makes. Each
+  registered mutation names a file in the hooks directory, a `sed` expression, the
+  requirement IDs whose checks must go red, and what the harness must report; a
+  mutation is caught only when every ID it names has at least one failing check.
+  An edit that leaves its target byte-identical is a failure, not a pass. The
+  harness never edits this repository's hooks, refuses to run if its working copy
+  is them, requires an unmutated copy to be green before it believes any
+  mutation, and checks that `.claude/hooks/` is byte-identical afterwards. Two
+  rows of the registry are its self-tests: one whose edit matches nothing, and one
+  registered against a requirement its edit cannot reach.
+- from: #107
+- kind: doc-claim
+- status: active
+- direction: static: what this suite can ask of the harness is what its text says
+  and whether its registry names files and requirements that exist. Whether the
+  harness is right is a run of the harness, which takes about sixteen minutes and
+  is nobody's check
+- note: eight real mutations against six rules — #105's three sections, and the
+  three historical tokeniser defects #106's families generalise — naming ten
+  requirement IDs between them. That is one mutation per rule and not one per
+  requirement: #105 and #106 gained checks for some twenty-five, and the rest have
+  no row. One mutation per FR is the backlog item docs/todo.md carries from #103
+  Q8, and #108 and #109 register theirs when they land. Two kinds of rule cannot
+  be registered at all, which is GH-107.1's split seen from the other side: one
+  that lives in `check-hooks.sh` (#106's six self-guards, #104's coverage
+  machinery), because the suite that runs is this repository's; and a claim about
+  a file outside `.claude/hooks/`, because only the hooks directory is copied.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that
