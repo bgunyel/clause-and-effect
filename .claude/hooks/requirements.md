@@ -1445,6 +1445,24 @@ The suite fails on each of these, and `--matrix` shows the rest:
   refused -- and this is not that. `--group=test` is the shape the base rule
   already handles as `--base=main`, one file away.
 
+### GH-139
+- text: A quoted base flag is still a base flag where its absence would be permitted:
+  `gh pr edit <n> "--base" main`, `"--base=main"` and `"-B" main`, and
+  `gh pr create --web "--base" main`, are refused as their unquoted spellings are.
+- from: #139, found by #106's invariance families once they quoted a fifth
+  argument position
+- kind: defect-permitting
+- status: gap → #139
+- note: `base_args` drops a quoted span whole, and its comment argues that
+  deleting a span cannot invent a flag. True, and not the whole of it: on the
+  retarget arm and under `--web`, naming no base is permitted, so deleting the
+  span removes a refusal rather than adding one. On the three creating arms the
+  same drop is safe, because a create naming no base is refused for naming none
+  -- which is why this stood. The refusing consequences of the same drop are not
+  this entry; #106 declares those by design, citing the comment that argues them.
+  The second time the retarget arm has differed from the creating arms in a way
+  their shared reasoning missed, after #133.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that
@@ -1681,6 +1699,9 @@ it has no entry above (Q16).
 - #103: the audit that decided this file; its decisions are cited as Q-numbers
 - #115: a pull request, for #97; Bertan's review of it found #117 and #118, which
   have entries above
+- #107: the issue that owns a standing mutation harness; #106's section cites it
+  when writing out its own three mutations, which are run by hand until it lands.
+  It adds no requirement of its own
 - #105: the gap-fill issue that owned fifteen of the nineteen `gap` markers #104
   left and has taken all fifteen off; it adds checks, not requirements of its own,
   and the three defects found doing it are #130, #131 and #133, which have entries
