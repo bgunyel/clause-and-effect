@@ -8571,6 +8571,14 @@ while IFS='|' read -r sdir shook swant stags skey scmd; do
   req $stags
   check_in "$sfix" "$shook" "$swant" "seed $skey: $scmd" "$scmd"
   for trans in $INV_TRANSFORMS; do
+    # And a third time per variant, for the same reason one loop further in.
+    # Three guards below fire before the `req` of the branch they sit in -- the
+    # transformation with no rewrite, the gap whose right verdict is the one it
+    # asserts, and the kind that is neither. Each would otherwise carry the tags
+    # of the PREVIOUS variant's check_in, or of this seed's own, and a table
+    # defect would be filed as evidence about FR-14 or FR-48. The three `req`s
+    # below this line stay where they are: they must win for the verdict checks.
+    req GH-106
     if ! variant=$(inv_apply "$trans" "$scmd"); then
       fail static 'the transformation %s is in the list with no rewrite of its own' "$trans"
       continue
