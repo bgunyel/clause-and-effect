@@ -2462,11 +2462,22 @@ check no-pr-decisions.sh BLOCK 'a wrapper, then the whole field quoted' \
 # this fix no verdict above can see: two copies that agree today are two copies
 # that can be fixed apart tomorrow, and that is how this defect was made. Both
 # go red on the one-call-site revert and on nothing else.
+#
+# OCCURRENCES, not matching lines, and FULL-LINE comments stripped rather than
+# everything after the first `#`. Bertan's review of PR #153 found both halves
+# loose in the permitting direction: `grep -c` counts lines, so two copies
+# written on one line read as one, and a stripper cutting at the first `#`
+# anywhere cuts into live code -- this file already carries `${TOK#--base=}` --
+# so a copy written after a `#` on a code line was invisible to the count. A
+# trailing comment that quotes the pattern now counts against the total, which
+# is the refusing direction and one edit away.
 req GH-137.1
 tok 'no-pr-decisions.sh: the state pattern is written once, not once per call site' \
-    '1' "$(sed 's/[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" | grep -c 'closed|open')"
+    '1' "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" \
+          | grep -o 'closed|open' | wc -l | tr -d '[:space:]')"
 tok 'no-pr-decisions.sh: both state call sites read that one pattern' \
-    '2' "$(sed 's/[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" | grep -cF 'grep -qiE "$STATE_FIELD_RE"')"
+    '2' "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" \
+          | grep -oF 'grep -qiE "$STATE_FIELD_RE"' | wc -l | tr -d '[:space:]')"
 # The arming evidence. The state rule is keyed on the field and not on the
 # endpoint, for the reason its own comment gives -- the same PATCH is how `gh pr
 # edit` retitles a pull request -- so a widened quote class that swallowed an
@@ -2534,10 +2545,12 @@ check no-pr-decisions.sh ALLOW 'a quoted rebase field on an issue'     'gh api -
 # EVERY FLAG THE ANCHOR ADMITS, with the quote in it. rest_bases names three
 # flags and the comment beside it now claims five spellings of one request, so
 # each is asked here in both directions rather than left to the two that happen
-# to be pinned. Two of the three flags reached no row at all before this: -F is
-# gh's typed field and --raw-field its long spelling, and `-f"base=x"` closes
-# the flag-attached case with a quote in it, which is the one the old pattern
-# would have hidden twice over. The three dev-05 rows go red on revert; the
+# to be pinned. Two of the three flags reached no row at all before this. They
+# pair as `gh api --help` gives them -- -F/--field is the TYPED parameter and
+# -f/--raw-field the STRING one -- which this comment had backwards until
+# Bertan's review of PR #153; the rows were right and the sentence was not.
+# `-f"base=x"` closes the flag-attached case with a quote in it, which is the
+# one the old pattern would have hidden twice over. The three dev-05 rows go red on revert; the
 # three naming main are CONTRAST of the third kind, refused before for naming no
 # base and after for naming main.
 req FR-18 FR-15 US-11 GH-137.2
@@ -2557,6 +2570,54 @@ check no-pr-decisions.sh ALLOW '--raw-field on a rebase field'        'gh api -X
 # that must also see a flagless `state:CLOSED` cannot be keyed on a flag. So it
 # is CONTRAST and green on revert, and that is the point of it: a flag spelling
 # that changes nothing for this reader is the evidence it is not flag-anchored.
+
+# THE SEPARATOR, which the first fix for #137 did not ask about. Found by
+# Bertan's review of PR #153, in the change that closed the quote gap -- the
+# fourth wrong answer to where a field begins, and the second one found by
+# review rather than by this suite. pflag takes `--field=value` for a long flag
+# and `-f=value` for a short one, and the pattern required whitespace or a quote
+# after the flag, so `--field=base=main` named a base nothing here could read.
+#
+# THE PERMITTING HALF, and it is the one that matters: on PATCH /pulls/N the
+# no-base arm is keyed on the collection endpoint and does not fire, so an
+# unread base is not a false refusal but a retarget onto main, permitted. That
+# is the same consequence this section already records for the quote gap,
+# surviving one spelling further along. All six rows below go red without the
+# separator class -- the four flag spellings, and the two that reach it through
+# a quote as well, the separator and the quote being independent.
+req FR-18 FR-17 US-10 GH-137.2
+check no-pr-decisions.sh BLOCK 'retarget to main, --field='        'gh api -X PATCH repos/o/r/pulls/35 --field=base=main'
+check no-pr-decisions.sh BLOCK 'retarget to main, -f='             'gh api -X PATCH repos/o/r/pulls/35 -f=base=main'
+check no-pr-decisions.sh BLOCK 'retarget to main, -F='             'gh api -X PATCH repos/o/r/pulls/35 -F=base=main'
+check no-pr-decisions.sh BLOCK 'retarget to main, --raw-field='    'gh api -X PATCH repos/o/r/pulls/35 --raw-field=base=main'
+# The separator and the quote are independent, so both orders are asked: a
+# quoted field reached through `=` is the two gaps of this issue in one command.
+check no-pr-decisions.sh BLOCK 'retarget to main, = then a quote'  'gh api -X PATCH repos/o/r/pulls/35 --field="base=main"'
+check no-pr-decisions.sh BLOCK "retarget to main, = then a ' quote" "gh api -X PATCH repos/o/r/pulls/35 --field='base=main'"
+# THE REFUSING HALF, which is how the gap showed on a create: the base was
+# unread, so the create was refused for naming none. The permitted destination
+# was the one refused, and `create into dev, --field=` is the row that says so
+# -- it goes red the other way without the separator, want=ALLOW got=BLOCK. The
+# two beside it are CONTRAST: `retarget to dev` was permitted before for seeing
+# no base rather than a good one, and `create into main` refused before for
+# naming none rather than for naming main. Right verdict, wrong reason, both.
+req FR-18 FR-15 US-11 GH-137.2
+check no-pr-decisions.sh ALLOW 'create into dev, --field='         'gh api -X POST repos/o/r/pulls --field=base=dev-05 -f head=x'
+check no-pr-decisions.sh ALLOW 'retarget to dev, --field='         'gh api -X PATCH repos/o/r/pulls/35 --field=base=dev-05'
+check no-pr-decisions.sh BLOCK 'create into main, --field='        'gh api -X POST repos/o/r/pulls --field=base=main -f head=x'
+# And the anchor survives the widened separator, which is the whole question a
+# separator class raises: `[[:space:]=]*` must not let the flag reach a word
+# that merely ends in base. It does not -- after the separator the next
+# character is still `d` or `r`, and still `t` for a title carrying a base.
+req FR-20 US-14 GH-137.2
+check no-pr-decisions.sh ALLOW '--field= on a database field'      'gh api -X POST repos/o/r/issues --field=database=main'
+check no-pr-decisions.sh ALLOW '--field= on a rebase field'        'gh api -X POST repos/o/r/issues --field=rebase=main'
+req FR-14 GH-137.2
+check no-pr-decisions.sh BLOCK 'a title reached through =, no base' 'gh api -X POST repos/o/r/pulls -f head=x -f=title=base=dev-05'
+# The state reader is unanchored, so the separator is nothing to it either. The
+# contrast row for the separator, as the -F row above is for the flag.
+req US-15 GH-137.1
+check no-pr-decisions.sh BLOCK '--field= on a state field'         'gh api -X PATCH repos/o/r/pulls/5 --field=state=closed'
 req US-15 GH-137.1
 check no-pr-decisions.sh BLOCK '-F, quoted state field'               'gh api -X PATCH repos/o/r/pulls/5 -F "state=closed"'
 

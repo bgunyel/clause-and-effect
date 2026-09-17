@@ -445,8 +445,9 @@ STATE_FIELD_RE='state[[:space:]]*[=:][[:space:]]*["'"'"']?(closed|open)["'"'"']?
 # look at.
 #
 # REST: the value is a FIELD, so the field flag is part of the pattern. This is
-# the THIRD answer to "where does the field begin", and the first two are kept
-# here because each was right about the one it replaced.
+# the FOURTH answer to "where does the field begin", and the first three are
+# kept here because each was right about the one it replaced, and because the
+# shape of being wrong four times is the thing worth reading.
 #
 # 1. The bare word. It read `-f title="base: dev-05"` as a base, so a create
 #    naming none of its own was permitted. Reported on the review of be0e3c7.
@@ -456,20 +457,32 @@ STATE_FIELD_RE='state[[:space:]]*[=:][[:space:]]*["'"'"']?(closed|open)["'"'"']?
 #    pattern had no room for it. `-f "base=dev-05"` therefore read as a create
 #    that named no base, and the single permitted destination was refused with
 #    the message that none was given. #137.
-# 3. The flag, an optional quote, then the name. `-f base=x`, `-fbase=x`,
-#    `--field base=x`, `-f "base=x"` and `-f 'base=x'` are one request written
-#    five ways. The quote is admitted only in that one position, so the anchor
-#    that answers 1 is untouched: `-f "database=x"` still begins `d`, and a
-#    `base` reached through no flag at all is still not a base.
+# 3. The flag, an optional quote, then the name. That fixed 2 and left the
+#    separator itself unasked about: pflag accepts `--field=value` for a long
+#    flag and `-f=value` for a short one, so `--field=base=main` and
+#    `-f=base=main` reached GitHub with nothing here seeing a base at all.
+#    Found by Bertan's review of PR #153, in the change that answered 2.
+# 4. The flag, ANY separator gh accepts, an optional quote, then the name. The
+#    separator between a flag and its value is exactly three things -- nothing,
+#    whitespace, `=` -- so `[[:space:]=]*` is the closure and not another guess,
+#    and the quote is admitted in the one position after it. `-f base=x`,
+#    `-fbase=x`, `--field base=x`, `--field=base=x`, `-f "base=x"` and
+#    `-f='base=x'` are one request. The anchor that answers 1 is untouched:
+#    `--field=database=x` still begins `d` after the separator, and a `base`
+#    reached through no flag at all is still not a base.
 #
-# The direction matters to which way an unknown spelling fails. This rule
-# refuses on ABSENCE -- a create to /pulls naming no base is refused -- so a
-# spelling it cannot read is a permitted create turned into a false refusal,
-# never a bad base let through. That is why widening it is safe where widening
-# STATE_FIELD_RE above had to be argued: state refuses on presence.
+# WHICH WAY AN UNREAD SPELLING FAILS, and it is not one way. The first version
+# of this comment said a spelling this rule cannot read is only ever a permitted
+# create turned into a false refusal, never a bad base let through. That is
+# false, and finding 1 above is what it hid: the no-base arm that produces the
+# refusal is keyed on the COLLECTION endpoint, so on `PATCH /pulls/N` -- a
+# retarget -- an unread base is matched by nothing and the command is permitted.
+# So this rule fails REFUSING on a create and PERMITTING on a retarget, and only
+# the create half is the "widening is safe here" that state's comment is
+# contrasted with. Both halves are checked, in the #137 section.
 rest_bases() {
   printf '%s\n' "$1" \
-    | grep -oiE "(-[fF]|--field|--raw-field)[[:space:]]*[\"']?base[[:space:]]*=[[:space:]]*[\"']?[^[:space:]\"',}]*" \
+    | grep -oiE "(-[fF]|--field|--raw-field)[[:space:]=]*[\"']?base[[:space:]]*=[[:space:]]*[\"']?[^[:space:]\"',}]*" \
     | sed -E "s/.*=[[:space:]]*[\"']?//"
 }
 

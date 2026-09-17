@@ -1580,22 +1580,28 @@ The suite fails on each of these, and `--matrix` shows the rest:
   `state="open"` already was.
 
 ### GH-137.2
-- text: The `base` reader `rest_bases` recognises `base=<value>` with a quote between
-  the field flag and the field name as well as round the value, and reads the
-  value out of it: `-f "base=dev-05"`, `-f 'base=dev-05'` and `--field
-  "base=dev-05"` are the permitted create that `-f base=dev-05` is, and the same
-  spellings naming `main` are refused with the message that names the branch.
-- from: #137, found while grilling the fix design for #130
+- text: The `base` reader `rest_bases` recognises `base=<value>` however the field is
+  spelled between its flag and its name — any separator `gh` accepts (nothing,
+  whitespace or `=`) and a quote round the whole field as well as round the value
+  — and reads the value out of it. `-f "base=dev-05"`, `-f 'base=dev-05'`,
+  `--field "base=dev-05"`, `--field=base=dev-05` and `-f=base=dev-05` are the
+  permitted create that `-f base=dev-05` is, and the same spellings naming `main`
+  are refused with the message that names the branch.
+- from: #137, found while grilling the fix design for #130; the separator half
+  found by Bertan's review of PR #153, in the change that closed the quote half
 - kind: defect-refusing
 - status: active
-- note: the third answer to "where does the field begin", after the bare word and
-  the flag with the name immediately after it; `rest_bases`' comment records all
-  three. The quote is admitted in one position only, so the flag anchor that keeps
-  `rebase` and `database` ordinary words and keeps a base out of `-f title="base:
-  dev-05"` is untouched. Not only a refusing defect: the no-base arm it fell into
-  is keyed on the collection endpoint, so a quoted base on `PATCH /pulls/N` — a
-  retarget — was read as naming no base and permitted. That half is in the
-  permitting direction and the issue's table does not name it.
+- note: the fourth answer to "where does the field begin", after the bare word, the
+  flag with the name immediately after it, and the flag with a quote admitted
+  between; `rest_bases`' comment records all four. The separator class is the
+  closure rather than another guess — pflag accepts exactly nothing, whitespace or
+  `=` between a flag and its value — and the anchor that keeps `rebase` and
+  `database` ordinary words and keeps a base out of `-f title="base: dev-05"` is
+  untouched, since after any separator the next character is still the wrong one.
+  Not only a refusing defect, in either half: the no-base arm it falls into is
+  keyed on the collection endpoint, so an unread base on `PATCH /pulls/N` — a
+  retarget — is matched by nothing and permitted. The issue's table names neither
+  the retarget nor the separator.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -1835,6 +1841,10 @@ it has no entry above (Q16).
   have entries above
 - #140: a pull request, for #106; Bertan's review of it is cited where the four
   things it corrected stand
+- #153: a pull request, for #137; Bertan's review of it found the separator half
+  of GH-137.2, which that entry carries, and corrected three claims in this
+  change — the flag pairing, the safety property `rest_bases`' comment asserted,
+  and two static checks that counted lines where they meant occurrences
 - #141: the issue that owns deciding which non-FR requirements the invariance
   families seed; it adds no requirement of its own until that is decided
 - #107: has entries above, GH-107.1 and GH-107.2, and is listed here only because

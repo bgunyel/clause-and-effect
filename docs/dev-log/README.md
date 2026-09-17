@@ -351,4 +351,13 @@ thing in the record.
   third answer to where a field begins. 41 checks, 18 of which go red under three
   separate reverts, and each of the other 23 declared beside it as contrast,
   arming or property rather than left to read as evidence it is not.
+- [2026-09-17 · session 5](devlog_2026-09-17_session-5.md) — Bertan's review of
+  PR #153 finds the fix for #137 closed the quote and never asked about the
+  separator: pflag takes `--field=value` and `-f=value`, so four flag spellings
+  of a base — six, counting the quoted pair the review did not list — reached
+  GitHub unread, and on `PATCH /pulls/N` that is a retarget onto `main`,
+  permitted. The comment added with the first fix asserted this could not happen.
+  Also: the flag pairing named backwards, and two static checks counting lines
+  where they meant occurrences. 54 checks, 25 red under four reverts. There is no
+  session 4 on this branch — see the entry's first section.
 
