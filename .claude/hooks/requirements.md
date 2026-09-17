@@ -1412,8 +1412,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - direction: refuse-only: a message is written only on a refusal
 - note: one `BASE` constant for four refusals is what FR-23 asks for, and for the
   three creating arms it is US-7's one-step correction too. For the retarget arm
-  it is not, and "Edit anything else you like" read as saying the base may not be
-  edited when editing it to `dev-NN` is what is allowed. So the same message was
+  it is not, and "Edit anything else you like" told an agent the base may not be
+  edited, when editing it to `dev-NN` is what is allowed. So the same message was
   evidence for FR-23 and against US-7, and #105's retarget rows were tagged FR-23
   alone while this stood open. The fix keeps the constant and lets the
   retarget arm's tail -- already per-arm -- name its own correction, so the

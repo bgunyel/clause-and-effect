@@ -618,6 +618,19 @@ while IFS= read -r CMD; do
   # is the one thing that may not be edited -- when editing it to dev-NN is
   # exactly what is allowed.
   #
+  # THE TRADE THIS LEAVES, named rather than left to be found. $BASE still opens
+  # with `Write: gh pr create --base dev-NN --title ... --body ...`, so a refused
+  # retarget carries TWO imperatives and the wrong one comes first: an agent that
+  # acts on the first `Write:` it reads still opens a second pull request beside
+  # the mis-targeted one, which is the exact failure #133 was filed about. What
+  # #133 fixes is that the right correction is now there at all; it does not fix
+  # the order. Keeping one constant is FR-23's own requirement and is what #133
+  # asked for in as many words -- "the fix is not to break the constant" -- and
+  # the alternative, a per-arm `Write:` line, would satisfy both but rewrites all
+  # four base refusals and moves the pins on three arms this issue is not about.
+  # So it is left, deliberately, and filed rather than traded in silence; #109
+  # owns message content. Raised by Bertan's review of PR #147.
+  #
   # NOTHING STANDS IN THAT SENTENCE'S PLACE, and the first draft of this fix got
   # that wrong. It ended "No other edit is checked here", which is true of this
   # arm and not of this file: an edit sharing a line with a shell wrapper is

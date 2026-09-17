@@ -2816,9 +2816,18 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch
 # The retarget's tail, in two rows because it makes two claims that fail apart.
 # The first says which branch was named and that naming it is the choice the rule
 # refuses -- the half that tells this refusal from the three beside it.
+#
+# THE FRAGMENT IS THE WHOLE SENTENCE, and the first version of this row stopped at
+# `chooses that destination`. `just as creating it there would` is the clause that
+# ties a retarget to a create, which is the entire reason an edit is refused at
+# all -- and a prefix fragment still matches once it is deleted, so that clause
+# could have gone with this suite green. Bertan's review of this pull request.
+# `retarget-refusal-drops-the-create-comparison` in the registry deletes exactly
+# that clause, so the question of whether this row can fail is re-runnable rather
+# than argued.
 req FR-23
-says "$ON_DEV" no-pr-decisions.sh 'Retargeting to main chooses that destination' \
-  'a retarget says which branch it named' \
+says "$ON_DEV" no-pr-decisions.sh 'Retargeting to main chooses that destination just as creating it there would' \
+  'a retarget says which branch it named, and that naming it is the same choice' \
   'gh pr edit 5 --base main'
 # The second is #133's fix, and the one row in this section that reads US-7 for a
 # retarget. The correction for `gh pr edit 5 --base main` is `gh pr edit 5 --base
@@ -2847,9 +2856,13 @@ req US-7 FR-23
 says "$ON_DEV" no-pr-decisions.sh 'the same destination under another spelling' \
   'the REST spelling says it is the same destination named differently' \
   'gh api -X POST repos/o/r/pulls -f base=main'
-# Four spellings, four tails, and five rows: the REST and graphql spellings reach
-# one sentence, both setting API_BAD_BASE, so this asks whether graphql arrives at
-# the informative one rather than at some bare refusal of its own. The first
+# Four spellings, four tails, and seven rows -- five before #133, and the count is
+# here so that a tail losing its row is visible. Two tails are read by more than
+# one row: the retarget's by three, its two claims failing apart and a says_not
+# holding out the phrase #133 removed, and the API tail by two, because the REST
+# and graphql spellings reach one sentence, both setting API_BAD_BASE, so this
+# asks whether graphql arrives at the informative one rather than at some bare
+# refusal of its own. The first
 # version of this block pinned the constant half for graphql and left the tail to
 # the REST row -- an asymmetry review found, and the shape #40 was filed for: a
 # rule, or here a message, that holds for one spelling and not another.
@@ -9219,7 +9232,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '24' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '25' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9282,7 +9295,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '22' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '23' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and

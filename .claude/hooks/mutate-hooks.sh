@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT FORTY-FIVE MINUTES for the whole registry: one check-hooks.sh run per
-# mutation that applies, at about two minutes, plus the baseline -- twenty-three
-# runs as the registry stands, not twenty-four, because the row whose edit matches
+# mutation that applies, at about two minutes, plus the baseline -- twenty-five
+# runs as the registry stands, not twenty-six, because the row whose edit matches
 # nothing never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s. That is why it is a
 # separate script and why check-hooks.sh does not call it (#107). Nothing here is
@@ -41,9 +41,19 @@
 # Both self-tests are additionally required to be present, one of each outcome.
 #
 # MEASURED, 2026-09-17, at the commit that answered that review: all twenty-three
-# rows reported what they declare, and .claude/hooks/ came back byte-identical.
-# The only edit to .claude/hooks/ after that run is the figure two paragraphs up,
-# which is this comment. No
+# rows as the registry then stood reported what they declare, and .claude/hooks/
+# came back byte-identical.
+#
+# THAT MEASUREMENT IS NOT CURRENT, and saying so is the point of this paragraph.
+# #133 added `retarget-refusal-drops-the-retarget-spelling` and
+# `retarget-refusal-drops-the-create-comparison` as a twenty-fourth and
+# twenty-fifth row and edited no-pr-decisions.sh, check-hooks.sh and this file, so
+# three of the files that run changed after the figure above was taken. Both new
+# rows were run on their own and reported `caught`; neither has been in a
+# whole-registry run, and nor has any other row since that commit. A reader who wants "the whole registry,
+# at this commit" has to run it -- which is the answer #107 built rather than a
+# gap, and is why the sentence this replaced, claiming the only later edit was to
+# this comment, was worth catching. Bertan's review of PR #147. No
 # per-mutation counts are recorded here on purpose -- a count in a comment is the
 # thing #107 was filed about, and the registry is re-runnable instead.
 #
@@ -99,7 +109,7 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   TWENTY-TWO real mutations, against FIVE files in .claude/hooks/, naming
+#   TWENTY-THREE real mutations, against FIVE files in .claude/hooks/, naming
 #   THIRTY-THREE requirement IDs between them, of the 145 whose status is active.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
@@ -177,6 +187,7 @@ gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught
 base-refusal-drops-the-spelling%no-pr-decisions.sh%/^BASE=/s/Write: gh pr create --base dev-NN/Name a base/%US-7 FR-23%caught
 retarget-refusal-drops-the-retarget-spelling%no-pr-decisions.sh%s/ Retarget to the active dev branch instead: gh pr edit <n> --base dev-NN\.//%US-7 FR-23 GH-133%caught
+retarget-refusal-drops-the-create-comparison%no-pr-decisions.sh%s/ just as creating it there would//%FR-23%caught
 base-pattern-admits-main%no-pr-decisions.sh%/^is_dev_base()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
 pr-create-base-not-read%no-pr-decisions.sh%s/if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/if false \&\& RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/%FR-14 FR-16 US-9%caught
 web-handoff-refused%no-pr-decisions.sh%/^gh_pr_web()/,/^}/s/--web|-w) return 0 ;;/--web|-w) return 1 ;;/%FR-21 US-12%caught
