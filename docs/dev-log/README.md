@@ -342,3 +342,15 @@ thing in the record.
   rule with 36 checks tagged to it and no coverage: nothing in the suite stood a
   worktree on the branch the hook refuses to push.
 
+- [2026-09-17 · session 2](devlog_2026-09-17_session-2.md) — #133: the retarget
+  arm of `no-pr-decisions.sh` refused a `gh pr edit --base main` and then named
+  `gh pr create --base dev-NN` as the correction, which is the correction for the
+  three creating arms and not for this one — `gh pr edit <n> --base dev-05` is
+  permitted, so the fix is one word of the command already written. The `BASE`
+  constant stays, because one sentence for four refusals is FR-23's own
+  requirement; the per-arm tail names the retarget instead. GH-133 goes from a
+  filed gap to active, and a registry row says the new check can fail. Review of
+  the assistant's own change then found the first draft's third sentence, "No
+  other edit is checked here", true of the arm but not of the file and pinned by
+  no row; it was dropped. The entry records that sentence as kept, having been
+  written before the review — the commit message carries the correction.

@@ -2769,18 +2769,22 @@ section "=== issue #105: a refusal names the permitted spelling ==="
 # that held for `gh pr create` and not for `gh api`. A message that held for one
 # spelling and not the others is that defect arriving as prose.
 #
-# The retarget's two rows are tagged FR-23 and not US-7, and #133 is why. One
-# constant for four refusals is what FR-23 asks for, and for three of the four it
-# is also the one-step correction US-7 asks for. For a retarget it is not:
-# `gh pr edit 5 --base dev-05` is permitted, so the correction is one word of the
-# command already written, and the message names a create -- which, acted on,
-# leaves the mis-targeted pull request open and opens a second beside it. The
-# same fact is evidence for one requirement and against the other, so the rows
-# say only the half that holds. Pinning them under US-7 would have made this
-# suite evidence that the message answers a story it does not answer, which is
-# what #103's Q18 forbids and what #130 and #131 were filed rather than pinned
-# for. Message content is #109's; the rows stay, because FR-23's claim is true
-# and is the claim that would go if the constant were split per arm.
+# The retarget's constant-half row is tagged FR-23 and not US-7, and #133 is why.
+# One constant for four refusals is what FR-23 asks for, and for three of the
+# four it is also the one-step correction US-7 asks for. For a retarget it is
+# not: `gh pr edit 5 --base dev-05` is permitted, so the correction is one word
+# of the command already written, and a create -- acted on -- leaves the
+# mis-targeted pull request open and opens a second beside it. The same fact is
+# evidence for one requirement and against the other, so this row says only the
+# half that holds, and it stays, because FR-23's claim is true and is the claim
+# that would go if the constant were split per arm.
+#
+# US-7's half is carried by the retarget's own tail, below, which #133 added and
+# which names `gh pr edit <n> --base dev-NN`. Before that the story went
+# uncovered here and requirements.md carried GH-133 as a gap: pinning US-7 on the
+# constant would have made this suite evidence that the message answers a story
+# it does not answer, which is what #103's Q18 forbids and what #130 and #131
+# were filed rather than pinned for.
 req US-7 FR-23
 says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
   'gh pr create with no base names the permitted spelling' \
@@ -2809,12 +2813,35 @@ says "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
 says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch' \
   'a create into main says which branch it named' \
   'gh pr create --base main --title x'
-# FR-23 alone again, and this tail is the worse half of #133: read against a
-# refusal whose subject is the base, "edit anything else" says the base is the
-# one thing that may not be edited, when editing it to dev-NN is what is allowed.
+# The retarget's tail, in two rows because it makes two claims that fail apart.
+# The first says which branch was named and that naming it is the choice the rule
+# refuses -- the half that tells this refusal from the three beside it.
 req FR-23
-says "$ON_DEV" no-pr-decisions.sh 'Edit anything else you like' \
-  'a retarget says what editing is still permitted' \
+says "$ON_DEV" no-pr-decisions.sh 'Retargeting to main chooses that destination' \
+  'a retarget says which branch it named' \
+  'gh pr edit 5 --base main'
+# The second is #133's fix, and the one row in this section that reads US-7 for a
+# retarget. The correction for `gh pr edit 5 --base main` is `gh pr edit 5 --base
+# dev-05`: one word of the command already written, and permitted -- pinned as
+# such by the ALLOW row on `gh pr edit 35 --base dev-05` above. Until #133 this
+# tail said "Edit anything else you like", which, read against a refusal whose
+# subject is the base, says the base is the one thing that may not be edited,
+# when editing it to dev-NN is what is allowed. The fragment is the whole
+# spelling and not the word `retarget`: a message naming the act without naming
+# what to write is the guessing US-7 exists to end.
+req US-7 FR-23 GH-133
+says "$ON_DEV" no-pr-decisions.sh 'Retarget to the active dev branch instead: gh pr edit <n> --base dev-NN' \
+  'a retarget names the retarget that would correct it' \
+  'gh pr edit 5 --base main'
+# And the phrase it replaced is gone rather than joined, because the two read
+# against each other: one sentence naming the permitted base beside another
+# saying the base may not be edited is US-7's guessing with a step added. Two
+# rows and a says_not are every clause of this tail, which is the property the
+# first draft of #133 did not have -- it ended in a third sentence, "No other
+# edit is checked here", that no row named and that could have been deleted with
+# this suite green. Found by review, not by the suite.
+says_not "$ON_DEV" no-pr-decisions.sh 'Edit anything else you like' \
+  'and does not also say the base is the one thing not to edit' \
   'gh pr edit 5 --base main'
 req US-7 FR-23
 says "$ON_DEV" no-pr-decisions.sh 'the same destination under another spelling' \
@@ -9192,7 +9219,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '23' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '24' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9255,7 +9282,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '21' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '22' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and
@@ -9348,7 +9375,7 @@ GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117:gap GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:gap GH-134:gap GH-135:gap GH-136:gap GH-139:gap
+GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139:gap
 GH-107.1:static GH-107.2:static
 '
 REQUIREMENTS_AWK=$(cat <<'AWK'
