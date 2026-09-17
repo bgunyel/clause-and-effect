@@ -11,7 +11,12 @@
 # housekeeping-commands.sh. And the one file beside this suite that nothing here
 # runs, mutate-hooks.sh, which runs THIS suite against a mutated copy of the
 # hooks: its registry and its guards are checked as text, in the #107 section,
-# and its own runs are the evidence that the checks here can fail.
+# and its own runs are the evidence that the checks tagged with the requirements
+# its registry names can fail. Not the checks here, which is a larger claim than
+# any run of it makes: its header counts what its rows reach and names two kinds
+# of rule they cannot reach at all. The unqualified sentence stood here until
+# Bertan's review of PR #142, contradicting the harness's own header and
+# CLAUDE.md both.
 # Most checks run a hook as a process and read
 # its verdict; the rest read one of these files, and each kind is introduced
 # where it begins. Every check carries the IDs of the requirements it
@@ -176,7 +181,17 @@
 #      bash .claude/hooks/check-hooks.sh --matrix   the requirements matrix, issue #104
 #      CHECK_HOOKS_DIR=<dir> bash .claude/hooks/check-hooks.sh
 #          judge the hooks in <dir> instead of the ones beside this file, which is
-#          how mutate-hooks.sh runs this suite against a mutated copy (#107)
+#          how mutate-hooks.sh runs this suite against a mutated copy (#107).
+#          A relative path is read from where the caller stood, not from here.
+#
+# WHERE THE CALLER STOOD, kept before the cd below moves this process into
+# .claude/hooks/. An override spelled relatively means "relative to me", and
+# resolving it after that cd made `CHECK_HOOKS_DIR=lib` name this repository's
+# own lib/ -- a directory that is there, so the run would have gone on and
+# judged it. Found by Bertan's review of PR #142. mutate-hooks.sh passes an
+# absolute path and never saw it, which is the half of this override no harness
+# exercises.
+INVOKED_FROM=$PWD
 cd "$(dirname "$0")" || exit 1
 # TWO DIRECTORIES, ONE OF THEM BY DEFAULT THE OTHER. $HOOKS is what is JUDGED:
 # the hook files run as processes, the library they source, the text of each and
@@ -202,13 +217,28 @@ cd "$(dirname "$0")" || exit 1
 #   - $REPO_ROOT and every document derived from it.
 SUITE_DIR=$(pwd)
 HOOKS=$SUITE_DIR
+# THE TOOLING BESIDE THE HOOKS: the files in .claude/hooks/ that are not hooks
+# and are not judged as ones. This suite, and the harness that runs it against a
+# copy of the rest. One list, because three questions that read it are one fact
+# -- neither file is executed from $HOOKS, whatever an override says. Neither is
+# a tokeniser consumer though both name the library in code; neither can be a
+# mutation target, because the copy's text of either would be read and never
+# run; and the text of both is read off $SUITE_DIR below rather than off $HOOKS.
+# It was three separate spellings of that one fact before Bertan's review of
+# PR #142, and the one it did not have was the middle one: mutate-hooks.sh was
+# an accepted mutation target, judged on text nobody executed.
+TOOLING="check-hooks.sh mutate-hooks.sh"
 # An override that names a directory missing one of the files beside this suite
 # would turn most of this suite red for that reason, and a harness reading the
 # result would count every mutation as caught -- its permitting direction. So
 # the files are derived off this directory and each one required over there,
 # and a missing one stops the run rather than failing a check.
 if [ -n "${CHECK_HOOKS_DIR:-}" ]; then
-  HOOKS=$(cd "$CHECK_HOOKS_DIR" 2>/dev/null && pwd) || {
+  # CDPATH is cleared for both steps and both are `cd --`: a bare `cd` consults
+  # $CDPATH and lands wherever that says, and `cd -` prints $OLDPWD, which would
+  # leave $HOOKS a two-line string rather than a path.
+  HOOKS=$(CDPATH= cd -- "$INVOKED_FROM" 2>/dev/null \
+          && CDPATH= cd -- "$CHECK_HOOKS_DIR" 2>/dev/null && pwd) || {
     echo "CHECK_HOOKS_DIR=$CHECK_HOOKS_DIR is not a directory; nothing was judged" >&2
     exit 1
   }
@@ -380,6 +410,19 @@ $GP remote add origin "$FIXTURES/unreachable-remote.git"
 $GP commit -q --allow-empty -m base
 $GP worktree add -q -b "$PUSH_BRANCH" "$PUSH_WT"
 mkdir -p "$PUSH_MAIN/src/deep" "$PUSH_WT/src/deep"
+# TWO MORE LINKED WORKTREES, STANDING ON THE BRANCHES AN AGENT MAY NOT PUSH.
+# Every refusal of main or of a dev branch above comes from the command NAMING a
+# branch that is not this worktree's, and none of those worktrees stands on one --
+# so the hook's own test of $CURRENT, the two lines that refuse a push from a
+# worktree that IS on main or on dev-NN, was reached by no check here. Found by
+# registering that rule as a mutation (#107): it survived, with the whole of this
+# suite green and 36 checks tagged US-2 among them. Bertan's review of PR #142 is
+# why the registry had a row for it to survive.
+PUSH_WT_DEV="$FIXTURES/push-wt-dev"
+PUSH_WT_MAIN="$FIXTURES/push-wt-main"
+$GP branch main
+$GP worktree add -q -b dev-05 "$PUSH_WT_DEV"
+$GP worktree add -q "$PUSH_WT_MAIN" main
 # The same two checkouts reached through a symlink. check_in's `cd` is logical,
 # so the hook starts with $PWD naming the link while git reports the real path:
 # a canonicalisation that followed $PWD rather than the directory would compare
@@ -407,6 +450,14 @@ done
   && [ "$(git -C "$PUSH_WT" branch --show-current)" = "$PUSH_BRANCH" ] \
   && git -C "$PUSH_WT" remote | grep -qx origin || {
   echo "the push fixture is not on feature-x and $PUSH_BRANCH with an origin remote; the checks against it prove nothing" >&2
+  exit 1
+}
+# And the two that stand on the withheld branches. A worktree on the wrong branch
+# would turn each refusal below into one for a reason no check names, which is
+# the whole shape those checks exist to rule out.
+[ "$(git -C "$PUSH_WT_DEV" branch --show-current)" = dev-05 ] \
+  && [ "$(git -C "$PUSH_WT_MAIN" branch --show-current)" = main ] || {
+  echo "the push fixtures standing on dev-05 and main are not on those branches; the checks against them prove nothing" >&2
   exit 1
 }
 # The nolib and halflib fixtures are built beside the checks that drive them, at
@@ -521,7 +572,30 @@ says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
 # this is the permitting-direction defect these checks exist to catch, in the
 # checks themselves. None of the literals below contains a `#`, so stripping
 # from the first one is safe for them.
+# THE FILE HAS TO BE NAMED ABSOLUTELY, asked of all three of these helpers by the
+# one below. A relative name -- a bare `no-git-push.sh`, or a `$hook` holding
+# one -- is read from this process's working directory, which is $SUITE_DIR, so
+# under a $CHECK_HOOKS_DIR override the check reads this repository's own hooks
+# and says nothing whatever about the copy under judgment. Sixty-nine calls were
+# spelled that way, among them every pin that a hook does not source the library
+# unguarded: a copy with the guard deleted printed ok for all of them, which is
+# #84's defect with nothing at all watching for it. Bertan's review of PR #142.
+#
+# Asked here, at the moment the file is read, because that is the only question
+# no spelling can hide from: the derivation in the #107 section reads this file's
+# text and cannot see through a variable, and it was a variable holding a bare
+# name that the first version of this fix left behind.
+absolute_or_fail() {  # absolute_or_fail <label> <file> -- 0 when absolute
+  case "$2" in
+    /*) return 0 ;;
+    *) fail static '%s\n         %s is not an absolute path, so it is read from this suite'"'"'s own directory and not from the hooks under judgment' \
+         "$1" "$2"
+       return 1 ;;
+  esac
+}
+
 armed() {  # armed <label> <file> <literal>
+  absolute_or_fail "$1" "$2" || return
   if sed 's/[[:space:]]*#.*$//' "$2" 2>/dev/null | grep -qF -- "$3"; then
     pass static 'armed %s' "$1"
   else
@@ -553,6 +627,7 @@ prose_count() {  # prose_count <file> <literal> -- how many lines say it
 }
 
 written() {  # written <label> <file> <literal> -- the file as written, # and all
+  absolute_or_fail "$1" "$2" || return
   if grep -qF -- "$3" "$2" 2>/dev/null; then
     pass static 'written %s' "$1"
   else
@@ -566,6 +641,7 @@ written() {  # written <label> <file> <literal> -- the file as written, # and al
 # the permitting direction and the same shape as the #84 defect these were added
 # for. Found by review of that change, not by this suite.
 unarmed() {  # unarmed <label> <file> <literal>
+  absolute_or_fail "$1" "$2" || return
   if [ ! -r "$2" ]; then
     fail static '%s\n         %s cannot be read, so the absence of |%s| is evidence of nothing' \
       "$1" "$2" "$3"
@@ -1258,21 +1334,21 @@ check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'wrapped commit, invisible to the 
 # unchanged: which text the rule reads.
 req GH-68.3 GH-79.4
 armed 'no-git-push.sh matches the shared wrapper rule on the raw command' \
-      no-git-push.sh 'if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE"'
+      "$HOOKS/no-git-push.sh" 'if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE"'
 armed 'no-commit-to-main.sh matches the shared wrapper rule on the raw command' \
-      no-commit-to-main.sh 'if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE"'
+      "$HOOKS/no-commit-to-main.sh" 'if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE"'
 # no-pr-decisions.sh joins continuations first and matches on that, which is the
 # half of cs_normalise its wrapper rules do want; both halves are pinned.
 armed 'no-pr-decisions.sh derives its wrapper text from the raw command' \
-      no-pr-decisions.sh "WRAPTEXT=\$(printf '%s\\n' \"\$COMMAND\" | cs_join)"
+      "$HOOKS/no-pr-decisions.sh" "WRAPTEXT=\$(printf '%s\\n' \"\$COMMAND\" | cs_join)"
 armed 'no-pr-decisions.sh matches the shared wrapper rule on that text' \
-      no-pr-decisions.sh 'if echo "$WRAPTEXT" | grep -qE "$CS_WRAPPER_RE"'
+      "$HOOKS/no-pr-decisions.sh" 'if echo "$WRAPTEXT" | grep -qE "$CS_WRAPPER_RE"'
 unarmed 'no-git-push.sh does not match its wrapper rule on the fragments' \
-        no-git-push.sh 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
+        "$HOOKS/no-git-push.sh" 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
 unarmed 'no-commit-to-main.sh does not match its wrapper rule on the fragments' \
-        no-commit-to-main.sh 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
+        "$HOOKS/no-commit-to-main.sh" 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
 unarmed 'no-pr-decisions.sh does not match its wrapper rule on the fragments' \
-        no-pr-decisions.sh 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
+        "$HOOKS/no-pr-decisions.sh" 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
 # The fourth consumer. It was covered behaviourally by the stale-branch section
 # below and not by a literal, which left "each wrapper detection" met in
 # substance and not in letter -- and this is the one hook where a lost fragment
@@ -1280,9 +1356,9 @@ unarmed 'no-pr-decisions.sh does not match its wrapper rule on the fragments' \
 # should rest on an argument rather than a pin. See the header of
 # lib/command-scan.sh for why that shape is still safe.
 armed 'no-work-on-stale-branch.sh matches the shared wrapper rule on the raw command' \
-      no-work-on-stale-branch.sh 'if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE"'
+      "$HOOKS/no-work-on-stale-branch.sh" 'if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE"'
 unarmed 'no-work-on-stale-branch.sh does not match its wrapper rule on the fragments' \
-        no-work-on-stale-branch.sh 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
+        "$HOOKS/no-work-on-stale-branch.sh" 'echo "$CMDS" | grep -qE "$CS_WRAPPER_RE"'
 # And that no hook carries its own copy of the anchor any more. WRAPRE is the
 # head each of the four wrote out before #79; four copies of one expression, in
 # the file whose header names that as the defect. A hook that re-derives it
@@ -1290,26 +1366,26 @@ unarmed 'no-work-on-stale-branch.sh does not match its wrapper rule on the fragm
 req GH-79.4
 WRAPRE='(^[[:space:]]*|[;&|(`][[:space:]]*)'
 unarmed 'no-git-push.sh does not carry its own copy of the anchor' \
-        no-git-push.sh "grep -qE '$WRAPRE"
+        "$HOOKS/no-git-push.sh" "grep -qE '$WRAPRE"
 unarmed 'nor no-commit-to-main.sh' \
-        no-commit-to-main.sh "grep -qE '$WRAPRE"
+        "$HOOKS/no-commit-to-main.sh" "grep -qE '$WRAPRE"
 unarmed 'nor no-pr-decisions.sh' \
-        no-pr-decisions.sh "grep -qE '$WRAPRE"
+        "$HOOKS/no-pr-decisions.sh" "grep -qE '$WRAPRE"
 unarmed 'nor no-work-on-stale-branch.sh' \
-        no-work-on-stale-branch.sh "grep -qE '$WRAPRE"
+        "$HOOKS/no-work-on-stale-branch.sh" "grep -qE '$WRAPRE"
 # In either spelling. The four pins above name the single-quoted one, which is
 # how all four hooks wrote it; a re-derivation reached for with double quotes
 # would satisfy every one of them and answer the list a second time anyway.
 # Found by review of this change: a pin on one spelling of a literal is
 # evidence about that spelling and about nothing else.
 unarmed 'no-git-push.sh does not carry it double-quoted either' \
-        no-git-push.sh "grep -qE \"$WRAPRE"
+        "$HOOKS/no-git-push.sh" "grep -qE \"$WRAPRE"
 unarmed 'nor no-commit-to-main.sh' \
-        no-commit-to-main.sh "grep -qE \"$WRAPRE"
+        "$HOOKS/no-commit-to-main.sh" "grep -qE \"$WRAPRE"
 unarmed 'nor no-pr-decisions.sh' \
-        no-pr-decisions.sh "grep -qE \"$WRAPRE"
+        "$HOOKS/no-pr-decisions.sh" "grep -qE \"$WRAPRE"
 unarmed 'nor no-work-on-stale-branch.sh' \
-        no-work-on-stale-branch.sh "grep -qE \"$WRAPRE"
+        "$HOOKS/no-work-on-stale-branch.sh" "grep -qE \"$WRAPRE"
 
 section "=== REGRESSION: issue #79, the wrapper rules did not know the prefix words ==="
 # cs_split has always stripped the words that run another command -- sudo, env,
@@ -1494,24 +1570,24 @@ tok 'the option words are written once in the library' \
 tok 'and so is the second of them' \
     '1' "$(prose_count "$HOOKS/lib/command-scan.sh" 'ionice')"
 armed 'the union is derived rather than written a third time' \
-      lib/command-scan.sh 'CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"'
+      "$HOOKS/lib/command-scan.sh" 'CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"'
 armed 'cs_split reads the option words as a variable' \
-      lib/command-scan.sh '-v wrapwords="$CS_WRAP_OPTION_WORDS"'
+      "$HOOKS/lib/command-scan.sh" '-v wrapwords="$CS_WRAP_OPTION_WORDS"'
 armed 'and the operand words the same way' \
-      lib/command-scan.sh '-v operandwords="$CS_WRAP_OPERAND_WORDS"'
+      "$HOOKS/lib/command-scan.sh" '-v operandwords="$CS_WRAP_OPERAND_WORDS"'
 # The literal moved in #96, not the claim. The strip used to match the list at the
 # head of the line and cut the line after it, and each cut copied the rest of the
 # line; it now asks the same list of the one token at the head and moves past it.
 # Whether that is the same question is argued in cs_split and was fuzzed there,
 # byte for byte against the version before.
 armed 'cs_split strips whatever that variable holds' \
-      lib/command-scan.sh '~ ("^(" wrapwords ")$")'
+      "$HOOKS/lib/command-scan.sh" '~ ("^(" wrapwords ")$")'
 armed 'and whatever the operand variable holds' \
-      lib/command-scan.sh '~ ("^(" operandwords ")$")'
+      "$HOOKS/lib/command-scan.sh" '~ ("^(" operandwords ")$")'
 armed 'and the anchor admits whatever the union holds' \
-      lib/command-scan.sh '($CS_WRAP_WORDS)[[:space:]]+'
+      "$HOOKS/lib/command-scan.sh" '($CS_WRAP_WORDS)[[:space:]]+'
 armed 'the intervening token is named once and used once' \
-      lib/command-scan.sh '($CS_WRAP_TOKEN){0,3}'
+      "$HOOKS/lib/command-scan.sh" '($CS_WRAP_TOKEN){0,3}'
 # What an empty list does is not pinned here. It is part of the load, so it is
 # driven where the load is driven: the word-list block of the load-contract
 # section at the foot of this suite, per consumer, with the rest of the contract.
@@ -1524,7 +1600,7 @@ armed 'the intervening token is named once and used once' \
 # The literal cs_split carried before #79. It is the second copy this fix
 # removes, and a re-derivation would restore it.
 unarmed 'cs_split no longer carries the list as a literal' \
-        lib/command-scan.sh '/^(env|command|xargs'
+        "$HOOKS/lib/command-scan.sh" '/^(env|command|xargs'
 # What these pins are NOT evidence of, named because a check is evidence about
 # what it names: they read the derivation, not the verdict. A list that is
 # written once and is wrong is wrong in both places at once, which is what the
@@ -2646,6 +2722,24 @@ check_in "$PUSH_WT/src"        no-git-push.sh BLOCK 'linked worktree, src/: a pu
   'git push origin dev-99'
 check_in "$PUSH_WT/src/deep"   no-git-push.sh BLOCK 'linked worktree, src/deep/: a push of a dev branch' \
   'git push origin dev-99'
+echo "--- a linked worktree standing on a branch that is Bertan's ---"
+# The command names nothing this worktree does not own: a bare push, and then the
+# branch by its own name. Every other refusal here would permit both, so a
+# refusal can only be the test of $CURRENT, and `says` pins which one spoke.
+req GH-94.1 US-2
+check_in "$PUSH_WT_DEV"  no-git-push.sh BLOCK 'a worktree on a dev branch: a bare push' \
+  'git push'
+check_in "$PUSH_WT_DEV"  no-git-push.sh BLOCK 'a worktree on a dev branch: a push naming its own branch' \
+  'git push origin dev-05'
+says "$PUSH_WT_DEV" no-git-push.sh 'This worktree is on dev-05, which is Bertan' \
+  'and refused for standing on it, not for naming something else' 'git push'
+req GH-94.1 US-1
+check_in "$PUSH_WT_MAIN" no-git-push.sh BLOCK 'a worktree on main: a bare push' \
+  'git push'
+check_in "$PUSH_WT_MAIN" no-git-push.sh BLOCK 'a worktree on main: a push naming its own branch' \
+  'git push origin main'
+says "$PUSH_WT_MAIN" no-git-push.sh 'This worktree is on main, which is Bertan' \
+  'and refused for standing on it, not for naming something else' 'git push'
 echo "--- both, reached through a symlink ---"
 # Resolving each path by the directory it names, and not by the spelling $PWD
 # gives it, is half of the fix; these are what fail if the -P on pwd is dropped.
@@ -5774,15 +5868,15 @@ CS_SOURCERS=$(for f in "$HOOKS"/*.sh; do
     sed 's/[[:space:]]*#.*$//' "$f" 2>/dev/null | grep -qF 'command-scan.sh' \
       && printf '%s\n' "${f##*/}"
   done | sort -u | tr '\n' ' ')
-# Two files beside the hooks NAME that path without loading it, and neither is a
-# consumer. This suite reads it to run this audit; mutate-hooks.sh names it as
-# the target of three registered mutations (#107). Named here for the reason
-# NOT_THE_BOUNDARY is named above: the exception is the part that would
-# otherwise be discovered rather than read. The needle stays the loose one -- a
-# hook that sources the library by some other spelling has to stay in this
-# audit, which is the failure it exists for -- so what is written down is who
-# may mention the file without loading it.
-CS_NOT_CONSUMERS="check-hooks.sh mutate-hooks.sh"
+# The tooling beside the hooks NAMES that path without loading it, and neither
+# file is a consumer. This suite reads it to run this audit; mutate-hooks.sh
+# names it as the target of several registered mutations (#107). The exception is
+# $TOOLING rather than a list written again here, for the reason the list exists:
+# a second spelling of one fact is the one that goes stale. The needle stays the
+# loose one -- a hook that sources the library by some other spelling has to stay
+# in this audit, which is the failure it exists for -- so what is written down is
+# who may mention the file without loading it.
+CS_NOT_CONSUMERS=$TOOLING
 CS_SOURCERS=$(for f in $CS_SOURCERS; do
     case " $CS_NOT_CONSUMERS " in *" $f "*) continue ;; esac
     printf '%s\n' "$f"
@@ -6828,9 +6922,9 @@ check_in "$ON_DEV" "$(emptylist_path append-only-docs.sh)" BLOCK \
 # commented out during a debugging session and left that way does not satisfy it.
 req GH-79.4
 armed 'the library withdraws cs_split when the word list is incomplete' \
-      lib/command-scan.sh 'unset -f cs_split'
+      "$HOOKS/lib/command-scan.sh" 'unset -f cs_split'
 armed 'on either half, and not on the union' \
-      lib/command-scan.sh 'if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then'
+      "$HOOKS/lib/command-scan.sh" 'if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then'
 # And that no guard learned about the list instead. A word-list guard in a hook
 # is a second answer to a question the library now answers once, and it is the
 # shape the first version of this took, in two hooks of six.
@@ -6868,53 +6962,53 @@ written 'append-only-docs.sh points at the contract by name, having taken a guar
 # that way, and review of PR #64 found exactly that shape in this suite. One
 # literal per hook per function, because that is the claim being made.
 req GH-84.2
-armed 'no-git-push.sh requires cs_normalise' no-git-push.sh 'command -v cs_normalise'
-armed 'no-git-push.sh requires cs_split' no-git-push.sh 'command -v cs_split'
-armed 'no-git-push.sh requires cs_git_args' no-git-push.sh 'command -v cs_git_args'
-armed 'no-pr-decisions.sh requires cs_normalise' no-pr-decisions.sh 'command -v cs_normalise'
-armed 'no-pr-decisions.sh requires cs_split' no-pr-decisions.sh 'command -v cs_split'
-armed 'no-pr-decisions.sh requires cs_gh_args' no-pr-decisions.sh 'command -v cs_gh_args'
-armed 'no-pr-decisions.sh requires cs_join' no-pr-decisions.sh 'command -v cs_join'
-armed 'no-commit-to-main.sh requires cs_normalise' no-commit-to-main.sh 'command -v cs_normalise'
-armed 'no-commit-to-main.sh requires cs_split' no-commit-to-main.sh 'command -v cs_split'
-armed 'no-commit-to-main.sh requires cs_git_args' no-commit-to-main.sh 'command -v cs_git_args'
-armed 'no-work-on-stale-branch.sh requires cs_normalise' no-work-on-stale-branch.sh 'command -v cs_normalise'
-armed 'no-work-on-stale-branch.sh requires cs_split' no-work-on-stale-branch.sh 'command -v cs_split'
-armed 'no-work-on-stale-branch.sh requires cs_git_args' no-work-on-stale-branch.sh 'command -v cs_git_args'
-armed 'pytest-via-uv-group.sh requires cs_normalise' pytest-via-uv-group.sh 'command -v cs_normalise'
-armed 'pytest-via-uv-group.sh requires cs_split' pytest-via-uv-group.sh 'command -v cs_split'
-armed 'alembic-via-uv-group.sh requires cs_normalise' alembic-via-uv-group.sh 'command -v cs_normalise'
-armed 'alembic-via-uv-group.sh requires cs_split' alembic-via-uv-group.sh 'command -v cs_split'
-armed 'no-git-push.sh requires cs_within_cap' no-git-push.sh 'command -v cs_within_cap'
-armed 'no-pr-decisions.sh requires cs_within_cap' no-pr-decisions.sh 'command -v cs_within_cap'
-armed 'no-commit-to-main.sh requires cs_within_cap' no-commit-to-main.sh 'command -v cs_within_cap'
-armed 'no-work-on-stale-branch.sh requires cs_within_cap' no-work-on-stale-branch.sh 'command -v cs_within_cap'
-armed 'pytest-via-uv-group.sh requires cs_within_cap' pytest-via-uv-group.sh 'command -v cs_within_cap'
-armed 'alembic-via-uv-group.sh requires cs_within_cap' alembic-via-uv-group.sh 'command -v cs_within_cap'
-armed 'append-only-docs.sh requires cs_within_cap' append-only-docs.sh 'command -v cs_within_cap'
+armed 'no-git-push.sh requires cs_normalise' "$HOOKS/no-git-push.sh" 'command -v cs_normalise'
+armed 'no-git-push.sh requires cs_split' "$HOOKS/no-git-push.sh" 'command -v cs_split'
+armed 'no-git-push.sh requires cs_git_args' "$HOOKS/no-git-push.sh" 'command -v cs_git_args'
+armed 'no-pr-decisions.sh requires cs_normalise' "$HOOKS/no-pr-decisions.sh" 'command -v cs_normalise'
+armed 'no-pr-decisions.sh requires cs_split' "$HOOKS/no-pr-decisions.sh" 'command -v cs_split'
+armed 'no-pr-decisions.sh requires cs_gh_args' "$HOOKS/no-pr-decisions.sh" 'command -v cs_gh_args'
+armed 'no-pr-decisions.sh requires cs_join' "$HOOKS/no-pr-decisions.sh" 'command -v cs_join'
+armed 'no-commit-to-main.sh requires cs_normalise' "$HOOKS/no-commit-to-main.sh" 'command -v cs_normalise'
+armed 'no-commit-to-main.sh requires cs_split' "$HOOKS/no-commit-to-main.sh" 'command -v cs_split'
+armed 'no-commit-to-main.sh requires cs_git_args' "$HOOKS/no-commit-to-main.sh" 'command -v cs_git_args'
+armed 'no-work-on-stale-branch.sh requires cs_normalise' "$HOOKS/no-work-on-stale-branch.sh" 'command -v cs_normalise'
+armed 'no-work-on-stale-branch.sh requires cs_split' "$HOOKS/no-work-on-stale-branch.sh" 'command -v cs_split'
+armed 'no-work-on-stale-branch.sh requires cs_git_args' "$HOOKS/no-work-on-stale-branch.sh" 'command -v cs_git_args'
+armed 'pytest-via-uv-group.sh requires cs_normalise' "$HOOKS/pytest-via-uv-group.sh" 'command -v cs_normalise'
+armed 'pytest-via-uv-group.sh requires cs_split' "$HOOKS/pytest-via-uv-group.sh" 'command -v cs_split'
+armed 'alembic-via-uv-group.sh requires cs_normalise' "$HOOKS/alembic-via-uv-group.sh" 'command -v cs_normalise'
+armed 'alembic-via-uv-group.sh requires cs_split' "$HOOKS/alembic-via-uv-group.sh" 'command -v cs_split'
+armed 'no-git-push.sh requires cs_within_cap' "$HOOKS/no-git-push.sh" 'command -v cs_within_cap'
+armed 'no-pr-decisions.sh requires cs_within_cap' "$HOOKS/no-pr-decisions.sh" 'command -v cs_within_cap'
+armed 'no-commit-to-main.sh requires cs_within_cap' "$HOOKS/no-commit-to-main.sh" 'command -v cs_within_cap'
+armed 'no-work-on-stale-branch.sh requires cs_within_cap' "$HOOKS/no-work-on-stale-branch.sh" 'command -v cs_within_cap'
+armed 'pytest-via-uv-group.sh requires cs_within_cap' "$HOOKS/pytest-via-uv-group.sh" 'command -v cs_within_cap'
+armed 'alembic-via-uv-group.sh requires cs_within_cap' "$HOOKS/alembic-via-uv-group.sh" 'command -v cs_within_cap'
+armed 'append-only-docs.sh requires cs_within_cap' "$HOOKS/append-only-docs.sh" 'command -v cs_within_cap'
 for hook in $LIB_CONSUMERS; do
-  armed "$hook requires cs_tool_input" "$hook" 'command -v cs_tool_input'
+  armed "$hook requires cs_tool_input" "$HOOKS/$hook" 'command -v cs_tool_input'
 done
 # The readability test before the source, which no fixture above can tell apart:
 # under bash a `.` of a missing file returns non-zero and carries on, so nolib
 # behaves the same with it and without it. It is held as text for that reason,
 # and because all four comments claim it.
 armed 'no-git-push.sh tests the library before sourcing it' \
-      no-git-push.sh '[ -r "$LIB" ] && . "$LIB"'
+      "$HOOKS/no-git-push.sh" '[ -r "$LIB" ] && . "$LIB"'
 armed 'no-pr-decisions.sh tests the library before sourcing it' \
-      no-pr-decisions.sh '[ -r "$LIB" ] && . "$LIB"'
+      "$HOOKS/no-pr-decisions.sh" '[ -r "$LIB" ] && . "$LIB"'
 armed 'no-commit-to-main.sh tests the library before sourcing it' \
-      no-commit-to-main.sh '[ -r "$LIB" ] && . "$LIB"'
+      "$HOOKS/no-commit-to-main.sh" '[ -r "$LIB" ] && . "$LIB"'
 armed 'no-work-on-stale-branch.sh tests the library before sourcing it' \
-      no-work-on-stale-branch.sh '[ -r "$LIB" ] && . "$LIB"'
+      "$HOOKS/no-work-on-stale-branch.sh" '[ -r "$LIB" ] && . "$LIB"'
 armed 'pytest-via-uv-group.sh tests the library before sourcing it' \
-      pytest-via-uv-group.sh '[ -r "$LIB" ] && . "$LIB"'
+      "$HOOKS/pytest-via-uv-group.sh" '[ -r "$LIB" ] && . "$LIB"'
 armed 'alembic-via-uv-group.sh tests the library before sourcing it' \
-      alembic-via-uv-group.sh '[ -r "$LIB" ] && . "$LIB"'
+      "$HOOKS/alembic-via-uv-group.sh" '[ -r "$LIB" ] && . "$LIB"'
 armed 'append-only-docs.sh tests the library before sourcing it' \
-      append-only-docs.sh '[ -r "$LIB" ] && . "$LIB"'
+      "$HOOKS/append-only-docs.sh" '[ -r "$LIB" ] && . "$LIB"'
 armed 'append-only-docs-edit.sh tests the library before sourcing it' \
-      append-only-docs-edit.sh '[ -r "$LIB" ] && . "$LIB"'
+      "$HOOKS/append-only-docs-edit.sh" '[ -r "$LIB" ] && . "$LIB"'
 echo "--- the required list is the call list, and these are all the consumers ---"
 # THE ONE CHECK HERE THAT SURVIVES THE NEXT CHANGE. Every literal above names a
 # file and a function, so all of them together say that these guards require
@@ -6991,21 +7085,21 @@ fi
 # more likely in the files that carried the defect -- these four are edited
 # together and the shape is one line long.
 unarmed 'no-git-push.sh does not source the library unguarded' \
-        no-git-push.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+        "$HOOKS/no-git-push.sh" '. "$(dirname "$0")/lib/command-scan.sh"'
 unarmed 'no-pr-decisions.sh does not source the library unguarded' \
-        no-pr-decisions.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+        "$HOOKS/no-pr-decisions.sh" '. "$(dirname "$0")/lib/command-scan.sh"'
 unarmed 'no-commit-to-main.sh does not source the library unguarded' \
-        no-commit-to-main.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+        "$HOOKS/no-commit-to-main.sh" '. "$(dirname "$0")/lib/command-scan.sh"'
 unarmed 'no-work-on-stale-branch.sh does not source the library unguarded' \
-        no-work-on-stale-branch.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+        "$HOOKS/no-work-on-stale-branch.sh" '. "$(dirname "$0")/lib/command-scan.sh"'
 unarmed 'pytest-via-uv-group.sh does not source the library unguarded' \
-        pytest-via-uv-group.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+        "$HOOKS/pytest-via-uv-group.sh" '. "$(dirname "$0")/lib/command-scan.sh"'
 unarmed 'alembic-via-uv-group.sh does not source the library unguarded' \
-        alembic-via-uv-group.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+        "$HOOKS/alembic-via-uv-group.sh" '. "$(dirname "$0")/lib/command-scan.sh"'
 unarmed 'append-only-docs.sh does not source the library unguarded' \
-        append-only-docs.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+        "$HOOKS/append-only-docs.sh" '. "$(dirname "$0")/lib/command-scan.sh"'
 unarmed 'append-only-docs-edit.sh does not source the library unguarded' \
-        append-only-docs-edit.sh '. "$(dirname "$0")/lib/command-scan.sh"'
+        "$HOOKS/append-only-docs-edit.sh" '. "$(dirname "$0")/lib/command-scan.sh"'
 
 section "=== issue #95: every hook refuses when it cannot read its input ==="
 # #84 made a hook that cannot load lib/command-scan.sh refuse. It did not reach
@@ -7264,7 +7358,7 @@ done
 # And the reader is the library's, in live code. `armed` strips comments, so a
 # reader commented out would not satisfy it; the behavioural checks above would
 # go red too, but this one names where.
-armed 'the library defines the shared reader' lib/command-scan.sh 'cs_tool_input() {'
+armed 'the library defines the shared reader' "$HOOKS/lib/command-scan.sh" 'cs_tool_input() {'
 # #95's acceptance: the fail direction for each condition stated in one place.
 # `written`, because it is prose.
 written 'the library states the fail direction of the input read' \
@@ -7847,7 +7941,7 @@ grep -q '^CS_LINE_CAP=$' "$FIXTURES/cap-empty.sh" || {
 tok 'and on a short command when the cap itself is empty' \
     'over' "$(within_cap "$FIXTURES/cap-empty.sh" "$FIXTURES/cap-short.txt")"
 armed 'the cap is 16384 bytes, written as the literal the issue decided' \
-      lib/command-scan.sh 'CS_LINE_CAP=16384'
+      "$HOOKS/lib/command-scan.sh" 'CS_LINE_CAP=16384'
 
 section "=== the exit-status helpers themselves: #98 ==="
 # The rule, and what it replaced, is written above `verdict`. Nothing else in this
@@ -8811,37 +8905,67 @@ section "=== issue #107: the mutation harness, and the hooks directory it judges
 # rotting quietly -- a row naming a renamed file reports did-not-apply, which is
 # loud, but a row naming a requirement that has been retired would report
 # `survived` for ever and read as a defect in the hooks rather than in the row.
-MUT="$HOOKS/mutate-hooks.sh"
+# Read off $SUITE_DIR and not $HOOKS. Under an override $HOOKS/mutate-hooks.sh
+# is a copy of this harness that no run executes -- the harness that runs is the
+# one a person started, from this directory -- so pinning the copy's text would
+# be the "evidence about text nobody executed" argument that keeps check-hooks.sh
+# off the registry, made about the other half of $TOOLING. A row targeting
+# mutate-hooks.sh could turn one of these pins red and be reported as caught.
+# Bertan's review of PR #142; the registry audit below refuses such a row.
+MUT="$SUITE_DIR/mutate-hooks.sh"
 req GH-107.1
 if [ -n "${CHECK_HOOKS_NESTED:-}" ]; then
   pass static 'the override guard is not asked of a run that is already one, so nothing recurses'
 else
-  NESTED_ERR=$(CHECK_HOOKS_NESTED=1 CHECK_HOOKS_DIR="$FIXTURES/no-such-directory-at-all" \
-    bash "$SUITE_DIR/check-hooks.sh" 2>&1 >/dev/null)
-  NESTED_STATUS=$?
-  case "$NESTED_STATUS:$NESTED_ERR" in
-    1:*"is not a directory"*) pass static 'an override naming no directory stops the suite, saying so' ;;
-    *) fail static 'an override naming no directory must stop the suite saying it is not a directory\n         exit=%s stderr |%s|' \
-         "$NESTED_STATUS" "$NESTED_ERR" ;;
-  esac
+  # Each of the three runs below asserts the guard's MESSAGE and not merely a
+  # non-zero exit: an inner run that went the whole way would exit 1 for its own
+  # uncovered requirement and say nothing about a directory. Said once here
+  # rather than three times, which is this suite's idiom for a shape it repeats.
+  override_refused() {  # override_refused <label> <expected text> <cwd> <override>
+    local ERR STATUS
+    ERR=$(cd "$3" && CHECK_HOOKS_NESTED=1 CHECK_HOOKS_DIR="$4" \
+          bash "$SUITE_DIR/check-hooks.sh" 2>&1 >/dev/null)
+    STATUS=$?
+    case "$STATUS:$ERR" in
+      1:*"$2"*) pass static '%s' "$1" ;;
+      *) fail static '%s\n         expected exit 1 and |%s|\n         exit=%s stderr |%s|' \
+           "$1" "$2" "$STATUS" "$ERR" ;;
+    esac
+  }
+  override_refused 'an override naming no directory stops the suite, saying so' \
+    'is not a directory' "$SUITE_DIR" "$FIXTURES/no-such-directory-at-all"
+
   # A directory that is there and is missing one of the files beside this suite.
-  # Everything but lib/, so that the file named in the refusal is the one left
-  # out and not the first of a dozen.
+  # Built by subtraction -- the whole of .claude/hooks/ and then one file taken
+  # off -- so that the file the refusal names is the one removed. Built by
+  # addition it was "one file short" only while lib/ held exactly one file, and a
+  # second lib/*.sh sorting earlier would have turned this check red about the
+  # order of a glob. Bertan's review of PR #142.
   PARTIAL="$FIXTURES/partial-hooks"
-  mkdir -p "$PARTIAL/lib"
-  cp -p "$SUITE_DIR"/*.sh "$SUITE_DIR"/*.md "$PARTIAL/" 2>/dev/null
+  rm -rf "$PARTIAL"
+  cp -a "$SUITE_DIR" "$PARTIAL"
+  rm -f "$PARTIAL/lib/command-scan.sh"
   [ -r "$PARTIAL/check-hooks.sh" ] && [ ! -e "$PARTIAL/lib/command-scan.sh" ] || {
     echo "the partial hooks fixture was not built as one file short; the check against it proves nothing" >&2
     exit 1
   }
-  NESTED_ERR=$(CHECK_HOOKS_NESTED=1 CHECK_HOOKS_DIR="$PARTIAL" \
-    bash "$SUITE_DIR/check-hooks.sh" 2>&1 >/dev/null)
-  NESTED_STATUS=$?
-  case "$NESTED_STATUS:$NESTED_ERR" in
-    1:*"does not hold lib/command-scan.sh"*) pass static 'an override missing a file beside this suite stops it, naming the file' ;;
-    *) fail static 'an override missing lib/command-scan.sh must stop the suite naming that file\n         exit=%s stderr |%s|' \
-         "$NESTED_STATUS" "$NESTED_ERR" ;;
-  esac
+  override_refused 'an override missing a file beside this suite stops it, naming the file' \
+    'does not hold lib/command-scan.sh' "$SUITE_DIR" "$PARTIAL"
+
+  # A RELATIVE OVERRIDE IS READ FROM WHERE THE CALLER STOOD. Resolved after the
+  # cd at the head of this file it was read from .claude/hooks/ instead, so
+  # `CHECK_HOOKS_DIR=lib` from anywhere at all named this repository's own lib/ --
+  # a directory that is there, so nothing stopped and the run went on to judge
+  # it. The fixture directory below holds no lib/, so the refusal is the answer
+  # only while the resolution is the caller's. Bertan's review of PR #142.
+  RELATIVE_CWD="$FIXTURES/relative-override"
+  mkdir -p "$RELATIVE_CWD"
+  [ -e "$RELATIVE_CWD/lib" ] && {
+    echo "the relative-override fixture holds a lib/, so the check against it proves nothing" >&2
+    exit 1
+  }
+  override_refused 'a relative override is read from where the caller stood, not from beside this suite' \
+    'is not a directory' "$RELATIVE_CWD" lib
 fi
 # And the two assignments themselves, so that a default quietly changed to
 # something other than "the files beside this file" is visible here.
@@ -8861,7 +8985,111 @@ fi
 armed 'the hooks under check default to the ones beside this suite' \
       "$SUITE_DIR/check-hooks.sh" 'HOOKS=$SUITE''_DIR'
 armed 'and $CHECK_HOOKS_DIR is what moves them' \
-      "$SUITE_DIR/check-hooks.sh" 'HOOKS=$(cd "$CHECK_HOOKS''_DIR" 2>/dev/null && pwd)'
+      "$SUITE_DIR/check-hooks.sh" 'CDPATH= cd -- "$CHECK_HOOKS''_DIR" 2>/dev/null && pwd)'
+
+
+# AND THAT EVERY TEXT CHECK READS THE DIRECTORY UNDER JUDGMENT. `armed`,
+# `unarmed` and `written` take a file path and grep it, so a bare name in that
+# position resolves against this process's working directory, which is
+# $SUITE_DIR -- and under an override those checks read this repository's own
+# hooks and say nothing whatever about the copy. Sixty-nine of them were spelled
+# that way when the two directories were first split, among them every "does not
+# source the library unguarded" pin: a copy with a guard deleted and an unguarded
+# load appended printed `ok` for all of them, which is #84's defect exactly,
+# caught by nothing. Found by Bertan's review of PR #142, and the row
+# `library-loaded-unguarded` in mutate-hooks.sh's registry is the mutation that
+# now asks it.
+#
+# So the file argument of every one of those calls is held to a rule, and the
+# rule is the two-directory split written out: a name spelled with a path has to
+# be under $HOOKS if it is a hook and under $SUITE_DIR if it is the tooling
+# beside them, and anything else has to be a variable that resolves somewhere
+# already argued. "A variable" alone would not have been enough -- it accepts
+# "$SUITE_DIR/no-git-push.sh", which is the same defect one door along.
+#
+# Derived off this file's text rather than listed, for the reason every derived
+# list here carries: a list is what the next call added would not be on.
+# Continuation lines are joined, the call is cut into shell words, and the third
+# word is the one asked. The count is pinned beside it, so a derivation that
+# stopped matching is red rather than empty.
+TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
+  function toks(s,   i, n, c, q, start) {
+    ntok = 0; i = 1; n = length(s)
+    while (i <= n) {
+      while (i <= n && substr(s, i, 1) ~ /[ \t]/) i++
+      if (i > n) break
+      start = i; q = ""
+      while (i <= n) {
+        c = substr(s, i, 1)
+        if (q != "") { if (c == q) q = ""; i++ }
+        else if (c == "'"'"'" || c == "\"") { q = c; i++ }
+        else if (c ~ /[ \t]/) break
+        else i++
+      }
+      tok[++ntok] = substr(s, start, i - start)
+    }
+  }
+  { line = $0; sub(/[ \t]+$/, "", line) }
+  line ~ /\\$/ { sub(/\\$/, "", line); if (!open) open = NR; buf = buf line; next }
+  { full = buf line; buf = ""; start = open ? open : NR; open = 0 }
+  full !~ /^[ \t]*(armed|unarmed|written)[ \t]/ { next }
+  { seen++
+    toks(full)
+    if (ntok < 3) { print start ": fewer than three arguments"; next }
+    a = tok[3]
+    gsub(/"/, "", a)
+    base = a
+    sub(/.*\//, "", base)
+    if (a !~ /^\$/)
+      print start ": " tok[3] " is a bare name, read from the directory this suite runs in"
+    else if (index(" " tooling " ", " " base " ") > 0) {
+      if (a !~ /^\$SUITE_DIR\//)
+        print start ": " tok[3] " is the tooling beside the hooks and is read from $SUITE_DIR"
+    }
+    else if (a ~ /\.sh$/ && a !~ /^\$HOOKS\//)
+      print start ": " tok[3] " names a hook and is read from $HOOKS" }
+  END { print "COUNT " seen + 0 }
+' "$SUITE_DIR/check-hooks.sh")
+TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
+tok 'this suite makes as many text checks as it expects' \
+    '274' "${TEXT_CHECK_ARGS##*COUNT }"
+if [ -z "$TEXT_CHECK_BAD" ]; then
+  pass static 'every text check names its file through a variable, so an override moves what it reads'
+else
+  fail static 'a text check names a file that does not move with $HOOKS:\n%s' \
+    "$(printf '%s' "$TEXT_CHECK_BAD" | sed 's/^/       /')"
+fi
+
+
+# AND THAT THE GUARD FIRES, asked of each of the three helpers with a needle
+# chosen so that the answer without the guard is the opposite of the answer with
+# it. Each is handed `check-hooks.sh`, a relative name that does resolve here and
+# would resolve here under any override -- the shape the rule is about -- and the
+# literal is one the file does hold for the two that look for presence and one it
+# does not for the one that looks for absence. A guard that reported ok would
+# leave the derivation above a comment about a rule nothing enforces.
+if ( FAILED=0; armed 'self-check' check-hooks.sh 'FAILED=0'; exit $FAILED ) >/dev/null 2>&1
+then
+  fail static 'armed reads a relative file name, so under an override it reads this directory rather than the hooks under judgment'
+else
+  pass static 'armed refuses a relative file name, which under an override is the wrong directory'
+fi
+if ( FAILED=0; written 'self-check' check-hooks.sh 'FAILED=0'; exit $FAILED ) >/dev/null 2>&1
+then
+  fail static 'written reads a relative file name, so under an override it reads this directory rather than the hooks under judgment'
+else
+  pass static 'written refuses a relative file name, which under an override is the wrong directory'
+fi
+# The literal is written in two quoted halves that bash joins, so that this line
+# does not itself hold the text `unarmed` is being asked not to find -- it greps
+# this file, and a needle spelled whole here would make the check fail for the
+# needle's sake rather than for the guard's.
+if ( FAILED=0; unarmed 'self-check' check-hooks.sh 'CS_NO_SUCH_LITERAL''_IS_WRITTEN_ANYWHERE'; exit $FAILED ) >/dev/null 2>&1
+then
+  fail static 'unarmed reads a relative file name, so under an override it reads this directory rather than the hooks under judgment'
+else
+  pass static 'unarmed refuses a relative file name, which under an override is the wrong directory'
+fi
 
 req GH-107.2
 # The harness is not a hook. It runs this suite; nothing runs it but a person.
@@ -8876,7 +9104,7 @@ case " $RUN_BY_SETTINGS " in
 esac
 written 'the harness says how it is run' "$MUT" 'bash .claude/hooks/mutate-hooks.sh'
 written 'and roughly what it costs, which is why nothing runs it for you' \
-        "$MUT" 'ABOUT SIXTEEN MINUTES'
+        "$MUT" 'ABOUT FORTY-FIVE MINUTES'
 written 'and what its exit status means, the two self-tests included' \
         "$MUT" 'EXIT STATUS: non-zero when any row reports something other than'
 written 'the harness refuses to mutate the hooks directory it stands in' \
@@ -8897,6 +9125,33 @@ armed 'in both directions' \
 # answer.
 armed 'a row naming an absolute path or climbing out with .. is refused before the write' \
       "$MUT" '/*|*/../*|../*|*/..|..)'
+# And that neither half of $TOOLING can be a target. check-hooks.sh was refused
+# by name from the start; mutate-hooks.sh was not, though $MUT above used to read
+# the copy's text -- so a row editing the harness's own header could turn one of
+# these pins red and be reported as caught, for a file whose running instance was
+# never touched. One list, read here and there. Bertan's review of PR #142.
+armed 'and a row targeting the tooling beside the hooks, which runs from the repository' \
+      "$MUT" 'case " $TOOLING " in *" $FILE "*)'
+armed 'which the harness reads from the same list this suite does' \
+      "$MUT" 'TOOLING="check-hooks.sh mutate-hooks.sh"'
+# THE OUTCOME FIELD IS TIED TO THE ID. Every real mutation expects `caught`, and
+# the other two words belong to rows whose id says they are self-tests. Untied,
+# the field was also how a real survivor could be declared expected: the row
+# reported ok, the counts below still held, and the harness exited 0 with a
+# registered mutation alive. The refusing direction, one line long, found by
+# Bertan's review of PR #142.
+armed 'only a selftest-* row may expect anything but caught' \
+      "$MUT" 'caught:*|survived:selftest-*|did-not-apply:selftest-*) ;;'
+armed 'and a whole-registry run requires both self-tests to be there' \
+      "$MUT" '$1 ~ /^selftest-/ && $5 == w'
+# The registry is read before the baseline is run. A mistyped id used to pay 95 s
+# for nothing and then report twice -- once for the row it refused and once for
+# having run none -- which is the double-report the selection order exists to
+# avoid, arriving by the other door.
+armed 'the registry is read before anything is copied or run' \
+      "$MUT" '[ -n "$RUNNABLE" ] || {'
+armed 'and a name that matches no row stops the run there' \
+      "$MUT" 'if [ -n "$SELECTED" ] && [ "$MATCHED" = 0 ]; then'
 armed 'an edit that leaves its target byte-identical is did-not-apply' \
       "$MUT" 'if cmp -s "$TARGET" "$WORK_ROOT/mutated"; then'
 written 'and that is a failure rather than a pass, with the reason' \
@@ -8905,6 +9160,17 @@ armed 'an unmutated copy has to be green before any mutation is believed' \
       "$MUT" 'if [ "$BASELINE_STATUS" != 0 ] || [ "$(matrix_size "$RUN_OUT")" = 0 ]; then'
 armed 'and the hooks directory is summed before and after the whole run' \
       "$MUT" 'if [ -n "$SUM_AFTER" ] && [ "$SUM_BEFORE" = "$SUM_AFTER" ]; then'
+# The sum's own three holes, each one line and each in the permitting direction.
+# Without -mindepth 1 `find` always emits `.`, so the guard on an empty listing
+# could never fire; without %l a symlink repointed at another file in the tree
+# left the sum where it was; and without -r on xargs a tree with no regular files
+# ran sha256sum with no arguments, which reads stdin and succeeds. This is the
+# harness's last line of defence on the files it is meant not to touch, and its
+# guard was inert. Bertan's review of PR #142.
+armed 'the sum reads every entry type, mode and symlink target, not only file contents' \
+      "$MUT" "find . -mindepth 1 -printf '%y %m %P -> %l"
+armed 'and hashes nothing when there is nothing to hash, rather than reading stdin' \
+      "$MUT" 'xargs -0 -r sha256sum'
 # A run that hangs is not a run that caught anything. Nothing in this suite bounds
 # a hook it runs, so a mutation that left one looping would stop the harness
 # rather than be reported by it.
@@ -8926,7 +9192,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '10' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '23' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -8936,7 +9202,8 @@ while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
   [ -n "$MFILE" ] && [ -n "$MEDIT" ] && [ -n "$MREQS" ] && [ -n "$MWANT" ] \
     || { MUT_BAD="$MUT_BAD  $MID: the row does not split into five fields
 "; continue; }
-  case "$MFILE" in check-hooks.sh) MUT_BAD="$MUT_BAD  $MID: targets this suite, which the harness runs rather than judges
+  case " $TOOLING " in *" $MFILE "*)
+    MUT_BAD="$MUT_BAD  $MID: targets $MFILE, which the harness runs rather than judges
 " ;; esac
   # A path INSIDE the hooks directory, asked of the table as written. An absolute
   # one, or one climbing out with .., names a file the copy does not hold and the
@@ -8948,10 +9215,29 @@ while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
 " ;; esac
   [ -r "$HOOKS/$MFILE" ] || MUT_BAD="$MUT_BAD  $MID: names $MFILE, which is not a file in the hooks directory
 "
+  # A requirement that EXISTS AND IS ACTIVE. Asking only whether the heading is
+  # there accepted `### FR-12`, which is retired, and `### FR-1`, which is
+  # superseded -- both have entries, neither has a covering check, so a row
+  # naming one would report `survived` on every run for ever and read as a defect
+  # in the hooks rather than in the row. That is the case this audit's own
+  # paragraph says it exists to prevent, and it did not ask it. Bertan's review
+  # of PR #142. A `gap` is refused by the same rule and for the same reason: the
+  # entry names the issue that owes it a check, so there is nothing to go red.
   for MR in $MREQS; do
-    grep -qx -- "### $MR" "$HOOKS/requirements.md" \
-      || MUT_BAD="$MUT_BAD  $MID: names $MR, which requirements.md has no entry for
+    if ! grep -qx -- "### $MR" "$HOOKS/requirements.md"; then
+      MUT_BAD="$MUT_BAD  $MID: names $MR, which requirements.md has no entry for
 "
+      continue
+    fi
+    MR_STATUS=$(awk -v h="### $MR" '
+      $0 == h { f = 1; next }
+      f && /^### / { exit }
+      f && /^- status:/ { sub(/^- status:[ \t]*/, ""); print; exit }' "$HOOKS/requirements.md")
+    case "${MR_STATUS%%[ :]*}" in
+      active) ;;
+      *) MUT_BAD="$MUT_BAD  $MID: names $MR, whose status is ${MR_STATUS%%[ :]*} rather than active, so no check covers it
+" ;;
+    esac
   done
 done <<< "$MUT_ROWS"
 if [ -z "$MUT_BAD" ]; then
@@ -8969,7 +9255,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '8' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '21' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and

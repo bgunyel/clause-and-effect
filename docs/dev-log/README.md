@@ -331,3 +331,14 @@ thing in the record.
   the first being two new checks green for the wrong reason in a change whose
   whole subject is checks that cannot fail.
 
+- [2026-09-17 · session 1](devlog_2026-09-17_session-1.md) — Bertan's review of
+  PR #142 returns ten findings and the verdict *not mergeable as is*. Sixty-nine
+  text checks named their file relatively and so read this repository's hooks
+  rather than the copy under judgment, every "does not source the library
+  unguarded" pin among them — #84's defect in the section written to catch it.
+  Three ways a survivor could be declared expected, a relative override that
+  named this repository's own `lib/`, and a byte-identical guard that could not
+  fire. The registry grows from 10 rows to 23, and its first full run found a
+  rule with 36 checks tagged to it and no coverage: nothing in the suite stood a
+  worktree on the branch the hook refuses to push.
+

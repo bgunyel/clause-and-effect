@@ -1280,19 +1280,40 @@ per the priority order above.
 
 ## 🟡 Tooling
 
+- [ ] **Bound the hooks `check-hooks.sh` runs, as `settings.json` bounds the ones
+  Claude Code runs.** The suite pins that timeout at 5 s and then runs every hook
+  itself with none, so a hook left looping by a change — or by a registered
+  mutation — hangs the suite rather than failing a check. `mutate-hooks.sh` bounds
+  the whole suite run at 600 s and reads a killed run as `did-not-complete`, which
+  names the harness's problem and not the hook's: the requirement that mutation
+  was registered against is never asked. Raised by Bertan's review of PR #142 as
+  lower-confidence, and it is a change to how every check here runs a process, so
+  it is its own piece of work.
+
+- [ ] **Derive `CS_NOT_CONSUMERS` rather than whitelisting it.** It is `$TOOLING`
+  now, a by-name list of the two files beside the hooks that are not hooks, and it
+  grows with every non-hook script anyone puts there. Iterating what
+  `settings.json` registers would answer the same question off the configuration
+  instead. Raised by Bertan's review of PR #142; the suite's own derivations
+  already take that shape elsewhere, so this is consistency rather than a defect.
+
 - [ ] **Register one mutation per FR in `mutate-hooks.sh`, so every functional
   requirement has a proof that its checks can fail.** Deferred from #103 Q8.
   `.claude/hooks/check-hooks.sh --matrix` says which checks each requirement has;
   it cannot say whether any of them would go red if the rule they name were
   broken, and several suites in this repository have been green for the wrong
-  reasons. #107 built the harness — `bash .claude/hooks/mutate-hooks.sh`, ten
-  registered rows and about sixteen minutes — with eight real mutations against
-  six rules of #105's and #106's, naming ten requirement IDs. This item is the
-  rest: those two issues gained checks for some twenty-five requirements, so a
-  row per FR is most of the work, and #108's and #109's rules arrive with them.
-  Two kinds of rule the harness cannot reach at all — one living in
-  `check-hooks.sh`, and a claim about a file outside `.claude/hooks/` — are
-  recorded in its header and need a different answer, not another row.
+  reasons. #107 built the harness — `bash .claude/hooks/mutate-hooks.sh`, about
+  forty-five minutes — and Bertan's review of PR #142 grew its registry from
+  eight real mutations to twenty-one. How many requirement IDs those name is
+  `--list`'s last line, deliberately not restated here: the first version of this
+  item restated it and was wrong, along with three other documents. This item is
+  what remains, and the shape of the gap rather than its size is the part worth
+  writing down: a row per rule reaches a requirement, it does not exercise every
+  check that requirement has, and 144 requirements are active. #108's and #109's
+  rules arrive with them. Two kinds of rule the harness cannot reach at all — one
+  living in the tooling beside the hooks, `check-hooks.sh` and `mutate-hooks.sh`
+  themselves, and a claim about a file outside `.claude/hooks/` — are recorded in
+  its header and need a different answer, not another row.
 
 - [ ] **One high-severity Dependabot alert on `main` — reported 2026-09-04** on
   pushing `dev-04`, at `security/dependabot/6`. Not looked at: neither the

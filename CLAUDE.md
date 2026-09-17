@@ -174,10 +174,13 @@ Whether those checks can fail is a second question, and `bash
 .claude/hooks/mutate-hooks.sh` is where it is asked (#107). It breaks one
 registered rule at a time in a copy of `.claude/hooks/` — never in this one — and
 a mutation counts as caught only when every requirement ID the registry names for
-it has a failing check. About sixteen minutes for the registry, so nothing runs
-it for you; two of its rows are self-tests, one whose edit matches nothing and one
-registered against a requirement its edit cannot reach, because an edit that
-silently fails to apply reads exactly like evidence and is none.
+it has a failing check. About forty-five minutes for the registry, so nothing
+runs it for you; two of its rows are self-tests, one whose edit matches nothing
+and one registered against a requirement its edit cannot reach, because an edit
+that silently fails to apply reads exactly like evidence and is none. What the
+registry covers is `--list`'s last line and is written down nowhere else: a row
+per rule, not per requirement, so a requirement with a row is one some mutation
+reaches rather than one whose every check has been exercised.
 
 Issue #84 is the same shape one level out, and it is the reason that last
 sentence is worth re-reading. The defect was not in the tokeniser but in the
