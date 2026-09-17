@@ -168,23 +168,53 @@ declared per entry, which is the shape `direction` and `seam` already have.
   in `INV_TRANSFORMS`, which is what makes this value a claim rather than a
   label: an entry naming a transformation the list lacks is red until the
   transformation is added.
-- `none: <reason>`: neither, and the reason says why. Two kinds qualify, and the
-  reason says which: a requirement whose subject is not a command spelling at
-  all -- a state of the tree, a file path, which operations a state covers,
-  where a flag stands among the arguments -- and a command shape the
-  transformations cannot generate, such as one written to probe the tokeniser's
-  quote state.
+- `none: <reason>`: neither, and the reason says why. Three kinds qualify, and
+  the reason says which: a requirement whose subject is not a command spelling
+  at all -- a state of the tree, a file path, which operations a state covers,
+  where a flag stands among the arguments; a command shape the transformations
+  cannot generate, such as one written to probe the tokeniser's quote state; and
+  a command whose judged content is not in its own text.
+
+A `transformation` value names the transformations that reach the entry's
+shapes. It is not a claim that they exhaust it, and where an entry names a shape
+no transformation reaches, that shape is named as a gap rather than covered by
+the value: GH-43.6's `-C` is `global-flag` and its `--git-dir` spelling is
+`global-flag-gitdir`, and both had to be in the list for the value to be
+honest.
+
+**The third kind of `none`, named because #141's follow-up asked for the
+decision rather than the discovery.** `gh api graphql -f query=@/tmp/rel.graphql`
+and `gh api graphql --input /tmp/rel.json` put the payload in a file, so the
+thing a rule has to judge is not in the command. A generator that rewrites a
+command's text can neither produce those spellings nor say anything about one,
+and the rule that would refuse them is a rule about a file argument rather than
+about a spelling — so they are `variants: none` on whichever entry comes to own
+them, with that as the reason. The contrast that makes this a departure and not
+a limitation of the idea is the third spelling #143 measured beside those two:
+`mutation{delete"Release"(…)}` is intra-word quoting, which a quoting
+transformation does generate, and is GH-135's shape. GH-131 and GH-143.1 to
+GH-143.3 are the entries this will land on; both are out of scope today by the
+rule above — #131 is `gap → #131` and GH-143.1 to .3 are not written — and when
+either goes active the rule makes the declaration compulsory rather than
+optional, which is the point of stating a rule instead of a list.
 
 **The trade, taken knowingly.** `none` is a declaration and not a derivation, so
 an entry that ought to be seeded can be written `none` with a plausible reason,
 and this rule would not catch it. What it changes is that the choice is made
 once per entry, in writing, with a reason a reviewer reads in the diff -- where
-before it was made by an `awk` filter nobody had to argue with. The refusing
-direction is closed: the set of in-scope entries and their values is held as a
-literal in `check-hooks.sh` too, so a new entry, a value changed and a value
-moved to another entry each go red until the suite's copy moves with it. That is
-#104's reason for holding this file's shape as a literal, applied to the one
-field #104 does not read.
+before it was made by an `awk` filter nobody had to argue with.
+
+What the literal in `check-hooks.sh` does close is narrower than the sentence
+that first stood here, which claimed "a value changed" and was wider than the
+guard. The literal holds each in-scope entry's ID beside its *keyword*, so a new
+entry, an entry whose answer moves between `seed`, `transformation` and `none`,
+and an answer moved to another entry each go red until the suite's copy moves
+with it. What it does not hold is the prose after the keyword: a `none` reason
+reworded, or a different transformation named, stays green. The transformation
+names have a guard of their own -- each must be in `INV_TRANSFORMS` -- and a
+reason is prose, which no literal can judge. That is #104's reason for holding
+this file's shape as a literal, applied to the one field #104 does not read,
+and held to the same standard of saying only what it asks.
 
 ## User stories
 
@@ -868,7 +898,7 @@ field #104 does not read.
 - kind: defect-permitting
 - status: active
 - variants: transformation: pre-sudo pre-env pre-command pre-nohup pre-time
-  pre-timeout pre-nice-opt global-flag
+  pre-timeout pre-nice-opt global-flag global-flag-gitdir
 
 ### GH-44.1
 - text: On a worktree branch whose upstream is gone, a commit, cherry-pick, revert,
@@ -1441,10 +1471,11 @@ field #104 does not read.
 ### GH-106
 - text: Every spelling variant of a seeded command reaches that seed's verdict, or a
   verdict the suite declares for that pair with its reason. The seeds are a
-  literal table covering every requirement with a command spelling in both
-  directions; the variants come from a fixed list of transformations; and every
-  departure is declared, either by design or as a gap naming the issue that owns
-  it.
+  literal table covering every *functional* requirement with a command spelling
+  in both directions; the variants come from a fixed list of transformations; and
+  every departure is declared, either by design or as a gap naming the issue that
+  owns it. Which `GH-` requirements the table seeds is GH-141's, and one
+  direction is allowed there.
 - from: #106
 - kind: defect-permitting
 - status: active
@@ -1455,7 +1486,12 @@ field #104 does not read.
 - note: the departures are not a second opinion about a hook. A `design` row is a
   verdict the hook's own comment argues for; a `gap` row is a verdict that is
   wrong today, written at the right one and owned by an issue. #103 Q18 forbids
-  the third thing, which is calling a defect a design exception
+  the third thing, which is calling a defect a design exception.
+  The word *functional* was added to the text by #141, and it is a correction
+  rather than a widening: the derivation that held the table to this claim read
+  `FR-` tags from the day it was written, so "every requirement" was never what
+  was checked. #141 stated the rule for the other family beside it, and GH-141
+  carries it
 
 ### GH-117
 - text: A command word spelled as a path, quoted or backslash-escaped is the command
@@ -1965,10 +2001,10 @@ field #104 does not read.
   and none at all that it is a sufficient one. Three of #141's additions are
   transformations rather than seeds, because an entry naming a rewriting of a
   command is not a command and seeding it would be a category error. What this
-  rule cannot do is written where the rule is: `none` is a declaration, and an
-  entry that ought to be seeded can carry a reason that reads well. The refusing
-  direction it does close is the silent one — a new entry, or a value moved
-  between entries, now moves a literal in `check-hooks.sh` too.
+  rule cannot do, and what the literal in `check-hooks.sh` does and does not
+  close, are argued under *The trade, taken knowingly* and are not restated
+  here — that trade was written out in three places on this branch before review
+  counted them.
 
 ## Provenance: the acceptance criteria of #37–#41
 
