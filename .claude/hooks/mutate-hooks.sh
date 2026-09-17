@@ -16,9 +16,9 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- twenty-nine runs as the
-# registry stands, not thirty, because the row whose edit matches nothing never
-# reaches one. Measured twice on 2026-09-17, on this machine and on registries one
+# applies, at about two minutes, plus the baseline -- thirty-four runs as the
+# registry stands, not thirty-five, because the row whose edit matches nothing
+# never reaches one. Measured twice on 2026-09-17, on this machine and on registries one
 # row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs. The figure above
 # is those rates carried to the current count and not a third measurement; a run
 # under load took nearer four minutes a row. That is why it is a
@@ -45,10 +45,11 @@
 # MEASURED, 2026-09-17, at the commit that answered that review: all twenty-three
 # rows as the registry then stood reported what they declare, and .claude/hooks/
 # came back byte-identical. #108's six rows were run as a named selection on the
-# same day -- baseline plus six, all caught, byte-identical after -- and not as
-# part of a whole-registry run, so no run has yet exercised all twenty-nine
-# together. Saying which rows a measurement covered is the whole point of
-# recording one. No
+# same day -- baseline plus six, all caught, byte-identical after -- and #144's
+# five the same way on 2026-09-17, so no run has yet exercised the whole registry
+# together. A count of the rows a measurement covered goes stale as the registry
+# grows, which is the trap this file's own header is about, so what is recorded is
+# which rows -- and that is the whole point of recording one. No
 # per-mutation counts are recorded here on purpose -- a count in a comment is the
 # thing #107 was filed about, and the registry is re-runnable instead.
 #
@@ -104,8 +105,8 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   TWENTY-SEVEN real mutations, against SIX files in .claude/hooks/, naming
-#   THIRTY-EIGHT requirement IDs between them, of the 156 whose status is active.
+#   THIRTY-TWO real mutations, against SIX files in .claude/hooks/, naming
+#   FORTY-TWO requirement IDs between them, of the 162 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
@@ -186,7 +187,7 @@ gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule i
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught
 base-refusal-drops-the-spelling%no-pr-decisions.sh%/^BASE=/s/Write: gh pr create --base dev-NN/Name a base/%US-7 FR-23%caught
-base-pattern-admits-main%no-pr-decisions.sh%/^is_dev_base()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
+base-pattern-admits-main%no-pr-decisions.sh%/^may_propose_into()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
 pr-create-base-not-read%no-pr-decisions.sh%s/if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/if false \&\& RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/%FR-14 FR-16 US-9%caught
 web-handoff-refused%no-pr-decisions.sh%/^gh_pr_web()/,/^}/s/--web|-w) return 0 ;;/--web|-w) return 1 ;;/%FR-21 US-12%caught
 api-read-taken-for-a-write%no-pr-decisions.sh%/^gh_api_is_write()/,/^}/s/^  return 1$/  return 0/%FR-20%caught
@@ -202,6 +203,11 @@ merged-branch-not-gone%no-work-on-stale-branch.sh%s/= "\[gone\]"/= "never-this-s
 bare-pytest-permitted%pytest-via-uv-group.sh%s/grep -qE '\^(pytest|/grep -qE '^(no-such-tool-at-all|/%GH-69.1%caught
 unresolved-git-dir-permits%no-git-push.sh%/could not be resolved, so whether this runs/,+1s/exit 2/exit 0/%GH-108.2%caught
 dev-branch-not-version-sorted%no-work-on-stale-branch.sh%s/| sort -V | tail -1)/| sort | head -1)/%GH-108.5%caught
+base-lookup-never-finds-a-branch%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/origin\/dev-\*/origin\/no-such-ref-\*/%GH-144.1 GH-144.3%caught
+base-lookup-not-version-sorted%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/| sort -V | tail -1)/| sort | head -1)/%GH-144.1 GH-144.3%caught
+base-lookup-admits-any-dev-ref%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/| grep -E '\^origin\/dev-\[0-9\]+\$' //%GH-144.1%caught
+base-lookup-refuses-when-it-cannot-read%no-pr-decisions.sh%/^may_propose_into()/,/^}/s/\[ -n "$ACTIVE_DEV" \]/[ -n "no such branch" \]/%GH-144.2 GH-108.5%caught
+base-lookup-read-once-per-base%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/\[ -z "$ACTIVE_DEV_READ" \] || return 0/:/%GH-144.5%caught
 tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 and (.[0].tool_name == "Bash") and/%GH-108.1%caught
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught

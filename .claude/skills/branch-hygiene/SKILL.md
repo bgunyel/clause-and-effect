@@ -376,6 +376,13 @@ untouched, and `git worktree list` names no worktree without a branch.
   flight.
 - Rotate only after a merge, not after each session. A dev branch spanning
   several sessions is normal; two dev branches at once is not.
+- Between step 3 and step 5 both `origin/dev-NN` and `origin/dev-NN+1` exist, and
+  so they do in any agent session that fetched in that window. Nothing in this
+  procedure has to change for it: since #144 `no-pr-decisions.sh` refuses a pull
+  request based on the older of the two and names the newer, deriving the active
+  dev branch from the same highest-`origin/dev-NN` read the report above makes.
+  Before that it accepted either, so the window was one in which a worktree pull
+  request could land on the branch on its way out and nothing would say so.
 - Push a worktree branch with `git push -u origin <branch>` the first time, as
   the rotation pushes `dev-NN+1`. Without the upstream, a merged branch whose
   remote half `delete_branch_on_merge` has removed is indistinguishable from one
