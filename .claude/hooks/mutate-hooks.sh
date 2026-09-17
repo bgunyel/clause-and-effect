@@ -104,8 +104,8 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   TWENTY-SEVEN real mutations, against SIX files in .claude/hooks/, naming
-#   THIRTY-EIGHT requirement IDs between them, of the 156 whose status is active.
+#   TWENTY-NINE real mutations, against SEVEN files in .claude/hooks/, naming
+#   THIRTY-NINE requirement IDs between them, of the 157 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
@@ -131,6 +131,16 @@
 #     one list. #106's six self-guards -- a transformation that applies to no
 #     seed, a departure row naming a seed that is not there -- are all of that
 #     kind, and #104's coverage machinery is too.
+#
+#     The seventh file is the exception that shows where the line actually
+#     falls, and it is worth reading before the next row is written. GH-141's
+#     rule is CODE in check-hooks.sh and so cannot be mutated -- but what that
+#     code READS is requirements.md, which an override does move. So the rule is
+#     reachable through its input: the two `variants-*` rows edit an entry in
+#     the copy and the suite, running from here, reads the copy and goes red.
+#     The test is not "whose file is it" but "does the run read the copy".
+#     Nothing about #106's own self-guards is reachable that way, because what
+#     they read is the seed table, which lives in the suite.
 #   - a claim about a file outside .claude/hooks/. Only the hooks directory is
 #     copied, and CLAUDE.md, CONTEXT.md, settings.json and the two skills are
 #     read from this repository whatever is being judged, so a mutation to one of
@@ -206,6 +216,8 @@ tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 a
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught
 degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch: FAILED or timed out after /d%GH-108.10%caught
+variants-field-deleted%requirements.md%/^- variants: transformation: redirect-quoted$/d%GH-141%caught
+variants-seed-disowned%requirements.md%/^### GH-72$/,/^$/s/^- variants: seed$/- variants: none: a reason/%GH-141%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS
