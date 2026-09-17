@@ -1390,16 +1390,28 @@ The suite fails on each of these, and `--matrix` shows the rest:
   these does.
 
 ### GH-131
-- text: `gh issue develop` creates a branch on the remote, which is a ref-creating
-  write no hook sees; what an agent may do with it is decided rather than left to
-  whichever rule happens not to match.
+- text: A creating spelling of `gh issue develop` is refused, whichever of `--base`,
+  `--name`, `--checkout` and `--branch-repo` it carries and whether it carries none;
+  the read spelling `gh issue develop --list` is permitted.
 - from: #131, found while covering US-14 for #105
 - kind: defect-permitting
 - status: gap → #131
-- note: US-14 says every issue subcommand stays available and this is one by name,
-  so #105 pins the read spelling `gh issue develop --list` and leaves the two
-  creating spellings unpinned rather than pinning a verdict that may be wrong
-  (Q18). US-14 is covered by the other twelve rows.
+- note: `gh issue develop` creates a branch ON THE REMOTE: an issue subcommand by
+  name, which US-14 says stays available, and a ref-creating write by effect, which
+  CLAUDE.md says is the whole of what an agent may push. #105 pinned the read and
+  left the creating spellings unpinned rather than pin a verdict that might be wrong
+  (Q18); the verdict was taken on 2026-09-17 and is #131's second comment — refuse
+  the creating spellings, permit `--list`, which is Q26's `gh release` shape. This
+  entry's text was rewritten when that verdict landed: as first written it required
+  only that the question "is decided", which no check can falsify in either
+  direction, so under Q15 it could never have been covered. A `gap → #<n>` entry's
+  text is provisional in exactly this way, and is restated in the behaviour when its
+  verdict is taken. US-14 is covered by the other twelve rows either way, being
+  `direction: permit-only`. The verdict is deliberately narrow: it refuses this
+  subcommand and not the `createLinkedBranch` mutation underneath it, which is
+  GH-143's along with the rest of the class, a rule against the porcelain with the
+  plumbing left open being the shape #47 and #97 both ended at. See
+  `docs/adr/0002-boundary-stated-in-effects.md`.
 
 ### GH-133
 - text: A refused retarget names the correction for a retarget. `gh pr edit <n>
@@ -1558,6 +1570,24 @@ The suite fails on each of these, and `--matrix` shows the rest:
   the hooks directory is copied. A row may name only an active requirement: a
   retired or superseded one has no covering check, so a row naming it would report
   `survived` for ever and read as a defect in the hooks rather than in the row.
+
+### GH-143.4
+- text: CONTEXT.md's *reserved act* names moving the active dev branch's remote ref
+  any way other than advancing it, and deleting that ref, and says that nothing
+  refuses either.
+- from: #143
+- kind: doc-claim
+- status: active
+- direction: static: a claim about what the document says
+- note: the entry already reserved *advancing* that ref and *moving a local* `main`
+  or `dev-NN`, and a remote force-move or deletion is named by neither clause —
+  which is where #143's two worst rows sit, the only acts in that issue's set that
+  neither a hook nor the `main-branch-protection` ruleset covers. The rule that
+  refuses them is GH-143.1 to GH-143.3 and is not written yet, so this entry is the
+  document half alone, landing first deliberately: an act nothing refuses is only
+  reserved in a document a reader can find, which is the reasoning GH-99.1 records
+  for the clause beside it. The general form is
+  `docs/adr/0002-boundary-stated-in-effects.md`.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -1826,3 +1856,12 @@ it has no entry above (Q16).
   corrected, which is most of what GH-107.1 and GH-107.2 now say. It is not
   counted here, because a count of corrections is the kind of number this file has
   already had to fix once
+- #145: the issue that owns how strongly a document claim can be pinned at all —
+  `written` and `unarmed` decide whether a literal occurs, so an entry can satisfy
+  every pin it carries and a later sentence can reverse the claim. Cited beside the
+  `unarmed` that pairs GH-143.4, to mark which half that pairing reaches. It has no
+  entry of its own on purpose: its four options differ in whether a requirement is
+  produced at all — accepting the limit moves existing doc-claims to
+  `verify: review` under Q17 and adds none — so an entry written now would have to
+  say only that the question is open, which is the unfalsifiable text GH-131 was
+  rewritten to stop saying

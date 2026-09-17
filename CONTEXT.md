@@ -39,9 +39,10 @@ _Avoid_: check
 **Reserved act**:
 An act that belongs to Bertan and not to an agent: advancing the active dev
 branch on the remote, merging any pull request, rotating the dev branch,
-removing a worktree or deleting a worktree branch, any write to a release, and
+removing a worktree or deleting a worktree branch, any write to a release,
 moving a local `main` or `dev-NN` — its ref, or the working tree of the
-checkout it is checked out in.
+checkout it is checked out in — and moving the active dev branch's remote ref
+any way other than advancing it, or deleting that ref.
 Reserved is not a synonym for refused. The hooks refuse the ordinary spellings
 of some of these and they stop mistakes, not adversaries; others nothing refuses
 at all. `git worktree remove`, the whole of the sweep, and `git branch -d`,
@@ -50,8 +51,19 @@ all the same. So do `git branch -f`, `git fetch origin dev-NN:dev-NN` and a
 fast-forward in the main checkout, each of which moves a local branch Bertan
 owns. Git refuses the first two while that branch is checked out anywhere, so
 they reach one that is not; the fast-forward reaches the checked-out one, and
-rewrites files with edits in progress. Where nothing enforces, an agent reports
-what it found and stops.
+rewrites files with edits in progress.
+
+Nothing refuses the last clause above at all, and the wording of this entry
+was one clause short of naming it until #143 measured it. A force-move or a
+deletion of the active dev branch's *remote* ref passes all seven registered
+Bash hooks whenever it is spelled through `gh api` rather than as a push, and
+`dev-NN` carries no ruleset to refuse it afterwards the way `main` does — so
+those two are the only acts here that neither a hook nor the server covers. A
+write to `origin`'s contents that advances the same ref is in the same
+position. The lesson generalises past this entry: an act is reserved by its
+effect, and a rule written against one command's spelling guards one spelling.
+
+Where nothing enforces, an agent reports what it found and stops.
 _Avoid_: forbidden act, blocked act
 
 **Worktree branch**:

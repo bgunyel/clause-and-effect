@@ -5561,6 +5561,33 @@ written 'and names moving the ref without a push, which passes every hook' \
 written 'and a fetch into the local branch, which passes every hook too' \
   "$RESERVED_ENTRY" 'git fetch origin dev-NN:dev-NN'
 
+# #143: the same shape one spelling out. The clause above reserves moving a LOCAL
+# main or dev-NN, and the head of the enumeration reserves ADVANCING the active
+# dev branch on the remote. A remote force-move or deletion is named by neither,
+# and those two are the one pair in #143's measured set that neither a hook nor
+# the main-branch-protection ruleset refuses -- the ruleset targets
+# ~DEFAULT_BRANCH and dev-NN is not it. Named here for GH-99.1's reason, that an
+# act nothing refuses is only reserved in a document a reader can find, and
+# pinned apart from the literals above for the reason that comment gives. The
+# rule that would refuse them is GH-143.1 to GH-143.3 and is not written yet, so
+# this pins the document half only.
+req GH-143.4 US-26
+written 'the enumeration reserves moving the remote dev ref another way, or deleting it' \
+  "$RESERVED_ENTRY" 'any way other than advancing it, or deleting that ref'
+written 'and says nothing refuses that clause, which is what leaves it reserved only' \
+  "$RESERVED_ENTRY" 'Nothing refuses the last clause above at all'
+# Paired with the `written` above for GH-97.2's reason: a document that gained
+# the new clause and kept the wording it extends would state the narrow rule
+# too. The enumeration used to END at the local-branch clause, so the absence of
+# that sentence's terminating period is what says the addition is still there
+# rather than reverted. `unarmed` over an empty file reads ok, which is why it
+# sits beside `written` calls over the same extracted entry and not alone. It
+# catches a revert, and deliberately not a later sentence that contradicts the
+# clause while leaving its words intact -- that is the half no text check
+# reaches, and it is #145's.
+unarmed 'and the enumeration no longer ends at the local-branch clause' \
+  "$RESERVED_ENTRY" 'checkout it is checked out in.'
+
 # #99 Q9 and Q13: the rule, in the boundary section this suite already
 # extracted and checked from both ends. Both routes, the qualifier that keeps
 # the second one from discarding a worktree's commits, and the sentence saying
@@ -9052,7 +9079,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '274' "${TEXT_CHECK_ARGS##*COUNT }"
+    '277' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -9349,7 +9376,7 @@ GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117:gap GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
 GH-131:gap GH-133:gap GH-134:gap GH-135:gap GH-136:gap GH-139:gap
-GH-107.1:static GH-107.2:static
+GH-107.1:static GH-107.2:static GH-143.4:static
 '
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }

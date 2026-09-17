@@ -342,3 +342,17 @@ thing in the record.
   rule with 36 checks tagged to it and no coverage: nothing in the suite stood a
   worktree on the branch the hook refuses to push.
 
+- [2026-09-17 · session 2](devlog_2026-09-17_session-2.md) — a grilling session
+  on #131 that established the issue was the fourth arrival of one defect: the
+  boundary is written in a command's spelling, so each new spelling of one act
+  arrives unguarded. #131 takes Q26's shape — refuse `gh issue develop`'s
+  creating spellings, permit `--list` — after a fourth option the assistant
+  proposed was rejected on a false premise of its own and on failing open under
+  #135/#137/#139. The class underneath it is filed as #143, where a force-move
+  and a deletion of `refs/heads/dev-NN` pass all seven registered hooks and
+  `dev-NN` carries no ruleset, the only acts measured that neither layer covers.
+  The assistant's filing of #143 was then itself wrong about its scope — `PUT
+  …/contents/?branch=dev-05` advances the ref with content attached — corrected
+  the same day. `CONTEXT.md`'s *reserved act* turned out to carry the principle
+  already and to be one clause short of it; ADR 0002 records the general form.
+
