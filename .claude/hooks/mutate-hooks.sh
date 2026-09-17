@@ -16,16 +16,16 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- twenty-nine runs as the
-# registry stands, not thirty, because the row whose edit matches nothing never
-# reaches one. Measured twice on 2026-09-17, on this machine and on registries one
-# row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs. The figure above
-# is those rates carried to the current count and not a third measurement; a run
-# under load took nearer four minutes a row. That is why it is a
-# separate script and why check-hooks.sh does not call it (#107). Nothing here is
-# a PreToolUse hook and settings.json does not register it. Naming rows costs the
-# baseline plus one run each, so re-asking a single rule is about four minutes
-# rather than an hour.
+# applies, at about two minutes, plus the baseline -- thirty-one runs as the
+# registry stands, not thirty-two, because the row whose edit matches nothing
+# never reaches one. Measured twice on 2026-09-17, on this machine and on
+# registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
+# The figure above is those rates carried to the current count and not a third
+# measurement; a run under load took nearer four minutes a row. That is why it
+# is a separate script and why check-hooks.sh does not call it (#107). Nothing
+# here is a PreToolUse hook and settings.json does not register it. Naming rows
+# costs the baseline plus one run each, so re-asking a single rule is about four
+# minutes rather than an hour.
 #
 # EXIT STATUS: non-zero when any row reports something other than the outcome it
 # declares. For every real mutation that means a survivor or an edit that did not
@@ -45,10 +45,22 @@
 # MEASURED, 2026-09-17, at the commit that answered that review: all twenty-three
 # rows as the registry then stood reported what they declare, and .claude/hooks/
 # came back byte-identical. #108's six rows were run as a named selection on the
-# same day -- baseline plus six, all caught, byte-identical after -- and not as
-# part of a whole-registry run, so no run has yet exercised all twenty-nine
-# together. Saying which rows a measurement covered is the whole point of
-# recording one. No
+# same day -- baseline plus six, all caught, byte-identical after -- and #128's
+# three the same way, baseline plus three, all caught with GH-128 red. No run has
+# yet exercised the whole registry together. Saying which rows a measurement
+# covered is the whole point of recording one.
+#
+# THREE ROWS FOR ONE FIX, #128's, which is a departure from a row per rule and is
+# here because the rules overlap. `heredoc-opener-parity` loosens the parity test
+# to the rule cs_join uses, which is the defect review of PR #151 found in the
+# first version of that fix; `heredoc-boundary-run-kept` stops the drop taking
+# the trailing run off the line a body starts after. Each is caught, and NEITHER
+# reproduces the defect the issue was filed for: on an odd run the two mechanisms
+# cover the same case, so breaking one leaves the other holding it. That case
+# needs both broken, which is `heredoc-opener-continuation`, the one row here
+# whose edit is two commands -- and it puts the pass back to what dev-05 did,
+# measured: 151 checks red, and the bash differential from 0 hidden pushes to
+# 198, which is dev-05's figure exactly. No
 # per-mutation counts are recorded here on purpose -- a count in a comment is the
 # thing #107 was filed about, and the registry is re-runnable instead.
 #
@@ -104,8 +116,8 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   TWENTY-SEVEN real mutations, against SIX files in .claude/hooks/, naming
-#   THIRTY-EIGHT requirement IDs between them, of the 156 whose status is active.
+#   THIRTY real mutations, against SIX files in .claude/hooks/, naming
+#   THIRTY-NINE requirement IDs between them, of the 157 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
@@ -206,6 +218,9 @@ tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 a
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught
 degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch: FAILED or timed out after /d%GH-108.10%caught
+heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
+heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
+heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

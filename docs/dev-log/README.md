@@ -385,3 +385,20 @@ thing in the record.
   later ones in the prose describing the earlier ones, and git refused the commit
   message for it. One permitting gap found and deliberately not fixed, filed as
   #144: a pull request based on a dev branch that is not the active one.
+
+- [2026-09-17 · session 5](devlog_2026-09-17_session-5.md) — #128: a heredoc
+  opener ending in an ODD run of trailing backslashes is a continued line to
+  bash, which joins it before the body begins, so the command after the
+  terminator runs and both boundary hooks permitted it. The body now begins where
+  bash begins it, and the drop takes the trailing run off the line it begins
+  after, because cs_join joins any trailing backslash and bash joins only an odd
+  run. The first fix used cs_join’s looser rule and hid a command bash runs —
+  found by review of PR #151, and the reason the entry carries three commits and
+  a correction. A differential run of 2,580 shapes, each executed under bash to
+  decide what really runs, puts dev-05 at 198 hidden pushes, that first fix at
+  40, and this one at 0; suite 3657 → 4098 with dev-05 merged in. The same run
+  read backwards counts what the direction costs — pushes bash never runs that
+  the hook refuses anyway — at 750, 816 and 848, raised on the re-review and
+  kept. The entry’s own heading still reads "session 2", the number it was
+  written under before session 2 of this day
+  turned out to be someone else’s.

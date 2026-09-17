@@ -57,6 +57,12 @@
 # cannot be got exact by looking more carefully, because that is what the
 # previous two attempts were. The drop is a fail-safe now. See cs_normalise.
 #
+# A fourth wrong answer followed that conclusion rather than preceding it, and
+# it is #128: the fail-safe covers a body that never ends, and this one was a
+# body that began a line too early, on an opener whose own line was continued.
+# So the count is four, and the reading of it is unchanged. cs_normalise keeps
+# it.
+#
 # A fourth review, of the #43 migration, found two more -- both the same shape
 # as the first three, and both here rather than in a hook. A wrapper word was
 # stripped along with its options but not its operand, so `timeout 30 git push
@@ -303,8 +309,11 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # beginning with one read as a command position, and an early version of the
 # hooks refused the commit that introduced them.
 #
-# Joining runs after dropping, so a backslash at the end of the line before a
-# heredoc terminator cannot swallow the terminator and hide what follows.
+# The drop waits for a logical line to end, and that is #128's paragraph below:
+# a line ending in a backslash continues, and a body begins after the first line
+# that does not. Only WHERE the line ends is asked here; the joining itself is
+# still cs_join's, one pass later, so the two cannot answer the backslash
+# differently.
 #
 # Dropping is the one step here that hides commands rather than exposing them,
 # so what counts as a heredoc has to be exact in both directions -- and it was
@@ -322,11 +331,115 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # right. A heredoc that never reaches its terminator was not a heredoc, and the
 # lines held for it are given back at END rather than lost.
 #
+# A FIFTH answer followed, and the paragraph that stood at the head of this
+# comment was it: joining ran after dropping, and that order was claimed to make
+# a backslash before a terminator harmless. It did the opposite one line further
+# up. Bash joins the OPENER's own continuation before the body begins, so
+#
+#   cat <<E \
+#   x
+#   E
+#   git push --force origin main
+#
+# is `cat <<E x` with an empty body, and the push runs -- while this pass took
+# `x` for the body, ended the body at `E`, and cs_join then glued the push onto
+# the opener line, where no command stands at a command position. no-git-push.sh
+# and no-commit-to-main.sh both answered exit 0, measured. Issue #128.
+#
+# So the drop waits for the logical line to end: the opener is looked for on
+# every line of it, and the body begins after the line that ends it. WHICH line
+# that is, is bash's rule and not cs_join's -- a line continues only when its
+# run of trailing backslashes is ODD -- and the first version of this fix used
+# cs_join's looser rule instead, that any trailing backslash continues. That
+# version was wrong, in the permitting direction, and the argument that licensed
+# it is the sentence worth keeping here:
+#
+#   "Looser than bash is the safe side, because a logical line held open too
+#   long only exposes more lines as commands."
+#
+# It is false. Holding the line open moves the START OF THE BODY forward, and
+# the search for the terminator with it -- so a delimiter line that bash took as
+# the whole terminator is scanned past as though it were part of the command
+# line, the body runs on to the NEXT delimiter, and everything between them is
+# dropped. Measured on the fix that made that claim:
+#
+#   cat <<E \\
+#   E
+#   echo after
+#   git push --force origin main
+#   E
+#
+# Bash ends the command line at `cat <<E \` -- `\\` is an escaped backslash,
+# an even run, so nothing is continued -- takes the next line as the terminator
+# of an empty body, and runs `echo after` and the push. That fix emitted
+# `cat <<E \E` and NOTHING else: the push was gone, and no-git-push.sh answered
+# exit 0 where dev-05 answered exit 2. A new permitting defect in the change
+# whose subject is a permitting defect, and of the same class. Found by review of
+# this pull request, not by the suite it arrived with.
+#
+# So parity is modelled where the body starts, and the two rules are then left
+# to disagree everywhere it cannot cost anything -- except at one point. cs_join
+# joins a line ending in ANY backslash, deliberately, and it runs one pass after
+# this one; the line this pass ends a logical line on therefore gets its trailing
+# run taken off, because that line is the one cs_join could otherwise glue the
+# first line AFTER the terminator onto. Under the parity rule such a run is
+# always even, which is exactly the case bash does not join and cs_join does. A
+# trailing backslash is text of a command line and never a command, so removing
+# it can hide nothing; what it removes is the disagreement, at the only place
+# where the disagreement reaches a verdict.
+#
+# What says all of this rather than the paragraph above: 2,580 generated shapes
+# of opener, backslash run, delimiter and payload position, each RUN under bash
+# with `touch ran.flag` as the payload -- so that execution and not output is
+# what the property reads -- and then put through this pass with a push in the
+# payload's place. The property is that a push bash runs stands at the start of
+# some emitted line. dev-05 fails it 198 times, the first version of this fix 40,
+# this version 0. The harness is in the pull request, not the tree: its own first
+# two generations were green for the wrong reasons, once from a fixed
+# `E / payload / E` tail that re-closed every swallowed body and once from
+# reading `cat` printing a body line as the payload having run.
+#
+# A body line is still never joined, whether its delimiter is quoted or not,
+# because it is dropped before cs_join sees it -- so a quoted body whose every
+# line ends in a backslash still ends at its terminator, where bash ends it too.
+# Bash joins inside an UNQUOTED body and this pass does not, which ends the body
+# EARLIER than bash: the lines between are emitted rather than dropped. That is
+# the safe direction here for the reason the paragraph above is careful about --
+# ending a body early exposes lines, and it is ending one LATE, or starting one
+# late, that hides them. Deliberately not modelled rather than overlooked, and
+# the 2,580-shape run above covers body lines ending in a backslash under both
+# quotings.
+#
+# THE TRADE, taken knowingly: an opener SPLIT by the continuation -- `cat <<\` /
+# `E`, or `cat <<E\` / `x`, which bash reads as `<<E` and `<<Ex` -- is not
+# recognised as that opener, because the opener is looked for on each physical
+# line rather than on the joined text. Joining here to look at it would be the
+# join rule written twice, in the file whose header says that is the defect. So
+# either no opener is found or its delimiter never arrives, and both ends in the
+# END give-back: the lines are scanned as commands, which is where every other
+# uncertainty in this pass already lands.
+#
 # That is the answer this question should have had from the start: the exact
-# version has been got wrong three times, and each time the failure was silent
+# version has been got wrong four times, and each time the failure was silent
 # and in the permitting direction. The fail-safe costs a genuinely unterminated
 # heredoc being scanned as commands -- which bash would refuse to run anyway --
 # and it is the direction this file takes everywhere else.
+#
+# WHAT THAT DIRECTION COSTS, counted rather than asserted: the sentence above
+# says the fail-safe is paid for in refusals and does not say how many. The
+# 2,580 shapes carry a second column, which is the first one read backwards --
+# bash does NOT run the payload, yet a push in its place stands at the start of
+# an emitted line, so a hook refuses text bash never runs. Measured on the same
+# run: 750 such shapes on dev-05, 816 on the first fix, 848 here, of 2,100.
+# The rise is this change taking its own direction and not a new departure:
+# of the 124 that arrive, 108 are the END give-back and 16 the unquoted-body
+# join, both of them named above -- bash reports the heredoc unterminated and
+# the lines held for it come back as commands; a body line ending in a
+# backslash is joined by bash and not by this pass. 26 go the other way:
+# pushes that really were body text, now dropped because the body begins where
+# bash begins it. Raised on review of the pull request for #128 and kept, on
+# the grounds the whole file keeps everywhere else: a
+# refusal is visible and one edit away, and a permitted push is neither.
 cs_normalise() {
   awk '
     ind {
@@ -337,18 +450,53 @@ cs_normalise() {
       next
     }
     {
-      # A here-string is not a heredoc. Blanked at its own width, so a real
-      # heredoc later on the same line is still found where it stands.
-      scan = $0
-      gsub(/<<</, "   ", scan)
-      if (match(scan, /<<-?[[:space:]]*[^[:space:];|&<>()]+/)) {
-        d = substr(scan, RSTART, RLENGTH)
-        dash = (d ~ /^<<-/)
-        sub(/^<<-?[[:space:]]*/, "", d)
-        gsub(/[\047"]/, "", d)
-        ind = 1
+      # An opener found on an earlier line of this logical line is the one that
+      # stands: the first match wins, as it did when every logical line was one
+      # physical line. `opener` set means a body is waiting for the line to end,
+      # which it can only be while the line is still being continued.
+      if (!opener) {
+        # A here-string is not a heredoc. Blanked at its own width, so a real
+        # heredoc later on the same line is still found where it stands.
+        scan = $0
+        gsub(/<<</, "   ", scan)
+        if (match(scan, /<<-?[[:space:]]*[^[:space:];|&<>()]+/)) {
+          d = substr(scan, RSTART, RLENGTH)
+          dash = (d ~ /^<<-/)
+          sub(/^<<-?[[:space:]]*/, "", d)
+          gsub(/[\047"]/, "", d)
+          opener = 1
+        }
       }
-      print
+      if (!opener) { print; next }
+      # Where the logical line carrying the opener ends, by the rule bash uses
+      # and not the one cs_join uses: a line continues only when its run of
+      # trailing backslashes is ODD, the last one escaping the newline and the
+      # rest being escaped backslashes. An even run is text, and the line ends
+      # there. #128.
+      # p is that parity, flipped per backslash rather than taken with a
+      # modulo, so that the rule can be broken by one registered mutation:
+      # mutate-hooks.sh splits a row on % and could not carry the expression.
+      line = $0
+      n = length(line)
+      r = 0
+      p = 0
+      while (r < n && substr(line, n - r, 1) == "\\") { r++; p = 1 - p }
+      if (p) { print; next }
+      # The body starts after this line, and cs_join runs one pass later on a
+      # LOOSER rule -- it joins a line ending in ANY backslash, an escaped one
+      # included, deliberately. So an even run left standing here is the one
+      # place the two disagree where it can cost something: cs_join would glue
+      # the first line after the terminator onto this one, which is #128 again
+      # in its other spelling. Take the run off rather than hope they agree:
+      # trailing backslashes are text of the command line itself, never a
+      # command, and a line start is what every rule reads.
+      # The blanks in front of the run go with it, so that what this pass emits
+      # carries no trailing whitespace for a literal in check-hooks.sh to have
+      # to spell. Trailing blanks are not a command either.
+      if (r > 0) sub(/[ \t]*\\+$/, "", line)
+      print line
+      ind = 1
+      opener = 0
     }
     # The terminator never arrived, so this was not a heredoc and the lines were
     # dropped in error. Give them back.
@@ -372,8 +520,9 @@ cs_normalise() {
     #   - `<(...)` and `>(...)` carry a command, which is the one thing a drop
     #     must never swallow. They are not redirections and are left whole.
     #   - a redirect inside quotes is text. A commit message naming one is the
-    #     mistake the heredoc opener made three times, so quotes are tracked
-    #     character by character rather than matched around.
+    #     mistake the heredoc opener has made four times -- the header above
+    #     keeps that count -- so quotes are tracked character by character
+    #     rather than matched around.
     #   - `<<`, `<<-` and `<<<` belong to the heredoc pass above. Answering
     #     what a heredoc is a second time, here, is how the answers came to
     #     disagree in the first place; a run of two or more < is emitted whole.
@@ -1021,10 +1170,19 @@ fi
 # or more per fragment cs_split emits, so its time grows with the number of
 # fragments as well, and a short line can hold thousands: 2,500 `t;` and a
 # `gh pr merge 5` on the next line -- 5,014 bytes, a third of the cap -- took
-# no-pr-decisions.sh 6.4 s idle, found by review of PR #123. That is #127. And
-# a heredoc opener ending in a backslash lets cs_normalise emit a line past the
-# cap from lines within it, so the cap does not bound what the passes are handed
-# either. That is #128.
+# no-pr-decisions.sh 6.4 s idle, found by review of PR #123. That is #127.
+#
+# It does bound what the passes are HANDED, and until #128 it did not. A heredoc
+# opener ending in a backslash let cs_normalise emit one 600,400-byte line from
+# an input whose longest joined line was 15,011 bytes, because the drop ended
+# each body at its terminator and the join then glued forty groups into one
+# line. What holds now is an argument and not a measurement: the drop only ever
+# REMOVES lines, and it can remove a line next to a continued one only inside a
+# body -- a body begins after a line that does not end in a backslash, and the
+# lines held for it are given back together. So every joined line cs_normalise
+# emits is part of a joined line cs_within_cap measured, and no longer than it.
+# That input is pinned at 15,011 in check-hooks.sh, and reverting the fix in a
+# copy puts the 600,400 back: mutate-hooks.sh row heredoc-opener-continuation.
 #
 # Why the passes were slow is fixed too, and is the other half of #96. Six of
 # them grew a string one character or one token at a time -- cs_normalise's
@@ -1066,7 +1224,7 @@ fi
 # backslash, are refused as a 24 KB line although no line of the command is
 # longer than 80 bytes and bash would never read them as one. Taken rather than
 # fixed, because answering it means cs_within_cap deciding where a heredoc
-# ends -- the question cs_normalise has got wrong three times, asked a fourth
+# ends -- the question cs_normalise has got wrong four times, asked a fifth
 # time in a second place -- and a body whose every line ends in a backslash is
 # not something a commit message or a dev-log entry holds. check-hooks.sh pins
 # the refusal.
