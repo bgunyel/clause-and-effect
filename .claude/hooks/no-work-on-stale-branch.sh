@@ -269,7 +269,7 @@ CURRENT=$(git branch --show-current 2>/dev/null)
 # The active dev branch. See the header for why the filter and the version sort
 # are both load-bearing. The next two lines stand verbatim in
 # report-stale-branches.sh as well:
-# check-hooks.sh holds the two equal, so a change here is a change there.
+# check-hooks.sh holds the three equal, so a change here is a change there.
 DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
       | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
 

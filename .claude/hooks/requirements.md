@@ -1676,35 +1676,44 @@ The suite fails on each of these, and `--matrix` shows the rest:
 ### GH-108.5
 - text: With no `origin/dev-NN` ref at all, `no-work-on-stale-branch.sh`'s fallback
   detector abstains while its `[gone]` detector still refuses; with two, the
-  highest by `sort -V` is the active dev branch. `no-pr-decisions.sh` accepts any
-  base matching `dev-NN` whatever refs origin holds, because it reads no git at
-  all.
+  highest by `sort -V` is the active dev branch. `no-pr-decisions.sh` with no such
+  ref accepts any base matching `dev-NN` and refuses one that does not, the shape
+  being the whole of its base rule where no branch can be read.
 - from: #108
 - kind: doc-claim
 - status: active
-- note: the last clause is a gap and is filed as such, not pinned as a design. A
-  base of `dev-05` is permitted while `dev-06` is the active dev branch, which
-  CLAUDE.md's "into the active dev branch" refuses; the window in which two exist
-  is a rotation. It is left at the measured verdict here because the fix -- having
-  that hook read refs to learn which dev branch is active -- would make the one
-  hook in the boundary whose verdict is independent of its environment depend on
-  it, and #108's whole table is the account of what a failed environment read
-  costs. Trading a gap during a rotation for a hook that fails open whenever refs
-  cannot be read is the wrong way round. Filed as #144, a sub-issue of #36, and
-  its check is written at the measured verdict rather than the correct one, so
-  the fix turns it red and finds the issue.
+- note: the last clause was a gap, filed as #144 and closed by it; GH-144.1 to
+  GH-144.4 carry the rule that replaced it and GH-144.2 the half this entry now
+  states. What stood here was the measured verdict rather than the correct one --
+  a base of `dev-05` permitted while `dev-06` was the active dev branch, which
+  CLAUDE.md's "into the active dev branch" refuses -- and the row was written that
+  way so that the fix would turn it red and find the issue, which is how #144
+  reached this entry. #108's reason for not fixing it was that a hook whose
+  verdict depends on an environment read fails open when the read fails; what
+  landed does not: the narrowing is asked only of a base that has already passed
+  the shape question, so a failed read costs the narrowing and no refusal. This
+  entry keeps the no-ref case, which is that degraded verdict and is still this
+  section's business.
 
 ### GH-108.6
 - text: No hook runs `gh`, so `gh` being off PATH changes no verdict: every `gh`
-  command is judged on the text of the line, and `no-pr-decisions.sh` reaches the
-  same verdict in every environment #108 builds.
+  command is judged on the text of the line, and every refusal
+  `no-pr-decisions.sh` makes is reached in every environment #108 builds.
 - from: #108
 - kind: doc-claim
 - status: active
 - note: the second clause is the wider claim and is checked as one -- the same
   payloads under every fixture of this section, not only under the one without
-  `gh`. That hook starts no process and reads no ref, and this is where that is
-  written down as a property rather than as an absence.
+  `gh`. It said "reaches the same verdict in every environment", which GH-144.1
+  made false: that rule refuses `--base dev-05` in the two-ref fixture and permits
+  it in every other environment here, which is the lookup narrowing and is the
+  point of it. Narrowing the claim to the refusals keeps what #108 was protecting
+  -- an environment this hook cannot read must never turn a refusal into a permit
+  -- and GH-144.2 is the same property said from the other side. The permitting
+  half of the pair is asked of `gh issue list`, a command with no pull request in
+  it, because every permit the base rule gives names a `dev-NN` base and so is the
+  environment's business by design. That hook still runs no `gh`; what it starts,
+  since #144, is one `git for-each-ref`, and only once a base has been named.
 
 ### GH-108.7
 - text: A NUL, a non-ASCII byte, an invalid UTF-8 sequence or a CRLF line ending in
@@ -1776,6 +1785,91 @@ The suite fails on each of these, and `--matrix` shows the rest:
   local path that does not exist fails at once, and with `gh` absent the two reads
   behind it are skipped by the rule in that file's header. That is why this one
   can be a run and why a genuinely offline network cannot.
+
+### GH-144.1
+- text: `no-pr-decisions.sh` asks two questions of a base: the shape, off the text
+  of the command, and then -- of a base that is already `dev-NN` -- whether it is
+  the branch `origin` holds highest. A base that is not the active dev branch is
+  refused in all four spellings, whether it is a dev branch already rotated past
+  or one origin does not have yet, and the active dev branch is derived as the
+  highest `refs/remotes/origin/dev-[0-9]+` by `sort -V`, so `origin/dev-foo` and
+  `origin/dev-05-backup` are not dev branches and `dev-10` is higher than
+  `dev-09`.
+- from: #144
+- kind: defect-permitting
+- status: active
+- note: the gap GH-108.5 pinned at its measured verdict. The base rule was a
+  pattern, so every `dev-NN` string was accepted whatever refs origin held, while
+  `no-work-on-stale-branch.sh` in the same repository derived the active dev
+  branch from those refs and refused a commit measured against it -- two
+  definitions of one term, disagreeing exactly during a rotation, which is when
+  both refs exist and when a worktree pull request would land on the branch on
+  its way out. The two lines that derive the branch now stand in three files and
+  the suite holds all three equal, which is the same arrangement, and the same
+  argument, that already held the other two.
+
+### GH-144.2
+- text: The lookup only narrows. When the read for the active dev branch comes
+  back empty -- no `origin/dev-NN` ref, `git` off PATH, a directory that is no
+  repository -- the shape question is the whole base rule, so every `dev-NN`
+  base is accepted as it was before GH-144.1 and every refusal made on the text
+  of the line is still made: a base of main, a base that is not `dev-NN`, and a
+  create or REST write naming no base at all.
+- from: #144
+- kind: defect-refusing
+- status: active
+- note: this is what made the lookup admissible at all, and #108 is the reason it
+  has to be written down as a requirement rather than as a comment. That issue
+  declined to close the gap because a hook whose verdict depends on an
+  environment read fails open when the read fails, and an abstaining pull-request
+  hook is one that permits `--base main` whenever refs cannot be read. The
+  narrowing is asked only of a base that has already passed the shape question,
+  so the set this hook accepts is a subset of `dev-NN` under every ref state
+  there is: a failed read costs the narrowing and no refusal. The sharpest check
+  is the `git`-off-PATH one, which runs in the fixture holding both refs, so the
+  same command refused under GH-144.1 is permitted there and the only difference
+  is whether the read could be made.
+
+### GH-144.3
+- text: A refusal for the branch question names the branch it expected -- "dev-05
+  ... is not dev-06, the active dev branch here" -- in all four spellings, and the
+  name is read from the refs rather than written into the message. A base that
+  fails the shape question is not told which branch was expected, and a `dev-NN`
+  base is never told it is not a `dev-NN` branch.
+- from: #144
+- kind: defect-permitting
+- status: active
+- direction: refuse-only: every claim here is about the wording of a refusal, and
+  a permit has no message to read
+- note: #133's complaint about a sibling message, answered for the rule this issue
+  adds rather than for that one. One constant carries both answers, which is what
+  FR-23 asks for and also what makes the wrong answer one edit away, so the two
+  `says_not` rows are the load-bearing half: a dev branch told it is "not a dev-NN
+  branch" is a refusal an agent cannot act on, and main told which dev branch was
+  expected reads as an invitation to retarget a pull request that should not
+  exist. Message content is #109's; what is claimed here is that the branch is
+  named at all and that the two answers do not cross.
+
+### GH-144.4
+- text: Every check in `check-hooks.sh` whose payload names a `dev-NN` base names
+  the directory it is judged in -- `$ON_DEV` for the shape question, a ref fixture
+  for the branch question -- and none is judged in the directory the suite was
+  started from.
+- from: #144
+- kind: doc-claim
+- status: active
+- direction: static: it reads the harness word of this suite's own rows and no
+  verdict at all
+- note: a rule about the checks rather than about the hook, and the one thing
+  GH-144.1 costs this suite. `check` runs the hook where this file stands, which
+  is inside this repository, so a `dev-05` payload read there is evidence only
+  until the next rotation makes `dev-06` the active branch -- it would then go red
+  blaming a hook that was right, which is the failure this entry exists to stop.
+  Thirty-five rows moved to `$ON_DEV` when GH-144.1 landed; the count is not
+  claimed, because what has to hold is that no bare row exists and not how many
+  scoped ones do. The derivation reads the harness word of every matching row and
+  `lacks` refuses an empty read, so a derivation that stopped matching fails
+  rather than reporting that no bare row was found.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -2056,8 +2150,8 @@ it has no entry above (Q16).
 - #150: the pull request for #108; Bertan's review of it is cited where each of
   the five things it corrected stands, the largest being a fixture guard that made
   the suite abort on any machine without `gh` installed
-- #144: the permitting gap #108 found and did not fix — a pull request based on a
-  dev branch that is not the active one. It has no entry above on purpose: the
-  requirement that would carry it is the fix, and GH-108.5 pins the verdict as it
-  stands and names it a gap. An entry here would read as a requirement the hooks
-  meet
+- #144: closed by the entries above, GH-144.1 to GH-144.4. It was listed here
+  while it was a gap #108 had found and not fixed, on the reasoning that the
+  requirement which would carry it was the fix itself; the fix landed and the
+  listing became the thing it warned against, an issue named here that a reader
+  cannot find above

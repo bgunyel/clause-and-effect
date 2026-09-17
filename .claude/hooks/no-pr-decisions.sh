@@ -22,16 +22,65 @@
 # state that was filed as a defect against it: the ordinary command refused
 # while the API route stayed open.
 #
-# "Active dev branch" is read as the dev-NN shape and not as a particular
-# branch. Naming the one live dev branch would mean reading repository state --
-# which branches exist, or which is newest -- and repository state is what the
-# sibling hook declines to rest on, for the reason it declines to rest on
-# configuration: an agent can make a branch. The trade, taken knowingly: a pull
-# request into a dev branch that is no longer the active one is permitted. main,
-# master, a worktree branch and a typo are all refused, and those are the
-# mistakes in question.
+# "ACTIVE DEV BRANCH" IS TWO QUESTIONS, and only the second of them reads a ref.
+# The shape question -- is this base a dev-NN at all -- is answered on the text
+# of the command, and answers main, master, a worktree branch and a typo. The
+# branch question -- is it THE dev-NN origin currently holds highest -- is
+# answered by reading refs/remotes/origin/dev-*, the same two lines
+# no-work-on-stale-branch.sh and report-stale-branches.sh derive that branch
+# from, so that the three files cannot disagree about which branch is active.
+# They did: this file accepted every dev-NN string whatever refs origin held,
+# while the stale guard in the same repository refused a commit naming the
+# higher of two. Issue #144.
 #
-# Still allowed: creating a PR into a dev-NN branch, commenting on one, editing
+# THE LOOKUP CAN ONLY NARROW, and that is the whole of why a hook that must not
+# fail open may make it. The shape question decides first and alone refuses;
+# the branch question is asked only of a base that already passed it, so the set
+# this file accepts is a subset of dev-NN under every ref state there is. When
+# the read comes back empty -- git off PATH, no repository, no origin, a fresh
+# clone, the rotation window before the successor is pushed -- the shape
+# question is the whole rule, which is the verdict this file gave everywhere
+# before the lookup existed. A failed read therefore costs the narrowing and
+# nothing else: it cannot admit main, cannot admit a missing base, and cannot
+# turn any refusal above into a permit. That is the answer to #108, whose table
+# is the account of what a failed environment read costs elsewhere in this
+# boundary: every other hook's read decides a refusal, and an abstaining PR hook
+# would be one that permits `--base main` whenever refs cannot be read. This one
+# abstains from the narrowing and keeps the rule.
+#
+# "An agent can make a branch" was the objection this file used to rest on, and
+# it is answered by the same asymmetry rather than by trust. Forging a
+# remote-tracking ref -- `git update-ref refs/remotes/origin/dev-99`, which no
+# hook here guards -- moves which single dev-NN is accepted inside a set that is
+# already only dev-NN, and gh then opens the pull request against a branch the
+# remote does not have. There is no ref state in which main is reachable through
+# this rule, so nothing is gained by inventing one, and these stop mistakes
+# rather than adversaries.
+#
+# THE REFUSAL NAMES THE BRANCH IT EXPECTED, because a refusal an agent cannot
+# act on is the complaint #133 records against a sibling message. "dev-05 is not
+# dev-06, the active dev branch" is one edit away from correct; "not a dev-NN
+# branch" said of a dev-NN branch would be a lie.
+#
+# WHAT IT COSTS, named. This file now starts a process, which it did not before
+# -- one `git for-each-ref`, no network, and only once a base has actually been
+# named, so an ordinary command still reaches its verdict without it. And stale
+# refs err toward refusing a base that is right: a session that has not fetched
+# since the rotation reads the old branch as active and refuses the new one.
+# That is the refusing direction, it is visible, and `git fetch` is the fix --
+# which the SessionStart report already runs every session.
+#
+# One corner is left open, named rather than closed. The refs read are those of
+# the repository the command runs in, and `gh pr create -R other/repo` names
+# another -- so a base is judged against this repository's active dev branch
+# whichever repository the pull request is going to. That is not a regression:
+# before #144 every dev-NN base was accepted in every repository, and what the
+# corner leaves is a subset of that. It stays open under the STOPPING RULE
+# below: opening a pull request into another repository is not a shape an agent
+# working here writes by accident.
+#
+# Still allowed: creating a PR into the active dev branch -- into any dev-NN
+# branch where no dev ref can be read -- commenting on one, editing
 # one without moving its base, viewing, listing, diffing and checking one,
 # reviewing with --comment, every gh issue subcommand, reading a release through
 # gh release list, view, download, verify and verify-asset, and reading a PR
@@ -222,8 +271,62 @@ gh_pr_web() {
   return 1
 }
 
+# THE ACTIVE DEV BRANCH: the highest-numbered refs/remotes/origin/dev-*, read
+# with no network because a hook has five seconds.
+#
+# Read once and memoised, because the API loop asks per command and this is the
+# one process this file starts. Nothing here can make it start when no base is
+# named: the only caller is the shape test, and the shape test runs only on a
+# base that is there. `origin/` comes off after the read rather than in it,
+# because what the answer is compared against is a base as gh spells it -- and
+# because the read itself is not this file's to reword; see below.
+#
+# An empty answer is not an error and is not refused; see the header. It means
+# the shape test is the whole rule, which is what this file was before #144.
+ACTIVE_DEV=
+ACTIVE_DEV_READ=
+active_dev() {
+  local DEV
+  [ -z "$ACTIVE_DEV_READ" ] || { printf '%s' "$ACTIVE_DEV"; return 0; }
+  ACTIVE_DEV_READ=1
+# Why the digit filter and the version sort are both load-bearing is argued once, in
+# no-work-on-stale-branch.sh's header, rather than twice here in different words
+# -- a second copy of an argument goes stale in silence when the first one is
+# corrected. The next two lines stand verbatim in that file and in
+# report-stale-branches.sh, and are written at column 0 inside this function for
+# exactly that reason: the three are compared as strings, and an indented copy is
+# a different string.
+# check-hooks.sh holds the three equal, so a change here is a change there.
+DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
+      | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
+  ACTIVE_DEV=${DEV#origin/}
+  printf '%s' "$ACTIVE_DEV"
+}
+
+# Is this base one a pull request may be proposed into? Two questions in the
+# order the header sets out -- the shape on the text of the command, then the
+# branch against origin's refs -- and the reason for the order is the message: a
+# base that is not dev-NN at all is told so, and a dev-NN branch is never told
+# it is not a dev-NN branch.
+#
+# BAD_BASE_WHY carries which question failed, so that one refusal constant can
+# carry either answer without the four call sites asking again. It is set on
+# failure only; every caller reads it beside BAD_BASE, which bases_all_dev
+# clears before the first call.
 is_dev_base() {
-  printf '%s' "$1" | grep -qE '^dev-[0-9]+$'
+  local DEV
+  if ! printf '%s' "$1" | grep -qE '^dev-[0-9]+$'; then
+    BAD_BASE_WHY='is not a dev-NN branch'
+    return 1
+  fi
+  DEV=$(active_dev)
+  # No dev ref to read: the shape is the whole rule.
+  [ -n "$DEV" ] || return 0
+  if [ "$1" != "$DEV" ]; then
+    BAD_BASE_WHY="is not $DEV, the active dev branch here"
+    return 1
+  fi
+  return 0
 }
 
 # Is this gh api call a write? Succeeds if it is, or if that cannot be told.
@@ -258,12 +361,16 @@ gh_api_is_write() {
   return 1
 }
 
-# Refuse unless every base in a newline-separated list is a dev-NN branch. The
-# offending one is left in BAD_BASE for the caller's message. An empty list is
-# no bases, which is a different question and the caller's to ask.
+# Refuse unless every base in a newline-separated list is one a pull request may
+# be proposed into. The offending one is left in BAD_BASE for the caller's
+# message and why it offends in BAD_BASE_WHY, which is seeded here so that a
+# caller reaching its message with no base to name -- the unreadable REST field,
+# which fails the shape test -- still prints a true clause. An empty list is no
+# bases, which is a different question and the caller's to ask.
 bases_all_dev() {
   local B
   BAD_BASE=
+  BAD_BASE_WHY='is not a dev-NN branch'
   [ -n "$1" ] || return 0
   while IFS= read -r B; do
     if ! is_dev_base "$B"; then BAD_BASE=$B; return 1; fi
@@ -582,7 +689,7 @@ while IFS= read -r CMD; do
     BASES=$(gh_pr_bases "$ARGS")
     if [ -n "$BASES" ]; then
       if ! bases_all_dev "$BASES"; then
-        echo "$BASE This names $BAD_BASE, which is not a dev-NN branch." >&2
+        echo "$BASE This names $BAD_BASE, which $BAD_BASE_WHY." >&2
         exit 2
       fi
     elif ! gh_pr_web "$WEBARGS"; then
@@ -603,7 +710,7 @@ while IFS= read -r CMD; do
   if RAW=$(cs_gh_args 'pr edit' <<<"$CMD"); then
     ARGS=$(base_args "$RAW")
     if ! bases_all_dev "$(gh_pr_bases "$ARGS")"; then
-      echo "$BASE Retargeting to $BAD_BASE chooses that destination just as creating it there would. Edit anything else you like." >&2
+      echo "$BASE Retargeting to $BAD_BASE, which $BAD_BASE_WHY, chooses that destination just as creating it there would. Edit anything else you like." >&2
       exit 2
     fi
   fi
@@ -640,14 +747,24 @@ CMDLIST
 # neither a method nor a field.
 API_WRITE=
 API_BAD_BASE=
+API_BAD_BASE_WHY=
 API_NO_BASE=
+# The offending base and why it offends are taken together, because BAD_BASE_WHY
+# belongs to the last bases_all_dev call and this block makes two of them: a
+# REST base refused in the loop, then a graphql list that passes, left the base
+# named in one variable and the reason reset in the other. Last failure wins, as
+# API_BAD_BASE already did.
+api_bad_base() {
+  API_BAD_BASE=${BAD_BASE:-nothing readable}
+  API_BAD_BASE_WHY=$BAD_BASE_WHY
+}
 while IFS= read -r CMD; do
   cs_gh_args api <<<"$CMD" >/dev/null || continue
   gh_api_is_write "$CMD" || continue
   API_WRITE=1
   CMD_BASES=$(rest_bases "$CMD")
   if [ -n "$CMD_BASES" ]; then
-    bases_all_dev "$CMD_BASES" || API_BAD_BASE=${BAD_BASE:-nothing readable}
+    bases_all_dev "$CMD_BASES" || api_bad_base
   # The collection endpoint is where a pull request is made; /pulls/N is one
   # that already exists and is not asked for a base it already has.
   elif printf '%s\n' "$CMD" | grep -qE '/pulls([^/A-Za-z0-9_-]|$)'; then
@@ -710,13 +827,13 @@ if [ -n "$API_WRITE" ]; then
   # verb would have answered for one and not the other.
   GQL_BASES=$(gql_bases "$SCAN")
   if [ -n "$GQL_BASES" ]; then
-    bases_all_dev "$GQL_BASES" || API_BAD_BASE=${BAD_BASE:-nothing readable}
+    bases_all_dev "$GQL_BASES" || api_bad_base
   elif echo "$SCAN" | grep -q 'createPullRequest'; then
     API_NO_BASE=1
   fi
 
   if [ -n "$API_BAD_BASE" ]; then
-    echo "$BASE This names $API_BAD_BASE; reaching it through gh api makes it the same destination under another spelling." >&2
+    echo "$BASE This names $API_BAD_BASE, which $API_BAD_BASE_WHY; reaching it through gh api makes it the same destination under another spelling." >&2
     exit 2
   fi
   if [ -n "$API_NO_BASE" ]; then
