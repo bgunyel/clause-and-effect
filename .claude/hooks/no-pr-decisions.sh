@@ -628,8 +628,8 @@ while IFS= read -r CMD; do
   # asked for in as many words -- "the fix is not to break the constant" -- and
   # the alternative, a per-arm `Write:` line, would satisfy both but rewrites all
   # four base refusals and moves the pins on three arms this issue is not about.
-  # So it is left, deliberately, and filed rather than traded in silence; #109
-  # owns message content. Raised by Bertan's review of PR #147.
+  # So it is left, deliberately, and filed as #154 rather than traded in silence;
+  # #109 owns message content. Raised by Bertan's review of PR #147.
   #
   # NOTHING STANDS IN THAT SENTENCE'S PLACE, and the first draft of this fix got
   # that wrong. It ended "No other edit is checked here", which is true of this

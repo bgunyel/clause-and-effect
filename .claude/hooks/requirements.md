@@ -1417,8 +1417,11 @@ The suite fails on each of these, and `--matrix` shows the rest:
   evidence for FR-23 and against US-7, and #105's retarget rows were tagged FR-23
   alone while this stood open. The fix keeps the constant and lets the
   retarget arm's tail -- already per-arm -- name its own correction, so the
-  retarget's tail row now carries US-7 as well. Left to #109: whether every other
-  refusal message in the two files is read for its words.
+  retarget's tail row now carries US-7 as well. What it does not fix is the
+  order: `BASE` still opens with `Write: gh pr create --base dev-NN`, so the
+  wrong imperative is still the first one an agent reads, which is #154. Left to
+  #109: whether every other refusal message in the two files is read for its
+  words.
 
 ### GH-134
 - text: A shell wrapper is refused wherever it stands in a command position,
