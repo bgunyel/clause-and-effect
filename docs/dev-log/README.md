@@ -342,3 +342,33 @@ thing in the record.
   rule with 36 checks tagged to it and no coverage: nothing in the suite stood a
   worktree on the branch the hook refuses to push.
 
+- [2026-09-17 · session 2](devlog_2026-09-17_session-2.md) — a grilling session
+  on #131 that established the issue was the fourth arrival of one defect: the
+  boundary is written in a command's spelling, so each new spelling of one act
+  arrives unguarded. #131 takes Q26's shape — refuse `gh issue develop`'s
+  creating spellings, permit `--list` — after a fourth option the assistant
+  proposed was rejected on a false premise of its own and on failing open under
+  #135/#137/#139. The class underneath it is filed as #143, where a force-move
+  and a deletion of `refs/heads/dev-NN` pass all seven registered hooks and
+  `dev-NN` carries no ruleset — recorded in the entry as the only acts measured
+  that neither layer covers, which session 3 corrects. The assistant's filing of
+  #143 was then itself wrong about its scope — `PUT …/contents/?branch=dev-05`
+  advances the ref with content attached — corrected the same day. `CONTEXT.md`'s
+  *reserved act* turned out to carry the principle already and to be one clause
+  short of it; ADR 0002 records the general form.
+
+- [2026-09-17 · session 3](devlog_2026-09-17_session-3.md) — Bertan's review of
+  PR #146 requests changes on five findings. The load-bearing one is a control
+  the previous entry recorded as refused and is not: `gh api --method POST
+  …/merges -f base=dev-05` passes all seven hooks, because no hook holds a rule
+  matching `/merges` at all, and its effect advances the active dev branch on the
+  remote — so the count of acts neither layer covers was wrong in four documents,
+  and was already false in the paragraph it stood in. No document carries a count
+  now. The `unarmed` added last session turned out to pin the clause's
+  *placement* rather than its claim, going red on a correct document, and all
+  three new checks read the wrap-sensitive fixture whose replacement `GH-97.2`
+  had already built 200 lines above them — so `CONTEXT.md` had been shaped to fit
+  a fragile check. Also found: `CLAUDE.md` still said `docs/adr/` holds one ADR,
+  unpinned by anything, in the sentence that warns a reader off a stale
+  enumeration.
+
