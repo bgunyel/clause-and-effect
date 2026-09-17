@@ -1303,15 +1303,24 @@ per the priority order above.
   it cannot say whether any of them would go red if the rule they name were
   broken, and several suites in this repository have been green for the wrong
   reasons. #107 built the harness — `bash .claude/hooks/mutate-hooks.sh`, about
-  forty-five minutes — and Bertan's review of PR #142 grew its registry from
+  an hour — and Bertan's review of PR #142 grew its registry from
   eight real mutations to twenty-one. How many requirement IDs those name is
   `--list`'s last line, deliberately not restated here: the first version of this
   item restated it and was wrong, along with three other documents. This item is
   what remains, and the shape of the gap rather than its size is the part worth
   writing down: a row per rule reaches a requirement, it does not exercise every
-  check that requirement has, and 145 requirements are active. #128 registered
-  its own row with its fix, which is the shape the rest of them should take;
-  #108's and #109's rules arrive with them. Two kinds of rule the harness cannot
+  check that requirement has, and 157 requirements are active. #108 registered
+  six rows with its ten requirements, reaching six of them; #128 registered three
+  for the two rules of one fix; #109's arrive with it. That #108 reached six of
+  ten is the shape again in miniature — the four it
+  did not reach are pins on behaviour no single edit to a hook flips, which is
+  what a row can and cannot be written against. Five was the first answer, and a
+  review found the sixth: the claim that the degraded report still reports was
+  reachable after all, by deleting the line that reports it. The other four are
+  abstentions and byte handling that lives in the shell rather than in a line of
+  hook code. #128's three are the same shape from the other end: two rules that
+  overlap, so a row per rule leaves the case the issue was filed for reachable by
+  neither, and a third row breaks both. Two kinds of rule the harness cannot
   reach at all — one living in the tooling beside the hooks, `check-hooks.sh` and
   `mutate-hooks.sh` themselves, and a claim about a file outside `.claude/hooks/`
   — are recorded in its header and need a different answer, not another row.

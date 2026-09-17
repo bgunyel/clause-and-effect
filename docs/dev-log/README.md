@@ -342,13 +342,60 @@ thing in the record.
   rule with 36 checks tagged to it and no coverage: nothing in the suite stood a
   worktree on the branch the hook refuses to push.
 
+- [2026-09-17 · session 2](devlog_2026-09-17_session-2.md) — a grilling session
+  on #131 that established the issue was the fourth arrival of one defect: the
+  boundary is written in a command's spelling, so each new spelling of one act
+  arrives unguarded. #131 takes Q26's shape — refuse `gh issue develop`'s
+  creating spellings, permit `--list` — after a fourth option the assistant
+  proposed was rejected on a false premise of its own and on failing open under
+  #135/#137/#139. The class underneath it is filed as #143, where a force-move
+  and a deletion of `refs/heads/dev-NN` pass all seven registered hooks and
+  `dev-NN` carries no ruleset — recorded in the entry as the only acts measured
+  that neither layer covers, which session 3 corrects. The assistant's filing of
+  #143 was then itself wrong about its scope — `PUT …/contents/?branch=dev-05`
+  advances the ref with content attached — corrected the same day. `CONTEXT.md`'s
+  *reserved act* turned out to carry the principle already and to be one clause
+  short of it; ADR 0002 records the general form.
 
-- [2026-09-17 · session 2](devlog_2026-09-17_session-2.md) — #128: a heredoc
-  opener ending in a backslash is a continued line to bash, which joins it before
-  the body begins — so the body of `cat <<E \` / `x` / `E` is empty and the
-  command after the terminator runs. The drop read that command as part of the
-  opener line instead and both boundary hooks permitted it, exit 0 where the same
-  command without the backslash was exit 2. The body now begins after the logical
-  line ends, by the rule cs_join joins on, while the joining stays cs_join’s: the
-  suite goes 3657 → 3957 results, 145 of them red with the one line reverted, and
-  the 600,400-byte line the cap was supposed to bound becomes 15,011.
+- [2026-09-17 · session 3](devlog_2026-09-17_session-3.md) — Bertan's review of
+  PR #146 requests changes on five findings. The load-bearing one is a control
+  the previous entry recorded as refused and is not: `gh api --method POST
+  …/merges -f base=dev-05` passes all seven hooks, because no hook holds a rule
+  matching `/merges` at all, and its effect advances the active dev branch on the
+  remote — so the count of acts neither layer covers was wrong in four documents,
+  and was already false in the paragraph it stood in. No document carries a count
+  now. The `unarmed` added last session turned out to pin the clause's
+  *placement* rather than its claim, going red on a correct document, and all
+  three new checks read the wrap-sensitive fixture whose replacement `GH-97.2`
+  had already built 200 lines above them — so `CONTEXT.md` had been shaped to fit
+  a fragile check. Also found: `CLAUDE.md` still said `docs/adr/` holds one ADR,
+  unpinned by anything, in the sentence that warns a reader off a stale
+  enumeration.
+
+- [2026-09-17 · session 4](devlog_2026-09-17_session-4.md) — #108 pins what the
+  hooks decide when the environment they read is broken: git or gh off PATH, no
+  repository, a detached HEAD, no origin, no `dev-NN` ref or two of them, and
+  bytes in the command nobody meant to send. The finding that makes the open
+  cells safe to write down is that no case exists where a hook's read of the
+  environment fails while the command would still reach a repository — every
+  spelling that reaches one is refused off the command's text. The session report
+  no longer exits silently when it has nothing to report. A NUL byte written
+  where the escape was meant made grep call the whole suite binary and emptied a
+  derivation four hundred lines away; it happened four times over the branch, the
+  later ones in the prose describing the earlier ones, and git refused the commit
+  message for it. One permitting gap found and deliberately not fixed, filed as
+  #144: a pull request based on a dev branch that is not the active one.
+
+- [2026-09-17 · session 5](devlog_2026-09-17_session-5.md) — #128: a heredoc
+  opener ending in an ODD run of trailing backslashes is a continued line to
+  bash, which joins it before the body begins, so the command after the
+  terminator runs and both boundary hooks permitted it. The body now begins where
+  bash begins it, and the drop takes the trailing run off the line it begins
+  after, because cs_join joins any trailing backslash and bash joins only an odd
+  run. The first fix used cs_join’s looser rule and hid a command bash runs —
+  found by review of PR #151, and the reason the entry carries three commits and
+  a correction. A differential run of 2,580 shapes, each executed under bash to
+  decide what really runs, puts dev-05 at 198 hidden pushes, that first fix at
+  40, and this one at 0; suite 3657 → 3967. The entry’s own heading still reads
+  "session 2", the number it was written under before session 2 of this day
+  turned out to be someone else’s.

@@ -1,236 +1,293 @@
-# 2026-09-17 · session 2 — #128: a continued heredoc opener hid the command after its terminator
+# 2026-09-17 · session 2 — the boundary was written in a command's spelling, and the fourth spelling of one act was permitted
 
-**Branch** `worktree-issue-128-heredoc-opener-continuation`, cut from
-`origin/dev-05` at `befcf8a` and proposed into `dev-05`. **Check suite 3657 →
-3957 results, all passing** (measured, 136 s). The mutation registry goes from
-23 rows to 24; the new row was run by name — baseline plus one run, `caught`,
-with `GH-128` among the 22 requirement IDs that went red. `requirements.md`
-gains `GH-128` and goes from 162 entries to 163.
+**Branch** `worktree-issue-143-boundary-in-effects`, cut from `origin/dev-05` at
+`befcf8a`, to be proposed into `dev-05`. The work is **uncommitted in the
+worktree** at the time of writing, left in the tree for Bertan's review.
+**Check suite 3657 → 3660 results, all passing.** Three of the new results are
+checks added here — two `written` and the `unarmed` that pairs them — each
+mutation-checked individually; the text-check count literal moved 274 → 277 with
+them.
 
-Worked by the assistant, unattended, from #128 and its triage comment.
+A grilling session on #131, which was open on one question: which of three
+verdicts `gh issue develop` gets. It closed that question, and on the way it
+established that #131 was the fourth arrival of one defect rather than an
+isolated gap, filed the class as #143, and corrected two claims of the
+assistant's — one of them in a GitHub issue that had already been filed.
 
-## The defect: bash joins the opener's own line, and the drop did not
+No hook was changed. Every rule this session decided on is queued behind other
+open bugs, for a reason recorded below.
 
-`cs_normalise`'s first pass found a heredoc opener on a raw line and dropped
-lines until the terminator; `cs_join` joined continuations one pass later. The
-comment above it argued that this order was the safe one — "a backslash at the
-end of the line before a heredoc terminator cannot swallow the terminator and
-hide what follows". It was true of the line before the terminator and false one
-line further up. Bash joins a continued line *before* the body begins, so
+## The verdict on #131, and the option that was proposed on a false premise
 
-```
-cat <<E \
-x
-E
-git push --force origin main
-```
+#131 offered three answers: leave `gh issue develop`'s creating spellings
+permitted and pin `ALLOW`; refuse them and permit `--list`; or refuse the
+subcommand outright and narrow US-14. **Option 2 was taken** — refuse the
+creating spellings, permit `--list` — which is #103 Q26's `gh release` shape,
+every read-only action permitted and every other refused.
 
-is `cat <<E x` with an empty body, and the push runs. The drop took `x` for the
-body, ended it at `E`, and `cs_join` then glued the push onto the opener's line,
-where it stands at no command position: `cs_normalise` emitted the single line
-`cat <<E git push --force origin main`. Both `no-git-push.sh` and
-`no-commit-to-main.sh` answered exit 0, where the same command without the
-backslash is exit 2. Bertan's review of PR #123 found it; the defect predates
-that PR.
+The assistant proposed a fourth option that is not in the issue: permit
+`gh issue develop` only when `--base` names the active dev branch, on the
+argument that the command used that way enforces two things the repository
+currently gets by convention — the fork point at `origin/dev-NN`, and the
+issue-to-branch link that the `Closes` keyword cannot make on a non-default
+base.
 
-The second consequence was a claim rather than a verdict. `cs_within_cap` refuses
-a command holding a joined line past 16 KB *before* any pass runs, and #96 read
-that as a bound on what the passes are handed. Forty repeats of
-`echo <15000 × a> <<E \` / `x` / `E` pass the cap — longest joined line 15,011
-bytes — and made `cs_normalise` emit **one 600,400-byte line**, measured here on
-this branch with the fix reverted. The issue measured 600,428 on #123's branch;
-the figure differs with the branch, and the one written into the library is this
-branch's.
+**Bertan established that the second half of that argument is false, and that
+the repository had already measured it.** `gh issue develop` writes
+`linkedBranches`, a branch-to-issue link; `Closes` writes
+`closingIssuesReferences`, a pull-request-to-issue link. They are different
+GitHub features, no mutation exists for the second, and this was recorded on
+2026-09-09 under PR #35 and #37. The fork-point half survives but is weaker than
+the assistant put it: `--base dev-05` creates a *remote* ref at `origin/dev-05`'s
+tip, while CLAUDE.md's rule governs where the *local* worktree branch starts, so
+the command removes no step from that rule. Against it, `--checkout` moves the
+invoking checkout off its branch and `--branch-repo` writes the ref into another
+repository entirely — two effects #131's body did not name.
 
-## The fix, and the order that was not taken
+Option 4 was then rejected on cost as well as premise, and the reasoning is the
+transferable part: it is a **permit conditional on a field's value**, and #135,
+#137 and #139 are all open bugs in exactly that machinery — a quoted subcommand
+word evades every rule that reads one, the base reader knows one quote spelling,
+and a quoted base flag removes a refusal where naming no base is permitted. A
+conditional permit built on an unfixed parser fails **open** when the parse
+fails. Option 2 fails closed under the same three. That is why it was taken over
+option 3 as well, which is simpler but buys a spec amendment and discards a real
+read.
 
-The issue's triage offered two orders, joining before the drop or dropping
-first, and the triage comment refined it to a third: join the non-body lines
-before looking for an opener, never join a body line. The assistant took a
-fourth, which is that third one without the join:
+## #143: the class under #131, and the two rows nothing covers
 
-- the opener is looked for on **each physical line**, as before;
-- the body begins after the first line that **does not end in a backslash**;
-- the joining itself stays `cs_join`'s, one pass later.
+#131's own triage note had measured a class of commands beside `gh issue
+develop` — a write to a ref on `origin` spelled through `gh api` rather than as
+a push — and recommended filing it separately so a low-severity headline would
+not bury it. That was done, as **#143**, and the recommendation was right for a
+reason sharper than severity: #131's body asserts the subcommand "cannot move or
+delete an existing ref", and the row beside it deletes `dev-05`.
 
-Two reasons for not joining inside the drop. A join written in the first pass is
-the join rule written twice, in the file whose header names that as the defect
-class it exists to end — and the two copies would then be free to answer the
-backslash differently, which is the defect being fixed, back again. And the
-joined line would have to be materialised for the opener search to read it,
-which is `out = out c` at line scale: #96 measured that shape at 5.9 s for
-512 KB and rewrote six passes to remove it.
+Measured by feeding each command to each of the seven registered Bash
+`PreToolUse` hooks as JSON on stdin, at `acefb24` and again at `befcf8a` with
+the same verdicts; nothing was executed and nothing reached `origin`. Every
+spelling is permitted by all seven: `POST …/git/refs`, a force-`PATCH` and a
+`DELETE` of `refs/heads/dev-05`, and the GraphQL mutations `createRef`,
+`updateRef(force:true)`, `deleteRef` and `createLinkedBranch`. `git push --force
+origin dev-05` and `gh api --method POST …/merges` were carried as controls and
+are refused, because a harness that permitted everything would print the same
+table.
 
-The rule this pass uses for "the line continues" is `cs_join`'s exactly — any
-trailing backslash, an escaped one included — and it has to be, because
-`cs_join` is what joins the line afterwards. A drop that ended the logical line
-*earlier* than `cs_join` joins it is the defect. Looser is the safe side: a
-logical line held open too long only exposes more lines as commands.
+**#131's triage said four boundary hooks; the number is seven.** Bertan's
+verification corrected it: the four boundary hooks plus `alembic-via-uv-group`,
+`pytest-via-uv-group` and `append-only-docs` are all registered on `Bash`, and a
+claim about what "every hook" permits is a claim about all seven.
 
-**What the fourth order costs, recorded because it is a real difference from the
-third.** An opener split by the continuation — `cat <<\` / `E`, which bash reads
-as `<<E`, or `cat <<E\` / `x`, which it reads as `<<Ex` — is not recognised as
-that opener, because no joined text is ever read. Either no opener is found or
-its delimiter never arrives, and both end in the `END` give-back: the held lines
-come back and are scanned as commands. That is the direction every other
-uncertainty in this pass already takes, and it is the same one bash's joining
-inside an *unquoted* body takes, which is deliberately not modelled.
+The `main-branch-protection` ruleset was read rather than recalled:
+`include: ["~DEFAULT_BRANCH"]`, `exclude: []`, `bypass_actors: []`, rules
+`deletion`, `non_fast_forward`, `pull_request`. So a force-move or deletion of
+`main` passes all seven hooks and is then refused by the server, while `dev-NN`
+carries no ruleset at all. **A force-`PATCH` and a `DELETE` of
+`refs/heads/dev-NN` are the only acts in the measured set that neither a hook
+nor the server covers**, and they are a data-loss path onto the branch where
+unmerged work lives. `docs/adr/0001-hooks-not-ruleset.md` argues that `dev-NN`
+rests on hooks because an agent acts with Bertan's credentials; these are the
+rows where that reasoning has no hook to rest on.
 
-## What the checks establish, and what they cannot
+## The assistant's filing of #143 was wrong about its own scope, and review found it by measuring
 
-Nineteen checks are written out, 273 come from #106's families, and seven are
-the families' own per-transformation guards: 300 new results.
+As first filed, #143 asserted that the class "cannot push blobs that are not
+already on the remote — a ref write names an existing object — so this is ref
+manipulation, not a content-upload path". **That is false.** Bertan's review
+measured `gh api --method PUT …/contents/README.md -f branch=dev-05`, which
+writes content *and advances `dev-05`* in one call — strictly worse than the
+`POST …/git/refs` the filing did cover — along with `DELETE …/contents/`,
+`POST …/git/blobs`, `POST …/git/commits`, and `createCommitOnBranch`, a fifth
+ref-affecting mutation the filing's count of four had missed. All permitted by
+all seven hooks.
 
-- Four `tok` checks read `cs_normalise`'s output directly, which is where the
-  defect is visible as text rather than as a verdict.
-- Twelve verdict checks are the two hooks and the two directions #128 measured,
-  over seven spellings of the opener: `<<E`, `<<-E` with a tab-indented
-  terminator, `<<'E'`, `<<"E"`, `<< E`, an opener continued over three lines,
-  and a redirect in front of it.
-- Three checks in the cap section hold the second consequence to literals: the
-  40-group input is within the cap, and `cs_normalise` emits 40 lines whose
-  longest is **15,011** bytes.
-- #106 has landed, so the seven spellings are registered as transformations
-  rather than left as a hand list. Each is asked of every one of the 39 seeds,
-  which is the whole reason that section exists; the issue listed the spellings
-  as a hand enumeration and said to prefer a family if one existed.
+CONTEXT.md names *advancing the active dev branch on the remote* as a reserved
+act in as many words, and cites `no-git-push.sh` as what refuses it. The first
+of those rows does exactly that and is refused by nothing.
 
-**Which of them fail with the fix reverted.** Measured, against a copy with the
-one line reverted and `CHECK_HOOKS_DIR` pointed at it: **145 red**, all of them
-new. Twelve of the nineteen written-out checks — the eight refusing verdicts,
-the two `tok` reads of the opener, and the two cap numbers — and 133 of the 273
-family variants, which is 19 refusing seeds × 7.
+The issue's title and body were widened the same day and the original scope
+recorded in a revision note rather than silently replaced. **The number is the
+argument, not the embarrassment**: a hand-kept list of spellings was wrong within
+hours of being written by someone looking straight at the surface it described,
+which is the whole case for the decision below.
 
-Three of the written-out checks and 21 family variants stay green with the fix
-reverted, and both are by construction rather than by accident:
+## Two ways a mutation-name denylist is evaded today, and they decide the fix's shape
 
-- the permitting direction is unchanged behaviour. `echo RAN-AFTER` in place of
-  the push, a quoted body that merely names one, and a slashed body line
-  followed by a real push were all answered correctly before this change. They
-  are regression guards, and a check that went red on the revert would mean the
-  fix had changed the drop rather than where it starts.
-- the 21 are the three *wrapped* seeds — `bash -c "git push …"` and its two
-  siblings — whose refusal comes from `CS_WRAPPER_RE` against raw text and never
-  reaches `cs_normalise`.
+Also Bertan's, measured against the live `/releases` rule as a proxy and against
+the mutation lists directly. All permitted by all seven hooks:
 
-Stating this is #128's own acceptance criterion read literally ("every new check
-fails with the fix reverted"), which cannot hold for a check whose subject is
-behaviour that did not change.
+- `gh api graphql -f query=mutation{delete"Release"(…)}` — intra-word quoting,
+  which is #135's shape, against a name already on the list.
+- `gh api graphql -f query=@/tmp/rel.graphql` and
+  `gh api graphql --input /tmp/rel.json` — the payload is in a file, and **no
+  field rule reads a request body**, which is #138's shape applied to GraphQL.
 
-## The counts in the comments, and the two left alone
+The endpoint machinery held up better than feared: whole-argument quoting,
+trailing-segment quoting and `-X` are all survived, and only intra-word quoting
+evades. So a fix here inherits one tracked bug rather than new debt.
 
-The heredoc question has now been answered five times and got wrong four. Four
-claims were moved from three to four: the `cs_normalise` header, the
-redirect-pass bullet that cites it, and two in `check-hooks.sh`. THE SECOND
-TRADE's "asked a fourth time in a second place" becomes a fifth.
+The consequence is about wording, and it is why the verdict below is phrased the
+way it is. Any predicate that *hunts for mutation text* inherits all three
+evasions however long its list. Only a predicate that refuses **unless a query
+is demonstrably present and a mutation demonstrably absent** refuses the two
+file spellings, because neither has a demonstrable query anywhere in its text.
 
-Two "three times" claims in `lib/command-scan.sh` were **deliberately left** —
-`cs_split`'s tail note and the prefix loop, both of which say *reading text as a
-command* is the mistake `cs_normalise` has made three times. #128 is the
-opposite direction: a command was read as text. Incrementing them would have
-made them false, and a reviewer who disagrees has one number to move rather
-than a paragraph to rewrite.
+## The verdict on #143: two allowlists, which is Q26 applied twice
 
-THE LINE CAP's *WHAT THIS CAP DOES NOT BOUND* named #128 as the reason the cap
-does not bound what the passes are handed. That half is now the opposite, and
-what replaces it is an argument rather than a measurement: the drop only ever
-removes lines, and it can remove a line adjacent to a continued one only inside
-a body — a body begins after a line that does not end in a backslash, and the
-lines held for one are given back together — so every joined line
-`cs_normalise` emits is part of a joined line `cs_within_cap` measured, and no
-longer than it. #127, the fragment-count half of the same paragraph, is still
-open and still says so.
+**Refuse every `gh api` write whose endpoint is not on an allowlist of permitted
+writes, and refuse every GraphQL command that is not demonstrably a query.**
 
-## State, and what is open
+Two amendments are Bertan's, and both move the answer away from where the
+assistant had put it:
 
-The branch holds one commit. `bash .claude/hooks/check-hooks.sh` passes in full,
-3957 results. `bash .claude/hooks/mutate-hooks.sh -v heredoc-opener-continuation`
-reports `caught` and leaves `.claude/hooks/` byte-identical; the whole registry
-has **not** been re-run since the row was added, and mutate-hooks.sh's header
-says so where it records the 2026-09-17 measurement of twenty-three rows.
+- The REST predicate must **not** be a `git/refs` denylist. That is the same
+  mistake one layer up: it leaves `PUT …/contents/`, `POST …/git/commits` and
+  `POST …/git/blobs` permitted, and the first of those advances `dev-05` with
+  content attached.
+- The GraphQL half must be the allowlist and not a widened denylist. The
+  assistant's phrasing contained both readings; the measurement above decides
+  which is operative.
 
-Open, and not this branch's:
+`gh_api_is_write` (`no-pr-decisions.sh:244`) was verified rather than assumed as
+the gate to hang the REST half on: it is a genuine method allowlist, it reads
+both `-X` and `--method`, and at `:252` it returns *write* when the flag is
+present but its value unparsed. It fails closed.
 
-- **#127**, the other half of the cap's claim: fragment count, not line length.
-- **An opener split by a continuation**, described above. Not filed: it is a
-  fail-safe, its shape is one an agent would have to construct, and CLAUDE.md's
-  stopping rule is that a newly found evasion earns a fix only if it is a shape
-  an agent would plausibly write.
-- **#108 and #109**, which owe the registry their own rows.
+**What the verdict costs was found by checking before recording it.** An
+allowlist inverts `gh api`'s default from permit to refuse for every write, and
+two writes the agent workflow uses today are on the wrong side of that
+inversion: `POST …/issues/<n>/sub_issues`, which is how every boundary bug since
+#94 was linked to its parent and how #143 itself was, and the
+`addCloseIssueReferences` mutation, which is the only way a pull request based
+on `dev-NN` links its issue. **A grep for either over every `*.md` and `*.sh` in
+the repository returns nothing** — they are conventions held in session memory
+alone. An allowlist seeded by reading the hooks would therefore have been seeded
+from the wrong set, and seeding one is an audit of what agents actually do.
 
-## Correction, from the review of this session's own commit
+A severity split of #143 was considered and rejected. What forced the split off
+#131 was a headline asserting the opposite of a row beneath it; #143's headline
+names its worst row, so nothing is buried, and splitting a class whose edge was
+still wrong would have produced two issues that both had the wrong edge.
+**#103 Q14 sub-IDs** take its place: `GH-143.1` a ref is not created, `.2` not
+moved non-fast-forward or deleted, `.3` not advanced by a content write — by
+effect, not by spelling, spelling-independence being #141's business.
 
-The two review axes run over `c2ce2bd` found that the assistant had miscounted
-its own checks, which is the class CLAUDE.md says to re-measure rather than
-restate. Appended rather than edited above, because the append-only guard
-refuses an in-place edit of an entry — verified by feeding the command to
-`append-only-docs.sh` rather than running it — and because that is what the
-directory's rule says to do with a correction. The figures here supersede the
-ones in *What the checks establish* and in `c2ce2bd`'s message; both of those
-stand as written.
+Sequencing: after #135 and #138 at minimum, because the GraphQL half is phrased
+as it is *because* #138 is open, and both halves inherit #135.
 
-**How far ahead of `main`.** The convention in this directory's README asks for
-it and the entry above omitted it: the branch ends **186 commits ahead of
-`origin/main`**, two ahead of `origin/dev-05` — the fix, and the commit that
-carries this section.
+## The lesson was already in the glossary, one clause short
 
-**Which commit each figure belongs to**, since this section adds four checks of
-its own. The entry above describes `c2ce2bd`, where the suite was 3957 results
-and 145 went red with the fix reverted. Every figure in this section is measured
-at the second commit's tree.
+The assistant proposed coining a term — *Ref write* — for the class.
+**Bertan established that the term already exists**: CONTEXT.md's *Reserved act*
+says in terms that "reserved is not a synonym for refused", enumerates acts
+rather than commands, and directs an agent to report and stop where nothing
+enforces. That is effects-not-spellings, written before any of these four
+issues.
 
-**The counts, measured rather than derived.** Suite 3657 → **3961** results.
-The families contribute **280** — 273 variants and 7 per-transformation guards
-— so **24** checks are written out, not the nineteen the entry above claims, and
-there is no "coverage row" among them: 280 + 24 = 304, and 3657 + 304 = 3961.
-The #128 verdict section holds **13** checks, nine refusing and four permitting,
-where the entry says twelve. The assistant wrote both figures from the edit it
-had just made instead of from a run, which is the whole of the error.
+What was missing was one clause *in* it. The entry reserved advancing the active
+dev branch **on the remote**, and moving a **local** `main` or `dev-NN`. A remote
+force-move or deletion is named by neither, and that gap is exactly where #143's
+two worst rows sit. The clause was added, with a paragraph naming what refuses
+it — nothing — and `GH-143.4` records the claim as a `doc-claim`, tagged by two
+new `written` checks.
 
-**Four checks the review added.** The standards axis — a review the assistant
-ran on its own commit, not Bertan's — found the continuation
-rule now derived in two places — `$0 !~ /\\$/` in the drop, and `cs_join`'s
-own count of trailing backslashes — with the code asserting they cannot disagree
-and nothing pinning it. That is #84's question one level in, and the assistant
-had answered it in a comment. Four `tok` checks now hold the two against each
-other over runs of two and three backslashes: the joined text is read once as
-`cs_join`'s output and once as the drop's, so a change to either rule moves one
-literal of a pair. Two backslashes is where bash parts company with both — it
-reads `\\` as an escaped backslash, so the line does not continue, the body is
-`x` and `E` ends it, and the push runs anyway, which is the verdict the looser
-rule reaches by deferring the body.
+`docs/adr/0002-boundary-stated-in-effects.md` records the general form: a rule
+names an effect, and where it must name a surface it names an allowlist with a
+default-deny. **ADR 0001 pre-authorises the second ADR rather than colliding with
+it** — Bertan's point — because 0001 says of itself that it "is about the
+mechanism and deliberately records no inventory of which commands are
+permitted", and how a rule is *stated* is a mechanism question. Its Considered
+Options section was written by the four issues: keeping per-spelling denylists,
+parsing commands semantically, moving the boundary server-side, and stating the
+effect in prose only.
 
-**Which new checks go red with the fix reverted, in full.** **147** of 3961,
-all of them new, measured against a copy with the one line reverted: 14 of the
-24 written out, and 133 of the 273 variants (19 refusing seeds × 7 spellings).
-The entry above says three written-out checks and 21 variants stay green; it is
-**10** and **147** — 140 variants, being 17 permitting seeds × 7 plus the 21
-wrapped, and the 7 guards. The ten, and why each cannot fail:
+## GH-131's requirement text could never have gone green
 
-| check | why the revert cannot reach it |
-|---|---|
-| `a body line ending in a backslash is not joined past its terminator` | the body drop, which this change does not alter |
-| `a body naming a push on a continued line is still dropped` | same |
-| `BLOCK a slashed body line, then a push` | same |
-| `ALLOW the same shape, with nothing to refuse after it` | the permitting direction, correct before the fix |
-| `ALLOW the same shape on main, with nothing to refuse` | same |
-| `ALLOW a body naming a push on a continued line` | same |
-| `ALLOW a body naming a commit on a continued line` | same |
-| `cs_join folds a line ending in two backslashes` | `cs_join` is untouched; it is the half of a pair whose other half does go red |
-| `cs_join folds a line ending in three backslashes` | same |
-| `the #128 shape is within the cap` | `cs_within_cap` runs before `cs_normalise` and the revert does not reach it |
+As written by #105, `GH-131` required that "what an agent may do with it **is
+decided** rather than left to whichever rule happens not to match". That was
+right while the verdict was open, and it is not falsifiable by any check.
+Bertan's point is that **Q15 makes the rewrite mandatory rather than tasteful**:
+an active requirement is covered only when it has a tagged check that refuses
+and one that permits, and "a decision exists" admits neither, so the entry would
+have sat permanently uncoverable — the state Q15 exists to prevent.
 
-#128's criterion reads "every new check fails with the fix reverted", and ten
-cannot: a check whose subject is behaviour this change leaves alone is a
-regression guard, and one of them going red would mean the fix had moved the
-drop rather than where it starts. Naming them is the part the entry above got
-wrong by naming three.
+The text now states the behaviour in both directions: a creating spelling is
+refused whichever of `--base`, `--name`, `--checkout` and `--branch-repo` it
+carries and whether it carries none, and `gh issue develop --list` is permitted.
+This is **not** a Q10 supersession — Q10 governs user stories, which are
+transcribed verbatim and gain `superseded-by:`. A `GH-` entry is written from a
+defect and is edited in place. The general rule recorded with it: a
+`gap → #<n>` entry's text is provisional, and is restated in the behaviour when
+its verdict is taken.
 
-**A seventh count site.** The review also found `lib/command-scan.sh`'s own
-header still reading "Three wrong answers, each silent and each in the
-permitting direction, is evidence about the question" — a site the assistant's
-sweep had missed while listing four it had moved and two it had left. It now
-records the fourth and says the reading of it is unchanged. Two claims stay at
-three on purpose, both about reading *text as a command*, which is the opposite
-direction from this defect; the spec axis checked that reading independently and
-agreed.
+## A re-wrap of CONTEXT.md turned three passing checks red, and the reason is worth keeping
+
+The assistant's first edit placed the new clause mid-enumeration and re-wrapped
+the paragraph. Three existing checks went red: two spellings of "the enumeration
+names the act the report cites" and "the enumeration reserves moving a local
+main or dev branch". `written` greps a file for a literal phrase, and a phrase
+that was on one line was now split across two. The clause was moved to the end
+of the enumeration, leaving both pinned phrases intact, and the suite went green
+again.
+
+The wrap sensitivity fails in the safe direction — a cosmetic edit is refused
+loudly — and is recorded rather than filed. The weakness beside it is filed, as
+**#145**, and the assistant's first framing of it was too wide.
+
+The assistant claimed `written` cannot tell a claim from its negation, and
+therefore that superseded-wording drift went unguarded. **Bertan established
+that half of that is already solved and the idiom is in the same file**:
+`unarmed` (`check-hooks.sh:643`) asserts a literal's *absence*, `GH-97.2` pairs
+it with `written` for exactly this reason — "a document that gained the new
+phrase and kept the old would state two rules" — and it already carries the
+unreadable-file guard that review of #84's change added, `grep -qF` on a missing
+file having exited 2 and read as `ok`.
+
+What is actually open is narrower and in two parts. **Contradiction by
+addition**: both helpers ask only whether a string occurs, so a sentence added
+to an entry can reverse a pinned claim while leaving its literal untouched, and
+nothing goes red. **Re-framing**: the phrase stays, nothing contradicts it
+outright, and it no longer means what the check reads it as meaning — which no
+`grep` can decide, and for which #103 Q17 already provides `seam: none` with
+`verify: review`, unused for these.
+
+The immediate consequence was concrete and is fixed here: the new clause was
+pinned by two `written` checks and no `unarmed`, so a straight revert of it
+would have passed. It now carries one, keyed on the terminating period the
+enumeration used to end with, and the pairing reddens on a revert though still
+not on a contradiction. Text checks 276 → 277.
+
+Q16's other half then fired, which is worth recording because it fired on the
+comment rather than on the code. The `unarmed`'s comment cites #145 to mark
+which half the pairing reaches, and the suite holds that **every `#<n>` cited in
+`check-hooks.sh` has an entry in `requirements.md` or an explicit reason** — so
+`the suite cites #145, which has no entry and no reason` went red alongside the
+mutation's two. #145 is listed as a citation that is not a requirement, with the
+reason stated: its four options differ in whether they produce a requirement at
+all, since accepting the limit moves existing doc-claims to `verify: review`
+under Q17 and adds none. Writing a `GH-145` entry now would have had to say only
+that the question is open — the unfalsifiable shape `GH-131` was rewritten in
+this same session to stop saying.
+
+## State, and what the next session picks up
+
+- **#131** `ready-for-agent`, verdict recorded in its second comment, sequenced
+  after #135 and #137.
+- **#143** `ready-for-agent`, sub-issue of #36, verdict recorded, sequenced
+  after #135 and #138. Its `GH-143.1`–`.3` entries are not written; `.4`, the
+  document half, is.
+- **#145** `needs-triage`, sub-issue of #36: contradiction by addition, and the
+  re-framing half that belongs under Q17's `verify: review`. Four options, none
+  pinned.
+- **Uncommitted in this worktree**: the CONTEXT.md clause, ADR 0002, `GH-131`'s
+  rewritten text, `GH-143.4`, two `written` checks and an `unarmed`, and the
+  text-check count literal at 277.
+- **Open**: whether the `gh api` write allowlist is seeded from an audit of
+  agent usage, which #143's verdict says it must be and which nothing has yet
+  done. CLAUDE.md's boundary paragraph is deliberately untouched and lands with
+  #143's rule in the same pull request, so the paragraph and the refusal move
+  together; the *Deliberately left open* count stays at **Five**, since
+  `check-hooks.sh:5199` reads that word and fails on one it does not recognise
+  rather than passing as zero.
+- **Not decided here**: #141's scope rule, which decides whether either issue's
+  `GH-` entries ever get an invariance seed. Both were linked to it.
