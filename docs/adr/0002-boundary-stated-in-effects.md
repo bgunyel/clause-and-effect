@@ -23,7 +23,12 @@ by the check suite, which was green before each**:
 - **#143** — the whole class underneath #131. A force-move and a deletion of
   `refs/heads/dev-NN` through `gh api` pass all seven registered Bash hooks, and
   `dev-NN` carries no ruleset to refuse them afterwards the way `main` does, so
-  those two are covered by nothing at either layer.
+  they are covered by nothing at either layer. Review of the commit that records
+  this decision found a further spelling in the same position,
+  `POST /repos/O/R/merges` — the REST *merge a branch* endpoint, which no hook
+  names at all and which advances `dev-NN` when `dev-NN` is its base. This
+  decision does not say how many there are, and the reason is that the number
+  moved three times while one rule was being argued about.
 
 #143 also measures the trap directly, and the numbers are the argument. Its
 first filing counted four GraphQL mutations that write a ref and asserted the
@@ -59,8 +64,10 @@ today sit on the wrong side of the inversion and are written down nowhere in the
 repository — a `POST …/issues/<n>/sub_issues`, which is how every boundary bug
 since #94 was linked to its parent, and the `addCloseIssueReferences` mutation,
 which is the only way a pull request based on `dev-NN` links its issue, the
-`Closes` keyword having no effect on a non-default base. A grep for either over
-every `*.md` and `*.sh` in the repository returns nothing. So an allowlist
+`Closes` keyword having no effect on a non-default base. No rule, hook or check
+names either; outside this ADR and the dev-log entries that record it, a grep
+for either over every `*.md` and `*.sh` in the repository returns nothing. So an
+allowlist
 seeded by reading the hooks would have been seeded from the wrong set, and
 seeding one is an audit of what agents actually do, not a transcription of what
 the denylists currently refuse.

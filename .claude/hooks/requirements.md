@@ -1573,21 +1573,48 @@ The suite fails on each of these, and `--matrix` shows the rest:
 
 ### GH-143.4
 - text: CONTEXT.md's *reserved act* names moving the active dev branch's remote ref
-  any way other than advancing it, and deleting that ref, and says that nothing
-  refuses either.
+  any way other than advancing it, and deleting that ref, says that nothing refuses
+  either, names the REST merge that advances the same ref under no rule at all, and
+  states no count of the acts neither a hook nor the server covers.
 - from: #143
 - kind: doc-claim
 - status: active
-- direction: static: a claim about what the document says
+- direction: static: a claim about what CONTEXT.md says
 - note: the entry already reserved *advancing* that ref and *moving a local* `main`
   or `dev-NN`, and a remote force-move or deletion is named by neither clause —
-  which is where #143's two worst rows sit, the only acts in that issue's set that
-  neither a hook nor the `main-branch-protection` ruleset covers. The rule that
-  refuses them is GH-143.1 to GH-143.3 and is not written yet, so this entry is the
-  document half alone, landing first deliberately: an act nothing refuses is only
-  reserved in a document a reader can find, which is the reasoning GH-99.1 records
-  for the clause beside it. The general form is
+  which is where #143's worst rows sit, refused by no hook and reached by no
+  ruleset, the `main-branch-protection` one targeting `~DEFAULT_BRANCH`. The rule
+  that refuses them is GH-143.1 to GH-143.3 and is not written yet, so this entry is
+  the document half alone, landing first deliberately: an act nothing refuses is
+  only reserved in a document a reader can find, which is the reasoning GH-99.1
+  records for the clause beside it. The general form is
   `docs/adr/0002-boundary-stated-in-effects.md`.
+  The last two clauses of the text were added by review of the commit that filed
+  this entry, which measured a spelling the paragraph had not: `POST /repos/O/R/merges`,
+  the REST *merge a branch* endpoint, named by no hook anywhere and advancing
+  `dev-NN` whenever `dev-NN` is its base. The wording it replaces said "those two
+  are the only acts", and was already false two sentences further down its own
+  paragraph, which named a third. A count is the part that goes stale, so the entry
+  states none and the `unarmed` holds it to that. That `unarmed` also replaces one
+  that pinned the clause's *placement* — the terminating period the enumeration
+  used to end on — which went red on a correct document and added nothing against a
+  revert, since the `written` checks catch that between them.
+
+### GH-143.5
+- text: CLAUDE.md's *Domain docs* section names `docs/adr/` as where the ADRs are,
+  and states no count of them.
+- from: #143
+- kind: doc-claim
+- status: active
+- direction: static: a claim about what CLAUDE.md says
+- note: the section said "`docs/adr/` holds one ADR", which
+  `docs/adr/0002-boundary-stated-in-effects.md` made false in the commit that added
+  it. Review found the claim unpinned — a grep for `docs/adr` across check-hooks.sh
+  returned nothing — in the one sentence that warns a reader off a stale
+  enumeration two clauses later, "the sentence that did named two terms of five and
+  went stale without saying so". So the count is gone rather than corrected, for
+  the reason that sentence gives about the glossary, and the `written`/`unarmed`
+  pairing is GH-97.2's with a narrower claim in place of a narrower rule.
 
 ## Provenance: the acceptance criteria of #37–#41
 
