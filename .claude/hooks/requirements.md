@@ -1356,6 +1356,36 @@ The suite fails on each of these, and `--matrix` shows the rest:
   open*. It is named here so that the gap is on the record rather than implied by
   the absence of a check.
 
+### GH-117.1
+- text: A command word that is a parameter or a command substitution is not
+  resolved, and is permitted rather than refused: `$(command -v gh) pr merge 5`,
+  `` `command -v gh` pr merge 5 ``, `$GH pr merge 5` and the `git` spellings of
+  each reach no hook rule. CLAUDE.md's *Deliberately left open* carries it as
+  consequence 6, with the measurement that decided it and the close that was
+  rejected.
+- from: #117, recommendation 4 of its triage comment, which raised it as a
+  judgement call for the maintainer to settle before implementation
+- kind: doc-claim
+- status: active
+- direction: permit-only: an accepted gap has no refusing half, and writing one
+  would claim a refusal that does not happen. What the refusing direction would
+  normally buy -- evidence the rule fires -- is bought instead by the paragraph
+  checks, which hold the document to naming these three shapes and to carrying
+  the number it was decided on.
+- note: settled by measuring rather than by judgement, against 75,346 Bash
+  commands from 661 local session transcripts. The close was written first: a
+  `$(` alternative to `CS_WRAPPER_RE` closes none of the four shapes, because the
+  wrapper block also asks whether the line carries the guarded surface and a
+  command substitution eats the boundary that question needs -- the line reads
+  `gh)`, not `gh `. It flipped only the `gh api` spelling, which matches on the
+  `/pulls/…/merge` literal and needs no `gh` at all, and it refused 9 commands
+  that should pass, 8 of them lines of `check-hooks.sh` being edited. One of
+  those 9 is kept as a check, so a later attempt at the same close fails in this
+  suite rather than in a review. The three shapes are also not one shape: in
+  command position the corpus holds 88 `$(…)`, 2,469 backticks and 377 `$VAR`,
+  and a backtick rule would refuse a heredoc whose prose says `` `git push` ``,
+  which is consequence 3 widened by three orders of magnitude.
+
 ### GH-118
 - text: A `gh` command carrying any option other than `-R`, `--repo` or
   `--hostname` before a word of a guarded subcommand path is refused as

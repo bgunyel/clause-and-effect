@@ -2252,6 +2252,42 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'a directory named for the command is n
 # A wrapper word is not a wrapper, and a path ending in one is not either. The
 # widened CS_WRAPPER_RE must not read `mybash` as bash, nor a bare path that
 # merely holds the letters.
+# CONSEQUENCE 6 OF CLAUDE.md's DELIBERATELY-LEFT-OPEN LIST, as verdicts. A
+# command word that is a parameter or a command substitution is not resolved,
+# and these are the commands that says are permitted. They are checks and not
+# just a paragraph because #117's triage raised the question as one to settle
+# before implementing, and a decision that lives only in prose is one the next
+# review reopens.
+#
+# PERMIT-ONLY, and it has to be: there is no refusing half of an accepted gap,
+# and writing one would be this suite claiming a refusal that does not happen.
+# requirements.md carries the direction and the reason with it.
+#
+# Each of the three was measured across 75,346 commands before it was accepted,
+# and the paragraph holds the numbers. The one thing these rows add over the
+# paragraph is that they go red if a later change closes a shape by accident --
+# which is how a gap stops being a decision and becomes a surprise.
+req GH-117.1
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a command substitution in command position' \
+  '$(command -v gh) pr merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a backticked command substitution in command position' \
+  '`command -v gh` pr merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a parameter in command position' \
+  '$GH pr merge 5'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a command substitution in command position, before a push' \
+  '$(command -v git) push origin main'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a parameter in command position, before a push' \
+  '$GIT push origin main'
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'a command substitution in command position, before a commit on main' \
+  '$(command -v git) commit -m wip'
+# The line the rejected close would have refused, and the reason the close was
+# rejected: it is a line of this suite being edited, not a command anyone runs
+# against GitHub. Kept as a check so that a later attempt at the same close
+# fails here rather than in a review.
+check_in "$SUITE_DIR" no-git-push.sh ALLOW 'a suite line quoting a push, edited through a command substitution' \
+  "\"\$(printf 'sudo git commit -m \"git push --all origin\"\\n' | cs_split)\""
+# Back to the reduction itself, which is the rest of this section.
+req GH-117
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a different program named mybash' \
   'mybash -c "gh pr merge 5"'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a path naming bash as an argument, not as the command' \
@@ -5948,6 +5984,37 @@ holds 'the extracted list is the left-open list' "$LEFT_OPEN" 'Deliberately left
 lacks 'and the unenforced rule is not one of its items' \
   "$LEFT_OPEN" 'git reset --hard origin/dev-NN'
 
+# CONSEQUENCE 6, and the half of it that is not a count. The item above answers
+# recommendation 4 of #117's triage, which called the question a judgement call
+# to settle before implementing. It was settled by measuring, and what a later
+# reader needs from this suite is that the paragraph still names the three
+# shapes it decided about -- a sixth item that kept its number and lost
+# `$VAR`, say, would pass the count check beside it and say something else.
+#
+# The verdicts themselves are pinned below rather than here, where they are
+# what a hook answers rather than what a document says. Both halves are needed:
+# the document without the verdicts is a claim nobody ran, and the verdicts
+# without the document are three permitted commands with no reason attached.
+req GH-117.1
+holds 'consequence 6 names the command substitution spelling' \
+  "$LEFT_OPEN" '$(command -v gh) pr merge 5'
+holds 'and the backtick spelling' \
+  "$LEFT_OPEN" '`command -v gh` pr merge 5'
+holds 'and the parameter spelling' \
+  "$LEFT_OPEN" '$GH pr merge 5'
+# The measurement, not just the decision. #117 settled this by counting, and a
+# claim without its number is a claim to re-measure -- so the corpus size is in
+# the paragraph and is held there, which is what stops the item decaying into
+# "we decided not to".
+holds 'and says what corpus the decision was measured against' \
+  "$LEFT_OPEN" '75,346'
+# The rejected close, held in the paragraph for the reason every rejected
+# alternative in this repository is written down: without it the next reviewer
+# reads an accepted gap and proposes the one-line fix that was already measured
+# and found to close nothing.
+holds 'and records that the close was written and rejected on its numbers' \
+  "$LEFT_OPEN" 'The close was written first and rejected on its own numbers.'
+
 # #99 Q5 took `head` out of settings.json, and the branch-hygiene skill's notes
 # went on arguing from it: every worktree made after a rotation branched from
 # the new dev branch because it forked from HEAD. Found on review of #99, not by
@@ -9569,7 +9636,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '26' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '27' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9632,7 +9699,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '24' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '25' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and
@@ -9723,7 +9790,8 @@ GH-84.2:static GH-84.3:static GH-94.1 GH-94.2 GH-94.3:review GH-94.4 GH-95.1
 GH-95.2 GH-96.1 GH-96.2:static GH-96.3:static GH-97.1 GH-97.2:refuse-only
 GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
-GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-118:gap
+GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-117.1:permit-only
+GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
 GH-131:gap GH-133:gap GH-134:gap GH-135:gap GH-136:gap GH-139:gap
 GH-107.1:static GH-107.2:static
