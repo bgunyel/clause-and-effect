@@ -342,3 +342,13 @@ thing in the record.
   rule with 36 checks tagged to it and no coverage: nothing in the suite stood a
   worktree on the branch the hook refuses to push.
 
+
+- [2026-09-17 · session 2](devlog_2026-09-17_session-2.md) — #128: a heredoc
+  opener ending in a backslash is a continued line to bash, which joins it before
+  the body begins — so the body of `cat <<E \` / `x` / `E` is empty and the
+  command after the terminator runs. The drop read that command as part of the
+  opener line instead and both boundary hooks permitted it, exit 0 where the same
+  command without the backslash was exit 2. The body now begins after the logical
+  line ends, by the rule cs_join joins on, while the joining stays cs_join’s: the
+  suite goes 3657 → 3957 results, 145 of them red with the one line reverted, and
+  the 600,400-byte line the cap was supposed to bound becomes 15,011.

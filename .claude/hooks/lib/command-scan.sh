@@ -303,8 +303,11 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # beginning with one read as a command position, and an early version of the
 # hooks refused the commit that introduced them.
 #
-# Joining runs after dropping, so a backslash at the end of the line before a
-# heredoc terminator cannot swallow the terminator and hide what follows.
+# The drop waits for a logical line to end, and that is #128's paragraph below:
+# a line ending in a backslash continues, and a body begins after the first line
+# that does not. Only WHERE the line ends is asked here; the joining itself is
+# still cs_join's, one pass later, so the two cannot answer the backslash
+# differently.
 #
 # Dropping is the one step here that hides commands rather than exposing them,
 # so what counts as a heredoc has to be exact in both directions -- and it was
@@ -322,8 +325,48 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # right. A heredoc that never reaches its terminator was not a heredoc, and the
 # lines held for it are given back at END rather than lost.
 #
+# A FIFTH answer followed, and the paragraph that stood at the head of this
+# comment was it: joining ran after dropping, and that order was claimed to make
+# a backslash before a terminator harmless. It did the opposite one line further
+# up. Bash joins the OPENER's own continuation before the body begins, so
+#
+#   cat <<E \
+#   x
+#   E
+#   git push --force origin main
+#
+# is `cat <<E x` with an empty body, and the push runs -- while this pass took
+# `x` for the body, ended the body at `E`, and cs_join then glued the push onto
+# the opener line, where no command stands at a command position. no-git-push.sh
+# and no-commit-to-main.sh both answered exit 0, measured. Issue #128.
+#
+# So the drop waits for the logical line to end: the opener is looked for on
+# every line of it, and the body begins after the first line that does not end
+# in a backslash. That rule is cs_join's exactly -- any trailing backslash
+# continues, an escaped one included -- and it has to be, because cs_join is
+# what joins the line one pass later: a drop that ended the logical line earlier
+# than cs_join joins it is the defect above, back again. Looser than bash is the
+# safe side of that, and this rule is: a logical line held open too long only
+# exposes more lines as commands.
+#
+# A body line is still never joined, whether its delimiter is quoted or not,
+# because it is dropped before cs_join sees it -- so a quoted body whose every
+# line ends in a backslash still ends at its terminator, where bash ends it too.
+# Bash joins inside an UNQUOTED body and this pass does not: that ends the body
+# earlier than bash, which exposes more lines and can only refuse more, so it is
+# deliberately not modelled rather than overlooked.
+#
+# THE TRADE, taken knowingly: an opener SPLIT by the continuation -- `cat <<\` /
+# `E`, or `cat <<E\` / `x`, which bash reads as `<<E` and `<<Ex` -- is not
+# recognised as that opener, because the opener is looked for on each physical
+# line rather than on the joined text. Joining here to look at it would be the
+# join rule written twice, in the file whose header says that is the defect. So
+# either no opener is found or its delimiter never arrives, and both ends in the
+# END give-back: the lines are scanned as commands, which is where every other
+# uncertainty in this pass already lands.
+#
 # That is the answer this question should have had from the start: the exact
-# version has been got wrong three times, and each time the failure was silent
+# version has been got wrong four times, and each time the failure was silent
 # and in the permitting direction. The fail-safe costs a genuinely unterminated
 # heredoc being scanned as commands -- which bash would refuse to run anyway --
 # and it is the direction this file takes everywhere else.
@@ -337,18 +380,27 @@ cs_normalise() {
       next
     }
     {
-      # A here-string is not a heredoc. Blanked at its own width, so a real
-      # heredoc later on the same line is still found where it stands.
-      scan = $0
-      gsub(/<<</, "   ", scan)
-      if (match(scan, /<<-?[[:space:]]*[^[:space:];|&<>()]+/)) {
-        d = substr(scan, RSTART, RLENGTH)
-        dash = (d ~ /^<<-/)
-        sub(/^<<-?[[:space:]]*/, "", d)
-        gsub(/[\047"]/, "", d)
-        ind = 1
+      # An opener found on an earlier line of this logical line is the one that
+      # stands: the first match wins, as it did when every logical line was one
+      # physical line. `opener` set means a body is waiting for the line to end,
+      # which it can only be while the line is still being continued.
+      if (!opener) {
+        # A here-string is not a heredoc. Blanked at its own width, so a real
+        # heredoc later on the same line is still found where it stands.
+        scan = $0
+        gsub(/<<</, "   ", scan)
+        if (match(scan, /<<-?[[:space:]]*[^[:space:];|&<>()]+/)) {
+          d = substr(scan, RSTART, RLENGTH)
+          dash = (d ~ /^<<-/)
+          sub(/^<<-?[[:space:]]*/, "", d)
+          gsub(/[\047"]/, "", d)
+          opener = 1
+        }
       }
       print
+      # cs_join joins a line ending in any backslash to the next one, so the
+      # logical line is not over yet and the body cannot start here. #128.
+      if (opener && $0 !~ /\\$/) { ind = 1; opener = 0 }
     }
     # The terminator never arrived, so this was not a heredoc and the lines were
     # dropped in error. Give them back.
@@ -372,8 +424,9 @@ cs_normalise() {
     #   - `<(...)` and `>(...)` carry a command, which is the one thing a drop
     #     must never swallow. They are not redirections and are left whole.
     #   - a redirect inside quotes is text. A commit message naming one is the
-    #     mistake the heredoc opener made three times, so quotes are tracked
-    #     character by character rather than matched around.
+    #     mistake the heredoc opener has made four times -- the header above
+    #     keeps that count -- so quotes are tracked character by character
+    #     rather than matched around.
     #   - `<<`, `<<-` and `<<<` belong to the heredoc pass above. Answering
     #     what a heredoc is a second time, here, is how the answers came to
     #     disagree in the first place; a run of two or more < is emitted whole.
@@ -1021,10 +1074,19 @@ fi
 # or more per fragment cs_split emits, so its time grows with the number of
 # fragments as well, and a short line can hold thousands: 2,500 `t;` and a
 # `gh pr merge 5` on the next line -- 5,014 bytes, a third of the cap -- took
-# no-pr-decisions.sh 6.4 s idle, found by review of PR #123. That is #127. And
-# a heredoc opener ending in a backslash lets cs_normalise emit a line past the
-# cap from lines within it, so the cap does not bound what the passes are handed
-# either. That is #128.
+# no-pr-decisions.sh 6.4 s idle, found by review of PR #123. That is #127.
+#
+# It does bound what the passes are HANDED, and until #128 it did not. A heredoc
+# opener ending in a backslash let cs_normalise emit one 600,400-byte line from
+# an input whose longest joined line was 15,011 bytes, because the drop ended
+# each body at its terminator and the join then glued forty groups into one
+# line. What holds now is an argument and not a measurement: the drop only ever
+# REMOVES lines, and it can remove a line next to a continued one only inside a
+# body -- a body begins after a line that does not end in a backslash, and the
+# lines held for it are given back together. So every joined line cs_normalise
+# emits is part of a joined line cs_within_cap measured, and no longer than it.
+# That input is pinned at 15,011 in check-hooks.sh, and reverting the fix in a
+# copy puts the 600,400 back: mutate-hooks.sh row heredoc-opener-continuation.
 #
 # Why the passes were slow is fixed too, and is the other half of #96. Six of
 # them grew a string one character or one token at a time -- cs_normalise's
@@ -1066,7 +1128,7 @@ fi
 # backslash, are refused as a 24 KB line although no line of the command is
 # longer than 80 bytes and bash would never read them as one. Taken rather than
 # fixed, because answering it means cs_within_cap deciding where a heredoc
-# ends -- the question cs_normalise has got wrong three times, asked a fourth
+# ends -- the question cs_normalise has got wrong four times, asked a fifth
 # time in a second place -- and a body whose every line ends in a backslash is
 # not something a commit message or a dev-log entry holds. check-hooks.sh pins
 # the refusal.

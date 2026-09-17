@@ -807,6 +807,35 @@ tok 'unterminated heredoc gives its lines back' \
     'git commit -m "fix <<EOF handling"
     git push --all origin' \
     "$(printf 'git commit -m "fix <<EOF handling"\n    git push --all origin\n' | cs_normalise)"
+# Issue #128, read here as output before it is read below as verdicts. An opener
+# whose own line ends in a backslash is a continued line to bash, which joins it
+# before the body begins -- so the body of `cat <<E \` / `x` / `E` is empty and
+# the command after `E` runs. The drop took `x` for the body, ended it at `E`,
+# and cs_join then glued that command onto the opener line, where it stands at
+# no command position: this output was `cat <<E git push --force origin main`,
+# one line, and every hook reading it permitted the push.
+#
+# The push standing at the head of a line of its own is the whole of the fix,
+# and each of these says which line it is on.
+req GH-128
+tok 'a continued opener ends its logical line before the body begins' \
+    'cat <<E x
+git push --force origin main' \
+    "$(printf 'cat <<E \\\nx\nE\ngit push --force origin main\n' | cs_normalise)"
+tok 'an opener continued twice, and the body still starts after the line' \
+    'cat <<E -n -E
+git push --force origin main' \
+    "$(printf 'cat <<E \\\n-n \\\n-E\nx\nE\ngit push --force origin main\n' | cs_normalise)"
+# The body is still dropped, so the fix did not simply stop dropping: a quoted
+# body whose lines end in a backslash ends at its terminator, where bash ends it
+# too, and cs_join never sees those lines to join them.
+tok 'a body line ending in a backslash is not joined past its terminator' \
+    "cat <<'E'
+git push --force origin main" \
+    "$(printf "cat <<'E'\nprose \\\\\nE\ngit push --force origin main\n" | cs_normalise)"
+tok 'a body naming a push on a continued line is still dropped' \
+    "cat <<'E'" \
+    "$(printf "cat <<'E'\ngit push --force origin main \\\\\nE\n" | cs_normalise)"
 # Redirections. A redirect is not an argument, and nothing removed it, so its
 # operator or its target was read as a refspec and every redirect on an
 # otherwise permitted push was refused. Issue #50.
@@ -1686,6 +1715,54 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'issue comment naming <<, then --mirror
 # A heredoc that does terminate is still data, so the older checks above still
 # ALLOW -- that is what says the fail-safe did not simply disable the drop.
 
+section "=== REGRESSION: issue #128, a continued opener hid the command after the terminator ==="
+# The fifth wrong answer to where a heredoc body begins, and the first that was
+# about the OPENER's own line. Bash joins a line ending in a backslash before
+# the body starts, so `cat <<E \` / `x` / `E` is `cat <<E x` with an empty body
+# and the next command runs -- measured with `echo RAN-AFTER` in its place,
+# which printed after cat's complaint about the file `x`. The drop read `x` as
+# the body instead, ended it at `E`, and the join then put the command after the
+# terminator on the opener's line, at no command position: exit 0 from both
+# hooks, where the same command without the backslash was exit 2.
+#
+# Every spelling of the opener is asked, because the spellings are where this
+# question has gone wrong before: `<<-` and `<<<` were the second and third
+# wrong answers and each was a spelling the comparison did not match. #106's
+# families ask the seven of them of every seed; these are the two hooks and the
+# two directions the issue measured, written out.
+req GH-128
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'continued opener, then a forced push' \
+  $'cat <<E \\\nx\nE\ngit push --force origin main'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'continued opener, then a commit on main' \
+  $'cat <<E \\\nx\nE\ngit commit -m wip'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'the <<-E spelling, tab-indented terminator' \
+  $'cat <<-E \\\n\tx\n\tE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK "the <<'E' spelling" \
+  $'cat <<\'E\' \\\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'the <<"E" spelling' \
+  $'cat <<"E" \\\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'the << E spelling, a space after the operator' \
+  $'cat << E \\\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an opener continued over three lines' \
+  $'cat <<E \\\n-n \\\n-E\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'a redirect in front of the continued opener' \
+  $'cat > f <<E \\\nx\nE\ngit push --force origin main'
+# A quoted body whose lines end in a backslash still ends at its terminator, so
+# the push after it is read. Bash does not join inside a quoted body either.
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'a slashed body line, then a push' \
+  $'cat <<\'E\'\nprose \\\nE\ngit push --force origin main'
+# And the permitting direction, which is what says the fix exposed a command
+# rather than stopping the drop: the shape the issue ran with `echo RAN-AFTER`
+# in place of the push, and a body that merely names one on a continued line.
+check_in "$PUSH_MAIN" no-git-push.sh ALLOW 'the same shape, with nothing to refuse after it' \
+  $'cat <<E \\\nx\nE\necho RAN-AFTER'
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'the same shape on main, with nothing to refuse' \
+  $'cat <<E \\\nx\nE\necho RAN-AFTER'
+check_in "$PUSH_MAIN" no-git-push.sh ALLOW 'a body naming a push on a continued line' \
+  $'cat <<\'E\'\ngit push --force origin main \\\nE'
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'a body naming a commit on a continued line' \
+  $'cat <<\'E\'\ngit commit -m wip \\\nE'
+
 section "=== REGRESSION: review of 02a14d8, bundled gh shorthand flags ==="
 # gh takes shorthand flags together, so -ab is --approve --body and approves.
 # no-git-push.sh had already answered this for -fu and this file had not: the
@@ -2454,7 +2531,7 @@ section "=== ACCEPTED false positive: a quoted redirect target ==="
 # exception, so this is a shortfall against it rather than a decision the issue
 # made -- taken because consuming a quoted target would mean the drop swallowing
 # text it cannot see the end of, which is the direction that has gone wrong
-# three times in this file. The targets an agent writes -- /dev/null, out.txt,
+# four times in this file. The targets an agent writes -- /dev/null, out.txt,
 # push.log -- carry no quotes.
 #
 # Pinned in both directions so a later change cannot move it silently. If these
@@ -2468,7 +2545,7 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'the same target unquoted' "git push or
 
 section "=== REGRESSION: issue #50, the drop must not hide a command ==="
 # Dropping is the one step in cs_normalise that hides text rather than exposing
-# it, and the heredoc question was got wrong three times in exactly that
+# it, and the heredoc question was got wrong four times in exactly that
 # direction. A process substitution carries a command, so it is not a redirect;
 # a command substitution used as a target is not a target. Both are pinned here
 # with a refused command inside, so hiding one would show up as ALLOW.
@@ -7628,6 +7705,38 @@ cap_guard '80-column heredoc, longest line' 79 \
 cap_guard '80-column heredoc, body' 200000 \
   "$(printf '%s\n' "$HEREDOC_200K" | sed '1d;$d' | wc -c | tr -d ' ')"
 
+# Issue #128's second consequence, which is a claim about the cap and not about
+# a verdict: forty repeats of a 15,011-byte line whose opener is continued. It
+# passes cs_within_cap, whose longest joined line is 15,011 bytes -- and
+# cs_normalise emitted ONE line of 600,400 bytes from it, thirty-six times the
+# cap, because the drop ended the body at each `E` and the join then glued all
+# forty groups onto one line. So the cap did not bound what the passes were
+# handed, which is what #96 claimed for it.
+#
+# Both numbers are literals, and the first is the one that says the fixture is
+# the one described: a builder one byte out would leave every check below
+# passing against a line that is not 15,011 bytes.
+HEREDOC_CONT_40="$(for i in $(seq 1 40); do printf 'echo %s <<E \\\nx\nE\n' "$(cap_pad 15000)"; done)"
+cap_guard 'the #128 shape, longest raw line' 15011 \
+  "$(printf '%s\n' "$HEREDOC_CONT_40" | LC_ALL=C awk '{ if (length($0) > m) m = length($0) } END { print m }')"
+cap_guard 'the #128 shape, groups' 40 \
+  "$(printf '%s\n' "$HEREDOC_CONT_40" | grep -c '^E$')"
+req GH-128
+tok 'cs_normalise emits no line past the cap for #128 shape, longest line' \
+    '15011' \
+    "$(printf '%s\n' "$HEREDOC_CONT_40" | LC_ALL=C cs_normalise \
+       | LC_ALL=C awk '{ if (length($0) > m) m = length($0) } END { print m }')"
+tok 'cs_normalise emits one line per group rather than one line in all' \
+    '40' \
+    "$(printf '%s\n' "$HEREDOC_CONT_40" | LC_ALL=C cs_normalise | wc -l | tr -d ' ')"
+# The input the cap is asked of, so the pair says what it is meant to say: the
+# claim is that a command WITHIN the cap cannot be made to exceed it here, not
+# that this one was refused at the door.
+tok 'the #128 shape is within the cap' \
+    'within' \
+    "$(printf '%s\n' "$HEREDOC_CONT_40" | cs_within_cap && echo within || echo over)"
+req GH-96.1
+
 # The fastest of three runs, stopping at the first one under the bound, since
 # the fastest is then under it too. Only a run that refused is timed: a hook
 # that dies before reading anything is fast as well, so a time with no verdict
@@ -8382,6 +8491,18 @@ SEEDS
 #                                     word-squoted word-escaped
 #  12 an option before the subcommand that consumes the next word (#118)
 #                                     option-eats-verb
+#  13 a heredoc in front of it whose opener line is continued (#128)
+#                                     heredoc-cont heredoc-cont-dash
+#                                     heredoc-cont-squote heredoc-cont-dquote
+#                                     heredoc-cont-space heredoc-cont-twice
+#                                     heredoc-cont-redirect
+#
+# The thirteenth is seven spellings where the others are one or two, and that is
+# #128 rather than thoroughness for its own sake: the spellings of the heredoc
+# opener are where this question has gone wrong four times, twice on a spelling
+# the terminator comparison did not match. #128's own section writes the two
+# hooks and the two directions it measured; these ask the same seven of every
+# seed, which is the whole reason the families exist.
 #
 # A transformation that cannot apply to a seed -- no value-taking long flag, no
 # second short flag to bundle with, no subcommand to put a global flag before --
@@ -8408,6 +8529,8 @@ INV_TRANSFORMS='
   continuation
   redirect-null redirect-dup
   word-path word-dot word-dquoted word-squoted word-escaped
+  heredoc-cont heredoc-cont-dash heredoc-cont-squote heredoc-cont-dquote
+  heredoc-cont-space heredoc-cont-twice heredoc-cont-redirect
 '
 
 # A rewrite that prints nothing when it changed nothing, which is how a
@@ -8522,6 +8645,24 @@ inv_cmdword() {  # inv_cmdword <command> <prefix> <suffix>
   [ "$rest" != "$1" ] || rest=
   printf '%s%s%s%s' "$2" "$word" "$3" "${rest:+ $rest}"
 }
+# #128: a heredoc in front of the command, whose OPENER line ends in a
+# backslash. Bash joins that line before the body begins, so the body of each of
+# these is empty, the terminator is the line after the opener, and the seed on
+# the line after THAT is the command that runs -- which is why the verdict must
+# be the seed's. The drop read the joined-on word as the body instead and the
+# join then glued the seed onto the opener line, at no command position.
+#
+# `x` is the word joined onto the opener, and it is a word bash hands to cat as a
+# filename rather than anything a rule reads. The twice-continued spelling joins
+# two of cat's own options instead, which is the shape an agent would actually
+# write across a continuation.
+# Each spelling is written out whole rather than assembled from an opener and a
+# body: the tab of the `<<-` spelling and the backslash of every one of them are
+# the characters under test, and a builder that dropped one would leave seven
+# variants passing that are not the seven named.
+inv_heredoc() {  # inv_heredoc <command> <heredoc, terminator included>
+  printf '%s\n%s' "$2" "$1"
+}
 inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
   case "$1" in
     indent-spaces)    printf '    %s' "$2" ;;
@@ -8569,6 +8710,13 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     word-dquoted)     inv_cmdword "$2" '"' '"' ;;
     word-squoted)     inv_cmdword "$2" "'" "'" ;;
     word-escaped)     inv_cmdword "$2" '\' '' ;;
+    heredoc-cont)          inv_heredoc "$2" $'cat <<E \\\nx\nE' ;;
+    heredoc-cont-dash)     inv_heredoc "$2" $'cat <<-E \\\n\tx\n\tE' ;;
+    heredoc-cont-squote)   inv_heredoc "$2" $'cat <<\'E\' \\\nx\nE' ;;
+    heredoc-cont-dquote)   inv_heredoc "$2" $'cat <<"E" \\\nx\nE' ;;
+    heredoc-cont-space)    inv_heredoc "$2" $'cat << E \\\nx\nE' ;;
+    heredoc-cont-twice)    inv_heredoc "$2" $'cat <<E \\\n-n \\\n-E\nx\nE' ;;
+    heredoc-cont-redirect) inv_heredoc "$2" $'cat > f <<E \\\nx\nE' ;;
     *)                return 1 ;;
   esac
   return 0
@@ -9192,7 +9340,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '23' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '24' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9255,7 +9403,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '21' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '22' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and
@@ -9349,7 +9497,7 @@ GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117:gap GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
 GH-131:gap GH-133:gap GH-134:gap GH-135:gap GH-136:gap GH-139:gap
-GH-107.1:static GH-107.2:static
+GH-107.1:static GH-107.2:static GH-128
 '
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }

@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT FORTY-FIVE MINUTES for the whole registry: one check-hooks.sh run per
-# mutation that applies, at about two minutes, plus the baseline -- twenty-three
-# runs as the registry stands, not twenty-four, because the row whose edit matches
+# mutation that applies, at about two minutes, plus the baseline -- twenty-four
+# runs as the registry stands, not twenty-five, because the row whose edit matches
 # nothing never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s. That is why it is a
 # separate script and why check-hooks.sh does not call it (#107). Nothing here is
@@ -42,8 +42,11 @@
 #
 # MEASURED, 2026-09-17, at the commit that answered that review: all twenty-three
 # rows reported what they declare, and .claude/hooks/ came back byte-identical.
-# The only edit to .claude/hooks/ after that run is the figure two paragraphs up,
-# which is this comment. No
+# That run is evidence about those twenty-three rows and about nothing else, so
+# `heredoc-opener-continuation`, added for #128, was run by name the same day
+# with the baseline -- caught, GH-128 red -- and the whole registry has not been
+# run since it was added. What every row has to hold either way is the shape
+# below, which check-hooks.sh reads from this file's text. No
 # per-mutation counts are recorded here on purpose -- a count in a comment is the
 # thing #107 was filed about, and the registry is re-runnable instead.
 #
@@ -99,8 +102,8 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   TWENTY-ONE real mutations, against FIVE files in .claude/hooks/, naming
-#   THIRTY-TWO requirement IDs between them, of the 144 whose status is active.
+#   TWENTY-TWO real mutations, against FIVE files in .claude/hooks/, naming
+#   THIRTY-THREE requirement IDs between them, of the 145 whose status is active.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
 # verify is `review` or `runbook` rather than a check here, every doc-claim about
@@ -190,6 +193,7 @@ own-branch-push-refused%no-git-push.sh%/^names_this_branch()/,/^}/s/") return 0 
 library-loaded-unguarded%no-git-push.sh%$a. "$(dirname "$0")/lib/command-scan.sh"%GH-84.2%caught
 merged-branch-not-gone%no-work-on-stale-branch.sh%s/= "\[gone\]"/= "never-this-string"/%FR-38%caught
 bare-pytest-permitted%pytest-via-uv-group.sh%s/grep -qE '\^(pytest|/grep -qE '^(no-such-tool-at-all|/%GH-69.1%caught
+heredoc-opener-continuation%lib/command-scan.sh%s/if (opener && $0 !~ \/\\\\$\/)/if (opener)/%GH-128%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

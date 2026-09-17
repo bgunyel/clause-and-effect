@@ -1559,6 +1559,30 @@ The suite fails on each of these, and `--matrix` shows the rest:
   retired or superseded one has no covering check, so a row naming it would report
   `survived` for ever and read as a defect in the hooks rather than in the row.
 
+### GH-128
+- text: A heredoc body begins after the opener's LOGICAL line, so a command written
+  after the terminator of `cat <<E \` / `x` / `E` is read as a command. Every
+  spelling of the opener reaches that verdict — `<<-E` with a tab-indented
+  terminator, `<<'E'`, `<<"E"`, `<< E`, an opener continued more than once, and a
+  redirect in front of it — and a heredoc body is still dropped whether or not its
+  lines end in a backslash. `cs_normalise` emits no line longer than the longest
+  line `cs_within_cap` measured of the same command.
+- from: #128, found by Bertan's review of PR #123
+- kind: defect-permitting
+- status: active
+- note: the fifth answer to where a heredoc body begins and the fourth wrong one,
+  and the first about the opener's own line rather than about the terminator.
+  `cs_normalise`'s first pass now waits for the logical line to end before it
+  starts a body, by the rule `cs_join` joins on — any trailing backslash
+  continues — while the joining itself stays `cs_join`'s one pass later, so the
+  two cannot answer the backslash differently. What is not modelled is bash's
+  joining INSIDE an unquoted body, and an opener split by the continuation
+  (`cat <<\` / `E`); both end the body earlier than bash does, which exposes
+  lines rather than hiding them. The second consequence was a claim about the
+  cap: forty 15,011-byte groups within the cap made `cs_normalise` emit one
+  600,400-byte line, and THE LINE CAP in `lib/command-scan.sh` said so until this
+  fix. #127 is the half of that claim which is still open.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that

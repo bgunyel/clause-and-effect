@@ -1309,8 +1309,9 @@ per the priority order above.
   item restated it and was wrong, along with three other documents. This item is
   what remains, and the shape of the gap rather than its size is the part worth
   writing down: a row per rule reaches a requirement, it does not exercise every
-  check that requirement has, and 144 requirements are active. #108's and #109's
-  rules arrive with them. Two kinds of rule the harness cannot reach at all — one
+  check that requirement has, and 145 requirements are active. #128 registered
+  its own row with its fix, which is the shape the rest of them should take;
+  #108's and #109's rules arrive with them. Two kinds of rule the harness cannot reach at all — one
   living in the tooling beside the hooks, `check-hooks.sh` and `mutate-hooks.sh`
   themselves, and a claim about a file outside `.claude/hooks/` — are recorded in
   its header and need a different answer, not another row.
