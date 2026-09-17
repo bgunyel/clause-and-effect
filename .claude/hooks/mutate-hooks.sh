@@ -15,15 +15,17 @@
 #       bash .claude/hooks/mutate-hooks.sh --list     the registry, and nothing run
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
-# ABOUT FORTY-FIVE MINUTES for the whole registry: one check-hooks.sh run per
-# mutation that applies, at about two minutes, plus the baseline -- twenty-three
-# runs as the registry stands, not twenty-four, because the row whose edit matches
-# nothing never reaches one. Measured twice on 2026-09-17, on this machine and on
-# registries one row apart: 47 min 34 s and 45 min 24 s. That is why it is a
+# ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
+# applies, at about two minutes, plus the baseline -- twenty-nine runs as the
+# registry stands, not thirty, because the row whose edit matches nothing never
+# reaches one. Measured twice on 2026-09-17, on this machine and on registries one
+# row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs. The figure above
+# is those rates carried to the current count and not a third measurement; a run
+# under load took nearer four minutes a row. That is why it is a
 # separate script and why check-hooks.sh does not call it (#107). Nothing here is
 # a PreToolUse hook and settings.json does not register it. Naming rows costs the
 # baseline plus one run each, so re-asking a single rule is about four minutes
-# rather than forty-five.
+# rather than an hour.
 #
 # EXIT STATUS: non-zero when any row reports something other than the outcome it
 # declares. For every real mutation that means a survivor or an edit that did not
@@ -41,9 +43,12 @@
 # Both self-tests are additionally required to be present, one of each outcome.
 #
 # MEASURED, 2026-09-17, at the commit that answered that review: all twenty-three
-# rows reported what they declare, and .claude/hooks/ came back byte-identical.
-# The only edit to .claude/hooks/ after that run is the figure two paragraphs up,
-# which is this comment. No
+# rows as the registry then stood reported what they declare, and .claude/hooks/
+# came back byte-identical. #108's six rows were run as a named selection on the
+# same day -- baseline plus six, all caught, byte-identical after -- and not as
+# part of a whole-registry run, so no run has yet exercised all twenty-nine
+# together. Saying which rows a measurement covered is the whole point of
+# recording one. No
 # per-mutation counts are recorded here on purpose -- a count in a comment is the
 # thing #107 was filed about, and the registry is re-runnable instead.
 #
@@ -99,8 +104,13 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   TWENTY-ONE real mutations, against FIVE files in .claude/hooks/, naming
-#   THIRTY-TWO requirement IDs between them, of the 144 whose status is active.
+#   TWENTY-SEVEN real mutations, against SIX files in .claude/hooks/, naming
+#   THIRTY-EIGHT requirement IDs between them, of the 156 whose status is active.
+#
+# Those four numbers are restated prose in a file whose own argument, three
+# paragraphs up, is that a count in a comment is the thing #107 was filed about.
+# They have now been wrong or moved three times in two days, and #148 is filed to
+# take them out and let `--list` be the only place they are written.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
 # verify is `review` or `runbook` rather than a check here, every doc-claim about
@@ -190,6 +200,12 @@ own-branch-push-refused%no-git-push.sh%/^names_this_branch()/,/^}/s/") return 0 
 library-loaded-unguarded%no-git-push.sh%$a. "$(dirname "$0")/lib/command-scan.sh"%GH-84.2%caught
 merged-branch-not-gone%no-work-on-stale-branch.sh%s/= "\[gone\]"/= "never-this-string"/%FR-38%caught
 bare-pytest-permitted%pytest-via-uv-group.sh%s/grep -qE '\^(pytest|/grep -qE '^(no-such-tool-at-all|/%GH-69.1%caught
+unresolved-git-dir-permits%no-git-push.sh%/could not be resolved, so whether this runs/,+1s/exit 2/exit 0/%GH-108.2%caught
+dev-branch-not-version-sorted%no-work-on-stale-branch.sh%s/| sort -V | tail -1)/| sort | head -1)/%GH-108.5%caught
+tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 and (.[0].tool_name == "Bash") and/%GH-108.1%caught
+hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
+report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught
+degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch: FAILED or timed out after /d%GH-108.10%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

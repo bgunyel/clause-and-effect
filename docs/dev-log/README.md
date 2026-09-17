@@ -372,3 +372,16 @@ thing in the record.
   unpinned by anything, in the sentence that warns a reader off a stale
   enumeration.
 
+- [2026-09-17 · session 4](devlog_2026-09-17_session-4.md) — #108 pins what the
+  hooks decide when the environment they read is broken: git or gh off PATH, no
+  repository, a detached HEAD, no origin, no `dev-NN` ref or two of them, and
+  bytes in the command nobody meant to send. The finding that makes the open
+  cells safe to write down is that no case exists where a hook's read of the
+  environment fails while the command would still reach a repository — every
+  spelling that reaches one is refused off the command's text. The session report
+  no longer exits silently when it has nothing to report. A NUL byte written
+  where the escape was meant made grep call the whole suite binary and emptied a
+  derivation four hundred lines away; it happened four times over the branch, the
+  later ones in the prose describing the earlier ones, and git refused the commit
+  message for it. One permitting gap found and deliberately not fixed, filed as
+  #144: a pull request based on a dev branch that is not the active one.
