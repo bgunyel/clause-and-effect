@@ -1989,6 +1989,9 @@ it has no entry above (Q16).
   corrected, which is most of what GH-107.1 and GH-107.2 now say. It is not
   counted here, because a count of corrections is the kind of number this file has
   already had to fix once
+- #150: the pull request for #108; Bertan's review of it is cited where each of
+  the five things it corrected stands, the largest being a fixture guard that made
+  the suite abort on any machine without `gh` installed
 - #144: the permitting gap #108 found and did not fix — a pull request based on a
   dev branch that is not the active one. It has no entry above on purpose: the
   requirement that would carry it is the fix, and GH-108.5 pins the verdict as it

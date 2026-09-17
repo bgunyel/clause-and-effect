@@ -9393,13 +9393,41 @@ rm -f "$ENV_NO_GIT_BIN/git"
 rm -f "$ENV_NO_GH_BIN/gh"
 # The same guard #95 puts on its jq-less twin, for the same reason: a hook that
 # refuses under one of these might be refusing because the fixture is broken, and
-# that refusal would read as the property being checked. Each must differ from
-# the farm by exactly one name, and that name must be the tool.
+# that refusal would read as the property being checked. What has to be true is
+# that the tool cannot be found under $dir, and that $dir is otherwise the farm.
+#
+# HOW IT GOT THAT WAY DEPENDS ON THE MACHINE, and the first version of this guard
+# did not allow for that. With the tool installed, the farm holds it, `rm` took it
+# out, and the two directories differ by exactly that one name. WITHOUT it, the
+# farm never held it, `rm -f` removed nothing, and the two are identical -- so a
+# guard demanding a one-name difference aborted the whole suite on any machine
+# with no `gh`, at this section, skipping every section below it including #104's
+# coverage derivations. That is a dependence on the invoker's machine, which is
+# the one thing #103's Q21 and this section's own preamble say there must not be,
+# and the abort blamed the fixture for what was true of the machine. Found by
+# Bertan's review of PR #150; reproduced by building a farm with no `gh` in it.
+#
+# `gh` is a dependency of no hook and, before this section, of nothing in this
+# suite: `report-stale-branches.sh` is the only file that calls it and degrades to
+# `no gh on PATH` by design, which GH-108.10 drives. `git` differs only in that
+# the suite has already built its fixtures with it hundreds of lines above, so its
+# farm entry is never the missing one -- the branch below is written for both
+# because the rule is the same, not because git can take it.
+#
+# What this costs, said rather than hidden: on a machine with no `gh` the gh-less
+# environment is the ordinary one, so the GH-108.6 checks that run under it assert
+# their verdicts twice rather than once. They are still true, and they still hold
+# the hook to a verdict that does not move; they are simply not evidence ABOUT gh
+# there. The suite says nothing about that, because a line printed only on some
+# machines is a worse thing to reason about than a check that is merely redundant.
 for pair in "git:$ENV_NO_GIT_BIN" "gh:$ENV_NO_GH_BIN"; do
   tool=${pair%%:*}; dir=${pair#*:}
-  [ -n "$( PATH="$WITH_JQ_BIN"; command -v "$tool" )" ] \
-    && [ -z "$( PATH="$dir"; command -v "$tool" )" ] \
-    && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$dir") | grep '^[<>]')" = "< $tool" ] || {
+  # Empty when the machine does not have the tool, which makes the required
+  # difference between the two directories "no difference at all".
+  want=
+  [ -n "$( PATH="$WITH_JQ_BIN"; command -v "$tool" )" ] && want="< $tool"
+  [ -z "$( PATH="$dir"; command -v "$tool" )" ] \
+    && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$dir") | grep '^[<>]')" = "$want" ] || {
     echo "the $tool-less PATH fixture is not the symlink farm minus $tool; the checks using it prove nothing" >&2
     exit 1
   }

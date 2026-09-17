@@ -4,8 +4,8 @@
 `origin/dev-05` at `befcf8a` and proposed into `dev-05`. **Check suite 3657 →
 3778 results, all passing** — 97 of the 121 new ones in a section of its own, 24
 in the #98 self-test, which had to grow before the section could be written.
-Ten requirements, `GH-108.1` to `GH-108.10`. Five rows added to the mutation
-registry, 23 → 28. One permitting gap found, filed as #144 and not fixed.
+Ten requirements, `GH-108.1` to `GH-108.10`. Six rows added to the mutation
+registry, 23 → 29. One permitting gap found, filed as #144 and not fixed.
 
 Issue #108 is the third of #103's stages. #95 pinned what a hook does when it
 cannot read its input; this one asks the step after it — what the hooks decide
@@ -83,12 +83,18 @@ nothing, so `READ_DOCS` — a derivation four hundred lines away that reads this
 suite's own text to learn which documents it reads — came back empty, and two
 checks about names in a paragraph went red. Nothing anywhere said NUL.
 
-It happened three times. The second was in the comment the assistant wrote
+It happened four times. The second was in the comment the assistant wrote
 warning about the first, which spelled the escape and embedded the byte instead;
-the third was in the paragraph above, in this file, and was caught by a scan of
-every file this branch touches rather than by anything that would have announced
-it. Four other derivations in the suite read it the same way and would have gone
-quiet rather than red.
+the third was in the paragraph above, in this file, caught by a scan of every
+file this branch touches rather than by anything that would have announced it;
+and the fourth was in the first draft of the commit message, which git refused
+outright, being the one consumer of these bytes that checks. Four other
+derivations in the suite read this file the same way and would have gone quiet
+rather than red.
+
+This paragraph said three until Bertan's review of PR #150, because it was
+written before the fourth happened and was not revisited when it did — which is
+the same failure as the counts below, arriving through the same door.
 
 The cause is worth naming, because it is not carelessness: the escape is written
 into a tool call, which is itself JSON, so a `\u0000` in the text being written
@@ -155,12 +161,14 @@ The check carries `ACCEPTED GAP` in its label and names #144, so the fix turns i
 red and finds the issue. Bertan may well decide the other way; what this session
 declined to do is decide it silently.
 
-## Five rows in the mutation registry
+## Six rows in the mutation registry
 
 Registered and run, rather than declared: `--list` now prints 29 rows. The six
 new ones break the unresolved-git-dir refusal in `no-git-push.sh`, the version
 sort that picks the active dev branch, the reader's indifference to `tool_name`,
-a hook's exit status, and the report's new sentence.
+a hook's exit status, the report's new sentence, and — the sixth, added by the
+review pass — the line in which the degraded report says its fetch failed, which
+is `GH-108.10`'s own claim that a report which cannot read still reports.
 
 `dev-branch-not-version-sorted` is worth its own line. It replaces `sort -V |
 tail -1` with `sort | head -1`, and the *existing* lifecycle fixture — which
