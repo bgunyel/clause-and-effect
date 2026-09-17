@@ -9365,14 +9365,23 @@ done
 # WHAT IT COSTS, which #141's fourth acceptance criterion asks for. Measured on
 # 2026-09-17, on one machine, in one worktree, all runs green:
 #
-#   before #141  118.6 s                          n=1   39 seeds, 1436 variants
-#   after   122.6 / 116.8 / 117.1 / 118.4 s       n=4   46 seeds, 1807 variants
+#   before #141  118.6 s                             39 seeds, 1436 variants
+#   after        116.8 117.1 118.4 119.9 122.6       46 seeds, 1807 variants
+#                133.1                               (n=6)
 #
-# 371 more variants, 26% more of them, for no wall-clock difference this suite
-# can resolve: the after mean is 118.7 s against 118.6 s, and nine runs over the
-# session spanned 116.8 s to 126.9 s. The spread is an order of magnitude larger
-# than the change, so what is honest to say is that the addition did not move
-# the run time, not that it moved it by a tenth of a second.
+# 371 more variants, 26% more of them, and the difference between the two rows
+# is smaller than the range WITHIN the second: the six after-runs span 16.3 s
+# and their median is 119.2 s, against a single before-run of 118.6 s. So this
+# measurement supports "the addition did not move the run time by anything this
+# suite can resolve" and does not support a figure for how much it moved it by.
+# A second before-run was not taken and should have been; the numbers above are
+# what there is.
+#
+# The range is the finding rather than noise around one. The 133.1 s run and a
+# 116.8 s run are the same tree minutes apart, with other worktree sessions on
+# the machine -- so a few seconds read off one run of each tree, which is how
+# #140's recorded number and this branch's would have been compared, says
+# nothing at all.
 #
 # The per-variant model over-predicts, and that is worth writing down because
 # #141's cost paragraph reasons from one. Timed directly, n=100 each, one hook
