@@ -1777,6 +1777,38 @@ The suite fails on each of these, and `--matrix` shows the rest:
   behind it are skipped by the rule in that file's header. That is why this one
   can be a run and why a genuinely offline network cannot.
 
+### GH-155.1
+- text: The `gh`-less PATH fixture of GH-108.6 is the symlink farm minus exactly
+  one name on every machine. The farm holds a `gh` whatever the host's PATH held:
+  the host's where there is one, and otherwise a stub the suite synthesises, which
+  refuses and names itself if anything ever runs it. `git` is never stubbed --
+  the suite runs `git` throughout, so a farm with no `git` is a machine this suite
+  cannot run on rather than a gap to synthesise over.
+- from: #155
+- kind: doc-claim
+- status: active
+- direction: static: it reads the fixtures the suite builds and the stub's own
+  text, and no hook's verdict
+- note: the fixture guard used to tolerate a farm that never held the name, so
+  that the suite would run on a machine with no `gh` at all -- and that tolerance
+  made the `gh`-less environment identical to the ordinary one on exactly those
+  machines, where the GH-108.6 checks then asserted their verdicts twice and were
+  evidence about `gh` on none of them. The property is asked of this machine and
+  of the machine this is not: a farm with `gh` taken out stands in for a host that
+  never had one, the same synthesis is run against it, and the one-name difference
+  is asserted there too. That is PR #150's manual reproduction written as a check.
+  It is the fixture rule and not a hook rule, so `mutate-hooks.sh` cannot register
+  it -- that harness refuses `check-hooks.sh` as a target by name, because an edit
+  to the copy would be executed by nothing. What the harness can hold is the hook
+  rule the fixture exists to establish, and #155 registered that: a
+  `no-pr-decisions.sh` that read `gh`'s presence out of the environment, which
+  GH-108.6 must catch. THAT ROW IS NOT EVIDENCE ABOUT WHAT #155 CHANGED, and
+  saying so is the point of writing it down: GH-108.6's `gh`-less fixture held no
+  `gh` on either kind of host, so the row would have been caught before this
+  change as well. It is a mutation GH-108.6 had none of, and it is the nearest
+  the harness can come. The fixture rule itself is hand-mutated -- four cases,
+  three caught and one a recorded survivor -- in the commit that added it.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that
