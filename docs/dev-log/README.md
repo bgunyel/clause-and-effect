@@ -385,3 +385,21 @@ thing in the record.
   later ones in the prose describing the earlier ones, and git refused the commit
   message for it. One permitting gap found and deliberately not fixed, filed as
   #144: a pull request based on a dev branch that is not the active one.
+
+- [2026-09-17 · session 5](devlog_2026-09-17_session-5.md) — #141: #106's
+  invariance families seeded one of `requirements.md`'s three requirement
+  families, and not the one written from defects — 95 `GH-` entries to 49 FRs,
+  and the derivation read `FR-` tags only. Which `GH-` requirements are seeded
+  is a rule now: membership derived off the file, the answer declared per entry
+  in a `variants` field, and three checks holding the declarations to the seed
+  table and the transformation list. The first hook the rule brought into scope
+  failed on its first generated spelling — `append-only-docs.sh` permits `rm`,
+  `mv`, `tee`, `truncate` and a truncating redirect behind a backslash line
+  continuation, filed as #156 — and review of the assistant's own commit then
+  found a pass about nothing in the very section whose subject is guards that
+  cannot fail. 371 more variants moved the run time by less than the suite can
+  resolve, which is also why #140's recorded 94.0 s could not be compared
+  against. Writing the entry then found a second permitting defect by trying to
+  obey the convention: `append-only-docs-edit.sh` is inoperative in every linked
+  worktree, which is where agents work, filed as #159. Worked unattended; it has
+  not had Bertan's review.
