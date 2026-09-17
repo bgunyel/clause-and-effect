@@ -1560,28 +1560,41 @@ The suite fails on each of these, and `--matrix` shows the rest:
   `survived` for ever and read as a defect in the hooks rather than in the row.
 
 ### GH-128
-- text: A heredoc body begins after the opener's LOGICAL line, so a command written
-  after the terminator of `cat <<E \` / `x` / `E` is read as a command. Every
-  spelling of the opener reaches that verdict — `<<-E` with a tab-indented
-  terminator, `<<'E'`, `<<"E"`, `<< E`, an opener continued more than once, and a
-  redirect in front of it — and a heredoc body is still dropped whether or not its
-  lines end in a backslash. `cs_normalise` emits no line longer than the longest
-  line `cs_within_cap` measured of the same command.
+- text: A heredoc body begins where bash begins it, so a command written after the
+  terminator is read as a command. A line ending in an ODD run of trailing
+  backslashes continues and the body waits for it; an EVEN run does not continue,
+  and the body begins on the next line. Every spelling of the opener reaches that
+  verdict — `<<-E` with a tab-indented terminator, `<<'E'`, `<<"E"`, `<< E`, an
+  opener continued more than once, and a redirect in front of it — and a heredoc
+  body is still dropped whether or not its lines end in a backslash.
+  `cs_normalise` emits no line longer than the longest line `cs_within_cap`
+  measured of the same command.
 - from: #128, found by Bertan's review of PR #123
 - kind: defect-permitting
 - status: active
 - note: the fifth answer to where a heredoc body begins and the fourth wrong one,
-  and the first about the opener's own line rather than about the terminator.
-  `cs_normalise`'s first pass now waits for the logical line to end before it
-  starts a body, by the rule `cs_join` joins on — any trailing backslash
-  continues — while the joining itself stays `cs_join`'s one pass later, so the
-  two cannot answer the backslash differently. What is not modelled is bash's
-  joining INSIDE an unquoted body, and an opener split by the continuation
-  (`cat <<\` / `E`); both end the body earlier than bash does, which exposes
-  lines rather than hiding them. The second consequence was a claim about the
-  cap: forty 15,011-byte groups within the cap made `cs_normalise` emit one
-  600,400-byte line, and THE LINE CAP in `lib/command-scan.sh` said so until this
-  fix. #127 is the half of that claim which is still open.
+  and the first about the opener's own line rather than about the terminator. Two
+  rules carry it. `cs_normalise`'s first pass ends the logical line by bash's
+  parity rule rather than by the looser one `cs_join` uses, and it takes the
+  trailing run off the line a body starts after — which under the parity rule is
+  always an even run, the one case where `cs_join` joins and bash does not, and
+  the one line onto which `cs_join` could otherwise glue the first line past the
+  terminator. Each rule has a row in `mutate-hooks.sh`, and a third breaks both,
+  because on an odd run either one alone holds the case the issue was filed for.
+  The first version of this fix used `cs_join`'s rule in the drop and argued that
+  looser than bash was the safe side, because a line held open too long "only
+  exposes more lines as commands" — and this entry said so for one revision. It
+  is false: holding the line open moves the terminator search forward, so a
+  delimiter line bash took as the terminator of an empty body is scanned past and
+  the body runs to the next delimiter, dropping what lies between.
+  `cat <<E \\` / `E` / `echo after` / a push / `E` was permitted at exit 0 where
+  `dev-05` refused it, found by review of PR #151. What IS safe is ending a body
+  early, which is why bash's joining inside an unquoted body and an opener split
+  by its own continuation (`cat <<\` / `E`) are still not modelled. The second
+  consequence was a claim about the cap: forty 15,011-byte groups within the cap
+  made `cs_normalise` emit one 600,400-byte line, and THE LINE CAP in
+  `lib/command-scan.sh` said so until this fix. #127 is the half of that claim
+  which is still open.
 
 ## Provenance: the acceptance criteria of #37–#41
 

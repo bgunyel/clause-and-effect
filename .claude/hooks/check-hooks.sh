@@ -836,35 +836,40 @@ git push --force origin main" \
 tok 'a body naming a push on a continued line is still dropped' \
     "cat <<'E'" \
     "$(printf "cat <<'E'\ngit push --force origin main \\\\\nE\n" | cs_normalise)"
-# THE TWO PLACES THE CONTINUATION RULE IS NOW READ, held against each other.
-# The drop asks whether a line continues, `$0 !~ /\\$/`; cs_join asks it again
-# one pass later when it joins one. That is #84's question a level in -- a rule
-# answered twice -- and the drop cannot borrow the answer, because cs_join runs
-# after it and a copy of the joining inside the drop would be the join rule
-# written twice, in the file whose header names that as the defect class it
-# exists to end. So the agreement is pinned by literals instead, over the runs
-# of trailing backslashes where the two could come apart: cs_join takes ONE
-# backslash off a run and joins on whatever is left, so the drop has to defer
-# the body over exactly the lines cs_join will fold. One backslash is the pair
-# above; two and three are here, and the joined text is written once per run
-# and read in both checks, which is the idiom the cs_join pin further up
-# already uses. A change to either rule moves one literal of a pair and is red.
+# THE TWO PLACES A TRAILING BACKSLASH IS READ, and what happens where they
+# disagree. cs_join joins a line ending in ANY backslash, deliberately and
+# unchanged; bash continues a line only when the run is ODD. The drop follows
+# bash, so the two disagree exactly on an even run -- and an even run is then
+# the line a body starts after, which is the one line where cs_join could glue
+# the first line past the terminator onto it. So the drop takes the run off.
 #
-# Two backslashes is where bash parts company with both of them, and the
-# verdict survives it: bash reads `\\` as an escaped backslash, so the line
-# does not continue, the body is `x` and `E` ends it -- and the push runs,
-# which is the verdict these reach by deferring the body instead.
-tok 'cs_join folds a line ending in two backslashes' \
+# The first version of this fix used cs_join's looser rule in the drop instead
+# and argued that looser was the safe side. It is not: holding the line open
+# moves the terminator search forward, a delimiter line bash took as the whole
+# terminator is scanned past, and the body runs to the NEXT delimiter, dropping
+# what lies between. The shape below is that defect, measured at exit 0 on the
+# first version and exit 2 on dev-05, and it is checked here as output and
+# below as verdicts.
+#
+# Each pair is the same run read twice, once through cs_join and once through
+# cs_normalise, so a change to either rule moves one literal of a pair.
+tok 'cs_join joins an even run, which bash does not' \
     'cat <<E \x' \
     "$(printf 'cat <<E \\\\\nx\n' | cs_join)"
-tok 'and the drop defers the body over that same line' \
-    'cat <<E \x
+tok 'so the drop ends the logical line there and takes the run off' \
+    'cat <<E
 git push --force origin main' \
-    "$(printf 'cat <<E \\\\\nx\nE\ngit push --force origin main\n' | cs_normalise)"
-tok 'cs_join folds a line ending in three backslashes' \
+    "$(printf 'cat <<E \\\\\nE\ngit push --force origin main\n' | cs_normalise)"
+tok 'the swallowed-terminator shape, which the first fix emptied' \
+    'cat <<E
+echo after
+git push --force origin main
+E' \
+    "$(printf 'cat <<E \\\\\nE\necho after\ngit push --force origin main\nE\n' | cs_normalise)"
+tok 'an odd run of three is a continuation to both of them' \
     'cat <<E \\x' \
     "$(printf 'cat <<E \\\\\\\nx\n' | cs_join)"
-tok 'and the drop defers the body over that one too' \
+tok 'and the drop defers the body over it' \
     'cat <<E \\x
 git push --force origin main' \
     "$(printf 'cat <<E \\\\\\\nx\nE\ngit push --force origin main\n' | cs_normalise)"
@@ -1762,6 +1767,16 @@ section "=== REGRESSION: issue #128, a continued opener hid the command after th
 # wrong answers and each was a spelling the comparison did not match. #106's
 # families ask the seven of them of every seed; these are the two hooks and the
 # two directions the issue measured, written out.
+#
+# THE EVEN RUN is here too, and it is not the issue's shape but the first fix's.
+# Bash continues a line only on an ODD run of trailing backslashes, and that fix
+# held the line open on any run at all -- which moved the terminator search
+# forward, let the body swallow the terminator, and dropped every line up to the
+# next one. `cat <<E \\` / `E` / `echo after` / *push* / `E` runs that push
+# under bash and was permitted, exit 0, where dev-05 refused it. Found by review
+# of this pull request. A generated run of 2,580 shapes, each executed under
+# bash with a harmless payload to decide what really runs, puts dev-05 at 198
+# hidden pushes, that fix at 40, and this one at 0.
 req GH-128
 check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'continued opener, then a forced push' \
   $'cat <<E \\\nx\nE\ngit push --force origin main'
@@ -1783,6 +1798,18 @@ check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'a redirect in front of the continued
 # the push after it is read. Bash does not join inside a quoted body either.
 check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'a slashed body line, then a push' \
   $'cat <<\'E\'\nprose \\\nE\ngit push --force origin main'
+# The even run, which bash does not continue: the terminator on the next line
+# ends an empty body, and what follows it runs.
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an even run, terminator, then a push' \
+  $'cat <<E \\\\\nE\ngit push --force origin main'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'an even run, terminator, then a commit on main' \
+  $'cat <<E \\\\\nE\ngit commit -m wip'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an even run whose body would have swallowed the terminator' \
+  $'cat <<E \\\\\nE\necho after\ngit push --force origin main\nE'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'the same shape on main' \
+  $'cat <<E \\\\\nE\necho after\ngit commit -m wip\nE'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an even run of four' \
+  $'cat <<E \\\\\\\\\nE\ngit push --force origin main'
 # And the permitting direction, which is what says the fix exposed a command
 # rather than stopping the drop: the shape the issue ran with `echo RAN-AFTER`
 # in place of the push, and a body that merely names one on a continued line.
@@ -9372,7 +9399,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '24' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '26' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9435,7 +9462,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '22' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '24' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and

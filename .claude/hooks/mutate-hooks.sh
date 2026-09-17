@@ -16,12 +16,13 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT FORTY-FIVE MINUTES for the whole registry: one check-hooks.sh run per
-# mutation that applies, at about two minutes, plus the baseline -- twenty-four
-# runs as the registry stands, not twenty-five, because the row whose edit matches
-# nothing never reaches one. Measured twice on 2026-09-17, on this machine and
+# mutation that applies, at about two minutes, plus the baseline -- twenty-six
+# runs as the registry stands, not twenty-seven, because the row whose edit
+# matches nothing never reaches one. Measured twice on 2026-09-17, on this machine and
 # on registries of 22 and 23 rows: 47 min 34 s and 45 min 24 s. Neither is this
-# registry: #128's row is the 24th, and a row is about two minutes, which is the
-# only arithmetic done to those figures rather than measuring again. That is why
+# registry: #128 adds the 24th, 25th and 26th, and a row is about two minutes,
+# which is the only arithmetic done to those figures rather than measuring
+# again. That is why
 # it is a separate script and why check-hooks.sh does not call it (#107).
 # Nothing here is a PreToolUse hook and settings.json does not register it.
 # Naming rows costs the baseline plus one run each, so re-asking a single rule
@@ -45,9 +46,20 @@
 # MEASURED, 2026-09-17, at the commit that answered that review: all twenty-three
 # rows reported what they declare, and .claude/hooks/ came back byte-identical.
 # That run is evidence about those twenty-three rows and about nothing else, so
-# `heredoc-opener-continuation`, added for #128, was run by name the same day
-# with the baseline -- caught, GH-128 red -- and the whole registry has not been
-# run since it was added. What every row has to hold either way is the shape
+# the three rows #128 added were each run by name with the baseline -- caught,
+# GH-128 red -- and the whole registry has not been run since.
+#
+# THREE ROWS FOR ONE FIX, which is a departure from a row per rule and is here
+# because the rules overlap. `heredoc-opener-parity` loosens the parity test to
+# the rule cs_join uses, which is the defect review of the pull request found in
+# the first version of the fix; `heredoc-boundary-run-kept` stops the drop taking
+# the trailing run off the line a body starts after. Each is caught, and NEITHER
+# reproduces the defect the issue was filed for: on an odd run the two mechanisms
+# cover the same case, so breaking one leaves the other holding it. The issue's own
+# case therefore needs both broken, which is `heredoc-opener-continuation`, the
+# one row here whose edit is two -- and it puts the pass back to what dev-05 did,
+# measured: 151 checks red, and the bash differential from 0 hidden pushes to
+# 198, which is dev-05's figure exactly. What every row has to hold either way is the shape
 # below, which check-hooks.sh reads from this file's text. No
 # per-mutation counts are recorded here on purpose -- a count in a comment is the
 # thing #107 was filed about, and the registry is re-runnable instead.
@@ -104,7 +116,7 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   TWENTY-TWO real mutations, against FIVE files in .claude/hooks/, naming
+#   TWENTY-FOUR real mutations, against FIVE files in .claude/hooks/, naming
 #   THIRTY-THREE requirement IDs between them, of the 145 whose status is active.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
@@ -195,7 +207,9 @@ own-branch-push-refused%no-git-push.sh%/^names_this_branch()/,/^}/s/") return 0 
 library-loaded-unguarded%no-git-push.sh%$a. "$(dirname "$0")/lib/command-scan.sh"%GH-84.2%caught
 merged-branch-not-gone%no-work-on-stale-branch.sh%s/= "\[gone\]"/= "never-this-string"/%FR-38%caught
 bare-pytest-permitted%pytest-via-uv-group.sh%s/grep -qE '\^(pytest|/grep -qE '^(no-such-tool-at-all|/%GH-69.1%caught
-heredoc-opener-continuation%lib/command-scan.sh%s/if (opener && $0 !~ \/\\\\$\/)/if (opener)/%GH-128%caught
+heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
+heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
+heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

@@ -347,28 +347,68 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # and no-commit-to-main.sh both answered exit 0, measured. Issue #128.
 #
 # So the drop waits for the logical line to end: the opener is looked for on
-# every line of it, and the body begins after the first line that does not end
-# in a backslash. That rule is cs_join's exactly -- any trailing backslash
-# continues, an escaped one included -- and it has to be, because cs_join is
-# what joins the line one pass later: a drop that ended the logical line earlier
-# than cs_join joins it is the defect above, back again. Looser than bash is the
-# safe side of that, and this rule is: a logical line held open too long only
-# exposes more lines as commands.
+# every line of it, and the body begins after the line that ends it. WHICH line
+# that is, is bash's rule and not cs_join's -- a line continues only when its
+# run of trailing backslashes is ODD -- and the first version of this fix used
+# cs_join's looser rule instead, that any trailing backslash continues. That
+# version was wrong, in the permitting direction, and the argument that licensed
+# it is the sentence worth keeping here:
 #
-# Which leaves the rule stated in two places, and that is #84's question one
-# level in. The drop cannot borrow cs_join's answer -- cs_join runs after it,
-# and a copy of the joining here would be the join rule written twice, which
-# the header of this file names as the defect class it exists to end -- so the
-# two are held against each other by literals in check-hooks.sh instead of by
-# this paragraph asserting they agree: the joined text of a one, two and three
-# backslash run, read once as cs_join's output and once as this pass's.
+#   "Looser than bash is the safe side, because a logical line held open too
+#   long only exposes more lines as commands."
+#
+# It is false. Holding the line open moves the START OF THE BODY forward, and
+# the search for the terminator with it -- so a delimiter line that bash took as
+# the whole terminator is scanned past as though it were part of the command
+# line, the body runs on to the NEXT delimiter, and everything between them is
+# dropped. Measured on the fix that made that claim:
+#
+#   cat <<E \\
+#   E
+#   echo after
+#   git push --force origin main
+#   E
+#
+# Bash ends the command line at `cat <<E \` -- `\\` is an escaped backslash,
+# an even run, so nothing is continued -- takes the next line as the terminator
+# of an empty body, and runs `echo after` and the push. That fix emitted
+# `cat <<E \E` and NOTHING else: the push was gone, and no-git-push.sh answered
+# exit 0 where dev-05 answered exit 2. A new permitting defect in the change
+# whose subject is a permitting defect, and of the same class. Found by review of
+# this pull request, not by the suite it arrived with.
+#
+# So parity is modelled where the body starts, and the two rules are then left
+# to disagree everywhere it cannot cost anything -- except at one point. cs_join
+# joins a line ending in ANY backslash, deliberately, and it runs one pass after
+# this one; the line this pass ends a logical line on therefore gets its trailing
+# run taken off, because that line is the one cs_join could otherwise glue the
+# first line AFTER the terminator onto. Under the parity rule such a run is
+# always even, which is exactly the case bash does not join and cs_join does. A
+# trailing backslash is text of a command line and never a command, so removing
+# it can hide nothing; what it removes is the disagreement, at the only place
+# where the disagreement reaches a verdict.
+#
+# What says all of this rather than the paragraph above: 2,580 generated shapes
+# of opener, backslash run, delimiter and payload position, each RUN under bash
+# with `touch ran.flag` as the payload -- so that execution and not output is
+# what the property reads -- and then put through this pass with a push in the
+# payload's place. The property is that a push bash runs stands at the start of
+# some emitted line. dev-05 fails it 198 times, the first version of this fix 40,
+# this version 0. The harness is in the pull request, not the tree: its own first
+# two generations were green for the wrong reasons, once from a fixed
+# `E / payload / E` tail that re-closed every swallowed body and once from
+# reading `cat` printing a body line as the payload having run.
 #
 # A body line is still never joined, whether its delimiter is quoted or not,
 # because it is dropped before cs_join sees it -- so a quoted body whose every
 # line ends in a backslash still ends at its terminator, where bash ends it too.
-# Bash joins inside an UNQUOTED body and this pass does not: that ends the body
-# earlier than bash, which exposes more lines and can only refuse more, so it is
-# deliberately not modelled rather than overlooked.
+# Bash joins inside an UNQUOTED body and this pass does not, which ends the body
+# EARLIER than bash: the lines between are emitted rather than dropped. That is
+# the safe direction here for the reason the paragraph above is careful about --
+# ending a body early exposes lines, and it is ending one LATE, or starting one
+# late, that hides them. Deliberately not modelled rather than overlooked, and
+# the 2,580-shape run above covers body lines ending in a backslash under both
+# quotings.
 #
 # THE TRADE, taken knowingly: an opener SPLIT by the continuation -- `cat <<\` /
 # `E`, or `cat <<E\` / `x`, which bash reads as `<<E` and `<<Ex` -- is not
@@ -411,10 +451,36 @@ cs_normalise() {
           opener = 1
         }
       }
-      print
-      # cs_join joins a line ending in any backslash to the next one, so the
-      # logical line is not over yet and the body cannot start here. #128.
-      if (opener && $0 !~ /\\$/) { ind = 1; opener = 0 }
+      if (!opener) { print; next }
+      # Where the logical line carrying the opener ends, by the rule bash uses
+      # and not the one cs_join uses: a line continues only when its run of
+      # trailing backslashes is ODD, the last one escaping the newline and the
+      # rest being escaped backslashes. An even run is text, and the line ends
+      # there. #128.
+      # p is that parity, flipped per backslash rather than taken with a
+      # modulo, so that the rule can be broken by one registered mutation:
+      # mutate-hooks.sh splits a row on % and could not carry the expression.
+      line = $0
+      n = length(line)
+      r = 0
+      p = 0
+      while (r < n && substr(line, n - r, 1) == "\\") { r++; p = 1 - p }
+      if (p) { print; next }
+      # The body starts after this line, and cs_join runs one pass later on a
+      # LOOSER rule -- it joins a line ending in ANY backslash, an escaped one
+      # included, deliberately. So an even run left standing here is the one
+      # place the two disagree where it can cost something: cs_join would glue
+      # the first line after the terminator onto this one, which is #128 again
+      # in its other spelling. Take the run off rather than hope they agree:
+      # trailing backslashes are text of the command line itself, never a
+      # command, and a line start is what every rule reads.
+      # The blanks in front of the run go with it, so that what this pass emits
+      # carries no trailing whitespace for a literal in check-hooks.sh to have
+      # to spell. Trailing blanks are not a command either.
+      if (r > 0) sub(/[ \t]*\\+$/, "", line)
+      print line
+      ind = 1
+      opener = 0
     }
     # The terminator never arrived, so this was not a heredoc and the lines were
     # dropped in error. Give them back.
