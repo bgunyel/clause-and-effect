@@ -342,7 +342,51 @@ thing in the record.
   rule with 36 checks tagged to it and no coverage: nothing in the suite stood a
   worktree on the branch the hook refuses to push.
 
-- [2026-09-17 · session 2](devlog_2026-09-17_session-2.md) — #133: the retarget
+- [2026-09-17 · session 2](devlog_2026-09-17_session-2.md) — a grilling session
+  on #131 that established the issue was the fourth arrival of one defect: the
+  boundary is written in a command's spelling, so each new spelling of one act
+  arrives unguarded. #131 takes Q26's shape — refuse `gh issue develop`'s
+  creating spellings, permit `--list` — after a fourth option the assistant
+  proposed was rejected on a false premise of its own and on failing open under
+  #135/#137/#139. The class underneath it is filed as #143, where a force-move
+  and a deletion of `refs/heads/dev-NN` pass all seven registered hooks and
+  `dev-NN` carries no ruleset — recorded in the entry as the only acts measured
+  that neither layer covers, which session 3 corrects. The assistant's filing of
+  #143 was then itself wrong about its scope — `PUT …/contents/?branch=dev-05`
+  advances the ref with content attached — corrected the same day. `CONTEXT.md`'s
+  *reserved act* turned out to carry the principle already and to be one clause
+  short of it; ADR 0002 records the general form.
+
+- [2026-09-17 · session 3](devlog_2026-09-17_session-3.md) — Bertan's review of
+  PR #146 requests changes on five findings. The load-bearing one is a control
+  the previous entry recorded as refused and is not: `gh api --method POST
+  …/merges -f base=dev-05` passes all seven hooks, because no hook holds a rule
+  matching `/merges` at all, and its effect advances the active dev branch on the
+  remote — so the count of acts neither layer covers was wrong in four documents,
+  and was already false in the paragraph it stood in. No document carries a count
+  now. The `unarmed` added last session turned out to pin the clause's
+  *placement* rather than its claim, going red on a correct document, and all
+  three new checks read the wrap-sensitive fixture whose replacement `GH-97.2`
+  had already built 200 lines above them — so `CONTEXT.md` had been shaped to fit
+  a fragile check. Also found: `CLAUDE.md` still said `docs/adr/` holds one ADR,
+  unpinned by anything, in the sentence that warns a reader off a stale
+  enumeration.
+
+- [2026-09-17 · session 4](devlog_2026-09-17_session-4.md) — #108 pins what the
+  hooks decide when the environment they read is broken: git or gh off PATH, no
+  repository, a detached HEAD, no origin, no `dev-NN` ref or two of them, and
+  bytes in the command nobody meant to send. The finding that makes the open
+  cells safe to write down is that no case exists where a hook's read of the
+  environment fails while the command would still reach a repository — every
+  spelling that reaches one is refused off the command's text. The session report
+  no longer exits silently when it has nothing to report. A NUL byte written
+  where the escape was meant made grep call the whole suite binary and emptied a
+  derivation four hundred lines away; it happened four times over the branch, the
+  later ones in the prose describing the earlier ones, and git refused the commit
+  message for it. One permitting gap found and deliberately not fixed, filed as
+  #144: a pull request based on a dev branch that is not the active one.
+
+- [2026-09-17 · session 5](devlog_2026-09-17_session-5.md) — #133: the retarget
   arm of `no-pr-decisions.sh` refused a `gh pr edit --base main` and then named
   `gh pr create --base dev-NN` as the correction, which is the correction for the
   three creating arms and not for this one — `gh pr edit <n> --base dev-05` is
@@ -352,5 +396,12 @@ thing in the record.
   filed gap to active, and a registry row says the new check can fail. Review of
   the assistant's own change then found the first draft's third sentence, "No
   other edit is checked here", true of the arm but not of the file and pinned by
-  no row; it was dropped. The entry records that sentence as kept, having been
-  written before the review — the commit message carries the correction.
+  no row; it was dropped, and a second review found the row that replaced it
+  pinned a prefix rather than the whole sentence, so the clause tying a retarget
+  to a create could have gone with the suite green. Both corrections are in the
+  commit messages; the entry, written before either review, records neither.
+  **Numbered 5 rather than 2.** It was written as session 2 and collided on merge
+  with #143's entry of the same name, sessions 2 to 4 having been taken on
+  `dev-05` meanwhile. The rename changed its title line and nothing else, so
+  every count inside it is the one that stood at its first commit: 24 registry
+  rows and a suite of 3659, against 31 rows and 3788 results after this merge.
