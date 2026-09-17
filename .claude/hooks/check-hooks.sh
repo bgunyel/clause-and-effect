@@ -4187,6 +4187,70 @@ feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <ra
   esac
 }
 
+# env_feed, env_cmd, env_says and report_says: issue #108, where a hook's verdict
+# is read against an ENVIRONMENT this suite built -- git off PATH, a directory
+# that is no repository, a detached HEAD, no origin, no dev-NN ref or two. Every
+# helper above fixes one half of that and leaves the other to the invoker:
+# check_in names a directory and takes the suite's PATH, feed names a PATH and
+# runs in $ON_DEV. These name both, which is what each row of #108's table needs.
+# They are up here with the others rather than in that section because the #98
+# self-test below drives every helper that reads a hook's exit status, and a
+# function defined after it has not been defined when it runs.
+env_feed() {  # env_feed <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin>
+  local dir="$1" path="$2" script="$3" want="$4" label="$5" payload="$6" rc err hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$payload" \
+        | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  verdict "$want" "$rc" "$err" "$label"
+}
+env_cmd() {  # env_cmd <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <command>
+  local dir="$1" path="$2" script="$3" want="$4" label="$5" cmd="$6"
+  env_feed "$dir" "$path" "$script" "$want" "$label" \
+    "$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}')"
+}
+env_says() {  # env_says <dir> <PATH> <script|/absolute/hook> <fragment> <label> <command>
+  local dir="$1" path="$2" script="$3" want="$4" label="$5" cmd="$6" rc err hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+        | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  if [ "$rc" != 2 ]; then
+    fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
+      "$label" "$want" "$rc" "$err"
+    return
+  fi
+  case "$err" in
+    *"$want"*) pass refuse 'says  %s' "$label" ;;
+    *) fail refuse '%s\n         wanted the refusal to say |%s|\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
+  esac
+}
+# The one helper here that runs no hook: report-stale-branches.sh is a
+# SessionStart report, so what is asked of it is that it exited 0 AND said a
+# literal -- #108's GH-108.9, where the failure it pins was a silent exit 0. Both
+# halves are in one helper because either alone passes the thing the other
+# catches: a report that says the right sentence and then exits 1 stops the
+# session, and one that exits 0 having said nothing is the defect itself. The
+# script is a parameter so that the #98 self-test can point it at a fixture; the
+# section that uses it passes a copy of the file outside any repository. Its
+# argument order is the family's -- the environment first, then what is run, then
+# what is expected of it, then the label -- so that a reader moving between these
+# helpers does not have to check.
+report_says() {  # report_says <PATH> <script> <literal> <label>
+  local path="$1" script="$2" want="$3" label="$4" out rc
+  out=$( cd "$(dirname "$script")" && PATH="$path" bash "$script" 2>&1 )
+  rc=$?
+  if [ "$rc" != 0 ]; then
+    fail static '%s\n         a SessionStart report must exit=%s, got exit=%s\n         output |%s|' \
+      "$label" 0 "$rc" "$out"
+  elif [ "${out#*"$want"}" = "$out" ]; then
+    fail static '%s\n         wanted the report to say |%s|\n         it said |%s|' "$label" "$want" "$out"
+  else
+    pass static 'report %s' "$label"
+  fi
+}
+
 # An ALLOW that came from the path simply not being there would say nothing
 # about docs/research/, and a BLOCK-expecting case needs its file present for
 # the same reason. Both are asserted rather than assumed.
@@ -7968,8 +8032,15 @@ printf '#!/bin/bash\n: > "$(dirname "$0")/ran-allow-0"\nexit 0\n' > "$EXITS/allo
 printf '#!/bin/bash\n: > "$(dirname "$0")/ran-block-2"\necho "block-2 refuses" >&2\nexit 2\n' > "$EXITS/block-2.sh"
 printf '#!/bin/bash\n: > "$(dirname "$0")/ran-crash-1"\necho "crash-1 fixture stderr" >&2\nset -e\nfalse\nexit 0\n' > "$EXITS/crash-1.sh"
 printf '#!/bin/bash\n: > "$(dirname "$0")/ran-crash-127"\necho "crash-127 fixture stderr" >&2\nno-such-tool-for-check-hooks\n' > "$EXITS/crash-127.sh"
+# A fifth fixture, for report_says alone: it exits 0 AND says something. Every
+# helper above it reads a verdict, for which exit 0 is the whole answer, so a
+# silent allow-0 is their passing case. report_says asks for a status and a
+# sentence together -- #108's silent exit 0 is the defect it exists to catch --
+# and allow-0 is indistinguishable from that defect, so it is this helper's
+# FAILING case and this one is its passing one.
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-speak-0"\necho "speak-0 reports something"\nexit 0\n' > "$EXITS/speak-0.sh"
 chmod +x "$EXITS"/*.sh
-for f in allow-0 block-2 crash-1 crash-127; do
+for f in allow-0 block-2 crash-1 crash-127 speak-0; do
   [ -x "$EXITS/$f.sh" ] || {
     echo "the exit-status fixture $f.sh was not created; the self-test using it proves nothing" >&2
     exit 1
@@ -8013,6 +8084,9 @@ drive_helper() {  # drive_helper <helper> <fixture> <want>
          says_not)   says_not "$EXITS" "$EXITS/$fixture.sh" 'never-said' 'self-test' 'true' ;;
          feed)       feed "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
          feed_says)  feed_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' '{}' ;;
+         env_feed)   env_feed "$EXITS" "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
+         env_says)   env_says "$EXITS" "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
+         report_says) report_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' ;;
          *)          exit 3 ;;
        esac
        exit $FAILED ) >"$EXITS_OUTPUT" 2>"$EXITS/stray-stderr"
@@ -8036,9 +8110,12 @@ failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
 # The helpers this self-test drives, named once: each loop below runs off its list,
 # and the derivation at the end of this section is asserted against both. A
 # helper added to neither is red there; one added to a list is driven.
-DRIVEN_VERDICT='check check_in flip gap check_file feed check_rawfile_in'
-DRIVEN_MESSAGE='says says_not feed_says'
+DRIVEN_VERDICT='check check_in flip gap check_file feed check_rawfile_in env_feed'
+DRIVEN_MESSAGE='says says_not feed_says env_says'
 DRIVEN_TIMED='cap_timed lib_run'
+# report_says is the fourth list because it is the only helper that asks for a
+# status and a sentence at once, so neither loop above states its cases. #108.
+DRIVEN_REPORT='report_says'
 
 req GH-98 GH-124
 for helper in $DRIVEN_VERDICT; do
@@ -8103,6 +8180,26 @@ for helper in $DRIVEN_TIMED; do
   done
 done
 
+# The report helper, #108. Its passing case needs both halves at once, so the
+# fixtures separate them: speak-0 exits 0 and speaks, allow-0 exits 0 and is
+# silent, and the three non-zero fixtures all speak. A helper that dropped the
+# status test passes the allow-0 case; one that dropped the text test passes the
+# silent one. Both were written and both were measured to fail exactly here.
+for helper in $DRIVEN_REPORT; do
+  tok "$helper: a report that exits 0 and says the literal passes" \
+      'ok' "$(drive_helper "$helper" speak-0 -)"
+  tok "$helper: a report that exits 0 saying nothing fails, which is the defect it is for" \
+      'FAIL' "$(drive_helper "$helper" allow-0 -)"
+  tok "$helper: a report that says the literal and then exits 2 fails" \
+      'FAIL' "$(drive_helper "$helper" block-2 -)"
+  timed_line_says "$helper: that failure line names the status it wanted and the one it got" \
+      'must exit=0, got exit=2'
+  tok "$helper: a report that exits 1 fails" 'FAIL' "$(drive_helper "$helper" crash-1 -)"
+  timed_line_says "$helper: that failure line names exit 1" 'got exit=1'
+  tok "$helper: a report that exits 127 fails" 'FAIL' "$(drive_helper "$helper" crash-127 -)"
+  timed_line_says "$helper: that failure line names exit 127" 'got exit=127'
+done
+
 # And that the helpers driven above are all of them. The helpers that read a hook's
 # exit status are derived from this file, and each must be in one of the three lists
 # the loops above run off -- so a new reader is either driven or red here. `flip`
@@ -8134,7 +8231,7 @@ if [ -z "$STATUS_READERS" ]; then
 fi
 for reader in $STATUS_READERS; do
   present "derived $reader reads a hook exit status, and the #98 self-test drives it" \
-          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE $DRIVEN_TIMED"
+          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE $DRIVEN_TIMED $DRIVEN_REPORT"
 done
 
 echo "--- issue #101: a load guard requires a function ---"
@@ -9052,7 +9149,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '274' "${TEXT_CHECK_ARGS##*COUNT }"
+    '279' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -9104,7 +9201,7 @@ case " $RUN_BY_SETTINGS " in
 esac
 written 'the harness says how it is run' "$MUT" 'bash .claude/hooks/mutate-hooks.sh'
 written 'and roughly what it costs, which is why nothing runs it for you' \
-        "$MUT" 'ABOUT FORTY-FIVE MINUTES'
+        "$MUT" 'ABOUT AN HOUR'
 written 'and what its exit status means, the two self-tests included' \
         "$MUT" 'EXIT STATUS: non-zero when any row reports something other than'
 written 'the harness refuses to mutate the hooks directory it stands in' \
@@ -9192,7 +9289,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '23' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '29' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9255,7 +9352,552 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '21' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '27' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+
+section "=== issue #108: what every hook decides when its environment is broken ==="
+# #95 pinned the step where a hook reads its input. This is the step after it:
+# what the hooks decide once the input has been read and the environment they
+# read the ANSWER out of is not the ordinary one. #103's audit wrote the table --
+# git off PATH, a directory that is no repository, a detached HEAD, no origin, no
+# dev-NN ref or two of them, gh off PATH, and bytes in the command nobody meant
+# to send -- and found some cells failing open, some closed, some by design and
+# some by accident, with no check anywhere naming any of them.
+#
+# THE QUESTION THAT DECIDES WHETHER AN OPEN CELL IS A HOLE, asked of every row
+# before any of this was written down: is there a case where the hook's read of
+# the environment fails while the command would still reach a repository? Every
+# such spelling -- `git -C`, `git --git-dir`, a `cd` or a `git checkout main`
+# before the commit -- was driven under each environment below, and every one is
+# refused, because those refusals are read off the text of the command and never
+# off the environment. So the permits here are the cases where the command cannot
+# run either, and that is what makes them safe to pin as intended rather than
+# tolerated. They are pinned all the same: a hook that starts reading the
+# environment for one of those decisions turns them red, which is the point.
+#
+# The fail direction is #103's Q19 and #95's, and one row needed it applied
+# rather than recorded: report-stale-branches.sh exited 0 with no output at all
+# when git was off PATH or it stood outside a repository. It now says why, and
+# the argument is in its own header under IT NEVER EXITS WITHOUT SAYING WHY.
+#
+# Every environment here is a fixture this suite builds -- Q21 -- so nothing
+# depends on the machine the suite is run on. The two PATH fixtures are the #95
+# section's symlink farm with one tool removed, which is why this section stands
+# below it.
+
+# --- the environments, each built and then asserted to be what it claims ------
+ENV_NO_GIT_BIN="$FIXTURES/path-without-git"
+ENV_NO_GH_BIN="$FIXTURES/path-without-gh"
+cp -a "$WITH_JQ_BIN" "$ENV_NO_GIT_BIN"
+cp -a "$WITH_JQ_BIN" "$ENV_NO_GH_BIN"
+rm -f "$ENV_NO_GIT_BIN/git"
+rm -f "$ENV_NO_GH_BIN/gh"
+# The same guard #95 puts on its jq-less twin, for the same reason: a hook that
+# refuses under one of these might be refusing because the fixture is broken, and
+# that refusal would read as the property being checked. Each must differ from
+# the farm by exactly one name, and that name must be the tool.
+for pair in "git:$ENV_NO_GIT_BIN" "gh:$ENV_NO_GH_BIN"; do
+  tool=${pair%%:*}; dir=${pair#*:}
+  [ -n "$( PATH="$WITH_JQ_BIN"; command -v "$tool" )" ] \
+    && [ -z "$( PATH="$dir"; command -v "$tool" )" ] \
+    && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$dir") | grep '^[<>]')" = "< $tool" ] || {
+    echo "the $tool-less PATH fixture is not the symlink farm minus $tool; the checks using it prove nothing" >&2
+    exit 1
+  }
+done
+
+ENV_REPOS="$FIXTURES/env"
+mkdir -p "$ENV_REPOS"
+GE="-c user.email=checks@example.invalid -c user.name=checks"
+# A directory that is no repository. Nothing is created in it on purpose: the
+# absence is the fixture.
+ENV_NOREPO="$ENV_REPOS/not-a-repository"
+mkdir -p "$ENV_NOREPO"
+# The control. An ordinary branch, an origin, one commit -- the environment the
+# other five differ from in one named way each.
+ENV_PLAIN="$ENV_REPOS/plain"
+git init -q -b feature-x "$ENV_PLAIN"
+git -C "$ENV_PLAIN" remote add origin "$FIXTURES/unreachable-remote.git"
+git -C "$ENV_PLAIN" $GE commit -q --allow-empty -m base
+# A detached HEAD: two commits, so detaching leaves a real one checked out.
+ENV_DETACHED="$ENV_REPOS/detached-head"
+git init -q -b feature-x "$ENV_DETACHED"
+git -C "$ENV_DETACHED" remote add origin "$FIXTURES/unreachable-remote.git"
+git -C "$ENV_DETACHED" $GE commit -q --allow-empty -m base
+git -C "$ENV_DETACHED" $GE commit -q --allow-empty -m second
+git -C "$ENV_DETACHED" checkout -q --detach HEAD
+# No remote at all.
+ENV_NO_ORIGIN="$ENV_REPOS/no-origin"
+git init -q -b feature-x "$ENV_NO_ORIGIN"
+git -C "$ENV_NO_ORIGIN" $GE commit -q --allow-empty -m base
+
+# THE TWO DEV-REF FIXTURES, each a lifecycle repository in the shape the
+# no-work-on-stale-branch.sh section builds: a stale worktree branch at base and
+# a merged one whose upstream is gone. They differ from that one in how many
+# origin/dev-NN refs stand over them -- none, and two -- which is the pair of
+# cells #103's audit left unpinned.
+#
+# In the two-ref fixture dev-05 sits at base and dev-06 at the tip, so the two
+# refs disagree about the stale branch: against dev-06 it is behind and stale,
+# against dev-05 it is level and clear. A refusal there is evidence that the
+# HIGHEST was taken, and the message names which. A fixture with both refs at the
+# tip would refuse whichever was chosen and would be evidence about neither.
+env_lifecycle() {  # env_lifecycle <dir> <ref at base>... -- with <ref at tip> last
+  local dir="$1" base tip r
+  git init -q -b main "$dir"
+  git -C "$dir" remote add origin "$FIXTURES/unreachable-remote.git"
+  git -C "$dir" $GE commit -q --allow-empty -m base
+  base=$(git -C "$dir" rev-parse HEAD)
+  git -C "$dir" $GE commit -q --allow-empty -m advance
+  tip=$(git -C "$dir" rev-parse HEAD)
+  shift
+  for r in "$@"; do
+    case "$r" in
+      *:tip) git -C "$dir" update-ref "refs/remotes/origin/${r%:tip}" "$tip" ;;
+      *) git -C "$dir" update-ref "refs/remotes/origin/${r%:base}" "$base" ;;
+    esac
+  done
+  # ahead == 0, behind == 1 against any ref at the tip: the fallback detector's case.
+  git -C "$dir" branch stale-branch "$base"
+  git -C "$dir" worktree add -q "$dir/wt-stale" stale-branch
+  # upstream configured, remote-tracking ref absent: the gone detector's case,
+  # placed at the tip so the fallback cannot fire here and a refusal is the gone
+  # detector's alone.
+  git -C "$dir" branch gone-branch "$tip"
+  git -C "$dir" config -f "$dir/.git/config" branch.gone-branch.remote origin
+  git -C "$dir" config -f "$dir/.git/config" branch.gone-branch.merge refs/heads/gone-branch
+  git -C "$dir" worktree add -q "$dir/wt-gone" gone-branch
+}
+ENV_DEV_NONE="$ENV_REPOS/no-dev-ref"
+ENV_DEV_TWO="$ENV_REPOS/two-dev-refs"
+env_lifecycle "$ENV_DEV_NONE"
+env_lifecycle "$ENV_DEV_TWO" dev-05:base dev-06:tip
+
+# Each fixture asserted to be the thing its name claims, because every verdict
+# below is read as evidence about that one difference. An unbuilt worktree or a
+# HEAD that is still on a branch would leave a column of permits that read as the
+# hooks abstaining when what abstained was the fixture.
+[ -d "$ENV_PLAIN/.git" ] && [ -d "$ENV_NO_ORIGIN/.git" ] \
+  && [ ! -e "$ENV_NOREPO/.git" ] \
+  && [ -z "$(git -C "$ENV_DETACHED" branch --show-current)" ] \
+  && [ "$(git -C "$ENV_PLAIN" branch --show-current)" = feature-x ] \
+  && [ -z "$(git -C "$ENV_NO_ORIGIN" remote)" ] \
+  && [ "$(git -C "$ENV_PLAIN" remote)" = origin ] \
+  && [ -z "$(git -C "$ENV_DEV_NONE" for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*')" ] \
+  && [ "$(git -C "$ENV_DEV_TWO" for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' | sort -V | tr '\n' ' ')" = 'origin/dev-05 origin/dev-06 ' ] \
+  && [ -d "$ENV_DEV_NONE/wt-stale" ] && [ -d "$ENV_DEV_NONE/wt-gone" ] \
+  && [ -d "$ENV_DEV_TWO/wt-stale" ] && [ -d "$ENV_DEV_TWO/wt-gone" ] || {
+  echo "the #108 environment fixtures are not what they claim; every verdict below would be evidence about the fixture" >&2
+  exit 1
+}
+# AND THAT THE TWO REFS DISAGREE, asked separately because it is the whole of
+# what makes a two-ref verdict evidence about WHICH ref was chosen rather than
+# about there being one. dev-05 stands level with the stale branch and dev-06 one
+# commit ahead of it, so a hook reading the lower ref calls that branch clear and
+# one reading the higher calls it stale. With both at the tip the branch is stale
+# either way, every check below still passes, and the mutation registered against
+# this fixture -- sort -V | tail -1 replaced by sort | head -1 -- survives.
+[ "$(git -C "$ENV_DEV_TWO" rev-parse refs/remotes/origin/dev-05)" \
+  = "$(git -C "$ENV_DEV_TWO" rev-parse refs/heads/stale-branch)" ] \
+  && [ "$(git -C "$ENV_DEV_TWO" rev-parse refs/remotes/origin/dev-06)" \
+       != "$(git -C "$ENV_DEV_TWO" rev-parse refs/heads/stale-branch)" ] || {
+  echo "the two dev refs do not disagree about the stale branch, so no verdict below says which was taken" >&2
+  exit 1
+}
+# AND THAT THE NO-REF FIXTURE'S STALE BRANCH IS ACTUALLY BEHIND. Its permit is
+# read as the fallback detector abstaining for want of a dev ref; a branch level
+# with the tip would be permitted by a hook reading every ref there is, and the
+# check could not tell the two apart. Asked of the branches rather than of the
+# refs, because there are no refs over there to ask.
+[ "$(GIT_DIR="$ENV_DEV_NONE/.git" git rev-list --count refs/heads/stale-branch..refs/heads/gone-branch)" = 1 ] || {
+  echo "the no-dev-ref fixture's stale branch is not one commit behind, so its permit would not be the abstention it is read as" >&2
+  exit 1
+}
+
+# env_feed, env_cmd and env_says are defined beside feed and feed_says above,
+# with the reason they are not here: the #98 self-test drives every helper that
+# reads a hook's exit status, and it runs long before this section.
+
+echo "--- no hook reads tool_name: the matcher in settings.json is what filters ---"
+# The row the audit wrote as "hooks ignore it". It is pinned in both directions
+# and on both fields, so a tool_name test added to any hook -- the obvious way to
+# make a hook "safer" that would in fact give the registration a second place to
+# disagree with itself -- turns these red.
+req GH-108.1
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a force push under tool_name Read is still a force push' \
+  '{"tool_name":"Read","tool_input":{"command":"git push --force origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a force push under no tool_name at all' \
+  '{"tool_input":{"command":"git push --force origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-pr-decisions.sh BLOCK 'gh pr merge under tool_name Edit' \
+  '{"tool_name":"Edit","tool_input":{"command":"gh pr merge 5"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-commit-to-main.sh BLOCK 'a push to main under tool_name Write' \
+  '{"tool_name":"Write","tool_input":{"command":"git push origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh ALLOW 'ls under tool_name Read is still ls' \
+  '{"tool_name":"Read","tool_input":{"command":"ls"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-pr-decisions.sh ALLOW 'gh issue list under a tool_name that is not Bash' \
+  '{"tool_name":"WebFetch","tool_input":{"command":"gh issue list"}}'
+# The Edit hook reads a different field, and is as indifferent to tool_name.
+env_feed "$ENV_PLAIN" "$PATH" append-only-docs-edit.sh BLOCK 'an edit of a dev-log entry under tool_name Bash' \
+  "$(printf '{"tool_name":"Bash","tool_input":{"file_path":"%s/docs/dev-log/devlog_2026-08-25_session-2.md"}}' "$REPO_ROOT")"
+env_feed "$ENV_PLAIN" "$PATH" append-only-docs-edit.sh ALLOW 'an edit outside the guarded directories under tool_name Bash' \
+  "$(printf '{"tool_name":"Bash","tool_input":{"file_path":"%s/src/config.py"}}' "$REPO_ROOT")"
+
+echo "--- git off PATH, and a directory that is no repository ---"
+# Both environments in one block because the hooks cannot tell them apart: each
+# makes every `git rev-parse` and `git branch --show-current` come back empty,
+# which is the whole of what the hooks read.
+req GH-108.2
+for env in "git off PATH:$ENV_PLAIN:$ENV_NO_GIT_BIN" "no repository:$ENV_NOREPO:$PATH"; do
+  name=${env%%:*}; rest=${env#*:}; dir=${rest%%:*}; path=${rest#*:}
+  env_cmd "$dir" "$path" no-git-push.sh BLOCK "$name: a force push to main is refused" \
+    'git push --force origin main'
+  env_cmd "$dir" "$path" no-commit-to-main.sh BLOCK "$name: a push naming main is refused" \
+    'git push origin main'
+  # The worktree exception cannot be verified without git, so it is not granted.
+  # This is the fail direction chosen rather than found: the same command is
+  # permitted in a linked worktree with git on PATH, and the #94 section is where.
+  env_cmd "$dir" "$path" no-git-push.sh BLOCK "$name: a push of an ordinary branch is refused too" \
+    'git push origin wt-branch'
+  env_says "$dir" "$path" no-git-push.sh 'linked worktree' "$name: and the refusal says what it could not judge" \
+    'git push origin wt-branch'
+  # Every spelling that reaches another repository, which is the class that would
+  # be a hole if it depended on the environment. It does not: these refusals are
+  # read off the command's text.
+  env_cmd "$dir" "$path" no-commit-to-main.sh BLOCK "$name: git -C elsewhere commit" \
+    'git -C /elsewhere/repo commit -m "wip"'
+  env_cmd "$dir" "$path" no-commit-to-main.sh BLOCK "$name: git --git-dir elsewhere commit" \
+    'git --git-dir /elsewhere/repo/.git commit -m "wip"'
+  env_cmd "$dir" "$path" no-commit-to-main.sh BLOCK "$name: cd elsewhere before the commit" \
+    'cd /elsewhere/repo && git commit -m "wip"'
+  env_cmd "$dir" "$path" no-commit-to-main.sh BLOCK "$name: git checkout main before the commit" \
+    'git checkout main && git commit -m "wip"'
+  # The permitting direction. A commit that names no reserved branch and no other
+  # repository is permitted, and so is everything that is not a git command: the
+  # environments that produce these permits are the ones where the command cannot
+  # run either.
+  env_cmd "$dir" "$path" no-commit-to-main.sh ALLOW "$name: a plain commit names no branch and is permitted" \
+    'git commit -m "wip"'
+  env_cmd "$dir" "$path" no-work-on-stale-branch.sh ALLOW "$name: the stale guard abstains, having no ref to read" \
+    'git commit -m "wip"'
+  env_cmd "$dir" "$path" no-git-push.sh ALLOW "$name: a command with no push in it" \
+    'ls -la'
+done
+
+echo "--- a detached HEAD: the one permit here that is the answer the boundary wants ---"
+# A commit on a detached HEAD lands on no branch, so it cannot land on main --
+# which is what no-commit-to-main.sh exists to stop. The design is stated at
+# CURRENT in no-work-on-stale-branch.sh, in as many words.
+req GH-108.3
+env_cmd "$ENV_DETACHED" "$PATH" no-git-push.sh BLOCK 'a force push from a detached HEAD is refused' \
+  'git push --force origin main'
+env_cmd "$ENV_DETACHED" "$PATH" no-commit-to-main.sh BLOCK 'a push naming main from a detached HEAD is refused' \
+  'git push origin main'
+env_cmd "$ENV_DETACHED" "$PATH" no-commit-to-main.sh ALLOW 'a commit on a detached HEAD lands on no branch' \
+  'git commit -m "wip"'
+env_cmd "$ENV_DETACHED" "$PATH" no-work-on-stale-branch.sh ALLOW 'neither staleness detector has a branch to read' \
+  'git commit -m "wip"'
+written 'the detached-HEAD design is stated where the hook reads the branch' \
+  "$HOOKS/no-work-on-stale-branch.sh" \
+  'A detached HEAD has no branch, so neither detector has anything to read.'
+
+echo "--- no remote named origin ---"
+req GH-108.4
+env_cmd "$ENV_NO_ORIGIN" "$PATH" no-git-push.sh BLOCK 'a push naming origin, which is no remote of this repository' \
+  'git push origin feature-x'
+env_cmd "$ENV_NO_ORIGIN" "$PATH" no-git-push.sh BLOCK 'a force push is refused with no remote to push to' \
+  'git push --force origin main'
+env_cmd "$ENV_NO_ORIGIN" "$PATH" no-work-on-stale-branch.sh ALLOW 'the stale guard abstains: removing a remote removes its refs' \
+  'git commit -m "wip"'
+env_cmd "$ENV_NO_ORIGIN" "$PATH" no-commit-to-main.sh ALLOW 'a commit on an ordinary branch is permitted' \
+  'git commit -m "wip"'
+
+echo "--- no origin/dev-NN ref at all, and two of them ---"
+# The fallback detector needs a dev ref and abstains without one; the gone
+# detector needs none and refuses anyway. With two refs the highest by version
+# sort is the active dev branch, and this fixture's two disagree about the stale
+# branch so that the refusal names which one was taken.
+req GH-108.5
+env_cmd "$ENV_DEV_NONE/wt-stale" "$PATH" no-work-on-stale-branch.sh ALLOW 'no dev ref: the fallback detector abstains' \
+  'git commit -m "wip"'
+env_cmd "$ENV_DEV_NONE/wt-gone" "$PATH" no-work-on-stale-branch.sh BLOCK 'no dev ref: the gone detector refuses anyway' \
+  'git commit -m "wip"'
+env_says "$ENV_DEV_NONE/wt-gone" "$PATH" no-work-on-stale-branch.sh 'the active dev branch' \
+  'no dev ref: and the refusal names no branch it could not find' \
+  'git commit -m "wip"'
+env_cmd "$ENV_DEV_TWO/wt-stale" "$PATH" no-work-on-stale-branch.sh BLOCK 'two dev refs: stale against the higher one' \
+  'git commit -m "wip"'
+env_says "$ENV_DEV_TWO/wt-stale" "$PATH" no-work-on-stale-branch.sh 'origin/dev-06' \
+  'two dev refs: and the refusal names dev-06, the highest by version sort' \
+  'git commit -m "wip"'
+env_cmd "$ENV_DEV_TWO/wt-gone" "$PATH" no-work-on-stale-branch.sh BLOCK 'two dev refs: the gone detector is unaffected' \
+  'git commit -m "wip"'
+# no-pr-decisions.sh reads no git at all, so the base rule is a pattern and not a
+# lookup: a dev-NN base is accepted whatever refs origin holds, and a base that
+# is not dev-NN is refused for the same reason.
+env_cmd "$ENV_DEV_NONE" "$PATH" no-pr-decisions.sh BLOCK 'a base of main is refused where origin holds no dev ref' \
+  'gh pr create --base main --title t --body b'
+env_cmd "$ENV_DEV_NONE" "$PATH" no-pr-decisions.sh ALLOW 'a dev-NN base is accepted where origin holds no dev ref' \
+  'gh pr create --base dev-05 --title t --body b'
+# THE GAP, at its measured verdict and named as one. dev-06 is the active dev
+# branch in this fixture -- the check above reads the refusal that says so -- and
+# a pull request based on dev-05 is permitted all the same. CLAUDE.md says "into
+# the active dev branch", so this permits something the boundary refuses, and it
+# is filed as #144, a sub-issue of #36, rather than fixed here: the fix is to have
+# this one hook read refs, and a hook that reads refs fails open when it cannot,
+# which is the failure mode this whole section exists to pin. The window is a
+# rotation. The verdict below is the measured one and not the correct one, which
+# is the one place this section departs from #103's Q18 -- so the fix turns this
+# check red, and the check names the issue that owns it.
+env_cmd "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh ALLOW 'ACCEPTED GAP: a base of dev-05 while dev-06 is the active dev branch' \
+  'gh pr create --base dev-05 --title t --body b'
+
+echo "--- gh off PATH, and every other environment: the pull request hook starts no process ---"
+# It runs no git and no gh, so its verdict is a function of the command's text
+# alone. That is checked as the property rather than as one absence: the same two
+# payloads under every environment of this section.
+req GH-108.6
+for env in "plain:$ENV_PLAIN:$PATH" "gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN" \
+           "git off PATH:$ENV_PLAIN:$ENV_NO_GIT_BIN" "no repository:$ENV_NOREPO:$PATH" \
+           "detached HEAD:$ENV_DETACHED:$PATH" "no origin:$ENV_NO_ORIGIN:$PATH" \
+           "no dev ref:$ENV_DEV_NONE:$PATH" "two dev refs:$ENV_DEV_TWO:$PATH"; do
+  name=${env%%:*}; rest=${env#*:}; dir=${rest%%:*}; path=${rest#*:}
+  env_cmd "$dir" "$path" no-pr-decisions.sh BLOCK "$name: gh pr merge is refused" \
+    'gh pr merge 5'
+  env_cmd "$dir" "$path" no-pr-decisions.sh ALLOW "$name: gh issue list is permitted" \
+    'gh issue list'
+done
+env_says "$ENV_PLAIN" "$ENV_NO_GH_BIN" no-pr-decisions.sh "Bertan's call" \
+  'gh off PATH: the refusal is word for word the one gh on PATH gets' \
+  'gh pr merge 5'
+
+echo "--- bytes in the command nobody meant to send ---"
+# A CRLF, a non-ASCII byte and an invalid UTF-8 sequence leave the verdict where
+# it was. A NUL and a non-breaking space do not, and the pair is pinned with the
+# mechanism rather than only the verdict: the NUL is STRIPPED by the command
+# substitution that reads it, so what decides is whether stripping it joins two
+# words. On one line it fuses `ls` and `git` into `lsgit` and the push is hidden;
+# after a newline it fuses nothing and the push is refused as it always was.
+#
+# Both permits are accepted. Neither byte is whitespace to a shell -- `git<NBSP>push`
+# is one word and there is no executable of that name -- and a NUL cannot survive
+# the exec that would start the command, which truncates the string at it. So
+# what is hidden from the hook is not a command that would have run.
+#
+# THE NUL IS SPELLED \u0000 AND NEVER EMBEDDED, and that is not a style choice.
+# The first draft of this section carried the byte itself, and a NUL anywhere in
+# this file makes GNU grep call the whole of it binary: `grep -o` then prints
+# nothing, and READ_DOCS in the header section above -- a derivation that reads
+# this suite's own text -- came back empty, which turned two of its checks red
+# for a reason nowhere near them. Four other derivations read this file the same
+# way. So every payload here that carries a byte outside ASCII is written as a
+# JSON escape and jq does the decoding, which is also how the harness would
+# deliver one: a tool call is JSON. For the NUL that is forced, since the byte
+# cannot sit in this file at all. For the others -- the non-breaking space, the
+# e-acute -- it is uniformity, so that the rule belongs to the section and not to
+# one payload; an earlier draft embedded those two and left this paragraph
+# claiming something true of the NUL alone. The one exception cannot be written
+# as an escape: an invalid UTF-8 sequence is by definition not a character, so
+# its payload is built with printf and carries the two bytes raw.
+#
+# It happened here more than once, this very paragraph included, whose first
+# draft spelled the escape and embedded the byte instead -- and no count is
+# written down, because the count is the part that goes stale and the shape is
+# what matters. Nothing ever said NUL. What went red was two checks in the header
+# section about names in a paragraph, four hundred lines away, and in the
+# permitting direction for everything else that reads this file the same way. The
+# cause is not carelessness: the escape travels through a JSON tool call, which
+# decodes it once before it reaches the file, so spelling it and embedding it are
+# the same keystrokes. That is the whole reason it is written down here rather
+# than fixed quietly.
+req GH-108.7
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a CRLF line ending does not hide the push' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls\r\ngit push --force origin main\r\n"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a carriage return at the end of the line' \
+  '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main\r"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a non-ASCII byte trailing the command' \
+  '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \u00e9"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-commit-to-main.sh BLOCK 'a CRLF line ending, asked of the commit hook' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls\r\ngit push origin main\r\n"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-pr-decisions.sh BLOCK 'a CRLF line ending, asked of the pull request hook' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls\r\ngh pr merge 5\r\n"}}'
+# Invalid UTF-8 cannot be written as a JSON escape, so the payload is built with
+# printf and carries the two bytes raw. jq reads them; the suite's own source
+# stays ASCII.
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'an invalid UTF-8 sequence trailing the command' \
+  "$(printf '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \377\376"}}')"
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh ALLOW 'the same invalid sequence on a command that is not a push' \
+  "$(printf '{"tool_name":"Bash","tool_input":{"command":"ls \377\376"}}')"
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a NUL after a newline fuses nothing, and the push is refused' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls\n\u0000git push --force origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh ALLOW 'ACCEPTED: a NUL on the line fuses lsgit, hiding a push that could not run' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls\u0000git push --force origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh ALLOW 'ACCEPTED: a non-breaking space makes one word of git push' \
+  '{"tool_name":"Bash","tool_input":{"command":"git\u00a0push --force origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-pr-decisions.sh ALLOW 'ACCEPTED: the same two bytes, asked of the pull request hook' \
+  '{"tool_name":"Bash","tool_input":{"command":"gh\u00a0pr merge 5"}}'
+
+echo "--- every hook exits 0 or 2, in every environment and on every payload here ---"
+# #98 made the suite read a third status as FAIL rather than as ALLOW. This asks
+# the other half: that no case in this section produces one. A crash is what a
+# third status means, and a hook that crashes on a payload the harness can send
+# is a hook that is not there for that payload.
+#
+# One check per hook over the cross product, with the number of cases written out
+# as a literal: a sweep that quietly stopped covering an environment would
+# otherwise report the same ok line. The payloads include the malformed ones,
+# because #95 fixed the verdict on those and said nothing about the status.
+#
+# THE CROSS PRODUCT IS THE WHOLE TABLE, which took a second pass to be true.
+# The first version drove eight environments against seven payloads and called
+# that the table. It left out three of the four byte classes of the row above --
+# the CRLF, the non-ASCII byte and the invalid UTF-8 sequence, all three driven
+# for their VERDICT a few lines up and none of them for their status -- and both
+# merged worktrees, which is where the two dev-ref rows read their refusing
+# verdicts. So the environments a hook was asked for a verdict in and the ones it
+# was asked for a status in were different sets, and nothing showed it, because
+# the count matched a literal written to match it. That is this section's own
+# shape, found here by review rather than by the suite. Ten environments against
+# ten payloads now, and the rule the first version should have been written to:
+# a case driven anywhere in this section is driven here.
+ENV_STATUS_CASES="plain:$ENV_PLAIN:$PATH
+git off PATH:$ENV_PLAIN:$ENV_NO_GIT_BIN
+gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN
+no repository:$ENV_NOREPO:$PATH
+detached HEAD:$ENV_DETACHED:$PATH
+no origin:$ENV_NO_ORIGIN:$PATH
+no dev ref:$ENV_DEV_NONE/wt-stale:$PATH
+no dev ref, merged branch:$ENV_DEV_NONE/wt-gone:$PATH
+two dev refs:$ENV_DEV_TWO/wt-stale:$PATH
+two dev refs, merged branch:$ENV_DEV_TWO/wt-gone:$PATH"
+ENV_STATUS_PAYLOADS=(
+  '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}'
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+  '{"tool_name":"Edit","tool_input":{"file_path":"docs/dev-log/devlog_2026-08-25_session-2.md"}}'
+  'not json at all'
+  '{"tool_name":"Bash","tool_input":{"command":42}}'
+  '{"tool_name":"Bash","tool_input":{"command":"ls\u0000git push --force origin main"}}'
+  '{"tool_name":"Nonesuch","tool_input":{"command":"gh pr merge 5"}}'
+  '{"tool_name":"Bash","tool_input":{"command":"ls\r\ngit push --force origin main\r\n"}}'
+  '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \u00e9"}}'
+  "$(printf '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \377\376"}}')"
+)
+ENV_STATUS_EXPECTED=100
+req GH-108.8
+for hook in $INPUT_BASH_HOOKS $INPUT_EDIT_HOOKS; do
+  bad= ; n=0
+  while IFS= read -r env; do
+    name=${env%%:*}; rest=${env#*:}; dir=${rest%%:*}; path=${rest#*:}
+    for payload in "${ENV_STATUS_PAYLOADS[@]}"; do
+      n=$((n + 1))
+      err=$(printf '%s' "$payload" \
+            | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$HOOKS/$hook" ) 2>&1 >/dev/null)
+      rc=$?
+      case "$rc" in
+        0|2) ;;
+        *) bad="$bad
+         exit=$rc in [$name] on |$payload|
+         stderr |$err|" ;;
+      esac
+    done
+  done <<< "$ENV_STATUS_CASES"
+  if [ -n "$bad" ]; then
+    fail static '%s exits other than 0 or 2:%s' "$hook" "$bad"
+  elif [ "$n" != "$ENV_STATUS_EXPECTED" ]; then
+    fail static '%s: the sweep ran %s cases, not the %s written here' "$hook" "$n" "$ENV_STATUS_EXPECTED"
+  else
+    pass static 'status %s exits only 0 or 2, over %s cases' "$hook" "$n"
+  fi
+done
+
+echo "--- report-stale-branches.sh says why it reported nothing ---"
+# The row #108 left to this pull request to decide. It exited 0 with no output at
+# all when git was off PATH or it stood outside a repository, and an empty report
+# reads as nothing to report. Decided the way every other unread thing in that
+# file already reads -- the fetch, the merge settings, the pull requests and the
+# main ancestry all say so -- and the argument is in its header.
+#
+# Driven against a COPY of the file, in a tree that is not a repository, because
+# the file cds to its own grandparent and this repository is one. The copy is the
+# $HOOKS one, so an override judges the file it was pointed at.
+req GH-108.9
+ENV_REPORT_COPY="$ENV_REPOS/report-copy/.claude/hooks"
+mkdir -p "$ENV_REPORT_COPY"
+cp "$HOOKS/report-stale-branches.sh" "$ENV_REPORT_COPY/"
+[ -s "$ENV_REPORT_COPY/report-stale-branches.sh" ] || {
+  echo "the report copy was not made; the checks against it would prove nothing" >&2
+  exit 1
+}
+report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  'branches: NOT READ -- this is not a git repository' \
+  'outside a repository it says the branches were not read'
+report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  '== branch lifecycle ==' \
+  'outside a repository it still prints its heading first'
+report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  'no-work-on-stale-branch.sh is armed for this session.' \
+  'outside a repository it names what is not armed'
+report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  'branches: NOT READ -- git is not on PATH' \
+  'with git off PATH it names git rather than the tree'
+# The third cause, a root the file cannot reach, is checked as text and not as a
+# run: a directory unsearchable enough to fail that cd is one the file cannot be
+# read out of either, so bash exits 126 before the guard is reached. Measured, not
+# assumed -- and it is why this one line is held to the file rather than to a
+# verdict.
+written 'the unreachable-root guard says why it reported nothing too' \
+  "$HOOKS/report-stale-branches.sh" \
+  'branches: NOT READ -- this file could not reach the repository root from its'
+written 'the heading is printed before the first thing that can fail' \
+  "$HOOKS/report-stale-branches.sh" \
+  'echo "== branch lifecycle =="'
+unarmed 'no exit above the heading survives, which is what made it silent' \
+  "$HOOKS/report-stale-branches.sh" \
+  'cd "$(dirname "$0")/../.." || exit 0'
+unarmed 'nor the rev-parse that exited with nothing said' \
+  "$HOOKS/report-stale-branches.sh" \
+  'git rev-parse --git-dir >/dev/null 2>&1 || exit 0'
+
+echo "--- the degraded report, produced rather than described ---"
+# The last row of #108's table: offline, the fetch reports FAILED, the settings
+# read reports NOT READ, and the session still starts. It was already pinned --
+# GH-100 asserts the file HOLDS each of those phrases -- but a file that never
+# reaches a line holds its text just as well, and the phrases and the exit status
+# had never been read off a run together.
+#
+# A repository whose origin is a path that is not there, under the gh-less PATH
+# above. Both halves are deliberate and neither is a timeout: a fetch of a local
+# path that does not exist fails at once, and the file's own header says the pull
+# request read is skipped when the settings read found gh missing. So this is the
+# degraded report in full, for no wall clock. A genuinely unreachable network
+# would cost FETCH_TIMEOUT and is nobody's check.
+req GH-108.10
+ENV_OFFLINE="$ENV_REPOS/offline"
+mkdir -p "$ENV_OFFLINE/.claude/hooks"
+git init -q -b feature-x "$ENV_OFFLINE"
+git -C "$ENV_OFFLINE" $GE commit -q --allow-empty -m base
+git -C "$ENV_OFFLINE" remote add origin "$ENV_REPOS/there-is-no-remote-here.git"
+cp "$HOOKS/report-stale-branches.sh" "$ENV_OFFLINE/.claude/hooks/"
+[ -s "$ENV_OFFLINE/.claude/hooks/report-stale-branches.sh" ] \
+  && [ ! -e "$ENV_REPOS/there-is-no-remote-here.git" ] \
+  && [ "$(git -C "$ENV_OFFLINE" remote)" = origin ] || {
+  echo "the offline report fixture is not a repository with an unreachable origin; the checks against it would prove nothing" >&2
+  exit 1
+}
+ENV_OFFLINE_REPORT="$ENV_OFFLINE/.claude/hooks/report-stale-branches.sh"
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  'fetch: FAILED or timed out after 15s' \
+  'a failed fetch is reported, and the session still starts'
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  'is not armed for this session.' \
+  'and it says what that leaves unarmed'
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  'merge settings: NOT READ -- no gh on PATH' \
+  'the merge settings are NOT READ rather than reported as drifted'
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  'pull requests: NOT READ -- no gh on PATH' \
+  'the pull requests are NOT READ, and the classes say so'
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  'active dev branch: none' \
+  'and with no dev ref fetched the active dev branch is none, not a guess'
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and
@@ -9350,6 +9992,8 @@ GH-104.4:static GH-104.5:review GH-106:static GH-117:gap GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
 GH-131:gap GH-133:gap GH-134:gap GH-135:gap GH-136:gap GH-139:gap
 GH-107.1:static GH-107.2:static
+GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7
+GH-108.8:static GH-108.9:static GH-108.10:static
 '
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }

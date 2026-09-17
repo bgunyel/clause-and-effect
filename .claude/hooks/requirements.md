@@ -1541,8 +1541,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - status: active
 - direction: static: what this suite can ask of the harness is what its text says
   and whether its registry names files and requirements that are active. Whether
-  the harness is right is a run of the harness, which takes about forty-five
-  minutes and is nobody's check
+  the harness is right is a run of the harness, which takes about an hour and is
+  nobody's check
 - note: the registry's size is what `bash .claude/hooks/mutate-hooks.sh --list`
   prints, and this file does not restate it — the first version did, in four
   documents, and was wrong in all four, which Bertan's review of PR #142 measured.
@@ -1558,6 +1558,169 @@ The suite fails on each of these, and `--matrix` shows the rest:
   the hooks directory is copied. A row may name only an active requirement: a
   retired or superseded one has no covering check, so a row naming it would report
   `survived` for ever and read as a defect in the hooks rather than in the row.
+
+
+### GH-108.1
+- text: No hook reads `tool_name`. Which tool calls reach which hook is decided by
+  the matcher in `settings.json` and nowhere else, so a payload carrying any other
+  `tool_name`, or none at all, reaches the same verdict as the same field under the
+  matching one.
+- from: #108
+- kind: doc-claim
+- status: active
+- note: the row #108's audit wrote as "hooks ignore it; the `settings.json` matcher
+  filters". It is pinned rather than changed: a hook that read `tool_name` would
+  have a second place for the registration to disagree with, and #95's reader
+  already refuses a payload it cannot read the field out of. What the checks hold
+  is that the verdict does not move, in both directions, so a `tool_name` test
+  added to a hook turns them red.
+
+### GH-108.2
+- text: With `git` off PATH, or run where there is no repository, every push is
+  refused by `no-git-push.sh` and a push naming main by `no-commit-to-main.sh`;
+  `no-work-on-stale-branch.sh` abstains, and a `git commit` that names no reserved
+  branch and no other repository is permitted. Every spelling that reaches another
+  repository -- `git -C`, `git --git-dir`, a `cd` or a `git checkout main` before
+  the commit -- is refused in these environments as it is in a working one.
+- from: #108
+- kind: doc-claim
+- status: active
+- note: the permitting half is the one worth stating. A commit permitted here is
+  not a hole: the environments that produce it are the ones where the command
+  cannot run either, and the refusals that matter are read off the command's text
+  rather than off the environment, which is what the last sentence pins. #108
+  measured the whole table for a case where the hook's read fails while the
+  command still reaches a repository, and found none -- every such spelling is
+  refused by text. That is the finding, and it is what makes the abstentions
+  above safe to write down as intended rather than as tolerated.
+
+### GH-108.3
+- text: On a detached HEAD every push is refused, and a `git commit` is permitted.
+- from: #108
+- kind: doc-claim
+- status: active
+- note: the design is stated in `no-work-on-stale-branch.sh`, at `CURRENT` -- "a
+  detached HEAD has no branch, so neither detector has anything to read" -- and it
+  is the same fact `no-commit-to-main.sh` rests on: that file exists to keep a
+  commit off main, and a commit made on a detached HEAD lands on no branch at all.
+  So this is the one row of #108's table whose permit is the answer the boundary
+  wants rather than the answer a failed read leaves behind.
+
+### GH-108.4
+- text: In a repository with no remote named `origin`, every push is refused --
+  the first bare argument of a push has to be a remote of this repository, and
+  there is none -- and `no-work-on-stale-branch.sh` abstains.
+- from: #108
+- kind: doc-claim
+- status: active
+- note: removing a remote removes its remote-tracking refs with it, so the
+  abstention has two causes at once and the fixture keeps them together on
+  purpose: there is no state in which `origin` is absent and `refs/remotes/origin/`
+  still holds a dev branch.
+
+### GH-108.5
+- text: With no `origin/dev-NN` ref at all, `no-work-on-stale-branch.sh`'s fallback
+  detector abstains while its `[gone]` detector still refuses; with two, the
+  highest by `sort -V` is the active dev branch. `no-pr-decisions.sh` accepts any
+  base matching `dev-NN` whatever refs origin holds, because it reads no git at
+  all.
+- from: #108
+- kind: doc-claim
+- status: active
+- note: the last clause is a gap and is filed as such, not pinned as a design. A
+  base of `dev-05` is permitted while `dev-06` is the active dev branch, which
+  CLAUDE.md's "into the active dev branch" refuses; the window in which two exist
+  is a rotation. It is left at the measured verdict here because the fix -- having
+  that hook read refs to learn which dev branch is active -- would make the one
+  hook in the boundary whose verdict is independent of its environment depend on
+  it, and #108's whole table is the account of what a failed environment read
+  costs. Trading a gap during a rotation for a hook that fails open whenever refs
+  cannot be read is the wrong way round. Filed as #144, a sub-issue of #36, and
+  its check is written at the measured verdict rather than the correct one, so
+  the fix turns it red and finds the issue.
+
+### GH-108.6
+- text: No hook runs `gh`, so `gh` being off PATH changes no verdict: every `gh`
+  command is judged on the text of the line, and `no-pr-decisions.sh` reaches the
+  same verdict in every environment #108 builds.
+- from: #108
+- kind: doc-claim
+- status: active
+- note: the second clause is the wider claim and is checked as one -- the same
+  payloads under every fixture of this section, not only under the one without
+  `gh`. That hook starts no process and reads no ref, and this is where that is
+  written down as a property rather than as an absence.
+
+### GH-108.7
+- text: A NUL, a non-ASCII byte, an invalid UTF-8 sequence or a CRLF line ending in
+  the command leaves every verdict where it was. A NUL or a non-breaking space
+  standing before a command word hides it and the command is permitted, which is
+  accepted: neither byte is a word separator to the shell, so what is hidden is
+  not a command the shell would have run.
+- from: #108
+- kind: doc-claim
+- status: active
+- note: the accepted half is one claim about two bytes that get there differently.
+  A NUL cannot survive a shell's own argument handling, and a non-breaking space
+  survives everything and is simply not whitespace -- `git<NBSP>push` is one word,
+  and there is no executable of that name. The check writes the verdict and the
+  reason together, because the verdict alone reads as a hole.
+
+### GH-108.8
+- text: No hook exits with a status other than 0 or 2, in any environment or on
+  any input of this section.
+- from: #108
+- kind: doc-claim
+- status: active
+- direction: static: it reads a status and not a verdict -- 0 and 2 are what
+  ALLOW and BLOCK are read off, so a check that asserts the status is one of the
+  two has asserted no verdict at all
+- note: #98 made every helper read a third status as FAIL rather than as ALLOW, so
+  a crash is no longer a silent pass. This asks the other half of that: not what
+  the suite does with a third status, but that no case here produces one. It is
+  driven per hook across every fixture and payload of this section rather than
+  written as one check, because the claim is about the cross product.
+
+### GH-108.9
+- text: `report-stale-branches.sh` never exits without saying why. The heading is
+  printed before the first thing that can fail, and each of the three ways it can
+  have nothing to report -- a root it cannot reach, `git` off PATH, a tree that is
+  not a repository -- prints a `branches: NOT READ` line naming its cause and the
+  consequence, that neither detector in `no-work-on-stale-branch.sh` is armed. The
+  exit status stays 0.
+- from: #108
+- kind: doc-claim
+- status: active
+- direction: static: it reads the report's text, and the report is not a verdict
+- note: this is the row #108 left to the pull request to decide, and it was decided
+  the way every other unread thing in that file already reads -- the fetch, the
+  merge settings, the pull requests and the main ancestry all say so in as many
+  words, and these two paths were the exception. Two of the three causes are
+  reachable from outside and are driven against a copy of the file; the third, a
+  root that cannot be reached, is not, because a directory unsearchable enough to
+  fail that `cd` is one the file cannot be read out of either. Its branch is held
+  to the file's text rather than to a run, and that is the whole of what is
+  claimed for it.
+
+### GH-108.10
+- text: With the fetch failing and `gh` off PATH, `report-stale-branches.sh` exits
+  0 and reports every read it could not make: `fetch: FAILED or timed out`,
+  `merge settings: NOT READ`, `pull requests: NOT READ`, and an active dev branch
+  of `none`. The session starts.
+- from: #108
+- kind: doc-claim
+- status: active
+- direction: static: it reads the report's text and its exit status, neither of
+  which is a hook's verdict
+- note: the row #108's audit wrote as "fetch reports FAILED; settings report NOT
+  READ; exit 0". It was already pinned, but only as text -- GH-100 asserts that
+  the file CONTAINS each of those phrases, which a file that never reaches them
+  contains just as well. This drives it, in a repository whose origin is a path
+  that is not there and under the `gh`-less PATH of GH-108.6, so the degraded
+  report is produced rather than described. It costs no wall clock: a fetch of a
+  local path that does not exist fails at once, and with `gh` absent the two reads
+  behind it are skipped by the rule in that file's header. That is why this one
+  can be a run and why a genuinely offline network cannot.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -1826,3 +1989,8 @@ it has no entry above (Q16).
   corrected, which is most of what GH-107.1 and GH-107.2 now say. It is not
   counted here, because a count of corrections is the kind of number this file has
   already had to fix once
+- #144: the permitting gap #108 found and did not fix — a pull request based on a
+  dev branch that is not the active one. It has no entry above on purpose: the
+  requirement that would carry it is the fix, and GH-108.5 pins the verdict as it
+  stands and names it a gap. An entry here would read as a requirement the hooks
+  meet
