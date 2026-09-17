@@ -1329,11 +1329,16 @@ The suite fails on each of these, and `--matrix` shows the rest:
   hook.
 - from: #117, found reviewing PR #115
 - kind: defect-permitting
-- status: gap → #117
-- note: #106's families pin the five spellings as permitted against every refused
-  seed, one row per spelling rather than one per seed, so the claim held is the
-  class the issue measured. Those rows go red when #117 lands, which is the
-  intended outcome.
+- status: active
+- note: the word is reduced to its basename after unquoting and unescaping, so a
+  program of another name keeps it -- GH-72 decided that `my-gh` is not `gh`, and
+  the permitting checks hold that decision against this one. Two places read a
+  command word and both are in `lib/command-scan.sh`: `cw_basename` in `cs_split`,
+  for every ordinary rule, and `CS_WORD_SPELLING` in `CS_WRAPPER_RE`, which reads
+  raw text and so admits the spellings itself. #106's families carried the five
+  spellings as departure rows against every refused seed until this landed; the
+  rows are gone, and those variants now reach their seed's verdict under the
+  seed's own tags.
 
 ### GH-118
 - text: A `gh` command carrying any option other than `-R`, `--repo` or

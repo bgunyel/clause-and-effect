@@ -690,11 +690,33 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # is pinned as a check.
 CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"
 
+# THE WRAPPER'S OWN COMMAND WORD, issue #117. The spellings cs_split normalises
+# for every other rule cannot be normalised here, because this expression reads
+# RAW TEXT: a wrapper is recognised before anything is split, and the reason it
+# is recognised at all is that its payload cannot be read. So the spellings are
+# admitted in the expression instead, and `/usr/bin/bash -c "gh pr merge 5"` --
+# permitted by all four boundary hooks before this -- is the wrapper it is.
+#
+# The same rule as cw_basename in cs_split, written as far as a regular
+# expression reaches it: a run that ends in a slash, or a quote or a backslash,
+# repeated, in front of the name -- and quotes behind the name, since `"bash"`
+# closes after it. The run cannot cross whitespace or a separator, so the
+# command position this anchor establishes is not given up: `ls /usr/bin/bash`
+# offers no command position at that path, and `mybash -c` reaches the name
+# through no slash at all. Both are pinned.
+#
+# WHAT A REGULAR EXPRESSION DOES NOT REACH, and cw_basename does: an escaped
+# slash inside the path, and a quoted span anywhere in the middle of the word --
+# `b"a"sh`, `/usr/"bin"/bash`. Both stay permitted here while they are refused
+# everywhere else, which is the same trade the rest of this rule takes: these
+# stop mistakes, not adversaries, and an agent that means `bash` writes one of
+# the five.
+CS_WORD_SPELLING="([\\\\\"']|[^[:space:];&|()\`\"']*/)*"
 # Built unconditionally. What happens when the list it interpolates is empty is
 # not decided here: it is decided once, after cs_split, where the list's one
 # reader is withdrawn so that every consumer's load guard refuses. See
 # THE WORD LIST IS PART OF THE LOAD, below cs_split.
-CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_WRAP_WORDS)[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
+CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_WRAP_WORDS)[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
 
 # Print one command per line, with anything that precedes the command word
 # removed, so a caller matches on ^ and never has to describe a command
@@ -866,6 +888,96 @@ cs_split() {
     # follow it, which is what separates `sudo git` from a line ending in sudo.
     function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
     function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
+    # THE COMMAND WORD ITSELF. Issue #117: every rule in every hook recognises a
+    # command by the bare name at the head of what this function emits, and bash
+    # runs the same program when that name is spelled as a path, in quotes or
+    # behind a backslash. All five spellings of all seven refused shapes #117
+    # measured were permitted, in every hook there is.
+    #
+    # Here rather than in each anchor, which is the same reason the rest of this
+    # file exists: seven anchors across six hooks would be the one question
+    # answered seven times, and an anchor added later would answer it an eighth.
+    # Every consumer gets this without knowing it happened.
+    #
+    # THE RULE IS THE BASENAME AFTER UNQUOTING AND UNESCAPING, and the two
+    # halves of that are not interchangeable. Asking instead whether the guarded
+    # name appears in the word would refuse `my-gh`, which #72 decided is a
+    # different program; asking only about a leading path would miss the three
+    # quoting spellings. What bash runs is the file the word names, so the word
+    # is reduced to the name of that file and to nothing else.
+    #
+    # A slash separates path components whatever quoting it is written under --
+    # quoting changes what a character IS, not what a slash DOES -- so the
+    # decision is taken on the character after unescaping, and `/usr\/bin\/gh`
+    # reduces to gh as `/usr/bin/gh` does. The count is reset at each one rather
+    # than the string searched for one afterwards, which answers the question
+    # once instead of twice.
+    #
+    # AN ARRAY OF CELLS AND NOT A STRING, which is issue #96 rather than style,
+    # and the reason this function returns a count and prints nothing. `out =
+    # out ch` copies the whole of out to add one character, so building the name
+    # that way is quadratic in its length -- the shape #96 found in six passes
+    # of this file and fixed in all six. A command word is one word, but THE
+    # LINE CAP does not bound one (#128), and the cap is not what these passes
+    # are held fast by in the first place. Measured at the cap, LC_ALL=C, mawk
+    # 1.3.4, fastest of three: a 16 KB line with no command word to reduce costs
+    # cs_split 6 ms, a command word of 5,460 path components 14 ms, and one
+    # quoted component of 16 KB -- the whole of it walked and the whole of it
+    # printed -- 16 ms. check-hooks.sh holds the scaling at 128 KB against
+    # 512 KB, past the cap, and the string version was measured against that
+    # check rather than argued about: 416 ms and 5,310 ms, a ratio of 12.7 where
+    # the check fails at 8, against 129 ms and 497 ms for the cells.
+    #
+    # A backslash escape is read inside double quotes and not inside single
+    # quotes. That is the answer cs_normalise and the separator walk in this
+    # same function already give, and it is what bash does; giving it a third
+    # time differently is how the answers in this file came to disagree before.
+    function cw_reduce(w,   m, c, ch, q, len) {
+      cw_n = 0
+      q = ""
+      m = 1
+      len = length(w)
+      while (m <= len) {
+        c = substr(w, m, 1)
+        ch = ""
+        if (q != "") {
+          if (q == "\042" && c == "\\")      { ch = substr(w, m + 1, 1); m += 2 }
+          else if (c == q)                   { q = ""; m++ }
+          else                               { ch = c; m++ }
+        }
+        else if (c == "\\")                  { ch = substr(w, m + 1, 1); m += 2 }
+        else if (c == "\042" || c == "\047") { q = c; m++ }
+        else                                 { ch = c; m++ }
+        if (ch == "/") cw_n = 0
+        else if (ch != "") cw[++cw_n] = ch
+      }
+      return cw_n
+    }
+    # A candidate printed with its first word reduced to that name, or printed
+    # exactly as it came. Two things leave it alone, and each is a case where
+    # rewriting would say something false:
+    #
+    #   - a word carrying none of the four characters is already a bare name.
+    #     The test is also what keeps the walk off every ordinary command, and
+    #     it is why the two costs above are 6 ms and not 6 ms plus a walk;
+    #   - a word whose basename is empty names no file. `/usr/bin/ git push`
+    #     rewritten would put the first ARGUMENT where the command word goes and
+    #     read as a push.
+    #
+    # There is no third case for a word that reduces to itself, and there cannot
+    # be one: past the test above the word holds a slash, a quote or a backslash,
+    # every one of which this drops, so a reduction that changed nothing has an
+    # empty name and is already the second case.
+    function printhead(s,   i, w, k) {
+      i = 1
+      while (i <= length(s) && index(" \t\n\v\f\r", substr(s, i, 1)) == 0) i++
+      w = substr(s, 1, i - 1)
+      if (index(w, "/") == 0 && index(w, "\042") == 0 \
+          && index(w, "\047") == 0 && index(w, "\\") == 0) { print s; return }
+      if (cw_reduce(w) == 0) { print s; return }
+      for (k = 1; k <= cw_n; k++) printf "%s", cw[k]
+      printf "%s\n", substr(s, i)
+    }
     {
       line = $0
       n = length(line)
@@ -918,7 +1030,7 @@ cs_split() {
       # Issue #96.
       e = n
       while (e >= p && index(" \t\n\v\f\r", substr(line, e, 1)) > 0) e--
-      if (e >= p) print substr(line, p, e - p + 1)
+      if (e >= p) printhead(substr(line, p, e - p + 1))
       # A wrapper option taking its value as a separate token leaves that value
       # where the command word has to be, and the command behind it is never at
       # ^ again: `sudo -u root git push --all origin` left `root`, `nice -n 10`
@@ -949,7 +1061,11 @@ cs_split() {
           r = skipblank(q)
           c = substr(line, r, 1)
           if (c == "\042" || c == "\047") break
-          print substr(line, r, e - r + 1)
+          # Every candidate, not only the first. A prefix word stands in front
+          # of the command word, so at the point the strip runs the word is
+          # still behind it and `sudo /usr/bin/git push` would be normalised
+          # nowhere.
+          printhead(substr(line, r, e - r + 1))
         }
       }
     }'
