@@ -341,4 +341,14 @@ thing in the record.
   fire. The registry grows from 10 rows to 23, and its first full run found a
   rule with 36 checks tagged to it and no coverage: nothing in the suite stood a
   worktree on the branch the hook refuses to push.
+- [2026-09-17 · session 2](devlog_2026-09-17_session-2.md) — #137: the `state`
+  and `base` readers in `no-pr-decisions.sh` each knew one quote spelling of
+  their own field, and the gap ran in opposite directions because the two rules
+  are triggered oppositely. A single-quoted `state` closed a pull request through
+  `gh api`; a quote before `base` refused a create into the one permitted branch,
+  and — unnamed in the issue — permitted a retarget to `main`. The state pattern
+  is now written once and read by both its call sites; `rest_bases` records the
+  third answer to where a field begins. 41 checks, 18 of which go red under three
+  separate reverts, and each of the other 23 declared beside it as contrast,
+  arming or property rather than left to read as evidence it is not.
 

@@ -1559,6 +1559,44 @@ The suite fails on each of these, and `--matrix` shows the rest:
   retired or superseded one has no covering check, so a row naming it would report
   `survived` for ever and read as a defect in the hooks rather than in the row.
 
+### GH-137.1
+- text: The `state` reader in `no-pr-decisions.sh` recognises every spelling of the
+  quoting round its own field — `state=closed` and `state=open` with the value
+  bare, double-quoted or single-quoted, and with a quote round the whole field
+  between the flag and the name — and does so at both of its call sites, the
+  `WRAPTEXT` arm and the `gh api` write block. The pattern is written once and
+  both read it.
+- from: #137, found while grilling the fix design for #130
+- kind: defect-permitting
+- status: active
+- note: the reader stays keyed on the FIELD and not on the endpoint, for the reason
+  its own comment gives — the same PATCH is how `gh pr edit` retitles a pull
+  request, which stays allowed — and stays unanchored where `rest_bases` anchors
+  on the field flag. The two rules are triggered oppositely and that decides it:
+  this one refuses on presence and has to reach a graphql `state:CLOSED` and a
+  bare `state=closed` in a wrapped line, neither carrying a flag at all. What the
+  widening costs is CLAUDE.md's left-open item 2, one spelling wider: `state='open'`
+  written as prose on a line that already reaches these rules is refused, as
+  `state="open"` already was.
+
+### GH-137.2
+- text: The `base` reader `rest_bases` recognises `base=<value>` with a quote between
+  the field flag and the field name as well as round the value, and reads the
+  value out of it: `-f "base=dev-05"`, `-f 'base=dev-05'` and `--field
+  "base=dev-05"` are the permitted create that `-f base=dev-05` is, and the same
+  spellings naming `main` are refused with the message that names the branch.
+- from: #137, found while grilling the fix design for #130
+- kind: defect-refusing
+- status: active
+- note: the third answer to "where does the field begin", after the bare word and
+  the flag with the name immediately after it; `rest_bases`' comment records all
+  three. The quote is admitted in one position only, so the flag anchor that keeps
+  `rebase` and `database` ordinary words and keeps a base out of `-f title="base:
+  dev-05"` is untouched. Not only a refusing defect: the no-base arm it fell into
+  is keyed on the collection endpoint, so a quoted base on `PATCH /pulls/N` — a
+  retarget — was read as naming no base and permitted. That half is in the
+  permitting direction and the issue's table does not name it.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that
