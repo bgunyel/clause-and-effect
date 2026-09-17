@@ -1489,6 +1489,76 @@ The suite fails on each of these, and `--matrix` shows the rest:
   The second time the retarget arm has differed from the creating arms in a way
   their shared reasoning missed, after #133.
 
+### GH-107.1
+- text: `check-hooks.sh` judges the hooks in `$CHECK_HOOKS_DIR` when that names a
+  directory, and the ones beside itself when it does not. What moves with it is
+  what is judged — the hooks run as processes, the library they source, the text
+  of both, and `requirements.md`. What does not move is what they are judged
+  against: `settings.json`, `CLAUDE.md`, `CONTEXT.md`, the two skills, the working
+  directory a hook is run in, and the suite itself. An override naming no
+  directory, or one missing a file that sits beside the suite, stops the run and
+  says which. A relative override is resolved against the directory the caller
+  stood in, not against `.claude/hooks/`. Every check that reads a hook's text
+  reads it out of `$CHECK_HOOKS_DIR` too: a file argument spelled as a bare name
+  resolves against the suite's own working directory, so such a check judges this
+  repository whatever the override says, and the suite holds every one of them to
+  a variable.
+- from: #107
+- kind: doc-claim
+- status: active
+- direction: static: the two checks that can be made here read the guard's exit
+  status and its message, which is no hook's verdict. The permitting direction is
+  a whole run of this suite against a copy, which this suite cannot ask of
+  itself; it is mutate-hooks.sh's baseline run, and every caught mutation depends
+  on it
+- note: the guard is checked by running this suite again with an override it must
+  refuse, three times: a directory that is not there, one missing a file that sits
+  beside the suite, and a relative name that exists beside the suite but not
+  beside the caller. The inner run is marked so that a guard which failed to
+  refuse cannot recurse, and each check asserts the refusal's message rather than
+  only a non-zero exit — an inner run that went the whole way would exit 1 for its
+  own uncovered requirement and say nothing about a directory. The rule about
+  bare file arguments is checked by derivation over this suite's own text rather
+  than by a list: sixty-nine checks were spelled that way when this requirement
+  first landed, among them every pin that says a hook does not source the library
+  unguarded, and a copy with the guard deleted printed ok for all of them. Found
+  by Bertan's review of PR #142; `library-loaded-unguarded` in the harness's
+  registry is the mutation that now asks it.
+
+### GH-107.2
+- text: `mutate-hooks.sh` re-runs the mutation claims this suite makes. Each
+  registered mutation names a file in the hooks directory, a `sed` expression, the
+  requirement IDs whose checks must go red, and what the harness must report; a
+  mutation is caught only when every ID it names has at least one failing check.
+  An edit that leaves its target byte-identical is a failure, not a pass. The
+  harness never edits this repository's hooks, refuses to run if its working copy
+  is them, requires an unmutated copy to be green before it believes any
+  mutation, and checks that `.claude/hooks/` is byte-identical afterwards. Two
+  rows of the registry are its self-tests: one whose edit matches nothing, and one
+  registered against a requirement its edit cannot reach.
+- from: #107
+- kind: doc-claim
+- status: active
+- direction: static: what this suite can ask of the harness is what its text says
+  and whether its registry names files and requirements that are active. Whether
+  the harness is right is a run of the harness, which takes about forty-five
+  minutes and is nobody's check
+- note: the registry's size is what `bash .claude/hooks/mutate-hooks.sh --list`
+  prints, and this file does not restate it — the first version did, in four
+  documents, and was wrong in all four, which Bertan's review of PR #142 measured.
+  What is worth recording is the shape: one row per rule rather than one per
+  requirement, so a requirement with a row is one some mutation reaches and not
+  one whose every check has been exercised. One mutation per FR is the backlog
+  item docs/todo.md carries from #103 Q8, and #108 and #109 register theirs when
+  they land. Two kinds of rule cannot be registered at all, which is GH-107.1's
+  split seen from the other side: one that lives in the tooling beside the hooks —
+  `check-hooks.sh` and `mutate-hooks.sh` themselves, so #106's six self-guards and
+  #104's coverage machinery — because both run from this repository whatever the
+  override says; and a claim about a file outside `.claude/hooks/`, because only
+  the hooks directory is copied. A row may name only an active requirement: a
+  retired or superseded one has no covering check, so a row naming it would report
+  `survived` for ever and read as a defect in the hooks rather than in the row.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that
@@ -1729,9 +1799,11 @@ it has no entry above (Q16).
   things it corrected stand
 - #141: the issue that owns deciding which non-FR requirements the invariance
   families seed; it adds no requirement of its own until that is decided
-- #107: the issue that owns a standing mutation harness; #106's section cites it
-  when writing out its own three mutations, which are run by hand until it lands.
-  It adds no requirement of its own
+- #107: has entries above, GH-107.1 and GH-107.2, and is listed here only because
+  #106's section cited it before it landed — that section writes out three
+  mutations of its own and says they are run by hand until the harness exists.
+  The two rules that decide this list, an entry above or a reason here, are
+  answered by the first for #107
 - #105: the gap-fill issue that owned fifteen of the nineteen `gap` markers #104
   left and has taken all fifteen off; it adds checks, not requirements of its own,
   and the three defects found doing it are #130, #131 and #133, which have entries
@@ -1750,3 +1822,7 @@ it has no entry above (Q16).
   the IDs of the procedures its generator prints, GH-70.2, GH-100 and US-29
 - #132: a pull request, for #105; cited where its review changed a check, because a
   tag dropped for a reason is only auditable if the reason is reachable
+- #142: a pull request, for #107; Bertan's review of it is cited at each thing it
+  corrected, which is most of what GH-107.1 and GH-107.2 now say. It is not
+  counted here, because a count of corrections is the kind of number this file has
+  already had to fix once

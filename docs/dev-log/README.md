@@ -319,4 +319,26 @@ thing in the record.
   looked for it, and a fenced-block extraction that read ```bash and skipped
   every other spelling in silence, so an `sh`-fenced refused push sat in the
   agent procedure with all 1987 checks green.
+- [2026-09-16 · session 3](devlog_2026-09-16_session-3.md) — #107: the suite's
+  two dozen prose claims of "mutation-checked" become re-runnable.
+  `mutate-hooks.sh` breaks one registered rule at a time in a copy of
+  `.claude/hooks/` and requires the requirement IDs that row names to go red;
+  `check-hooks.sh` gains `$CHECK_HOOKS_DIR`, splitting what it judges from what
+  it judges against. Ten rows, eight of them real and two self-tests, sixteen
+  minutes, all as declared — and the harness's own baseline check fired on the
+  first run, on a file the new harness had made the suite red by existing. Review
+  of the assistant's own change then found six defects, five of them permitting,
+  the first being two new checks green for the wrong reason in a change whose
+  whole subject is checks that cannot fail.
+
+- [2026-09-17 · session 1](devlog_2026-09-17_session-1.md) — Bertan's review of
+  PR #142 returns ten findings and the verdict *not mergeable as is*. Sixty-nine
+  text checks named their file relatively and so read this repository's hooks
+  rather than the copy under judgment, every "does not source the library
+  unguarded" pin among them — #84's defect in the section written to catch it.
+  Three ways a survivor could be declared expected, a relative override that
+  named this repository's own `lib/`, and a byte-identical guard that could not
+  fire. The registry grows from 10 rows to 23, and its first full run found a
+  rule with 36 checks tagged to it and no coverage: nothing in the suite stood a
+  worktree on the branch the hook refuses to push.
 
