@@ -697,7 +697,7 @@ CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"
 # admitted in the expression instead, and `/usr/bin/bash -c "gh pr merge 5"` --
 # permitted by all four boundary hooks before this -- is the wrapper it is.
 #
-# The same rule as cw_basename in cs_split, written as far as a regular
+# The same rule as cw_reduce in cs_split, written as far as a regular
 # expression reaches it: a run that ends in a slash, or a quote or a backslash,
 # repeated, in front of the name -- and quotes behind the name, since `"bash"`
 # closes after it. The run cannot cross whitespace or a separator, so the
@@ -705,18 +705,27 @@ CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"
 # offers no command position at that path, and `mybash -c` reaches the name
 # through no slash at all. Both are pinned.
 #
-# WHAT A REGULAR EXPRESSION DOES NOT REACH, and cw_basename does: an escaped
-# slash inside the path, and a quoted span anywhere in the middle of the word --
-# `b"a"sh`, `/usr/"bin"/bash`. Both stay permitted here while they are refused
-# everywhere else, which is the same trade the rest of this rule takes: these
-# stop mistakes, not adversaries, and an agent that means `bash` writes one of
-# the five.
+# WHAT A REGULAR EXPRESSION DOES NOT REACH, and cw_reduce does: a quoted span in
+# the middle of the word -- `b"a"sh`, `/usr/"bin"/bash`, where the run stops at
+# the quote and the name is not whole on either side of it. That stays permitted
+# here while it is refused everywhere else, under the same trade the rest of this
+# rule takes: these stop mistakes, not adversaries, and an agent that means
+# `bash` writes one of the five.
+#
+# ONE SHAPE AND NOT TWO, which is what this paragraph said before Bertan's
+# review of the #117 branch measured it. An ESCAPED SLASH inside the path was
+# named here as a second unreachable shape and is not one: a backslash is not
+# excluded from the run, so the run takes `/usr\` and the `/` after it, and
+# `/usr\/bin\/bash -c "x"` matches. The claim was written from the shape of the
+# expression rather than from a measurement of it, which is the habit this file
+# exists to end. Both spellings are pinned now, the one that matches and the one
+# that does not, so that neither can move in silence.
 CS_WORD_SPELLING="([\\\\\"']|[^[:space:];&|()\`\"']*/)*"
 # Built unconditionally. What happens when the list it interpolates is empty is
 # not decided here: it is decided once, after cs_split, where the list's one
 # reader is withdrawn so that every consumer's load guard refuses. See
 # THE WORD LIST IS PART OF THE LOAD, below cs_split.
-CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_WRAP_WORDS)[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
+CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|$CS_WORD_SPELLING($CS_WRAP_WORDS)[\\\\\"']*[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
 
 # Print one command per line, with anything that precedes the command word
 # removed, so a caller matches on ^ and never has to describe a command
@@ -892,7 +901,11 @@ cs_split() {
     # command by the bare name at the head of what this function emits, and bash
     # runs the same program when that name is spelled as a path, in quotes or
     # behind a backslash. All five spellings of all seven refused shapes #117
-    # measured were permitted, in every hook there is.
+    # measured were permitted, in the five hooks it measured. Five of the six
+    # that read a command: the sixth, no-work-on-stale-branch.sh, needed a
+    # fixture the issue did not build, so it went unmeasured rather than
+    # unaffected -- it reads its git commands through this same anchor. It is
+    # checked now, beside that fixture.
     #
     # Here rather than in each anchor, which is the same reason the rest of this
     # file exists: seven anchors across six hooks would be the one question
@@ -968,6 +981,37 @@ cs_split() {
     # be one: past the test above the word holds a slash, a quote or a backslash,
     # every one of which this drops, so a reduction that changed nothing has an
     # empty name and is already the second case.
+    # The reduced word as a STRING, for the comparisons that need one rather
+    # than a printed line: the prefix-word list and the operand-word list. A
+    # prefix word is matched BY NAME, so #117 reaches it exactly as it reaches
+    # the command word -- `/usr/bin/env gh pr merge 5`, `/usr/bin/sudo gh pr
+    # merge 5` and `"timeout" 30 gh pr merge 5` were permitted where the bare
+    # spellings are refused, measured in the triage of #117 at origin/dev-05
+    # 96c6850. Fixing the command word alone would have left all three, which is
+    # what that triage means by "the next review round finds it".
+    #
+    # BOUNDED, and that is what keeps this linear where printhead avoids the
+    # question by printing. A string has to be built to match it against a list,
+    # and building one a character at a time is the quadratic shape of #96; so a
+    # name
+    # longer than any word in either list is not built at all. It cannot be one
+    # of them, and the cost of a long word stays the cost of walking it. The
+    # bound is written here as a number well past the longest word either list
+    # holds rather than derived from them, because a derivation would have to
+    # split the lists on `|` for every token of every line.
+    function cw_name(w,   k, out) {
+      if (cw_reduce(w) == 0 || cw_n > 32) return ""
+      out = ""
+      for (k = 1; k <= cw_n; k++) out = out cw[k]
+      return out
+    }
+    # A token as the name it spells: itself when it carries none of the four
+    # characters, which is every ordinary command, and its reduction otherwise.
+    function cw_spelled(w) {
+      if (index(w, "/") == 0 && index(w, "\042") == 0 \
+          && index(w, "\047") == 0 && index(w, "\\") == 0) return w
+      return cw_name(w)
+    }
     function printhead(s,   i, w, k) {
       i = 1
       while (i <= length(s) && index(" \t\n\v\f\r", substr(s, i, 1)) == 0) i++
@@ -999,8 +1043,15 @@ cs_split() {
         # The list arrives as a variable rather than standing here as a literal,
         # so that the wrapper anchor can admit the same words without a second
         # copy of them. Issue #79; see CS_WRAP_OPTION_WORDS above.
+        #
+        # Through cw_spelled since #117, so that a prefix word spelled as a path
+        # or in quotes is the prefix word it is. Not the control words above:
+        # quoting a RESERVED word takes its reserved meaning away, so bash runs
+        # a program named `if` for `"if" true` and the strip is right to stop.
+        # The two lists are matched by name and the reserved words are matched
+        # as syntax, and that is the whole difference.
         q = tokend(p)
-        if (q <= n && substr(line, p, q - p) ~ ("^(" wrapwords ")$")) {
+        if (q <= n && cw_spelled(substr(line, p, q - p)) ~ ("^(" wrapwords ")$")) {
           p = skipblank(q)
           while ((q = tokend(p)) <= n && substr(line, p, 1) == "-") p = skipblank(q)
           wrapped = 1
@@ -1013,7 +1064,7 @@ cs_split() {
         # operand is stripped with the word, one token and only if it is not
         # itself an option.
         q = tokend(p)
-        if (q <= n && substr(line, p, q - p) ~ ("^(" operandwords ")$")) {
+        if (q <= n && cw_spelled(substr(line, p, q - p)) ~ ("^(" operandwords ")$")) {
           p = skipblank(q)
           while ((q = tokend(p)) <= n && substr(line, p, 1) == "-") p = skipblank(q)
           q = tokend(p)
@@ -1065,6 +1116,22 @@ cs_split() {
           # of the command word, so at the point the strip runs the word is
           # still behind it and `sudo /usr/bin/git push` would be normalised
           # nowhere.
+          #
+          # THE TRADE, TAKEN KNOWINGLY, and it is this pass reaching one word
+          # further than the one before it did. A tail candidate is an ARGUMENT
+          # offered as a command word, on the argument above that offering
+          # cannot hide a command -- and reducing one to its basename turns a
+          # path-shaped argument into a name a rule reads. Measured: `sudo cp
+          # /usr/bin/pytest /tmp/` offers `pytest /tmp/` and is now refused by
+          # pytest-via-uv-group.sh, where the same command without the prefix
+          # word offers no tail at all and is permitted.
+          #
+          # Taken rather than fixed, for the reason the note above gives: it is
+          # the refusing direction, the refusal names the permitted spelling,
+          # and telling an argument from a command word here is the shell parser
+          # the stopping rule in these files refuses to write. It is recorded
+          # because a refusal nobody wrote down reads as a defect to whoever
+          # meets it. check-hooks.sh pins both verdicts.
           printhead(substr(line, r, e - r + 1))
         }
       }

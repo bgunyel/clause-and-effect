@@ -1323,22 +1323,38 @@ The suite fails on each of these, and `--matrix` shows the rest:
   the third thing, which is calling a defect a design exception
 
 ### GH-117
-- text: A command word spelled as a path, quoted or backslash-escaped is the command
-  it spells: `/usr/bin/gh pr merge 5`, `./gh …`, `"git" push origin main`, `'git'
-  …` and `\git …` reach the verdict their bare-name spelling reaches, in every
-  hook.
+- text: A word the library recognises BY NAME is the word it spells, however it is
+  spelled: `/usr/bin/gh pr merge 5`, `./gh …`, `"git" push origin main`, `'git' …`
+  and `\git …` reach the verdict their bare-name spelling reaches, in every hook.
+  That covers three kinds of word and not one, because all three are matched by
+  name: the command word; the prefix words `cs_split` strips, so that
+  `/usr/bin/env gh pr merge 5` and `"timeout" 30 gh pr merge 5` are refused as
+  their bare spellings are; and the wrapper words, so that CLAUDE.md's
+  deliberately-left-open item 1 holds for `/bin/bash -c …` as it does for
+  `bash -c …`. Partial quoting counts, `g"h"` being `gh`, and so does a tilde
+  path. A reserved word does not: quoting one takes its reserved meaning away, so
+  `"if"` is a program named `if` and the control-word strip is right to stop.
 - from: #117, found reviewing PR #115
 - kind: defect-permitting
 - status: active
 - note: the word is reduced to its basename after unquoting and unescaping, so a
   program of another name keeps it -- GH-72 decided that `my-gh` is not `gh`, and
   the permitting checks hold that decision against this one. Two places read a
-  command word and both are in `lib/command-scan.sh`: `cw_basename` in `cs_split`,
-  for every ordinary rule, and `CS_WORD_SPELLING` in `CS_WRAPPER_RE`, which reads
-  raw text and so admits the spellings itself. #106's families carried the five
-  spellings as departure rows against every refused seed until this landed; the
-  rows are gone, and those variants now reach their seed's verdict under the
-  seed's own tags.
+  command word and both are in `lib/command-scan.sh`: `cw_reduce` in `cs_split`,
+  reached through `printhead` for the word a rule anchors on and through
+  `cw_spelled` for the prefix and operand word lists, and `CS_WORD_SPELLING` in
+  `CS_WRAPPER_RE`, which reads raw text and so admits the spellings itself.
+  #106's families carried the five spellings as departure rows against every
+  refused seed until this landed; the rows are gone, and those variants now reach
+  their seed's verdict under the seed's own tags. The families also gained
+  transformation 13, the prefix word spelled otherwise.
+  What is NOT decided here is a command word that is a parameter or command
+  substitution -- `$(command -v gh) pr merge 5` -- which cannot be resolved from
+  text at all. #117's triage raises it as recommendation 4 and calls it the
+  maintainer's judgement; it stays permitted, and the decision is Bertan's,
+  either a refusal or a sixth numbered item in CLAUDE.md's *Deliberately left
+  open*. It is named here so that the gap is on the record rather than implied by
+  the absence of a check.
 
 ### GH-118
 - text: A `gh` command carrying any option other than `-R`, `--repo` or

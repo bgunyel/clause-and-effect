@@ -1152,7 +1152,13 @@ fi
 # command by the bare name at the head of what cs_split emits -- `^git`, `^gh`,
 # `^pytest`, `^alembic`, `^uv` -- and bash runs the same program when that name
 # is spelled as a path, in quotes or behind a backslash. All five spellings of
-# all seven refused shapes in #117's table were ALLOW, in every hook there is.
+# all seven refused shapes in #117's table were ALLOW. In six hooks of seven and
+# not in every one: the issue says so of `no-work-on-stale-branch.sh` -- "was not
+# measured, since it needs a stale-branch fixture" -- and the count is written
+# out here because the sentence that said "every hook" was the #84 shape in
+# miniature, a claim one hook wider than the measurement behind it. That hook
+# reads its git commands through the same `^git` anchor, so the defect was there
+# too; it is checked in its own section, beside the fixture it needs.
 #
 # Answered here and in no second place, which is what the issue means by "one
 # place": the anchors stay exactly as they are, and every consumer of cs_split
@@ -1665,8 +1671,16 @@ armed 'cs_split strips whatever that variable holds' \
       "$HOOKS/lib/command-scan.sh" '~ ("^(" wrapwords ")$")'
 armed 'and whatever the operand variable holds' \
       "$HOOKS/lib/command-scan.sh" '~ ("^(" operandwords ")$")'
+# The literal moved again in #117, and the claim did not. A prefix word is
+# admitted in every spelling now, so the spelling prefix stands in front of the
+# union and a run of quotes behind it; what is pinned is still that the anchor
+# reads the shared variable rather than a copy of the words, which is the whole
+# of GH-79.4. Both halves of the new spelling are named, so the union cannot be
+# quietly wrapped in something that changes which words it admits.
 armed 'and the anchor admits whatever the union holds' \
-      "$HOOKS/lib/command-scan.sh" '($CS_WRAP_WORDS)[[:space:]]+'
+      "$HOOKS/lib/command-scan.sh" '($CS_WRAP_WORDS)[\\\\\"'"'"']*[[:space:]]+'
+armed 'and reaches it through the same spelling prefix the command word uses' \
+      "$HOOKS/lib/command-scan.sh" '$CS_WORD_SPELLING($CS_WRAP_WORDS)'
 armed 'the intervening token is named once and used once' \
       "$HOOKS/lib/command-scan.sh" '($CS_WRAP_TOKEN){0,3}'
 # What an empty list does is not pinned here. It is part of the load, so it is
@@ -2117,6 +2131,71 @@ flip "$SUITE_DIR" alembic-via-uv-group.sh ALLOW BLOCK 'bare alembic, the name be
 # command it had already recognised as reaching pytest and let it go.
 flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'uvx pytest as an absolute path' \
   '/usr/bin/uvx pytest tests/'
+# THE TWO TABLE ROWS THE ISSUE BODY DOES NOT CARRY. #117's triage comment
+# measured nine seeds where the body measured seven, and the two it added are
+# the surfaces no-pr-decisions.sh guards through cs_gh_args rather than through
+# the base rule.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'gh pr review --approve as an absolute path' \
+  '/usr/bin/gh pr review --approve 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'gh pr review --approve, the name double quoted' \
+  '"gh" pr review --approve 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a merge through gh api, as an absolute path' \
+  '/usr/bin/gh api -X PUT repos/o/r/pulls/5/merge'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a merge through gh api, the name behind a backslash' \
+  '\gh api -X PUT repos/o/r/pulls/5/merge'
+# The two spellings the triage comment names as its own acceptance criterion,
+# at the hook rather than only at the tokeniser: partial quoting and a tilde
+# path. Neither is one of the five, and both are what bash runs.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a quote inside the command word' \
+  'g"h" pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a path under the home directory' \
+  '~/bin/gh pr merge 5'
+# `python -m pytest` in the spellings the rows above leave. The seed is not one
+# of #106's, so the families never reach it, and without these the table row
+# would be pinned in two spellings of five. Found by review of this branch.
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'python -m pytest as a relative path' \
+  './python -m pytest tests/'
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'python -m pytest, the name double quoted' \
+  '"python" -m pytest tests/'
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'python -m pytest, the name single quoted' \
+  "'python' -m pytest tests/"
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'python -m pytest, the name behind a backslash' \
+  '\python -m pytest tests/'
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'a versioned python by path, -m pytest' \
+  '/usr/bin/python3.12 -m pytest tests/'
+flip "$SUITE_DIR" alembic-via-uv-group.sh ALLOW BLOCK 'bare alembic as a relative path' \
+  './alembic upgrade head'
+flip "$SUITE_DIR" alembic-via-uv-group.sh ALLOW BLOCK 'bare alembic, the name single quoted' \
+  "'alembic' upgrade head"
+# A PREFIX WORD IS MATCHED BY NAME TOO, which is what #117's triage means by
+# "the gap is wider than the issue states". `cs_split` strips `sudo`, `env` and
+# `timeout` by comparing a token against a list, so every spelling reached them
+# exactly as it reached the command word -- and the bare `sudo gh pr merge 5` is
+# refused, so the contrast was already in the suite with nothing testing it.
+#
+# Fixing the command word alone would have left all three, and the triage says
+# in as many words what happens then: "the next review round finds it".
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the prefix word env, as an absolute path' \
+  '/usr/bin/env gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the prefix word sudo, as an absolute path' \
+  '/usr/bin/sudo gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the prefix word sudo, as a relative path' \
+  './sudo gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the prefix word sudo, behind a backslash' \
+  '\sudo gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the operand word timeout, double quoted' \
+  '"timeout" 30 gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the prefix word and the command word, both as paths' \
+  '/usr/bin/sudo /usr/bin/gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a prefix word by path in front of a wrapper' \
+  '/usr/bin/env bash -c "gh pr merge 5"'
+# And the permitting half of that, which is the reason the reduction is bounded
+# rather than applied to any token: an ordinary command behind a prefix word
+# keeps its verdict, and so does a prefix word whose payload decides nothing.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a prefix word in front of an ordinary command' \
+  'sudo apt-get install jq'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'env by path in front of an ordinary command' \
+  '/usr/bin/env python3 -c "print(1)"'
 # THE WRAPPER HALF. The payload cannot be read, so the wrapper itself is what is
 # recognised -- and it was recognised by the same bare name at a command
 # position that everything else used.
@@ -2177,6 +2256,30 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a different program named mybash
   'mybash -c "gh pr merge 5"'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a path naming bash as an argument, not as the command' \
   'ls -l /usr/bin/bash'
+# WHERE THE TWO HALVES DISAGREE, pinned in both directions rather than described.
+# CS_WORD_SPELLING is a regular expression and cw_reduce is a walk, so they do
+# not reach the same set, and the comment above CS_WORD_SPELLING says which shape
+# each reaches. It said two shapes until Bertan's review of this branch measured
+# them and found one: a backslash is not excluded from the run, so an escaped
+# slash inside the path IS reached. The pair below is why that cannot go stale
+# again -- the spelling that matches and the spelling that does not, each a
+# literal verdict.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, an escaped slash inside the path' \
+  '/usr\/bin\/bash -c "gh pr merge 5"'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'ACCEPTED gap: a quoted span in the middle of the wrapper name' \
+  'b"a"sh -c "gh pr merge 5"'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'ACCEPTED gap: a quoted span in the middle of the wrapper path' \
+  '/usr/"bin"/bash -c "gh pr merge 5"'
+# THE TRADE THE TAIL CANDIDATES TAKE. Reducing every candidate the prefix strip
+# offers -- not only the first -- is what makes `sudo /usr/bin/git push` visible,
+# and it also turns a path-shaped ARGUMENT into a name a rule reads. The pair is
+# what says this is a decision: behind a prefix word the copy is refused, and
+# without one the same command offers no tail and is permitted. Refusing
+# direction, recorded at the call site in lib/command-scan.sh.
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'copying the pytest binary, behind a prefix word' \
+  'sudo cp /usr/bin/pytest /tmp/'
+check_in "$SUITE_DIR" pytest-via-uv-group.sh ALLOW 'copying the pytest binary, with no prefix word' \
+  'cp /usr/bin/pytest /tmp/'
 
 section "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
 # Closing a PR and publishing a release were refused in the gh spelling and open
@@ -3859,6 +3962,37 @@ check_in "$LIFE_LINK/src/deep" no-work-on-stale-branch.sh ALLOW 'main checkout t
 req GH-94.2 GH-44.2
 check_in "$LIFE_LINK/wt-stale/src/deep" no-work-on-stale-branch.sh BLOCK 'stale worktree through a symlink, src/deep/: a commit is still refused' \
   'git commit -m "wip"'
+
+# ISSUE #117 IN THIS HOOK TOO, and it is here rather than in #117's own section
+# for one reason: that section stands above the line where $WT_STALE is built,
+# and a check cannot name a fixture that does not exist yet.
+#
+# Written out because the issue measured six hooks of seven and said so -- "was
+# not measured, since it needs a stale-branch fixture" -- and a fix whose
+# evidence stops where the measurement stopped is #84 exactly: the question
+# asked of the consumers that happened to be convenient. This hook reads every
+# git command through cs_git_args, whose `^git` anchor is the one #117 is about,
+# so the defect was here whether anyone measured it or not.
+#
+# #106's families do reach it, through the `commit-stale` seed, and that is why
+# these are not the only thing standing between the hook and a regression. But
+# those variants carry FR-38, the seed's tag, and a requirement is covered by
+# the checks that NAME it; GH-117 had no check against this hook at all.
+req GH-117
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a commit on a stale branch, as an absolute path' \
+  '/usr/bin/git commit -m wip'
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a commit on a stale branch, the name double quoted' \
+  '"git" commit -m wip'
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a commit on a stale branch, the name behind a backslash' \
+  '\git commit -m wip'
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a cherry-pick on a stale branch, as an absolute path' \
+  '/usr/bin/git cherry-pick abc1234'
+# And the permitting half, in the worktree whose branch is still live, so that
+# the reduction is not what decides the verdict here either.
+check_in "$WT_WORK" no-work-on-stale-branch.sh ALLOW 'a commit on a live branch, as an absolute path' \
+  '/usr/bin/git commit -m wip'
+check_in "$WT_WORK" no-work-on-stale-branch.sh ALLOW 'a commit on a live branch, the name double quoted' \
+  '"git" commit -m wip'
 
 section "=== review of #111: the #94 comparison when it has nothing to compare, and its two copies ==="
 # Three points from the review of the #94 pull request, each checked here.
@@ -8615,6 +8749,17 @@ SEEDS
 #                                     word-squoted word-escaped
 #  12 an option before the subcommand that consumes the next word (#118)
 #                                     option-eats-verb
+#  13 a prefix word spelled otherwise (#117)  pre-sudo-path pre-env-path
+#                                     pre-timeout-quoted
+#
+# Thirteen and not twelve, and the thirteenth is the one the triage of #117
+# asked for by name: a prefix word is matched against a list BY NAME, exactly as
+# the command word is matched by its anchor, so every spelling reached it too.
+# Transformation 4 prepends those words BARE and so could never have found it --
+# which is the point the list itself makes about why a family is worth having.
+# The wrapper words the same triage names need no row of their own: a wrapped
+# seed carries the wrapper AS its command word, so transformation 11 already
+# rewrites it, and adding a fourteenth would be the same question asked twice.
 #
 # A transformation that cannot apply to a seed -- no value-taking long flag, no
 # second short flag to bundle with, no subcommand to put a global flag before --
@@ -8641,6 +8786,7 @@ INV_TRANSFORMS='
   continuation
   redirect-null redirect-dup
   word-path word-dot word-dquoted word-squoted word-escaped
+  pre-sudo-path pre-env-path pre-timeout-quoted
 '
 
 # A rewrite that prints nothing when it changed nothing, which is how a
@@ -8797,6 +8943,9 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     continuation)     inv_continuation "$2" ;;
     redirect-null)    printf '%s >/dev/null' "$2" ;;
     redirect-dup)     printf '%s 2>&1' "$2" ;;
+    pre-sudo-path)    printf '/usr/bin/sudo %s' "$2" ;;
+    pre-env-path)     printf '/usr/bin/env X=1 %s' "$2" ;;
+    pre-timeout-quoted) printf '"timeout" 30 %s' "$2" ;;
     word-path)        inv_cmdword "$2" '/usr/bin/' '' ;;
     word-dot)         inv_cmdword "$2" './' '' ;;
     word-dquoted)     inv_cmdword "$2" '"' '"' ;;
@@ -9280,7 +9429,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '274' "${TEXT_CHECK_ARGS##*COUNT }"
+    '275' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -9420,7 +9569,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '25' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '26' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9483,7 +9632,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '23' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '24' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and
