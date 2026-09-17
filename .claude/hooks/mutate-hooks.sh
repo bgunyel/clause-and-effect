@@ -18,12 +18,14 @@
 # ABOUT FORTY-FIVE MINUTES for the whole registry: one check-hooks.sh run per
 # mutation that applies, at about two minutes, plus the baseline -- twenty-four
 # runs as the registry stands, not twenty-five, because the row whose edit matches
-# nothing never reaches one. Measured twice on 2026-09-17, on this machine and on
-# registries one row apart: 47 min 34 s and 45 min 24 s. That is why it is a
-# separate script and why check-hooks.sh does not call it (#107). Nothing here is
-# a PreToolUse hook and settings.json does not register it. Naming rows costs the
-# baseline plus one run each, so re-asking a single rule is about four minutes
-# rather than forty-five.
+# nothing never reaches one. Measured twice on 2026-09-17, on this machine and
+# on registries of 22 and 23 rows: 47 min 34 s and 45 min 24 s. Neither is this
+# registry: #128's row is the 24th, and a row is about two minutes, which is the
+# only arithmetic done to those figures rather than measuring again. That is why
+# it is a separate script and why check-hooks.sh does not call it (#107).
+# Nothing here is a PreToolUse hook and settings.json does not register it.
+# Naming rows costs the baseline plus one run each, so re-asking a single rule
+# is about four minutes rather than forty-five.
 #
 # EXIT STATUS: non-zero when any row reports something other than the outcome it
 # declares. For every real mutation that means a survivor or an edit that did not

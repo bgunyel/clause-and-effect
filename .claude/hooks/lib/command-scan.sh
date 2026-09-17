@@ -57,6 +57,12 @@
 # cannot be got exact by looking more carefully, because that is what the
 # previous two attempts were. The drop is a fail-safe now. See cs_normalise.
 #
+# A fourth wrong answer followed that conclusion rather than preceding it, and
+# it is #128: the fail-safe covers a body that never ends, and this one was a
+# body that began a line too early, on an opener whose own line was continued.
+# So the count is four, and the reading of it is unchanged. cs_normalise keeps
+# it.
+#
 # A fourth review, of the #43 migration, found two more -- both the same shape
 # as the first three, and both here rather than in a hook. A wrapper word was
 # stripped along with its options but not its operand, so `timeout 30 git push
@@ -348,6 +354,14 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # than cs_join joins it is the defect above, back again. Looser than bash is the
 # safe side of that, and this rule is: a logical line held open too long only
 # exposes more lines as commands.
+#
+# Which leaves the rule stated in two places, and that is #84's question one
+# level in. The drop cannot borrow cs_join's answer -- cs_join runs after it,
+# and a copy of the joining here would be the join rule written twice, which
+# the header of this file names as the defect class it exists to end -- so the
+# two are held against each other by literals in check-hooks.sh instead of by
+# this paragraph asserting they agree: the joined text of a one, two and three
+# backslash run, read once as cs_join's output and once as this pass's.
 #
 # A body line is still never joined, whether its delimiter is quoted or not,
 # because it is dropped before cs_join sees it -- so a quoted body whose every

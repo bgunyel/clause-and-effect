@@ -1311,10 +1311,10 @@ per the priority order above.
   writing down: a row per rule reaches a requirement, it does not exercise every
   check that requirement has, and 145 requirements are active. #128 registered
   its own row with its fix, which is the shape the rest of them should take;
-  #108's and #109's rules arrive with them. Two kinds of rule the harness cannot reach at all — one
-  living in the tooling beside the hooks, `check-hooks.sh` and `mutate-hooks.sh`
-  themselves, and a claim about a file outside `.claude/hooks/` — are recorded in
-  its header and need a different answer, not another row.
+  #108's and #109's rules arrive with them. Two kinds of rule the harness cannot
+  reach at all — one living in the tooling beside the hooks, `check-hooks.sh` and
+  `mutate-hooks.sh` themselves, and a claim about a file outside `.claude/hooks/`
+  — are recorded in its header and need a different answer, not another row.
 
 - [ ] **One high-severity Dependabot alert on `main` — reported 2026-09-04** on
   pushing `dev-04`, at `security/dependabot/6`. Not looked at: neither the

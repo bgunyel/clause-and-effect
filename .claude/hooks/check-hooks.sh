@@ -836,6 +836,38 @@ git push --force origin main" \
 tok 'a body naming a push on a continued line is still dropped' \
     "cat <<'E'" \
     "$(printf "cat <<'E'\ngit push --force origin main \\\\\nE\n" | cs_normalise)"
+# THE TWO PLACES THE CONTINUATION RULE IS NOW READ, held against each other.
+# The drop asks whether a line continues, `$0 !~ /\\$/`; cs_join asks it again
+# one pass later when it joins one. That is #84's question a level in -- a rule
+# answered twice -- and the drop cannot borrow the answer, because cs_join runs
+# after it and a copy of the joining inside the drop would be the join rule
+# written twice, in the file whose header names that as the defect class it
+# exists to end. So the agreement is pinned by literals instead, over the runs
+# of trailing backslashes where the two could come apart: cs_join takes ONE
+# backslash off a run and joins on whatever is left, so the drop has to defer
+# the body over exactly the lines cs_join will fold. One backslash is the pair
+# above; two and three are here, and the joined text is written once per run
+# and read in both checks, which is the idiom the cs_join pin further up
+# already uses. A change to either rule moves one literal of a pair and is red.
+#
+# Two backslashes is where bash parts company with both of them, and the
+# verdict survives it: bash reads `\\` as an escaped backslash, so the line
+# does not continue, the body is `x` and `E` ends it -- and the push runs,
+# which is the verdict these reach by deferring the body instead.
+tok 'cs_join folds a line ending in two backslashes' \
+    'cat <<E \x' \
+    "$(printf 'cat <<E \\\\\nx\n' | cs_join)"
+tok 'and the drop defers the body over that same line' \
+    'cat <<E \x
+git push --force origin main' \
+    "$(printf 'cat <<E \\\\\nx\nE\ngit push --force origin main\n' | cs_normalise)"
+tok 'cs_join folds a line ending in three backslashes' \
+    'cat <<E \\x' \
+    "$(printf 'cat <<E \\\\\\\nx\n' | cs_join)"
+tok 'and the drop defers the body over that one too' \
+    'cat <<E \\x
+git push --force origin main' \
+    "$(printf 'cat <<E \\\\\\\nx\nE\ngit push --force origin main\n' | cs_normalise)"
 # Redirections. A redirect is not an argument, and nothing removed it, so its
 # operator or its target was read as a refspec and every redirect on an
 # otherwise permitted push was refused. Issue #50.
@@ -1716,8 +1748,8 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'issue comment naming <<, then --mirror
 # ALLOW -- that is what says the fail-safe did not simply disable the drop.
 
 section "=== REGRESSION: issue #128, a continued opener hid the command after the terminator ==="
-# The fifth wrong answer to where a heredoc body begins, and the first that was
-# about the OPENER's own line. Bash joins a line ending in a backslash before
+# The fifth answer to where a heredoc body begins and the fourth wrong one, and
+# the first of them about the OPENER's own line. Bash joins a line ending in a backslash before
 # the body starts, so `cat <<E \` / `x` / `E` is `cat <<E x` with an empty body
 # and the next command runs -- measured with `echo RAN-AFTER` in its place,
 # which printed after cat's complaint about the file `x`. The drop read `x` as

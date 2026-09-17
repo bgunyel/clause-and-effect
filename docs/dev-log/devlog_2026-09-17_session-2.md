@@ -157,3 +157,80 @@ Open, and not this branch's:
   stopping rule is that a newly found evasion earns a fix only if it is a shape
   an agent would plausibly write.
 - **#108 and #109**, which owe the registry their own rows.
+
+## Correction, from the review of this session's own commit
+
+The two review axes run over `c2ce2bd` found that the assistant had miscounted
+its own checks, which is the class CLAUDE.md says to re-measure rather than
+restate. Appended rather than edited above, because the append-only guard
+refuses an in-place edit of an entry — verified by feeding the command to
+`append-only-docs.sh` rather than running it — and because that is what the
+directory's rule says to do with a correction. The figures here supersede the
+ones in *What the checks establish* and in `c2ce2bd`'s message; both of those
+stand as written.
+
+**How far ahead of `main`.** The convention in this directory's README asks for
+it and the entry above omitted it: the branch ends **186 commits ahead of
+`origin/main`**, two ahead of `origin/dev-05` — the fix, and the commit that
+carries this section.
+
+**Which commit each figure belongs to**, since this section adds four checks of
+its own. The entry above describes `c2ce2bd`, where the suite was 3957 results
+and 145 went red with the fix reverted. Every figure in this section is measured
+at the second commit's tree.
+
+**The counts, measured rather than derived.** Suite 3657 → **3961** results.
+The families contribute **280** — 273 variants and 7 per-transformation guards
+— so **24** checks are written out, not the nineteen the entry above claims, and
+there is no "coverage row" among them: 280 + 24 = 304, and 3657 + 304 = 3961.
+The #128 verdict section holds **13** checks, nine refusing and four permitting,
+where the entry says twelve. The assistant wrote both figures from the edit it
+had just made instead of from a run, which is the whole of the error.
+
+**Four checks the review added.** The standards axis — a review the assistant
+ran on its own commit, not Bertan's — found the continuation
+rule now derived in two places — `$0 !~ /\\$/` in the drop, and `cs_join`'s
+own count of trailing backslashes — with the code asserting they cannot disagree
+and nothing pinning it. That is #84's question one level in, and the assistant
+had answered it in a comment. Four `tok` checks now hold the two against each
+other over runs of two and three backslashes: the joined text is read once as
+`cs_join`'s output and once as the drop's, so a change to either rule moves one
+literal of a pair. Two backslashes is where bash parts company with both — it
+reads `\\` as an escaped backslash, so the line does not continue, the body is
+`x` and `E` ends it, and the push runs anyway, which is the verdict the looser
+rule reaches by deferring the body.
+
+**Which new checks go red with the fix reverted, in full.** **147** of 3961,
+all of them new, measured against a copy with the one line reverted: 14 of the
+24 written out, and 133 of the 273 variants (19 refusing seeds × 7 spellings).
+The entry above says three written-out checks and 21 variants stay green; it is
+**10** and **147** — 140 variants, being 17 permitting seeds × 7 plus the 21
+wrapped, and the 7 guards. The ten, and why each cannot fail:
+
+| check | why the revert cannot reach it |
+|---|---|
+| `a body line ending in a backslash is not joined past its terminator` | the body drop, which this change does not alter |
+| `a body naming a push on a continued line is still dropped` | same |
+| `BLOCK a slashed body line, then a push` | same |
+| `ALLOW the same shape, with nothing to refuse after it` | the permitting direction, correct before the fix |
+| `ALLOW the same shape on main, with nothing to refuse` | same |
+| `ALLOW a body naming a push on a continued line` | same |
+| `ALLOW a body naming a commit on a continued line` | same |
+| `cs_join folds a line ending in two backslashes` | `cs_join` is untouched; it is the half of a pair whose other half does go red |
+| `cs_join folds a line ending in three backslashes` | same |
+| `the #128 shape is within the cap` | `cs_within_cap` runs before `cs_normalise` and the revert does not reach it |
+
+#128's criterion reads "every new check fails with the fix reverted", and ten
+cannot: a check whose subject is behaviour this change leaves alone is a
+regression guard, and one of them going red would mean the fix had moved the
+drop rather than where it starts. Naming them is the part the entry above got
+wrong by naming three.
+
+**A seventh count site.** The review also found `lib/command-scan.sh`'s own
+header still reading "Three wrong answers, each silent and each in the
+permitting direction, is evidence about the question" — a site the assistant's
+sweep had missed while listing four it had moved and two it had left. It now
+records the fourth and says the reading of it is unchanged. Two claims stay at
+three on purpose, both about reading *text as a command*, which is the opposite
+direction from this defect; the spec axis checked that reading independently and
+agreed.
