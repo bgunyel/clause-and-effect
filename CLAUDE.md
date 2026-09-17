@@ -390,10 +390,13 @@ The five canonical roles, each label string equal to its name. See
 
 ### Domain docs
 
-Single-context: `docs/adr/` holds one ADR; `CONTEXT.md` holds the glossary. It
+Single-context: `docs/adr/` holds the ADRs; `CONTEXT.md` holds the glossary. It
 is written lazily — a term is added when a collision has actually been resolved
 — so it stays short enough to read whole, and this line deliberately does not
 enumerate it: the sentence that did named two terms of five and went stale
-without saying so. Several of the hooks above cite it, and
-`.claude/hooks/check-hooks.sh` holds those citations to what it says. See
-`docs/agents/domain.md`.
+without saying so. It does not count the ADRs either, for the same reason and
+on the same evidence — the clause that did said one, and #143 added a second in
+the commit that cites this sentence's own lesson back at it. Several of the
+hooks above cite `CONTEXT.md`, and `.claude/hooks/check-hooks.sh` holds those
+citations to what it says; it holds this line too, since review of that commit
+found nothing held it at all. See `docs/agents/domain.md`.

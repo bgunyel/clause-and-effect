@@ -105,7 +105,7 @@
 # prose a second time:
 #
 #   TWENTY-SEVEN real mutations, against SIX files in .claude/hooks/, naming
-#   THIRTY-EIGHT requirement IDs between them, of the 154 whose status is active.
+#   THIRTY-EIGHT requirement IDs between them, of the 156 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.

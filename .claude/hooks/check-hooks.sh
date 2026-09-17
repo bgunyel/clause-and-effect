@@ -5625,6 +5625,79 @@ written 'and names moving the ref without a push, which passes every hook' \
 written 'and a fetch into the local branch, which passes every hook too' \
   "$RESERVED_ENTRY" 'git fetch origin dev-NN:dev-NN'
 
+# #143: the same shape one spelling out. The clause above reserves moving a LOCAL
+# main or dev-NN; this one reserves moving the active dev branch's REMOTE ref any
+# way but forward, and it sits beside the act it extends at the head of the
+# enumeration rather than at the end of it. Named here for GH-99.1's reason, that
+# an act nothing refuses is only reserved in a document a reader can find. The
+# rule that would refuse any of it is GH-143.1 to GH-143.3 and is not written
+# yet, so this pins the document half only.
+#
+# Asserted against the FLATTENED entry, for the reason recorded at GH-97.2 above:
+# a literal matches within a line, so a check over the entry as written is partly
+# a check on where the paragraph happens to wrap. These three read
+# $RESERVED_ENTRY when they were first written, and adding the clause
+# mid-paragraph re-wrapped two literals pinned elsewhere in this file and turned
+# three passing checks red -- which decided where the clause went. That is a
+# document shaped to fit its check, and the fix was already 200 lines up. It is
+# also why the placement above is free to be the one the entry reads best as.
+#
+# No count of the spellings neither layer covers is asserted, and the `unarmed`
+# holds the entry to not carrying one. There were two when #143 was filed, three
+# by the end of the session that filed it, and four once review of that session's
+# commit measured `POST /repos/O/R/merges` -- an endpoint no hook names at all,
+# which with a base of dev-05 advances the very ref the head of this enumeration
+# reserves. The sentence that said "those two" was already wrong in the paragraph
+# it stood in, which named a third two sentences later. A count is the part that
+# goes stale, so the document states none and this says so.
+#
+# That is also the GH-97.2 pairing, and it is the pairing the first spelling of
+# this block lacked: what it pinned was the clause's placement -- the absence of
+# the terminating period the enumeration used to end on -- so it went red on a
+# correct document with the clause moved, and added nothing against a revert,
+# which the two `written` checks already catch between them. `unarmed` over an
+# empty file reads ok, which is why it sits beside `written` calls over the same
+# fixture and not alone. It catches a count coming back, and deliberately not a
+# later sentence that contradicts the clause while leaving its words intact --
+# that is the half no text check reaches, and it is #145's.
+req GH-143.4 US-26
+written 'the enumeration reserves moving the remote dev ref another way, or deleting it' \
+  "$RESERVED_FLAT" 'any way other than advancing it, or deleting that ref'
+written 'and says nothing refuses either at all, which is what leaves them reserved only' \
+  "$RESERVED_FLAT" 'Nothing refuses a remote force-move or deletion'
+written 'and names the REST merge that advances the same ref under no rule at all' \
+  "$RESERVED_FLAT" 'a REST merge of any'
+unarmed 'and counts none of the acts that neither a hook nor the server covers' \
+  "$RESERVED_FLAT" 'the only acts'
+
+# CLAUDE.md's *Domain docs* section said "docs/adr/ holds one ADR", and the ADR
+# that states the decision above made it false in the same commit. Nothing held
+# it: a grep for docs/adr across this suite returned nothing at all, so the one
+# sentence in CLAUDE.md that warns about a stale enumeration -- "the sentence
+# that did named two terms of five and went stale without saying so" -- was
+# carrying a count of its own, unpinned, one clause to the left. That is the
+# drift class 0002 is about, arriving in the document that describes where 0002
+# lives, which is why it is pinned here rather than left to the next reader.
+#
+# The pairing is GH-97.2's, and here the superseded wording is a narrower claim
+# rather than a narrower rule: a section that gained the directory and kept the
+# count would say both. Flattened for the same reason as the entry above.
+DOMAIN_SECTION="$FIXTURES/claude-md-domain-docs.md"
+awk '/^### Domain docs$/ {f=1; print; next}
+     f && /^#/ {exit}
+     f {print}' "$CLAUDE_MD" > "$DOMAIN_SECTION"
+DOMAIN_FLAT="$FIXTURES/claude-md-domain-docs.flat"
+flatten "$DOMAIN_SECTION" > "$DOMAIN_FLAT"
+req GH-143.5
+written 'the extracted section is the domain docs section' \
+  "$DOMAIN_FLAT" '### Domain docs'
+unarmed 'and it is that section rather than the whole file' \
+  "$DOMAIN_FLAT" '### Triage labels'
+written 'the domain docs section points at the ADR directory' \
+  "$DOMAIN_FLAT" '`docs/adr/` holds the ADRs'
+unarmed 'and states no count of what is in it' \
+  "$DOMAIN_FLAT" 'holds one ADR'
+
 # #99 Q9 and Q13: the rule, in the boundary section this suite already
 # extracted and checked from both ends. Both routes, the qualifier that keeps
 # the second one from discarding a worktree's commits, and the sentence saying
@@ -9149,7 +9222,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '279' "${TEXT_CHECK_ARGS##*COUNT }"
+    '287' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -10019,7 +10092,7 @@ GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117:gap GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
 GH-131:gap GH-133:gap GH-134:gap GH-135:gap GH-136:gap GH-139:gap
-GH-107.1:static GH-107.2:static
+GH-107.1:static GH-107.2:static GH-143.4:static GH-143.5:static
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7
 GH-108.8:static GH-108.9:static GH-108.10:static
 '
