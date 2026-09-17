@@ -1849,6 +1849,17 @@ The suite fails on each of these, and `--matrix` shows the rest:
   expected reads as an invitation to retarget a pull request that should not
   exist. Message content is #109's; what is claimed here is that the branch is
   named at all and that the two answers do not cross.
+  WHAT IS DEFERRED, so that it reads as a decision and not an oversight: the
+  refusal's first half still says "Write: gh pr create --base dev-NN" although the
+  hook now knows the name, which is the same complaint one sentence earlier in the
+  same message. Two reasons it is not changed here. FR-23's claim is that ONE
+  constant serves all four refusals and five checks pin its text, so rewording it
+  is that requirement's business rather than this one's; and the constant is
+  assigned before any command is judged, so interpolating the branch would make
+  the read happen for every refusal including the one where no base is named,
+  which GH-144.5 says it does not. The branch is named in the clause that follows,
+  so the correction is in the message either way, and #109 owns which sentence it
+  belongs in.
 
 ### GH-144.4
 - text: Every check in `check-hooks.sh` whose payload names a `dev-NN` base names
@@ -1870,6 +1881,41 @@ The suite fails on each of these, and `--matrix` shows the rest:
   scoped ones do. The derivation reads the harness word of every matching row and
   `lacks` refuses an empty read, so a derivation that stopped matching fails
   rather than reporting that no bare row was found.
+
+### GH-144.5
+- text: `no-pr-decisions.sh` reads `refs/remotes/origin/dev-*` once per run, however
+  many bases the line names, and not at all where no base is named.
+- from: #144
+- kind: defect-refusing
+- status: active
+- note: the claim GH-144.1 costs, and it was false when it was first written. Every
+  caller said `DEV=$(read_active_dev)`; a command substitution is a subshell, so
+  the variable recording the read was set in a process that then exited and the
+  memo was a no-op -- one `git for-each-ref` per base tested, while the comment
+  beside it said once per run. Verdicts were identical either way, the read being
+  idempotent, so no verdict check in the suite could have shown it and none did:
+  it was found by review of the commit that added it. What shows it is a count, so
+  a count is what the suite now reads, off a git shim that logs every
+  `for-each-ref` and passes every other call to the real git -- the fixture kind
+  #111 introduced here. Both payloads name two bases, because a line naming one
+  cannot tell a read made once from a read made per base.
+
+### GH-144.6
+- text: The active dev branch is read from the repository the command runs in, so a
+  base named with `-R other/repo` is judged against this repository's active dev
+  branch: the branch active here is permitted for another repository, and one this
+  repository has rotated past is refused there too. Accepted, not fixed.
+- from: #144
+- kind: defect-refusing
+- status: active
+- note: the corner GH-144.1 leaves, written as verdicts rather than as a sentence in
+  a header, because a fix that gives up a case has to say so where a reader will be
+  looking -- the rule this repository took from #50.3. It is not a regression:
+  before #144 every `dev-NN` base was accepted in every repository, so what is left
+  is a subset of that, and the permitting row is the one that says which subset. It
+  stays open under the stopping rule in `no-pr-decisions.sh`'s header, opening a
+  pull request into another repository being no shape an agent working here writes
+  by accident, and it is filed as no issue for the same reason.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -2150,8 +2196,3 @@ it has no entry above (Q16).
 - #150: the pull request for #108; Bertan's review of it is cited where each of
   the five things it corrected stands, the largest being a fixture guard that made
   the suite abort on any machine without `gh` installed
-- #144: closed by the entries above, GH-144.1 to GH-144.4. It was listed here
-  while it was a gap #108 had found and not fixed, on the reasoning that the
-  requirement which would carry it was the fix itself; the fix landed and the
-  listing became the thing it warned against, an issue named here that a reader
-  cannot find above

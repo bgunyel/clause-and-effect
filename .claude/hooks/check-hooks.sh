@@ -4444,15 +4444,29 @@ unarmed 'the report force-deletes no branch' \
 unarmed 'the report deletes nothing on the remote' \
   "$HOOKS/report-stale-branches.sh" 'push origin --delete'
 
-# The active dev branch is derived in both files, and the copies are identical
-# by hand. lib/command-scan.sh's own header names this failure mode -- the same
-# question answered differently in a different place -- and the library is right
-# there, so the duplication is a decision and not an oversight: the guard must
-# read its state before it may depend on lib/ at all. That is what lets it fail
-# closed only on a branch it has an opinion about, rather than refusing every
-# command in every worktree whenever a library is missing. The cost of that
-# ordering is two copies, so the copies are pinned instead of shared. A
-# divergence here silently unarms the guard or misreports the branch.
+# The active dev branch is derived in three files since #144, and the copies are
+# identical by hand. lib/command-scan.sh's own header names this failure mode --
+# the same question answered differently in a different place -- and the library
+# is right there, so the duplication is a decision and not an oversight: the
+# guard must read its state before it may depend on lib/ at all. That is what
+# lets it fail closed only on a branch it has an opinion about, rather than
+# refusing every command in every worktree whenever a library is missing. The
+# cost of that ordering is a copy that cannot be shared, so the copies are pinned
+# instead. A divergence here silently unarms the guard or misreports the branch.
+#
+# THAT ARGUMENT DOES NOT COVER THE THIRD FILE, and saying it does would be the
+# stale-rationale defect this block exists to prevent. no-pr-decisions.sh sources
+# lib/command-scan.sh before it reads anything, so a shared reader IS available
+# to it. Two reasons it still holds a copy. The library is the tokeniser -- it
+# answers what a command says, and a git-ref reader is not that question, so
+# putting one there widens what every consumer has to guard: THE LOAD CONTRACT
+# makes each consumer require the functions it calls, and #69 and #84 are both
+# what happens when that list and the call set drift apart. And the guard cannot
+# use a shared reader whatever the library holds, so sharing would leave two
+# copies anyway -- one in lib/ and one in the guard -- which is this same
+# duplication with an indirection added and a third place for the two to
+# disagree. What holds the three together is this block, which is the same answer
+# #62 gave for two.
 #
 # Issue #62: that pin used to be `armed` against the tail of the pipeline,
 # "| grep -E ... | sort -V | tail -1)". Everything left of the first pipe -- the
@@ -4467,22 +4481,23 @@ unarmed 'the report deletes nothing on the remote' \
 # grep -qF, and grep reads a pattern containing a newline as two patterns, so a
 # two-line fixed string is satisfied by a file holding either line alone --
 # measured on a two-line fixture, not assumed. The derivations are extracted and
-# compared as strings instead, three ways: each file holds exactly one, the two
-# are equal to each other, and each is the derivation as pinned here. The counts
-# ask a question `armed` cannot ask at all -- it wants a constant somewhere in a
-# file, so a second derivation added to either file would have been satisfied by
-# the first -- and they are what closes the case, because two files that both
-# extract to nothing are equal to each other and to nothing else.
+# compared as strings instead, three ways per file: each file holds exactly one,
+# each is equal to the guard's, and each is the derivation as pinned here. The
+# counts ask a question `armed` cannot ask at all -- it wants a constant somewhere
+# in a file, so a second derivation added to any of the three would have been
+# satisfied by the first -- and they are what closes the case, because two files
+# that both extract to nothing are equal to each other and to nothing else.
 #
-# Be exact about which of the three carry the weight: with both files pinned to
-# the literal, the guard-equals-report check follows by transitivity and proves
-# nothing the pins do not. It is kept as the one line that states the property
-# the duplication actually needs, and because it is the check that still holds
-# the two together the day someone re-pins the literal on purpose -- a
-# coordinated change turns both pins red and leaves it green, which is the pair
-# of answers that says what happened. Each of the five was mutated to confirm it
-# fails for its own reason, and the two counts were mutated to confirm they fail
-# for theirs.
+# Be exact about which of them carry the weight: with every file pinned to the
+# literal, the equality checks follow by transitivity and prove nothing the pins
+# do not. They are kept as the lines that state the property the duplication
+# actually needs, and because they are the checks that still hold the copies
+# together the day someone re-pins the literal on purpose -- a coordinated change
+# turns every pin red and leaves them green, which is the pair of answers that
+# says what happened. Each check of the #62 pair was mutated to confirm it fails
+# for its own reason, and the counts were mutated to confirm they fail for theirs;
+# #144's third copy joined the arrangement rather than changing it, and carries
+# the three checks the other two do.
 DEV_DERIVATION=$(cat <<'DERIVATION'
 DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
       | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
@@ -9401,7 +9416,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '33' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '34' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9464,7 +9479,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '31' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '32' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -9792,6 +9807,14 @@ env_cmd "$ENV_DEV_NONE" "$PATH" no-pr-decisions.sh ALLOW 'a dev-NN base is accep
 # base that has already passed the shape question, so a failed read costs the
 # narrowing and no refusal -- the two rows above are that, and the git-off-PATH
 # rows in #144's section drive it.
+#
+# TAGGED GH-144.1 AND NOT GH-108.5, which is where it stood while it was the gap.
+# GH-108.5's text now claims the no-ref verdict and no longer claims this one, so a
+# row left under that tag would be this suite reporting a requirement as covered by
+# a check that establishes something the requirement does not say. It stays in this
+# section because this is where the gap was recorded, and a reader following #108
+# has to be able to find what became of it.
+req GH-144.1
 env_cmd "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh BLOCK 'a base of dev-05 while dev-06 is the active dev branch' \
   'gh pr create --base dev-05 --title t --body b'
 
@@ -10199,6 +10222,14 @@ says_not "$ENV_DEV_TWO" no-pr-decisions.sh 'the active dev branch here' \
 # dev ref, git off PATH, and a directory that is no repository: in each, every
 # dev-NN base is accepted as it was before #144 and every refusal made on the
 # text of the line is still made.
+#
+# The refusing rows overlap GH-108.6's loop above, which drives two of these
+# payloads over eight environments, and the overlap is deliberate: the two
+# requirements would fail apart. GH-108.6 is the claim about the ENVIRONMENT --
+# nothing this hook cannot read turns a refusal into a permit -- and it says
+# nothing about which bases are accepted. GH-144.2 is the claim about the RULE in
+# its degraded state, where the permit and the refusals are one answer and reading
+# them in the same fixture is what makes it one.
 req GH-144.2
 for env in "no dev ref:$ENV_DEV_NONE:$PATH" "no repository:$ENV_NOREPO:$PATH" \
            "git off PATH:$ENV_DEV_TWO:$ENV_NO_GIT_BIN"; do
@@ -10227,6 +10258,88 @@ req GH-144.2
 env_says "$ENV_DEV_TWO" "$ENV_NO_GIT_BIN" no-pr-decisions.sh 'not a dev-NN branch' \
   'git off PATH: the refusal that remains is the shape one' \
   'gh pr create --base main --title t --body b'
+
+# HOW MANY TIMES THE READ IS MADE, counted rather than claimed. The hook says it
+# reads the refs once per run however many bases a line names, and the first
+# version of it did not: every caller said `DEV=$(read_active_dev)`, a command
+# substitution is a subshell, so the variable that records the read was set in a
+# process that then exited and the memo was a no-op -- one `git for-each-ref` per
+# base tested. Verdicts were identical either way, the read being idempotent, so
+# no verdict in this section could have shown it and none did; it was found by
+# review. What shows it is a count, so the count is what is checked.
+#
+# A shim first on PATH, the fixture kind #111 already uses here: it appends a
+# byte for every `git for-each-ref` and hands every call to the real git, so the
+# hook's verdict is the real one and the log is the number. Both payloads test
+# two bases -- one where both pass and the line is permitted, one where the first
+# passes and the second does not -- because a line naming a single base cannot
+# tell a read made once from a read made per base.
+PR_COUNT_SHIM="$FIXTURES/git-counting-shim"
+PR_COUNT_LOG="$FIXTURES/for-each-ref-calls"
+mkdir -p "$PR_COUNT_SHIM"
+printf '#!/bin/bash\nfor a in "$@"; do\n  [ "$a" = for-each-ref ] && { printf x >> %s; break; }\ndone\nexec %s "$@"\n' \
+  "$PR_COUNT_LOG" "$REAL_GIT" > "$PR_COUNT_SHIM/git"
+chmod +x "$PR_COUNT_SHIM/git"
+# Both halves of the shim, asserted, for the reason #111's is: a count read off a
+# shim that logs nothing is zero, and zero would pass a check asking for "not
+# more than once". It has to log a for-each-ref, and it has to leave every other
+# call alone, or the verdicts beside the count are the shim's rather than the
+# hook's.
+: > "$PR_COUNT_LOG"
+[ "$( cd "$ENV_DEV_TWO" && PATH="$PR_COUNT_SHIM:$PATH" git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' | sort -V | tail -1 )" = origin/dev-06 ] \
+  && [ "$(wc -c < "$PR_COUNT_LOG" | tr -d ' ')" = 1 ] \
+  && [ "$( cd "$ENV_DEV_TWO" && PATH="$PR_COUNT_SHIM:$PATH" git rev-parse --abbrev-ref HEAD )" = main ] \
+  && [ "$(wc -c < "$PR_COUNT_LOG" | tr -d ' ')" = 1 ] || {
+  echo "the counting git shim does not log a for-each-ref and pass everything else through; the counts below prove nothing" >&2
+  exit 1
+}
+req GH-144.5
+: > "$PR_COUNT_LOG"
+env_cmd "$ENV_DEV_TWO" "$PR_COUNT_SHIM:$PATH" no-pr-decisions.sh ALLOW \
+  'two bases on one line, both the active dev branch' \
+  'gh pr create --base dev-06 --title t && gh pr edit 5 --base dev-06'
+tok 'and the refs were read once, not once per base' \
+    '1' "$(wc -c < "$PR_COUNT_LOG" | tr -d ' ')"
+: > "$PR_COUNT_LOG"
+env_cmd "$ENV_DEV_TWO" "$PR_COUNT_SHIM:$PATH" no-pr-decisions.sh BLOCK \
+  'a create naming the active dev branch and then another' \
+  'gh pr create --base dev-06 --base dev-05 --title t'
+tok 'and that refusal read them once as well' \
+    '1' "$(wc -c < "$PR_COUNT_LOG" | tr -d ' ')"
+# And nothing at all where no base is named, which is what keeps an ordinary
+# command off the read: the permitted `gh issue list` and the refused `gh pr
+# merge` are both judged without it.
+: > "$PR_COUNT_LOG"
+env_cmd "$ENV_DEV_TWO" "$PR_COUNT_SHIM:$PATH" no-pr-decisions.sh ALLOW \
+  'a command naming no base at all' \
+  'gh issue list'
+env_cmd "$ENV_DEV_TWO" "$PR_COUNT_SHIM:$PATH" no-pr-decisions.sh BLOCK \
+  'and a refusal that needs no base' \
+  'gh pr merge 5'
+tok 'neither of those read the refs at all' \
+    '0' "$(wc -c < "$PR_COUNT_LOG" | tr -d ' ')"
+
+# THE CORNER LEFT OPEN, written as verdicts rather than as a sentence in a
+# header, because a fix that gives up a case has to say so where a reader will
+# be looking. The refs read are those of the repository the command runs in, and
+# `gh pr create -R other/repo` names another one, so a base is judged against
+# THIS repository's active dev branch whichever repository the pull request is
+# going to. Both directions of that are here: the base this repository calls
+# active is permitted for the other one, and a base that may well be active over
+# there is refused. It is not a regression -- before #144 every dev-NN base was
+# accepted in every repository, so what is left is a subset of that -- and it
+# stays open under the stopping rule: opening a pull request into another
+# repository is not a shape an agent working here writes by accident.
+req GH-144.6
+env_cmd "$PR_ONE" "$PATH" no-pr-decisions.sh ALLOW \
+  'ACCEPTED: another repository, based on the branch active in this one' \
+  'gh pr create -R other/repo --base dev-05 --title t --body b'
+env_cmd "$PR_ONE" "$PATH" no-pr-decisions.sh BLOCK \
+  'ACCEPTED: and a base this repository has rotated past is refused there too' \
+  'gh pr create -R other/repo --base dev-04 --title t --body b'
+env_cmd "$PR_ONE" "$PATH" no-pr-decisions.sh BLOCK \
+  'while main is refused for another repository as it is for this one' \
+  'gh pr create -R other/repo --base main --title t --body b'
 
 # THIS SUITE'S OWN RULE, and it is a rule about the checks rather than about the
 # hook. A payload naming a dev-NN base now has a verdict that depends on the refs
@@ -10379,7 +10492,7 @@ GH-131:gap GH-133:gap GH-134:gap GH-135:gap GH-136:gap GH-139:gap
 GH-107.1:static GH-107.2:static GH-143.4:static GH-143.5:static
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7
 GH-108.8:static GH-108.9:static GH-108.10:static
-GH-144.1 GH-144.2 GH-144.3:refuse-only GH-144.4:static
+GH-144.1 GH-144.2 GH-144.3:refuse-only GH-144.4:static GH-144.5 GH-144.6
 '
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
