@@ -2196,6 +2196,67 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a prefix word in front of an ord
   'sudo apt-get install jq'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'env by path in front of an ordinary command' \
   '/usr/bin/env python3 -c "print(1)"'
+# THE WRAPPER RULE'S SECOND QUESTION, which is the half #117 reached a round
+# late. The block is an `and`: is a wrapper in a command position, and does the
+# line carry the surface this hook guards. The first question is
+# CS_WRAPPER_RE's and was answered above; the second is each hook's own pattern,
+# and every one of the four matched its guarded name by the BARE spelling only.
+#
+# So the quoting half of #117 leaked at exactly the place the wrapper rule
+# exists to close: `bash -c "gh pr merge 5"` refused, `bash -c '"gh" pr merge
+# 5'` permitted. The path and backslash spellings already passed, because those
+# patterns have a left boundary that admits `/` and `\` -- it is quotes alone
+# that never produce the name-then-whitespace the pattern wanted. Found by
+# review of this branch, not by this suite, and the requirements entry had
+# already been flipped to `active` claiming these spellings reach the bare-name
+# verdict in every hook.
+#
+# Measured before it was taken: across the 476 wrapper-carrying commands in a
+# 75,346-command corpus, widening all four patterns changed no verdict at all.
+req GH-117
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, the name double quoted inside the payload' \
+  'bash -c '"'"'"gh" pr merge 5'"'"''
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, the name single quoted inside the payload' \
+  'bash -c "'"'"'gh'"'"' pr merge 5"'
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a wrapped push, the name double quoted inside the payload' \
+  'bash -c '"'"'"git" push --all origin'"'"''
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'a wrapped commit, the name double quoted inside the payload' \
+  'bash -c '"'"'"git" commit -m wip'"'"''
+# The spellings that already passed, kept so that widening for quotes cannot be
+# mistaken for the whole of what these patterns admit.
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'a wrapped gh pr merge, the name as a path inside the payload' \
+  'bash -c "/usr/bin/gh pr merge 5"'
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'a wrapped gh pr merge, the name behind a backslash inside the payload' \
+  'bash -c "\gh pr merge 5"'
+# ACCEPTED GAP, the same one CS_WORD_SPELLING names one level up: a quoted span
+# in the MIDDLE of the word. A character class cannot see that `g"h"` is `gh`,
+# and the payload is quoted text, so there is no word to reduce.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'ACCEPTED gap: a quoted span in the middle of the guarded name, wrapped' \
+  'bash -c '"'"'g"h" pr merge 5'"'"''
+# #72's decision, held against this widening. A program whose name merely ends
+# in the guarded one is a different program, and a quote class in front of the
+# name must not turn the left boundary into one that admits `-`.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a wrapped my-gh is still a different program' \
+  'bash -c "my-gh pr merge 5"'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'and a wrapped my-gh whose name is quoted' \
+  'bash -c '"'"'"my-gh" pr merge 5'"'"''
+# The permitting direction of the wrapper rule itself: a wrapper whose payload
+# decides nothing stays permitted, which is the row CLAUDE.md names in
+# consequence 1.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a wrapped gh issue list, the name double quoted' \
+  'bash -c '"'"'"gh" issue list'"'"''
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a wrapper carrying no push at all' \
+  'bash -c "make test"'
+# THE OVER-REFUSAL THE PATH SPELLING BROUGHT, recorded rather than fixed. The
+# spelling prefix in CS_WRAPPER_RE reaches into quoted text, because a regular
+# expression over raw text has no idea what a quote is -- so a sed script whose
+# PATTERN names a wrapper is now read as one. Permitted at origin/dev-05,
+# refused here. Refusing direction, one edit away, and in the same family as
+# consequence 3: a hook cannot tell a command from prose that quotes one.
+check_in "$SUITE_DIR" no-git-push.sh BLOCK 'ACCEPTED false positive: a sed script whose pattern names a wrapper and a push' \
+  "sed -i 's|/bin/sh -c git push --all origin|X|' hooks.sh"
+check_in "$SUITE_DIR" no-git-push.sh ALLOW 'the same sed with no wrapper named in its pattern' \
+  "sed -i 's|X|Y|' hooks.sh"
 # THE WRAPPER HALF. The payload cannot be read, so the wrapper itself is what is
 # recognised -- and it was recognised by the same bare name at a command
 # position that everything else used.
@@ -2280,6 +2341,17 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'a parameter in command position, befor
   '$GIT push origin main'
 check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'a command substitution in command position, before a commit on main' \
   '$(command -v git) commit -m wip'
+# The line the item draws, as verdicts. A variable that is the whole word is
+# unresolved and permitted; a path whose last component is written out is the
+# name it spells, whatever the directory part expands to, and is refused. The
+# pair is what makes the sentence in CLAUDE.md a measurement rather than a
+# guess -- its first draft had the second row the other way round.
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'a variable directory with the guarded name written out' \
+  '"$VENV/bin/gh" pr merge 5'
+check_in "$SUITE_DIR" pytest-via-uv-group.sh BLOCK 'and the same shape reaching pytest' \
+  '"$VENV/bin/pytest" tests/'
+check_in "$SUITE_DIR" pytest-via-uv-group.sh ALLOW 'a variable that is the whole word, reaching pytest' \
+  '$PYTHON -m pytest tests/'
 # The line the rejected close would have refused, and the reason the close was
 # rejected: it is a line of this suite being edited, not a command anyone runs
 # against GitHub. Kept as a check so that a later attempt at the same close
@@ -4023,6 +4095,13 @@ flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a commit on a stale bra
   '\git commit -m wip'
 flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a cherry-pick on a stale branch, as an absolute path' \
   '/usr/bin/git cherry-pick abc1234'
+# The wrapper rule's second question, in this hook too. The pattern here names
+# its own verb list and so is a fourth copy of the shape, and #117's widening
+# has to reach all four or the claim is one hook short again.
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a wrapped commit on a stale branch, the name double quoted' \
+  'bash -c '"'"'"git" commit -m wip'"'"''
+check_in "$WT_WORK" no-work-on-stale-branch.sh ALLOW 'the same wrapped commit on a live branch, which decides nothing' \
+  'bash -c '"'"'"git" commit -m wip'"'"''
 # And the permitting half, in the worktree whose branch is still live, so that
 # the reduction is not what decides the verdict here either.
 check_in "$WT_WORK" no-work-on-stale-branch.sh ALLOW 'a commit on a live branch, as an absolute path' \
@@ -5639,6 +5718,31 @@ for hook in $BOUNDARY_HOOKS; do
   written "and the shape that does not earn one, in $hook" \
     "$HOOKS/$hook" 'have to construct'
 done
+# AND EVERY ONE OF THEM ADMITS A QUOTED GUARDED NAME, issue #117. The second
+# question of each boundary hook's wrapper rule is that hook's own pattern, so
+# there are four of them, and all four matched the guarded name by its bare
+# spelling until this branch. Asked of the DERIVED set rather than of a list
+# written here, which is the whole of #84: a list names the hooks someone
+# remembered, and a boundary hook added later joins the derivation without
+# anyone revising a sentence.
+#
+# The class itself is the literal, not the pattern around it, because the four
+# patterns differ in the name they guard and in their verb lists. What is held
+# is that each carries the class at all -- narrowing any one of them back is
+# then a red check here rather than a review finding.
+#
+# The literal is the class AS THE FILES SPELL IT, which is the shell-escaped
+# form and not the regular expression it becomes: a single shell word cannot
+# hold both quote characters, so the four files write the apostrophe by closing
+# the quote and reopening it, and so does this. Assembled with printf rather
+# than quoted, because the quoted spelling of the quoted spelling is where a
+# reader stops being able to check it by eye.
+req GH-117
+QUOTE_ADMISSION=$(printf '[%s%s%s%s%s%s]*' '"' "'" '"' "'" '"' "'")
+for hook in $BOUNDARY_HOOKS; do
+  written "$hook admits a quoted spelling of the name its wrapper rule guards" \
+    "$HOOKS/$hook" "$QUOTE_ADMISSION"
+done
 set +f
 # The two that state it in full, named because a check is evidence about what it
 # names and the loop above is satisfied by the phrase alone.
@@ -6014,6 +6118,14 @@ holds 'and says what corpus the decision was measured against' \
 # and found to close nothing.
 holds 'and records that the close was written and rejected on its numbers' \
   "$LEFT_OPEN" 'The close was written first and rejected on its own numbers.'
+# THE LINE THE ITEM DRAWS, which its first draft drew in the wrong place: it
+# offered `"$VENV/bin/gh"` as an example of a permitted variable, and the same
+# commit refused it -- the reduction resets at each slash, so the word spells
+# `gh`. A permitted `$VAR` is one that is the WHOLE word. The verdict is pinned
+# below; this holds the document to saying which, so the example and the
+# behaviour cannot drift apart again.
+holds 'and draws the line at a variable that is the whole word' \
+  "$LEFT_OPEN" 'A variable is only unresolved while it is the whole word.'
 
 # #99 Q5 took `head` out of settings.json, and the branch-hygiene skill's notes
 # went on arguing from it: every worktree made after a rotation branched from
@@ -9496,7 +9608,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '275' "${TEXT_CHECK_ARGS##*COUNT }"
+    '276' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -9636,7 +9748,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '27' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '28' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9699,7 +9811,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '25' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '26' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and

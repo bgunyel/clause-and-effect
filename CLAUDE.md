@@ -407,8 +407,17 @@ part that went stale last time.
    raw text too, so a backtick rule would refuse `cat > notes.md <<'EOF'`
    whenever the prose says `` `git push` ``. That is consequence 3's accepted
    class widened by three orders of magnitude. `$VAR` is an agent being *more*
-   careful about which binary it runs — `$PYTHON -m pytest`, `"$VENV/bin/gh"` —
-   and refusing it punishes the care.
+   careful about which binary it runs — `$PYTHON -m pytest` — and refusing it
+   punishes the care.
+
+   **A variable is only unresolved while it is the whole word.** `"$VENV/bin/gh"`
+   is refused, because the reduction in `cs_split` resets at each `/` and the
+   basename it is left with is `gh`, which is the name it spells whatever the
+   directory part expands to. So the permitted shape is the one where the word
+   is a variable and nothing else, and the refused shape is a path whose last
+   component is written out. That is the line this consequence draws, and it was
+   drawn by a review of the branch that wrote it: the example here said
+   `"$VENV/bin/gh"` was permitted, and the same commit refused it.
 
    The standing rule these hooks are held to is that a newly found evasion
    earns a fix only if it is a shape an agent would plausibly write, and none

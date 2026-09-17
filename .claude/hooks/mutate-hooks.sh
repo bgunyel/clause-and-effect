@@ -99,7 +99,7 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   TWENTY-FIVE real mutations, against FIVE files in .claude/hooks/, naming
+#   TWENTY-SIX real mutations, against FIVE files in .claude/hooks/, naming
 #   THIRTY-FOUR requirement IDs between them, of the 146 whose status is active.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
@@ -191,8 +191,9 @@ library-loaded-unguarded%no-git-push.sh%$a. "$(dirname "$0")/lib/command-scan.sh
 merged-branch-not-gone%no-work-on-stale-branch.sh%s/= "\[gone\]"/= "never-this-string"/%FR-38%caught
 bare-pytest-permitted%pytest-via-uv-group.sh%s/grep -qE '\^(pytest|/grep -qE '^(no-such-tool-at-all|/%GH-69.1%caught
 command-word-not-reduced%lib/command-scan.sh%s/^      w = substr(s, 1, i - 1)$/      w = "x"/%GH-117%caught
-wrapper-word-spelling-not-admitted%lib/command-scan.sh%/^CS_WRAPPER_RE=/s/[$]CS_WORD_SPELLING//%GH-117%caught
+wrapper-word-spelling-not-admitted%lib/command-scan.sh%s/SPELLING((ba|z|)sh/((ba|z|)sh/%GH-117%caught
 prefix-word-spelling-not-reduced%lib/command-scan.sh%s/return cw_name(w)/return w/%GH-117%caught
+wrapper-surface-quotes-not-admitted%no-pr-decisions.sh%/^GH_SURFACE_ANYWHERE=/s/\["'"'"'\]\*gh\["'"'"'\]\*/gh/%GH-117%caught
 the-close-117-rejected%lib/command-scan.sh%s/SPELLING((ba|z|)sh/SPELLING(\\\\$\\\\(|(ba|z|)sh/%GH-117.1%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived

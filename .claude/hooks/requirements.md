@@ -1348,6 +1348,17 @@ The suite fails on each of these, and `--matrix` shows the rest:
   refused seed until this landed; the rows are gone, and those variants now reach
   their seed's verdict under the seed's own tags. The families also gained
   transformation 13, the prefix word spelled otherwise.
+  A FOURTH SITE, found by review of the branch rather than by the suite: the
+  wrapper rule asks two questions, and its second one -- does the line carry the
+  surface this hook guards -- is each hook's own pattern and matched the guarded
+  name by its bare spelling only. So `bash -c '"gh" pr merge 5"'` was permitted
+  where the bare spelling is refused, and the text above said "in every hook"
+  while four hooks said otherwise. All four patterns admit a quoted spelling
+  now; `check-hooks.sh` derives the set off `settings.json` rather than listing
+  it, so a fifth boundary hook is asked the same question without anyone
+  revising a sentence. Measured before it was taken: across the 476
+  wrapper-carrying commands of a 75,346-command corpus, widening all four
+  changed no verdict.
   What is NOT decided here is a command word that is a parameter or command
   substitution -- `$(command -v gh) pr merge 5` -- which cannot be resolved from
   text at all. #117's triage raises it as recommendation 4 and calls it the
