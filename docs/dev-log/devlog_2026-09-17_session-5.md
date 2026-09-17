@@ -368,3 +368,47 @@ cap's claim; **#148**, which would take the restated counts out of
 `mutate-hooks.sh`'s header and leave `--list` as the only place they are
 written — this session moved four of them by hand and is the second session in
 two days to do so.
+
+## What the fix costs, measured after the re-review
+
+A second reviewing session re-read PR #151 in a scratch clone at `060c6b3`,
+confirmed the permitting regression closed, and raised one observation rather
+than a finding: across its own 450 shapes the hook's over-refusals rise
+234 → 246 → 264 from `dev-05` through the first fix to this one. It asked
+whether that is an intended cost or an unnoticed one.
+
+It is intended, and it is now counted. The 2,580-shape harness was re-run with
+the column read backwards — bash does **not** run the payload, yet a push in its
+place stands at the start of an emitted line, so a hook refuses text bash never
+runs:
+
+| library | hidden pushes | over-refusals, of the 2,100 shapes bash does not run |
+|---|---|---|
+| `origin/dev-05` | 198 | 750 |
+| `c2ce2bd`, the first fix | 40 | 816 |
+| this fix | 0 | 848 |
+
+Same ordering as the reviewing session found on a different generator, which is
+the agreement worth having. The rise decomposes into departures already named in
+`lib/command-scan.sh` rather than into anything new: of the 124 shapes that
+arrive, **108** are the END give-back — bash itself reports the heredoc
+unterminated, each one checked by reading bash's stderr rather than by
+assumption — and **16** are the unquoted-body join, where a body line ends in a
+backslash that bash joins and this pass does not. **26** go the other way:
+pushes that really were body text, now dropped because the body begins where
+bash begins it.
+
+The paragraph is added to `lib/command-scan.sh` under **WHAT THAT DIRECTION
+COSTS**, because the sentence above it said the fail-safe is paid for in
+refusals and did not say how many, and a claim without a number is one to
+re-measure. Two `written` pins hold it, each carrying its whole claim on one
+line: a pin that is a prefix goes on passing after the rest of the sentence is
+deleted. Both were mutation-checked by hand — deleting the line each names turns
+that pin and only that pin red, against a green control on the unmutated copy.
+
+The counts this entry gave above move with it: **32** written-out checks rather
+than 30, of which **12** are unreachable by any registered mutation rather than
+10, and the suite reads **4098** results rather than 4096. The suite's own
+derived count of its text checks caught the addition and was raised 287 → 289.
+The three registered mutation rows were re-run afterwards: all three still
+caught, and `.claude/hooks/` byte-identical after.

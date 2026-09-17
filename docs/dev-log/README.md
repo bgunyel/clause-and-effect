@@ -396,6 +396,9 @@ thing in the record.
   found by review of PR #151, and the reason the entry carries three commits and
   a correction. A differential run of 2,580 shapes, each executed under bash to
   decide what really runs, puts dev-05 at 198 hidden pushes, that first fix at
-  40, and this one at 0; suite 3657 → 3967. The entry’s own heading still reads
-  "session 2", the number it was written under before session 2 of this day
+  40, and this one at 0; suite 3657 → 4098 with dev-05 merged in. The same run
+  read backwards counts what the direction costs — pushes bash never runs that
+  the hook refuses anyway — at 750, 816 and 848, raised on the re-review and
+  kept. The entry’s own heading still reads "session 2", the number it was
+  written under before session 2 of this day
   turned out to be someone else’s.

@@ -424,6 +424,22 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # and in the permitting direction. The fail-safe costs a genuinely unterminated
 # heredoc being scanned as commands -- which bash would refuse to run anyway --
 # and it is the direction this file takes everywhere else.
+#
+# WHAT THAT DIRECTION COSTS, counted rather than asserted: the sentence above
+# says the fail-safe is paid for in refusals and does not say how many. The
+# 2,580 shapes carry a second column, which is the first one read backwards --
+# bash does NOT run the payload, yet a push in its place stands at the start of
+# an emitted line, so a hook refuses text bash never runs. Measured on the same
+# run: 750 such shapes on dev-05, 816 on the first fix, 848 here, of 2,100.
+# The rise is this change taking its own direction and not a new departure:
+# of the 124 that arrive, 108 are the END give-back and 16 the unquoted-body
+# join, both of them named above -- bash reports the heredoc unterminated and
+# the lines held for it come back as commands; a body line ending in a
+# backslash is joined by bash and not by this pass. 26 go the other way:
+# pushes that really were body text, now dropped because the body begins where
+# bash begins it. Raised on review of the pull request for #128 and kept, on
+# the grounds the whole file keeps everywhere else: a
+# refusal is visible and one edit away, and a permitted push is neither.
 cs_normalise() {
   awk '
     ind {

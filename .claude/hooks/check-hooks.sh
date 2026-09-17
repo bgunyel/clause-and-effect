@@ -1821,6 +1821,19 @@ check_in "$PUSH_MAIN" no-git-push.sh ALLOW 'a body naming a push on a continued 
   $'cat <<\'E\'\ngit push --force origin main \\\nE'
 check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'a body naming a commit on a continued line' \
   $'cat <<\'E\'\ngit commit -m wip \\\nE'
+# What the fix COSTS, which no check above can show: the same 2,580-shape run
+# read backwards counts pushes bash never runs that the hook refuses anyway,
+# and this change raises that count. Raised on review of this pull request and
+# kept. `written`, because it is a measurement in prose and the file is where
+# it has to stay true; each pin carries its whole claim on one line, since a
+# pin that is a prefix goes on passing after the rest of the sentence is gone.
+req GH-128
+written 'the library counts what the direction of the fix costs' \
+  "$HOOKS/lib/command-scan.sh" \
+  '750 such shapes on dev-05, 816 on the first fix, 848 here, of 2,100.'
+written 'and decomposes the rise into the two departures already named' \
+  "$HOOKS/lib/command-scan.sh" \
+  'of the 124 that arrive, 108 are the END give-back and 16 the unquoted-body'
 
 section "=== REGRESSION: review of 02a14d8, bundled gh shorthand flags ==="
 # gh takes shorthand flags together, so -ab is --approve --body and approves.
@@ -9429,7 +9442,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '287' "${TEXT_CHECK_ARGS##*COUNT }"
+    '289' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
