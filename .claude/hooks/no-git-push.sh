@@ -145,8 +145,13 @@ REFUSE="Blocked: git push. An agent may push only the branch of the linked workt
 # refused `sudo git push --all origin` and permitted
 # `sudo sh -c 'git push --all origin'`. What the anchor admits, where it stops,
 # and the soft spot it keeps are argued there rather than restated here.
+# The quote class is #117's, and the note above GH_SURFACE_ANYWHERE in
+# no-pr-decisions.sh argues it in full: this is the loose half of the wrapper
+# rule, it matched the guarded name by its bare spelling only, and so
+# `bash -c '"git" push --all origin'` was permitted where the bare spelling is
+# refused. Written out rather than shared, for the reason given there.
 if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE" \
-   && echo "$COMMAND" | grep -qE 'git[[:space:]]+([^;&|]*[[:space:]])?push([^-A-Za-z0-9_]|$)'; then
+   && echo "$COMMAND" | grep -qE '["'"'"']*git["'"'"']*[[:space:]]+([^;&|]*[[:space:]])?push([^-A-Za-z0-9_]|$)'; then
   echo "Blocked: git push inside a shell wrapper. The destination cannot be read through a quoted payload, so the worktree exception does not apply. Push plainly from the worktree, or leave it to Bertan." >&2
   exit 2
 fi

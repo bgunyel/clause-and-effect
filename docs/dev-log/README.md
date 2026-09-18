@@ -430,33 +430,38 @@ thing in the record.
   the ordinal is decided by merge order, and is knowable only afterwards, is
   #157.
 
-- [2026-09-17 · session 7](devlog_2026-09-17_session-7.md) — #137: the `state`
-  and `base` readers in `no-pr-decisions.sh` each knew one quote spelling of
-  their own field, and the gap ran in opposite directions because the two rules
-  are triggered oppositely. A single-quoted `state` closed a pull request through
-  `gh api`; a quote before `base` refused a create into the one permitted branch,
-  and — unnamed in the issue — permitted a retarget to `main`. The state pattern
-  is now written once and read by both its call sites; `rest_bases` records the
-  third answer to where a field begins. 41 checks, 18 of which go red under three
-  separate reverts, and each of the other 23 declared beside it as contrast,
-  arming or property rather than left to read as evidence it is not.
-  **Numbered 7 rather than 2.** It was written as session 2 and collided on
-  merge with #143's entry of that name; `dev-05` had taken sessions 2–6 by then.
-  The rename changed its title line and nothing else, so every count inside it
-  is the one that stood at its first commit.
+- [2026-09-17 · session dev-issue-117](devlog_2026-09-17_session-dev-issue-117.md)
+  — #117 and PR #152, in three parts, written in this order.
 
-- [2026-09-17 · session 8](devlog_2026-09-17_session-8.md) — Bertan's review of
-  PR #153 finds the fix for #137 closed the quote and never asked about the
-  separator: pflag takes `--field=value` and `-f=value`, so four flag spellings
-  of a base — six, counting the quoted pair the review did not list — reached
-  GitHub unread, and on `PATCH /pulls/N` that is a retarget onto `main`,
-  permitted. The comment added with the first fix asserted this could not happen.
-  Also: the flag pairing named backwards, and two static checks counting lines
-  where they meant occurrences. 54 checks, 25 red under four reverts.
-  **Numbered 8 rather than 5.** It was written as session 5 and collided on
-  merge with #128's entry of that name. Its own "On the numbering" section,
-  which says the session-2 entry becomes session 4, predates the second merge
-  and is wrong; the title line is the only thing the rename changed.
+  **Part 1** — #117: a command word spelled as a path, quoted or
+  backslash-escaped passed every hook, and so did the prefix and wrapper words
+  the triage added. `cs_split` now reduces a command word to the name it spells,
+  in one place, cell by cell rather than by building a string, because the
+  string version was measured quadratic at the line cap. Review of the first
+  commit found a prefix word matched by name as well, left unreduced.
+
+  **Part 2** — #117's recommendation 4, a command word that is `$(…)`, a
+  backtick or `$VAR`: the close was written, measured against 75,346 Bash
+  commands from local session transcripts, and rejected on its own numbers — it
+  closed none of the headline shapes and refused nine commands that should pass.
+  Settled as consequence 6 in `CLAUDE.md`, with all three shapes pinned as
+  permitted.
+
+  **Part 3** — review of PR #152: the wrapper rule asks two questions, and #117
+  had closed only the first. Each boundary hook's own surface pattern matched its
+  guarded name by the bare spelling, so `bash -c '"gh" pr merge 5'` was
+  permitted; widened in all four, measured at no verdict change across 476
+  wrapper-carrying commands. A registry row was found mutating the wrong
+  occurrence and still reporting `caught`.
+
+  **Named for the session rather than numbered.** The three were written as
+  sessions 2, 3 and 4, renumbered 7, 8 and 9 when they collided on merging
+  dev-05 with #143's two entries and #108's, and collided again when #137's
+  entries took 7 and 8. `db06477` replaced day-numbering with the writing
+  session's name, so they now share one file. Each part is its original entry
+  with heading levels changed and nothing else, so every count inside is the one
+  that stood at its commit — 28 registry rows and a suite of 3903 at the end of
+  Part 3, against 39 rows and 4346 results after the first merge.
 
 - [2026-09-18 · session 1](devlog_2026-09-18_session-1.md) — the follow-up review
   of #153: `[[:space:]=]*` closes the separator, not the field. Quoting inside a

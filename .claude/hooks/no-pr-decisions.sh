@@ -408,11 +408,41 @@ VERDICT='(^|[[:space:]])(--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[
 # narrows `my-gh pr merge 5` and `my_gh pr merge 5`.
 #
 # All three are evasion shapes rather than mistakes -- `./gh` and `/usr/bin/gh`
-# still refuse, a path ending in a character that is none of gh's own -- and
-# they are accepted under the same "these stop mistakes, not adversaries" that
-# decides the rest, stated here rather than left for a later review to find.
-# All three are pinned under REGRESSION: #72 in check-hooks.sh.
-GH_SURFACE_ANYWHERE='(^|[^-A-Za-z0-9_])gh[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
+# still refuse HERE, a path ending in a character that is none of gh's own --
+# and they are accepted under the same "these stop mistakes, not adversaries"
+# that decides the rest, stated here rather than left for a later review to
+# find. All three are pinned under REGRESSION: #72 in check-hooks.sh.
+#
+# HERE, and this is the word the sentence above lacked for two issues. It is a
+# claim about THIS PATTERN, which matches raw text with a left boundary, and it
+# read as a claim about the hook. It was not one: every rule outside this
+# wrapper block found `gh` by the bare name at the head of a command cs_split
+# emits, so `/usr/bin/gh pr merge 5` unwrapped was permitted, and so was the
+# same command under each of the other four spellings. Issue #117 fixed that in
+# lib/command-scan.sh -- in cs_split for the ordinary rules and in
+# CS_WRAPPER_RE for this one, which had the identical hole one word further
+# left, `/usr/bin/bash -c "gh pr merge 5"` reaching no wrapper rule at all.
+# THE SECOND QUESTION READS A NAME TOO, and #117 reached it a round late. This
+# pattern is the loose half of the wrapper rule -- does the line carry the
+# surface this hook guards -- and it matched `gh` by its bare spelling only. So
+# `bash -c "gh pr merge 5"` was refused while `bash -c '"gh" pr merge 5"'` was
+# not, and the quoting half of #117 leaked at exactly the place the wrapper rule
+# exists to close. The path and backslash spellings already passed, because the
+# left boundary admits `/` and `\`; it is quotes alone that never produce the
+# `gh` followed by whitespace this wanted.
+#
+# The class is written here rather than taken from the library, for the reason
+# THE WORD LIST IS PART OF THE LOAD gives one level down: a shared variable that
+# came back empty would degrade this to its old spelling silently, in the
+# permitting direction, and no guard can tell an empty variable from a narrow
+# one. Four copies that check-hooks.sh derives off the files and holds to each
+# other is the answer this repository already gives for these four patterns.
+#
+# Measured before it was taken: across the 476 wrapper-carrying commands in a
+# 75,346-command corpus, widening all four changed no verdict at all. It closes
+# `"gh"` and `'gh'`; `g"h"` stays open, the same accepted gap CS_WORD_SPELLING
+# names one level up, and it is pinned.
+GH_SURFACE_ANYWHERE='(^|[^-A-Za-z0-9_])["'"'"']*gh["'"'"']*[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
 
 # A pull request's state, in every spelling of the quoting AROUND the value --
 # not inside the name or the value, which is #163.
