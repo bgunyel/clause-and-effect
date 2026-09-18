@@ -1271,27 +1271,76 @@ cs_git_args() {
   awk -v want="$1" '
     # The global options are skipped by moving p past them rather than cutting
     # the line down after each one: every cut copied the rest of the line, so
-    # a long run of options was quadratic. Issue #96. What is skipped is what
-    # the expression it replaced matched at the head of the line -- any token
-    # of two or more characters that opens with a dash and has blanks after it,
-    # and for the options named in VALUED the value token behind it too, when
-    # that value has blanks after it in turn. The same two helpers stand in
-    # cs_split and in the other argument reader: an awk program cannot source
-    # another, and a shared definition passed in as a variable would be one
-    # more thing a load could leave empty.
-    function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
+    # a long run of options was quadratic. Issue #96. What is skipped is said
+    # above skipopts. skipblank stands in cs_split too, and word and skipopts
+    # in the other argument reader: an awk program cannot source another, and
+    # a shared definition passed in as a variable would be one more thing a
+    # load could leave empty. check-hooks.sh holds the copies identical.
     function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
+    # One shell word from i, read as bash reads it: a blank ends it only
+    # outside quotes, and the quotes and escapes are removed from what it
+    # spells. Returns the position after the word and leaves what it spells in
+    # W. Issue #135: the word was a raw token, so `git "push"`, a single-quoted
+    # `merge` and `gh \pr` spelled no subcommand here although bash hands git and gh
+    # exactly the bare word -- and `-c "user.name=a b"` ended at the blank, so
+    # `b"` read as the subcommand and hid the push behind it.
+    #
+    # Single quotes take everything literally; inside double quotes a
+    # backslash escapes only $ ` " and itself, as in bash; outside quotes it
+    # escapes any character. ANSI-C and locale quoting, a dollar sign before
+    # the quote, are not read as quoting, which is #166.
+    #
+    # WUNREAD says W is not the word, and nothing is compared with it. Two
+    # cases. A quote that never closes runs to the end of the line, and bash
+    # would read no word there that ends where this one does; the case is
+    # real, because cs_split falls back to a plain cut on an unbalanced line,
+    # and one fragment of that was `gh pr create` followed by the quote closing
+    # a span opened lines earlier. Read as spelling `create` it refused a
+    # command that runs no gh at all -- found by replaying 4,513 transcript
+    # commands through the library before and after this change. And W is
+    # capped at 64 characters: growing a string one character at a time is the
+    # quadratic shape #96 removed from these passes, and nothing this word is
+    # compared with -- a verb, a group, an option name -- comes near 64
+    # characters. The dash test reads only the first.
+    function word(i,    c, k, qt) {
+      W = ""; k = 0; qt = ""
+      while (i <= n) {
+        c = substr(line, i, 1)
+        if (qt == "\047") {
+          if (c == "\047") qt = ""; else if (k < 64) { W = W c; k++ }
+          i++; continue
+        }
+        if (qt == "\"") {
+          if (c == "\"") { qt = ""; i++; continue }
+          if (c == "\\" && i < n && index("$`\"\\", substr(line, i + 1, 1)) > 0) c = substr(line, ++i, 1)
+          if (k < 64) { W = W c; k++ }
+          i++; continue
+        }
+        if (index(" \t\n\v\f\r", c) > 0) break
+        if (c == "\047" || c == "\"") { qt = c; i++; continue }
+        if (c == "\\" && i < n) c = substr(line, ++i, 1)
+        if (k < 64) { W = W c; k++ }
+        i++
+      }
+      WUNREAD = (k >= 64 || qt != "")
+      return i
+    }
+    # An option is a word that SPELLS one, so `"-C"` is the -C of git as bash
+    # hands it over. What is skipped is otherwise what it was before #135:
+    # a word of two or more characters opening with a dash and with blanks
+    # after it, and for the options named in VALUED the word behind it too,
+    # when that word has blanks after it in turn.
     function skipopts(valued,    q, r) {
       while (1) {
-        q = tokend(p)
-        if (q > n || q - p < 2 || substr(line, p, 1) != "-") return
-        r = substr(line, p, q - p)
+        q = word(p)
+        if (q > n || length(W) < 2 || substr(W, 1, 1) != "-") return
+        r = W
         p = skipblank(q)
         # A token holding "|" is never one name, and index() would find
         # `-c|-C` in the list as readily as `-c`; the expression this replaced
         # matched a name, so that token took no value behind it there either.
         if (index(r, "|") == 0 && index(valued, "|" r "|") > 0) {
-          q = tokend(p)
+          q = word(p)
           if (q > p && q <= n) p = skipblank(q)
         }
       }
@@ -1304,9 +1353,13 @@ cs_git_args() {
       n = length(line)
       p = 1
       skipopts("|-c|-C|--git-dir|--work-tree|--namespace|--exec-path|")
-      line = substr(line, p)
-      if (line !~ "^" want "([[:space:]]|$)") next
-      sub("^" want "[[:space:]]*", "", line)
+      # The subcommand is the word it SPELLS, compared as a string; what is
+      # printed after it is the rest as written, quotes kept, because every
+      # reader downstream makes its own argued decision about a quoted
+      # argument. #135.
+      q = word(p)
+      if (WUNREAD || W != want) next
+      line = substr(line, skipblank(q))
       print line
       found = 1
       exit
@@ -1350,14 +1403,13 @@ cs_git_args() {
 # command at a time, as no-git-push.sh does with cs_split's output, and the
 # check suite pins that the second match is lost.
 #
-# One place it does not mirror cs_git_args: that function removes the matched
-# subcommand with a regular expression, so the expression that matches and the
-# one that removes are the same and cannot disagree. This one matches part[i] as
-# a regular expression and removes it by string length. That is the same answer
-# for a word and a different one for anything carrying a metacharacter. Every
-# caller passes a literal path, so it is a property rather than a defect -- but
-# it is the kind that gets discovered rather than read, and closing it would
-# need a check written against a caller that does not exist.
+# Both readers compare each word of the path as a STRING against what the word
+# spells once bash has removed its quotes, and cut the line where that word
+# ends. Before #135 this one matched part[i] as a regular expression and removed
+# it by string length, which answered differently for a metacharacter; and both
+# compared the raw token, so `gh "pr" merge 5` and `git "push" origin main`
+# reached no rule at all. The word reader is the awk function word(), written
+# twice for the reason the helpers above give.
 #
 # It was written before the rule that used it, so what it is for is worth saying:
 # asking whether a flag belongs to *this* command is argument scoping, and
@@ -1369,27 +1421,76 @@ cs_gh_args() {
   awk -v want="$1" '
     # The global options are skipped by moving p past them rather than cutting
     # the line down after each one: every cut copied the rest of the line, so
-    # a long run of options was quadratic. Issue #96. What is skipped is what
-    # the expression it replaced matched at the head of the line -- any token
-    # of two or more characters that opens with a dash and has blanks after it,
-    # and for the options named in VALUED the value token behind it too, when
-    # that value has blanks after it in turn. The same two helpers stand in
-    # cs_split and in cs_git_args: an awk program cannot source
-    # another, and a shared definition passed in as a variable would be one
-    # more thing a load could leave empty.
-    function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
+    # a long run of options was quadratic. Issue #96. What is skipped is said
+    # above skipopts. skipblank stands in cs_split too, and word and skipopts
+    # in cs_git_args: an awk program cannot source another, and a shared
+    # definition passed in as a variable would be one more thing a load could
+    # leave empty. check-hooks.sh holds the copies identical.
     function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
+    # One shell word from i, read as bash reads it: a blank ends it only
+    # outside quotes, and the quotes and escapes are removed from what it
+    # spells. Returns the position after the word and leaves what it spells in
+    # W. Issue #135: the word was a raw token, so `git "push"`, a single-quoted
+    # `merge` and `gh \pr` spelled no subcommand here although bash hands git and gh
+    # exactly the bare word -- and `-c "user.name=a b"` ended at the blank, so
+    # `b"` read as the subcommand and hid the push behind it.
+    #
+    # Single quotes take everything literally; inside double quotes a
+    # backslash escapes only $ ` " and itself, as in bash; outside quotes it
+    # escapes any character. ANSI-C and locale quoting, a dollar sign before
+    # the quote, are not read as quoting, which is #166.
+    #
+    # WUNREAD says W is not the word, and nothing is compared with it. Two
+    # cases. A quote that never closes runs to the end of the line, and bash
+    # would read no word there that ends where this one does; the case is
+    # real, because cs_split falls back to a plain cut on an unbalanced line,
+    # and one fragment of that was `gh pr create` followed by the quote closing
+    # a span opened lines earlier. Read as spelling `create` it refused a
+    # command that runs no gh at all -- found by replaying 4,513 transcript
+    # commands through the library before and after this change. And W is
+    # capped at 64 characters: growing a string one character at a time is the
+    # quadratic shape #96 removed from these passes, and nothing this word is
+    # compared with -- a verb, a group, an option name -- comes near 64
+    # characters. The dash test reads only the first.
+    function word(i,    c, k, qt) {
+      W = ""; k = 0; qt = ""
+      while (i <= n) {
+        c = substr(line, i, 1)
+        if (qt == "\047") {
+          if (c == "\047") qt = ""; else if (k < 64) { W = W c; k++ }
+          i++; continue
+        }
+        if (qt == "\"") {
+          if (c == "\"") { qt = ""; i++; continue }
+          if (c == "\\" && i < n && index("$`\"\\", substr(line, i + 1, 1)) > 0) c = substr(line, ++i, 1)
+          if (k < 64) { W = W c; k++ }
+          i++; continue
+        }
+        if (index(" \t\n\v\f\r", c) > 0) break
+        if (c == "\047" || c == "\"") { qt = c; i++; continue }
+        if (c == "\\" && i < n) c = substr(line, ++i, 1)
+        if (k < 64) { W = W c; k++ }
+        i++
+      }
+      WUNREAD = (k >= 64 || qt != "")
+      return i
+    }
+    # An option is a word that SPELLS one, so `"-C"` is the -C of git as bash
+    # hands it over. What is skipped is otherwise what it was before #135:
+    # a word of two or more characters opening with a dash and with blanks
+    # after it, and for the options named in VALUED the word behind it too,
+    # when that word has blanks after it in turn.
     function skipopts(valued,    q, r) {
       while (1) {
-        q = tokend(p)
-        if (q > n || q - p < 2 || substr(line, p, 1) != "-") return
-        r = substr(line, p, q - p)
+        q = word(p)
+        if (q > n || length(W) < 2 || substr(W, 1, 1) != "-") return
+        r = W
         p = skipblank(q)
         # A token holding "|" is never one name, and index() would find
         # `-c|-C` in the list as readily as `-c`; the expression this replaced
         # matched a name, so that token took no value behind it there either.
         if (index(r, "|") == 0 && index(valued, "|" r "|") > 0) {
-          q = tokend(p)
+          q = word(p)
           if (q > p && q <= n) p = skipblank(q)
         }
       }
@@ -1404,10 +1505,10 @@ cs_gh_args() {
         n = length(line)
         p = 1
         skipopts("|-R|--repo|--hostname|")
-        line = substr(line, p)
-        if (line !~ "^" part[i] "([[:space:]]|$)") { matched = 0; break }
-        line = substr(line, length(part[i]) + 1)
-        sub(/^[[:space:]]*/, "", line)
+        # Each word of the path is the word it spells, as in cs_git_args. #135.
+        q = word(p)
+        if (WUNREAD || W != part[i]) { matched = 0; break }
+        line = substr(line, skipblank(q))
       }
       if (!matched) next
       print line

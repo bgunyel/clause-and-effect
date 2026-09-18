@@ -354,7 +354,10 @@ fi
 CARVE=1
 if printf '%s\n' "$CMDS" | grep -qE '^(cd|pushd|popd)([^-A-Za-z0-9_]|$)'; then CARVE=; fi
 if echo "$SCAN" | grep -qE '(GIT_DIR|GIT_WORK_TREE|GIT_COMMON_DIR)='; then CARVE=; fi
-if printf '%s\n' "$CMDS" | grep -qE '^git[[:space:]]+([^[:space:]]+[[:space:]]+)*(-C|--git-dir|--work-tree)([[:space:]]|=)'; then CARVE=; fi
+# Quote and backslash characters removed first, so a quoted `"-C"` -- which git
+# obeys, and which cs_git_args reads as an option since #135 -- closes the
+# carve-out as the bare one does. Refusing direction only: this can close it.
+if printf '%s\n' "$CMDS" | tr -d '\042\047\134' | grep -qE '^git[[:space:]]+([^[:space:]]+[[:space:]]+)*(-C|--git-dir|--work-tree)([[:space:]]|=)'; then CARVE=; fi
 while IFS= read -r CMD; do
   if cs_git_args checkout <<<"$CMD" >/dev/null || cs_git_args switch <<<"$CMD" >/dev/null; then
     CARVE=

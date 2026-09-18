@@ -2186,8 +2186,9 @@ check no-pr-decisions.sh ALLOW 'gh release view'                     'gh release
 check no-pr-decisions.sh ALLOW 'gh release download'                 "gh release download v1 -p '*.tgz'"
 check no-pr-decisions.sh ALLOW 'gh release verify'                   'gh release verify v1'
 check no-pr-decisions.sh ALLOW 'gh release verify-asset'             'gh release verify-asset v1 a.tgz'
-echo "--- the trade: three reads that are refused, and where to go instead ---"
-# The hook's comment above its release rule names these as its three-part trade,
+echo "--- the trade: the reads that are refused, and where to go instead ---"
+# The hook's comment above its release rule names these as its trade -- two
+# parts, and a third withdrawn --
 # and a trade written down without a check is a claim, so each part is pinned.
 # None of them writes, all are refused, and each is one edit away.
 #
@@ -2219,10 +2220,13 @@ check no-pr-decisions.sh ALLOW 'gh help release upload'              'gh help re
 req GH-97.2 US-7
 says "$ON_DEV" no-pr-decisions.sh 'gh help release' \
   'the refusal of bare gh release says where help is' 'gh release'
-# 3. A quoted verb is matched as written and refused, rather than unquoted into
-#    a read -- the generous reading gh_pr_web gives its reasons for not taking.
-req GH-97.1 FR-48
-flip "$ON_DEV" no-pr-decisions.sh ALLOW BLOCK 'a quoted read verb' \
+# 3. Was: a quoted verb is matched as written and refused. #135 withdrew it.
+#    The allowlist refuses a subcommand gh adds later, and a quoted `view` is
+#    not one: bash hands gh the word `view`. It is read as the word it spells
+#    now, as every other subcommand word is, so the trade is two parts. Bertan's
+#    review of PR #140 is where it was first called a gap.
+req GH-97.1 FR-48 GH-135
+flip "$ON_DEV" no-pr-decisions.sh BLOCK ALLOW 'a quoted read verb' \
   'gh release "view" v1'
 echo "--- a flag before the subcommand does not change the verdict ---"
 # cs_gh_args skips options before every word of a path, and a subcommand read
@@ -8475,10 +8479,13 @@ tok 'cs_gh_args reads -R|--repo as one option taking no value, as before #96' \
     '5' "$PIPED_GH_R"
 tok 'and --repo|--hostname' '5' "$PIPED_GH_LONG"
 
-# The linear passes carry copies of two awk helpers -- tokend and skipblank in
-# three programs, skipopts in two -- because an awk program cannot source
-# another. A rule written twice is answered twice, which is the sentence
-# lib/command-scan.sh opens with, so the copies are held to each other here:
+# The linear passes carry copies of awk helpers -- skipblank in three programs,
+# skipopts and word in the two argument readers -- because an awk program cannot
+# source another. tokend was in three until #135 gave the argument readers word,
+# which reads a quoted word whole where tokend stopped at its first blank; its
+# one copy left is cs_split's, and one copy has nothing to drift from. A rule
+# written twice is answered twice, which is the sentence lib/command-scan.sh
+# opens with, so the copies are held to each other here:
 # every definition of each is extracted off the file and all must be identical.
 # Derived rather than counted, so a fourth copy is compared with the rest.
 awk_copies() {  # awk_copies <function> -- each definition, one per line, newlines as |
@@ -8487,7 +8494,7 @@ awk_copies() {  # awk_copies <function> -- each definition, one per line, newlin
     grab { body = body substr($0, indent) "|"; if ($0 ~ /}[[:space:]]*$/ && (match($0, /[^[:space:]]/) == indent)) { print body; grab = 0 } }
   ' "$HOOKS/lib/command-scan.sh"
 }
-for fn in tokend skipblank skipopts; do
+for fn in skipblank skipopts word; do
   total=$(awk_copies "$fn" | wc -l | tr -d ' ')
   distinct=$(awk_copies "$fn" | sort -u | wc -l | tr -d ' ')
   if [ "$total" -lt 2 ]; then
@@ -8826,6 +8833,243 @@ for f in lib/command-scan.sh $LIB_CONSUMERS; do
   fi
 done
 
+section "=== issue #135: a quoted group or subcommand word is the word it spells ==="
+# cs_git_args and cs_gh_args found the subcommand by comparing a raw token, and
+# skipped the options before it by a raw test for a leading dash. Bash removes
+# quotes before git or gh sees a word, so `git "push"`, `gh pr 'merge'` and
+# `gh \pr` run exactly what their bare spellings run -- and each reached no rule
+# at all. Every row of the table on #135 is below, in all three spellings, and
+# each was ALLOW at origin/dev-05 33f7129, measured. So were the BLOCK rows
+# about a quoted option and a quoted value holding a blank, which the issue does
+# not name. The CONTRAST rows at the foot were BLOCK already, and say so.
+#
+# The contrast that made it a defect rather than a policy is at the foot of this
+# section: a quoted VALUE was already read, by base_args and by check_push, so
+# three readers of one argument list knew what a quote is and the one that
+# decides which rule applies did not.
+#
+# THE LIBRARY. What the two readers return is the rest of the command AS
+# WRITTEN, quotes kept: the readers downstream of them -- base_args,
+# check_push, the carve-out's whitelist -- make their own decisions about a
+# quoted argument, and several of those are argued trades this issue does not
+# reopen.
+req FR-3 US-3 GH-135
+tok 'git args, the subcommand double-quoted' 'origin main' \
+    "$(printf 'git "push" origin main\n' | cs_git_args push)"
+tok 'git args, the subcommand single-quoted' 'origin main' \
+    "$(printf "git 'push' origin main\n" | cs_git_args push)"
+tok 'git args, the subcommand behind a backslash' 'origin main' \
+    "$(printf 'git \\push origin main\n' | cs_git_args push)"
+# A quote inside the word rather than round it. #135 names this shape and leaves
+# it to triage; it is in scope here because reading quotes the way bash does
+# reaches it with no extra rule, and leaving it out would take one.
+tok 'git args, a quote inside the subcommand word' 'origin main' \
+    "$(printf 'git pu"sh" origin main\n' | cs_git_args push)"
+# A global option's value holding a blank. Split on blanks, `"user.name=a` was
+# the value and `b"` was read as the subcommand, so the push behind it reached
+# no rule; the token ends where bash's word ends. Found measuring this fix, not
+# named on the issue.
+tok 'git args, a quoted option value holding a blank' 'origin main' \
+    "$(printf 'git -c "user.name=a b" push origin main\n' | cs_git_args push)"
+tok 'git args, a quoted global option' 'origin main' \
+    "$(printf 'git "-C" . push origin main\n' | cs_git_args push)"
+tok 'git args, the rest returned as written' 'origin "main"' \
+    "$(printf 'git "push" origin "main"\n' | cs_git_args push)"
+if printf 'git "status"\n' | cs_git_args push >/dev/null; then
+  tok 'a quoted status is not a push' 'not found' 'found'
+else
+  tok 'a quoted status is not a push' 'not found' 'not found'
+fi
+req FR-22 GH-135
+tok 'gh args, the group double-quoted' '5' \
+    "$(printf 'gh "pr" merge 5\n' | cs_gh_args 'pr merge')"
+tok 'gh args, the verb single-quoted' '5' \
+    "$(printf "gh pr 'merge' 5\n" | cs_gh_args 'pr merge')"
+tok 'gh args, the group behind a backslash' '5' \
+    "$(printf 'gh \\pr merge 5\n' | cs_gh_args 'pr merge')"
+tok 'gh args, a quoted option before the group' '5' \
+    "$(printf 'gh "-R" o/r pr merge 5\n' | cs_gh_args 'pr merge')"
+tok 'gh args, a quoted option value holding a blank' '5' \
+    "$(printf 'gh -R "o/r x" pr merge 5\n' | cs_gh_args 'pr merge')"
+tok 'gh args, the rest returned as written' '--base "main" --title x' \
+    "$(printf 'gh pr "create" --base "main" --title x\n' | cs_gh_args 'pr create')"
+# One quoted span is one word, as it is to gh: `gh "pr merge" 5` is a command gh
+# rejects as unknown, and reading it as a merge would be reading a word bash
+# never produced. The reason the token is quote-aware and not split on blanks
+# and then unquoted.
+if printf 'gh "pr merge" 5\n' | cs_gh_args 'pr merge' >/dev/null; then
+  tok 'one quoted span holding two words is one word' 'not found' 'found'
+else
+  tok 'one quoted span holding two words is one word' 'not found' 'not found'
+fi
+# A quote that never closes spells no word. cs_split cuts an unbalanced line
+# plainly, so a quoted multi-line argument reaches here as a fragment whose
+# quote closes a span opened a line earlier, and the first version of word()
+# read `gh pr create'` as a create. Found by replaying transcript commands
+# through the library before and after the change: two of them, both sessions
+# testing this library, were refused for it.
+if printf "gh pr create'\n" | cs_gh_args 'pr create' >/dev/null; then
+  tok 'a word whose quote never closes spells nothing' 'not found' 'found'
+else
+  tok 'a word whose quote never closes spells nothing' 'not found' 'not found'
+fi
+check no-pr-decisions.sh ALLOW 'a quoted argument whose second line reads as a create' \
+  "echo 'a first line
+gh pr create'"
+# The word is compared as a string, not as a pattern. Before this fix it was
+# matched as a regular expression and cut by length, which the comment above
+# cs_gh_args called a property no caller reached.
+if printf 'gh px merge 5\n' | cs_gh_args 'p. merge' >/dev/null; then
+  tok 'a path word is a literal, not a pattern' 'not found' 'found'
+else
+  tok 'a path word is a literal, not a pattern' 'not found' 'not found'
+fi
+
+# THE HOOKS, every row of #135's table, in all three spellings. Tagged with the
+# seed requirement each row is a spelling of, as well as GH-135.
+req FR-3 US-2 GH-135
+for q in '"push"' "'push'" '\push'; do
+  check_in "$PUSH_WT" no-git-push.sh BLOCK "a quoted push: git $q --all origin" "git $q --all origin"
+done
+req FR-3 US-1 GH-135
+for q in '"push"' "'push'" '\push'; do
+  check_in "$PUSH_WT" no-git-push.sh BLOCK "a quoted push: git $q origin main" "git $q origin main"
+done
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a quote inside the push word' 'git pu"sh" origin main'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a push behind a quoted value holding a blank' \
+  'git -c "user.name=a b" push origin main'
+req FR-3 US-3 GH-135
+for q in '"push"' "'push'" '\push'; do
+  check_in "$PUSH_WT" no-git-push.sh BLOCK "a quoted push: git $q --force origin wt-branch" \
+    "git $q --force origin wt-branch"
+done
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a quoted -C before a push' 'git "-C" . push origin wt-branch'
+# THE OPTION TESTS BEHIND THE READER. Reaching a quoted verb made a quoted global
+# option reachable too, and five patterns in three hooks read git's -C and -c off
+# the raw text, where `"-C"` has a quote where they want a blank. Every command
+# here is permitted without its option, so each is refused only by the option
+# test, and each was ALLOW with the library fixed and those patterns not.
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a quoted -c before a push of the own branch' \
+  'git "-c" push.default=matching push origin wt-branch'
+req GH-43.2 GH-135
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'a quoted -C before a commit on a dev branch' \
+  "git \"-C\" $ON_MAIN commit -m x"
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'a backslashed -C before a commit on a dev branch' \
+  "git \\-C $ON_MAIN commit -m x"
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'a quoted -c before a push on a dev branch' \
+  'git "-c" push.default=matching push'
+req GH-44.3 GH-135
+check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'the catch-up merge with a quoted -C' \
+  'git "-C" . merge origin/dev-05'
+# And the removal does not reach a commit message, which is the one argument on
+# these paths that carries prose: the patterns stay anchored at the head.
+req GH-43.2 GH-135
+check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'a commit message quoting -C' \
+  'git "commit" -m "drop the -C flag"'
+# A QUOTED VALUE HOLDING A BLANK, in front of the option. The first version of
+# this fix removed the quote characters, which split `"user.name=a b"` into two
+# words; no-commit-to-main.sh's patterns are anchored at the head, so the stray
+# `b` stopped them before the -C and these were ALLOW -- the shape the fix was
+# for. Found by the spec review of this change. That hook reads bare_words now,
+# which keeps a quoted blank inside its word. The last row is the control: the
+# same value in front of a plain commit on a dev branch changes nothing.
+req GH-43.2 GH-135
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'a double-quoted value with a blank, then -C' \
+  "git -c \"user.name=a b\" -C $ON_MAIN commit -m x"
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'a single-quoted value with a blank, then a quoted -C' \
+  "git -c 'user.name=a b' \"-C\" $ON_MAIN commit -m x"
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'an escaped blank in a value, then -C' \
+  "git -c user.name=a\\ b -C $ON_MAIN commit -m x"
+check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'a quoted value with a blank before a plain commit' \
+  'git -c "user.name=a b" commit -m x'
+req GH-43.4 US-1 GH-135
+check_in "$ON_DEV" no-commit-to-main.sh BLOCK 'a quoted value with a blank, then -c before a push' \
+  'git --namespace "a b" -c push.default=matching push'
+# And a -C whose own VALUE holds a blank, which dev-05 permitted for a push:
+# the value token ended at the blank there, so the subcommand read was `b"`.
+req FR-3 US-3 GH-135
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a -C whose quoted value holds a blank' \
+  "git -C 'a b' push origin wt-branch"
+req US-1 GH-135
+for q in '"commit"' "'commit'" '\commit'; do
+  check_in "$ON_MAIN" no-commit-to-main.sh BLOCK "a quoted commit on main: git $q -m x" "git $q -m x"
+done
+req FR-38 GH-135
+for q in '"commit"' "'commit'" '\commit'; do
+  check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK "a quoted commit on a stale branch: git $q -m x" \
+    "git $q -m x"
+done
+req US-15 GH-135
+for c in 'gh "pr" merge 5' "gh 'pr' merge 5" 'gh \pr merge 5' \
+         'gh pr "merge" 5' "gh pr 'merge' 5" 'gh pr \merge 5' \
+         'gh "-R" o/r pr merge 5'; do
+  check no-pr-decisions.sh BLOCK "a quoted merge: $c" "$c"
+done
+req FR-15 FR-16 US-8 GH-135
+for c in 'gh "pr" create --base main --title x' "gh pr 'create' --base main --title x" \
+         'gh \pr create --base main --title x'; do
+  check no-pr-decisions.sh BLOCK "a quoted create onto main: $c" "$c"
+done
+req FR-14 FR-16 US-9 GH-135
+for c in 'gh "pr" create --title x --body y' "gh pr 'create' --title x --body y" \
+         'gh pr \create --title x --body y'; do
+  check no-pr-decisions.sh BLOCK "a quoted create naming no base: $c" "$c"
+done
+req FR-17 FR-15 US-10 GH-135
+for c in 'gh "pr" edit 35 --base main' "gh pr 'edit' 35 --base main" 'gh \pr edit 35 --base main'; do
+  check no-pr-decisions.sh BLOCK "a quoted retarget to main: $c" "$c"
+done
+req FR-48 US-15 GH-135
+for c in 'gh "release" create v1' "gh 'release' create v1" 'gh \release create v1'; do
+  check no-pr-decisions.sh BLOCK "a quoted release group: $c" "$c"
+done
+req FR-18 FR-20 FR-15 US-11 GH-135
+for c in 'gh "api" -X POST repos/o/r/pulls -f base=main -f head=x' \
+         "gh 'api' -X POST repos/o/r/pulls -f base=main -f head=x" \
+         'gh \api -X POST repos/o/r/pulls -f base=main -f head=x'; do
+  check no-pr-decisions.sh BLOCK "a quoted api group: $c" "$c"
+done
+
+# THE PERMITTING DIRECTION. A reader that learned to unquote is a reader that
+# could now find a guarded word where there is none, so each of these reads a
+# quoted word that is NOT a guarded one, or a guarded one used as permitted.
+req US-13 GH-135
+check no-pr-decisions.sh ALLOW 'a quoted group, then a read' 'gh "pr" view 5'
+check no-pr-decisions.sh ALLOW 'a quoted read verb' 'gh pr "view" 5'
+check no-pr-decisions.sh ALLOW 'one quoted span holding the group and a verb' 'gh "pr merge" 5'
+req US-14 GH-135
+check no-pr-decisions.sh ALLOW 'a quoted issue group' 'gh "issue" list'
+req FR-3 GH-135
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a quoted status' 'git "status"'
+req FR-3 US-3 US-4 GH-135
+for q in '"push"' "'push'" '\push'; do
+  check_in "$PUSH_WT" no-git-push.sh ALLOW "a quoted push of the worktree's own branch: git $q origin wt-branch" \
+    "git $q origin wt-branch"
+done
+req US-4 GH-135
+check_in "$ON_DEV" no-commit-to-main.sh ALLOW 'a quoted commit on a dev branch' 'git "commit" -m x'
+req FR-38 GH-135
+check_in "$WT_WORK" no-work-on-stale-branch.sh ALLOW 'a quoted commit on a live branch' 'git "commit" -m x'
+req FR-14 FR-15 FR-16 US-8 GH-135
+check no-pr-decisions.sh ALLOW 'a quoted create onto dev-05' 'gh pr "create" --base dev-05 --title x'
+# The other half of this entry: the release allowlist is a list of read verbs
+# asked of cs_gh_args, so a verb it could not read was refused with the writes.
+# That was a refusal of a read, and it goes with the rest. Declared a gap in
+# #106's departures until now.
+req FR-48 GH-135
+check no-pr-decisions.sh ALLOW 'a quoted release read verb' 'gh release "view" v1'
+check no-pr-decisions.sh ALLOW 'a quoted release group and read verb' "gh 'release' 'view' v1"
+
+# THE CONTRAST, from #135's second table. These three already reached the right
+# verdict before this fix, and are pinned so a later change to what the readers
+# return -- unquoting the rest as well as the word, say -- cannot move them.
+req FR-3 US-1 GH-135
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'a quoted destination branch' 'git push origin "main"'
+req FR-15 FR-16 US-8 GH-135
+check no-pr-decisions.sh BLOCK 'a quoted base value naming main' 'gh pr create --base "main" --title x'
+req FR-14 FR-15 FR-16 US-8 GH-135
+check no-pr-decisions.sh ALLOW 'a quoted base value naming dev-05' 'gh pr create --base "dev-05" --title x'
+
 section "=== issue #106: every spelling of a judged command reaches its verdict ==="
 # THE FAMILIES. Almost every defect this boundary has had in the permitting
 # direction was a spelling variant of a command the suite already judged
@@ -9109,7 +9353,8 @@ inv_eats() {  # inv_eats <command>
 # this did and is the reason this comment is here: quoting the last argument of
 # `gh pr merge 5` quotes the number, and the number is not what any rule reads.
 # The word a rule does read is the subcommand, two and three words in, and
-# `gh pr "merge" 5` and `git "push" --all origin` are permitted. Found by hand
+# `gh pr "merge" 5` and `git "push" --all origin` were permitted -- #135, closed
+# since, so positions 2 and 3 now reach their seed's verdict. Found by hand
 # after this transformation had been written and run, which is the shape this
 # whole section is about: the family asked the right question of the wrong word.
 #
@@ -9291,9 +9536,11 @@ inv_show() {  # inv_show <variant>
 # command word. One row is a stronger claim than thirty-eight copies of it and
 # not a weaker one -- a refused seed that turned out to be refused under
 # `/usr/bin/` after all fails this row, where its own row would have passed and
-# said nothing. #135 is deliberately NOT a class: the word two in is the group
-# for `git push` and `gh pr` and an ordinary argument for `pytest tests/`, so a
-# class there would claim something of `pytest "tests/"` that is not true of it.
+# said nothing. #135 was deliberately NOT a class while it stood open: the word
+# two in is the group for `git push` and `gh pr` and an ordinary argument for
+# `pytest tests/`, so a class there would have claimed something of
+# `pytest "tests/"` that was not true of it. Its rows went red when it closed
+# and were deleted, as a gap row is.
 #
 # An exact key wins over a class, and a class applies only where no exact key
 # does. Every row must be used: a seed renamed or a transformation that has
@@ -9306,8 +9553,6 @@ pr-web|quote-double-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span who
 pr-web|quote-single-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span whole, and quoted text may not grant an exemption
 pr-base-dev pr-base-dev-eq|quote-double-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
 pr-base-dev pr-base-dev-eq|quote-single-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
-release-view|quote-double-3|BLOCK|gap|GH-135|the release verb in double quotes, refused by the allowlist that cannot read it
-release-view|quote-single-3|BLOCK|gap|GH-135|the release verb in single quotes, refused by the allowlist that cannot read it
 BLOCK:*|word-path|ALLOW|gap|GH-117|the command word as an absolute path
 BLOCK:*|word-dot|ALLOW|gap|GH-117|the command word as a relative path
 BLOCK:*|word-dquoted|ALLOW|gap|GH-117|the command word in double quotes
@@ -9318,10 +9563,6 @@ pr-view pr-base-dev pr-base-dev-eq pr-retarget-dev pr-web release-view|option-ea
 push-wrapped pr-merge-wrapped commit-wrapped|word-if|ALLOW|gap|GH-134|a wrapper after a control word
 push-wrapped pr-merge-wrapped commit-wrapped|word-for|ALLOW|gap|GH-134|a wrapper after a control word
 push-wrapped pr-merge-wrapped commit-wrapped|word-brace|ALLOW|gap|GH-134|a wrapper after a control word
-push-all push-main push-force push-from-main-checkout commit-main commit-stale api-rest-main release-create pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-double-2|ALLOW|gap|GH-135|the group word in double quotes
-push-all push-main push-force push-from-main-checkout commit-main commit-stale api-rest-main release-create pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-single-2|ALLOW|gap|GH-135|the group word in single quotes
-pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-double-3|ALLOW|gap|GH-135|the subcommand verb in double quotes
-pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-single-3|ALLOW|gap|GH-135|the subcommand verb in single quotes
 pytest-uv alembic-uv|flag-attached|BLOCK|gap|GH-136|the dependency group named with an attached value
 pytest-uv alembic-uv|quote-double-3|BLOCK|gap|GH-136|the group flag in double quotes
 pytest-uv alembic-uv|quote-single-3|BLOCK|gap|GH-136|the group flag in single quotes
@@ -9860,7 +10101,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '34' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '39' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9923,7 +10164,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '32' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '37' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -10589,7 +10830,7 @@ GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117:gap GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139:gap              
+GH-131:gap GH-133:refuse-only GH-134:gap GH-135 GH-136:gap GH-139:gap              
 GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
 GH-108.8:static GH-108.9:static GH-108.10:static GH-128   

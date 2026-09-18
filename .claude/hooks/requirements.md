@@ -1454,22 +1454,43 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - text: A quoted group or subcommand word is the word it spells: `git "push" --all
   origin`, `git "commit" -m x` on main, `gh "pr" merge 5`, `gh pr "merge" 5`,
   `gh "api" …` and `gh "release" create v1` reach the verdicts their unquoted
-  spellings reach.
+  spellings reach, in double quotes, in single quotes and behind a backslash, and
+  so does `gh release "view" v1`, which is a read. A global option before the
+  subcommand is the option it spells in the same way: `git "-C" <dir> commit` is
+  refused as `git -C <dir> commit` is, and `git -c "user.name=a b" push origin
+  main` is a push.
 - from: #135, found by #106's invariance families
 - kind: defect-permitting
-- status: gap → #135
-- note: one word past #117, and a different fix site: the command word is found by
+- status: active
+- note: fixed by one awk function, `word`, in both argument readers: it reads a
+  word as bash does -- a blank inside quotes does not end it -- and compares what
+  it spells as a string. That reaches a quote inside the word too (`git
+  pu"sh"`), which the issue left to triage, with no extra rule. What the readers
+  return after the subcommand is still the rest AS WRITTEN, so `base_args`,
+  `check_push` and the carve-out keep their own quoting trades. Reading the
+  subcommand made a quoted global option reachable, and five raw-text patterns
+  in three hooks read `-C` and `-c` off the command. The unanchored ones read it
+  with its quote and backslash characters removed now, which can only add
+  refusals; `no-commit-to-main.sh`'s are anchored at the head, where a quoted
+  value split at its blank stopped them, so they read `bare_words`, which keeps
+  a quoted blank inside its word. Not this
+  entry: a quoted verb inside a shell wrapper, which the git hooks' wrapper
+  patterns match on raw text (#165), and ANSI-C and locale quoting (#166). The
+  issue's denylist-or-allowlist question for the pull-request verbs is also
+  left open: `gh pr "merge" 5` is refused by reading the verb, not by
+  refusing an unknown one.
+  Before the fix: one word past #117, and a different fix site: the command word is found by
   an anchor, the group and verb by `cs_git_args`, `cs_gh_args` and the verb tests.
   The contrast that makes it a defect rather than a policy is that a quoted VALUE
   is read correctly -- `--base "dev-05"` is permitted and `--base "main"` refused
   -- so `base_args` knows what a quote is and the group and verb tests do not.
   Both directions are this entry. The permitting half is above; the refusing half
-  is `gh release "view" v1`, refused because the read-verb allowlist is
-  `cs_gh_args "release <verb>"` per verb and cannot read a quoted one. #106 first
+  was `gh release "view" v1`, refused because the read-verb allowlist is
+  `cs_gh_args "release <verb>"` per verb and could not read a quoted one. #106 first
   declared that one by design, citing the allowlist's fail-closed comment, and
   Bertan's review of PR #140 corrected it: that comment argues for refusing a
-  subcommand `gh` adds later, and a quoted `view` is not one. It is a gap here,
-  in the function this entry already names as the fix site.
+  subcommand `gh` adds later, and a quoted `view` is not one. It was a gap here,
+  in the function this entry names as the fix site, and it closed with the rest.
   What is NOT this entry is the `base_args` family -- `gh pr create "--web"` and
   `gh pr create "--base" dev-05` -- which #106 declares by design, citing the
   comment that argues quoted text may trigger a refusal and may not grant an

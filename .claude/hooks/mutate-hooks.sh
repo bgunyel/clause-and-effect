@@ -236,6 +236,11 @@ degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch:
 heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
+subcommand-quotes-not-removed%lib/command-scan.sh%s/qt = c; i++; continue/W = W/%GH-135 FR-48 US-15%caught
+unclosed-quote-spells-a-word%lib/command-scan.sh%s/ || qt != "")/)/%GH-135%caught
+option-test-reads-raw-quotes%no-git-push.sh%s/^  BARE=.*$/  BARE=$CMD/%GH-135%caught
+quoted-blank-splits-the-word%no-commit-to-main.sh%/^bare_words()/,/^}/s/c = "_"/c = c/%GH-43.2 GH-135%caught
+carve-out-reads-raw-quotes%no-work-on-stale-branch.sh%s/| tr -d '\\042\\047\\134' | grep -qE '^git/| grep -qE '^git/%GH-44.3 GH-135%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

@@ -211,9 +211,15 @@ names_this_branch() {
 # One push's arguments. Returns 1 with a reason on stderr if it is not a plain,
 # unforced push naming this branch.
 check_push() {
-  local CMD="$1" ARGS="$2" TOK SPEC SRC DST SKIP REMOTE_SEEN REFSPEC_SEEN
+  local CMD="$1" ARGS="$2" TOK SPEC SRC DST SKIP REMOTE_SEEN REFSPEC_SEEN BARE
 
-  if printf '%s' "$CMD" | grep -qE '(^|[[:space:]])(-C|--git-dir|--work-tree)([[:space:]]|=)'; then
+  # The two option tests below read the command with its quote and backslash
+  # characters removed. Once cs_git_args read `git "push"` as a push (#135), a
+  # quoted `"-C"` or `"-c"` in front of it was an option git obeys and these
+  # patterns could not see. Both are unanchored and refuse on a match, so what
+  # the removal can add is refusals.
+  BARE=$(printf '%s' "$CMD" | tr -d '\042\047\134')
+  if printf '%s' "$BARE" | grep -qE '(^|[[:space:]])(-C|--git-dir|--work-tree)([[:space:]]|=)'; then
     echo "$REFUSE This command points git at another directory, so where the push would land cannot be judged from here." >&2
     return 1
   fi
@@ -223,7 +229,7 @@ check_push() {
   # already replaced, which is not a gap that can be closed by reading more
   # carefully. `git -c push.default=matching push` was allowed for exactly that
   # reason. Reported on PR #35's review.
-  if printf '%s' "$CMD" | grep -qE '(^|[[:space:]])(-c|--config-env)([[:space:]]|=)'; then
+  if printf '%s' "$BARE" | grep -qE '(^|[[:space:]])(-c|--config-env)([[:space:]]|=)'; then
     echo "$REFUSE This command sets git configuration for itself, which overrides what this check would read back." >&2
     return 1
   fi

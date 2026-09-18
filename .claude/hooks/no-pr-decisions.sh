@@ -574,8 +574,8 @@ fi
 # defects have lived. No agent here has a release-shaped task, so the list worth
 # keeping is the short one of what reads.
 #
-# The trade, taken knowingly, in three parts. Each is a read or a help page, each
-# is refused, and each is one edit away.
+# The trade, taken knowingly, in two parts; a third was withdrawn. Each is a read
+# or a help page, each is refused, and each is one edit away.
 #
 #   1. `ls` is gh's alias for list. The five below are the five decided, not the
 #      five plus whatever gh aliases them to, which would be a list tracking
@@ -589,9 +589,13 @@ fi
 #      that question in one place and says so. Group help is `gh help release`
 #      and a verb's is `gh help release upload`; neither is a gh release
 #      command, and neither is refused. The refusal says so.
-#   3. A quoted verb, `gh release "view" v1`, is refused with the writes. The
-#      verb is matched as written, and unquoting a word to grant a read is the
-#      generous reading gh_pr_web gives its reasons for not taking.
+#   3. Withdrawn by #135. A quoted verb, `gh release "view" v1`, was refused
+#      with the writes, on the argument that unquoting a word to grant a read is
+#      the generous reading gh_pr_web declines. It is not that reading: bash
+#      removes the quotes before gh sees the word, so the word is `view`, and
+#      cs_gh_args reads every subcommand word that way now -- the same change
+#      that makes `gh "release" create v1` a write. What gh_pr_web declines is
+#      unquoting an ARGUMENT, and base_args still declines it.
 #
 # The verb is the subcommand word and nothing else: each read is asked of
 # cs_gh_args as a whole path, `release view`, which skips options before each

@@ -171,6 +171,46 @@ CMDLIST
 # sibling does for a push, would read `git commit -m "drop the -C flag"` as a
 # redirection; a commit message is the one argument on this path that carries
 # arbitrary prose.
+#
+# Matched against bare_words' reading of the command, at every site below, and
+# so is the -c pattern. Once cs_git_args read `git "commit"` as a commit (#135),
+# `git "-C" /x commit` was a commit whose -C this pattern could not see, and it
+# was judged on the branch here rather than refused.
+#
+# Not `tr -d` on the quote characters, which is what the first version of this
+# fix did, and what the two sibling hooks still do. Removing them splits a
+# quoted value holding a blank into two words, and this pattern is anchored at
+# the head: in `git -c "user.name=a b" -C /x commit` the stray `b` is not an
+# option, the pattern stops there, and the -C behind it was never reached --
+# permitted, on the exact shape the fix was for. Found by the spec review of
+# this change. The siblings' patterns are unanchored or accept any word before
+# the option, so a split value cannot stop them.
+#
+# bare_words writes each word as bash hands it to git: quotes and escapes gone,
+# and a blank inside a quote, or escaped outside one, written as `_` so that a
+# word stays one word. One character at a time with printf and no string grown,
+# so it is linear, for #96's reason. Quoting rules as word() in
+# lib/command-scan.sh, and ANSI-C quoting unread there as here (#166).
+bare_words() {  # stdin: a command. stdout: its words, unquoted, a quoted blank as _
+  awk '{
+    n = length($0); q = ""
+    for (i = 1; i <= n; i++) {
+      c = substr($0, i, 1)
+      if (q == "\047") {
+        if (c == "\047") { q = ""; continue }
+      } else if (q == "\"") {
+        if (c == "\"") { q = ""; continue }
+        if (c == "\\" && i < n && index("$`\"\\", substr($0, i + 1, 1)) > 0) c = substr($0, ++i, 1)
+      } else {
+        if (c == "\047" || c == "\"") { q = c; continue }
+        if (c == "\\" && i < n) { c = substr($0, ++i, 1); if (index(" \t", c) > 0) c = "_" }
+      }
+      if (q != "" && index(" \t", c) > 0) c = "_"
+      printf "%s", c
+    }
+    printf "\n"
+  }'
+}
 ELSEWHERE_OPT='^git[[:space:]]+(-[cC][[:space:]]+[^[:space:]]+[[:space:]]+|--(git-dir|work-tree|namespace|exec-path)=[^[:space:]]*[[:space:]]+|-[^[:space:]]+[[:space:]]+)*(-C|--git-dir|--work-tree)([[:space:]]|=)'
 
 BRANCH=$(git branch --show-current 2>/dev/null)
@@ -254,7 +294,7 @@ check_push() {
 # git push origin main` is refused on its second half.
 while IFS= read -r CMD; do
   if cs_git_args commit <<<"$CMD" >/dev/null; then
-    if printf '%s' "$CMD" | grep -qE "$ELSEWHERE_OPT"; then
+    if printf '%s' "$CMD" | bare_words | grep -qE "$ELSEWHERE_OPT"; then
       echo "$ELSEWHERE_REFUSE" >&2
       exit 2
     fi
@@ -264,7 +304,7 @@ while IFS= read -r CMD; do
     fi
   fi
   if ARGS=$(cs_git_args push <<<"$CMD"); then
-    if printf '%s' "$CMD" | grep -qE "$ELSEWHERE_OPT"; then
+    if printf '%s' "$CMD" | bare_words | grep -qE "$ELSEWHERE_OPT"; then
       echo "$ELSEWHERE_REFUSE" >&2
       exit 2
     fi
@@ -272,7 +312,7 @@ while IFS= read -r CMD; do
     # push defaults the bare-push case rests on: `git -c push.default=matching
     # push` advances main from a dev branch. Reading the value back cannot close
     # that, because the command has already replaced it.
-    if printf '%s' "$CMD" | grep -qE '^git[[:space:]]+(-[^[:space:]]+[[:space:]]+[^[:space:]-][^[:space:]]*[[:space:]]+|-[^[:space:]]+[[:space:]]+)*(-c|--config-env)([[:space:]]|=)'; then
+    if printf '%s' "$CMD" | bare_words | grep -qE '^git[[:space:]]+(-[^[:space:]]+[[:space:]]+[^[:space:]-][^[:space:]]*[[:space:]]+|-[^[:space:]]+[[:space:]]+)*(-c|--config-env)([[:space:]]|=)'; then
       echo "$PUSH_REFUSE This command sets git configuration for itself, which decides where a push lands." >&2
       exit 2
     fi
