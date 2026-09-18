@@ -20,8 +20,9 @@
 # registry stands, not thirty-nine, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
-# The figure above is those rates carried to the current count and not a third
-# measurement; a run under load took nearer four minutes a row. That is why it
+# Those rates carried to thirty-eight runs give nearer eighty minutes than sixty,
+# and no third whole-registry measurement has been taken; a run under load took
+# nearer four minutes a row. That is why it
 # is a separate script and why check-hooks.sh does not call it (#107). Nothing
 # here is a PreToolUse hook and settings.json does not register it. Naming rows
 # costs the baseline plus one run each, so re-asking a single rule is about four
@@ -135,8 +136,8 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   THIRTY-TWO real mutations, against SIX files in .claude/hooks/, naming
-#   FORTY requirement IDs between them, of the 158 whose status is active.
+#   THIRTY-SIX real mutations, against SEVEN files in .claude/hooks/, naming
+#   FORTY-THREE requirement IDs between them, of the 165 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.

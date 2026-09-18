@@ -326,7 +326,11 @@ section() {  # section <heading> -- print it, and let no tag carry across it
 # configuration section reads the record back and requires every hook
 # settings.json registers to have been run by at least one tagged check. An
 # absolute path is a fixture copy -- a hook with its library taken away, or one
-# built to crash -- and is not the registered hook, so it is not recorded.
+# built to crash -- and is not the registered hook, so it is not recorded. The
+# one exception is the session report, which reads the repository it sits in and
+# so is only ever run as a byte copy placed in a fixture repository: `anc_report`
+# and `report_says` record that copy as the report, and nothing here records a
+# modified one.
 hook_path() {  # hook_path <script|/absolute/hook>
   case "$1" in
     /*) printf '%s\n' "$1" ;;
@@ -5148,7 +5152,7 @@ anc_fixture() {  # anc_fixture <dir> <origin url> -- a repository with the repor
 }
 anc_report() {  # anc_report <repo> -- the report's output, run as that repository's hook
   ran report-stale-branches.sh
-  ( cd /&& PATH="$ANC_BIN:$PATH" "$1/.claude/hooks/report-stale-branches.sh" ) 2>/dev/null
+  ( cd / && PATH="$ANC_BIN:$PATH" "$1/.claude/hooks/report-stale-branches.sh" ) 2>/dev/null
 }
 # The line and its indented continuations, and nothing after them: a NOT is
 # three lines, and a phrase from the line after it must not count as its own.
@@ -10602,7 +10606,8 @@ echo "--- a realistic worst case: a 200-line heredoc, several separators a line 
 # separators and a redirect, with each hook's own refused command after it.
 #
 # MEASURED BEFORE IT WAS WRITTEN, 2026-09-18, at 33f7129, fastest of three: 9 to
-# 33 ms per hook, quoted opener or not. cs_normalise drops a heredoc body before
+# 33 ms per hook, quoted opener or not, in a scratch fixture; the first run of
+# this section, in the fixtures below, measured 12 to 57 ms. cs_normalise drops a heredoc body before
 # any pass reads it, so its separators never become fragments. That is what this
 # pins: a change that let a body through to cs_split would multiply the time by
 # the number of fragments, which is the cost #127 is about.
@@ -10644,8 +10649,9 @@ echo "--- every refusal of no-git-push.sh says the rule it applies ---"
 # ONE ROW AN ARM, and the fragment is the arm's own tail, whole. A prefix keeps
 # matching after the rest of the sentence is deleted, so each fragment runs to
 # the end of the sentence that states the reason -- the lesson of the retarget
-# row in #105's section. The shared opening, which states the rule itself, is
-# read once, below, rather than thirteen times.
+# row in #105's section. The shared opening, $REFUSE, which states the rule
+# itself, is read once, below, rather than on every arm that carries it; the
+# wrapper arm does not carry it.
 #
 # All in the push fixture's linked worktree on $PUSH_BRANCH with an origin,
 # where the push the arm refuses is otherwise the permitted one: so each refusal
@@ -10689,6 +10695,16 @@ need_worktree "$PUSH_WT_DETACHED" 'detached push'
 }
 says "$PUSH_WT_DETACHED" no-git-push.sh 'This worktree has no branch checked out.' \
   'a push from a detached worktree says it has no branch' 'git push origin HEAD'
+# The arms older sections read, read again here to the end of their sentence.
+# #94 and #108 pinned each by the prefix that told it from its neighbours, which
+# was their question; the half after it is the remedy or the reason, which is
+# this one's, and a prefix keeps matching after that half is deleted.
+says "$PUSH_MAIN" no-git-push.sh 'This is the main checkout, not a linked worktree. Leave the commits on the branch and say what is ready to push.' \
+  'a push from the main checkout says what to do instead' 'git push origin feature-x'
+says "$PUSH_WT_DEV" no-git-push.sh "This worktree is on dev-05, which is Bertan's to push." \
+  'a push from a worktree on dev-05 says whose the branch is' 'git push origin dev-05'
+says "$NOT_A_REPO" no-git-push.sh 'The repository directory git reports here could not be resolved, so whether this runs in a linked worktree cannot be judged from here.' \
+  'a push where git reports no directory says what could not be judged' 'git push origin x'
 
 echo "--- every refusal of no-pr-decisions.sh says the rule it applies ---"
 # The same question of the other boundary hook. #97 read the release refusals and
@@ -10707,7 +10723,7 @@ for c in 'bash -c "gh pr merge 5"' \
          'gh api -X PATCH repos/o/r/pulls/5 -f state=closed' \
          'gh api graphql -f query="mutation { mergePullRequest(input:{x:1}) }"'
 do
-  says "$ON_DEV" no-pr-decisions.sh "deciding a pull request is Bertan's call, not an agent's. Opening a PR, commenting on it and editing it are allowed; accepting, rejecting, merging and reopening are not." \
+  says "$ON_DEV" no-pr-decisions.sh "Blocked: deciding a pull request is Bertan's call, not an agent's. Opening a PR, commenting on it and editing it are allowed; accepting, rejecting, merging and reopening are not." \
     "$c: says a decision is Bertan's, and what stays allowed" "$c"
 done
 says "$ON_DEV" no-pr-decisions.sh 'A shell wrapper does not change what the command decides, and its payload cannot be read. Run it unwrapped.' \
@@ -10732,6 +10748,12 @@ says "$ON_DEV" no-pr-decisions.sh "No base is named here, so this would go to th
   'a REST create naming no base says where it would go' 'gh api -X POST repos/o/r/pulls -f head=x -f title=t'
 says "$ON_DEV" no-pr-decisions.sh "No base is named here, so this would go to the repository's default branch." \
   'a graphql create naming no base says the same' 'gh api graphql -f query="mutation{createPullRequest(input:{headRefName:\"x\"})}"'
+# The release refusals, which #97 read for their verdict-bearing words and not to
+# the end: the reason a write is Bertan's, and the read the gh api arm names.
+says "$ON_DEV" no-pr-decisions.sh 'and this repository is public, so a release is visible the moment it changes.' \
+  'the release refusal says why a write is not an agent'"'"'s' 'gh release upload v1 a.tgz'
+says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted: a gh api request to /releases that does not write, or gh release followed by one of: list view download verify verify-asset.' \
+  'the gh api release refusal names both reads that stay permitted' 'gh api -X PATCH repos/o/r/releases/1'
 # NO ARM GOES UNREAD, asked of the files rather than of this list. Every echo
 # to stderr in either hook is a refusal, and a new arm is a new echo; so each
 # hook's count is a literal here, and adding an arm moves it -- which is the
@@ -10805,7 +10827,9 @@ req GH-109.3
 tok 'settings.json registers exactly these hooks, under these matchers, in this order, with these timeouts' \
     "$REGISTRATION_EXPECTED" "$REGISTRATION"
 # The same table a line at a time, so that a failure names the hook rather than
-# printing two tables to compare by eye. Both directions: an expected line that
+# printing two tables to compare by eye. The whole-table row above stays: it is
+# the only one of the three that sees order, since a swap leaves every line
+# present and none unexpected. Both directions: an expected line that
 # is missing, and a registered line nobody expected.
 while IFS= read -r line; do
   present "settings.json has: $line" "$line" "$(printf '%s\n' "$REGISTRATION" | tr '\n' ' ')"
@@ -10833,7 +10857,9 @@ echo "--- all seven Bash hooks at once: a permitted spelling is permitted by eve
 # $WT_WORK is a linked worktree on its own branch, carrying a commit, with an
 # origin and origin/dev-05 -- an agent's worktree mid-task. The two catch-up
 # spellings run in $WT_STALE, a worktree branch the dev branch has moved past,
-# which is where the stale guard's message names them. The route-1 worktree
+# which is where the stale guard's message names them -- and is the state
+# EnterWorktree leaves under `baseRef: fresh`, a branch at an older commit with
+# nothing of its own, which is where route 2's reset is written for. The route-1 worktree
 # creation runs from the main checkout.
 #
 # THE FIRST RUN FOUND ONE, #164. no-commit-to-main.sh refuses a push to main
@@ -10843,7 +10869,8 @@ echo "--- all seven Bash hooks at once: a permitted spelling is permitted by eve
 # `gap` cannot express it. It is recorded as a row on the message instead,
 # marked a gap: it asserts the sentence is still there, and #164's fix turns it
 # red by removing it, which is the outcome `gap` describes. Every other spelling
-# below was permitted by all seven on the first run.
+# below was permitted by all seven on the first run, and so were the three that
+# review of this section added: the two gh api creates and the plain commit.
 XH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command' "$SETTINGS" 2>/dev/null \
              | sed 's|.*/||; s|"$||')
 req GH-109.5
@@ -10860,10 +10887,20 @@ need_worktree "$WT_STALE" 'stale'
 # refusals name.
 req GH-109.5 US-4
 every_hook "$WT_WORK" 'git push origin <branch> from a linked worktree' 'git push origin work-branch'
+# And the commit that precedes it, which no-commit-to-main.sh's and the stale
+# guard's refusals both tell an agent to make plainly, on the branch it belongs on.
+req GH-109.5
+every_hook "$WT_WORK" 'a plain commit on a worktree branch carrying work' 'git commit -m wip'
 # CLAUDE.md's pull request grants, and the spellings the base, retarget, review
 # and decision refusals name.
 req GH-109.5 US-8
 every_hook "$WT_WORK" 'gh pr create --base dev-NN' 'gh pr create --base dev-05 --title x --body y'
+# CLAUDE.md grants the same base "in whichever of the four spellings is used",
+# the two gh api forms included.
+every_hook "$WT_WORK" 'the REST create, naming dev-NN' \
+  'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=work-branch -f title=x'
+every_hook "$WT_WORK" 'the graphql create, naming dev-NN' \
+  'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}"'
 req GH-109.5 US-13
 for c in 'gh pr edit 5 --base dev-05' \
          'gh pr edit 5 --add-label x' \

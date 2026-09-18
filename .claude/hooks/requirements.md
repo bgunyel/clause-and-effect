@@ -1924,7 +1924,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
   open a PR instead", and `no-git-push.sh` refuses that push from every checkout an
   agent could stand in.
 - from: #164, found by #109's cross-hook checks
-- kind: defect-refusing
+- kind: doc-claim
 - status: gap → #164
 - note: the verdicts are right (US-2), so the defect is in the message, and the
   gap row reads the message: it asserts the sentence is still there and turns red
