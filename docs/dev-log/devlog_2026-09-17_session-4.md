@@ -1,103 +1,234 @@
-# 2026-09-17 · session 4 — the review of PR #152: the wrapper rule asks two questions
+# 2026-09-17 · session 4 — #108: what the hooks decide when the environment they read is broken
 
-**Branch** `worktree-issue-117-command-word`, PR #152 into `dev-05`, fourth
-commit. **Check suite 3880 → 3903 results, all passing.** The mutation registry
-goes from 27 rows to 28 — 26 real mutations against 5 files naming 34 requirement
-IDs, and the two self-tests.
+**Branch** `worktree-issue-108-malformed-input-verdicts`, cut from
+`origin/dev-05` at `befcf8a` and proposed into `dev-05` as pull request #150.
+Numbered 4 rather than 2: this session ran concurrently with #143's two, which
+reached `dev-05` first and took both earlier numbers. The entry was written as
+session 2 and renumbered when the collision showed up as an add/add conflict on
+the filename, which is the only thing that would have caught it — nothing checks
+that a dev-log filename is free before it is written. **Check suite 3657 → 3778
+results measured against `befcf8a`, and 3665 → 3786 after merging `dev-05` at
+`9221529`, all passing** — the same 121 either way: 97 of them in a section of
+its own, 24 in the #98 self-test, which had to grow before the section could be
+written.
+Ten requirements, `GH-108.1` to `GH-108.10`. Six rows added to the mutation
+registry, 23 → 29. One permitting gap found, filed as #144 and not fixed.
 
-A review session went over the branch read-only and returned five findings, with
-the verdict that there is no permitting regression: a differential harness over
-about 400 commands and a 300-case quoting fuzz produced no BLOCK→ALLOW flip, and
-the `cw_reduce`/`printhead` core is sound. Every one of the five was reproduced
-here before anything was changed.
+Issue #108 is the third of #103's stages. #95 pinned what a hook does when it
+cannot read its input; this one asks the step after it — what the hooks decide
+once the input has been read and the environment they read the *answer* out of is
+not the ordinary one. #103's audit had written the table and measured every cell
+at `750aace`, and marked some open, some closed, some by design and some by
+accident, with no check anywhere naming any of them.
 
-## The two that matter: #117 closed three sites of four
+## What the review and the merge cost, recorded after the fact
 
-The wrapper rule is an **and**. Is a wrapper in a command position — that is
-`CS_WRAPPER_RE`, shared, and this branch had already taught it the five
-spellings. And does the line carry the surface this hook guards — that is **each
-hook's own pattern**, four of them, and every one matched its guarded name by the
-bare spelling only.
+Bertan's review of PR #150 returned four findings. The one that mattered was a
+defect in the very thing this session claims to have established: the fixture
+guard for the `gh`-less PATH required `gh` to be installed. On a machine without
+it the symlink farm never held one, `rm -f` removed nothing, the guard read that
+as a broken fixture and aborted the whole suite at this section — skipping every
+section below it, #104's coverage derivations included. That is a dependence on
+the invoker's machine, which is the one thing #103's Q21 forbids and which this
+section's own preamble claims not to have. The assistant had written the claim
+and the violation of it in the same commit. Reproduced on a stripped PATH,
+fixed so that the required difference between the farm and the fixture is "that
+one name, or nothing at all when the machine has no such tool", and verified by
+re-running on the same stripped PATH: no abort, 3778 results, #104 reached.
 
-So the quoting half of #117 leaked at exactly the place the wrapper rule exists
-to close:
+The other three were stale counts in this entry — the summary paragraph, a
+section heading, and the NUL tally that its own index line disagreed with. Every
+one was a number written before the thing it counted stopped being true, and not
+revisited. That is the fourth distinct instance in this branch of the failure
+the branch is about, and the first three are described above.
 
-| command | before this session |
-|---|---|
-| `bash -c "gh pr merge 5"` | BLOCK |
-| `bash -c '"gh" pr merge 5'` | **ALLOW** |
-| `bash -c "'gh' pr merge 5"` | **ALLOW** |
-| `bash -c '"git" push --all origin'` | **ALLOW** |
-| `bash -c "/usr/bin/gh pr merge 5"` | BLOCK |
-| `bash -c "\gh pr merge 5"` | BLOCK |
+Then `dev-05` moved: #143 landed, and its two entries had taken `session-2` and
+`session-3` for this date. This entry was written as session 2 and is session 4
+because of it. Nothing checks that a dev-log filename is free before it is
+written; the collision surfaced as an add/add conflict in the merge, which is
+the only thing that would have caught it, and would not have caught it at all if
+the two sessions had chosen different titles for the same number.
 
-The path and backslash spellings already passed, because those patterns carry a
-left boundary that admits `/` and `\`. It is quotes alone that never produce the
-name-then-whitespace the patterns wanted — the half `cw_reduce` exists for.
+The merge also moved two pinned literals that both branches had edited from the
+same base — the text-check count, 274 with this branch's five and #143's eight on
+top of it, and `REQUIREMENT_SHAPE`. Neither was resolved by taking a side or by
+adding the two deltas: the count was set and then read back off a run, which is
+what #148 argues a count should always be. It came to 287, and the suite agreed.
 
-Worse than the gap: the assistant had flipped `GH-117` to `status: active` with
-text claiming quoted spellings reach the bare-name verdict **in every hook**.
-That was false at four sites and pinned by no check. A requirement asserting more
-than its checks establish is the failure this file is most often about, written
-by the session that had just spent two rounds on it.
+## The question that decides whether an open cell is a hole
 
-**Measured before the fix was taken**, which is the only reason it was taken:
-across the 476 wrapper-carrying commands in a 75,346-command corpus, widening all
-four patterns to admit a quoted name changed **no verdict at all**. That is the
-contrast with recommendation 4 one session earlier, where the proposed close was
-measured and closed nothing — here the close works and costs nothing.
+The assistant re-measured the whole table at `befcf8a` before writing anything
+down, because the audit predates #95's landing and several cells could have moved
+under it. They had not. What the re-measurement added was the question the table
+does not ask: **is there a case where a hook's read of the environment fails while
+the command would still reach a repository?**
 
-The class is written out in each of the four rather than shared from the library.
-A shared variable that came back empty would degrade all four to their old
-spelling silently, in the permitting direction, and no guard can tell an empty
-variable from a narrow one — which is the argument `THE WORD LIST IS PART OF THE
-LOAD` already makes one level down. What holds the four together instead is a
-derivation: `check-hooks.sh` reads the boundary set off `settings.json` and asks
-every hook in it whether it carries the class, so a fifth boundary hook is asked
-without anyone revising a sentence. That is #84's lesson applied at the point
-where this session had just repeated #84's mistake.
+Every spelling that reaches one — `git -C`, `git --git-dir`, a `cd` or a
+`git checkout main` before the commit — was driven under each broken environment,
+and every one is refused. Those refusals are read off the text of the command and
+never off the environment, so they do not move when the environment does. That is
+the finding, and it is what makes the open cells safe to write down as intended
+rather than tolerated: the environments that produce a permit are the ones in
+which the command cannot run either.
 
-`g"h"` stays open — a quoted span in the *middle* of the word, which a character
-class cannot see and a quoted payload gives no word to reduce. It is the same
-accepted gap `CS_WORD_SPELLING` names one level up, and it is pinned.
+They are pinned all the same, in both directions. A hook that starts consulting
+the environment for one of those decisions turns them red, which is the whole
+point of pinning an answer that is currently right for a reason nobody wrote down.
 
-## The other three
+## The row the issue left to this pull request to decide
 
-- **Consequence 6 gave an example that its own commit refused.** It offered
-  `"$VENV/bin/gh"` as a permitted `$VAR` shape; the reduction resets at each
-  slash, so the word spells `gh` and is refused. The item now draws the line
-  where the behaviour draws it — a variable is unresolved only while it is the
-  **whole word** — and both verdicts are pinned. `requirements.md` had it right;
-  it was the prose that was wrong.
-- **A registry row mutated the wrong occurrence.** `wrapper-word-spelling-not-admitted`
-  was written as `/^CS_WRAPPER_RE=/s/[$]CS_WORD_SPELLING//`, and the same session
-  then added a second `$CS_WORD_SPELLING` to that line for the prefix words. With
-  no `g` flag, `sed` takes the first, so the row named for the wrapper word broke
-  the prefix word instead — and still reported `caught`, because both make
-  `GH-117` checks red. A row can be wrong in the permitting direction while
-  reporting exactly what the registry expects, which is what the `selftest-`
-  rows are about, arriving here as an ordinary defect. It is anchored on
-  `SPELLING((ba|z|)sh` now, which is unique.
-- **The path spelling reaches into quoted text.** `CS_WRAPPER_RE`'s spelling
-  prefix has no idea what a quote is, so a `sed` script whose *pattern* names a
-  wrapper is now read as one: `sed -i 's|/bin/sh -c git push --all origin|X|'
-  hooks.sh` was permitted at `origin/dev-05` and is refused here. Refusing
-  direction, one edit away, and in the same family as consequence 3 — a hook
-  cannot tell a command from prose that quotes one. Recorded and pinned in both
-  directions rather than fixed.
+`report-stale-branches.sh` exited 0 with no output at all when `git` was off PATH
+or it stood outside a repository. #108 named it and declined to decide it: either
+the silence is stated as intended in the file's header, or the file is changed to
+say why it reported nothing.
 
-## Evidence
+The assistant changed it. The argument was already in that file, twice over: it
+fails open *with a timeout* and says so in as many words when the fetch fails,
+"because the consequence is not cosmetic", and its heading
+`THE ARMING PROPERTY IS NOT SELF-ANNOUNCING` says that this file arms enforcement
+rather than performing it, so its breakage does not announce itself. Every other
+unread thing in the report already says so — the fetch, the merge settings, the
+pull requests, the main ancestry. These two paths were the exception, and no
+reason for the exception survived being looked for.
 
-- Suite 3880 → 3903, all passing. With `lib/command-scan.sh` alone reverted to
-  `origin/dev-05` and the rest of the branch in place, **249 checks go red and no
-  permitting check does**.
-- `wrapper-word-spelling-not-admitted` and the new
-  `wrapper-surface-quotes-not-admitted` both report `caught` off a run.
-- `make test`: 595 passed, 5 xfailed, and the pre-existing
-  `test_installed_packages_match_uv_lock` failure, which is the virtual
-  environment drifting from `uv.lock` and touches nothing on this branch.
+The heading is now printed before the first thing that can fail, and each of the
+three ways the file can have nothing to report prints a `branches: NOT READ` line
+naming its cause and naming what is not armed. The exit status stays 0: a
+SessionStart hook that fails is a session that does not start.
 
-## What this session did not do
+Two of the three causes are driven against a copy of the file in a tree that is
+no repository. The third — a root the file cannot reach — is not, and this is
+recorded rather than glossed: a directory unsearchable enough to fail that `cd`
+is one the file cannot be *read* out of either, so bash exits 126 before the
+guard is reached. The assistant measured that rather than assuming it, and the
+branch is held to the file's text instead. That is the whole of what is claimed
+for it.
 
-It did not re-open recommendation 4. The review did not contest it, and nothing
-measured here bears on it.
+The row above it in the table — the report when the fetch fails — turned out to
+be pinned in a way that says less than it looks like it says. `GH-100` asserts
+that `report-stale-branches.sh` CONTAINS `fetch: FAILED`, `merge settings: NOT
+READ` and the rest, and a file that never reaches those lines contains them just
+as well. `GH-108.10` drives the degraded report instead: a repository whose origin
+is a path that is not there, under the `gh`-less PATH the section already builds.
+It costs no wall clock, which is why it can be a check at all — a fetch of a
+local path that does not exist fails at once, and the file's own header says the
+pull request read is skipped when the settings read found `gh` missing. A
+genuinely unreachable network would cost the full fifteen seconds and is nobody's
+check.
+
+## A NUL in the suite's own text, which nothing said the name of
+
+The first draft of the byte-level checks carried a real NUL byte in a payload
+literal. GNU grep calls a file with a NUL in it binary and `grep -o` then prints
+nothing, so `READ_DOCS` — a derivation four hundred lines away that reads this
+suite's own text to learn which documents it reads — came back empty, and two
+checks about names in a paragraph went red. Nothing anywhere said NUL.
+
+It happened four times. The second was in the comment the assistant wrote
+warning about the first, which spelled the escape and embedded the byte instead;
+the third was in the paragraph above, in this file, caught by a scan of every
+file this branch touches rather than by anything that would have announced it;
+and the fourth was in the first draft of the commit message, which git refused
+outright, being the one consumer of these bytes that checks. Four other
+derivations in the suite read this file the same way and would have gone quiet
+rather than red.
+
+This paragraph said three until Bertan's review of PR #150, because it was
+written before the fourth happened and was not revisited when it did — which is
+the same failure as the counts below, arriving through the same door.
+
+The cause is worth naming, because it is not carelessness: the escape is written
+into a tool call, which is itself JSON, so a `\u0000` in the text being written
+is decoded once before it ever reaches the file. Spelling the escape and writing
+the byte are the same keystrokes. Nothing in the editing path says so, and the
+only reliable check is to read the bytes back.
+
+The payloads are now spelled `\u0000` and jq does the decoding, which is also how
+such a command would actually arrive: a tool call is JSON, and a NUL can only
+reach a hook as that escape. The account is in the section, because a fix whose
+whole content is "do not do the thing that looked fine" is one the next person
+will undo.
+
+What the byte checks pin, measured rather than reasoned: a NUL is **stripped** by
+the command substitution that reads it, so what decides the verdict is whether
+stripping it joins two words. On one line it fuses `ls` and `git` into `lsgit`
+and the push is hidden; after a newline it fuses nothing and the push is refused
+as it always was. The issue's table had the first half and not the second. The
+permit is accepted, with the reason beside it: neither a NUL nor a non-breaking
+space is whitespace to a shell, so what is hidden from the hook is not a command
+that would have run.
+
+## The self-test had to grow first
+
+Four new helpers were needed — `env_feed`, `env_cmd`, `env_says` and
+`report_says` — because every existing one fixes half of what each
+row of the table needs — `check_in` names a directory and takes the suite's PATH,
+`feed` names a PATH and runs in a fixed directory. The suite refused all three
+until they were driven: it derives, from its own text, every helper that reads a
+hook's exit status, and fails one that the #98 self-test does not drive against
+hooks exiting 0, 2, 1 and 127. Three of the four are caught by that derivation;
+`env_cmd` reads no status of its own, handing its payload to `env_feed`. So they
+had to move up beside the others, since a function defined after the self-test
+has not been defined when it runs.
+
+`report_says` needed a fifth fixture. It is the first helper that asks for a
+status *and* a sentence at once — a report that exits 0 having said nothing is
+precisely the defect it exists to catch — so `allow-0`, silent and successful, is
+its failing case rather than its passing one, and `speak-0` was added to be the
+passing one. Both halves were dropped in turn and measured to fail exactly there.
+
+## The gap that was found and not fixed
+
+`no-pr-decisions.sh` judges a pull request's base by pattern, `^dev-[0-9]+$`, and
+reads no git at all. With two `dev-NN` refs on origin — which is what a dev-branch
+rotation looks like — `gh pr create --base dev-05` is permitted while `dev-06` is
+the active dev branch. CLAUDE.md says "into the active dev branch", so this
+permits something the boundary refuses. In the same fixture
+`no-work-on-stale-branch.sh` refuses and names `origin/dev-06`, so two hooks in
+one repository disagree about which branch is active; that is the sharpest way to
+state it.
+
+#103's Q18 says such a case is filed as a sub-issue of #36 with its check written
+at the *correct* verdict. The assistant filed it — #144 — and wrote the check at
+the **measured** verdict instead, which is the one place this work departs from
+its own ticket. The reason is the ticket's own subject: the fix is to have that
+hook read refs, and a hook that reads refs fails open when it cannot, which is the
+failure mode every other row here exists to pin. `no-pr-decisions.sh` is today the
+only hook in the boundary whose verdict is independent of its environment, and
+`GH-108.6` pins that as a property across every fixture. Trading it for a gap that
+exists during a rotation is the wrong way round.
+
+The check carries `ACCEPTED GAP` in its label and names #144, so the fix turns it
+red and finds the issue. Bertan may well decide the other way; what this session
+declined to do is decide it silently.
+
+## Six rows in the mutation registry
+
+Registered and run, rather than declared: `--list` now prints 29 rows. The six
+new ones break the unresolved-git-dir refusal in `no-git-push.sh`, the version
+sort that picks the active dev branch, the reader's indifference to `tool_name`,
+a hook's exit status, the report's new sentence, and — the sixth, added by the
+review pass — the line in which the degraded report says its fetch failed, which
+is `GH-108.10`'s own claim that a report which cannot read still reports.
+
+`dev-branch-not-version-sorted` is worth its own line. It replaces `sort -V |
+tail -1` with `sort | head -1`, and the *existing* lifecycle fixture — which
+holds `dev-05`, `dev-4` and `dev-foo` specifically to check that sort — stays
+green under it, because a lexical sort of those three happens to put `dev-05`
+first as well. Only the new two-ref fixture catches it, where `dev-05` sits at
+base and `dev-06` at the tip so the two refs disagree about the stale branch. A
+fixture with both refs at the tip would have refused whichever was chosen and
+been evidence about neither.
+
+Four of the ten requirements have no row. The first count was five, and the
+review that followed found one of them reachable after all: `GH-108.10` says the
+degraded report still reports, and deleting the line that reports it turns that
+check red. It is registered. The four that remain are `GH-108.3`, `GH-108.4` and
+`GH-108.7`, which pin verdicts no single edit to a hook flips without flipping a
+great deal else, and `GH-108.6`, a property of a hook starting no process, which
+an edit can only break by making it start one. That the first answer was wrong by
+one is worth recording rather than quietly correcting: "no mutation reaches this"
+is the same shape of claim as "this check covers that", and it wants the same
+scepticism. The
+backlog item in `docs/todo.md` carries the shape of that gap and now carries this
+instance of it.

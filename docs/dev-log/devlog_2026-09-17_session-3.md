@@ -1,112 +1,162 @@
-# 2026-09-17 · session 3 — #117 recommendation 4: the close was written, measured, and rejected
+# 2026-09-17 · session 3 — a control recorded as refused was permitted, and the count it stood on was stale in four documents
 
-**Branch** `worktree-issue-117-command-word`, PR #152 into `dev-05`, third commit.
-**Check suite 3868 → 3880 results, all passing.** The mutation registry goes from
-26 rows to 27 — 25 real mutations against 5 files naming 34 requirement IDs, and
-the two self-tests. `GH-117.1` is new and `active`: 0 refusing, 7 permitting, 5
-static, `permit-only`. CLAUDE.md's *Deliberately left open* goes from five
-consequences to six.
+**Branch** `worktree-issue-143-boundary-in-effects`, proposed into `dev-05` as
+pull request #146, at `9bd972a` when the review arrived. **Check suite 3660 →
+3665 results, all passing.** Five of the new results are checks added here; the
+text-check count literal moved 277 → 282 with them. No hook is changed by this
+session either.
 
-Session 2 left one thing undecided: recommendation 4 of #117's triage, a command
-word that is a parameter or a command substitution. The triage called it "a
-judgement call for the maintainer [that] should be settled before
-implementation", and the assistant declined to take it either way.
+Bertan reviewed #146 and requested changes, re-measuring every load-bearing
+claim in it in a separate clone. The thesis and the central measurement
+reproduced exactly, and so did the suite figures, the ruleset read and the
+seven-hook correction. Five findings did not reproduce, and the first of them is
+a defect in the permitting direction: a command the previous entry recorded as
+**refused** is permitted by all seven registered Bash hooks, and its effect is a
+reserved act that no ruleset reaches either.
 
-## Bertan refused the framing, and was right to
+## The control that was not refused
 
-His answer was that it is not a judgement call at all but an empirical question,
-and he answered it: every Bash command from 651 local session transcripts,
-74,992 of them, scanned for a command substitution in command position. He
-reported `$(…)` 0, `` `…` `` 2026, `$VAR` 144, and concluded that the three
-shapes recommendation 4 lumps together have nothing in common empirically — so
-refuse `$(…)`, where the measured mistake rate is zero, and let an item 6 cover
-the other two.
+`gh api --method POST /repos/bgunyel/clause-and-effect/merges -f base=dev-05 -f
+head=<branch>` passes all seven hooks. Re-measured here by feeding it to each
+hook as JSON on stdin; nothing was executed. It cannot block in any
+environment, because **no hook contains a rule that matches `/merges` at all** —
+a grep across every hook and `lib/command-scan.sh` returns two prose comments in
+`no-work-on-stale-branch.sh` about when a pull request merges, and nothing else.
+The merge spellings that are ruled on block correctly: `gh api --method PUT
+…/pulls/35/merge` and `gh pr merge 35 --squash` both on `no-pr-decisions.sh`,
+and `git push --force origin dev-05` on `no-git-push.sh`. So the measurement rig
+was sound and the row was simply wrong.
 
-He also wrote out the strongest objection to his own recommendation, which is
-that a shape with a measured mistake rate of zero offers exactly zero
-mistake-protection, and CLAUDE.md says these hooks stop mistakes rather than
-adversaries. He overrode it on the ground that the cost actually being paid is
-re-litigation: `/usr/bin/env gh` was permitted, the next review round found it,
-and `$(command -v gh)` would be found the same way — so buy the permanent close
-while it costs one alternative in a regular expression that already exists.
+The previous entry recorded that force-push and that `POST …/merges` as
+"controls, and they are refused". The push is refused. The assistant wrote the
+second row without measuring it, and wrote it in the direction that made the
+boundary look tighter than it is — in a record that is append-only.
 
-## Two measurements, and they reversed the recommendation
+`POST …/merges` is the REST *merge a branch* endpoint. With `base=dev-05` it
+creates a merge commit on `dev-05`, which **advances the active dev branch on
+the remote** — the first act `CONTEXT.md`'s *reserved act* enumerates, and one
+`main-branch-protection` does not reach, since that ruleset targets
+`~DEFAULT_BRANCH`. It is therefore uncovered at both layers, exactly like the
+force-move and the deletion that #143 was filed on. Recorded on #143 rather than
+as a new issue: it is the same thesis arriving under a third name for one
+effect, and it needs no new sub-ID, because a default-deny predicate that
+refuses it is the predicate `GH-143.1`–`GH-143.3` already describe. It does
+sharpen that issue's Amendment B, which is the half that matters — a REST
+allowlist keyed on `git/refs`, or on "ref endpoints" generally, would not catch
+this one, because `/merges` is a ref endpoint only by effect and not by path.
 
-The assistant re-ran the count before implementing, on the same corpus, and got
-75,346 commands and 37 rather than 0. The difference was methodology and worth
-chasing: `CS_WRAPPER_RE` strips assignments and prefix words before it looks, so
-`cmd="echo $(…)` puts a `$(` in a command position **as the hook reads one**,
-where bash would not call it one. The hook is looser than bash there, and a
-count taken against bash undercounts what the rule would fire on.
+## The count, in four documents, already false where it stood
 
-So the question was re-asked with the repository's own expression rather than a
-paraphrase of it — the current `CS_WRAPPER_RE`, and the same string with a `\$\(`
-alternative added — and then the candidates were fed to the real hooks.
+The sentence "those two are the only acts here that neither a hook nor the
+server covers" was carried by `CONTEXT.md`, by ADR 0002, by #146's body and by
+the previous entry. `POST …/merges` falsifies it. Reading falsifies it too,
+without any measurement: the same paragraph in `CONTEXT.md` named a third such
+act two sentences later, the `PUT …/contents/` write found during the previous
+session.
 
-**Finding one: the close closes nothing it is named for.** The wrapper block is
-an *and*. Is a wrapper in a command position, and does the line carry what this
-hook guards. The alternative answers the first question; the second is answered
-by patterns that want the tool's name followed by whitespace, and a command
-substitution eats that boundary — the line reads `gh)`, not `gh `.
+Bertan's instruction was to correct it rather than re-number it, and no document
+carries a count now. `CONTEXT.md`, ADR 0002 and `GH-143.4` state none, and a new
+`unarmed` holds `CONTEXT.md` to stating none. The number had moved three times
+in one day — two spellings when #143 was filed, three by the end of the session
+that filed it, four at review — which is the argument for saying that a measured
+set is only ever as wide as the spellings someone thought to try.
 
-| command | before | with the `$(` alternative |
-|---|---|---|
-| `$(command -v gh) pr merge 5` | ALLOW | **ALLOW** |
-| `$(which gh) pr merge 5` | ALLOW | **ALLOW** |
-| `$(command -v gh) release create v1` | ALLOW | **ALLOW** |
-| `$(command -v git) push origin main` | ALLOW | **ALLOW** |
-| `$(command -v gh) api -X PUT repos/o/r/pulls/5/merge` | ALLOW | BLOCK |
-| `$(echo gh ) pr merge 5` | ALLOW | BLOCK |
+## A check that pinned a placement rather than a claim
 
-The two that flip are the control. The `gh api` spelling matches on the
-`/pulls/…/merge` literal and needs no `gh` at all; the other is the same command
-with one space added so the surface pattern can see the name. Between them they
-isolate the whitespace requirement as the whole mechanism.
+The `unarmed` added last session asserted the absence of `'checkout it is
+checked out in.'`, on the reasoning that the enumeration used to end on that
+clause, so the absence of its terminating period says the addition is still
+there. Bertan measured the five mutants that reasoning implies and it does not
+hold. A straight revert of the clause reddens **both** `written` checks on its
+own, so the `unarmed` adds no falsification power there. What it uniquely
+catches is the clause moved to sit beside the act it extends — a **correct**
+document, and one of the four judgements #146's own review pointers invited a
+reviewer to overturn.
 
-**Finding two: the false-positive count is not zero.** Of 75,346 commands, 88 are
-newly called a wrapper and **9 change verdict**. Every one is a false refusal,
-and 8 of the 9 are lines of `check-hooks.sh` being edited — for instance
-`"$(printf 'sudo -u root git push --all origin\n' | cs_split)"`. The close would
-have obstructed work on these very files.
+The justification the assistant wrote into the comment beside that check — that
+a revert would otherwise pass — was false, and it was checkable in the file it
+was written in. The check is replaced by an `unarmed` on `'the only acts'`,
+which is a claim about what the document says rather than about where its lines
+break, and which falsifies a count coming back.
 
-## What landed instead
+The session-2 entry recorded those three checks as "mutation-checked
+individually", and that was true as far as it went: each was reverted and seen
+to redden. What the assistant did not ask is whether each reddened for the
+*reason* its label gives. A mutation that reddens a check is evidence the check
+is reachable; it is not evidence that the check measures the claim beside it.
 
-Consequence 6, covering all three shapes, carrying the numbers and the rejected
-close. Bertan chose it once the measurements were in.
+## The fragile fixture the suite had already fixed
 
-The item is held by checks in both of its halves, because neither half is enough
-on its own — the document without the verdicts is a claim nobody ran, and the
-verdicts without the document are three permitted commands with no reason
-attached:
+All three new checks read `$RESERVED_ENTRY`, the extracted entry as written.
+`written` and `unarmed` match a literal within a line, so a check over that
+fixture is partly a check on where the paragraph happens to wrap — which is why
+`$RESERVED_FLAT` exists at `check-hooks.sh:5362`, added under `GH-97.2`, with
+the measurement recorded in the comment above it.
 
-- Five `holds` checks on the extracted list: the three spellings by name, the
-  corpus size, and the sentence recording that the close was written first. Each
-  was mutation-checked by hand, all five literals removed from `CLAUDE.md` in one
-  run, and each check failed by its own label; `CLAUDE.md` was restored from a
-  file copy rather than from git.
-- Seven permitting checks across `no-pr-decisions.sh`, `no-git-push.sh` and
-  `no-commit-to-main.sh`. `GH-117.1` is `permit-only` and says why in its
-  `direction` field: an accepted gap has no refusing half, and writing one would
-  claim a refusal that does not happen.
-- One of the 9 false refusals is kept as a check, so a later attempt at the same
-  close fails in this suite rather than in a review.
-- A registry row, `the-close-117-rejected`, whose edit is the close itself. It
-  reported `caught`.
+So the fact the previous entry recorded as a property of the document — that
+placing the clause mid-paragraph re-wrapped two pinned literals and turned three
+passing checks red — was a property of the checks. The assistant wrote three new
+checks against the fragile fixture, hit its documented weakness, and then shaped
+`CONTEXT.md` around it, with the fix sitting 200 lines up in the same file. All
+four checks now read `$RESERVED_FLAT`, the clause sits beside the act it
+extends, and the placement decision recorded last session is overturned. The
+re-wrap that follows from moving it leaves every pre-existing pin green, which
+was measured rather than assumed.
 
-**That row took two goes, and the first one is worth recording.** The sed
-replacement was written `\\$\\(`, which sed turns into `\$\(` in the file, which
-bash then reads inside a double-quoted string as `$\(` — a `$` anchor followed by
-a literal paren, an alternative that can never match. The harness said `survived`
-with nothing red, and the honest reading of that was not "the check is wrong" but
-"the mutation did nothing". It needed `\\\\$\\\\(` to put `\\$\\(` in the file.
-Three escaping layers — the registry heredoc, sed, and the shell that reads the
-expression back — and the suite was green on both sides of a mutation that was
-not a mutation. That is the shape the two self-tests in the registry exist for,
-and it arrived unprompted the first time a row of this kind was written.
+## `CLAUDE.md` said there was one ADR
 
-## What this session did not settle
+`CLAUDE.md`'s *Domain docs* section opened "Single-context: `docs/adr/` holds one
+ADR", and `docs/adr/0002-boundary-stated-in-effects.md` made that false in the
+commit that added it. Nothing caught it: a grep for `docs/adr` across
+`check-hooks.sh` returned nothing at all. The clause sat two clauses to the left
+of the one sentence in the file that warns a reader off exactly this — "this line
+deliberately does not enumerate it: the sentence that did named two terms of
+five and went stale without saying so".
 
-Nothing. Recommendation 4 is closed, and `GH-117` and `GH-117.1` are both active
-and covered. `make test` is unchanged: 595 passed, 5 xfailed, and the
-pre-existing `test_installed_packages_match_uv_lock` failure, which is the
-virtual environment drifting from `uv.lock` and touches nothing on this branch.
+The count is gone rather than corrected, for the reason that sentence gives
+about the glossary, and the line is now pinned as `GH-143.5` with a
+`written`/`unarmed` pair over the flattened section: that the section names
+`docs/adr/` as where the ADRs are, and that it states no count of them. This was
+the drift class ADR 0002 is about, arriving unguarded in the document that
+describes where ADR 0002 lives.
+
+The reason the rest of `CLAUDE.md` is still untouched is unchanged and was
+confirmed in review: its boundary paragraph is the text the hooks refuse in the
+words of, `GH-97.2` pins the two to the same phrase, and restating it in effects
+while the hooks still refuse one spelling would manufacture that drift in the
+wider direction. That reason does not reach the *Domain docs* line.
+
+## ADR 0002 contained a claim its own commit falsified
+
+The ADR said of the two undocumented `gh api` writes that "a grep for either
+over every `*.md` and `*.sh` in the repository returns nothing". True at
+`befcf8a`; false at `9bd972a`, where the ADR and the dev-log entry both name
+them. The intent — that no rule, hook or check documents those writes — is what
+the sentence now says, with the two hits named.
+
+## Errors, all four the assistant's
+
+1. **A control row recorded without being measured**, in the permitting
+   direction, in an append-only record.
+2. **A count published in four documents** that was false in the paragraph it
+   stood in.
+3. **A check whose stated justification was false**, pinning a placement while
+   its comment claimed it pinned a revert.
+4. **Three checks written against a fixture documented as fragile**, followed by
+   a document reshaped to satisfy them.
+
+The first was caught by measurement, the other three by reading — two of them by
+reading the very file the checks were added to.
+
+## What is open
+
+- **#143** gains `POST …/merges`, by comment; its body stands as filed, with the
+  comment as the correction rather than a silent edit. Sub-IDs unchanged. Still
+  sequenced after #135 and #138.
+- **#145** is unchanged. Contradiction by addition is still the half no text
+  check reaches, and the new `unarmed` disclaims it in as many words.
+- **The *Deliberately left open* count stays at Five**, for the reason recorded
+  on #143: reaching for an API spelling after a push was refused is an honest
+  next move, which is what makes this a bug rather than an accepted gap.
+- **No rule is written.** Every verdict this branch records is still queued
+  behind #135, #137 and #138.

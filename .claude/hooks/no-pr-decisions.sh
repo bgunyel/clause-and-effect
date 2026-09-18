@@ -630,10 +630,50 @@ while IFS= read -r CMD; do
   #
   # Editing a pull request stays allowed; moving its base is the same choice of
   # destination made a second time, so it is checked, and only when it is there.
+  #
+  # THE TAIL NAMES A RETARGET, NOT A CREATE, and #133 is the whole of why. $BASE
+  # is one constant for four refusals because FR-23 asks the base rule's messages
+  # to be consistent with each other -- #40 was a rule that held for
+  # `gh pr create` and not for `gh api`, and one sentence is how that is kept
+  # from happening in prose. For the three creating arms that constant is also
+  # US-7's one-step correction. For this one it is not: a retarget to the active
+  # dev branch is permitted, so the correction to `gh pr edit 5 --base main` is
+  # `gh pr edit 5 --base dev-05`, one word of the command already written. A
+  # create is not a correction of that command at all -- acted on literally it
+  # leaves the mis-targeted pull request open and opens a second beside it.
+  #
+  # So the constant stays and the tail, which is already per-arm, names this
+  # arm's own correction. The tail this replaced was "Edit anything else you
+  # like", which read against a refusal whose subject is the base says the base
+  # is the one thing that may not be edited -- when editing it to dev-NN is
+  # exactly what is allowed.
+  #
+  # THE TRADE THIS LEAVES, named rather than left to be found. $BASE still opens
+  # with `Write: gh pr create --base dev-NN --title ... --body ...`, so a refused
+  # retarget carries TWO imperatives and the wrong one comes first: an agent that
+  # acts on the first `Write:` it reads still opens a second pull request beside
+  # the mis-targeted one, which is the exact failure #133 was filed about. What
+  # #133 fixes is that the right correction is now there at all; it does not fix
+  # the order. Keeping one constant is FR-23's own requirement and is what #133
+  # asked for in as many words -- "the fix is not to break the constant" -- and
+  # the alternative, a per-arm `Write:` line, would satisfy both but rewrites all
+  # four base refusals and moves the pins on three arms this issue is not about.
+  # So it is left, deliberately, and filed as #154 rather than traded in silence;
+  # #109 owns message content. Raised by Bertan's review of PR #147.
+  #
+  # NOTHING STANDS IN THAT SENTENCE'S PLACE, and the first draft of this fix got
+  # that wrong. It ended "No other edit is checked here", which is true of this
+  # arm and not of this file: an edit sharing a line with a shell wrapper is
+  # refused, which is CLAUDE.md's left-open item 2 and applies to every command
+  # on the line. A message that has to be read against that caveat is a message
+  # an agent corrects itself from in two steps, which is the opposite of what
+  # US-7 asks. Nothing is lost by dropping it either: a refusal that names
+  # `gh pr edit <n> --base dev-NN` as the thing to write has already said that
+  # `gh pr edit` is not what is refused.
   if RAW=$(cs_gh_args 'pr edit' <<<"$CMD"); then
     ARGS=$(base_args "$RAW")
     if ! bases_all_dev "$(gh_pr_bases "$ARGS")"; then
-      echo "$BASE Retargeting to $BAD_BASE chooses that destination just as creating it there would. Edit anything else you like." >&2
+      echo "$BASE Retargeting to $BAD_BASE chooses that destination just as creating it there would. Retarget to the active dev branch instead: gh pr edit <n> --base dev-NN." >&2
       exit 2
     fi
   fi

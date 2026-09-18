@@ -807,6 +807,72 @@ tok 'unterminated heredoc gives its lines back' \
     'git commit -m "fix <<EOF handling"
     git push --all origin' \
     "$(printf 'git commit -m "fix <<EOF handling"\n    git push --all origin\n' | cs_normalise)"
+# Issue #128, read here as output before it is read below as verdicts. An opener
+# whose own line ends in a backslash is a continued line to bash, which joins it
+# before the body begins -- so the body of `cat <<E \` / `x` / `E` is empty and
+# the command after `E` runs. The drop took `x` for the body, ended it at `E`,
+# and cs_join then glued that command onto the opener line, where it stands at
+# no command position: this output was `cat <<E git push --force origin main`,
+# one line, and every hook reading it permitted the push.
+#
+# The push standing at the head of a line of its own is the whole of the fix,
+# and each of these says which line it is on.
+req GH-128
+tok 'a continued opener ends its logical line before the body begins' \
+    'cat <<E x
+git push --force origin main' \
+    "$(printf 'cat <<E \\\nx\nE\ngit push --force origin main\n' | cs_normalise)"
+tok 'an opener continued twice, and the body still starts after the line' \
+    'cat <<E -n -E
+git push --force origin main' \
+    "$(printf 'cat <<E \\\n-n \\\n-E\nx\nE\ngit push --force origin main\n' | cs_normalise)"
+# The body is still dropped, so the fix did not simply stop dropping: a quoted
+# body whose lines end in a backslash ends at its terminator, where bash ends it
+# too, and cs_join never sees those lines to join them.
+tok 'a body line ending in a backslash is not joined past its terminator' \
+    "cat <<'E'
+git push --force origin main" \
+    "$(printf "cat <<'E'\nprose \\\\\nE\ngit push --force origin main\n" | cs_normalise)"
+tok 'a body naming a push on a continued line is still dropped' \
+    "cat <<'E'" \
+    "$(printf "cat <<'E'\ngit push --force origin main \\\\\nE\n" | cs_normalise)"
+# THE TWO PLACES A TRAILING BACKSLASH IS READ, and what happens where they
+# disagree. cs_join joins a line ending in ANY backslash, deliberately and
+# unchanged; bash continues a line only when the run is ODD. The drop follows
+# bash, so the two disagree exactly on an even run -- and an even run is then
+# the line a body starts after, which is the one line where cs_join could glue
+# the first line past the terminator onto it. So the drop takes the run off.
+#
+# The first version of this fix used cs_join's looser rule in the drop instead
+# and argued that looser was the safe side. It is not: holding the line open
+# moves the terminator search forward, a delimiter line bash took as the whole
+# terminator is scanned past, and the body runs to the NEXT delimiter, dropping
+# what lies between. The shape below is that defect, measured at exit 0 on the
+# first version and exit 2 on dev-05, and it is checked here as output and
+# below as verdicts.
+#
+# Each pair is the same run read twice, once through cs_join and once through
+# cs_normalise, so a change to either rule moves one literal of a pair.
+tok 'cs_join joins an even run, which bash does not' \
+    'cat <<E \x' \
+    "$(printf 'cat <<E \\\\\nx\n' | cs_join)"
+tok 'so the drop ends the logical line there and takes the run off' \
+    'cat <<E
+git push --force origin main' \
+    "$(printf 'cat <<E \\\\\nE\ngit push --force origin main\n' | cs_normalise)"
+tok 'the swallowed-terminator shape, which the first fix emptied' \
+    'cat <<E
+echo after
+git push --force origin main
+E' \
+    "$(printf 'cat <<E \\\\\nE\necho after\ngit push --force origin main\nE\n' | cs_normalise)"
+tok 'an odd run of three is a continuation to both of them' \
+    'cat <<E \\x' \
+    "$(printf 'cat <<E \\\\\\\nx\n' | cs_join)"
+tok 'and the drop defers the body over it' \
+    'cat <<E \\x
+git push --force origin main' \
+    "$(printf 'cat <<E \\\\\\\nx\nE\ngit push --force origin main\n' | cs_normalise)"
 # Redirections. A redirect is not an argument, and nothing removed it, so its
 # operator or its target was read as a refspec and every redirect on an
 # otherwise permitted push was refused. Issue #50.
@@ -1780,6 +1846,89 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'left shift << in a message, then --all
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'issue comment naming <<, then --mirror' $'gh issue comment 1 -b "see << notes"\n    git push --mirror origin'
 # A heredoc that does terminate is still data, so the older checks above still
 # ALLOW -- that is what says the fail-safe did not simply disable the drop.
+
+section "=== REGRESSION: issue #128, a continued opener hid the command after the terminator ==="
+# The fifth answer to where a heredoc body begins and the fourth wrong one, and
+# the first of them about the OPENER's own line. Bash joins a line ending in a backslash before
+# the body starts, so `cat <<E \` / `x` / `E` is `cat <<E x` with an empty body
+# and the next command runs -- measured with `echo RAN-AFTER` in its place,
+# which printed after cat's complaint about the file `x`. The drop read `x` as
+# the body instead, ended it at `E`, and the join then put the command after the
+# terminator on the opener's line, at no command position: exit 0 from both
+# hooks, where the same command without the backslash was exit 2.
+#
+# Every spelling of the opener is asked, because the spellings are where this
+# question has gone wrong before: `<<-` and `<<<` were the second and third
+# wrong answers and each was a spelling the comparison did not match. #106's
+# families ask the seven of them of every seed; these are the two hooks and the
+# two directions the issue measured, written out.
+#
+# THE EVEN RUN is here too, and it is not the issue's shape but the first fix's.
+# Bash continues a line only on an ODD run of trailing backslashes, and that fix
+# held the line open on any run at all -- which moved the terminator search
+# forward, let the body swallow the terminator, and dropped every line up to the
+# next one. `cat <<E \\` / `E` / `echo after` / *push* / `E` runs that push
+# under bash and was permitted, exit 0, where dev-05 refused it. Found by review
+# of this pull request. A generated run of 2,580 shapes, each executed under
+# bash with a harmless payload to decide what really runs, puts dev-05 at 198
+# hidden pushes, that fix at 40, and this one at 0.
+req GH-128
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'continued opener, then a forced push' \
+  $'cat <<E \\\nx\nE\ngit push --force origin main'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'continued opener, then a commit on main' \
+  $'cat <<E \\\nx\nE\ngit commit -m wip'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'the <<-E spelling, tab-indented terminator' \
+  $'cat <<-E \\\n\tx\n\tE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK "the <<'E' spelling" \
+  $'cat <<\'E\' \\\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'the <<"E" spelling' \
+  $'cat <<"E" \\\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'the << E spelling, a space after the operator' \
+  $'cat << E \\\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an opener continued over three lines' \
+  $'cat <<E \\\n-n \\\n-E\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'a redirect in front of the continued opener' \
+  $'cat > f <<E \\\nx\nE\ngit push --force origin main'
+# A quoted body whose lines end in a backslash still ends at its terminator, so
+# the push after it is read. Bash does not join inside a quoted body either.
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'a slashed body line, then a push' \
+  $'cat <<\'E\'\nprose \\\nE\ngit push --force origin main'
+# The even run, which bash does not continue: the terminator on the next line
+# ends an empty body, and what follows it runs.
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an even run, terminator, then a push' \
+  $'cat <<E \\\\\nE\ngit push --force origin main'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'an even run, terminator, then a commit on main' \
+  $'cat <<E \\\\\nE\ngit commit -m wip'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an even run whose body would have swallowed the terminator' \
+  $'cat <<E \\\\\nE\necho after\ngit push --force origin main\nE'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'the same shape on main' \
+  $'cat <<E \\\\\nE\necho after\ngit commit -m wip\nE'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an even run of four' \
+  $'cat <<E \\\\\\\\\nE\ngit push --force origin main'
+# And the permitting direction, which is what says the fix exposed a command
+# rather than stopping the drop: the shape the issue ran with `echo RAN-AFTER`
+# in place of the push, and a body that merely names one on a continued line.
+check_in "$PUSH_MAIN" no-git-push.sh ALLOW 'the same shape, with nothing to refuse after it' \
+  $'cat <<E \\\nx\nE\necho RAN-AFTER'
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'the same shape on main, with nothing to refuse' \
+  $'cat <<E \\\nx\nE\necho RAN-AFTER'
+check_in "$PUSH_MAIN" no-git-push.sh ALLOW 'a body naming a push on a continued line' \
+  $'cat <<\'E\'\ngit push --force origin main \\\nE'
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'a body naming a commit on a continued line' \
+  $'cat <<\'E\'\ngit commit -m wip \\\nE'
+# What the fix COSTS, which no check above can show: the same 2,580-shape run
+# read backwards counts pushes bash never runs that the hook refuses anyway,
+# and this change raises that count. Raised on review of this pull request and
+# kept. `written`, because it is a measurement in prose and the file is where
+# it has to stay true; each pin carries its whole claim on one line, since a
+# pin that is a prefix goes on passing after the rest of the sentence is gone.
+req GH-128
+written 'the library counts what the direction of the fix costs' \
+  "$HOOKS/lib/command-scan.sh" \
+  '750 such shapes on dev-05, 816 on the first fix, 848 here, of 2,100.'
+written 'and decomposes the rise into the two departures already named' \
+  "$HOOKS/lib/command-scan.sh" \
+  'of the 124 that arrive, 108 are the END give-back and 16 the unquoted-body'
 
 section "=== REGRESSION: review of 02a14d8, bundled gh shorthand flags ==="
 # gh takes shorthand flags together, so -ab is --approve --body and approves.
@@ -2888,7 +3037,7 @@ section "=== ACCEPTED false positive: a quoted redirect target ==="
 # exception, so this is a shortfall against it rather than a decision the issue
 # made -- taken because consuming a quoted target would mean the drop swallowing
 # text it cannot see the end of, which is the direction that has gone wrong
-# three times in this file. The targets an agent writes -- /dev/null, out.txt,
+# four times in this file. The targets an agent writes -- /dev/null, out.txt,
 # push.log -- carry no quotes.
 #
 # Pinned in both directions so a later change cannot move it silently. If these
@@ -2902,7 +3051,7 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'the same target unquoted' "git push or
 
 section "=== REGRESSION: issue #50, the drop must not hide a command ==="
 # Dropping is the one step in cs_normalise that hides text rather than exposing
-# it, and the heredoc question was got wrong three times in exactly that
+# it, and the heredoc question was got wrong four times in exactly that
 # direction. A process substitution carries a command, so it is not a redirect;
 # a command substitution used as a target is not a target. Both are pinned here
 # with a refused command inside, so hiding one would show up as ALLOW.
@@ -3203,18 +3352,22 @@ section "=== issue #105: a refusal names the permitted spelling ==="
 # that held for `gh pr create` and not for `gh api`. A message that held for one
 # spelling and not the others is that defect arriving as prose.
 #
-# The retarget's two rows are tagged FR-23 and not US-7, and #133 is why. One
-# constant for four refusals is what FR-23 asks for, and for three of the four it
-# is also the one-step correction US-7 asks for. For a retarget it is not:
-# `gh pr edit 5 --base dev-05` is permitted, so the correction is one word of the
-# command already written, and the message names a create -- which, acted on,
-# leaves the mis-targeted pull request open and opens a second beside it. The
-# same fact is evidence for one requirement and against the other, so the rows
-# say only the half that holds. Pinning them under US-7 would have made this
-# suite evidence that the message answers a story it does not answer, which is
-# what #103's Q18 forbids and what #130 and #131 were filed rather than pinned
-# for. Message content is #109's; the rows stay, because FR-23's claim is true
-# and is the claim that would go if the constant were split per arm.
+# The retarget's constant-half row is tagged FR-23 and not US-7, and #133 is why.
+# One constant for four refusals is what FR-23 asks for, and for three of the
+# four it is also the one-step correction US-7 asks for. For a retarget it is
+# not: `gh pr edit 5 --base dev-05` is permitted, so the correction is one word
+# of the command already written, and a create -- acted on -- leaves the
+# mis-targeted pull request open and opens a second beside it. The same fact is
+# evidence for one requirement and against the other, so this row says only the
+# half that holds, and it stays, because FR-23's claim is true and is the claim
+# that would go if the constant were split per arm.
+#
+# US-7's half is carried by the retarget's own tail, below, which #133 added and
+# which names `gh pr edit <n> --base dev-NN`. Before that the story went
+# uncovered here and requirements.md carried GH-133 as a gap: pinning US-7 on the
+# constant would have made this suite evidence that the message answers a story
+# it does not answer, which is what #103's Q18 forbids and what #130 and #131
+# were filed rather than pinned for.
 req US-7 FR-23
 says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
   'gh pr create with no base names the permitted spelling' \
@@ -3243,20 +3396,56 @@ says "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
 says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch' \
   'a create into main says which branch it named' \
   'gh pr create --base main --title x'
-# FR-23 alone again, and this tail is the worse half of #133: read against a
-# refusal whose subject is the base, "edit anything else" says the base is the
-# one thing that may not be edited, when editing it to dev-NN is what is allowed.
+# The retarget's tail, in two rows because it makes two claims that fail apart.
+# The first says which branch was named and that naming it is the choice the rule
+# refuses -- the half that tells this refusal from the three beside it.
+#
+# THE FRAGMENT IS THE WHOLE SENTENCE, and the first version of this row stopped at
+# `chooses that destination`. `just as creating it there would` is the clause that
+# ties a retarget to a create, which is the entire reason an edit is refused at
+# all -- and a prefix fragment still matches once it is deleted, so that clause
+# could have gone with this suite green. Bertan's review of this pull request.
+# `retarget-refusal-drops-the-create-comparison` in the registry deletes exactly
+# that clause, so the question of whether this row can fail is re-runnable rather
+# than argued.
 req FR-23
-says "$ON_DEV" no-pr-decisions.sh 'Edit anything else you like' \
-  'a retarget says what editing is still permitted' \
+says "$ON_DEV" no-pr-decisions.sh 'Retargeting to main chooses that destination just as creating it there would' \
+  'a retarget says which branch it named, and that naming it is the same choice' \
+  'gh pr edit 5 --base main'
+# The second is #133's fix, and the one row in this section that reads US-7 for a
+# retarget. The correction for `gh pr edit 5 --base main` is `gh pr edit 5 --base
+# dev-05`: one word of the command already written, and permitted -- pinned as
+# such by the ALLOW row on `gh pr edit 35 --base dev-05` above. Until #133 this
+# tail said "Edit anything else you like", which, read against a refusal whose
+# subject is the base, says the base is the one thing that may not be edited,
+# when editing it to dev-NN is what is allowed. The fragment is the whole
+# spelling and not the word `retarget`: a message naming the act without naming
+# what to write is the guessing US-7 exists to end.
+req US-7 FR-23 GH-133
+says "$ON_DEV" no-pr-decisions.sh 'Retarget to the active dev branch instead: gh pr edit <n> --base dev-NN' \
+  'a retarget names the retarget that would correct it' \
+  'gh pr edit 5 --base main'
+# And the phrase it replaced is gone rather than joined, because the two read
+# against each other: one sentence naming the permitted base beside another
+# saying the base may not be edited is US-7's guessing with a step added. Two
+# rows and a says_not are every clause of this tail, which is the property the
+# first draft of #133 did not have -- it ended in a third sentence, "No other
+# edit is checked here", that no row named and that could have been deleted with
+# this suite green. Found by review, not by the suite.
+says_not "$ON_DEV" no-pr-decisions.sh 'Edit anything else you like' \
+  'and does not also say the base is the one thing not to edit' \
   'gh pr edit 5 --base main'
 req US-7 FR-23
 says "$ON_DEV" no-pr-decisions.sh 'the same destination under another spelling' \
   'the REST spelling says it is the same destination named differently' \
   'gh api -X POST repos/o/r/pulls -f base=main'
-# Four spellings, four tails, and five rows: the REST and graphql spellings reach
-# one sentence, both setting API_BAD_BASE, so this asks whether graphql arrives at
-# the informative one rather than at some bare refusal of its own. The first
+# Four spellings, four tails, and seven rows -- five before #133, and the count is
+# here so that a tail losing its row is visible. Two tails are read by more than
+# one row: the retarget's by three, its two claims failing apart and a says_not
+# holding out the phrase #133 removed, and the API tail by two, because the REST
+# and graphql spellings reach one sentence, both setting API_BAD_BASE, so this
+# asks whether graphql arrives at the informative one rather than at some bare
+# refusal of its own. The first
 # version of this block pinned the constant half for graphql and left the tail to
 # the REST row -- an asymmetry review found, and the shape #40 was filed for: a
 # rule, or here a message, that holds for one spelling and not another.
@@ -4659,6 +4848,70 @@ feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <ra
   esac
 }
 
+# env_feed, env_cmd, env_says and report_says: issue #108, where a hook's verdict
+# is read against an ENVIRONMENT this suite built -- git off PATH, a directory
+# that is no repository, a detached HEAD, no origin, no dev-NN ref or two. Every
+# helper above fixes one half of that and leaves the other to the invoker:
+# check_in names a directory and takes the suite's PATH, feed names a PATH and
+# runs in $ON_DEV. These name both, which is what each row of #108's table needs.
+# They are up here with the others rather than in that section because the #98
+# self-test below drives every helper that reads a hook's exit status, and a
+# function defined after it has not been defined when it runs.
+env_feed() {  # env_feed <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin>
+  local dir="$1" path="$2" script="$3" want="$4" label="$5" payload="$6" rc err hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$payload" \
+        | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  verdict "$want" "$rc" "$err" "$label"
+}
+env_cmd() {  # env_cmd <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <command>
+  local dir="$1" path="$2" script="$3" want="$4" label="$5" cmd="$6"
+  env_feed "$dir" "$path" "$script" "$want" "$label" \
+    "$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}')"
+}
+env_says() {  # env_says <dir> <PATH> <script|/absolute/hook> <fragment> <label> <command>
+  local dir="$1" path="$2" script="$3" want="$4" label="$5" cmd="$6" rc err hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+        | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  if [ "$rc" != 2 ]; then
+    fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
+      "$label" "$want" "$rc" "$err"
+    return
+  fi
+  case "$err" in
+    *"$want"*) pass refuse 'says  %s' "$label" ;;
+    *) fail refuse '%s\n         wanted the refusal to say |%s|\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
+  esac
+}
+# The one helper here that runs no hook: report-stale-branches.sh is a
+# SessionStart report, so what is asked of it is that it exited 0 AND said a
+# literal -- #108's GH-108.9, where the failure it pins was a silent exit 0. Both
+# halves are in one helper because either alone passes the thing the other
+# catches: a report that says the right sentence and then exits 1 stops the
+# session, and one that exits 0 having said nothing is the defect itself. The
+# script is a parameter so that the #98 self-test can point it at a fixture; the
+# section that uses it passes a copy of the file outside any repository. Its
+# argument order is the family's -- the environment first, then what is run, then
+# what is expected of it, then the label -- so that a reader moving between these
+# helpers does not have to check.
+report_says() {  # report_says <PATH> <script> <literal> <label>
+  local path="$1" script="$2" want="$3" label="$4" out rc
+  out=$( cd "$(dirname "$script")" && PATH="$path" bash "$script" 2>&1 )
+  rc=$?
+  if [ "$rc" != 0 ]; then
+    fail static '%s\n         a SessionStart report must exit=%s, got exit=%s\n         output |%s|' \
+      "$label" 0 "$rc" "$out"
+  elif [ "${out#*"$want"}" = "$out" ]; then
+    fail static '%s\n         wanted the report to say |%s|\n         it said |%s|' "$label" "$want" "$out"
+  else
+    pass static 'report %s' "$label"
+  fi
+}
+
 # An ALLOW that came from the path simply not being there would say nothing
 # about docs/research/, and a BLOCK-expecting case needs its file present for
 # the same reason. Both are asserted rather than assumed.
@@ -6057,6 +6310,79 @@ written 'and names moving the ref without a push, which passes every hook' \
   "$RESERVED_ENTRY" 'git branch -f'
 written 'and a fetch into the local branch, which passes every hook too' \
   "$RESERVED_ENTRY" 'git fetch origin dev-NN:dev-NN'
+
+# #143: the same shape one spelling out. The clause above reserves moving a LOCAL
+# main or dev-NN; this one reserves moving the active dev branch's REMOTE ref any
+# way but forward, and it sits beside the act it extends at the head of the
+# enumeration rather than at the end of it. Named here for GH-99.1's reason, that
+# an act nothing refuses is only reserved in a document a reader can find. The
+# rule that would refuse any of it is GH-143.1 to GH-143.3 and is not written
+# yet, so this pins the document half only.
+#
+# Asserted against the FLATTENED entry, for the reason recorded at GH-97.2 above:
+# a literal matches within a line, so a check over the entry as written is partly
+# a check on where the paragraph happens to wrap. These three read
+# $RESERVED_ENTRY when they were first written, and adding the clause
+# mid-paragraph re-wrapped two literals pinned elsewhere in this file and turned
+# three passing checks red -- which decided where the clause went. That is a
+# document shaped to fit its check, and the fix was already 200 lines up. It is
+# also why the placement above is free to be the one the entry reads best as.
+#
+# No count of the spellings neither layer covers is asserted, and the `unarmed`
+# holds the entry to not carrying one. There were two when #143 was filed, three
+# by the end of the session that filed it, and four once review of that session's
+# commit measured `POST /repos/O/R/merges` -- an endpoint no hook names at all,
+# which with a base of dev-05 advances the very ref the head of this enumeration
+# reserves. The sentence that said "those two" was already wrong in the paragraph
+# it stood in, which named a third two sentences later. A count is the part that
+# goes stale, so the document states none and this says so.
+#
+# That is also the GH-97.2 pairing, and it is the pairing the first spelling of
+# this block lacked: what it pinned was the clause's placement -- the absence of
+# the terminating period the enumeration used to end on -- so it went red on a
+# correct document with the clause moved, and added nothing against a revert,
+# which the two `written` checks already catch between them. `unarmed` over an
+# empty file reads ok, which is why it sits beside `written` calls over the same
+# fixture and not alone. It catches a count coming back, and deliberately not a
+# later sentence that contradicts the clause while leaving its words intact --
+# that is the half no text check reaches, and it is #145's.
+req GH-143.4 US-26
+written 'the enumeration reserves moving the remote dev ref another way, or deleting it' \
+  "$RESERVED_FLAT" 'any way other than advancing it, or deleting that ref'
+written 'and says nothing refuses either at all, which is what leaves them reserved only' \
+  "$RESERVED_FLAT" 'Nothing refuses a remote force-move or deletion'
+written 'and names the REST merge that advances the same ref under no rule at all' \
+  "$RESERVED_FLAT" 'a REST merge of any'
+unarmed 'and counts none of the acts that neither a hook nor the server covers' \
+  "$RESERVED_FLAT" 'the only acts'
+
+# CLAUDE.md's *Domain docs* section said "docs/adr/ holds one ADR", and the ADR
+# that states the decision above made it false in the same commit. Nothing held
+# it: a grep for docs/adr across this suite returned nothing at all, so the one
+# sentence in CLAUDE.md that warns about a stale enumeration -- "the sentence
+# that did named two terms of five and went stale without saying so" -- was
+# carrying a count of its own, unpinned, one clause to the left. That is the
+# drift class 0002 is about, arriving in the document that describes where 0002
+# lives, which is why it is pinned here rather than left to the next reader.
+#
+# The pairing is GH-97.2's, and here the superseded wording is a narrower claim
+# rather than a narrower rule: a section that gained the directory and kept the
+# count would say both. Flattened for the same reason as the entry above.
+DOMAIN_SECTION="$FIXTURES/claude-md-domain-docs.md"
+awk '/^### Domain docs$/ {f=1; print; next}
+     f && /^#/ {exit}
+     f {print}' "$CLAUDE_MD" > "$DOMAIN_SECTION"
+DOMAIN_FLAT="$FIXTURES/claude-md-domain-docs.flat"
+flatten "$DOMAIN_SECTION" > "$DOMAIN_FLAT"
+req GH-143.5
+written 'the extracted section is the domain docs section' \
+  "$DOMAIN_FLAT" '### Domain docs'
+unarmed 'and it is that section rather than the whole file' \
+  "$DOMAIN_FLAT" '### Triage labels'
+written 'the domain docs section points at the ADR directory' \
+  "$DOMAIN_FLAT" '`docs/adr/` holds the ADRs'
+unarmed 'and states no count of what is in it' \
+  "$DOMAIN_FLAT" 'holds one ADR'
 
 # #99 Q9 and Q13: the rule, in the boundary section this suite already
 # extracted and checked from both ends. Both routes, the qualifier that keeps
@@ -8164,6 +8490,38 @@ cap_guard '80-column heredoc, longest line' 79 \
 cap_guard '80-column heredoc, body' 200000 \
   "$(printf '%s\n' "$HEREDOC_200K" | sed '1d;$d' | wc -c | tr -d ' ')"
 
+# Issue #128's second consequence, which is a claim about the cap and not about
+# a verdict: forty repeats of a 15,011-byte line whose opener is continued. It
+# passes cs_within_cap, whose longest joined line is 15,011 bytes -- and
+# cs_normalise emitted ONE line of 600,400 bytes from it, thirty-six times the
+# cap, because the drop ended the body at each `E` and the join then glued all
+# forty groups onto one line. So the cap did not bound what the passes were
+# handed, which is what #96 claimed for it.
+#
+# Both numbers are literals, and the first is the one that says the fixture is
+# the one described: a builder one byte out would leave every check below
+# passing against a line that is not 15,011 bytes.
+HEREDOC_CONT_40="$(for i in $(seq 1 40); do printf 'echo %s <<E \\\nx\nE\n' "$(cap_pad 15000)"; done)"
+cap_guard 'the #128 shape, longest raw line' 15011 \
+  "$(printf '%s\n' "$HEREDOC_CONT_40" | LC_ALL=C awk '{ if (length($0) > m) m = length($0) } END { print m }')"
+cap_guard 'the #128 shape, groups' 40 \
+  "$(printf '%s\n' "$HEREDOC_CONT_40" | grep -c '^E$')"
+req GH-128
+tok 'cs_normalise emits no line past the cap for #128 shape, longest line' \
+    '15011' \
+    "$(printf '%s\n' "$HEREDOC_CONT_40" | LC_ALL=C cs_normalise \
+       | LC_ALL=C awk '{ if (length($0) > m) m = length($0) } END { print m }')"
+tok 'cs_normalise emits one line per group rather than one line in all' \
+    '40' \
+    "$(printf '%s\n' "$HEREDOC_CONT_40" | LC_ALL=C cs_normalise | wc -l | tr -d ' ')"
+# The input the cap is asked of, so the pair says what it is meant to say: the
+# claim is that a command WITHIN the cap cannot be made to exceed it here, not
+# that this one was refused at the door.
+tok 'the #128 shape is within the cap' \
+    'within' \
+    "$(printf '%s\n' "$HEREDOC_CONT_40" | cs_within_cap && echo within || echo over)"
+req GH-96.1
+
 # The fastest of three runs, stopping at the first one under the bound, since
 # the fastest is then under it too. Only a run that refused is timed: a hook
 # that dies before reading anything is fast as well, so a time with no verdict
@@ -8514,8 +8872,15 @@ printf '#!/bin/bash\n: > "$(dirname "$0")/ran-allow-0"\nexit 0\n' > "$EXITS/allo
 printf '#!/bin/bash\n: > "$(dirname "$0")/ran-block-2"\necho "block-2 refuses" >&2\nexit 2\n' > "$EXITS/block-2.sh"
 printf '#!/bin/bash\n: > "$(dirname "$0")/ran-crash-1"\necho "crash-1 fixture stderr" >&2\nset -e\nfalse\nexit 0\n' > "$EXITS/crash-1.sh"
 printf '#!/bin/bash\n: > "$(dirname "$0")/ran-crash-127"\necho "crash-127 fixture stderr" >&2\nno-such-tool-for-check-hooks\n' > "$EXITS/crash-127.sh"
+# A fifth fixture, for report_says alone: it exits 0 AND says something. Every
+# helper above it reads a verdict, for which exit 0 is the whole answer, so a
+# silent allow-0 is their passing case. report_says asks for a status and a
+# sentence together -- #108's silent exit 0 is the defect it exists to catch --
+# and allow-0 is indistinguishable from that defect, so it is this helper's
+# FAILING case and this one is its passing one.
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-speak-0"\necho "speak-0 reports something"\nexit 0\n' > "$EXITS/speak-0.sh"
 chmod +x "$EXITS"/*.sh
-for f in allow-0 block-2 crash-1 crash-127; do
+for f in allow-0 block-2 crash-1 crash-127 speak-0; do
   [ -x "$EXITS/$f.sh" ] || {
     echo "the exit-status fixture $f.sh was not created; the self-test using it proves nothing" >&2
     exit 1
@@ -8559,6 +8924,9 @@ drive_helper() {  # drive_helper <helper> <fixture> <want>
          says_not)   says_not "$EXITS" "$EXITS/$fixture.sh" 'never-said' 'self-test' 'true' ;;
          feed)       feed "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
          feed_says)  feed_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' '{}' ;;
+         env_feed)   env_feed "$EXITS" "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
+         env_says)   env_says "$EXITS" "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
+         report_says) report_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' ;;
          *)          exit 3 ;;
        esac
        exit $FAILED ) >"$EXITS_OUTPUT" 2>"$EXITS/stray-stderr"
@@ -8582,9 +8950,12 @@ failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
 # The helpers this self-test drives, named once: each loop below runs off its list,
 # and the derivation at the end of this section is asserted against both. A
 # helper added to neither is red there; one added to a list is driven.
-DRIVEN_VERDICT='check check_in flip gap check_file feed check_rawfile_in'
-DRIVEN_MESSAGE='says says_not feed_says'
+DRIVEN_VERDICT='check check_in flip gap check_file feed check_rawfile_in env_feed'
+DRIVEN_MESSAGE='says says_not feed_says env_says'
 DRIVEN_TIMED='cap_timed lib_run'
+# report_says is the fourth list because it is the only helper that asks for a
+# status and a sentence at once, so neither loop above states its cases. #108.
+DRIVEN_REPORT='report_says'
 
 req GH-98 GH-124
 for helper in $DRIVEN_VERDICT; do
@@ -8649,6 +9020,26 @@ for helper in $DRIVEN_TIMED; do
   done
 done
 
+# The report helper, #108. Its passing case needs both halves at once, so the
+# fixtures separate them: speak-0 exits 0 and speaks, allow-0 exits 0 and is
+# silent, and the three non-zero fixtures all speak. A helper that dropped the
+# status test passes the allow-0 case; one that dropped the text test passes the
+# silent one. Both were written and both were measured to fail exactly here.
+for helper in $DRIVEN_REPORT; do
+  tok "$helper: a report that exits 0 and says the literal passes" \
+      'ok' "$(drive_helper "$helper" speak-0 -)"
+  tok "$helper: a report that exits 0 saying nothing fails, which is the defect it is for" \
+      'FAIL' "$(drive_helper "$helper" allow-0 -)"
+  tok "$helper: a report that says the literal and then exits 2 fails" \
+      'FAIL' "$(drive_helper "$helper" block-2 -)"
+  timed_line_says "$helper: that failure line names the status it wanted and the one it got" \
+      'must exit=0, got exit=2'
+  tok "$helper: a report that exits 1 fails" 'FAIL' "$(drive_helper "$helper" crash-1 -)"
+  timed_line_says "$helper: that failure line names exit 1" 'got exit=1'
+  tok "$helper: a report that exits 127 fails" 'FAIL' "$(drive_helper "$helper" crash-127 -)"
+  timed_line_says "$helper: that failure line names exit 127" 'got exit=127'
+done
+
 # And that the helpers driven above are all of them. The helpers that read a hook's
 # exit status are derived from this file, and each must be in one of the three lists
 # the loops above run off -- so a new reader is either driven or red here. `flip`
@@ -8680,7 +9071,7 @@ if [ -z "$STATUS_READERS" ]; then
 fi
 for reader in $STATUS_READERS; do
   present "derived $reader reads a hook exit status, and the #98 self-test drives it" \
-          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE $DRIVEN_TIMED"
+          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE $DRIVEN_TIMED $DRIVEN_REPORT"
 done
 
 echo "--- issue #101: a load guard requires a function ---"
@@ -8770,9 +9161,10 @@ section "=== issue #106: every spelling of a judged command reaches its verdict 
 # WHAT A GREEN RUN HERE IS NOT EVIDENCE OF. The transformations are a list
 # someone wrote, so this is still evidence about the cases it names: wider than
 # the one-variant checks above it by the number of transformations, and no wider
-# than that. The next transformation is the one nobody has thought of, and two
-# of the twelve here arrived that way -- #117 and #118 came out of Bertan's
-# review of PR #115, after the first ten had been settled. What changes is the
+# than that. The next transformation is the one nobody has thought of, and four
+# of the fourteen here arrived that way -- #117 and #118 came out of Bertan's
+# review of PR #115, after the first ten had been settled, and #128 and #117's
+# triage after those. What changes is the
 # cost of the next one: a transformation added to the list below is asked of
 # every seed at once, rather than of the one command whose review found it.
 #
@@ -8911,8 +9303,8 @@ hooks|alembic-via-uv-group.sh|ALLOW|GH-69.1|alembic-uv|uv run --group migrations
 SEEDS
 )
 
-# THE TRANSFORMATIONS, #103's ten and the two Bertan's review of PR #115 added,
-# each family spelled out one variant per spelling it has:
+# THE TRANSFORMATIONS, #103's ten, the two Bertan's review of PR #115 added, and
+# two since, each family spelled out one variant per spelling it has:
 #
 #   1 leading indentation      indent-spaces indent-tab
 #   2 separators               before-* after-*, one per separator and side
@@ -8928,17 +9320,29 @@ SEEDS
 #                                     word-squoted word-escaped
 #  12 an option before the subcommand that consumes the next word (#118)
 #                                     option-eats-verb
-#  13 a prefix word spelled otherwise (#117)  pre-sudo-path pre-env-path
+#  13 a heredoc in front of it whose opener line is continued (#128)
+#                                     heredoc-cont heredoc-cont-dash
+#                                     heredoc-cont-squote heredoc-cont-dquote
+#                                     heredoc-cont-space heredoc-cont-twice
+#                                     heredoc-cont-redirect
+#  14 a prefix word spelled otherwise (#117)  pre-sudo-path pre-env-path
 #                                     pre-timeout-quoted
 #
-# Thirteen and not twelve, and the thirteenth is the one the triage of #117
-# asked for by name: a prefix word is matched against a list BY NAME, exactly as
-# the command word is matched by its anchor, so every spelling reached it too.
-# Transformation 4 prepends those words BARE and so could never have found it --
-# which is the point the list itself makes about why a family is worth having.
-# The wrapper words the same triage names need no row of their own: a wrapped
-# seed carries the wrapper AS its command word, so transformation 11 already
-# rewrites it, and adding a fourteenth would be the same question asked twice.
+# The thirteenth is seven spellings where the others are one or two, and that is
+# #128 rather than thoroughness for its own sake: the spellings of the heredoc
+# opener are where this question has gone wrong four times, twice on a spelling
+# the terminator comparison did not match. #128's own section writes the two
+# hooks and the two directions it measured; these ask the same seven of every
+# seed, which is the whole reason the families exist.
+#
+# The fourteenth is the one the triage of #117 asked for by name: a prefix word
+# is matched against a list BY NAME, exactly as the command word is matched by
+# its anchor, so every spelling reached it too. Transformation 4 prepends those
+# words BARE and so could never have found it -- which is the point the list
+# itself makes about why a family is worth having. The wrapper words the same
+# triage names need no row of their own: a wrapped seed carries the wrapper AS
+# its command word, so transformation 11 already rewrites it, and adding a
+# fifteenth would be the same question asked twice.
 #
 # A transformation that cannot apply to a seed -- no value-taking long flag, no
 # second short flag to bundle with, no subcommand to put a global flag before --
@@ -8965,6 +9369,8 @@ INV_TRANSFORMS='
   continuation
   redirect-null redirect-dup
   word-path word-dot word-dquoted word-squoted word-escaped
+  heredoc-cont heredoc-cont-dash heredoc-cont-squote heredoc-cont-dquote
+  heredoc-cont-space heredoc-cont-twice heredoc-cont-redirect
   pre-sudo-path pre-env-path pre-timeout-quoted
 '
 
@@ -9080,6 +9486,24 @@ inv_cmdword() {  # inv_cmdword <command> <prefix> <suffix>
   [ "$rest" != "$1" ] || rest=
   printf '%s%s%s%s' "$2" "$word" "$3" "${rest:+ $rest}"
 }
+# #128: a heredoc in front of the command, whose OPENER line ends in a
+# backslash. Bash joins that line before the body begins, so the body of each of
+# these is empty, the terminator is the line after the opener, and the seed on
+# the line after THAT is the command that runs -- which is why the verdict must
+# be the seed's. The drop read the joined-on word as the body instead and the
+# join then glued the seed onto the opener line, at no command position.
+#
+# `x` is the word joined onto the opener, and it is a word bash hands to cat as a
+# filename rather than anything a rule reads. The twice-continued spelling joins
+# two of cat's own options instead, which is the shape an agent would actually
+# write across a continuation.
+# Each spelling is written out whole rather than assembled from an opener and a
+# body: the tab of the `<<-` spelling and the backslash of every one of them are
+# the characters under test, and a builder that dropped one would leave seven
+# variants passing that are not the seven named.
+inv_heredoc() {  # inv_heredoc <command> <heredoc, terminator included>
+  printf '%s\n%s' "$2" "$1"
+}
 inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
   case "$1" in
     indent-spaces)    printf '    %s' "$2" ;;
@@ -9130,6 +9554,13 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     word-dquoted)     inv_cmdword "$2" '"' '"' ;;
     word-squoted)     inv_cmdword "$2" "'" "'" ;;
     word-escaped)     inv_cmdword "$2" '\' '' ;;
+    heredoc-cont)          inv_heredoc "$2" $'cat <<E \\\nx\nE' ;;
+    heredoc-cont-dash)     inv_heredoc "$2" $'cat <<-E \\\n\tx\n\tE' ;;
+    heredoc-cont-squote)   inv_heredoc "$2" $'cat <<\'E\' \\\nx\nE' ;;
+    heredoc-cont-dquote)   inv_heredoc "$2" $'cat <<"E" \\\nx\nE' ;;
+    heredoc-cont-space)    inv_heredoc "$2" $'cat << E \\\nx\nE' ;;
+    heredoc-cont-twice)    inv_heredoc "$2" $'cat <<E \\\n-n \\\n-E\nx\nE' ;;
+    heredoc-cont-redirect) inv_heredoc "$2" $'cat > f <<E \\\nx\nE' ;;
     *)                return 1 ;;
   esac
   return 0
@@ -9608,7 +10039,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '276' "${TEXT_CHECK_ARGS##*COUNT }"
+    '291' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -9660,7 +10091,7 @@ case " $RUN_BY_SETTINGS " in
 esac
 written 'the harness says how it is run' "$MUT" 'bash .claude/hooks/mutate-hooks.sh'
 written 'and roughly what it costs, which is why nothing runs it for you' \
-        "$MUT" 'ABOUT FORTY-FIVE MINUTES'
+        "$MUT" 'ABOUT AN HOUR'
 written 'and what its exit status means, the two self-tests included' \
         "$MUT" 'EXIT STATUS: non-zero when any row reports something other than'
 written 'the harness refuses to mutate the hooks directory it stands in' \
@@ -9748,7 +10179,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '28' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '39' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9811,7 +10242,580 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '26' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '37' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+
+section "=== issue #108: what every hook decides when its environment is broken ==="
+# #95 pinned the step where a hook reads its input. This is the step after it:
+# what the hooks decide once the input has been read and the environment they
+# read the ANSWER out of is not the ordinary one. #103's audit wrote the table --
+# git off PATH, a directory that is no repository, a detached HEAD, no origin, no
+# dev-NN ref or two of them, gh off PATH, and bytes in the command nobody meant
+# to send -- and found some cells failing open, some closed, some by design and
+# some by accident, with no check anywhere naming any of them.
+#
+# THE QUESTION THAT DECIDES WHETHER AN OPEN CELL IS A HOLE, asked of every row
+# before any of this was written down: is there a case where the hook's read of
+# the environment fails while the command would still reach a repository? Every
+# such spelling -- `git -C`, `git --git-dir`, a `cd` or a `git checkout main`
+# before the commit -- was driven under each environment below, and every one is
+# refused, because those refusals are read off the text of the command and never
+# off the environment. So the permits here are the cases where the command cannot
+# run either, and that is what makes them safe to pin as intended rather than
+# tolerated. They are pinned all the same: a hook that starts reading the
+# environment for one of those decisions turns them red, which is the point.
+#
+# The fail direction is #103's Q19 and #95's, and one row needed it applied
+# rather than recorded: report-stale-branches.sh exited 0 with no output at all
+# when git was off PATH or it stood outside a repository. It now says why, and
+# the argument is in its own header under IT NEVER EXITS WITHOUT SAYING WHY.
+#
+# Every environment here is a fixture this suite builds -- Q21 -- so nothing
+# depends on the machine the suite is run on. The two PATH fixtures are the #95
+# section's symlink farm with one tool removed, which is why this section stands
+# below it.
+
+# --- the environments, each built and then asserted to be what it claims ------
+ENV_NO_GIT_BIN="$FIXTURES/path-without-git"
+ENV_NO_GH_BIN="$FIXTURES/path-without-gh"
+cp -a "$WITH_JQ_BIN" "$ENV_NO_GIT_BIN"
+cp -a "$WITH_JQ_BIN" "$ENV_NO_GH_BIN"
+rm -f "$ENV_NO_GIT_BIN/git"
+rm -f "$ENV_NO_GH_BIN/gh"
+# The same guard #95 puts on its jq-less twin, for the same reason: a hook that
+# refuses under one of these might be refusing because the fixture is broken, and
+# that refusal would read as the property being checked. What has to be true is
+# that the tool cannot be found under $dir, and that $dir is otherwise the farm.
+#
+# HOW IT GOT THAT WAY DEPENDS ON THE MACHINE, and the first version of this guard
+# did not allow for that. With the tool installed, the farm holds it, `rm` took it
+# out, and the two directories differ by exactly that one name. WITHOUT it, the
+# farm never held it, `rm -f` removed nothing, and the two are identical -- so a
+# guard demanding a one-name difference aborted the whole suite on any machine
+# with no `gh`, at this section, skipping every section below it including #104's
+# coverage derivations. That is a dependence on the invoker's machine, which is
+# the one thing #103's Q21 and this section's own preamble say there must not be,
+# and the abort blamed the fixture for what was true of the machine. Found by
+# Bertan's review of PR #150; reproduced by building a farm with no `gh` in it.
+#
+# `gh` is a dependency of no hook and, before this section, of nothing in this
+# suite: `report-stale-branches.sh` is the only file that calls it and degrades to
+# `no gh on PATH` by design, which GH-108.10 drives. `git` differs only in that
+# the suite has already built its fixtures with it hundreds of lines above, so its
+# farm entry is never the missing one -- the branch below is written for both
+# because the rule is the same, not because git can take it.
+#
+# What this costs, said rather than hidden: on a machine with no `gh` the gh-less
+# environment is the ordinary one, so the GH-108.6 checks that run under it assert
+# their verdicts twice rather than once. They are still true, and they still hold
+# the hook to a verdict that does not move; they are simply not evidence ABOUT gh
+# there. The suite says nothing about that, because a line printed only on some
+# machines is a worse thing to reason about than a check that is merely redundant.
+for pair in "git:$ENV_NO_GIT_BIN" "gh:$ENV_NO_GH_BIN"; do
+  tool=${pair%%:*}; dir=${pair#*:}
+  # Empty when the machine does not have the tool, which makes the required
+  # difference between the two directories "no difference at all".
+  want=
+  [ -n "$( PATH="$WITH_JQ_BIN"; command -v "$tool" )" ] && want="< $tool"
+  [ -z "$( PATH="$dir"; command -v "$tool" )" ] \
+    && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$dir") | grep '^[<>]')" = "$want" ] || {
+    echo "the $tool-less PATH fixture is not the symlink farm minus $tool; the checks using it prove nothing" >&2
+    exit 1
+  }
+done
+
+ENV_REPOS="$FIXTURES/env"
+mkdir -p "$ENV_REPOS"
+GE="-c user.email=checks@example.invalid -c user.name=checks"
+# A directory that is no repository. Nothing is created in it on purpose: the
+# absence is the fixture.
+ENV_NOREPO="$ENV_REPOS/not-a-repository"
+mkdir -p "$ENV_NOREPO"
+# The control. An ordinary branch, an origin, one commit -- the environment the
+# other five differ from in one named way each.
+ENV_PLAIN="$ENV_REPOS/plain"
+git init -q -b feature-x "$ENV_PLAIN"
+git -C "$ENV_PLAIN" remote add origin "$FIXTURES/unreachable-remote.git"
+git -C "$ENV_PLAIN" $GE commit -q --allow-empty -m base
+# A detached HEAD: two commits, so detaching leaves a real one checked out.
+ENV_DETACHED="$ENV_REPOS/detached-head"
+git init -q -b feature-x "$ENV_DETACHED"
+git -C "$ENV_DETACHED" remote add origin "$FIXTURES/unreachable-remote.git"
+git -C "$ENV_DETACHED" $GE commit -q --allow-empty -m base
+git -C "$ENV_DETACHED" $GE commit -q --allow-empty -m second
+git -C "$ENV_DETACHED" checkout -q --detach HEAD
+# No remote at all.
+ENV_NO_ORIGIN="$ENV_REPOS/no-origin"
+git init -q -b feature-x "$ENV_NO_ORIGIN"
+git -C "$ENV_NO_ORIGIN" $GE commit -q --allow-empty -m base
+
+# THE TWO DEV-REF FIXTURES, each a lifecycle repository in the shape the
+# no-work-on-stale-branch.sh section builds: a stale worktree branch at base and
+# a merged one whose upstream is gone. They differ from that one in how many
+# origin/dev-NN refs stand over them -- none, and two -- which is the pair of
+# cells #103's audit left unpinned.
+#
+# In the two-ref fixture dev-05 sits at base and dev-06 at the tip, so the two
+# refs disagree about the stale branch: against dev-06 it is behind and stale,
+# against dev-05 it is level and clear. A refusal there is evidence that the
+# HIGHEST was taken, and the message names which. A fixture with both refs at the
+# tip would refuse whichever was chosen and would be evidence about neither.
+env_lifecycle() {  # env_lifecycle <dir> <ref at base>... -- with <ref at tip> last
+  local dir="$1" base tip r
+  git init -q -b main "$dir"
+  git -C "$dir" remote add origin "$FIXTURES/unreachable-remote.git"
+  git -C "$dir" $GE commit -q --allow-empty -m base
+  base=$(git -C "$dir" rev-parse HEAD)
+  git -C "$dir" $GE commit -q --allow-empty -m advance
+  tip=$(git -C "$dir" rev-parse HEAD)
+  shift
+  for r in "$@"; do
+    case "$r" in
+      *:tip) git -C "$dir" update-ref "refs/remotes/origin/${r%:tip}" "$tip" ;;
+      *) git -C "$dir" update-ref "refs/remotes/origin/${r%:base}" "$base" ;;
+    esac
+  done
+  # ahead == 0, behind == 1 against any ref at the tip: the fallback detector's case.
+  git -C "$dir" branch stale-branch "$base"
+  git -C "$dir" worktree add -q "$dir/wt-stale" stale-branch
+  # upstream configured, remote-tracking ref absent: the gone detector's case,
+  # placed at the tip so the fallback cannot fire here and a refusal is the gone
+  # detector's alone.
+  git -C "$dir" branch gone-branch "$tip"
+  git -C "$dir" config -f "$dir/.git/config" branch.gone-branch.remote origin
+  git -C "$dir" config -f "$dir/.git/config" branch.gone-branch.merge refs/heads/gone-branch
+  git -C "$dir" worktree add -q "$dir/wt-gone" gone-branch
+}
+ENV_DEV_NONE="$ENV_REPOS/no-dev-ref"
+ENV_DEV_TWO="$ENV_REPOS/two-dev-refs"
+env_lifecycle "$ENV_DEV_NONE"
+env_lifecycle "$ENV_DEV_TWO" dev-05:base dev-06:tip
+
+# Each fixture asserted to be the thing its name claims, because every verdict
+# below is read as evidence about that one difference. An unbuilt worktree or a
+# HEAD that is still on a branch would leave a column of permits that read as the
+# hooks abstaining when what abstained was the fixture.
+[ -d "$ENV_PLAIN/.git" ] && [ -d "$ENV_NO_ORIGIN/.git" ] \
+  && [ ! -e "$ENV_NOREPO/.git" ] \
+  && [ -z "$(git -C "$ENV_DETACHED" branch --show-current)" ] \
+  && [ "$(git -C "$ENV_PLAIN" branch --show-current)" = feature-x ] \
+  && [ -z "$(git -C "$ENV_NO_ORIGIN" remote)" ] \
+  && [ "$(git -C "$ENV_PLAIN" remote)" = origin ] \
+  && [ -z "$(git -C "$ENV_DEV_NONE" for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*')" ] \
+  && [ "$(git -C "$ENV_DEV_TWO" for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' | sort -V | tr '\n' ' ')" = 'origin/dev-05 origin/dev-06 ' ] \
+  && [ -d "$ENV_DEV_NONE/wt-stale" ] && [ -d "$ENV_DEV_NONE/wt-gone" ] \
+  && [ -d "$ENV_DEV_TWO/wt-stale" ] && [ -d "$ENV_DEV_TWO/wt-gone" ] || {
+  echo "the #108 environment fixtures are not what they claim; every verdict below would be evidence about the fixture" >&2
+  exit 1
+}
+# AND THAT THE TWO REFS DISAGREE, asked separately because it is the whole of
+# what makes a two-ref verdict evidence about WHICH ref was chosen rather than
+# about there being one. dev-05 stands level with the stale branch and dev-06 one
+# commit ahead of it, so a hook reading the lower ref calls that branch clear and
+# one reading the higher calls it stale. With both at the tip the branch is stale
+# either way, every check below still passes, and the mutation registered against
+# this fixture -- sort -V | tail -1 replaced by sort | head -1 -- survives.
+[ "$(git -C "$ENV_DEV_TWO" rev-parse refs/remotes/origin/dev-05)" \
+  = "$(git -C "$ENV_DEV_TWO" rev-parse refs/heads/stale-branch)" ] \
+  && [ "$(git -C "$ENV_DEV_TWO" rev-parse refs/remotes/origin/dev-06)" \
+       != "$(git -C "$ENV_DEV_TWO" rev-parse refs/heads/stale-branch)" ] || {
+  echo "the two dev refs do not disagree about the stale branch, so no verdict below says which was taken" >&2
+  exit 1
+}
+# AND THAT THE NO-REF FIXTURE'S STALE BRANCH IS ACTUALLY BEHIND. Its permit is
+# read as the fallback detector abstaining for want of a dev ref; a branch level
+# with the tip would be permitted by a hook reading every ref there is, and the
+# check could not tell the two apart. Asked of the branches rather than of the
+# refs, because there are no refs over there to ask.
+[ "$(GIT_DIR="$ENV_DEV_NONE/.git" git rev-list --count refs/heads/stale-branch..refs/heads/gone-branch)" = 1 ] || {
+  echo "the no-dev-ref fixture's stale branch is not one commit behind, so its permit would not be the abstention it is read as" >&2
+  exit 1
+}
+
+# env_feed, env_cmd and env_says are defined beside feed and feed_says above,
+# with the reason they are not here: the #98 self-test drives every helper that
+# reads a hook's exit status, and it runs long before this section.
+
+echo "--- no hook reads tool_name: the matcher in settings.json is what filters ---"
+# The row the audit wrote as "hooks ignore it". It is pinned in both directions
+# and on both fields, so a tool_name test added to any hook -- the obvious way to
+# make a hook "safer" that would in fact give the registration a second place to
+# disagree with itself -- turns these red.
+req GH-108.1
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a force push under tool_name Read is still a force push' \
+  '{"tool_name":"Read","tool_input":{"command":"git push --force origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a force push under no tool_name at all' \
+  '{"tool_input":{"command":"git push --force origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-pr-decisions.sh BLOCK 'gh pr merge under tool_name Edit' \
+  '{"tool_name":"Edit","tool_input":{"command":"gh pr merge 5"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-commit-to-main.sh BLOCK 'a push to main under tool_name Write' \
+  '{"tool_name":"Write","tool_input":{"command":"git push origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh ALLOW 'ls under tool_name Read is still ls' \
+  '{"tool_name":"Read","tool_input":{"command":"ls"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-pr-decisions.sh ALLOW 'gh issue list under a tool_name that is not Bash' \
+  '{"tool_name":"WebFetch","tool_input":{"command":"gh issue list"}}'
+# The Edit hook reads a different field, and is as indifferent to tool_name.
+env_feed "$ENV_PLAIN" "$PATH" append-only-docs-edit.sh BLOCK 'an edit of a dev-log entry under tool_name Bash' \
+  "$(printf '{"tool_name":"Bash","tool_input":{"file_path":"%s/docs/dev-log/devlog_2026-08-25_session-2.md"}}' "$REPO_ROOT")"
+env_feed "$ENV_PLAIN" "$PATH" append-only-docs-edit.sh ALLOW 'an edit outside the guarded directories under tool_name Bash' \
+  "$(printf '{"tool_name":"Bash","tool_input":{"file_path":"%s/src/config.py"}}' "$REPO_ROOT")"
+
+echo "--- git off PATH, and a directory that is no repository ---"
+# Both environments in one block because the hooks cannot tell them apart: each
+# makes every `git rev-parse` and `git branch --show-current` come back empty,
+# which is the whole of what the hooks read.
+req GH-108.2
+for env in "git off PATH:$ENV_PLAIN:$ENV_NO_GIT_BIN" "no repository:$ENV_NOREPO:$PATH"; do
+  name=${env%%:*}; rest=${env#*:}; dir=${rest%%:*}; path=${rest#*:}
+  env_cmd "$dir" "$path" no-git-push.sh BLOCK "$name: a force push to main is refused" \
+    'git push --force origin main'
+  env_cmd "$dir" "$path" no-commit-to-main.sh BLOCK "$name: a push naming main is refused" \
+    'git push origin main'
+  # The worktree exception cannot be verified without git, so it is not granted.
+  # This is the fail direction chosen rather than found: the same command is
+  # permitted in a linked worktree with git on PATH, and the #94 section is where.
+  env_cmd "$dir" "$path" no-git-push.sh BLOCK "$name: a push of an ordinary branch is refused too" \
+    'git push origin wt-branch'
+  env_says "$dir" "$path" no-git-push.sh 'linked worktree' "$name: and the refusal says what it could not judge" \
+    'git push origin wt-branch'
+  # Every spelling that reaches another repository, which is the class that would
+  # be a hole if it depended on the environment. It does not: these refusals are
+  # read off the command's text.
+  env_cmd "$dir" "$path" no-commit-to-main.sh BLOCK "$name: git -C elsewhere commit" \
+    'git -C /elsewhere/repo commit -m "wip"'
+  env_cmd "$dir" "$path" no-commit-to-main.sh BLOCK "$name: git --git-dir elsewhere commit" \
+    'git --git-dir /elsewhere/repo/.git commit -m "wip"'
+  env_cmd "$dir" "$path" no-commit-to-main.sh BLOCK "$name: cd elsewhere before the commit" \
+    'cd /elsewhere/repo && git commit -m "wip"'
+  env_cmd "$dir" "$path" no-commit-to-main.sh BLOCK "$name: git checkout main before the commit" \
+    'git checkout main && git commit -m "wip"'
+  # The permitting direction. A commit that names no reserved branch and no other
+  # repository is permitted, and so is everything that is not a git command: the
+  # environments that produce these permits are the ones where the command cannot
+  # run either.
+  env_cmd "$dir" "$path" no-commit-to-main.sh ALLOW "$name: a plain commit names no branch and is permitted" \
+    'git commit -m "wip"'
+  env_cmd "$dir" "$path" no-work-on-stale-branch.sh ALLOW "$name: the stale guard abstains, having no ref to read" \
+    'git commit -m "wip"'
+  env_cmd "$dir" "$path" no-git-push.sh ALLOW "$name: a command with no push in it" \
+    'ls -la'
+done
+
+echo "--- a detached HEAD: the one permit here that is the answer the boundary wants ---"
+# A commit on a detached HEAD lands on no branch, so it cannot land on main --
+# which is what no-commit-to-main.sh exists to stop. The design is stated at
+# CURRENT in no-work-on-stale-branch.sh, in as many words.
+req GH-108.3
+env_cmd "$ENV_DETACHED" "$PATH" no-git-push.sh BLOCK 'a force push from a detached HEAD is refused' \
+  'git push --force origin main'
+env_cmd "$ENV_DETACHED" "$PATH" no-commit-to-main.sh BLOCK 'a push naming main from a detached HEAD is refused' \
+  'git push origin main'
+env_cmd "$ENV_DETACHED" "$PATH" no-commit-to-main.sh ALLOW 'a commit on a detached HEAD lands on no branch' \
+  'git commit -m "wip"'
+env_cmd "$ENV_DETACHED" "$PATH" no-work-on-stale-branch.sh ALLOW 'neither staleness detector has a branch to read' \
+  'git commit -m "wip"'
+written 'the detached-HEAD design is stated where the hook reads the branch' \
+  "$HOOKS/no-work-on-stale-branch.sh" \
+  'A detached HEAD has no branch, so neither detector has anything to read.'
+
+echo "--- no remote named origin ---"
+req GH-108.4
+env_cmd "$ENV_NO_ORIGIN" "$PATH" no-git-push.sh BLOCK 'a push naming origin, which is no remote of this repository' \
+  'git push origin feature-x'
+env_cmd "$ENV_NO_ORIGIN" "$PATH" no-git-push.sh BLOCK 'a force push is refused with no remote to push to' \
+  'git push --force origin main'
+env_cmd "$ENV_NO_ORIGIN" "$PATH" no-work-on-stale-branch.sh ALLOW 'the stale guard abstains: removing a remote removes its refs' \
+  'git commit -m "wip"'
+env_cmd "$ENV_NO_ORIGIN" "$PATH" no-commit-to-main.sh ALLOW 'a commit on an ordinary branch is permitted' \
+  'git commit -m "wip"'
+
+echo "--- no origin/dev-NN ref at all, and two of them ---"
+# The fallback detector needs a dev ref and abstains without one; the gone
+# detector needs none and refuses anyway. With two refs the highest by version
+# sort is the active dev branch, and this fixture's two disagree about the stale
+# branch so that the refusal names which one was taken.
+req GH-108.5
+env_cmd "$ENV_DEV_NONE/wt-stale" "$PATH" no-work-on-stale-branch.sh ALLOW 'no dev ref: the fallback detector abstains' \
+  'git commit -m "wip"'
+env_cmd "$ENV_DEV_NONE/wt-gone" "$PATH" no-work-on-stale-branch.sh BLOCK 'no dev ref: the gone detector refuses anyway' \
+  'git commit -m "wip"'
+env_says "$ENV_DEV_NONE/wt-gone" "$PATH" no-work-on-stale-branch.sh 'the active dev branch' \
+  'no dev ref: and the refusal names no branch it could not find' \
+  'git commit -m "wip"'
+env_cmd "$ENV_DEV_TWO/wt-stale" "$PATH" no-work-on-stale-branch.sh BLOCK 'two dev refs: stale against the higher one' \
+  'git commit -m "wip"'
+env_says "$ENV_DEV_TWO/wt-stale" "$PATH" no-work-on-stale-branch.sh 'origin/dev-06' \
+  'two dev refs: and the refusal names dev-06, the highest by version sort' \
+  'git commit -m "wip"'
+env_cmd "$ENV_DEV_TWO/wt-gone" "$PATH" no-work-on-stale-branch.sh BLOCK 'two dev refs: the gone detector is unaffected' \
+  'git commit -m "wip"'
+# no-pr-decisions.sh reads no git at all, so the base rule is a pattern and not a
+# lookup: a dev-NN base is accepted whatever refs origin holds, and a base that
+# is not dev-NN is refused for the same reason.
+env_cmd "$ENV_DEV_NONE" "$PATH" no-pr-decisions.sh BLOCK 'a base of main is refused where origin holds no dev ref' \
+  'gh pr create --base main --title t --body b'
+env_cmd "$ENV_DEV_NONE" "$PATH" no-pr-decisions.sh ALLOW 'a dev-NN base is accepted where origin holds no dev ref' \
+  'gh pr create --base dev-05 --title t --body b'
+# THE GAP, at its measured verdict and named as one. dev-06 is the active dev
+# branch in this fixture -- the check above reads the refusal that says so -- and
+# a pull request based on dev-05 is permitted all the same. CLAUDE.md says "into
+# the active dev branch", so this permits something the boundary refuses, and it
+# is filed as #144, a sub-issue of #36, rather than fixed here: the fix is to have
+# this one hook read refs, and a hook that reads refs fails open when it cannot,
+# which is the failure mode this whole section exists to pin. The window is a
+# rotation. The verdict below is the measured one and not the correct one, which
+# is the one place this section departs from #103's Q18 -- so the fix turns this
+# check red, and the check names the issue that owns it.
+env_cmd "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh ALLOW 'ACCEPTED GAP: a base of dev-05 while dev-06 is the active dev branch' \
+  'gh pr create --base dev-05 --title t --body b'
+
+echo "--- gh off PATH, and every other environment: the pull request hook starts no process ---"
+# It runs no git and no gh, so its verdict is a function of the command's text
+# alone. That is checked as the property rather than as one absence: the same two
+# payloads under every environment of this section.
+req GH-108.6
+for env in "plain:$ENV_PLAIN:$PATH" "gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN" \
+           "git off PATH:$ENV_PLAIN:$ENV_NO_GIT_BIN" "no repository:$ENV_NOREPO:$PATH" \
+           "detached HEAD:$ENV_DETACHED:$PATH" "no origin:$ENV_NO_ORIGIN:$PATH" \
+           "no dev ref:$ENV_DEV_NONE:$PATH" "two dev refs:$ENV_DEV_TWO:$PATH"; do
+  name=${env%%:*}; rest=${env#*:}; dir=${rest%%:*}; path=${rest#*:}
+  env_cmd "$dir" "$path" no-pr-decisions.sh BLOCK "$name: gh pr merge is refused" \
+    'gh pr merge 5'
+  env_cmd "$dir" "$path" no-pr-decisions.sh ALLOW "$name: gh issue list is permitted" \
+    'gh issue list'
+done
+env_says "$ENV_PLAIN" "$ENV_NO_GH_BIN" no-pr-decisions.sh "Bertan's call" \
+  'gh off PATH: the refusal is word for word the one gh on PATH gets' \
+  'gh pr merge 5'
+
+echo "--- bytes in the command nobody meant to send ---"
+# A CRLF, a non-ASCII byte and an invalid UTF-8 sequence leave the verdict where
+# it was. A NUL and a non-breaking space do not, and the pair is pinned with the
+# mechanism rather than only the verdict: the NUL is STRIPPED by the command
+# substitution that reads it, so what decides is whether stripping it joins two
+# words. On one line it fuses `ls` and `git` into `lsgit` and the push is hidden;
+# after a newline it fuses nothing and the push is refused as it always was.
+#
+# Both permits are accepted. Neither byte is whitespace to a shell -- `git<NBSP>push`
+# is one word and there is no executable of that name -- and a NUL cannot survive
+# the exec that would start the command, which truncates the string at it. So
+# what is hidden from the hook is not a command that would have run.
+#
+# THE NUL IS SPELLED \u0000 AND NEVER EMBEDDED, and that is not a style choice.
+# The first draft of this section carried the byte itself, and a NUL anywhere in
+# this file makes GNU grep call the whole of it binary: `grep -o` then prints
+# nothing, and READ_DOCS in the header section above -- a derivation that reads
+# this suite's own text -- came back empty, which turned two of its checks red
+# for a reason nowhere near them. Four other derivations read this file the same
+# way. So every payload here that carries a byte outside ASCII is written as a
+# JSON escape and jq does the decoding, which is also how the harness would
+# deliver one: a tool call is JSON. For the NUL that is forced, since the byte
+# cannot sit in this file at all. For the others -- the non-breaking space, the
+# e-acute -- it is uniformity, so that the rule belongs to the section and not to
+# one payload; an earlier draft embedded those two and left this paragraph
+# claiming something true of the NUL alone. The one exception cannot be written
+# as an escape: an invalid UTF-8 sequence is by definition not a character, so
+# its payload is built with printf and carries the two bytes raw.
+#
+# It happened here more than once, this very paragraph included, whose first
+# draft spelled the escape and embedded the byte instead -- and no count is
+# written down, because the count is the part that goes stale and the shape is
+# what matters. Nothing ever said NUL. What went red was two checks in the header
+# section about names in a paragraph, four hundred lines away, and in the
+# permitting direction for everything else that reads this file the same way. The
+# cause is not carelessness: the escape travels through a JSON tool call, which
+# decodes it once before it reaches the file, so spelling it and embedding it are
+# the same keystrokes. That is the whole reason it is written down here rather
+# than fixed quietly.
+req GH-108.7
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a CRLF line ending does not hide the push' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls\r\ngit push --force origin main\r\n"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a carriage return at the end of the line' \
+  '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main\r"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a non-ASCII byte trailing the command' \
+  '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \u00e9"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-commit-to-main.sh BLOCK 'a CRLF line ending, asked of the commit hook' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls\r\ngit push origin main\r\n"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-pr-decisions.sh BLOCK 'a CRLF line ending, asked of the pull request hook' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls\r\ngh pr merge 5\r\n"}}'
+# Invalid UTF-8 cannot be written as a JSON escape, so the payload is built with
+# printf and carries the two bytes raw. jq reads them; the suite's own source
+# stays ASCII.
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'an invalid UTF-8 sequence trailing the command' \
+  "$(printf '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \377\376"}}')"
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh ALLOW 'the same invalid sequence on a command that is not a push' \
+  "$(printf '{"tool_name":"Bash","tool_input":{"command":"ls \377\376"}}')"
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh BLOCK 'a NUL after a newline fuses nothing, and the push is refused' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls\n\u0000git push --force origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh ALLOW 'ACCEPTED: a NUL on the line fuses lsgit, hiding a push that could not run' \
+  '{"tool_name":"Bash","tool_input":{"command":"ls\u0000git push --force origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-git-push.sh ALLOW 'ACCEPTED: a non-breaking space makes one word of git push' \
+  '{"tool_name":"Bash","tool_input":{"command":"git\u00a0push --force origin main"}}'
+env_feed "$ENV_PLAIN" "$PATH" no-pr-decisions.sh ALLOW 'ACCEPTED: the same two bytes, asked of the pull request hook' \
+  '{"tool_name":"Bash","tool_input":{"command":"gh\u00a0pr merge 5"}}'
+
+echo "--- every hook exits 0 or 2, in every environment and on every payload here ---"
+# #98 made the suite read a third status as FAIL rather than as ALLOW. This asks
+# the other half: that no case in this section produces one. A crash is what a
+# third status means, and a hook that crashes on a payload the harness can send
+# is a hook that is not there for that payload.
+#
+# One check per hook over the cross product, with the number of cases written out
+# as a literal: a sweep that quietly stopped covering an environment would
+# otherwise report the same ok line. The payloads include the malformed ones,
+# because #95 fixed the verdict on those and said nothing about the status.
+#
+# THE CROSS PRODUCT IS THE WHOLE TABLE, which took a second pass to be true.
+# The first version drove eight environments against seven payloads and called
+# that the table. It left out three of the four byte classes of the row above --
+# the CRLF, the non-ASCII byte and the invalid UTF-8 sequence, all three driven
+# for their VERDICT a few lines up and none of them for their status -- and both
+# merged worktrees, which is where the two dev-ref rows read their refusing
+# verdicts. So the environments a hook was asked for a verdict in and the ones it
+# was asked for a status in were different sets, and nothing showed it, because
+# the count matched a literal written to match it. That is this section's own
+# shape, found here by review rather than by the suite. Ten environments against
+# ten payloads now, and the rule the first version should have been written to:
+# a case driven anywhere in this section is driven here.
+ENV_STATUS_CASES="plain:$ENV_PLAIN:$PATH
+git off PATH:$ENV_PLAIN:$ENV_NO_GIT_BIN
+gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN
+no repository:$ENV_NOREPO:$PATH
+detached HEAD:$ENV_DETACHED:$PATH
+no origin:$ENV_NO_ORIGIN:$PATH
+no dev ref:$ENV_DEV_NONE/wt-stale:$PATH
+no dev ref, merged branch:$ENV_DEV_NONE/wt-gone:$PATH
+two dev refs:$ENV_DEV_TWO/wt-stale:$PATH
+two dev refs, merged branch:$ENV_DEV_TWO/wt-gone:$PATH"
+ENV_STATUS_PAYLOADS=(
+  '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}'
+  '{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+  '{"tool_name":"Edit","tool_input":{"file_path":"docs/dev-log/devlog_2026-08-25_session-2.md"}}'
+  'not json at all'
+  '{"tool_name":"Bash","tool_input":{"command":42}}'
+  '{"tool_name":"Bash","tool_input":{"command":"ls\u0000git push --force origin main"}}'
+  '{"tool_name":"Nonesuch","tool_input":{"command":"gh pr merge 5"}}'
+  '{"tool_name":"Bash","tool_input":{"command":"ls\r\ngit push --force origin main\r\n"}}'
+  '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \u00e9"}}'
+  "$(printf '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \377\376"}}')"
+)
+ENV_STATUS_EXPECTED=100
+req GH-108.8
+for hook in $INPUT_BASH_HOOKS $INPUT_EDIT_HOOKS; do
+  bad= ; n=0
+  while IFS= read -r env; do
+    name=${env%%:*}; rest=${env#*:}; dir=${rest%%:*}; path=${rest#*:}
+    for payload in "${ENV_STATUS_PAYLOADS[@]}"; do
+      n=$((n + 1))
+      err=$(printf '%s' "$payload" \
+            | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$HOOKS/$hook" ) 2>&1 >/dev/null)
+      rc=$?
+      case "$rc" in
+        0|2) ;;
+        *) bad="$bad
+         exit=$rc in [$name] on |$payload|
+         stderr |$err|" ;;
+      esac
+    done
+  done <<< "$ENV_STATUS_CASES"
+  if [ -n "$bad" ]; then
+    fail static '%s exits other than 0 or 2:%s' "$hook" "$bad"
+  elif [ "$n" != "$ENV_STATUS_EXPECTED" ]; then
+    fail static '%s: the sweep ran %s cases, not the %s written here' "$hook" "$n" "$ENV_STATUS_EXPECTED"
+  else
+    pass static 'status %s exits only 0 or 2, over %s cases' "$hook" "$n"
+  fi
+done
+
+echo "--- report-stale-branches.sh says why it reported nothing ---"
+# The row #108 left to this pull request to decide. It exited 0 with no output at
+# all when git was off PATH or it stood outside a repository, and an empty report
+# reads as nothing to report. Decided the way every other unread thing in that
+# file already reads -- the fetch, the merge settings, the pull requests and the
+# main ancestry all say so -- and the argument is in its header.
+#
+# Driven against a COPY of the file, in a tree that is not a repository, because
+# the file cds to its own grandparent and this repository is one. The copy is the
+# $HOOKS one, so an override judges the file it was pointed at.
+req GH-108.9
+ENV_REPORT_COPY="$ENV_REPOS/report-copy/.claude/hooks"
+mkdir -p "$ENV_REPORT_COPY"
+cp "$HOOKS/report-stale-branches.sh" "$ENV_REPORT_COPY/"
+[ -s "$ENV_REPORT_COPY/report-stale-branches.sh" ] || {
+  echo "the report copy was not made; the checks against it would prove nothing" >&2
+  exit 1
+}
+report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  'branches: NOT READ -- this is not a git repository' \
+  'outside a repository it says the branches were not read'
+report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  '== branch lifecycle ==' \
+  'outside a repository it still prints its heading first'
+report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  'no-work-on-stale-branch.sh is armed for this session.' \
+  'outside a repository it names what is not armed'
+report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  'branches: NOT READ -- git is not on PATH' \
+  'with git off PATH it names git rather than the tree'
+# The third cause, a root the file cannot reach, is checked as text and not as a
+# run: a directory unsearchable enough to fail that cd is one the file cannot be
+# read out of either, so bash exits 126 before the guard is reached. Measured, not
+# assumed -- and it is why this one line is held to the file rather than to a
+# verdict.
+written 'the unreachable-root guard says why it reported nothing too' \
+  "$HOOKS/report-stale-branches.sh" \
+  'branches: NOT READ -- this file could not reach the repository root from its'
+written 'the heading is printed before the first thing that can fail' \
+  "$HOOKS/report-stale-branches.sh" \
+  'echo "== branch lifecycle =="'
+unarmed 'no exit above the heading survives, which is what made it silent' \
+  "$HOOKS/report-stale-branches.sh" \
+  'cd "$(dirname "$0")/../.." || exit 0'
+unarmed 'nor the rev-parse that exited with nothing said' \
+  "$HOOKS/report-stale-branches.sh" \
+  'git rev-parse --git-dir >/dev/null 2>&1 || exit 0'
+
+echo "--- the degraded report, produced rather than described ---"
+# The last row of #108's table: offline, the fetch reports FAILED, the settings
+# read reports NOT READ, and the session still starts. It was already pinned --
+# GH-100 asserts the file HOLDS each of those phrases -- but a file that never
+# reaches a line holds its text just as well, and the phrases and the exit status
+# had never been read off a run together.
+#
+# A repository whose origin is a path that is not there, under the gh-less PATH
+# above. Both halves are deliberate and neither is a timeout: a fetch of a local
+# path that does not exist fails at once, and the file's own header says the pull
+# request read is skipped when the settings read found gh missing. So this is the
+# degraded report in full, for no wall clock. A genuinely unreachable network
+# would cost FETCH_TIMEOUT and is nobody's check.
+req GH-108.10
+ENV_OFFLINE="$ENV_REPOS/offline"
+mkdir -p "$ENV_OFFLINE/.claude/hooks"
+git init -q -b feature-x "$ENV_OFFLINE"
+git -C "$ENV_OFFLINE" $GE commit -q --allow-empty -m base
+git -C "$ENV_OFFLINE" remote add origin "$ENV_REPOS/there-is-no-remote-here.git"
+cp "$HOOKS/report-stale-branches.sh" "$ENV_OFFLINE/.claude/hooks/"
+[ -s "$ENV_OFFLINE/.claude/hooks/report-stale-branches.sh" ] \
+  && [ ! -e "$ENV_REPOS/there-is-no-remote-here.git" ] \
+  && [ "$(git -C "$ENV_OFFLINE" remote)" = origin ] || {
+  echo "the offline report fixture is not a repository with an unreachable origin; the checks against it would prove nothing" >&2
+  exit 1
+}
+ENV_OFFLINE_REPORT="$ENV_OFFLINE/.claude/hooks/report-stale-branches.sh"
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  'fetch: FAILED or timed out after 15s' \
+  'a failed fetch is reported, and the session still starts'
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  'is not armed for this session.' \
+  'and it says what that leaves unarmed'
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  'merge settings: NOT READ -- no gh on PATH' \
+  'the merge settings are NOT READ rather than reported as drifted'
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  'pull requests: NOT READ -- no gh on PATH' \
+  'the pull requests are NOT READ, and the classes say so'
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  'active dev branch: none' \
+  'and with no dev ref fetched the active dev branch is none, not a guess'
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and
@@ -9905,8 +10909,10 @@ GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-117.1:permit-only
 GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:gap GH-134:gap GH-135:gap GH-136:gap GH-139:gap
-GH-107.1:static GH-107.2:static
+GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139:gap
+GH-107.1:static GH-107.2:static GH-143.4:static GH-143.5:static
+GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7
+GH-108.8:static GH-108.9:static GH-108.10:static GH-128
 '
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }

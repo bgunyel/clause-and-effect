@@ -113,6 +113,27 @@
 #
 # Exits 0 always. A SessionStart hook that fails is a session that does not
 # start, and nothing here is worth that.
+#
+# IT NEVER EXITS WITHOUT SAYING WHY. Issue #108 audited what this file does in a
+# broken environment and found the one path that said nothing at all: with git
+# off PATH, or run from a tree that is not a repository, it exited 0 above the
+# heading, and the session began with an empty report. An empty report reads as
+# nothing to report; what is true is that nothing was read. That is the same
+# conflation the two counts under the drift heading were split to remove, and
+# the argument for splitting them holds harder here, because this is the line a
+# reader skims rather than one under a heading.
+#
+# It matters for the reason under THE ARMING PROPERTY IS NOT SELF-ANNOUNCING.
+# Neither detector in no-work-on-stale-branch.sh is armed for such a session, and
+# that guard's silence is what a clean tree looks like too -- so a session whose
+# refs were never read is indistinguishable, from the inside, from one with
+# nothing stale in it. Every other unread thing here already says so in as many
+# words: the fetch, the merge settings, the pull requests, the main ancestry.
+# These two were the exception, and there is no reason for them to be one.
+#
+# So the heading is printed before the first thing that can fail, and each exit
+# below it names its cause. The exit status stays 0: what changes is that the
+# report says the branches were not read, not the behaviour of the session.
 FETCH_TIMEOUT=15
 # Its own budget rather than the fetch's, and smaller: one small API request
 # against a fetch of every ref. The calls are spent in series and the hook's own
@@ -124,10 +145,29 @@ SETTINGS_TIMEOUT=10
 # network, not for the read.
 PRS_TIMEOUT=10
 
-cd "$(dirname "$0")/../.." || exit 0
-git rev-parse --git-dir >/dev/null 2>&1 || exit 0
-
 echo "== branch lifecycle =="
+
+# The three ways this file can have nothing to report, each said out loud. See
+# IT NEVER EXITS WITHOUT SAYING WHY above. The git test is `command -v` and not
+# the rev-parse below it, because the two causes are different sentences: a
+# machine with no git is one install away from a report, a directory that is not
+# a repository is not.
+cd "$(dirname "$0")/../.." || {
+  echo "branches: NOT READ -- this file could not reach the repository root from its"
+  echo "          own location, so neither staleness detector in"
+  echo "          no-work-on-stale-branch.sh is armed for this session."
+  exit 0
+}
+if ! command -v git >/dev/null 2>&1; then
+  echo "branches: NOT READ -- git is not on PATH, so neither staleness detector in"
+  echo "          no-work-on-stale-branch.sh is armed for this session."
+  exit 0
+fi
+git rev-parse --git-dir >/dev/null 2>&1 || {
+  echo "branches: NOT READ -- this is not a git repository, so neither staleness"
+  echo "          detector in no-work-on-stale-branch.sh is armed for this session."
+  exit 0
+}
 
 if ! git remote | grep -qxF origin; then
   echo "fetch: SKIPPED -- this repository has no remote named origin, so neither"
