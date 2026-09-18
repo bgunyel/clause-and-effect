@@ -10321,15 +10321,23 @@ tok 'neither of those read the refs at all' \
 
 # THE CORNER LEFT OPEN, written as verdicts rather than as a sentence in a
 # header, because a fix that gives up a case has to say so where a reader will
-# be looking. The refs read are those of the repository the command runs in, and
-# `gh pr create -R other/repo` names another one, so a base is judged against
-# THIS repository's active dev branch whichever repository the pull request is
-# going to. Both directions of that are here: the base this repository calls
-# active is permitted for the other one, and a base that may well be active over
-# there is refused. It is not a regression -- before #144 every dev-NN base was
-# accepted in every repository, so what is left is a subset of that -- and it
-# stays open under the stopping rule: opening a pull request into another
-# repository is not a shape an agent working here writes by accident.
+# be looking. The refs are read in the directory the hook process runs in, which
+# is the session's and which no command moves, so a base is judged against THIS
+# repository's active dev branch whichever repository the pull request is going
+# to. Both directions of that are here: the base this repository calls active is
+# permitted for the other one, and a base that may well be active over there is
+# refused. It is not a regression -- before #144 every dev-NN base was accepted
+# in every repository, so what is left is a subset of that -- and it stays open
+# under the stopping rule: opening a pull request into another repository is not
+# a shape an agent working here writes by accident.
+#
+# Three spellings, because the corner is one corner and not three, and because
+# the sentence this comment replaces said "the repository the command runs in"
+# -- which review of PR #158 caught as wrong about exactly the third: a `cd`
+# moves the command and not the hook, so in the one case where the two
+# directories differ the old wording named the wrong one. A claim about which
+# directory is read is worth a row per route, since the routes are what a reader
+# would otherwise have to reason about.
 req GH-144.6
 env_cmd "$PR_ONE" "$PATH" no-pr-decisions.sh ALLOW \
   'ACCEPTED: another repository, based on the branch active in this one' \
@@ -10337,6 +10345,15 @@ env_cmd "$PR_ONE" "$PATH" no-pr-decisions.sh ALLOW \
 env_cmd "$PR_ONE" "$PATH" no-pr-decisions.sh BLOCK \
   'ACCEPTED: and a base this repository has rotated past is refused there too' \
   'gh pr create -R other/repo --base dev-04 --title t --body b'
+env_cmd "$PR_ONE" "$PATH" no-pr-decisions.sh ALLOW \
+  'ACCEPTED: GH_REPO reaches the same corner, and is judged the same way' \
+  'GH_REPO=other/repo gh pr create --base dev-05 --title t --body b'
+env_cmd "$PR_ONE" "$PATH" no-pr-decisions.sh BLOCK \
+  'ACCEPTED: and so does a cd, which moves the command but not this hook' \
+  'cd ../other-repo && gh pr create --base dev-04 --title t --body b'
+env_cmd "$PR_ONE" "$PATH" no-pr-decisions.sh ALLOW \
+  'ACCEPTED: the same cd with the base active here is permitted' \
+  'cd ../other-repo && gh pr create --base dev-05 --title t --body b'
 env_cmd "$PR_ONE" "$PATH" no-pr-decisions.sh BLOCK \
   'while main is refused for another repository as it is for this one' \
   'gh pr create -R other/repo --base main --title t --body b'

@@ -73,14 +73,19 @@
 # That is the refusing direction, it is visible, and `git fetch` is the fix --
 # which the SessionStart report already runs every session.
 #
-# One corner is left open, named rather than closed. The refs read are those of
-# the repository the command runs in, and `gh pr create -R other/repo` names
-# another -- so a base is judged against this repository's active dev branch
-# whichever repository the pull request is going to. That is not a regression:
-# before #144 every dev-NN base was accepted in every repository, and what the
-# corner leaves is a subset of that. It stays open under the STOPPING RULE
-# below: opening a pull request into another repository is not a shape an agent
-# working here writes by accident.
+# One corner is left open, named rather than closed. The refs are read in the
+# directory this hook process runs in -- the session's -- and nothing a command
+# says moves that, so a base is judged against THIS repository's active dev
+# branch whichever repository the pull request is going to. Four spellings reach
+# it and they are one corner, not four: `-R other/repo`, `--repo other/repo`, a
+# `GH_REPO=` assignment, and a `cd other-repo &&` earlier on the line. The last
+# is why this paragraph does not say "the repository the command runs in", which
+# is what it said until review of PR #158: a `cd` moves the command and not the
+# hook, so that wording named the wrong directory in the one case where the two
+# differ. That is not a regression: before #144 every dev-NN base was accepted
+# in every repository, and what the corner leaves is a subset of that. It stays
+# open under the STOPPING RULE below: opening a pull request into another
+# repository is not a shape an agent working here writes by accident.
 #
 # Still allowed: creating a PR into the active dev branch -- into any dev-NN
 # branch where no dev ref can be read -- commenting on one, editing

@@ -1901,10 +1901,12 @@ The suite fails on each of these, and `--matrix` shows the rest:
   cannot tell a read made once from a read made per base.
 
 ### GH-144.6
-- text: The active dev branch is read from the repository the command runs in, so a
-  base named with `-R other/repo` is judged against this repository's active dev
-  branch: the branch active here is permitted for another repository, and one this
-  repository has rotated past is refused there too. Accepted, not fixed.
+- text: The active dev branch is read in the directory the hook process runs in, which
+  no command moves, so a base aimed at another repository -- by `-R other/repo`, by
+  `GH_REPO=`, or by a `cd` earlier on the line -- is judged against this
+  repository's active dev branch: the branch active here is permitted for another
+  repository, and one this repository has rotated past is refused there too.
+  Accepted, not fixed.
 - from: #144
 - kind: defect-refusing
 - status: active
@@ -1915,7 +1917,13 @@ The suite fails on each of these, and `--matrix` shows the rest:
   is a subset of that, and the permitting row is the one that says which subset. It
   stays open under the stopping rule in `no-pr-decisions.sh`'s header, opening a
   pull request into another repository being no shape an agent working here writes
-  by accident, and it is filed as no issue for the same reason.
+  by accident, and it is filed as no issue for the same reason. The `cd` spelling
+  is the one this entry first missed: review of PR #158 read the header's "the
+  repository the command runs in" and pointed out that a `cd other-repo &&` prefix
+  moves the command and not the hook, so the sentence named the wrong directory in
+  the one case where the two differ. The verdicts were right and only the account
+  of them was wrong, which is why the correction is a wording change and two more
+  rows rather than a fix.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -2157,6 +2165,10 @@ it has no entry above (Q16).
   things it corrected stand
 - #141: the issue that owns deciding which non-FR requirements the invariance
   families seed; it adds no requirement of its own until that is decided
+- #158: a pull request, for #144; its review found no defect in a verdict and one
+  in the account of them, and GH-144.6 is where the correction stands — the suite
+  cites the number beside the three rows that review asked for, because a claim
+  about which directory is read is worth saying who last got it wrong
 - #107: has entries above, GH-107.1 and GH-107.2, and is listed here only because
   #106's section cited it before it landed — that section writes out three
   mutations of its own and says they are run by hand until the harness exists.

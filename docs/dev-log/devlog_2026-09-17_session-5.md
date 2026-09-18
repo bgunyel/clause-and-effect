@@ -1,7 +1,7 @@
 # 2026-09-17 · session 5 — #144: the pull request base is the active dev branch, and the lookup only narrows
 
 **Branch** `worktree-issue-144-active-dev-base`, cut from `origin/dev-05` at
-`897bdff` and proposed into `dev-05`. **Check suite 3786 → 3867 results, all
+`897bdff` and proposed into `dev-05`. **Check suite 3786 → 3870 results, all
 passing**; requirements 174 → 180, `GH-144.1` to `GH-144.6`; mutation registry
 29 → 34 rows, the five new ones run against a baseline and all caught.
 
@@ -134,12 +134,27 @@ otherwise have reported `survived`.
 
 ## The corner left open
 
-The refs read are those of the repository the command runs in, and
-`gh pr create -R other/repo` names another one, so a base is judged against this
-repository's active dev branch whichever repository the pull request is going to.
+The refs are read in the directory the hook process runs in — the session's, and
+no command moves it — so a base is judged against this repository's active dev
+branch whichever repository the pull request is going to.
 It is not a regression — before this change every `dev-NN` base was accepted in
 every repository, so what is left is a subset of that — and it stays open under
 the stopping rule, opening a pull request into another repository being no shape
 an agent working here writes by accident. It is written as `GH-144.6` with the
 permitting row named `ACCEPTED`, because a fix that gives up a case has to say so
 where a reader will be looking rather than in a header.
+
+The wording above is the second attempt at it. A third review, run from a peer
+session against the pushed pull request, found no correctness defect and one
+thing: the header and `GH-144.6` both said the refs read were "those of the
+repository the command runs in", and `cd other-repo && gh pr create --base
+dev-02` is the case where that is false — the `cd` moves the command and not the
+hook, so the command runs in one repository and the refs are read in another.
+The verdicts were right; only the account of them was wrong, which is why the
+answer is a wording change rather than a fix. The assistant measured the other
+routes before rewording rather than reasoning about them: `GH_REPO=` and `cd`
+were fed to the hook in a one-ref fixture and behave exactly as `-R` does, so
+the corner is one corner reached four ways. `GH-144.6` gains a row per route,
+on the argument that a claim about *which directory is read* is the kind a
+reader would otherwise have to re-derive — and this session has now got it
+wrong once.
