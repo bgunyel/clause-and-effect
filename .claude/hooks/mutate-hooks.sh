@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- thirty-nine runs as the
-# registry stands, not forty, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- forty-one runs as the
+# registry stands, not forty-two, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -58,9 +58,13 @@
 # figure above was taken. #117 added five, and on the merge of dev-05 into it
 # (2026-09-18) the sixteen rows added since that measurement -- #117's, #108's,
 # #128's and #133's -- were run as one selection: baseline plus sixteen, all
-# caught, byte-identical after. The other twenty-three rows have not been run
-# since the files they run against changed. No run has therefore exercised all
-# thirty-nine rows together, and saying which rows a measurement covered is the
+# caught, byte-identical after. #141 added two, `variants-field-deleted` and
+# `variants-seed-disowned`, and on the second merge of dev-05 into it
+# (2026-09-18) ran that pair as a selection against the merged tree: baseline
+# plus two, both caught with GH-141 red, byte-identical after. The other
+# twenty-three rows have not been run since the files they run against changed.
+# No run has therefore exercised all forty-one rows together, and saying which
+# rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
 # sentence this replaced, claiming the only later edit was to this comment, was
@@ -133,8 +137,8 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   THIRTY-SEVEN real mutations, against SIX files in .claude/hooks/, naming
-#   FORTY-TWO requirement IDs between them, of the 160 whose status is active.
+#   THIRTY-NINE real mutations, against SEVEN files in .claude/hooks/, naming
+#   FORTY-THREE requirement IDs between them, of the 163 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
@@ -160,6 +164,16 @@
 #     one list. #106's six self-guards -- a transformation that applies to no
 #     seed, a departure row naming a seed that is not there -- are all of that
 #     kind, and #104's coverage machinery is too.
+#
+#     The seventh file is the exception that shows where the line actually
+#     falls, and it is worth reading before the next row is written. GH-141's
+#     rule is CODE in check-hooks.sh and so cannot be mutated -- but what that
+#     code READS is requirements.md, which an override does move. So the rule is
+#     reachable through its input: the two `variants-*` rows edit an entry in
+#     the copy and the suite, running from here, reads the copy and goes red.
+#     The test is not "whose file is it" but "does the run read the copy".
+#     Nothing about #106's own self-guards is reachable that way, because what
+#     they read is the seed table, which lives in the suite.
 #   - a claim about a file outside .claude/hooks/. Only the hooks directory is
 #     copied, and CLAUDE.md, CONTEXT.md, settings.json and the two skills are
 #     read from this repository whatever is being judged, so a mutation to one of
@@ -237,6 +251,8 @@ tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 a
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught
 degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch: FAILED or timed out after /d%GH-108.10%caught
+variants-field-deleted%requirements.md%/^- variants: transformation: redirect-quoted$/d%GH-141%caught
+variants-seed-disowned%requirements.md%/^### GH-72$/,/^$/s/^- variants: seed$/- variants: none: a reason/%GH-141%caught
 heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
