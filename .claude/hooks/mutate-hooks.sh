@@ -15,15 +15,17 @@
 #       bash .claude/hooks/mutate-hooks.sh --list     the registry, and nothing run
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
-# ABOUT FORTY-FIVE MINUTES for the whole registry: one check-hooks.sh run per
-# mutation that applies, at about two minutes, plus the baseline -- twenty-three
-# runs as the registry stands, not twenty-four, because the row whose edit matches
-# nothing never reaches one. Measured twice on 2026-09-17, on this machine and on
-# registries one row apart: 47 min 34 s and 45 min 24 s. That is why it is a
-# separate script and why check-hooks.sh does not call it (#107). Nothing here is
-# a PreToolUse hook and settings.json does not register it. Naming rows costs the
-# baseline plus one run each, so re-asking a single rule is about four minutes
-# rather than forty-five.
+# ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
+# applies, at about two minutes, plus the baseline -- thirty-four runs as the
+# registry stands, not thirty-five, because the row whose edit matches nothing
+# never reaches one. Measured twice on 2026-09-17, on this machine and on
+# registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
+# The figure above is those rates carried to the current count and not a third
+# measurement; a run under load took nearer four minutes a row. That is why it
+# is a separate script and why check-hooks.sh does not call it (#107). Nothing
+# here is a PreToolUse hook and settings.json does not register it. Naming rows
+# costs the baseline plus one run each, so re-asking a single rule is about four
+# minutes rather than an hour.
 #
 # EXIT STATUS: non-zero when any row reports something other than the outcome it
 # declares. For every real mutation that means a survivor or an edit that did not
@@ -41,9 +43,37 @@
 # Both self-tests are additionally required to be present, one of each outcome.
 #
 # MEASURED, 2026-09-17, at the commit that answered that review: all twenty-three
-# rows reported what they declare, and .claude/hooks/ came back byte-identical.
-# The only edit to .claude/hooks/ after that run is the figure two paragraphs up,
-# which is this comment. No
+# rows as the registry then stood reported what they declare, and .claude/hooks/
+# came back byte-identical.
+#
+# THAT MEASUREMENT IS NOT CURRENT, and saying so is the point of this paragraph.
+# Three selections have been run since, each naming its own rows and none part of
+# a whole-registry run. #108 added six rows and ran them as a named selection:
+# baseline plus six, all caught, .claude/hooks/ byte-identical after. #128 added
+# three and ran them the same way, baseline plus three, all caught with GH-128
+# red. #133 added `retarget-refusal-drops-the-retarget-spelling` and
+# `retarget-refusal-drops-the-create-comparison` and ran the pair the same way,
+# both caught, byte-identical after; it also edited no-pr-decisions.sh,
+# check-hooks.sh and this file, so three of the files that run changed after the
+# figure above was taken. No run has therefore exercised all thirty-four rows
+# together, and saying which rows a measurement covered is the whole point of
+# recording one. A reader who wants "the whole registry, at this commit" has to
+# run it -- which is the answer #107 built rather than a gap, and is why the
+# sentence this replaced, claiming the only later edit was to this comment, was
+# worth catching. Bertan's two reviews of PR #147, and two merges of dev-05 into
+# it.
+#
+# THREE ROWS FOR ONE FIX, #128's, which is a departure from a row per rule and is
+# here because the rules overlap. `heredoc-opener-parity` loosens the parity test
+# to the rule cs_join uses, which is the defect review of PR #151 found in the
+# first version of that fix; `heredoc-boundary-run-kept` stops the drop taking
+# the trailing run off the line a body starts after. Each is caught, and NEITHER
+# reproduces the defect the issue was filed for: on an odd run the two mechanisms
+# cover the same case, so breaking one leaves the other holding it. That case
+# needs both broken, which is `heredoc-opener-continuation`, the one row here
+# whose edit is two commands -- and it puts the pass back to what dev-05 did,
+# measured: 151 checks red, and the bash differential from 0 hidden pushes to
+# 198, which is dev-05's figure exactly. No
 # per-mutation counts are recorded here on purpose -- a count in a comment is the
 # thing #107 was filed about, and the registry is re-runnable instead.
 #
@@ -99,8 +129,13 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   TWENTY-ONE real mutations, against FIVE files in .claude/hooks/, naming
-#   THIRTY-TWO requirement IDs between them, of the 144 whose status is active.
+#   THIRTY-TWO real mutations, against SIX files in .claude/hooks/, naming
+#   FORTY requirement IDs between them, of the 158 whose status is active.
+#
+# Those four numbers are restated prose in a file whose own argument, three
+# paragraphs up, is that a count in a comment is the thing #107 was filed about.
+# They have now been wrong or moved five times in two days, and #148 is filed to
+# take them out and let `--list` be the only place they are written.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
 # verify is `review` or `runbook` rather than a check here, every doc-claim about
@@ -176,6 +211,8 @@ gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule i
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught
 base-refusal-drops-the-spelling%no-pr-decisions.sh%/^BASE=/s/Write: gh pr create --base dev-NN/Name a base/%US-7 FR-23%caught
+retarget-refusal-drops-the-retarget-spelling%no-pr-decisions.sh%s/ Retarget to the active dev branch instead: gh pr edit <n> --base dev-NN\.//%US-7 FR-23 GH-133%caught
+retarget-refusal-drops-the-create-comparison%no-pr-decisions.sh%s/ just as creating it there would//%FR-23%caught
 base-pattern-admits-main%no-pr-decisions.sh%/^is_dev_base()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
 pr-create-base-not-read%no-pr-decisions.sh%s/if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/if false \&\& RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/%FR-14 FR-16 US-9%caught
 web-handoff-refused%no-pr-decisions.sh%/^gh_pr_web()/,/^}/s/--web|-w) return 0 ;;/--web|-w) return 1 ;;/%FR-21 US-12%caught
@@ -190,6 +227,15 @@ own-branch-push-refused%no-git-push.sh%/^names_this_branch()/,/^}/s/") return 0 
 library-loaded-unguarded%no-git-push.sh%$a. "$(dirname "$0")/lib/command-scan.sh"%GH-84.2%caught
 merged-branch-not-gone%no-work-on-stale-branch.sh%s/= "\[gone\]"/= "never-this-string"/%FR-38%caught
 bare-pytest-permitted%pytest-via-uv-group.sh%s/grep -qE '\^(pytest|/grep -qE '^(no-such-tool-at-all|/%GH-69.1%caught
+unresolved-git-dir-permits%no-git-push.sh%/could not be resolved, so whether this runs/,+1s/exit 2/exit 0/%GH-108.2%caught
+dev-branch-not-version-sorted%no-work-on-stale-branch.sh%s/| sort -V | tail -1)/| sort | head -1)/%GH-108.5%caught
+tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 and (.[0].tool_name == "Bash") and/%GH-108.1%caught
+hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
+report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught
+degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch: FAILED or timed out after /d%GH-108.10%caught
+heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
+heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
+heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

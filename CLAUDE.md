@@ -174,7 +174,7 @@ Whether those checks can fail is a second question, and `bash
 .claude/hooks/mutate-hooks.sh` is where it is asked (#107). It breaks one
 registered rule at a time in a copy of `.claude/hooks/` — never in this one — and
 a mutation counts as caught only when every requirement ID the registry names for
-it has a failing check. About forty-five minutes for the registry, so nothing
+it has a failing check. About an hour for the registry, so nothing
 runs it for you; two of its rows are self-tests, one whose edit matches nothing
 and one registered against a requirement its edit cannot reach, because an edit
 that silently fails to apply reads exactly like evidence and is none. What the
@@ -390,10 +390,13 @@ The five canonical roles, each label string equal to its name. See
 
 ### Domain docs
 
-Single-context: `docs/adr/` holds one ADR; `CONTEXT.md` holds the glossary. It
+Single-context: `docs/adr/` holds the ADRs; `CONTEXT.md` holds the glossary. It
 is written lazily — a term is added when a collision has actually been resolved
 — so it stays short enough to read whole, and this line deliberately does not
 enumerate it: the sentence that did named two terms of five and went stale
-without saying so. Several of the hooks above cite it, and
-`.claude/hooks/check-hooks.sh` holds those citations to what it says. See
-`docs/agents/domain.md`.
+without saying so. It does not count the ADRs either, for the same reason and
+on the same evidence — the clause that did said one, and #143 added a second in
+the commit that cites this sentence's own lesson back at it. Several of the
+hooks above cite `CONTEXT.md`, and `.claude/hooks/check-hooks.sh` holds those
+citations to what it says; it holds this line too, since review of that commit
+found nothing held it at all. See `docs/agents/domain.md`.
