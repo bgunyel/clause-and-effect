@@ -16,12 +16,13 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- thirty-nine runs as the
-# registry stands, not forty, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- forty-three runs as the
+# registry stands, not forty-four, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
-# The figure above is those rates carried to the current count and not a third
-# measurement; a run under load took nearer four minutes a row. That is why it
+# Those rates carried to forty-three runs give nearer ninety minutes than sixty,
+# and no third whole-registry measurement has been taken; a run under load took
+# nearer four minutes a row. That is why it
 # is a separate script and why check-hooks.sh does not call it (#107). Nothing
 # here is a PreToolUse hook and settings.json does not register it. Naming rows
 # costs the baseline plus one run each, so re-asking a single rule is about four
@@ -59,9 +60,16 @@
 # (2026-09-18) the sixteen rows added since that measurement -- #117's, #108's,
 # #128's and #133's -- were run as one selection: baseline plus sixteen, all
 # caught, byte-identical after. The other twenty-three rows have not been run
-# since the files they run against changed. No run has therefore exercised all
-# thirty-nine rows together, and saying which rows a measurement covered is the
-# whole point of recording one. A reader who wants "the whole registry, at this commit" has to
+# since the files they run against changed. #109 added four more -- a pass
+# slowed past the 1 s bound on a long command, two refusal messages losing the
+# sentence their rows read, and a second hook refusing a permitted read -- and
+# ran them as a named selection on 2026-09-18, before dev-05 carried #117:
+# baseline green over 183 requirements, all four caught, .claude/hooks/
+# byte-identical after. Its settings.json mutations cannot be rows here, the file
+# being outside the copy; they were run by hand and are recorded in #109's
+# section of check-hooks.sh. No run has therefore exercised all forty-three rows
+# together, and saying which rows a measurement covered is the whole point of
+# recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
 # sentence this replaced, claiming the only later edit was to this comment, was
 # worth catching. Bertan's two reviews of PR #147, and two merges of dev-05 into
@@ -133,12 +141,12 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   THIRTY-SEVEN real mutations, against SIX files in .claude/hooks/, naming
-#   FORTY-TWO requirement IDs between them, of the 160 whose status is active.
+#   FORTY-ONE real mutations, against SEVEN files in .claude/hooks/, naming
+#   FORTY-FIVE requirement IDs between them, of the 167 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
-# They have now been wrong or moved six times in three days, and #148 is filed to
+# They have now been wrong or moved seven times in three days, and #148 is filed to
 # take them out and let `--list` be the only place they are written.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
@@ -245,6 +253,10 @@ wrapper-word-spelling-not-admitted%lib/command-scan.sh%s/SPELLING((ba|z|)sh/((ba
 prefix-word-spelling-not-reduced%lib/command-scan.sh%s/return cw_name(w)/return w/%GH-117%caught
 wrapper-surface-quotes-not-admitted%no-pr-decisions.sh%/^GH_SURFACE_ANYWHERE=/s/\["'"'"'\]\*gh\["'"'"'\]\*/gh/%GH-117%caught
 the-close-117-rejected%lib/command-scan.sh%s/SPELLING((ba|z|)sh/SPELLING(\\\\$\\\\(|(ba|z|)sh/%GH-117.1%caught
+long-command-outlasts-the-bound%no-git-push.sh%/^CMDS=\$(printf/a [ "$(echo "$COMMAND" | wc -l)" -gt 100 ] && sleep 1.1%GH-109.1%caught
+forced-push-refusal-drops-the-remedy%no-git-push.sh%s/ Add a commit instead\.//%US-7 GH-109.2%caught
+decision-refusal-drops-what-stays-allowed%no-pr-decisions.sh%/^DECIDE=/s/ Opening a PR, commenting on it and editing it are allowed;//%US-7 GH-109.2%caught
+second-hook-refuses-a-permitted-read%alembic-via-uv-group.sh%/^CMDS=\$(printf/a echo "$CMDS" | grep -q '^gh pr view' && exit 2%GH-109.5%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

@@ -1493,9 +1493,9 @@ The suite fails on each of these, and `--matrix` shows the rest:
   retarget arm's tail -- already per-arm -- name its own correction, so the
   retarget's tail row now carries US-7 as well. What it does not fix is the
   order: `BASE` still opens with `Write: gh pr create --base dev-NN`, so the
-  wrong imperative is still the first one an agent reads, which is #154. Left to
-  #109: whether every other refusal message in the two files is read for its
-  words.
+  wrong imperative is still the first one an agent reads, which is #154. Whether
+  every other refusal message in the two files is read for its words was left to
+  #109, and GH-109.2 is its answer.
 
 ### GH-134
 - text: A shell wrapper is refused wherever it stands in a command position,
@@ -1931,6 +1931,67 @@ The suite fails on each of these, and `--matrix` shows the rest:
   `lib/command-scan.sh` said so until this fix. #127 is the half of that claim
   which is still open.
 
+### GH-109.1
+- text: Each Bash hook finishes a 200-line heredoc whose every body line holds
+  several separators, followed by a command it refuses, in under 1 s, fastest of
+  three, whether the opener is quoted or not.
+- from: #109, and #103 Q28
+- kind: defect-permitting
+- status: active
+- direction: static: a bound on time, not a verdict
+- note: measured at 9 to 33 ms, because a heredoc body is dropped before any pass
+  reads it. The same 200 lines as live commands take up to 3.1 s, which is #127's
+  per-fragment cost and is not bounded here.
+
+### GH-109.2
+- text: Every refusal arm of `no-git-push.sh` and `no-pr-decisions.sh` says the rule
+  it applies, or the spelling that is permitted instead, in a sentence read whole;
+  and each file has as many refusal arms as the suite reads.
+- from: #109, and #103 Q3
+- kind: doc-claim
+- status: active
+- direction: refuse-only: a message is written only on a refusal
+
+### GH-109.3
+- text: `settings.json` registers exactly the seven Bash hooks under `Bash`, in a
+  fixed order, `append-only-docs-edit.sh` under `Edit|Write`, and the report under
+  `SessionStart`, each at its `.claude/hooks/` path; every `PreToolUse` timeout is
+  5 and the report's is 50.
+- from: #109
+- kind: defect-permitting
+- status: active
+- direction: static: configuration the harness reads
+
+### GH-109.4
+- text: Every hook `settings.json` registers, on any event and matcher, is run by at
+  least one tagged check.
+- from: #109
+- kind: defect-permitting
+- status: active
+- direction: static: a property of the suite's run
+
+### GH-109.5
+- text: Every permitted spelling named in CLAUDE.md's boundary section or in a
+  refusal message is permitted by all seven Bash hooks, run in their registered
+  order from the context where it is meant to be permitted, each exiting exactly 0.
+- from: #109, and #103 Q20 and Q21
+- kind: defect-refusing
+- status: active
+- direction: permit-only: the claim is that nothing refuses these; what refuses
+  anything else is every other requirement's
+
+### GH-164
+- text: No refusal message tells an agent to use a spelling that another hook
+  refuses. `no-commit-to-main.sh`'s push refusal says "Push your dev-NN branch and
+  open a PR instead", and `no-git-push.sh` refuses that push from every checkout an
+  agent could stand in.
+- from: #164, found by #109's cross-hook checks
+- kind: doc-claim
+- status: gap → #164
+- note: the verdicts are right (US-2), so the defect is in the message, and the
+  gap row reads the message: it asserts the sentence is still there and turns red
+  when #164 removes it.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that
@@ -2187,9 +2248,6 @@ it has no entry above (Q16).
   left and has taken all fifteen off; it adds checks, not requirements of its own,
   and the three defects found doing it are #130, #131 and #133, which have entries
   above
-- #109: the issue that owns what a refusal says; cited where a message is pinned
-  for its words, so that a reworded message is changed in one place and checked in
-  another. The defect #133 records is its to fix
 - #110: the live acceptance runbook, not yet written; `verify: runbook §<n>` names
   its sections
 - #111: a pull request, for #94
