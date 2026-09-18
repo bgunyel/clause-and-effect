@@ -40,9 +40,10 @@ thing in the record.
 
 ## Conventions
 
-- File name: `devlog_YYYY-MM-DD_session-NAME.md`, where `NAME` is the session 
-  name of the agent writing the dev-log. If the agent does not know its session
-  name, it should call the `ListAgents` function to see its session name.
+- File name: `devlog_YYYY-MM-DD_SESSION-NAME.md`, where `SESSION-NAME` is the session 
+  name of the agent writing the dev-log. 
+- If the agent does not know its session name, or it is in doubt, it should call 
+  the `ListAgents` function to see its session name. 
 - Open with the date, branch, commit range, and how far ahead of `main` the
   branch ended up.
 - Written for technical readers who know the codebase. Prefer measured numbers
