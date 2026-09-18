@@ -444,21 +444,85 @@ VERDICT='(^|[[:space:]])(--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[
 # names one level up, and it is pinned.
 GH_SURFACE_ANYWHERE='(^|[^-A-Za-z0-9_])["'"'"']*gh["'"'"']*[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
 
+# A pull request's state, in every spelling of the quoting AROUND the value --
+# not inside the name or the value, which is #163.
+# Two rules read it -- the wrapper arm below and the gh api write block near the
+# foot of this file -- and the pattern is written ONCE because it was written
+# twice: two copies of `"?(closed|open)"?`, each admitting a double quote and
+# not a single one, so `-f state='closed'` closed a pull request through both.
+# Two copies can be fixed apart, and a fix applied to one of them reads exactly
+# like a fix. #137. check-hooks.sh pins each call site on its own, so a copy
+# reintroduced and then corrected in one place is red rather than silent.
+#
+# NOT anchored on the field flag, where rest_bases below is. The two rules are
+# triggered oppositely and that decides it: state refuses on PRESENCE, so a
+# spelling it cannot see is a refusal that does not happen, and it has to reach
+# the graphql `state:CLOSED` inside a mutation body and a bare `state=closed`
+# sitting in a wrapped line's text, neither of which carries a flag at all.
+# Anchoring would have narrowed a rule whose whole job is to be wide. base
+# refuses on ABSENCE, so width there is what invents a base out of prose.
+#
+# What the widening costs, named: `state='open'` written in prose on a line that
+# already reaches these rules is now refused, where `state="open"` and
+# `state=open` in the same prose already were. That is CLAUDE.md's left-open
+# item 2 -- quoted text has no argument structure to say whether a word is a
+# value or prose -- and it is one edit away, not a decision that goes wrong.
+STATE_FIELD_RE='state[[:space:]]*[=:][[:space:]]*["'"'"']?(closed|open)["'"'"']?'
+
 # Every base a gh api call names, in the two shapes gh accepts one. Both print
 # the values, one per line, for bases_all_dev -- the same "every, not the last"
 # answer gh_pr_bases gives, and for the same reason: `-f base=dev-05 -f
 # base=main` must not be answered by whichever occurrence a rule happened to
 # look at.
 #
-# REST: the value is a FIELD, so the field flag is part of the pattern. Matching
-# the bare word instead read `-f title="base: dev-05"` as a base, so a create
-# naming none of its own was permitted. Reported on the review of be0e3c7.
-# `-f base=x`, `-fbase=x` and `--field base=x` are one request written three
-# ways; anchoring on the flag is also what keeps `rebase` and `database` the
-# words they are.
+# REST: the value is a FIELD, so the field flag is part of the pattern. This is
+# the FOURTH answer to "where does the field begin", and the first three are
+# kept here because each was right about the one it replaced, and because the
+# shape of being wrong four times is the thing worth reading.
+#
+# 1. The bare word. It read `-f title="base: dev-05"` as a base, so a create
+#    naming none of its own was permitted. Reported on the review of be0e3c7.
+# 2. The flag, with the field name immediately after it. That fixed 1 and is
+#    what keeps `rebase` and `database` the words they are -- but the quote gh
+#    accepts round a whole field goes BETWEEN the flag and the name, and the
+#    pattern had no room for it. `-f "base=dev-05"` therefore read as a create
+#    that named no base, and the single permitted destination was refused with
+#    the message that none was given. #137.
+# 3. The flag, an optional quote, then the name. That fixed 2 and left the
+#    separator itself unasked about: pflag accepts `--field=value` for a long
+#    flag and `-f=value` for a short one, so `--field=base=main` and
+#    `-f=base=main` reached GitHub with nothing here seeing a base at all.
+#    Found by Bertan's review of PR #153, in the change that answered 2.
+# 4. The flag, ANY separator gh accepts, an optional quote, then the name. The
+#    separator between a flag and its value is exactly three things -- nothing,
+#    whitespace, `=` -- so `[[:space:]=]*` is the closure and not another guess,
+#    and the quote is admitted in the one position after it. `-f base=x`,
+#    `-fbase=x`, `--field base=x`, `--field=base=x`, `-f "base=x"` and
+#    `-f='base=x'` are one request. The anchor that answers 1 is untouched:
+#    `--field=database=x` still begins `d` after the separator, and a `base`
+#    reached through no flag at all is still not a base.
+#
+#    That is a closure of the SEPARATOR, not of the field, and an earlier
+#    wording of this item claimed the second. Quoting and escaping INSIDE the
+#    name or value -- `-f ba"se"=main`, `-f base\=main`, `-f \base=main` -- is
+#    still unread, and on a retarget still permitted; so are `st"ate"=closed`
+#    and `state=clo"sed"` in STATE_FIELD_RE above. Found by the follow-up
+#    review of PR #153. A fifth regex guess is the wrong answer: the fix is to
+#    dequote each argument before reading it, and the state half of that
+#    stands on #130's per-command move. #163.
+#
+# WHICH WAY AN UNREAD SPELLING FAILS, and it is not one way. The first version
+# of this comment said a spelling this rule cannot read is only ever a permitted
+# create turned into a false refusal, never a bad base let through. That is
+# false, and finding 1 above is what it hid: the no-base arm that produces the
+# refusal is keyed on the COLLECTION endpoint, so on `PATCH /pulls/N` -- a
+# retarget -- an unread base is matched by nothing and the command is permitted.
+# So this rule fails REFUSING on a create and PERMITTING on a retarget, and only
+# the create half is the "widening is safe here" that state's comment is
+# contrasted with. Both halves are checked, in the #137 section.
 rest_bases() {
   printf '%s\n' "$1" \
-    | grep -oiE "(-[fF]|--field|--raw-field)[[:space:]]*base[[:space:]]*=[[:space:]]*[\"']?[^[:space:]\"',}]*" \
+    | grep -oiE "(-[fF]|--field|--raw-field)[[:space:]=]*[\"']?base[[:space:]]*=[[:space:]]*[\"']?[^[:space:]\"',}]*" \
     | sed -E "s/.*=[[:space:]]*[\"']?//"
 }
 
@@ -499,7 +563,7 @@ if echo "$WRAPTEXT" | grep -qE "$CS_WRAPPER_RE"; then
   if echo "$WRAPTEXT" | grep -qE "$GH_SURFACE_ANYWHERE" \
      || echo "$WRAPTEXT" | grep -qE '/pulls/[^ ]*/(merge|reviews)' \
      || echo "$WRAPTEXT" | grep -qE '/releases([^A-Za-z0-9_-]|$)' \
-     || echo "$WRAPTEXT" | grep -qiE 'state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?' \
+     || echo "$WRAPTEXT" | grep -qiE "$STATE_FIELD_RE" \
      || echo "$WRAPTEXT" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then
     echo "$DECIDE A shell wrapper does not change what the command decides, and its payload cannot be read. Run it unwrapped." >&2
     exit 2
@@ -737,9 +801,11 @@ if [ -n "$API_WRITE" ]; then
   # They are a write to the pull request itself rather than to a subpath, and
   # the same PATCH is how `gh pr edit` retitles one, which stays allowed -- so
   # the endpoint cannot decide this and the field has to. graphql spells the
-  # same change as a state on updatePullRequest.
+  # same change as a state on updatePullRequest. Which spellings of the field
+  # count is STATE_FIELD_RE's, at the head of this file and shared with the
+  # wrapper arm, for the reason written there: the two copies of it disagreed.
   if echo "$SCAN" | grep -qiE '(/pulls/|updatePullRequest)' \
-     && echo "$SCAN" | grep -qiE 'state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?'; then
+     && echo "$SCAN" | grep -qiE "$STATE_FIELD_RE"; then
     echo "$DECIDE Setting a pull request's state through gh api closes or reopens it, which is the same decision by another name." >&2
     exit 2
   fi

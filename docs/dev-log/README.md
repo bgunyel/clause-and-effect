@@ -40,10 +40,15 @@ thing in the record.
 
 ## Conventions
 
-- File name: `devlog_YYYY-MM-DD_session-N.md`, where `N` counts sessions within
-  that day starting at 1 (multiple sessions per day are expected).
-- Open with the date, branch, commit range, and how far ahead of `main` the
-  branch ended up.
+- File name: `devlog_YYYY-MM-DD_SESSION-NAME.md`, where `SESSION-NAME` is the session 
+  name of the agent writing the dev-log. 
+- If the agent does not know its session name, or it is in doubt, it should call 
+  the `ListAgents` function to see its session name.
+- A dev-log entry should start with date and time of the entry. Open with 
+  branch, commit range, and how far ahead of its root branch the current branch 
+  ended up.
+- If the dev-log file that the agent is trying to write already exists, 
+  the agent should  append a new dev-log entry to the file with a date and time. 
 - Written for technical readers who know the codebase. Prefer measured numbers
   and commit SHAs over recollection — and say which figures were measured versus
   recalled.

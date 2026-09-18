@@ -1640,6 +1640,54 @@ The suite fails on each of these, and `--matrix` shows the rest:
   retired or superseded one has no covering check, so a row naming it would report
   `survived` for ever and read as a defect in the hooks rather than in the row.
 
+### GH-137.1
+- text: The `state` reader in `no-pr-decisions.sh` recognises every spelling of the
+  quoting round its own field — `state=closed` and `state=open` with the value
+  bare, double-quoted or single-quoted, and with a quote round the whole field
+  between the flag and the name — and does so at both of its call sites, the
+  `WRAPTEXT` arm and the `gh api` write block. The pattern is written once and
+  both read it. Quoting INSIDE the name or the value (`st"ate"=closed`,
+  `state=clo"sed"`, `state\=closed`) is not this requirement's, and is #163.
+- from: #137, found while grilling the fix design for #130
+- kind: defect-permitting
+- status: active
+- note: the reader stays keyed on the FIELD and not on the endpoint, for the reason
+  its own comment gives — the same PATCH is how `gh pr edit` retitles a pull
+  request, which stays allowed — and stays unanchored where `rest_bases` anchors
+  on the field flag. The two rules are triggered oppositely and that decides it:
+  this one refuses on presence and has to reach a graphql `state:CLOSED` and a
+  bare `state=closed` in a wrapped line, neither carrying a flag at all. What the
+  widening costs is CLAUDE.md's left-open item 2, one spelling wider: `state='open'`
+  written as prose on a line that already reaches these rules is refused, as
+  `state="open"` already was.
+
+### GH-137.2
+- text: The `base` reader `rest_bases` recognises `base=<value>` however the field is
+  spelled between its flag and its name — any separator `gh` accepts (nothing,
+  whitespace or `=`) and a quote round the whole field as well as round the value
+  — and reads the value out of it. `-f "base=dev-05"`, `-f 'base=dev-05'`,
+  `--field "base=dev-05"`, `--field=base=dev-05` and `-f=base=dev-05` are the
+  permitted create that `-f base=dev-05` is, and the same spellings naming `main`
+  are refused with the message that names the branch.
+- from: #137, found while grilling the fix design for #130; the separator half
+  found by Bertan's review of PR #153, in the change that closed the quote half
+- kind: defect-refusing
+- status: active
+- note: the fourth answer to "where does the field begin", after the bare word, the
+  flag with the name immediately after it, and the flag with a quote admitted
+  between; `rest_bases`' comment records all four. The separator class is the
+  closure rather than another guess — pflag accepts exactly nothing, whitespace or
+  `=` between a flag and its value — and the anchor that keeps `rebase` and
+  `database` ordinary words and keeps a base out of `-f title="base: dev-05"` is
+  untouched, since after any separator the next character is still the wrong one.
+  Not only a refusing defect, in either half: the no-base arm it falls into is
+  keyed on the collection endpoint, so an unread base on `PATCH /pulls/N` — a
+  retarget — is matched by nothing and permitted. The issue's table names neither
+  the retarget nor the separator. The closure is of the separator and not of the
+  field: quoting inside the name or the value (`-f ba"se"=main`, `-f base\=main`)
+  is still unread and on a retarget still permitted, found by the follow-up review
+  of PR #153 and carried by #163.
+
 ### GH-143.4
 - text: CONTEXT.md's *reserved act* names moving the active dev branch's remote ref
   any way other than advancing it, and deleting that ref, says that nothing refuses
@@ -1845,6 +1893,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
   local path that does not exist fails at once, and with `gh` absent the two reads
   behind it are skipped by the rule in that file's header. That is why this one
   can be a run and why a genuinely offline network cannot.
+
 ### GH-128
 - text: A heredoc body begins where bash begins it, so a command written after the
   terminator is read as a command. A line ending in an ODD run of trailing
@@ -2120,6 +2169,13 @@ it has no entry above (Q16).
   have entries above
 - #140: a pull request, for #106; Bertan's review of it is cited where the four
   things it corrected stand
+- #153: a pull request, for #137; Bertan's review of it found the separator half
+  of GH-137.2, which that entry carries, and corrected three claims in this
+  change — the flag pairing, the safety property `rest_bases`' comment asserted,
+  and two static checks that counted lines where they meant occurrences
+- #163: the in-word half of the quoting GH-137.1 and GH-137.2 read round a field,
+  found by the follow-up review of #153; it adds its requirements in the pull
+  request that fixes it, after #130, rather than pinning today's verdicts
 - #141: the issue that owns deciding which non-FR requirements the invariance
   families seed; it adds no requirement of its own until that is decided
 - #107: has entries above, GH-107.1 and GH-107.2, and is listed here only because
