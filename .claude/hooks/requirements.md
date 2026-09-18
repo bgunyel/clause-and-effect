@@ -1416,17 +1416,24 @@ The suite fails on each of these, and `--matrix` shows the rest:
 ### GH-133
 - text: A refused retarget names the correction for a retarget. `gh pr edit <n>
   --base dev-NN` is permitted, so the one-step correction is one word of the
-  command already written, not the create the four base refusals share.
+  command already written, not the create the four base refusals share, and the
+  message does not also say the base is the one thing that may not be edited.
 - from: #133, found by Bertan's review of #132
 - kind: defect-refusing
-- status: gap → #133
+- status: active
+- direction: refuse-only: a message is written only on a refusal
 - note: one `BASE` constant for four refusals is what FR-23 asks for, and for the
   three creating arms it is US-7's one-step correction too. For the retarget arm
-  it is not, and "Edit anything else you like" reads as saying the base may not
-  be edited when editing it to `dev-NN` is what is allowed. So the same message
-  is evidence for FR-23 and against US-7: #105's two retarget rows are tagged
-  FR-23 alone, and US-7 stays covered by the other twenty-one refusing checks.
-  Message content is #109's.
+  it is not, and "Edit anything else you like" told an agent the base may not be
+  edited, when editing it to `dev-NN` is what is allowed. So the same message was
+  evidence for FR-23 and against US-7, and #105's retarget rows were tagged FR-23
+  alone while this stood open. The fix keeps the constant and lets the
+  retarget arm's tail -- already per-arm -- name its own correction, so the
+  retarget's tail row now carries US-7 as well. What it does not fix is the
+  order: `BASE` still opens with `Write: gh pr create --base dev-NN`, so the
+  wrong imperative is still the first one an agent reads, which is #154. Left to
+  #109: whether every other refusal message in the two files is read for its
+  words.
 
 ### GH-134
 - text: A shell wrapper is refused wherever it stands in a command position,

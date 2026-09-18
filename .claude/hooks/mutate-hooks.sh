@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- thirty-one runs as the
-# registry stands, not thirty-two, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- thirty-four runs as the
+# registry stands, not thirty-five, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -44,11 +44,24 @@
 #
 # MEASURED, 2026-09-17, at the commit that answered that review: all twenty-three
 # rows as the registry then stood reported what they declare, and .claude/hooks/
-# came back byte-identical. #108's six rows were run as a named selection on the
-# same day -- baseline plus six, all caught, byte-identical after -- and #128's
-# three the same way, baseline plus three, all caught with GH-128 red. No run has
-# yet exercised the whole registry together. Saying which rows a measurement
-# covered is the whole point of recording one.
+# came back byte-identical.
+#
+# THAT MEASUREMENT IS NOT CURRENT, and saying so is the point of this paragraph.
+# Three selections have been run since, each naming its own rows and none part of
+# a whole-registry run. #108 added six rows and ran them as a named selection:
+# baseline plus six, all caught, .claude/hooks/ byte-identical after. #128 added
+# three and ran them the same way, baseline plus three, all caught with GH-128
+# red. #133 added `retarget-refusal-drops-the-retarget-spelling` and
+# `retarget-refusal-drops-the-create-comparison` and ran the pair the same way,
+# both caught, byte-identical after; it also edited no-pr-decisions.sh,
+# check-hooks.sh and this file, so three of the files that run changed after the
+# figure above was taken. No run has therefore exercised all thirty-four rows
+# together, and saying which rows a measurement covered is the whole point of
+# recording one. A reader who wants "the whole registry, at this commit" has to
+# run it -- which is the answer #107 built rather than a gap, and is why the
+# sentence this replaced, claiming the only later edit was to this comment, was
+# worth catching. Bertan's two reviews of PR #147, and two merges of dev-05 into
+# it.
 #
 # THREE ROWS FOR ONE FIX, #128's, which is a departure from a row per rule and is
 # here because the rules overlap. `heredoc-opener-parity` loosens the parity test
@@ -116,12 +129,12 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   THIRTY real mutations, against SIX files in .claude/hooks/, naming
-#   THIRTY-NINE requirement IDs between them, of the 157 whose status is active.
+#   THIRTY-TWO real mutations, against SIX files in .claude/hooks/, naming
+#   FORTY requirement IDs between them, of the 158 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
-# They have now been wrong or moved three times in two days, and #148 is filed to
+# They have now been wrong or moved five times in two days, and #148 is filed to
 # take them out and let `--list` be the only place they are written.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
@@ -198,6 +211,8 @@ gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule i
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught
 base-refusal-drops-the-spelling%no-pr-decisions.sh%/^BASE=/s/Write: gh pr create --base dev-NN/Name a base/%US-7 FR-23%caught
+retarget-refusal-drops-the-retarget-spelling%no-pr-decisions.sh%s/ Retarget to the active dev branch instead: gh pr edit <n> --base dev-NN\.//%US-7 FR-23 GH-133%caught
+retarget-refusal-drops-the-create-comparison%no-pr-decisions.sh%s/ just as creating it there would//%FR-23%caught
 base-pattern-admits-main%no-pr-decisions.sh%/^is_dev_base()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
 pr-create-base-not-read%no-pr-decisions.sh%s/if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/if false \&\& RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/%FR-14 FR-16 US-9%caught
 web-handoff-refused%no-pr-decisions.sh%/^gh_pr_web()/,/^}/s/--web|-w) return 0 ;;/--web|-w) return 1 ;;/%FR-21 US-12%caught
