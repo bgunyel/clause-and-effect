@@ -10,10 +10,16 @@ entry may not.
 
 The rule is also stated by its effect, following ADR 0002, which was written
 for the agent boundary and is applied here to a convention hook for the same
-reason: a history entry that differs from the merge base's copy has been
-rewritten, whichever tool did it. The text-level rule that stands in for that
-effect in a Bash command is an allowlist of reads and `>>` appends with a
-default-deny, not a list of the editors that can overwrite a file.
+reason: a history entry of which the merge base's copy is no longer a byte
+prefix has been rewritten, whichever tool did it. A pure append leaves the
+recorded bytes as they were, so it is not a rewrite, and that is why the
+text-level rule that stands in for the effect in a Bash command can be an
+allowlist of reads and `>>` appends with a default-deny rather than a list of
+the editors that can overwrite a file. Appending to a history entry is still
+not how a correction is made — CLAUDE.md puts corrections in the newest entry,
+and that convention is left to the author, not to a hook. The Edit companion
+refuses a history entry whole, an append included: it decides by the file, not
+by what the payload would do to it, and `>>` is the route for an append.
 
 ## Why
 
@@ -29,9 +35,10 @@ listed verb only when the command text named the path. Two things followed.
 - **The Bash half guarded spellings.** `python3 -c "open('<entry>','w')"`,
   `awk -i inplace`, `ex`, `ed`, `ruby -i` and `perl -pi` were each permitted on
   an existing entry, and `python3 rewrite_entry.py` names no path at all. That
-  last case is out of reach of any rule that reads a command's text, so it is
-  detected after the fact against the merge base rather than prevented, and
-  CLAUDE.md lists it among the consequences left open.
+  last case is out of reach of any rule that reads a command's text, so it
+  will be detected after the fact against the merge base rather than
+  prevented, and is to be listed in CLAUDE.md among the consequences left
+  open. Neither is built by this decision; #149 builds both.
 
 ## Considered Options
 
