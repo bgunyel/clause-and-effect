@@ -425,29 +425,35 @@ thing in the record.
   the ordinal is decided by merge order, and is knowable only afterwards, is
   #157.
 
-- [2026-09-17 · session 7](devlog_2026-09-17_session-7.md) — #117: a command
-  word spelled as a path, quoted or backslash-escaped passed every hook, and so
-  did the prefix and wrapper words the triage added. `cs_split` now reduces a
-  command word to the name it spells, in one place, cell by cell rather than by
-  building a string, because the string version was measured quadratic at the
-  line cap. Review of the first commit found a prefix word matched by name as
-  well, left unreduced.
+- [2026-09-17 · session dev-issue-117](devlog_2026-09-17_session-dev-issue-117.md)
+  — #117 and PR #152, in three parts, written in this order.
 
-- [2026-09-17 · session 8](devlog_2026-09-17_session-8.md) — #117's
-  recommendation 4, a command word that is `$(…)`, a backtick or `$VAR`: the
-  close was written, measured against 75,346 Bash commands from local session
-  transcripts, and rejected on its own numbers — it closed none of the headline
-  shapes and refused nine commands that should pass. Settled as consequence 6
-  in `CLAUDE.md`, with all three shapes pinned as permitted.
+  **Part 1** — #117: a command word spelled as a path, quoted or
+  backslash-escaped passed every hook, and so did the prefix and wrapper words
+  the triage added. `cs_split` now reduces a command word to the name it spells,
+  in one place, cell by cell rather than by building a string, because the
+  string version was measured quadratic at the line cap. Review of the first
+  commit found a prefix word matched by name as well, left unreduced.
 
-- [2026-09-17 · session 9](devlog_2026-09-17_session-9.md) — review of PR #152:
-  the wrapper rule asks two questions, and #117 had closed only the first. Each
-  boundary hook's own surface pattern matched its guarded name by the bare
-  spelling, so `bash -c '"gh" pr merge 5'` was permitted; widened in all four,
-  measured at no verdict change across 476 wrapper-carrying commands. A registry
-  row was found mutating the wrong occurrence and still reporting `caught`.
-  **Numbered 7, 8 and 9 rather than 2, 3 and 4**: all three were written under
-  those numbers and collided on merging dev-05 with #143's two entries and
-  #108's. Each rename changed the title line and nothing else, so every count
-  inside is the one that stood at its commit — 28 registry rows and a suite of
-  3903 at session 9, against 39 rows and 4346 results after the merge.
+  **Part 2** — #117's recommendation 4, a command word that is `$(…)`, a
+  backtick or `$VAR`: the close was written, measured against 75,346 Bash
+  commands from local session transcripts, and rejected on its own numbers — it
+  closed none of the headline shapes and refused nine commands that should pass.
+  Settled as consequence 6 in `CLAUDE.md`, with all three shapes pinned as
+  permitted.
+
+  **Part 3** — review of PR #152: the wrapper rule asks two questions, and #117
+  had closed only the first. Each boundary hook's own surface pattern matched its
+  guarded name by the bare spelling, so `bash -c '"gh" pr merge 5'` was
+  permitted; widened in all four, measured at no verdict change across 476
+  wrapper-carrying commands. A registry row was found mutating the wrong
+  occurrence and still reporting `caught`.
+
+  **Named for the session rather than numbered.** The three were written as
+  sessions 2, 3 and 4, renumbered 7, 8 and 9 when they collided on merging
+  dev-05 with #143's two entries and #108's, and collided again when #137's
+  entries took 7 and 8. `db06477` replaced day-numbering with the writing
+  session's name, so they now share one file. Each part is its original entry
+  with heading levels changed and nothing else, so every count inside is the one
+  that stood at its commit — 28 registry rows and a suite of 3903 at the end of
+  Part 3, against 39 rows and 4346 results after the first merge.
