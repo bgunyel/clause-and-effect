@@ -807,6 +807,72 @@ tok 'unterminated heredoc gives its lines back' \
     'git commit -m "fix <<EOF handling"
     git push --all origin' \
     "$(printf 'git commit -m "fix <<EOF handling"\n    git push --all origin\n' | cs_normalise)"
+# Issue #128, read here as output before it is read below as verdicts. An opener
+# whose own line ends in a backslash is a continued line to bash, which joins it
+# before the body begins -- so the body of `cat <<E \` / `x` / `E` is empty and
+# the command after `E` runs. The drop took `x` for the body, ended it at `E`,
+# and cs_join then glued that command onto the opener line, where it stands at
+# no command position: this output was `cat <<E git push --force origin main`,
+# one line, and every hook reading it permitted the push.
+#
+# The push standing at the head of a line of its own is the whole of the fix,
+# and each of these says which line it is on.
+req GH-128
+tok 'a continued opener ends its logical line before the body begins' \
+    'cat <<E x
+git push --force origin main' \
+    "$(printf 'cat <<E \\\nx\nE\ngit push --force origin main\n' | cs_normalise)"
+tok 'an opener continued twice, and the body still starts after the line' \
+    'cat <<E -n -E
+git push --force origin main' \
+    "$(printf 'cat <<E \\\n-n \\\n-E\nx\nE\ngit push --force origin main\n' | cs_normalise)"
+# The body is still dropped, so the fix did not simply stop dropping: a quoted
+# body whose lines end in a backslash ends at its terminator, where bash ends it
+# too, and cs_join never sees those lines to join them.
+tok 'a body line ending in a backslash is not joined past its terminator' \
+    "cat <<'E'
+git push --force origin main" \
+    "$(printf "cat <<'E'\nprose \\\\\nE\ngit push --force origin main\n" | cs_normalise)"
+tok 'a body naming a push on a continued line is still dropped' \
+    "cat <<'E'" \
+    "$(printf "cat <<'E'\ngit push --force origin main \\\\\nE\n" | cs_normalise)"
+# THE TWO PLACES A TRAILING BACKSLASH IS READ, and what happens where they
+# disagree. cs_join joins a line ending in ANY backslash, deliberately and
+# unchanged; bash continues a line only when the run is ODD. The drop follows
+# bash, so the two disagree exactly on an even run -- and an even run is then
+# the line a body starts after, which is the one line where cs_join could glue
+# the first line past the terminator onto it. So the drop takes the run off.
+#
+# The first version of this fix used cs_join's looser rule in the drop instead
+# and argued that looser was the safe side. It is not: holding the line open
+# moves the terminator search forward, a delimiter line bash took as the whole
+# terminator is scanned past, and the body runs to the NEXT delimiter, dropping
+# what lies between. The shape below is that defect, measured at exit 0 on the
+# first version and exit 2 on dev-05, and it is checked here as output and
+# below as verdicts.
+#
+# Each pair is the same run read twice, once through cs_join and once through
+# cs_normalise, so a change to either rule moves one literal of a pair.
+tok 'cs_join joins an even run, which bash does not' \
+    'cat <<E \x' \
+    "$(printf 'cat <<E \\\\\nx\n' | cs_join)"
+tok 'so the drop ends the logical line there and takes the run off' \
+    'cat <<E
+git push --force origin main' \
+    "$(printf 'cat <<E \\\\\nE\ngit push --force origin main\n' | cs_normalise)"
+tok 'the swallowed-terminator shape, which the first fix emptied' \
+    'cat <<E
+echo after
+git push --force origin main
+E' \
+    "$(printf 'cat <<E \\\\\nE\necho after\ngit push --force origin main\nE\n' | cs_normalise)"
+tok 'an odd run of three is a continuation to both of them' \
+    'cat <<E \\x' \
+    "$(printf 'cat <<E \\\\\\\nx\n' | cs_join)"
+tok 'and the drop defers the body over it' \
+    'cat <<E \\x
+git push --force origin main' \
+    "$(printf 'cat <<E \\\\\\\nx\nE\ngit push --force origin main\n' | cs_normalise)"
 # Redirections. A redirect is not an argument, and nothing removed it, so its
 # operator or its target was read as a refspec and every redirect on an
 # otherwise permitted push was refused. Issue #50.
@@ -1686,6 +1752,89 @@ check_in "$PUSH_WT" no-git-push.sh BLOCK 'issue comment naming <<, then --mirror
 # A heredoc that does terminate is still data, so the older checks above still
 # ALLOW -- that is what says the fail-safe did not simply disable the drop.
 
+section "=== REGRESSION: issue #128, a continued opener hid the command after the terminator ==="
+# The fifth answer to where a heredoc body begins and the fourth wrong one, and
+# the first of them about the OPENER's own line. Bash joins a line ending in a backslash before
+# the body starts, so `cat <<E \` / `x` / `E` is `cat <<E x` with an empty body
+# and the next command runs -- measured with `echo RAN-AFTER` in its place,
+# which printed after cat's complaint about the file `x`. The drop read `x` as
+# the body instead, ended it at `E`, and the join then put the command after the
+# terminator on the opener's line, at no command position: exit 0 from both
+# hooks, where the same command without the backslash was exit 2.
+#
+# Every spelling of the opener is asked, because the spellings are where this
+# question has gone wrong before: `<<-` and `<<<` were the second and third
+# wrong answers and each was a spelling the comparison did not match. #106's
+# families ask the seven of them of every seed; these are the two hooks and the
+# two directions the issue measured, written out.
+#
+# THE EVEN RUN is here too, and it is not the issue's shape but the first fix's.
+# Bash continues a line only on an ODD run of trailing backslashes, and that fix
+# held the line open on any run at all -- which moved the terminator search
+# forward, let the body swallow the terminator, and dropped every line up to the
+# next one. `cat <<E \\` / `E` / `echo after` / *push* / `E` runs that push
+# under bash and was permitted, exit 0, where dev-05 refused it. Found by review
+# of this pull request. A generated run of 2,580 shapes, each executed under
+# bash with a harmless payload to decide what really runs, puts dev-05 at 198
+# hidden pushes, that fix at 40, and this one at 0.
+req GH-128
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'continued opener, then a forced push' \
+  $'cat <<E \\\nx\nE\ngit push --force origin main'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'continued opener, then a commit on main' \
+  $'cat <<E \\\nx\nE\ngit commit -m wip'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'the <<-E spelling, tab-indented terminator' \
+  $'cat <<-E \\\n\tx\n\tE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK "the <<'E' spelling" \
+  $'cat <<\'E\' \\\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'the <<"E" spelling' \
+  $'cat <<"E" \\\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'the << E spelling, a space after the operator' \
+  $'cat << E \\\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an opener continued over three lines' \
+  $'cat <<E \\\n-n \\\n-E\nx\nE\ngit push --force origin main'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'a redirect in front of the continued opener' \
+  $'cat > f <<E \\\nx\nE\ngit push --force origin main'
+# A quoted body whose lines end in a backslash still ends at its terminator, so
+# the push after it is read. Bash does not join inside a quoted body either.
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'a slashed body line, then a push' \
+  $'cat <<\'E\'\nprose \\\nE\ngit push --force origin main'
+# The even run, which bash does not continue: the terminator on the next line
+# ends an empty body, and what follows it runs.
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an even run, terminator, then a push' \
+  $'cat <<E \\\\\nE\ngit push --force origin main'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'an even run, terminator, then a commit on main' \
+  $'cat <<E \\\\\nE\ngit commit -m wip'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an even run whose body would have swallowed the terminator' \
+  $'cat <<E \\\\\nE\necho after\ngit push --force origin main\nE'
+check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'the same shape on main' \
+  $'cat <<E \\\\\nE\necho after\ngit commit -m wip\nE'
+check_in "$PUSH_MAIN" no-git-push.sh BLOCK 'an even run of four' \
+  $'cat <<E \\\\\\\\\nE\ngit push --force origin main'
+# And the permitting direction, which is what says the fix exposed a command
+# rather than stopping the drop: the shape the issue ran with `echo RAN-AFTER`
+# in place of the push, and a body that merely names one on a continued line.
+check_in "$PUSH_MAIN" no-git-push.sh ALLOW 'the same shape, with nothing to refuse after it' \
+  $'cat <<E \\\nx\nE\necho RAN-AFTER'
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'the same shape on main, with nothing to refuse' \
+  $'cat <<E \\\nx\nE\necho RAN-AFTER'
+check_in "$PUSH_MAIN" no-git-push.sh ALLOW 'a body naming a push on a continued line' \
+  $'cat <<\'E\'\ngit push --force origin main \\\nE'
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'a body naming a commit on a continued line' \
+  $'cat <<\'E\'\ngit commit -m wip \\\nE'
+# What the fix COSTS, which no check above can show: the same 2,580-shape run
+# read backwards counts pushes bash never runs that the hook refuses anyway,
+# and this change raises that count. Raised on review of this pull request and
+# kept. `written`, because it is a measurement in prose and the file is where
+# it has to stay true; each pin carries its whole claim on one line, since a
+# pin that is a prefix goes on passing after the rest of the sentence is gone.
+req GH-128
+written 'the library counts what the direction of the fix costs' \
+  "$HOOKS/lib/command-scan.sh" \
+  '750 such shapes on dev-05, 816 on the first fix, 848 here, of 2,100.'
+written 'and decomposes the rise into the two departures already named' \
+  "$HOOKS/lib/command-scan.sh" \
+  'of the 124 that arrive, 108 are the END give-back and 16 the unquoted-body'
+
 section "=== REGRESSION: review of 02a14d8, bundled gh shorthand flags ==="
 # gh takes shorthand flags together, so -ab is --approve --body and approves.
 # no-git-push.sh had already answered this for -fu and this file had not: the
@@ -2454,7 +2603,7 @@ section "=== ACCEPTED false positive: a quoted redirect target ==="
 # exception, so this is a shortfall against it rather than a decision the issue
 # made -- taken because consuming a quoted target would mean the drop swallowing
 # text it cannot see the end of, which is the direction that has gone wrong
-# three times in this file. The targets an agent writes -- /dev/null, out.txt,
+# four times in this file. The targets an agent writes -- /dev/null, out.txt,
 # push.log -- carry no quotes.
 #
 # Pinned in both directions so a later change cannot move it silently. If these
@@ -2468,7 +2617,7 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'the same target unquoted' "git push or
 
 section "=== REGRESSION: issue #50, the drop must not hide a command ==="
 # Dropping is the one step in cs_normalise that hides text rather than exposing
-# it, and the heredoc question was got wrong three times in exactly that
+# it, and the heredoc question was got wrong four times in exactly that
 # direction. A process substitution carries a command, so it is not a redirect;
 # a command substitution used as a target is not a target. Both are pinned here
 # with a refused command inside, so hiding one would show up as ALLOW.
@@ -2769,18 +2918,22 @@ section "=== issue #105: a refusal names the permitted spelling ==="
 # that held for `gh pr create` and not for `gh api`. A message that held for one
 # spelling and not the others is that defect arriving as prose.
 #
-# The retarget's two rows are tagged FR-23 and not US-7, and #133 is why. One
-# constant for four refusals is what FR-23 asks for, and for three of the four it
-# is also the one-step correction US-7 asks for. For a retarget it is not:
-# `gh pr edit 5 --base dev-05` is permitted, so the correction is one word of the
-# command already written, and the message names a create -- which, acted on,
-# leaves the mis-targeted pull request open and opens a second beside it. The
-# same fact is evidence for one requirement and against the other, so the rows
-# say only the half that holds. Pinning them under US-7 would have made this
-# suite evidence that the message answers a story it does not answer, which is
-# what #103's Q18 forbids and what #130 and #131 were filed rather than pinned
-# for. Message content is #109's; the rows stay, because FR-23's claim is true
-# and is the claim that would go if the constant were split per arm.
+# The retarget's constant-half row is tagged FR-23 and not US-7, and #133 is why.
+# One constant for four refusals is what FR-23 asks for, and for three of the
+# four it is also the one-step correction US-7 asks for. For a retarget it is
+# not: `gh pr edit 5 --base dev-05` is permitted, so the correction is one word
+# of the command already written, and a create -- acted on -- leaves the
+# mis-targeted pull request open and opens a second beside it. The same fact is
+# evidence for one requirement and against the other, so this row says only the
+# half that holds, and it stays, because FR-23's claim is true and is the claim
+# that would go if the constant were split per arm.
+#
+# US-7's half is carried by the retarget's own tail, below, which #133 added and
+# which names `gh pr edit <n> --base dev-NN`. Before that the story went
+# uncovered here and requirements.md carried GH-133 as a gap: pinning US-7 on the
+# constant would have made this suite evidence that the message answers a story
+# it does not answer, which is what #103's Q18 forbids and what #130 and #131
+# were filed rather than pinned for.
 req US-7 FR-23
 says "$ON_DEV" no-pr-decisions.sh 'Write: gh pr create --base dev-NN' \
   'gh pr create with no base names the permitted spelling' \
@@ -2809,20 +2962,56 @@ says "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
 says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch' \
   'a create into main says which branch it named' \
   'gh pr create --base main --title x'
-# FR-23 alone again, and this tail is the worse half of #133: read against a
-# refusal whose subject is the base, "edit anything else" says the base is the
-# one thing that may not be edited, when editing it to dev-NN is what is allowed.
+# The retarget's tail, in two rows because it makes two claims that fail apart.
+# The first says which branch was named and that naming it is the choice the rule
+# refuses -- the half that tells this refusal from the three beside it.
+#
+# THE FRAGMENT IS THE WHOLE SENTENCE, and the first version of this row stopped at
+# `chooses that destination`. `just as creating it there would` is the clause that
+# ties a retarget to a create, which is the entire reason an edit is refused at
+# all -- and a prefix fragment still matches once it is deleted, so that clause
+# could have gone with this suite green. Bertan's review of this pull request.
+# `retarget-refusal-drops-the-create-comparison` in the registry deletes exactly
+# that clause, so the question of whether this row can fail is re-runnable rather
+# than argued.
 req FR-23
-says "$ON_DEV" no-pr-decisions.sh 'Edit anything else you like' \
-  'a retarget says what editing is still permitted' \
+says "$ON_DEV" no-pr-decisions.sh 'Retargeting to main chooses that destination just as creating it there would' \
+  'a retarget says which branch it named, and that naming it is the same choice' \
+  'gh pr edit 5 --base main'
+# The second is #133's fix, and the one row in this section that reads US-7 for a
+# retarget. The correction for `gh pr edit 5 --base main` is `gh pr edit 5 --base
+# dev-05`: one word of the command already written, and permitted -- pinned as
+# such by the ALLOW row on `gh pr edit 35 --base dev-05` above. Until #133 this
+# tail said "Edit anything else you like", which, read against a refusal whose
+# subject is the base, says the base is the one thing that may not be edited,
+# when editing it to dev-NN is what is allowed. The fragment is the whole
+# spelling and not the word `retarget`: a message naming the act without naming
+# what to write is the guessing US-7 exists to end.
+req US-7 FR-23 GH-133
+says "$ON_DEV" no-pr-decisions.sh 'Retarget to the active dev branch instead: gh pr edit <n> --base dev-NN' \
+  'a retarget names the retarget that would correct it' \
+  'gh pr edit 5 --base main'
+# And the phrase it replaced is gone rather than joined, because the two read
+# against each other: one sentence naming the permitted base beside another
+# saying the base may not be edited is US-7's guessing with a step added. Two
+# rows and a says_not are every clause of this tail, which is the property the
+# first draft of #133 did not have -- it ended in a third sentence, "No other
+# edit is checked here", that no row named and that could have been deleted with
+# this suite green. Found by review, not by the suite.
+says_not "$ON_DEV" no-pr-decisions.sh 'Edit anything else you like' \
+  'and does not also say the base is the one thing not to edit' \
   'gh pr edit 5 --base main'
 req US-7 FR-23
 says "$ON_DEV" no-pr-decisions.sh 'the same destination under another spelling' \
   'the REST spelling says it is the same destination named differently' \
   'gh api -X POST repos/o/r/pulls -f base=main'
-# Four spellings, four tails, and five rows: the REST and graphql spellings reach
-# one sentence, both setting API_BAD_BASE, so this asks whether graphql arrives at
-# the informative one rather than at some bare refusal of its own. The first
+# Four spellings, four tails, and seven rows -- five before #133, and the count is
+# here so that a tail losing its row is visible. Two tails are read by more than
+# one row: the retarget's by three, its two claims failing apart and a says_not
+# holding out the phrase #133 removed, and the API tail by two, because the REST
+# and graphql spellings reach one sentence, both setting API_BAD_BASE, so this
+# asks whether graphql arrives at the informative one rather than at some bare
+# refusal of its own. The first
 # version of this block pinned the constant half for graphql and left the tail to
 # the REST row -- an asymmetry review found, and the shape #40 was filed for: a
 # rule, or here a message, that holds for one spelling and not another.
@@ -7765,6 +7954,38 @@ cap_guard '80-column heredoc, longest line' 79 \
 cap_guard '80-column heredoc, body' 200000 \
   "$(printf '%s\n' "$HEREDOC_200K" | sed '1d;$d' | wc -c | tr -d ' ')"
 
+# Issue #128's second consequence, which is a claim about the cap and not about
+# a verdict: forty repeats of a 15,011-byte line whose opener is continued. It
+# passes cs_within_cap, whose longest joined line is 15,011 bytes -- and
+# cs_normalise emitted ONE line of 600,400 bytes from it, thirty-six times the
+# cap, because the drop ended the body at each `E` and the join then glued all
+# forty groups onto one line. So the cap did not bound what the passes were
+# handed, which is what #96 claimed for it.
+#
+# Both numbers are literals, and the first is the one that says the fixture is
+# the one described: a builder one byte out would leave every check below
+# passing against a line that is not 15,011 bytes.
+HEREDOC_CONT_40="$(for i in $(seq 1 40); do printf 'echo %s <<E \\\nx\nE\n' "$(cap_pad 15000)"; done)"
+cap_guard 'the #128 shape, longest raw line' 15011 \
+  "$(printf '%s\n' "$HEREDOC_CONT_40" | LC_ALL=C awk '{ if (length($0) > m) m = length($0) } END { print m }')"
+cap_guard 'the #128 shape, groups' 40 \
+  "$(printf '%s\n' "$HEREDOC_CONT_40" | grep -c '^E$')"
+req GH-128
+tok 'cs_normalise emits no line past the cap for #128 shape, longest line' \
+    '15011' \
+    "$(printf '%s\n' "$HEREDOC_CONT_40" | LC_ALL=C cs_normalise \
+       | LC_ALL=C awk '{ if (length($0) > m) m = length($0) } END { print m }')"
+tok 'cs_normalise emits one line per group rather than one line in all' \
+    '40' \
+    "$(printf '%s\n' "$HEREDOC_CONT_40" | LC_ALL=C cs_normalise | wc -l | tr -d ' ')"
+# The input the cap is asked of, so the pair says what it is meant to say: the
+# claim is that a command WITHIN the cap cannot be made to exceed it here, not
+# that this one was refused at the door.
+tok 'the #128 shape is within the cap' \
+    'within' \
+    "$(printf '%s\n' "$HEREDOC_CONT_40" | cs_within_cap && echo within || echo over)"
+req GH-96.1
+
 # The fastest of three runs, stopping at the first one under the bound, since
 # the fastest is then under it too. Only a run that refused is timed: a hook
 # that dies before reading anything is fast as well, so a time with no verdict
@@ -8603,6 +8824,18 @@ SEEDS
 #                                     word-squoted word-escaped
 #  12 an option before the subcommand that consumes the next word (#118)
 #                                     option-eats-verb
+#  13 a heredoc in front of it whose opener line is continued (#128)
+#                                     heredoc-cont heredoc-cont-dash
+#                                     heredoc-cont-squote heredoc-cont-dquote
+#                                     heredoc-cont-space heredoc-cont-twice
+#                                     heredoc-cont-redirect
+#
+# The thirteenth is seven spellings where the others are one or two, and that is
+# #128 rather than thoroughness for its own sake: the spellings of the heredoc
+# opener are where this question has gone wrong four times, twice on a spelling
+# the terminator comparison did not match. #128's own section writes the two
+# hooks and the two directions it measured; these ask the same seven of every
+# seed, which is the whole reason the families exist.
 #
 # Four of those spellings are #141's, added because a `GH-` entry named the
 # shape and the list did not have it -- which is the whole of what a
@@ -8643,6 +8876,8 @@ INV_TRANSFORMS='
   continuation
   redirect-null redirect-dup redirect-quoted
   word-path word-dot word-dquoted word-squoted word-escaped
+  heredoc-cont heredoc-cont-dash heredoc-cont-squote heredoc-cont-dquote
+  heredoc-cont-space heredoc-cont-twice heredoc-cont-redirect
 '
 
 # A rewrite that prints nothing when it changed nothing, which is how a
@@ -8772,6 +9007,24 @@ inv_cmdword() {  # inv_cmdword <command> <prefix> <suffix>
   [ "$rest" != "$1" ] || rest=
   printf '%s%s%s%s' "$2" "$word" "$3" "${rest:+ $rest}"
 }
+# #128: a heredoc in front of the command, whose OPENER line ends in a
+# backslash. Bash joins that line before the body begins, so the body of each of
+# these is empty, the terminator is the line after the opener, and the seed on
+# the line after THAT is the command that runs -- which is why the verdict must
+# be the seed's. The drop read the joined-on word as the body instead and the
+# join then glued the seed onto the opener line, at no command position.
+#
+# `x` is the word joined onto the opener, and it is a word bash hands to cat as a
+# filename rather than anything a rule reads. The twice-continued spelling joins
+# two of cat's own options instead, which is the shape an agent would actually
+# write across a continuation.
+# Each spelling is written out whole rather than assembled from an opener and a
+# body: the tab of the `<<-` spelling and the backslash of every one of them are
+# the characters under test, and a builder that dropped one would leave seven
+# variants passing that are not the seven named.
+inv_heredoc() {  # inv_heredoc <command> <heredoc, terminator included>
+  printf '%s\n%s' "$2" "$1"
+}
 inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
   case "$1" in
     indent-spaces)    printf '    %s' "$2" ;;
@@ -8823,6 +9076,13 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     word-dquoted)     inv_cmdword "$2" '"' '"' ;;
     word-squoted)     inv_cmdword "$2" "'" "'" ;;
     word-escaped)     inv_cmdword "$2" '\' '' ;;
+    heredoc-cont)          inv_heredoc "$2" $'cat <<E \\\nx\nE' ;;
+    heredoc-cont-dash)     inv_heredoc "$2" $'cat <<-E \\\n\tx\n\tE' ;;
+    heredoc-cont-squote)   inv_heredoc "$2" $'cat <<\'E\' \\\nx\nE' ;;
+    heredoc-cont-dquote)   inv_heredoc "$2" $'cat <<"E" \\\nx\nE' ;;
+    heredoc-cont-space)    inv_heredoc "$2" $'cat << E \\\nx\nE' ;;
+    heredoc-cont-twice)    inv_heredoc "$2" $'cat <<E \\\n-n \\\n-E\nx\nE' ;;
+    heredoc-cont-redirect) inv_heredoc "$2" $'cat > f <<E \\\nx\nE' ;;
     *)                return 1 ;;
   esac
   return 0
@@ -9132,7 +9392,8 @@ GH-50.1:transformation GH-50.2:none GH-50.3:transformation GH-51.1:seed
 GH-51.2:seed GH-58.1:none GH-68.1:seed GH-68.2:none GH-68.3:none GH-69.1:seed
 GH-69.2:seed GH-69.3:none GH-72:seed GH-79.1:transformation GH-79.2:none
 GH-79.3:none GH-79.4:none GH-84.1:none GH-94.1:seed GH-94.2:none GH-94.4:none
-GH-95.1:none GH-95.2:none GH-96.1:none GH-97.1:seed
+GH-95.1:none GH-95.2:none GH-96.1:none GH-97.1:seed GH-128:transformation
+GH-133:none
 '
 # One row per entry that is either in scope or carries the field: `<ID>|in|out`,
 # the `variants` keyword, and whatever follows it. An entry out of scope is
@@ -9587,7 +9848,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '287' "${TEXT_CHECK_ARGS##*COUNT }"
+    '289' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -9727,7 +9988,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '31' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '36' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9790,7 +10051,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '29' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '34' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -10456,10 +10717,11 @@ GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117:gap GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:gap GH-134:gap GH-135:gap GH-136:gap GH-139:gap
+GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139:gap
 GH-107.1:static GH-107.2:static GH-143.4:static GH-143.5:static
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7
 GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static
+GH-128
 '
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in

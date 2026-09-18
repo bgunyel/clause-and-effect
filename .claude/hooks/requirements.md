@@ -1587,17 +1587,26 @@ and held to the same standard of saying only what it asks.
 ### GH-133
 - text: A refused retarget names the correction for a retarget. `gh pr edit <n>
   --base dev-NN` is permitted, so the one-step correction is one word of the
-  command already written, not the create the four base refusals share.
+  command already written, not the create the four base refusals share, and the
+  message does not also say the base is the one thing that may not be edited.
 - from: #133, found by Bertan's review of #132
 - kind: defect-refusing
-- status: gap → #133
+- status: active
+- direction: refuse-only: a message is written only on a refusal
+- variants: none: its subject is the words of a refusal message, which no
+  rewriting of the refused command's spelling reaches
 - note: one `BASE` constant for four refusals is what FR-23 asks for, and for the
   three creating arms it is US-7's one-step correction too. For the retarget arm
-  it is not, and "Edit anything else you like" reads as saying the base may not
-  be edited when editing it to `dev-NN` is what is allowed. So the same message
-  is evidence for FR-23 and against US-7: #105's two retarget rows are tagged
-  FR-23 alone, and US-7 stays covered by the other twenty-one refusing checks.
-  Message content is #109's.
+  it is not, and "Edit anything else you like" told an agent the base may not be
+  edited, when editing it to `dev-NN` is what is allowed. So the same message was
+  evidence for FR-23 and against US-7, and #105's retarget rows were tagged FR-23
+  alone while this stood open. The fix keeps the constant and lets the
+  retarget arm's tail -- already per-arm -- name its own correction, so the
+  retarget's tail row now carries US-7 as well. What it does not fix is the
+  order: `BASE` still opens with `Write: gh pr create --base dev-NN`, so the
+  wrong imperative is still the first one an agent reads, which is #154. Left to
+  #109: whether every other refusal message in the two files is read for its
+  words.
 
 ### GH-134
 - text: A shell wrapper is refused wherever it stands in a command position,
@@ -1955,6 +1964,45 @@ and held to the same standard of saying only what it asks.
   local path that does not exist fails at once, and with `gh` absent the two reads
   behind it are skipped by the rule in that file's header. That is why this one
   can be a run and why a genuinely offline network cannot.
+### GH-128
+- text: A heredoc body begins where bash begins it, so a command written after the
+  terminator is read as a command. A line ending in an ODD run of trailing
+  backslashes continues and the body waits for it; an EVEN run does not continue,
+  and the body begins on the next line. Every spelling of the opener reaches that
+  verdict — `<<-E` with a tab-indented terminator, `<<'E'`, `<<"E"`, `<< E`, an
+  opener continued more than once, and a redirect in front of it — and a heredoc
+  body is still dropped whether or not its lines end in a backslash.
+  `cs_normalise` emits no line longer than the longest line `cs_within_cap`
+  measured of the same command.
+- from: #128, found by Bertan's review of PR #123
+- kind: defect-permitting
+- status: active
+- variants: transformation: heredoc-cont heredoc-cont-dash heredoc-cont-squote
+  heredoc-cont-dquote heredoc-cont-space heredoc-cont-twice
+  heredoc-cont-redirect
+- note: the fifth answer to where a heredoc body begins and the fourth wrong one,
+  and the first about the opener's own line rather than about the terminator. Two
+  rules carry it. `cs_normalise`'s first pass ends the logical line by bash's
+  parity rule rather than by the looser one `cs_join` uses, and it takes the
+  trailing run off the line a body starts after — which under the parity rule is
+  always an even run, the one case where `cs_join` joins and bash does not, and
+  the one line onto which `cs_join` could otherwise glue the first line past the
+  terminator. Each rule has a row in `mutate-hooks.sh`, and a third breaks both,
+  because on an odd run either one alone holds the case the issue was filed for.
+  The first version of this fix used `cs_join`'s rule in the drop and argued that
+  looser than bash was the safe side, because a line held open too long "only
+  exposes more lines as commands" — and this entry said so for one revision. It
+  is false: holding the line open moves the terminator search forward, so a
+  delimiter line bash took as the terminator of an empty body is scanned past and
+  the body runs to the next delimiter, dropping what lies between.
+  `cat <<E \\` / `E` / `echo after` / a push / `E` was permitted at exit 0 where
+  `dev-05` refused it, found by review of PR #151. What IS safe is ending a body
+  early, which is why bash's joining inside an unquoted body and an opener split
+  by its own continuation (`cat <<\` / `E`) are still not modelled. The second
+  consequence was a claim about the cap: forty 15,011-byte groups within the cap
+  made `cs_normalise` emit one 600,400-byte line, and THE LINE CAP in
+  `lib/command-scan.sh` said so until this fix. #127 is the half of that claim
+  which is still open.
 
 ### GH-156
 - text: Every verb `append-only-docs.sh` names — `rm`, `mv`, `cp`, `truncate`,

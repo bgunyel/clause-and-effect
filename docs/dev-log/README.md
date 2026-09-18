@@ -386,7 +386,46 @@ thing in the record.
   message for it. One permitting gap found and deliberately not fixed, filed as
   #144: a pull request based on a dev branch that is not the active one.
 
-- [2026-09-17 · session 5](devlog_2026-09-17_session-5.md) — #141: #106's
+- [2026-09-17 · session 5](devlog_2026-09-17_session-5.md) — #128: a heredoc
+  opener ending in an ODD run of trailing backslashes is a continued line to
+  bash, which joins it before the body begins, so the command after the
+  terminator runs and both boundary hooks permitted it. The body now begins where
+  bash begins it, and the drop takes the trailing run off the line it begins
+  after, because cs_join joins any trailing backslash and bash joins only an odd
+  run. The first fix used cs_join’s looser rule and hid a command bash runs —
+  found by review of PR #151, and the reason the entry carries three commits and
+  a correction. A differential run of 2,580 shapes, each executed under bash to
+  decide what really runs, puts dev-05 at 198 hidden pushes, that first fix at
+  40, and this one at 0; suite 3657 → 4098 with dev-05 merged in. The same run
+  read backwards counts what the direction costs — pushes bash never runs that
+  the hook refuses anyway — at 750, 816 and 848, raised on the re-review and
+  kept. The entry’s own heading still reads "session 2", the number it was
+  written under before session 2 of this day
+  turned out to be someone else’s.
+
+- [2026-09-17 · session 6](devlog_2026-09-17_session-6.md) — #133: the retarget
+  arm of `no-pr-decisions.sh` refused a `gh pr edit --base main` and then named
+  `gh pr create --base dev-NN` as the correction, which is the correction for the
+  three creating arms and not for this one — `gh pr edit <n> --base dev-05` is
+  permitted, so the fix is one word of the command already written. The `BASE`
+  constant stays, because one sentence for four refusals is FR-23's own
+  requirement; the per-arm tail names the retarget instead. GH-133 goes from a
+  filed gap to active, and a registry row says the new check can fail. Review of
+  the assistant's own change then found the first draft's third sentence, "No
+  other edit is checked here", true of the arm but not of the file and pinned by
+  no row; it was dropped, and a second review found the row that replaced it
+  pinned a prefix rather than the whole sentence, so the clause tying a retarget
+  to a create could have gone with the suite green. Both corrections are in the
+  commit messages; the entry, written before either review, records neither.
+  **Numbered 6 rather than 2.** It was written as session 2 and has collided on
+  merge twice — first with #143's entry of that name, then, as session 5, with
+  #128's. Each rename changed its title line and nothing else, so every count
+  inside it is the one that stood at its first commit: 24 registry rows and a
+  suite of 3659, against 34 rows and 4100 results after the second merge. That
+  the ordinal is decided by merge order, and is knowable only afterwards, is
+  #157.
+
+- [2026-09-17 · session 7](devlog_2026-09-17_session-7.md) — #141: #106's
   invariance families seeded one of `requirements.md`'s three requirement
   families, and not the one written from defects — 95 `GH-` entries to 49 FRs,
   and the derivation read `FR-` tags only. Which `GH-` requirements are seeded
@@ -403,3 +442,10 @@ thing in the record.
   obey the convention: `append-only-docs-edit.sh` is inoperative in every linked
   worktree, which is where agents work, filed as #159. Worked unattended; it has
   not had Bertan's review.
+  **Numbered 7 rather than 5.** It was written as session 5 and collided on
+  merge with #128's entry of that name, with #133's session 6 already beside
+  it — #157's ordinal collision a third time. Only the file name changed: its
+  heading still reads "session 5", because changing it would be an edit to an
+  existing entry that only #159's gap lets through, and every count inside it
+  is the one that stood at its first commit — 31 registry rows before
+  `dev-05`'s five were merged in.

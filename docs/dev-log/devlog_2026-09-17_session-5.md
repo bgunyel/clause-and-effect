@@ -1,261 +1,414 @@
-# 2026-09-17 · session 5 — #141: which requirements the invariance families seed
+# 2026-09-17 · session 2 — #128: a continued heredoc opener hid the command after its terminator
 
-**Branch** `worktree-issue-141-seed-scope-rule`, cut from `origin/dev-05` at
-`897bdff`. **Commits** `897bdff..f4e0530`, two of them: `e7b6d5a` the change,
-`f4e0530` the answer to its review. The branch ends 2 commits ahead of
-`origin/dev-05` and 193 ahead of `origin/main`.
+**Branch** `worktree-issue-128-heredoc-opener-continuation`, cut from
+`origin/dev-05` at `befcf8a` and proposed into `dev-05`. **Check suite 3657 →
+3957 results, all passing** (measured, 136 s). The mutation registry goes from
+23 rows to 24; the new row was run by name — baseline plus one run, `caught`,
+with `GH-128` among the 22 requirement IDs that went red. `requirements.md`
+gains `GH-128` and goes from 162 entries to 163.
 
-Worked unattended by the assistant on Bertan's `/implement` invocation. Bertan
-did not take part; the review recorded below was run by two subagents on the
-assistant's own commit, which is a weaker instrument than his review has been —
-every previous session's most valuable findings were his, and nothing here
-should be read as having had that pass.
+Worked by the assistant, unattended, from #128 and its triage comment.
 
-## The families seeded one of three requirement families, and not the one written from defects
+## The defect: bash joins the opener's own line, and the drop did not
 
-#106's invariance families take a seed — a command with a literal verdict —
-rewrite its text, and assert every variant reaches that verdict or a departure
-declared with its reason. Their leverage is that a transformation added to the
-list is asked of every seed at once, so **what is seeded is what the generator
-can ever find.**
+`cs_normalise`'s first pass found a heredoc opener on a raw line and dropped
+lines until the terminator; `cs_join` joined continuations one pass later. The
+comment above it argued that this order was the safe one — "a backslash at the
+end of the line before a heredoc terminator cannot swallow the terminator and
+hide what follows". It was true of the line before the terminator and false one
+line further up. Bash joins a continued line *before* the body begins, so
 
-The derivation that held the seed table to its scope read `FR-` tags and nothing
-else. `requirements.md` holds three families, and measured on 2026-09-17 it
-holds 95 `GH-` entries to 49 FRs — the `GH-` ones being the entries written
-*from* defects rather than from the specification. So GH-43.6, GH-68.1, GH-72
-and the GH-79 family named commands and no transformation was ever asked of one
-of them, and GH-94.1 was seeded in one direction only. #140's four findings were
-all on FR-seeded commands, which is evidence that the FR set is a reasonable
-start and none at all that it is a sufficient one.
+```
+cat <<E \
+x
+E
+git push --force origin main
+```
 
-## The scope is now a rule, and the rule is mechanical where the answer is declared
+is `cat <<E x` with an empty body, and the push runs. The drop took `x` for the
+body, ended it at `E`, and `cs_join` then glued the push onto the opener's line,
+where it stands at no command position: `cs_normalise` emitted the single line
+`cat <<E git push --force origin main`. Both `no-git-push.sh` and
+`no-commit-to-main.sh` answered exit 0, where the same command without the
+backslash is exit 2. Bertan's review of PR #123 found it; the defect predates
+that PR.
 
-None of the three candidates #141 raised is both derivable and right on its own,
-and the session's first substantive decision was to say so rather than pick one.
-`kind: defect-permitting` alone takes in every entry about the suite's own
-helpers, its tags and its timings, which name no command; "an entry naming a
-hook that judges commands" takes in the same; "text contains a command" is not
-derivable from prose.
+The second consequence was a claim rather than a verdict. `cs_within_cap` refuses
+a command holding a joined line past 16 KB *before* any pass runs, and #96 read
+that as a bound on what the passes are handed. Forty repeats of
+`echo <15000 × a> <<E \` / `x` / `E` pass the cap — longest joined line 15,011
+bytes — and made `cs_normalise` emit **one 600,400-byte line**, measured here on
+this branch with the fix reverted. The issue measured 600,428 on #123's branch;
+the figure differs with the branch, and the one written into the library is this
+branch's.
 
-What landed splits the question. *Membership* is derived off `requirements.md`:
-a `GH-` entry is in scope when it is `defect-permitting` or `defect-refusing`,
-`active`, and declares neither `direction: static` nor `seam: none` — the
-derivable form of "a requirement about a verdict on a command", which is the
-only thing a variant can reach. The *answer* is declared per entry, in a new
-`variants` field, as one of `seed`, `transformation: <name> …` and
-`none: <reason>`. Three checks at the foot of #106's section hold the
-declarations to the tables: a seed to a tagged row of `INV_SEEDS` by set
-equality, each named transformation to `INV_TRANSFORMS`, and a `none` to a
-reason.
+## The fix, and the order that was not taken
 
-38 entries are in scope: 11 seeded, 7 naming a transformation, 20 with no
-command spelling for a variant to vary. Those four numbers are a line the suite
-prints, not a comment — they stood in the prose for one revision and the review
-caught them.
+The issue's triage offered two orders, joining before the drop or dropping
+first, and the triage comment refined it to a third: join the non-body lines
+before looking for an opener, never join a body line. The assistant took a
+fourth, which is that third one without the join:
 
-The trade is recorded where the rule is. `none` is a declaration, so an entry
-that ought to be seeded can carry a reason that reads well, and this rule would
-not catch it. What changed is that the choice is made once per entry, in
-writing, with a reason a reviewer reads in the diff — where before it was made
-by an `awk` filter nobody had to argue with. The silent direction is closed by
-holding the in-scope set and each entry's keyword as a literal in the suite as
-well, which is #104's reason for holding this file's shape, applied to the one
-field #104 does not read.
+- the opener is looked for on **each physical line**, as before;
+- the body begins after the first line that **does not end in a backslash**;
+- the joining itself stays `cs_join`'s, one pass later.
 
-## The first hook the rule brought into scope failed on its first generated spelling
+Two reasons for not joining inside the drop. A join written in the first pass is
+the join rule written twice, in the file whose header names that as the defect
+class it exists to end — and the two copies would then be free to answer the
+backslash differently, which is the defect being fixed, back again. And the
+joined line would have to be materialised for the opener search to read it,
+which is `out = out c` at line scale: #96 measured that shape at 5.9 s for
+512 KB and rewrote six passes to remove it.
 
-`append-only-docs.sh` judges commands and had never been seeded. Seeding it cost
-two rows, and the `continuation` transformation refused to pass: **the verb and
-the path on either side of a backslash are two lines to `grep` and one command
-to a shell.** Fed to the hook on stdin — nothing was executed — `rm`, `mv`,
-`tee`, `truncate` and a truncating redirect are all permitted behind one
-backslash, and `rm -rf docs/dev-log` written across two lines takes every entry
-in the directory with it. `sed -i` survives by accident: its rule is two greps
-rather than one, the verb on a line and the path anywhere, which is the shape of
-the fix arrived at unintentionally in one rule of four.
+The rule this pass uses for "the line continues" is `cs_join`'s exactly — any
+trailing backslash, an escaped one included — and it has to be, because
+`cs_join` is what joins the line afterwards. A drop that ended the logical line
+*earlier* than `cs_join` joins it is the defect. Looser is the safe side: a
+logical line held open too long only exposes more lines as commands.
 
-It is #84's shape once more. `no-pr-decisions.sh` calls `cs_join` for exactly
-this reason, and the comment above `cs_join` in `lib/command-scan.sh` states the
-defect in the present tense, one file away from the hook that has it. Filed as
-**#156** with a gap row rather than fixed here: the fix touches the hook and its
-load guard together, because GH-84.2 requires a consumer's guard to require
-exactly the `cs_*` functions its code calls.
+**What the fourth order costs, recorded because it is a real difference from the
+third.** An opener split by the continuation — `cat <<\` / `E`, which bash reads
+as `<<E`, or `cat <<E\` / `x`, which it reads as `<<Ex` — is not recognised as
+that opener, because no joined text is ever read. Either no opener is found or
+its delimiter never arrives, and both end in the `END` give-back: the held lines
+come back and are scanned as commands. That is the direction every other
+uncertainty in this pass already takes, and it is the same one bash's joining
+inside an *unquoted* body takes, which is deliberately not modelled.
 
-## Two constraints on the seed table that were discovered rather than known
+## What the checks establish, and what they cannot
 
-**A seed command may not contain `|`**, which is the table's field separator. So
-GH-68.1 cannot be seeded with its own example, `sed -i 's/a\|b/c/'`; the seed
-carries the same shape with a `;` inside the quotes instead. A requirement whose
-only command contains a `|` cannot be seeded at all, and would be
-`variants: none` with that as the reason.
+Nineteen checks are written out, 273 come from #106's families, and seven are
+the families' own per-transformation guards: 300 new results.
 
-**A verdict is a property of the command text together with the fixture and the
-hook.** `git push --all origin` is now seeded twice on purpose — against
-`no-git-push.sh` in a worktree and `no-commit-to-main.sh` on `main`, because two
-hooks reading one command is two claims. The regeneration skip was keyed on text
-alone, so its premise ("already checked as a seed, with the same verdict")
-stopped holding in general the moment that happened. Both seeds are BLOCK, so
-nothing was skipped wrongly; the key is `fixture|hook|text` now. The two
-examples that comment offered turned out to regenerate nothing at all — their
-tails had diverged, `--body y` against `--title x` — and the counter reading 0
-is the evidence.
+- Four `tok` checks read `cs_normalise`'s output directly, which is where the
+  defect is visible as text rather than as a verdict.
+- Twelve verdict checks are the two hooks and the two directions #128 measured,
+  over seven spellings of the opener: `<<E`, `<<-E` with a tab-indented
+  terminator, `<<'E'`, `<<"E"`, `<< E`, an opener continued over three lines,
+  and a redirect in front of it.
+- Three checks in the cap section hold the second consequence to literals: the
+  40-group input is within the cap, and `cs_normalise` emits 40 lines whose
+  longest is **15,011** bytes.
+- #106 has landed, so the seven spellings are registered as transformations
+  rather than left as a hand list. Each is asked of every one of the 39 seeds,
+  which is the whole reason that section exists; the issue listed the spellings
+  as a hand enumeration and said to prefer a family if one existed.
 
-## The review found nine things, and the one with teeth was a pass about nothing
+**Which of them fail with the fix reverted.** Measured, against a copy with the
+one line reverted and `CHECK_HOOKS_DIR` pointed at it: **145 red**, all of them
+new. Twelve of the nineteen written-out checks — the eight refusing verdicts,
+the two `tok` reads of the opener, and the two cap numbers — and 133 of the 273
+family variants, which is 19 refusing seeds × 7.
 
-`[ -n "$INV_SCOPE_DERIVED" ] || fail …` did not count itself into the failure
-tally, so a run that read nothing out of `requirements.md` printed its failure
-and then, on the next line, `ok every GH- entry in the families scope declares a
-variants value this suite can act on` — a pass about cases it had not asked.
-That is the shape #98's section exists for, written by the assistant into the
-one section whose subject is guards that cannot fail.
+Three of the written-out checks and 21 family variants stay green with the fix
+reverted, and both are by construction rather than by accident:
 
-The other eight were claims wider than what the code asks, or numbers already
-stale:
+- the permitting direction is unchanged behaviour. `echo RAN-AFTER` in place of
+  the push, a quoted body that merely names one, and a slashed body line
+  followed by a real push were all answered correctly before this change. They
+  are regression guards, and a check that went red on the revert would mean the
+  fix had changed the drop rather than where it starts.
+- the 21 are the three *wrapped* seeds — `bash -c "git push …"` and its two
+  siblings — whose refusal comes from `CS_WRAPPER_RE` against raw text and never
+  reaches `cs_normalise`.
 
-- "Both directions for every requirement with a command spelling" — the
-  derivation under it has read `FR-` tags since the day it was written, so the
-  sentence was never what was checked, and the assistant's one-directional
-  `GH-` seeds then contradicted it outright. GH-106's own `text` carried the
-  same overclaim; both now say *functional*, and the entry's note records that
-  this is a correction and not a widening.
-- `requirements.md`'s trade claimed "a value changed" goes red. The literal
-  holds `ID:keyword`, so a reworded reason or a different transformation named
-  stays green. It now says which half the literal closes.
-- GH-43.6 declared `transformation: global-flag` while `inv_global` writes only
-  `-C`, claiming a shape no variant generated. `global-flag-gitdir` added, and
-  measured first: `--git-dir` and `--work-tree` behave exactly as `-C` does,
-  refused on a push and permitted on a `status`.
-- "60-odd `GH-` entries against 49 FRs", quoted from #141's own text, is two
-  different bases — all FRs against some `GH-` entries. Measured and replaced.
-- `trim`, `keyword` and `after_colon` are `requirements.md`'s field grammar and
-  had been written twice in one file, which is the defect class
-  `lib/command-scan.sh`'s header opens by naming. One `REQ_FIELD_AWK` now,
-  prepended to both programs.
-- The `^GH-` test the rule states rested on `requirements.md`'s separate rule
-  that only a `GH-` entry carries a `kind`; it is in the condition now.
-- Two splits left unpaired where the rest of the section pairs `set -f`/`set +f`.
-- The `none`-is-a-declaration trade was written out in three places, one of them
-  labelled "said once".
+Stating this is #128's own acceptance criterion read literally ("every new check
+fails with the fix reverted"), which cannot hold for a check whose subject is
+behaviour that did not change.
 
-## What it costs, and why #140's number could not be used
+## The counts in the comments, and the two left alone
 
-Measured on one machine, in one worktree, every run green:
+The heredoc question has now been answered five times and got wrong four. Four
+claims were moved from three to four: the `cs_normalise` header, the
+redirect-pass bullet that cites it, and two in `check-hooks.sh`. THE SECOND
+TRADE's "asked a fourth time in a second place" becomes a fifth.
 
-| tree | wall clock | n | families |
-|---|---|---|---|
-| before, at `897bdff` | 118.6 s | 1 | 39 seeds, 1436 variants |
-| after | 116.8 / 117.1 / 118.4 / 119.9 / 122.6 / 133.1 s | 6 | 46 seeds, 1807 variants |
+Two "three times" claims in `lib/command-scan.sh` were **deliberately left** —
+`cs_split`'s tail note and the prefix loop, both of which say *reading text as a
+command* is the mistake `cs_normalise` has made three times. #128 is the
+opposite direction: a command was read as text. Incrementing them would have
+made them false, and a reviewer who disagrees has one number to move rather
+than a paragraph to rewrite.
 
-371 more variants, 26% more of them, and **the difference between the two rows
-is smaller than the range within the second**: the six after-runs span 16.3 s
-and their median is 119.2 s, against a single before-run of 118.6 s. So the
-measurement supports "the addition did not move the run time by anything this
-suite can resolve", and does not support a figure for how much it moved it by.
-A second before-run was not taken and should have been.
+THE LINE CAP's *WHAT THIS CAP DOES NOT BOUND* named #128 as the reason the cap
+does not bound what the passes are handed. That half is now the opposite, and
+what replaces it is an argument rather than a measurement: the drop only ever
+removes lines, and it can remove a line adjacent to a continued one only inside
+a body — a body begins after a line that does not end in a backslash, and the
+lines held for one are given back together — so every joined line
+`cs_normalise` emits is part of a joined line `cs_within_cap` measured, and no
+longer than it. #127, the fragment-count half of the same paragraph, is still
+open and still says so.
 
-The range is the finding rather than noise around one. The 133.1 s run and a
-116.8 s run are the same tree minutes apart, with other worktree sessions on the
-machine.
+## State, and what is open
 
-The per-variant model over-predicts, which matters because #141's cost paragraph
-reasons from one. Timed directly at n=100 each, one hook invocation exactly as
-`check_in` makes it: 10.9 ms for `append-only-docs.sh`, 16.0 ms for
-`no-commit-to-main.sh`, 29.8 ms for `no-pr-decisions.sh`. At those rates 371
-variants would be 5–7 s and the suite does not show it; a cold invocation from a
-shell loop is not what a variant costs in the middle of a run that has paged
-everything in.
+The branch holds one commit. `bash .claude/hooks/check-hooks.sh` passes in full,
+3957 results. `bash .claude/hooks/mutate-hooks.sh -v heredoc-opener-continuation`
+reports `caught` and leaves `.claude/hooks/` byte-identical; the whole registry
+has **not** been re-run since the row was added, and mutate-hooks.sh's header
+says so where it records the 2026-09-17 measurement of twenty-three rows.
 
-**#140's 94.0 s is not comparable with any of these.** The commit this branch
-starts from measures 118.6 s here, so the comparison #141's fourth acceptance
-criterion asks for had to be made baseline-to-after on one machine rather than
-against the recorded figure. #141's warning that "the same again would want a
-decision about the budget" is about the 53 s #140 added, and on this evidence
-this is not that.
+Open, and not this branch's:
 
-## Mutation, and the limit it moved
+- **#127**, the other half of the cap's claim: fragment count, not line length.
+- **An opener split by a continuation**, described above. Not filed: it is a
+  fail-safe, its shape is one an agent would have to construct, and CLAUDE.md's
+  stopping rule is that a newly found evasion earns a fix only if it is a shape
+  an agent would plausibly write.
+- **#108 and #109**, which owe the registry their own rows.
 
-Two registry rows added, `variants-field-deleted` and `variants-seed-disowned`,
-both reported `caught` in a clean run with `.claude/hooks/` byte-identical
-afterwards. The first run of them was not clean and reported `.claude/hooks/
-changed during this run` — the assistant had edited `requirements.md` while the
-harness was running, which is exactly the integrity check doing its job, and the
-run was repeated rather than explained away.
+## Correction, from the review of this session's own commit
 
-Those two rows moved a stated limit. `mutate-hooks.sh` says a rule living in the
-tooling beside the hooks cannot be registered, because the suite that runs is
-this repository's whatever `CHECK_HOOKS_DIR` says — and GH-141's rule *is* code
-in `check-hooks.sh`. It is registrable all the same, because what that code
-**reads** is `requirements.md`, which an override does move. The test is whether
-the run reads the copy, not whose file the rule sits in. #106's own self-guards
-still fail it: what they read is the seed table, which is in the suite.
-GH-107.2's note said otherwise and is corrected.
+The two review axes run over `c2ce2bd` found that the assistant had miscounted
+its own checks, which is the class CLAUDE.md says to re-measure rather than
+restate. Appended rather than edited above, because the append-only guard
+refuses an in-place edit of an entry — verified by feeding the command to
+`append-only-docs.sh` rather than running it — and because that is what the
+directory's rule says to do with a correction. The figures here supersede the
+ones in *What the checks establish* and in `c2ce2bd`'s message; both of those
+stand as written.
 
-## The append-only guard is off in every worktree, found by trying to obey it
+**How far ahead of `main`.** The convention in this directory's README asks for
+it and the entry above omitted it: the branch ends **186 commits ahead of
+`origin/main`**, two ahead of `origin/dev-05` — the fix, and the commit that
+carries this section.
 
-Writing this entry produced the session's second permitting defect, and the way
-it was found is worth recording. The numbers in the cost section above were
-wrong by two later runs. `docs/dev-log/` is append-only and the convention is
-that an entry freezes once written, so the assistant expected
-`append-only-docs-edit.sh` to refuse the correction, and attempted it to
-confirm. **It went through.**
+**Which commit each figure belongs to**, since this section adds four checks of
+its own. The entry above describes `c2ce2bd`, where the suite was 3957 results
+and 145 went red with the fix reverted. Every figure in this section is measured
+at the second commit's tree.
 
-`append-only-docs-edit.sh` resolves the edited path against
-`CLAUDE_PROJECT_DIR`, which is the main checkout, so for a file in a linked
-worktree the remainder is `.claude/worktrees/<name>/docs/dev-log/<entry>.md` and
-the `^docs/` anchor does not match. Measured by feeding tool calls to the hook
-on stdin, with the controls run rather than assumed:
+**The counts, measured rather than derived.** Suite 3657 → **3961** results.
+The families contribute **280** — 273 variants and 7 per-transformation guards
+— so **24** checks are written out, not the nineteen the entry above claims, and
+there is no "coverage row" among them: 280 + 24 = 304, and 3657 + 304 = 3961.
+The #128 verdict section holds **13** checks, nine refusing and four permitting,
+where the entry says twelve. The assistant wrote both figures from the edit it
+had just made instead of from a run, which is the whole of the error.
 
-| `CLAUDE_PROJECT_DIR` | path | verdict |
+**Four checks the review added.** The standards axis — a review the assistant
+ran on its own commit, not Bertan's — found the continuation
+rule now derived in two places — `$0 !~ /\\$/` in the drop, and `cs_join`'s
+own count of trailing backslashes — with the code asserting they cannot disagree
+and nothing pinning it. That is #84's question one level in, and the assistant
+had answered it in a comment. Four `tok` checks now hold the two against each
+other over runs of two and three backslashes: the joined text is read once as
+`cs_join`'s output and once as the drop's, so a change to either rule moves one
+literal of a pair. Two backslashes is where bash parts company with both — it
+reads `\\` as an escaped backslash, so the line does not continue, the body is
+`x` and `E` ends it, and the push runs anyway, which is the verdict the looser
+rule reaches by deferring the body.
+
+**Which new checks go red with the fix reverted, in full.** **147** of 3961,
+all of them new, measured against a copy with the one line reverted: 14 of the
+24 written out, and 133 of the 273 variants (19 refusing seeds × 7 spellings).
+The entry above says three written-out checks and 21 variants stay green; it is
+**10** and **147** — 140 variants, being 17 permitting seeds × 7 plus the 21
+wrapped, and the 7 guards. The ten, and why each cannot fail:
+
+| check | why the revert cannot reach it |
+|---|---|
+| `a body line ending in a backslash is not joined past its terminator` | the body drop, which this change does not alter |
+| `a body naming a push on a continued line is still dropped` | same |
+| `BLOCK a slashed body line, then a push` | same |
+| `ALLOW the same shape, with nothing to refuse after it` | the permitting direction, correct before the fix |
+| `ALLOW the same shape on main, with nothing to refuse` | same |
+| `ALLOW a body naming a push on a continued line` | same |
+| `ALLOW a body naming a commit on a continued line` | same |
+| `cs_join folds a line ending in two backslashes` | `cs_join` is untouched; it is the half of a pair whose other half does go red |
+| `cs_join folds a line ending in three backslashes` | same |
+| `the #128 shape is within the cap` | `cs_within_cap` runs before `cs_normalise` and the revert does not reach it |
+
+#128's criterion reads "every new check fails with the fix reverted", and ten
+cannot: a check whose subject is behaviour this change leaves alone is a
+regression guard, and one of them going red would mean the fix had moved the
+drop rather than where it starts. Naming them is the part the entry above got
+wrong by naming three.
+
+**A seventh count site.** The review also found `lib/command-scan.sh`'s own
+header still reading "Three wrong answers, each silent and each in the
+permitting direction, is evidence about the question" — a site the assistant's
+sweep had missed while listing four it had moved and two it had left. It now
+records the fourth and says the reading of it is unchanged. Two claims stay at
+three on purpose, both about reading *text as a command*, which is the opposite
+direction from this defect; the spec axis checked that reading independently and
+agreed.
+
+## Renumbering: this entry is session 5, and its heading is wrong
+
+The heading above reads *session 2*, which is the number this session was
+working under. Session 2 of 2026-09-17 turned out to belong to another session,
+whose entry landed in `dev-05` first and is kept byte-identical; two more, 3 and
+4, landed with it. This entry is **session 5** and its file is named for that.
+
+The assistant could not correct the heading. `.claude/hooks/append-only-docs.sh`
+refuses `rm`, `mv`, `git mv` and a truncating redirect on any file in
+`docs/dev-log/`, each verdict read by feeding the command to the hook rather
+than running it, and the Edit and Write tools are refused on a file that already
+exists. An append is the only edit available, so the correction is appended —
+which is the rule this directory keeps anyway. One `git mv` from Bertan's
+terminal, which the hooks do not see, fixes it.
+
+## The fix was wrong, and the review found it permitting
+
+Bertan reviewed PR #151 and returned four findings, two high. The first is the
+one that matters: the fix permitted a command bash runs, which is the defect
+class it exists to close, arriving inside the change that closes it.
+
+```
+cat <<E \\
+E
+echo after
+git push --force origin main
+E
+```
+
+Bash ends the command line at `cat <<E \` — `\\` is an escaped backslash, an
+even-length run, so nothing is continued — takes the next line as the terminator
+of an empty body, and runs `echo after` and the push. `cs_normalise` as
+`c2ce2bd` left it emitted `cat <<E \E` and nothing else. The push was gone.
+`no-git-push.sh` answered exit 0 where `dev-05` answered exit 2.
+
+**The cause was the argument, not an oversight.** The assistant had written, and
+this entry above still says, that *looser than bash is the safe side, because a
+logical line held open too long only exposes more lines as commands*. That
+sentence is false, and everything downstream of it followed: holding the line
+open moves the start of the body forward and the search for the terminator with
+it, so a delimiter line that bash took as the whole terminator is scanned past
+as though it were part of the command line, the body runs on to the next
+delimiter, and every line between them is dropped. Exposing and hiding are not
+the only two outcomes of a boundary moved late. The sentence is now in
+`lib/command-scan.sh` with the counter-example under it, because the reasoning
+was the defect.
+
+## Two rules, and why neither alone is the fix
+
+**Parity.** A line continues only when its run of trailing backslashes is odd.
+That is bash's rule; `cs_join`'s is any trailing backslash at all, deliberately
+and unchanged. Written as a flag flipped per backslash rather than with a
+modulo, because `mutate-hooks.sh` splits a registry row on `%` and could not
+otherwise carry the expression that breaks it.
+
+**The boundary.** `cs_join` runs one pass later on that looser rule, so the line
+a body starts after — which under the parity rule can only end in an even run,
+exactly where the two disagree — has its trailing run taken off, with the blanks
+in front of it. It is the one line onto which `cs_join` could otherwise glue the
+first line past the terminator, and a trailing backslash is text of a command
+line, never a command.
+
+Neither rule alone reproduces the defect the issue was filed for: on an odd run
+the two cover the same case, so breaking one leaves the other holding it. Three
+rows are registered in `mutate-hooks.sh` for that reason — one per rule, and
+`heredoc-opener-continuation`, whose edit is two commands, which puts the pass
+back to what `dev-05` did. All three were run by name with the baseline and all
+three are caught; the two single-rule rows turn `GH-128` red and nothing else.
+
+## What says it, and the harness that was twice green for the wrong reason
+
+An argument in a comment is what produced the regression, so the claim is now
+measured. 2,580 generated shapes of opener, backslash run, delimiter and payload
+position are each **run under bash** with `touch ran.flag` as the payload, so
+that execution and not output decides what ran, and then put through
+`cs_normalise` with a push in the payload's place. The property is that a push
+bash runs stands at the start of some emitted line, because a hook cannot see
+one that does not.
+
+| library | shapes where bash runs the push and no hook can see it |
+|---|---|
+| `origin/dev-05` | 198 |
+| `c2ce2bd`, the first fix | 40 |
+| this fix | 0 |
+
+Of the 198 on `dev-05`, the first fix closed 184 and **introduced 26 new ones**.
+That is the number the review found by hand.
+
+The harness earned its own paragraph by being wrong twice, and both times it
+read as evidence. Its first generation ended every case `E / payload / E`, so a
+body that had swallowed one terminator was re-closed by the second before the
+payload was reached: it reported **0 new regressions** for a library that
+measurably had one. Its second generation used `echo THE-PAYLOAD-RAN` and looked
+for that string in bash's output — but when the payload line is inside a heredoc
+body, `cat` prints it, so the string appeared without anything having run, and
+151 of the cases it reported were that. Both were found by reading the cases
+rather than by the harness. It lives in the pull request and not in the tree.
+
+## The counts, re-measured
+
+Suite **3657 → 3967** on this branch, and **4096** on the merged tree once
+`origin/dev-05` came in with #108's work. 310 new results: 280 from #106's
+families — 273 variants and 7 per-transformation guards — and **30** written out.
+
+Under `heredoc-opener-continuation`, the row that restores `dev-05`'s behaviour,
+**151** go red: 133 family variants and 18 of the 30. Twenty of the 30 are
+reached by one of the three registered mutations. The ten that are not are named
+here, because "every new check fails with the fix reverted" is #128's criterion
+and it cannot hold for a check whose subject is behaviour the fix leaves alone:
+
+- `a body line ending in a backslash is not joined past its terminator`,
+  `a body naming a push on a continued line is still dropped` and
+  `BLOCK a slashed body line, then a push` — the body drop, unchanged.
+- the four permitting verdicts — `echo RAN-AFTER` in the push's place on both
+  hooks, and a body that merely names a push or a commit.
+- `cs_join joins an even run, which bash does not` and `an odd run of three is a
+  continuation to both of them` — the `cs_join` halves of the paired pins. **No
+  registry row mutates `cs_join`**, so those two are evidence about `cs_join` as
+  it stands and would not go red for any change to the drop.
+- `the #128 shape is within the cap` — `cs_within_cap` runs before this pass.
+
+## State
+
+Three commits and a merge. `bash .claude/hooks/check-hooks.sh` passes in full at
+4096 results. `bash .claude/hooks/mutate-hooks.sh --list` reads 32 rows, 30 real
+mutations against 6 files, naming 39 requirement IDs, of 157 active; the whole
+registry has not been run since #107 measured its 23, and nothing claims it has.
+
+Still open, and not this branch's: **#127**, the fragment-count half of the
+cap's claim; **#148**, which would take the restated counts out of
+`mutate-hooks.sh`'s header and leave `--list` as the only place they are
+written — this session moved four of them by hand and is the second session in
+two days to do so.
+
+## What the fix costs, measured after the re-review
+
+A second reviewing session re-read PR #151 in a scratch clone at `060c6b3`,
+confirmed the permitting regression closed, and raised one observation rather
+than a finding: across its own 450 shapes the hook's over-refusals rise
+234 → 246 → 264 from `dev-05` through the first fix to this one. It asked
+whether that is an intended cost or an unnoticed one.
+
+It is intended, and it is now counted. The 2,580-shape harness was re-run with
+the column read backwards — bash does **not** run the payload, yet a push in its
+place stands at the start of an emitted line, so a hook refuses text bash never
+runs:
+
+| library | hidden pushes | over-refusals, of the 2,100 shapes bash does not run |
 |---|---|---|
-| main checkout | `<main>/docs/dev-log/<entry>` | BLOCK |
-| main checkout | `docs/dev-log/<entry>`, relative | BLOCK |
-| main checkout | `<worktree>/docs/dev-log/<entry>` | **ALLOW** |
-| worktree | `<worktree>/docs/dev-log/<entry>` | BLOCK |
-| main checkout | a new entry file | ALLOW |
+| `origin/dev-05` | 198 | 750 |
+| `c2ce2bd`, the first fix | 40 | 816 |
+| this fix | 0 | 848 |
 
-The fourth row is what says the cause is the anchoring and not the path. The
-Bash-side `append-only-docs.sh` does not share it — it matches path spellings in
-the command text and resolves nothing against a root, so `rm -rf` of a
-worktree's `docs/dev-log` is still refused, measured in all three spellings. So
-the two halves of one rule disagree about which files are append-only, which is
-the class `lib/command-scan.sh` exists to end, here between two files rather
-than inside one.
+Same ordering as the reviewing session found on a different generator, which is
+the agreement worth having. The rise decomposes into departures already named in
+`lib/command-scan.sh` rather than into anything new: of the 124 shapes that
+arrive, **108** are the END give-back — bash itself reports the heredoc
+unterminated, each one checked by reading bash's stderr rather than by
+assumption — and **16** are the unquoted-body join, where a body line ends in a
+backslash that bash joins and this pass does not. **26** go the other way:
+pushes that really were body text, now dropped because the body begins where
+bash begins it.
 
-The consequence runs the wrong way round from the guard's purpose: CLAUDE.md
-says an unattended agent *shall* work in a dedicated worktree, so a worktree is
-where every agent edit to `docs/dev-log/` happens. The guard covers the checkout
-where an agent is not working. Filed as **#159**, unfixed.
+The paragraph is added to `lib/command-scan.sh` under **WHAT THAT DIRECTION
+COSTS**, because the sentence above it said the fail-safe is paid for in
+refusals and did not say how many, and a claim without a number is one to
+re-measure. Two `written` pins hold it, each carrying its whole claim on one
+line: a pin that is a prefix goes on passing after the rest of the sentence is
+deleted. Both were mutation-checked by hand — deleting the line each names turns
+that pin and only that pin red, against a green control on the unmutated copy.
 
-Two things about this entry follow from that, stated rather than left for a
-reader to work out. The corrected cost table above, and this section, were both
-written through the gap — the guard should have refused both, and the second
-edit is a record of a defect that only exists because the first one worked.
-Neither revises history: the file was minutes old, uncommitted, and factually
-wrong. And the check suite is green with the guard inoperative, because every
-check for this hook passes a path under the project root — #84's shape, one
-question asked of one spelling, which is the same finding as this session's
-main one arriving from the other side.
-
-## Open
-
-- **#156** is filed and unfixed: the continuation evasion in
-  `append-only-docs.sh`. Its gap row goes red when the fix lands, which is the
-  intended outcome. The fix has to move the load guard with the call.
-- **#159** is filed and unfixed: `append-only-docs-edit.sh` is off in every
-  linked worktree. Nothing in the suite fails on it, so nothing will remind
-  anyone; it is the more urgent of the two, because the hook is not merely
-  evadable there but inoperative.
-- **The `GH-` half of the seed table is 11 entries wide**, and 20 in-scope
-  entries are `variants: none`. Each reason is a claim someone can argue with,
-  which is the point, and the frontier is whichever of them turns out to be
-  wrong.
-- **GH-131 and GH-143.1–.3** are the entries the file-payload decision will land
-  on. Both are out of scope today — #131 is `gap → #131`, GH-143.1 to .3 are not
-  written — and the rule makes the declaration compulsory when either goes
-  active. The decision itself is recorded now rather than left to be
-  rediscovered: `-f query=@file` and `--input file` put what a rule must judge
-  outside the command's text, so no text-rewriting generator can produce or
-  judge them.
-- **This branch has not had Bertan's review.** Every previous entry in this
-  directory records that pass finding defects a green suite did not, several of
-  them in the commit that fixed the previous round.
+The counts this entry gave above move with it: **32** written-out checks rather
+than 30, of which **12** are unreachable by any registered mutation rather than
+10, and the suite reads **4098** results rather than 4096. The suite's own
+derived count of its text checks caught the addition and was raised 287 → 289.
+The three registered mutation rows were re-run afterwards: all three still
+caught, and `.claude/hooks/` byte-identical after.
