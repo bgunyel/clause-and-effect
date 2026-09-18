@@ -320,8 +320,27 @@ section() {  # section <heading> -- print it, and let no tag carry across it
 # three helpers below asked it, and they answered it in three identical `case`
 # statements until the load-contract section gave `says` its first fixture; five
 # ask it now, `feed` and `feed_says` having come with #95.
+#
+# A bare name is also the moment a check runs one of the hooks under judgment,
+# so that is where it is recorded, with the tags then in force: #109's
+# configuration section reads the record back and requires every hook
+# settings.json registers to have been run by at least one tagged check. An
+# absolute path is a fixture copy -- a hook with its library taken away, or one
+# built to crash -- and is not the registered hook, so it is not recorded.
 hook_path() {  # hook_path <script|/absolute/hook>
-  case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s\n' "$HOOKS/$1" ;; esac
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    *) ran "$1"; printf '%s\n' "$HOOKS/$1" ;;
+  esac
+}
+# ran <hook basename> -- a tagged check has run it. Written from a subshell as
+# often as not, since hook_path is called inside $( ), so it appends to a file
+# rather than setting a variable. An untagged run is not recorded: the #104
+# section already fails the check, and it would cover nothing here either.
+RAN=
+ran() {
+  [ -n "$RAN" ] && [ -n "$REQ" ] || return 0
+  printf '%s\t%s\n' "$REQ" "$1" >> "$RAN"
 }
 # What a hook's exit status means, answered once for every helper that runs a
 # hook and reads one: exit 0 is ALLOW, exit 2 is BLOCK, and anything else FAILs
@@ -373,6 +392,8 @@ FIXTURES=$(mktemp -d)
 trap 'rm -rf "$FIXTURES"' EXIT
 LEDGER="$FIXTURES/ledger"
 : > "$LEDGER"
+RAN="$FIXTURES/ran"
+: > "$RAN"
 git init -q -b main "$FIXTURES/on-main"
 git init -q -b dev-99 "$FIXTURES/on-dev"
 ON_MAIN="$FIXTURES/on-main"
@@ -4666,6 +4687,10 @@ env_says() {  # env_says <dir> <PATH> <script|/absolute/hook> <fragment> <label>
 # helpers does not have to check.
 report_says() {  # report_says <PATH> <script> <literal> <label>
   local path="$1" script="$2" want="$3" label="$4" out rc
+  # A copy of the registered report, placed in a fixture repository because the
+  # report reads the repository it sits in; the #98 self-test's crashing
+  # fixtures carry other names. See `ran`.
+  [ "${script##*/}" = report-stale-branches.sh ] && ran report-stale-branches.sh
   out=$( cd "$(dirname "$script")" && PATH="$path" bash "$script" 2>&1 )
   rc=$?
   if [ "$rc" != 0 ]; then
@@ -4675,6 +4700,32 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
     fail static '%s\n         wanted the report to say |%s|\n         it said |%s|' "$label" "$want" "$out"
   else
     pass static 'report %s' "$label"
+  fi
+}
+
+# every_hook: issue #109. One command through every hook named in $XH_HOOKS, in
+# that order -- the Bash hooks settings.json registers, read in #109's section --
+# and a pass only if every one exits exactly 0, which is how the harness decides
+# whether a command runs at all. Every helper above runs one hook; this is the
+# one question none of them can ask. It is defined here, with the others, because
+# the #98 self-test below drives it and runs before #109's section does.
+#
+# The failure line names every hook that did not exit 0, each with its status and
+# its stderr in the spelling `verdict` uses, since the case it exists for is a
+# second hook refusing what the first permits and the name is the whole finding.
+every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every Bash hook
+  local dir="$1" label="$2" cmd="$3" hook rc err refused=
+  for hook in $XH_HOOKS; do
+    err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+          | ( cd "$dir" && CLAUDE_PROJECT_DIR="$dir" "$(hook_path "$hook")" ) 2>&1 >/dev/null)
+    rc=$?
+    [ "$rc" = 0 ] || refused="$refused
+         ${hook##*/} exit=$rc stderr |$err|"
+  done
+  if [ -z "$refused" ]; then
+    pass permit 'ALLOW by all  %s' "$label"
+  else
+    fail permit '%s\n         wanted every Bash hook to exit 0; these did not:%s' "$label" "$refused"
   fi
 }
 
@@ -5096,7 +5147,8 @@ anc_fixture() {  # anc_fixture <dir> <origin url> -- a repository with the repor
   cp -p "$HOOKS/report-stale-branches.sh" "$1/.claude/hooks/"
 }
 anc_report() {  # anc_report <repo> -- the report's output, run as that repository's hook
-  ( cd / && PATH="$ANC_BIN:$PATH" "$1/.claude/hooks/report-stale-branches.sh" ) 2>/dev/null
+  ran report-stale-branches.sh
+  ( cd /&& PATH="$ANC_BIN:$PATH" "$1/.claude/hooks/report-stale-branches.sh" ) 2>/dev/null
 }
 # The line and its indented continuations, and nothing after them: a NOT is
 # three lines, and a phrase from the line after it must not count as its own.
@@ -8619,6 +8671,7 @@ drive_helper() {  # drive_helper <helper> <fixture> <want>
          env_feed)   env_feed "$EXITS" "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
          env_says)   env_says "$EXITS" "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
          report_says) report_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' ;;
+         every_hook) XH_HOOKS="$EXITS/$fixture.sh" every_hook "$EXITS" 'self-test' 'true' ;;
          *)          exit 3 ;;
        esac
        exit $FAILED ) >"$EXITS_OUTPUT" 2>"$EXITS/stray-stderr"
@@ -8648,6 +8701,10 @@ DRIVEN_TIMED='cap_timed lib_run'
 # report_says is the fourth list because it is the only helper that asks for a
 # status and a sentence at once, so neither loop above states its cases. #108.
 DRIVEN_REPORT='report_says'
+# every_hook is the fifth, #109's: it expects ALLOW of every hook it runs and
+# takes no verdict, so the first loop cannot drive it, and it runs more than one
+# hook, which is the case none of the others has.
+DRIVEN_ALL='every_hook'
 
 req GH-98 GH-124
 for helper in $DRIVEN_VERDICT; do
@@ -8732,6 +8789,36 @@ for helper in $DRIVEN_REPORT; do
   timed_line_says "$helper: that failure line names exit 127" 'got exit=127'
 done
 
+# The all-hooks helper, #109. Exit 0 is its only passing status, a refusal is a
+# failure like any crash, and the failure line names the status and the stderr.
+req GH-98 GH-109.5
+for helper in $DRIVEN_ALL; do
+  tok "$helper: a hook that exits 0 passes" 'ok' "$(drive_helper "$helper" allow-0 -)"
+  tok "$helper: a hook that exits 2 fails" 'FAIL' "$(drive_helper "$helper" block-2 -)"
+  failure_line_says "$helper: that failure line names exit 2 and the hook's stderr" \
+      2 'block-2 refuses'
+  tok "$helper: a hook that exits 1 fails" 'FAIL' "$(drive_helper "$helper" crash-1 -)"
+  failure_line_says "$helper: that failure line names exit 1 and the hook's stderr" \
+      1 'crash-1 fixture stderr'
+  tok "$helper: a hook that exits 127 fails" 'FAIL' "$(drive_helper "$helper" crash-127 -)"
+  failure_line_says "$helper: that failure line names exit 127 and the hook's stderr" \
+      127 'crash-127 fixture stderr'
+done
+# And the property it exists for: ONE refusing hook of several fails it, in
+# either position. A helper that kept only the last status, or only the first,
+# passes one of these two and not the other.
+every_hook_of() {  # every_hook_of <fixture>... -- ok or FAIL, for every_hook over those
+  local list= f
+  for f in "$@"; do list="$list $EXITS/$f.sh"; done
+  if ( FAILED=0
+       XH_HOOKS="$list" every_hook "$EXITS" 'self-test' 'true'
+       exit $FAILED ) >/dev/null 2>&1
+  then echo ok; else echo FAIL; fi
+}
+tok 'every_hook: a refusing hook after a permitting one fails' 'FAIL' "$(every_hook_of allow-0 block-2)"
+tok 'every_hook: a refusing hook before a permitting one fails' 'FAIL' "$(every_hook_of block-2 allow-0)"
+tok 'every_hook: two permitting hooks pass' 'ok' "$(every_hook_of allow-0 allow-0)"
+
 # And that the helpers driven above are all of them. The helpers that read a hook's
 # exit status are derived from this file, and each must be in one of the three lists
 # the loops above run off -- so a new reader is either driven or red here. `flip`
@@ -8763,7 +8850,7 @@ if [ -z "$STATUS_READERS" ]; then
 fi
 for reader in $STATUS_READERS; do
   present "derived $reader reads a hook exit status, and the #98 self-test drives it" \
-          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE $DRIVEN_TIMED $DRIVEN_REPORT"
+          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE $DRIVEN_TIMED $DRIVEN_REPORT $DRIVEN_ALL"
 done
 
 echo "--- issue #101: a load guard requires a function ---"
@@ -9860,7 +9947,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '34' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '38' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9923,7 +10010,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '32' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '36' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -10498,6 +10585,368 @@ report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
   'active dev branch: none' \
   'and with no dev ref fetched the active dev branch is none, not a guess'
 
+section "=== issue #109: timing, what a refusal says, the registration, and all seven hooks at once ==="
+# Four kinds of check #103's audit found the suite without (Q3), each of which
+# had already let something through. They are grouped here by kind rather than
+# spread over the sections of the hooks they read, because each asks one
+# question of every hook and a reader auditing the question wants it in one
+# place.
+
+echo "--- a realistic worst case: a 200-line heredoc, several separators a line ---"
+# #96 bounds a hook at the cap: a command whose longest line is 16 KB finishes in
+# under 1 s, fastest of three. That is a claim about one long line. The shape an
+# agent actually writes is many short ones, and the commonest carrier of many
+# short lines is a heredoc -- a commit message, a file written with cat. So the
+# same bound, the same fastest-of-three and the same refusal to time anything
+# but a refusal (see cap_timed), asked of 200 body lines each holding four
+# separators and a redirect, with each hook's own refused command after it.
+#
+# MEASURED BEFORE IT WAS WRITTEN, 2026-09-18, at 33f7129, fastest of three: 9 to
+# 33 ms per hook, quoted opener or not. cs_normalise drops a heredoc body before
+# any pass reads it, so its separators never become fragments. That is what this
+# pins: a change that let a body through to cs_split would multiply the time by
+# the number of fragments, which is the cost #127 is about.
+#
+# NOT HERE, and named for that reason. The same 200 lines as LIVE commands, with
+# no heredoc around them, took no-pr-decisions.sh 3.1 s, no-commit-to-main.sh
+# 2.1 s and no-git-push.sh 1.1 s on the same run -- over this bound, under the
+# harness's 5 s. That is #127's per-fragment cost, which #96 left open, and a
+# bound on it is #127's decision to take, not this section's.
+XH_BODY=$(for i in $(seq 1 200); do
+            printf 'echo step %s; cd src && git status | grep -v x || true; ls >> log\n' "$i"
+          done)
+cap_guard 'heredoc body, lines' 200 "$(printf '%s\n' "$XH_BODY" | wc -l | tr -d ' ')"
+cap_guard 'heredoc body, lines holding four separators' 200 \
+  "$(printf '%s\n' "$XH_BODY" | grep -c '; .* && .* | .* || ')"
+req GH-109.1
+for hook in $BASH_HOOKS; do
+  dir=$(cap_dir "$hook")
+  refused=$(cap_refused "$hook")
+  [ -n "$refused" ] || continue
+  under_a_second "$hook, a 200-line heredoc of separators, then $refused" \
+    "$(cap_timed "$dir" "$hook" "cat <<'EOF'
+$XH_BODY
+EOF
+$refused")"
+  under_a_second "$hook, the same heredoc with an unquoted opener" \
+    "$(cap_timed "$dir" "$hook" "cat <<EOF
+$XH_BODY
+EOF
+$refused")"
+done
+
+echo "--- every refusal of no-git-push.sh says the rule it applies ---"
+# US-7: a refusal tells an agent the permitted spelling or the reason. Before
+# this, `says` read the bare push's message, the main checkout's and the
+# reserved branch's, and nothing else in this file: every other arm could be
+# emptied to "Blocked." with this suite green, since the verdict would not move.
+#
+# ONE ROW AN ARM, and the fragment is the arm's own tail, whole. A prefix keeps
+# matching after the rest of the sentence is deleted, so each fragment runs to
+# the end of the sentence that states the reason -- the lesson of the retarget
+# row in #105's section. The shared opening, which states the rule itself, is
+# read once, below, rather than thirteen times.
+#
+# All in the push fixture's linked worktree on $PUSH_BRANCH with an origin,
+# where the push the arm refuses is otherwise the permitted one: so each refusal
+# is the arm's and not the main checkout's or the reserved branch's.
+req US-7 GH-109.2
+says "$PUSH_WT" no-git-push.sh 'An agent may push only the branch of the linked worktree it is working in, so that it can open a pull request.' \
+  'every push refusal opens with the rule it applies' 'git push --force origin wt-branch'
+says "$PUSH_WT" no-git-push.sh 'The destination cannot be read through a quoted payload, so the worktree exception does not apply. Push plainly from the worktree, or leave it to Bertan.' \
+  'a wrapped push says why, and to push plainly' "bash -c 'git push origin $PUSH_BRANCH'"
+says "$PUSH_WT" no-git-push.sh 'This command changes directory first, so where the push would land cannot be judged from here.' \
+  'a push after cd says the directory moved' "cd src && git push origin $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'This command points git at another directory, so where the push would land cannot be judged from here.' \
+  'a push under GIT_DIR= says git is pointed elsewhere' "GIT_DIR=/tmp/x git push origin $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'This command points git at another directory, so where the push would land cannot be judged from here.' \
+  'a push under git -C says the same, from its own arm' "git -C /tmp push origin $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'This command sets git configuration for itself, which overrides what this check would read back.' \
+  'a push under git -c says configuration was set for it' "git -c push.default=matching push origin $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'That form pushes or deletes refs wholesale rather than naming this branch.' \
+  'a push --all says it names no branch' 'git push --all origin'
+says "$PUSH_WT" no-git-push.sh 'That is a forced push, which rewrites history the open pull request is showing. Add a commit instead.' \
+  'a forced push says why, and to add a commit' "git push --force origin $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'A wildcard refspec does not name this branch.' \
+  'a wildcard refspec says it names no branch' "git push origin 'refs/heads/*'"
+says "$PUSH_WT" no-git-push.sh 'upstream is not a remote of this repository.' \
+  'a push to a remote that is not one says so, by name' "git push upstream $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'A leading + forces the push, which rewrites history the open pull request is showing.' \
+  'a + refspec says it forces' "git push origin +$PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh "This names feature-y, not $PUSH_BRANCH." \
+  'a push of another branch names both' 'git push origin feature-y'
+# The continuation arm: a backslash cs_join did not join. A backslash followed
+# by a space ends no line, so it survives into the arguments.
+says "$PUSH_WT" no-git-push.sh 'The arguments continue past where this check can read them.' \
+  'a push whose arguments end in an unjoined backslash says it cannot read them' "git push origin $PUSH_BRANCH \\ "
+# The detached arm needs a worktree with no branch, which no fixture above holds.
+PUSH_WT_DETACHED="$FIXTURES/push-wt-detached"
+$GP worktree add -q --detach "$PUSH_WT_DETACHED"
+need_worktree "$PUSH_WT_DETACHED" 'detached push'
+[ -z "$(git -C "$PUSH_WT_DETACHED" branch --show-current)" ] || {
+  echo "the detached push worktree is on a branch; the check against it proves nothing" >&2
+  exit 1
+}
+says "$PUSH_WT_DETACHED" no-git-push.sh 'This worktree has no branch checked out.' \
+  'a push from a detached worktree says it has no branch' 'git push origin HEAD'
+
+echo "--- every refusal of no-pr-decisions.sh says the rule it applies ---"
+# The same question of the other boundary hook. #97 read the release refusals and
+# #105 the four base refusals; the decision arms and the wrapper were read by
+# nobody. Every decision arm opens with DECIDE, whose second sentence is the one
+# that names what stays permitted -- opening, commenting, editing -- so it is
+# read on every arm rather than once: the constant is interpolated per arm, and
+# an arm that stopped using it would lose exactly that sentence.
+req US-7 GH-109.2
+for c in 'bash -c "gh pr merge 5"' \
+         'gh pr merge 5' \
+         'gh pr review --approve 5' \
+         'gh pr close 5' \
+         'gh pr reopen 5' \
+         'gh api -X PUT repos/o/r/pulls/5/merge' \
+         'gh api -X PATCH repos/o/r/pulls/5 -f state=closed' \
+         'gh api graphql -f query="mutation { mergePullRequest(input:{x:1}) }"'
+do
+  says "$ON_DEV" no-pr-decisions.sh "deciding a pull request is Bertan's call, not an agent's. Opening a PR, commenting on it and editing it are allowed; accepting, rejecting, merging and reopening are not." \
+    "$c: says a decision is Bertan's, and what stays allowed" "$c"
+done
+says "$ON_DEV" no-pr-decisions.sh 'A shell wrapper does not change what the command decides, and its payload cannot be read. Run it unwrapped.' \
+  'a wrapped decision says to run it unwrapped' 'bash -c "gh pr merge 5"'
+says "$ON_DEV" no-pr-decisions.sh 'Leave the PR open and say it is ready to merge.' \
+  'a merge says to leave it open and say it is ready' 'gh pr merge 5'
+says "$ON_DEV" no-pr-decisions.sh 'Review with --comment to leave remarks without a verdict.' \
+  'a verdict review names the review that is allowed' 'gh pr review --approve 5'
+says "$ON_DEV" no-pr-decisions.sh 'Closing a PR rejects it; say why it should be closed instead.' \
+  'a close says it rejects, and to say why instead' 'gh pr close 5'
+says "$ON_DEV" no-pr-decisions.sh 'Closing a PR rejects it; say why it should be closed instead.' \
+  'a reopen reaches the same sentence' 'gh pr reopen 5'
+says "$ON_DEV" no-pr-decisions.sh 'Reaching the merge or review endpoint through gh api is the same decision by another name.' \
+  'the merge endpoint says it is the same decision' 'gh api -X PUT repos/o/r/pulls/5/merge'
+says "$ON_DEV" no-pr-decisions.sh "Setting a pull request's state through gh api closes or reopens it, which is the same decision by another name." \
+  'a state write says it closes or reopens' 'gh api -X PATCH repos/o/r/pulls/5 -f state=closed'
+says "$ON_DEV" no-pr-decisions.sh 'Reaching the same decision through a graphql mutation is the same decision by another name.' \
+  'a decision mutation says it is the same decision' 'gh api graphql -f query="mutation { mergePullRequest(input:{x:1}) }"'
+# The API arm of the missing base, whose sentence #105 read only for gh pr
+# create and only as far as its first clause.
+says "$ON_DEV" no-pr-decisions.sh "No base is named here, so this would go to the repository's default branch." \
+  'a REST create naming no base says where it would go' 'gh api -X POST repos/o/r/pulls -f head=x -f title=t'
+says "$ON_DEV" no-pr-decisions.sh "No base is named here, so this would go to the repository's default branch." \
+  'a graphql create naming no base says the same' 'gh api graphql -f query="mutation{createPullRequest(input:{headRefName:\"x\"})}"'
+# NO ARM GOES UNREAD, asked of the files rather than of this list. Every echo
+# to stderr in either hook is a refusal, and a new arm is a new echo; so each
+# hook's count is a literal here, and adding an arm moves it -- which is the
+# moment to write that arm's row above. The count is the arms above, the load
+# guard, the cap, and the arms other sections read: the release refusals (#97),
+# the four base refusals (#105), the bare push, the main checkout, the reserved
+# branch and the unresolvable directory (#94, #108).
+req GH-109.2
+tok 'no-git-push.sh refuses in as many places as this suite reads' '19' \
+    "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-git-push.sh" | grep -c 'echo .*>&2')"
+tok 'no-pr-decisions.sh refuses in as many places as this suite reads' '16' \
+    "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" | grep -c 'echo .*>&2')"
+
+echo "--- settings.json: what runs, on which tool, in what order, under what timeout ---"
+# settings.json is what makes a hook run at all, and until this section the suite
+# read two of its registrations -- the report's and the stale guard's -- and the
+# Bash timeouts as a set. So the Edit hook's timeout, the matcher any other hook
+# is registered under, and the path each command names were unread: a hook moved
+# under the wrong matcher, or registered at a path that is not there, runs on no
+# call and every check that drives it by name stays green.
+#
+# THE WHOLE TABLE, as a literal, one line a hook: event, matcher, type, the
+# command exactly as written, timeout. Order is part of it on purpose. The
+# cross-hook checks below run the Bash hooks in their registered order, and a
+# reordering is a change a reviewer should see move here.
+#
+# Every PreToolUse timeout is 5. The 1 s bounds above and in #96's section are
+# set against it, and a hook the harness kills is a hook that permits, so a
+# timeout lowered to 1 turns a hook that is merely slow into one that permits.
+# The report's 50 is argued in its own section (FR-43) and is held here too.
+#
+# `worktree.baseRef` is pinned by GH-99.2, in the report's section, to what #99
+# decided -- `fresh` -- and is not asked twice.
+#
+# MUTATION-CHECKED BY HAND, 2026-09-18, because mutate-hooks.sh copies only
+# .claude/hooks/ and settings.json is one directory up: each edit made to the
+# file in place from a per-file backup, this suite run, and the backup restored
+# and its sha256 compared. What each turned red, and what already caught it:
+#   - no-git-push.sh's timeout set to 1: this table, and GH-96.2's timeout set,
+#     which already caught it before #109.
+#   - every PreToolUse timeout set to 1, the issue's own wording: the same, and
+#     the Edit hook's row, which nothing read before #109.
+#   - no-git-push.sh unregistered: this table and the seven-hook row below, and
+#     three older checks -- the CLAUDE.md paragraph, the cap consumers and #95's
+#     registered list -- which already caught it.
+#   - a hook registered that no check runs, x-unchecked.sh under Edit|Write: the
+#     derived row at the foot of this section, naming it, besides this table.
+#   - two Bash hooks swapped in order: this table and the seven-hook row, and
+#     nothing else in the suite.
+#   - `ran` returning before it records: the foot of this section, once for each
+#     of the nine registered hooks.
+# The one kind of mutation the issue names that lives in a hook -- a second hook
+# refusing a permitted spelling -- is a registry row,
+# `second-hook-refuses-a-permitted-read`.
+REGISTRATION_EXPECTED='PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/no-commit-to-main.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/alembic-via-uv-group.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/pytest-via-uv-group.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/append-only-docs.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/no-git-push.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/no-pr-decisions.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/no-work-on-stale-branch.sh|5
+PreToolUse|Edit|Write|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/append-only-docs-edit.sh|5
+SessionStart|-|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/report-stale-branches.sh|50'
+REGISTRATION=$(jq -r '.hooks | to_entries[] | .key as $e | .value[] | (.matcher // "-") as $m
+                      | .hooks[] | "\($e)|\($m)|\(.type)|\(.command)|\(.timeout)"' "$SETTINGS" 2>/dev/null)
+[ -n "$REGISTRATION" ] || {
+  echo "no registration was read out of settings.json; the checks below prove nothing" >&2
+  exit 1
+}
+req GH-109.3
+tok 'settings.json registers exactly these hooks, under these matchers, in this order, with these timeouts' \
+    "$REGISTRATION_EXPECTED" "$REGISTRATION"
+# The same table a line at a time, so that a failure names the hook rather than
+# printing two tables to compare by eye. Both directions: an expected line that
+# is missing, and a registered line nobody expected.
+while IFS= read -r line; do
+  present "settings.json has: $line" "$line" "$(printf '%s\n' "$REGISTRATION" | tr '\n' ' ')"
+done <<< "$REGISTRATION_EXPECTED"
+XH_UNEXPECTED=$(printf '%s\n' "$REGISTRATION" | grep -vxF -- "$REGISTRATION_EXPECTED")
+if [ -z "$XH_UNEXPECTED" ]; then
+  pass static 'settings.json registers nothing this table does not name'
+else
+  fail static 'settings.json registers what this table does not name:\n%s' \
+    "$(printf '%s\n' "$XH_UNEXPECTED" | sed 's/^/         /')"
+fi
+
+echo "--- all seven Bash hooks at once: a permitted spelling is permitted by every one ---"
+# Every check above runs ONE hook. The harness runs every hook registered for
+# Bash on every command, and permits the command only if all of them do. So a
+# spelling CLAUDE.md's boundary section tells an agent to use, or that a refusal
+# message names as the thing to write, can be refused by a hook other than the
+# one whose rule it satisfies, and no single-hook check would see it. This asks
+# each such spelling of all seven, in their registered order, read off
+# settings.json -- the table above holds what that order is -- and requires every
+# one to exit exactly 0 (Q20). One line per spelling, naming every hook that did
+# not.
+#
+# Each runs where it is meant to be permitted (Q21), in the lifecycle fixture:
+# $WT_WORK is a linked worktree on its own branch, carrying a commit, with an
+# origin and origin/dev-05 -- an agent's worktree mid-task. The two catch-up
+# spellings run in $WT_STALE, a worktree branch the dev branch has moved past,
+# which is where the stale guard's message names them. The route-1 worktree
+# creation runs from the main checkout.
+#
+# THE FIRST RUN FOUND ONE, #164. no-commit-to-main.sh refuses a push to main
+# with "Push your dev-NN branch and open a PR instead", and no-git-push.sh
+# refuses that push from every checkout an agent could stand in -- rightly, by
+# US-2. The message is what is wrong, so the right verdict is not ALLOW and
+# `gap` cannot express it. It is recorded as a row on the message instead,
+# marked a gap: it asserts the sentence is still there, and #164's fix turns it
+# red by removing it, which is the outcome `gap` describes. Every other spelling
+# below was permitted by all seven on the first run.
+XH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command' "$SETTINGS" 2>/dev/null \
+             | sed 's|.*/||; s|"$||')
+req GH-109.5
+tok 'the cross-hook checks run seven hooks, in registered order' \
+    'no-commit-to-main.sh alembic-via-uv-group.sh pytest-via-uv-group.sh append-only-docs.sh no-git-push.sh no-pr-decisions.sh no-work-on-stale-branch.sh' \
+    "$(printf '%s\n' "$XH_HOOKS" | tr '\n' ' ' | sed 's/ $//')"
+need_worktree "$WT_WORK" 'work'
+need_worktree "$WT_STALE" 'stale'
+[ "$(git -C "$WT_WORK" branch --show-current)" = work-branch ] || {
+  echo "the work worktree is not on work-branch; the push spelling below would name the wrong branch" >&2
+  exit 1
+}
+# The push CLAUDE.md grants, and the one no-git-push.sh's bare-push and wrapper
+# refusals name.
+req GH-109.5 US-4
+every_hook "$WT_WORK" 'git push origin <branch> from a linked worktree' 'git push origin work-branch'
+# CLAUDE.md's pull request grants, and the spellings the base, retarget, review
+# and decision refusals name.
+req GH-109.5 US-8
+every_hook "$WT_WORK" 'gh pr create --base dev-NN' 'gh pr create --base dev-05 --title x --body y'
+req GH-109.5 US-13
+for c in 'gh pr edit 5 --base dev-05' \
+         'gh pr edit 5 --add-label x' \
+         'gh pr view 5' \
+         'gh pr comment 5 --body x' \
+         'gh pr review --comment -b x' \
+         'gh api repos/o/r/pulls/5'
+do every_hook "$WT_WORK" "$c" "$c"; done
+# The release reads CLAUDE.md lists, and the help pages the release refusal names.
+req GH-109.5 FR-48
+for c in 'gh release list' \
+         'gh release view v1' \
+         'gh release download v1' \
+         'gh release verify v1' \
+         'gh release verify-asset v1 a.tgz' \
+         'gh help release' \
+         'gh help release upload' \
+         'gh api repos/o/r/releases'
+do every_hook "$WT_WORK" "$c" "$c"; done
+# Every gh issue subcommand, #105's twelve and the three pinned before them.
+req GH-109.5 US-14
+for c in 'gh issue create --title x --body y' \
+         'gh issue close 27' \
+         'gh issue comment 27 --body x' \
+         'gh issue list' \
+         'gh issue status' \
+         'gh issue view 27' \
+         'gh issue reopen 27' \
+         'gh issue edit 27 --add-label bug' \
+         'gh issue delete 27 --yes' \
+         'gh issue transfer 27 o/other' \
+         'gh issue lock 27' \
+         'gh issue unlock 27' \
+         'gh issue pin 27' \
+         'gh issue unpin 27' \
+         'gh issue develop --list 27'
+do every_hook "$WT_WORK" "$c" "$c"; done
+# The convention hooks' own remedies: pytest's two, alembic's, and the append the
+# append-only refusal names -- into an entry not yet written.
+req GH-109.5
+for c in 'make test' \
+         'uv run --group test pytest tests/test_chunker.py::test_name' \
+         'uv run --group migrations alembic upgrade head' \
+         'echo entry >> docs/dev-log/devlog_2099-01-01_session-1.md'
+do every_hook "$WT_WORK" "$c" "$c"; done
+# The two routes CLAUDE.md gives to a worktree branch that starts at the dev tip,
+# and the catch-up the stale guard's refusal names -- each where it is written for.
+every_hook "$LIFE" 'route 1: git worktree add --no-track -b <branch> <path> origin/dev-NN' \
+  'git worktree add --no-track -b wt-new ../wt-new origin/dev-05'
+every_hook "$WT_STALE" 'route 2: git reset --hard origin/dev-NN, first act in a new worktree' \
+  'git reset --hard origin/dev-05'
+every_hook "$WT_STALE" 'the stale guard names git merge <dev branch> as permitted from here' \
+  'git merge origin/dev-05'
+# #164, the one this section found. See above for why it is a row on the message.
+req GH-164
+says "$ON_MAIN" no-commit-to-main.sh 'Push your dev-NN branch and open a PR instead.' \
+  'the push-to-main refusal names a push no-git-push.sh refuses [gap: #164 removes this sentence; today it is there]' \
+  'git push origin main'
+
+echo "--- every hook settings.json registers is run by a tagged check ---"
+# A hook registered and never run by any check is a hook this suite says nothing
+# about, and every count above would stay green -- the audit's finding, "a
+# registered hook with zero checks passes". Asked of what the checks actually
+# ran, which `ran` records at the moment a check names one of the hooks under
+# judgment, and not of this file's text, where a loop over a variable names no
+# hook at all. So it reads the whole run and is the last check before #104's.
+#
+# THE LIMIT, named: this says a tagged check ran the hook, not that any check of
+# it can fail. That is mutation's question.
+req GH-109.4
+# The basename is read off the command field by its suffix rather than by field
+# number, because a matcher such as Edit|Write carries the separator itself.
+for hook in $(printf '%s\n' "$REGISTRATION" | grep -o '[A-Za-z0-9_.-]*\.sh' | sort -u); do
+  n=$(awk -F'\t' -v h="$hook" '$2 == h' "$RAN" | wc -l | tr -d ' ')
+  if [ "$n" -gt 0 ]; then
+    # Runs, not checks: a timed check runs its hook up to three times, and a
+    # cross-hook check runs seven.
+    pass static 'derived %s was run %s times under a tag' "$hook" "$n"
+  else
+    fail static 'settings.json registers %s, and no tagged check ran it' "$hook"
+  fi
+done
+
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and
 # fails when the two do not meet. requirements.md says what a requirement is,
@@ -10592,7 +11041,9 @@ GH-124:static GH-127:gap GH-130:gap
 GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139:gap              
 GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
-GH-108.8:static GH-108.9:static GH-108.10:static GH-128   
+GH-108.8:static GH-108.9:static GH-108.10:static GH-128
+GH-109.1:static GH-109.2:refuse-only GH-109.3:static GH-109.4:static
+GH-109.5:permit-only GH-164:gap
 '
 REQUIREMENTS_AWK=$(cat <<'AWK'
   function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }

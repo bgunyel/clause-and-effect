@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- thirty-four runs as the
-# registry stands, not thirty-five, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- thirty-eight runs as the
+# registry stands, not thirty-nine, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -55,10 +55,16 @@
 # `retarget-refusal-drops-the-create-comparison` and ran the pair the same way,
 # both caught, byte-identical after; it also edited no-pr-decisions.sh,
 # check-hooks.sh and this file, so three of the files that run changed after the
-# figure above was taken. No run has therefore exercised all thirty-four rows
-# together, and saying which rows a measurement covered is the whole point of
-# recording one. A reader who wants "the whole registry, at this commit" has to
-# run it -- which is the answer #107 built rather than a gap, and is why the
+# figure above was taken. #109 added four more -- a pass slowed past the 1 s
+# bound on a long command, two refusal messages losing the sentence their rows
+# read, and a second hook refusing a permitted read -- and ran them the same way
+# on 2026-09-18: baseline green over 183 requirements, all four caught,
+# .claude/hooks/ byte-identical after. Its settings.json mutations cannot be rows
+# here, the file being outside the copy; they were run by hand and are recorded
+# in #109's section of check-hooks.sh. No run has therefore exercised all
+# thirty-eight rows together, and saying which rows a measurement covered is the
+# whole point of recording one. A reader who wants "the whole registry, at this
+# commit" has to run it -- which is the answer #107 built rather than a gap, and is why the
 # sentence this replaced, claiming the only later edit was to this comment, was
 # worth catching. Bertan's two reviews of PR #147, and two merges of dev-05 into
 # it.
@@ -236,6 +242,10 @@ degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch:
 heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
+long-command-outlasts-the-bound%no-git-push.sh%/^CMDS=\$(printf/a [ "$(echo "$COMMAND" | wc -l)" -gt 100 ] && sleep 1.1%GH-109.1%caught
+forced-push-refusal-drops-the-remedy%no-git-push.sh%s/ Add a commit instead\.//%US-7 GH-109.2%caught
+decision-refusal-drops-what-stays-allowed%no-pr-decisions.sh%/^DECIDE=/s/ Opening a PR, commenting on it and editing it are allowed;//%US-7 GH-109.2%caught
+second-hook-refuses-a-permitted-read%alembic-via-uv-group.sh%/^CMDS=\$(printf/a echo "$CMDS" | grep -q '^gh pr view' && exit 2%GH-109.5%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS
