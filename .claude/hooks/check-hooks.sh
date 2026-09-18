@@ -8604,14 +8604,16 @@ SEEDS
 #  12 an option before the subcommand that consumes the next word (#118)
 #                                     option-eats-verb
 #
-# Three of those spellings are #141's, added because a `GH-` entry named the
+# Four of those spellings are #141's, added because a `GH-` entry named the
 # shape and the list did not have it -- which is the whole of what a
 # `variants: transformation:` value claims, and the derivation at the foot of
 # this section is what holds each to the list. `pre-timeout` is a prefix word
 # with an OPERAND of its own (CS_WRAP_OPERAND_WORDS, not the option words every
 # other `pre-*` here comes from) and `pre-nice-opt` a prefix word with a
 # SEPARATED OPTION VALUE, the two shapes GH-43.6 names that `pre-sudo` and
-# `env X=1` between them do not reach; `redirect-quoted` is the quoted redirect
+# `env X=1` between them do not reach; `global-flag-gitdir` is its third,
+# `git --git-dir` beside the `-C` that `global-flag` already covers, and it
+# departs by design on the two seeds it moves; `redirect-quoted` is the quoted redirect
 # target GH-50.3 records as a knowingly-taken shortfall, and it is a shortfall
 # of the push hook alone, which is a thing one row can now say of every seed
 # rather than of the one command #50's review happened to write.
@@ -9085,7 +9087,7 @@ done <<< "$INV_SEEDS"
 # table, and once by a reviewer of this branch who was asked to derive the set
 # independently and got the same twelve.
 req GH-106
-tok 'the seeds cover every requirement with a command spelling, in both directions' \
+tok 'the seeds cover every functional requirement (FR-) with a command spelling, in both directions' \
   'FR-14 ALLOW BLOCK;FR-15 ALLOW BLOCK;FR-16 ALLOW BLOCK;FR-17 ALLOW BLOCK;FR-18 ALLOW BLOCK;FR-19 ALLOW BLOCK;FR-20 ALLOW BLOCK;FR-21 ALLOW BLOCK;FR-3 ALLOW BLOCK;FR-38 ALLOW BLOCK;FR-4 ALLOW BLOCK;FR-48 ALLOW BLOCK;' \
   "$(printf '%s\n' "$INV_SEEDS" \
      | awk -F'|' 'NF >= 6 { n = split($4, t, " "); for (i = 1; i <= n; i++) if (t[i] ~ /^FR-/) print t[i], $3 }' \
@@ -9098,7 +9100,7 @@ tok 'the seeds cover every requirement with a command spelling, in both directio
 # The FR check above is a literal, and its own comment says what that cannot do:
 # the literal is the set someone chose, so an FR that names a command and was
 # never seeded is missing from both sides at once. For the `GH-` family that
-# blind spot was the whole family -- 60-odd entries, the ones written FROM
+# blind spot was the whole family -- 95 entries, the ones written FROM
 # defects rather than from the specification, and not one of them asked for.
 #
 # So the scope is derived off requirements.md instead. Each entry in it declares

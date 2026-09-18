@@ -1996,9 +1996,10 @@ and held to the same standard of saying only what it asks.
   permitting checks tagged with that entry, not with this one; what is left here
   is that the rule and the tables agree, which is read off them
 - note: the family the FR derivation could not see was the one written from
-  defects — 60-odd `GH-` entries against 49 FRs, and #140's four findings were all
-  on FR-seeded commands, which is evidence that the FR set is a reasonable start
-  and none at all that it is a sufficient one. Three of #141's additions are
+  defects — 95 `GH-` entries against 49 FRs (measured 2026-09-17), and #140's
+  four findings were all on FR-seeded commands, which is evidence that the FR
+  set is a reasonable start
+  and none at all that it is a sufficient one. Four of #141's additions are
   transformations rather than seeds, because an entry naming a rewriting of a
   command is not a command and seeding it would be a category error. What this
   rule cannot do, and what the literal in `check-hooks.sh` does and does not
