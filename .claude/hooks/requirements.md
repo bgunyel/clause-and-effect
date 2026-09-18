@@ -1504,13 +1504,24 @@ The suite fails on each of these, and `--matrix` shows the rest:
   command position, as they already are for the unwrapped command.
 - from: #134, found by #106's invariance families
 - kind: defect-permitting
-- status: gap → #134
-- note: `CS_WRAPPER_RE` is matched against raw text and so carries its own
+- status: active
+- note: `CS_WRAPPER_RE` is matched against raw text and so carried its own
   command-position class -- start of line and `;` `&` `|` `(` and a backtick --
-  where every other rule reads `cs_split`, which strips control words. The two
-  answers disagree, which is the defect class `lib/command-scan.sh` exists to
-  end. #106 pins the three control words it generates against its three wrapped
-  seeds.
+  where every other rule reads `cs_split`, which strips control words and cuts
+  on `)` as well. The two answers disagreed, which is the defect class
+  `lib/command-scan.sh` exists to end. The fix spells both lists once,
+  `CS_SEPARATORS` and `CS_CONTROL_WORDS`, and both halves read them; the suite
+  pins that as text and each list emptied as a withdrawal of `cs_split`. `in` is
+  deliberately not a control word: it introduces the words of a `for` or a
+  `case`, never a command, and `cs_split` has never stripped it. The widening
+  costs refusals in one shape, named and pinned: prose that puts a quote-blind
+  separator and then a control word or a `)` in front of a wrapper word, on a
+  line that carries a guarded command -- a regex alternation such as
+  `(ba|z)sh -c`, and a pull request comment quoting the shape this entry fixed,
+  among them. `function NAME { … }` is out of reach of both halves alike and is
+  #167, not this entry. #106's three `word-if`, `word-for` and
+  `word-brace` gap rows against its wrapped seeds are gone with it, and those
+  variants are ordinary checks at the seeds' verdicts.
 
 ### GH-135
 - text: A quoted group or subcommand word is the word it spells: `git "push" --all

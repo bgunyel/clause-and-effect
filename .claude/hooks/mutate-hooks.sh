@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- thirty-nine runs as the
-# registry stands, not forty, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- forty-one runs as the
+# registry stands, not forty-two, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -58,10 +58,16 @@
 # figure above was taken. #117 added five, and on the merge of dev-05 into it
 # (2026-09-18) the sixteen rows added since that measurement -- #117's, #108's,
 # #128's and #133's -- were run as one selection: baseline plus sixteen, all
-# caught, byte-identical after. The other twenty-three rows have not been run
-# since the files they run against changed. No run has therefore exercised all
-# thirty-nine rows together, and saying which rows a measurement covered is the
-# whole point of recording one. A reader who wants "the whole registry, at this commit" has to
+# caught, byte-identical after. #134 added `control-words-not-admitted-by-anchor`
+# and `close-paren-not-a-separator` and ran the pair before that merge, baseline
+# plus two, both caught with GH-134 red, byte-identical after; and again on the
+# merge of dev-05 into it (2026-09-18), with the same result. Both break a list that both
+# halves read since #134, so each breaks cs_split and the anchor together, and so
+# does `control-words-not-stripped` now; no row breaks one reader alone, which is
+# what the single spelling was for. The other rows have not been run since the
+# files they run against changed. No run has therefore exercised all forty-one
+# rows together, and saying which rows a measurement covered is the whole point
+# of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
 # sentence this replaced, claiming the only later edit was to this comment, was
 # worth catching. Bertan's two reviews of PR #147, and two merges of dev-05 into
@@ -211,6 +217,8 @@ MUTATIONS=$(cat <<'MUTATIONS'
 sudo-not-a-wrapper%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/sudo|//%FR-4 US-15 US-1 GH-79.1%caught
 nohup-not-a-wrapper%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%FR-4 US-15 GH-79.1%caught
 control-words-not-stripped%lib/command-scan.sh%s/\[{}!\]|if|then|elif|else|fi|while|until|for|do|done|case|esac|select|function|coproc/cs-matches-no-control-word/%FR-3 US-1 US-15%caught
+control-words-not-admitted-by-anchor%lib/command-scan.sh%s/|(\$CS_CONTROL_WORDS)\[\[:space:\]\]+|/|/%GH-134%caught
+close-paren-not-a-separator%lib/command-scan.sh%/^CS_SEPARATORS=/s/)//%GH-134%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught
