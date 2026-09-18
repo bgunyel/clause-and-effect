@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- thirty-four runs as the
-# registry stands, not thirty-five, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- thirty-seven runs as the
+# registry stands, not thirty-eight, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -55,7 +55,11 @@
 # `retarget-refusal-drops-the-create-comparison` and ran the pair the same way,
 # both caught, byte-identical after; it also edited no-pr-decisions.sh,
 # check-hooks.sh and this file, so three of the files that run changed after the
-# figure above was taken. No run has therefore exercised all thirty-four rows
+# figure above was taken. #136 added `option-attached-spelling-not-read` and
+# `option-unfinished-word-read` and ran the pair the same way, baseline plus
+# two, both caught, byte-identical after; review of that change added
+# `option-substitution-read`, run on its own the same way. No run has therefore
+# exercised all thirty-seven rows
 # together, and saying which rows a measurement covered is the whole point of
 # recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -129,12 +133,14 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   THIRTY-TWO real mutations, against SIX files in .claude/hooks/, naming
-#   FORTY requirement IDs between them, of the 158 whose status is active.
+#   THIRTY-FIVE real mutations, against SIX files in .claude/hooks/, naming
+#   FORTY-ONE requirement IDs between them, of the 161 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
-# They have now been wrong or moved five times in two days, and #148 is filed to
+# They have now been wrong or moved six times: the last of them read 158 when
+# 160 entries were active, and #136 found it so while moving the other three.
+# #148 is filed to
 # take them out and let `--list` be the only place they are written.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
@@ -236,6 +242,9 @@ degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch:
 heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
+option-attached-spelling-not-read%lib/command-scan.sh%s/w\[k\] == opt "=" val || //%GH-136%caught
+option-unfinished-word-read%lib/command-scan.sh%s/for (k = 1; k <= nw; k++) {/if (inword) finish(); for (k = 1; k <= nw; k++) {/%GH-136%caught
+option-substitution-read%lib/command-scan.sh%/# A substitution anywhere names nothing/,+1d%GH-136%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

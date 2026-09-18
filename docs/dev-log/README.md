@@ -463,3 +463,11 @@ thing in the record.
   field name or value (`-f ba"se"=main`, `-f state=clo"sed"`) is still permitted,
   here and on `dev-05`. It is filed as #163, to land after #130, and the claim is
   narrowed. `--input` on a retarget is added to #138. No verdict changed.
+
+- [2026-09-18 · dev-issue-136](devlog_2026-09-18_dev-issue-136.md) — the
+  uv-group hooks read the dependency group through one library helper,
+  `cs_names_option`, which reads shell words: `--group=test`, `--group "test"`
+  and `"--group" test` are permitted, and two shapes the old grep permitted —
+  a group inside another option's quoted value, and a group cut short by the
+  tool name — are refused. Review found a command substitution fooled the
+  helper (fixed; the hook-level shape is #117's) and filed `--no-group` as #168.

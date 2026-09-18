@@ -1484,11 +1484,25 @@ The suite fails on each of these, and `--matrix` shows the rest:
   invocation that `--group test` is, in both uv-group hooks.
 - from: #136, found by #106's invariance families
 - kind: defect-refusing
-- status: gap → #136
+- status: active
 - note: the hooks' own header argues a different quoting trade knowingly -- that a
   command name inside a quoted argument is treated as an invocation, so prose is
   refused -- and this is not that. `--group=test` is the shape the base rule
   already handles as `--base=main`, one file away.
+  Both directions are this entry. The spelling question is `cs_names_option` in
+  `lib/command-scan.sh`, which reads the head of the command as shell words, so
+  a different group -- `--group=testing`, `--group test-extra` -- is still
+  refused. Reading words rather than text also refused two shapes the grep it
+  replaced permitted, neither named in the issue: a `--group test` inside another
+  option's quoted value (`--with "--group test x"`), and a group whose name
+  begins with the tool's, which the cut at the tool name shortened to the group
+  (`--group testpytest pytest`). Those are this entry's refusing checks beside
+  the issue's own. #106's five gap rows for it became ordinary family checks.
+  The trade: `$'test'` and a variable for the value are refused, bash reading
+  both as something the helper does not resolve, and so is any head holding a
+  command substitution, whose quotes the helper cannot pair.
+  Not this entry: a group named and then disabled -- `--no-group test`, or
+  `UV_NO_GROUP` -- is permitted, before and after this fix. That is #168.
 
 ### GH-139
 - text: A quoted base flag is still a base flag where its absence would be permitted:

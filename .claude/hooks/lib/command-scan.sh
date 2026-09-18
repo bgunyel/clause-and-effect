@@ -184,8 +184,9 @@
 #     no-git-push.sh, no-commit-to-main.sh and no-work-on-stale-branch.sh call
 #     cs_normalise, cs_split and cs_git_args; no-pr-decisions.sh calls
 #     cs_normalise, cs_split, cs_gh_args and cs_join, and no cs_git_args at
-#     all; pytest-via-uv-group.sh and alembic-via-uv-group.sh call cs_normalise
-#     and cs_split and neither of the argument readers. Every one of them calls
+#     all; pytest-via-uv-group.sh and alembic-via-uv-group.sh call cs_normalise,
+#     cs_split and, since #136, cs_names_option, and neither of the argument
+#     readers. Every one of them calls
 #     cs_tool_input as well, and every Bash hook among them calls cs_within_cap
 #     (#96); append-only-docs.sh calls those two and nothing else, and
 #     append-only-docs-edit.sh only cs_tool_input. cs_within_cap calls cs_join,
@@ -1413,6 +1414,122 @@ cs_gh_args() {
       print line
       found = 1
       exit
+    }
+    END { exit(found ? 0 : 1) }'
+}
+
+# Succeed if the text on stdin names <option> with exactly <value>, in any
+# spelling bash and a GNU-style parser accept: `--group test`, `--group=test`,
+# and either with the flag or the value quoted or backslash-escaped. Fail
+# otherwise. Issue #136.
+#
+# The two uv-group hooks asked this with a grep each, one spelling only --
+# whitespace between flag and value, neither quoted -- so `--group=test`,
+# `--group "test"` and `"--group" test` were refused although uv runs every one
+# of them in the group. The base rule answers the same question for
+# `--base=main` in no-pr-decisions.sh, so it was one question answered in three
+# places, which is the habit the header of this file names. It is asked here
+# once for the two hooks that had it wrong. The base rule keeps its own reader:
+# it also reads `-Bmain` and `-dB main`, bundled short spellings gh takes and uv
+# does not, and moving it is a change to a boundary hook that #136 is not.
+#
+# How it reads. The text is cut into shell words the way bash cuts them --
+# unquoted blanks end a word, single quotes hold everything, double quotes take
+# a backslash only before $ ` " and \, an unquoted backslash takes the next
+# character -- and the quotes and escapes are removed. Then a word equal to
+# `<option>=<value>`, or a word equal to <option> with the next word equal to
+# <value>, is the option named. Equality and not a pattern, so `--group=testing`
+# and `--group test-extra` name a different group. Nothing expands a word here,
+# so a word bash would expand -- a $, a glob, a brace -- is compared as the
+# characters it holds, and is equal to a group name only if it is one. There is
+# no separate test for those; equality is what refuses them.
+#
+# Blank means space and tab, and not the wider class the tokend walkers use:
+# those are the characters bash splits a command line on, a newline apart, and
+# a line on stdin holds none. A \v or \r left inside a word makes it unequal to
+# any value, which is the refusing direction.
+#
+# A COMMAND SUBSTITUTION IS NOT READ AT ALL: a line holding `$(` or a backtick
+# anywhere names nothing. Quotes inside a substitution do not pair with the
+# ones around it, and this reader does not parse substitutions, so it pairs the
+# wrong ones -- `uv run "$(: " --group test ")"pytest` read `--group` and
+# `test` as finished words, where bash reads one word the substitution empties
+# and runs pytest with no group. Found by review of #136. Refusing the whole
+# head is the stopping rule cs_split takes for the same reason, and a sanctioned
+# invocation carries no substitution in front of the tool. A `$(` inside single
+# quotes is text and is refused anyway, which is the cost, and it is in the
+# refusing direction.
+#
+# What this does NOT decide is that command's verdict in the hooks. cs_split
+# cuts at the parens before this is asked, so the fragment naming pytest arrives
+# as `"pytest tests/` -- a quoted command word with no runner in front of it --
+# and the hook permits that for #117's reason, not this one. So the guard here
+# holds this function to its own contract, for a caller handed text cs_split
+# has not cut; the hook-level shape is #117's, and check-hooks.sh says so where
+# the #136 hook checks stand.
+#
+# ONLY A FINISHED WORD COUNTS, and that is what makes it safe to hand this a
+# cut. The hooks cut the command at the tool name and hand over what precedes
+# it, so the last word may be the front of a longer one -- `--group testpytest`
+# cut at `pytest` ends `--group test` -- or may sit inside a quote the cut left
+# open. A word is finished when an unquoted blank ends it, and nothing after
+# that blank can change it, so a finished word in the head of a command is the
+# word bash reads there. The grep this replaced took the end of its input for
+# the end of the value, and permitted the first of those. It also read inside
+# quotes, so `--with "--group test x"` named the group; a quoted span is one
+# word here and names nothing. Both are checks.
+#
+# THE TRADE, taken knowingly: ANSI-C quoting, `$'test'`, is read as a dollar
+# and a quoted word, which names nothing, so it is refused though bash reads it
+# as `test`. A variable standing for the value is refused the same way. Both
+# are the refusing direction, and the spelling each hook's refusal names needs
+# neither. No short form is guessed at either: uv has none for --group, and a
+# caller that wants one would have to ask for it by name.
+#
+# Every line of stdin is read, and it succeeds if any names the option. A
+# caller hands it one fragment, and which fragment to hand it is the scoping
+# question cs_gh_args documents -- the caller's to ask, not this function's.
+cs_names_option() {  # cs_names_option <option> <value> -- stdin: the head of one command
+  awk -v opt="$1" -v val="$2" '
+    # No apostrophe appears in these comments: the program is a single-quoted
+    # shell word, so one would end it.
+    #
+    # The word is grown a character at a time, which cs_split and cs_normalise
+    # stopped doing under #96 because it copies the word each time. It is kept
+    # here because what grows is one word and not a line: it is reset at every
+    # blank, and it runs over a line THE LINE CAP has already bounded.
+    function finish() { w[++nw] = cur; cur = ""; inword = 0 }
+    # A substitution anywhere names nothing. See the comment above.
+    index($0, "$(") > 0 || index($0, "`") > 0 { next }
+    {
+      line = $0
+      n = length(line)
+      nw = 0
+      cur = ""
+      inword = 0
+      q = ""
+      for (i = 1; i <= n; i++) {
+        c = substr(line, i, 1)
+        if (q == "\047") {
+          if (c == q) q = ""; else cur = cur c
+          continue
+        }
+        if (q == "\042") {
+          if (c == "\\" && i < n && index("$`\042\\", substr(line, i + 1, 1)) > 0) { i++; cur = cur substr(line, i, 1); continue }
+          if (c == q) q = ""; else cur = cur c
+          continue
+        }
+        if (c == " " || c == "\t") { if (inword) finish(); continue }
+        inword = 1
+        if (c == "\\") { if (i < n) { i++; cur = cur substr(line, i, 1) }; continue }
+        if (c == "\042" || c == "\047") { q = c; continue }
+        cur = cur c
+      }
+      # The word still open here is not finished, and is not read. See the
+      # comment above this function.
+      for (k = 1; k <= nw; k++) {
+        if (w[k] == opt "=" val || (w[k] == opt && k < nw && w[k + 1] == val)) { found = 1; exit }
+      }
     }
     END { exit(found ? 0 : 1) }'
 }

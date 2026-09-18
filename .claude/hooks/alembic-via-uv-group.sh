@@ -24,13 +24,15 @@
 # only honest way to keep them in step is to keep them identical.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
-# Both functions this file calls, not just the one that names the file's
-# subject. Testing cs_split alone left cs_normalise unguarded, and a library
+# Every function this file calls, not just the one that names the file's
+# subject; check-hooks.sh derives the call set and holds this list to it, so
+# the count is not written here. Testing cs_split alone left cs_normalise unguarded, and a library
 # missing only that one permitted a bare `alembic upgrade head` silently.
 if ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_normalise >/dev/null 2>&1 \
    || ! command -v cs_tool_input >/dev/null 2>&1 \
-   || ! command -v cs_within_cap >/dev/null 2>&1; then
+   || ! command -v cs_within_cap >/dev/null 2>&1 \
+   || ! command -v cs_names_option >/dev/null 2>&1; then
   echo "Blocked: alembic-via-uv-group.sh could not load lib/command-scan.sh, so it cannot tell an alembic invocation from a mention of one. Refusing rather than permitting." >&2
   exit 2
 fi
@@ -68,9 +70,9 @@ while IFS= read -r FRAGMENT; do
   fi
   echo "$FRAGMENT" | grep -qE "$UV_RUN" || continue
   # Everything before the name. The group has to be an argument of uv, not of
-  # alembic, and this is what tells the two apart.
-  if ! printf '%s' "${FRAGMENT%%alembic*}" \
-       | grep -qE -e '--group[[:space:]]+migrations([[:space:]]|$)'; then
+  # alembic, and this is what tells the two apart. Whether that names the group,
+  # in whichever spelling, is the library's question since #136.
+  if ! printf '%s' "${FRAGMENT%%alembic*}" | cs_names_option --group migrations; then
     echo "Blocked: uv run reaches alembic without the 'migrations' dependency group named first. CLAUDE.md pins Alembic to that group. Run it as: uv run --group migrations alembic <args>" >&2
     exit 2
   fi

@@ -69,15 +69,27 @@
 # the pair settles is the smaller question. `echo "pytest lives in the test
 # group"` on its own is untouched: its command word is echo, and no rule here
 # reaches it.
+#
+# Issue #136, which is not that trade. The group was asked for with a grep in
+# one spelling -- `--group test`, neither word quoted -- so `--group=test`,
+# `--group "test"` and `"--group" test` were refused, and each really does run
+# in the group. Refusing a sanctioned invocation is the opposite of what the
+# trade above buys. The same grep read inside quotes and took the end of the cut
+# for the end of the value, so `--with "--group test x"` and `--group
+# testpytest` were permitted. Whether an option is named with a value is
+# cs_names_option's question now, and alembic-via-uv-group.sh asks it the same
+# way.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
-# Both functions this file calls, not just the one that names the file's
-# subject. Testing cs_split alone left cs_normalise unguarded, and a library
+# Every function this file calls, not just the one that names the file's
+# subject; check-hooks.sh derives the call set and holds this list to it, so
+# the count is not written here. Testing cs_split alone left cs_normalise unguarded, and a library
 # missing only that one permitted a bare `pytest tests/` silently.
 if ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_normalise >/dev/null 2>&1 \
    || ! command -v cs_tool_input >/dev/null 2>&1 \
-   || ! command -v cs_within_cap >/dev/null 2>&1; then
+   || ! command -v cs_within_cap >/dev/null 2>&1 \
+   || ! command -v cs_names_option >/dev/null 2>&1; then
   echo "Blocked: pytest-via-uv-group.sh could not load lib/command-scan.sh, so it cannot tell a pytest invocation from a mention of one. Refusing rather than permitting." >&2
   exit 2
 fi
@@ -116,9 +128,9 @@ while IFS= read -r FRAGMENT; do
   fi
   echo "$FRAGMENT" | grep -qE "$UV_RUN" || continue
   # Everything before the name. The group has to be an argument of uv, not of
-  # pytest, and this is what tells the two apart.
-  if ! printf '%s' "${FRAGMENT%%pytest*}" \
-       | grep -qE -e '--group[[:space:]]+test([[:space:]]|$)'; then
+  # pytest, and this is what tells the two apart. Whether that names the group,
+  # in whichever spelling, is the library's question since #136.
+  if ! printf '%s' "${FRAGMENT%%pytest*}" | cs_names_option --group test; then
     echo "Blocked: uv run reaches pytest without the 'test' dependency group named first. CLAUDE.md runs tests through that group. Use: make test, or uv run --group test pytest tests/<file>::<test>" >&2
     exit 2
   fi

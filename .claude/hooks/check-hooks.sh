@@ -1214,6 +1214,74 @@ else
   tok 'a pr create is not a gh api call' 'not found' 'not found'
 fi
 
+section "=== issue #136: an option named with a value, in any of its spellings ==="
+# The two uv-group hooks asked whether `--group test` stood in front of the tool
+# with one grep each, in one spelling -- whitespace between flag and value, and
+# neither quoted -- so `--group=test`, `--group "test"` and `"--group" test`
+# were refused although uv and bash run every one of them in the group. The
+# question is the one the base rule already answers for `--base=main`, and it is
+# asked here once, of the library, rather than a third and fourth time in the
+# hooks. Each input below is what a hook hands the helper: the fragment cut at
+# the tool name, so it ends where the name began and carries no newline.
+req GH-136
+option_named() {  # option_named <text> <option> <value> -- `named` or `not named`
+  if printf '%s' "$1" | cs_names_option "$2" "$3"; then
+    printf 'named'
+  else
+    printf 'not named'
+  fi
+}
+tok 'option, flag and value separated'         'named' "$(option_named 'uv run --group test ' --group test)"
+tok 'option, value attached with ='            'named' "$(option_named 'uv run --group=test ' --group test)"
+tok 'option, value in double quotes'           'named' "$(option_named 'uv run --group "test" ' --group test)"
+tok 'option, value in single quotes'           'named' "$(option_named $'uv run --group \'test\' ' --group test)"
+tok 'option, flag in double quotes'            'named' "$(option_named 'uv run "--group" test ' --group test)"
+tok 'option, flag in single quotes'            'named' "$(option_named $'uv run \'--group\' test ' --group test)"
+tok 'option, attached spelling quoted whole'   'named' "$(option_named 'uv run "--group=test" ' --group test)"
+tok 'option, attached value quoted'            'named' "$(option_named 'uv run --group="test" ' --group test)"
+tok 'option, flag behind a backslash'          'named' "$(option_named 'uv run \--group test ' --group test)"
+tok 'option, value behind a backslash'         'named' "$(option_named 'uv run --group \test ' --group test)"
+tok 'option, a quote closing mid-word'         'named' "$(option_named 'uv run --group te"st" ' --group test)"
+tok 'option, the second of two groups'         'named' "$(option_named 'uv run --group dev --group test ' --group test)"
+# The permitting direction, which is where widening the spellings costs
+# something. A different group is a different group however it is spelled.
+tok 'option, a longer group, attached'         'not named' "$(option_named 'uv run --group=testing ' --group test)"
+tok 'option, a longer group, separated'        'not named' "$(option_named 'uv run --group testing ' --group test)"
+tok 'option, a hyphenated group'               'not named' "$(option_named 'uv run --group test-extra ' --group test)"
+tok 'option, another group'                    'not named' "$(option_named 'uv run --group dev ' --group test)"
+tok 'option, a flag that only begins with it'  'not named' "$(option_named 'uv run --groups test ' --group test)"
+tok 'option, a value that never arrives'       'not named' "$(option_named 'uv run --group ' --group test)"
+tok 'option, not named at all'                 'not named' "$(option_named 'uv run ' --group test)"
+# A word is a word only once whitespace outside quotes has ended it. The hook
+# cuts at the tool name, so the last word it hands over may be a prefix of a
+# longer one -- `--group testpytest` cut at `pytest` is `--group test` -- or
+# may sit inside a quote the cut left open. Neither is a word bash would read
+# as `test`, and the grep this replaced took the first of them for one.
+tok 'option, the cut ends inside the value'    'not named' "$(option_named 'uv run --group test' --group test)"
+tok 'option, the cut ends inside a quote'      'not named' "$(option_named 'uv run --group "test ' --group test)"
+tok 'option, a finished value before a quote'  'named'     "$(option_named 'uv run --group test "' --group test)"
+# Quoted text is one word, so a flag named inside another option's quoted value
+# is that value and not a flag. The grep this replaced read inside quotes.
+tok 'option, named inside a quoted value'      'not named' "$(option_named 'uv run --with "--group test x" ' --group test)"
+# A shell expansion is not resolved, so it names no group -- the refusing
+# direction, and the spellings the hook's refusal names do not need one.
+tok 'option, a variable for the value'         'not named' "$(option_named 'uv run --group "$G" ' --group test)"
+tok 'option, ANSI-C quoting is not read'       'not named' "$(option_named $'uv run --group $\'test\' ' --group test)"
+# A command substitution can hold quotes of its own, and a quote inside one
+# does not close the quote around it -- so a reader that does not parse the
+# substitution pairs the wrong quotes and reads text as words. Found by review
+# of this change: `"$(: " --group test ")"` read `--group` and `test` as two
+# finished words, where bash reads one word the substitution empties. The head
+# of a command holding one is not read at all; a backtick is the same thing.
+tok 'option, a substitution pairing quotes'    'not named' "$(option_named 'uv run "$(: " --group test ")"' --group test)"
+tok 'option, a substitution anywhere in front' 'not named' "$(option_named 'uv run --with "$(echo x)" --group test ' --group test)"
+tok 'option, a backtick anywhere in front'     'not named' "$(option_named 'uv run --with `echo x` --group test ' --group test)"
+tok 'option, a dollar that opens nothing'      'named'     "$(option_named 'uv run --with $X --group test ' --group test)"
+# uv has no short form of --group, and the helper names no spelling the caller
+# did not ask for.
+tok 'option, no short form is invented'        'not named' "$(option_named 'uv run -g test ' --group test)"
+tok 'option, the other hook asks its own group' 'named'    "$(option_named 'uv run --group=migrations ' --group migrations)"
+
 section "=== REGRESSION: PR #35, only the first push on a line was validated ==="
 # The scope found the first push, validated its arguments, and stopped. So a
 # legitimate push carried an illegitimate one after ; or && on its coat-tails.
@@ -4410,6 +4478,91 @@ check pytest-via-uv-group.sh BLOCK 'the group as an argument of pytest' \
 check alembic-via-uv-group.sh BLOCK 'the group as an argument of alembic' \
   'uv run alembic upgrade head --group migrations'
 
+section "=== REGRESSION: #136, the group was matched in one spelling ==="
+# Each hook asked for `--group test` with a grep of its own -- whitespace
+# between flag and value, neither quoted -- so every other spelling uv and bash
+# accept was refused. Measured at dev-05 33f7129, where the hooks are those of
+# the issue's 8b1cbaf: the first ten ALLOWs below were BLOCK. The question is
+# lib/command-scan.sh's now, asked through cs_names_option, whose own checks
+# are in the tokeniser section.
+req GH-136
+check pytest-via-uv-group.sh ALLOW 'the group attached with =' \
+  'uv run --group=test pytest tests/'
+check pytest-via-uv-group.sh ALLOW 'the group value in double quotes' \
+  'uv run --group "test" pytest tests/'
+check pytest-via-uv-group.sh ALLOW 'the group value in single quotes' \
+  "uv run --group 'test' pytest tests/"
+check pytest-via-uv-group.sh ALLOW 'the group flag in double quotes' \
+  'uv run "--group" test pytest tests/'
+check pytest-via-uv-group.sh ALLOW 'the group flag in single quotes' \
+  "uv run '--group' test pytest tests/"
+check alembic-via-uv-group.sh ALLOW 'the group attached with =' \
+  'uv run --group=migrations alembic upgrade head'
+check alembic-via-uv-group.sh ALLOW 'the group value in double quotes' \
+  'uv run --group "migrations" alembic upgrade head'
+check alembic-via-uv-group.sh ALLOW 'the group value in single quotes' \
+  "uv run --group 'migrations' alembic upgrade head"
+check alembic-via-uv-group.sh ALLOW 'the group flag in double quotes' \
+  'uv run "--group" migrations alembic upgrade head'
+check alembic-via-uv-group.sh ALLOW 'the group flag in single quotes' \
+  "uv run '--group' migrations alembic upgrade head"
+# Two that were ALLOW already, by the grep finding `--group test` inside the
+# longer text, and that the helper reaches by reading them rather than by
+# accident. The second is the one that could regress: the cut at the name
+# leaves the tool's opening quote behind, and a word the cut leaves open is not
+# counted -- so this says a finished value in front of it still is.
+check pytest-via-uv-group.sh ALLOW 'the group flag behind a backslash' \
+  'uv run \--group test pytest tests/'
+check alembic-via-uv-group.sh ALLOW 'the group flag behind a backslash' \
+  'uv run \--group migrations alembic upgrade head'
+check pytest-via-uv-group.sh ALLOW 'a plain group before a quoted tool name' \
+  'uv run --group test "pytest" tests/'
+check alembic-via-uv-group.sh ALLOW 'a plain group before a quoted tool name' \
+  'uv run --group migrations "alembic" upgrade head'
+# The permitting direction, which is where widening what counts as naming the
+# group costs something. Each was BLOCK at 33f7129 and stays BLOCK.
+check pytest-via-uv-group.sh BLOCK 'a longer group, attached' \
+  'uv run --group=testing pytest tests/'
+check pytest-via-uv-group.sh BLOCK 'a longer group, separated' \
+  'uv run --group testing pytest tests/'
+check pytest-via-uv-group.sh BLOCK 'a hyphenated group' \
+  'uv run --group test-extra pytest tests/'
+check pytest-via-uv-group.sh BLOCK 'the attached group as an argument of pytest' \
+  'uv run pytest --group=test'
+check pytest-via-uv-group.sh BLOCK 'bare pytest, whatever the group spellings' \
+  'pytest tests/'
+check alembic-via-uv-group.sh BLOCK 'a longer group, attached' \
+  'uv run --group=migrations-old alembic upgrade head'
+check alembic-via-uv-group.sh BLOCK 'a longer group, separated' \
+  'uv run --group migrationsx alembic upgrade head'
+check alembic-via-uv-group.sh BLOCK 'the attached group as an argument of alembic' \
+  'uv run alembic upgrade head --group=migrations'
+check alembic-via-uv-group.sh BLOCK 'bare alembic, whatever the group spellings' \
+  'alembic upgrade head'
+# Two shapes the grep this replaced PERMITTED, found while writing the helper
+# and not named in the issue. It read raw text, so a `--group test` inside
+# another option's quoted value named the group whenever a blank followed the
+# value inside the quotes; and it took the end of the prefix for the end of the
+# value, so a group whose name begins with the tool's -- cut at the name --
+# read as the group. All three were ALLOW at 33f7129, and none runs the tool in
+# its group. The same quoted value with the quote straight after `test` was
+# BLOCK there, by the character that followed it, which is the intermittency
+# #69 was filed about one rule further in.
+check pytest-via-uv-group.sh BLOCK 'the group named inside a quoted value (was ALLOW)' \
+  'uv run --with "--group test x" pytest tests/'
+check pytest-via-uv-group.sh BLOCK 'a group cut short by the tool name (was ALLOW)' \
+  'uv run --group testpytest pytest tests/'
+check alembic-via-uv-group.sh BLOCK 'the group named inside a quoted value (was ALLOW)' \
+  'uv run --with "--group migrations x" alembic upgrade head'
+# NOT A CHECK HERE, and why. Review of this change found `uv run "$(: "
+# --group test ")"pytest tests/` permitted, and bash runs it with no group. The
+# helper read that head wrongly and is fixed -- see its checks in the tokeniser
+# section -- but that is not why the hook permits it. cs_split cuts at the
+# parens, so the fragment naming pytest is `"pytest tests/`: a quoted command
+# word with no runner in front of it, which no rule here reads. That is #117's
+# `word-dquoted` gap, already pinned in #106's departure table, and it flips
+# when #117 lands. A BLOCK written here would be a check of #117 tagged #136.
+
 section "=== REGRESSION: review of #69, the intermittency survived inside the rule ==="
 req GH-69.1
 # The same quote-versus-space split the migration was supposed to end, one rule
@@ -7039,8 +7192,9 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
 # One call per pair the contract names, which is the required list of each hook. The
 # sets differ, and that difference is the reason the guards cannot share a list:
 # four want cs_git_args, no-pr-decisions.sh wants cs_gh_args and cs_join instead,
-# and the two convention hooks want neither. Since #96 every one of them wants
-# cs_within_cap, and append-only-docs.sh wants nothing else.
+# and the two convention hooks want neither -- since #136 they want
+# cs_names_option. Since #96 every one of them wants cs_within_cap, and
+# append-only-docs.sh wants nothing else.
 mk_halflib no-git-push.sh cs_normalise
 mk_halflib no-git-push.sh cs_split
 mk_halflib no-git-push.sh cs_git_args
@@ -7056,8 +7210,10 @@ mk_halflib no-work-on-stale-branch.sh cs_split
 mk_halflib no-work-on-stale-branch.sh cs_git_args
 mk_halflib pytest-via-uv-group.sh cs_normalise
 mk_halflib pytest-via-uv-group.sh cs_split
+mk_halflib pytest-via-uv-group.sh cs_names_option
 mk_halflib alembic-via-uv-group.sh cs_normalise
 mk_halflib alembic-via-uv-group.sh cs_split
+mk_halflib alembic-via-uv-group.sh cs_names_option
 # The input reader, which every consumer calls since #95 and two call alone.
 for hook in $LIB_CONSUMERS; do
   mk_halflib "$hook" cs_tool_input
@@ -7228,6 +7384,10 @@ check_in "$ON_DEV" "$(halflib_path pytest-via-uv-group.sh cs_split)" BLOCK \
   'a library missing only cs_split, pytest-via-uv-group.sh' 'ls'
 check_in "$ON_DEV" "$(halflib_path pytest-via-uv-group.sh cs_within_cap)" BLOCK \
   'a library missing only cs_within_cap, pytest-via-uv-group.sh' 'ls'
+# #136 added cs_names_option to each. `ls` names no pytest, so the helper is
+# never reached and nothing but the guard can refuse it.
+check_in "$ON_DEV" "$(halflib_path pytest-via-uv-group.sh cs_names_option)" BLOCK \
+  'a library missing only cs_names_option, pytest-via-uv-group.sh' 'ls'
 says "$ON_DEV" "$(nolib_path pytest-via-uv-group.sh)" 'pytest-via-uv-group.sh could not load' \
   'the refusal names this hook and not its companion' 'ls'
 says "$ON_DEV" "$(nolib_path pytest-via-uv-group.sh)" 'Refusing rather than permitting' \
@@ -7242,6 +7402,8 @@ check_in "$ON_DEV" "$(halflib_path alembic-via-uv-group.sh cs_split)" BLOCK \
   'a library missing only cs_split, alembic-via-uv-group.sh' 'ls'
 check_in "$ON_DEV" "$(halflib_path alembic-via-uv-group.sh cs_within_cap)" BLOCK \
   'a library missing only cs_within_cap, alembic-via-uv-group.sh' 'ls'
+check_in "$ON_DEV" "$(halflib_path alembic-via-uv-group.sh cs_names_option)" BLOCK \
+  'a library missing only cs_names_option, alembic-via-uv-group.sh' 'ls'
 says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'alembic-via-uv-group.sh could not load' \
   'the refusal names this hook and not its companion' 'ls'
 says "$ON_DEV" "$(nolib_path alembic-via-uv-group.sh)" 'Refusing rather than permitting' \
@@ -9322,11 +9484,6 @@ push-all push-main push-force push-from-main-checkout commit-main commit-stale a
 push-all push-main push-force push-from-main-checkout commit-main commit-stale api-rest-main release-create pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-single-2|ALLOW|gap|GH-135|the group word in single quotes
 pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-double-3|ALLOW|gap|GH-135|the subcommand verb in double quotes
 pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-single-3|ALLOW|gap|GH-135|the subcommand verb in single quotes
-pytest-uv alembic-uv|flag-attached|BLOCK|gap|GH-136|the dependency group named with an attached value
-pytest-uv alembic-uv|quote-double-3|BLOCK|gap|GH-136|the group flag in double quotes
-pytest-uv alembic-uv|quote-single-3|BLOCK|gap|GH-136|the group flag in single quotes
-pytest-uv alembic-uv|quote-double-4|BLOCK|gap|GH-136|the group value in double quotes
-pytest-uv alembic-uv|quote-single-4|BLOCK|gap|GH-136|the group value in single quotes
 pr-retarget pr-web-main|quote-double-5|ALLOW|gap|GH-139|the base flag in double quotes, on an arm where naming no base is permitted
 pr-retarget pr-web-main|quote-single-5|ALLOW|gap|GH-139|the base flag in single quotes, on an arm where naming no base is permitted
 EX
@@ -9860,7 +10017,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '34' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '37' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -9923,7 +10080,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '32' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '35' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -10589,7 +10746,7 @@ GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117:gap GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139:gap              
+GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136 GH-139:gap              
 GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
 GH-108.8:static GH-108.9:static GH-108.10:static GH-128   
