@@ -361,3 +361,8 @@ thing in the record.
   where they meant occurrences. 54 checks, 25 red under four reverts. There is no
   session 4 on this branch — see the entry's first section.
 
+- [2026-09-18 · session 1](devlog_2026-09-18_session-1.md) — the follow-up review
+  of #153: `[[:space:]=]*` closes the separator, not the field. Quoting inside a
+  field name or value (`-f ba"se"=main`, `-f state=clo"sed"`) is still permitted,
+  here and on `dev-05`. It is filed as #163, to land after #130, and the claim is
+  narrowed. `--input` on a retarget is added to #138. No verdict changed.

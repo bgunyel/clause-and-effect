@@ -414,7 +414,8 @@ VERDICT='(^|[[:space:]])(--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[
 # All three are pinned under REGRESSION: #72 in check-hooks.sh.
 GH_SURFACE_ANYWHERE='(^|[^-A-Za-z0-9_])gh[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
 
-# A pull request's state, in every spelling of the quoting around the value.
+# A pull request's state, in every spelling of the quoting AROUND the value --
+# not inside the name or the value, which is #163.
 # Two rules read it -- the wrapper arm below and the gh api write block near the
 # foot of this file -- and the pattern is written ONCE because it was written
 # twice: two copies of `"?(closed|open)"?`, each admitting a double quote and
@@ -470,6 +471,15 @@ STATE_FIELD_RE='state[[:space:]]*[=:][[:space:]]*["'"'"']?(closed|open)["'"'"']?
 #    `-f='base=x'` are one request. The anchor that answers 1 is untouched:
 #    `--field=database=x` still begins `d` after the separator, and a `base`
 #    reached through no flag at all is still not a base.
+#
+#    That is a closure of the SEPARATOR, not of the field, and an earlier
+#    wording of this item claimed the second. Quoting and escaping INSIDE the
+#    name or value -- `-f ba"se"=main`, `-f base\=main`, `-f \base=main` -- is
+#    still unread, and on a retarget still permitted; so are `st"ate"=closed`
+#    and `state=clo"sed"` in STATE_FIELD_RE above. Found by the follow-up
+#    review of PR #153. A fifth regex guess is the wrong answer: the fix is to
+#    dequote each argument before reading it, and the state half of that
+#    stands on #130's per-command move. #163.
 #
 # WHICH WAY AN UNREAD SPELLING FAILS, and it is not one way. The first version
 # of this comment said a spelling this rule cannot read is only ever a permitted

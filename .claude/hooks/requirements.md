@@ -1565,7 +1565,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
   bare, double-quoted or single-quoted, and with a quote round the whole field
   between the flag and the name — and does so at both of its call sites, the
   `WRAPTEXT` arm and the `gh api` write block. The pattern is written once and
-  both read it.
+  both read it. Quoting INSIDE the name or the value (`st"ate"=closed`,
+  `state=clo"sed"`, `state\=closed`) is not this requirement's, and is #163.
 - from: #137, found while grilling the fix design for #130
 - kind: defect-permitting
 - status: active
@@ -1601,7 +1602,10 @@ The suite fails on each of these, and `--matrix` shows the rest:
   Not only a refusing defect, in either half: the no-base arm it falls into is
   keyed on the collection endpoint, so an unread base on `PATCH /pulls/N` — a
   retarget — is matched by nothing and permitted. The issue's table names neither
-  the retarget nor the separator.
+  the retarget nor the separator. The closure is of the separator and not of the
+  field: quoting inside the name or the value (`-f ba"se"=main`, `-f base\=main`)
+  is still unread and on a retarget still permitted, found by the follow-up review
+  of PR #153 and carried by #163.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -1845,6 +1849,9 @@ it has no entry above (Q16).
   of GH-137.2, which that entry carries, and corrected three claims in this
   change — the flag pairing, the safety property `rest_bases`' comment asserted,
   and two static checks that counted lines where they meant occurrences
+- #163: the in-word half of the quoting GH-137.1 and GH-137.2 read round a field,
+  found by the follow-up review of #153; it adds its requirements in the pull
+  request that fixes it, after #130, rather than pinning today's verdicts
 - #141: the issue that owns deciding which non-FR requirements the invariance
   families seed; it adds no requirement of its own until that is decided
 - #107: has entries above, GH-107.1 and GH-107.2, and is listed here only because
