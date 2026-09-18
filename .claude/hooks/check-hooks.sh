@@ -9100,8 +9100,9 @@ tok 'the seeds cover every functional requirement (FR-) with a command spelling,
 # The FR check above is a literal, and its own comment says what that cannot do:
 # the literal is the set someone chose, so an FR that names a command and was
 # never seeded is missing from both sides at once. For the `GH-` family that
-# blind spot was the whole family -- 95 entries, the ones written FROM
-# defects rather than from the specification, and not one of them asked for.
+# blind spot was the whole family -- 95 entries when measured on 2026-09-17,
+# the ones written FROM defects rather than from the specification, and not
+# one of them asked for.
 #
 # So the scope is derived off requirements.md instead. Each entry in it declares
 # what the families do with it, and these three checks hold that declaration to

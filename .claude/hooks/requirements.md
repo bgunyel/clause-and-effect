@@ -1998,14 +1998,13 @@ and held to the same standard of saying only what it asks.
 - note: the family the FR derivation could not see was the one written from
   defects — 95 `GH-` entries against 49 FRs (measured 2026-09-17), and #140's
   four findings were all on FR-seeded commands, which is evidence that the FR
-  set is a reasonable start
-  and none at all that it is a sufficient one. Four of #141's additions are
-  transformations rather than seeds, because an entry naming a rewriting of a
-  command is not a command and seeding it would be a category error. What this
-  rule cannot do, and what the literal in `check-hooks.sh` does and does not
-  close, are argued under *The trade, taken knowingly* and are not restated
-  here — that trade was written out in three places on this branch before review
-  counted them.
+  set is a reasonable start and none at all that it is a sufficient one. Four
+  of #141's additions are transformations rather than seeds, because an entry
+  naming a rewriting of a command is not a command and seeding it would be a
+  category error. What this rule cannot do, and what the literal in
+  `check-hooks.sh` does and does not close, are argued under *The trade, taken
+  knowingly* and are not restated here — that trade was written out in three
+  places on this branch before review counted them.
 
 ## Provenance: the acceptance criteria of #37–#41
 
