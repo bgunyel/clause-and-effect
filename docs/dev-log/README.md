@@ -424,3 +424,37 @@ thing in the record.
   suite of 3659, against 34 rows and 4100 results after the second merge. That
   the ordinal is decided by merge order, and is knowable only afterwards, is
   #157.
+
+- [2026-09-17 · session 7](devlog_2026-09-17_session-7.md) — #137: the `state`
+  and `base` readers in `no-pr-decisions.sh` each knew one quote spelling of
+  their own field, and the gap ran in opposite directions because the two rules
+  are triggered oppositely. A single-quoted `state` closed a pull request through
+  `gh api`; a quote before `base` refused a create into the one permitted branch,
+  and — unnamed in the issue — permitted a retarget to `main`. The state pattern
+  is now written once and read by both its call sites; `rest_bases` records the
+  third answer to where a field begins. 41 checks, 18 of which go red under three
+  separate reverts, and each of the other 23 declared beside it as contrast,
+  arming or property rather than left to read as evidence it is not.
+  **Numbered 7 rather than 2.** It was written as session 2 and collided on
+  merge with #143's entry of that name; `dev-05` had taken sessions 2–6 by then.
+  The rename changed its title line and nothing else, so every count inside it
+  is the one that stood at its first commit.
+
+- [2026-09-17 · session 8](devlog_2026-09-17_session-8.md) — Bertan's review of
+  PR #153 finds the fix for #137 closed the quote and never asked about the
+  separator: pflag takes `--field=value` and `-f=value`, so four flag spellings
+  of a base — six, counting the quoted pair the review did not list — reached
+  GitHub unread, and on `PATCH /pulls/N` that is a retarget onto `main`,
+  permitted. The comment added with the first fix asserted this could not happen.
+  Also: the flag pairing named backwards, and two static checks counting lines
+  where they meant occurrences. 54 checks, 25 red under four reverts.
+  **Numbered 8 rather than 5.** It was written as session 5 and collided on
+  merge with #128's entry of that name. Its own "On the numbering" section,
+  which says the session-2 entry becomes session 4, predates the second merge
+  and is wrong; the title line is the only thing the rename changed.
+
+- [2026-09-18 · session 1](devlog_2026-09-18_session-1.md) — the follow-up review
+  of #153: `[[:space:]=]*` closes the separator, not the field. Quoting inside a
+  field name or value (`-f ba"se"=main`, `-f state=clo"sed"`) is still permitted,
+  here and on `dev-05`. It is filed as #163, to land after #130, and the claim is
+  narrowed. `--input` on a retarget is added to #138. No verdict changed.
