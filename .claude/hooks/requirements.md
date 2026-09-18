@@ -1783,7 +1783,11 @@ The suite fails on each of these, and `--matrix` shows the rest:
   the host's where there is one, and otherwise a stub the suite synthesises, which
   refuses and names itself if anything ever runs it. `git` is never stubbed --
   the suite runs `git` throughout, so a farm with no `git` is a machine this suite
-  cannot run on rather than a gap to synthesise over.
+  cannot run on rather than a gap to synthesise over. Nothing in this suite ever
+  runs the farm's `gh`: report-stale-branches.sh is the only hook that calls `gh`
+  at all, and of the four PATHs it is driven under, none both carries a `gh` of
+  the farm's and reaches the call -- the farm minus `git` carries one and stops at
+  the `command -v git` guard standing above the first.
 - from: #155
 - kind: doc-claim
 - status: active
@@ -1806,8 +1810,17 @@ The suite fails on each of these, and `--matrix` shows the rest:
   saying so is the point of writing it down: GH-108.6's `gh`-less fixture held no
   `gh` on either kind of host, so the row would have been caught before this
   change as well. It is a mutation GH-108.6 had none of, and it is the nearest
-  the harness can come. The fixture rule itself is hand-mutated -- four cases,
-  three caught and one a recorded survivor -- in the commit that added it.
+  the harness can come to the fixture rule. What it does hold of this entry is
+  the second half: the ordering the stub rests on, registered answering the
+  review of PR #161. `report-reads-gh-before-git` puts a `gh` call above
+  report-stale-branches.sh's `command -v git` guard, and the check that reads a
+  marker FILE rather than a message -- that file's own `gh api` redirects stderr
+  away, so a stub announcing itself would be silenced by the line being caught --
+  goes red. That row IS evidence about what #155 changed: nothing was watching
+  the ordering before it, and the comment which asserted the farm's `gh` was
+  never run gave the wrong reason and was found wrong by review rather than by a
+  check. The fixture rule itself is hand-mutated -- four cases, three caught and
+  one a recorded survivor -- in the commit that added it.
 
 ## Provenance: the acceptance criteria of #37–#41
 

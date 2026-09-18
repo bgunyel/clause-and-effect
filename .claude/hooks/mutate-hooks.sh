@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- thirty runs as the registry
-# stands, not thirty-one, because the row whose edit matches nothing never
+# applies, at about two minutes, plus the baseline -- thirty-one runs as the registry
+# stands, not thirty-two, because the row whose edit matches nothing never
 # reaches one. Measured twice on 2026-09-17, on this machine and on registries
 # one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs. The figure
 # above is those rates carried to the current count and not a third measurement;
@@ -48,7 +48,7 @@
 # same day -- baseline plus six, all caught, byte-identical after -- and not as
 # part of a whole-registry run. #155's row was run the same way and on the same
 # day: baseline plus one, caught, red in GH-108.6 and in nothing else, and
-# byte-identical after. So no run has yet exercised all thirty together. Saying
+# byte-identical after. So no run has yet exercised all thirty-one together. Saying
 # which rows a measurement covered is the whole point of recording one. No
 # per-mutation counts are recorded here on purpose -- a count in a comment is the
 # thing #107 was filed about, and the registry is re-runnable instead.
@@ -105,8 +105,8 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   TWENTY-EIGHT real mutations, against SIX files in .claude/hooks/, naming
-#   THIRTY-NINE requirement IDs between them, of the 157 whose status is active.
+#   TWENTY-NINE real mutations, against SIX files in .claude/hooks/, naming
+#   FORTY requirement IDs between them, of the 157 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
@@ -208,6 +208,7 @@ hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%cau
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught
 degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch: FAILED or timed out after /d%GH-108.10%caught
 pr-hook-reads-gh-off-the-environment%no-pr-decisions.sh%s#^if gh_rule 'pr merge'; then$#command -v gh >/dev/null 2>\&1 || exit 0\nif gh_rule 'pr merge'; then#%GH-108.6%caught
+report-reads-gh-before-git%report-stale-branches.sh%s#^if ! command -v git >/dev/null 2>&1; then$#gh --version >/dev/null 2>\&1\nif ! command -v git >/dev/null 2>\&1; then#%GH-155.1%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS
