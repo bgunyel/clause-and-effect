@@ -1214,6 +1214,93 @@ else
   tok 'a pr create is not a gh api call' 'not found' 'not found'
 fi
 
+# THE COMMAND WORD ITSELF, issue #117. Every rule in every hook recognises a
+# command by the bare name at the head of what cs_split emits -- `^git`, `^gh`,
+# `^pytest`, `^alembic`, `^uv` -- and bash runs the same program when that name
+# is spelled as a path, in quotes or behind a backslash. All five spellings of
+# all seven refused shapes in #117's table were ALLOW. In six hooks of seven and
+# not in every one: the issue says so of `no-work-on-stale-branch.sh` -- "was not
+# measured, since it needs a stale-branch fixture" -- and the count is written
+# out here because the sentence that said "every hook" was the #84 shape in
+# miniature, a claim one hook wider than the measurement behind it. That hook
+# reads its git commands through the same `^git` anchor, so the defect was there
+# too; it is checked in its own section, beside the fixture it needs.
+#
+# Answered here and in no second place, which is what the issue means by "one
+# place": the anchors stay exactly as they are, and every consumer of cs_split
+# gets the fix without knowing it happened. The rule is the word's BASENAME
+# AFTER UNQUOTING AND UNESCAPING, so a program of another name keeps it -- #72
+# decided that `my-gh` is not `gh`, and the permitting rows below hold that
+# decision against this change.
+#
+# It is checked here rather than only through the hooks because a check through
+# a hook cannot tell this transformation from the anchor being widened, and a
+# widened anchor is how `my-gh` would quietly become `gh`.
+req GH-117
+tok 'the command word as an absolute path' \
+    'git push --all origin' \
+    "$(printf '/usr/bin/git push --all origin\n' | cs_split)"
+tok 'the command word as a relative path' \
+    'gh pr merge 5' \
+    "$(printf './gh pr merge 5\n' | cs_split)"
+tok 'the command word as a path under the home directory' \
+    'gh pr merge 5' \
+    "$(printf '~/bin/gh pr merge 5\n' | cs_split)"
+tok 'the command word in double quotes' \
+    'git push origin main' \
+    "$(printf '"git" push origin main\n' | cs_split)"
+tok 'the command word in single quotes' \
+    'git push origin main' \
+    "$(printf "'git' push origin main\n" | cs_split)"
+tok 'the command word behind a backslash' \
+    'git push origin main' \
+    "$(printf '\\git push origin main\n' | cs_split)"
+# Quoting part of a word is the same word to bash, and the spellings compose:
+# a quoted span inside a path, and a path whose own name is quoted.
+tok 'a quote inside the command word' \
+    'gh pr merge 5' \
+    "$(printf 'g"h" pr merge 5\n' | cs_split)"
+tok 'a quoted name at the end of a path' \
+    'gh pr merge 5' \
+    "$(printf '/usr/bin/"gh" pr merge 5\n' | cs_split)"
+# The permitting direction, and the half that makes the rows above evidence.
+# A basename is not a substring match: three of these four have a guarded name
+# inside them and none of them IS that name.
+tok 'a program whose name merely ends in the guarded one' \
+    'my-gh pr merge 5' \
+    "$(printf 'my-gh pr merge 5\n' | cs_split)"
+tok 'a program whose name merely ends in the guarded one, underscored' \
+    'my_gh pr merge 5' \
+    "$(printf 'my_gh pr merge 5\n' | cs_split)"
+tok 'a directory named for the command is not the command' \
+    'ls /usr/bin/git' \
+    "$(printf 'ls /usr/bin/git\n' | cs_split)"
+tok 'a bare command word is handed back unchanged' \
+    'git push --all origin' \
+    "$(printf 'git push --all origin\n' | cs_split)"
+# A word whose basename is empty is not a name, so it is left exactly as it
+# stands: rewriting it to nothing would put its first ARGUMENT where the command
+# word goes, and `/usr/bin/ git push` would read as a push.
+tok 'a word with no basename is left alone' \
+    '/usr/bin/ git push --all origin' \
+    "$(printf '/usr/bin/ git push --all origin\n' | cs_split)"
+# The normalisation runs after the prefix strip and on every candidate the strip
+# offers, not only the first. Without that, `sudo /usr/bin/git` is normalised
+# nowhere, because at the point the prefix words are read the command word is
+# still behind them.
+tok 'the command word behind a prefix word, and every tail candidate' \
+    'git push --mirror
+push --mirror
+--mirror' \
+    "$(printf 'sudo /usr/bin/git push --mirror\n' | cs_split)"
+# And after the split, so that the second command on a line is reached. The
+# first defect in this file was a scope that answered about the first command
+# and stopped, and a transformation applied before the split would repeat it.
+tok 'the command word of the second command on a line' \
+    'echo x
+git push origin main' \
+    "$(printf 'echo x && /usr/bin/git push origin main\n' | cs_split)"
+
 section "=== REGRESSION: PR #35, only the first push on a line was validated ==="
 # The scope found the first push, validated its arguments, and stopped. So a
 # legitimate push carried an illegitimate one after ; or && on its coat-tails.
@@ -1650,8 +1737,16 @@ armed 'cs_split strips whatever that variable holds' \
       "$HOOKS/lib/command-scan.sh" '~ ("^(" wrapwords ")$")'
 armed 'and whatever the operand variable holds' \
       "$HOOKS/lib/command-scan.sh" '~ ("^(" operandwords ")$")'
+# The literal moved again in #117, and the claim did not. A prefix word is
+# admitted in every spelling now, so the spelling prefix stands in front of the
+# union and a run of quotes behind it; what is pinned is still that the anchor
+# reads the shared variable rather than a copy of the words, which is the whole
+# of GH-79.4. Both halves of the new spelling are named, so the union cannot be
+# quietly wrapped in something that changes which words it admits.
 armed 'and the anchor admits whatever the union holds' \
-      "$HOOKS/lib/command-scan.sh" '($CS_WRAP_WORDS)[[:space:]]+'
+      "$HOOKS/lib/command-scan.sh" '($CS_WRAP_WORDS)[\\\\\"'"'"']*[[:space:]]+'
+armed 'and reaches it through the same spelling prefix the command word uses' \
+      "$HOOKS/lib/command-scan.sh" '$CS_WORD_SPELLING($CS_WRAP_WORDS)'
 armed 'the intervening token is named once and used once' \
       "$HOOKS/lib/command-scan.sh" '($CS_WRAP_TOKEN){0,3}'
 # What an empty list does is not pinned here. It is part of the load, so it is
@@ -2104,6 +2199,345 @@ check no-pr-decisions.sh ALLOW 'bash -c my_gh pr merge'        'bash -c "my_gh p
 check no-pr-decisions.sh ALLOW 'bash -c a \n escape before gh' \
   "bash -c \"printf 'summary\\ngh pr review --approve 5' > /tmp/x\""
 
+section "=== issue #117: the command word as a path, quoted or escaped ==="
+# The section above accepts three narrowings of GH_SURFACE_ANYWHERE and says, as
+# its reason, that `./gh` and `/usr/bin/gh` still refuse. That was true of the
+# WRAPPER rule and of nothing else. Outside a wrapper every hook found its
+# command by the bare name at ^, so all five spellings of all seven refused
+# shapes in #117's table were ALLOW -- `/usr/bin/gh pr merge 5` among them,
+# measured at origin/dev-05 d71ab1c.
+#
+# TWO HALVES, because there are two places a command word is read. cs_split
+# normalises the one it emits, which is what every ordinary rule matches on; and
+# the wrapper detector reads raw text, where there is no command word to
+# normalise, so CS_WRAPPER_RE admits the spellings itself. `/usr/bin/bash -c
+# "gh pr merge 5"` was permitted by the same defect wearing the other hat, and
+# the rows below hold both halves. Both changes are in lib/command-scan.sh, so
+# there is still one answer to where a command word is.
+#
+# Not an evasion shape only, which is why it is fixed rather than accepted into
+# CLAUDE.md's deliberately-left-open list: an agent whose PATH does not carry
+# gh, or that copied a path out of `command -v`, writes `/usr/bin/gh` meaning
+# nothing by it.
+req GH-117
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'gh pr merge as an absolute path' \
+  '/usr/bin/gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'gh pr merge as a relative path' \
+  './gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'gh pr merge, the name double quoted' \
+  '"gh" pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'gh pr merge, the name single quoted' \
+  "'gh' pr merge 5"
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'gh pr merge, the name behind a backslash' \
+  '\gh pr merge 5'
+# A create naming no base is the other arm of that hook, and it fails open in a
+# way the merge rule does not: nothing is matched, so nothing objects.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'gh pr create naming no base, as an absolute path' \
+  '/usr/bin/gh pr create --title t --body b'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'gh pr create --base main, as an absolute path' \
+  '/usr/bin/gh pr create --base main --title t'
+# The push hook, from the linked worktree, so that the branch named is the one
+# thing deciding the verdict. main and --all are refused whoever asks.
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'git push origin main as an absolute path' \
+  '/usr/bin/git push origin main'
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'git push origin main as a relative path' \
+  './git push origin main'
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'git push origin main, the name double quoted' \
+  '"git" push origin main'
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'git push origin main, the name single quoted' \
+  "'git' push origin main"
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'git push origin main, the name behind a backslash' \
+  '\git push origin main'
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'git push --all as an absolute path' \
+  '/usr/bin/git push --all origin'
+# The commit hook, in a checkout that is on main, where the bare spelling is the
+# refusal the whole file exists for.
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'git commit on main as an absolute path' \
+  '/usr/bin/git commit -m wip'
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'git commit on main, the name behind a backslash' \
+  '\git commit -m wip'
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'git commit on main, the name single quoted' \
+  "'git' commit -m wip"
+# The two convention hooks. They are not part of the agent boundary and had the
+# identical defect, which is the evidence that this was one question answered in
+# one place and not four coincidences.
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'bare pytest as an absolute path' \
+  '/usr/bin/pytest tests/'
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'bare pytest, the name double quoted' \
+  '"pytest" tests/'
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'python -m pytest as an absolute path' \
+  '/usr/bin/python -m pytest tests/'
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'python3 -m pytest as an absolute path' \
+  '/usr/bin/python3 -m pytest tests/'
+flip "$SUITE_DIR" alembic-via-uv-group.sh ALLOW BLOCK 'bare alembic as an absolute path' \
+  '/usr/bin/alembic upgrade head'
+flip "$SUITE_DIR" alembic-via-uv-group.sh ALLOW BLOCK 'bare alembic, the name behind a backslash' \
+  '\alembic upgrade head'
+# A runner that cannot name a dependency group, reached by path. This one is
+# worth its own row: the refusal comes from OTHER_RUNNER, which is anchored at ^
+# like the rest, while the `pytest` NAME rule beside it is not anchored at all --
+# so the fragment already matched the name and stopped, and the hook read a
+# command it had already recognised as reaching pytest and let it go.
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'uvx pytest as an absolute path' \
+  '/usr/bin/uvx pytest tests/'
+# THE TWO TABLE ROWS THE ISSUE BODY DOES NOT CARRY. #117's triage comment
+# measured nine seeds where the body measured seven, and the two it added are
+# the surfaces no-pr-decisions.sh guards through cs_gh_args rather than through
+# the base rule.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'gh pr review --approve as an absolute path' \
+  '/usr/bin/gh pr review --approve 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'gh pr review --approve, the name double quoted' \
+  '"gh" pr review --approve 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a merge through gh api, as an absolute path' \
+  '/usr/bin/gh api -X PUT repos/o/r/pulls/5/merge'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a merge through gh api, the name behind a backslash' \
+  '\gh api -X PUT repos/o/r/pulls/5/merge'
+# The two spellings the triage comment names as its own acceptance criterion,
+# at the hook rather than only at the tokeniser: partial quoting and a tilde
+# path. Neither is one of the five, and both are what bash runs.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a quote inside the command word' \
+  'g"h" pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a path under the home directory' \
+  '~/bin/gh pr merge 5'
+# `python -m pytest` in the spellings the rows above leave. The seed is not one
+# of #106's, so the families never reach it, and without these the table row
+# would be pinned in two spellings of five. Found by review of this branch.
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'python -m pytest as a relative path' \
+  './python -m pytest tests/'
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'python -m pytest, the name double quoted' \
+  '"python" -m pytest tests/'
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'python -m pytest, the name single quoted' \
+  "'python' -m pytest tests/"
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'python -m pytest, the name behind a backslash' \
+  '\python -m pytest tests/'
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'a versioned python by path, -m pytest' \
+  '/usr/bin/python3.12 -m pytest tests/'
+flip "$SUITE_DIR" alembic-via-uv-group.sh ALLOW BLOCK 'bare alembic as a relative path' \
+  './alembic upgrade head'
+flip "$SUITE_DIR" alembic-via-uv-group.sh ALLOW BLOCK 'bare alembic, the name single quoted' \
+  "'alembic' upgrade head"
+# A PREFIX WORD IS MATCHED BY NAME TOO, which is what #117's triage means by
+# "the gap is wider than the issue states". `cs_split` strips `sudo`, `env` and
+# `timeout` by comparing a token against a list, so every spelling reached them
+# exactly as it reached the command word -- and the bare `sudo gh pr merge 5` is
+# refused, so the contrast was already in the suite with nothing testing it.
+#
+# Fixing the command word alone would have left all three, and the triage says
+# in as many words what happens then: "the next review round finds it".
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the prefix word env, as an absolute path' \
+  '/usr/bin/env gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the prefix word sudo, as an absolute path' \
+  '/usr/bin/sudo gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the prefix word sudo, as a relative path' \
+  './sudo gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the prefix word sudo, behind a backslash' \
+  '\sudo gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the operand word timeout, double quoted' \
+  '"timeout" 30 gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the prefix word and the command word, both as paths' \
+  '/usr/bin/sudo /usr/bin/gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a prefix word by path in front of a wrapper' \
+  '/usr/bin/env bash -c "gh pr merge 5"'
+# And the permitting half of that, which is the reason the reduction is bounded
+# rather than applied to any token: an ordinary command behind a prefix word
+# keeps its verdict, and so does a prefix word whose payload decides nothing.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a prefix word in front of an ordinary command' \
+  'sudo apt-get install jq'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'env by path in front of an ordinary command' \
+  '/usr/bin/env python3 -c "print(1)"'
+# THE WRAPPER RULE'S SECOND QUESTION, which is the half #117 reached a round
+# late. The block is an `and`: is a wrapper in a command position, and does the
+# line carry the surface this hook guards. The first question is
+# CS_WRAPPER_RE's and was answered above; the second is each hook's own pattern,
+# and every one of the four matched its guarded name by the BARE spelling only.
+#
+# So the quoting half of #117 leaked at exactly the place the wrapper rule
+# exists to close: `bash -c "gh pr merge 5"` refused, `bash -c '"gh" pr merge
+# 5'` permitted. The path and backslash spellings already passed, because those
+# patterns have a left boundary that admits `/` and `\` -- it is quotes alone
+# that never produce the name-then-whitespace the pattern wanted. Found by
+# review of this branch, not by this suite, and the requirements entry had
+# already been flipped to `active` claiming these spellings reach the bare-name
+# verdict in every hook.
+#
+# Measured before it was taken: across the 476 wrapper-carrying commands in a
+# 75,346-command corpus, widening all four patterns changed no verdict at all.
+req GH-117
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, the name double quoted inside the payload' \
+  'bash -c '"'"'"gh" pr merge 5'"'"''
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, the name single quoted inside the payload' \
+  'bash -c "'"'"'gh'"'"' pr merge 5"'
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a wrapped push, the name double quoted inside the payload' \
+  'bash -c '"'"'"git" push --all origin'"'"''
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'a wrapped commit, the name double quoted inside the payload' \
+  'bash -c '"'"'"git" commit -m wip'"'"''
+# The spellings that already passed, kept so that widening for quotes cannot be
+# mistaken for the whole of what these patterns admit.
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'a wrapped gh pr merge, the name as a path inside the payload' \
+  'bash -c "/usr/bin/gh pr merge 5"'
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'a wrapped gh pr merge, the name behind a backslash inside the payload' \
+  'bash -c "\gh pr merge 5"'
+# ACCEPTED GAP, the same one CS_WORD_SPELLING names one level up: a quoted span
+# in the MIDDLE of the word. A character class cannot see that `g"h"` is `gh`,
+# and the payload is quoted text, so there is no word to reduce.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'ACCEPTED gap: a quoted span in the middle of the guarded name, wrapped' \
+  'bash -c '"'"'g"h" pr merge 5'"'"''
+# #72's decision, held against this widening. A program whose name merely ends
+# in the guarded one is a different program, and a quote class in front of the
+# name must not turn the left boundary into one that admits `-`.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a wrapped my-gh is still a different program' \
+  'bash -c "my-gh pr merge 5"'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'and a wrapped my-gh whose name is quoted' \
+  'bash -c '"'"'"my-gh" pr merge 5'"'"''
+# The permitting direction of the wrapper rule itself: a wrapper whose payload
+# decides nothing stays permitted, which is the row CLAUDE.md names in
+# consequence 1.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a wrapped gh issue list, the name double quoted' \
+  'bash -c '"'"'"gh" issue list'"'"''
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a wrapper carrying no push at all' \
+  'bash -c "make test"'
+# THE OVER-REFUSAL THE PATH SPELLING BROUGHT, recorded rather than fixed. The
+# spelling prefix in CS_WRAPPER_RE reaches into quoted text, because a regular
+# expression over raw text has no idea what a quote is -- so a sed script whose
+# PATTERN names a wrapper is now read as one. Permitted at origin/dev-05,
+# refused here. Refusing direction, one edit away, and in the same family as
+# consequence 3: a hook cannot tell a command from prose that quotes one.
+check_in "$SUITE_DIR" no-git-push.sh BLOCK 'ACCEPTED false positive: a sed script whose pattern names a wrapper and a push' \
+  "sed -i 's|/bin/sh -c git push --all origin|X|' hooks.sh"
+check_in "$SUITE_DIR" no-git-push.sh ALLOW 'the same sed with no wrapper named in its pattern' \
+  "sed -i 's|X|Y|' hooks.sh"
+# THE WRAPPER HALF. The payload cannot be read, so the wrapper itself is what is
+# recognised -- and it was recognised by the same bare name at a command
+# position that everything else used.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, bash as an absolute path' \
+  '/usr/bin/bash -c "gh pr merge 5"'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, bash as a relative path' \
+  './bash -c "gh pr merge 5"'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, bash double quoted' \
+  '"bash" -c "gh pr merge 5"'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, bash single quoted' \
+  "'bash' -c \"gh pr merge 5\""
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, bash behind a backslash' \
+  '\bash -c "gh pr merge 5"'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, sh as an absolute path' \
+  '/bin/sh -c "gh pr merge 5"'
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a wrapped push, bash as an absolute path' \
+  '/usr/bin/bash -c "git push origin wt-branch"'
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'a wrapped commit on main, bash as an absolute path' \
+  '/usr/bin/bash -c "git commit -m wip"'
+# THE PERMITTING DIRECTION, and the half that makes the rows above evidence
+# rather than a report that these hooks got stricter. Each is a command an agent
+# is entitled to run, written in one of the five spellings.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh pr view as an absolute path' \
+  '/usr/bin/gh pr view 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh pr create --base dev-05 as an absolute path' \
+  '/usr/bin/gh pr create --base dev-05 --title x'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh issue list, the name double quoted' \
+  '"gh" issue list'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a wrapped gh issue list, bash as an absolute path' \
+  '/usr/bin/bash -c "gh issue list"'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'this worktree pushing its own branch, as an absolute path' \
+  '/usr/bin/git push origin wt-branch'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'this worktree pushing its own branch, the name double quoted' \
+  '"git" push origin wt-branch'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'this worktree pushing its own branch, behind a backslash' \
+  '\git push origin wt-branch'
+check_in "$SUITE_DIR" pytest-via-uv-group.sh ALLOW 'uv run --group test, as an absolute path' \
+  '/usr/bin/uv run --group test pytest tests/'
+check_in "$SUITE_DIR" alembic-via-uv-group.sh ALLOW 'uv run --group migrations, as an absolute path' \
+  '/usr/bin/uv run --group migrations alembic upgrade head'
+# A BASENAME IS NOT A SUBSTRING. #72 decided that a program whose name merely
+# ends in a guarded one is a different program, and this change could have
+# revoked that decision silently -- normalising to "the guarded name appears in
+# the word" rather than to the basename would refuse all four of these, and no
+# row above would have noticed.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a different program named my-gh' \
+  'my-gh pr merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a different program named my-gh, reached by path' \
+  '/usr/local/bin/my-gh pr merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a different program named my_gh' \
+  'my_gh pr merge 5'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a directory named for the command is not the command' \
+  'ls /usr/bin/git'
+# A wrapper word is not a wrapper, and a path ending in one is not either. The
+# widened CS_WRAPPER_RE must not read `mybash` as bash, nor a bare path that
+# merely holds the letters.
+# CONSEQUENCE 6 OF CLAUDE.md's DELIBERATELY-LEFT-OPEN LIST, as verdicts. A
+# command word that is a parameter or a command substitution is not resolved,
+# and these are the commands that says are permitted. They are checks and not
+# just a paragraph because #117's triage raised the question as one to settle
+# before implementing, and a decision that lives only in prose is one the next
+# review reopens.
+#
+# PERMIT-ONLY, and it has to be: there is no refusing half of an accepted gap,
+# and writing one would be this suite claiming a refusal that does not happen.
+# requirements.md carries the direction and the reason with it.
+#
+# Each of the three was measured across 75,346 commands before it was accepted,
+# and the paragraph holds the numbers. The one thing these rows add over the
+# paragraph is that they go red if a later change closes a shape by accident --
+# which is how a gap stops being a decision and becomes a surprise.
+req GH-117.1
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a command substitution in command position' \
+  '$(command -v gh) pr merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a backticked command substitution in command position' \
+  '`command -v gh` pr merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a parameter in command position' \
+  '$GH pr merge 5'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a command substitution in command position, before a push' \
+  '$(command -v git) push origin main'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a parameter in command position, before a push' \
+  '$GIT push origin main'
+check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'a command substitution in command position, before a commit on main' \
+  '$(command -v git) commit -m wip'
+# The line the item draws, as verdicts. A variable that is the whole word is
+# unresolved and permitted; a path whose last component is written out is the
+# name it spells, whatever the directory part expands to, and is refused. The
+# pair is what makes the sentence in CLAUDE.md a measurement rather than a
+# guess -- its first draft had the second row the other way round.
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'a variable directory with the guarded name written out' \
+  '"$VENV/bin/gh" pr merge 5'
+check_in "$SUITE_DIR" pytest-via-uv-group.sh BLOCK 'and the same shape reaching pytest' \
+  '"$VENV/bin/pytest" tests/'
+check_in "$SUITE_DIR" pytest-via-uv-group.sh ALLOW 'a variable that is the whole word, reaching pytest' \
+  '$PYTHON -m pytest tests/'
+# The line the rejected close would have refused, and the reason the close was
+# rejected: it is a line of this suite being edited, not a command anyone runs
+# against GitHub. Kept as a check so that a later attempt at the same close
+# fails here rather than in a review.
+check_in "$SUITE_DIR" no-git-push.sh ALLOW 'a suite line quoting a push, edited through a command substitution' \
+  "\"\$(printf 'sudo git commit -m \"git push --all origin\"\\n' | cs_split)\""
+# Back to the reduction itself, which is the rest of this section.
+req GH-117
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a different program named mybash' \
+  'mybash -c "gh pr merge 5"'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a path naming bash as an argument, not as the command' \
+  'ls -l /usr/bin/bash'
+# WHERE THE TWO HALVES DISAGREE, pinned in both directions rather than described.
+# CS_WORD_SPELLING is a regular expression and cw_reduce is a walk, so they do
+# not reach the same set, and the comment above CS_WORD_SPELLING says which shape
+# each reaches. It said two shapes until Bertan's review of this branch measured
+# them and found one: a backslash is not excluded from the run, so an escaped
+# slash inside the path IS reached. The pair below is why that cannot go stale
+# again -- the spelling that matches and the spelling that does not, each a
+# literal verdict.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a wrapped gh pr merge, an escaped slash inside the path' \
+  '/usr\/bin\/bash -c "gh pr merge 5"'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'ACCEPTED gap: a quoted span in the middle of the wrapper name' \
+  'b"a"sh -c "gh pr merge 5"'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'ACCEPTED gap: a quoted span in the middle of the wrapper path' \
+  '/usr/"bin"/bash -c "gh pr merge 5"'
+# THE TRADE THE TAIL CANDIDATES TAKE. Reducing every candidate the prefix strip
+# offers -- not only the first -- is what makes `sudo /usr/bin/git push` visible,
+# and it also turns a path-shaped ARGUMENT into a name a rule reads. The pair is
+# what says this is a decision: behind a prefix word the copy is refused, and
+# without one the same command offers no tail and is permitted. Refusing
+# direction, recorded at the call site in lib/command-scan.sh.
+flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'copying the pytest binary, behind a prefix word' \
+  'sudo cp /usr/bin/pytest /tmp/'
+check_in "$SUITE_DIR" pytest-via-uv-group.sh ALLOW 'copying the pytest binary, with no prefix word' \
+  'cp /usr/bin/pytest /tmp/'
+
 section "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
 # Closing a PR and publishing a release were refused in the gh spelling and open
 # through gh api, so the boundary was spelling-dependent exactly where the file
@@ -2531,6 +2965,244 @@ check no-pr-decisions.sh BLOCK 'a wrapped REST create'       "bash -c 'gh api -X
 check no-pr-decisions.sh BLOCK 'a wrapped create into main'  'bash -c "gh pr create --base main"'
 check no-pr-decisions.sh BLOCK 'a wrapped create, flag first' 'bash -c "gh -R o/r pr create --base main"'
 check no-pr-decisions.sh BLOCK 'a wrapped baseless create'   'bash -c "gh pr create --fill"'
+
+section "=== issue #137, the field readers knew one quote spelling of their own field ==="
+# Two rules in no-pr-decisions.sh read the value of a named FIELD rather than an
+# endpoint: `state` decides whether a gh api write closes or reopens a pull
+# request, and `base` decides where one is proposed. Each knew one spelling of
+# the quoting round its own field, and the gap ran in OPPOSITE DIRECTIONS
+# because the two are triggered oppositely. State refuses on PRESENCE, so a
+# spelling it could not see was a refusal that did not happen: `-f
+# state='closed'` closed a pull request. Base refuses on ABSENCE, so a spelling
+# it could not see was a base that was not there: `-f "base=dev-05"` was refused
+# for naming no base, into the one branch an agent may propose into.
+#
+# Found while grilling #130's fix design, not by this suite, which was green.
+# It pinned `state=closed` and `state=open` bare and nothing else, and `-f
+# base=dev-05` bare and nothing else. A check suite is evidence about the cases
+# it names and about nothing else. No ordinal is written here on purpose: the
+# section two above counts "a fifth time" and nothing counts either, so a second
+# uncounted counter would be one more number to go stale unwatched.
+#
+# WHICH OF THESE 41 ROWS CAN FAIL, measured rather than argued, by judging three
+# broken copies of .claude/hooks/ through $CHECK_HOOKS_DIR -- this repository's
+# own hooks were never edited. Eighteen distinct rows go red:
+#
+#   STATE_FIELD_RE back to `"?(closed|open)"?`        6 rows
+#     the four single-quoted spellings below, and the two wrapper rows.
+#   rest_bases back to no quote between flag and name 10 rows
+#     the six dev-05 creates, the two retargets to main, and both message rows.
+#   the fix applied to the write block and not to the wrapper arm  4 rows
+#     the two wrapper rows again, and the static pair.
+#
+# The other twenty-three reach the same verdict with the fix reverted, and each
+# block below says which kind it is rather than leaving a reader to assume they
+# all go red. Fourteen are CONTRAST rows -- spellings the old patterns already
+# reached, three of them reaching the right verdict for the wrong reason, which
+# is what the two message rows exist to separate. Nine are ARMING and PROPERTY
+# rows: that the widening did not swallow an ordinary retitle, that the value
+# alternation still bites, and that the flag anchor still keeps `rebase`,
+# `database` and a quoted title out of the base.
+#
+# THE STATE READER, at the gh api write block. Rows 1 and 2 are CONTRAST and
+# stay green on revert: the old pattern admitted a double quote round the value
+# and not a single one, so they are the shape the hole is read against. Rows 3
+# and 4 are the hole, and go red.
+req US-15 GH-137.1
+check no-pr-decisions.sh BLOCK 'PATCH to state, value bare'        'gh api -X PATCH repos/o/r/pulls/5 -f state=closed'
+check no-pr-decisions.sh BLOCK 'PATCH to state, value double-quoted' 'gh api -X PATCH repos/o/r/pulls/5 -f state="closed"'
+check no-pr-decisions.sh BLOCK 'PATCH to state, value single-quoted' "gh api -X PATCH repos/o/r/pulls/5 -f state='closed'"
+check no-pr-decisions.sh BLOCK 'PATCH to state=open, single-quoted'  "gh api -X PATCH repos/o/r/pulls/5 -f state='open'"
+# The quote round the WHOLE field rather than round the value, in both styles,
+# on the long flag and with the field attached to the short one. gh reads all of
+# these as the one request. The first two -- one double-quoted, one single --
+# pass BEFORE this fix as well as after, through the raw grep alone, and are
+# pinned for what they would catch later: re-anchoring this reader on its field
+# flag, which is the shape rest_bases has and the obvious next refactor, turns
+# them red instead of inheriting the gap this issue closed in base. The other
+# two go red on revert.
+check no-pr-decisions.sh BLOCK 'the whole state field double-quoted' 'gh api -X PATCH repos/o/r/pulls/5 -f "state=closed"'
+check no-pr-decisions.sh BLOCK 'the whole state field single-quoted' "gh api -X PATCH repos/o/r/pulls/5 -f 'state=closed'"
+check no-pr-decisions.sh BLOCK '--field, state value single-quoted'  "gh api -X PATCH repos/o/r/pulls/5 --field state='closed'"
+check no-pr-decisions.sh BLOCK 'short flag with the field attached'  "gh api -X PATCH repos/o/r/pulls/5 -fstate='closed'"
+# THE SAME READER AT ITS OTHER CALL SITE. The wrapper arm asks the same question
+# and carried its own copy of the pattern, so a fix applied to one call site and
+# not the other would leave this green. These reach that arm with NO gh on the
+# line: the surface alternative beside it would answer for a wrapped `gh api`
+# whatever the state rule said, which is what makes these rows evidence about
+# the state arm rather than about the wrapper rule. Same shape as the bare
+# `echo state=closed` row under ACCEPTED false positive: #51. The first two go
+# red twice over -- on the state revert and on the one-call-site revert, which
+# is what makes them the rows that tell the two apart. The third is CONTRAST.
+req GH-51.2 GH-137.1
+check no-pr-decisions.sh BLOCK 'a wrapper, then a single-quoted state' \
+  "bash -c \"make test\" && echo state='closed'"
+check no-pr-decisions.sh BLOCK 'a wrapper, then a single-quoted open' \
+  "bash -c \"make test\" && echo state='open'"
+check no-pr-decisions.sh BLOCK 'a wrapper, then the whole field quoted' \
+  "bash -c \"make test\" && echo 'state=closed'"
+# The pattern is written once and both call sites read it, which is the half of
+# this fix no verdict above can see: two copies that agree today are two copies
+# that can be fixed apart tomorrow, and that is how this defect was made. Both
+# go red on the one-call-site revert and on nothing else.
+#
+# OCCURRENCES, not matching lines, and FULL-LINE comments stripped rather than
+# everything after the first `#`. Bertan's review of PR #153 found both halves
+# loose in the permitting direction: `grep -c` counts lines, so two copies
+# written on one line read as one, and a stripper cutting at the first `#`
+# anywhere cuts into live code -- this file already carries `${TOK#--base=}` --
+# so a copy written after a `#` on a code line was invisible to the count. A
+# trailing comment that quotes the pattern now counts against the total, which
+# is the refusing direction and one edit away.
+req GH-137.1
+tok 'no-pr-decisions.sh: the state pattern is written once, not once per call site' \
+    '1' "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" \
+          | grep -o 'closed|open' | wc -l | tr -d '[:space:]')"
+tok 'no-pr-decisions.sh: both state call sites read that one pattern' \
+    '2' "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" \
+          | grep -oF 'grep -qiE "$STATE_FIELD_RE"' | wc -l | tr -d '[:space:]')"
+# The arming evidence. The state rule is keyed on the field and not on the
+# endpoint, for the reason its own comment gives -- the same PATCH is how `gh pr
+# edit` retitles a pull request -- so a widened quote class that swallowed an
+# ordinary edit would be this fix going wrong in the refusing direction. And the
+# value alternation still bites: a quote round the value is not a licence for
+# any value. All three are ARMING and stay green on revert, as arming evidence
+# must: they say the fix did not break what was already right.
+req US-13 FR-20 GH-137.1
+check no-pr-decisions.sh ALLOW 'PATCH a title, whole field quoted'  'gh api -X PATCH repos/o/r/pulls/35 -f "title=newtitle"'
+check no-pr-decisions.sh ALLOW 'PATCH a title, value single-quoted' "gh api -X PATCH repos/o/r/pulls/35 -f title='newtitle'"
+check no-pr-decisions.sh ALLOW 'a quoted state that is neither'     "gh api -X PATCH repos/o/r/pulls/35 -f state='draft'"
+
+# THE BASE READER. rest_bases anchors on the field flag, and the field name had
+# to follow it immediately -- so the quote gh accepts round a whole field hid
+# the base entirely and the no-base arm fired. Five spellings of one request;
+# the first three go red on revert, and the last two are CONTRAST -- the
+# value-quoted pair the old pattern already read, kept as the contrast that says
+# where the hole was.
+req FR-18 FR-15 US-11 GH-137.2
+check no-pr-decisions.sh ALLOW 'REST create, whole field double-quoted' 'gh api -X POST repos/o/r/pulls -f "base=dev-05" -f head=x'
+check no-pr-decisions.sh ALLOW 'REST create, whole field single-quoted' "gh api -X POST repos/o/r/pulls -f 'base=dev-05' -f head=x"
+check no-pr-decisions.sh ALLOW '--field, whole field double-quoted'     'gh api -X POST repos/o/r/pulls --field "base=dev-05" -f head=x'
+check no-pr-decisions.sh ALLOW 'REST create, value double-quoted'       'gh api -X POST repos/o/r/pulls -f base="dev-05" -f head=x'
+check no-pr-decisions.sh ALLOW 'REST create, value single-quoted'       "gh api -X POST repos/o/r/pulls -f base='dev-05' -f head=x"
+req FR-17 US-10 FR-15 GH-137.2
+check no-pr-decisions.sh ALLOW 'REST retarget to dev, field quoted'     'gh api -X PATCH repos/o/r/pulls/35 -f "base=dev-05"'
+# The other direction of the same read, and the one that makes this a hole in
+# both: a base the reader cannot see is not only a permitted create refused, it
+# is a BAD base unseen. The POST was refused before this fix and the PATCH was
+# not -- the no-base arm the POST fell into is keyed on the collection endpoint,
+# and /pulls/35 is not one. So a retarget to main with the field quoted was
+# permitted, a consequence the issue's own table does not name. The two creates
+# are CONTRAST of the third kind: refused before this fix and refused after, but
+# before it for naming NO base, which is what the message rows below separate.
+# The two retargets go red.
+req FR-18 FR-15 US-11 GH-137.2
+check no-pr-decisions.sh BLOCK 'REST create into main, field quoted'   'gh api -X POST repos/o/r/pulls -f "base=main" -f head=x'
+check no-pr-decisions.sh BLOCK 'REST create into main, single-quoted'  "gh api -X POST repos/o/r/pulls -f 'base=main' -f head=x"
+req FR-18 FR-17 US-10 GH-137.2
+check no-pr-decisions.sh BLOCK 'REST retarget to main, field quoted'   'gh api -X PATCH repos/o/r/pulls/35 -f "base=main"'
+check no-pr-decisions.sh BLOCK 'REST retarget to main, single-quoted'  "gh api -X PATCH repos/o/r/pulls/35 -f 'base=main'"
+# WHICH refusal fires, not just that one does. Before the fix the quoted create
+# into main was refused for naming NO base, so the message told an agent to name
+# a base it had already named -- the same two halves of #40 that the messages
+# above are kept apart for. Both go red on revert, and they are the only rows
+# that see this half of the defect: the verdict was right throughout.
+req US-7 FR-23 GH-137.2
+says "$ON_DEV" no-pr-decisions.sh 'This names main;' \
+  'a quoted base into main says which branch it named' \
+  'gh api -X POST repos/o/r/pulls -f "base=main" -f head=x'
+says_not "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
+  'and does not say that no base was named' \
+  'gh api -X POST repos/o/r/pulls -f "base=main" -f head=x'
+# rest_bases' existing property, asked again with the quote in it. The flag
+# anchor is what keeps `rebase` and `database` the words they are, and what
+# keeps a base out of prose; admitting a quote in ONE position between the flag
+# and the name leaves all of that where it was. PROPERTY rows, green on revert:
+# what they assert is what must not have changed.
+req FR-14 GH-137.2
+check no-pr-decisions.sh BLOCK 'a quoted title is still not a base'    'gh api -X POST repos/o/r/pulls -f head=x -f title="base: dev-05"'
+check no-pr-decisions.sh BLOCK 'a quoted title naming the flag'        'gh api -X POST repos/o/r/pulls -f head=x -f "title=base=dev-05"'
+req FR-20 US-14 GH-137.2
+check no-pr-decisions.sh ALLOW 'a quoted database field on an issue'   'gh api -X POST repos/o/r/issues -f "database=main"'
+check no-pr-decisions.sh ALLOW 'a quoted rebase field on an issue'     'gh api -X POST repos/o/r/issues -f "rebase=main"'
+# EVERY FLAG THE ANCHOR ADMITS, with the quote in it. rest_bases names three
+# flags and the comment beside it now claims five spellings of one request, so
+# each is asked here in both directions rather than left to the two that happen
+# to be pinned. Two of the three flags reached no row at all before this. They
+# pair as `gh api --help` gives them -- -F/--field is the TYPED parameter and
+# -f/--raw-field the STRING one -- which this comment had backwards until
+# Bertan's review of PR #153; the rows were right and the sentence was not.
+# `-f"base=x"` closes the flag-attached case with a quote in it, which is the
+# one the old pattern would have hidden twice over. The three dev-05 rows go red on revert; the
+# three naming main are CONTRAST of the third kind, refused before for naming no
+# base and after for naming main.
+req FR-18 FR-15 US-11 GH-137.2
+check no-pr-decisions.sh BLOCK 'attached flag, quoted field, main'     'gh api -X POST repos/o/r/pulls -f"base=main" -f head=x'
+check no-pr-decisions.sh BLOCK '-F, quoted field, main'               'gh api -X POST repos/o/r/pulls -F "base=main" -f head=x'
+check no-pr-decisions.sh BLOCK '--raw-field, quoted field, main'      'gh api -X POST repos/o/r/pulls --raw-field "base=main" -f head=x'
+check no-pr-decisions.sh ALLOW 'attached flag, quoted field, dev'      'gh api -X POST repos/o/r/pulls -f"base=dev-05" -f head=x'
+check no-pr-decisions.sh ALLOW '-F, quoted field, dev'                'gh api -X POST repos/o/r/pulls -F "base=dev-05" -f head=x'
+check no-pr-decisions.sh ALLOW '--raw-field, quoted field, dev'       'gh api -X POST repos/o/r/pulls --raw-field "base=dev-05" -f head=x'
+# And the anchor still holds for the two flags it had never been asked about.
+req FR-20 US-14 GH-137.2
+check no-pr-decisions.sh ALLOW '-F on a database field'               'gh api -X POST repos/o/r/issues -F "database=main"'
+check no-pr-decisions.sh ALLOW '--raw-field on a rebase field'        'gh api -X POST repos/o/r/issues --raw-field "rebase=main"'
+# The state reader is the contrast, and this row is what says so: the flag is
+# irrelevant to it BY DESIGN, because it is not anchored on one. -F reaches the
+# same refusal -f does, for the reason STATE_FIELD_RE's comment gives -- a rule
+# that must also see a flagless `state:CLOSED` cannot be keyed on a flag. So it
+# is CONTRAST and green on revert, and that is the point of it: a flag spelling
+# that changes nothing for this reader is the evidence it is not flag-anchored.
+
+# THE SEPARATOR, which the first fix for #137 did not ask about. Found by
+# Bertan's review of PR #153, in the change that closed the quote gap -- the
+# fourth wrong answer to where a field begins, and the second one found by
+# review rather than by this suite. pflag takes `--field=value` for a long flag
+# and `-f=value` for a short one, and the pattern required whitespace or a quote
+# after the flag, so `--field=base=main` named a base nothing here could read.
+#
+# THE PERMITTING HALF, and it is the one that matters: on PATCH /pulls/N the
+# no-base arm is keyed on the collection endpoint and does not fire, so an
+# unread base is not a false refusal but a retarget onto main, permitted. That
+# is the same consequence this section already records for the quote gap,
+# surviving one spelling further along. All six rows below go red without the
+# separator class -- the four flag spellings, and the two that reach it through
+# a quote as well, the separator and the quote being independent.
+req FR-18 FR-17 US-10 GH-137.2
+check no-pr-decisions.sh BLOCK 'retarget to main, --field='        'gh api -X PATCH repos/o/r/pulls/35 --field=base=main'
+check no-pr-decisions.sh BLOCK 'retarget to main, -f='             'gh api -X PATCH repos/o/r/pulls/35 -f=base=main'
+check no-pr-decisions.sh BLOCK 'retarget to main, -F='             'gh api -X PATCH repos/o/r/pulls/35 -F=base=main'
+check no-pr-decisions.sh BLOCK 'retarget to main, --raw-field='    'gh api -X PATCH repos/o/r/pulls/35 --raw-field=base=main'
+# The separator and the quote are independent, so both orders are asked: a
+# quoted field reached through `=` is the two gaps of this issue in one command.
+check no-pr-decisions.sh BLOCK 'retarget to main, = then a quote'  'gh api -X PATCH repos/o/r/pulls/35 --field="base=main"'
+check no-pr-decisions.sh BLOCK "retarget to main, = then a ' quote" "gh api -X PATCH repos/o/r/pulls/35 --field='base=main'"
+# THE REFUSING HALF, which is how the gap showed on a create: the base was
+# unread, so the create was refused for naming none. The permitted destination
+# was the one refused, and `create into dev, --field=` is the row that says so
+# -- it goes red the other way without the separator, want=ALLOW got=BLOCK. The
+# two beside it are CONTRAST: `retarget to dev` was permitted before for seeing
+# no base rather than a good one, and `create into main` refused before for
+# naming none rather than for naming main. Right verdict, wrong reason, both.
+req FR-18 FR-15 US-11 GH-137.2
+check no-pr-decisions.sh ALLOW 'create into dev, --field='         'gh api -X POST repos/o/r/pulls --field=base=dev-05 -f head=x'
+check no-pr-decisions.sh ALLOW 'retarget to dev, --field='         'gh api -X PATCH repos/o/r/pulls/35 --field=base=dev-05'
+check no-pr-decisions.sh BLOCK 'create into main, --field='        'gh api -X POST repos/o/r/pulls --field=base=main -f head=x'
+# And the anchor survives the widened separator, which is the whole question a
+# separator class raises: `[[:space:]=]*` must not let the flag reach a word
+# that merely ends in base. It does not -- after the separator the next
+# character is still `d` or `r`, and still `t` for a title carrying a base.
+req FR-20 US-14 GH-137.2
+check no-pr-decisions.sh ALLOW '--field= on a database field'      'gh api -X POST repos/o/r/issues --field=database=main'
+check no-pr-decisions.sh ALLOW '--field= on a rebase field'        'gh api -X POST repos/o/r/issues --field=rebase=main'
+req FR-14 GH-137.2
+check no-pr-decisions.sh BLOCK 'a title reached through =, no base' 'gh api -X POST repos/o/r/pulls -f head=x -f=title=base=dev-05'
+# The state reader is unanchored, so the separator is nothing to it either. The
+# contrast row for the separator, as the -F row above is for the flag.
+req US-15 GH-137.1
+check no-pr-decisions.sh BLOCK '--field= on a state field'         'gh api -X PATCH repos/o/r/pulls/5 --field=state=closed'
+req US-15 GH-137.1
+check no-pr-decisions.sh BLOCK '-F, quoted state field'               'gh api -X PATCH repos/o/r/pulls/5 -F "state=closed"'
 
 section "=== the push argument split does not glob against the worktree ==="
 # `for TOK in $ARGS` is unquoted because the split is the point; set -f stops
@@ -3825,6 +4497,44 @@ check_in "$LIFE_LINK/src/deep" no-work-on-stale-branch.sh ALLOW 'main checkout t
 req GH-94.2 GH-44.2
 check_in "$LIFE_LINK/wt-stale/src/deep" no-work-on-stale-branch.sh BLOCK 'stale worktree through a symlink, src/deep/: a commit is still refused' \
   'git commit -m "wip"'
+
+# ISSUE #117 IN THIS HOOK TOO, and it is here rather than in #117's own section
+# for one reason: that section stands above the line where $WT_STALE is built,
+# and a check cannot name a fixture that does not exist yet.
+#
+# Written out because the issue measured six hooks of seven and said so -- "was
+# not measured, since it needs a stale-branch fixture" -- and a fix whose
+# evidence stops where the measurement stopped is #84 exactly: the question
+# asked of the consumers that happened to be convenient. This hook reads every
+# git command through cs_git_args, whose `^git` anchor is the one #117 is about,
+# so the defect was here whether anyone measured it or not.
+#
+# #106's families do reach it, through the `commit-stale` seed, and that is why
+# these are not the only thing standing between the hook and a regression. But
+# those variants carry FR-38, the seed's tag, and a requirement is covered by
+# the checks that NAME it; GH-117 had no check against this hook at all.
+req GH-117
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a commit on a stale branch, as an absolute path' \
+  '/usr/bin/git commit -m wip'
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a commit on a stale branch, the name double quoted' \
+  '"git" commit -m wip'
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a commit on a stale branch, the name behind a backslash' \
+  '\git commit -m wip'
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a cherry-pick on a stale branch, as an absolute path' \
+  '/usr/bin/git cherry-pick abc1234'
+# The wrapper rule's second question, in this hook too. The pattern here names
+# its own verb list and so is a fourth copy of the shape, and #117's widening
+# has to reach all four or the claim is one hook short again.
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'a wrapped commit on a stale branch, the name double quoted' \
+  'bash -c '"'"'"git" commit -m wip'"'"''
+check_in "$WT_WORK" no-work-on-stale-branch.sh ALLOW 'the same wrapped commit on a live branch, which decides nothing' \
+  'bash -c '"'"'"git" commit -m wip'"'"''
+# And the permitting half, in the worktree whose branch is still live, so that
+# the reduction is not what decides the verdict here either.
+check_in "$WT_WORK" no-work-on-stale-branch.sh ALLOW 'a commit on a live branch, as an absolute path' \
+  '/usr/bin/git commit -m wip'
+check_in "$WT_WORK" no-work-on-stale-branch.sh ALLOW 'a commit on a live branch, the name double quoted' \
+  '"git" commit -m wip'
 
 section "=== review of #111: the #94 comparison when it has nothing to compare, and its two copies ==="
 # Three points from the review of the #94 pull request, each checked here.
@@ -5499,6 +6209,31 @@ for hook in $BOUNDARY_HOOKS; do
   written "and the shape that does not earn one, in $hook" \
     "$HOOKS/$hook" 'have to construct'
 done
+# AND EVERY ONE OF THEM ADMITS A QUOTED GUARDED NAME, issue #117. The second
+# question of each boundary hook's wrapper rule is that hook's own pattern, so
+# there are four of them, and all four matched the guarded name by its bare
+# spelling until this branch. Asked of the DERIVED set rather than of a list
+# written here, which is the whole of #84: a list names the hooks someone
+# remembered, and a boundary hook added later joins the derivation without
+# anyone revising a sentence.
+#
+# The class itself is the literal, not the pattern around it, because the four
+# patterns differ in the name they guard and in their verb lists. What is held
+# is that each carries the class at all -- narrowing any one of them back is
+# then a red check here rather than a review finding.
+#
+# The literal is the class AS THE FILES SPELL IT, which is the shell-escaped
+# form and not the regular expression it becomes: a single shell word cannot
+# hold both quote characters, so the four files write the apostrophe by closing
+# the quote and reopening it, and so does this. Assembled with printf rather
+# than quoted, because the quoted spelling of the quoted spelling is where a
+# reader stops being able to check it by eye.
+req GH-117
+QUOTE_ADMISSION=$(printf '[%s%s%s%s%s%s]*' '"' "'" '"' "'" '"' "'")
+for hook in $BOUNDARY_HOOKS; do
+  written "$hook admits a quoted spelling of the name its wrapper rule guards" \
+    "$HOOKS/$hook" "$QUOTE_ADMISSION"
+done
 set +f
 # The two that state it in full, named because a check is evidence about what it
 # names and the loop above is satisfied by the phrase alone.
@@ -5916,6 +6651,45 @@ req GH-99.1 GH-73
 holds 'the extracted list is the left-open list' "$LEFT_OPEN" 'Deliberately left open'
 lacks 'and the unenforced rule is not one of its items' \
   "$LEFT_OPEN" 'git reset --hard origin/dev-NN'
+
+# CONSEQUENCE 6, and the half of it that is not a count. The item above answers
+# recommendation 4 of #117's triage, which called the question a judgement call
+# to settle before implementing. It was settled by measuring, and what a later
+# reader needs from this suite is that the paragraph still names the three
+# shapes it decided about -- a sixth item that kept its number and lost
+# `$VAR`, say, would pass the count check beside it and say something else.
+#
+# The verdicts themselves are pinned below rather than here, where they are
+# what a hook answers rather than what a document says. Both halves are needed:
+# the document without the verdicts is a claim nobody ran, and the verdicts
+# without the document are three permitted commands with no reason attached.
+req GH-117.1
+holds 'consequence 6 names the command substitution spelling' \
+  "$LEFT_OPEN" '$(command -v gh) pr merge 5'
+holds 'and the backtick spelling' \
+  "$LEFT_OPEN" '`command -v gh` pr merge 5'
+holds 'and the parameter spelling' \
+  "$LEFT_OPEN" '$GH pr merge 5'
+# The measurement, not just the decision. #117 settled this by counting, and a
+# claim without its number is a claim to re-measure -- so the corpus size is in
+# the paragraph and is held there, which is what stops the item decaying into
+# "we decided not to".
+holds 'and says what corpus the decision was measured against' \
+  "$LEFT_OPEN" '75,346'
+# The rejected close, held in the paragraph for the reason every rejected
+# alternative in this repository is written down: without it the next reviewer
+# reads an accepted gap and proposes the one-line fix that was already measured
+# and found to close nothing.
+holds 'and records that the close was written and rejected on its numbers' \
+  "$LEFT_OPEN" 'The close was written first and rejected on its own numbers.'
+# THE LINE THE ITEM DRAWS, which its first draft drew in the wrong place: it
+# offered `"$VENV/bin/gh"` as an example of a permitted variable, and the same
+# commit refused it -- the reduction resets at each slash, so the word spells
+# `gh`. A permitted `$VAR` is one that is the WHOLE word. The verdict is pinned
+# below; this holds the document to saying which, so the example and the
+# behaviour cannot drift apart again.
+holds 'and draws the line at a variable that is the whole word' \
+  "$LEFT_OPEN" 'A variable is only unresolved while it is the whole word.'
 
 # #99 Q5 took `head` out of settings.json, and the branch-hygiene skill's notes
 # went on arguing from it: every worktree made after a rotation branched from
@@ -8172,6 +8946,14 @@ shape_trailing() { printf 'git push'; head -c "$1" /dev/zero | tr '\0' ' '; prin
 shape_continued() { yes 'aaaaaaa \' | head -n $(( $1 / 10 )); printf 'git push\n'; }
 shape_gitglobals() { printf 'git '; yes -- '-c a=b' | head -n $(( $1 / 7 )) | tr '\n' ' '; printf 'push origin x\n'; }
 shape_ghglobals() { printf 'gh '; yes -- '-R o/r' | head -n $(( $1 / 7 )) | tr '\n' ' '; printf 'pr merge 5\n'; }
+# Issue #117's pass, in the one shape that separates a string from an array of
+# cells: a command word that is a SINGLE path component, so nothing resets the
+# count and the whole of it is both walked and printed. Quoted rather than left
+# bare, because the bare spelling carries no slash either and would be handed
+# straight back by the test that keeps this pass off ordinary commands -- the
+# check would then time a reduction that never ran, which is the mistake the
+# `shape_prefixes` note above records in its own form.
+shape_cmdword() { printf '"'; head -c "$1" /dev/zero | tr '\0' 'a'; printf '" push origin x\n'; }
 shape_tail() {  # shape_tail <file> -- the last line, blanks squeezed, last 24 characters
   awk 'END { s = $0; gsub(/[ \t]+/, " ", s); n = length(s); print substr(s, n > 24 ? n - 23 : 1) }' "$1"
 }
@@ -8209,6 +8991,8 @@ scales_linearly trailing cs_split 'git push origin'
 scales_linearly continued cs_join 'aaaaaaa aaaaaaa git push'
 scales_linearly gitglobals 'cs_git_args push' 'origin x'
 scales_linearly ghglobals "cs_gh_args 'pr merge'" '5'
+req GH-117
+scales_linearly cmdword cs_split 'aaaaaaaaaa push origin x'
 
 # The option skip in both argument readers looks a token up in its list of
 # valued options with index(), which finds `-c|-C` in `|-c|-C|...|` as readily
@@ -8615,9 +9399,10 @@ section "=== issue #106: every spelling of a judged command reaches its verdict 
 # WHAT A GREEN RUN HERE IS NOT EVIDENCE OF. The transformations are a list
 # someone wrote, so this is still evidence about the cases it names: wider than
 # the one-variant checks above it by the number of transformations, and no wider
-# than that. The next transformation is the one nobody has thought of, and two
-# of the twelve here arrived that way -- #117 and #118 came out of Bertan's
-# review of PR #115, after the first ten had been settled. What changes is the
+# than that. The next transformation is the one nobody has thought of, and four
+# of the fourteen here arrived that way -- #117 and #118 came out of Bertan's
+# review of PR #115, after the first ten had been settled, and #128 and #117's
+# triage after those. What changes is the
 # cost of the next one: a transformation added to the list below is asked of
 # every seed at once, rather than of the one command whose review found it.
 #
@@ -8785,6 +9570,9 @@ hooks|no-pr-decisions.sh|ALLOW|FR-21 US-12|pr-web|gh pr create --web
 hooks|no-pr-decisions.sh|ALLOW|FR-20 US-13|api-read|gh api repos/o/r/pulls/35
 hooks|no-pr-decisions.sh|ALLOW|FR-18 FR-15 US-11|api-rest-dev|gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x
 hooks|no-pr-decisions.sh|ALLOW|FR-19 FR-15 US-11|api-graphql-dev|gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:"dev-05"})}'
+hooks|no-pr-decisions.sh|BLOCK|GH-137.1|api-state-quoted|gh api -X PATCH repos/o/r/pulls/5 -f "state=closed"
+hooks|no-pr-decisions.sh|BLOCK|GH-137.2|api-base-quoted-main|gh api -X POST repos/o/r/pulls -f "base=main" -f head=x
+hooks|no-pr-decisions.sh|ALLOW|GH-137.2|api-base-quoted-dev|gh api -X POST repos/o/r/pulls -f "base=dev-05" -f head=x
 hooks|no-pr-decisions.sh|ALLOW|FR-48 GH-97.1|release-view|gh release view v1
 hooks|no-pr-decisions.sh|ALLOW|US-14|issue-list|gh issue list
 hooks|no-pr-decisions.sh|ALLOW|FR-4|wrap-benign|bash -c "gh issue list"
@@ -8805,8 +9593,8 @@ hooks|alembic-via-uv-group.sh|ALLOW|GH-69.1|alembic-uv|uv run --group migrations
 SEEDS
 )
 
-# THE TRANSFORMATIONS, #103's ten and the two Bertan's review of PR #115 added,
-# each family spelled out one variant per spelling it has:
+# THE TRANSFORMATIONS, #103's ten, the two Bertan's review of PR #115 added, and
+# two since, each family spelled out one variant per spelling it has:
 #
 #   1 leading indentation      indent-spaces indent-tab
 #   2 separators               before-* after-*, one per separator and side
@@ -8829,6 +9617,8 @@ SEEDS
 #                                     heredoc-cont-squote heredoc-cont-dquote
 #                                     heredoc-cont-space heredoc-cont-twice
 #                                     heredoc-cont-redirect
+#  14 a prefix word spelled otherwise (#117)  pre-sudo-path pre-env-path
+#                                     pre-timeout-quoted
 #
 # The thirteenth is seven spellings where the others are one or two, and that is
 # #128 rather than thoroughness for its own sake: the spellings of the heredoc
@@ -8850,6 +9640,15 @@ SEEDS
 # target GH-50.3 records as a knowingly-taken shortfall, and it is a shortfall
 # of the push hook alone, which is a thing one row can now say of every seed
 # rather than of the one command #50's review happened to write.
+#
+# The fourteenth is the one the triage of #117 asked for by name: a prefix word
+# is matched against a list BY NAME, exactly as the command word is matched by
+# its anchor, so every spelling reached it too. Transformation 4 prepends those
+# words BARE and so could never have found it -- which is the point the list
+# itself makes about why a family is worth having. The wrapper words the same
+# triage names need no row of their own: a wrapped seed carries the wrapper AS
+# its command word, so transformation 11 already rewrites it, and adding a
+# fifteenth would be the same question asked twice.
 #
 # A transformation that cannot apply to a seed -- no value-taking long flag, no
 # second short flag to bundle with, no subcommand to put a global flag before --
@@ -8878,6 +9677,7 @@ INV_TRANSFORMS='
   word-path word-dot word-dquoted word-squoted word-escaped
   heredoc-cont heredoc-cont-dash heredoc-cont-squote heredoc-cont-dquote
   heredoc-cont-space heredoc-cont-twice heredoc-cont-redirect
+  pre-sudo-path pre-env-path pre-timeout-quoted
 '
 
 # A rewrite that prints nothing when it changed nothing, which is how a
@@ -9071,6 +9871,9 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     redirect-null)    printf '%s >/dev/null' "$2" ;;
     redirect-dup)     printf '%s 2>&1' "$2" ;;
     redirect-quoted)  printf '%s > "out.txt"' "$2" ;;
+    pre-sudo-path)    printf '/usr/bin/sudo %s' "$2" ;;
+    pre-env-path)     printf '/usr/bin/env X=1 %s' "$2" ;;
+    pre-timeout-quoted) printf '"timeout" 30 %s' "$2" ;;
     word-path)        inv_cmdword "$2" '/usr/bin/' '' ;;
     word-dot)         inv_cmdword "$2" './' '' ;;
     word-dquoted)     inv_cmdword "$2" '"' '"' ;;
@@ -9157,11 +9960,6 @@ pr-base-dev pr-base-dev-eq|quote-double-4|BLOCK|design|FR-14|base_args drops a q
 pr-base-dev pr-base-dev-eq|quote-single-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
 release-view|quote-double-3|BLOCK|gap|GH-135|the release verb in double quotes, refused by the allowlist that cannot read it
 release-view|quote-single-3|BLOCK|gap|GH-135|the release verb in single quotes, refused by the allowlist that cannot read it
-BLOCK:*|word-path|ALLOW|gap|GH-117|the command word as an absolute path
-BLOCK:*|word-dot|ALLOW|gap|GH-117|the command word as a relative path
-BLOCK:*|word-dquoted|ALLOW|gap|GH-117|the command word in double quotes
-BLOCK:*|word-squoted|ALLOW|gap|GH-117|the command word in single quotes
-BLOCK:*|word-escaped|ALLOW|gap|GH-117|the command word behind a backslash
 BLOCK:*|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand eats the read verb after it
 pr-view pr-base-dev pr-base-dev-eq pr-retarget-dev pr-web release-view|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand makes a guarded path unreadable, and the right verdict is a refusal whatever the seed's is|BLOCK
 push-wrapped pr-merge-wrapped pr-view-wrapped commit-wrapped|word-if|ALLOW|gap|GH-134|a wrapper after a control word
@@ -9179,6 +9977,11 @@ pytest-uv alembic-uv|quote-single-4|BLOCK|gap|GH-136|the group value in single q
 pr-retarget pr-web-main|quote-double-5|ALLOW|gap|GH-139|the base flag in double quotes, on an arm where naming no base is permitted
 pr-retarget pr-web-main|quote-single-5|ALLOW|gap|GH-139|the base flag in single quotes, on an arm where naming no base is permitted
 docs-truncate|continuation|ALLOW|gap|GH-156|the verb and the path on either side of a backslash, which this hook's greps read as two lines and a shell runs as one
+docs-truncate|word-path|ALLOW|gap|GH-171|a command word spelled as a path, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|word-dot|ALLOW|gap|GH-171|a command word spelled with ./, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|word-dquoted|ALLOW|gap|GH-171|a double-quoted command word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|word-squoted|ALLOW|gap|GH-171|a single-quoted command word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|word-escaped|ALLOW|gap|GH-171|a backslash-escaped command word, which this hook's verb grep does not reduce to the name it spells
 EX
 )
 
@@ -9393,7 +10196,7 @@ GH-51.2:seed GH-58.1:none GH-68.1:seed GH-68.2:none GH-68.3:none GH-69.1:seed
 GH-69.2:seed GH-69.3:none GH-72:seed GH-79.1:transformation GH-79.2:none
 GH-79.3:none GH-79.4:none GH-84.1:none GH-94.1:seed GH-94.2:none GH-94.4:none
 GH-95.1:none GH-95.2:none GH-96.1:none GH-97.1:seed GH-128:transformation
-GH-133:none
+GH-117:transformation GH-133:none GH-137.1:seed GH-137.2:seed
 '
 # One row per entry that is either in scope or carries the field: `<ID>|in|out`,
 # the `variants` keyword, and whatever follows it. An entry out of scope is
@@ -9571,7 +10374,7 @@ tok 'every GH- entry declaring variants: seed is tagged on a seed, and every GH-
 # is GH-117's open gap, which the class rows above already assert.
 req GH-141
 tok 'the GH- seeds are tagged in the directions the table holds' \
-  'GH-43.1 ALLOW;GH-43.3 BLOCK;GH-43.4 BLOCK;GH-51.1 BLOCK;GH-51.2 BLOCK;GH-68.1 ALLOW;GH-69.1 ALLOW BLOCK;GH-69.2 ALLOW BLOCK;GH-72 ALLOW;GH-94.1 ALLOW BLOCK;GH-97.1 ALLOW BLOCK;' \
+  'GH-137.1 BLOCK;GH-137.2 ALLOW BLOCK;GH-43.1 ALLOW;GH-43.3 BLOCK;GH-43.4 BLOCK;GH-51.1 BLOCK;GH-51.2 BLOCK;GH-68.1 ALLOW;GH-69.1 ALLOW BLOCK;GH-69.2 ALLOW BLOCK;GH-72 ALLOW;GH-94.1 ALLOW BLOCK;GH-97.1 ALLOW BLOCK;' \
   "$(printf '%s\n' "$INV_SEEDS" \
      | awk -F'|' 'NF >= 6 { n = split($4, t, " "); for (i = 1; i <= n; i++) if (t[i] ~ /^GH-/) print t[i], $3 }' \
      | LC_ALL=C sort -u \
@@ -9848,7 +10651,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '289' "${TEXT_CHECK_ARGS##*COUNT }"
+    '291' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -9988,7 +10791,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '36' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '41' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -10051,7 +10854,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '34' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '39' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -10715,13 +11518,14 @@ GH-84.2:static GH-84.3:static GH-94.1 GH-94.2 GH-94.3:review GH-94.4 GH-95.1
 GH-95.2 GH-96.1 GH-96.2:static GH-96.3:static GH-97.1 GH-97.2:refuse-only
 GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
-GH-104.4:static GH-104.5:review GH-106:static GH-117:gap GH-118:gap
+GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-117.1:permit-only
+GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139:gap
-GH-107.1:static GH-107.2:static GH-143.4:static GH-143.5:static
-GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7
+GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139:gap              
+GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      
+GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
 GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static
-GH-128
+GH-128 GH-171:gap
 '
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in

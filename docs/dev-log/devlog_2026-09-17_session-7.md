@@ -1,261 +1,139 @@
-# 2026-09-17 · session 5 — #141: which requirements the invariance families seed
+# 2026-09-17 · session 7 — #137: two field readers, each knowing one quote spelling of its own field
 
-**Branch** `worktree-issue-141-seed-scope-rule`, cut from `origin/dev-05` at
-`897bdff`. **Commits** `897bdff..f4e0530`, two of them: `e7b6d5a` the change,
-`f4e0530` the answer to its review. The branch ends 2 commits ahead of
-`origin/dev-05` and 193 ahead of `origin/main`.
+**Branch** `worktree-issue-137-field-quote-spellings`, cut from `origin/dev-05`
+at `befcf8a` and proposed into `dev-05`. One commit, leaving the branch one ahead
+of `origin/dev-05` and 185 ahead of `origin/main`. **Check
+suite 3657 → 3698 results, all passing** — 41 new checks, of which 18 go red
+when the fix is reverted. Every figure here was measured in the worktree, none
+recalled.
 
-Worked unattended by the assistant on Bertan's `/implement` invocation. Bertan
-did not take part; the review recorded below was run by two subagents on the
-assistant's own commit, which is a weaker instrument than his review has been —
-every previous session's most valuable findings were his, and nothing here
-should be read as having had that pass.
+Issue #137 was filed during the grilling of #130's fix design and measured on
+`dev-05` at `8b1cbaf`. Two rules in `no-pr-decisions.sh` read the value of a
+named **field** rather than an endpoint: `state` decides whether a `gh api`
+write closes or reopens a pull request, and `base` decides where one is
+proposed. Each knew one spelling of the quoting around its own field.
 
-## The families seeded one of three requirement families, and not the one written from defects
+## The gap ran in opposite directions, because the two rules are triggered oppositely
 
-#106's invariance families take a seed — a command with a literal verdict —
-rewrite its text, and assert every variant reaches that verdict or a departure
-declared with its reason. Their leverage is that a transformation added to the
-list is asked of every seed at once, so **what is seeded is what the generator
-can ever find.**
+**State refuses on presence**, so a spelling it cannot see is a refusal that does
+not happen. The pattern was `state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?`
+— a double quote admitted round the value, a single quote not — so
+`gh api -X PATCH repos/o/r/pulls/5 -f state='closed'` reached GitHub. Four
+spellings of one request were permitted: the value in single quotes, the same
+for `state='open'`, `--field state='closed'` and `-fstate='closed'`.
 
-The derivation that held the seed table to its scope read `FR-` tags and nothing
-else. `requirements.md` holds three families, and measured on 2026-09-17 it
-holds 95 `GH-` entries to 49 FRs — the `GH-` ones being the entries written
-*from* defects rather than from the specification. So GH-43.6, GH-68.1, GH-72
-and the GH-79 family named commands and no transformation was ever asked of one
-of them, and GH-94.1 was seeded in one direction only. #140's four findings were
-all on FR-seeded commands, which is evidence that the FR set is a reasonable
-start and none at all that it is a sufficient one.
+**Base refuses on absence**, so a spelling it cannot see is a base that is not
+there. `rest_bases` anchored on the field flag with the field name immediately
+after it, and the quote `gh` accepts round a whole field goes *between* the two.
+So `-f "base=dev-05"` read as a create that named no base, and the single
+destination an agent may propose into was refused with the message saying none
+was given.
 
-## The scope is now a rule, and the rule is mechanical where the answer is declared
+Both were measured by the assistant before anything was changed, by feeding each
+command to the hook on stdin — never by running one. The issue's table
+reproduced exactly.
 
-None of the three candidates #141 raised is both derivable and right on its own,
-and the session's first substantive decision was to say so rather than pick one.
-`kind: defect-permitting` alone takes in every entry about the suite's own
-helpers, its tags and its timings, which name no command; "an entry naming a
-hook that judges commands" takes in the same; "text contains a command" is not
-derivable from prose.
+## A third consequence, which the issue's table does not name
 
-What landed splits the question. *Membership* is derived off `requirements.md`:
-a `GH-` entry is in scope when it is `defect-permitting` or `defect-refusing`,
-`active`, and declares neither `direction: static` nor `seam: none` — the
-derivable form of "a requirement about a verdict on a command", which is the
-only thing a variant can reach. The *answer* is declared per entry, in a new
-`variants` field, as one of `seed`, `transformation: <name> …` and
-`none: <reason>`. Three checks at the foot of #106's section hold the
-declarations to the tables: a seed to a tagged row of `INV_SEEDS` by set
-equality, each named transformation to `INV_TRANSFORMS`, and a `none` to a
-reason.
+The quoted base is not only a refusing defect. The no-base arm it fell into is
+keyed on the **collection** endpoint, and `/pulls/35` is not one. So
+`gh api -X PATCH repos/o/r/pulls/35 -f "base=main"` — a retarget of an existing
+pull request onto `main` — set no base the reader could see, matched no
+collection endpoint, and was **permitted**. The refusing half of the base defect
+was visible in the issue because a create was refused loudly; this half was
+silent, and in the permitting direction. It is recorded in `GH-137.2`'s note and
+pinned by two checks.
 
-38 entries are in scope: 11 seeded, 7 naming a transformation, 20 with no
-command spelling for a variant to vary. Those four numbers are a line the suite
-prints, not a comment — they stood in the prose for one revision and the review
-caught them.
+## The fix, and why the two readers are not made alike
 
-The trade is recorded where the rule is. `none` is a declaration, so an entry
-that ought to be seeded can carry a reason that reads well, and this rule would
-not catch it. What changed is that the choice is made once per entry, in
-writing, with a reason a reviewer reads in the diff — where before it was made
-by an `awk` filter nobody had to argue with. The silent direction is closed by
-holding the in-scope set and each entry's keyword as a literal in the suite as
-well, which is #104's reason for holding this file's shape, applied to the one
-field #104 does not read.
+**State** gains `STATE_FIELD_RE`, written once at the head of the file and read
+by both call sites — the wrapper arm and the `gh api` write block. Two copies
+were the defect's cause, not merely its shape: two copies can be fixed apart,
+and a fix applied to one of them reads exactly like a fix.
 
-## The first hook the rule brought into scope failed on its first generated spelling
+The obvious next move — re-anchoring state on its field flag, in `rest_bases`'
+shape — was considered and rejected. State has to reach a graphql `state:CLOSED`
+inside a mutation body and a bare `state=closed` sitting in a wrapped line's
+text, neither of which carries a flag at all; anchoring would narrow a rule whose
+whole job is to be wide. So the two readers stay different shapes on purpose, and
+the comment beside each says which direction it fails in and why that decides it.
 
-`append-only-docs.sh` judges commands and had never been seeded. Seeding it cost
-two rows, and the `continuation` transformation refused to pass: **the verb and
-the path on either side of a backslash are two lines to `grep` and one command
-to a shell.** Fed to the hook on stdin — nothing was executed — `rm`, `mv`,
-`tee`, `truncate` and a truncating redirect are all permitted behind one
-backslash, and `rm -rf docs/dev-log` written across two lines takes every entry
-in the directory with it. `sed -i` survives by accident: its rule is two greps
-rather than one, the verb on a line and the path anywhere, which is the shape of
-the fix arrived at unintentionally in one rule of four.
+**Base** gains an optional quote in one position only, between the flag and the
+name. Everything the anchor was for survives: `-f database=x` and `-f rebase=x`
+still begin with the wrong letter, `-f "database=main"` likewise, and
+`-f title="base: dev-05"` still supplies no base. `rest_bases`' comment now
+records three answers to "where does the field begin" rather than two, each
+right about the one it replaced.
 
-It is #84's shape once more. `no-pr-decisions.sh` calls `cs_join` for exactly
-this reason, and the comment above `cs_join` in `lib/command-scan.sh` states the
-defect in the present tense, one file away from the hook that has it. Filed as
-**#156** with a gap row rather than fixed here: the fix touches the hook and its
-load guard together, because GH-84.2 requires a consumer's guard to require
-exactly the `cs_*` functions its code calls.
+What the state widening costs is one spelling more of CLAUDE.md's left-open item
+2: `state='open'` written as prose, on a line that already reaches these rules,
+is now refused as `state="open"` already was. Named in the code and in
+`GH-137.1`'s note rather than left for a later review to find.
 
-## Two constraints on the seed table that were discovered rather than known
+## The evidence, and what it is evidence of
 
-**A seed command may not contain `|`**, which is the table's field separator. So
-GH-68.1 cannot be seeded with its own example, `sed -i 's/a\|b/c/'`; the seed
-carries the same shape with a `;` inside the quotes instead. A requirement whose
-only command contains a `|` cannot be seeded at all, and would be
-`variants: none` with that as the reason.
+`requirements.md` gains `GH-137.1` (`defect-permitting`) and `GH-137.2`
+(`defect-refusing`), both bare in `REQUIREMENT_SHAPE`, so each needs a refusing
+and a permitting check.
 
-**A verdict is a property of the command text together with the fixture and the
-hook.** `git push --all origin` is now seeded twice on purpose — against
-`no-git-push.sh` in a worktree and `no-commit-to-main.sh` on `main`, because two
-hooks reading one command is two claims. The regeneration skip was keyed on text
-alone, so its premise ("already checked as a seed, with the same verdict")
-stopped holding in general the moment that happened. Both seeds are BLOCK, so
-nothing was skipped wrongly; the key is `fixture|hook|text` now. The two
-examples that comment offered turned out to regenerate nothing at all — their
-tails had diverged, `--body y` against `--title x` — and the counter reading 0
-is the evidence.
+The 41 checks were then run against three broken copies of `.claude/hooks/`,
+judged through `$CHECK_HOOKS_DIR` so that this repository's own hooks were never
+edited:
 
-## The review found nine things, and the one with teeth was a pass about nothing
+| what was broken | checks that went red |
+|---|---|
+| `STATE_FIELD_RE` back to the double-quote-only form | 6 |
+| `rest_bases` back to no quote between flag and name | 10, two of them message checks |
+| the fix applied to the write block and not the wrapper arm | 4, two of them the static pair |
 
-`[ -n "$INV_SCOPE_DERIVED" ] || fail …` did not count itself into the failure
-tally, so a run that read nothing out of `requirements.md` printed its failure
-and then, on the next line, `ok every GH- entry in the families scope declares a
-variants value this suite can act on` — a pass about cases it had not asked.
-That is the shape #98's section exists for, written by the assistant into the
-one section whose subject is guards that cannot fail.
+Eighteen distinct rows; the two wrapper rows go red twice over, which is what
+makes them the pair that tells a broken pattern from a pattern fixed in one place
+only.
 
-The other eight were claims wider than what the code asks, or numbers already
-stale:
+Twenty-three stay green under all three, and each block is declared in the
+section's comments as what it is rather than left for a reader to assume. The
+assistant's first version of this section declared it only in aggregate; the
+per-block declarations and the ledger at the head of the section were added after
+review, because #137's acceptance criterion asks that the pull request say so for
+each and an aggregate does not.
 
-- "Both directions for every requirement with a command spelling" — the
-  derivation under it has read `FR-` tags since the day it was written, so the
-  sentence was never what was checked, and the assistant's one-directional
-  `GH-` seeds then contradicted it outright. GH-106's own `text` carried the
-  same overclaim; both now say *functional*, and the entry's note records that
-  this is a correction and not a widening.
-- `requirements.md`'s trade claimed "a value changed" goes red. The literal
-  holds `ID:keyword`, so a reworded reason or a different transformation named
-  stays green. It now says which half the literal closes.
-- GH-43.6 declared `transformation: global-flag` while `inv_global` writes only
-  `-C`, claiming a shape no variant generated. `global-flag-gitdir` added, and
-  measured first: `--git-dir` and `--work-tree` behave exactly as `-C` does,
-  refused on a push and permitted on a `status`.
-- "60-odd `GH-` entries against 49 FRs", quoted from #141's own text, is two
-  different bases — all FRs against some `GH-` entries. Measured and replaced.
-- `trim`, `keyword` and `after_colon` are `requirements.md`'s field grammar and
-  had been written twice in one file, which is the defect class
-  `lib/command-scan.sh`'s header opens by naming. One `REQ_FIELD_AWK` now,
-  prepended to both programs.
-- The `^GH-` test the rule states rested on `requirements.md`'s separate rule
-  that only a `GH-` entry carries a `kind`; it is in the condition now.
-- Two splits left unpaired where the rest of the section pairs `set -f`/`set +f`.
-- The `none`-is-a-declaration trade was written out in three places, one of them
-  labelled "said once".
+Fourteen are contrast rows: the spellings the old patterns already reached, kept
+so that the shape of the hole is on the record beside the hole. `-f
+"state=closed"` and `-f 'state=closed'` are the two that matter most — they pass
+today through the raw grep alone, and they are pinned so that a later
+re-anchoring of the state reader on its field flag turns them red instead of
+inheriting the gap this issue closed in `base`. Five of the fourteen reached the
+same verdict before the fix **for a different reason**: a quoted create into
+`main`, in three flag spellings, was refused for naming no base rather than for
+naming `main` — which is what the two message checks exist to separate — and a
+quoted retarget to `dev-05` was permitted because no base was seen at all rather
+than because the base was good.
 
-## What it costs, and why #140's number could not be used
+The remaining nine are arming and property rows: that the widened state pattern
+still permits an ordinary retitle and still reads `state='draft'` as neither
+verdict, and that the widened base anchor still keeps `rebase`, `database` and a
+quoted title out of the base.
 
-Measured on one machine, in one worktree, every run green:
+Nine of the 41 were added after the standards review observed that `rest_bases`'
+own comment now claims five spellings of one request while the suite named two,
+and that two of the three flags the anchor admits — `-F` and `--raw-field` —
+reached no row at all. Three of those nine go red on the `rest_bases` revert; the
+other six are contrast and property rows, declared as such beside them.
 
-| tree | wall clock | n | families |
-|---|---|---|---|
-| before, at `897bdff` | 118.6 s | 1 | 39 seeds, 1436 variants |
-| after | 116.8 / 117.1 / 118.4 / 119.9 / 122.6 / 133.1 s | 6 | 46 seeds, 1807 variants |
+The two static checks are the half no verdict can see: that the state pattern
+appears once in the file's code and that exactly two call sites read it. They are
+the pair that fires on the one-call-site mutation, and without them a copy
+reintroduced and corrected in one place would be silent again.
 
-371 more variants, 26% more of them, and **the difference between the two rows
-is smaller than the range within the second**: the six after-runs span 16.3 s
-and their median is 119.2 s, against a single before-run of 118.6 s. So the
-measurement supports "the addition did not move the run time by anything this
-suite can resolve", and does not support a figure for how much it moved it by.
-A second before-run was not taken and should have been.
+No mutation registry rows were added. `mutate-hooks.sh` takes about forty-five
+minutes for its 23 rows, and a row that has not been run is the trap #107's own
+self-tests exist to name: an edit that silently fails to apply reads exactly like
+evidence and is none. The three reverts above were run instead, and they are
+recorded here rather than claimed in a registry.
 
-The range is the finding rather than noise around one. The 133.1 s run and a
-116.8 s run are the same tree minutes apart, with other worktree sessions on the
-machine.
+## Left for #130 and #138
 
-The per-variant model over-predicts, which matters because #141's cost paragraph
-reasons from one. Timed directly at n=100 each, one hook invocation exactly as
-`check_in` makes it: 10.9 ms for `append-only-docs.sh`, 16.0 ms for
-`no-commit-to-main.sh`, 29.8 ms for `no-pr-decisions.sh`. At those rates 371
-variants would be 5–7 s and the suite does not show it; a cold invocation from a
-shell loop is not what a variant costs in the middle of a run that has paged
-everything in.
-
-**#140's 94.0 s is not comparable with any of these.** The commit this branch
-starts from measures 118.6 s here, so the comparison #141's fourth acceptance
-criterion asks for had to be made baseline-to-after on one machine rather than
-against the recorded figure. #141's warning that "the same again would want a
-decision about the budget" is about the 53 s #140 added, and on this evidence
-this is not that.
-
-## Mutation, and the limit it moved
-
-Two registry rows added, `variants-field-deleted` and `variants-seed-disowned`,
-both reported `caught` in a clean run with `.claude/hooks/` byte-identical
-afterwards. The first run of them was not clean and reported `.claude/hooks/
-changed during this run` — the assistant had edited `requirements.md` while the
-harness was running, which is exactly the integrity check doing its job, and the
-run was repeated rather than explained away.
-
-Those two rows moved a stated limit. `mutate-hooks.sh` says a rule living in the
-tooling beside the hooks cannot be registered, because the suite that runs is
-this repository's whatever `CHECK_HOOKS_DIR` says — and GH-141's rule *is* code
-in `check-hooks.sh`. It is registrable all the same, because what that code
-**reads** is `requirements.md`, which an override does move. The test is whether
-the run reads the copy, not whose file the rule sits in. #106's own self-guards
-still fail it: what they read is the seed table, which is in the suite.
-GH-107.2's note said otherwise and is corrected.
-
-## The append-only guard is off in every worktree, found by trying to obey it
-
-Writing this entry produced the session's second permitting defect, and the way
-it was found is worth recording. The numbers in the cost section above were
-wrong by two later runs. `docs/dev-log/` is append-only and the convention is
-that an entry freezes once written, so the assistant expected
-`append-only-docs-edit.sh` to refuse the correction, and attempted it to
-confirm. **It went through.**
-
-`append-only-docs-edit.sh` resolves the edited path against
-`CLAUDE_PROJECT_DIR`, which is the main checkout, so for a file in a linked
-worktree the remainder is `.claude/worktrees/<name>/docs/dev-log/<entry>.md` and
-the `^docs/` anchor does not match. Measured by feeding tool calls to the hook
-on stdin, with the controls run rather than assumed:
-
-| `CLAUDE_PROJECT_DIR` | path | verdict |
-|---|---|---|
-| main checkout | `<main>/docs/dev-log/<entry>` | BLOCK |
-| main checkout | `docs/dev-log/<entry>`, relative | BLOCK |
-| main checkout | `<worktree>/docs/dev-log/<entry>` | **ALLOW** |
-| worktree | `<worktree>/docs/dev-log/<entry>` | BLOCK |
-| main checkout | a new entry file | ALLOW |
-
-The fourth row is what says the cause is the anchoring and not the path. The
-Bash-side `append-only-docs.sh` does not share it — it matches path spellings in
-the command text and resolves nothing against a root, so `rm -rf` of a
-worktree's `docs/dev-log` is still refused, measured in all three spellings. So
-the two halves of one rule disagree about which files are append-only, which is
-the class `lib/command-scan.sh` exists to end, here between two files rather
-than inside one.
-
-The consequence runs the wrong way round from the guard's purpose: CLAUDE.md
-says an unattended agent *shall* work in a dedicated worktree, so a worktree is
-where every agent edit to `docs/dev-log/` happens. The guard covers the checkout
-where an agent is not working. Filed as **#159**, unfixed.
-
-Two things about this entry follow from that, stated rather than left for a
-reader to work out. The corrected cost table above, and this section, were both
-written through the gap — the guard should have refused both, and the second
-edit is a record of a defect that only exists because the first one worked.
-Neither revises history: the file was minutes old, uncommitted, and factually
-wrong. And the check suite is green with the guard inoperative, because every
-check for this hook passes a path under the project root — #84's shape, one
-question asked of one spelling, which is the same finding as this session's
-main one arriving from the other side.
-
-## Open
-
-- **#156** is filed and unfixed: the continuation evasion in
-  `append-only-docs.sh`. Its gap row goes red when the fix lands, which is the
-  intended outcome. The fix has to move the load guard with the call.
-- **#159** is filed and unfixed: `append-only-docs-edit.sh` is off in every
-  linked worktree. Nothing in the suite fails on it, so nothing will remind
-  anyone; it is the more urgent of the two, because the hook is not merely
-  evadable there but inoperative.
-- **The `GH-` half of the seed table is 11 entries wide**, and 20 in-scope
-  entries are `variants: none`. Each reason is a claim someone can argue with,
-  which is the point, and the frontier is whichever of them turns out to be
-  wrong.
-- **GH-131 and GH-143.1–.3** are the entries the file-payload decision will land
-  on. Both are out of scope today — #131 is `gap → #131`, GH-143.1 to .3 are not
-  written — and the rule makes the declaration compulsory when either goes
-  active. The decision itself is recorded now rather than left to be
-  rediscovered: `-f query=@file` and `--input file` put what a rule must judge
-  outside the command's text, so no text-rewriting generator can produce or
-  judge them.
-- **This branch has not had Bertan's review.** Every previous entry in this
-  directory records that pass finding defects a green suite did not, several of
-  them in the commit that fixed the previous round.
+#130's endpoint reader, the per-command move and the graphql gate are untouched,
+and its worktree is cut after this one. A field read out of a JSON request body
+supplied by `--input` is #138 and lands last; a state in such a body is permitted
+today and a base in one is refused today, and neither changed here.

@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- thirty-four runs as the
-# registry stands, not thirty-five, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- forty-one runs as the
+# registry stands, not forty-two, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -47,7 +47,7 @@
 # came back byte-identical.
 #
 # THAT MEASUREMENT IS NOT CURRENT, and saying so is the point of this paragraph.
-# Three selections have been run since, each naming its own rows and none part of
+# Four selections have been run since, each naming its own rows and none part of
 # a whole-registry run. #108 added six rows and ran them as a named selection:
 # baseline plus six, all caught, .claude/hooks/ byte-identical after. #128 added
 # three and ran them the same way, baseline plus three, all caught with GH-128
@@ -55,9 +55,17 @@
 # `retarget-refusal-drops-the-create-comparison` and ran the pair the same way,
 # both caught, byte-identical after; it also edited no-pr-decisions.sh,
 # check-hooks.sh and this file, so three of the files that run changed after the
-# figure above was taken. No run has therefore exercised all thirty-four rows
-# together, and saying which rows a measurement covered is the whole point of
-# recording one. A reader who wants "the whole registry, at this commit" has to
+# figure above was taken. #117 added five, and on the merge of dev-05 into it
+# (2026-09-18) the sixteen rows added since that measurement -- #117's, #108's,
+# #128's and #133's -- were run as one selection: baseline plus sixteen, all
+# caught, byte-identical after. #141 added two, `variants-field-deleted` and
+# `variants-seed-disowned`, and on the second merge of dev-05 into it
+# (2026-09-18) ran that pair as a selection against the merged tree: baseline
+# plus two, both caught with GH-141 red, byte-identical after. The other
+# twenty-three rows have not been run since the files they run against changed.
+# No run has therefore exercised all forty-one rows together, and saying which
+# rows a measurement covered is the
+# whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
 # sentence this replaced, claiming the only later edit was to this comment, was
 # worth catching. Bertan's two reviews of PR #147, and two merges of dev-05 into
@@ -129,12 +137,12 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   THIRTY-FOUR real mutations, against SEVEN files in .claude/hooks/, naming
-#   FORTY-ONE requirement IDs between them, of the 159 whose status is active.
+#   THIRTY-NINE real mutations, against SEVEN files in .claude/hooks/, naming
+#   FORTY-THREE requirement IDs between them, of the 163 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
-# They have now been wrong or moved five times in two days, and #148 is filed to
+# They have now been wrong or moved six times in three days, and #148 is filed to
 # take them out and let `--list` be the only place they are written.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
@@ -248,6 +256,11 @@ variants-seed-disowned%requirements.md%/^### GH-72$/,/^$/s/^- variants: seed$/- 
 heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
+command-word-not-reduced%lib/command-scan.sh%s/^      w = substr(s, 1, i - 1)$/      w = "x"/%GH-117%caught
+wrapper-word-spelling-not-admitted%lib/command-scan.sh%s/SPELLING((ba|z|)sh/((ba|z|)sh/%GH-117%caught
+prefix-word-spelling-not-reduced%lib/command-scan.sh%s/return cw_name(w)/return w/%GH-117%caught
+wrapper-surface-quotes-not-admitted%no-pr-decisions.sh%/^GH_SURFACE_ANYWHERE=/s/\["'"'"'\]\*gh\["'"'"'\]\*/gh/%GH-117%caught
+the-close-117-rejected%lib/command-scan.sh%s/SPELLING((ba|z|)sh/SPELLING(\\\\$\\\\(|(ba|z|)sh/%GH-117.1%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

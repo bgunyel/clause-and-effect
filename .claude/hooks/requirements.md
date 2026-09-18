@@ -1494,17 +1494,81 @@ and held to the same standard of saying only what it asks.
   carries it
 
 ### GH-117
-- text: A command word spelled as a path, quoted or backslash-escaped is the command
-  it spells: `/usr/bin/gh pr merge 5`, `./gh …`, `"git" push origin main`, `'git'
-  …` and `\git …` reach the verdict their bare-name spelling reaches, in every
-  hook.
+- text: A word the library recognises BY NAME is the word it spells, however it is
+  spelled: `/usr/bin/gh pr merge 5`, `./gh …`, `"git" push origin main`, `'git' …`
+  and `\git …` reach the verdict their bare-name spelling reaches, in every hook.
+  That covers three kinds of word and not one, because all three are matched by
+  name: the command word; the prefix words `cs_split` strips, so that
+  `/usr/bin/env gh pr merge 5` and `"timeout" 30 gh pr merge 5` are refused as
+  their bare spellings are; and the wrapper words, so that CLAUDE.md's
+  deliberately-left-open item 1 holds for `/bin/bash -c …` as it does for
+  `bash -c …`. Partial quoting counts, `g"h"` being `gh`, and so does a tilde
+  path. A reserved word does not: quoting one takes its reserved meaning away, so
+  `"if"` is a program named `if` and the control-word strip is right to stop.
 - from: #117, found reviewing PR #115
 - kind: defect-permitting
-- status: gap → #117
-- note: #106's families pin the five spellings as permitted against every refused
-  seed, one row per spelling rather than one per seed, so the claim held is the
-  class the issue measured. Those rows go red when #117 lands, which is the
-  intended outcome.
+- status: active
+- variants: transformation: word-path word-dot word-dquoted word-squoted
+  word-escaped pre-sudo-path pre-env-path pre-timeout-quoted
+- note: the word is reduced to its basename after unquoting and unescaping, so a
+  program of another name keeps it -- GH-72 decided that `my-gh` is not `gh`, and
+  the permitting checks hold that decision against this one. Two places read a
+  command word and both are in `lib/command-scan.sh`: `cw_reduce` in `cs_split`,
+  reached through `printhead` for the word a rule anchors on and through
+  `cw_spelled` for the prefix and operand word lists, and `CS_WORD_SPELLING` in
+  `CS_WRAPPER_RE`, which reads raw text and so admits the spellings itself.
+  #106's families carried the five spellings as departure rows against every
+  refused seed until this landed; the rows are gone, and those variants now reach
+  their seed's verdict under the seed's own tags. The families also gained
+  transformation 13, the prefix word spelled otherwise.
+  A FOURTH SITE, found by review of the branch rather than by the suite: the
+  wrapper rule asks two questions, and its second one -- does the line carry the
+  surface this hook guards -- is each hook's own pattern and matched the guarded
+  name by its bare spelling only. So `bash -c '"gh" pr merge 5"'` was permitted
+  where the bare spelling is refused, and the text above said "in every hook"
+  while four hooks said otherwise. All four patterns admit a quoted spelling
+  now; `check-hooks.sh` derives the set off `settings.json` rather than listing
+  it, so a fifth boundary hook is asked the same question without anyone
+  revising a sentence. Measured before it was taken: across the 476
+  wrapper-carrying commands of a 75,346-command corpus, widening all four
+  changed no verdict.
+  What is NOT decided here is a command word that is a parameter or command
+  substitution -- `$(command -v gh) pr merge 5` -- which cannot be resolved from
+  text at all. #117's triage raises it as recommendation 4 and calls it the
+  maintainer's judgement; it stays permitted, and the decision is Bertan's,
+  either a refusal or a sixth numbered item in CLAUDE.md's *Deliberately left
+  open*. It is named here so that the gap is on the record rather than implied by
+  the absence of a check.
+
+### GH-117.1
+- text: A command word that is a parameter or a command substitution is not
+  resolved, and is permitted rather than refused: `$(command -v gh) pr merge 5`,
+  `` `command -v gh` pr merge 5 ``, `$GH pr merge 5` and the `git` spellings of
+  each reach no hook rule. CLAUDE.md's *Deliberately left open* carries it as
+  consequence 6, with the measurement that decided it and the close that was
+  rejected.
+- from: #117, recommendation 4 of its triage comment, which raised it as a
+  judgement call for the maintainer to settle before implementation
+- kind: doc-claim
+- status: active
+- direction: permit-only: an accepted gap has no refusing half, and writing one
+  would claim a refusal that does not happen. What the refusing direction would
+  normally buy -- evidence the rule fires -- is bought instead by the paragraph
+  checks, which hold the document to naming these three shapes and to carrying
+  the number it was decided on.
+- note: settled by measuring rather than by judgement, against 75,346 Bash
+  commands from 661 local session transcripts. The close was written first: a
+  `$(` alternative to `CS_WRAPPER_RE` closes none of the four shapes, because the
+  wrapper block also asks whether the line carries the guarded surface and a
+  command substitution eats the boundary that question needs -- the line reads
+  `gh)`, not `gh `. It flipped only the `gh api` spelling, which matches on the
+  `/pulls/…/merge` literal and needs no `gh` at all, and it refused 9 commands
+  that should pass, 8 of them lines of `check-hooks.sh` being edited. One of
+  those 9 is kept as a check, so a later attempt at the same close fails in this
+  suite rather than in a review. The three shapes are also not one shape: in
+  command position the corpus holds 88 `$(…)`, 2,469 backticks and 377 `$VAR`,
+  and a backtick rule would refuse a heredoc whose prose says `` `git push` ``,
+  which is consequence 3 widened by three orders of magnitude.
 
 ### GH-118
 - text: A `gh` command carrying any option other than `-R`, `--repo` or
@@ -1759,6 +1823,56 @@ and held to the same standard of saying only what it asks.
   retired or superseded one has no covering check, so a row naming it would report
   `survived` for ever and read as a defect in the hooks rather than in the row.
 
+### GH-137.1
+- text: The `state` reader in `no-pr-decisions.sh` recognises every spelling of the
+  quoting round its own field — `state=closed` and `state=open` with the value
+  bare, double-quoted or single-quoted, and with a quote round the whole field
+  between the flag and the name — and does so at both of its call sites, the
+  `WRAPTEXT` arm and the `gh api` write block. The pattern is written once and
+  both read it. Quoting INSIDE the name or the value (`st"ate"=closed`,
+  `state=clo"sed"`, `state\=closed`) is not this requirement's, and is #163.
+- from: #137, found while grilling the fix design for #130
+- kind: defect-permitting
+- status: active
+- variants: seed
+- note: the reader stays keyed on the FIELD and not on the endpoint, for the reason
+  its own comment gives — the same PATCH is how `gh pr edit` retitles a pull
+  request, which stays allowed — and stays unanchored where `rest_bases` anchors
+  on the field flag. The two rules are triggered oppositely and that decides it:
+  this one refuses on presence and has to reach a graphql `state:CLOSED` and a
+  bare `state=closed` in a wrapped line, neither carrying a flag at all. What the
+  widening costs is CLAUDE.md's left-open item 2, one spelling wider: `state='open'`
+  written as prose on a line that already reaches these rules is refused, as
+  `state="open"` already was.
+
+### GH-137.2
+- text: The `base` reader `rest_bases` recognises `base=<value>` however the field is
+  spelled between its flag and its name — any separator `gh` accepts (nothing,
+  whitespace or `=`) and a quote round the whole field as well as round the value
+  — and reads the value out of it. `-f "base=dev-05"`, `-f 'base=dev-05'`,
+  `--field "base=dev-05"`, `--field=base=dev-05` and `-f=base=dev-05` are the
+  permitted create that `-f base=dev-05` is, and the same spellings naming `main`
+  are refused with the message that names the branch.
+- from: #137, found while grilling the fix design for #130; the separator half
+  found by Bertan's review of PR #153, in the change that closed the quote half
+- kind: defect-refusing
+- status: active
+- variants: seed
+- note: the fourth answer to "where does the field begin", after the bare word, the
+  flag with the name immediately after it, and the flag with a quote admitted
+  between; `rest_bases`' comment records all four. The separator class is the
+  closure rather than another guess — pflag accepts exactly nothing, whitespace or
+  `=` between a flag and its value — and the anchor that keeps `rebase` and
+  `database` ordinary words and keeps a base out of `-f title="base: dev-05"` is
+  untouched, since after any separator the next character is still the wrong one.
+  Not only a refusing defect, in either half: the no-base arm it falls into is
+  keyed on the collection endpoint, so an unread base on `PATCH /pulls/N` — a
+  retarget — is matched by nothing and permitted. The issue's table names neither
+  the retarget nor the separator. The closure is of the separator and not of the
+  field: quoting inside the name or the value (`-f ba"se"=main`, `-f base\=main`)
+  is still unread and on a retarget still permitted, found by the follow-up review
+  of PR #153 and carried by #163.
+
 ### GH-143.4
 - text: CONTEXT.md's *reserved act* names moving the active dev branch's remote ref
   any way other than advancing it, and deleting that ref, says that nothing refuses
@@ -1964,6 +2078,7 @@ and held to the same standard of saying only what it asks.
   local path that does not exist fails at once, and with `gh` absent the two reads
   behind it are skipped by the rule in that file's header. That is why this one
   can be a run and why a genuinely offline network cannot.
+
 ### GH-128
 - text: A heredoc body begins where bash begins it, so a command written after the
   terminator is read as a command. A line ending in an ODD run of trailing
@@ -2027,6 +2142,24 @@ and held to the same standard of saying only what it asks.
   one file away from the hook that has it. #106's families pin the one
   transformation they generate, `docs-truncate + continuation`; the other
   spellings are in the issue.
+
+### GH-171
+- text: `append-only-docs.sh` refuses a verb it names however its command word is
+  spelled: `/bin/rm`, `./truncate`, `"rm"`, `'truncate'` and `\mv` on an
+  append-only path are refused as `rm`, `truncate` and `mv` are.
+- from: #171, found by #106's invariance families when #141's `docs-truncate`
+  seed first met #117's `word-*` transformations, on the merge of dev-05 into
+  PR #160
+- kind: defect-permitting
+- status: gap → #171
+- note: the verb test is the hook's own `grep -E`, which wants the bare name
+  after a start, separator or space, and reads the raw command text; #117
+  reduced a command word to the name it spells in `cs_split`, and this hook takes
+  only `cs_tool_input` and `cs_within_cap` from the library, so the reduction
+  never reaches it. Measured on dev-05's own copy by feeding each command on
+  stdin: the bare spellings and `command rm`/`env rm` are refused, the five
+  spellings above permitted. #106's families pin the five they generate as
+  `docs-truncate + word-*` gap rows, which go red when this is fixed.
 
 ### GH-141
 - text: Which `GH-` requirements #106's invariance families seed is a stated rule
@@ -2292,6 +2425,13 @@ it has no entry above (Q16).
   have entries above
 - #140: a pull request, for #106; Bertan's review of it is cited where the four
   things it corrected stand
+- #153: a pull request, for #137; Bertan's review of it found the separator half
+  of GH-137.2, which that entry carries, and corrected three claims in this
+  change — the flag pairing, the safety property `rest_bases`' comment asserted,
+  and two static checks that counted lines where they meant occurrences
+- #163: the in-word half of the quoting GH-137.1 and GH-137.2 read round a field,
+  found by the follow-up review of #153; it adds its requirements in the pull
+  request that fixes it, after #130, rather than pinning today's verdicts
 - #141: has an entry above, GH-141, and is listed here only because this file
   cited it before it landed, as the issue that owned deciding which non-FR
   requirements the invariance families seed. It decided that, and the rule is

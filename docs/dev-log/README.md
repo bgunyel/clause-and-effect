@@ -40,10 +40,15 @@ thing in the record.
 
 ## Conventions
 
-- File name: `devlog_YYYY-MM-DD_session-N.md`, where `N` counts sessions within
-  that day starting at 1 (multiple sessions per day are expected).
-- Open with the date, branch, commit range, and how far ahead of `main` the
-  branch ended up.
+- File name: `devlog_YYYY-MM-DD_SESSION-NAME.md`, where `SESSION-NAME` is the session 
+  name of the agent writing the dev-log. 
+- If the agent does not know its session name, or it is in doubt, it should call 
+  the `ListAgents` function to see its session name.
+- A dev-log entry should start with date and time of the entry. Open with 
+  branch, commit range, and how far ahead of its root branch the current branch 
+  ended up.
+- If the dev-log file that the agent is trying to write already exists, 
+  the agent should  append a new dev-log entry to the file with a date and time. 
 - Written for technical readers who know the codebase. Prefer measured numbers
   and commit SHAs over recollection — and say which figures were measured versus
   recalled.
@@ -425,7 +430,41 @@ thing in the record.
   the ordinal is decided by merge order, and is knowable only afterwards, is
   #157.
 
-- [2026-09-17 · session 7](devlog_2026-09-17_session-7.md) — #141: #106's
+- [2026-09-17 · session dev-issue-117](devlog_2026-09-17_session-dev-issue-117.md)
+  — #117 and PR #152, in three parts, written in this order.
+
+  **Part 1** — #117: a command word spelled as a path, quoted or
+  backslash-escaped passed every hook, and so did the prefix and wrapper words
+  the triage added. `cs_split` now reduces a command word to the name it spells,
+  in one place, cell by cell rather than by building a string, because the
+  string version was measured quadratic at the line cap. Review of the first
+  commit found a prefix word matched by name as well, left unreduced.
+
+  **Part 2** — #117's recommendation 4, a command word that is `$(…)`, a
+  backtick or `$VAR`: the close was written, measured against 75,346 Bash
+  commands from local session transcripts, and rejected on its own numbers — it
+  closed none of the headline shapes and refused nine commands that should pass.
+  Settled as consequence 6 in `CLAUDE.md`, with all three shapes pinned as
+  permitted.
+
+  **Part 3** — review of PR #152: the wrapper rule asks two questions, and #117
+  had closed only the first. Each boundary hook's own surface pattern matched its
+  guarded name by the bare spelling, so `bash -c '"gh" pr merge 5'` was
+  permitted; widened in all four, measured at no verdict change across 476
+  wrapper-carrying commands. A registry row was found mutating the wrong
+  occurrence and still reporting `caught`.
+
+  **Named for the session rather than numbered.** The three were written as
+  sessions 2, 3 and 4, renumbered 7, 8 and 9 when they collided on merging
+  dev-05 with #143's two entries and #108's, and collided again when #137's
+  entries took 7 and 8. `db06477` replaced day-numbering with the writing
+  session's name, so they now share one file. Each part is its original entry
+  with heading levels changed and nothing else, so every count inside is the one
+  that stood at its commit — 28 registry rows and a suite of 3903 at the end of
+  Part 3, against 39 rows and 4346 results after the first merge.
+
+- [2026-09-17 · session dev-issue-141](devlog_2026-09-17_dev-issue-141.md)
+  — #141: #106's
   invariance families seeded one of `requirements.md`'s three requirement
   families, and not the one written from defects — 95 `GH-` entries to 49 FRs,
   and the derivation read `FR-` tags only. Which `GH-` requirements are seeded
@@ -442,10 +481,10 @@ thing in the record.
   obey the convention: `append-only-docs-edit.sh` is inoperative in every linked
   worktree, which is where agents work, filed as #159. Worked unattended; it has
   not had Bertan's review.
-  **Numbered 7 rather than 5.** It was written as session 5 and collided on
-  merge with #128's entry of that name, with #133's session 6 already beside
-  it — #157's ordinal collision a third time. Only the file name changed: its
-  heading still reads "session 5", because changing it would be an edit to an
-  existing entry that only #159's gap lets through, and every count inside it
-  is the one that stood at its first commit — 31 registry rows before
-  `dev-05`'s five were merged in.
+  **Named for the session rather than numbered.** It was written as session
+  5, collided on merging dev-05 with #128's entry of that name and became 7,
+  then collided again when #137's entries took 7. `db06477`'s convention
+  names it for the writing session instead. It was still a draft under ADR
+  0003 when renamed, so its heading was corrected with the file name; every
+  count inside it is the one that stood at its first commit — 31 registry
+  rows, against 41 after the second merge.
