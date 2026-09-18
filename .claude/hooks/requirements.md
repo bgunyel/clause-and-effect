@@ -1323,17 +1323,79 @@ The suite fails on each of these, and `--matrix` shows the rest:
   the third thing, which is calling a defect a design exception
 
 ### GH-117
-- text: A command word spelled as a path, quoted or backslash-escaped is the command
-  it spells: `/usr/bin/gh pr merge 5`, `./gh …`, `"git" push origin main`, `'git'
-  …` and `\git …` reach the verdict their bare-name spelling reaches, in every
-  hook.
+- text: A word the library recognises BY NAME is the word it spells, however it is
+  spelled: `/usr/bin/gh pr merge 5`, `./gh …`, `"git" push origin main`, `'git' …`
+  and `\git …` reach the verdict their bare-name spelling reaches, in every hook.
+  That covers three kinds of word and not one, because all three are matched by
+  name: the command word; the prefix words `cs_split` strips, so that
+  `/usr/bin/env gh pr merge 5` and `"timeout" 30 gh pr merge 5` are refused as
+  their bare spellings are; and the wrapper words, so that CLAUDE.md's
+  deliberately-left-open item 1 holds for `/bin/bash -c …` as it does for
+  `bash -c …`. Partial quoting counts, `g"h"` being `gh`, and so does a tilde
+  path. A reserved word does not: quoting one takes its reserved meaning away, so
+  `"if"` is a program named `if` and the control-word strip is right to stop.
 - from: #117, found reviewing PR #115
 - kind: defect-permitting
-- status: gap → #117
-- note: #106's families pin the five spellings as permitted against every refused
-  seed, one row per spelling rather than one per seed, so the claim held is the
-  class the issue measured. Those rows go red when #117 lands, which is the
-  intended outcome.
+- status: active
+- note: the word is reduced to its basename after unquoting and unescaping, so a
+  program of another name keeps it -- GH-72 decided that `my-gh` is not `gh`, and
+  the permitting checks hold that decision against this one. Two places read a
+  command word and both are in `lib/command-scan.sh`: `cw_reduce` in `cs_split`,
+  reached through `printhead` for the word a rule anchors on and through
+  `cw_spelled` for the prefix and operand word lists, and `CS_WORD_SPELLING` in
+  `CS_WRAPPER_RE`, which reads raw text and so admits the spellings itself.
+  #106's families carried the five spellings as departure rows against every
+  refused seed until this landed; the rows are gone, and those variants now reach
+  their seed's verdict under the seed's own tags. The families also gained
+  transformation 13, the prefix word spelled otherwise.
+  A FOURTH SITE, found by review of the branch rather than by the suite: the
+  wrapper rule asks two questions, and its second one -- does the line carry the
+  surface this hook guards -- is each hook's own pattern and matched the guarded
+  name by its bare spelling only. So `bash -c '"gh" pr merge 5"'` was permitted
+  where the bare spelling is refused, and the text above said "in every hook"
+  while four hooks said otherwise. All four patterns admit a quoted spelling
+  now; `check-hooks.sh` derives the set off `settings.json` rather than listing
+  it, so a fifth boundary hook is asked the same question without anyone
+  revising a sentence. Measured before it was taken: across the 476
+  wrapper-carrying commands of a 75,346-command corpus, widening all four
+  changed no verdict.
+  What is NOT decided here is a command word that is a parameter or command
+  substitution -- `$(command -v gh) pr merge 5` -- which cannot be resolved from
+  text at all. #117's triage raises it as recommendation 4 and calls it the
+  maintainer's judgement; it stays permitted, and the decision is Bertan's,
+  either a refusal or a sixth numbered item in CLAUDE.md's *Deliberately left
+  open*. It is named here so that the gap is on the record rather than implied by
+  the absence of a check.
+
+### GH-117.1
+- text: A command word that is a parameter or a command substitution is not
+  resolved, and is permitted rather than refused: `$(command -v gh) pr merge 5`,
+  `` `command -v gh` pr merge 5 ``, `$GH pr merge 5` and the `git` spellings of
+  each reach no hook rule. CLAUDE.md's *Deliberately left open* carries it as
+  consequence 6, with the measurement that decided it and the close that was
+  rejected.
+- from: #117, recommendation 4 of its triage comment, which raised it as a
+  judgement call for the maintainer to settle before implementation
+- kind: doc-claim
+- status: active
+- direction: permit-only: an accepted gap has no refusing half, and writing one
+  would claim a refusal that does not happen. What the refusing direction would
+  normally buy -- evidence the rule fires -- is bought instead by the paragraph
+  checks, which hold the document to naming these three shapes and to carrying
+  the number it was decided on.
+- note: settled by measuring rather than by judgement, against 75,346 Bash
+  commands from 661 local session transcripts. The close was written first: a
+  `$(` alternative to `CS_WRAPPER_RE` closes none of the four shapes, because the
+  wrapper block also asks whether the line carries the guarded surface and a
+  command substitution eats the boundary that question needs -- the line reads
+  `gh)`, not `gh `. It flipped only the `gh api` spelling, which matches on the
+  `/pulls/…/merge` literal and needs no `gh` at all, and it refused 9 commands
+  that should pass, 8 of them lines of `check-hooks.sh` being edited. One of
+  those 9 is kept as a check, so a later attempt at the same close fails in this
+  suite rather than in a review. The three shapes are also not one shape: in
+  command position the corpus holds 88 `$(…)`, 2,469 backticks and 377 `$VAR`,
+  and a backtick rule would refuse a heredoc whose prose says `` `git push` ``,
+  which is consequence 3 widened by three orders of magnitude.
 
 ### GH-118
 - text: A `gh` command carrying any option other than `-R`, `--repo` or

@@ -30,6 +30,29 @@ only agree or disagree with what was already claimed. Every assertion in
 `.claude/hooks/check-hooks.sh` is a check.
 _Avoid_: probe, test
 
+**History entry**:
+A file under one of the append-only directories — `docs/dev-log/`,
+`docs/lessons-learned/`, `docs/eval-reports/` — that is present on the active
+dev branch at the point where a branch last took that branch in: its merge base
+with the active dev branch's tip, not the tip itself, since an entry merged
+after a branch forked is one that branch never had and so cannot have
+rewritten. It is never rewritten; a correction goes in a newer entry. Before it
+is merged, the same file is a **draft**: it has not reached the active dev
+branch, and correcting it — after review or at any other time — is the ordinary
+case, not a breach. A directory's `README.md` describes the directory rather
+than recording anything, and is neither.
+
+What makes a file history is where it stands, not whether it exists, is
+committed or is pushed. Existence was the first answer, and it froze a draft the
+moment it was written. In #149 it refused two sessions correcting their own
+unmerged entries: one went around the refusal with a script, the other left
+four stale counts in a pushed entry. The append-only rule is also stated by
+this effect rather than by the commands that could cause it: a history entry
+of which the merge base's copy is no longer a byte prefix has been rewritten,
+whichever tool did it. A pure append leaves that prefix intact, so it is not a
+rewrite.
+_Avoid_: frozen entry, published entry, old entry
+
 **Probe**:
 An empirical measurement whose answer is not known until it runs. Each
 `scripts/probe_*.py` is a probe — one measurement, its output landing in
