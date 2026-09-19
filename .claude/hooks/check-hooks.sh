@@ -3289,9 +3289,25 @@ check no-pr-decisions.sh BLOCK "a span cut to nothing after the name" "gh pr edi
 # Refused before this fix too, but by base_args' first sed and not by the rule
 # written for it -- the review called it luck. Pinned here so that it is not.
 check no-pr-decisions.sh BLOCK 'an empty "" after the name'           'gh pr edit 5 --base"" main'
-# A span that yields a character after the name is still a quoted value, with
-# the = inside it or not. CONTRAST: green before and after.
-check no-pr-decisions.sh ALLOW 'a quoted value holding the ='          'gh pr edit 5 --base"=dev-05"'
+# Bertan's fifth review of PR #173. A span that yields a character just past
+# the name was taken as round the value, which assumed base_args could read the
+# value there -- and it can for `"="` and `'='`, but not for `$'='`, `$"="` or
+# `\=`, so `--base$'=main'` named no base at all. A quoted or escaped `=` is now
+# part of the name, and each of these, permitted before, is refused.
+check no-pr-decisions.sh BLOCK "an = in \$'...' after the name"         "gh pr edit 5 --base\$'=main'"
+check no-pr-decisions.sh BLOCK "an = alone in \$'...'"                   "gh pr edit 5 --base\$'='main"
+check no-pr-decisions.sh BLOCK 'an = alone in $"..."'                   'gh pr edit 5 --base$"="main'
+check no-pr-decisions.sh BLOCK 'an = and part of the value in $"..."'   'gh pr edit 5 --base$"=m"ain'
+check no-pr-decisions.sh BLOCK "an = as \\x3d"                          "gh pr edit 5 --base\$'\\x3d'main"
+check no-pr-decisions.sh BLOCK "an = as \\075"                          "gh pr edit 5 --base\$'\\075'main"
+check no-pr-decisions.sh BLOCK 'a backslash-escaped ='                  'gh pr edit 5 --base\=main'
+check no-pr-decisions.sh BLOCK "web create, an = in \$'...'"            "gh pr create --web --base\$'=main'"
+check no-pr-decisions.sh BLOCK "dev base, then an = in \$'...'"         "gh pr create --base dev-05 --title x --body y --base\$'=main'"
+# THE TRADE, and it moves a row: `--base"=dev-05"` was pinned ALLOW here as a
+# quoted value holding the =. Its = is quoted too, so it is refused with the
+# rest -- a spelling nobody writes for a base that could be written plainly.
+# The = OUTSIDE the quote is still a quoted value, `--base="dev-05"`, above.
+check no-pr-decisions.sh BLOCK 'a quoted = before a dev value'          'gh pr edit 5 --base"=dev-05"'
 # The line-end rule refused every cut span open at a line's end, and a body is
 # the ordinary thing to write across lines. A word the next line can only
 # extend can become a flag only if it is empty or begins with a dash and holds
@@ -10935,7 +10951,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '51' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '52' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -10998,7 +11014,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '49' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '50' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:

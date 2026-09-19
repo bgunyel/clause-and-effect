@@ -282,7 +282,14 @@ base_args() {
 #     `$''`, `$""`, or one a NUL cuts to nothing -- holds no value to be round,
 #     so one standing at or just past the end of the name refuses too.
 #     `--base$'' main` is `--base main`, and was permitted as a quote round a
-#     value until Bertan's fourth review of PR #173.
+#     value until Bertan's fourth review of PR #173. And the `=` of `--base=`
+#     counts as part of the name: a quoted or escaped `=` refuses, because the
+#     value after it is read by base_args, which knows `"` and `'` and neither
+#     `$'...'` nor a backslash -- `--base$'=main'` and `--base\=main` named no
+#     base at all until the fifth review. The trade: `--base"=dev-05"`, which
+#     base_args could read, is refused with them; `--base="dev-05"` is not.
+#     `-B` needs no such clause: gh_pr_bases reads what follows its B as the
+#     value, so a leading `=` is part of a value that is no dev branch.
 #   - the argument holds no whitespace. gh reads `--base dev-05` as one argument
 #     as an unknown flag and `-B main` as a base of ` main`, and neither names a
 #     branch, a git ref being unable to hold a space. So `--title "-B main"` and
@@ -314,7 +321,7 @@ quoted_base_flag() {
     # holding nothing, so one at or just past the end of the name refuses.
     function judge(   b) {
       if (w !~ /[[:space:]]/ && (q || qe)) {
-        if (w ~ /^--base(=|$)/ && ((q && q <= length("--base")) || (qe && qe <= length("--base") + 1))) { print w; found = 1; exit }
+        if (w ~ /^--base(=|$)/ && ((q && q <= length("--base") + (w ~ /^--base=/)) || (qe && qe <= length("--base") + 1))) { print w; found = 1; exit }
         if (w ~ /^-[A-Za-z]*B/) { b = index(w, "B"); if ((q && q <= b) || (qe && qe <= b + 1)) { print w; found = 1; exit } }
       }
       w = ""; q = 0; qe = 0; inw = 0; cut = 0

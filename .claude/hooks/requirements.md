@@ -1730,7 +1730,7 @@ and held to the same standard of saying only what it asks.
   arm of `gh pr create` and `gh pr edit`, rather than dropped with the quoted
   prose around it: `gh pr edit <n> "--base" main`, `'--base' main`,
   `"--base=main"`, `"-B" main`, `--"base" main`, `\--base main`, `$'--base' main`,
-  `$'\x2d-base' main`, `$'\055\055base' main`, `$'--base\0' main`, `--base$'' main`,
+  `$'\x2d-base' main`, `$'\055\055base' main`, `$'--base\0' main`, `--base$'' main`, `--base$'=main'`,
   `gh pr create --web "--base" main` and `gh pr create --base dev-05 "--base" main` are refused.
   A quote round the value only (`--base="dev-05"`, `-B"dev-05"`) is read as before,
   and a quoted argument holding whitespace is prose (`--title "-B main"`, `--body
@@ -1780,6 +1780,11 @@ and held to the same standard of saying only what it asks.
   next line could still make a flag -- empty, or dash-led with no whitespace --
   is refused there. The rest of that review's findings are `base_args`' own and
   predate this entry, and are left to issues of their own.
+  Its fifth review found a quoted or escaped `=` just past the name read as a
+  quote round the value, which base_args cannot read when the quote is `$'...'`,
+  `$"..."` or a backslash: `--base$'=main'` and `--base\=main` named no base.
+  The `=` is now part of the name, so those refuse -- and so does
+  `--base"=dev-05"`, which base_args could read, the trade that fix takes.
 
 ### GH-107.1
 - text: `check-hooks.sh` judges the hooks in `$CHECK_HOOKS_DIR` when that names a

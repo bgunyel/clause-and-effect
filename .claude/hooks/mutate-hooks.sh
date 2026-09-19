@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- fifty-one runs as the
-# registry stands, not fifty-two, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- fifty-two runs as the
+# registry stands, not fifty-three, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -82,9 +82,11 @@
 # `cut-span-at-line-end-always-refused`, re-anchored
 # `quoted-shorthand-value-refused` and `nul-cut-span-keeps-its-newline` on the
 # lines it rewrote, and all ten #139 rows were run as one selection against
-# the answering commit. The other twenty-three rows have
+# the answering commit. The fifth added `quoted-equals-read-as-value` and
+# re-anchored `quoted-base-value-refused`, and all eleven #139 rows were run as
+# one selection against the commit answering it. The other twenty-three rows have
 # not been run since the files they run against changed.
-# No run has therefore exercised all fifty-one rows together, and saying which
+# No run has therefore exercised all fifty-two rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -158,14 +160,14 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   FORTY-NINE real mutations, against SEVEN files in .claude/hooks/, naming
+#   FIFTY real mutations, against SEVEN files in .claude/hooks/, naming
 #   FORTY-FOUR requirement IDs between them, of the 164 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
 # They had been wrong or moved six times in three days when #148 was filed to
 # take them out and let `--list` be the only place they are written, and #139
-# moved them seven more times.
+# moved them eight more times.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
 # verify is `review` or `runbook` rather than a check here, every doc-claim about
@@ -257,7 +259,8 @@ base-pattern-admits-main%no-pr-decisions.sh%/^is_dev_base()/,/^}/s/\^dev-\[0-9\]
 pr-create-base-not-read%no-pr-decisions.sh%s/if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/if false \&\& RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/%FR-14 FR-16 US-9%caught
 web-handoff-refused%no-pr-decisions.sh%/^gh_pr_web()/,/^}/s/--web|-w) return 0 ;;/--web|-w) return 1 ;;/%FR-21 US-12%caught
 quoted-base-flag-permitted%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/END { exit found ? 0 : 1 }/END { exit 1 }/%GH-139%caught
-quoted-base-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ \&\& q <= length("--base"))/)/%GH-139%caught
+quoted-base-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ \&\& q <= length("--base") + (w ~ \/^--base=\/))/)/%GH-139%caught
+quoted-equals-read-as-value%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ + (w ~ \/^--base=\/))/)/%GH-139%caught
 quoted-shorthand-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if ((q \&\& q <= b)/if ((q/%GH-139%caught
 ansi-hex-escape-not-decoded%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "x") {/if (0) {/%GH-139%caught
 open-quote-holds-no-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (st) w = w "\\n"; //%GH-139%caught
