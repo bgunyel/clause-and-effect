@@ -3237,6 +3237,27 @@ check no-pr-decisions.sh BLOCK "retarget, \\x escape in \$'...'"     "gh pr edit
 check no-pr-decisions.sh BLOCK "retarget, octal escapes in \$'...'"  "gh pr edit 35 \$'\\055\\055base' main"
 check no-pr-decisions.sh BLOCK "retarget, \\u escape in \$'...'"     "gh pr edit 35 \$'\\u002d-base' main"
 check no-pr-decisions.sh BLOCK "web create, \\x escape shorthand"    "gh pr create --web \$'\\x2dB' main"
+# A NUL the escapes produce, which the decoder turned into `?`. bash stops the
+# $'...' span at a NUL and drops what is left of it up to the closing quote, so
+# `$'--base\0' main` is `--base main`. Bertan's second review of PR #173; each of
+# these was permitted. bash 5.2 was asked what each spelling becomes before the
+# rows were written: `\c@` is a NUL, and `\^@` -- also named by that review -- is
+# not an escape at all and stays four characters, which the ALLOW row below pins.
+check no-pr-decisions.sh BLOCK "retarget, \\0 ends the \$'...' span"     "gh pr edit 35 \$'--base\\0' main"
+check no-pr-decisions.sh BLOCK "retarget, \\x00 and text after it"      "gh pr edit 35 \$'--base\\x00junk' main"
+check no-pr-decisions.sh BLOCK "retarget, \\c@ is a NUL"                "gh pr edit 35 \$'--base\\c@x' main"
+check no-pr-decisions.sh BLOCK "retarget, NUL span then the rest"      "gh pr edit 35 \$'--ba\\0'se main"
+check no-pr-decisions.sh BLOCK "web create, \\u0000 in the flag"        "gh pr create --web \$'--base\\u0000' main"
+check no-pr-decisions.sh BLOCK "dev base, then a NUL-cut second base"  "gh pr create --base dev-05 --title x --body y \$'--base\\x00' main"
+# A cut span still open at the end of the line. The newline is inside the span
+# after the NUL, so bash drops it with the rest -- the argument is `--base`, not
+# prose holding a newline. Found while answering that review, not by it.
+check no-pr-decisions.sh BLOCK "a NUL-cut span open past the line end" $'gh pr edit 35 $\'--base\\0\n\' main'
+# Only the SPAN is cut, not the argument: text after the closing quote joins on,
+# so `$'--base\0'x` is `--basex`, which is no flag. The review proposed ending
+# the word at the NUL, which would refuse this; bash does not end it there.
+check no-pr-decisions.sh ALLOW "a NUL span, then more of the word"     "gh pr edit 35 --label \$'--base\\0'x"
+check no-pr-decisions.sh ALLOW "\\^@ is not an escape in bash"          "gh pr edit 35 --label \$'--base\\^@x'"
 # THE CREATE ARM, which the issue called safe and is not wholly. A create naming
 # no base is refused, so a quoted flag standing alone was refused for naming
 # none -- but beside an unquoted dev base it is a SECOND base, the unquoted one
@@ -10869,7 +10890,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '46' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '48' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -10932,7 +10953,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '44' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '46' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:

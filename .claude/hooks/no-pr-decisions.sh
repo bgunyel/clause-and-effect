@@ -257,7 +257,12 @@ base_args() {
 #     are `--base`. The first version left them as written and called them a
 #     construction rather than a spelling; Bertan's review of PR #173 retargeted
 #     onto main with both. A character outside ASCII decodes to `?`, which is no
-#     character of any flag, so only its not being one is read.
+#     character of any flag, so only its not being one is read. A NUL -- `\0`,
+#     `\x00`, `\u0000`, `\c@` -- is not a character at all: bash drops the rest
+#     of that `$'...'` span at it and joins what follows the closing quote, so
+#     `$'--base\0' main` is `--base main` and `$'--base\0'x` is `--basex`.
+#     Decoded to `?`, the first was permitted; Bertan's second review of #173.
+#     That review also named `\^@`, which bash 5.2 does not decode.
 #   - the quote or backslash comes AT OR BEFORE the end of the flag's name. A
 #     quote after it is round the value, `--base="dev-05"` and `-B"dev-05"`,
 #     which base_args already reads and this must not refuse.
@@ -268,6 +273,8 @@ base_args() {
 #     quote still open where the line ends is an argument holding a newline --
 #     cs_split hands this one line of a command, and bash carries the quote on
 #     to the next -- so `--body "--base` followed by a newline is prose too.
+#     Unless a NUL has cut that span: the newline is then dropped with the rest
+#     of it, and what was read so far is the whole of what the span gave.
 #     The first version saw only the line and refused it; Bertan's review of
 #     PR #173.
 #
@@ -283,7 +290,7 @@ quoted_base_flag() {
         if (w ~ /^--base(=|$)/ && q <= length("--base")) { print w; found = 1; exit }
         if (w ~ /^-[A-Za-z]*B/) { b = index(w, "B"); if (q <= b) { print w; found = 1; exit } }
       }
-      w = ""; q = 0; inw = 0
+      w = ""; q = 0; inw = 0; cut = 0
     }
     # The value of up to MAX digits of BASE at s[i+1], consumed by advancing i.
     function digits(base, max,   k, d, v) {
@@ -297,15 +304,19 @@ quoted_base_flag() {
       return v
     }
     function chr(v) { return (v > 0 && v < 128) ? sprintf("%c", v) : "?" }
+    # Append the character V decodes to. A NUL is not a character bash can pass:
+    # it ends what the span contributes, and cut holds the word at that length
+    # until the closing quote.
+    function put(v) { if (v == 0) { if (!cut) { cut = 1; cutw = w } } else w = w chr(v) }
     # One escape inside $'"'"'...'"'"', the backslash at s[i]. Appends what bash makes of it.
     function ansi(   e, v) {
       if (i >= n) { w = w "\\"; return }
       e = substr(s, ++i, 1)
-      if (e == "x") { v = digits(16, 2); w = w (nd ? chr(v) : "\\x"); return }
-      if (e == "u") { v = digits(16, 4); w = w (nd ? chr(v) : "\\u"); return }
-      if (e == "U") { v = digits(16, 8); w = w (nd ? chr(v) : "\\U"); return }
-      if (e ~ /[0-7]/) { i--; v = digits(8, 3); w = w chr(v % 256); return }
-      if (e == "c") { if (i < n) i++; w = w "?"; return }
+      if (e == "x") { v = digits(16, 2); if (nd) put(v); else w = w "\\x"; return }
+      if (e == "u") { v = digits(16, 4); if (nd) put(v); else w = w "\\u"; return }
+      if (e == "U") { v = digits(16, 8); if (nd) put(v); else w = w "\\U"; return }
+      if (e ~ /[0-7]/) { i--; v = digits(8, 3); put(v % 256); return }
+      if (e == "c") { if (i < n) { i++; if (substr(s, i, 1) ~ /[@` ]/) put(0); else w = w "?" } else w = w "\\c"; return }
       if (e == "n") { w = w "\n"; return }
       if (e == "t") { w = w "\t"; return }
       if (e == "r") { w = w "\r"; return }
@@ -321,7 +332,9 @@ quoted_base_flag() {
         c = substr(s, i, 1)
         if (st == 1) { if (c == "\047") st = 0; else w = w c; continue }
         if (st == 3) {
-          if (c == "\047") st = 0; else if (c == "\\") ansi(); else w = w c
+          if (c == "\047") { st = 0; cut = 0; continue }
+          if (c == "\\") ansi(); else w = w c
+          if (cut) w = cutw
           continue
         }
         if (st == 2) {
@@ -337,7 +350,7 @@ quoted_base_flag() {
         if (c == "\\" && i < n) { if (!q) q = length(w) + 1; w = w substr(s, i + 1, 1); i++; continue }
         w = w c
       }
-      if (inw) { if (st) w = w "\n"; judge() }
+      if (inw) { if (st && !cut) w = w "\n"; judge() }
     }
     END { exit found ? 0 : 1 }'
 }

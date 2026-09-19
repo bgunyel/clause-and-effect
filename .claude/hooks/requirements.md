@@ -1730,7 +1730,8 @@ and held to the same standard of saying only what it asks.
   arm of `gh pr create` and `gh pr edit`, rather than dropped with the quoted
   prose around it: `gh pr edit <n> "--base" main`, `'--base' main`,
   `"--base=main"`, `"-B" main`, `--"base" main`, `\--base main`, `$'--base' main`,
-  `$'\x2d-base' main`, `$'\055\055base' main`, `gh pr create --web "--base" main` and `gh pr create --base dev-05 "--base" main` are refused.
+  `$'\x2d-base' main`, `$'\055\055base' main`, `$'--base\0' main`,
+  `gh pr create --web "--base" main` and `gh pr create --base dev-05 "--base" main` are refused.
   A quote round the value only (`--base="dev-05"`, `-B"dev-05"`) is read as before,
   and a quoted argument holding whitespace is prose (`--title "-B main"`, `--body
   "--base dev-05 is the base"`, and a body whose quote is still open where its
@@ -1758,7 +1759,12 @@ and held to the same standard of saying only what it asks.
   version: the escapes inside `$'...'` were left undecoded, so `$'\x2d-base'`
   retargeted onto main, and a quote still open at the end of a line was read as
   a word with no whitespace, so a body opening `--base` and then a newline was
-  refused as a flag. Both are fixed and each has a mutation row.
+  refused as a flag. Both are fixed and each has a mutation row. Its second
+  review found a NUL decoded as `?`: bash drops the rest of a `$'...'` span at a
+  NUL, so `$'--base\0' main` retargeted onto main. The span is now cut there and
+  what follows its closing quote still joins the word, as bash joins it --
+  `$'--base\0'x` is `--basex` and permitted. That review's `\^@` is not an escape
+  bash 5.2 decodes, and is pinned as the four characters it stays.
 
 ### GH-107.1
 - text: `check-hooks.sh` judges the hooks in `$CHECK_HOOKS_DIR` when that names a
@@ -2496,6 +2502,6 @@ it has no entry above (Q16).
   stands and names it a gap. An entry here would read as a requirement the hooks
   meet
 - #173: the pull request for #139; Bertan's review of it found the two holes
-  GH-139's note records -- `$'...'` escapes left undecoded, and a quote open at
-  the end of a line read as a word with no whitespace -- and is cited where each
-  fix stands
+  GH-139's note records -- `$'...'` escapes left undecoded, a quote open at the
+  end of a line read as a word with no whitespace, and a NUL decoded as a
+  character -- and is cited where each fix stands
