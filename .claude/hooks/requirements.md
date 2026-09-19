@@ -1730,7 +1730,7 @@ and held to the same standard of saying only what it asks.
   arm of `gh pr create` and `gh pr edit`, rather than dropped with the quoted
   prose around it: `gh pr edit <n> "--base" main`, `'--base' main`,
   `"--base=main"`, `"-B" main`, `--"base" main`, `\--base main`, `$'--base' main`,
-  `$'\x2d-base' main`, `$'\055\055base' main`, `$'--base\0' main`,
+  `$'\x2d-base' main`, `$'\055\055base' main`, `$'--base\0' main`, `--base$'' main`,
   `gh pr create --web "--base" main` and `gh pr create --base dev-05 "--base" main` are refused.
   A quote round the value only (`--base="dev-05"`, `-B"dev-05"`) is read as before,
   and a quoted argument holding whitespace is prose (`--title "-B main"`, `--body
@@ -1773,6 +1773,13 @@ and held to the same standard of saying only what it asks.
   cuts the span, consuming only the `c`, and a cut span open at a line's end is
   refused. The trade: `$'--base\cA'`, which bash passes as `--base` and a
   control character, is refused.
+  Its fourth review found two more: an EMPTY span just past the name --
+  `--base$'' main` -- was read as a quote round the value, which holding nothing
+  it cannot be, so it now refuses; and refusing every cut span open at a line's
+  end refused an ordinary multi-line body with a `\c` in it, so only a word the
+  next line could still make a flag -- empty, or dash-led with no whitespace --
+  is refused there. The rest of that review's findings are `base_args`' own and
+  predate this entry, and are left to issues of their own.
 
 ### GH-107.1
 - text: `check-hooks.sh` judges the hooks in `$CHECK_HOOKS_DIR` when that names a

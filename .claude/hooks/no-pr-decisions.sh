@@ -277,7 +277,12 @@ base_args() {
 #     names no base in bash and is refused here. A string nobody writes.
 #   - the quote or backslash comes AT OR BEFORE the end of the flag's name. A
 #     quote after it is round the value, `--base="dev-05"` and `-B"dev-05"`,
-#     which base_args already reads and this must not refuse.
+#     which base_args already reads and this must not refuse. What counts is
+#     the first quote that YIELDS a character: an empty span -- `''`, `""`,
+#     `$''`, `$""`, or one a NUL cuts to nothing -- holds no value to be round,
+#     so one standing at or just past the end of the name refuses too.
+#     `--base$'' main` is `--base main`, and was permitted as a quote round a
+#     value until Bertan's fourth review of PR #173.
 #   - the argument holds no whitespace. gh reads `--base dev-05` as one argument
 #     as an unknown flag and `-B main` as a base of ` main`, and neither names a
 #     branch, a git ref being unable to hold a space. So `--title "-B main"` and
@@ -285,13 +290,16 @@ base_args() {
 #     quote still open where the line ends is an argument holding a newline --
 #     cs_split hands this one line of a command, and bash carries the quote on
 #     to the next -- so `--body "--base` followed by a newline is prose too.
-#     Unless a NUL has cut that span: the newline is dropped with the rest of
-#     it, and the span closes on a later line and the word goes on there, where
-#     one line cannot follow it. So a cut span open at the end of a line is
-#     refused whatever it holds -- `$'--ba\0`, newline, `'se main` is `--base
-#     main`, and was permitted on its first line alone. Bertan's third review.
 #     The first version saw only the line and refused it; Bertan's review of
-#     PR #173.
+#     PR #173. Unless a NUL has cut that span: the newline is dropped with the
+#     rest of it, and the span closes on a later line and the word goes on
+#     there, where one line cannot follow it -- `$'--ba\0`, newline, `'se main`
+#     is `--base main`, and was permitted on its first line alone (the third
+#     review). The next line can only EXTEND the word, so it can become a flag
+#     only if it is empty so far, or begins with a dash and holds no
+#     whitespace yet; those refuse, and anything else is judged as it stands.
+#     Refusing every cut span there refused an ordinary multi-line body with a
+#     `\c` in it (the fourth review).
 #
 # The trade, taken knowingly: a whitespace-free quoted argument that merely
 # begins like the flag is refused wherever it stands, value or not, since
@@ -300,13 +308,19 @@ base_args() {
 # visible and one edit away.
 quoted_base_flag() {
   printf '%s\n' "$1" | awk '
+    # q is where the first quote or escape that YIELDS a character opened, and
+    # qe where the first span that yields none did. A span with a character in
+    # it that opens past the name is round the value; an empty one cannot be,
+    # holding nothing, so one at or just past the end of the name refuses.
     function judge(   b) {
-      if (q && w !~ /[[:space:]]/) {
-        if (w ~ /^--base(=|$)/ && q <= length("--base")) { print w; found = 1; exit }
-        if (w ~ /^-[A-Za-z]*B/) { b = index(w, "B"); if (q <= b) { print w; found = 1; exit } }
+      if (w !~ /[[:space:]]/ && (q || qe)) {
+        if (w ~ /^--base(=|$)/ && ((q && q <= length("--base")) || (qe && qe <= length("--base") + 1))) { print w; found = 1; exit }
+        if (w ~ /^-[A-Za-z]*B/) { b = index(w, "B"); if ((q && q <= b) || (qe && qe <= b + 1)) { print w; found = 1; exit } }
       }
-      w = ""; q = 0; inw = 0; cut = 0
+      w = ""; q = 0; qe = 0; inw = 0; cut = 0
     }
+    function open(t) { st = t; op = length(w) + 1; emp = 1 }
+    function shut() { if (emp && !qe) qe = op; st = 0; cut = 0 }
     # The value of up to MAX digits of BASE at s[i+1], consumed by advancing i.
     function digits(base, max,   k, d, v) {
       v = 0
@@ -345,27 +359,32 @@ quoted_base_flag() {
       s = $0; n = length(s); st = 0
       for (i = 1; i <= n; i++) {
         c = substr(s, i, 1)
-        if (st == 1) { if (c == "\047") st = 0; else w = w c; continue }
-        if (st == 3) {
-          if (c == "\047") { st = 0; cut = 0; continue }
-          if (c == "\\") ansi(); else w = w c
-          if (cut) w = cutw
+        if (st) {
+          len = length(w)
+          if (st == 1) { if (c == "\047") { shut(); continue } w = w c }
+          else if (st == 3) {
+            if (c == "\047") { shut(); continue }
+            if (c == "\\") ansi(); else w = w c
+            if (cut) w = cutw
+          } else {
+            if (c == "\"") { shut(); continue }
+            if (c == "\\" && i < n && substr(s, i + 1, 1) ~ /[\\"$`]/) { w = w substr(s, i + 1, 1); i++ } else w = w c
+          }
+          if (length(w) > len) { emp = 0; if (!q) q = op }
           continue
-        }
-        if (st == 2) {
-          if (c == "\"") { st = 0; continue }
-          if (c == "\\" && i < n && substr(s, i + 1, 1) ~ /[\\"$`]/) { w = w substr(s, i + 1, 1); i++; continue }
-          w = w c; continue
         }
         if (c == " " || c == "\t") { if (inw) judge(); continue }
         inw = 1
-        if (c == "$" && i < n && substr(s, i + 1, 1) == "\047") { if (!q) q = length(w) + 1; i++; st = 3; continue }
-        if (c == "$" && i < n && substr(s, i + 1, 1) == "\"") { if (!q) q = length(w) + 1; continue }
-        if (c == "\047" || c == "\"") { if (!q) q = length(w) + 1; st = (c == "\"") ? 2 : 1; continue }
+        if (c == "$" && i < n && substr(s, i + 1, 1) == "\047") { i++; open(3); continue }
+        if (c == "$" && i < n && substr(s, i + 1, 1) == "\"") continue
+        if (c == "\047" || c == "\"") { open(c == "\"" ? 2 : 1); continue }
         if (c == "\\" && i < n) { if (!q) q = length(w) + 1; w = w substr(s, i + 1, 1); i++; continue }
         w = w c
       }
-      if (inw) { if (cut) { print w; found = 1; exit } if (st) w = w "\n"; judge() }
+      if (inw) {
+        if (cut) { if (w == "" || (w ~ /^-/ && w !~ /[[:space:]]/)) { print (w == "" ? "a span cut to nothing" : w); found = 1; exit } }
+        else if (st) w = w "\n"; judge()
+      }
     }
     END { exit found ? 0 : 1 }'
 }

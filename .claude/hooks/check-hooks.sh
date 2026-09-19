@@ -3274,6 +3274,30 @@ check no-pr-decisions.sh BLOCK "a cut span closing on the next line"  $'gh pr ed
 # a word that cannot be a flag is untouched.
 check no-pr-decisions.sh BLOCK "\\cA after the flag name, refused"     "gh pr edit 35 \$'--base\\cA' main"
 check no-pr-decisions.sh ALLOW "\\c in a word that is no flag"         "gh pr edit 35 --label \$'x\\cAy'"
+# Bertan's fourth review of PR #173. An EMPTY span right after the flag's name
+# was read as a quote round the value, which it cannot be -- it holds nothing --
+# so `--base$'' main` passed, and base_args, which does not know `$`, read
+# `--base$` as some other flag. What decides now is where the first span that
+# yields a character opens, and separately where the first span that yields
+# none does: an empty one at or just past the name's end refuses.
+check no-pr-decisions.sh BLOCK "an empty \$'' after the name"          "gh pr edit 5 --base\$'' main"
+check no-pr-decisions.sh BLOCK 'an empty $"" after the name'          'gh pr edit 5 --base$"" main'
+check no-pr-decisions.sh BLOCK "web create, an empty \$'' after it"    "gh pr create --web --base\$'' main"
+check no-pr-decisions.sh BLOCK "an empty \$'' before the ="            "gh pr edit 5 --base\$''=main"
+check no-pr-decisions.sh BLOCK "an empty \$'' inside the shorthand"    "gh pr edit 5 -B\$''main"
+check no-pr-decisions.sh BLOCK "a span cut to nothing after the name" "gh pr edit 5 --base\$'\\0' main"
+# Refused before this fix too, but by base_args' first sed and not by the rule
+# written for it -- the review called it luck. Pinned here so that it is not.
+check no-pr-decisions.sh BLOCK 'an empty "" after the name'           'gh pr edit 5 --base"" main'
+# A span that yields a character after the name is still a quoted value, with
+# the = inside it or not. CONTRAST: green before and after.
+check no-pr-decisions.sh ALLOW 'a quoted value holding the ='          'gh pr edit 5 --base"=dev-05"'
+# The line-end rule refused every cut span open at a line's end, and a body is
+# the ordinary thing to write across lines. A word the next line can only
+# extend can become a flag only if it is empty or begins with a dash and holds
+# no whitespace yet, so only that is refused. Red before the fix.
+check no-pr-decisions.sh ALLOW "a multi-line \$'...' body with a \\c"   $'gh pr edit 5 --body $\'Adds C:\\cache support\nsecond line\''
+check no-pr-decisions.sh BLOCK "a span cut to nothing, open at the end" $'gh pr edit 5 $\'\\c\n\'--base main'
 # Only the SPAN is cut, not the argument: text after the closing quote joins on,
 # so `$'--base\0'x` is `--basex`, which is no flag. The review proposed ending
 # the word at the NUL, which would refuse this; bash does not end it there.
@@ -10911,7 +10935,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '49' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '51' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -10974,7 +10998,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '47' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '49' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
