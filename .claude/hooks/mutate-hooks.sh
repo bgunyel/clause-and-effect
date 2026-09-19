@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- forty-one runs as the
-# registry stands, not forty-two, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- forty-four runs as the
+# registry stands, not forty-five, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -61,9 +61,13 @@
 # caught, byte-identical after. #141 added two, `variants-field-deleted` and
 # `variants-seed-disowned`, and on the second merge of dev-05 into it
 # (2026-09-18) ran that pair as a selection against the merged tree: baseline
-# plus two, both caught with GH-141 red, byte-identical after. The other
-# twenty-three rows have not been run since the files they run against changed.
-# No run has therefore exercised all forty-one rows together, and saying which
+# plus two, both caught with GH-141 red, byte-identical after. #139 added three,
+# `quoted-base-flag-permitted`, `quoted-base-value-refused` and
+# `quoted-shorthand-value-refused`, and ran them as a selection (2026-09-19):
+# baseline plus three, all caught with GH-139 red, byte-identical after; it also
+# edited no-pr-decisions.sh and check-hooks.sh. The other twenty-three rows have
+# not been run since the files they run against changed.
+# No run has therefore exercised all forty-four rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -137,13 +141,14 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   THIRTY-NINE real mutations, against SEVEN files in .claude/hooks/, naming
-#   FORTY-THREE requirement IDs between them, of the 163 whose status is active.
+#   FORTY-TWO real mutations, against SEVEN files in .claude/hooks/, naming
+#   FORTY-FOUR requirement IDs between them, of the 164 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
-# They have now been wrong or moved six times in three days, and #148 is filed to
-# take them out and let `--list` be the only place they are written.
+# They had been wrong or moved six times in three days when #148 was filed to
+# take them out and let `--list` be the only place they are written, and #139
+# moved them a seventh time.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
 # verify is `review` or `runbook` rather than a check here, every doc-claim about
@@ -234,6 +239,9 @@ retarget-refusal-drops-the-create-comparison%no-pr-decisions.sh%s/ just as creat
 base-pattern-admits-main%no-pr-decisions.sh%/^is_dev_base()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
 pr-create-base-not-read%no-pr-decisions.sh%s/if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/if false \&\& RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/%FR-14 FR-16 US-9%caught
 web-handoff-refused%no-pr-decisions.sh%/^gh_pr_web()/,/^}/s/--web|-w) return 0 ;;/--web|-w) return 1 ;;/%FR-21 US-12%caught
+quoted-base-flag-permitted%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/END { exit found ? 0 : 1 }/END { exit 1 }/%GH-139%caught
+quoted-base-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ \&\& q <= length("--base"))/)/%GH-139%caught
+quoted-shorthand-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (q <= b)/if (1)/%GH-139%caught
 api-read-taken-for-a-write%no-pr-decisions.sh%/^gh_api_is_write()/,/^}/s/^  return 1$/  return 0/%FR-20%caught
 release-allowlist-admits-a-write%no-pr-decisions.sh%/^RELEASE_READ_VERBS=/s/verify-asset"/verify-asset create edit delete"/%FR-48%caught
 bare-push-refusal-drops-the-branch%no-git-push.sh%/Name the branch: git push/s/git push <remote> \$CURRENT/git push <remote> <branch>/%US-7%caught

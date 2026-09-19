@@ -3204,6 +3204,67 @@ check no-pr-decisions.sh BLOCK '--field= on a state field'         'gh api -X PA
 req US-15 GH-137.1
 check no-pr-decisions.sh BLOCK '-F, quoted state field'               'gh api -X PATCH repos/o/r/pulls/5 -F "state=closed"'
 
+section "=== REGRESSION: #139, a quoted base flag removed the refusal it should trigger ==="
+# base_args drops every quoted span whole, and on the two arms where naming no
+# base is permitted -- a retarget, and a create under --web -- the drop removed
+# the one refusal a base of main would have met. The issue's table, every row of
+# which went red before the fix: the quote round the flag's NAME is what hid it.
+req FR-17 FR-15 US-10 GH-139
+check no-pr-decisions.sh BLOCK 'retarget, flag double-quoted'       'gh pr edit 35 "--base" main'
+check no-pr-decisions.sh BLOCK 'retarget, flag single-quoted'       "gh pr edit 35 '--base' main"
+check no-pr-decisions.sh BLOCK 'retarget, flag=value quoted whole'  'gh pr edit 35 "--base=main"'
+check no-pr-decisions.sh BLOCK 'retarget, shorthand quoted'         'gh pr edit 35 "-B" main'
+req FR-21 FR-15 GH-139
+check no-pr-decisions.sh BLOCK 'web create, flag double-quoted'     'gh pr create --web "--base" main'
+check no-pr-decisions.sh BLOCK 'web create, flag=value quoted whole' 'gh pr create --web "--base=main"'
+# Quoting that touches the flag name without standing round it, and a backslash,
+# which bash removes as it removes a quote. Not in the issue's table; each was
+# permitted on the retarget arm before the fix, for the same reason.
+req FR-17 FR-15 US-10 GH-139
+check no-pr-decisions.sh BLOCK 'retarget, quote inside the name'    'gh pr edit 35 --"base" main'
+check no-pr-decisions.sh BLOCK 'retarget, quote before the ='       'gh pr edit 35 "--base"=main'
+check no-pr-decisions.sh BLOCK 'retarget, name backslash-escaped'   'gh pr edit 35 \--base main'
+check no-pr-decisions.sh BLOCK 'retarget, bundled shorthand quoted' 'gh pr edit 35 "-dB" main'
+# bash's $'...' and $"..." quoting, which the first version of the fix counted
+# the $ of as a character. Found by review of the fix; all three were permitted.
+check no-pr-decisions.sh BLOCK "retarget, flag in \$'...'"          "gh pr edit 35 \$'--base' main"
+check no-pr-decisions.sh BLOCK 'retarget, flag in $"..."'           'gh pr edit 35 $"--base" main'
+check no-pr-decisions.sh BLOCK "web create, shorthand in \$'...'"   "gh pr create --web \$'-B' main"
+# THE CREATE ARM, which the issue called safe and is not wholly. A create naming
+# no base is refused, so a quoted flag standing alone was refused for naming
+# none -- but beside an unquoted dev base it is a SECOND base, the unquoted one
+# satisfied the rule, and gh takes the last. Found while writing this fix.
+req FR-15 FR-16 GH-139
+check no-pr-decisions.sh BLOCK 'dev base, then a quoted main'       'gh pr create --base dev-05 "--base" main --title x'
+check no-pr-decisions.sh BLOCK 'dev base, then a quoted shorthand'  'gh pr create --base dev-05 --title x "-B" main'
+# The refusal names what it refused, and not the missing base it used to report
+# for a quoted flag standing alone on a create.
+req US-7 FR-23 GH-139
+says "$ON_DEV" no-pr-decisions.sh 'a quote or a backslash in its name' \
+  'a quoted base flag says it was quoted' \
+  'gh pr edit 35 "--base" main'
+says_not "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
+  'and a quoted flag on a create is not reported as no base' \
+  'gh pr create "--base" dev-05 --title x'
+# THE CONTROLS the issue names, and the prose the quote-drop exists for. A quote
+# round a VALUE is still read -- base_args' own unquoting, which this fix does
+# not touch -- and a quoted word holding whitespace is one argument that no
+# branch can be named, git refusing a space in a ref, so a title or body that
+# begins with the flag is prose and stays permitted. CONTRAST rows: every one is
+# green with the fix reverted, and says the fix did not widen past the name.
+req FR-17 FR-15 US-10 US-13 GH-139
+check no-pr-decisions.sh ALLOW 'retarget to dev, unquoted'          'gh pr edit 35 --base dev-05'
+check no-pr-decisions.sh ALLOW 'an edit naming no base'             'gh pr edit 35 --add-label bug'
+check no-pr-decisions.sh ALLOW 'retarget to dev, value quoted'      'gh pr edit 35 --base "dev-05"'
+check no-pr-decisions.sh ALLOW 'retarget to dev, = then a quote'    'gh pr edit 35 --base="dev-05"'
+check no-pr-decisions.sh ALLOW 'retarget to dev, -B then a quote'   'gh pr edit 35 -B"dev-05"'
+check no-pr-decisions.sh ALLOW 'an edit titled -B and a branch'     'gh pr edit 35 --title "-B main"'
+check no-pr-decisions.sh ALLOW 'an edit whose body opens --base'    'gh pr edit 35 --body "--base dev-05 is the base"'
+req FR-21 US-12 GH-139
+check no-pr-decisions.sh ALLOW 'the web form, no base'              'gh pr create --web'
+req FR-14 FR-15 GH-139
+check no-pr-decisions.sh ALLOW 'a body naming the flag, dev base'   'gh pr create --base dev-05 --title t --body "the --base flag"'
+
 section "=== the push argument split does not glob against the worktree ==="
 # `for TOK in $ARGS` is unquoted because the split is the point; set -f stops
 # the same line expanding ? and [...] against the files sitting next to it.
@@ -9956,8 +10017,10 @@ commit-dev|global-flag|BLOCK|design|GH-43.2|git -C moves git's working directory
 commit-dev|global-flag-gitdir|BLOCK|design|GH-43.6|git --git-dir moves which repository git acts on, so whether the commit lands on main cannot be judged from here
 pr-web|quote-double-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span whole, and quoted text may not grant an exemption
 pr-web|quote-single-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span whole, and quoted text may not grant an exemption
-pr-base-dev pr-base-dev-eq|quote-double-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
-pr-base-dev pr-base-dev-eq|quote-single-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
+pr-base-dev pr-base-dev-eq|quote-double-4|BLOCK|design|FR-14 GH-139|a base flag with a quote in its name is refused rather than read, because reading it is unquoting and unquoting could invent a base
+pr-base-dev pr-base-dev-eq|quote-single-4|BLOCK|design|FR-14 GH-139|a base flag with a quote in its name is refused rather than read, because reading it is unquoting and unquoting could invent a base
+pr-retarget-dev|quote-double-5|BLOCK|design|FR-17 GH-139|a base flag with a quote in its name is refused rather than read, on the retarget arm as on the creating ones, even where the base it names is dev-NN
+pr-retarget-dev|quote-single-5|BLOCK|design|FR-17 GH-139|a base flag with a quote in its name is refused rather than read, on the retarget arm as on the creating ones, even where the base it names is dev-NN
 release-view|quote-double-3|BLOCK|gap|GH-135|the release verb in double quotes, refused by the allowlist that cannot read it
 release-view|quote-single-3|BLOCK|gap|GH-135|the release verb in single quotes, refused by the allowlist that cannot read it
 BLOCK:*|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand eats the read verb after it
@@ -9974,8 +10037,6 @@ pytest-uv alembic-uv|quote-double-3|BLOCK|gap|GH-136|the group flag in double qu
 pytest-uv alembic-uv|quote-single-3|BLOCK|gap|GH-136|the group flag in single quotes
 pytest-uv alembic-uv|quote-double-4|BLOCK|gap|GH-136|the group value in double quotes
 pytest-uv alembic-uv|quote-single-4|BLOCK|gap|GH-136|the group value in single quotes
-pr-retarget pr-web-main|quote-double-5|ALLOW|gap|GH-139|the base flag in double quotes, on an arm where naming no base is permitted
-pr-retarget pr-web-main|quote-single-5|ALLOW|gap|GH-139|the base flag in single quotes, on an arm where naming no base is permitted
 docs-truncate|continuation|ALLOW|gap|GH-156|the verb and the path on either side of a backslash, which this hook's greps read as two lines and a shell runs as one
 docs-truncate|word-path|ALLOW|gap|GH-171|a command word spelled as a path, which this hook's verb grep does not reduce to the name it spells
 docs-truncate|word-dot|ALLOW|gap|GH-171|a command word spelled with ./, which this hook's verb grep does not reduce to the name it spells
@@ -10197,6 +10258,7 @@ GH-69.2:seed GH-69.3:none GH-72:seed GH-79.1:transformation GH-79.2:none
 GH-79.3:none GH-79.4:none GH-84.1:none GH-94.1:seed GH-94.2:none GH-94.4:none
 GH-95.1:none GH-95.2:none GH-96.1:none GH-97.1:seed GH-128:transformation
 GH-117:transformation GH-133:none GH-137.1:seed GH-137.2:seed
+GH-139:transformation
 '
 # One row per entry that is either in scope or carries the field: `<ID>|in|out`,
 # the `variants` keyword, and whatever follows it. An entry out of scope is
@@ -10791,7 +10853,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '41' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '44' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -10854,7 +10916,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '39' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '42' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -11521,7 +11583,7 @@ GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-117.1:permit-only
 GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139:gap              
+GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139                  
 GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
 GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static

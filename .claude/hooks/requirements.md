@@ -1710,10 +1710,8 @@ and held to the same standard of saying only what it asks.
   What is NOT this entry is the `base_args` family -- `gh pr create "--web"` and
   `gh pr create "--base" dev-05` -- which #106 declares by design, citing the
   comment that argues quoted text may trigger a refusal and may not grant an
-  exemption. Those four rows hold only if #139 is fixed by refusing on the
-  retarget and `--web` arms rather than by teaching `base_args` to read a quoted
-  flag everywhere; #139 records that, so whoever takes it decides rather than
-  discovers it.
+  exemption. #139 was fixed by refusing a quoted base flag rather than by
+  teaching `base_args` to read one, so those rows hold; GH-139 says why.
 
 ### GH-136
 - text: The dependency group is named whichever way `uv` and bash accept it: `uv run
@@ -1728,22 +1726,34 @@ and held to the same standard of saying only what it asks.
   already handles as `--base=main`, one file away.
 
 ### GH-139
-- text: A quoted base flag is still a base flag where its absence would be permitted:
-  `gh pr edit <n> "--base" main`, `"--base=main"` and `"-B" main`, and
-  `gh pr create --web "--base" main`, are refused as their unquoted spellings are.
+- text: A base flag whose name carries a quote or a backslash is refused on every
+  arm of `gh pr create` and `gh pr edit`, rather than dropped with the quoted
+  prose around it: `gh pr edit <n> "--base" main`, `'--base' main`,
+  `"--base=main"`, `"-B" main`, `--"base" main`, `\--base main`, `$'--base' main`,
+  `gh pr create --web "--base" main` and `gh pr create --base dev-05 "--base" main` are refused.
+  A quote round the value only (`--base="dev-05"`, `-B"dev-05"`) is read as before,
+  and a quoted argument holding whitespace is prose (`--title "-B main"`, `--body
+  "--base dev-05 is the base"`), since no git ref holds a space.
 - from: #139, found by #106's invariance families once they quoted a fifth
   argument position
 - kind: defect-permitting
-- status: gap → #139
+- status: active
+- variants: transformation: quote-double-5 quote-single-5
 - note: `base_args` drops a quoted span whole, and its comment argues that
   deleting a span cannot invent a flag. True, and not the whole of it: on the
   retarget arm and under `--web`, naming no base is permitted, so deleting the
-  span removes a refusal rather than adding one. On the three creating arms the
-  same drop is safe, because a create naming no base is refused for naming none
-  -- which is why this stood. The refusing consequences of the same drop are not
-  this entry; #106 declares those by design, citing the comment that argues them.
-  The second time the retarget arm has differed from the creating arms in a way
-  their shared reasoning missed, after #133.
+  span removed a refusal rather than adding one. The issue called the creating
+  arms safe, and they were not wholly: beside an unquoted `--base dev-05` a quoted
+  `"--base" main` is a second base, and gh takes the last. Found while writing the
+  fix, and the reason it is on every arm rather than on the two #139's comment
+  proposed. The fix refuses and does not read -- reading the flag back out of its
+  quotes is the unquoting that let `--body "--base dev-05"` name a base -- so
+  #106's four `pr-base-dev(-eq) + quote-*-4` rows keep BLOCK, now for this reason
+  and with a message that says so rather than that no base was named. The trade:
+  a whitespace-free quoted argument that merely begins like the flag is refused
+  as a value too, `--body "--base"` and `--label "-Blocked"`. The second time the
+  retarget arm differed from the creating arms in a way their shared reasoning
+  missed, after #133.
 
 ### GH-107.1
 - text: `check-hooks.sh` judges the hooks in `$CHECK_HOOKS_DIR` when that names a
