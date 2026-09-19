@@ -1764,7 +1764,15 @@ and held to the same standard of saying only what it asks.
   NUL, so `$'--base\0' main` retargeted onto main. The span is now cut there and
   what follows its closing quote still joins the word, as bash joins it --
   `$'--base\0'x` is `--basex` and permitted. That review's `\^@` is not an escape
-  bash 5.2 decodes, and is pinned as the four characters it stays.
+  bash 5.2 decodes, and is pinned as the four characters it stays. Its third
+  review found four more, all from copying bash's decoding escape by escape:
+  `\c` took a closing quote or the first of a `\\` pair as its argument, so the
+  span ran past where bash closes it; `\c` masks a byte, so `\cअ` is a NUL; and
+  a cut span open at a line's end was judged on that line alone. The answer is
+  conservative rather than faithful: every `\c` is taken as a possible NUL and
+  cuts the span, consuming only the `c`, and a cut span open at a line's end is
+  refused. The trade: `$'--base\cA'`, which bash passes as `--base` and a
+  control character, is refused.
 
 ### GH-107.1
 - text: `check-hooks.sh` judges the hooks in `$CHECK_HOOKS_DIR` when that names a
@@ -2503,5 +2511,6 @@ it has no entry above (Q16).
   meet
 - #173: the pull request for #139; Bertan's review of it found the two holes
   GH-139's note records -- `$'...'` escapes left undecoded, a quote open at the
-  end of a line read as a word with no whitespace, and a NUL decoded as a
-  character -- and is cited where each fix stands
+  end of a line read as a word with no whitespace, a NUL decoded as a
+  character, and `\c` and cut spans read past where bash reads them -- and is
+  cited where each fix stands

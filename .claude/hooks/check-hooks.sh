@@ -3253,6 +3253,27 @@ check no-pr-decisions.sh BLOCK "dev base, then a NUL-cut second base"  "gh pr cr
 # after the NUL, so bash drops it with the rest -- the argument is `--base`, not
 # prose holding a newline. Found while answering that review, not by it.
 check no-pr-decisions.sh BLOCK "a NUL-cut span open past the line end" $'gh pr edit 35 $\'--base\\0\n\' main'
+# Bertan's third review of PR #173: four more holes, all from copying bash's
+# decoding one escape at a time. `\c` took the character after it as its
+# argument even when that was the closing quote or the first of a `\\` pair,
+# which bash's parser pairs first -- so the span never closed where bash closes
+# it, and everything after was misread. And a cut span open at the line end was
+# judged on its first line, where bash closes it on the next and the word goes
+# on. The answer is the conservative one that review suggested: every `\c` is
+# taken as a possible NUL, since what it masks is a byte and bytes are not this
+# decoder's business, and a cut span that runs past the line is refused.
+check no-pr-decisions.sh BLOCK "\\c before the closing quote"          "gh pr edit 35 \$'x\\c' \$'--base' main"
+check no-pr-decisions.sh BLOCK "web create, \\c before the quote"      "gh pr create --web \$'x\\c' \$'--base' main"
+check no-pr-decisions.sh BLOCK "\\c before a backslash pair"           "gh pr edit 35 \$'x\\c\\\\' \$'--base' main"
+check no-pr-decisions.sh BLOCK "dev base, \\c\\\\ then a quoted second" "gh pr create --base dev-05 --title x --body y \$'z\\c\\\\' '--base' main"
+check no-pr-decisions.sh BLOCK "\\c on a byte that masks to NUL"       "gh pr edit 35 \$'--base\\cअ' main"
+check no-pr-decisions.sh BLOCK "a cut span closing on the next line"  $'gh pr edit 35 $\'--ba\\0\n\'se main'
+# THE TRADE, pinned: `\cA` is byte 0x01 and no NUL, so bash passes `--base` and
+# a control character, which is no flag -- and it is refused, as every `\c`
+# after a flag's name is. Nobody writes a branch or a title that way. A `\c` in
+# a word that cannot be a flag is untouched.
+check no-pr-decisions.sh BLOCK "\\cA after the flag name, refused"     "gh pr edit 35 \$'--base\\cA' main"
+check no-pr-decisions.sh ALLOW "\\c in a word that is no flag"         "gh pr edit 35 --label \$'x\\cAy'"
 # Only the SPAN is cut, not the argument: text after the closing quote joins on,
 # so `$'--base\0'x` is `--basex`, which is no flag. The review proposed ending
 # the word at the NUL, which would refuse this; bash does not end it there.
@@ -10890,7 +10911,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '48' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '49' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -10953,7 +10974,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '46' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '47' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:

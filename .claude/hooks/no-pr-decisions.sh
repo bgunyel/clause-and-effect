@@ -263,6 +263,18 @@ base_args() {
 #     `$'--base\0' main` is `--base main` and `$'--base\0'x` is `--basex`.
 #     Decoded to `?`, the first was permitted; Bertan's second review of #173.
 #     That review also named `\^@`, which bash 5.2 does not decode.
+#
+#     `\c` IS NOT DECODED BUT REFUSED, and that is the third review's answer.
+#     Copying bash one escape at a time opened a hole beside each one it
+#     closed: `\c` took the next character as its argument even where bash's
+#     parser had already paired it -- a closing quote, or the first half of
+#     `\\` -- so the span ran on past where bash ends it; and what `\c` makes
+#     is the next BYTE masked to five bits, so `\cअ` is a NUL while `\cA` is
+#     not. So every `\c` is taken as a possible NUL: it cuts the span, only
+#     the `c` is consumed, and what follows is paired by the ordinary rules.
+#     The word is judged as cut, which is the only reading that can be a flag
+#     -- a control character is not a flag character. The trade: `$'--base\cA'`
+#     names no base in bash and is refused here. A string nobody writes.
 #   - the quote or backslash comes AT OR BEFORE the end of the flag's name. A
 #     quote after it is round the value, `--base="dev-05"` and `-B"dev-05"`,
 #     which base_args already reads and this must not refuse.
@@ -273,8 +285,11 @@ base_args() {
 #     quote still open where the line ends is an argument holding a newline --
 #     cs_split hands this one line of a command, and bash carries the quote on
 #     to the next -- so `--body "--base` followed by a newline is prose too.
-#     Unless a NUL has cut that span: the newline is then dropped with the rest
-#     of it, and what was read so far is the whole of what the span gave.
+#     Unless a NUL has cut that span: the newline is dropped with the rest of
+#     it, and the span closes on a later line and the word goes on there, where
+#     one line cannot follow it. So a cut span open at the end of a line is
+#     refused whatever it holds -- `$'--ba\0`, newline, `'se main` is `--base
+#     main`, and was permitted on its first line alone. Bertan's third review.
 #     The first version saw only the line and refused it; Bertan's review of
 #     PR #173.
 #
@@ -316,7 +331,7 @@ quoted_base_flag() {
       if (e == "u") { v = digits(16, 4); if (nd) put(v); else w = w "\\u"; return }
       if (e == "U") { v = digits(16, 8); if (nd) put(v); else w = w "\\U"; return }
       if (e ~ /[0-7]/) { i--; v = digits(8, 3); put(v % 256); return }
-      if (e == "c") { if (i < n) { i++; if (substr(s, i, 1) ~ /[@` ]/) put(0); else w = w "?" } else w = w "\\c"; return }
+      if (e == "c") { put(0); return }
       if (e == "n") { w = w "\n"; return }
       if (e == "t") { w = w "\t"; return }
       if (e == "r") { w = w "\r"; return }
@@ -350,7 +365,7 @@ quoted_base_flag() {
         if (c == "\\" && i < n) { if (!q) q = length(w) + 1; w = w substr(s, i + 1, 1); i++; continue }
         w = w c
       }
-      if (inw) { if (st && !cut) w = w "\n"; judge() }
+      if (inw) { if (cut) { print w; found = 1; exit } if (st) w = w "\n"; judge() }
     }
     END { exit found ? 0 : 1 }'
 }

@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- forty-eight runs as the
-# registry stands, not forty-nine, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- forty-nine runs as the
+# registry stands, not fifty, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -70,9 +70,16 @@
 # #139 rows were run again as one selection against the answering commit. Its
 # second review added `nul-decoded-as-a-character` and
 # `nul-cut-span-keeps-its-newline`, and all seven #139 rows were run as one
-# selection against the commit answering it. The other twenty-three rows have
+# selection against the commit answering it. Its third review added
+# `c-escape-takes-the-next-character` and moved the edit of
+# `nul-cut-span-keeps-its-newline` onto the line that now refuses. The eight
+# #139 rows were run as one selection against the answering commit, and
+# `open-quote-holds-no-newline` reported did-not-apply: the second review had
+# written its edit against `if (st && !cut)`, which the third removed. Its edit
+# was re-anchored and it was run alone, caught; the other seven were caught in
+# the selection, and .claude/hooks/ was byte-identical after both runs. The other twenty-three rows have
 # not been run since the files they run against changed.
-# No run has therefore exercised all forty-eight rows together, and saying which
+# No run has therefore exercised all forty-nine rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -146,14 +153,14 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   FORTY-SIX real mutations, against SEVEN files in .claude/hooks/, naming
+#   FORTY-SEVEN real mutations, against SEVEN files in .claude/hooks/, naming
 #   FORTY-FOUR requirement IDs between them, of the 164 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
 # They had been wrong or moved six times in three days when #148 was filed to
 # take them out and let `--list` be the only place they are written, and #139
-# moved them a seventh, an eighth and a ninth time.
+# moved them a seventh, an eighth, a ninth and a tenth time.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
 # verify is `review` or `runbook` rather than a check here, every doc-claim about
@@ -248,9 +255,10 @@ quoted-base-flag-permitted%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/END { 
 quoted-base-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ \&\& q <= length("--base"))/)/%GH-139%caught
 quoted-shorthand-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (q <= b)/if (1)/%GH-139%caught
 ansi-hex-escape-not-decoded%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "x") {/if (0) {/%GH-139%caught
-open-quote-holds-no-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (st \&\& !cut) w = w "\\n"; //%GH-139%caught
+open-quote-holds-no-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (st) w = w "\\n"; //%GH-139%caught
 nul-decoded-as-a-character%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (v == 0) { if (!cut) { cut = 1; cutw = w } } else w = w chr(v)/w = w chr(v)/%GH-139%caught
-nul-cut-span-keeps-its-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (st \&\& !cut)/if (st)/%GH-139%caught
+nul-cut-span-keeps-its-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (cut) { print w; found = 1; exit } //%GH-139%caught
+c-escape-takes-the-next-character%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "c") { put(0); return }/if (e == "c") { if (i < n) i++; w = w "?"; return }/%GH-139%caught
 api-read-taken-for-a-write%no-pr-decisions.sh%/^gh_api_is_write()/,/^}/s/^  return 1$/  return 0/%FR-20%caught
 release-allowlist-admits-a-write%no-pr-decisions.sh%/^RELEASE_READ_VERBS=/s/verify-asset"/verify-asset create edit delete"/%FR-48%caught
 bare-push-refusal-drops-the-branch%no-git-push.sh%/Name the branch: git push/s/git push <remote> \$CURRENT/git push <remote> <branch>/%US-7%caught
