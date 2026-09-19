@@ -3230,6 +3230,13 @@ check no-pr-decisions.sh BLOCK 'retarget, bundled shorthand quoted' 'gh pr edit 
 check no-pr-decisions.sh BLOCK "retarget, flag in \$'...'"          "gh pr edit 35 \$'--base' main"
 check no-pr-decisions.sh BLOCK 'retarget, flag in $"..."'           'gh pr edit 35 $"--base" main'
 check no-pr-decisions.sh BLOCK "web create, shorthand in \$'...'"   "gh pr create --web \$'-B' main"
+# The escapes $'...' decodes, which the first version of that answer left as
+# written and called a construction rather than a spelling. Bertan's review of
+# PR #173: bash hands gh `--base main` for each of these, and each was permitted.
+check no-pr-decisions.sh BLOCK "retarget, \\x escape in \$'...'"     "gh pr edit 35 \$'\\x2d-base' main"
+check no-pr-decisions.sh BLOCK "retarget, octal escapes in \$'...'"  "gh pr edit 35 \$'\\055\\055base' main"
+check no-pr-decisions.sh BLOCK "retarget, \\u escape in \$'...'"     "gh pr edit 35 \$'\\u002d-base' main"
+check no-pr-decisions.sh BLOCK "web create, \\x escape shorthand"    "gh pr create --web \$'\\x2dB' main"
 # THE CREATE ARM, which the issue called safe and is not wholly. A create naming
 # no base is refused, so a quoted flag standing alone was refused for naming
 # none -- but beside an unquoted dev base it is a SECOND base, the unquoted one
@@ -3260,6 +3267,15 @@ check no-pr-decisions.sh ALLOW 'retarget to dev, = then a quote'    'gh pr edit 
 check no-pr-decisions.sh ALLOW 'retarget to dev, -B then a quote'   'gh pr edit 35 -B"dev-05"'
 check no-pr-decisions.sh ALLOW 'an edit titled -B and a branch'     'gh pr edit 35 --title "-B main"'
 check no-pr-decisions.sh ALLOW 'an edit whose body opens --base'    'gh pr edit 35 --body "--base dev-05 is the base"'
+# The same prose split by a newline instead of a space. The hook reads one line
+# of a command at a time, so the quote is still open where the line ends -- and
+# the argument bash builds holds that newline, so it is prose as the space made
+# it. Refused by the first version of the fix. Bertan's review of PR #173.
+check no-pr-decisions.sh ALLOW 'an edit whose body opens --base, then a newline' $'gh pr edit 35 --base dev-05 --body "--base\nmore text"'
+# And a decoded \n inside $'...' is whitespace in the argument too. Green before
+# the escape decoding above existed, when `\n` was two characters; it is here so
+# that decoding one spelling of prose into a flag would go red.
+check no-pr-decisions.sh ALLOW "a \$'...' body opening --base, then \\n" "gh pr edit 35 --body \$'--base\\nmore text'"
 req FR-21 US-12 GH-139
 check no-pr-decisions.sh ALLOW 'the web form, no base'              'gh pr create --web'
 req FR-14 FR-15 GH-139
@@ -10853,7 +10869,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '44' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '46' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -10916,7 +10932,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '42' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '44' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:

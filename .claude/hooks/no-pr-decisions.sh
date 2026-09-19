@@ -250,16 +250,26 @@ base_args() {
 #     sits in, not as a token of its own, which is what the drop above does not
 #     do and why `--"base" main` slipped past it as `-- main`. The `$` of
 #     bash's `$'...'` and `$"..."` goes with its quote, found by review of this
-#     fix: counted as a character, it hid `$'--base' main` as `$--base`. The
-#     escapes `$'...'` interprets inside are not, being a construction rather
-#     than a spelling.
+#     fix: counted as a character, it hid `$'--base' main` as `$--base`. And
+#     the escapes `$'...'` interprets are decoded as bash decodes them -- \xHH,
+#     octal, \u and \U, \cX and the one-letter ones -- because each is a
+#     spelling of a character gh receives: `$'\x2d-base'` and `$'\055\055base'`
+#     are `--base`. The first version left them as written and called them a
+#     construction rather than a spelling; Bertan's review of PR #173 retargeted
+#     onto main with both. A character outside ASCII decodes to `?`, which is no
+#     character of any flag, so only its not being one is read.
 #   - the quote or backslash comes AT OR BEFORE the end of the flag's name. A
 #     quote after it is round the value, `--base="dev-05"` and `-B"dev-05"`,
 #     which base_args already reads and this must not refuse.
 #   - the argument holds no whitespace. gh reads `--base dev-05` as one argument
 #     as an unknown flag and `-B main` as a base of ` main`, and neither names a
 #     branch, a git ref being unable to hold a space. So `--title "-B main"` and
-#     `--body "--base dev-05 is the base"` are prose and stay permitted.
+#     `--body "--base dev-05 is the base"` are prose and stay permitted. A
+#     quote still open where the line ends is an argument holding a newline --
+#     cs_split hands this one line of a command, and bash carries the quote on
+#     to the next -- so `--body "--base` followed by a newline is prose too.
+#     The first version saw only the line and refused it; Bertan's review of
+#     PR #173.
 #
 # The trade, taken knowingly: a whitespace-free quoted argument that merely
 # begins like the flag is refused wherever it stands, value or not, since
@@ -275,11 +285,45 @@ quoted_base_flag() {
       }
       w = ""; q = 0; inw = 0
     }
+    # The value of up to MAX digits of BASE at s[i+1], consumed by advancing i.
+    function digits(base, max,   k, d, v) {
+      v = 0
+      for (k = 0; k < max && i < n; k++) {
+        d = index("0123456789abcdef", tolower(substr(s, i + 1, 1))) - 1
+        if (d < 0 || d >= base) break
+        v = v * base + d; i++
+      }
+      nd = k
+      return v
+    }
+    function chr(v) { return (v > 0 && v < 128) ? sprintf("%c", v) : "?" }
+    # One escape inside $'"'"'...'"'"', the backslash at s[i]. Appends what bash makes of it.
+    function ansi(   e, v) {
+      if (i >= n) { w = w "\\"; return }
+      e = substr(s, ++i, 1)
+      if (e == "x") { v = digits(16, 2); w = w (nd ? chr(v) : "\\x"); return }
+      if (e == "u") { v = digits(16, 4); w = w (nd ? chr(v) : "\\u"); return }
+      if (e == "U") { v = digits(16, 8); w = w (nd ? chr(v) : "\\U"); return }
+      if (e ~ /[0-7]/) { i--; v = digits(8, 3); w = w chr(v % 256); return }
+      if (e == "c") { if (i < n) i++; w = w "?"; return }
+      if (e == "n") { w = w "\n"; return }
+      if (e == "t") { w = w "\t"; return }
+      if (e == "r") { w = w "\r"; return }
+      if (e == "v") { w = w "\v"; return }
+      if (e == "f") { w = w "\f"; return }
+      if (e ~ /[abeE]/) { w = w "?"; return }
+      if (e ~ /[\\"?\047]/) { w = w e; return }
+      w = w "\\" e
+    }
     {
       s = $0; n = length(s); st = 0
       for (i = 1; i <= n; i++) {
         c = substr(s, i, 1)
         if (st == 1) { if (c == "\047") st = 0; else w = w c; continue }
+        if (st == 3) {
+          if (c == "\047") st = 0; else if (c == "\\") ansi(); else w = w c
+          continue
+        }
         if (st == 2) {
           if (c == "\"") { st = 0; continue }
           if (c == "\\" && i < n && substr(s, i + 1, 1) ~ /[\\"$`]/) { w = w substr(s, i + 1, 1); i++; continue }
@@ -287,12 +331,13 @@ quoted_base_flag() {
         }
         if (c == " " || c == "\t") { if (inw) judge(); continue }
         inw = 1
-        if (c == "$" && i < n && substr(s, i + 1, 1) ~ /["\047]/) { if (!q) q = length(w) + 1; continue }
+        if (c == "$" && i < n && substr(s, i + 1, 1) == "\047") { if (!q) q = length(w) + 1; i++; st = 3; continue }
+        if (c == "$" && i < n && substr(s, i + 1, 1) == "\"") { if (!q) q = length(w) + 1; continue }
         if (c == "\047" || c == "\"") { if (!q) q = length(w) + 1; st = (c == "\"") ? 2 : 1; continue }
         if (c == "\\" && i < n) { if (!q) q = length(w) + 1; w = w substr(s, i + 1, 1); i++; continue }
         w = w c
       }
-      if (inw) judge()
+      if (inw) { if (st) w = w "\n"; judge() }
     }
     END { exit found ? 0 : 1 }'
 }
