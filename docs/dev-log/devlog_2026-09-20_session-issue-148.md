@@ -7,16 +7,16 @@ into line here rather than backwards through the entry.*
 
 **Branch** `worktree-issue-148-derive-the-counts`, for a pull request into
 `dev-05` (PR #183). Cut from `origin/dev-05` at `2a52322`; the base moved to
-`7bea85f` mid-review when #169 landed, and the branch ends **four commits plus a
-merge ahead of `origin/dev-05`**. Worked unattended by an AI assistant, over
-five review rounds by Bertan.
+`7bea85f` when #169 landed mid-review and then to `df60fa1` when #172 did, so
+the branch ends **four commits plus two merges ahead of `origin/dev-05`**.
+Worked unattended by an AI assistant, over six review rounds by Bertan.
 
-**Check suite 5093 → 5306 results, all passing** — of which the growth from 5106
-is #169's, not this branch's. Figures below are measured unless marked
+**Check suite 5093 → 5401 results, all passing** — of which the growth from
+5106 is #169's and #172's, not this branch's. Figures below are measured unless marked
 otherwise. A new requirement, `GH-148`, carrying seven checks when it was first
 written and ten by the end. **This branch registers no mutation row**: the
-registry held 54 when the branch was cut and holds 67 now, and all thirteen of
-those are #169's. `check-hooks.sh`'s `#107` literals — the registry size and the
+registry held 54 when the branch was cut and holds 81 now: thirteen of those
+rows are #169's and fourteen are #172's. `check-hooks.sh`'s `#107` literals — the registry size and the
 three outcome counts — are untouched, which is the point of the issue rather
 than an omission; a fourth literal, the self-test total, was added in round
 three because the review measured that nothing held it.
@@ -385,6 +385,64 @@ than assumed to survive: every one of the 17 remaining `"$MUT"` pins resolves to
 a line at or below `set -u`, so all of them are code and none is header prose.
 #169 added no pin on the harness.
 
+## Round six — the same conflict again, and the evidence landing on dev-05
+
+PR #172 (issue #134) merged into `dev-05` before #183 could, moving the base
+`7bea85f` → `df60fa1` and conflicting two files. Resolved the same way; suite
+green at 5401 results.
+
+**The strongest evidence this issue has produced turned up in dev-05 itself.**
+Measured at `df60fa1`, before this branch merged anything: the header paragraph
+#148 removes claimed sixty-five real mutations naming fifty requirement IDs, of
+a hundred and seventy active. Its own files held **seventy-nine, fifty-two and
+a hundred and seventy-two** — out by fourteen, two and two, shipped on the
+active dev branch, with the suite green. The paragraph arguing that a count in a
+comment goes stale was wrong in three of its four numbers, and nothing anywhere
+could say so.
+
+dev-05's other half of the same paragraph had already recorded the problem in
+its own words. #172's sixth review found the run total *"WENT STALE A THIRD
+TIME, in the paragraph recording that it went stale twice"*, and rewrote it as a
+crossing point instead of a count — and that rewrite still carried a count,
+which this merge made wrong a fourth time. Four times in one paragraph, each
+caught by a person reading it and never by a check.
+
+**Re-derived rather than taken from a side:**
+
+| value | ours | dev-05 | merged, derived |
+|---|---|---|---|
+| registry rows | 67 | 81 | **81** |
+| caught | 65 | 79 | **79** |
+| survived / did-not-apply | 1 / 1 | 1 / 1 | **1 / 1** |
+| self-tests | 2 | — | **2** |
+| text checks | 298 | 308 | **314** |
+
+The text-check count is the one where neither side was right: base 292, this
+branch +6, #172 +16, disjoint. Derived three ways before being written —
+the suite's own `TEXT_CHECK_ARGS` awk run against the resolved file, an
+independent count of call sites with continuation lines joined, and the
+arithmetic over the three trees — all three answering 314.
+
+**Taking dev-05's side of the runtime heading would have turned five checks
+red, not the two flagged.** Its reflowed header carries every one of the five
+phrases this branch's absence pins forbid. The second hunk needed a genuine
+union instead: #134's twelve-row run records are evidence and survive whole,
+#172's qualification of the sentence above them survives, #148's record
+survives, and only the trailing sentence — which named a row count — is this
+branch's.
+
+**The rate was not re-measured, deliberately.** Load average was 7.34 on six
+cores, with a `cs_split` awk from another session at 97% CPU for ten hours, so
+any reading would have been contention rather than the rate — the exact case
+written beside the constant as the thing the staleness check cannot see. That
+check reports 5296 → 5391, under a tenth of its threshold, so the recorded
+measurement still covers this tree. Taking a bad measurement and recording it
+would corrupt the record, which is worse than leaving one the check says holds.
+
+`#172` added no pin on the harness; its seventeen new pins all read
+`lib/command-scan.sh`, which is code. All 17 `"$MUT"` pins still resolve at or
+below `set -u`, so the `$MUT` / `$MUT_PROSE` rule holds unchanged.
+
 ## What is still open
 
 - **#192** — the wrap-blind class outside this branch. `GH-70.3` and `GH-99.1`
@@ -411,8 +469,17 @@ a line at or below `set -u`, so all of them are code and none is header prose.
 
 ## For the next session
 
-The branch is PR #183 into `dev-05`, green and merged up to `7bea85f`. If
-another dev-branch merge lands before it does, the same re-derivation applies:
-every count in the table above comes off the merged tree, never off a side, and
-the sweep for values both sides carried identically is the half that conflict
-markers cannot do.
+The branch is PR #183 into `dev-05`, green and merged up to `df60fa1`. Two
+dev-branch merges landed while it was open and each needed the same treatment,
+so a third should be assumed rather than hoped against: every count comes off
+the merged tree and never off a side; the sweep for values both sides carried
+identically is the half conflict markers cannot do; and a phrase one side's
+prose carries may be one this branch's absence pins forbid, which is checked by
+reflowing that side's header and asking the pins directly rather than by reading
+the diff.
+
+One thing to watch that is not this branch's: a `cs_split` `awk` from another
+session was at 97% CPU for ten hours during round six, which is the failure mode
+`docs/todo.md` already carries a backlog item for — nothing bounds the hooks the
+suite runs. It was left alone rather than killed, since peer sessions run the
+same scripts.
