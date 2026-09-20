@@ -1,11 +1,25 @@
 # 2026-09-20 · session issue-148 — the four counts the harness restated, and the two it never derived
 
-**Branch** `worktree-issue-148-derive-the-counts`, cut from `origin/dev-05` at
-`2a52322`, for a pull request into `dev-05`. Worked unattended by an AI
-assistant. **Check suite 5093 → 5100 results, all passing.** A new requirement,
-`GH-148`, with seven checks. The mutation registry is unchanged at 54 rows, and
-`check-hooks.sh`'s `#107` literals — the registry size and the three outcome
-counts — are untouched, which is the point of the issue rather than an omission.
+*Opened 2026-09-20, closed 2026-09-20 20:29 +03. The opening sections below were
+written before `docs/dev-log/README.md` gained its current conventions, which
+arrived on this branch with #169's merge in round five; the header is brought
+into line here rather than backwards through the entry.*
+
+**Branch** `worktree-issue-148-derive-the-counts`, for a pull request into
+`dev-05` (PR #183). Cut from `origin/dev-05` at `2a52322`; the base moved to
+`7bea85f` mid-review when #169 landed, and the branch ends **four commits plus a
+merge ahead of `origin/dev-05`**. Worked unattended by an AI assistant, over
+five review rounds by Bertan.
+
+**Check suite 5093 → 5306 results, all passing** — of which the growth from 5106
+is #169's, not this branch's. Figures below are measured unless marked
+otherwise. A new requirement, `GH-148`, carrying seven checks when it was first
+written and ten by the end. **This branch registers no mutation row**: the
+registry held 54 when the branch was cut and holds 67 now, and all thirteen of
+those are #169's. `check-hooks.sh`'s `#107` literals — the registry size and the
+three outcome counts — are untouched, which is the point of the issue rather
+than an omission; a fourth literal, the self-test total, was added in round
+three because the review measured that nothing held it.
 
 ## What #148 asked for
 
@@ -307,3 +321,98 @@ produced seven findings each, which is what reviewing by instance yields; round
 four swept eight classes and found three words and one pre-existing defect. The
 assistant's own round-three reply had named the reason — *"I fixed the instance
 instead of the class"* — and the review applied that method to the rest.
+
+## Round five — the conflict this issue was filed about, arriving
+
+PR #169 (issue #109) merged into `dev-05` mid-review, moving the merge base from
+`2a52322` to `7bea85f` and putting all four of this branch's files into
+conflict. **This is the three-way conflict #148 predicts in as many words**, and
+it is worth recording because it behaved exactly as the issue said it would.
+
+**#169 reached half of this issue independently, from the other side.** Its
+second review found the harness heading saying one total while the paragraph
+under it said another and `check-hooks.sh` pinned the first — so #169 changed
+the heading from a total to a *rate*, on the reasoning #148 rests on: a total
+goes stale every time a row is registered and a rate does not. It went further
+and pinned the figure's second copy in `CLAUDE.md`, because a sentence in
+`requirements.md` claimed the two moved together with nothing enforcing it.
+
+This branch answers the same thing one step on: there is no second copy to pin.
+The magnitude is on `--list`, multiplied out of a measured rate; `CLAUDE.md`
+points at it. So #169's `CLAUDE.md` pin was dropped in the resolution, and the
+reason is written where it stood.
+
+**What was re-derived rather than taken from a side**, which is the whole
+instruction #148 gives for this conflict:
+
+| value | this branch | dev-05 | merged, derived |
+|---|---|---|---|
+| registry rows | 54 | 67 | **67** |
+| caught | 52 | 65 | **65** |
+| survived / did-not-apply | 1 / 1 | 1 / 1 | **1 / 1** |
+| self-tests | 2 | — | **2** |
+| text checks | 298 | 292 | **298** |
+| active requirements (prose, dev-05) | — | 170 | **171** |
+
+Every one was derived from the merged tree with a script written for it, and
+then checked against what the suite derives. The last row is the point of the
+issue in one line: dev-05's header prose said `of the 170 whose status is
+active`, and the merged tree holds **171**, because this branch added `GH-148`.
+Neither side's number was right, and both sides' text would have merged clean.
+`--list` derives 171 and nothing restates it.
+
+**Two things the conflict markers could not show**, found by sweeping the whole
+tree for every value either side carried:
+
+- The assistant folded #169's finding into the harness header and quoted the
+  old magnitude while doing it — inside the reflowed region, where this branch's
+  own absence pin forbids exactly that string. The pin would have gone red; the
+  sweep found it first. The paragraph now records what #169 found without
+  spelling either figure, and says why. The header had a sentence warning about
+  precisely this trap, written two rounds earlier, and it was still walked into.
+- `MEASURED_AT_RESULTS` looks like a value to re-derive and is not. It is half
+  of a measurement record — the suite's size when the rate was taken — so
+  updating it without re-measuring would move the staleness check's baseline
+  instead of answering it, which is silencing a check rather than satisfying it.
+  The rate was re-measured against the merged tree instead, the way the harness
+  pays for a run: **274 s, 250 s, 266 s**, all under the 275 s already recorded.
+  So the rate itself does not move — #169 added about 200 check results without
+  making a run slower — and `MEASURED_AT_RESULTS` moves to 5296 because a
+  measurement was taken at that size, not because the tree grew.
+
+The `$MUT` / `$MUT_PROSE` rule was re-checked against the merged tree rather
+than assumed to survive: every one of the 17 remaining `"$MUT"` pins resolves to
+a line at or below `set -u`, so all of them are code and none is header prose.
+#169 added no pin on the harness.
+
+## What is still open
+
+- **#192** — the wrap-blind class outside this branch. `GH-70.3` and `GH-99.1`
+  grep raw files, and the false green was measured end to end: the count
+  `GH-70.3` forbids can stand in `SKILL.md`, wrapped, with the suite reporting
+  `ALL CHECKS PASSED`. `flatten()` already exists thirty lines above `GH-70.3`.
+  Filed rather than fixed here, because widening a scoped change into
+  `SKILL.md` is how it stops being reviewable.
+- **#193** — making `--list` apply each row's edit, so the run count is exact
+  rather than an upper bound and a rotted anchor surfaces in a second rather
+  than after a whole pass. Deferred by agreement: it changes what `--list` is.
+  Four questions are written into the issue, of which one is the trap — the
+  `#148` run-count check compares two derivations, so if `--list` starts
+  measuring, the suite's side must measure too or the check has to become
+  something else.
+- **The rate is a measurement and will go stale again.** Nothing in this
+  repository can derive it. The staleness check fires when the suite outgrows
+  the size it was taken at by a quarter; it cannot see the machine changing
+  under a suite of the same size, and that is written beside it.
+- **No whole-registry pass has been run on the merged tree**, and the harness
+  header says which selections have and have not been exercised since the files
+  under them changed. This branch changes no hook and no registry row, so it
+  adds nothing to that debt, but it does not discharge it either.
+
+## For the next session
+
+The branch is PR #183 into `dev-05`, green and merged up to `7bea85f`. If
+another dev-branch merge lands before it does, the same re-derivation applies:
+every count in the table above comes off the merged tree, never off a side, and
+the sweep for values both sides carried identically is the half that conflict
+markers cannot do.
