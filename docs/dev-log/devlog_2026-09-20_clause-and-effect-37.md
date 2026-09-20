@@ -174,3 +174,120 @@ byte-identical after both runs.
   predates #118; it is written down in the library rather than fixed.
 - The whole mutation registry has still never been run in one pass; this session
   added four rows and ran those four.
+
+---
+
+# 2026-09-20 18:09 +03 · session `clause-and-effect-37` — #118 round two: two spellings of the refused command were still permitted
+
+**Branch** `worktree-issue-118-gh-preoption`, answering Bertan's review of PR
+#184. Five findings, all verified against the real hooks before anything was
+changed; two were blocking. **Check suite 5147 → 5163 results, all passing.**
+All six #118 mutation rows were run as one selection: all caught,
+`.claude/hooks/` byte-identical after.
+
+## Both blocking findings were the same mistake in different clothes
+
+The walk asked its question of **a `cs_split` fragment while reasoning about a
+command**, and twice that difference let the command through.
+
+**A backtick makes the option the last token.** `cs_split` cuts at a backtick,
+so ``gh pr -t `echo view` merge 5`` arrives as the fragment `gh pr -t`. The walk
+had an exemption — "a token with no blank behind it is the last word of the line
+and consumes nothing" — which is true of a command and false of a fragment, so
+the option was never judged. Reproduced: **ALLOW**, and the shell expands it to
+the merge this rule exists to refuse. The `$( )` spelling of the same command
+was already refused, its fragment ending `gh pr -t $`, so two spellings of one
+command disagreed. That pair is what makes it a defect rather than a shortfall.
+
+**A quote in front of the option ends the walk.** It tested the raw first
+character for a dash, so `gh pr "-t" view merge 5`, the single-quoted spelling
+and `gh pr \-t view merge 5` were all **ALLOW**, and all three reach gh as a
+merge. The release arm was closed against this and the pr arm was not — the read
+allowlist catches the eaten word there — so the file failed closed in one place
+and open in another for one cause.
+
+**The fixes.** The exemption is gone; option tokens have quotes and backslashes
+removed before classification, by a reducer narrower than `cw_reduce` on
+purpose, since `cw_reduce` also takes a path to its basename and would read
+`--repo=o/r` as `r`. Path words are not reduced, so `gh "pr" merge 5` stays
+GH-135's and is pinned as the boundary rather than left to be assumed.
+
+## Dropping the exemption had a price, and it was measured before it was paid
+
+Without it, `gh --version` is unreadable and refused. That is not theoretical:
+**23 occurrences in 100,929 Bash commands from 861 local session transcripts**,
+against 3 for every other non-repo option in that position put together — and
+all three of those were written while developing these hooks. So `--version`
+and `--help` are recognised rather than refused.
+
+That *is* a list of gh booleans, and saying otherwise would be the evasion. It
+is not the list #97 refused: that one is gh's flag definitions **per group**,
+which a gh release moves and which has to be tracked. These two are the **root**
+flag set, which `gh help` prints in two lines, which gh 2.45.0 defines as
+exactly `--help` and `--version`, and which both print and exit — so recognising
+them cannot hide a verb behind a value they never take. `-h` stays unreadable,
+because cobra registering it is a thing to measure and not a thing to assume.
+
+## The cost finding was real and is gone
+
+Bertan measured the hook at 63 ms before this issue and 167 ms after — 2.6×, on
+every Bash tool call — because asking the unreadable question separately meant
+`cs_gh_args` read stdin into a variable and piped it twice: three processes
+where there had been one. Measured here, 8 runs each, same input:
+
+| | `pytest && ruff && mypy` | `gh pr view && gh issue list && gh release list` |
+|---|---|---|
+| `dev-05` | 61 ms | 58 ms |
+| PR #184 as reviewed | 157 ms | 140 ms |
+| after this round | **64 ms** | **67 ms** |
+
+Two changes. `cs_gh_args` and `cs_gh_opaque` are now **one awk program**,
+`CS_GH_AWK`, asked two questions through a `mode` variable — one process again,
+and one copy of the classification. And the unreadable pass in the hook skips a
+command that does not begin with `gh` before forking awk for it, which is free:
+the program's own first act is that same test.
+
+The one-program change also settled round 1's "stated once" finding properly.
+That round had left `cs_gh_args` carrying the same three names again in its own
+skip list, with a comment explaining why that was not a second copy. It was a
+second copy. There is one now, and the check derives it off the file.
+
+## What the contract change cost, and the check that says so
+
+Folding the two questions together moved a documented contract: `cs_gh_args`
+answered about **the first match**, and now answers about **the first line it
+can decide** — an unreadable line decides too. Reachable only from
+`check-hooks.sh`, every hook caller feeding one command at a time, which is
+exactly why it needed a check rather than a caller. Bertan's finding 5 was that
+the two existing multi-line checks pass only because their first lines happen to
+be readable; a third now drives the case that changed.
+
+## Mistakes in this round's own work
+
+- **The withdrawal guard was written from reasoning and the reasoning was
+  wrong.** The comment said an empty `CS_GH_AWK` makes awk read its program from
+  the first operand and exit non-zero, which a caller reads as "not this path"
+  and permits. Measured: an empty program is a *valid* awk program that reads
+  its input, does nothing and exits **0**, so every path answers "cannot tell"
+  and every gh rule refuses — loud, and the safe direction. The guard is kept as
+  belt and braces and the paragraph now says which it is.
+- **A derived check went stale in the direction that reads as a defect.** With
+  the gh pair merged, `skipopts` has one definition, and the loop asserting
+  every copy is identical failed with "fewer than two definitions … nothing to
+  compare". Correctly: it is a check saying it cannot make its claim. It is a
+  literal count now, so a second `skipopts` reappearing rejoins the comparison.
+- **A check's claim stopped being about its subject and went green.** "A caller
+  of that shape refuses everything when `cs_gh_opaque` is gone" was true while
+  `cs_gh_args` called it; once they shared a program it read PERMIT for an
+  honest reason. Replaced by the claim that now holds — the walk emptied — with
+  the direction asserted.
+
+## Still open after round two
+
+- Everything under the previous entry's *Still open* stands.
+- An option **inside** a command substitution — ``gh pr `echo -t` view merge
+  5`` — is still permitted, on both `dev-05` and here. `cs_split` cuts there, so
+  the option sits in a fragment no walk sees. CLAUDE.md's deliberately-left-open
+  consequences 4 and 6; closing it means resolving a substitution from text.
+  Pinned as permitted so the boundary is evidence.
+- The registry is at 60 rows and has still never been run in one pass.

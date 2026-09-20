@@ -1622,6 +1622,24 @@ and held to the same standard of saying only what it asks.
   `gh --paginate issue list` is refused on the argument that a group which may
   have been eaten cannot be called unguarded, not on a count. Said here because
   the two halves of the trade have different evidence behind them.
+  `--version` and `--help` are recognised rather than refused, being the two
+  flags `gh help` prints at the root, taking no value and printing and exiting.
+  That is a list of gh booleans and is not the per-group list #97 refused: the
+  root set does not vary by group and has not moved. It is there because
+  dropping the last-token exemption would otherwise refuse `gh --version`,
+  measured at 23 occurrences in 100,929 Bash commands from 861 local session
+  transcripts, against 3 for every other non-repo option in that position put
+  together.
+  TWO SPELLINGS THIS DOES NOT REACH, and the requirement text is to be read
+  against them. Neither is refused, both are pinned as permitted, and both are
+  unchanged from `dev-05`. A quoted PATH word — `gh "pr" merge 5` — is GH-135
+  and not this: only the option spelling is reduced, because the reducer that
+  would read `"pr"` as `pr` is `cw_reduce`, which also takes a path to its
+  basename and would read `--repo=o/r` as `r`. An option inside a command
+  substitution — ``gh pr `echo -t` view merge 5`` — is cut into a fragment of
+  its own by `cs_split`, so no walk sees it; that is CLAUDE.md's
+  deliberately-left-open consequences 4 and 6, and closing it would mean
+  resolving a substitution from text.
 
 ### GH-124
 - text: `feed` and `feed_says` read a hook's exit status as every other helper does,

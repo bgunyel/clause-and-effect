@@ -1176,6 +1176,20 @@ tok 'gh args, an option on a neighbouring command' '--base dev-05' \
 req FR-22 GH-47.2
 tok 'gh args, the first match only, and the rest unseen' '' \
     "$(printf 'gh pr create\ngh pr create --base dev-05\n' | cs_gh_args 'pr create')"
+# AND SINCE #118 IT IS THE FIRST LINE IT CAN DECIDE, which is not the same
+# sentence: an unreadable line decides too, and the match after it is never
+# reached. Review round 1 found the two checks above passing only because their
+# first lines happen to be readable, so the half that changed was pinned by
+# nothing. Not live in any hook -- every caller feeds one command at a time --
+# which is exactly why it needs a check rather than a caller.
+req GH-118
+tok 'gh args, an unreadable earlier line decides, and the match after it is unseen' '' \
+    "$(printf 'gh pr --json title view 5\ngh pr create --base dev-05\n' | cs_gh_args 'pr create')"
+if printf 'gh pr --json title view 5\ngh pr create --base dev-05\n' | cs_gh_args 'pr create' >/dev/null; then
+  tok 'and it succeeds there, so a caller reads cannot-tell and not not-a-match' 'cannot tell' 'cannot tell'
+else
+  tok 'and it succeeds there, so a caller reads cannot-tell and not not-a-match' 'cannot tell' 'not a match'
+fi
 req FR-22
 if printf 'gh pr create\n' | cs_gh_args 'pr create' >/dev/null; then
   tok 'bare create succeeds, so empty args mean a create' 'found' 'found'
@@ -2670,14 +2684,25 @@ NAIVE_EATS=$(printf 'gh pr -t view merge 5\n' \
   | bash -c ". '$HOOKS/lib/command-scan.sh' && $NAIVE_CALLER" 2>/dev/null)
 NAIVE_OTHER=$(printf 'gh issue list\n' \
   | bash -c ". '$HOOKS/lib/command-scan.sh' && $NAIVE_CALLER" 2>/dev/null)
-NAIVE_NOOPAQUE=$(printf 'gh issue list\n' \
-  | bash -c ". '$HOOKS/lib/command-scan.sh' && unset -f cs_gh_opaque && $NAIVE_CALLER" 2>/dev/null)
+NAIVE_NOWALK=$(printf 'gh issue list\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && CS_GH_AWK= && $NAIVE_CALLER" 2>/dev/null)
 tok 'a caller that ignores the third outcome refuses an unreadable command' \
     'REFUSE' "$NAIVE_EATS"
 tok 'and still skips a command that is not that path at all' \
     'PERMIT' "$NAIVE_OTHER"
-tok 'and a caller of THAT shape refuses everything when cs_gh_opaque is gone' \
-    'REFUSE' "$NAIVE_NOOPAQUE"
+# AND WITH THE WALK ITSELF EMPTIED, which is the state the library withdraws
+# both functions for. This drives the state the withdrawal cannot reach -- the
+# variable emptied AFTER the library was sourced -- and asserts the direction it
+# fails in. An empty awk program is a valid program that reads its input and
+# does nothing, measured exit 0, so cs_gh_args answers "cannot tell" for every
+# path and every gh rule refuses. Loud, and the permitting direction would be a
+# defect: this is the check that says which of the two it is.
+#
+# The claim this replaced was about cs_gh_opaque being unset, which stopped
+# being a claim about cs_gh_args when the two became one program -- it went
+# green as PERMIT for the honest reason that cs_gh_args no longer calls it.
+tok 'and answers cannot-tell for every path when the shared walk is emptied' \
+    'REFUSE' "$NAIVE_NOWALK"
 
 # AND THE OTHER POLARITY, which the three above say nothing about and which the
 # first version of this section claimed they did. A caller whose MATCH grants
@@ -2714,23 +2739,93 @@ tok 'and withholds it when cs_gh_opaque is gone, where && return would grant' \
 armed 'and release_is_read reads that status as 1-or-nothing, in the file' \
       "$HOOKS/no-pr-decisions.sh" 'case $? in 1) ;; *) return 1 ;; esac'
 
-# THE TWO LISTS OF THE SAME THREE NAMES, derived off the library and held to a
-# literal. ghopt in cs_gh_opaque says which options may stand before a
-# subcommand at all; the skip list cs_gh_args passes its own skipopts says which
-# of them eat the next word. Different questions, same three names, written
-# twice -- so a name added to one and not the other is caught here rather than
-# by whatever it lets through. The comment beside each points at this check.
+# ROUND 1 OF REVIEW: TWO SPELLINGS OF THE VERY COMMAND THIS REFUSES, both
+# measured permitted on the first version of #118 and on dev-05.
+#
+# THE FIRST IS A FRAGMENT, NOT A COMMAND. cs_split cuts at a backtick, so
+# ``gh pr -t `echo view` merge 5`` reaches cs_gh_opaque as `gh pr -t`, where the
+# option is the last token. The walk had an exemption for that position -- "a
+# token with no blank behind it consumes nothing" -- which is true of a command
+# and false of a fragment, and the exemption is gone. The $( ) spelling of the
+# same command was already refused, its fragment ending `gh pr -t $`, so the two
+# spellings of one command disagreed; that pair is why it is a defect rather
+# than a shortfall.
+req GH-118 US-15
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option made last by a backtick, then a merge' \
+  'gh pr -t `echo view` merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the same, with the group inside the substitution' \
+  'gh -t `echo pr` pr merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'and the $( ) spelling, which was already refused' \
+  'gh pr -t $(echo view) merge 5'
+# THE SECOND IS A SPELLING OF THE OPTION. The walk tested the raw first
+# character for a dash, so a quote or a backslash in front of the option ended
+# it. All three of these reach gh as `gh pr -t view merge 5`, which merges.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the option double quoted, then a merge' \
+  'gh pr "-t" view merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the option single quoted, then a merge' \
+  "gh pr '-t' view merge 5"
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the option behind a backslash, then a merge' \
+  'gh pr \-t view merge 5'
+req GH-118 FR-15 FR-16
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a quoted option before a create naming main' \
+  'gh pr "-t" view create --base main --title x'
+req GH-118 FR-17
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a quoted option before a retarget to main' \
+  'gh pr "-t" view edit 35 --base main'
+# The release arm was already closed against this, by the read allowlist rather
+# than by the walk: the eaten word is not a read verb. Kept because it is the
+# contrast that says the pr arm was failing open where this one failed closed.
+req GH-118 FR-48 US-15
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'the quoted option before a release create, already refused' \
+  'gh release "-t" list create v1'
+#
+# WHAT THE TWO FIXES STILL LEAVE, pinned as permitted so the boundary is
+# evidence rather than a sentence. Neither is #118 to answer and both are
+# unchanged from dev-05.
+#
+#   - a quoted PATH WORD. Only the option spelling is reduced, deliberately:
+#     the reducer that would read `"pr"` as `pr` is cw_reduce, which also takes
+#     a path to its basename and would read `--repo=o/r` as `r`. `gh "pr" merge
+#     5` is permitted at dev-05 too and is GH-135.
+#   - an option inside a command substitution. cs_split cuts there, so the
+#     option is in a fragment of its own and no walk sees it at all. That is
+#     CLAUDE.md deliberately-left-open consequence 4 and 6, and closing it means
+#     resolving a substitution from text, which cannot be done.
+req GH-118 US-13
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: a quoted group word, which is #135 and not this' \
+  'gh "pr" merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the option itself inside a substitution' \
+  'gh pr `echo -t` view merge 5'
+# The two gh root flags, permitted because ghopt recognises them: dropping the
+# last-token exemption would otherwise have refused a command written 23 times
+# in the 100,929-command corpus. `gh pr --help` is the same flag one level in.
+req GH-118 US-13
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh --version, still permitted' 'gh --version'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh --help, still permitted' 'gh --help'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh pr --help, still permitted' 'gh pr --help'
+
+# THE ONE LIST, derived off the library and held to a literal. Round 1 of the
+# review found this section asserting that the classification was written once
+# while `cs_gh_args` carried the same three names again in its own skip list;
+# the two functions are one awk program now, so there is one list and this is
+# what says so. The literal is the recognised set: the three that name where a
+# command acts, and the two root flags that `gh help` prints, which are here
+# because dropping the last-token exemption would otherwise refuse
+# `gh --version` -- 23 of those in 100,929 Bash commands from 861 local
+# transcripts.
+#
+# Derived rather than listed, so a fourth name added to ghopt is red here
+# whatever the comment beside it says. The second half asserts there is no
+# second list: `skipopts` was where the other copy lived, and cs_gh_args no
+# longer has an awk program of its own to put one in.
 req GH-118
-tok 'ghopt recognises exactly -R, --repo and --hostname' \
-    '--hostname --repo -R' \
-    "$(sed -n '/function ghopt(t) {/,/^    }/p' "$HOOKS/lib/command-scan.sh" \
+tok 'ghopt recognises exactly -R, --repo, --hostname, --version and --help' \
+    '--help --hostname --repo --version -R' \
+    "$(sed -n '/function ghopt(t) {/,/^  }/p' "$HOOKS/lib/command-scan.sh" \
        | grep -oE '\-\-?[A-Za-z][-A-Za-z]*' | LC_ALL=C sort -u \
        | tr '\n' ' ' | sed 's/ $//')"
-tok 'and the skip list in cs_gh_args names the same three' \
-    '--hostname --repo -R' \
-    "$(grep -oE 'skipopts\("\|-R\|[^"]*"\)' "$HOOKS/lib/command-scan.sh" \
-       | sed -e 's/^skipopts("//' -e 's/")$//' | tr '|' '\n' | grep -v '^$' \
-       | LC_ALL=C sort -u | tr '\n' ' ' | sed 's/ $//')"
+tok 'and no second list of them survives in a gh skipopts call' \
+    '0' "$(grep -c 'skipopts("|-R' "$HOOKS/lib/command-scan.sh")"
 
 # WHICH REFUSAL, which is the whole of what the unreadable pass in the hook
 # adds. The third outcome above already refuses these commands without it -- an
@@ -9550,19 +9645,28 @@ tok 'cs_gh_args reads -R|--repo as one option taking no value, as before #96' \
 req GH-96.3 GH-118
 tok 'and --repo|--hostname, which #118 made unreadable' 'rc=0' "$PIPED_GH_LONG"
 
-# The linear passes carry copies of two awk helpers -- tokend and skipblank in
-# three programs, skipopts in two -- because an awk program cannot source
-# another. A rule written twice is answered twice, which is the sentence
-# lib/command-scan.sh opens with, so the copies are held to each other here:
-# every definition of each is extracted off the file and all must be identical.
-# Derived rather than counted, so a fourth copy is compared with the rest.
+# The linear passes carry copies of two awk helpers -- tokend and skipblank --
+# because an awk program cannot source another. A rule written twice is answered
+# twice, which is the sentence lib/command-scan.sh opens with, so the copies are
+# held to each other here: every definition of each is extracted off the file
+# and all must be identical. Derived rather than counted, so a further copy is
+# compared with the rest.
+#
+# skipopts IS NOT IN THE LIST ANY MORE, and the one line below is why it is
+# named here rather than silently dropped. It had two copies, one per argument
+# reader, and #118 left one: the gh reader and the gh unreadable-shape question
+# became one awk program, so the gh copy is gone and only cs_git_args has one.
+# A single definition cannot disagree with itself, so this loop would have had
+# nothing to compare and said so -- correctly, and as a failure. The claim it is
+# replaced by is the count, held to a literal, so a SECOND skipopts reappearing
+# puts it back in the comparison rather than arriving unnoticed.
 awk_copies() {  # awk_copies <function> -- each definition, one per line, newlines as |
   awk -v fn="$1" '
     $0 ~ "^[[:space:]]*function " fn "\\(" { body = ""; grab = 1; indent = match($0, /[^[:space:]]/) }
     grab { body = body substr($0, indent) "|"; if ($0 ~ /}[[:space:]]*$/ && (match($0, /[^[:space:]]/) == indent)) { print body; grab = 0 } }
   ' "$HOOKS/lib/command-scan.sh"
 }
-for fn in tokend skipblank skipopts; do
+for fn in tokend skipblank; do
   total=$(awk_copies "$fn" | wc -l | tr -d ' ')
   distinct=$(awk_copies "$fn" | sort -u | wc -l | tr -d ' ')
   if [ "$total" -lt 2 ]; then
@@ -9573,6 +9677,9 @@ for fn in tokend skipblank skipopts; do
     fail static 'the %s copies of the awk helper %s have drifted apart into %s versions' "$total" "$fn" "$distinct"
   fi
 done
+req GH-118
+tok 'and skipopts has one definition left, cs_git_args own, since the gh pair became one program' \
+    '1' "$(awk_copies skipopts | wc -l | tr -d ' ')"
 
 # Where the argument is written. Prose, so `written`: the header that states the
 # cap is where someone raising it will look for what it gives up.
@@ -11327,7 +11434,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '58' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '60' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11390,7 +11497,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '56' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '58' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:

@@ -98,12 +98,15 @@
 # one function this file calls whose SUCCESS is a refusal, so a call to a name
 # that is not there fails and the rule it carries simply does not fire: the
 # unreadable pass below would find nothing, and release_is_read would grant the
-# read it exists to withhold. Neither is loud. cs_gh_args asks the same function
-# and answers for its absence itself, by reading every path as unreadable and so
-# refusing every gh command this file judges -- which is loud, and is the
-# library's own fail-closed default rather than a substitute for requiring the
-# name here. A guard that leans on another file's default is #84's finding in
-# one line.
+# read it exists to withhold. Neither is loud, and neither is reached by any
+# verdict in the check suite, which is why the name is required here and why
+# release_is_read reads its status rather than its success.
+#
+# The two share one awk program, CS_GH_AWK in the library, so in practice they
+# arrive and leave together -- and the library withdraws both if that program is
+# empty, which turns the one state a `command -v` guard cannot see into the one
+# it can. That is the library answering for itself and not a reason to require
+# fewer names here: #84 is the issue about a guard that named a subset.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
 if ! command -v cs_normalise >/dev/null 2>&1 \
@@ -804,8 +807,21 @@ fi
 # the others already ask about; it is named anyway, because a reader checking
 # that this list covers what the file judges should find all three surfaces
 # here rather than have to know that one of them is subsumed.
+#
+# THE NON-gh FAST PATH is the `case` below, and it is a cost fix rather than a
+# rule. cs_gh_opaque forks awk, and this loop would fork it three times for
+# every command on the line -- including the `make test` and `uv run` that most
+# lines are. Its first act is `if (line !~ /^gh(…)/) next`, so asking the same
+# question in the shell first is the same answer for nothing. Measured on a
+# three-command line with no gh in it: 167 ms to 71 ms, against 63 ms at
+# dev-05. Bertan review of PR #184 measured the cost and named this fix.
+#
+# It is not a second copy of a rule: what it duplicates is `does this command
+# start with gh`, which is a precondition of the question and not the question.
+# A command this skips is one cs_gh_opaque would have returned "readable" for.
 GH_OPAQUE_PATHS=('pr merge' 'release view' 'api')
 while IFS= read -r CMD; do
+  case "$CMD" in gh|gh[[:space:]]*) ;; *) continue ;; esac
   for GHPATH in "${GH_OPAQUE_PATHS[@]}"; do
     if cs_gh_opaque "$GHPATH" <<<"$CMD"; then
       echo "$CS_GH_OPAQUE_REFUSAL" >&2
