@@ -2304,14 +2304,17 @@ and held to the same standard of saying only what it asks.
   one.
 
 ### GH-148
-- text: `bash .claude/hooks/mutate-hooks.sh --list` is the only place any count
-  about the mutation registry is written. Its summary lines carry the rows, the
-  real mutations among them, the files those touch, the requirement IDs they
-  name, the self-tests, how many requirements this file holds active, and how
-  many runs of `check-hooks.sh` a whole-registry pass costs — the baseline plus
-  one per row whose edit applies, which is not one per row, because a row
-  registered `did-not-apply` never reaches a run. The harness's header restates
-  none of them and points at `--list` where they stood.
+- text: `bash .claude/hooks/mutate-hooks.sh --list` derives every count about the
+  mutation registry, and the harness's header states none of them. Its summary
+  lines carry the rows, the real mutations among them, the files those touch, the
+  requirement IDs they name, the self-tests, how many requirements this file
+  holds active, how many runs of `check-hooks.sh` a whole-registry pass costs —
+  the baseline plus one per row whose edit applies and that pass one does not
+  refuse, which is not one per row — and about how long that pass takes, the
+  dated rate in the harness multiplied by that run count. Where one of those
+  numbers is ALSO written as a literal in `check-hooks.sh` it is a check, and
+  goes red when a row is added. Where it would be written in a comment it is not
+  written at all.
 - from: #148
 - kind: doc-claim
 - status: active
@@ -2338,21 +2341,44 @@ and held to the same standard of saying only what it asks.
   suite: an active-requirement literal in `check-hooks.sh` would move with every
   entry appended here, which is this issue recreated one directory over. Each
   figure is compared against a derivation `check-hooks.sh` makes for itself —
-  one over this file, one over the registry rows it already reads — so what is
-  asked is whether the harness counts what the suite counts. THAT IS NOT THE
-  SAME AS EITHER BEING RIGHT: the active-requirement derivation is the harness's
-  own program written out a second time, so a defect the two share agrees with
-  itself, and what the check catches is the harness drifting — the figure
-  dropped, renamed, spelled off a constant, or counted by line instead of by ID.
-  Three readings were compared by hand when this landed, and all three answered
-  166. Both derivations
+  one over this file, one over the registry rows it already reads, one over the
+  harness's two dated measurement constants — so what is asked is whether the
+  harness counts what the suite counts. THAT IS NOT THE SAME AS EITHER BEING
+  RIGHT: the active-requirement derivation is the harness's own program written
+  out a second time, so a defect the two share agrees with itself, and what the
+  check catches is the harness drifting — the figure dropped, renamed, spelled
+  off a constant, or counted by line instead of by ID. Bertan's review of PR
+  #183 found that case live rather than hypothetical, twice: neither copy was
+  section-aware, so a stray `- status: active` outside the three sections that
+  hold entries moved both together; and the run count asked only about
+  `did-not-apply`, not about the five reasons pass one refuses a row, so one
+  malformed row made both over-report by one. Both are fixed, and the chain now
+  ends somewhere that is not a copy — a third check holds the suite's count to
+  what `REQUIREMENTS_AWK`, the canonical reader of this file, makes of the same
+  file. All three derivations
   read the directory beside the suite rather than `$HOOKS`, because the
   `requirements.md` the harness counted is the one beside the harness; reading a
   file the override moved would go red for the override and say nothing about
   the arithmetic. The four `unarmed` pins are evidence about the four spellings
   they name and about nothing else — a count written some other way is out of
   their reach, and what holds the positive half is the `written` pin on the
-  pointer that now stands where the counts did. No row of the registry can reach
+  pointer that now stands where the counts did.
+
+  THE RUNTIME IS THE CASE THAT TAUGHT THIS ENTRY WHAT A CHECK IS. The first
+  version of this fix kept one magnitude in the harness's header, `ABOUT AN
+  HOUR`, and classified it as the safe kind of literal because `check-hooks.sh`
+  pinned the string — then pointed `CLAUDE.md`, `docs/todo.md` and GH-107.2's
+  note at it, making it the only copy. It was right at twenty-three runs, had
+  never been re-derived as the registry grew past fifty, and was wrong by about
+  a factor of two. The pin could not have caught that: asserting a string is
+  present says nothing about whether the number still follows from anything.
+  Bertan's review of PR #183. So the magnitude moved to `--list`, where it is a
+  dated rate times the run count, and what the suite now pins is the absence of
+  a magnitude in the header, the sentence saying the harness is slow enough that
+  nobody runs it, and the product itself against its own multiplication. The
+  rate is read out of the harness rather than restated here because it is a
+  MEASUREMENT and this file has taken none; what is checked is the arithmetic
+  and that it still moves. No row of the registry can reach
   any of this: the rule is code in `mutate-hooks.sh`, which is `$TOOLING`, and
   what that code reads is `requirements.md` beside the harness rather than a
   file an override moves — so GH-141's exception does not apply and this is
@@ -2663,3 +2689,12 @@ it has no entry above (Q16).
   holds, which resolves a `gh` shell function ahead of PATH and would have aborted
   the suite on a host that exports one. Its third correction is a measurement in
   `mutate-hooks.sh`, whose exclusivity was that host's, and is recorded there
+- #183: the pull request for #148; Bertan's review of it is cited where each of
+  the seven things it corrected stands. Two were the issue's own thesis failing
+  on the number the branch had just made load-bearing: the harness's runtime was
+  wrong by about a factor of two, and the pin classified as the safe kind of
+  literal asserted only that a string was present and so could never go red as
+  the registry grew. The rest are a count in `CLAUDE.md` that misdescribed which
+  numbers live in two places, two readers of `requirements.md` that were not
+  section-aware, a run count that included rows a pass refuses, and a suppressed
+  stderr. It is not counted here, for the reason #142's entry gives

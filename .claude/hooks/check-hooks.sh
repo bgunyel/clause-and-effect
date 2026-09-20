@@ -10894,7 +10894,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '296' "${TEXT_CHECK_ARGS##*COUNT }"
+    '297' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -10945,7 +10945,23 @@ case " $RUN_BY_SETTINGS " in
     pass static 'settings.json does not register the mutation harness' ;;
 esac
 written 'the harness says how it is run' "$MUT" 'bash .claude/hooks/mutate-hooks.sh'
-written 'and roughly what it costs, which is why nothing runs it for you' \
+# WHAT IT COSTS IS NO LONGER A STRING HERE, and the reason is #148's own
+# distinction turned on the pin that used to stand in this line. It asserted the
+# header still said `ABOUT AN HOUR`, which the header did -- while the figure
+# itself had gone wrong by about a factor of two, right at twenty-three runs and
+# never re-derived as the registry grew past fifty. A pin on a magnitude's
+# SPELLING cannot go red when the magnitude rots, so it was a comment-count
+# wearing a check's clothes, and #148's first commit classified it as safe and
+# kept it. Bertan's review of PR #183.
+#
+# What stands here instead is the half that is genuinely static -- that the
+# header still says the harness is slow enough that nobody runs it for you --
+# and the absence of the old magnitude, so that the next person cannot put one
+# back without this going red. The figure moved to `--list`, where it is
+# multiplied out of a dated rate, and the #148 block below checks the product.
+written 'and that it is slow enough that nothing runs it for you' \
+        "$MUT" 'SLOW ENOUGH THAT NOTHING RUNS IT FOR YOU'
+unarmed 'while the magnitude that rotted is not written there any more' \
         "$MUT" 'ABOUT AN HOUR'
 written 'and what its exit status means, the two self-tests included' \
         "$MUT" 'EXIT STATUS: non-zero when any row reports something other than'
@@ -11037,9 +11053,31 @@ tok 'the registry holds as many mutations as this suite expects' \
     '54' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
+# AND THE OUTCOMES OF THE ROWS A PASS WOULD ACTUALLY RUN, which is a different
+# list from the one above and is what the #148 run-count check needs. The five
+# reasons the harness's pass one refuses a row are asked here, in this file's own
+# shell rather than by calling the harness's `row_fault` -- so the two are
+# genuinely separate programs, which is the whole point of the comparison. The
+# three questions this audit asks that pass one does not -- is the file readable,
+# does the requirement exist, is it active -- are deliberately NOT among them: a
+# pass runs such a row and reports what it finds, so counting it out would make
+# this figure disagree with the harness for a reason the harness is right about.
+# Bertan's review of PR #183.
+MUT_RUN_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
   [ -n "$MID" ] || continue
   MUT_OUTCOMES="$MUT_OUTCOMES$MWANT
+"
+  MUT_ROW_RUNS=1
+  case "$MWANT" in caught|survived|did-not-apply) ;; *) MUT_ROW_RUNS= ;; esac
+  case "$MWANT:$MID" in
+    caught:*|survived:selftest-*|did-not-apply:selftest-*) ;;
+    *) MUT_ROW_RUNS= ;;
+  esac
+  case " $TOOLING " in *" $MFILE "*) MUT_ROW_RUNS= ;; esac
+  case "$MFILE" in /*|*/../*|../*|*/..|..) MUT_ROW_RUNS= ;; esac
+  [ -n "$MFILE" ] && [ -n "$MEDIT" ] && [ -n "$MREQS" ] && [ -n "$MWANT" ] || MUT_ROW_RUNS=
+  [ -z "$MUT_ROW_RUNS" ] || MUT_RUN_OUTCOMES="$MUT_RUN_OUTCOMES$MWANT
 "
   [ -n "$MFILE" ] && [ -n "$MEDIT" ] && [ -n "$MREQS" ] && [ -n "$MWANT" ] \
     || { MUT_BAD="$MUT_BAD  $MID: the row does not split into five fields
@@ -11131,11 +11169,21 @@ tok 'and every other registered mutation is expected to be caught' \
 # beside it; comparing its arithmetic against a reading of a DIFFERENT file would
 # go red for the override rather than for the harness.
 req GH-148
-MUT_LIST=$(bash "$MUT" --list 2>/dev/null)
-[ -n "$MUT_LIST" ] || {
-  echo "mutate-hooks.sh --list printed nothing, so the #148 checks below prove nothing" >&2
+# STDERR IS KEPT, not discarded. The harness says WHY it refused on stderr --
+# that it could not resolve its own directory, that the suite is not beside it,
+# a usage line on exit 64 -- and throwing that away turned every one of those
+# into the same "printed nothing" and then exited the whole suite, leaving the
+# reader to re-run the harness by hand to learn which. Bertan's review of PR
+# #183. The exit status is read too: a `--list` that printed its summary and
+# then failed is not a `--list` these checks may read.
+MUT_LIST_ERR="$FIXTURES/mutate-hooks-list.err"
+MUT_LIST=$(bash "$MUT" --list 2>"$MUT_LIST_ERR")
+MUT_LIST_STATUS=$?
+if [ -z "$MUT_LIST" ] || [ "$MUT_LIST_STATUS" != 0 ]; then
+  echo "mutate-hooks.sh --list exited $MUT_LIST_STATUS and printed $(printf '%s' "$MUT_LIST" | grep -c .) lines, so the #148 checks below prove nothing" >&2
+  sed 's/^/       /' "$MUT_LIST_ERR" >&2
   exit 1
-}
+fi
 # Distinct IDs, not `- status: active` lines, so that an entry carrying the field
 # twice counts once.
 #
@@ -11158,8 +11206,29 @@ MUT_LIST=$(bash "$MUT" --list 2>/dev/null)
 # an entry the audit twenty lines up still called active would have dropped out
 # of both counts here, silently and equally, which is the one way a comparison
 # of two readings of one rule can be green and wrong. Review of this branch.
+#
+# AND IT IS SECTION-AWARE, which the first version was not. requirements.md is
+# not all entries: its `##` headings divide it, only three of them hold
+# requirements, the provenance section holds stage-ticket criteria under
+# headings of their own, and the sections above it hold prose. A criterion
+# heading is deliberately not spelled out here -- the citation audit reads every
+# `#<n>` in this file, and one written as an example would be a citation of the
+# stage ticket. Reading `### ` anywhere, and never clearing the id at a
+# `##` boundary, counted a stray `- status: active` in a later section against
+# whichever heading was last seen -- and the harness's copy made the same
+# mistake, so the two agreed and were wrong together. That is precisely the
+# failure the paragraph above says a doubled program cannot find, arriving in
+# the commit that wrote the paragraph. Bertan's review of PR #183.
+#
+# The section rule is REQUIREMENTS_AWK's, the canonical reader of this file, and
+# the check under `--- this repository ---` holds this count to what THAT reader
+# makes of the same file. So the chain is harness -> here -> canonical, and only
+# the middle link is a copied program.
 REQ_ACTIVE_HERE=$(awk '
-  /^### / { id = $2; next }
+  /^## / { id = ""
+           part = ($0 ~ /^## (User stories|Functional requirements|Boundary issues)$/) ? "req" : "other"
+           next }
+  /^### / { id = (part == "req") ? $2 : ""; next }
   id != "" && /^- status:[ \t]*active[ \t]*$/ { active[id] = 1 }
   END { n = 0; for (i in active) n++; print n + 0 }' "$SUITE_DIR/requirements.md")
 MUT_ACTIVE=$(printf '%s\n' "$MUT_LIST" \
@@ -11174,15 +11243,52 @@ else
       "$REQ_ACTIVE_HERE" "$MUT_ACTIVE"
 fi
 # THE WHOLE-REGISTRY RUN COUNT: the baseline, plus one per row whose edit is
-# expected to apply. Not one per row -- a row registered did-not-apply never
-# reaches a run -- so it is derived off the outcomes read above, which is the
-# registry itself and not a constant.
+# expected to apply. TWO things take a row off it, not one: an edit expected to
+# leave its target byte-identical never reaches a run, and neither does a row
+# pass one refuses. The first version counted only the first, so a malformed row
+# made both sides over-report by one and agree -- and agreeing is all this check
+# can see. It is read off MUT_RUN_OUTCOMES, which is the audit loop's answer to
+# both questions, and never off a constant. Bertan's review of PR #183.
 req GH-148
-MUT_RUNS_HERE=$((1 + $(printf '%s' "$MUT_OUTCOMES" | grep -cv '^did-not-apply$')))
+MUT_RUNS_HERE=$((1 + $(printf '%s' "$MUT_RUN_OUTCOMES" | grep -cv '^did-not-apply$')))
 tok 'and how many runs of this suite a whole-registry pass costs, the baseline included' \
     "$MUT_RUNS_HERE" \
     "$(printf '%s\n' "$MUT_LIST" \
        | awk '/runs of check-hooks.sh for a whole-registry pass/ { print $1; exit }')"
+
+# AND WHAT THAT PASS COSTS IN WALL-CLOCK. The harness multiplies a dated rate by
+# the run count it derives; this multiplies the same dated rate, read out of the
+# harness's two measurement constants, by the run count THIS file derived above.
+#
+# WHAT IT ESTABLISHES, exactly, because the obvious overclaim is wrong. It does
+# NOT go red when a row is added: both sides are derived, so both move and they
+# go on agreeing -- which is the point of deriving them and the reason this
+# figure needs no maintenance at all. What it catches is the harness ceasing to
+# multiply: a minutes figure hardcoded back into `--list`, a factor dropped, the
+# line renamed away. The old `ABOUT AN HOUR` pin could catch none of that, and
+# could not catch staleness either, because a string being present says nothing
+# about whether the number still follows from anything -- which is how it came
+# to be wrong by about a factor of two while classified as the safe kind of
+# literal. Bertan's review of PR #183.
+#
+# What forces a human to look when the registry grows is already here: the `54`
+# above is a literal, it turns red on the next row, and the run count and the
+# wall-clock are both consequences of it. Pinning them as literals too would be
+# maintenance for numbers nobody reviews.
+#
+# The rate is read from the harness rather than written here on purpose: it is a
+# MEASUREMENT, dated 2026-09-17, and this file has taken none.
+req GH-148
+MUT_SECONDS=$(awk -F'[= ]' '/^MEASURED_SECONDS=/ { print $2; exit }' "$MUT")
+MUT_RUNS_MEASURED=$(awk -F'[= ]' '/^MEASURED_RUNS=/ { print $2; exit }' "$MUT")
+if [ -z "$MUT_SECONDS" ] || [ -z "$MUT_RUNS_MEASURED" ] || [ "$MUT_RUNS_MEASURED" = 0 ]; then
+  fail static 'the harness names no measured rate, so what --list prints as a runtime follows from nothing'
+else
+  tok 'and about how long that pass takes, which moves with the registry rather than standing still' \
+      "$(( (MUT_RUNS_HERE * MUT_SECONDS / MUT_RUNS_MEASURED + 30) / 60 ))" \
+      "$(printf '%s\n' "$MUT_LIST" \
+         | awk '/minutes for that pass/ { print $2; exit }')"
+fi
 
 # AND THE HEADER STATES NONE OF THEM. Four absences, each the exact phrase that
 # carried one of those counts before #148 took it out. This is evidence about
@@ -11211,13 +11317,21 @@ sed -n '1,/^set -u$/p' "$MUT" | sed -e 's/^#[ \t]\{0,3\}//' | tr '\n' ' ' | tr -
   > "$MUT_PROSE"
 # A reflow that read part of the header would make the four absences below
 # vacuous, because an absence is what a truncated file has most of. So the region
-# is BRACKETED rather than merely non-empty: a marker from its first paragraph
-# and one from its last, which together say the whole of it was read. Anchored at
-# one end only -- `ABOUT AN HOUR`, which is line 18 -- every truncation below
-# line 18 passed the guard and emptied the pins, and review of this branch found
-# it. Both markers are text the header carries for its own reasons and one of
-# them is separately pinned above, so neither is maintenance this adds.
-for MUT_PROSE_MARK in 'ABOUT AN HOUR' 'the documents it is judged against stay this repository'; do
+# is BRACKETED rather than merely non-empty: a marker at each end, which together
+# say the whole of it was read. Anchored at one end only -- the heading of the
+# runtime paragraph, which is line 18 -- every truncation below line 18 passed
+# the guard and emptied the pins, and review of this branch found it.
+#
+# THE FIRST MARKER IS STRUCTURAL AND NOT PROSE, deliberately. A guard aborts the
+# whole suite rather than reporting a check, so anchoring it on a SENTENCE meant
+# that rewording that sentence stopped the run with a bare message instead of
+# failing the pin that already asks for it -- two ways to say one thing, and the
+# louder one less useful. `#!/bin/bash` is line 1 of the file whatever the prose
+# does, and the strip above leaves it as `!/bin/bash`. The late marker stays
+# prose because there is nothing structural at that end, and it is the one that
+# detects the truncation this guard exists for.
+for MUT_PROSE_MARK in '!/bin/bash' \
+                      'the documents it is judged against stay this repository'; do
   grep -qF -- "$MUT_PROSE_MARK" "$MUT_PROSE" || {
     echo "the reflowed mutate-hooks.sh header does not carry |$MUT_PROSE_MARK|, so it is not the whole header and the #148 pins below prove nothing" >&2
     exit 1
@@ -12880,6 +12994,33 @@ while IFS="$TAB" read -r RESULT TAGS TEXT; do
     *)  fail static '%s' "$TEXT" ;;
   esac
 done <<< "$FINDINGS"
+
+# THE LAST LINK OF #148's CHAIN. The #107 section above asks whether the harness
+# counts the active requirements the way this file counts them, and both sides of
+# that are the same short program written twice -- so a defect they share agrees
+# with itself, which that section says in as many words. This is the link that
+# makes it mean something: REQUIREMENTS_AWK is the canonical reader of
+# requirements.md, section-aware, entry-aware and separately checked by the
+# fixture above, and its matrix line publishes an active count of its own. A
+# stray `- status: active` in a section that holds no entries moves the short
+# program and does not move this one. Bertan's review of PR #183 named exactly
+# that case.
+#
+# Read over $SUITE_DIR/requirements.md, which is the file the short program and
+# the harness both counted; $HOOKS is where the repository's own findings above
+# come from, and comparing across the two would go red for an override.
+req GH-148
+REQ_ACTIVE_CANON=$(requirements_read matrix "$SUITE_DIR/requirements.md" "$FIXTURES/ledger-read" \
+                     "$SUITE_DIR/check-hooks.sh" "$REPO_ROOT" "$SUITE_DIR/runbook.md" \
+                     "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE" \
+                   | awk -F'[;,] *' '/^requirements matrix: / { print $2; exit }' \
+                   | awk '{ print $1 }')
+if [ -z "$REQ_ACTIVE_CANON" ] || [ "$REQ_ACTIVE_CANON" = 0 ]; then
+  fail static 'the canonical reader published no active count, so the #148 chain has no last link'
+else
+  tok 'the active-requirement count the #148 checks use is the one the canonical reader derives' \
+      "$REQ_ACTIVE_CANON" "$REQ_ACTIVE_HERE"
+fi
 
 # --matrix: every requirement, from the record as it stands now, the findings
 # above included, and then the verdict line the run would have printed.

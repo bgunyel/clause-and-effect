@@ -174,20 +174,27 @@ Whether those checks can fail is a second question, and `bash
 .claude/hooks/mutate-hooks.sh` is where it is asked (#107). It breaks one
 registered rule at a time in a copy of `.claude/hooks/` — never in this one — and
 a mutation counts as caught only when every requirement ID the registry names for
-it has a failing check. Slow enough that nothing runs it for you — roughly how
-slow is in the harness's header, which `check-hooks.sh` pins and this file no
-longer restates (#148); two of its rows are self-tests, one whose edit matches
+it has a failing check. Slow enough that nothing runs it for you, and `--list`
+says how slow at the size the registry is now: it multiplies a dated rate by the
+runs a pass needs, so the figure follows the registry instead of standing still
+while it grows (#148). Two of its rows are self-tests, one whose edit matches
 nothing and one registered against a requirement its edit cannot reach, because
-an edit that silently fails to apply reads exactly like evidence and is none.
-What the registry covers is `--list`'s summary lines and is written down nowhere
-else: a row per rule, not per requirement, so a requirement with a row is one
-some mutation reaches rather than one whose every check has been exercised. So
-does every other number about the registry — how many runs a whole pass costs,
-and how many requirements `requirements.md` holds active, which is what a row may
-name into (#148). The exception is deliberate and is not on that summary:
-`check-hooks.sh` keeps the registry's size and each outcome count as literals,
-because a literal in a check earns its maintenance by going red when a row is
-added, and a number in a comment earns nothing because nothing reads it.
+an edit that silently fails to apply reads exactly like evidence and is none —
+and that pair is held by literals in `check-hooks.sh`, so a third cannot be
+registered without two checks going red.
+
+Every count about that registry is derived by `--list`: the rows, the files they
+touch, the requirement IDs they name, how many requirements are active, the runs
+a whole pass costs and roughly what it costs in wall-clock. What the registry
+covers is there too — a row per rule, not per requirement, so a requirement with
+a row is one some mutation reaches rather than one whose every check has been
+exercised. Several of those numbers are *also* written as literals in
+`check-hooks.sh`, and that duplication is deliberate rather than a lapse: a
+literal in a check earns its maintenance, because adding a row turns it red and
+somebody has to look at it. A number in a comment earns nothing, because nothing
+reads it and nothing turns red when it rots — which is why the harness's header
+now states none, and why the one magnitude it kept had gone wrong by a factor of
+two before anybody noticed.
 
 Issue #84 is the same shape one level out, and it is the reason that last
 sentence is worth re-reading. The defect was not in the tokeniser but in the

@@ -15,20 +15,41 @@
 #       bash .claude/hooks/mutate-hooks.sh --list     the registry, and nothing run
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
-# ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline. How many runs that is, as
-# the registry stands today, is on `--list`'s summary and is written nowhere
-# else (#148) -- it is not simply one per row, because a row whose edit matches
-# nothing never reaches one. Measured twice on 2026-09-17, on this machine and
-# on registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three
-# runs. Those two are dated records of a measurement and stay; the hour is those
-# rates carried to the row count of the day and is not a third measurement, and
-# a run under load took nearer four minutes a row. That is why it is a separate
-# script and why check-hooks.sh never runs the registry (#107). It does ask
-# `--list` for the two figures its #148 checks compare against a derivation of
-# their own, which runs no mutation and costs nothing. Nothing here is a
-# PreToolUse hook and settings.json does not register it. Naming rows costs the
-# baseline plus one run each, so re-asking a single rule is about four minutes.
+# SLOW ENOUGH THAT NOTHING RUNS IT FOR YOU, which is why it is a separate script
+# and why check-hooks.sh never runs the registry (#107). One check-hooks.sh run
+# per mutation that applies, plus the baseline. How many runs that is, and what
+# they cost in wall-clock at the row count of the day, are both on `--list`'s
+# summary and are written nowhere else (#148). The run count is not simply one
+# per row: a row whose edit matches nothing, or one pass one refuses, never
+# reaches a run.
+#
+# NO MAGNITUDE IS WRITTEN IN THIS HEADER, and the first version of #148's own
+# fix is why. It kept one, in capitals a few lines above here, classified it as
+# the safe kind of number because a check pinned the string, and pointed
+# CLAUDE.md, docs/todo.md and GH-107.2's note at it. The figure was right at
+# twenty-three runs and had never been re-derived as the registry grew past
+# fifty, so it was wrong by about a factor of two AND was by then the only copy
+# left. The pin could not have caught that: it asserted a string was present,
+# never that the number still followed from anything. A literal in a check earns
+# its maintenance only when the check goes red as the thing it counts moves, and
+# that one could not move at all. Bertan's review of PR #183, in the branch
+# whose whole subject is that distinction. The old wording is deliberately not
+# quoted anywhere in this file -- check-hooks.sh now pins its ABSENCE, and a
+# quotation would keep that pin green for the quotation's sake.
+#
+# THE MEASUREMENT IT WAS DERIVED FROM STAYS, dated and unchanged, and is now
+# carried into the estimate instead of being rounded into prose. Measured twice
+# on 2026-09-17, on this machine and on registries one row apart: 47 min 34 s
+# and 45 min 24 s, at twenty-three runs. A run under load took nearer four
+# minutes a row, so MEASURED_SECONDS below is the SLOWER of the two -- a budget
+# that is short is the one that costs somebody an afternoon. `--list` multiplies
+# that rate by the run count it derives; nothing here restates the product.
+#
+# check-hooks.sh does ask `--list` for the three figures its #148 checks compare
+# against derivations of their own. That runs no mutation and costs nothing.
+# Nothing here is a PreToolUse hook and settings.json does not register it.
+# Naming rows costs the baseline plus one run each, so re-asking a single rule
+# is two runs.
 #
 # EXIT STATUS: non-zero when any row reports something other than the outcome it
 # declares. For every real mutation that means a survivor or an edit that did not
@@ -263,6 +284,73 @@ SUITE="$SRC/check-hooks.sh"
 # neither can be a mutation target.
 TOOLING="check-hooks.sh mutate-hooks.sh"
 
+# THE MEASUREMENT, as two numbers rather than as a rounded magnitude in prose.
+# The header says where they come from: two whole-registry passes on 2026-09-17,
+# of which this is the slower, and the run count both were taken at. `--list`
+# divides one by the other and multiplies by the runs it derives, so the
+# wall-clock it prints follows the registry instead of standing still while the
+# registry grows. A rounded magnitude in the header could not do that, which is
+# why there is no longer one (#148, PR #183).
+#
+# Re-measuring means replacing BOTH of these together and saying so in the
+# header, because a rate is a ratio and half of one is not a measurement.
+MEASURED_SECONDS=2854   # 47 min 34 s
+MEASURED_RUNS=23
+
+# WHAT MAKES A ROW RUNNABLE, asked in one place because two callers need the
+# same answer and gave different ones. Pass one below refuses a row for five
+# reasons; `--list`'s run count has to predict which rows a pass will actually
+# run. It did not ask any of the five -- it counted every row whose outcome was
+# not did-not-apply -- so one malformed row made it over-report by one, and
+# check-hooks.sh's #148 check made the identical omission and stayed green: the
+# doubled-program failure its own comment warns about, arriving in the first
+# commit that wrote the warning. Bertan's review of PR #183.
+#
+# The reason text is returned rather than printed, so pass one keeps reporting
+# it per row and `--list` can ask the same question in silence. An empty answer
+# means runnable, which is the one spelling that cannot be confused with a
+# reason a reader could act on.
+row_fault() {  # row_fault <id> <file> <edit> <reqs> <want> -- a reason, or nothing
+  local ID="$1" FILE="$2" EDIT="$3" REQS="$4" WANT="$5"
+  if [ -z "$FILE" ] || [ -z "$EDIT" ] || [ -z "$REQS" ] || [ -z "$WANT" ]; then
+    echo "the registry row does not split into five fields on %"
+    return
+  fi
+  # The outcome, and whose it is. `caught` is every real mutation's; the other
+  # two words belong to the self-tests, which say so in their ids. Untied, the
+  # fifth field was the way to declare a real survivor expected and keep this
+  # harness at exit 0.
+  case "$WANT" in
+    caught|survived|did-not-apply) ;;
+    *) echo "the expected outcome $WANT is none of caught, survived and did-not-apply"
+       return ;;
+  esac
+  case "$WANT:$ID" in
+    caught:*|survived:selftest-*|did-not-apply:selftest-*) ;;
+    *) echo "only a selftest-* row may expect $WANT; a real mutation expects caught"
+       return ;;
+  esac
+  # The tooling beside the hooks is not a mutation target. The suite that runs is
+  # this repository's, whatever CHECK_HOOKS_DIR says -- the two-directories
+  # paragraph at its head says why -- and so is this file. An edit to either copy
+  # would be read by the suite's text checks and executed by nothing, so whatever
+  # this harness reported would be about a file that never ran.
+  case " $TOOLING " in *" $FILE "*)
+    echo "$FILE runs from the repository rather than from the copy, so a mutation to it would be read and never executed"
+    return ;;
+  esac
+  # A file IN the working copy, spelled as a path relative to it. An absolute
+  # path, or one climbing out with .., is an edit to whatever it names -- this
+  # repository's own hooks among the things it could name -- and the sum taken at
+  # the end would report that after the write rather than instead of it. Refused
+  # on the spelling, which is the only moment before the write.
+  case "$FILE" in
+    /*|*/../*|../*|*/..|..)
+      echo "the target $FILE is not a path inside the hooks directory"
+      return ;;
+  esac
+}
+
 VERBOSE=
 LIST=
 SELECTED=
@@ -379,12 +467,18 @@ if [ -n "$LIST" ]; then
   while IFS='%' read -r id file edit reqs want; do
     [ -n "$id" ] || continue
     ROWS=$((ROWS + 1))
-    # A pass is NOT one run per row. A row whose edit is expected to leave its
-    # target byte-identical never reaches a run -- that is what the self-test
-    # expecting did-not-apply establishes -- so the count is read off the
-    # expected outcome, which moves when the registry does, and never off a
-    # constant, which is the thing #148 was filed about.
-    [ "$want" = did-not-apply ] || RUNS_NEEDED=$((RUNS_NEEDED + 1))
+    # A PASS IS NOT ONE RUN PER ROW, and two separate things take rows off the
+    # count. A row whose edit is expected to leave its target byte-identical
+    # never reaches a run -- that is what the self-test expecting did-not-apply
+    # establishes. And a row pass one refuses never reaches one either, which
+    # this line asked nothing about until Bertan's review of PR #183: a single
+    # malformed row made this figure predict one run more than the pass performs.
+    # Both are read off the registry, which moves when the registry does, and
+    # never off a constant, which is the thing #148 was filed about.
+    if [ -z "$(row_fault "$id" "$file" "$edit" "$reqs" "$want")" ] \
+       && [ "$want" != did-not-apply ]; then
+      RUNS_NEEDED=$((RUNS_NEEDED + 1))
+    fi
     case "$id" in
       selftest-*) SELFTESTS=$((SELFTESTS + 1)) ;;
       *) REAL=$((REAL + 1))
@@ -411,11 +505,21 @@ if [ -n "$LIST" ]; then
   # because that is the requirements.md this registry's rows are judged against.
   # The status line is matched the way that audit matches it, whitespace either
   # side of the word tolerated -- two readings of one field that disagree about
-  # a trailing space are a defect waiting to happen, and check-hooks.sh's #148
-  # check compares this count against a second copy of exactly this program, so
-  # a stricter reading here would be wrong in both places at once and green.
+  # a trailing space are a defect waiting to happen.
+  #
+  # SECTION-AWARE, because requirements.md is not all entries. Its `##` headings
+  # divide it, and only three of them hold requirements; `## Provenance` holds
+  # `### #37.1` criteria and the sections above hold prose. Reading `### `
+  # anywhere, and never clearing the id at a `##` boundary, counted a stray
+  # `- status: active` in a later section against whichever heading was last
+  # seen -- and check-hooks.sh's #148 check made the same mistake, so the two
+  # agreed and were wrong together, which is the one failure its own comment
+  # says a doubled program cannot find. Bertan's review of PR #183. The section
+  # rule is check-hooks.sh's REQUIREMENTS_AWK, which is the canonical reader of
+  # this file, and the check compares this count against that reader's own.
   ACTIVE=$(awk '
-    /^### / { id = $2; next }
+    /^## / { id = ""; part = ($0 ~ /^## (User stories|Functional requirements|Boundary issues)$/) ? "req" : "other"; next }
+    /^### / { id = (part == "req") ? $2 : ""; next }
     id != "" && /^- status:[ \t]*active[ \t]*$/ { active[id] = 1 }
     END { n = 0; for (i in active) n++; print n + 0 }' "$SRC/requirements.md" 2>/dev/null)
   # Nothing read is not zero, and it is not a count either. An unreadable or
@@ -431,6 +535,16 @@ if [ -n "$LIST" ]; then
   fi
   printf '%s runs of check-hooks.sh for a whole-registry pass: the baseline, plus one per row whose edit applies\n' \
     "$RUNS_NEEDED"
+  # AND WHAT THAT COSTS, derived here rather than rounded into the header. The
+  # rate is the dated measurement above divided by the run count it was taken
+  # at; the product follows the registry, which is the whole of #148 applied to
+  # the one number that had already rotted. Integer arithmetic throughout, with
+  # the half-minute added before the divide so the minutes round rather than
+  # truncate -- a budget that is short is the one that costs somebody an
+  # afternoon, and truncation is always short.
+  printf 'about %s minutes for that pass, at the %s s a run the slower 2026-09-17 measurement gives\n' \
+    "$(( (RUNS_NEEDED * MEASURED_SECONDS / MEASURED_RUNS + 30) / 60 ))" \
+    "$(( MEASURED_SECONDS / MEASURED_RUNS ))"
   exit 0
 fi
 
@@ -538,46 +652,16 @@ while IFS='%' read -r ID FILE EDIT REQS WANT; do
     case " $SELECTED " in *" $ID "*) ;; *) continue ;; esac
   fi
   MATCHED=$((MATCHED + 1))
-  if [ -z "$FILE" ] || [ -z "$EDIT" ] || [ -z "$REQS" ] || [ -z "$WANT" ]; then
-    echo "  FAIL $ID: the registry row does not split into five fields on %"
+  # The five refusals are row_fault's, above, because `--list` has to predict
+  # which rows this pass will run and the two have to mean the same thing by a
+  # runnable row. What is this pass's alone is reporting the reason and counting
+  # the row out; what the reason SAYS is written once.
+  FAULT=$(row_fault "$ID" "$FILE" "$EDIT" "$REQS" "$WANT")
+  if [ -n "$FAULT" ]; then
+    echo "  FAIL $ID: $FAULT"
     FAILED=1
     continue
   fi
-  # The outcome, and whose it is. `caught` is every real mutation's; the other
-  # two words belong to the self-tests, which say so in their ids. Untied, the
-  # fifth field was the way to declare a real survivor expected and keep this
-  # harness at exit 0.
-  case "$WANT" in
-    caught|survived|did-not-apply) ;;
-    *) echo "  FAIL $ID: the expected outcome $WANT is none of caught, survived and did-not-apply"
-       FAILED=1; continue ;;
-  esac
-  case "$WANT:$ID" in
-    caught:*|survived:selftest-*|did-not-apply:selftest-*) ;;
-    *) echo "  FAIL $ID: only a selftest-* row may expect $WANT; a real mutation expects caught"
-       FAILED=1; continue ;;
-  esac
-  # The tooling beside the hooks is not a mutation target. The suite that runs is
-  # this repository's, whatever CHECK_HOOKS_DIR says -- the two-directories
-  # paragraph at its head says why -- and so is this file. An edit to either copy
-  # would be read by the suite's text checks and executed by nothing, so whatever
-  # this harness reported would be about a file that never ran.
-  case " $TOOLING " in *" $FILE "*)
-    echo "  FAIL $ID: $FILE runs from the repository rather than from the copy, so a mutation to it would be read and never executed"
-    FAILED=1
-    continue ;;
-  esac
-  # A file IN the working copy, spelled as a path relative to it. An absolute
-  # path, or one climbing out with .., is an edit to whatever it names -- this
-  # repository's own hooks among the things it could name -- and the sum taken at
-  # the end would report that after the write rather than instead of it. Refused
-  # on the spelling, which is the only moment before the write.
-  case "$FILE" in
-    /*|*/../*|../*|*/..|..)
-      echo "  FAIL $ID: the target $FILE is not a path inside the hooks directory"
-      FAILED=1
-      continue ;;
-  esac
   RUNNABLE="$RUNNABLE$ID%$FILE%$EDIT%$REQS%$WANT
 "
 done <<< "$MUTATIONS"
