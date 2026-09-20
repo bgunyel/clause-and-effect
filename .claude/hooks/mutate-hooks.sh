@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- sixty runs as the
-# registry stands, not sixty-one, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- sixty-one runs as the
+# registry stands, not sixty-two, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -129,6 +129,15 @@
 # review that reverted the two entries in a copy and watched three flips go back
 # to ALLOW with nothing in this registry to say so.
 #
+# ROUND 2 ADDED `gh-valued-option-eats-past-the-end`, which takes out the guard
+# saying a recognised valued option needs a value that is there. That is the
+# same rule as `gh-last-token-exempt-again` one option-kind along -- the walk
+# reasoning about a command while holding a fragment -- and it is a row of its
+# own because the two are separate lines closing separate halves, and a registry
+# row per rule is what this file counts. All seven #118 rows were run as one
+# selection against the commit answering round 2: baseline plus seven, all
+# caught, .claude/hooks/ byte-identical after.
+#
 # ROUND 1 OF THE REVIEW OF PR #184 ADDED TWO MORE AND RE-ANCHORED A THIRD.
 # `gh-option-spelling-not-reduced` takes the reduction back out of ghopt, so a
 # quoted option ends the walk again; `gh-last-token-exempt-again` puts the
@@ -146,7 +155,7 @@
 # doing what it exists to do to a claim written one requirement too wide, and it
 # is recorded because a registry row is itself a claim and this one was made
 # before it was measured.
-# No run has therefore exercised all sixty rows together, and saying which
+# No run has therefore exercised all sixty-one rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -334,6 +343,7 @@ release-allowlist-admits-a-write%no-pr-decisions.sh%/^RELEASE_READ_VERBS=/s/veri
 gh-option-never-unreadable%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^    return 3$/    return 2/%GH-118 US-15%caught
 gh-option-spelling-not-reduced%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^    t = ghreduce(t)$/    t = t/%GH-118 US-15%caught
 gh-last-token-exempt-again%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^        q = tokend(p)$/        q = tokend(p); if (q > n) break/%GH-118 US-15%caught
+gh-valued-option-eats-past-the-end%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^          if (q <= p || substr(line, p, q - p) == "\$") { opaque = 1; break }$/          if (0) { opaque = 1; break }/%GH-118 US-15%caught
 gh-unreadable-pass-removed%no-pr-decisions.sh%s/^    if cs_gh_opaque "$GHPATH" <<<"$CMD"; then$/    if false \&\& cs_gh_opaque "$GHPATH" <<<"$CMD"; then/%GH-118 US-7%caught
 release-read-granted-when-opaque%no-pr-decisions.sh%/^release_is_read()/,/^}/s/^  case $? in 1) ;; \*) return 1 ;; esac$/  case $? in 0) return 1 ;; esac/%GH-118%caught
 git-globals-list-short-again%lib/command-scan.sh%s/|--exec-path|--config-env|--attr-source|/|--exec-path|/%GH-118 FR-3 FR-38 US-1%caught

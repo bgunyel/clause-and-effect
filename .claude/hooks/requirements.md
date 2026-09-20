@@ -1603,13 +1603,24 @@ and held to the same standard of saying only what it asks.
   `gh api -X POST repos/o/r/pulls` keeps its own options. The position BEFORE the
   group is nobody's group, so an unreadable option there is refused whatever
   follows, `gh --squash view issue list` included: with the group eaten, which
-  group it was is what cannot be read. An option standing as the last word of a
-  line consumes nothing, which is what keeps `gh --version` and `gh --help`
-  permitted.
+  group it was is what cannot be read. `gh --version` and `gh --help` are
+  permitted because `ghopt` RECOGNISES those two, and for no reason to do with
+  where they stand. An earlier version of this entry said they were permitted
+  because an option last on a line consumes nothing; that was a position rule,
+  and round 1 of the review of PR #184 showed position is a property of a
+  COMMAND and not of the fragment a tokeniser hands the walk — a backtick makes
+  any option the last token of its fragment. There is no last-token exemption,
+  and this paragraph authorising one is what `gh-last-token-exempt-again` in the
+  mutation registry exists to catch.
   The two halves are one entry because they are one reading defect, in the two
   argument readers, and they are not one mechanism: git rejects an unknown
-  global option itself, so it has no shape to refuse and only a list to
-  complete. The list was checked against `git help git` for git 2.43.0 by
+  global option itself, so it has no counterpart of the unreadable shape. That
+  rules git out of THAT shape and not of every one — `cs_git_args` carries both
+  classes the gh walk was fixed for, a fragment boundary read as a command
+  boundary and an option compared as raw text, measured at ten permitted
+  commands that reach the transport and identical at `dev-05`. Pre-existing, so
+  not this requirement's, and filed as #191. The list was checked against
+  `git help git` for git 2.43.0 by
   running `git <option> <value> version` for each; seven options take a separate
   value, and `--exec-path` is kept in the code's list although it is not one of
   the seven, for the reason written beside it.

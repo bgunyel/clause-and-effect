@@ -291,3 +291,102 @@ be readable; a third now drives the case that changed.
   consequences 4 and 6; closing it means resolving a substitution from text.
   Pinned as permitted so the boundary is evidence.
 - The registry is at 60 rows and has still never been run in one pass.
+
+---
+
+# 2026-09-20 19:19 +03 · session `clause-and-effect-37` — #118 round three: the fix closed the class for two of three option kinds
+
+**Branch** `worktree-issue-118-gh-preoption`, answering round 2 of Bertan's
+review of PR #184. Four findings, one gating. **Check suite 5163 → 5172
+results, all passing.** The review's own class sweep is reproduced below and
+filed as **#191**.
+
+## The gating finding is the round-1 defect, left standing for the recognised options
+
+Round 1 removed the last-token exemption, because position is a property of a
+**command** and the walk is handed a **fragment**. It removed it for options
+`ghopt` calls unreadable — and `-R`, `--repo` and `--hostname` went on
+consuming a value token that may not be there. `cs_split` cuts at a
+substitution, so ``gh pr -R `echo o/r` merge 5`` arrives as `gh pr -R`, the
+value was consumed from nothing, the line went empty, the path did not match,
+and the caller read "not this path" and permitted. **The shell ran a real
+merge.** Measured ALLOW at `dev-05` and at the round-1 commit alike.
+
+Two things make it the same defect rather than a neighbour of it: it is closed
+by the same sentence ("there is no last-token exemption"), and the release arm
+failed **closed** on the same input only by accident of the read allowlist —
+the pr-fails-open / release-fails-closed asymmetry this branch already calls a
+defect wherever else it appears.
+
+**The fix needed both spellings of the cut, and they do not leave the same
+fragment.** Measured: a backtick leaves `gh pr -R` with no token behind the
+option; `$(` leaves `gh pr -R $`. So "no value token" alone would have closed
+the backtick and left `$( )` open — reintroducing exactly the two-spellings-
+disagree shape that made round 1's finding a defect. A recognised valued option
+is unreadable when no value token follows **or** when the token is a lone `$`,
+which is the stump a cut `$(` leaves and is nobody's repository or host.
+
+**What it deliberately does not refuse:** a fragment that ends after a value it
+really has. `gh release -R o/r` is the whole of its command, gh runs no verb for
+it, and the release allowlist already refuses it with the message naming the
+five reads. That is the right message — "move the option after the subcommand"
+would name a subcommand that is not there — so the message is now pinned by a
+`says` and a `says_not` rather than left to the next edit.
+
+## The redundant fork was real and is gone
+
+`api` was in `GH_OPAQUE_PATHS` and cost an awk fork per gh command to restate
+what its two neighbours cannot fail to catch: `api` takes no verb, so its only
+position is the one before the group, and that position is walked before any
+path word is compared. The first version kept it "for the reader", which is what
+a sentence is for. Measured, 12 runs each:
+
+| | `gh pr view 5` | `gh pr view 5 && gh issue list && gh release list` |
+|---|---|---|
+| `dev-05` | 33 ms | 59 ms |
+| PR #184 as reviewed | 62 ms | 154 ms |
+| after this round | **38 ms** | **72 ms** |
+
+## The class sweep, reproduced rather than taken on trust
+
+Round 2 swept the two classes across every walk in the file and found
+`cs_git_args` carrying both. Re-run here through `no-git-push.sh` in a
+throwaway fixture, twelve probes, and the result is the reviewer's exactly:
+six Class A spellings (a valued global as the last token of a fragment) and
+four Class B spellings (a quoted or escaped option) are **ALLOW**, with the
+unquoted control BLOCK. Identical at `dev-05`, so pre-existing.
+
+Two of those Class A rows name `--config-env` and `--attr-source` — this
+branch's own two additions, refused in their plain spelling and reachable again
+through the fragment cut.
+
+**The decision-of-record comment was wrong and is corrected.** It said git "has
+only the question of whether this list is complete". The first clause of that
+paragraph is right — git rejects an unknown global itself, so it has no
+counterpart of the unreadable shape — but #118's own *Scope* paragraph asked for
+this measurement before git was ruled in or out, and nobody had made it. The
+comment now rules git out of **that shape only**, names both classes it does
+carry, and points at #191.
+
+## Why the git classes are not fixed in this PR
+
+I considered it, and the argument for is real: the file will now hold one walk
+with both guards and one without, which is the "same question answered
+differently in two places" its own header exists to prevent. Against, and
+decisive: `cs_git_args` is read by three hooks, so a fix moves verdicts in
+`no-git-push.sh`, `no-commit-to-main.sh` and `no-work-on-stale-branch.sh` and
+needs a measured `was` for each — a second substantial change riding on a PR
+whose subject is gh, two review rounds deep. CLAUDE.md's working convention is
+one reviewable step at a time.
+
+What closes the gap in the meantime is that the asymmetry is **written down
+where a reader meets it** rather than left to be inferred from the absence of a
+guard: the comment above `cs_git_args` names both classes and the issue.
+
+## Still open after round three
+
+- Everything under the previous entries' *Still open* stands, except the two
+  stale last-token sentences, which are corrected.
+- #191: `cs_git_args` carries Class A and Class B. Pre-existing, measured,
+  filed with acceptance criteria.
+- The registry is at 61 rows and has still never been run in one pass.

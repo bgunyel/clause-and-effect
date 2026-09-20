@@ -1450,8 +1450,34 @@ cs_within_cap() {  # stdin: a command. Succeeds only if no joined line exceeds t
 # WHICH GLOBAL OPTIONS TAKE A SEPARATE VALUE is a fixed, documented set, and git
 # rejects an unknown global option itself -- `git --bogus push origin main`
 # exits with `unknown option: --bogus` and pushes nothing -- so git has no
-# counterpart of the gh shape cs_gh_opaque refuses below. It has only the
-# question of whether this list is complete, and #118 found it two short.
+# counterpart of THE UNREADABLE GH SHAPE that cs_gh_opaque refuses below. #118
+# ruled git out of that shape, and out of that shape only.
+#
+# WHAT THIS WALK DOES CARRY, because the sentence here used to say "it has only
+# the question of whether this list is complete" and that was not true. #118's
+# own Scope paragraph asked for the measurement before git was ruled in or out;
+# round 2 of the review of PR #184 made it, and ten commands came back permitted
+# that reach the transport. The two classes are the two the gh walk was fixed
+# for, and this one got neither:
+#
+#   A. A fragment boundary read as a command boundary. skipopts consumes a value
+#      token that may not be there, so a valued global standing last in a
+#      fragment -- what cs_split leaves when it cuts at a substitution -- eats
+#      past the end, the line goes empty and the subcommand is never matched.
+#      ``git -C `echo .` push origin main`` is permitted.
+#   B. An option compared as raw text. `substr(line, p, 1) != "-"` returns on
+#      the first quoted or escaped option, so the walk stops in front of it.
+#      `git "-c" u.e=x push origin main` is permitted.
+#
+# Both are pre-existing -- identical verdicts at dev-05 -- and both are #191,
+# which carries the twelve measured rows and the acceptance criteria. They are
+# named here rather than left to the issue because this is the comment that
+# rules git out, and a reader who stops at it should not stop believing there is
+# nothing else to ask. cs_gh_opaque answers A with its k==1 guard and B with
+# ghreduce; when #191 lands, one of those answers has to serve both walks rather
+# than being written a second time here.
+#
+# The completeness question is real as well, and #118 found the list two short.
 #
 # Measured on git 2.43.0, by running `git <option> <value> version` for every
 # option `git help git` lists under OPTIONS and asking whether the version still
@@ -1706,7 +1732,33 @@ CS_GH_AWK='
         if (k == 0) break
         if (k == 3) { opaque = 1; break }
         p = skipblank(q)
-        if (k == 1) { q = tokend(p); p = skipblank(q) }
+        # A RECOGNISED VALUED OPTION NEEDS A VALUE, and round 2 of the review
+        # found this line eating past the end of a fragment when it has none.
+        # It is the same defect THERE IS NO LAST-TOKEN EXEMPTION closed, left
+        # standing for the three options the walk recognises: cs_split cuts at a
+        # substitution, so `gh pr -R ` + backtick + `echo o/r` + backtick +
+        # ` merge 5` arrives as `gh pr -R`, the value was consumed from nothing,
+        # the line went empty, the path did not match and the caller read
+        # permit. The shell ran the merge.
+        #
+        # Two spellings of the cut and they do not leave the same fragment,
+        # measured: a backtick leaves the option last with no token behind it,
+        # and $( leaves a lone `$` where the value would be. Both mean the value
+        # is in another fragment, so both are unreadable. A `$` on its own is
+        # nobody repository, host or config value, so reading it as a stump
+        # costs nothing.
+        #
+        # What this deliberately does NOT do is refuse a fragment that merely
+        # ENDS after a value it really has. `gh release -R o/r` is the whole of
+        # its command, gh runs no verb for it, and the release allowlist already
+        # refuses it with the message that names the five reads -- which is the
+        # right message, where "move the option after the subcommand" would name
+        # a subcommand that is not there.
+        if (k == 1) {
+          q = tokend(p)
+          if (q <= p || substr(line, p, q - p) == "$") { opaque = 1; break }
+          p = skipblank(q)
+        }
       }
       if (opaque) break
       line = substr(line, p)

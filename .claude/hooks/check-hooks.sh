@@ -2653,8 +2653,12 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh pr --repo o/r view 5, unmoved
   'gh pr --repo o/r view 5'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'an option after the whole path' \
   'gh pr view 5 --json title'
-# An option standing as the LAST word of a line consumes nothing, so it is not
-# unreadable and these two stay ordinary commands.
+# These two are permitted because ghopt RECOGNISES them -- gh root flag set,
+# which `gh help` prints in two lines -- and NOT because of where they stand.
+# The comment here used to give the position as the reason, which is the rule
+# round 1 removed: a backtick makes any option the last token of its fragment,
+# so position is a property of a command and not of what the walk is handed.
+# The full argument is with ghopt in lib/command-scan.sh.
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh --version' 'gh --version'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh --help' 'gh --help'
 req GH-118 FR-48
@@ -2779,6 +2783,53 @@ req GH-118 FR-48 US-15
 check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'the quoted option before a release create, already refused' \
   'gh release "-t" list create v1'
 #
+# ROUND 2: THE SAME FRAGMENT DEFECT, LEFT STANDING FOR THE THREE OPTIONS THE
+# WALK RECOGNISES. Round 1 closed it for an option ghopt calls unreadable, and
+# `-R`, `--repo` and `--hostname` went on consuming a value token that is not
+# there -- the walk ate past the end of the fragment, the line went empty, the
+# path did not match, and the caller read "not this path" and permitted. The
+# shell ran a real merge. Measured on dev-05 and on the round-1 commit alike.
+#
+# The two spellings of the cut leave different fragments, which is why both are
+# here: a backtick leaves the option last with nothing behind it, and $( leaves
+# a lone `$` where the value would be. Round 1's `-t` rows are refused under
+# both spellings because `-t` is unreadable on sight; these are the rows where
+# the option is recognised and only its value is gone.
+req GH-118 US-15
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a recognised option cut from its value by a backtick' \
+  'gh pr -R `echo o/r` merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the same cut written as $( )' \
+  'gh pr -R $(echo o/r) merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK '--repo cut from its value' \
+  'gh pr --repo `echo o/r` merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK '--hostname cut from its value' \
+  'gh pr --hostname `echo h` merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the same cut before the group' \
+  'gh -R `echo o/r` pr merge 5'
+# The release arm was closed against this input already, and by the read
+# allowlist rather than by the walk. Kept as the contrast that says the pr arm
+# was failing open where this one failed closed -- the asymmetry this file
+# calls a defect wherever else it appears.
+req GH-118 FR-48 US-15
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'the same cut on a release create, already refused' \
+  'gh release -R `echo o/r` create v1'
+# AND WHAT THE k==1 GUARD MUST NOT REFUSE: a fragment that ends after a value it
+# really has. `gh release -R o/r` is the whole of its command, gh runs no verb
+# for it, and the release allowlist refuses it with the message naming the five
+# reads. That is the right message; "move the option after the subcommand"
+# would name a subcommand that is not there. The verdict is pinned where the
+# rule is stated, and the MESSAGE is what this says.
+req GH-118 GH-97.2 US-7
+says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted' \
+  'a valued option ending its own command keeps the release message, not the unreadable one' \
+  'gh release -R o/r'
+says_not "$ON_DEV" no-pr-decisions.sh 'option before its subcommand' \
+  'and is not told to move an option after a subcommand it does not have' \
+  'gh release -R o/r'
+req GH-118 US-13
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a valued option with its value, before a read' \
+  'gh release -R o/r view v1'
+
 # WHAT THE TWO FIXES STILL LEAVE, pinned as permitted so the boundary is
 # evidence rather than a sentence. Neither is #118 to answer and both are
 # unchanged from dev-05.
@@ -11434,7 +11485,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '60' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '61' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11497,7 +11548,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '58' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '59' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:

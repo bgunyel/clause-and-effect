@@ -799,17 +799,23 @@ fi
 # names no correction it can act on. The message is the whole of what is here,
 # so the message is what `says` pins below it.
 #
-# ONE PATH PER GUARDED POSITION, not one per rule. cs_gh_opaque decides the
-# position before a verb without reading the verb, so `pr merge` answers for
-# `pr review`, `pr close`, `pr reopen`, `pr create` and `pr edit` alike, and
-# `release view` for the four other release reads and every release write. `api`
-# takes no verb, so the only position it has is the one before it, which both of
-# the others already ask about; it is named anyway, because a reader checking
-# that this list covers what the file judges should find all three surfaces
-# here rather than have to know that one of them is subsumed.
+# ONE PATH PER GUARDED POSITION, not one per rule and not one per surface.
+# cs_gh_opaque decides the position before a verb without reading the verb, so
+# `pr merge` answers for `pr review`, `pr close`, `pr reopen`, `pr create` and
+# `pr edit` alike, and `release view` for the four other release reads and every
+# release write.
+#
+# `api` IS NOT IN THE LIST, and the first version of this had it. It takes no
+# verb, so the only position it has is the one before the group -- and that
+# position is walked before any path word is compared, so both rows below ask
+# about it already. Keeping it cost a fork of awk per gh command to restate
+# something neither of its neighbours can fail to catch. The first version kept
+# it for the reader, which is what this sentence is for instead: `gh api` is
+# covered, by the only position it has. Bertan review of PR #184 measured the
+# cost and named the redundancy this file had already conceded in prose.
 #
 # THE NON-gh FAST PATH is the `case` below, and it is a cost fix rather than a
-# rule. cs_gh_opaque forks awk, and this loop would fork it three times for
+# rule. cs_gh_opaque forks awk, and this loop would fork it once per path for
 # every command on the line -- including the `make test` and `uv run` that most
 # lines are. Its first act is `if (line !~ /^gh(…)/) next`, so asking the same
 # question in the shell first is the same answer for nothing. Measured on a
@@ -819,7 +825,7 @@ fi
 # It is not a second copy of a rule: what it duplicates is `does this command
 # start with gh`, which is a precondition of the question and not the question.
 # A command this skips is one cs_gh_opaque would have returned "readable" for.
-GH_OPAQUE_PATHS=('pr merge' 'release view' 'api')
+GH_OPAQUE_PATHS=('pr merge' 'release view')
 while IFS= read -r CMD; do
   case "$CMD" in gh|gh[[:space:]]*) ;; *) continue ;; esac
   for GHPATH in "${GH_OPAQUE_PATHS[@]}"; do
