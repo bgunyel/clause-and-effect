@@ -268,7 +268,7 @@ CURRENT=$(git branch --show-current 2>/dev/null)
 
 # The active dev branch. See the header for why the filter and the version sort
 # are both load-bearing. The next two lines stand verbatim in
-# report-stale-branches.sh as well:
+# no-pr-decisions.sh and in report-stale-branches.sh as well:
 # check-hooks.sh holds the three equal, so a change here is a change there.
 DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
       | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
@@ -338,8 +338,13 @@ VERBS="commit cherry-pick revert merge am rebase"
 # The expression is CS_WRAPPER_RE, derived once in lib/command-scan.sh since
 # #79 -- one copy where all four hooks carried their own, and none of the four
 # admitted the prefix words cs_split already strips.
+# The quote class is #117's, and the note above GH_SURFACE_ANYWHERE in
+# no-pr-decisions.sh argues it in full: this is the loose half of the wrapper
+# rule, it matched the guarded name by its bare spelling only, and so
+# `bash -c '"git" push --all origin'` was permitted where the bare spelling is
+# refused. Written out rather than shared, for the reason given there.
 if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE" \
-   && echo "$COMMAND" | grep -qE 'git[[:space:]]+([^;&|]*[[:space:]])?(commit|cherry-pick|revert|merge|am|rebase)([^-A-Za-z0-9_]|$)'; then
+   && echo "$COMMAND" | grep -qE '["'"'"']*git["'"'"']*[[:space:]]+([^;&|]*[[:space:]])?(commit|cherry-pick|revert|merge|am|rebase)([^-A-Za-z0-9_]|$)'; then
   refuse "(That command is wrapped in a shell, so what it would write cannot be read through a quoted payload. Run it plainly.)"
 fi
 

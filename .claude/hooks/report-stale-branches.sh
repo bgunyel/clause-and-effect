@@ -296,7 +296,8 @@ pr_of() {  # pr_of <branch>
 # digit filter and the version sort are both load-bearing is argued once, in
 # no-work-on-stale-branch.sh's header, rather than twice here in different words
 # -- a second copy of an argument goes stale in silence when the first one is
-# corrected. The next two lines stand verbatim in that file as well:
+# corrected. The next two lines stand verbatim in that file and in
+# no-pr-decisions.sh as well:
 # check-hooks.sh holds the three equal, so a change here is a change there.
 DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
       | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)

@@ -116,8 +116,13 @@ ELSEWHERE_REFUSE="Blocked: this command moves git somewhere else before committi
 # #79 -- one copy where all four hooks carried their own, and none of the four
 # admitted the prefix words cs_split already strips, so a wrapped commit behind
 # `sudo` or `timeout` was invisible to every one of them.
+# The quote class is #117's, and the note above GH_SURFACE_ANYWHERE in
+# no-pr-decisions.sh argues it in full: this is the loose half of the wrapper
+# rule, it matched the guarded name by its bare spelling only, and so
+# `bash -c '"git" push --all origin'` was permitted where the bare spelling is
+# refused. Written out rather than shared, for the reason given there.
 if echo "$COMMAND" | grep -qE "$CS_WRAPPER_RE" \
-   && echo "$COMMAND" | grep -qE 'git[[:space:]]+([^;&|]*[[:space:]])?(commit|push)([^-A-Za-z0-9_]|$)'; then
+   && echo "$COMMAND" | grep -qE '["'"'"']*git["'"'"']*[[:space:]]+([^;&|]*[[:space:]])?(commit|push)([^-A-Za-z0-9_]|$)'; then
   echo "Blocked: git commit or push inside a shell wrapper. Whether it lands on main cannot be read through a quoted payload. Run it plainly." >&2
   exit 2
 fi
