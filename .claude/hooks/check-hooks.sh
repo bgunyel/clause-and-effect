@@ -11131,9 +11131,11 @@ MUT_OUTCOMES=
 # further cases -- a target not writable in the copy, a `sed` that fails, and an
 # edit that turns out to apply to nothing -- and neither side can see any of
 # them without copying the tree and running the edit, which `--list` does not
-# do. The harness's header states the same limit. An earlier version of this
-# comment said a pass "runs such a row and reports what it finds", which is
-# false for all three. Bertan's review of PR #183.
+# do. The harness's header states the same limit, and so does `--list`'s own
+# output line, which says `at most`. An earlier version of this comment said a
+# pass "runs such a row and reports what it finds", which is false for all
+# three. Bertan's review of PR #183; #193 is the change that would make the
+# figure exact rather than an upper bound.
 MUT_RUN_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
   [ -n "$MID" ] || continue
@@ -11348,7 +11350,12 @@ tok 'and how many runs of this suite a whole-registry pass costs, the baseline i
 # maintenance for numbers nobody reviews.
 #
 # The rate is read from the harness rather than written here on purpose: it is a
-# MEASUREMENT, dated 2026-09-17, and this file has taken none.
+# MEASUREMENT, and this file has taken none. Its date is not restated here
+# either -- it stands beside the constant in mutate-hooks.sh, where re-measuring
+# moves the two together. The first version of this comment did restate it, and
+# was three days stale the moment it was written, because the commit that wrote
+# it was the one re-dating the measurement. Bertan's review of PR #183, class
+# (b): a date in a comment is a number in a comment.
 req GH-148
 MUT_SECONDS=$(awk -F'[= ]' '/^MEASURED_SECONDS_PER_RUN=/ { print $2; exit }' "$MUT")
 if [ -z "$MUT_SECONDS" ] || [ "$MUT_SECONDS" = 0 ]; then

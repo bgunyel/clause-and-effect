@@ -255,3 +255,55 @@ The other five:
 
 Findings 4, 5, 6 and 7 were offered as deferrable to a follow-up issue. All four
 were taken, because all four were in code this branch introduced.
+
+## Round four — the third review, done as a class sweep
+
+Bertan reviewed by **class** rather than by instance this time, sweeping every
+line each previous finding's class could apply to and reporting the sweep. Eight
+classes; five came back clean on measurement rather than on reading, and the
+round-two fixes were verified by re-running rather than by reading the diff.
+**Check suite 5106 results, all passing.** Three findings, all of them words in
+this branch's own diff, and one filed elsewhere.
+
+The three, each a count or a date that nothing falsifies — in the branch whose
+subject is counts that nothing falsifies:
+
+- **`GH-148` enumerated five literals and called them "the four of those"**, and
+  `d86223b` — the commit that created the fifth by taking round three's
+  self-test pin — is where that clause was written. The sentence was composed
+  listing the new pin and counting as though it were absent. Fixed by deleting
+  the count rather than correcting it: the enumeration says the same thing and
+  cannot disagree with itself.
+- **`check-hooks.sh` dated the rate 2026-09-17** while the constant it reads is
+  dated 2026-09-20 three lines into the other file — three days stale in the
+  commit that re-dated the measurement. The date is no longer restated; it
+  stands beside the constant, where re-measuring moves both.
+- **`--list`'s own output line still carried the un-narrowed claim.** Round three
+  narrowed the header and `GH-148` to say the run count is a prediction off the
+  table, then left the line a person actually reads saying `plus one per row
+  whose edit applies`. The caveat was in the two places nobody looks and missing
+  from the one they do. It now says `at most` and names what only a run can see.
+
+**The fourth finding is the wrap-blind class outside this branch, and it is not
+fixed here.** Two absence pins still grep raw files — `GH-70.3` over `SKILL.md`,
+`GH-99.1` over `check-hooks.sh`'s own comments. The assistant reproduced it
+rather than taking the report: re-adding the count `GH-70.3` exists to forbid,
+wrapped the way `SKILL.md` already wraps, gives `grep -cF` 0 against 1 for the
+flattened text, and the full suite returns **`ALL CHECKS PASSED`, zero FAIL
+lines**, with the forbidden count standing in the file. `SKILL.md` was restored
+and its sha256 verified.
+
+What makes it worth its own issue rather than a footnote: `flatten()` already
+exists at `check-hooks.sh:6506`, and the comment directly above it states the
+class from an earlier discovery. `GH-70.3` sits thirty lines below that helper
+and does not call it. This branch's `$MUT_PROSE` is the **third** independent
+rediscovery of the same class in the same file. Filed as #192, with the
+reproduction and `flatten()` as the fix. #193 carries the `--list`-applies-each-
+edit change, which was deferred by agreement because it changes what `--list`
+is.
+
+The shape of this round is worth recording on its own. Rounds two and three
+produced seven findings each, which is what reviewing by instance yields; round
+four swept eight classes and found three words and one pre-existing defect. The
+assistant's own round-three reply had named the reason — *"I fixed the instance
+instead of the class"* — and the review applied that method to the rest.

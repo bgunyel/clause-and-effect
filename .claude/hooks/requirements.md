@@ -2311,12 +2311,15 @@ and held to the same standard of saying only what it asks.
   holds active, how many runs of `check-hooks.sh` a whole-registry pass costs —
   the baseline plus one per row whose edit applies and that pass one does not
   refuse, which is not one per row and which `--list` can over-report, because
-  it reads the table and does not apply an edit — and about how long that pass
+  it reads the table and does not apply an edit (#193) — and about how long that pass
   takes, the dated rate in the harness multiplied by that run count. Where one
   of those numbers is ALSO written as a literal in `check-hooks.sh` it is a
-  check, and goes red when a row is added; the registry's size, its three
-  outcome totals and its self-test total are the four of those. Where a number
-  would be written in a comment it is not written at all, and no runtime
+  check, and goes red when a row is added: the registry's size, each of its
+  three outcome totals, and its self-test total. That list is deliberately not
+  counted — the first version of this sentence counted it, said four when the
+  commit it was written in had just made it five, and nothing reads it.
+  Enumerating them says the same thing and cannot disagree with itself. Where a
+  number would be written in a comment it is not written at all, and no runtime
   magnitude is written anywhere but `--list`.
 - from: #148
 - kind: doc-claim
@@ -2705,6 +2708,12 @@ it has no entry above (Q16).
   holds, which resolves a `gh` shell function ahead of PATH and would have aborted
   the suite on a host that exports one. Its third correction is a measurement in
   `mutate-hooks.sh`, whose exclusivity was that host's, and is recorded there
+- #193: the issue that owns making `--list` apply each row's edit, so the run
+  count is exact rather than an upper bound and a rotted anchor surfaces without
+  a whole-registry pass. Cited beside the three pass-two cases `--list` cannot
+  see, so that the limit names what would lift it. It has no entry above on
+  purpose: the requirement that would carry it is the change, and GH-148 states
+  today's behaviour as the upper bound it is
 - #183: the pull request for #148; Bertan's review of it is cited where each of
   the seven things it corrected stands. Two were the issue's own thesis failing
   on the number the branch had just made load-bearing: the harness's runtime was

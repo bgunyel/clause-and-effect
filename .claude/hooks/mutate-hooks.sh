@@ -33,8 +33,10 @@
 # has moved is predicted to run and reports `did-not-apply` without running.
 # The paragraph below on rows not exercised since the files under them changed
 # is the same fact from the other side, so this is not hypothetical. Bertan's
-# review of PR #183; making `--list` apply each edit to answer it properly is
-# its own change and its own issue.
+# review of PR #183. Making `--list` apply each edit would answer it properly
+# and would surface a rotted anchor in a second rather than after a whole pass;
+# that changes what `--list` is -- `the registry, and nothing run` -- so it is
+# #193 and not this.
 #
 # NO MAGNITUDE IS WRITTEN IN THIS HEADER, and the first version of #148's own
 # fix is why. It kept one, in capitals a few lines above here, classified it as
@@ -584,7 +586,14 @@ if [ -n "$LIST" ]; then
   else
     printf 'NO ACTIVE REQUIREMENT WAS READ OUT OF requirements.md, so how many a row may name is not known here\n'
   fi
-  printf '%s runs of check-hooks.sh for a whole-registry pass: the baseline, plus one per row whose edit applies\n' \
+  # AT MOST, and the word is the whole point of it. This is a prediction off the
+  # table, so it counts rows whose edit is DECLARED to apply; only a run can see
+  # one whose anchor has rotted, or a target the copy cannot write, or a `sed`
+  # that fails. The header and GH-148 both say so, and this line -- the one a
+  # person actually reads -- said `plus one per row whose edit applies` flat.
+  # The caveat was in the two places nobody looks and missing from the one they
+  # do. Bertan's review of PR #183.
+  printf '%s runs of check-hooks.sh for a whole-registry pass, at most: the baseline plus every row the table declares runnable; only a run sees an edit that applies to nothing\n' \
     "$RUNS_NEEDED"
   # AND WHAT THAT COSTS, derived here rather than rounded into the header. The
   # rate is the dated measurement above divided by the run count it was taken
