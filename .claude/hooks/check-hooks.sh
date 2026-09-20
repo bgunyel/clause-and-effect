@@ -12678,17 +12678,21 @@ lacks 'nor does any fixture list feeding those loops name it' \
 # name argued about. The `holds` is the non-vacuity guard `lacks` would give:
 # a derivation that stopped matching would otherwise report an empty set of
 # offenders and pass.
-PR_VAR_PAYLOAD_NAMES=$(grep -vE '^[[:space:]]*#' "$SUITE_DIR/check-hooks.sh" \
-  | grep -oE '(^|[[:space:]])check[[:space:]]+no-pr-decisions\.sh[[:space:]]+(ALLOW|BLOCK)[[:space:]].*"\$\{?[A-Za-z_][A-Za-z0-9_]*' \
-  | grep -oE '\$\{?[A-Za-z_][A-Za-z0-9_]*$' | tr -d '${' | LC_ALL=C sort -u | tr '\n' ' ')
-holds 'the variable-payload derivation matches the rows that have one' \
-  "$PR_VAR_PAYLOAD_NAMES" 'COMMIT_MSG'
-PR_VAR_HIDING_A_BASE=
-for v in $PR_VAR_PAYLOAD_NAMES; do
-  case "${!v}" in *dev-[0-9]*) PR_VAR_HIDING_A_BASE="$PR_VAR_HIDING_A_BASE$v " ;; esac
-done
-tok 'and no payload it holds hides a dev-NN base from the derivation above' \
-    '' "$PR_VAR_HIDING_A_BASE"
+# THE VARIABLE-PAYLOAD RULE IS GONE, and its removal is the honest end of a
+# thread rather than a simplification. It asked whether any payload held in a
+# variable hid a dev-NN base from the derivations above, and it read that value
+# with `case "${!v}"` -- once, after this whole file had run. For a loop
+# variable that is the loop's LAST element, so a `for` list whose first entry
+# names a base and whose last does not passed it while the base was judged.
+# PR #158's fifth review found that, and it is the same defect as the rest of
+# this block one step further in: a check whose subject is narrower than the
+# claim beside it, here narrowed by WHEN it reads rather than by what it matches.
+#
+# It is deleted instead of repaired because the pair at the foot of this file
+# reads every payload as the shell expanded it, once per row, so a variable
+# payload is not a special case there and needs no rule of its own. Repairing
+# this one would have left two answers to one question, and the weaker one is
+# the one a reader meets first.
 PR_DEV_SEED_DIRS=$(grep -E '^[a-z-]+\|no-pr-decisions\.sh\|' "$SUITE_DIR/check-hooks.sh" \
   | grep -E 'dev-[0-9]' | cut -d'|' -f1 | sort -u | tr '\n' ' ')
 holds 'every #106 seed naming a dev-NN base runs in a fixture with no dev ref' \
