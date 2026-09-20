@@ -261,9 +261,9 @@ a claim without a number is a claim to re-measure.
 ## What an unattended agent may do to this repository
 
 * **Unless otherwise stated, an agent shall create a dedicated worktree for its work.**
-* **Unless otherwise stated, an agent shall create its own dedicated worktree for its work.**
 * **Unless otherwise stated, an agent shall not work on a worktree created by someone else.**
 * **If an agent finds out that a worktree already exists, it shall ask the user for permission to work in that worktree.**
+* **When an agent finishes its work in its worktree, it will commit and push to its corresponding worktree branch.**
 
 An agent may push the branch of the linked worktree it is working in —
 non-forced, and naming that branch in the command, because a bare `git push`
