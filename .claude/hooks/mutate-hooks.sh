@@ -16,14 +16,26 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # TWO MINUTES A ROW, and hours for the whole registry: one check-hooks.sh run
-# per mutation that applies, plus the baseline -- seventy-nine runs as the registry
-# stands, not eighty, because the row whose edit matches nothing never reaches
+# per mutation that applies, plus the baseline -- eighty-one runs as the registry
+# stands, not eighty-two, because the row whose edit matches nothing never reaches
 # one. Measured twice on 2026-09-17, on this machine and on registries one row
 # apart: 47 min 34 s and 45 min 24 s, at twenty-three runs. That measurement is
 # the two minutes, and the two minutes is what is written in the heading, because
 # review of PR #169 found the heading saying ABOUT AN HOUR while this paragraph
 # said ninety minutes and check-hooks.sh pinned the hour: a total goes stale
-# every time a row is added and a rate does not. Carried to sixty-seven runs the
+# every time a row is added and a rate does not. THE TOTAL IN THIS SENTENCE WENT
+# STALE A THIRD TIME, in the paragraph recording that it went stale twice: the
+# merge that took the row count past it moved the count four lines up
+# and at the foot of this comment and missed this clause, which went on naming a
+# count two merges behind and so contradicted its own conclusion: at 124 s a run
+# the halfway mark between two hours and three falls at seventy-three runs, and
+# the stale figure sat below it while the live one sat above. Written as the
+# crossing point rather than as either count, because a count here is the thing
+# that goes stale and this sentence has now watched it happen three times.
+# Found by the sixth review of PR #172. Nothing pins it; only the rate is
+# pinned, which is the whole argument for writing a rate and is why the rate
+# survived three rewrites of the total beside it. Carried to eighty-one runs
+# the
 # rate gives nearer three hours than two, and no third whole-registry measurement has been
 # taken; a run under load took nearer four minutes a row. That is why it
 # is a separate script and why check-hooks.sh does not call it (#107). Nothing
@@ -234,7 +246,15 @@
 # seven hooks: baseline green over 191 requirements, all twelve caught,
 # .claude/hooks/ byte-identical after. That is the first run here that has
 # exercised a whole family together rather than the rows one round added.
-# No run has therefore exercised all seventy-nine rows together, and saying which
+# The sixth round added two, and both break a DERIVATION rather than a rule:
+# `guard-trigger-loses-its-name` deletes the line naming a list the guard still
+# tests, which is the fifth-trigger slip that round measured by construction;
+# `doc-hook-function-not-named` drops one of the two functions the message says
+# the document hooks need. Neither is reachable by driving a fixture -- the
+# point of both checks is that they read the guard's own condition and the
+# hooks' own load guards rather than a list written beside them. Run as a
+# selection on 2026-09-20: baseline plus two, both caught, byte-identical after.
+# No run has therefore exercised all eighty-one rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -411,6 +431,8 @@ awk-status-read-as-two%lib/command-scan.sh%s/^  1) CS_LISTS_VALID=0$/  1|*) CS_L
 refusal-claims-every-consumer%lib/command-scan.sh%s/every consumer that requires it refuses/every consumer refuses/%GH-134.1%caught
 refusal-names-two-lists%lib/command-scan.sh%s/CS_SEPARATORS, CS_CONTROL_WORDS, CS_WORD_SPELLING, CS_WRAP_TOKEN or CS_WRAP_WORDS/CS_SEPARATORS or CS_WRAP_WORDS/%GH-134.1%caught
 emptiness-not-named%lib/command-scan.sh%s/\[ -n "\$CS_SEPARATORS" \]/[ -n "always" ]/%GH-134.1%caught
+guard-trigger-loses-its-name%lib/command-scan.sh%s/}CS_SEPARATORS is empty"/}"/%GH-134.1%caught
+doc-hook-function-not-named%lib/command-scan.sh%s/cs_tool_input and cs_within_cap/cs_tool_input/%GH-134.1%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught

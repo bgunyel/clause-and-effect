@@ -8718,6 +8718,60 @@ tok 'exactly two hooks source the library and do not require cs_split' \
     'append-only-docs-edit.sh append-only-docs.sh ' "$NO_CS_SPLIT"
 written 'and the withdrawal names them as two, not as every consumer' \
         "$HOOKS/lib/command-scan.sh" 'the two document hooks need only'
+# The same clause names the FUNCTIONS those hooks need, and that is a second
+# enumeration in one sentence -- found sweeping the class the sixth review of
+# PR #172 raised, one clause over from the one it raised it about. The names
+# are declared in the two hooks' own load guards, so they are derived from
+# there: a document hook that came to require a third cs_* function would make
+# the message wrong the day it landed, exactly as a fifth trigger would.
+req GH-134.1
+DOC_HOOK_FUNCS=$(for hook_file in $NO_CS_SPLIT; do
+  grep -oE 'command -v cs_[a-z_]+' "$HOOKS/$hook_file" | grep -oE 'cs_[a-z_]+'
+done | LC_ALL=C sort -u)
+[ -n "$DOC_HOOK_FUNCS" ] || {
+  echo "no cs_* requirement was read out of the document hooks; the check below proves nothing" >&2
+  exit 1
+}
+tok 'the two document hooks require the functions this suite expects' \
+    'cs_tool_input cs_within_cap' \
+    "$(printf '%s' "$DOC_HOOK_FUNCS" | tr '\n' ' ' | sed 's/ $//')"
+DOC_FUNCS_UNNAMED=
+for doc_func in $DOC_HOOK_FUNCS; do
+  grep -q "the two document hooks need only.*$doc_func" "$HOOKS/lib/command-scan.sh" \
+    || DOC_FUNCS_UNNAMED="$DOC_FUNCS_UNNAMED $doc_func"
+done
+tok 'and the withdrawal names each of them, so a third requirement cannot go unnamed' \
+    '' "$DOC_FUNCS_UNNAMED"
+# AND THE TRIGGER SET ITSELF, derived off the guard's own condition. The four
+# checks above drive four FIXTURES, one per list, hand-written; the paragraph
+# they answer claims every trigger is named. Those are not the same claim, and
+# the difference is a list added to the guard with no line naming it -- measured
+# by review of PR #172, which put `|| [ -z "$CS_WRAP_TOKEN" ]` in the condition
+# and emptied it: cs_split WITHDRAWN, diagnostic EMPTY. Word for word the
+# failure the paragraph says it ended, one list over.
+#
+# Worth more than a fifth fixture, which is why it is read rather than written:
+# two enumerations in this very block are already derived -- ANCHOR_LISTS off
+# CS_WRAPPER_RE's assignment, NO_CS_SPLIT off the files -- and the trigger set
+# arrived in the same commit as four lines and a comment asserting they match.
+# It was the one enumeration in this suite neither derived nor compared.
+req GH-134.1
+GUARD_TRIGGERS=$(sed -n '/^if \[ -z/,/; then$/p' "$HOOKS/lib/command-scan.sh" \
+  | grep -oE '\[ -z "\$CS_[A-Z_]+" \]' | grep -oE 'CS_[A-Z_]+' | LC_ALL=C sort -u)
+[ -n "$GUARD_TRIGGERS" ] || {
+  echo "no emptiness triggers were read out of the load guard; the checks below prove nothing" >&2
+  exit 1
+}
+tok 'the load guard withdraws on the lists this suite expects' \
+    'CS_CONTROL_WORDS CS_SEPARATORS CS_WRAP_OPERAND_WORDS CS_WRAP_OPTION_WORDS' \
+    "$(printf '%s' "$GUARD_TRIGGERS" | tr '\n' ' ' | sed 's/ $//')"
+GUARD_UNNAMED=
+for guard_list in $GUARD_TRIGGERS; do
+  grep -q "CS_INVALID_LIST=.*$guard_list is empty" "$HOOKS/lib/command-scan.sh" \
+    || GUARD_UNNAMED="$GUARD_UNNAMED $guard_list"
+done
+tok 'and every one of them sets a line naming itself, so a list added to the condition cannot go silent' \
+    '' "$GUARD_UNNAMED"
 # AND OF EVERY TRIGGER, not of the two the probes find. The checks above asked
 # the two validity fixtures and the intact library and stopped there, so the
 # four emptiness withdrawals could go out silent with nothing red -- measured
@@ -11783,7 +11837,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '79' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '81' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11846,7 +11900,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '77' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '79' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
