@@ -228,6 +228,12 @@
 # out silent while the paragraph above them claimed otherwise. Its edit makes
 # the separator test always true, so that list empties without being named. Run
 # on 2026-09-20: baseline plus one, caught, byte-identical after.
+# All twelve rows over this library's two lists and its load guard -- six on
+# GH-134 and six on GH-134.1 -- were run as one selection against the merge of
+# dev-05 at 7bea85f (2026-09-20), the merge that carried #109's checks over all
+# seven hooks: baseline green over 191 requirements, all twelve caught,
+# .claude/hooks/ byte-identical after. That is the first run here that has
+# exercised a whole family together rather than the rows one round added.
 # No run has therefore exercised all seventy-nine rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
