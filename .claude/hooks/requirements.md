@@ -2403,8 +2403,8 @@ and held to the same standard of saying only what it asks.
 - from: #144
 - kind: doc-claim
 - status: active
-- direction: static: it reads the harness word of this suite's own rows and no
-  verdict at all
+- direction: static: it reads which directory this suite's own rows were judged
+  in, and no verdict at all
 - note: a rule about the checks rather than about the hook, and the one thing
   GH-144.1 costs this suite. `check` runs the hook where this file stands, which
   is inside this repository, so a `dev-05` payload read there is evidence only
@@ -2417,9 +2417,46 @@ and held to the same standard of saying only what it asks.
   thirty-five, which was also pre-merge. The third review of PR #158 counted the
   head and got a figure matching neither that number nor the one it derived from
   the diff, and that disagreement is the argument for carrying no number here
-  rather than a corrected one. The derivation reads the harness word of every matching row and
-  `lacks` refuses an empty read, so a derivation that stopped matching fails
-  rather than reporting that no bare row was found.
+  rather than a corrected one.
+
+  HOW THIS IS ESTABLISHED CHANGED IN THE FIFTH REVIEW OF PR #158, and the change
+  is the point of this paragraph. It was three derivations over this file's text,
+  strengthened twice and got past twice: the fourth review found a row spelled
+  `check_in "$SUITE_DIR"` that satisfied a rule reading the harness word and not
+  the directory, and the fifth found three more shapes -- a payload in a `for`
+  list, a payload behind a continuation, a loop variable read after its loop --
+  and reached the fourth review's own defect through the first of them. Each fix
+  was an instance patch. The class is a guard narrower than the prose beside it,
+  and a rule about shell source enforced by grepping shell source has another
+  spelling every time: #128, #137, #139 and #155 are the same wall lower down.
+  There is a second class in it, quieter: a derivation that matches nothing
+  returns nothing, and nothing holds no offender, so a row no pattern reaches
+  reads exactly like a row that passed.
+
+  So the claim is read off the RUN instead. Every harness that runs a hook
+  records the directory it actually entered, the script and the payload as the
+  shell expanded it; none of the five shapes survives expansion, because a
+  variable arrives expanded, a loop arrives once per iteration and a continuation
+  is joined before the parser is done. What remains assumed is that every harness
+  records, which is one claim about twelve function bodies and is itself derived:
+  the set of functions calling `hook_path` is compared with the set calling
+  `judged`, so a harness added later that does not record is red. That check
+  found two on its first run.
+
+  THE THREE TEXT DERIVATIONS ARE KEPT AS THE CHEAP ONES, with the three shapes
+  they still miss written beside them rather than patched, and `feed`/`feed_says`
+  removed from the directory alternation -- their first argument is a PATH, so a
+  row through either would have been a false red.
+
+  AND THE REAL CHECK IS NEITHER, which this entry says so that a later reader
+  does not over-trust the derivations. Both read something ABOUT the suite. The
+  five-state rotation experiment runs the suite under `dev-05` alone, `dev-05`
+  beside `dev-06`, `dev-06` alone, no dev ref, and `dev-09` beside `dev-10`, and
+  a row that has rotted turns red there whatever its spelling and whether or not
+  any derivation can see it. It is in PR #158 and in the session 6 dev-log. It is
+  not a check in this file because it needs ref states this suite's fixtures do
+  not have, so it is run by hand at the end of work that touches the base rule --
+  which is a cost, and is the reason the cheap ones are kept.
 
 ### GH-144.5
 - text: `no-pr-decisions.sh` reads `refs/remotes/origin/dev-*` once per run, however

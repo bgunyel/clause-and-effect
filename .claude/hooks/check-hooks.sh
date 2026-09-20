@@ -359,6 +359,7 @@ verdict() {  # verdict <want> <exit status> <stderr> <label>
 }
 check() {  # check <script|/absolute/hook> <want> <label> <cmd>, run in $SUITE_DIR
   local script="$1" want="$2" label="$3" cmd="$4" rc err hook
+  judged "$SUITE_DIR" "$script" "$cmd"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | "$hook" 2>&1 >/dev/null)
   rc=$?
@@ -373,6 +374,20 @@ FIXTURES=$(mktemp -d)
 trap 'rm -rf "$FIXTURES"' EXIT
 LEDGER="$FIXTURES/ledger"
 : > "$LEDGER"
+# WHAT WAS JUDGED WHERE, recorded as it happens rather than read off this file
+# afterwards. Every harness below that runs a hook writes one line here: the
+# directory it actually cd's to, the script it ran, and the payload as the shell
+# expanded it. GH-144.4's derivations read the source instead, and four review
+# rounds of PR #158 found four shapes they could not see -- a payload in a `for`
+# list, a payload behind a continuation, a loop variable read after the loop, and
+# a PATH argument mistaken for a directory. None of those is a shape here: a
+# variable arrives expanded, a loop arrives once per iteration, and the directory
+# is the one the subshell entered.
+JUDGED="$FIXTURES/judged"
+: > "$JUDGED"
+judged() {  # judged <dir> <script> <payload> -- one row, as it ran
+  printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$JUDGED"
+}
 git init -q -b main "$FIXTURES/on-main"
 git init -q -b dev-99 "$FIXTURES/on-dev"
 ON_MAIN="$FIXTURES/on-main"
@@ -469,6 +484,7 @@ done
 # hook is invoked by absolute path because it sources lib/ relative to $0.
 check_in() {  # check_in <dir> <script|/absolute/hook> <want> <label> <cmd>
   local dir="$1" script="$2" want="$3" label="$4" cmd="$5" rc err hook
+  judged "$dir" "$script" "$cmd"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
     | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
@@ -523,6 +539,7 @@ gap() {  # gap <dir> <script> <right> <today> <label> <cmd>
 # stderr is not a refusal, and it passed `says_not` whenever it lacked the fragment.
 says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
   local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err rc hook
+  judged "$dir" "$script" "$cmd"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
@@ -545,6 +562,7 @@ says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
 # Nothing above can catch a message saying too much.
 says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
   local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err rc hook
+  judged "$dir" "$script" "$cmd"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
@@ -5217,6 +5235,7 @@ check append-only-docs.sh ALLOW 'the append that is documented is still permitte
 REPO_ROOT=$(cd "$SUITE_DIR/../.." && pwd)
 check_file() {  # check_file <script|/absolute/hook> <want> <label> <path relative to the repo>
   local script="$1" want="$2" label="$3" path="$4" rc err hook
+  judged "$SUITE_DIR" "$script" "$path"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$path" | jq -Rs '{tool_name:"Edit",tool_input:{file_path:.}}' \
     | CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" 2>&1 >/dev/null)
@@ -5245,6 +5264,7 @@ check_file() {  # check_file <script|/absolute/hook> <want> <label> <path relati
 # That second shape is the one #98 removed from `says`.
 feed() {  # feed <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin>
   local path="$1" script="$2" want="$3" label="$4" payload="$5" rc err hook
+  judged "$ON_DEV" "$script" "$payload"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$payload" \
         | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
@@ -5253,6 +5273,7 @@ feed() {  # feed <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin
 }
 feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <raw stdin>
   local path="$1" script="$2" want="$3" label="$4" payload="$5" err rc hook
+  judged "$ON_DEV" "$script" "$payload"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$payload" \
         | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
@@ -5280,6 +5301,7 @@ feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <ra
 # function defined after it has not been defined when it runs.
 env_feed() {  # env_feed <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin>
   local dir="$1" path="$2" script="$3" want="$4" label="$5" payload="$6" rc err hook
+  judged "$dir" "$script" "$payload"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$payload" \
         | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
@@ -5293,6 +5315,7 @@ env_cmd() {  # env_cmd <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label
 }
 env_says() {  # env_says <dir> <PATH> <script|/absolute/hook> <fragment> <label> <command>
   local dir="$1" path="$2" script="$3" want="$4" label="$5" cmd="$6" rc err hook
+  judged "$dir" "$script" "$cmd"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
@@ -8964,6 +8987,7 @@ cap_wide() {  # cap_wide <bytes> -- `echo git ` and two-byte characters, and an 
 # Found by review of PR #123 once #98 was merged in, not by this suite.
 check_rawfile_in() {  # check_rawfile_in <dir> <script> <want> <label> <cmd>
   local dir="$1" script="$2" want="$3" label="$4" cmd="$5" rc err
+  judged "$dir" "$script" "$cmd"
   printf '%s' "$cmd" > "$FIXTURES/rawfile.txt"
   err=$(jq -n --rawfile c "$FIXTURES/rawfile.txt" '{tool_name:"Bash",tool_input:{command:$c}}' \
     | ( cd "$dir" && "$(hook_path "$script")" ) 2>&1 >/dev/null)
@@ -9066,6 +9090,7 @@ req GH-96.1
 # beside it would pass for a hook that is not there.
 cap_timed() {  # cap_timed <dir> <hook|/absolute/hook> <cmd> -- "<ms>", or "exit <rc>" for a run that did not refuse
   local i s e ms rc best=
+  judged "$1" "$2" "$3"
   printf '%s' "$3" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' > "$FIXTURES/timed.json"
   for i in 1 2 3; do
     s=$(date +%s%N)
@@ -11711,6 +11736,7 @@ done
 # the reason the loop above gives (#155).
 env_stderr() {  # env_stderr <dir> <PATH> <script> <command> -- what the hook said
   local dir="$1" path="$2" script="$3" cmd="$4" hook
+  judged "$dir" "$script" "$cmd"
   hook=$(hook_path "$script")
   printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
     | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null
@@ -12584,6 +12610,32 @@ lacks 'and none of those is judged wherever the suite was started from' \
 # fixture lists are literals in this file; the third check holds those lists away
 # from $SUITE_DIR, so the variable is bounded by what the lists may say.
 #
+# WHAT THIS DERIVATION IS FOR, since PR #158's fifth review, and it is no longer
+# the answer to GH-144.4. It reads this file's text, and four review rounds found
+# five shapes it cannot see. Three are still open and are named here rather than
+# patched, because the run-reading derivation at the foot of this file sees all
+# of them and a sixth strengthening would be the same losing bet:
+#
+#   - a payload in a `for` list judged by `check_in ... "$c" "$c"`: the payload
+#     line does not name the hook and the judging line holds no literal dev-NN,
+#     so both PR_JUDGED and the variable rule return empty for it. TWO SUCH ROWS
+#     ARE LIVE and are correct only because their `"$ON_DEV"` was hand-written;
+#   - a payload behind a `\` continuation: PR_JUDGED joins continuations and the
+#     variable rule does not, so a row split across two lines escapes the second;
+#   - `case "${!v}"` reads a variable once, after the file has run, so a loop
+#     variable is read as its last element rather than once per row.
+#
+# `feed` and `feed_says` were in the directory alternation above until that same
+# review: their first argument is a PATH and they hard-code `cd "$ON_DEV"`, so a
+# `dev-NN` row through either would have been reported as naming an unexpected
+# directory while being perfectly safe -- a false red, and the `lacks` beside it
+# would have been asserting a property it never measured for those rows. They are
+# out. `flip` stays, because it takes a directory and delegates to check_in.
+#
+# So these three are the CHEAP check: they read the file without running it, they
+# fail fast, and they are honest about covering the shapes someone has thought
+# of. What GH-144.4 rests on is the pair at the foot of this file.
+#
 # WHETHER THESE TWO CAN FAIL was asked by measuring and not by registering, and
 # the reason is structural rather than an omission. #107's harness mutates the
 # hooks under judgment; check-hooks.sh is in its TOOLING list and a row naming it
@@ -12595,7 +12647,7 @@ lacks 'and none of those is judged wherever the suite was started from' \
 # "$SUITE_DIR"`, both go red, naming that directory. Measured on this branch
 # before the row was moved, and reproducible by moving it back.
 PR_DEV_ROW_DIRS=$(printf '%s\n' "$PR_JUDGED" \
-  | grep -oE '(^|[[:space:]])(check_in|flip|feed_says|feed|says_not|says|env_cmd|env_says|env_feed)[[:space:]]+"[^"]+"' \
+  | grep -oE '(^|[[:space:]])(check_in|flip|says_not|says|env_cmd|env_says|env_feed)[[:space:]]+"[^"]+"' \
   | sed 's/.*"\(.*\)"/\1/' | LC_ALL=C sort -u | tr '\n' ' ')
 tok 'and the directory each one names is one of these, read off the rows themselves' \
     '$ENV_DEV_NONE $ENV_DEV_TWO $ON_DEV $PR_NOISE $PR_ONE $PR_TEN $dir ' \
@@ -13378,6 +13430,67 @@ while IFS="$TAB" read -r RESULT TAGS TEXT; do
     *)  fail static '%s' "$TEXT" ;;
   esac
 done <<< "$FINDINGS"
+
+section "=== issue #144: what was judged where, read off the run and not off this file ==="
+# THE DERIVATIONS ABOVE READ THIS FILE; THIS ONE READS THE RUN, and that is the
+# whole difference. GH-144.4's three source derivations were strengthened twice
+# and got past twice: PR #158's fourth review found a row spelled
+# `check_in "$SUITE_DIR"`, which satisfied a rule that read the harness word and
+# not the directory, and its fifth found three more shapes -- a payload sitting
+# in a `for` list, a payload behind a `\` continuation, and a loop variable whose
+# value was read once after the loop rather than once per row -- plus the fourth
+# review's own defect reached by the first of those.
+#
+# Each fix was an instance patch. The CLASS is a guard narrower than the prose
+# beside it, and a rule about shell source enforced by grepping shell source will
+# always have another spelling: it is #128's heredoc opener, #137's quote
+# spellings, #139's quoted `=` and #155's two guards, one level up. A fifth
+# strengthening would be the same bet.
+#
+# There is a second class in them and it is the quieter one. A derivation that
+# matches nothing returns nothing, and nothing contains no offender, so a row no
+# pattern reaches reads exactly like a row that passed. `lacks` refuses an empty
+# read for that reason, but it can only refuse the empty it is handed -- it
+# cannot know that a row existed and was not matched.
+#
+# So this asks the question of the RUN. Every harness that runs a hook calls
+# `judged` with the directory it actually enters, the script it runs and the
+# payload as the shell expanded it. A variable arrives expanded, a loop arrives
+# once per iteration, a continuation has already been joined by the parser, and
+# a hard-coded `cd "$ON_DEV"` is recorded as $ON_DEV rather than read off an
+# argument that is a PATH. None of the five shapes above is a shape here,
+# because none of them survives expansion.
+#
+# WHAT IS STILL ASSUMED, so that it is not mistaken for closed: that every
+# harness records. That is one claim about twelve function bodies rather than an
+# open claim about every row spelling, and the next check derives it rather than
+# trusting this comment -- a harness added later that runs a hook and does not
+# record turns it red.
+req GH-144.4
+JUDGED_DEV_DIRS=$(grep -P "\tdev-|dev-[0-9]" "$JUDGED" 2>/dev/null \
+  | grep -F 'no-pr-decisions.sh' | cut -f1 | LC_ALL=C sort -u | tr '\n' ' ')
+holds 'the run recorded dev-NN payloads judged against this hook, so the absence below is one that was looked for' \
+  "$JUDGED_DEV_DIRS" "$ON_DEV"
+lacks 'and not one of them was judged in the directory the suite was started from' \
+  "$JUDGED_DEV_DIRS" "$SUITE_DIR"
+
+# THE ONE ASSUMPTION, derived. A harness runs a hook exactly when its body calls
+# `hook_path`; the delegating ones (env_cmd, flip) reach a hook only through one
+# of these, so instrumenting the leaves covers them. Both lists are read off this
+# file and compared, so a new harness is red until it records, and a `judged`
+# call deleted from an existing one is red too.
+HOOK_RUNNERS=$(awk '
+  /^[a-z_]+\(\) *\{/ { fn = $1; sub(/\(\).*/, "", fn); body = "" }
+  fn { body = body $0 "\n" }
+  /^\}/ { if (fn && body ~ /hook_path/ && fn != "hook_path") print fn; fn = "" }
+' "$SUITE_DIR/check-hooks.sh" | LC_ALL=C sort -u | tr '\n' ' ')
+RECORDERS=$(awk '
+  /^[a-z_]+\(\) *\{/ { fn = $1; sub(/\(\).*/, "", fn); body = "" }
+  fn { body = body $0 "\n" }
+  /^\}/ { if (fn && body ~ /judged "/ && fn != "judged") print fn; fn = "" }
+' "$SUITE_DIR/check-hooks.sh" | LC_ALL=C sort -u | tr '\n' ' ')
+tok 'every harness that runs a hook records what it judged, and none other does' \
+    "$HOOK_RUNNERS" "$RECORDERS"
 
 # --matrix: every requirement, from the record as it stands now, the findings
 # above included, and then the verdict line the run would have printed.
