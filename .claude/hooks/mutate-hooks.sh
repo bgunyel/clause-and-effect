@@ -16,20 +16,41 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # TWO MINUTES A ROW, and hours for the whole registry: one check-hooks.sh run
-# per mutation that applies, plus the baseline -- sixty-seven runs as the registry
-# stands, not sixty-eight, because the row whose edit matches nothing never reaches
+# per mutation that applies, plus the baseline -- eighty-one runs as the registry
+# stands, not eighty-two, because the row whose edit matches nothing never reaches
 # one. Measured twice on 2026-09-17, on this machine and on registries one row
 # apart: 47 min 34 s and 45 min 24 s, at twenty-three runs. That measurement is
 # the two minutes, and the two minutes is what is written in the heading, because
 # review of PR #169 found the heading saying ABOUT AN HOUR while this paragraph
 # said ninety minutes and check-hooks.sh pinned the hour: a total goes stale
-# every time a row is added and a rate does not. Carried to sixty-seven runs the
-# rate gives nearer two hours than one, and no third whole-registry measurement has been
+# every time a row is added and a rate does not. THE TOTAL IN THIS SENTENCE WENT
+# STALE A THIRD TIME, in the paragraph recording that it went stale twice: the
+# merge that took the row count past it moved the count four lines up
+# and at the foot of this comment and missed this clause, which went on naming a
+# count two merges behind and so contradicted its own conclusion: at 124 s a run
+# the halfway mark between two hours and three falls at seventy-three runs, and
+# the stale figure sat below it while the live one sat above. Written as the
+# crossing point rather than as either count, because a count here is the thing
+# that goes stale and this sentence has now watched it happen three times.
+# Found by the sixth review of PR #172. Nothing pins it; only the rate is
+# pinned, which is the whole argument for writing a rate and is why the rate
+# survived three rewrites of the total beside it. Carried to eighty-one runs
+# the
+# rate gives nearer three hours than two, and no third whole-registry measurement has been
 # taken; a run under load took nearer four minutes a row. That is why it
 # is a separate script and why check-hooks.sh does not call it (#107). Nothing
 # here is a PreToolUse hook and settings.json does not register it. Naming rows
 # costs the baseline plus one run each, so re-asking a single rule is about four
 # minutes rather than the whole registry.
+#
+# FOUND TWICE, INDEPENDENTLY, IN THE SAME WEEK, which is worth a line because it
+# says something about the defect rather than about either reviewer. Review of
+# PR #169 found the heading contradicting its own paragraph; review of PR #172
+# found the same heading stale while that pull request was editing the row count
+# in this very sentence and leaving the total beside it untouched. Two branches
+# rewrote it as a rate within hours of each other and the merge of the two is
+# this paragraph. A total in a heading is reached by every change that adds a
+# row, and neither reviewer had to look for it.
 #
 # EXIT STATUS: non-zero when any row reports something other than the outcome it
 # declares. For every real mutation that means a survivor or an edit that did not
@@ -164,9 +185,88 @@
 # rather than on its own text, because the sentence it deletes is written
 # twice in that file and deleting both is a different mutation. #155's two
 # rows have still not been run since that merge, and neither has anything
-# else here -- except that #144's selection below did run #155's two against the
-# merged tree, which is the later measurement and the one that stands.
+# else here -- except the rows this branch names below, which were run
+# against each tree that carried them.
+# #134 added `control-words-not-admitted-by-anchor` and
+# `close-paren-not-a-separator` and ran the pair three times: before the merge of
+# dev-05 into it, again on that merge (2026-09-18), and again on the merge of
+# 2026-09-20 -- baseline plus two each time, both caught with GH-134 red,
+# byte-identical after. Both break a list that both halves read since #134, so
+# each breaks cs_split and the anchor together, and so does
+# `control-words-not-stripped` now; no row breaks one reader alone, which is what
+# the single spelling was for. The review of PR #172 added `dash-in-separators`
+# and `bracket-opens-a-collating-element`, for the half of the separator list
+# that emptiness does not reach -- whether what is in it is literal inside a
+# bracket expression -- and ran that pair on 2026-09-20 before the merge and
+# again after it. The two fail differently and that is why they are two rows,
+# measured on the same machine on the same day: the dash compiles, so the class
+# silently becomes a range and the damage runs both ways, 602 checks red with
+# 305 of them a BLOCK become an ALLOW and 248 the reverse; the bracket opened a
+# collating element and was then the permitting one, 289 red with 274 of them
+# permitting.
 #
+# THE BRACKET FIGURE IS HISTORY AND THE DASH FIGURE IS NOT, which the first
+# version of this caveat did not distinguish -- it disclaimed the dev-05 merge
+# and said nothing about the guard the same review added. GH-134.1 withdraws
+# cs_split for a list that does not compile, so re-measured against the head
+# that has it, the bracket is 1564 checks red with NONE permitting and 1444
+# refusing. The dash is unchanged, because a range compiles and the guard is
+# right not to see it. Read 289/274 as the measurement that justified the guard,
+# not as what a malformed separator list costs today.
+# That review's second round added three more, and they are the answer to a
+# question it asked of the first round's work: a check that cannot fail.
+# `backslash-in-separators` exists because the backslash pin was spelled with
+# two backslashes and could not fire against any one-backslash list, so the row
+# is what says the corrected spelling can. `anchor-validity-not-checked` and
+# `control-word-validity-not-checked` break the two halves of the load-time
+# validity guard GH-134.1 adds, one each, since a guard with no row is the same
+# untested claim one level down. All three were run as one selection on
+# 2026-09-20 against the merged tree: baseline plus three, all caught,
+# byte-identical after. `caught` is this harness's word for every requirement
+# the row names having a failing check, so the outcome is what says GH-134 went
+# red for the first and GH-134.1 for the other two; it was not read off a
+# separate column, and a row naming a requirement its edit cannot reach is the
+# one the registry keeps on purpose to show what that would look like.
+# The third round added `backslash-in-control-words`, which is the same question
+# asked of the other list: CS_CONTROL_WORDS is read raw by grep and
+# escape-processed by `awk -v`, exactly as CS_SEPARATORS is, and had word pins
+# only. Its edit puts a `\t` inside a word rather than breaking the list,
+# deliberately -- the two load-time guards both pass it, since the anchor still
+# compiles and the words still do not match the empty string, so the row is
+# caught by the character pin and by nothing else. That is what makes it
+# evidence that the pin and the guard are not the same check. Run with the three
+# rows above it on 2026-09-20 against the same head: baseline plus four, all
+# caught, byte-identical after.
+# The fourth round added three, and all three are about what the withdrawal
+# SAYS rather than whether it happens: `awk-status-read-as-two` collapses the
+# case back onto `||`, so a control-word list that will not compile is reported
+# as one that hangs the strip; `refusal-claims-every-consumer` restores the
+# claim that every consumer refuses, which is false for the two document hooks
+# that never call cs_split; `refusal-names-two-lists` puts back the enumeration
+# that named two of the five lists CS_WRAPPER_RE is built from. A message that
+# names the wrong cause is worse than the one it replaced, which is why these
+# are rules with rows and not prose. Run as one selection on 2026-09-20:
+# baseline plus three, all caught, byte-identical after.
+# The fifth round added `emptiness-not-named`, which is the same claim asked of
+# the other four triggers: the message named what the two validity guards found
+# and said nothing for the four empty lists, so three withdrawals of five went
+# out silent while the paragraph above them claimed otherwise. Its edit makes
+# the separator test always true, so that list empties without being named. Run
+# on 2026-09-20: baseline plus one, caught, byte-identical after.
+# All twelve rows over this library's two lists and its load guard -- six on
+# GH-134 and six on GH-134.1 -- were run as one selection against the merge of
+# dev-05 at 7bea85f (2026-09-20), the merge that carried #109's checks over all
+# seven hooks: baseline green over 191 requirements, all twelve caught,
+# .claude/hooks/ byte-identical after. That is the first run here that has
+# exercised a whole family together rather than the rows one round added.
+# The sixth round added two, and both break a DERIVATION rather than a rule:
+# `guard-trigger-loses-its-name` deletes the line naming a list the guard still
+# tests, which is the fifth-trigger slip that round measured by construction;
+# `doc-hook-function-not-named` drops one of the two functions the message says
+# the document hooks need. Neither is reachable by driving a fixture -- the
+# point of both checks is that they read the guard's own condition and the
+# hooks' own load guards rather than a list written beside them. Run as a
+# selection on 2026-09-20: baseline plus two, both caught, byte-identical after.
 # BOTH WERE RUN AGAIN on the merge of dev-05 (#155) into #144, in a selection of
 # twelve: #155's two, #144's eight, and GH-144.8's two, against the merged tree
 # at the commit that resolved it. All twelve caught, .claude/hooks/
@@ -199,7 +299,7 @@
 # the merge of #109 brought three harnesses that ran hooks and recorded nothing.
 # Two merges, two findings only a run could produce. This selection found none,
 # which is a result and not an absence of one.
-# No run has therefore exercised all sixty-seven rows together, and saying which
+# No run has therefore exercised all eighty-one rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -390,6 +490,20 @@ MUTATIONS=$(cat <<'MUTATIONS'
 sudo-not-a-wrapper%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/sudo|//%FR-4 US-15 US-1 GH-79.1%caught
 nohup-not-a-wrapper%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%FR-4 US-15 GH-79.1%caught
 control-words-not-stripped%lib/command-scan.sh%s/\[{}!\]|if|then|elif|else|fi|while|until|for|do|done|case|esac|select|function|coproc/cs-matches-no-control-word/%FR-3 US-1 US-15%caught
+control-words-not-admitted-by-anchor%lib/command-scan.sh%s/|(\$CS_CONTROL_WORDS)\[\[:space:\]\]+|/|/%GH-134%caught
+close-paren-not-a-separator%lib/command-scan.sh%/^CS_SEPARATORS=/s/)//%GH-134%caught
+dash-in-separators%lib/command-scan.sh%/^CS_SEPARATORS=/s/)/)-/%GH-134%caught
+bracket-opens-a-collating-element%lib/command-scan.sh%/^CS_SEPARATORS=/s/`/`[./%GH-134%caught
+backslash-in-separators%lib/command-scan.sh%/^CS_SEPARATORS=/s/)/)\\/%GH-134%caught
+backslash-in-control-words%lib/command-scan.sh%/^CS_CONTROL_WORDS=/s/|coproc/|copro\\tc/%GH-134%caught
+anchor-validity-not-checked%lib/command-scan.sh%/CS_LISTS_VALID=0/s/-le 1/-le 2/%GH-134.1%caught
+control-word-validity-not-checked%lib/command-scan.sh%s|if ($0 ~ ("^(" w ")$"))|if (0)|%GH-134.1%caught
+awk-status-read-as-two%lib/command-scan.sh%s/^  1) CS_LISTS_VALID=0$/  1|*) CS_LISTS_VALID=0/%GH-134.1%caught
+refusal-claims-every-consumer%lib/command-scan.sh%s/every consumer that requires it refuses/every consumer refuses/%GH-134.1%caught
+refusal-names-two-lists%lib/command-scan.sh%s/CS_SEPARATORS, CS_CONTROL_WORDS, CS_WORD_SPELLING, CS_WRAP_TOKEN or CS_WRAP_WORDS/CS_SEPARATORS or CS_WRAP_WORDS/%GH-134.1%caught
+emptiness-not-named%lib/command-scan.sh%s/\[ -n "\$CS_SEPARATORS" \]/[ -n "always" ]/%GH-134.1%caught
+guard-trigger-loses-its-name%lib/command-scan.sh%s/}CS_SEPARATORS is empty"/}"/%GH-134.1%caught
+doc-hook-function-not-named%lib/command-scan.sh%s/cs_tool_input and cs_within_cap/cs_tool_input/%GH-134.1%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught

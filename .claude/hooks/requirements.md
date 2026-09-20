@@ -1679,13 +1679,53 @@ and held to the same standard of saying only what it asks.
   command position, as they already are for the unwrapped command.
 - from: #134, found by #106's invariance families
 - kind: defect-permitting
-- status: gap → #134
-- note: `CS_WRAPPER_RE` is matched against raw text and so carries its own
+- status: active
+- variants: transformation: word-if word-for word-brace
+- note: `CS_WRAPPER_RE` is matched against raw text and so carried its own
   command-position class -- start of line and `;` `&` `|` `(` and a backtick --
-  where every other rule reads `cs_split`, which strips control words. The two
-  answers disagree, which is the defect class `lib/command-scan.sh` exists to
-  end. #106 pins the three control words it generates against its three wrapped
-  seeds.
+  where every other rule reads `cs_split`, which strips control words and cuts
+  on `)` as well. The two answers disagreed, which is the defect class
+  `lib/command-scan.sh` exists to end. The fix spells both lists once,
+  `CS_SEPARATORS` and `CS_CONTROL_WORDS`, and both halves read them; the suite
+  pins that as text and each list emptied as a withdrawal of `cs_split`. `in` is
+  deliberately not a control word: it introduces the words of a `for` or a
+  `case`, never a command, and `cs_split` has never stripped it. The widening
+  costs refusals in one shape, named and pinned: prose that puts a quote-blind
+  separator and then a control word or a `)` in front of a wrapper word, on a
+  line that carries a guarded command -- a regex alternation such as
+  `(ba|z)sh -c`, and a pull request comment quoting the shape this entry fixed,
+  among them. `function NAME { … }` is out of reach of both halves alike and is
+  #167, not this entry. #106's three `word-if`, `word-for` and
+  `word-brace` gap rows against its wrapped seeds are gone with it, and those
+  variants are ordinary checks at the seeds' verdicts.
+
+### GH-134.1
+- text: A command-position list that is present but malformed withdraws `cs_split`,
+  as an empty one does: separators that do not compile into a bracket expression,
+  and control words that match the empty string.
+- from: #172's second review, of the fix for #134
+- kind: defect-permitting
+- status: active
+- direction: static: derived from the library's text and from whether loading it
+  defines `cs_split`, as GH-84.2 is. The verdicts a withdrawal buys are the
+  consumers' load guards, which GH-84.2 and GH-79.4 already carry, so this entry
+  would otherwise assert them a second time
+- note: the guard below `cs_split` reached emptiness only, and both lists fail
+  open when they are present and wrong. A collating element in `CS_SEPARATORS`
+  stops `CS_WRAPPER_RE` compiling, `grep -qE` exits 2, and every consumer's
+  `if grep -qE "$CS_WRAPPER_RE" && …` reads a 2 as "no wrapper": measured, a
+  wrapped `gh pr merge 5` went from BLOCK to ALLOW while the unwrapped command
+  still blocked. A trailing `|` in `CS_CONTROL_WORDS` -- the ordinary slip when
+  appending to a list #134 made the edit point for both halves -- makes the
+  alternation match the empty string, and `cs_split`'s strip advances by what it
+  matched, so it does not advance and does not return: measured, killed at 8 s
+  against exit 0 intact, and a hook the harness kills for time has permitted.
+  Each list is asked by the engine that will ask it, grep for the anchor and awk
+  for the control words, rather than by a pattern written here, for the reason
+  `lib/command-scan.sh` exists. What it does not reach is named rather than
+  implied: a `-` makes a valid range, so the class compiles and means something
+  else, and that is caught by the membership pins under GH-134 instead. Cost
+  measured at 2.6 ms to source the library before and 5.6 ms after.
 
 ### GH-135
 - text: A quoted group or subcommand word is the word it spells: `git "push" --all
@@ -1785,6 +1825,50 @@ and held to the same standard of saying only what it asks.
   `$"..."` or a backslash: `--base$'=main'` and `--base\=main` named no base.
   The `=` is now part of the name, so those refuse -- and so does
   `--base"=dev-05"`, which base_args could read, the trade that fix takes.
+
+### GH-167
+- text: The `function NAME { … }` spelling of a function definition puts the
+  function's name where the command word has to be, so its body is refused by no
+  boundary hook, wrapped or unwrapped. The `NAME() { … }` spelling is refused as
+  it should be.
+- from: #167, found by the spec review of the fix for #134
+- kind: defect-permitting
+- status: gap → #167
+- note: `cs_split` strips `function` as a control word and stops at the name,
+  which it then takes for the command word; `(` and `)` are separators, so the
+  other spelling puts the brace at the head of its own fragment and is reached.
+  Since #134 the wrapper anchor reads the same control words, and it misses this
+  shape for the same reason -- the name breaks the run of admitted prefixes
+  before the wrapper word -- so both halves agree here and are both wrong. That
+  is what makes it a sibling of #134 rather than an instance of it, and why
+  dropping `function` from `CS_CONTROL_WORDS` is the wrong repair: the word
+  earns its place in `cs_split`, which does strip it, and taking it out would
+  lose that strip to buy the anchor nothing. What the word needs is its operand
+  stripped with it, as `CS_WRAP_OPERAND_WORDS` does for `timeout` and `flock`.
+  The checks are written at the measured verdict and not the correct one, so the
+  fix turns them red and finds this entry.
+
+### GH-175
+- text: A shell wrapper is read as one only when its option token begins `-c` and
+  its heredoc operator is preceded by whitespace, so `bash -lc`, `sh -ec`,
+  `bash --login -c`, `bash -o pipefail -c` and `bash<<EOF` are at no wrapper
+  position for any boundary hook.
+- from: #175, found by the review of PR #172
+- kind: defect-permitting
+- status: gap → #175
+- note: #134 gave the anchor one spelling of WHERE a command position is. WHICH
+  word is a wrapper is a second question and is still answered narrowly, in the
+  anchor's tail. `cs_split` does not rescue these: `bash` is not a prefix word,
+  so the payload stays quoted and no rule sees the command inside it. Not a
+  regression from #134 -- the tail is byte-identical at `origin/dev-05` 33f7129
+  -- and not the family `NAMED AND NOT CLOSED` covers, which names words this
+  library cannot reach at all; this is the anchor's own word with an option
+  spelling it declines to admit. `bash -cx` is refused, but only because `-cx`
+  begins with `-c`, which is the measurement that says the rule tests a prefix
+  and not a token. Left at the measured verdict because the widening has a cost
+  in the refusing direction that has to be measured first -- the anchor reads
+  raw text, so a wider option class falls on prose too -- and that measurement
+  is the fix, not this entry.
 
 ### GH-107.1
 - text: `check-hooks.sh` judges the hooks in `$CHECK_HOOKS_DIR` when that names a
@@ -2970,6 +3054,14 @@ it has no entry above (Q16).
 - #150: the pull request for #108; Bertan's review of it is cited where each of
   the five things it corrected stands, the largest being a fixture guard that made
   the suite abort on any machine without `gh` installed
+- #172: the pull request for #134; its two reviews are cited where each thing
+  they corrected stands. The first added GH-167 and GH-175 as gaps and the
+  separator membership pins; the second found three guards that did not guard --
+  a backslash pin spelled with two backslashes and so unable to fire, a
+  malformed list that fails open, and a control-word list with no validity check
+  at all -- which is GH-134.1 and the corrected pin under GH-134. It has no
+  entry of its own, for the reason #142 has none: a count of what a review
+  corrected is the kind of number this file has already had to fix once
 - #173: the pull request for #139; Bertan's review of it found the two holes
   GH-139's note records -- `$'...'` escapes left undecoded, a quote open at the
   end of a line read as a word with no whitespace, a NUL decoded as a
