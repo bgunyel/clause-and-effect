@@ -127,7 +127,10 @@
 # caught, .claude/hooks/ byte-identical after. The first two survived the suite
 # before that commit, which is how the review found them and why they are rows
 # rather than a paragraph. That selection was run before dev-05 was merged in a
-# second time, so #155's two rows were not in the tree it ran against.
+# second time, at 2a52322, so it was re-run against the merged tree: baseline
+# green over 188 requirements, all four caught again, .claude/hooks/
+# byte-identical after. #155's two rows have still not been run since that
+# merge, and neither has anything else here.
 # No run has therefore exercised all sixty-two rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
