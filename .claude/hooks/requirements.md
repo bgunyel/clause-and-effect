@@ -2369,7 +2369,16 @@ and held to the same standard of saying only what it asks.
   themselves are ordinary and the transformations would generate from them
   happily -- which is why this says `none` with a reason rather than being left
   out of scope. A seed table row naming every hook rather than one would make
-  this a `seed`, and that is a change to #106's machinery and not to this entry
+  this a `seed`, and that is a change to #106's machinery and not to this entry:
+  #179 owns it
+- note: the 41 spellings are a hand-written literal and are not derived off
+  CLAUDE.md's boundary section, so one added there or named in a new refusal
+  message is outside this requirement until someone adds it. Deriving them was
+  measured and declined -- the section's command spans are mostly bare tool
+  names and spellings it refuses, and a derivation wrong in the permitting
+  direction would answer falsely where a short list only leaves a spelling
+  unasked. The argument is in `check-hooks.sh` beside the list; #180 owns the
+  gap it leaves
 
 ### GH-164
 - text: No refusal message tells an agent to use a spelling that another hook
@@ -2691,6 +2700,14 @@ it has no entry above (Q16).
   ninety minutes, and this suite pinned the hour. A rate does not move when a
   row is registered and a total does, so the heading is a rate now and the pin
   reads it. That is one of the four, not the issue
+- #179: the invariance families cannot seed a requirement whose subject is
+  agreement across hooks, which is the reason GH-109.5 declares `variants:
+  none`. Filed out of the second review of PR #169 so that the reason is a
+  question someone can answer rather than a paragraph in an entry
+- #180: GH-109.5's 41 spellings are hand-written with no tripwire on CLAUDE.md's
+  boundary section. The derivation was measured and declined, and the decline
+  was accepted; this owns the residual gap rather than closing it, which is the
+  class #164 came from
 - #169: the pull request for #109; its two reviews are cited at each thing they
   moved, and every one of them is this suite saying more than it had
   established rather than a defect in a hook — which is why the pull request

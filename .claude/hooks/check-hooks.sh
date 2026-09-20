@@ -12709,6 +12709,8 @@ echo "--- all seven Bash hooks at once: a permitted spelling is permitted by eve
 # rejected: 11 of the 35 are a bare tool name, so the count moves whenever the
 # prose is reflowed around one, which is a false red on CLAUDE.md edits that
 # change no rule -- and it would still say nothing about which span is a grant.
+# #180 owns what that leaves open, so the gap is tracked rather than only argued
+# here; this paragraph is its reasoning and not its resolution.
 #
 # THE FIRST RUN FOUND ONE, #164. no-commit-to-main.sh refuses a push to main
 # with "Push your dev-NN branch and open a PR instead", and no-git-push.sh
