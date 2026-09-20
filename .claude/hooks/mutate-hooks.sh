@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- fifty-four runs as the
-# registry stands, not fifty-five, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- fifty-eight runs as the
+# registry stands, not fifty-nine, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -104,7 +104,39 @@
 # red in GH-155.1 and in nothing else, byte-identical after. That one is host-
 # independent -- its `gh --version` is silent where there is no `gh` to run and
 # harmless where there is. Neither has been run since dev-05 was merged in.
-# No run has therefore exercised all fifty-four rows together, and saying which
+# #118 added four: `gh-option-never-unreadable`, `gh-unreadable-pass-removed`,
+# `release-read-granted-when-opaque` and `git-globals-list-short-again`. They
+# were run as one selection against the commit answering it, baseline plus four;
+# three were caught and the fourth is the paragraph after this one. A second run
+# took that one alone, caught. .claude/hooks/ was byte-identical after both.
+#
+# THEY ARE NOT ONE RULE SPELLED FOUR TIMES, and each is the reason the one
+# before it is not enough. `gh-option-never-unreadable` makes ghopt stop
+# reporting an unreadable option, which is the rule itself; it goes red across
+# fifteen requirements. `gh-unreadable-pass-removed` is narrower and turns none
+# of those red: with the pass gone every command it refuses is STILL refused, by
+# the decision rule that #118's third outcome sends it to, so only the `says`
+# checks on the refusal's own text move. A row against the rule and none against
+# the message would have left that loop covered by nothing.
+# `release-read-granted-when-opaque` is narrower again and is the only one of
+# the four whose subject no verdict in this suite can reach: release_is_read
+# reads cs_gh_opaque's status as 1-or-nothing rather than with `&& return 1`,
+# and the two differ only when the call does not run at all. It is caught by the
+# `armed` pin on that line, which is what that pin is for.
+# `git-globals-list-short-again` is the issue's other half, git's list of
+# globals taking a separate value, which shares no code with the gh shape and
+# would have been the one rule of the four with no row at all -- found by a
+# review that reverted the two entries in a copy and watched three flips go back
+# to ALLOW with nothing in this registry to say so.
+#
+# THE FOURTH ROW REPORTED `survived` ON THE FIRST RUN, and the row was wrong
+# rather than the rule. `release-read-granted-when-opaque` named `GH-118 FR-48`,
+# and the check its edit turns red carries GH-118 alone: `no failing check for
+# FR-48; red instead: GH-118` is what this harness printed. That is the harness
+# doing what it exists to do to a claim written one requirement too wide, and it
+# is recorded because a registry row is itself a claim and this one was made
+# before it was measured.
+# No run has therefore exercised all fifty-eight rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -289,6 +321,10 @@ cut-span-at-line-end-always-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}
 c-escape-takes-the-next-character%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "c") { put(0); return }/if (e == "c") { if (i < n) i++; w = w "?"; return }/%GH-139%caught
 api-read-taken-for-a-write%no-pr-decisions.sh%/^gh_api_is_write()/,/^}/s/^  return 1$/  return 0/%FR-20%caught
 release-allowlist-admits-a-write%no-pr-decisions.sh%/^RELEASE_READ_VERBS=/s/verify-asset"/verify-asset create edit delete"/%FR-48%caught
+gh-option-never-unreadable%lib/command-scan.sh%/^cs_gh_opaque()/,/^}/s/^      return 3$/      return 2/%GH-118 US-15%caught
+gh-unreadable-pass-removed%no-pr-decisions.sh%s/^    if cs_gh_opaque "$GHPATH" <<<"$CMD"; then$/    if false \&\& cs_gh_opaque "$GHPATH" <<<"$CMD"; then/%GH-118 US-7%caught
+release-read-granted-when-opaque%no-pr-decisions.sh%/^release_is_read()/,/^}/s/^  case $? in 1) ;; \*) return 1 ;; esac$/  case $? in 0) return 1 ;; esac/%GH-118%caught
+git-globals-list-short-again%lib/command-scan.sh%s/|--exec-path|--config-env|--attr-source|/|--exec-path|/%GH-118 FR-3 FR-38 US-1%caught
 bare-push-refusal-drops-the-branch%no-git-push.sh%/Name the branch: git push/s/git push <remote> \$CURRENT/git push <remote> <branch>/%US-7%caught
 stopping-rule-removed%no-git-push.sh%/would plausibly write/d%US-20 FR-2%caught
 main-checkout-not-recognised%no-git-push.sh%s/^if \[ "$GIT_DIR_PATH" = "$GIT_COMMON_PATH" \]; then$/if false; then/%GH-94.1%caught

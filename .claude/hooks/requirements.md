@@ -1576,24 +1576,52 @@ and held to the same standard of saying only what it asks.
   unreadable, whatever verb it appears to name. A shorthand that is unknown or
   takes a value consumes the next word, so the verb the hook reads is not the
   verb `gh` runs: `gh pr -t view merge 5` is a merge and `gh release -t list
-  create v1` is a create.
+  create v1` is a create. Separately, `cs_git_args` treats every global option
+  git gives a separate value as taking one, `--config-env` and `--attr-source`
+  included, so `git --attr-source HEAD push origin main` is a push.
 - from: #118, found reviewing PR #115; the refuse-the-shape decision is that
   issue's agent brief, and the spelling is corrected by the measurement in #106's
   comment on it
 - kind: defect-permitting
-- status: gap → #118
+- status: active
+- variants: transformation: option-eats-verb
 - note: the spelling matters and the issue's original example is not one `gh`
   runs. Cobra treats an unknown LONGHAND as a boolean, so `gh pr --squash view 5`
   returns `unknown flag: --squash` and eats nothing; it is a shorthand that
-  consumes the next word. Measured on gh 2.45.0.
+  consumes the next word. Measured on gh 2.45.0. The rule refuses the shape and
+  is therefore wider than that reading: the longhand spellings are refused too,
+  and what they pin is the rule rather than cobra.
   The requirement is a refusal of the shape and not a reading of the verb, so it
-  is not verdict-preserving in either direction: #106's families pin every
-  refused `gh pr` and `gh release` seed as permitted, and also six PERMITTED
-  seeds whose right verdict is BLOCK although their seed's is ALLOW --
+  is not verdict-preserving in either direction: #106's families carried every
+  refused `gh pr` and `gh release` seed as a gap, and also six PERMITTED seeds
+  whose right verdict is BLOCK although their seed's is ALLOW --
   `gh pr -t view view 5` is a read the rule refuses. That second set is why the
-  departure table carries a right verdict of its own. `gh issue` is not a guarded
-  group, so `gh issue -t list list` stays ALLOW; `gh api` takes no group, so the
-  shape does not arise there.
+  departure table carries a right verdict of its own, and with this closed those
+  six are a design row at that verdict and the refused seeds need no row at all.
+  `gh issue` is not a guarded group, so `gh issue -t list list` stays ALLOW;
+  `gh api` takes no group, so only the position before it is read and
+  `gh api -X POST repos/o/r/pulls` keeps its own options. The position BEFORE the
+  group is nobody's group, so an unreadable option there is refused whatever
+  follows, `gh --squash view issue list` included: with the group eaten, which
+  group it was is what cannot be read. An option standing as the last word of a
+  line consumes nothing, which is what keeps `gh --version` and `gh --help`
+  permitted.
+  The two halves are one entry because they are one reading defect, in the two
+  argument readers, and they are not one mechanism: git rejects an unknown
+  global option itself, so it has no shape to refuse and only a list to
+  complete. The list was checked against `git help git` for git 2.43.0 by
+  running `git <option> <value> version` for each; seven options take a separate
+  value, and `--exec-path` is kept in the code's list although it is not one of
+  the seven, for the reason written beside it.
+  THE TRADE, taken knowingly: harmless reads go with the writes, `gh pr --json
+  title view 5` among them. 37,597 past Bash commands from this project's
+  sessions were searched for a pre-subcommand option on a guarded group; the
+  only two were commands written while developing these hooks. The refused read
+  is pinned as a check whose label names it as the trade. The pre-GROUP class
+  is not covered by that number — the search asked about guarded groups, and
+  `gh --paginate issue list` is refused on the argument that a group which may
+  have been eaten cannot be called unguarded, not on a count. Said here because
+  the two halves of the trade have different evidence behind them.
 
 ### GH-124
 - text: `feed` and `feed_says` read a hook's exit status as every other helper does,

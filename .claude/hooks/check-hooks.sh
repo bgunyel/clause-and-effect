@@ -2538,6 +2538,263 @@ flip "$SUITE_DIR" pytest-via-uv-group.sh ALLOW BLOCK 'copying the pytest binary,
 check_in "$SUITE_DIR" pytest-via-uv-group.sh ALLOW 'copying the pytest binary, with no prefix word' \
   'cp /usr/bin/pytest /tmp/'
 
+section "=== issue #118: an option before a gh subcommand, and git's global list ==="
+# gh resolves a subcommand path at the first non-flag argument, and cobra hands
+# an option it does not know as a boolean the next word as a value. So an option
+# written in front of a subcommand EATS it, and the verb every rule in
+# no-pr-decisions.sh reads is not the verb gh runs. Measured on gh 2.45.0:
+# `gh pr -t view merge 5` merges, `gh pr -t view view 5` views and then
+# complains that `--template` needs `--json` -- which is the evidence, since only
+# the command that ran after the eaten word could say it -- and
+# `gh release -t list create v1` creates. Verifying that last row, an agent
+# CREATED A REAL RELEASE on this repository. The defect is not a hypothetical
+# about what gh would do.
+#
+# The spelling matters and the issue's own table got it wrong: cobra treats an
+# unknown LONGHAND as a boolean, so `gh pr --squash view 5` returns
+# `unknown flag: --squash` and eats nothing. It is an unknown or value-taking
+# SHORTHAND that consumes the next word. The rule below is wider than that
+# reading and deliberately so -- it refuses the shape rather than modelling
+# which options gh gives a value to, because that model is gh's flag definitions
+# per group, the list #97 decided against keeping and one a gh release moves.
+# So the longhand rows are refused here too, on the shape, and what they pin is
+# the rule rather than cobra.
+#
+# THE RULE IS STATED ONCE, as THE UNREADABLE GH SHAPE in lib/command-scan.sh,
+# and every consumer of cs_gh_args inherits it from there. Nothing in a hook
+# re-derives which options are readable; no-pr-decisions.sh names only the paths
+# it judges.
+#
+# Every flip below was PERMITTED at origin/dev-05 2a52322, and each is measured
+# rather than reasoned -- the suite was green on all of them.
+req GH-118 US-15
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a shorthand eats the verb, then a merge' \
+  'gh pr -t view merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the longhand spelling of the same shape' \
+  'gh pr --squash view merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a value-taking longhand before merge' \
+  'gh pr --body x merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option before a review verdict' \
+  'gh pr --approve view review 5'
+# BEFORE THE GROUP, not between the group and the verb. With the group eaten,
+# which group it was is exactly what cannot be read, so the refusal does not
+# wait to find out -- `gh --squash view issue list` is refused although `issue`
+# is a group no hook guards, because nothing here can tell that `issue` is the
+# group and not the option's value.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option before the group, then a merge' \
+  'gh --squash view pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option before the group of an unguarded one' \
+  'gh --squash view issue list'
+req GH-118 FR-48 US-15
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option before a release create' \
+  'gh release --title view create v2'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the shorthand that created a real release' \
+  'gh release -t list create v1'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option before a release delete' \
+  'gh release --yes list delete v1'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option before a release edit' \
+  'gh release --draft view edit v1'
+req GH-118 FR-15 FR-16
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option before a create naming main' \
+  'gh pr -t view create --base main --title x'
+req GH-118 FR-17
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option before a retarget to main' \
+  'gh pr -t view edit 35 --base main'
+# THE READS THIS REFUSES, which is the trade rather than a side effect. A read
+# behind an unreadable option is not a read this file can see, and it is refused
+# with the writes for the reason a wrapped read is: nothing in the text says
+# which verb runs. Both of these are permitted commands in their bare spelling.
+req GH-118 US-13
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a pull request read behind an eaten verb' \
+  'gh pr -t view view 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'THE ACCEPTED TRADE: a --json read of a pull request' \
+  'gh pr --json title view 5'
+req GH-118 FR-48
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a release read behind an eaten verb' \
+  'gh release -t list view v1'
+# Already refused at dev-05, and refused now for a different reason: the value
+# `x` was not a read verb, so the allowlist caught it. It is pinned because the
+# allowlist is what a narrowing of this rule would leave standing, and a check
+# that passes before and after says which of the two is doing the work only when
+# its neighbours say what moved.
+req GH-118 FR-48 US-15
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'an option before a release edit, value not a read verb' \
+  'gh release --notes-file x view edit v1'
+#
+# WHAT DOES NOT MOVE. The three options that name where a command acts rather
+# than what it does are readable in every spelling, so every verdict resting on
+# them is the verdict it was. An option AFTER the whole path belongs to the verb
+# and was never this rule's. A group no hook guards keeps its verb position.
+req GH-118 US-15
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'gh -R o/r pr merge 5, unmoved' \
+  'gh -R o/r pr merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'gh pr --repo o/r merge 5, unmoved' \
+  'gh pr --repo o/r merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'gh pr --repo=o/r merge 5, unmoved' \
+  'gh pr --repo=o/r merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'the attached shorthand -Ro/r is still read' \
+  'gh -Ro/r pr merge 5'
+req GH-118 US-13
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh pr --repo o/r view 5, unmoved' \
+  'gh pr --repo o/r view 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'an option after the whole path' \
+  'gh pr view 5 --json title'
+# An option standing as the LAST word of a line consumes nothing, so it is not
+# unreadable and these two stay ordinary commands.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh --version' 'gh --version'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh --help' 'gh --help'
+req GH-118 FR-48
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh release -R o/r view v1, unmoved' \
+  'gh release -R o/r view v1'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'an option after a release list' \
+  'gh release list --limit 5'
+req GH-118 US-14
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'an option after an issue list' \
+  'gh issue list --label bug'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh issue is not a guarded group, so its verb position is not read' \
+  'gh issue -t list list'
+
+# THE THIRD OUTCOME, driven directly. cs_gh_args had two answers, "is this path"
+# and "is not", and a caller reads the second as `|| continue`, which permits.
+# "Cannot tell" is therefore spelled like the first -- success, with no
+# arguments -- so that a caller which asks nothing further refuses. These drive
+# that caller rather than reasoning about it: the same four lines, over a
+# command that is unreadable, over one that is simply not the path, and over the
+# library with cs_gh_opaque taken away, which is #84's failure mode for this
+# function and must refuse rather than fall back to the old reading.
+req GH-118
+NAIVE_CALLER='
+  read -r CMD
+  if ARGS=$(printf "%s\n" "$CMD" | cs_gh_args "pr merge"); then echo REFUSE; else echo PERMIT; fi'
+NAIVE_EATS=$(printf 'gh pr -t view merge 5\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && $NAIVE_CALLER" 2>/dev/null)
+NAIVE_OTHER=$(printf 'gh issue list\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && $NAIVE_CALLER" 2>/dev/null)
+NAIVE_NOOPAQUE=$(printf 'gh issue list\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && unset -f cs_gh_opaque && $NAIVE_CALLER" 2>/dev/null)
+tok 'a caller that ignores the third outcome refuses an unreadable command' \
+    'REFUSE' "$NAIVE_EATS"
+tok 'and still skips a command that is not that path at all' \
+    'PERMIT' "$NAIVE_OTHER"
+tok 'and a caller of THAT shape refuses everything when cs_gh_opaque is gone' \
+    'REFUSE' "$NAIVE_NOOPAQUE"
+
+# AND THE OTHER POLARITY, which the three above say nothing about and which the
+# first version of this section claimed they did. A caller whose MATCH grants
+# something reads the same default the other way round: "cannot tell" spelled as
+# success is a granted read, and a cs_gh_opaque that is not there answers 127,
+# which `&& return 1` reads as "readable" and lets through. release_is_read in
+# no-pr-decisions.sh is the only caller of that shape in this repository, and it
+# reads the status as 1-or-nothing so that both cases withhold the read. These
+# drive its two lines rather than the hook, since the hook's own load guard
+# refuses before either is reached and would hide the property being claimed.
+GRANT_CALLER='
+  read -r CMD
+  cs_gh_opaque "release view" <<<"$CMD"
+  case $? in 1) ;; *) echo WITHHOLD; exit ;; esac
+  if cs_gh_args "release view" <<<"$CMD" >/dev/null; then echo GRANT; else echo WITHHOLD; fi'
+GRANT_READ=$(printf 'gh release view v1\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && $GRANT_CALLER" 2>/dev/null)
+GRANT_EATS=$(printf 'gh release -t list view v1\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && $GRANT_CALLER" 2>/dev/null)
+GRANT_NOOPAQUE=$(printf 'gh release view v1\n' \
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && unset -f cs_gh_opaque && $GRANT_CALLER" 2>/dev/null)
+tok 'the granting shape still grants an ordinary release read' \
+    'GRANT' "$GRANT_READ"
+tok 'and withholds it from a command whose verb was eaten' \
+    'WITHHOLD' "$GRANT_EATS"
+tok 'and withholds it when cs_gh_opaque is gone, where && return would grant' \
+    'WITHHOLD' "$GRANT_NOOPAQUE"
+# The three above drive that SHAPE and not the file, so on their own they would
+# pass with the hook written the other way. This is the line itself, whole: the
+# two arms of the case and the order they stand in. `&& return 1` and
+# `case $? in 0) return 1 ;; esac` both satisfy the verdict checks above, since
+# the two differ only when the call does not run -- so nothing but the text says
+# which of them is there.
+armed 'and release_is_read reads that status as 1-or-nothing, in the file' \
+      "$HOOKS/no-pr-decisions.sh" 'case $? in 1) ;; *) return 1 ;; esac'
+
+# THE TWO LISTS OF THE SAME THREE NAMES, derived off the library and held to a
+# literal. ghopt in cs_gh_opaque says which options may stand before a
+# subcommand at all; the skip list cs_gh_args passes its own skipopts says which
+# of them eat the next word. Different questions, same three names, written
+# twice -- so a name added to one and not the other is caught here rather than
+# by whatever it lets through. The comment beside each points at this check.
+req GH-118
+tok 'ghopt recognises exactly -R, --repo and --hostname' \
+    '--hostname --repo -R' \
+    "$(sed -n '/function ghopt(t) {/,/^    }/p' "$HOOKS/lib/command-scan.sh" \
+       | grep -oE '\-\-?[A-Za-z][-A-Za-z]*' | LC_ALL=C sort -u \
+       | tr '\n' ' ' | sed 's/ $//')"
+tok 'and the skip list in cs_gh_args names the same three' \
+    '--hostname --repo -R' \
+    "$(grep -oE 'skipopts\("\|-R\|[^"]*"\)' "$HOOKS/lib/command-scan.sh" \
+       | sed -e 's/^skipopts("//' -e 's/")$//' | tr '|' '\n' | grep -v '^$' \
+       | LC_ALL=C sort -u | tr '\n' ' ' | sed 's/ $//')"
+
+# WHICH REFUSAL, which is the whole of what the unreadable pass in the hook
+# adds. The third outcome above already refuses these commands without it -- an
+# unreadable command succeeds at every path, so `gh_rule 'pr merge'` matches and
+# the decision rule speaks. That refusal is wrong about the command in front of
+# it: `gh --squash view issue list` decides no pull request, and being told that
+# deciding one is Bertan's call names no correction its writer can act on. So
+# the verdict checks above cannot see this loop at all, and only these can.
+# #105 owns the rule that a refusal names the permitted spelling.
+req GH-118 US-7
+says "$SUITE_DIR" no-pr-decisions.sh 'option before its subcommand' \
+  'the refusal names the cause, not a pull request decision' \
+  'gh pr -t view merge 5'
+says "$SUITE_DIR" no-pr-decisions.sh 'gh pr merge 5 --squash' \
+  'and names where the option goes instead' \
+  'gh release -t list create v1'
+says "$SUITE_DIR" no-pr-decisions.sh 'option before its subcommand' \
+  'and reaches a group no rule here guards, where the decision message would lie' \
+  'gh --squash view issue list'
+says_not "$SUITE_DIR" no-pr-decisions.sh 'deciding a pull request' \
+  'and does not tell an unreadable issue command that it decides a pull request' \
+  'gh --squash view issue list'
+
+# THE GIT HALF, which is a different defect wearing the same shape. git rejects
+# an unknown global option itself -- `git --bogus push origin main` exits with
+# `unknown option: --bogus` -- so git has no "an unknown option eats the next
+# word" problem. What it had is a list two entries short. cs_git_args skipped
+# git's value-taking globals, and `--config-env` and `--attr-source` were not
+# among them, so their value was read as the subcommand and the push behind it
+# was seen by no hook. Measured on git 2.43.0, by running
+# `git <option> <value> version` for every option `git help git` lists: seven
+# take a separate value, and these are the two that were missing.
+req GH-118 FR-3 US-1
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'git --config-env hid a push to main' \
+  'git --config-env x.y=HOME push origin main'
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'git --attr-source hid a push to main' \
+  'git --attr-source HEAD push origin main'
+req GH-118 FR-3 US-2
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'git --config-env hid a push --all' \
+  'git --config-env x.y=HOME push --all origin'
+# The `=` spellings were refused all along: a token carrying its own value is
+# skipped as a valueless option and the subcommand behind it is reached. They
+# are pinned so that a later edit to the list cannot take them with it.
+req GH-118 FR-3 US-1
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the = spelling of --config-env, refused already' \
+  'git --config-env=x.y=HOME push origin main'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the = spelling of --attr-source, refused already' \
+  'git --attr-source=HEAD push origin main'
+# The same two options in front of the commit hook's own verbs, on main.
+req GH-118 US-1
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'git --config-env hid a commit on main' \
+  'git --config-env x.y=HOME commit -m wip'
+flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'git --attr-source hid a commit on main' \
+  'git --attr-source HEAD commit -m wip'
+# And what the two entries must not cost: an ordinary read behind either of them,
+# and the globals that were in the list before.
+req GH-118 FR-3
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'git --attr-source HEAD status' \
+  'git --attr-source HEAD status'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'git --config-env x.y=HOME status' \
+  'git --config-env x.y=HOME status'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'git -C . status, unmoved' 'git -C . status'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'git -c x.y=z log, unmoved' 'git -c x.y=z log'
+
 section "=== REGRESSION: review of 02a14d8, close and release through gh api ==="
 # Closing a PR and publishing a release were refused in the gh spelling and open
 # through gh api, so the boundary was spelling-dependent exactly where the file
@@ -4347,6 +4604,20 @@ check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'revert' \
   'git revert HEAD'
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'am' \
   'git am /tmp/patch.mbox'
+# #118'S TWO GLOBALS, ASKED OF THE THIRD CONSUMER OF cs_git_args. The issue's
+# criterion says these are "refused by the same hooks that refuse `git push
+# origin main`", which named two; this file is the third that reads a verb
+# through that function, and a rule shared by three hooks checked in two is a
+# rule checked where it was convenient. Both were PERMITTED here before the two
+# entries were added, the option's value being read as the verb.
+req GH-118 FR-38
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'git --config-env hid a commit on a stale branch' \
+  'git --config-env x.y=HOME commit -m "wip"'
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'git --attr-source hid a cherry-pick on a stale branch' \
+  'git --attr-source HEAD cherry-pick 1234abc'
+# And the read behind the same option, which this hook must go on permitting.
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'git --attr-source HEAD status, on a stale branch' \
+  'git --attr-source HEAD status'
 # ahead == 0 means this branch is a strict ancestor of the dev branch, so this
 # is a fast-forward: it creates no commit and masks nothing. Refusing it would
 # deadlock the branch -- no commit, no catch-up, and removing a worktree is a
@@ -9255,13 +9526,29 @@ PIPED_GIT_LONG=$(printf 'git --work-tree|--namespace push origin main\n' \
 PIPED_GH_R=$(printf 'gh -R|--repo pr merge 5\n' \
   | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_gh_args 'pr merge'" 2>/dev/null)
 PIPED_GH_LONG=$(printf 'gh --repo|--hostname pr merge 5\n' \
-  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_gh_args 'pr merge'" 2>/dev/null)
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_gh_args 'pr merge'; printf 'rc=%s' \$?" 2>/dev/null)
 tok 'cs_git_args reads -c|-C as one option taking no value, as before #96' \
     'origin main' "$PIPED_GIT_C"
 tok 'and --work-tree|--namespace' 'origin main' "$PIPED_GIT_LONG"
 tok 'cs_gh_args reads -R|--repo as one option taking no value, as before #96' \
     '5' "$PIPED_GH_R"
-tok 'and --repo|--hostname' '5' "$PIPED_GH_LONG"
+# #118 MOVED THE FOURTH OF THESE AND LEFT THE OTHER THREE, which is the whole
+# reason this one now reads a status as well as a value. THE UNREADABLE GH SHAPE
+# recognises exactly -R, --repo and --hostname, in the bare form and the three
+# that carry a value; `--repo|--hostname` is none of the six, so the command is
+# unreadable and cs_gh_args gives its third outcome -- success with no arguments
+# -- where before it printed `5`. `-R|--repo` above is unmoved because it IS one
+# of the six, the attached shorthand `-R` carrying the value `|--repo`.
+#
+# Neither moves a verdict. `gh --repo|--hostname pr merge 5` was refused as a
+# merge and is refused as unreadable, and gh runs neither: through cs_split a
+# token holding `|` stands only inside quotes, and cobra rejects the longhand
+# outright. The status is asserted beside the value because the value alone no
+# longer separates "cannot tell" from "not this path" -- both print nothing, and
+# only the status says which, which is the property the third outcome was
+# spelled for.
+req GH-96.3 GH-118
+tok 'and --repo|--hostname, which #118 made unreadable' 'rc=0' "$PIPED_GH_LONG"
 
 # The linear passes carry copies of two awk helpers -- tokend and skipblank in
 # three programs, skipopts in two -- because an awk program cannot source
@@ -10160,11 +10447,11 @@ inv_show() {  # inv_show <variant>
 # A SEVENTH FIELD carries the right verdict where it is not the seed's, and this
 # is the case the first version of this table could not say at all. A gap was
 # "wrong today, and the seed's verdict is the right one", because `gap` was
-# handed `$swant`. #118's triage decision is not of that shape: on a guarded
+# handed `$swant`. #118's triage decision was not of that shape: on a guarded
 # group, ANY option before a subcommand word makes the command unreadable and
 # must be refused, so the right verdict is BLOCK for a permitted seed as much as
-# for a refused one. `gh pr -t view view 5` is a read of a pull request that the
-# hook must refuse once #118 lands, and its seed `gh pr view 5` is ALLOW.
+# for a refused one. `gh pr -t view view 5` is a read of a pull request, and its
+# seed `gh pr view 5` is ALLOW.
 #
 # Without the field those six rows carried no departure at all, so they asserted
 # ALLOW as the invariant and would have gone red on #118's fix looking like
@@ -10173,6 +10460,13 @@ inv_show() {  # inv_show <variant>
 # can only express one of the two directions hides the other. Found by Bertan's
 # review of PR #140; the check's own definition of a gap was narrower than the
 # defects it was finding.
+#
+# NO ROW USES IT TODAY, #118 having landed: those six are a design row now, at
+# the verdict the field used to hold. The field is kept because what it says is
+# a property of the tables rather than of that issue -- a transformation can
+# move a verdict in either direction, and the next gap of that shape would
+# otherwise be written as the half of itself this table can express. The
+# `option-eats-verb` row below is where to look for what it read like in use.
 #
 # The first field is either a space-separated list of seed keys, or a verdict
 # class -- `BLOCK:*` or `ALLOW:*` -- which declares the departure for every seed
@@ -10204,8 +10498,7 @@ pr-retarget-dev|quote-double-5|BLOCK|design|FR-17 GH-139|a base flag with a quot
 pr-retarget-dev|quote-single-5|BLOCK|design|FR-17 GH-139|a base flag with a quote in its name is refused rather than read, on the retarget arm as on the creating ones, even where the base it names is dev-NN
 release-view|quote-double-3|BLOCK|gap|GH-135|the release verb in double quotes, refused by the allowlist that cannot read it
 release-view|quote-single-3|BLOCK|gap|GH-135|the release verb in single quotes, refused by the allowlist that cannot read it
-BLOCK:*|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand eats the read verb after it
-pr-view pr-base-dev pr-base-dev-eq pr-retarget-dev pr-web release-view|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand makes a guarded path unreadable, and the right verdict is a refusal whatever the seed's is|BLOCK
+pr-view pr-base-dev pr-base-dev-eq pr-retarget-dev pr-web release-view|option-eats-verb|BLOCK|design|GH-118|an option before a guarded subcommand makes the command unreadable, and an unreadable command is refused whatever its bare spelling reaches; the refused seeds need no row of their own, their variants reaching the seed's own BLOCK
 push-wrapped pr-merge-wrapped pr-view-wrapped commit-wrapped|word-if|ALLOW|gap|GH-134|a wrapper after a control word
 push-wrapped pr-merge-wrapped pr-view-wrapped commit-wrapped|word-for|ALLOW|gap|GH-134|a wrapper after a control word
 push-wrapped pr-merge-wrapped pr-view-wrapped commit-wrapped|word-brace|ALLOW|gap|GH-134|a wrapper after a control word
@@ -10438,8 +10731,8 @@ GH-51.2:seed GH-58.1:none GH-68.1:seed GH-68.2:none GH-68.3:none GH-69.1:seed
 GH-69.2:seed GH-69.3:none GH-72:seed GH-79.1:transformation GH-79.2:none
 GH-79.3:none GH-79.4:none GH-84.1:none GH-94.1:seed GH-94.2:none GH-94.4:none
 GH-95.1:none GH-95.2:none GH-96.1:none GH-97.1:seed GH-128:transformation
-GH-117:transformation GH-133:none GH-137.1:seed GH-137.2:seed
-GH-139:transformation
+GH-117:transformation GH-118:transformation GH-133:none GH-137.1:seed
+GH-137.2:seed GH-139:transformation
 '
 # One row per entry that is either in scope or carries the field: `<ID>|in|out`,
 # the `variants` keyword, and whatever follows it. An entry out of scope is
@@ -10894,7 +11187,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '291' "${TEXT_CHECK_ARGS##*COUNT }"
+    '292' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -11034,7 +11327,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '54' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '58' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11097,7 +11390,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '52' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '56' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -12099,7 +12392,7 @@ GH-95.2 GH-96.1 GH-96.2:static GH-96.3:static GH-97.1 GH-97.2:refuse-only
 GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-117.1:permit-only
-GH-118:gap
+GH-118
 GH-124:static GH-127:gap GH-130:gap
 GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139                  
 GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      

@@ -183,9 +183,10 @@
 #     the rest. The sets differ, which is why one shared list would be wrong:
 #     no-git-push.sh, no-commit-to-main.sh and no-work-on-stale-branch.sh call
 #     cs_normalise, cs_split and cs_git_args; no-pr-decisions.sh calls
-#     cs_normalise, cs_split, cs_gh_args and cs_join, and no cs_git_args at
-#     all; pytest-via-uv-group.sh and alembic-via-uv-group.sh call cs_normalise
-#     and cs_split and neither of the argument readers. Every one of them calls
+#     cs_normalise, cs_split, cs_gh_args, cs_gh_opaque and cs_join, and no
+#     cs_git_args at all; pytest-via-uv-group.sh and alembic-via-uv-group.sh
+#     call cs_normalise and cs_split and neither of the argument readers, nor
+#     cs_gh_opaque. Every one of them calls
 #     cs_tool_input as well, and every Bash hook among them calls cs_within_cap
 #     (#96); append-only-docs.sh calls those two and nothing else, and
 #     append-only-docs-edit.sh only cs_tool_input. cs_within_cap calls cs_join,
@@ -1443,8 +1444,37 @@ cs_within_cap() {  # stdin: a command. Succeeds only if no joined line exceeds t
 
 # Print the arguments of a git subcommand and succeed, or print nothing and fail
 # if this command is not `git <subcommand>`. Global options are skipped,
-# including the two that take a separate value: without that, -C /path ends the
+# including the ones that take a separate value: without that, -C /path ends the
 # match before the subcommand is reached.
+#
+# WHICH GLOBAL OPTIONS TAKE A SEPARATE VALUE is a fixed, documented set, and git
+# rejects an unknown global option itself -- `git --bogus push origin main`
+# exits with `unknown option: --bogus` and pushes nothing -- so git has no
+# counterpart of the gh shape cs_gh_opaque refuses below. It has only the
+# question of whether this list is complete, and #118 found it two short.
+#
+# Measured on git 2.43.0, by running `git <option> <value> version` for every
+# option `git help git` lists under OPTIONS and asking whether the version still
+# printed. Seven do take a separate value; the list below is those seven:
+#
+#   -c  -C  --git-dir  --work-tree  --namespace  --config-env  --attr-source
+#
+# `--config-env` and `--attr-source` are #118's two. Without them
+# `git --config-env x.y=HOME push origin main` and `git --attr-source HEAD push
+# origin main` read as commands whose subcommand is the option's own value, so
+# neither was a push to any of the three hooks that ask, and git ran both.
+#
+# `--exec-path` is the eighth entry and is NOT one of the seven: bare
+# `git --exec-path /usr/bin version` prints `/usr/lib/git-core` and exits, so the
+# option queries rather than consumes. It is kept because dropping it would
+# refuse `git --exec-path push origin main`, which git does not run as a push
+# either -- it prints the path and exits -- and because what it costs while it
+# stays is that same command being permitted, which is a permission to run
+# nothing. The `=` spelling, `--exec-path=/x push origin main`, carries its own
+# value and is refused as a push whichever list this is.
+#
+# The `=` spellings of all eight need no entry: a token carrying its own value
+# is skipped as a valueless option and the subcommand behind it is reached.
 #
 # The exit status is what distinguishes `git push` -- a push whose argument list
 # is empty, and the permitted shape -- from a command that is not a push at all.
@@ -1486,13 +1516,144 @@ cs_git_args() {
       sub(/^git[[:space:]]*/, "", line)
       n = length(line)
       p = 1
-      skipopts("|-c|-C|--git-dir|--work-tree|--namespace|--exec-path|")
+      skipopts("|-c|-C|--git-dir|--work-tree|--namespace|--exec-path|--config-env|--attr-source|")
       line = substr(line, p)
       if (line !~ "^" want "([[:space:]]|$)") next
       sub("^" want "[[:space:]]*", "", line)
       print line
       found = 1
       exit
+    }
+    END { exit(found ? 0 : 1) }'
+}
+
+# THE UNREADABLE GH SHAPE, stated here and nowhere else, so that every hook
+# judging a gh path inherits one answer and none re-derives it. Issue #118.
+#
+# gh resolves a subcommand path at the first non-flag argument, and cobra gives
+# a value to an option it does not know as a boolean. Measured on gh 2.45.0: an
+# unknown LONGHAND is treated as a boolean and eats nothing -- `gh pr --squash
+# view 5` returns `unknown flag: --squash` -- while a SHORTHAND that is unknown
+# or takes a value consumes the next word. `-t` (`--template`) is value-taking
+# at every group level, so `gh pr -t view merge 5` runs the merge, `gh pr -t
+# view view 5` runs a view that then complains `--template` needs `--json`, and
+# `gh release -t list create v1` runs the create. That last one is not a
+# hypothetical: verifying the issue, an agent ran it and it created a real
+# release on this repository.
+#
+# So the word a hook reads as the subcommand is not the word gh runs. The answer
+# is NOT to model which options take a value -- that is gh's own flag definition
+# for each group, a list #97 decided against keeping and one that a new gh
+# release moves. The answer is to refuse the shape: an option standing before a
+# word of a guarded subcommand path, other than the three that name where the
+# command acts rather than what it does, makes the command unreadable, and an
+# unreadable command is refused the way a wrapped one is. The hook does not
+# guess the verb.
+#
+# The three exceptions are -R, --repo and --hostname, in every spelling: the
+# bare form taking its value as the next word, and the forms carrying it --
+# `--repo=o/r`, `--hostname=h`, `-R=o/r`, `-Ro/r`. Nothing else is recognised,
+# `--` and an unknown longhand included, because the point is not to be right
+# about cobra but to stop reading where being right stops being possible.
+#
+# THE TRADE, TAKEN KNOWINGLY. This refuses harmless reads too: `gh pr --json
+# title view 5` is a view, and it is refused. Before the decision, 37,597 past
+# Bash commands from this project's sessions were searched for a pre-subcommand
+# option on a guarded group; the only two were commands written while developing
+# these hooks, `gh pr --limit=1` and `gh issue --bogusflag=1`. No real use is
+# lost, and the correction is one edit -- the option goes after the subcommand,
+# `gh pr view 5 --json title`, which is where it is written anyway.
+# check-hooks.sh pins the refused read as a check, so the trade is evidence and
+# not only this paragraph.
+#
+# The second part of the trade is paid on these files themselves, and it is
+# CLAUDE.md's deliberately-left-open consequence 3 rather than anything new: a
+# quoted multi-line string whose continuation line begins with one of these
+# commands is refused although it is only prose. What #118 adds to that class is
+# the READS -- a line of check-hooks.sh carrying `gh pr -t view view 5` is
+# refused where `gh pr view 5` alone is not. Write such a file with an editor
+# rather than through a shell heredoc.
+#
+# WHAT IT DOES NOT REACH. An option after the whole path belongs to the verb and
+# is untouched. A group no hook guards is untouched at its verb position, so
+# `gh issue -t list list` stays permitted -- the shape is there, and nothing
+# behind it is a decision this repository withholds. The position BEFORE the
+# group is not a group's, so an unreadable option there is refused whatever
+# follows it, `gh --squash view pr merge 5` and `gh --bogus x issue list` alike:
+# with the group eaten, which group it was is exactly what cannot be read. An
+# option standing as the last word of the line consumes nothing and is left
+# alone, which is what keeps `gh --version` and `gh --help` permitted.
+#
+# THAT LAST CLASS IS ARGUED AND NOT MEASURED, and the difference is worth the
+# sentence. The 37,597-command search above asked for a pre-subcommand option on
+# a GUARDED group, so `gh --paginate issue list` and its like were outside what
+# it counted. The argument for refusing them is the one above -- a group that
+# may have been eaten is not a group this can call unguarded -- and it is an
+# argument, where the guarded half has a number. Found by review of this change.
+#
+# A bare `-` is not an option here and is not this rule's: it is one character,
+# so the walk stops on it and reads it as a subcommand that matches nothing,
+# leaving `gh pr - merge 5` permitted. gh does not run a merge there either --
+# `gh pr -` is no subcommand and gh says so -- and the behaviour predates #118,
+# the same length test having always ended the skip. Named so that the next
+# reader finds it written down rather than by trying it.
+CS_GH_OPAQUE_REFUSAL="Blocked: this gh command writes an option before its subcommand, and gh gives an option it does not know as a boolean the next word as a value -- so the subcommand a hook reads here is not the one gh would run. Refusing rather than guessing it. Move the option after the subcommand: gh pr merge 5 --squash, gh pr view 5 --json title. Only -R, --repo and --hostname may stand in front of a subcommand."
+
+# Does an unreadable option stand before a word of this gh subcommand path?
+# Succeeds when it does. The path is given as cs_gh_args takes it, and the
+# positions asked about are that path's own words: `api` is one word, so only
+# the position before it is read, and `gh api -X POST repos/o/r/pulls` is an api
+# call with options of its own rather than an unreadable command.
+#
+# The verb a two-word path names does not change the answer, because the
+# position before the verb is read before the verb is compared. So one verb
+# stands for every verb of its group, and a caller guarding a whole group asks
+# once rather than once per rule.
+cs_gh_opaque() {  # cs_gh_opaque <subcommand path> -- stdin: one command
+  awk -v want="$1" '
+    function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
+    function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
+    # 1 the option takes the next word, 2 it carries its own value, 3 unreadable.
+    # WHICH OPTIONS ARE RECOGNISED IS DECIDED HERE AND NOWHERE ELSE: cs_gh_args
+    # does not classify, it asks this function first and walks what is left.
+    #
+    # It does hold the same three NAMES, in the skip list `|-R|--repo|--hostname|`
+    # it passes its own skipopts, and saying it does not would be the claim this
+    # file exists to stop being made. The two are not the same question -- this
+    # one says which options may stand there at all, that one says which of them
+    # eat the next word -- but they are the same three names, and two lists that
+    # must agree and are written twice are two lists that will disagree.
+    # check-hooks.sh derives both off this file and holds each to the literal
+    # `-R --repo --hostname`, so a name added to one and not the other is red
+    # there rather than found later.
+    function ghopt(t) {
+      if (t == "-R" || t == "--repo" || t == "--hostname") return 1
+      if (t ~ /^--repo=/ || t ~ /^--hostname=/ || t ~ /^-R./) return 2
+      return 3
+    }
+    BEGIN { found = 0; nparts = split(want, part, /[[:space:]]+/) }
+    {
+      line = $0
+      if (line !~ /^gh([[:space:]]|$)/) next
+      sub(/^gh[[:space:]]*/, "", line)
+      for (i = 1; i <= nparts; i++) {
+        n = length(line)
+        p = 1
+        while (1) {
+          q = tokend(p)
+          # A token with no blank behind it is the last word of the line and
+          # consumes nothing, which is why `gh --version` is not unreadable.
+          if (q > n || q - p < 2 || substr(line, p, 1) != "-") break
+          k = ghopt(substr(line, p, q - p))
+          if (k == 3) { found = 1; exit }
+          p = skipblank(q)
+          if (k == 1) { q = tokend(p); if (q > p && q <= n) p = skipblank(q) }
+        }
+        line = substr(line, p)
+        if (line !~ "^" part[i] "([[:space:]]|$)") break
+        line = substr(line, length(part[i]) + 1)
+        sub(/^[[:space:]]*/, "", line)
+      }
     }
     END { exit(found ? 0 : 1) }'
 }
@@ -1527,6 +1688,45 @@ cs_git_args() {
 # testing the printed text instead would have to re-derive the rule, which is
 # the habit this file exists to end.
 #
+# THE THIRD OUTCOME, #118. Two outcomes were "is this path", which prints the
+# arguments and succeeds, and "is not", which prints nothing and fails. There is
+# now a third, "cannot tell": the command carries an option that THE UNREADABLE
+# GH SHAPE above refuses, so which subcommand gh would run cannot be read out of
+# it. It is signalled as success with no arguments, which is to say it is
+# spelled like the outcome a caller refuses on, and NOT like the outcome a
+# caller skips past. A caller writing the ordinary `ARGS=$(cs_gh_args ...) ||
+# continue` and asking nothing further therefore refuses an unreadable command
+# rather than permitting it, which is the one property this signalling was
+# chosen for. check-hooks.sh drives that caller and pins it.
+#
+# It is spelled that way and not as a status of its own because a status is
+# something `|| continue` collapses into "is not", and "is not" permits. That is
+# the direction every defect in the list at the top of this file went.
+#
+# THE ONE CALLER THIS IS NOT ENOUGH FOR, named rather than left to be found.
+# release_is_read() in no-pr-decisions.sh is the single place where SUCCESS
+# means permit -- it asks whether a command is one of five reads -- so there
+# "cannot tell" spelled as success would grant the read. That caller asks
+# cs_gh_opaque itself, first, and says so. A caller of that shape is the shape
+# to look for when adding one.
+#
+# It asks cs_gh_opaque rather than holding a second copy of the classification,
+# for the reason the top of this file gives: this question answered twice is
+# this question answered differently.
+#
+# IF THAT FUNCTION IS NOT LOADED this one reads every path as "cannot tell", so
+# every rule that refuses on a match refuses -- loud, and in the direction #84
+# says a missing `cs_*` must fail. That is not the whole of it, and the first
+# draft of this paragraph said it was. A rule whose match GRANTS something is
+# the other half, and there the same default is silent and permitting: a caller
+# that asks cs_gh_opaque itself, gets 127 from a name that is not there, and
+# reads only "not opaque" goes on to be told "cannot tell" as success and grants
+# what it was withholding. release_is_read in no-pr-decisions.sh is that caller
+# and reads the status as 1-or-nothing for this reason. Requiring the name in
+# each consumer's load guard is what closes it; this default cannot, because a
+# default that refuses for one polarity permits for the other. Found by review
+# of this change, not by the suite.
+#
 # Like cs_git_args, it answers about the first match and stops, which is the
 # fifth defect in the list at the top of this file if a caller hands it a whole
 # command list: the second command is never examined. So a caller feeds it one
@@ -1549,7 +1749,14 @@ cs_git_args() {
 # narrowing that fixed that cut at a newline, so a continuation made every
 # command look bare.
 cs_gh_args() {
-  awk -v want="$1" '
+  local CS_GH_CMD
+  CS_GH_CMD=$(cat)
+  # THE THIRD OUTCOME, above. Read the command once and ask the unreadable-shape
+  # question before the path question, because past an unreadable option there
+  # is no path question to answer.
+  if ! command -v cs_gh_opaque >/dev/null 2>&1; then return 0; fi
+  if printf '%s\n' "$CS_GH_CMD" | cs_gh_opaque "$1"; then return 0; fi
+  printf '%s\n' "$CS_GH_CMD" | awk -v want="$1" '
     # The global options are skipped by moving p past them rather than cutting
     # the line down after each one: every cut copied the rest of the line, so
     # a long run of options was quadratic. Issue #96. What is skipped is what
@@ -1557,9 +1764,20 @@ cs_gh_args() {
     # of two or more characters that opens with a dash and has blanks after it,
     # and for the options named in VALUED the value token behind it too, when
     # that value has blanks after it in turn. The same two helpers stand in
-    # cs_split and in cs_git_args: an awk program cannot source
+    # cs_split, in cs_git_args and in cs_gh_opaque: an awk program cannot source
     # another, and a shared definition passed in as a variable would be one
     # more thing a load could leave empty.
+    #
+    # WHAT REACHES THIS SKIP SINCE #118, which is why "any token that opens
+    # with a dash" is still the right reading of it here. cs_gh_opaque has
+    # already refused every option that is not -R, --repo or --hostname in one
+    # of their four spellings, so the only tokens this can meet are those --
+    # the two below that take the next word, and the `=` and attached forms
+    # that carry their own. This skip is therefore not a looser copy of that
+    # classification; it is the walk that follows it, and the list below answers
+    # the narrower question of which of the three eat the next word. The two
+    # lists name the same three, which is a thing that has to be held rather
+    # than asserted: see ghopt in cs_gh_opaque, and the check derived off it.
     function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
     function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
     function skipopts(valued,    q, r) {
