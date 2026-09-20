@@ -154,6 +154,15 @@
 # words a variable that both halves read, and moved the four copies of the
 # wrapper expression into the one CS_WRAPPER_RE below. Where that anchor stops,
 # what it cannot reach, and the soft spot it keeps are argued there.
+#
+# #106's invariance families found it again one list over, in #134. That anchor
+# still carried its own answer to where a command position is -- a separator
+# class with no `)` and no control words at all -- so `if true; then bash -c
+# "git push --all origin"; fi` was permitted by every boundary hook while the
+# same push unwrapped was refused. It is PR #35's control-word defect, fixed for
+# the unwrapped command and never asked of the wrapped one. The separators and
+# the control words are variables now, CS_SEPARATORS and CS_CONTROL_WORDS, read
+# by both halves.
 
 # THE LOAD CONTRACT, which is about this file's absence rather than its
 # contents, and is written here because a rename made here is what breaks it.
@@ -715,6 +724,54 @@ CS_WRAP_OPTION_WORDS='env|command|xargs|nohup|nice|time|stdbuf|ionice|sudo|doas|
 CS_WRAP_OPERAND_WORDS='timeout|flock'
 CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 
+# Where a command position is, as two lists that both halves of this library
+# read: the characters cs_split cuts on, and the shell's own words it strips from
+# the head of a fragment. Issue #134.
+#
+# They were written once each, inside cs_split, and CS_WRAPPER_RE below answered
+# the same question a second time with a class of its own -- start of line and
+# `;` `&` `|` `(` and a backtick. It had no `)`, and no control words at all, so
+# a wrapper after one was at a command position for every rule that reads
+# cs_split and at none for the rule that refuses wrappers. Measured at
+# origin/dev-05 33f7129, in every boundary hook:
+#
+#   BLOCK   if true; then git push --all origin; fi            cs_split strips then
+#   ALLOW   if true; then bash -c "git push --all origin"; fi  the anchor did not
+#   ALLOW   case x in x) bash -c "gh pr merge 5";; esac        nor did it know )
+#
+# The same shape as the prefix words above, one list over, and the same answer:
+# a variable, read by cs_split through awk's -v and interpolated by the anchor,
+# so that a word added to one is added to both. `in` is not a control word here
+# and is left out on purpose: it introduces the words of a for loop or a case,
+# never a command, and cs_split has never stripped it.
+#
+# The separators are a string of characters and not a regular expression, since
+# cs_split walks them with index() and the anchor wraps them in a bracket
+# expression. Every one of them is literal inside brackets, which is what lets
+# one spelling serve both, and check-hooks.sh asks that of the list rather than
+# leaving it to this sentence: no `-`, which would make a range of its
+# neighbours in silence, and no `]`, `^`, backslash or `[`.
+#
+# WHAT THAT PIN IS NOW FOR, and it is not what the first version of this
+# paragraph said. That version was written before the load-time validity guard
+# below cs_split existed, and it argued from the damage a malformed list did
+# then: `[.` opens a collating element, the anchor does not compile, grep exits
+# 2, and every consumer's `if grep -qE ... &&` read a 2 as "no wrapper" and
+# PERMITTED -- 289 checks red with 274 of them a BLOCK turned ALLOW. The guard
+# closed that, and the paragraph outlived it. Re-measured with the guard in
+# place, the same mutation is 1564 checks red, **none** of them permitting and
+# 1444 refusing: the list is withdrawn and every consumer refuses everything.
+# Review of PR #172 found the sentence still claiming the old direction.
+#
+# So emptiness and validity are BOTH handled below cs_split now, and what is
+# asked here is the third thing neither reaches: a list that is well formed and
+# means the wrong thing. `-` between two characters is a valid range -- the
+# class compiles, both load-time guards pass it, and digits, uppercase and `=?@_/`
+# quietly become separators. No compile test can see that, which is why it is a
+# membership pin and why the pin is not redundant with the guard.
+CS_SEPARATORS=';&|()`'
+CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|select|function|coproc'
+
 # Is there a shell wrapper at a command position? Derived once here and grepped
 # by all four hooks, which each carried their own copy of it before #79 -- four
 # copies of one expression, in the file whose header says that is the defect.
@@ -726,10 +783,15 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # wrappers, so the payload would go with the body. That is why this is an
 # anchored regular expression rather than a pass over cs_split's output.
 #
-# Which is also why the anchor has to say what a command position is a second
-# time, and what it now admits between the position and the wrapper word: an
-# environment assignment, as it always did, and a prefix word from the list
-# above with its options and up to three further tokens.
+# Which is also why the anchor has to find a command position for itself, and
+# what it admits between the position and the wrapper word. The position is
+# CS_SEPARATORS or the start of a line, and what may stand after it, in any
+# order and any number, is what cs_split strips from the head of a fragment: an
+# environment assignment, a control word from CS_CONTROL_WORDS (#134), and a
+# prefix word from the list above with its options and up to three further
+# tokens. It finds the position for itself; it no longer says what one is a
+# second time. Until #134 it did, with a class of its own that lacked `)` and
+# every control word, and that is argued above CS_SEPARATORS.
 #
 # More than one, because the operand a wrapper takes is not always one token.
 # `timeout -s KILL 30 bash -c` leaves KILL and 30 once the option is consumed,
@@ -767,6 +829,29 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # can already name. Everything past that is out of reach, in the manner of the
 # soft spot at no-git-push.sh:153, and not a claim the set is exhaustive.
 #
+# AND A NARROWER GAP THAN THAT ONE, which is #175 and is not the same family.
+# The paragraph above is about words this library cannot reach. This is the
+# anchor's own word, `bash`, with an option spelling it declines to admit: the
+# tail below wants an option token that BEGINS `-c` and a heredoc operator with
+# whitespace in front of it, so
+#
+#   BLOCK   bash -c 'gh pr merge 5'
+#   BLOCK   bash -cx 'gh pr merge 5'    only because -cx begins with -c
+#   ALLOW   bash -lc 'gh pr merge 5'
+#   ALLOW   sh -ec 'gh pr merge 5'
+#   ALLOW   bash --login -c 'gh pr merge 5'
+#   ALLOW   bash<<EOF                    the blank is required and is not there
+#
+# cs_split does not rescue these either: `bash` is not a prefix word, so the
+# payload stays quoted and no rule sees the command inside it. #134 answered
+# WHERE a command position is, once, for both halves; WHICH word is a wrapper is
+# the other question in this expression and #134 did not touch it. The verdicts
+# above are pinned in check-hooks.sh under GH-175, at the verdict they have and
+# not the one they should have, so the fix turns them red. Why it was not fixed
+# with #134: widening the option class falls on prose too, since this rule reads
+# raw text, and that cost has to be measured before it is taken -- which is the
+# work, not a line of it.
+#
 # ONE SOFT SPOT, named rather than closed, and it is #68's complaint reaching
 # this rule. The separator class below carries its own idea of what ends a
 # command and knows nothing about quoting, so a verdict still turns on a sed
@@ -797,6 +882,14 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # Widening the anchor widens this with it -- `sed -i 's|sudo sh -c git push|X|'
 # f.sh` was ALLOW and is now BLOCK -- named here so that it is a known cost
 # rather than a discovery. Both spellings of each pair above are checks.
+#
+# #134 widened it again, the same way: a control word or a `)` in prose after a
+# quote-blind separator now stands where a command would, so `echo "x; then
+# bash -c y" && gh pr view 5` was ALLOW and is now BLOCK. So is a regex
+# alternation closing onto a wrapper word, `grep -nE "(ba|z)sh -c" f && gh pr
+# view 5`, since a `)` needs no blank after it; and so is a pull request comment
+# quoting the shape #134 fixed, `gh pr comment 5 --body "if true; then bash -c
+# y; fi"`. The same cost, in the same direction, and each is a check.
 #
 # A token that may stand between the prefix word and the wrapper word: any word
 # at all, which is cs_split's tail token exactly -- `^[^[:space:]]+[[:space:]]+`
@@ -869,18 +962,24 @@ CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"
 # expression rather than from a measurement of it, which is the habit this file
 # exists to end. Both spellings are pinned now, the one that matches and the one
 # that does not, so that neither can move in silence.
-CS_WORD_SPELLING="([\\\\\"']|[^[:space:];&|()\`\"']*/)*"
+#
+# "Cannot cross a separator" reads CS_SEPARATORS. #117 and #134 landed on
+# dev-05 separately, and #117 wrote the characters out here as its own copy;
+# the merge of the two made it read the list, so the separators are still spelled
+# once.
+CS_WORD_SPELLING="([\\\\\"']|[^[:space:]$CS_SEPARATORS\"']*/)*"
 # Built unconditionally. What happens when the list it interpolates is empty is
 # not decided here: it is decided once, after cs_split, where the list's one
 # reader is withdrawn so that every consumer's load guard refuses. See
 # THE WORD LIST IS PART OF THE LOAD, below cs_split.
-CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|$CS_WORD_SPELLING($CS_WRAP_WORDS)[\\\\\"']*[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
+CS_WRAPPER_RE="(^[[:space:]]*|[$CS_SEPARATORS][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_CONTROL_WORDS)[[:space:]]+|$CS_WORD_SPELLING($CS_WRAP_WORDS)[\\\\\"']*[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
 
 # Print one command per line, with anything that precedes the command word
 # removed, so a caller matches on ^ and never has to describe a command
 # position again.
 #
-# Separators are ; && || | ( ) and a backtick. The backtick is there because
+# Separators are CS_SEPARATORS, the two-character && and || among them because
+# each is a doubled one of its characters. The backtick is there because
 # $( ) was closed by the paren and its twin was not -- the same asymmetry
 # GIT_DIR= had against --git-dir. Since issue #68 a separator inside quotes is
 # not one, which is where the exceptions and the fallbacks are; the comment
@@ -896,6 +995,7 @@ CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:s
 # still left `then` standing in front of the command word, so the anchor never
 # saw a push at all; `do`, `else`, `elif`, `{` and `!` each did the same. They
 # are removed rather than matched around, so every caller keeps anchoring at ^.
+# Which words they are is CS_CONTROL_WORDS, and the wrapper anchor reads it too.
 #
 # The trade that used to be recorded here -- a quoted string holding a separator
 # and then a control word in front of a refused command read as that command, so
@@ -911,7 +1011,7 @@ CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:s
 # file has taken throughout -- a blocked comment is visible and one edit away, a
 # silently permitted push is neither.
 cs_split() {
-  awk '
+  awk -v separators="$CS_SEPARATORS" '
     # The separator pass, quote-aware. Issue #68: it was a character class with
     # no idea what a quote is, so a sed substitution written with | as its
     # delimiter cut into four fragments, the second of which is a push that
@@ -1006,7 +1106,7 @@ cs_split() {
         }
         if (c == "&" && substr(line, i + 1, 1) == "&") { at[++ncut] = i; width[ncut] = 2; i += 2; continue }
         if (c == "|" && substr(line, i + 1, 1) == "|") { at[++ncut] = i; width[ncut] = 2; i += 2; continue }
-        if (index(";&|()`", c) > 0) { at[++ncut] = i; width[ncut] = 1; i++; continue }
+        if (index(separators, c) > 0) { at[++ncut] = i; width[ncut] = 1; i++; continue }
         i++
       }
     }
@@ -1035,7 +1135,8 @@ cs_split() {
       emit($0)
     }' \
   | awk -v wrapwords="$CS_WRAP_OPTION_WORDS" \
-        -v operandwords="$CS_WRAP_OPERAND_WORDS" '
+        -v operandwords="$CS_WRAP_OPERAND_WORDS" \
+        -v controlwords="$CS_CONTROL_WORDS" '
     # Each strip below moves p past a token rather than cutting the line down to
     # what follows it. They were substr calls on the line, and every one copied
     # the rest of it, so a long run of prefixes was quadratic: 512 KB of sudo
@@ -1184,8 +1285,11 @@ cs_split() {
           p = skipblank(q)
           changed = 1
         }
+        # The control words arrive as a variable for the reason the prefix
+        # words below do: the wrapper anchor admits the same list, and a second
+        # copy of it there was #134. See CS_CONTROL_WORDS.
         q = tokend(p)
-        if (substr(line, p, q - p) ~ /^([{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|select|function|coproc)$/) {
+        if (substr(line, p, q - p) ~ ("^(" controlwords ")$")) {
           p = skipblank(q)
           changed = 1
         }
@@ -1321,6 +1425,14 @@ cs_split() {
 # from being one more copy of a question the contract already asks in each of
 # them.
 #
+# "Only reader" is loose, and #134 made it looser, so the premise the argument
+# needs is written out instead. CS_WRAPPER_RE reads the prefix words through
+# CS_WRAP_WORDS and, since #134, CS_SEPARATORS and CS_CONTROL_WORDS as well, and
+# it is not withdrawn. What makes that harmless is that every hook that reads
+# the anchor -- the four boundary hooks -- also calls cs_split and requires it,
+# so withdrawing cs_split refuses there before the anchor's answer is asked. A
+# consumer that read the anchor and not cs_split would reopen this.
+#
 # It must stand AFTER cs_split's definition, since `unset -f` on a function not
 # yet defined does nothing and the definition then restores it. That is a
 # position a later edit can break silently, so check-hooks.sh asserts cs_split
@@ -1329,7 +1441,138 @@ cs_split() {
 #
 # The two halves and not the union: with both empty CS_WRAP_WORDS is the string
 # "|", which is not empty.
-if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ]; then
+#
+# And the two command-position lists since #134, which cs_split reads the same
+# way and which fail worse. With CS_CONTROL_WORDS empty and cs_split left
+# running, measured: `then git push` keeps `then` in front of the command word,
+# and a blank line never returns -- the strip matches the empty token at its end
+# and does not advance, and a hook the harness kills for time is a hook that
+# permitted. With CS_SEPARATORS empty nothing is cut, so a second command on a
+# line is never at ^.
+#
+# AND VALID, WHICH IS NOT THE SAME AS NON-EMPTY, and is the half the four tests
+# above do not reach and the half that fails open. Both lists are interpolated
+# into a regular expression, so a list that is malformed rather than absent
+# builds an expression that does not work, and neither reader says so. Found by
+# review of PR #172, each measured end to end:
+#
+#   CS_SEPARATORS holding `[.` or `[=` opens a collating element, so the anchor
+#   does not compile and `grep -qE` exits 2. Every consumer's guard reads
+#   `if grep -qE "$CS_WRAPPER_RE" && ...`, and a 2 is not a 0, so the whole
+#   wrapper rule is skipped: a wrapped `gh pr merge 5` went from BLOCK to ALLOW
+#   in no-pr-decisions.sh while the unwrapped command still blocked. A silent
+#   and total fail-open.
+#
+#   CS_CONTROL_WORDS holding a trailing `|` -- the ordinary slip when appending
+#   a word to a list #134 made the edit point for both halves -- makes the
+#   alternation match the empty string. cs_split's strip advances past whatever
+#   it matched, so it matches nothing, advances nothing, and the loop does not
+#   end: `printf 'a\n\nb\n' | cs_split` never returned, against exit 0 intact.
+#   A hook the harness kills for time has permitted, which the paragraph above
+#   says in as many words and did not then test for.
+#
+# Each list is asked the question BY THE ENGINE THAT WILL ASK IT -- the anchor
+# compiled by grep, the control words matched by awk -- and a failure routes to
+# the same withdrawal an empty list gets. That is why this is two processes and
+# not one pattern of this file's own: what counts as a valid bracket expression
+# is grep's answer, and what the strip will match is awk's, and writing either
+# down here would be the second answer to a question a reader already answers,
+# which is the defect class this file exists to end. The empty line rather than
+# a survey of spellings for the same reason: matching the empty string IS the
+# property that hangs the strip, so a leading `|`, a `||` and an empty
+# alternative anywhere are caught by the same test as a trailing one.
+#
+# What it does NOT reach, named rather than implied: a list that compiles and
+# means something else. `-` between two characters is a valid range, so the
+# class still builds and this guard passes it; that one is caught in
+# check-hooks.sh, by asking the lists what they hold. Validity here, membership
+# there, and neither is the other.
+#
+# The cost, measured on this machine over 60 loads each: 2.6 ms to source the
+# library before, 5.6 ms after, so about 3 ms added to a hook invocation for two
+# process spawns. Paid once per hook run, against a rule whose failure is
+# silent and total.
+#
+# WHICH LIST, said here and once. Every consumer's guard refuses with "could not
+# load lib/command-scan.sh", which is true of a missing file and of a renamed
+# function and is a misdirection here: the library loaded, every function but
+# cs_split is defined, and what failed is a list. A reader who appended a word
+# with a trailing `|` would be sent to look for a file that is present and
+# correct. Naming it in the nine guards would put the answer in nine places, and
+# they are right about their own case; the library knows which list it withdrew
+# for, so the library says so, on the same stderr the refusal uses and only on
+# the path where something is actually wrong. Review of PR #172.
+#
+# FOR EVERY TRIGGER AND NOT ONE OF THEM. The first version of this named only
+# what the two validity guards found, so the four emptiness withdrawals below
+# went out silent -- the claim in this paragraph was wider than the code under
+# it, which is the third time in this pull request a sentence has been. Each
+# trigger sets CS_INVALID_LIST now, and check-hooks.sh asks it of every fixture
+# rather than of the two it used to.
+#
+# THREE STATUSES AND NOT TWO, which the first version of this got wrong in the
+# commit that added it. `||` reads every non-zero awk status as the hang case,
+# and awk has three: 1 is the `exit 1` below, taken when the list matches an
+# empty line; 2 is awk refusing to compile the dynamic regex at all; 127 is awk
+# not being on PATH. Measured -- `|[a`, `a(b` and `x{2,1}` each exit 2, and an
+# empty PATH exits 127 -- and each was reported as a list that hangs the strip,
+# which is the misdirection the message exists to end. Review of PR #172.
+#
+# The grep branch names the lists CS_WRAPPER_RE is built from rather than two of
+# them. It named CS_SEPARATORS and CS_WRAP_WORDS, and a control-word list that
+# would not compile sent the reader to inspect two lists that were both correct
+# -- the one list this file calls the likely edit point being the one it did not
+# name. The enumeration is held to the anchor's own definition by check-hooks.sh,
+# so a list added there and not here is red rather than silent.
+CS_LISTS_VALID=1
+CS_INVALID_LIST=
+# EMPTINESS IS A WITHDRAWAL TOO, and naming only the validity ones left three
+# of the five triggers silent -- a maintainer who deleted the last prefix word
+# from CS_WRAP_OPTION_WORDS, or emptied CS_SEPARATORS, got every Bash hook
+# refusing every command with "could not load lib/command-scan.sh" and nothing
+# else, which is word for word the failure the paragraph above says it ended.
+# Measured before this: emptying CS_CONTROL_WORDS printed a line, emptying any
+# of the other three printed none. The block said "the library knows which list
+# it withdrew for" and knew it for one trigger of five. Review of PR #172.
+#
+# Spelled out rather than looped over with eval, which is the only way a shell
+# reads a variable whose name it is handed, and is not worth having in a file
+# every hook sources. Four lines, the same four the guard below tests, in the
+# same order.
+[ -n "$CS_WRAP_OPTION_WORDS" ] \
+  || CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_WRAP_OPTION_WORDS is empty"
+[ -n "$CS_WRAP_OPERAND_WORDS" ] \
+  || CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_WRAP_OPERAND_WORDS is empty"
+[ -n "$CS_CONTROL_WORDS" ] \
+  || CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_CONTROL_WORDS is empty"
+[ -n "$CS_SEPARATORS" ] \
+  || CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_SEPARATORS is empty"
+printf '' | grep -qE "$CS_WRAPPER_RE" 2>/dev/null
+[ $? -le 1 ] || { CS_LISTS_VALID=0
+  CS_INVALID_LIST="CS_WRAPPER_RE does not compile, so one of the lists it is built from holds something that is not literal there: CS_SEPARATORS, CS_CONTROL_WORDS, CS_WORD_SPELLING, CS_WRAP_TOKEN or CS_WRAP_WORDS"; }
+printf '\n' | awk -v w="$CS_CONTROL_WORDS" \
+  '{ if ($0 ~ ("^(" w ")$")) exit 1 }' 2>/dev/null
+CS_AWK_STATUS=$?
+case $CS_AWK_STATUS in
+  0) ;;
+  1) CS_LISTS_VALID=0
+     CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_CONTROL_WORDS matches the empty string, which makes the strip advance by nothing and never return" ;;
+  *) CS_LISTS_VALID=0
+     CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }awk exited $CS_AWK_STATUS when asked whether CS_CONTROL_WORDS matches an empty line, so that question went unanswered: at 2 the list does not compile as a regular expression, and at 127 awk is not on PATH" ;;
+esac
+unset CS_AWK_STATUS
+if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ] \
+   || [ -z "$CS_CONTROL_WORDS" ] || [ -z "$CS_SEPARATORS" ] \
+   || [ "$CS_LISTS_VALID" -ne 1 ]; then
+  # "every consumer that needs it", and not "every consumer". append-only-docs.sh
+  # and append-only-docs-edit.sh source this library for cs_tool_input and
+  # cs_within_cap and never call cs_split, so their load guards do not require it
+  # and they go on permitting -- measured, append-only-docs-edit.sh exits 0 with
+  # a broken control-word list. The first version of this line claimed a refusal
+  # on the one path where there is none, printed on every Edit and Write. Review
+  # of PR #172.
+  [ -z "$CS_INVALID_LIST" ] \
+    || echo "lib/command-scan.sh: $CS_INVALID_LIST. cs_split is withdrawn, so every consumer that requires it refuses; the two document hooks need only cs_tool_input and cs_within_cap and are unaffected." >&2
   unset -f cs_split
 fi
 
