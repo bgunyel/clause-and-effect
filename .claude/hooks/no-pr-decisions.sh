@@ -791,6 +791,18 @@ gql_bases() {
 # both are CLAUDE.md's left-open item 2 in a narrower place. Quoted or bare, an
 # argument's text does not say whether a word is an endpoint or prose.
 #
+# AND ONE PERMISSION IT LEAVES, which is the same sentence read the other way.
+# The whitespace clause is written for a field value and fires on a POSITIONAL
+# too, so `gh api -X PUT "repos/o/r/pulls/5/merge "` loses its endpoint and is
+# permitted. Every spelling it drops is one GitHub will not serve -- measured,
+# a trailing or leading space 404s where the bare path resolves, and a literal
+# space inside a query string produces no request at all -- and the one served
+# spelling, `%20`, holds no whitespace and is read. Found by rev-agent-130's
+# round 1. Leaving a whitespace-holding span RAW was the suggested alternative
+# and was declined on its numbers: measured, it turns four of #130's ten rows
+# back into refusals, every one whose body names a path in prose, which is the
+# whole of what this issue fixes traded for two spellings that 404.
+#
 # A span that is never closed on this line is left exactly as written, neither
 # unquoted nor dropped, which is what base_args' sed already does with one and
 # is the refusing direction. cs_split hands one line of a command, so that span
@@ -1173,12 +1185,50 @@ while IFS= read -r CMD; do
   esac
   # THE GRAPHQL GATE IS STRUCTURAL, and is asked of every gh api call on the
   # line, read or write, because the three rules it gates are asked of the line.
-  # A bare `graphql` token in an api call's own arguments is gh's one spelling
-  # of that endpoint, and endpoint_args has already turned `"graphql"` and
-  # `'graphql'` into it. A textual grep for the word would have left
-  # `-f body="the gh api graphql endpoint mergePullRequest"` refused, which is
-  # the defect this fix is about with one more word in it.
-  if printf '%s\n' "$ENDPOINT" | grep -qE '(^|[[:space:]])graphql([[:space:]]|$)'; then
+  # It tests this command's own endpoint TOKEN, which endpoint_args has already
+  # unquoted, so `"graphql"`, `'graphql'`, `$'graphql'`, `graph"ql"` and
+  # `'graph'ql` all reach it as the token they spell. A textual grep for the
+  # word would have left `-f body="the gh api graphql endpoint reaches
+  # mergePullRequest"` refused, which is the defect this fix is about with one
+  # more word in it.
+  #
+  # THREE SPELLINGS OF THE ENDPOINT, NOT ONE, and the first version of this
+  # knew one. Its comment said "a bare `graphql` token ... is gh's one spelling
+  # of that endpoint", and the code was exactly as wide as that sentence, which
+  # was false against the tool. gh resolves a bare path, a leading-slash path
+  # and a full URL to the same request, so `gh api /graphql` and
+  # `gh api https://api.github.com/graphql` execute a real GraphQL operation and
+  # neither carried a whitespace-anchored `graphql`. Twelve shapes were refused
+  # at 7bea85f and permitted here, and the gate closing switches off THREE rules
+  # at once -- the mutation names, updatePullRequest + state, and gql_bases with
+  # its createPullRequest arm. Found by review of this branch; the suite was
+  # green with all twelve permitted.
+  #
+  # WHAT WAS MEASURED, against the live API and with `rate_limit` standing in
+  # for `graphql` so that nothing asked of it sent a mutation. Served, and
+  # matched here: the bare token; a leading slash; and any scheme://host/graphql,
+  # the scheme compared case-insensitively, `HTTPS://` and `http://` both
+  # resolving. Not served, and deliberately not matched: `graphql/` (404),
+  # `//graphql` (404) and `repos/o/r/graphql` (no such endpoint) -- each was
+  # refused at 7bea85f only because the mutation-name rule read the whole line
+  # with no gate at all, so permitting them is this gate working rather than a
+  # spelling lost. `/GRAPHQL` is excluded too: GitHub's paths are
+  # case-sensitive and it answers 502 rather than GraphQL.
+  #
+  # WHAT IS NOT MATCHED AND IS NAMED RATHER THAN FORGOTTEN: GitHub Enterprise
+  # Server puts the endpoint at `/api/graphql`, so a full URL to a GHES host
+  # does not open the gate. This repository is on github.com and `gh api
+  # graphql` against a GHES host is spelled with `--hostname` and the bare
+  # token, which is matched. The stopping rule at the head of this file is what
+  # decides that: the list stops growing when the spellings stop being ones an
+  # agent here would plausibly write.
+  #
+  # The host part is deliberately unconstrained. Checking it would be a second
+  # list to keep current -- api.github.com, a GHES host, a proxy -- and the
+  # question this gate asks is whether the command names the graphql endpoint,
+  # not whose graphql endpoint it is.
+  if printf '%s\n' "$ENDPOINT" \
+     | grep -qE '(^|[[:space:]])(graphql|/graphql|[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]/]+/graphql)([[:space:]]|$)'; then
     API_GRAPHQL=1
   fi
   gh_api_is_write "$CMD" || continue
@@ -1297,9 +1347,19 @@ if [ -n "$API_WRITE" ]; then
   # asked in the loop above, of the writing command's own arguments with
   # endpoint_args run over them. A read of /releases beside an unrelated issue
   # write is a read; an issue body naming /releases is prose. What is refused
-  # instead, and knowingly, is `-f "body=/releases"` -- the quote before the
-  # field name makes it a whole word, so it is unquoted and read. See
-  # endpoint_args.
+  # instead, and knowingly, is `-f "body=/releases"` and `-f body=/releases` --
+  # a field value this reader cannot tell from a positional. See endpoint_args.
+  #
+  # AN ENDPOINT SPELLED THROUGH A VARIABLE IS PERMITTED, here as in every rule
+  # in this loop, and that is not a rule this change wrote. `gh api $EP -X PUT`
+  # is ALLOW at 7bea85f too once the assignment is off the line; what refused
+  # `EP=repos/o/r/pulls/5/merge; gh api $EP -X PUT` there was the line-wide read
+  # finding the ASSIGNMENT's text, which is row 4 of #130's table in another
+  # costume. It is also CLAUDE.md's left-open item 6 one argument to the right.
+  # The base rule answers the same question the other way, deliberately -- a
+  # base is refused when it is NAMED and unreadable, and naming a destination is
+  # the act guarded -- and that the two answers were nowhere written down is
+  # #198's. Raised by rev-agent-130's round 1.
   if [ -n "$API_RELEASE" ]; then
     echo "Blocked: $RELEASE_WRITE, reached through gh api no less than through gh release. Reading one is permitted: a gh api request to /releases that does not write, or gh release followed by one of: $RELEASE_READ_VERBS." >&2
     exit 2

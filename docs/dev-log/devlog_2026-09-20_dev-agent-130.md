@@ -224,3 +224,98 @@ implying otherwise is how a suite comes to claim more than it checks.
 - `$'…'` escapes are taken as quoting and not decoded, so
   `$'\x2frepos\x2f…'` is permitted. A gap this fix neither opened nor closed —
   the old `$SCAN`-wide grep never matched an escape spelling either.
+
+---
+
+## 2026-09-20 22:25 +03 — #196 review round 1: the gate knew one spelling of three
+
+rev-agent-130's round 1 on PR #196, against head `164a5ab`. The reviewer
+confirmed the suite green (5354 `ok` rows against 5294 at `7bea85f`) and
+re-measured all ten rows of #130's table, the three controls and the four
+must-survive refusals before looking for anything, and disputed neither the
+per-command move nor `endpoint_args`. Three classes came back, two of them
+gating. Every claim was reproduced here before anything was changed; all three
+reproduced exactly.
+
+### The gate was as wide as its own sentence, and the sentence was false
+
+`no-pr-decisions.sh` said, in the comment above the gate: *"A bare `graphql`
+token in an api call's own arguments is gh's one spelling of that endpoint."*
+It is not. `gh` resolves a bare path, a leading-slash path and a full URL to the
+same request, so `gh api /graphql` and `gh api https://api.github.com/graphql`
+both execute a real GraphQL operation and neither carries a whitespace-anchored
+`graphql`. Twelve shapes were BLOCK at `7bea85f` and ALLOW at `164a5ab`, and the
+gate closing switches off **three** rules at once — the mutation names,
+`updatePullRequest` + state, and `gql_bases` with its `createPullRequest` arm.
+
+The reviewer verified the three spellings against the live API. The assistant
+verified the mechanism rather than taking that on trust, and did it without
+sending a mutation: `rate_limit`, `/rate_limit` and
+`https://api.github.com/rate_limit` all return the same body, `rate_limit/` and
+`//rate_limit` 404. Two spellings the review did not name were measured and are
+now matched: `http://` resolves as `https://` does, and `HTTPS://` uppercase
+resolves too, so the scheme is compared case-insensitively. `/GRAPHQL` is
+excluded — GitHub's paths are case-sensitive — and GHES's `/api/graphql` is
+named in the comment and deliberately not matched.
+
+The sweep the class asks for is every endpoint test in the file, five of them.
+Four match a substring of the path and carry every spelling for free; each was
+measured in all four spellings before and after the widening, sixteen
+measurements, none moved. They are pinned now in the two spellings that had no
+row, so "measured clean" is a check rather than a sentence in a pull request.
+
+### An endpoint in a variable was never a rule, and the measurement says so
+
+Class 2 reported four BLOCK→ALLOW transitions on `EP=…; gh api $EP` shapes and
+asked for a decision on the record. The decision is that these were never a
+rule, and the control is one command: with the assignment taken **off** the
+line, `gh api $EP -X PUT` and `gh api -X POST $EP -f tag_name=v1` are ALLOW at
+`7bea85f` too. What refused the four was the line-wide read finding the text of
+the *assignment* — row 4 of #130's table in another costume, a string belonging
+to one command judged as another's endpoint.
+
+The reviewer is right that the base rule answers the same question the other
+way and that the file says so nowhere. They are asked different questions: a
+base is refused when it is *named* and unreadable, and naming a destination is
+the act guarded, so the correction is one word; an unreadable endpoint names no
+act at all, and refusing it refuses every `gh api` write whose endpoint is a
+variable — #130's own defect with a different trigger. CLAUDE.md's left-open
+item 6 settles the identical question one word to the left, measured against
+75,346 commands. The asymmetry is deliberate; that it was undocumented is the
+finding, and it is filed as #198 with three ways to close it and a
+recommendation. Four verdicts are pinned as accepted, with the no-assignment
+control beside them so the argument is checkable and not an excuse.
+
+### A suggested alternative that would have cost four of the ten rows
+
+Class 3 is unexploitable and was filed rather than gated: `endpoint_args`'
+whitespace clause fires on a positional too, so
+`gh api -X PUT "repos/o/r/pulls/5/merge "` loses its endpoint — and GitHub
+serves none of the spellings it drops, which the reviewer measured. Two accepted
+rows close it.
+
+The review added that leaving a whitespace-holding span raw instead of dropping
+it "would too, and costs nothing". Measured on a copy of the hook built to do
+exactly that: **four of #130's ten rows go back to BLOCK** — rows 1, 2, 3 and 5,
+every one whose body names a path in prose. That is the whole of what this issue
+fixes, traded for two spellings that 404. Declined, with the numbers, which is
+the one place this round pushed back rather than complied.
+
+### A number that was stale, and why arithmetic was the wrong fix
+
+The body claimed `revert` = 19 red. The reviewer measured 22 and was right: the
+three rows added after the `eq-off` finding were never counted, because `eq-off`
+was recounted and `revert` was not. They asked for a re-run rather than a patch
+from 19 to 22, which is the right instinct — at least one row had been measured
+against a suite text that then changed. Every mutation is being re-run against
+the current tree, `revert` included, and a tenth was added: `gate-narrow`, the
+gate as it stood before this round.
+
+### Still open
+
+- `#198`, the base/endpoint asymmetry, recommended to be settled by measuring
+  the local session corpus first.
+- `#138` lands after this.
+- The `$'…'` escape spellings of an endpoint are still not decoded, and the
+  reviewer did not raise them; they remain named in `endpoint_args`' comment as
+  a gap this fix neither opened nor closed.

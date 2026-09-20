@@ -2503,11 +2503,14 @@ and held to the same standard of saying only what it asks.
 ### GH-130.5
 - text: The three rules that keep `$SCAN` — the graphql mutation names, the
   `updatePullRequest` half of the state rule, and `gql_bases` — fire only when some
-  `gh api` call on the line names the graphql endpoint as a BARE `graphql` token in
-  its own arguments, tested after `endpoint_args`. `gh api "graphql"` and the
-  single-quoted spelling are that endpoint and are refused; an issue body naming a
-  mutation, naming `baseRefName`, or carrying either in a `-F body=@-` heredoc, is
-  prose.
+  `gh api` call's own arguments name the graphql endpoint, tested after
+  `endpoint_args`. The endpoint is recognised in every spelling `gh` resolves to
+  it — the bare token, `/graphql`, and any `scheme://host/graphql` with the scheme
+  compared case-insensitively — under every quoting of that token, and in no
+  spelling `gh` does not serve: `graphql/`, `//graphql`, `/GRAPHQL` and
+  `repos/o/r/graphql` leave it shut. An issue body naming a mutation, naming
+  `baseRefName`, naming `/graphql` in prose, or carrying any of them in a
+  `-F body=@-` heredoc, is prose.
 - from: #130, rows 6, 7 and 9 of its table
 - kind: defect-refusing
 - status: active
@@ -2526,7 +2529,14 @@ and held to the same standard of saying only what it asks.
   those — it is one command, which the old acceptance never reached. Three further
   spellings were permitted under the first version of this fix and are pinned:
   `graph"ql"`, `'graph'ql` and `$'graphql'`, each of which the whole-word proxy cut
-  down to something the gate could not see.
+  down to something the gate could not see. THE PATH SPELLINGS ARE A SECOND ROUND:
+  the gate first knew one, `graphql` anchored on whitespace, and its comment said
+  in as many words that this was gh's one spelling of the endpoint. It is not —
+  `/graphql` and `https://api.github.com/graphql` execute real GraphQL, measured
+  against the live API — and twelve shapes were refused at `7bea85f` and permitted
+  with the gate in place, the suite green throughout. Found by rev-agent-130's
+  round-1 review of #196. GitHub Enterprise Server's `/api/graphql` is named and
+  not matched, this repository being on github.com.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -2773,6 +2783,14 @@ it has no entry above (Q16).
 - #163: the in-word half of the quoting GH-137.1 and GH-137.2 read round a field,
   found by the follow-up review of #153; it adds its requirements in the pull
   request that fixes it, after #130, rather than pinning today's verdicts
+- #198: `no-pr-decisions.sh` refuses an unreadable base and permits an unreadable
+  endpoint, and says so nowhere. Raised as Class 2 of rev-agent-130's round-1
+  review of #196 and filed rather than fixed there: the four transitions that
+  review measured were the line-wide read finding an assignment's text, which is
+  #130's own defect, and what is left over is a policy #130's scope does not
+  reach. Cited in the accepted-verdict rows that pin today's answer
+- #196: a pull request, for #130; rev-agent-130's review rounds are cited where
+  each thing they found stands
 - #138: no field rule reads a JSON request body supplied by `--input`; the last of
   the three the grilling of #130 split out, after #137 and #130 themselves. Cited
   in the `gh api` heredoc row #130 rewrote, to say what that row is NOT about:
