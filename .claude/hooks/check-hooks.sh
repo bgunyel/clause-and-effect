@@ -320,8 +320,63 @@ section() {  # section <heading> -- print it, and let no tag carry across it
 # three helpers below asked it, and they answered it in three identical `case`
 # statements until the load-contract section gave `says` its first fixture; five
 # ask it now, `feed` and `feed_says` having come with #95.
+#
+# It resolves and nothing else. Which hook a check ran is recorded by `ran`
+# below, and the two were one function until review of PR #169 separated them;
+# see there for why resolving is not running.
 hook_path() {  # hook_path <script|/absolute/hook>
-  case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s\n' "$HOOKS/$1" ;; esac
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    *) printf '%s\n' "$HOOKS/$1" ;;
+  esac
+}
+# ran <script|/absolute/hook> <exit status> -- a tagged check ran it, and it ran.
+# #109's configuration section reads the record back and requires every hook
+# settings.json registers to have been run by at least one tagged check.
+#
+# IT IS CALLED AFTER THE STATUS IS READ, never at path resolution, and review of
+# PR #169 is why. `hook_path` recorded it, and a hook that is not there or is not
+# executable resolves exactly as one that is: the path is built by string
+# concatenation, nothing tests it, and bash reports 127 having run nothing. So a
+# deleted or chmod-ed hook that every check still named would have printed
+# `derived <hook> was run N times under a tag` -- a green row, under GH-109.4's
+# tag, for a file that never started. The other checks of that hook would each
+# have gone red, loudly, by the exit-status contract below; this row would have
+# been the one place the suite said the opposite.
+#
+# So the status is the evidence, and only a status the hook itself can have
+# produced counts: 0 or 2, the two that contract accepts as a verdict. Every
+# other status FAILs the check that read it, and leaves this row saying the hook
+# was never run, which is what happened. THE LIMIT: 0 and 2 are what a running
+# hook exits with, not proof that one did -- 0 is also `true`, and a bash syntax
+# error exits 2, the case the contract below already names. This says a tagged
+# check ran the hook and got a verdict out of it, not that any check of it can
+# fail. That is mutation's question.
+#
+# AND THE RUN HAS TO BE A CHECK'S, not the registration's. `every_hook` runs
+# every hook settings.json registers under Bash, so its runs say nothing about
+# whether anyone wrote a check for one; it is the only caller that does not
+# record, and it says why where it runs them. Everything else here is named by
+# the check that runs it.
+#
+# An absolute path is a fixture copy -- a hook with its library taken away, or
+# one built to crash -- and is not the registered hook, so it is not recorded.
+# The one exception is the session report, which reads the repository it sits in
+# and so is only ever run as a byte copy placed in a fixture repository:
+# `report_says` records that copy as the report, by name, and nothing here
+# records a modified one. `anc_report` runs a copy too and records nothing; see
+# there for why.
+#
+# Written from a subshell as often as not -- `cap_timed` is called inside $( ),
+# and the #98 self-test runs every helper in one -- so it appends to a file
+# rather than setting a variable. An untagged run is not recorded: the #104
+# section already fails the check, and it would cover nothing here either.
+RAN=
+ran() {
+  case "$1" in /*) return 0 ;; esac
+  [ -n "$RAN" ] && [ -n "$REQ" ] || return 0
+  [ "$2" = 0 ] || [ "$2" = 2 ] || return 0
+  printf '%s\t%s\n' "$REQ" "$1" >> "$RAN"
 }
 # What a hook's exit status means, answered once for every helper that runs a
 # hook and reads one: exit 0 is ALLOW, exit 2 is BLOCK, and anything else FAILs
@@ -362,6 +417,7 @@ check() {  # check <script|/absolute/hook> <want> <label> <cmd>, run in $SUITE_D
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | "$hook" 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 
@@ -373,6 +429,8 @@ FIXTURES=$(mktemp -d)
 trap 'rm -rf "$FIXTURES"' EXIT
 LEDGER="$FIXTURES/ledger"
 : > "$LEDGER"
+RAN="$FIXTURES/ran"
+: > "$RAN"
 git init -q -b main "$FIXTURES/on-main"
 git init -q -b dev-99 "$FIXTURES/on-dev"
 ON_MAIN="$FIXTURES/on-main"
@@ -473,6 +531,7 @@ check_in() {  # check_in <dir> <script|/absolute/hook> <want> <label> <cmd>
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
     | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 
@@ -527,6 +586,7 @@ says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   if [ "$rc" != 2 ]; then
     fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
       "$label" "$want" "$rc" "$err"
@@ -543,12 +603,45 @@ says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
 # detector cannot tell a merged branch from one cut before the dev branch moved,
 # so a message claiming a merge there would be a claim the hook cannot support.
 # Nothing above can catch a message saying too much.
+# The third of the family: a refusal that must BEGIN with something. `says` and
+# `says_not` both ask about containment, which is the right question for a tail
+# -- an arm's own sentence can sit anywhere in its message and still be the thing
+# that tells the arm from its neighbours. It is the wrong question for an
+# opening. Sixteen rows below are labelled "opens with the rule", and until the
+# third review of PR #169 every one of them passed for a message carrying the
+# rule ANYWHERE, including appended after the arm's tail -- which is the order
+# #154 is filed about, at the other constant. The mutation behind them deletes
+# the constant, so it proved the deletion and never the order its own id claims.
+#
+# Position is all that separates this from `says`, so it reads the exit status
+# the same way and is driven by the same self-test list.
+says_first() {  # says_first <dir> <script|/absolute/hook> <opening> <label> <cmd>
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err rc hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+        | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  ran "$script" "$rc"
+  if [ "$rc" != 2 ]; then
+    fail refuse '%s\n         wanted a refusal opening with |%s|, got exit=%s\n         stderr |%s|' \
+      "$label" "$want" "$rc" "$err"
+    return
+  fi
+  case "$err" in
+    "$want"*) pass refuse 'says  %s' "$label" ;;
+    *"$want"*) fail refuse '%s\n         the refusal says |%s| but does not open with it\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
+    *) fail refuse '%s\n         wanted the refusal to open with |%s|\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
+  esac
+}
 says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
   local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err rc hook
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   if [ "$rc" != 2 ]; then
     fail refuse '%s\n         wanted a refusal not saying |%s|, got exit=%s\n         stderr |%s|' \
       "$label" "$unwanted" "$rc" "$err"
@@ -5197,6 +5290,7 @@ check_file() {  # check_file <script|/absolute/hook> <want> <label> <path relati
   err=$(printf '%s' "$path" | jq -Rs '{tool_name:"Edit",tool_input:{file_path:.}}' \
     | CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 
@@ -5225,6 +5319,7 @@ feed() {  # feed <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin
   err=$(printf '%s' "$payload" \
         | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <raw stdin>
@@ -5233,6 +5328,7 @@ feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <ra
   err=$(printf '%s' "$payload" \
         | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   if [ "$rc" != 2 ]; then
     fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
       "$label" "$want" "$rc" "$err"
@@ -5260,6 +5356,7 @@ env_feed() {  # env_feed <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <lab
   err=$(printf '%s' "$payload" \
         | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 env_cmd() {  # env_cmd <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <command>
@@ -5273,6 +5370,7 @@ env_says() {  # env_says <dir> <PATH> <script|/absolute/hook> <fragment> <label>
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   if [ "$rc" != 2 ]; then
     fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
       "$label" "$want" "$rc" "$err"
@@ -5299,6 +5397,20 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
   local path="$1" script="$2" want="$3" label="$4" out rc
   out=$( cd "$(dirname "$script")" && PATH="$path" bash "$script" 2>&1 )
   rc=$?
+  # A copy of the registered report, placed in a fixture repository because the
+  # report reads the repository it sits in; the #98 self-test's crashing
+  # fixtures carry other names. Recorded after the run, and by name rather than
+  # through `hook_path`, which never sees this one. See `ran`.
+  #
+  # THE NAME IS THE WHOLE TEST, and #187 owns what that costs. `ran` refuses an
+  # absolute path because a fixture copy is not the registered hook; this steps
+  # around that rule on the strength of an invariant -- every fixture carrying
+  # this name is a byte copy -- which is written here and enforced nowhere, while
+  # `nolib_path` and `halflib_path` build modified copies of other hooks a few
+  # hundred lines down. A modified copy keeping the name would make GH-109.4
+  # green for a hook no check ran, which is what the first review of PR #169 had
+  # this record rewritten to stop.
+  [ "${script##*/}" = report-stale-branches.sh ] && ran report-stale-branches.sh "$rc"
   if [ "$rc" != 0 ]; then
     fail static '%s\n         a SessionStart report must exit=%s, got exit=%s\n         output |%s|' \
       "$label" 0 "$rc" "$out"
@@ -5306,6 +5418,51 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
     fail static '%s\n         wanted the report to say |%s|\n         it said |%s|' "$label" "$want" "$out"
   else
     pass static 'report %s' "$label"
+  fi
+}
+
+# every_hook: issue #109. One command through every hook named in $XH_HOOKS, in
+# that order -- the Bash hooks settings.json registers, read in #109's section --
+# and a pass only if every one exits exactly 0, which is how the harness decides
+# whether a command runs at all. Every helper above runs one hook; this is the
+# one question none of them can ask. It is defined here, with the others, because
+# the #98 self-test below drives it and runs before #109's section does.
+#
+# The failure line names every hook that did not exit 0, each with its status and
+# its stderr in the spelling `verdict` uses, since the case it exists for is a
+# second hook refusing what the first permits and the name is the whole finding.
+# ON AN EMPTY LIST IT PASSES, which is #186. The loop body would not run,
+# `refused` would stay empty, and this would print `ok ALLOW by all` for a
+# command no hook had judged -- recording permit-direction coverage for six
+# requirements on nothing. The guard that answers it today is an external one
+# beside the derivation that reads settings.json, so it covers that producer and
+# not this consumer, and `drive_helper` and `every_hook_of` already set
+# `XH_HOOKS` from elsewhere. That is the first review of PR #169's finding at a
+# second call site, and the sixth's: the guard belongs in here, as a failing
+# verdict rather than an abort.
+every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every Bash hook
+  local dir="$1" label="$2" cmd="$3" hook rc err refused=
+  for hook in $XH_HOOKS; do
+    err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+          | ( cd "$dir" && CLAUDE_PROJECT_DIR="$dir" "$(hook_path "$hook")" ) 2>&1 >/dev/null)
+    rc=$?
+    # IT DOES NOT RECORD, and the third review of PR #169 is why. This loop runs
+    # whatever settings.json registers under Bash, so a run of it is derived from
+    # the registration and not from anyone having written a check. Feeding the
+    # GH-109.4 record from here made that row self-satisfying for the seven Bash
+    # hooks: register one, write no checks for it, and the row printed `was run
+    # 41 times under a tag` -- which is the case the audit filed it for, "a
+    # registered hook with zero checks passes", passing. The same shape the first
+    # review found one level down, where `ran` was fed from `hook_path` and a
+    # resolution counted as a run. A record has to come from something other than
+    # the fact it attests.
+    [ "$rc" = 0 ] || refused="$refused
+         ${hook##*/} exit=$rc stderr |$err|"
+  done
+  if [ -z "$refused" ]; then
+    pass permit 'ALLOW by all  %s' "$label"
+  else
+    fail permit '%s\n         wanted every Bash hook to exit 0; these did not:%s' "$label" "$refused"
   fi
 }
 
@@ -5726,6 +5883,14 @@ anc_fixture() {  # anc_fixture <dir> <origin url> -- a repository with the repor
   mkdir -p "$1/.claude/hooks"
   cp -p "$HOOKS/report-stale-branches.sh" "$1/.claude/hooks/"
 }
+# IT RECORDS NOTHING, and review of PR #169 is why. `ran` takes the status the
+# hook exited with, because a hook that was never there is resolved exactly as
+# one that was; this helper takes no verdict and reads no status, so it has
+# nothing to give it. Reading one here to feed the record would put a status
+# reader in this file that the #98 self-test cannot drive -- there is no
+# expectation of its to fail -- and an undriven reader is what that self-test's
+# derivation exists to refuse. The report's record comes from `report_says`,
+# nine times under GH-108.9, which asks for the status and the sentence both.
 anc_report() {  # anc_report <repo> -- the report's output, run as that repository's hook
   ( cd / && PATH="$ANC_BIN:$PATH" "$1/.claude/hooks/report-stale-branches.sh" ) 2>/dev/null
 }
@@ -7787,6 +7952,16 @@ says "$PUSH_WT" "$(nolib_path no-git-push.sh)" 'no-git-push.sh could not load' \
   'the refusal names this hook and not one of its three siblings' 'ls'
 says "$PUSH_WT" "$(nolib_path no-git-push.sh)" 'Refusing rather than permitting' \
   'and says that it is refusing rather than permitting' 'ls'
+# THE WHOLE SENTENCE, because the two rows above read its two ends and nothing
+# read between them: the clause naming what the hook cannot tell could go with
+# both of them green. This arm is inside #109's count of nineteen, so GH-109.2's
+# "every refusal arm, read whole" covered it and nothing did -- measured by the
+# fifth review of PR #169.
+req US-7 GH-84.1 GH-109.2
+says "$PUSH_WT" "$(nolib_path no-git-push.sh)" \
+  'Blocked: no-git-push.sh could not load lib/command-scan.sh, so it cannot tell whether this command pushes, or where to. Refusing rather than permitting.' \
+  'the push load guard, read whole' 'ls'
+req GH-84.1
 
 echo "--- no-pr-decisions.sh, which had no guard at all ---"
 # This file's function set is what makes one shared required list wrong: cs_gh_args
@@ -7819,6 +7994,12 @@ check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_join)" BLOCK 'a library
   'ls'
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_within_cap)" BLOCK 'a library missing only cs_within_cap' \
   'ls'
+# The same, for the same reason: this arm is inside the count of eighteen.
+req US-7 GH-84.1 GH-109.2
+says "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" \
+  'Blocked: no-pr-decisions.sh could not load lib/command-scan.sh, so it cannot tell whether this command decides a pull request or a release. Refusing rather than permitting.' \
+  'the decision load guard, read whole' 'ls'
+req GH-84.1
 says "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" 'no-pr-decisions.sh could not load' \
   'the refusal names this hook and not one of its three siblings' 'ls'
 says "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" 'Refusing rather than permitting' \
@@ -8910,6 +9091,7 @@ check_rawfile_in() {  # check_rawfile_in <dir> <script> <want> <label> <cmd>
   err=$(jq -n --rawfile c "$FIXTURES/rawfile.txt" '{tool_name:"Bash",tool_input:{command:$c}}' \
     | ( cd "$dir" && "$(hook_path "$script")" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 cap_bytes() {  # cap_bytes <string>
@@ -9014,6 +9196,10 @@ cap_timed() {  # cap_timed <dir> <hook|/absolute/hook> <cmd> -- "<ms>", or "exit
     ( cd "$1" && "$(hook_path "$2")" ) < "$FIXTURES/timed.json" >/dev/null 2>&1
     rc=$?
     e=$(date +%s%N)
+    # After the end timestamp, not before it: this is the one helper whose claim
+    # is a duration, and a record written between the run and the read would be
+    # measured as the hook's.
+    ran "$2" "$rc"
     [ $rc -eq 2 ] || { printf 'exit %s\n' "$rc"; return; }
     ms=$(( (e - s) / 1000000 ))
     if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms; fi
@@ -9359,8 +9545,17 @@ printf '#!/bin/bash\n: > "$(dirname "$0")/ran-crash-127"\necho "crash-127 fixtur
 # and allow-0 is indistinguishable from that defect, so it is this helper's
 # FAILING case and this one is its passing one.
 printf '#!/bin/bash\n: > "$(dirname "$0")/ran-speak-0"\necho "speak-0 reports something"\nexit 0\n' > "$EXITS/speak-0.sh"
+# A sixth, for `says_first` against `says`, and the fourth review of PR #169 is
+# why. Every fixture above either carries the fragment at the front or does not
+# carry it at all, so the two helpers agreed on all of them and no driven case
+# reached the branch `says_first` exists for: reverting its `"$want"*)` to
+# `*"$want"*)` left this self-test green and quietly put the sixteen `opens with
+# the rule` rows back to asserting containment, which is the defect round 3
+# filed. This one refuses saying the fragment somewhere other than the front, so
+# `says` passes it and `says_first` must not.
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-prefix-2"\necho "something else first, then prefix-2 refuses" >&2\nexit 2\n' > "$EXITS/prefix-2.sh"
 chmod +x "$EXITS"/*.sh
-for f in allow-0 block-2 crash-1 crash-127 speak-0; do
+for f in allow-0 block-2 crash-1 crash-127 speak-0 prefix-2; do
   [ -x "$EXITS/$f.sh" ] || {
     echo "the exit-status fixture $f.sh was not created; the self-test using it proves nothing" >&2
     exit 1
@@ -9401,12 +9596,14 @@ drive_helper() {  # drive_helper <helper> <fixture> <want>
          gap)        gap "$EXITS" "$EXITS/$fixture.sh" BLOCK "$want" 'self-test' 'true' ;;
          check_file) check_file "$EXITS/$fixture.sh" "$want" 'self-test' 'docs/x.md' ;;
          says)       says "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
+         says_first) says_first "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
          says_not)   says_not "$EXITS" "$EXITS/$fixture.sh" 'never-said' 'self-test' 'true' ;;
          feed)       feed "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
          feed_says)  feed_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' '{}' ;;
          env_feed)   env_feed "$EXITS" "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
          env_says)   env_says "$EXITS" "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
          report_says) report_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' ;;
+         every_hook) XH_HOOKS="$EXITS/$fixture.sh" every_hook "$EXITS" 'self-test' 'true' ;;
          *)          exit 3 ;;
        esac
        exit $FAILED ) >"$EXITS_OUTPUT" 2>"$EXITS/stray-stderr"
@@ -9431,11 +9628,15 @@ failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
 # and the derivation at the end of this section is asserted against both. A
 # helper added to neither is red there; one added to a list is driven.
 DRIVEN_VERDICT='check check_in flip gap check_file feed check_rawfile_in env_feed'
-DRIVEN_MESSAGE='says says_not feed_says env_says'
+DRIVEN_MESSAGE='says says_first says_not feed_says env_says'
 DRIVEN_TIMED='cap_timed lib_run'
 # report_says is the fourth list because it is the only helper that asks for a
 # status and a sentence at once, so neither loop above states its cases. #108.
 DRIVEN_REPORT='report_says'
+# every_hook is the fifth, #109's: it expects ALLOW of every hook it runs and
+# takes no verdict, so the first loop cannot drive it, and it runs more than one
+# hook, which is the case none of the others has.
+DRIVEN_ALL='every_hook'
 
 req GH-98 GH-124
 for helper in $DRIVEN_VERDICT; do
@@ -9471,6 +9672,18 @@ for helper in $DRIVEN_MESSAGE; do
   failure_line_says "$helper: that failure line names exit 127 and the hook's stderr" \
       127 'crash-127 fixture stderr'
 done
+
+# AND THE ONE CASE THE LOOP ABOVE CANNOT STATE: what separates `says_first` from
+# `says`. They differ on exactly one input -- a refusal that carries the fragment
+# somewhere other than the front -- and no fixture above is one, so the loop
+# drove both helpers through identical branches and a revert of the position test
+# went unseen. Two rows, the same fixture, opposite verdicts; either row alone
+# passes for a helper that is the other one.
+req GH-98 GH-124
+tok 'says: a refusal carrying the fragment anywhere passes, which is what containment means' \
+    'ok' "$(drive_helper says prefix-2 -)"
+tok 'says_first: the same refusal fails, which is the whole of the difference' \
+    'FAIL' "$(drive_helper says_first prefix-2 -)"
 
 # The timed helpers, from #96. Each times one outcome and hands any other back as
 # the status it saw: cap_timed times only a refusal, lib_run only a function that
@@ -9520,6 +9733,36 @@ for helper in $DRIVEN_REPORT; do
   timed_line_says "$helper: that failure line names exit 127" 'got exit=127'
 done
 
+# The all-hooks helper, #109. Exit 0 is its only passing status, a refusal is a
+# failure like any crash, and the failure line names the status and the stderr.
+req GH-98 GH-109.5
+for helper in $DRIVEN_ALL; do
+  tok "$helper: a hook that exits 0 passes" 'ok' "$(drive_helper "$helper" allow-0 -)"
+  tok "$helper: a hook that exits 2 fails" 'FAIL' "$(drive_helper "$helper" block-2 -)"
+  failure_line_says "$helper: that failure line names exit 2 and the hook's stderr" \
+      2 'block-2 refuses'
+  tok "$helper: a hook that exits 1 fails" 'FAIL' "$(drive_helper "$helper" crash-1 -)"
+  failure_line_says "$helper: that failure line names exit 1 and the hook's stderr" \
+      1 'crash-1 fixture stderr'
+  tok "$helper: a hook that exits 127 fails" 'FAIL' "$(drive_helper "$helper" crash-127 -)"
+  failure_line_says "$helper: that failure line names exit 127 and the hook's stderr" \
+      127 'crash-127 fixture stderr'
+done
+# And the property it exists for: ONE refusing hook of several fails it, in
+# either position. A helper that kept only the last status, or only the first,
+# passes one of these two and not the other.
+every_hook_of() {  # every_hook_of <fixture>... -- ok or FAIL, for every_hook over those
+  local list= f
+  for f in "$@"; do list="$list $EXITS/$f.sh"; done
+  if ( FAILED=0
+       XH_HOOKS="$list" every_hook "$EXITS" 'self-test' 'true'
+       exit $FAILED ) >/dev/null 2>&1
+  then echo ok; else echo FAIL; fi
+}
+tok 'every_hook: a refusing hook after a permitting one fails' 'FAIL' "$(every_hook_of allow-0 block-2)"
+tok 'every_hook: a refusing hook before a permitting one fails' 'FAIL' "$(every_hook_of block-2 allow-0)"
+tok 'every_hook: two permitting hooks pass' 'ok' "$(every_hook_of allow-0 allow-0)"
+
 # And that the helpers driven above are all of them. The helpers that read a hook's
 # exit status are derived from this file, and each must be in one of the three lists
 # the loops above run off -- so a new reader is either driven or red here. `flip`
@@ -9551,7 +9794,7 @@ if [ -z "$STATUS_READERS" ]; then
 fi
 for reader in $STATUS_READERS; do
   present "derived $reader reads a hook exit status, and the #98 self-test drives it" \
-          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE $DRIVEN_TIMED $DRIVEN_REPORT"
+          "$reader" "$DRIVEN_VERDICT $DRIVEN_MESSAGE $DRIVEN_TIMED $DRIVEN_REPORT $DRIVEN_ALL"
 done
 
 echo "--- issue #101: a load guard requires a function ---"
@@ -10439,7 +10682,7 @@ GH-69.2:seed GH-69.3:none GH-72:seed GH-79.1:transformation GH-79.2:none
 GH-79.3:none GH-79.4:none GH-84.1:none GH-94.1:seed GH-94.2:none GH-94.4:none
 GH-95.1:none GH-95.2:none GH-96.1:none GH-97.1:seed GH-128:transformation
 GH-117:transformation GH-133:none GH-137.1:seed GH-137.2:seed
-GH-139:transformation
+GH-139:transformation GH-109.5:none
 '
 # One row per entry that is either in scope or carries the field: `<ID>|in|out`,
 # the `variants` keyword, and whatever follows it. An entry out of scope is
@@ -10894,7 +11137,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '291' "${TEXT_CHECK_ARGS##*COUNT }"
+    '292' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -10945,8 +11188,22 @@ case " $RUN_BY_SETTINGS " in
     pass static 'settings.json does not register the mutation harness' ;;
 esac
 written 'the harness says how it is run' "$MUT" 'bash .claude/hooks/mutate-hooks.sh'
+# A RATE, NOT A TOTAL, and review of PR #169 is why: the heading said ABOUT AN
+# HOUR while the paragraph under it said ninety minutes, and this pin held the
+# file to the stale half of its own contradiction. A total moves every time a
+# row is registered -- the thing #148 is filed about -- and the measurement the
+# heading rests on is a rate, so the rate is what is pinned.
 written 'and roughly what it costs, which is why nothing runs it for you' \
-        "$MUT" 'ABOUT AN HOUR'
+        "$MUT" 'TWO MINUTES A ROW'
+# AND CLAUDE.md SAYS THE SAME, which nothing held until the fifth review of
+# PR #169 asked. The figure lives in two files; the pin above held one of them,
+# and requirements.md's #148 entry asserted that "CLAUDE.md's copy of the figure
+# moves with it" with nothing enforcing it. Two copies of a number, one pinned,
+# and a sentence claiming they move together is the shape #148 is about, arriving
+# in the change that took one instance of it out. Lower case, because CLAUDE.md
+# writes it as prose rather than as a heading.
+written 'and CLAUDE.md says the same cost, so the two copies cannot drift' \
+        "$CLAUDE_MD" 'Two minutes a row'
 written 'and what its exit status means, the two self-tests included' \
         "$MUT" 'EXIT STATUS: non-zero when any row reports something other than'
 written 'the harness refuses to mutate the hooks directory it stands in' \
@@ -11034,7 +11291,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '54' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '67' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11097,7 +11354,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '52' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '65' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -12009,6 +12266,1072 @@ report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
   'active dev branch: none' \
   'and with no dev ref fetched the active dev branch is none, not a guess'
 
+section "=== issue #109: timing, what a refusal says, the registration, and all seven hooks at once ==="
+# Four kinds of check #103's audit found the suite without (Q3), each of which
+# had already let something through. They are grouped here by kind rather than
+# spread over the sections of the hooks they read, because each asks one
+# question of every hook and a reader auditing the question wants it in one
+# place.
+
+echo "--- a realistic worst case: a 200-line heredoc, several separators a line ---"
+# #96 bounds a hook at the cap: a command whose longest line is 16 KB finishes in
+# under 1 s, fastest of three. That is a claim about one long line. The shape an
+# agent actually writes is many short ones, and the commonest carrier of many
+# short lines is a heredoc -- a commit message, a file written with cat. So the
+# same bound, the same fastest-of-three and the same refusal to time anything
+# but a refusal (see cap_timed), asked of 200 body lines each holding four
+# separators and a redirect, with each hook's own refused command after it.
+#
+# MEASURED BEFORE IT WAS WRITTEN, 2026-09-18, at 33f7129, fastest of three: 9 to
+# 33 ms per hook, quoted opener or not, in a scratch fixture; the first run of
+# this section, in the fixtures below, measured 12 to 57 ms. cs_normalise drops a heredoc body before
+# any pass reads it, so its separators never become fragments. That is what this
+# pins: a change that let a body through to cs_split would multiply the time by
+# the number of fragments, which is the cost #127 is about.
+#
+# NOT HERE, and named for that reason. The same 200 lines as LIVE commands, with
+# no heredoc around them, took no-pr-decisions.sh 3.1 s, no-commit-to-main.sh
+# 2.1 s and no-git-push.sh 1.1 s on the same run -- over this bound, under the
+# harness's 5 s. That is #127's per-fragment cost, which #96 left open, and a
+# bound on it is #127's decision to take, not this section's.
+XH_BODY=$(for i in $(seq 1 200); do
+            printf 'echo step %s; cd src && git status | grep -v x || true; ls >> log\n' "$i"
+          done)
+cap_guard 'heredoc body, lines' 200 "$(printf '%s\n' "$XH_BODY" | wc -l | tr -d ' ')"
+cap_guard 'heredoc body, lines holding four separators' 200 \
+  "$(printf '%s\n' "$XH_BODY" | grep -c '; .* && .* | .* || ')"
+req GH-109.1
+for hook in $BASH_HOOKS; do
+  dir=$(cap_dir "$hook")
+  refused=$(cap_refused "$hook")
+  [ -n "$refused" ] || continue
+  under_a_second "$hook, a 200-line heredoc of separators, then $refused" \
+    "$(cap_timed "$dir" "$hook" "cat <<'EOF'
+$XH_BODY
+EOF
+$refused")"
+  under_a_second "$hook, the same heredoc with an unquoted opener" \
+    "$(cap_timed "$dir" "$hook" "cat <<EOF
+$XH_BODY
+EOF
+$refused")"
+done
+
+echo "--- every refusal of no-git-push.sh says the rule it applies ---"
+# US-7: a refusal tells an agent the permitted spelling or the reason. Before
+# this, `says` read the bare push's message, the main checkout's and the
+# reserved branch's, and nothing else in this file: every other arm could be
+# emptied to "Blocked." with this suite green, since the verdict would not move.
+#
+# ONE ROW AN ARM, and the fragment is the arm's own tail, whole. A prefix keeps
+# matching after the rest of the sentence is deleted, so each fragment runs to
+# the end of the sentence that states the reason -- the lesson of the retarget
+# row in #105's section. The shared opening, $REFUSE, which states the rule
+# itself, is read on every arm that carries it, sixteen of the nineteen; the
+# wrapper arm, the load guard and the cap do not carry it.
+#
+# READ ONCE WAS NOT ENOUGH, and the second review of PR #169 is why it is read
+# sixteen times now. It read it once, and said so without an argument -- while
+# $DECIDE, three screens down, was read on every arm with the argument spelled
+# out. One row catches text deleted from the constant. It does not catch an arm
+# that stops interpolating it: that arm loses the whole rule sentence, its own
+# tail row still passes, and the count below does not move. Review found the
+# same hole at $BASE and measured it; this is the third opening, closed on the
+# same reasoning rather than waiting for a round that measures it too.
+#
+# All in the push fixture's linked worktree on $PUSH_BRANCH with an origin,
+# where the push the arm refuses is otherwise the permitted one: so each refusal
+# is the arm's and not the main checkout's or the reserved branch's.
+req US-7 GH-109.2
+says "$PUSH_WT" no-git-push.sh 'An agent may push only the branch of the linked worktree it is working in, so that it can open a pull request.' \
+  'every push refusal opens with the rule it applies' 'git push --force origin wt-branch'
+says "$PUSH_WT" no-git-push.sh 'The destination cannot be read through a quoted payload, so the worktree exception does not apply. Push plainly from the worktree, or leave it to Bertan.' \
+  'a wrapped push says why, and to push plainly' "bash -c 'git push origin $PUSH_BRANCH'"
+says "$PUSH_WT" no-git-push.sh 'This command changes directory first, so where the push would land cannot be judged from here.' \
+  'a push after cd says the directory moved' "cd src && git push origin $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'This command points git at another directory, so where the push would land cannot be judged from here.' \
+  'a push under GIT_DIR= says git is pointed elsewhere' "GIT_DIR=/tmp/x git push origin $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'This command points git at another directory, so where the push would land cannot be judged from here.' \
+  'a push under git -C says the same, from its own arm' "git -C /tmp push origin $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'This command sets git configuration for itself, which overrides what this check would read back.' \
+  'a push under git -c says configuration was set for it' "git -c push.default=matching push origin $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'That form pushes or deletes refs wholesale rather than naming this branch.' \
+  'a push --all says it names no branch' 'git push --all origin'
+says "$PUSH_WT" no-git-push.sh 'That is a forced push, which rewrites history the open pull request is showing. Add a commit instead.' \
+  'a forced push says why, and to add a commit' "git push --force origin $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'A wildcard refspec does not name this branch.' \
+  'a wildcard refspec says it names no branch' "git push origin 'refs/heads/*'"
+says "$PUSH_WT" no-git-push.sh 'upstream is not a remote of this repository.' \
+  'a push to a remote that is not one says so, by name' "git push upstream $PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh 'A leading + forces the push, which rewrites history the open pull request is showing.' \
+  'a + refspec says it forces' "git push origin +$PUSH_BRANCH"
+says "$PUSH_WT" no-git-push.sh "This names feature-y, not $PUSH_BRANCH." \
+  'a push of another branch names both' 'git push origin feature-y'
+# The continuation arm: a backslash cs_join did not join. A backslash followed
+# by a space ends no line, so it survives into the arguments.
+says "$PUSH_WT" no-git-push.sh 'The arguments continue past where this check can read them.' \
+  'a push whose arguments end in an unjoined backslash says it cannot read them' "git push origin $PUSH_BRANCH \\ "
+# The detached arm needs a worktree with no branch, which no fixture above holds.
+PUSH_WT_DETACHED="$FIXTURES/push-wt-detached"
+$GP worktree add -q --detach "$PUSH_WT_DETACHED"
+need_worktree "$PUSH_WT_DETACHED" 'detached push'
+[ -z "$(git -C "$PUSH_WT_DETACHED" branch --show-current)" ] || {
+  echo "the detached push worktree is on a branch; the check against it proves nothing" >&2
+  exit 1
+}
+says "$PUSH_WT_DETACHED" no-git-push.sh 'This worktree has no branch checked out.' \
+  'a push from a detached worktree says it has no branch' 'git push origin HEAD'
+# The arms older sections read, read again here to the end of their sentence.
+# #94 and #108 pinned each by the prefix that told it from its neighbours, which
+# was their question; the half after it is the remedy or the reason, which is
+# this one's, and a prefix keeps matching after that half is deleted.
+says "$PUSH_MAIN" no-git-push.sh 'This is the main checkout, not a linked worktree. Leave the commits on the branch and say what is ready to push.' \
+  'a push from the main checkout says what to do instead' 'git push origin feature-x'
+says "$PUSH_WT_DEV" no-git-push.sh "This worktree is on dev-05, which is Bertan's to push." \
+  'a push from a worktree on dev-05 says whose the branch is' 'git push origin dev-05'
+says "$NOT_A_REPO" no-git-push.sh 'The repository directory git reports here could not be resolved, so whether this runs in a linked worktree cannot be judged from here.' \
+  'a push where git reports no directory says what could not be judged' 'git push origin x'
+# And the rule sentence itself, on each of the sixteen arms that carry it. The
+# fragment is $REFUSE whole -- including the `Blocked: git push.` the earlier
+# version left off -- and it is asked as an OPENING rather than as a fragment
+# somewhere in the message, which is what the label has always said and what
+# `says` could not ask. See `says_first`.
+opens_with_rule() {  # opens_with_rule <dir> <label> <cmd>
+  says_first "$1" no-git-push.sh 'Blocked: git push. An agent may push only the branch of the linked worktree it is working in, so that it can open a pull request.' \
+    "$2: opens with the rule" "$3"
+}
+req US-7 GH-109.2
+opens_with_rule "$PUSH_WT" 'a push after cd' "cd src && git push origin $PUSH_BRANCH"
+opens_with_rule "$PUSH_WT" 'a push under GIT_DIR=' "GIT_DIR=/tmp/x git push origin $PUSH_BRANCH"
+opens_with_rule "$PUSH_WT" 'a push under git -C' "git -C /tmp push origin $PUSH_BRANCH"
+opens_with_rule "$PUSH_WT" 'a push under git -c' "git -c push.default=matching push origin $PUSH_BRANCH"
+opens_with_rule "$PUSH_WT" 'a push whose arguments end in an unjoined backslash' "git push origin $PUSH_BRANCH \\ "
+opens_with_rule "$PUSH_WT" 'a push --all' 'git push --all origin'
+opens_with_rule "$PUSH_WT" 'a forced push' "git push --force origin $PUSH_BRANCH"
+opens_with_rule "$PUSH_WT" 'a wildcard refspec' "git push origin 'refs/heads/*'"
+opens_with_rule "$PUSH_WT" 'a push to a remote that is not one' "git push upstream $PUSH_BRANCH"
+opens_with_rule "$PUSH_WT" 'a + refspec' "git push origin +$PUSH_BRANCH"
+opens_with_rule "$PUSH_WT" 'a push of another branch' 'git push origin feature-y'
+opens_with_rule "$PUSH_WT" 'a push naming no refspec' 'git push'
+opens_with_rule "$PUSH_MAIN" 'a push from the main checkout' 'git push origin feature-x'
+opens_with_rule "$PUSH_WT_DEV" 'a push from a worktree on dev-05' 'git push origin dev-05'
+opens_with_rule "$PUSH_WT_DETACHED" 'a push from a detached worktree' 'git push origin HEAD'
+opens_with_rule "$NOT_A_REPO" 'a push where git reports no directory' 'git push origin x'
+# Two registry rows, because the claim has two halves and they fail apart.
+# `push-refusal-stops-opening-with-the-rule` takes $REFUSE off the forced-push
+# arm and leaves the arm's own tail, which is what an arm that stopped carrying
+# the constant looks like. `push-refusal-moves-the-rule-to-the-end` leaves it
+# carrying the constant and puts it last, which is what the label claims and
+# what `says` could not tell from the right order -- the row the third review of
+# PR #169 pointed out was missing, since a deletion proves a deletion. Both
+# caught, 2026-09-20.
+
+echo "--- every refusal of no-pr-decisions.sh says the rule it applies ---"
+# The same question of the other boundary hook. #97 read the release refusals and
+# #105 the four base refusals; the decision arms and the wrapper were read by
+# nobody. Every decision arm opens with DECIDE, whose second sentence is the one
+# that names what stays permitted -- opening, commenting, editing -- so it is
+# read on every arm rather than once: the constant is interpolated per arm, and
+# an arm that stopped using it would lose exactly that sentence.
+req US-7 GH-109.2
+for c in 'bash -c "gh pr merge 5"' \
+         'gh pr merge 5' \
+         'gh pr review --approve 5' \
+         'gh pr close 5' \
+         'gh pr reopen 5' \
+         'gh api -X PUT repos/o/r/pulls/5/merge' \
+         'gh api -X PATCH repos/o/r/pulls/5 -f state=closed' \
+         'gh api graphql -f query="mutation { mergePullRequest(input:{x:1}) }"'
+do
+  says "$ON_DEV" no-pr-decisions.sh "Blocked: deciding a pull request is Bertan's call, not an agent's. Opening a PR, commenting on it and editing it are allowed; accepting, rejecting, merging and reopening are not." \
+    "$c: says a decision is Bertan's, and what stays allowed" "$c"
+done
+says "$ON_DEV" no-pr-decisions.sh 'A shell wrapper does not change what the command decides, and its payload cannot be read. Run it unwrapped.' \
+  'a wrapped decision says to run it unwrapped' 'bash -c "gh pr merge 5"'
+says "$ON_DEV" no-pr-decisions.sh 'Leave the PR open and say it is ready to merge.' \
+  'a merge says to leave it open and say it is ready' 'gh pr merge 5'
+says "$ON_DEV" no-pr-decisions.sh 'Review with --comment to leave remarks without a verdict.' \
+  'a verdict review names the review that is allowed' 'gh pr review --approve 5'
+says "$ON_DEV" no-pr-decisions.sh 'Closing a PR rejects it; say why it should be closed instead.' \
+  'a close says it rejects, and to say why instead' 'gh pr close 5'
+says "$ON_DEV" no-pr-decisions.sh 'Closing a PR rejects it; say why it should be closed instead.' \
+  'a reopen reaches the same sentence' 'gh pr reopen 5'
+says "$ON_DEV" no-pr-decisions.sh 'Reaching the merge or review endpoint through gh api is the same decision by another name.' \
+  'the merge endpoint says it is the same decision' 'gh api -X PUT repos/o/r/pulls/5/merge'
+says "$ON_DEV" no-pr-decisions.sh "Setting a pull request's state through gh api closes or reopens it, which is the same decision by another name." \
+  'a state write says it closes or reopens' 'gh api -X PATCH repos/o/r/pulls/5 -f state=closed'
+says "$ON_DEV" no-pr-decisions.sh 'Reaching the same decision through a graphql mutation is the same decision by another name.' \
+  'a decision mutation says it is the same decision' 'gh api graphql -f query="mutation { mergePullRequest(input:{x:1}) }"'
+# The missing base, whose sentence #105 read only as far as its first clause --
+# and which lives on two lines of the hook, one reached by `gh pr create` and one
+# by `gh api`. The fifth review of PR #169 measured the difference: the two rows
+# below drove `gh api` only, so deleting the sentence from the `gh pr create` arm
+# alone left the suite green. That is the prefix shape this section exists to
+# stop, inside the section that stops it, because the literal is duplicated and
+# the rows reached one copy of it. One row an ARM, and an arm is a line rather
+# than a sentence.
+says "$ON_DEV" no-pr-decisions.sh "No base is named here, so this would go to the repository's default branch." \
+  'a gh pr create naming no base says where it would go' 'gh pr create --title x --body y'
+says "$ON_DEV" no-pr-decisions.sh "No base is named here, so this would go to the repository's default branch." \
+  'a REST create naming no base says where it would go' 'gh api -X POST repos/o/r/pulls -f head=x -f title=t'
+says "$ON_DEV" no-pr-decisions.sh "No base is named here, so this would go to the repository's default branch." \
+  'a graphql create naming no base says the same' 'gh api graphql -f query="mutation{createPullRequest(input:{headRefName:\"x\"})}"'
+# The release refusals, which #97 read for their verdict-bearing words and not to
+# the end: the reason a write is Bertan's, and the read the gh api arm names.
+says "$ON_DEV" no-pr-decisions.sh 'and this repository is public, so a release is visible the moment it changes.' \
+  'the release refusal says why a write is not an agent'"'"'s' 'gh release upload v1 a.tgz'
+says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted: a gh api request to /releases that does not write, or gh release followed by one of: list view download verify verify-asset.' \
+  'the gh api release refusal names both reads that stay permitted' 'gh api -X PATCH repos/o/r/releases/1'
+# THE THIRD SHARED OPENING, $BASE, and the second review of PR #169 is why it is
+# here. This section disposed of two -- $REFUSE, read whole once above, and
+# $DECIDE, read on every arm -- and said nothing about the third. Every check
+# that read $BASE read `Write: gh pr create --base dev-NN` and stopped there,
+# which is the prefix shape the paragraph at the head of this section was written
+# to stop: it is the front of the remedy, so the rule sentence in front of it and
+# the ` --title ... --body ...` behind it could both go with this suite green.
+# Review measured exactly that, deleting each half in turn, and both survived.
+#
+# So the constant is read whole, on every arm that interpolates it, for $DECIDE's
+# reason: an arm that stopped using it would lose the rule sentence and nothing
+# here would say so. Seven arms carry it -- two creates, a create naming no base,
+# two retargets, and the two gh api spellings -- where there were five before #139
+# added the quoted-flag pair.
+#
+# The retarget rows are tagged FR-23 and not US-7, for the reason the base block
+# above gives at length: one constant for four refusals is what FR-23 asks for,
+# and for a retarget the constant's `gh pr create` is not the one-step correction
+# US-7 asks for. That correction is in the retarget's own tail, which has its own
+# row above.
+BASE_WHOLE="Blocked: a pull request may be proposed only into the active dev branch, and the base has to be named in the command. Write: gh pr create --base dev-NN --title ... --body ..."
+req US-7 FR-23 GH-109.2
+for c in 'gh pr create --base main --title x' \
+         'gh pr create --title x --body y' \
+         'gh pr create --base"=dev-05" --title x' \
+         'gh api -X POST repos/o/r/pulls -f base=main -f head=x' \
+         'gh api -X POST repos/o/r/pulls -f head=x -f title=t'
+do
+  says "$ON_DEV" no-pr-decisions.sh "$BASE_WHOLE" \
+    "$c: says the rule and names the spelling, both halves" "$c"
+done
+req FR-23 GH-109.2
+for c in 'gh pr edit 5 --base main' \
+         'gh pr edit 5 --base"=dev-05"'
+do
+  says "$ON_DEV" no-pr-decisions.sh "$BASE_WHOLE" \
+    "$c: says the rule and names the spelling, both halves" "$c"
+done
+# And the three tails nothing read. The two quoted-flag arms came with #139 and
+# were given no message row at all; the gh api arm that names a bad base was read
+# for its opening and never for what it says about the spelling. Each names the
+# thing that tells its arm from the six beside it, so a message routed to the
+# wrong one of them would otherwise pass every row above.
+req US-7 GH-109.2
+says "$ON_DEV" no-pr-decisions.sh 'A base flag is written with a quote or a backslash in its name (--base=dev-05 here), so the base this names cannot be checked. Write the flag unquoted.' \
+  'a quoted base flag on a create says what cannot be read, and to write it unquoted' \
+  'gh pr create --base"=dev-05" --title x'
+req US-7 FR-23 GH-109.2
+says "$ON_DEV" no-pr-decisions.sh 'A base flag is written with a quote or a backslash in its name (--base=dev-05 here), so where this retargets to cannot be checked. Write the flag unquoted: gh pr edit <n> --base dev-NN.' \
+  'a quoted base flag on a retarget says the same, and names the retarget' \
+  'gh pr edit 5 --base"=dev-05"'
+req US-7 GH-109.2
+says "$ON_DEV" no-pr-decisions.sh 'This names main; reaching it through gh api makes it the same destination under another spelling.' \
+  'the gh api arm says naming the base there is the same destination' \
+  'gh api -X POST repos/o/r/pulls -f base=main -f head=x'
+# MEASURED, and the two halves are separate rows because they fail apart.
+# `base-refusal-drops-the-rule-sentence` takes the rule off the front of $BASE
+# and `base-refusal-drops-the-remedy-spelling` takes ` --title ... --body ...`
+# off the back; both survived the suite as it stood, which is how review found
+# this, and both are caught as of 2026-09-20. The registry already held
+# `base-refusal-drops-the-spelling`, which replaces the middle -- the prefix the
+# older rows read -- so the constant now has a row for each of its three parts,
+# and it had one for the only part anything read.
+# NO ARM GOES UNREAD, asked of the files rather than of this list. Every write
+# to stderr in either hook is a refusal, and a new arm is a new write; so each
+# hook's count is a literal here, and adding an arm moves it -- which is the
+# moment to write that arm's row above. The count is the arms above, the load
+# guard, the cap, and the arms other sections read: the release refusals (#97),
+# the four base refusals (#105), the bare push, the main checkout, the reserved
+# branch and the unresolvable directory (#94, #108).
+#
+# WHAT SHAPE AN ARM HAS TO BE WRITTEN IN, because this count is what makes it
+# load-bearing. `arms` reads a redirection to fd 2 on one logical line, whatever
+# writes through it. It read `echo .*>&2` when this section was written, which is
+# one builtin, before the redirection, on one physical line; the first review of
+# PR #169 widened it to `(echo|printf)` with continuations folded, and the second
+# measured what that still let through and found three shapes:
+#
+#   >&2 echo "..."            the redirection first, which bash reads the same
+#   cat >&2 <<EOF ... EOF     a heredoc, which is neither builtin
+#   msg() { echo "$1" >&2; }  a helper, called once per arm
+#
+# and it ran the first of them: appended to `no-git-push.sh` as a real refusal
+# arm, the count stayed at 19 and the whole suite stayed green. So the pattern is
+# now the redirection itself -- `>&2`, `1>&2`, `>& 2` and `> /dev/stderr` -- which
+# closes the first two, and the helper is closed below rather than by counting,
+# because a helper called twice is two arms and one line however the line is read.
+# Both counts are what they were before either widening, which is the whole of
+# what a widening should do to a file that is clean.
+#
+# OCCURRENCES, NOT LINES, and the fourth review of PR #169 is why. This ended in
+# `grep -c` until then, which counts matching LINES -- so two writes on one
+# logical line counted as one. Measured: `; echo "..." >&2` appended to the
+# wildcard-refspec arm left the count at 19 and the whole suite green, a live
+# refusal arm that no `says` row reads, in the permitting direction, under the
+# count that makes every per-arm row load-bearing. `a-new-refusal-arm-nothing-
+# reads` does not reach it, because that row appends the arm on its own line.
+#
+# It is the defect round 3 fixed in `fn_calls`, one function below, not applied
+# to the count `fn_calls` exists to back -- the third time in this pull request
+# that a fix was made in one place and not in the place beside it. That is what
+# the fixtures below are for.
+#
+# IT CLOSED #182's THIRD SHAPE ON THE WAY, which is worth saying because that
+# shape was the reason #182 was filed rather than only named. A heredoc body line
+# ending in a backslash was swallowed by the continuation fold, so two real arms
+# read as one LINE and the count did not move. Counting occurrences, they are two
+# whatever line they end up on -- and the same closes the fold case with no
+# heredoc in it at all, which review found beside this one. What is left of #182
+# is its two inflating shapes, both false red.
+#
+# TWO TRADES, taken knowingly, and neither is the permitting direction.
+#
+# Comments are stripped whole-line only. An `echo ... >&2` written as a trailing
+# comment on a live line inflates the count and turns the run red for nothing.
+# That is left, and it is the same trade CLAUDE.md's consequence 3 takes -- a
+# false red is visible and one edit away, a new arm that nothing reads is neither
+# -- and closing it means deciding where a `#` is a comment and where it is
+# inside a string, which is the thing that cannot be read out of the text.
+#
+# A group redirected once -- `{ echo a; echo b; } >&2` -- is two arms on three
+# lines and counts one. Neither hook writes one, nothing here stops one being
+# written, and it is named because the count is evidence about the shapes it
+# names and about nothing else.
+#
+# A DUPLICATED DESCRIPTOR is the shape the fifth review of PR #169 added to that
+# list, and it is the permitting direction: `exec 3>&2` once, then every arm
+# writing `>&3`. The count reads the `exec` line and none of the writes, and
+# `fn_writes` calls the function holding them silent, so the call count is never
+# consulted either -- two arms, count one, both derivations quiet. Which fd a
+# write lands on after a duplication is dataflow and not text, so it is refused
+# rather than counted: `dup_stderr` below fails on any fd other than 1 being
+# pointed at 2 in either hook, which is what a duplication has to write.
+# TWO SPELLINGS IT DOES NOT REACH, found by the sixth review of PR #169 and owned
+# by #185: `exec 3>/dev/stderr`, which names the destination instead of
+# duplicating a descriptor, and a two-digit fd, which the leading `[^0-9]` cannot
+# match into. Both are the permitting direction, and neither hook writes either.
+#
+# A HEREDOC BODY IS THE SECOND, and "one shape remains" stood here until the
+# third review of PR #169 counted them. This pipeline strips whole-line comments
+# and folds continuations; it does not know where a heredoc body begins. Both
+# hooks use heredocs today -- `done <<BASELIST`, `done <<CMDLIST` -- with bodies
+# that are a bare variable, so nothing is miscounted now, and it is one edit away
+# rather than hypothetical. Two shapes survive counting occurrences, and both
+# inflate:
+#
+#   a body line carrying `>&2`                counts as an arm      (false red)
+#   `cat >&2 <<EOF` whose body carries one    counts twice for one  (false red)
+#
+# There was a third, and it was the permitting one -- a body line ending in a
+# backslash swallowed the line after it, so two arms read as one. Counting
+# occurrences rather than lines closed it; see above. #182 records that, and
+# what is left of it is a false red, which by the standard CLAUDE.md's
+# consequence 3 sets would not on its own have been worth a parser.
+#
+# `fn_writes` runs the same pipeline and inherits both.
+STDERR_WRITE='>&[[:space:]]*2|>[[:space:]]*/dev/stderr'
+arms() {  # arms <file> -- in how many places it writes a refusal to stderr
+  sed 's/^[[:space:]]*#.*$//' "$1" \
+    | sed ':a;/\\$/{N;s/\\\n//;ba}' \
+    | grep -oE "$STDERR_WRITE" | wc -l | tr -d ' '
+}
+# WHAT `arms` COUNTS, driven against files written for it. Neither hook can show
+# this: both are clean of every shape the two widenings added, so the pair of
+# literals below is the same either way, and what the count would miss is
+# invisible in a green run -- the same reason `ran` is driven directly in #109's
+# configuration section. Each fixture is one shape, named after it; the last two
+# are the comment trade, asserted rather than assumed.
+ARMS_FIXTURES="$FIXTURES/arms"
+mkdir -p "$ARMS_FIXTURES"
+cat > "$ARMS_FIXTURES/echo.sh" <<'ARMS_EOF'
+echo "refused" >&2
+ARMS_EOF
+cat > "$ARMS_FIXTURES/printf.sh" <<'ARMS_EOF'
+printf 'refused\n' >&2
+ARMS_EOF
+cat > "$ARMS_FIXTURES/continued.sh" <<'ARMS_EOF'
+echo "refused" \
+  >&2
+ARMS_EOF
+cat > "$ARMS_FIXTURES/redirect-first.sh" <<'ARMS_EOF'
+>&2 echo "refused"
+ARMS_EOF
+cat > "$ARMS_FIXTURES/heredoc.sh" <<'ARMS_EOF'
+cat >&2 <<INNER
+refused
+INNER
+ARMS_EOF
+cat > "$ARMS_FIXTURES/dev-stderr.sh" <<'ARMS_EOF'
+echo "refused" > /dev/stderr
+ARMS_EOF
+cat > "$ARMS_FIXTURES/two-on-one-line.sh" <<'ARMS_EOF'
+echo "refused" >&2; echo "refused again" >&2
+ARMS_EOF
+cat > "$ARMS_FIXTURES/two-folded-into-one.sh" <<'ARMS_EOF'
+echo "refused" >&2 \
+  ; echo "refused again" >&2
+ARMS_EOF
+cat > "$ARMS_FIXTURES/whole-line-comment.sh" <<'ARMS_EOF'
+# echo "refused" >&2
+ARMS_EOF
+cat > "$ARMS_FIXTURES/trailing-comment.sh" <<'ARMS_EOF'
+exit 0  # echo "refused" >&2
+ARMS_EOF
+req GH-109.2
+tok 'arms counts an echo redirected to stderr' '1' "$(arms "$ARMS_FIXTURES/echo.sh")"
+tok 'arms counts a printf redirected to stderr, which echo alone did not' \
+    '1' "$(arms "$ARMS_FIXTURES/printf.sh")"
+tok 'arms counts an echo whose redirection is on a continuation line' \
+    '1' "$(arms "$ARMS_FIXTURES/continued.sh")"
+tok 'arms counts a redirection written before the command, which the builtin-first pattern did not' \
+    '1' "$(arms "$ARMS_FIXTURES/redirect-first.sh")"
+tok 'arms counts a heredoc sent to stderr, which is neither builtin' \
+    '1' "$(arms "$ARMS_FIXTURES/heredoc.sh")"
+tok 'arms counts a write to /dev/stderr by name' '1' "$(arms "$ARMS_FIXTURES/dev-stderr.sh")"
+tok 'arms counts two writes sharing a line as two, which counting lines did not' \
+    '2' "$(arms "$ARMS_FIXTURES/two-on-one-line.sh")"
+tok 'arms counts two writes a continuation joined as two, for the same reason' \
+    '2' "$(arms "$ARMS_FIXTURES/two-folded-into-one.sh")"
+tok 'arms does not count a commented-out line' '0' "$(arms "$ARMS_FIXTURES/whole-line-comment.sh")"
+tok 'arms counts a trailing comment, which is the false red this trade accepts' \
+    '1' "$(arms "$ARMS_FIXTURES/trailing-comment.sh")"
+
+# THE ONE SHAPE COUNTING CANNOT REACH, closed here instead. A line stands for an
+# arm only while every write to stderr is written out once. A function that
+# writes one and is CALLED FROM TWO PLACES is two arms and one line, and no
+# pattern over the text of that line can say otherwise. `no-git-push.sh` has such
+# a function already -- `check_push`, which carries ten of its nineteen writes --
+# so this is a live assumption and not a hypothetical one, and it holds because
+# that function is written out at one call site.
+#
+# CALL SITES, NOT EXECUTIONS, and the fifth review of PR #169 corrected this
+# where it stood. `check_push` runs once per command fragment: its one call site
+# is inside `while IFS= read -r CMD ... done <<CMDLIST`, so a command of four
+# fragments runs it four times. That is the right answer for counting arms -- an
+# arm is a place a refusal is written, not a time one is reached, and a loop adds
+# no sentence to the file -- but the sentence that said "called exactly once"
+# taught the opposite rule in the one comment written to teach it.
+#
+# Both halves are pinned: which functions each hook defines and which of them
+# write, so a new helper moves a literal and is declared rather than absorbed;
+# and the call count of each one that writes, which is the number the arm count
+# actually rests on. A silent function's call count is not pinned -- it moves on
+# refactors that cost this claim nothing, and a red there would be noise.
+#
+# Only a `}` in column 1 closes a function, which is this file's convention and
+# the same one `STATUS_READERS` names its reliance on; a one-line definition is
+# read as one.
+#
+# A ONE-LINER IS A LINE THAT CLOSES ITS OWN BODY, not a line with a brace pair on
+# it, and the sixth review of PR #169 is why that distinction is spelled out. The
+# test was `/\{.*\}/`, which any brace pair satisfies -- including one inside the
+# trailing comment this repository writes on a definition. `no-pr-decisions.sh`
+# already has two such definitions, `gh_rule` and `release_is_read`; neither
+# comment happens to hold a brace, so the table was right and one `${X:-a}` away
+# from not being. A definition read as a one-liner has `fn` cleared at once, so
+# its body is never attributed and the function is derived as `silent`.
+#
+# WHAT THAT COSTS IS NOT A GREEN RUN, and the distinction is the point. Adding a
+# function moves the pinned table and its writes move the arm count, so the run
+# goes red -- measured, 19 to 20 and a fourth row in the table. What is wrong is
+# what the red run SHOWS: `speaks silent` for a function that writes. The person
+# reconciling the table to get back to green enters that row, blesses it, and
+# has then taken `fn_calls` out of the loop for a writer -- and that state is
+# green and stays green. So this misleads the reviewer rather than hiding from
+# them, which is a smaller thing than a false green and a different thing, and
+# the two are worth telling apart because this section has produced both.
+#
+# The test asks for `;` then `}` at the end of the line instead, which is what
+# bash requires of a body closed on its own line and what a comment does not
+# have. The `sed` above strips whole-line comments only, so a trailing one
+# reaches awk intact and this is the only thing standing between it and the
+# table. Fourth spelling of the class this whole section is about.
+fn_writes() {  # fn_writes <file> -- "<function> writes|silent" a line, sorted
+  sed 's/^[[:space:]]*#.*$//' "$1" \
+    | sed ':a;/\\$/{N;s/\\\n//;ba}' \
+    | awk -v W="$STDERR_WRITE" '
+        /^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
+          fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
+          seen[fn] = 1
+          if ($0 ~ /;[[:space:]]*\}[[:space:]]*$/) { if ($0 ~ W) w[fn] = 1; fn = ""; next }
+          next
+        }
+        /^\}/ { fn = ""; next }
+        fn != "" && $0 ~ W { w[fn] = 1 }
+        END { for (f in seen) print f, (f in w ? "writes" : "silent") }' \
+    | LC_ALL=C sort
+}
+# Occurrences, not lines, and tokens rather than matches. `grep -c` counted
+# matching lines, so `check_push a; check_push b` read as one call and ten writes
+# would have become twenty arms with both rows green -- the hole the third review
+# of PR #169 found one level below the one the second closed. `grep -o` then
+# counted each occurrence, and the fifth review found it counting `speaks;speaks`
+# as one, because a match takes the separator with it and the next match has none
+# left to start on. Splitting on everything that cannot be in a name counts each
+# name wherever it stands. `$` and `-` stay in the token so that `$speaks` is a
+# variable and `speaks-x` is another word, neither of them a call, which is what
+# the pattern said before.
+#
+# WHAT IT STILL CANNOT SEE, named because this number is what the arm count rests
+# on: an indirect call. Move the call into another function that is itself called
+# twice and the text here still reads one. That is a call graph and not a
+# pattern, and #181 owns it; what keeps it from mattering today is the row above,
+# which pins the whole function table of both hooks, so the second function has
+# to be declared before it can hide anything.
+fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a call
+  sed 's/^[[:space:]]*#.*$//' "$1" \
+    | sed ':a;/\\$/{N;s/\\\n//;ba}' \
+    | grep -vE "^(function[[:space:]]+)?$2[[:space:]]*\(\)" \
+    | tr -c 'A-Za-z0-9_$-' '\n' \
+    | grep -cxF -- "$2"
+}
+# DRIVEN, NOT ONLY ASSERTED, which is the rule the fixtures above are built on
+# and the fourth review of PR #169 found these two helpers exempted from. Both
+# were pinned against the two real hooks alone, and on those `check_push` appears
+# once on one line -- so `grep -c` and `grep -o | wc -l` both return 1 and the
+# pin could not tell round 3's fix from a revert of it. A number that reads the
+# same either way is not evidence about which one is running.
+#
+# The last fixture is the third shape of the helper hole, after #181's indirect
+# call and #182's heredoc: a function defined inside another one. The patterns
+# are anchored at column 1 -- which is this file's convention and what the
+# closing `}` relies on too -- so a nested definition is never entered, its
+# writes are attributed to the function around it, which already writes, and
+# nothing moves. It is asserted here as the behaviour it is, and refused
+# outright below, because the honest fix for a convention a derivation depends on
+# is to hold the file to it rather than to widen the pattern and hope.
+FN_FIXTURES="$FIXTURES/fns"
+mkdir -p "$FN_FIXTURES"
+cat > "$FN_FIXTURES/one-call.sh" <<'FN_EOF'
+speaks() {
+  echo "refused" >&2
+}
+silent() {
+  return 0
+}
+speaks "$1"
+FN_EOF
+cat > "$FN_FIXTURES/two-calls-one-line.sh" <<'FN_EOF'
+speaks() {
+  echo "refused" >&2
+}
+speaks a; speaks b
+FN_EOF
+cat > "$FN_FIXTURES/one-liner.sh" <<'FN_EOF'
+speaks() { echo "refused" >&2; }
+silent() { return 0; }
+speaks x
+FN_EOF
+cat > "$FN_FIXTURES/comment-holds-braces.sh" <<'FN_EOF'
+speaks() {  # speaks <msg> -- expands ${X:-a}
+  echo "refused" >&2
+}
+speaks x
+FN_EOF
+cat > "$FN_FIXTURES/brace-next-line.sh" <<'FN_EOF'
+outer() {
+  inner()
+  { echo "refused" >&2; }
+  inner a
+  inner b
+}
+outer
+FN_EOF
+cat > "$FN_FIXTURES/dup-stderr.sh" <<'FN_EOF'
+exec 3>&2
+speaks() {
+  echo "refused" >&3
+  echo "refused again" >&3
+}
+speaks
+FN_EOF
+cat > "$FN_FIXTURES/two-calls-one-separator.sh" <<'FN_EOF'
+speaks() {
+  echo "refused" >&2
+}
+speaks;speaks
+FN_EOF
+cat > "$FN_FIXTURES/awk-function.sh" <<'FN_EOF'
+awk '
+    function shut() { st = 0 }
+    { shut() }
+' "$1"
+FN_EOF
+cat > "$FN_FIXTURES/nested.sh" <<'FN_EOF'
+outer() {
+  inner() { echo "refused" >&2; }
+  inner a
+  inner b
+}
+outer
+FN_EOF
+req GH-109.2
+tok 'fn_writes tells a function that writes from one that does not' \
+    'silent silent
+speaks writes' "$(fn_writes "$FN_FIXTURES/one-call.sh")"
+tok 'fn_writes reads a one-line definition as one, and closes it there' \
+    'silent silent
+speaks writes' "$(fn_writes "$FN_FIXTURES/one-liner.sh")"
+tok 'fn_writes does not read a brace pair in a trailing comment as a closed body' \
+    'speaks writes' "$(fn_writes "$FN_FIXTURES/comment-holds-braces.sh")"
+tok 'fn_calls counts one call as one' '1' "$(fn_calls "$FN_FIXTURES/one-call.sh" speaks)"
+tok 'fn_calls counts two calls sharing a line as two, which counting lines did not' \
+    '2' "$(fn_calls "$FN_FIXTURES/two-calls-one-line.sh" speaks)"
+tok 'fn_calls counts two calls sharing one separator as two, which matching did not' \
+    '2' "$(fn_calls "$FN_FIXTURES/two-calls-one-separator.sh" speaks)"
+# The nested case, asserted as what it does rather than as what one would want.
+tok 'fn_writes does not see a function defined inside another, and says so here' \
+    'outer writes' "$(fn_writes "$FN_FIXTURES/nested.sh")"
+tok 'and the arm count reads its three writes as one call site' \
+    '1' "$(fn_calls "$FN_FIXTURES/nested.sh" outer)"
+# So the convention the derivation rests on is held, rather than assumed: a
+# definition anywhere but column 1 in either hook turns this red, and whoever
+# writes one has to say what the counts above then mean.
+# THE KEYWORD FORM IS NOT ASKED FOR, and the first run of this guard is why.
+# `no-pr-decisions.sh` embeds awk programs, and awk spells a function
+# `function shut() { ... }`, indented inside the program text -- which is the
+# shape this was written to refuse, in a language where it is ordinary. It fired
+# on line 330 immediately. Shell writes a nested function `inner() { ... }`
+# without the keyword, and awk cannot write one without it, so asking only for
+# the parenthesis form separates the two exactly today.
+#
+# THE TRADE: an indented `function inner() {` in shell is not caught, and neither
+# is it entered by `fn_writes`, which is the permitting direction. It is left
+# because closing it means telling shell text from awk text inside a quoted
+# program, which is the thing that cannot be read out of the line -- and because
+# the shape an author reaches for is the one without the keyword. Written down
+# rather than found later: the guard below is evidence about the parenthesis
+# form and about nothing else.
+# THE BRACE IS NOT ASKED FOR EITHER, and the fifth review of PR #169 is why.
+# This required `{` on the definition's own line, so `inner()` with its brace on
+# the next one read as clean -- `fn_writes` never entered it, its writes went to
+# the function around it, and the arm count read one for a body called twice.
+# That is round four's finding one level out: the guard written to close an
+# anchor assumption carried its own. `fn_writes` does not require the brace
+# either, so asking for it here was the guard being narrower than the thing it
+# guards.
+nested_defs() {  # nested_defs <file> -- shell function definitions that are not in column 1
+  sed 's/^[[:space:]]*#.*$//' "$1" \
+    | grep -nE '^[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)[[:space:]]*(\{|$)' \
+    | tr '\n' ' ' | sed 's/ $//'
+}
+tok 'no-git-push.sh defines every function in column 1, which fn_writes depends on' \
+    '' "$(nested_defs "$HOOKS/no-git-push.sh")"
+tok 'no-pr-decisions.sh does too' \
+    '' "$(nested_defs "$HOOKS/no-pr-decisions.sh")"
+tok 'and the guard can see one, asked of a file that has one' \
+    '2:  inner() { echo "refused" >&2; }' "$(nested_defs "$FN_FIXTURES/nested.sh")"
+tok 'and it does not see awk spelling its own, which is what the hooks embed' \
+    '' "$(nested_defs "$FN_FIXTURES/awk-function.sh")"
+tok 'and it sees one whose brace is on the next line, which requiring the brace did not' \
+    '2:  inner()' "$(nested_defs "$FN_FIXTURES/brace-next-line.sh")"
+# The duplicated descriptor: neither derivation can see through it, so it is
+# refused in both hooks rather than counted. Asserted as what each one does, and
+# then as the absence of the shape in the files the counts are taken from.
+dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplication writes
+  sed 's/^[[:space:]]*#.*$//' "$1" \
+    | grep -nE '(^|[^0-9])[03-9]>&[[:space:]]*2' \
+    | tr '\n' ' ' | sed 's/ $//'
+}
+tok 'arms reads one for two arms written through a duplicated descriptor' \
+    '1' "$(arms "$FN_FIXTURES/dup-stderr.sh")"
+tok 'and fn_writes calls the function holding them silent, so the call count is never asked' \
+    'speaks silent' "$(fn_writes "$FN_FIXTURES/dup-stderr.sh")"
+tok 'so dup_stderr refuses the shape, and can see one' \
+    '1:exec 3>&2' "$(dup_stderr "$FN_FIXTURES/dup-stderr.sh")"
+tok 'no-git-push.sh points no other fd at 2' '' "$(dup_stderr "$HOOKS/no-git-push.sh")"
+tok 'no-pr-decisions.sh points no other fd at 2' '' "$(dup_stderr "$HOOKS/no-pr-decisions.sh")"
+
+req GH-109.2
+tok 'no-git-push.sh defines these functions, and this is which of them writes a refusal' \
+    'canonical_dir silent
+check_push writes
+names_this_branch silent' "$(fn_writes "$HOOKS/no-git-push.sh")"
+tok 'no-pr-decisions.sh defines these, and none of them writes one' \
+    'base_args silent
+bases_all_dev silent
+gh_api_is_write silent
+gh_pr_bases silent
+gh_pr_web silent
+gh_rule silent
+gql_bases silent
+is_dev_base silent
+quoted_base_flag silent
+release_is_read silent
+rest_bases silent' "$(fn_writes "$HOOKS/no-pr-decisions.sh")"
+tok 'check_push has one call site, so each write inside it is one arm and one line' \
+    '1' "$(fn_calls "$HOOKS/no-git-push.sh" check_push)"
+
+tok 'no-git-push.sh refuses in as many places as this suite reads' '19' \
+    "$(arms "$HOOKS/no-git-push.sh")"
+tok 'no-pr-decisions.sh refuses in as many places as this suite reads' '18' \
+    "$(arms "$HOOKS/no-pr-decisions.sh")"
+# Two registry rows add a real arm and require this count to move, because the
+# two ways of adding one are caught by different halves of the counter.
+# `a-new-refusal-arm-nothing-reads` writes it on its own line, in the shape
+# the second review measured -- the redirection before the command -- which
+# the pattern had to widen to see. `a-new-refusal-arm-sharing-a-line` appends
+# it to the wildcard-refspec arm, which the pattern always saw and the LINE
+# count never did; that is the fourth review's, and it is the one that shows
+# why this counts occurrences. Each survived the counter as it stood when it
+# was written; both caught as of 2026-09-20.
+
+echo "--- settings.json: what runs, on which tool, in what order, under what timeout ---"
+# settings.json is what makes a hook run at all, and until this section the suite
+# read two of its registrations -- the report's and the stale guard's -- and the
+# Bash timeouts as a set. So the Edit hook's timeout, the matcher any other hook
+# is registered under, and the path each command names were unread: a hook moved
+# under the wrong matcher, or registered at a path that is not there, runs on no
+# call and every check that drives it by name stays green.
+#
+# THE WHOLE TABLE, as a literal, one line a hook: event, matcher, type, the
+# command exactly as written, timeout. Order is part of it on purpose. The
+# cross-hook checks below run the Bash hooks in their registered order, and a
+# reordering is a change a reviewer should see move here.
+#
+# Every PreToolUse timeout is 5. The 1 s bounds above and in #96's section are
+# set against it, and a hook the harness kills is a hook that permits, so a
+# timeout lowered to 1 turns a hook that is merely slow into one that permits.
+# The report's 50 is argued in its own section (FR-43) and is held here too.
+#
+# `worktree.baseRef` is pinned by GH-99.2, in the report's section, to what #99
+# decided -- `fresh` -- and is not asked twice.
+#
+# MUTATION-CHECKED BY HAND, 2026-09-18, because mutate-hooks.sh copies only
+# .claude/hooks/ and settings.json is one directory up: each edit made to the
+# file in place from a per-file backup, this suite run, and the backup restored
+# and its sha256 compared. What each turned red, and what already caught it:
+#   - no-git-push.sh's timeout set to 1: this table, and GH-96.2's timeout set,
+#     which already caught it before #109.
+#   - every PreToolUse timeout set to 1, the issue's own wording: the same, and
+#     the Edit hook's row, which nothing read before #109.
+#   - no-git-push.sh unregistered: this table and the seven-hook row below, and
+#     three older checks -- the CLAUDE.md paragraph, the cap consumers and #95's
+#     registered list -- which already caught it.
+#   - a hook registered that no check runs, x-unchecked.sh under Edit|Write: the
+#     derived row at the foot of this section, naming it, besides this table.
+#   - THE SAME HOOK REGISTERED UNDER Bash, 2026-09-20, which is the case the row
+#     is mostly about and the one the Edit|Write mutation does not reach. Until
+#     the third review of PR #169 it could not fail: `every_hook` ran whatever
+#     was registered under Bash and recorded it, so the row read `was run 41
+#     times under a tag` for a hook nothing checked. With that record gone, the
+#     row says `settings.json registers x-unchecked.sh, and no tagged check ran
+#     it`, measured. Nine other checks went red with it, which is the point --
+#     the two loops that would otherwise have run the new hook, at #96's cap and
+#     #109's timing, are both gated on `cap_refused`, a hand-written table, and
+#     the guard above fails on a Bash hook with no row in it rather than running
+#     it silently. settings.json was edited in place from a backup, restored, and
+#     its sha256 compared.
+#   - two Bash hooks swapped in order: this table and the seven-hook row, and
+#     nothing else in the suite.
+#   - `ran` returning before it records: the foot of this section, once for each
+#     of the nine registered hooks.
+# The one kind of mutation the issue names that lives in a hook -- a second hook
+# refusing a permitted spelling -- is a registry row,
+# `second-hook-refuses-a-permitted-read`.
+REGISTRATION_EXPECTED='PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/no-commit-to-main.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/alembic-via-uv-group.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/pytest-via-uv-group.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/append-only-docs.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/no-git-push.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/no-pr-decisions.sh|5
+PreToolUse|Bash|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/no-work-on-stale-branch.sh|5
+PreToolUse|Edit|Write|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/append-only-docs-edit.sh|5
+SessionStart|-|command|"$CLAUDE_PROJECT_DIR"/.claude/hooks/report-stale-branches.sh|50'
+REGISTRATION=$(jq -r '.hooks | to_entries[] | .key as $e | .value[] | (.matcher // "-") as $m
+                      | .hooks[] | "\($e)|\($m)|\(.type)|\(.command)|\(.timeout)"' "$SETTINGS" 2>/dev/null)
+[ -n "$REGISTRATION" ] || {
+  echo "no registration was read out of settings.json; the checks below prove nothing" >&2
+  exit 1
+}
+req GH-109.3
+tok 'settings.json registers exactly these hooks, under these matchers, in this order, with these timeouts' \
+    "$REGISTRATION_EXPECTED" "$REGISTRATION"
+# The same table a line at a time, so that a failure names the hook rather than
+# printing two tables to compare by eye. The whole-table row above stays: it is
+# the only one of the three that sees order, since a swap leaves every line
+# present and none unexpected. Both directions: an expected line that
+# is missing, and a registered line nobody expected.
+while IFS= read -r line; do
+  present "settings.json has: $line" "$line" "$(printf '%s\n' "$REGISTRATION" | tr '\n' ' ')"
+done <<< "$REGISTRATION_EXPECTED"
+XH_UNEXPECTED=$(printf '%s\n' "$REGISTRATION" | grep -vxF -- "$REGISTRATION_EXPECTED")
+if [ -z "$XH_UNEXPECTED" ]; then
+  pass static 'settings.json registers nothing this table does not name'
+else
+  fail static 'settings.json registers what this table does not name:\n%s' \
+    "$(printf '%s\n' "$XH_UNEXPECTED" | sed 's/^/         /')"
+fi
+
+echo "--- all seven Bash hooks at once: a permitted spelling is permitted by every one ---"
+# Every check above runs ONE hook. The harness runs every hook registered for
+# Bash on every command, and permits the command only if all of them do. So a
+# spelling CLAUDE.md's boundary section tells an agent to use, or that a refusal
+# message names as the thing to write, can be refused by a hook other than the
+# one whose rule it satisfies, and no single-hook check would see it. This asks
+# each such spelling of all seven, in their registered order, read off
+# settings.json -- the table above holds what that order is -- and requires every
+# one to exit exactly 0 (Q20). One line per spelling, naming every hook that did
+# not.
+#
+# Each runs where it is meant to be permitted (Q21), in the lifecycle fixture:
+# $WT_WORK is a linked worktree on its own branch, carrying a commit, with an
+# origin and origin/dev-05 -- an agent's worktree mid-task. The two catch-up
+# spellings run in $WT_STALE, a worktree branch the dev branch has moved past,
+# which is where the stale guard's message names them -- and is the state
+# EnterWorktree leaves under `baseRef: fresh`, a branch at an older commit with
+# nothing of its own, which is where route 2's reset is written for. The route-1 worktree
+# creation runs from the main checkout.
+#
+# THE LIST IS HAND-WRITTEN, AND NOT DERIVED OFF $SECTION. Everything else
+# load-bearing in this suite is derived off its source -- BASH_HOOKS,
+# REGISTRATION, XH_HOOKS, STATUS_READERS, CAP_CONSUMERS -- and the second review
+# of PR #169 asked why this is not, since $SECTION is already extracted two
+# thousand lines up. The answer is what is in that section, measured rather than
+# argued. It holds 35 command-shaped spans, 27 of them distinct. Eleven are a
+# bare tool name with no command after it and two more are the `gh)` of
+# consequence 6's prose about command substitution, so they name no spelling at
+# all; and of what is left, the majority are spellings the section REFUSES --
+# the three wrapped forms consequence 1 lists, each named precisely because it
+# names the right branch or the right base and is refused anyway.
+#
+# So a derivation would have to read grant from refusal out of the prose around
+# each span, and that section is written to be full of near-misses: its whole
+# second half is six numbered consequences whose subject is spellings that read
+# as permitted and are not, or read as evasions and are permitted. A derivation
+# that got one wrong in the permitting direction would put an `ALLOW by all` row
+# here for a command CLAUDE.md refuses, which is this suite asserting the
+# opposite of the rule it exists to hold. A hand-written list short of a
+# spelling leaves that spelling unasked; a derived one wrong about a spelling
+# answers for it falsely. Those are not the same cost, and the second is the one
+# a green run hides.
+#
+# WHAT THAT LEAVES OPEN, named because a check is evidence about what it names: a
+# spelling added to CLAUDE.md's boundary section, or named in a new refusal
+# message, is outside this list until someone adds it here, and a second hook may
+# refuse it with this suite green. That is the class #164 came from, and #164 was
+# found by reading the messages by hand rather than by any check. Pinning a count
+# of the section's command spans was measured as the cheap half of a fix and
+# rejected: 11 of the 35 are a bare tool name, so the count moves whenever the
+# prose is reflowed around one, which is a false red on CLAUDE.md edits that
+# change no rule -- and it would still say nothing about which span is a grant.
+# #180 owns what that leaves open, so the gap is tracked rather than only argued
+# here; this paragraph is its reasoning and not its resolution.
+#
+# THE FIRST RUN FOUND ONE, #164. no-commit-to-main.sh refuses a push to main
+# with "Push your dev-NN branch and open a PR instead", and no-git-push.sh
+# refuses that push from every checkout an agent could stand in -- rightly, by
+# US-2. The message is what is wrong, so the right verdict is not ALLOW and
+# `gap` cannot express it. It is recorded as a row on the message instead,
+# marked a gap: it asserts the sentence is still there, and #164's fix turns it
+# red by removing it, which is the outcome `gap` describes. Every other spelling
+# below was permitted by all seven on the first run, and so were the three that
+# review of this section added: the two gh api creates and the plain commit.
+XH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command' "$SETTINGS" 2>/dev/null \
+             | sed 's|.*/||; s|"$||')
+# The guard BASH_HOOKS and REGISTRATION both carry, and the one derivation in
+# this section that was without it until review of PR #169. It fails green where
+# the other two fail red: `every_hook` loops over this list, so an empty one runs
+# no hook, leaves `refused` empty, and prints `ok ALLOW by all` for all 41
+# spellings -- recording permit-direction coverage for GH-109.5, US-4, US-8,
+# US-13, US-14 and FR-48 without a hook having started. The `tok` below would
+# turn the run red, so the suite as a whole still catches it; the 41 rows would
+# say the opposite anyway, and a row that says the opposite is the thing this
+# suite is for. Unreachable today, since the two earlier guards read the same
+# file.
+[ -n "$XH_HOOKS" ] || {
+  echo "no Bash hooks were read out of settings.json; the cross-hook checks below prove nothing" >&2
+  exit 1
+}
+req GH-109.5
+tok 'the cross-hook checks run seven hooks, in registered order' \
+    'no-commit-to-main.sh alembic-via-uv-group.sh pytest-via-uv-group.sh append-only-docs.sh no-git-push.sh no-pr-decisions.sh no-work-on-stale-branch.sh' \
+    "$(printf '%s\n' "$XH_HOOKS" | tr '\n' ' ' | sed 's/ $//')"
+need_worktree "$WT_WORK" 'work'
+need_worktree "$WT_STALE" 'stale'
+[ "$(git -C "$WT_WORK" branch --show-current)" = work-branch ] || {
+  echo "the work worktree is not on work-branch; the push spelling below would name the wrong branch" >&2
+  exit 1
+}
+# The push CLAUDE.md grants, and the one no-git-push.sh's bare-push and wrapper
+# refusals name.
+req GH-109.5 US-4
+every_hook "$WT_WORK" 'git push origin <branch> from a linked worktree' 'git push origin work-branch'
+# And the commit that precedes it, which no-commit-to-main.sh's and the stale
+# guard's refusals both tell an agent to make plainly, on the branch it belongs on.
+req GH-109.5
+every_hook "$WT_WORK" 'a plain commit on a worktree branch carrying work' 'git commit -m wip'
+# CLAUDE.md's pull request grants, and the spellings the base, retarget, review
+# and decision refusals name.
+req GH-109.5 US-8
+every_hook "$WT_WORK" 'gh pr create --base dev-NN' 'gh pr create --base dev-05 --title x --body y'
+# CLAUDE.md grants the same base "in whichever of the four spellings is used",
+# the two gh api forms included.
+every_hook "$WT_WORK" 'the REST create, naming dev-NN' \
+  'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=work-branch -f title=x'
+every_hook "$WT_WORK" 'the graphql create, naming dev-NN' \
+  'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}"'
+req GH-109.5 US-13
+for c in 'gh pr edit 5 --base dev-05' \
+         'gh pr edit 5 --add-label x' \
+         'gh pr view 5' \
+         'gh pr comment 5 --body x' \
+         'gh pr review --comment -b x' \
+         'gh api repos/o/r/pulls/5'
+do every_hook "$WT_WORK" "$c" "$c"; done
+# The release reads CLAUDE.md lists, and the help pages the release refusal names.
+req GH-109.5 FR-48
+for c in 'gh release list' \
+         'gh release view v1' \
+         'gh release download v1' \
+         'gh release verify v1' \
+         'gh release verify-asset v1 a.tgz' \
+         'gh help release' \
+         'gh help release upload' \
+         'gh api repos/o/r/releases'
+do every_hook "$WT_WORK" "$c" "$c"; done
+# Every gh issue subcommand, #105's twelve and the three pinned before them.
+req GH-109.5 US-14
+for c in 'gh issue create --title x --body y' \
+         'gh issue close 27' \
+         'gh issue comment 27 --body x' \
+         'gh issue list' \
+         'gh issue status' \
+         'gh issue view 27' \
+         'gh issue reopen 27' \
+         'gh issue edit 27 --add-label bug' \
+         'gh issue delete 27 --yes' \
+         'gh issue transfer 27 o/other' \
+         'gh issue lock 27' \
+         'gh issue unlock 27' \
+         'gh issue pin 27' \
+         'gh issue unpin 27' \
+         'gh issue develop --list 27'
+do every_hook "$WT_WORK" "$c" "$c"; done
+# The convention hooks' own remedies: pytest's two, alembic's, and the append the
+# append-only refusal names -- into an entry not yet written.
+req GH-109.5
+for c in 'make test' \
+         'uv run --group test pytest tests/test_chunker.py::test_name' \
+         'uv run --group migrations alembic upgrade head' \
+         'echo entry >> docs/dev-log/devlog_2099-01-01_session-1.md'
+do every_hook "$WT_WORK" "$c" "$c"; done
+# The two routes CLAUDE.md gives to a worktree branch that starts at the dev tip,
+# and the catch-up the stale guard's refusal names -- each where it is written for.
+every_hook "$LIFE" 'route 1: git worktree add --no-track -b <branch> <path> origin/dev-NN' \
+  'git worktree add --no-track -b wt-new ../wt-new origin/dev-05'
+every_hook "$WT_STALE" 'route 2: git reset --hard origin/dev-NN, first act in a new worktree' \
+  'git reset --hard origin/dev-05'
+every_hook "$WT_STALE" 'the stale guard names git merge <dev branch> as permitted from here' \
+  'git merge origin/dev-05'
+# #164, the one this section found. See above for why it is a row on the message.
+req GH-164
+says "$ON_MAIN" no-commit-to-main.sh 'Push your dev-NN branch and open a PR instead.' \
+  'the push-to-main refusal names a push no-git-push.sh refuses [gap: #164 removes this sentence; today it is there]' \
+  'git push origin main'
+
+echo "--- every hook settings.json registers is run by a tagged check ---"
+# A hook registered and never run by any check is a hook this suite says nothing
+# about, and every count above would stay green -- the audit's finding, "a
+# registered hook with zero checks passes".
+#
+# AND THE RUN HAS TO BE A CHECK'S OWN. `every_hook` runs whatever this file
+# registers under Bash, so its runs are derived from the registration and say
+# nothing about whether anyone wrote a check. It fed this record until the third
+# review of PR #169, and while it did, this row could not fail for any of the
+# seven Bash hooks: register one, write nothing for it, and the row printed `was
+# run 41 times under a tag` -- the audit's finding, passing, in the check filed
+# to catch it. The by-hand mutation below registered its unchecked hook under
+# Edit|Write, the one matcher `every_hook` does not reach, so the evidence
+# covered the two hooks this was never in doubt for. `every_hook` no longer
+# records; the Bash case is measured below with the rest.
+#
+# Asked of what the checks actually
+# ran, which `ran` records once a tagged check has run one of the hooks under
+# judgment and read a verdict out of it, and not of this file's text, where a
+# loop over a variable names no hook at all. So it reads the whole run and is
+# the last check before #104's.
+#
+# THE LIMITS, named, both of them.
+#
+# First: this says a tagged check ran the hook, not that any check of it can
+# fail. That is mutation's question.
+#
+# Second, found by review of PR #169: what `ran` can see is that the hook
+# returned a status a running hook returns. It cannot see that the hook did the
+# work -- 0 is also what `true` exits with, and a bash syntax error exits 2, the
+# case the exit-status contract at the head of this suite already names. What it
+# no longer says is the thing review found it saying: `ran` was called from
+# `hook_path`, at path resolution, and a path is built by concatenation whether
+# the file is there or not, so a deleted or unexecutable hook that checks still
+# named was recorded as run and this row printed green over it. It is recorded
+# after the status now, and 127 does not count.
+#
+# MEASURED, 2026-09-20, by hand: a copy of .claude/hooks/ with
+# alembic-via-uv-group.sh's shebang pointed at an interpreter that is not there
+# -- the file present and executable, and nothing of it ever running -- run
+# through $CHECK_HOOKS_DIR. This row went red, "settings.json registers
+# alembic-via-uv-group.sh, and no tagged check ran it", where before the change
+# it read "was run 207 times under a tag". The other two shapes review named do
+# not reach here at all, and that is a fixture guard's doing rather than this
+# row's: a hook made unreadable stops the override's own pre-flight, and one
+# made unexecutable stops #84's nolib fixture, each before this section runs.
+# So the shape this row can be wrong about is the one that was measured, and it
+# is the one that was fixed.
+# WHAT `ran` RECORDS, asked of `ran` itself. The row below reads the record and
+# nothing else, so what the record means is the whole of what that row claims,
+# and review of PR #169 found it meaning less than the row said: `ran` was
+# called from `hook_path`, before the hook was invoked, so a hook that was not
+# there or not executable -- resolved by concatenation, run by nobody, reported
+# 127 by bash -- counted as a run. No run of this suite could show that. Every
+# other check of such a hook goes red and this row alone goes green, which is
+# the shape a check has to be driven directly to catch.
+#
+# Driven against a scratch record, so the real one is untouched; each call is a
+# command substitution and runs in a subshell besides. The expectations are
+# literals: a tab, the tag `req` set on the line above, and the name as given.
+ran_probe() {  # ran_probe <script|/absolute/hook> <exit status> -- what `ran` writes
+  local saved="$RAN" out
+  RAN="$FIXTURES/ran-probe"
+  : > "$RAN"
+  ran "$1" "$2"
+  out=$(cat "$RAN")
+  RAN="$saved"
+  printf '%s\n' "$out"
+}
+req GH-109.4
+tok 'ran records a hook that exited 0, against the tag then in force' \
+    $'GH-109.4\tprobe.sh' "$(ran_probe probe.sh 0)"
+tok 'ran records a hook that exited 2' \
+    $'GH-109.4\tprobe.sh' "$(ran_probe probe.sh 2)"
+tok 'ran records nothing for exit 127, which is a hook that never started' \
+    '' "$(ran_probe probe.sh 127)"
+tok 'ran records nothing for exit 1, which is no verdict either' \
+    '' "$(ran_probe probe.sh 1)"
+tok 'ran records nothing for a fixture copy, which is not the registered hook' \
+    '' "$(ran_probe /nowhere/probe.sh 0)"
+# The basename is read off the command field by its suffix rather than by field
+# number, because a matcher such as Edit|Write carries the separator itself.
+for hook in $(printf '%s\n' "$REGISTRATION" | grep -o '[A-Za-z0-9_.-]*\.sh' | sort -u); do
+  n=$(awk -F'\t' -v h="$hook" '$2 == h' "$RAN" | wc -l | tr -d ' ')
+  if [ "$n" -gt 0 ]; then
+    # Runs, not checks: a timed check runs its hook up to three times, and a
+    # cross-hook check runs seven.
+    pass static 'derived %s was run %s times under a tag' "$hook" "$n"
+  else
+    fail static 'settings.json registers %s, and no tagged check ran it' "$hook"
+  fi
+done
+
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads requirements.md and the tags every check above carries, and
 # fails when the two do not meet. requirements.md says what a requirement is,
@@ -12107,6 +13430,8 @@ GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7
 GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static
 GH-128 GH-171:gap
 GH-155.1:static
+GH-109.1:static GH-109.2:refuse-only GH-109.3:static GH-109.4:static
+GH-109.5:permit-only GH-164:gap
 '
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in
