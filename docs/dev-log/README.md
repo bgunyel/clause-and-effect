@@ -404,9 +404,12 @@ thing in the record.
   40, and this one at 0; suite 3657 → 4098 with dev-05 merged in. The same run
   read backwards counts what the direction costs — pushes bash never runs that
   the hook refuses anyway — at 750, 816 and 848, raised on the re-review and
-  kept. The entry’s own heading still reads "session 2", the number it was
-  written under before session 2 of this day
-  turned out to be someone else’s.
+  kept. The entry’s own heading read "session 2" until #177 — the number it was
+  written under, before session 2 of this day turned out to be someone else’s —
+  and it now reads "session 5", agreeing with the file name. ADR 0003 was
+  amended to allow that one correction: a heading that contradicts its own file
+  name is the entry’s label rather than a statement of history, so it is
+  corrected in place instead of forward. Nothing else in the entry moved.
 
 - [2026-09-17 · session 6](devlog_2026-09-17_session-6.md) — #133: the retarget
   arm of `no-pr-decisions.sh` refused a `gh pr edit --base main` and then named
