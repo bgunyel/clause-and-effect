@@ -16,14 +16,14 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # TWO MINUTES A ROW, and hours for the whole registry: one check-hooks.sh run
-# per mutation that applies, plus the baseline -- sixty-two runs as the registry
-# stands, not sixty-three, because the row whose edit matches nothing never reaches
+# per mutation that applies, plus the baseline -- sixty-three runs as the registry
+# stands, not sixty-four, because the row whose edit matches nothing never reaches
 # one. Measured twice on 2026-09-17, on this machine and on registries one row
 # apart: 47 min 34 s and 45 min 24 s, at twenty-three runs. That measurement is
 # the two minutes, and the two minutes is what is written in the heading, because
 # review of PR #169 found the heading saying ABOUT AN HOUR while this paragraph
 # said ninety minutes and check-hooks.sh pinned the hour: a total goes stale
-# every time a row is added and a rate does not. Carried to sixty-two runs the
+# every time a row is added and a rate does not. Carried to sixty-three runs the
 # rate gives nearer two hours than one, and no third whole-registry measurement has been
 # taken; a run under load took nearer four minutes a row. That is why it
 # is a separate script and why check-hooks.sh does not call it (#107). Nothing
@@ -129,9 +129,16 @@
 # rather than a paragraph. That selection was run before dev-05 was merged in a
 # second time, at 2a52322, so it was re-run against the merged tree: baseline
 # green over 188 requirements, all four caught again, .claude/hooks/
-# byte-identical after. #155's two rows have still not been run since that
-# merge, and neither has anything else here.
-# No run has therefore exercised all sixty-two rows together, and saying which
+# byte-identical after. Its third review pointed out that
+# `push-refusal-stops-opening-with-the-rule` deletes the constant and so
+# proves a deletion, where the rows it backs claim an ORDER, so
+# `push-refusal-moves-the-rule-to-the-end` was added -- it keeps the constant
+# and puts it last, which a containment check cannot tell from the right order
+# -- and run alone against the commit answering that review (2026-09-20):
+# baseline green over 188 requirements, caught, byte-identical after. #155's
+# two rows have still not been run since that merge, and neither has anything
+# else here.
+# No run has therefore exercised all sixty-three rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -205,7 +212,7 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   SIXTY real mutations, against EIGHT files in .claude/hooks/, naming
+#   SIXTY-ONE real mutations, against EIGHT files in .claude/hooks/, naming
 #   FORTY-NINE requirement IDs between them, of the 170 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
@@ -353,6 +360,7 @@ base-refusal-drops-the-rule-sentence%no-pr-decisions.sh%/^BASE=/s/a pull request
 base-refusal-drops-the-remedy-spelling%no-pr-decisions.sh%/^BASE=/s/ --title \.\.\. --body \.\.\.//%US-7 FR-23 GH-109.2%caught
 push-refusal-stops-opening-with-the-rule%no-git-push.sh%s/echo "\$REFUSE That is a forced push/echo "That is a forced push/%US-7 GH-109.2%caught
 a-new-refusal-arm-nothing-reads%no-git-push.sh%/^CMDS=\$(printf/a >\&2 echo "Blocked: an arm with no says row above it."%GH-109.2%caught
+push-refusal-moves-the-rule-to-the-end%no-git-push.sh%s/"\$REFUSE That is a forced push, which rewrites history the open pull request is showing. Add a commit instead."/"That is a forced push, which rewrites history the open pull request is showing. Add a commit instead. \$REFUSE"/%US-7 GH-109.2%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

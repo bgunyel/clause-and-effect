@@ -353,6 +353,12 @@ hook_path() {  # hook_path <script|/absolute/hook>
 # check ran the hook and got a verdict out of it, not that any check of it can
 # fail. That is mutation's question.
 #
+# AND THE RUN HAS TO BE A CHECK'S, not the registration's. `every_hook` runs
+# every hook settings.json registers under Bash, so its runs say nothing about
+# whether anyone wrote a check for one; it is the only caller that does not
+# record, and it says why where it runs them. Everything else here is named by
+# the check that runs it.
+#
 # An absolute path is a fixture copy -- a hook with its library taken away, or
 # one built to crash -- and is not the registered hook, so it is not recorded.
 # The one exception is the session report, which reads the repository it sits in
@@ -597,6 +603,38 @@ says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
 # detector cannot tell a merged branch from one cut before the dev branch moved,
 # so a message claiming a merge there would be a claim the hook cannot support.
 # Nothing above can catch a message saying too much.
+# The third of the family: a refusal that must BEGIN with something. `says` and
+# `says_not` both ask about containment, which is the right question for a tail
+# -- an arm's own sentence can sit anywhere in its message and still be the thing
+# that tells the arm from its neighbours. It is the wrong question for an
+# opening. Sixteen rows below are labelled "opens with the rule", and until the
+# third review of PR #169 every one of them passed for a message carrying the
+# rule ANYWHERE, including appended after the arm's tail -- which is the order
+# #154 is filed about, at the other constant. The mutation behind them deletes
+# the constant, so it proved the deletion and never the order its own id claims.
+#
+# Position is all that separates this from `says`, so it reads the exit status
+# the same way and is driven by the same self-test list.
+says_first() {  # says_first <dir> <script|/absolute/hook> <opening> <label> <cmd>
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err rc hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+        | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  ran "$script" "$rc"
+  if [ "$rc" != 2 ]; then
+    fail refuse '%s\n         wanted a refusal opening with |%s|, got exit=%s\n         stderr |%s|' \
+      "$label" "$want" "$rc" "$err"
+    return
+  fi
+  case "$err" in
+    "$want"*) pass refuse 'says  %s' "$label" ;;
+    *"$want"*) fail refuse '%s\n         the refusal says |%s| but does not open with it\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
+    *) fail refuse '%s\n         wanted the refusal to open with |%s|\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
+  esac
+}
 says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
   local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err rc hook
   hook=$(hook_path "$script")
@@ -5390,7 +5428,16 @@ every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every Bash hook
     err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
           | ( cd "$dir" && CLAUDE_PROJECT_DIR="$dir" "$(hook_path "$hook")" ) 2>&1 >/dev/null)
     rc=$?
-    ran "$hook" "$rc"
+    # IT DOES NOT RECORD, and the third review of PR #169 is why. This loop runs
+    # whatever settings.json registers under Bash, so a run of it is derived from
+    # the registration and not from anyone having written a check. Feeding the
+    # GH-109.4 record from here made that row self-satisfying for the seven Bash
+    # hooks: register one, write no checks for it, and the row printed `was run
+    # 41 times under a tag` -- which is the case the audit filed it for, "a
+    # registered hook with zero checks passes", passing. The same shape the first
+    # review found one level down, where `ran` was fed from `hook_path` and a
+    # resolution counted as a run. A record has to come from something other than
+    # the fact it attests.
     [ "$rc" = 0 ] || refused="$refused
          ${hook##*/} exit=$rc stderr |$err|"
   done
@@ -9506,6 +9553,7 @@ drive_helper() {  # drive_helper <helper> <fixture> <want>
          gap)        gap "$EXITS" "$EXITS/$fixture.sh" BLOCK "$want" 'self-test' 'true' ;;
          check_file) check_file "$EXITS/$fixture.sh" "$want" 'self-test' 'docs/x.md' ;;
          says)       says "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
+         says_first) says_first "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
          says_not)   says_not "$EXITS" "$EXITS/$fixture.sh" 'never-said' 'self-test' 'true' ;;
          feed)       feed "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
          feed_says)  feed_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' '{}' ;;
@@ -9537,7 +9585,7 @@ failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
 # and the derivation at the end of this section is asserted against both. A
 # helper added to neither is red there; one added to a list is driven.
 DRIVEN_VERDICT='check check_in flip gap check_file feed check_rawfile_in env_feed'
-DRIVEN_MESSAGE='says says_not feed_says env_says'
+DRIVEN_MESSAGE='says says_first says_not feed_says env_says'
 DRIVEN_TIMED='cap_timed lib_run'
 # report_says is the fourth list because it is the only helper that asks for a
 # status and a sentence at once, so neither loop above states its cases. #108.
@@ -11179,7 +11227,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '62' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '63' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11242,7 +11290,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '60' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '61' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -12280,10 +12328,12 @@ says "$PUSH_WT_DEV" no-git-push.sh "This worktree is on dev-05, which is Bertan'
 says "$NOT_A_REPO" no-git-push.sh 'The repository directory git reports here could not be resolved, so whether this runs in a linked worktree cannot be judged from here.' \
   'a push where git reports no directory says what could not be judged' 'git push origin x'
 # And the rule sentence itself, on each of the sixteen arms that carry it. The
-# fragment is $REFUSE whole; the label names the arm, so a failure says which one
-# stopped carrying it rather than that one did.
+# fragment is $REFUSE whole -- including the `Blocked: git push.` the earlier
+# version left off -- and it is asked as an OPENING rather than as a fragment
+# somewhere in the message, which is what the label has always said and what
+# `says` could not ask. See `says_first`.
 opens_with_rule() {  # opens_with_rule <dir> <label> <cmd>
-  says "$1" no-git-push.sh 'An agent may push only the branch of the linked worktree it is working in, so that it can open a pull request.' \
+  says_first "$1" no-git-push.sh 'Blocked: git push. An agent may push only the branch of the linked worktree it is working in, so that it can open a pull request.' \
     "$2: opens with the rule" "$3"
 }
 req US-7 GH-109.2
@@ -12303,9 +12353,14 @@ opens_with_rule "$PUSH_MAIN" 'a push from the main checkout' 'git push origin fe
 opens_with_rule "$PUSH_WT_DEV" 'a push from a worktree on dev-05' 'git push origin dev-05'
 opens_with_rule "$PUSH_WT_DETACHED" 'a push from a detached worktree' 'git push origin HEAD'
 opens_with_rule "$NOT_A_REPO" 'a push where git reports no directory' 'git push origin x'
-# `push-refusal-stops-opening-with-the-rule` in the registry takes $REFUSE off
-# the forced-push arm and leaves the arm's own tail, which is what an arm that
-# stopped carrying the constant looks like. Caught, 2026-09-20.
+# Two registry rows, because the claim has two halves and they fail apart.
+# `push-refusal-stops-opening-with-the-rule` takes $REFUSE off the forced-push
+# arm and leaves the arm's own tail, which is what an arm that stopped carrying
+# the constant looks like. `push-refusal-moves-the-rule-to-the-end` leaves it
+# carrying the constant and puts it last, which is what the label claims and
+# what `says` could not tell from the right order -- the row the third review of
+# PR #169 pointed out was missing, since a deletion proves a deletion. Both
+# caught, 2026-09-20.
 
 echo "--- every refusal of no-pr-decisions.sh says the rule it applies ---"
 # The same question of the other boundary hook. #97 read the release refusals and
@@ -12458,6 +12513,27 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main; reaching it through gh api m
 # lines and counts one. Neither hook writes one, nothing here stops one being
 # written, and it is named because the count is evidence about the shapes it
 # names and about nothing else.
+#
+# A HEREDOC BODY IS THE SECOND, and "one shape remains" stood here until the
+# third review of PR #169 counted them. This pipeline strips whole-line comments
+# and folds continuations; it does not know where a heredoc body begins. Both
+# hooks use heredocs today -- `done <<BASELIST`, `done <<CMDLIST` -- with bodies
+# that are a bare variable, so nothing is miscounted now, and it is one edit away
+# rather than hypothetical. Three shapes, and the third is the one the first two
+# do not prepare a reader for:
+#
+#   a body line carrying `>&2`                counts as an arm      (false red)
+#   `cat >&2 <<EOF` whose body carries one    counts twice for one  (false red)
+#   a body line ending in a backslash         swallows the line
+#                                             after it, so two arms
+#                                             read as one           (PERMITTING)
+#
+# `fn_writes` runs the same pipeline and inherits all three. #182 owns it, and
+# says why it was not fixed beside the rest: the other shapes review raised were
+# pattern-width and were fixed by widening the pattern, and this one needs the
+# counter to track heredoc state, which is a parser rather than a pattern. There
+# is already one of those in this repository, and CLAUDE.md records what review
+# rather than the suite found in it.
 STDERR_WRITE='>&[[:space:]]*2|>[[:space:]]*/dev/stderr'
 arms() {  # arms <file> -- in how many places it writes a refusal to stderr
   sed 's/^[[:space:]]*#.*$//' "$1" \
@@ -12546,11 +12622,23 @@ fn_writes() {  # fn_writes <file> -- "<function> writes|silent" a line, sorted
         END { for (f in seen) print f, (f in w ? "writes" : "silent") }' \
     | LC_ALL=C sort
 }
-fn_calls() {  # fn_calls <file> <function> -- how many times it is called
+# Occurrences, not lines. `grep -c` counts matching lines, so `check_push a;
+# check_push b` on one line would read as one call and ten writes would become
+# twenty arms with both rows green -- the hole the third review of PR #169 found
+# one level below the one the second closed. `grep -o` counts each occurrence.
+#
+# WHAT IT STILL CANNOT SEE, named because this number is what the arm count rests
+# on: an indirect call. Move the call into another function that is itself called
+# twice and the text here still reads one. That is a call graph and not a
+# pattern, and #181 owns it; what keeps it from mattering today is the row above,
+# which pins the whole function table of both hooks, so the second function has
+# to be declared before it can hide anything.
+fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a call
   sed 's/^[[:space:]]*#.*$//' "$1" \
     | sed ':a;/\\$/{N;s/\\\n//;ba}' \
     | grep -vE "^(function[[:space:]]+)?$2[[:space:]]*\(\)" \
-    | grep -cE "(^|[^A-Za-z0-9_\$])$2([^A-Za-z0-9_-]|\$)"
+    | grep -oE "(^|[^A-Za-z0-9_\$])$2([^A-Za-z0-9_-]|\$)" \
+    | wc -l | tr -d ' '
 }
 req GH-109.2
 tok 'no-git-push.sh defines these functions, and this is which of them writes a refusal' \
@@ -12616,6 +12704,18 @@ echo "--- settings.json: what runs, on which tool, in what order, under what tim
 #     registered list -- which already caught it.
 #   - a hook registered that no check runs, x-unchecked.sh under Edit|Write: the
 #     derived row at the foot of this section, naming it, besides this table.
+#   - THE SAME HOOK REGISTERED UNDER Bash, 2026-09-20, which is the case the row
+#     is mostly about and the one the Edit|Write mutation does not reach. Until
+#     the third review of PR #169 it could not fail: `every_hook` ran whatever
+#     was registered under Bash and recorded it, so the row read `was run 41
+#     times under a tag` for a hook nothing checked. With that record gone, the
+#     row says `settings.json registers x-unchecked.sh, and no tagged check ran
+#     it`, measured. Nine other checks went red with it, which is the point --
+#     the two loops that would otherwise have run the new hook, at #96's cap and
+#     #109's timing, are both gated on `cap_refused`, a hand-written table, and
+#     the guard above fails on a Bash hook with no row in it rather than running
+#     it silently. settings.json was edited in place from a backup, restored, and
+#     its sha256 compared.
 #   - two Bash hooks swapped in order: this table and the seven-hook row, and
 #     nothing else in the suite.
 #   - `ran` returning before it records: the foot of this section, once for each
@@ -12827,7 +12927,20 @@ says "$ON_MAIN" no-commit-to-main.sh 'Push your dev-NN branch and open a PR inst
 echo "--- every hook settings.json registers is run by a tagged check ---"
 # A hook registered and never run by any check is a hook this suite says nothing
 # about, and every count above would stay green -- the audit's finding, "a
-# registered hook with zero checks passes". Asked of what the checks actually
+# registered hook with zero checks passes".
+#
+# AND THE RUN HAS TO BE A CHECK'S OWN. `every_hook` runs whatever this file
+# registers under Bash, so its runs are derived from the registration and say
+# nothing about whether anyone wrote a check. It fed this record until the third
+# review of PR #169, and while it did, this row could not fail for any of the
+# seven Bash hooks: register one, write nothing for it, and the row printed `was
+# run 41 times under a tag` -- the audit's finding, passing, in the check filed
+# to catch it. The by-hand mutation below registered its unchecked hook under
+# Edit|Write, the one matcher `every_hook` does not reach, so the evidence
+# covered the two hooks this was never in doubt for. `every_hook` no longer
+# records; the Bash case is measured below with the rest.
+#
+# Asked of what the checks actually
 # ran, which `ran` records once a tagged check has run one of the hooks under
 # judgment and read a verdict out of it, and not of this file's text, where a
 # loop over a variable names no hook at all. So it reads the whole run and is

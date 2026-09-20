@@ -2326,10 +2326,16 @@ and held to the same standard of saying only what it asks.
   them. What a line cannot say is how often a function holding one is called, so
   the functions each hook defines and which of them write are pinned beside the
   count, and the call count of each that does. Two shapes are left and named
-  where the count is: a trailing comment inflates it, and a redirected group
-  counts once for several arms. "Read whole" means every shared opening on every
-  arm that carries it -- `$REFUSE` sixteen times, `$DECIDE` eight, `$BASE` seven
-  -- which the second review of PR #169 found true of one of the three.
+  where the count is: a trailing comment inflates it, a redirected group counts
+  once for several arms, and a heredoc body is read as code, which #182 owns.
+  "Read whole" means every shared opening on every arm that carries it --
+  `$REFUSE` on sixteen arms, `$DECIDE` on seven, `$BASE` on seven -- which the
+  second review of PR #169 found true of one of the three. `$REFUSE` is also
+  read as an opening rather than as a fragment anywhere in the message, which is
+  what its rows claim and what the third review found them not asking.
+  These are arm counts, not row counts: the suite drives eight commands at
+  `$DECIDE`'s seven arms, because `gh pr close` and `gh pr reopen` reach the same
+  one, and this note said eight until that review counted the arms.
 
 ### GH-109.3
 - text: `settings.json` registers exactly the seven Bash hooks under `Bash`, in a
@@ -2343,7 +2349,7 @@ and held to the same standard of saying only what it asks.
 
 ### GH-109.4
 - text: Every hook `settings.json` registers, on any event and matcher, is run by at
-  least one tagged check, and returns that check a verdict status.
+  least one tagged check that names it, and returns that check a verdict status.
 - from: #109
 - kind: defect-permitting
 - status: active
@@ -2351,7 +2357,11 @@ and held to the same standard of saying only what it asks.
 - note: the record is written after the status is read, and only for 0 or 2.
   Review of PR #169 found it written at path resolution instead, where a hook
   that was deleted or not executable is indistinguishable from one that is: it
-  counted as run, and this was the one row that would have said so.
+  counted as run, and this was the one row that would have said so. "Names it"
+  is the third review of the same pull request: `every_hook` runs whatever is
+  registered under `Bash`, so while its runs counted, this requirement could
+  not fail for any of the seven Bash hooks -- it was satisfied by the
+  registration it is about. It no longer records.
 
 ### GH-109.5
 - text: Every permitted spelling named in CLAUDE.md's boundary section or in a
@@ -2700,6 +2710,16 @@ it has no entry above (Q16).
   ninety minutes, and this suite pinned the hour. A rate does not move when a
   row is registered and a total does, so the heading is a rate now and the pin
   reads it. That is one of the four, not the issue
+- #154: the order of `$BASE`'s two imperatives on a retarget, which #109 left
+  untouched. Cited where `says_first` says why an opening is a different question
+  from a fragment: ordering is already a live concern at one of these constants,
+  which is what made it worth asking at the other
+- #181: `fn_calls` cannot see an indirect call, so a wrapper around a function
+  that writes a refusal hides arms from the count. Cited beside that helper,
+  which names what it can and cannot see
+- #182: `arms` and `fn_writes` do not know where a heredoc body starts. Cited
+  where the count names the shapes it cannot reach; one of the three is the
+  permitting direction, which is why it is filed rather than only named
 - #179: the invariance families cannot seed a requirement whose subject is
   agreement across hooks, which is the reason GH-109.5 declares `variants:
   none`. Filed out of the second review of PR #169 so that the reason is a
