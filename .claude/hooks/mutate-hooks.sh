@@ -188,6 +188,17 @@
 # to derive the sites rather than pin the literal. All three caught after that,
 # .claude/hooks/ byte-identical. A row written for a claim and run against it is
 # the only thing that told the two apart.
+# #109's THIRTEEN ROWS WERE RUN AGAINST THE MERGED TREE on the merge of dev-05
+# into #144 (2026-09-20), as one selection: baseline green over 196
+# requirements, all thirteen caught, .claude/hooks/ byte-identical after. They
+# arrived here having never run against this tree, which is the state a merge
+# always leaves a registry in and the one worth naming: a row that has not run
+# against the tree it guards is a claim, not evidence. The prior is not a guess
+# any more. The merge of #155 left `base-pattern-admits-main` establishing three
+# of the eight requirements it named and nothing said so until it was run, and
+# the merge of #109 brought three harnesses that ran hooks and recorded nothing.
+# Two merges, two findings only a run could produce. This selection found none,
+# which is a result and not an absence of one.
 # No run has therefore exercised all sixty-seven rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
