@@ -1838,8 +1838,9 @@ and held to the same standard of saying only what it asks.
 - status: active
 - direction: static: what this suite can ask of the harness is what its text says
   and whether its registry names files and requirements that are active. Whether
-  the harness is right is a run of the harness, which takes about an hour and is
-  nobody's check
+  the harness is right is a run of the harness, which is slow enough to be
+  nobody's check — roughly how slow is in the harness's own header, pinned there
+  by this suite and restated here no more than its counts are (GH-148)
 - note: the registry's size is what `bash .claude/hooks/mutate-hooks.sh --list`
   prints, and this file does not restate it — the first version did, in four
   documents, and was wrong in all four, which Bertan's review of PR #142 measured.
@@ -2301,6 +2302,61 @@ and held to the same standard of saying only what it asks.
   pinned rather than filtered, because a comment can only add a PATH and never
   hide a call, while stripping comments would cut at the first `#` and could hide
   one.
+
+### GH-148
+- text: `bash .claude/hooks/mutate-hooks.sh --list` is the only place any count
+  about the mutation registry is written. Its summary lines carry the rows, the
+  real mutations among them, the files those touch, the requirement IDs they
+  name, the self-tests, how many requirements this file holds active, and how
+  many runs of `check-hooks.sh` a whole-registry pass costs — the baseline plus
+  one per row whose edit applies, which is not one per row, because a row
+  registered `did-not-apply` never reaches a run. The harness's header restates
+  none of them and points at `--list` where they stood.
+- from: #148
+- kind: doc-claim
+- status: active
+- direction: static: it reads what `--list` prints and what the harness's header
+  no longer says. Whether the counts are the right ones to publish is a reading
+  of the registry, not a verdict on a command
+- note: THE DISTINCTION THIS ENTRY EXISTS TO CARRY, because it is not "counts in
+  code are bad". A literal in a CHECK earns its maintenance: `check-hooks.sh`'s
+  #107 section pins the registry's size and its three outcome counts, they go
+  red the moment a row is added, and moving them is where a reviewer sees the
+  registry grow in a diff. Those stay, and #148 leaves them alone deliberately.
+  A number in a COMMENT earns nothing, because nothing reads it and nothing
+  turns red when it rots. The harness's header held four of the second kind in a
+  file whose own argument, three paragraphs above them, is that a count in a
+  comment is the thing #107 was filed about. They were wrong or moved six times
+  in three days before this issue was filed and eight times more while #139 was
+  open, and the suite reported ALL CHECKS PASSED through every one of them:
+  Bertan's review of PR #147 ran it with `THIRTY-EIGHT requirement IDs … of the
+  156` in the header against a registry holding 39 and 157, and nothing went
+  red. Three branches open against the same dev branch each had to re-derive the
+  same four numbers by hand, and a conflict whose only correct resolution is
+  "re-derive" is the worst kind there is, because both sides read as valid text.
+  THE CHECKS HOLD NO NUMBER OF THEIR OWN, which is this rule applied to the
+  suite: an active-requirement literal in `check-hooks.sh` would move with every
+  entry appended here, which is this issue recreated one directory over. Each
+  figure is compared against a derivation `check-hooks.sh` makes for itself —
+  one over this file, one over the registry rows it already reads — so what is
+  asked is whether the harness counts what the suite counts. THAT IS NOT THE
+  SAME AS EITHER BEING RIGHT: the active-requirement derivation is the harness's
+  own program written out a second time, so a defect the two share agrees with
+  itself, and what the check catches is the harness drifting — the figure
+  dropped, renamed, spelled off a constant, or counted by line instead of by ID.
+  Three readings were compared by hand when this landed, and all three answered
+  166. Both derivations
+  read the directory beside the suite rather than `$HOOKS`, because the
+  `requirements.md` the harness counted is the one beside the harness; reading a
+  file the override moved would go red for the override and say nothing about
+  the arithmetic. The four `unarmed` pins are evidence about the four spellings
+  they name and about nothing else — a count written some other way is out of
+  their reach, and what holds the positive half is the `written` pin on the
+  pointer that now stands where the counts did. No row of the registry can reach
+  any of this: the rule is code in `mutate-hooks.sh`, which is `$TOOLING`, and
+  what that code reads is `requirements.md` beside the harness rather than a
+  file an override moves — so GH-141's exception does not apply and this is
+  GH-107.2's first limit exactly. It is held by these checks and by review.
 
 ## Provenance: the acceptance criteria of #37–#41
 

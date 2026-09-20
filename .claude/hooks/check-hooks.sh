@@ -10894,7 +10894,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '291' "${TEXT_CHECK_ARGS##*COUNT }"
+    '296' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -11098,6 +11098,143 @@ tok 'and one is expected to survive, being registered against the wrong requirem
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
     '52' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+
+# ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
+# DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
+#
+# The four pins just above are literals ON PURPOSE and they stay: the registry's
+# size and the three outcome counts. They are CHECKS. A row added without anyone
+# noticing turns them red, moving them is the moment a reviewer sees the registry
+# grow in a diff, and none of them has ever gone stale. That is a literal earning
+# its maintenance.
+#
+# The counts that used to sit in mutate-hooks.sh's header were the other kind:
+# how many real mutations, against how many files, naming how many requirement
+# IDs, of how many active requirements, and how many runs a whole-registry pass
+# costs. Nothing read them, so nothing went red when they rotted -- they were
+# wrong or moved six times in three days before #148 was filed and eight times
+# more while #139 was open, and a whole-registry pass reported ALL CHECKS PASSED
+# through all of it. A number in a comment earns nothing because nothing reads
+# it. `--list` derives all of them now and the header states none.
+#
+# WHY NEITHER FIGURE BELOW IS A LITERAL HERE, which is #148's own rule turned on
+# this file: an active-requirement count written here would move with every
+# entry added to requirements.md, and a suite that has to be edited whenever a
+# requirement is filed is this issue recreated one directory over. So each is
+# compared against a value derived here instead -- one from requirements.md, one
+# from the registry rows read above -- and this section holds no number of its
+# own. The pins above can do it because what they count is the registry, which
+# is the thing a reviewer of a registry change is looking at.
+#
+# READ OFF $SUITE_DIR, like $MUT and for the same reason. The harness that runs
+# is the one a person started, and the requirements.md it counted is the one
+# beside it; comparing its arithmetic against a reading of a DIFFERENT file would
+# go red for the override rather than for the harness.
+req GH-148
+MUT_LIST=$(bash "$MUT" --list 2>/dev/null)
+[ -n "$MUT_LIST" ] || {
+  echo "mutate-hooks.sh --list printed nothing, so the #148 checks below prove nothing" >&2
+  exit 1
+}
+# Distinct IDs, not `- status: active` lines, so that an entry carrying the field
+# twice counts once.
+#
+# WHAT THIS ASKS, AND WHAT IT DOES NOT. The program below is the same reading the
+# harness makes, written out a second time rather than called -- so what goes red
+# is the harness drifting from it: the figure dropped, renamed, spelled off a
+# constant, counted by line instead of by ID, or read out of some other file. It
+# is NOT independent evidence that either reading is right about
+# requirements.md's grammar, because a defect the two share agrees with itself.
+# Three readings were compared by hand when this landed -- these two and a third
+# pairing headings to statuses through `sort -u` -- and all three answered 166,
+# with no `### ` heading outside the entry grammar carrying a status line. That
+# was a measurement, and this is a check; saying which is which is the point of
+# this paragraph.
+#
+# THE STATUS LINE IS READ AS THE REGISTRY AUDIT ABOVE READS IT, tolerating the
+# whitespace either side of the word rather than matching the line byte for
+# byte. Two parsers in one file disagreeing about what `active` means is a
+# defect waiting on a trailing space, and this one was the stricter of the two:
+# an entry the audit twenty lines up still called active would have dropped out
+# of both counts here, silently and equally, which is the one way a comparison
+# of two readings of one rule can be green and wrong. Review of this branch.
+REQ_ACTIVE_HERE=$(awk '
+  /^### / { id = $2; next }
+  id != "" && /^- status:[ \t]*active[ \t]*$/ { active[id] = 1 }
+  END { n = 0; for (i in active) n++; print n + 0 }' "$SUITE_DIR/requirements.md")
+MUT_ACTIVE=$(printf '%s\n' "$MUT_LIST" \
+             | awk '/requirements in requirements.md are active/ { print $1; exit }')
+# Nothing read is not agreement. Both sides empty compares equal, which is this
+# check passing by computing nothing -- the shape #98's section is about, and the
+# reason the harness prints a phrase rather than 0 when it reads no entry either.
+if [ -z "$REQ_ACTIVE_HERE" ] || [ "$REQ_ACTIVE_HERE" = 0 ]; then
+  fail static 'no active requirement was counted out of requirements.md, so what --list prints is being compared against nothing'
+else
+  tok 'the harness derives how many requirements are active, and derives the number this suite does' \
+      "$REQ_ACTIVE_HERE" "$MUT_ACTIVE"
+fi
+# THE WHOLE-REGISTRY RUN COUNT: the baseline, plus one per row whose edit is
+# expected to apply. Not one per row -- a row registered did-not-apply never
+# reaches a run -- so it is derived off the outcomes read above, which is the
+# registry itself and not a constant.
+req GH-148
+MUT_RUNS_HERE=$((1 + $(printf '%s' "$MUT_OUTCOMES" | grep -cv '^did-not-apply$')))
+tok 'and how many runs of this suite a whole-registry pass costs, the baseline included' \
+    "$MUT_RUNS_HERE" \
+    "$(printf '%s\n' "$MUT_LIST" \
+       | awk '/runs of check-hooks.sh for a whole-registry pass/ { print $1; exit }')"
+
+# AND THE HEADER STATES NONE OF THEM. Four absences, each the exact phrase that
+# carried one of those counts before #148 took it out. This is evidence about
+# the four spellings it names and about nothing else: a count written some other
+# way is out of their reach, and these do not amount to "the header restates
+# nothing". What holds that is the pointer the header now carries in their place,
+# which the last pin below reads.
+#
+# ASKED OF THE HEADER REFLOWED ONTO ONE LINE, and not of the file. The first
+# version of these pins greped $MUT directly and one of the four was inert for
+# it: the sentence it named, `fifty-four runs as the registry stands`, wrapped
+# between `as the` and `registry stands`, so `grep -F` could not see the text the
+# check exists to forbid. Reverting the fix turned three of the four red and left
+# that one green -- a guard weaker than its own prose, which is the shape #84 and
+# GH-155.1 are both about, found here by running the revert rather than by
+# reasoning about it. A comment's line breaks are a wrapping decision and no part
+# of what it says, so the breaks are taken out before the question is asked.
+#
+# THE FIXTURE IS BUILT FROM $MUT TWO LINES DOWN, which is the only reason a path
+# under $FIXTURES may stand where the text checks below want a hook or the
+# tooling. The derivation above judges that argument by its basename and cannot
+# see this one -- a fixture is a third place, neither $HOOKS nor $SUITE_DIR -- so
+# what holds it is the line that writes it and this sentence, not that check.
+MUT_PROSE="$FIXTURES/mutate-hooks-header.txt"
+sed -n '1,/^set -u$/p' "$MUT" | sed -e 's/^#[ \t]\{0,3\}//' | tr '\n' ' ' | tr -s ' ' \
+  > "$MUT_PROSE"
+# A reflow that read part of the header would make the four absences below
+# vacuous, because an absence is what a truncated file has most of. So the region
+# is BRACKETED rather than merely non-empty: a marker from its first paragraph
+# and one from its last, which together say the whole of it was read. Anchored at
+# one end only -- `ABOUT AN HOUR`, which is line 18 -- every truncation below
+# line 18 passed the guard and emptied the pins, and review of this branch found
+# it. Both markers are text the header carries for its own reasons and one of
+# them is separately pinned above, so neither is maintenance this adds.
+for MUT_PROSE_MARK in 'ABOUT AN HOUR' 'the documents it is judged against stay this repository'; do
+  grep -qF -- "$MUT_PROSE_MARK" "$MUT_PROSE" || {
+    echo "the reflowed mutate-hooks.sh header does not carry |$MUT_PROSE_MARK|, so it is not the whole header and the #148 pins below prove nothing" >&2
+    exit 1
+  }
+done
+req GH-148
+unarmed 'the harness header does not restate how many requirements are active' \
+        "$MUT_PROSE" 'whose status is active'
+unarmed 'nor how many runs a whole-registry pass costs' \
+        "$MUT_PROSE" 'runs as the registry stands'
+unarmed 'nor how many real mutations there are and what they touch' \
+        "$MUT_PROSE" 'real mutations, against'
+unarmed 'nor how many requirement IDs those rows name' \
+        "$MUT_PROSE" 'requirement IDs between them'
+req GH-148
+written 'the harness header points at --list where those counts stood' \
+        "$MUT_PROSE" 'Its summary lines carry all of them'
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -12106,7 +12243,7 @@ GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:stati
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
 GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static
 GH-128 GH-171:gap
-GH-155.1:static
+GH-155.1:static GH-148:static
 '
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in

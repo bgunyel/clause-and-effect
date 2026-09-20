@@ -16,16 +16,19 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- fifty-four runs as the
-# registry stands, not fifty-five, because the row whose edit matches nothing
-# never reaches one. Measured twice on 2026-09-17, on this machine and on
-# registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
-# The figure above is those rates carried to the current count and not a third
-# measurement; a run under load took nearer four minutes a row. That is why it
-# is a separate script and why check-hooks.sh does not call it (#107). Nothing
-# here is a PreToolUse hook and settings.json does not register it. Naming rows
-# costs the baseline plus one run each, so re-asking a single rule is about four
-# minutes rather than an hour.
+# applies, at about two minutes, plus the baseline. How many runs that is, as
+# the registry stands today, is on `--list`'s summary and is written nowhere
+# else (#148) -- it is not simply one per row, because a row whose edit matches
+# nothing never reaches one. Measured twice on 2026-09-17, on this machine and
+# on registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three
+# runs. Those two are dated records of a measurement and stay; the hour is those
+# rates carried to the row count of the day and is not a third measurement, and
+# a run under load took nearer four minutes a row. That is why it is a separate
+# script and why check-hooks.sh never runs the registry (#107). It does ask
+# `--list` for the two figures its #148 checks compare against a derivation of
+# their own, which runs no mutation and costs nothing. Nothing here is a
+# PreToolUse hook and settings.json does not register it. Naming rows costs the
+# baseline plus one run each, so re-asking a single rule is about four minutes.
 #
 # EXIT STATUS: non-zero when any row reports something other than the outcome it
 # declares. For every real mutation that means a survivor or an edit that did not
@@ -84,8 +87,8 @@
 # lines it rewrote, and all ten #139 rows were run as one selection against
 # the answering commit. The fifth added `quoted-equals-read-as-value` and
 # re-anchored `quoted-base-value-refused`, and all eleven #139 rows were run as
-# one selection against the commit answering it. The other twenty-three rows have
-# not been run since the files they run against changed.
+# one selection against the commit answering it. The rows named in none of the
+# selections above have not been run since the files they run against changed.
 # #155 added two. `pr-hook-reads-gh-off-the-environment` was run as a selection
 # on 2026-09-17: baseline plus one, caught, byte-identical after, and red in
 # GH-108.6 and in nothing else ON A HOST THAT HAS `gh`. That last clause is the
@@ -104,7 +107,15 @@
 # red in GH-155.1 and in nothing else, byte-identical after. That one is host-
 # independent -- its `gh --version` is silent where there is no `gh` to run and
 # harmless where there is. Neither has been run since dev-05 was merged in.
-# No run has therefore exercised all fifty-four rows together, and saying which
+# #148 registered no row -- what it changed is `--list`, which no run reads --
+# and ran `selftest-anchor-that-matches-nothing` alone on 2026-09-20 to say the
+# harness still starts: the baseline green, the row did-not-apply as it
+# declares, .claude/hooks/ byte-identical after. That is evidence that this file
+# still runs and about nothing else. The first version of this sentence gave the
+# baseline's requirement count, which nothing reads and which read as the active
+# count and is not one; review of the branch that wrote it took it out, in the
+# commit whose whole subject is that.
+# No run has therefore exercised the whole registry together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -175,17 +186,28 @@
 # that characterised it ("the rules that gained checks under #103") claimed the
 # whole of two issues and named eight rows -- and the count that replaced it was
 # itself wrong, in four documents, until Bertan's review of PR #142 measured it.
-# The counts below are what `--list` prints, and nothing here restates them in
-# prose a second time:
+# Every count about this registry is derived, and this is where the pointer
+# stands instead of the numbers:
 #
-#   FIFTY-TWO real mutations, against SEVEN files in .claude/hooks/, naming
-#   FORTY-SIX requirement IDs between them, of the 165 whose status is active.
+#   bash .claude/hooks/mutate-hooks.sh --list
 #
-# Those four numbers are restated prose in a file whose own argument, three
-# paragraphs up, is that a count in a comment is the thing #107 was filed about.
-# They had been wrong or moved six times in three days when #148 was filed to
-# take them out and let `--list` be the only place they are written, and #139
-# moved them eight more times.
+# Its summary lines carry all of them -- the rows, how many are real mutations,
+# how many files in .claude/hooks/ those touch, how many requirement IDs they
+# name, how many self-tests, how many requirements requirements.md still holds
+# active, and how many runs of check-hooks.sh a whole-registry pass costs.
+#
+# #148 IS WHY NONE OF THEM IS WRITTEN HERE, and the distinction it draws is the
+# part worth carrying forward, because it is not "counts are bad". A literal in
+# a CHECK earns its maintenance: check-hooks.sh's #107 section pins this
+# registry's size and each of its three outcome counts, and those go red the
+# moment a row is added, so moving them is where a reviewer sees it grow in a diff.
+# They stay. A number in a COMMENT earns nothing, because nothing reads it and
+# nothing turns red when it rots. This header held four of the second kind, in a
+# file whose own argument three paragraphs up is that a count in a comment is
+# the thing #107 was filed about. They were wrong or moved six times in three
+# days before #148 was filed, and eight times more while #139 was open, silently
+# every time -- a whole-registry pass reported ALL CHECKS PASSED beside prose
+# naming a row count the registry had already outgrown.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
 # verify is `review` or `runbook` rather than a check here, every doc-claim about
@@ -345,15 +367,24 @@ if [ -n "$LIST" ]; then
   # The counts are printed rather than restated in prose anywhere, which is the
   # whole of #107's complaint applied to this file's own header: the previous
   # version characterised the registry in four documents and got the number
-  # wrong in all four.
+  # wrong in all four. #148 finished that -- the header states none of these and
+  # points here instead, and check-hooks.sh's #148 checks compare the two figures
+  # below against a derivation of each it makes for itself.
   ROWS=0
   REAL=0
   SELFTESTS=0
+  RUNS_NEEDED=1   # the baseline, which a pass pays before it believes any row
   FILES=
   IDS=
   while IFS='%' read -r id file edit reqs want; do
     [ -n "$id" ] || continue
     ROWS=$((ROWS + 1))
+    # A pass is NOT one run per row. A row whose edit is expected to leave its
+    # target byte-identical never reaches a run -- that is what the self-test
+    # expecting did-not-apply establishes -- so the count is read off the
+    # expected outcome, which moves when the registry does, and never off a
+    # constant, which is the thing #148 was filed about.
+    [ "$want" = did-not-apply ] || RUNS_NEEDED=$((RUNS_NEEDED + 1))
     case "$id" in
       selftest-*) SELFTESTS=$((SELFTESTS + 1)) ;;
       *) REAL=$((REAL + 1))
@@ -370,6 +401,36 @@ if [ -n "$LIST" ]; then
     "$(printf '%s' "$FILES" | sort -u | grep -c .)" \
     "$(printf '%s' "$IDS" | sort -u | grep -c .)" \
     "$SELFTESTS"
+  # WHAT A ROW MAY NAME INTO, which is the denominator the header used to write
+  # out beside the numerator. The fourth field is only ever an ACTIVE
+  # requirement -- a retired or superseded one has no covering check, so a row
+  # naming it would report `survived` on every run for ever and read as a defect
+  # in the hooks rather than in the row, which is why check-hooks.sh's registry
+  # audit refuses one. Counted by ID rather than by line, so that an entry
+  # carrying the field twice counts once, and read from beside this script
+  # because that is the requirements.md this registry's rows are judged against.
+  # The status line is matched the way that audit matches it, whitespace either
+  # side of the word tolerated -- two readings of one field that disagree about
+  # a trailing space are a defect waiting to happen, and check-hooks.sh's #148
+  # check compares this count against a second copy of exactly this program, so
+  # a stricter reading here would be wrong in both places at once and green.
+  ACTIVE=$(awk '
+    /^### / { id = $2; next }
+    id != "" && /^- status:[ \t]*active[ \t]*$/ { active[id] = 1 }
+    END { n = 0; for (i in active) n++; print n + 0 }' "$SRC/requirements.md" 2>/dev/null)
+  # Nothing read is not zero, and it is not a count either. An unreadable or
+  # renamed file would otherwise print `0 requirements ... are active`, which
+  # reads like a measurement and is none -- the shape this whole file exists to
+  # argue against. The failure says so in a line of its own, carrying none of
+  # the words check-hooks.sh's #148 check reads the figure out of, so that check
+  # goes red rather than picking a number out of an apology.
+  if [ -n "$ACTIVE" ] && [ "$ACTIVE" != 0 ]; then
+    printf '%s requirements in requirements.md are active, which is what a row may name\n' "$ACTIVE"
+  else
+    printf 'NO ACTIVE REQUIREMENT WAS READ OUT OF requirements.md, so how many a row may name is not known here\n'
+  fi
+  printf '%s runs of check-hooks.sh for a whole-registry pass: the baseline, plus one per row whose edit applies\n' \
+    "$RUNS_NEEDED"
   exit 0
 fi
 
