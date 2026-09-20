@@ -10953,7 +10953,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '293' "${TEXT_CHECK_ARGS##*COUNT }"
+    '291' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -11935,12 +11935,46 @@ report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
 # GH-144.8's text read false -- and the mutation registered for it could not see
 # that, its sed address taking all five matching lines at once. `report-omits-
 # the-skipped-fetch-clause` deletes exactly this one.
-written 'the unreachable-root guard names the base rule too' \
-  "$HOOKS/report-stale-branches.sh" \
-  'no-pr-decisions.sh accepts any dev-NN base for want of a ref.'
-written 'and so does the skipped fetch, where there is no origin to fetch from' \
-  "$HOOKS/report-stale-branches.sh" \
-  'staleness detector in no-work-on-stale-branch.sh is armed, and'
+# A PIN PER SITE, and `written` cannot be one. The first answer here was two
+# `written` pins, and the registry row written beside them -- which deletes the
+# skipped-fetch clause and nothing else -- SURVIVED them. `written` is `grep -qF`
+# over the whole file, so a literal standing at six sites is still present when
+# one is deleted, and a pin on it says nothing about any site. The row is what
+# said so; the pins read as evidence and were none.
+#
+# So the sites are derived instead. Every run of adjacent `echo` lines is one
+# message; a message is in scope when it says a read was not made or was made
+# against refs no fetch refreshed -- which is what its staleness-detector,
+# not-armed or abstains wording marks -- and every message in scope must name
+# no-pr-decisions.sh too. The echo scaffolding is stripped and the whitespace
+# collapsed before matching, because "neither staleness" and "detector in" fall
+# on different lines in one of the six and a line-at-a-time match misses it.
+#
+# The two messages this deliberately leaves out are the ones GH-144.8 is not
+# about: `merge settings: NOT READ`, whose subject is a setting that arms that
+# guard's detectors and feeds no base rule, and the `main ancestry` line, whose
+# subject is that guard's ahead/behind test. Both correctly name one hook, and a
+# derivation that swept them in would be the correction applied one site too far.
+REPORT_DEGRADED=$(awk '
+  /^[[:space:]]*echo "/ {
+    if (!g) { g = 1; t = ""; s = NR }
+    line = $0
+    sub(/^[[:space:]]*echo "/, "", line); sub(/"[[:space:]]*$/, "", line)
+    t = t " " line
+    next
+  }
+  { if (g) { emit(); g = 0 } }
+  END { if (g) emit() }
+  function emit(   j) {
+    j = t; gsub(/[[:space:]]+/, " ", j)
+    if (j !~ /staleness detector|is not armed for this session|abstains rather than refusing/) return
+    printf "%s:%s\n", s, (j ~ /no-pr-decisions\.sh/ ? "names-base" : "MISSING")
+  }
+' "$HOOKS/report-stale-branches.sh")
+tok 'the report has six messages about a read it could not make or could not trust' \
+    '6' "$(printf '%s\n' "$REPORT_DEGRADED" | grep -c .)"
+lacks 'and every one of them names the base rule beside the stale-branch guard' \
+  "$REPORT_DEGRADED" 'MISSING'
 req GH-108.9
 report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
   'branches: NOT READ -- git is not on PATH' \

@@ -129,6 +129,16 @@
 # registered this row against that same requirement. The narrowing did not cost
 # the row its evidence. Said plainly because the previous merge's selection
 # found the opposite and the two are only distinguishable by running them.
+#
+# GH-144.8's three rows were run on the fourth review of PR #158, and the third
+# of them is why there are three. `report-omits-the-skipped-fetch-clause` deletes
+# one clause of the six the requirement claims, and it SURVIVED the two `written`
+# pins first written for those sites: `written` is `grep -qF` over a whole file,
+# so a literal standing at six sites is still there when one is deleted. The row
+# is what said so -- the pins read as evidence and were none -- and the answer was
+# to derive the sites rather than pin the literal. All three caught after that,
+# .claude/hooks/ byte-identical. A row written for a claim and run against it is
+# the only thing that told the two apart.
 # No run has therefore exercised all sixty-four rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
