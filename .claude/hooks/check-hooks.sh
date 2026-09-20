@@ -2813,6 +2813,58 @@ flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the same cut before the group'
 req GH-118 FR-48 US-15
 check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'the same cut on a release create, already refused' \
   'gh release -R `echo o/r` create v1'
+# ROUND 3: THE GUARD ITSELF COMPARED ITS STUMP AS RAW TEXT. The option token
+# went through ghreduce and the stump did not, so Class B reappeared inside the
+# fix for Class A: quote the substitution and the stump is `"$` rather than `$`,
+# the guard missed it, and the unquoted spelling of one command was refused
+# while the quoted spelling was permitted. Each of these reaches gh as a merge
+# of PR 5 -- measured with a shim on PATH printing its argv, under a name that
+# is not `gh`, so that nothing here could reach the real one.
+req GH-118 US-15
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a quoted $( ) stump before a merge' \
+  'gh pr -R "$(echo o/r)" merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a quoted backtick stump, which reduces to nothing' \
+  'gh pr -R "`echo o/r`" merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the --repo spelling of the quoted stump' \
+  'gh pr --repo "$(echo o/r)" merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the quoted stump before the group' \
+  'gh -R "$(echo o/r)" pr merge 5'
+# AND THE ROW THAT SAYS WHY THE RULE IS NOT A LIST OF STUMPS. Reducing the stump
+# and testing it for `$` or emptiness -- the fix round 3 proposed and measured --
+# closes the four above and leaves this one, which is a real merge: the shell
+# hands gh `foobar` as the repository and runs `merge 5`. The stump here is
+# `foo$`, which is neither. What every stump has in common is that the cut left
+# an unfinished word, so that is what the guard tests.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a stump with text in front of it, which no list catches' \
+  'gh pr -R foo$(echo bar) merge 5'
+# Process substitution, which round 3 left to judgement: gh rejects /dev/fd/63
+# as a repository, so these buy a broken command rather than a merge. They are
+# closed anyway, because deciding stump by stump which ones matter is the list
+# the rule above exists instead of.
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a <( ) stump before a merge' \
+  'gh pr -R <(echo o/r) merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a >( ) stump before a merge' \
+  'gh pr -R >(echo o/r) merge 5'
+# An expansion cs_split does NOT cut leaves the whole command visible, so the
+# value is a value and the walk reads the verb behind it. ${X} was refused
+# before this guard existed; $((1)) was permitted, and is refused now because
+# its cut leaves a `$` like any other.
+req GH-118 US-15
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK 'a ${ } value, uncut, and the merge behind it' \
+  'gh pr -R ${X} merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an arithmetic expansion, whose cut leaves a $ too' \
+  'gh pr -R $((1)) merge 5'
+# THE SHAPE THIS STILL LEAVES, pinned as permitted rather than described. A
+# quoted value containing whitespace is several tokens to this walk, so the
+# stump test never sees the span as one word: `-R` takes `'"'"'$(echo` and the rest
+# of the span stays in the line. gh receives the literal text as a repository
+# and rejects it, so it buys a broken command and not a merge -- the same
+# third-order class as <( ) and, unlike that one, not closed by the rule above.
+# Permitted at dev-05 too.
+req GH-118 US-13
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: a quoted value holding whitespace, several tokens here; #194' \
+  'gh pr -R '"'"'$(echo o/r)'"'"' merge 5'
+
 # AND WHAT THE k==1 GUARD MUST NOT REFUSE: a fragment that ends after a value it
 # really has. `gh release -R o/r` is the whole of its command, gh runs no verb
 # for it, and the release allowlist refuses it with the message naming the five
@@ -11485,7 +11537,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '61' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '62' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11548,7 +11600,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '59' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '60' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:

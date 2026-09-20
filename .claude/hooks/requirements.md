@@ -1650,7 +1650,15 @@ and held to the same standard of saying only what it asks.
   substitution — ``gh pr `echo -t` view merge 5`` — is cut into a fragment of
   its own by `cs_split`, so no walk sees it; that is CLAUDE.md's
   deliberately-left-open consequences 4 and 6, and closing it would mean
-  resolving a substitution from text.
+  resolving a substitution from text. A quoted VALUE holding whitespace —
+  `gh pr -R 'a b' merge 5` — is several tokens to a walk that cuts on
+  whitespace, so the option consumes the first of them and the subcommand
+  behind the rest is never matched; third-order, since none of the three
+  recognised options takes a value that may contain whitespace, and filed as
+  #194 because that is a property of those options rather than of the walk.
+  A value token that is the STUMP of a cut substitution is not in this list:
+  that one is refused, by the rule that a stump is a word the cut left
+  unfinished.
 
 ### GH-124
 - text: `feed` and `feed_says` read a hook's exit status as every other helper does,
@@ -2664,3 +2672,17 @@ it has no entry above (Q16).
   holds, which resolves a `gh` shell function ahead of PATH and would have aborted
   the suite on a host that exports one. Its third correction is a measurement in
   `mutate-hooks.sh`, whose exclusivity was that host's, and is recorded there
+- #184: the pull request for #118; Bertan's three reviews of it are cited where
+  each thing they corrected stands. The largest were two spellings of the
+  refused command still permitted — an option made last by a backtick, and a
+  quoted one — and then the same shape twice more, in the guard written for the
+  first of them and in the guard written for that
+- #191: the two classes `cs_git_args` carries and `CS_GH_AWK` does not, found by
+  the class sweep in that review's round 2. It has no entry above on purpose:
+  pre-existing and measured identical at `dev-05`, so the requirement that would
+  carry it is the fix. GH-118's note names both classes and points here
+- #194: a quoted gh option value holding whitespace, several tokens to a walk
+  that cuts on whitespace. No entry above for the same reason as #191, and for
+  one more: it is third-order, none of the three recognised options taking a
+  value that may contain whitespace, so there is no decision behind it to
+  require. A check pins the permitted verdict and its label names the issue

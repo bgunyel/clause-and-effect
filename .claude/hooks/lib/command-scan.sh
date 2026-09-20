@@ -1754,9 +1754,44 @@ CS_GH_AWK='
         # refuses it with the message that names the five reads -- which is the
         # right message, where "move the option after the subcommand" would name
         # a subcommand that is not there.
+        # A STUMP IS AN INCOMPLETE WORD, and that is the rule rather than a list
+        # of the stumps seen so far. Round 3 of the review found the first
+        # version of this guard comparing the stump as RAW TEXT while the option
+        # token beside it went through ghreduce -- Class B reappearing inside
+        # the fix for Class A, and the same disagreement that made round 1 a
+        # defect: `gh pr -R $(echo o/r) merge 5` was refused and its quoted
+        # spelling permitted, both reaching gh as a merge of PR 5.
+        #
+        # Reducing the stump was the fix proposed, and it is not enough. What
+        # cs_split leaves in the value position, measured over every spelling:
+        #
+        #   gh pr -R `...`          ->  (no token at all)
+        #   gh pr -R $(...)         ->  $
+        #   gh pr -R "$(...)"       ->  "$        reduces to  $
+        #   gh pr -R "`...`"        ->  "         reduces to  (empty)
+        #   gh pr -R <(...)         ->  <
+        #   gh pr -R >(...)         ->  >
+        #   gh pr -R foo$(...)      ->  foo$
+        #
+        # A list of those is a list, and the last row is the one that says so:
+        # the shell hands gh `foobar` there and runs the merge, and no guard
+        # written as `== "$" || == ""` sees it. What every row has in common is
+        # that the cut left a word that is not finished -- it ends on the
+        # character that opened the substitution, or the quote that held it is
+        # gone with the rest. So the test is that shape: nothing left after
+        # reduction, or a reduced word ending on one of the three characters a
+        # `(` cut can leave behind. No repository, host or config value ends on
+        # one of those, so it costs nothing.
+        #
+        # This closes <( ) and >( ) as well, which round 3 left to judgement on
+        # the grounds that gh rejects /dev/fd/63 as a repository and so buys a
+        # broken command rather than a merge. That is true and it is not the
+        # reason to leave them: enumerating which stumps are worth refusing is
+        # the list this comment just argued against keeping.
         if (k == 1) {
           q = tokend(p)
-          if (q <= p || substr(line, p, q - p) == "$") { opaque = 1; break }
+          val = ghreduce(substr(line, p, q - p))
+          if (q <= p || val == "" || val ~ /[$<>]$/) { opaque = 1; break }
           p = skipblank(q)
         }
       }

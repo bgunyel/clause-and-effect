@@ -390,3 +390,98 @@ guard: the comment above `cs_git_args` names both classes and the issue.
 - #191: `cs_git_args` carries Class A and Class B. Pre-existing, measured,
   filed with acceptance criteria.
 - The registry is at 61 rows and has still never been run in one pass.
+
+---
+
+# 2026-09-20 20:24 +03 · session `clause-and-effect-37` — #118 round four: the fix for Class A had Class B inside it
+
+**Branch** `worktree-issue-118-gh-preoption`, answering round 3 of Bertan's
+review of PR #184. One gating finding. **Check suite 5172 → 5182 results, all
+passing.** Eight #118 mutation rows run as one selection.
+
+## The finding: the guard reduced the option and compared the stump raw
+
+Round 2 added a guard saying a recognised valued option needs a value that is
+there, testing the stump with `substr(...) == "$"`. The option token beside it
+goes through `ghreduce`. **The stump did not.** So quoting the substitution
+made the stump `"$` rather than `$`, the guard missed it, and
+`gh pr -R "$(echo o/r)" merge 5` was permitted while its unquoted spelling was
+refused — Class B living inside the fix for Class A, and the same
+two-spellings-disagree argument that made round 1's finding a defect, turned on
+the round-2 fix.
+
+Confirmed the review's argv column independently, with a shim printing its
+arguments under the name `ghx` — **never `gh`**, because a shim that is not
+found first would hand a real merge to the real thing.
+
+## Reducing the stump is not enough, and the sixth spelling is why
+
+The fix round 3 proposed — reduce the stump, and treat an empty one as a stump
+too — closes four spellings and leaves a fifth that is a **real merge**:
+
+```
+gh pr -R foo$(echo bar) merge 5    ->  fragment `gh pr -R foo$`
+                                   ->  shell passes [pr] [-R] [foobar] [merge] [5]
+```
+
+The stump is `foo$`, which is neither `$` nor empty. Measured, the stumps
+`cs_split` leaves in the value position are: nothing at all (backtick), `$`,
+`"$`, `"`, `<`, `>`, and `foo$`. **A list of those is a list**, which is the
+thing this file keeps relearning.
+
+What every one has in common is that the cut left a **word that is not
+finished**: it ends on the character that opened the substitution, or the quote
+that held it went with the rest. So the guard tests that shape — after
+reduction, nothing left, or a word ending on `$`, `<` or `>`. No repository,
+host or config value ends on one of those.
+
+That also closes `<( )` and `>( )`, which round 3 left to judgement on the
+grounds that gh rejects `/dev/fd/63` as a repository and so buys a broken
+command rather than a merge. True, and not the reason to leave them: deciding
+stump by stump which ones are worth refusing is the list the rule replaces.
+
+`$((1))` is refused now too — its cut leaves a `$` like any other — where it
+was permitted at `dev-05`.
+
+## What this still leaves, filed as #194
+
+A quoted value containing **whitespace** is several tokens to a walk that
+tokenises on whitespace: `gh pr -R 'a b' merge 5` consumes `'a` as the value
+and leaves `b' merge 5`, so `merge` is never matched. Permitted, and the shell
+does hand gh `[pr] [-R] [a b] [merge] [5]`.
+
+Third-order: `a b` is not `OWNER/REPO`, and none of `-R`, `--repo` or
+`--hostname` takes a value that can contain whitespace, so no spelling of it
+reaches a decision. Filed anyway, because "no valid value has a space in it" is
+a property of those three options and not of the walk — a valued option added
+later whose value may contain whitespace would make it first-order with no
+other change, and nothing would say so. Pinned as a permitted BOUNDARY check.
+
+## Mistakes in this round's own work
+
+- **The finding itself was this session's.** The round-2 guard was written and
+  shipped with the defect its own neighbouring fix had already named. Reducing
+  one token and not the one beside it is not a subtle miss — the reducer was
+  three lines above the comparison.
+- **A mutation row went stale on the line this round rewrote, and the harness
+  caught it.** `gh-valued-option-eats-past-the-end` was anchored on round 2's
+  spelling of the guard; round 3 rewrote that line, so the edit matched nothing
+  and the harness reported `did-not-apply` with the reason — the edit left the
+  file byte-identical, so the run after it would have been a run of *unmutated*
+  hooks reported as evidence. That is the self-test shape happening to a real
+  row. Re-anchored on the head of the line rather than its body, and re-run
+  alone: caught.
+- **Citing an issue in a check label is a claim the suite holds you to.** The
+  `#194` label turned `the suite cites #194, which has no entry and no reason`
+  red until the issue was recorded in `requirements.md`'s cited-issues section
+  with why it has no requirement entry. Working as designed; noted because the
+  first instinct was to read it as an unrelated failure.
+
+## Still open after round four
+
+- Everything under the previous entries' *Still open* stands.
+- #194: a quoted value holding whitespace. Third-order, pinned, filed.
+- #191: `cs_git_args` carries both classes. Pre-existing, filed.
+- The registry is at 62 rows and has still never been run in one pass.
+- #184's three review rounds are recorded in `requirements.md`'s cited-issues
+  section, with #191 and #194 and why neither has a requirement entry.
