@@ -1581,6 +1581,50 @@ The suite fails on each of these, and `--matrix` shows the rest:
   The second time the retarget arm has differed from the creating arms in a way
   their shared reasoning missed, after #133.
 
+### GH-167
+- text: The `function NAME { … }` spelling of a function definition puts the
+  function's name where the command word has to be, so its body is refused by no
+  boundary hook, wrapped or unwrapped. The `NAME() { … }` spelling is refused as
+  it should be.
+- from: #167, found by the spec review of the fix for #134
+- kind: defect-permitting
+- status: gap → #167
+- note: `cs_split` strips `function` as a control word and stops at the name,
+  which it then takes for the command word; `(` and `)` are separators, so the
+  other spelling puts the brace at the head of its own fragment and is reached.
+  Since #134 the wrapper anchor reads the same control words, and it misses this
+  shape for the same reason -- the name breaks the run of admitted prefixes
+  before the wrapper word -- so both halves agree here and are both wrong. That
+  is what makes it a sibling of #134 rather than an instance of it, and why
+  dropping `function` from `CS_CONTROL_WORDS` is the wrong repair: the word
+  earns its place in `cs_split`, which does strip it, and taking it out would
+  lose that strip to buy the anchor nothing. What the word needs is its operand
+  stripped with it, as `CS_WRAP_OPERAND_WORDS` does for `timeout` and `flock`.
+  The checks are written at the measured verdict and not the correct one, so the
+  fix turns them red and finds this entry.
+
+### GH-175
+- text: A shell wrapper is read as one only when its option token begins `-c` and
+  its heredoc operator is preceded by whitespace, so `bash -lc`, `sh -ec`,
+  `bash --login -c`, `bash -o pipefail -c` and `bash<<EOF` are at no wrapper
+  position for any boundary hook.
+- from: #175, found by the review of PR #172
+- kind: defect-permitting
+- status: gap → #175
+- note: #134 gave the anchor one spelling of WHERE a command position is. WHICH
+  word is a wrapper is a second question and is still answered narrowly, in the
+  anchor's tail. `cs_split` does not rescue these: `bash` is not a prefix word,
+  so the payload stays quoted and no rule sees the command inside it. Not a
+  regression from #134 -- the tail is byte-identical at `origin/dev-05` 33f7129
+  -- and not the family `NAMED AND NOT CLOSED` covers, which names words this
+  library cannot reach at all; this is the anchor's own word with an option
+  spelling it declines to admit. `bash -cx` is refused, but only because `-cx`
+  begins with `-c`, which is the measurement that says the rule tests a prefix
+  and not a token. Left at the measured verdict because the widening has a cost
+  in the refusing direction that has to be measured first -- the anchor reads
+  raw text, so a wider option class falls on prose too -- and that measurement
+  is the fix, not this entry.
+
 ### GH-107.1
 - text: `check-hooks.sh` judges the hooks in `$CHECK_HOOKS_DIR` when that names a
   directory, and the ones beside itself when it does not. What moves with it is

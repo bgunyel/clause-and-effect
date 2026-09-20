@@ -748,7 +748,16 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # The separators are a string of characters and not a regular expression, since
 # cs_split walks them with index() and the anchor wraps them in a bracket
 # expression. Every one of them is literal inside brackets, which is what lets
-# one spelling serve both.
+# one spelling serve both, and check-hooks.sh asks that of the list rather than
+# leaving it to this sentence: no `-`, which would make a range of its
+# neighbours silently, and no `]`, `^`, backslash or `[`. Both registered
+# mutations reach the permitting direction, and the last of those reaches little
+# else. `[.` or `[=` opens a collating
+# element, grep exits 2 on the malformed class, and every consumer's guard is
+# `if grep -qE ... &&`, which reads a 2 as "no wrapper" -- measured on a copy
+# with `[.` appended, a wrapped `gh pr merge 5` went from BLOCK to ALLOW. The
+# emptiness of the list is handled below cs_split; its validity is handled here,
+# by there being nothing in it that is not literal.
 CS_SEPARATORS=';&|()`'
 CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|select|function|coproc'
 
@@ -808,6 +817,29 @@ CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|s
 # refused rather than parsed, and the wrapper words are the ones this library
 # can already name. Everything past that is out of reach, in the manner of the
 # soft spot at no-git-push.sh:153, and not a claim the set is exhaustive.
+#
+# AND A NARROWER GAP THAN THAT ONE, which is #175 and is not the same family.
+# The paragraph above is about words this library cannot reach. This is the
+# anchor's own word, `bash`, with an option spelling it declines to admit: the
+# tail below wants an option token that BEGINS `-c` and a heredoc operator with
+# whitespace in front of it, so
+#
+#   BLOCK   bash -c 'gh pr merge 5'
+#   BLOCK   bash -cx 'gh pr merge 5'    only because -cx begins with -c
+#   ALLOW   bash -lc 'gh pr merge 5'
+#   ALLOW   sh -ec 'gh pr merge 5'
+#   ALLOW   bash --login -c 'gh pr merge 5'
+#   ALLOW   bash<<EOF                    the blank is required and is not there
+#
+# cs_split does not rescue these either: `bash` is not a prefix word, so the
+# payload stays quoted and no rule sees the command inside it. #134 answered
+# WHERE a command position is, once, for both halves; WHICH word is a wrapper is
+# the other question in this expression and #134 did not touch it. The verdicts
+# above are pinned in check-hooks.sh under GH-175, at the verdict they have and
+# not the one they should have, so the fix turns them red. Why it was not fixed
+# with #134: widening the option class falls on prose too, since this rule reads
+# raw text, and that cost has to be measured before it is taken -- which is the
+# work, not a line of it.
 #
 # ONE SOFT SPOT, named rather than closed, and it is #68's complaint reaching
 # this rule. The separator class below carries its own idea of what ends a

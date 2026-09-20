@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- forty-one runs as the
-# registry stands, not forty-two, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- forty-three runs as the
+# registry stands, not forty-four, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -64,8 +64,20 @@
 # merge of dev-05 into it (2026-09-18), with the same result. Both break a list that both
 # halves read since #134, so each breaks cs_split and the anchor together, and so
 # does `control-words-not-stripped` now; no row breaks one reader alone, which is
-# what the single spelling was for. The other rows have not been run since the
-# files they run against changed. No run has therefore exercised all forty-one
+# what the single spelling was for. The review of PR #172 added
+# `dash-in-separators` and `bracket-opens-a-collating-element`, for the half of
+# the separator list that emptiness does not reach -- whether what is in it is
+# literal inside a bracket expression -- and ran that pair on 2026-09-20,
+# baseline plus two, both caught with GH-134 red, byte-identical after. The two
+# fail differently and that is why they are two rows, measured on the same
+# machine on the same day. The dash compiles, so the class silently becomes a
+# range and the damage runs both ways: 602 checks red, 305 of them a BLOCK
+# turned ALLOW and 248 the reverse. The bracket opens a collating element, grep
+# exits 2 on the malformed class, and every consumer's `if grep -qE ... &&`
+# reads a 2 as "no wrapper": 289 red, 274 of them permitting and one refusing --
+# fewer checks than the dash, and almost all of them in the direction that
+# matters. The other rows have not been run since the
+# files they run against changed. No run has therefore exercised all forty-three
 # rows together, and saying which rows a measurement covered is the whole point
 # of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -219,6 +231,8 @@ nohup-not-a-wrapper%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%FR-4 
 control-words-not-stripped%lib/command-scan.sh%s/\[{}!\]|if|then|elif|else|fi|while|until|for|do|done|case|esac|select|function|coproc/cs-matches-no-control-word/%FR-3 US-1 US-15%caught
 control-words-not-admitted-by-anchor%lib/command-scan.sh%s/|(\$CS_CONTROL_WORDS)\[\[:space:\]\]+|/|/%GH-134%caught
 close-paren-not-a-separator%lib/command-scan.sh%/^CS_SEPARATORS=/s/)//%GH-134%caught
+dash-in-separators%lib/command-scan.sh%/^CS_SEPARATORS=/s/)/)-/%GH-134%caught
+bracket-opens-a-collating-element%lib/command-scan.sh%/^CS_SEPARATORS=/s/`/`[./%GH-134%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught

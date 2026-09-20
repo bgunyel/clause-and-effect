@@ -1823,7 +1823,29 @@ check no-pr-decisions.sh BLOCK 'brace group + wrapped merge' '{ bash -c "gh pr m
 # function's parameter list both end in one, and cs_split has always cut there;
 # the anchor's class stopped at `(`.
 check no-pr-decisions.sh BLOCK 'case arm + wrapped merge'    'case x in x) bash -c "gh pr merge 5";; esac'
-check no-pr-decisions.sh BLOCK 'function body + wrapped merge' 'f() { bash -c "gh pr merge 5"; }'
+check no-pr-decisions.sh BLOCK 'a NAME() function body + wrapped merge' 'f() { bash -c "gh pr merge 5"; }'
+# The OTHER spelling of the same construct, which neither half reaches, pinned
+# at the verdict it has rather than the one it should have. `function` is in
+# CS_CONTROL_WORDS and is stripped, but the function's NAME stands after it and
+# breaks the run of admitted prefixes before a wrapper word, so the body is at a
+# command position for nobody. Both halves agree here and are both wrong, which
+# is what makes #167 a sibling of #134 and not an instance of it. The label
+# above said "function body" and reached one spelling of two, so a reader took
+# the construct for covered -- the drift this suite exists to catch. These go
+# red when #167 is fixed, which is how the entry gets found.
+req GH-167
+check no-pr-decisions.sh ALLOW 'a function NAME body, unwrapped, is reached by nobody' \
+      'function f { gh pr merge 5; }'
+check no-pr-decisions.sh ALLOW 'nor is a wrapped one' \
+      'function f { bash -c "gh pr merge 5"; }'
+# Dropping `function` from CS_CONTROL_WORDS is the repair that suggests itself
+# and is the wrong one: the word earns its place in cs_split, which does strip
+# it, and a strip lost to buy the anchor nothing is a worse trade than the gap.
+# What it is pinned with is a line where the strip is the only thing between the
+# guarded command and ^.
+req GH-167 FR-3
+check no-pr-decisions.sh BLOCK 'and the strip the word does earn is still made' \
+      'function gh pr merge 5'
 req GH-134 FR-4 GH-43.3
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'then + wrapped commit on main' \
          'if true; then bash -c "git commit -m x"; fi'
@@ -1923,6 +1945,90 @@ tok 'and do' 'yes' "$(inlist "|$CS_CONTROL_WORDS|" '|do|')"
 tok 'and else' 'yes' "$(inlist "|$CS_CONTROL_WORDS|" '|else|')"
 tok 'and the brace and the negation' 'yes' "$(inlist "|$CS_CONTROL_WORDS|" '|[{}!]|')"
 tok 'and not in, which introduces words and not a command' 'no' "$(inlist "|$CS_CONTROL_WORDS|" '|in|')"
+# And what lets one spelling serve both readers at all: every character in the
+# list is literal inside a bracket expression. The comment at CS_SEPARATORS
+# asserts that, and nothing enforced it, while the list is interpolated into two
+# classes -- the anchor's command position, and the negated class inside
+# CS_WORD_SPELLING. The characters that are not literal there are the whole of
+# the risk, and they fail in two different ways, so both are named rather than
+# one standing for the other:
+#
+#   -    is silent and valid. Appending it before the backtick makes `)` to a
+#        backtick a range, so digits, uppercase and `=?@_/` all become
+#        separators. The class still compiles and grep still exits 0 or 1, which
+#        is what makes it silent. It is NOT refuse-only, and the first draft of
+#        this comment said it was: registered as `dash-in-separators` and run,
+#        it turns 602 checks red, 305 of them a BLOCK become an ALLOW.
+#   [.   and `[=` are not silent. They open a collating element, grep exits 2,
+#        and the guard in all four hooks is `if grep -qE ... &&`, which reads a 2
+#        as "no wrapper" and PERMITS. Registered as
+#        `bracket-opens-a-collating-element`: 289 checks red, 274 of them a
+#        BLOCK become an ALLOW and one the reverse. Fewer than the dash, and
+#        almost all of them in the direction that matters.
+#
+# So both reach the permitting direction and the second reaches almost nothing
+# else, and the doctrine this file
+# applies to the lists -- withdraw cs_split when one cannot be trusted -- reaches
+# emptiness and not validity. Asked here as membership, which is what `inlist`
+# can ask. A check that compiled the class instead would go green on the day the
+# compile stopped happening, which is the shape this suite keeps finding.
+req GH-134
+tok 'the separator set holds no dash, which would make a range of its neighbours' \
+    'no' "$(inlist "$CS_SEPARATORS" '-')"
+tok 'nor a close bracket, which would end the class early' \
+    'no' "$(inlist "$CS_SEPARATORS" ']')"
+tok 'nor a caret, which leads a negated class' \
+    'no' "$(inlist "$CS_SEPARATORS" '^')"
+tok 'nor a backslash' \
+    'no' "$(inlist "$CS_SEPARATORS" '\\')"
+tok 'nor an open bracket, which is the half of a collating element that makes grep exit 2' \
+    'no' "$(inlist "$CS_SEPARATORS" '[')"
+
+section "=== issue #175: which word is a wrapper, which #134 did not answer ==="
+# #134 gave the anchor one spelling of WHERE a command position is. WHICH word
+# is a wrapper is the second question in the same expression, and it is still
+# answered narrowly: the tail wants an option token that BEGINS `-c`, and a
+# heredoc operator with whitespace in front of it. So the ordinary spellings
+# `bash -lc` and `sh -ec` are at no wrapper position for any of the four hooks,
+# and neither is `bash<<EOF` written against the word.
+#
+# Pinned at the measured verdict and not the correct one, so the fix for #175
+# turns these red and finds the entry -- the treatment GH-108.5 has for #144.
+# Not a regression from #134: the tail is byte-identical at origin/dev-05
+# 33f7129. Not the family NAMED AND NOT CLOSED covers either, which is words
+# this library cannot reach at all; this is the anchor's own word.
+req GH-175
+check no-pr-decisions.sh ALLOW 'a bundled shell option is not a wrapper flag' \
+      "bash -lc 'gh pr merge 5'"
+check no-pr-decisions.sh ALLOW 'nor is it on sh' \
+      "sh -ec 'gh pr merge 5'"
+check no-pr-decisions.sh ALLOW 'nor on zsh' \
+      "zsh -lc 'gh pr merge 5'"
+check no-pr-decisions.sh ALLOW 'a long option before the flag hides it too' \
+      "bash --login -c 'gh pr merge 5'"
+check no-pr-decisions.sh ALLOW 'and so does an option with an operand' \
+      "bash -o pipefail -c 'gh pr merge 5'"
+check no-pr-decisions.sh ALLOW 'a heredoc written against the word is not one' \
+      "bash<<'EOF'
+gh pr merge 5
+EOF"
+# The controls, which say the rule is a prefix test and not a token test. `-cx`
+# is refused for beginning with `-c` and for no better reason, which is the
+# measurement that names the defect.
+check no-pr-decisions.sh BLOCK 'the control: the flag alone' \
+      "bash -c 'gh pr merge 5'"
+check no-pr-decisions.sh BLOCK 'the control: a flag that merely begins with it' \
+      "bash -cx 'gh pr merge 5'"
+check no-pr-decisions.sh BLOCK 'the control: a heredoc with the blank it wants' \
+      "bash <<'EOF'
+gh pr merge 5
+EOF"
+# The same expression serves all four hooks, so the gap is not this one hook's.
+req GH-175
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'the same bundled option in front of a push' \
+      "bash -lc 'git push --all origin'"
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'the control: the same push, flag alone' \
+      "bash -c 'git push --all origin'"
 
 section "=== REGRESSION: PR #35 review, heredoc detection dropped live commands ==="
 # Dropping a heredoc body is the one step that hides commands, so both ends of
@@ -10580,7 +10686,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '41' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '43' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -10643,7 +10749,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '39' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '41' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -11310,7 +11416,7 @@ GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-117.1:permit-only
 GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:refuse-only GH-134 GH-135:gap GH-136:gap GH-139:gap              
+GH-131:gap GH-133:refuse-only GH-134 GH-135:gap GH-136:gap GH-139:gap GH-167:gap GH-175:gap              
 GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
 GH-108.8:static GH-108.9:static GH-108.10:static GH-128   
