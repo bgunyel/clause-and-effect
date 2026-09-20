@@ -16,7 +16,7 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT TWO MINUTES A ROW: one check-hooks.sh run per mutation that applies,
-# plus the baseline -- sixty-one runs as the registry stands, not sixty-two,
+# plus the baseline -- sixty-two runs as the registry stands, not sixty-three,
 # because the row whose edit matches nothing never reaches one. Measured twice
 # on 2026-09-17, on this machine and on registries one row apart: 47 min 34 s
 # and 45 min 24 s, at twenty-three runs, which is 124 s and 118 s a run. A run
@@ -26,7 +26,7 @@
 # rewritten that way. The line said ABOUT AN HOUR, and an hour was the total at
 # twenty-three runs; every row added since made it wronger while the sentence
 # four lines down went on calling it "those rates carried to the current count".
-# At sixty-one runs the same rate is about two hours. The total is what goes
+# At sixty-two runs the same rate is about two hours. The total is what goes
 # stale on every registry addition, and a check pinned the stale one in place --
 # review of PR #172 found this while that PR was editing the row count in this
 # very sentence and leaving the hour. So the rate is what is written and what
@@ -127,15 +127,20 @@
 # that emptiness does not reach -- whether what is in it is literal inside a
 # bracket expression -- and ran that pair on 2026-09-20 before the merge and
 # again after it. The two fail differently and that is why they are two rows,
-# measured on the same machine on the same day, before the merge: the dash
-# compiles, so the class silently becomes a range and the damage runs both ways,
-# 602 checks red with 305 of them a BLOCK become an ALLOW and 248 the reverse;
-# the bracket opens a collating element, grep exits 2 on the malformed class, and
-# every consumer's `if grep -qE ... &&` reads a 2 as "no wrapper", 289 red with
-# 274 of them permitting and one refusing. Fewer checks than the dash, and almost
-# all of them in the direction that matters. Those two figures are of the
-# pre-merge tree and were not retaken against the merged one; what was retaken is
-# the verdict, which is what the registry records.
+# measured on the same machine on the same day: the dash compiles, so the class
+# silently becomes a range and the damage runs both ways, 602 checks red with
+# 305 of them a BLOCK become an ALLOW and 248 the reverse; the bracket opened a
+# collating element and was then the permitting one, 289 red with 274 of them
+# permitting.
+#
+# THE BRACKET FIGURE IS HISTORY AND THE DASH FIGURE IS NOT, which the first
+# version of this caveat did not distinguish -- it disclaimed the dev-05 merge
+# and said nothing about the guard the same review added. GH-134.1 withdraws
+# cs_split for a list that does not compile, so re-measured against the head
+# that has it, the bracket is 1564 checks red with NONE permitting and 1444
+# refusing. The dash is unchanged, because a range compiles and the guard is
+# right not to see it. Read 289/274 as the measurement that justified the guard,
+# not as what a malformed separator list costs today.
 # That review's second round added three more, and they are the answer to a
 # question it asked of the first round's work: a check that cannot fail.
 # `backslash-in-separators` exists because the backslash pin was spelled with
@@ -150,7 +155,17 @@
 # red for the first and GH-134.1 for the other two; it was not read off a
 # separate column, and a row naming a requirement its edit cannot reach is the
 # one the registry keeps on purpose to show what that would look like.
-# No run has therefore exercised all sixty-one rows together, and saying which
+# The third round added `backslash-in-control-words`, which is the same question
+# asked of the other list: CS_CONTROL_WORDS is read raw by grep and
+# escape-processed by `awk -v`, exactly as CS_SEPARATORS is, and had word pins
+# only. Its edit puts a `\t` inside a word rather than breaking the list,
+# deliberately -- the two load-time guards both pass it, since the anchor still
+# compiles and the words still do not match the empty string, so the row is
+# caught by the character pin and by nothing else. That is what makes it
+# evidence that the pin and the guard are not the same check. Run with the three
+# rows above it on 2026-09-20 against the same head: baseline plus four, all
+# caught, byte-identical after.
+# No run has therefore exercised all sixty-two rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -318,6 +333,7 @@ close-paren-not-a-separator%lib/command-scan.sh%/^CS_SEPARATORS=/s/)//%GH-134%ca
 dash-in-separators%lib/command-scan.sh%/^CS_SEPARATORS=/s/)/)-/%GH-134%caught
 bracket-opens-a-collating-element%lib/command-scan.sh%/^CS_SEPARATORS=/s/`/`[./%GH-134%caught
 backslash-in-separators%lib/command-scan.sh%/^CS_SEPARATORS=/s/)/)\\/%GH-134%caught
+backslash-in-control-words%lib/command-scan.sh%/^CS_CONTROL_WORDS=/s/|coproc/|copro\\tc/%GH-134%caught
 anchor-validity-not-checked%lib/command-scan.sh%/CS_LISTS_VALID=0/s/-le 1/-le 2/%GH-134.1%caught
 control-word-validity-not-checked%lib/command-scan.sh%s|if ($0 ~ ("^(" w ")$"))|if (0)|%GH-134.1%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught

@@ -1971,19 +1971,28 @@ tok 'and not in, which introduces words and not a command' 'no' "$(inlist "|$CS_
 #        is what makes it silent. It is NOT refuse-only, and the first draft of
 #        this comment said it was: registered as `dash-in-separators` and run,
 #        it turns 602 checks red, 305 of them a BLOCK become an ALLOW.
-#   [.   and `[=` are not silent. They open a collating element, grep exits 2,
-#        and the guard in all four hooks is `if grep -qE ... &&`, which reads a 2
-#        as "no wrapper" and PERMITS. Registered as
-#        `bracket-opens-a-collating-element`: 289 checks red, 274 of them a
-#        BLOCK become an ALLOW and one the reverse. Fewer than the dash, and
-#        almost all of them in the direction that matters.
+#   [.   and `[=` open a collating element, so the anchor does not compile.
+#        Registered as `bracket-opens-a-collating-element`.
 #
-# So both reach the permitting direction and the second reaches almost nothing
-# else, and the doctrine this file
-# applies to the lists -- withdraw cs_split when one cannot be trusted -- reaches
-# emptiness and not validity. Asked here as membership, which is what `inlist`
-# can ask. A check that compiled the class instead would go green on the day the
-# compile stopped happening, which is the shape this suite keeps finding.
+# WHAT THOSE TWO NOW COST IS NOT WHAT THIS SAID, and the correction is the
+# point. Written before GH-134.1, this paragraph read the bracket as the
+# permitting case -- 289 checks red, 274 of them a BLOCK become an ALLOW --
+# because grep exited 2 and every consumer's `if grep -qE ... &&` took a 2 for
+# "no wrapper". GH-134.1 withdraws cs_split for exactly that, so the figures
+# became a record of why the guard exists rather than of what the tree does.
+# Re-measured against this head: the same mutation is 1564 checks red, NONE of
+# them permitting and 1444 refusing. The dash is unchanged at 602 red and 305
+# permitting, because a range compiles and no guard sees it. Review of PR #172,
+# which is the third sentence in this PR to be a measurement that outlived its
+# subject.
+#
+# So the doctrine -- withdraw cs_split when a list cannot be trusted -- now
+# reaches emptiness AND validity, below cs_split, and what is left here is the
+# list that is valid and means something else. That is the dash, and it is the
+# whole of what these five pins are for. Asked as membership, which is what
+# `inlist` can ask; a check that compiled the class instead would go green on
+# the day the compile stopped happening, which is the shape this suite keeps
+# finding.
 req GH-134
 tok 'the separator set holds no dash, which would make a range of its neighbours' \
     'no' "$(inlist "$CS_SEPARATORS" '-')"
@@ -2003,6 +2012,27 @@ tok 'nor a backslash' \
     'no' "$(inlist "$CS_SEPARATORS" '\')"
 tok 'nor an open bracket, which is the half of a collating element that makes grep exit 2' \
     'no' "$(inlist "$CS_SEPARATORS" '[')"
+# AND THE SAME QUESTION OF THE OTHER LIST, which this asked of one of two.
+# CS_CONTROL_WORDS is read the same two ways CS_SEPARATORS is -- raw by grep
+# through CS_WRAPPER_RE, and escape-processed by `awk -v controlwords=` -- and
+# had word pins only. A control word carrying an escape hands the two readers
+# two different strings: measured, `if|then|do\tx` is 13 characters to the shell
+# and grep and 12 to awk, because awk -v turns the two-character `\t` into a tab.
+# Whether that changes a verdict then depends on what each engine does with the
+# escape, which is a property of the host and not of this repository -- awk is
+# mawk here, and an implementation that strips unknown escapes rather than
+# keeping them would differ again. Two answers to one question, at the edit
+# point #134 built to have one.
+#
+# The runtime guard below cs_split does not reach this and is not meant to: the
+# anchor still compiles and the control words still do not match the empty
+# string, so both load-time guards pass it. Each list's own characters, asked
+# here; whether
+# an expression works at all, asked there. Review of PR #172, which found the
+# asymmetry rather than the divergence -- the list holds no backslash today.
+req GH-134
+tok 'the control words hold no backslash, which the two readers would not agree on' \
+    'no' "$(inlist "$CS_CONTROL_WORDS" '\')"
 
 section "=== issue #175: which word is a wrapper, which #134 did not answer ==="
 # #134 gave the anchor one spelling of WHERE a command position is. WHICH word
@@ -4605,14 +4635,22 @@ check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'brace group + a wrapped ch
   "{ bash -c 'git cherry-pick 1234abc'; }"
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a NAME() function body + a wrapped merge' \
   "f() { eval 'git merge other-branch'; }"
+check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'the control: a read after then' \
+  'if true; then git log --oneline -5; fi'
 # And the spelling that reaches neither half, here too. #167 was pinned in one
 # consumer of four, which is the shape #84 was filed against; the label above
 # said "function body" and this is the other half of what that names.
+#
+# LAST IN THE BLOCK, and that is the point. `req` sets the tag for every check
+# after it until the next `req`, so when this stood above the control the
+# control inherited GH-167 and counted as coverage for a gap it exercises
+# nothing of -- it would have gone on passing when #167 is fixed. A check that
+# cannot fail, tagged onto the entry whose pins exist precisely so the fix turns
+# them red. Found by review of PR #172, which is the same round that removed two
+# others; an inserted `req` reaches forwards, and that is the way to insert one.
 req GH-167
 check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'a function NAME body is reached by nobody here either' \
   "function f { git merge other-branch; }"
-check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'the control: a read after then' \
-  'if true; then git log --oneline -5; fi'
 
 echo "--- the fallback: ahead == 0, behind > 0 against the active dev branch ---"
 req GH-44.2 FR-38
@@ -11384,7 +11422,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '61' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '62' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11447,7 +11485,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '59' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '60' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:

@@ -750,14 +750,25 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # expression. Every one of them is literal inside brackets, which is what lets
 # one spelling serve both, and check-hooks.sh asks that of the list rather than
 # leaving it to this sentence: no `-`, which would make a range of its
-# neighbours silently, and no `]`, `^`, backslash or `[`. Both registered
-# mutations reach the permitting direction, and the last of those reaches little
-# else. `[.` or `[=` opens a collating
-# element, grep exits 2 on the malformed class, and every consumer's guard is
-# `if grep -qE ... &&`, which reads a 2 as "no wrapper" -- measured on a copy
-# with `[.` appended, a wrapped `gh pr merge 5` went from BLOCK to ALLOW. The
-# emptiness of the list is handled below cs_split; its validity is handled here,
-# by there being nothing in it that is not literal.
+# neighbours in silence, and no `]`, `^`, backslash or `[`.
+#
+# WHAT THAT PIN IS NOW FOR, and it is not what the first version of this
+# paragraph said. That version was written before the load-time validity guard
+# below cs_split existed, and it argued from the damage a malformed list did
+# then: `[.` opens a collating element, the anchor does not compile, grep exits
+# 2, and every consumer's `if grep -qE ... &&` read a 2 as "no wrapper" and
+# PERMITTED -- 289 checks red with 274 of them a BLOCK turned ALLOW. The guard
+# closed that, and the paragraph outlived it. Re-measured with the guard in
+# place, the same mutation is 1564 checks red, **none** of them permitting and
+# 1444 refusing: the list is withdrawn and every consumer refuses everything.
+# Review of PR #172 found the sentence still claiming the old direction.
+#
+# So emptiness and validity are BOTH handled below cs_split now, and what is
+# asked here is the third thing neither reaches: a list that is well formed and
+# means the wrong thing. `-` between two characters is a valid range -- the
+# class compiles, both load-time guards pass it, and digits, uppercase and `=?@_/`
+# quietly become separators. No compile test can see that, which is why it is a
+# membership pin and why the pin is not redundant with the guard.
 CS_SEPARATORS=';&|()`'
 CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|select|function|coproc'
 
@@ -1481,14 +1492,29 @@ cs_split() {
 # library before, 5.6 ms after, so about 3 ms added to a hook invocation for two
 # process spawns. Paid once per hook run, against a rule whose failure is
 # silent and total.
+#
+# WHICH LIST, said here and once. Every consumer's guard refuses with "could not
+# load lib/command-scan.sh", which is true of a missing file and of a renamed
+# function and is a misdirection here: the library loaded, every function but
+# cs_split is defined, and what failed is a list. A reader who appended a word
+# with a trailing `|` would be sent to look for a file that is present and
+# correct. Naming it in the nine guards would put the answer in nine places, and
+# they are right about their own case; the library knows which list it withdrew
+# for, so the library says so, on the same stderr the refusal uses and only on
+# the path where something is actually wrong. Review of PR #172.
 CS_LISTS_VALID=1
+CS_INVALID_LIST=
 printf '' | grep -qE "$CS_WRAPPER_RE" 2>/dev/null
-[ $? -le 1 ] || CS_LISTS_VALID=0
+[ $? -le 1 ] || { CS_LISTS_VALID=0
+  CS_INVALID_LIST="CS_WRAPPER_RE does not compile, so CS_SEPARATORS or CS_WRAP_WORDS holds something that is not literal in it"; }
 printf '\n' | awk -v w="$CS_CONTROL_WORDS" \
-  '{ if ($0 ~ ("^(" w ")$")) exit 1 }' 2>/dev/null || CS_LISTS_VALID=0
+  '{ if ($0 ~ ("^(" w ")$")) exit 1 }' 2>/dev/null || { CS_LISTS_VALID=0
+  CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_CONTROL_WORDS matches the empty string, which makes the strip advance by nothing and never return"; }
 if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ] \
    || [ -z "$CS_CONTROL_WORDS" ] || [ -z "$CS_SEPARATORS" ] \
    || [ "$CS_LISTS_VALID" -ne 1 ]; then
+  [ -z "$CS_INVALID_LIST" ] \
+    || echo "lib/command-scan.sh: $CS_INVALID_LIST. cs_split is withdrawn, so every consumer refuses." >&2
   unset -f cs_split
 fi
 
