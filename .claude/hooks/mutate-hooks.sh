@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- forty-one runs as the
-# registry stands, not forty-two, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- fifty-two runs as the
+# registry stands, not fifty-three, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -61,9 +61,32 @@
 # caught, byte-identical after. #141 added two, `variants-field-deleted` and
 # `variants-seed-disowned`, and on the second merge of dev-05 into it
 # (2026-09-18) ran that pair as a selection against the merged tree: baseline
-# plus two, both caught with GH-141 red, byte-identical after. The other
-# twenty-three rows have not been run since the files they run against changed.
-# No run has therefore exercised all forty-one rows together, and saying which
+# plus two, both caught with GH-141 red, byte-identical after. #139 added three,
+# `quoted-base-flag-permitted`, `quoted-base-value-refused` and
+# `quoted-shorthand-value-refused`, and ran them as a selection (2026-09-19):
+# baseline plus three, all caught with GH-139 red, byte-identical after; it also
+# edited no-pr-decisions.sh and check-hooks.sh. Bertan's review of PR #173 added
+# `ansi-hex-escape-not-decoded` and `open-quote-holds-no-newline`, and the five
+# #139 rows were run again as one selection against the answering commit. Its
+# second review added `nul-decoded-as-a-character` and
+# `nul-cut-span-keeps-its-newline`, and all seven #139 rows were run as one
+# selection against the commit answering it. Its third review added
+# `c-escape-takes-the-next-character` and moved the edit of
+# `nul-cut-span-keeps-its-newline` onto the line that now refuses. The eight
+# #139 rows were run as one selection against the answering commit, and
+# `open-quote-holds-no-newline` reported did-not-apply: the second review had
+# written its edit against `if (st && !cut)`, which the third removed. Its edit
+# was re-anchored and it was run alone, caught; the other seven were caught in
+# the selection, and .claude/hooks/ was byte-identical after both runs. The
+# fourth review added `empty-span-read-as-value` and
+# `cut-span-at-line-end-always-refused`, re-anchored
+# `quoted-shorthand-value-refused` and `nul-cut-span-keeps-its-newline` on the
+# lines it rewrote, and all ten #139 rows were run as one selection against
+# the answering commit. The fifth added `quoted-equals-read-as-value` and
+# re-anchored `quoted-base-value-refused`, and all eleven #139 rows were run as
+# one selection against the commit answering it. The other twenty-three rows have
+# not been run since the files they run against changed.
+# No run has therefore exercised all fifty-two rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -137,13 +160,14 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   THIRTY-NINE real mutations, against SEVEN files in .claude/hooks/, naming
-#   FORTY-THREE requirement IDs between them, of the 163 whose status is active.
+#   FIFTY real mutations, against SEVEN files in .claude/hooks/, naming
+#   FORTY-FOUR requirement IDs between them, of the 164 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
-# They have now been wrong or moved six times in three days, and #148 is filed to
-# take them out and let `--list` be the only place they are written.
+# They had been wrong or moved six times in three days when #148 was filed to
+# take them out and let `--list` be the only place they are written, and #139
+# moved them eight more times.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
 # verify is `review` or `runbook` rather than a check here, every doc-claim about
@@ -234,6 +258,17 @@ retarget-refusal-drops-the-create-comparison%no-pr-decisions.sh%s/ just as creat
 base-pattern-admits-main%no-pr-decisions.sh%/^is_dev_base()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
 pr-create-base-not-read%no-pr-decisions.sh%s/if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/if false \&\& RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/%FR-14 FR-16 US-9%caught
 web-handoff-refused%no-pr-decisions.sh%/^gh_pr_web()/,/^}/s/--web|-w) return 0 ;;/--web|-w) return 1 ;;/%FR-21 US-12%caught
+quoted-base-flag-permitted%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/END { exit found ? 0 : 1 }/END { exit 1 }/%GH-139%caught
+quoted-base-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ \&\& q <= length("--base") + (w ~ \/^--base=\/))/)/%GH-139%caught
+quoted-equals-read-as-value%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ + (w ~ \/^--base=\/))/)/%GH-139%caught
+quoted-shorthand-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if ((q \&\& q <= b)/if ((q/%GH-139%caught
+ansi-hex-escape-not-decoded%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "x") {/if (0) {/%GH-139%caught
+open-quote-holds-no-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (st) w = w "\\n"; //%GH-139%caught
+nul-decoded-as-a-character%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (v == 0) { if (!cut) { cut = 1; cutw = w } } else w = w chr(v)/w = w chr(v)/%GH-139%caught
+nul-cut-span-keeps-its-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (cut) { if (/if (0) { if (/%GH-139%caught
+empty-span-read-as-value%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ || (qe \&\& qe <= length("--base") + 1)//%GH-139%caught
+cut-span-at-line-end-always-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (w == "" || (w ~ \/^-\/ \&\& w !~ \/\[\[:space:\]\]\/))/if (1)/%GH-139%caught
+c-escape-takes-the-next-character%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "c") { put(0); return }/if (e == "c") { if (i < n) i++; w = w "?"; return }/%GH-139%caught
 api-read-taken-for-a-write%no-pr-decisions.sh%/^gh_api_is_write()/,/^}/s/^  return 1$/  return 0/%FR-20%caught
 release-allowlist-admits-a-write%no-pr-decisions.sh%/^RELEASE_READ_VERBS=/s/verify-asset"/verify-asset create edit delete"/%FR-48%caught
 bare-push-refusal-drops-the-branch%no-git-push.sh%/Name the branch: git push/s/git push <remote> \$CURRENT/git push <remote> <branch>/%US-7%caught

@@ -3204,6 +3204,165 @@ check no-pr-decisions.sh BLOCK '--field= on a state field'         'gh api -X PA
 req US-15 GH-137.1
 check no-pr-decisions.sh BLOCK '-F, quoted state field'               'gh api -X PATCH repos/o/r/pulls/5 -F "state=closed"'
 
+section "=== REGRESSION: #139, a quoted base flag removed the refusal it should trigger ==="
+# base_args drops every quoted span whole, and on the two arms where naming no
+# base is permitted -- a retarget, and a create under --web -- the drop removed
+# the one refusal a base of main would have met. The issue's table, every row of
+# which went red before the fix: the quote round the flag's NAME is what hid it.
+req FR-17 FR-15 US-10 GH-139
+check no-pr-decisions.sh BLOCK 'retarget, flag double-quoted'       'gh pr edit 35 "--base" main'
+check no-pr-decisions.sh BLOCK 'retarget, flag single-quoted'       "gh pr edit 35 '--base' main"
+check no-pr-decisions.sh BLOCK 'retarget, flag=value quoted whole'  'gh pr edit 35 "--base=main"'
+check no-pr-decisions.sh BLOCK 'retarget, shorthand quoted'         'gh pr edit 35 "-B" main'
+req FR-21 FR-15 GH-139
+check no-pr-decisions.sh BLOCK 'web create, flag double-quoted'     'gh pr create --web "--base" main'
+check no-pr-decisions.sh BLOCK 'web create, flag=value quoted whole' 'gh pr create --web "--base=main"'
+# Quoting that touches the flag name without standing round it, and a backslash,
+# which bash removes as it removes a quote. Not in the issue's table; each was
+# permitted on the retarget arm before the fix, for the same reason.
+req FR-17 FR-15 US-10 GH-139
+check no-pr-decisions.sh BLOCK 'retarget, quote inside the name'    'gh pr edit 35 --"base" main'
+check no-pr-decisions.sh BLOCK 'retarget, quote before the ='       'gh pr edit 35 "--base"=main'
+check no-pr-decisions.sh BLOCK 'retarget, name backslash-escaped'   'gh pr edit 35 \--base main'
+check no-pr-decisions.sh BLOCK 'retarget, bundled shorthand quoted' 'gh pr edit 35 "-dB" main'
+# bash's $'...' and $"..." quoting, which the first version of the fix counted
+# the $ of as a character. Found by review of the fix; all three were permitted.
+check no-pr-decisions.sh BLOCK "retarget, flag in \$'...'"          "gh pr edit 35 \$'--base' main"
+check no-pr-decisions.sh BLOCK 'retarget, flag in $"..."'           'gh pr edit 35 $"--base" main'
+check no-pr-decisions.sh BLOCK "web create, shorthand in \$'...'"   "gh pr create --web \$'-B' main"
+# The escapes $'...' decodes, which the first version of that answer left as
+# written and called a construction rather than a spelling. Bertan's review of
+# PR #173: bash hands gh `--base main` for each of these, and each was permitted.
+check no-pr-decisions.sh BLOCK "retarget, \\x escape in \$'...'"     "gh pr edit 35 \$'\\x2d-base' main"
+check no-pr-decisions.sh BLOCK "retarget, octal escapes in \$'...'"  "gh pr edit 35 \$'\\055\\055base' main"
+check no-pr-decisions.sh BLOCK "retarget, \\u escape in \$'...'"     "gh pr edit 35 \$'\\u002d-base' main"
+check no-pr-decisions.sh BLOCK "web create, \\x escape shorthand"    "gh pr create --web \$'\\x2dB' main"
+# A NUL the escapes produce, which the decoder turned into `?`. bash stops the
+# $'...' span at a NUL and drops what is left of it up to the closing quote, so
+# `$'--base\0' main` is `--base main`. Bertan's second review of PR #173; each of
+# these was permitted. bash 5.2 was asked what each spelling becomes before the
+# rows were written: `\c@` is a NUL, and `\^@` -- also named by that review -- is
+# not an escape at all and stays four characters, which the ALLOW row below pins.
+check no-pr-decisions.sh BLOCK "retarget, \\0 ends the \$'...' span"     "gh pr edit 35 \$'--base\\0' main"
+check no-pr-decisions.sh BLOCK "retarget, \\x00 and text after it"      "gh pr edit 35 \$'--base\\x00junk' main"
+check no-pr-decisions.sh BLOCK "retarget, \\c@ is a NUL"                "gh pr edit 35 \$'--base\\c@x' main"
+check no-pr-decisions.sh BLOCK "retarget, NUL span then the rest"      "gh pr edit 35 \$'--ba\\0'se main"
+check no-pr-decisions.sh BLOCK "web create, \\u0000 in the flag"        "gh pr create --web \$'--base\\u0000' main"
+check no-pr-decisions.sh BLOCK "dev base, then a NUL-cut second base"  "gh pr create --base dev-05 --title x --body y \$'--base\\x00' main"
+# A cut span still open at the end of the line. The newline is inside the span
+# after the NUL, so bash drops it with the rest -- the argument is `--base`, not
+# prose holding a newline. Found while answering that review, not by it.
+check no-pr-decisions.sh BLOCK "a NUL-cut span open past the line end" $'gh pr edit 35 $\'--base\\0\n\' main'
+# Bertan's third review of PR #173: four more holes, all from copying bash's
+# decoding one escape at a time. `\c` took the character after it as its
+# argument even when that was the closing quote or the first of a `\\` pair,
+# which bash's parser pairs first -- so the span never closed where bash closes
+# it, and everything after was misread. And a cut span open at the line end was
+# judged on its first line, where bash closes it on the next and the word goes
+# on. The answer is the conservative one that review suggested: every `\c` is
+# taken as a possible NUL, since what it masks is a byte and bytes are not this
+# decoder's business, and a cut span that runs past the line is refused.
+check no-pr-decisions.sh BLOCK "\\c before the closing quote"          "gh pr edit 35 \$'x\\c' \$'--base' main"
+check no-pr-decisions.sh BLOCK "web create, \\c before the quote"      "gh pr create --web \$'x\\c' \$'--base' main"
+check no-pr-decisions.sh BLOCK "\\c before a backslash pair"           "gh pr edit 35 \$'x\\c\\\\' \$'--base' main"
+check no-pr-decisions.sh BLOCK "dev base, \\c\\\\ then a quoted second" "gh pr create --base dev-05 --title x --body y \$'z\\c\\\\' '--base' main"
+check no-pr-decisions.sh BLOCK "\\c on a byte that masks to NUL"       "gh pr edit 35 \$'--base\\cअ' main"
+check no-pr-decisions.sh BLOCK "a cut span closing on the next line"  $'gh pr edit 35 $\'--ba\\0\n\'se main'
+# THE TRADE, pinned: `\cA` is byte 0x01 and no NUL, so bash passes `--base` and
+# a control character, which is no flag -- and it is refused, as every `\c`
+# after a flag's name is. Nobody writes a branch or a title that way. A `\c` in
+# a word that cannot be a flag is untouched.
+check no-pr-decisions.sh BLOCK "\\cA after the flag name, refused"     "gh pr edit 35 \$'--base\\cA' main"
+check no-pr-decisions.sh ALLOW "\\c in a word that is no flag"         "gh pr edit 35 --label \$'x\\cAy'"
+# Bertan's fourth review of PR #173. An EMPTY span right after the flag's name
+# was read as a quote round the value, which it cannot be -- it holds nothing --
+# so `--base$'' main` passed, and base_args, which does not know `$`, read
+# `--base$` as some other flag. What decides now is where the first span that
+# yields a character opens, and separately where the first span that yields
+# none does: an empty one at or just past the name's end refuses.
+check no-pr-decisions.sh BLOCK "an empty \$'' after the name"          "gh pr edit 5 --base\$'' main"
+check no-pr-decisions.sh BLOCK 'an empty $"" after the name'          'gh pr edit 5 --base$"" main'
+check no-pr-decisions.sh BLOCK "web create, an empty \$'' after it"    "gh pr create --web --base\$'' main"
+check no-pr-decisions.sh BLOCK "an empty \$'' before the ="            "gh pr edit 5 --base\$''=main"
+check no-pr-decisions.sh BLOCK "an empty \$'' inside the shorthand"    "gh pr edit 5 -B\$''main"
+check no-pr-decisions.sh BLOCK "a span cut to nothing after the name" "gh pr edit 5 --base\$'\\0' main"
+# Refused before this fix too, but by base_args' first sed and not by the rule
+# written for it -- the review called it luck. Pinned here so that it is not.
+check no-pr-decisions.sh BLOCK 'an empty "" after the name'           'gh pr edit 5 --base"" main'
+# Bertan's fifth review of PR #173. A span that yields a character just past
+# the name was taken as round the value, which assumed base_args could read the
+# value there -- and it can for `"="` and `'='`, but not for `$'='`, `$"="` or
+# `\=`, so `--base$'=main'` named no base at all. A quoted or escaped `=` is now
+# part of the name, and each of these, permitted before, is refused.
+check no-pr-decisions.sh BLOCK "an = in \$'...' after the name"         "gh pr edit 5 --base\$'=main'"
+check no-pr-decisions.sh BLOCK "an = alone in \$'...'"                   "gh pr edit 5 --base\$'='main"
+check no-pr-decisions.sh BLOCK 'an = alone in $"..."'                   'gh pr edit 5 --base$"="main'
+check no-pr-decisions.sh BLOCK 'an = and part of the value in $"..."'   'gh pr edit 5 --base$"=m"ain'
+check no-pr-decisions.sh BLOCK "an = as \\x3d"                          "gh pr edit 5 --base\$'\\x3d'main"
+check no-pr-decisions.sh BLOCK "an = as \\075"                          "gh pr edit 5 --base\$'\\075'main"
+check no-pr-decisions.sh BLOCK 'a backslash-escaped ='                  'gh pr edit 5 --base\=main'
+check no-pr-decisions.sh BLOCK "web create, an = in \$'...'"            "gh pr create --web --base\$'=main'"
+check no-pr-decisions.sh BLOCK "dev base, then an = in \$'...'"         "gh pr create --base dev-05 --title x --body y --base\$'=main'"
+# THE TRADE, and it moves a row: `--base"=dev-05"` was pinned ALLOW here as a
+# quoted value holding the =. Its = is quoted too, so it is refused with the
+# rest -- a spelling nobody writes for a base that could be written plainly.
+# The = OUTSIDE the quote is still a quoted value, `--base="dev-05"`, above.
+check no-pr-decisions.sh BLOCK 'a quoted = before a dev value'          'gh pr edit 5 --base"=dev-05"'
+# The line-end rule refused every cut span open at a line's end, and a body is
+# the ordinary thing to write across lines. A word the next line can only
+# extend can become a flag only if it is empty or begins with a dash and holds
+# no whitespace yet, so only that is refused. Red before the fix.
+check no-pr-decisions.sh ALLOW "a multi-line \$'...' body with a \\c"   $'gh pr edit 5 --body $\'Adds C:\\cache support\nsecond line\''
+check no-pr-decisions.sh BLOCK "a span cut to nothing, open at the end" $'gh pr edit 5 $\'\\c\n\'--base main'
+# Only the SPAN is cut, not the argument: text after the closing quote joins on,
+# so `$'--base\0'x` is `--basex`, which is no flag. The review proposed ending
+# the word at the NUL, which would refuse this; bash does not end it there.
+check no-pr-decisions.sh ALLOW "a NUL span, then more of the word"     "gh pr edit 35 --label \$'--base\\0'x"
+check no-pr-decisions.sh ALLOW "\\^@ is not an escape in bash"          "gh pr edit 35 --label \$'--base\\^@x'"
+# THE CREATE ARM, which the issue called safe and is not wholly. A create naming
+# no base is refused, so a quoted flag standing alone was refused for naming
+# none -- but beside an unquoted dev base it is a SECOND base, the unquoted one
+# satisfied the rule, and gh takes the last. Found while writing this fix.
+req FR-15 FR-16 GH-139
+check no-pr-decisions.sh BLOCK 'dev base, then a quoted main'       'gh pr create --base dev-05 "--base" main --title x'
+check no-pr-decisions.sh BLOCK 'dev base, then a quoted shorthand'  'gh pr create --base dev-05 --title x "-B" main'
+# The refusal names what it refused, and not the missing base it used to report
+# for a quoted flag standing alone on a create.
+req US-7 FR-23 GH-139
+says "$ON_DEV" no-pr-decisions.sh 'a quote or a backslash in its name' \
+  'a quoted base flag says it was quoted' \
+  'gh pr edit 35 "--base" main'
+says_not "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
+  'and a quoted flag on a create is not reported as no base' \
+  'gh pr create "--base" dev-05 --title x'
+# THE CONTROLS the issue names, and the prose the quote-drop exists for. A quote
+# round a VALUE is still read -- base_args' own unquoting, which this fix does
+# not touch -- and a quoted word holding whitespace is one argument that no
+# branch can be named, git refusing a space in a ref, so a title or body that
+# begins with the flag is prose and stays permitted. CONTRAST rows: every one is
+# green with the fix reverted, and says the fix did not widen past the name.
+req FR-17 FR-15 US-10 US-13 GH-139
+check no-pr-decisions.sh ALLOW 'retarget to dev, unquoted'          'gh pr edit 35 --base dev-05'
+check no-pr-decisions.sh ALLOW 'an edit naming no base'             'gh pr edit 35 --add-label bug'
+check no-pr-decisions.sh ALLOW 'retarget to dev, value quoted'      'gh pr edit 35 --base "dev-05"'
+check no-pr-decisions.sh ALLOW 'retarget to dev, = then a quote'    'gh pr edit 35 --base="dev-05"'
+check no-pr-decisions.sh ALLOW 'retarget to dev, -B then a quote'   'gh pr edit 35 -B"dev-05"'
+check no-pr-decisions.sh ALLOW 'an edit titled -B and a branch'     'gh pr edit 35 --title "-B main"'
+check no-pr-decisions.sh ALLOW 'an edit whose body opens --base'    'gh pr edit 35 --body "--base dev-05 is the base"'
+# The same prose split by a newline instead of a space. The hook reads one line
+# of a command at a time, so the quote is still open where the line ends -- and
+# the argument bash builds holds that newline, so it is prose as the space made
+# it. Refused by the first version of the fix. Bertan's review of PR #173.
+check no-pr-decisions.sh ALLOW 'an edit whose body opens --base, then a newline' $'gh pr edit 35 --base dev-05 --body "--base\nmore text"'
+# And a decoded \n inside $'...' is whitespace in the argument too. Green before
+# the escape decoding above existed, when `\n` was two characters; it is here so
+# that decoding one spelling of prose into a flag would go red.
+check no-pr-decisions.sh ALLOW "a \$'...' body opening --base, then \\n" "gh pr edit 35 --body \$'--base\\nmore text'"
+req FR-21 US-12 GH-139
+check no-pr-decisions.sh ALLOW 'the web form, no base'              'gh pr create --web'
+req FR-14 FR-15 GH-139
+check no-pr-decisions.sh ALLOW 'a body naming the flag, dev base'   'gh pr create --base dev-05 --title t --body "the --base flag"'
+
 section "=== the push argument split does not glob against the worktree ==="
 # `for TOK in $ARGS` is unquoted because the split is the point; set -f stops
 # the same line expanding ? and [...] against the files sitting next to it.
@@ -9956,8 +10115,10 @@ commit-dev|global-flag|BLOCK|design|GH-43.2|git -C moves git's working directory
 commit-dev|global-flag-gitdir|BLOCK|design|GH-43.6|git --git-dir moves which repository git acts on, so whether the commit lands on main cannot be judged from here
 pr-web|quote-double-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span whole, and quoted text may not grant an exemption
 pr-web|quote-single-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span whole, and quoted text may not grant an exemption
-pr-base-dev pr-base-dev-eq|quote-double-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
-pr-base-dev pr-base-dev-eq|quote-single-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
+pr-base-dev pr-base-dev-eq|quote-double-4|BLOCK|design|FR-14 GH-139|a base flag with a quote in its name is refused rather than read, because reading it is unquoting and unquoting could invent a base
+pr-base-dev pr-base-dev-eq|quote-single-4|BLOCK|design|FR-14 GH-139|a base flag with a quote in its name is refused rather than read, because reading it is unquoting and unquoting could invent a base
+pr-retarget-dev|quote-double-5|BLOCK|design|FR-17 GH-139|a base flag with a quote in its name is refused rather than read, on the retarget arm as on the creating ones, even where the base it names is dev-NN
+pr-retarget-dev|quote-single-5|BLOCK|design|FR-17 GH-139|a base flag with a quote in its name is refused rather than read, on the retarget arm as on the creating ones, even where the base it names is dev-NN
 release-view|quote-double-3|BLOCK|gap|GH-135|the release verb in double quotes, refused by the allowlist that cannot read it
 release-view|quote-single-3|BLOCK|gap|GH-135|the release verb in single quotes, refused by the allowlist that cannot read it
 BLOCK:*|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand eats the read verb after it
@@ -9974,8 +10135,6 @@ pytest-uv alembic-uv|quote-double-3|BLOCK|gap|GH-136|the group flag in double qu
 pytest-uv alembic-uv|quote-single-3|BLOCK|gap|GH-136|the group flag in single quotes
 pytest-uv alembic-uv|quote-double-4|BLOCK|gap|GH-136|the group value in double quotes
 pytest-uv alembic-uv|quote-single-4|BLOCK|gap|GH-136|the group value in single quotes
-pr-retarget pr-web-main|quote-double-5|ALLOW|gap|GH-139|the base flag in double quotes, on an arm where naming no base is permitted
-pr-retarget pr-web-main|quote-single-5|ALLOW|gap|GH-139|the base flag in single quotes, on an arm where naming no base is permitted
 docs-truncate|continuation|ALLOW|gap|GH-156|the verb and the path on either side of a backslash, which this hook's greps read as two lines and a shell runs as one
 docs-truncate|word-path|ALLOW|gap|GH-171|a command word spelled as a path, which this hook's verb grep does not reduce to the name it spells
 docs-truncate|word-dot|ALLOW|gap|GH-171|a command word spelled with ./, which this hook's verb grep does not reduce to the name it spells
@@ -10197,6 +10356,7 @@ GH-69.2:seed GH-69.3:none GH-72:seed GH-79.1:transformation GH-79.2:none
 GH-79.3:none GH-79.4:none GH-84.1:none GH-94.1:seed GH-94.2:none GH-94.4:none
 GH-95.1:none GH-95.2:none GH-96.1:none GH-97.1:seed GH-128:transformation
 GH-117:transformation GH-133:none GH-137.1:seed GH-137.2:seed
+GH-139:transformation
 '
 # One row per entry that is either in scope or carries the field: `<ID>|in|out`,
 # the `variants` keyword, and whatever follows it. An entry out of scope is
@@ -10791,7 +10951,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '41' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '52' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -10854,7 +11014,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '39' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '50' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -11521,7 +11681,7 @@ GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-117.1:permit-only
 GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139:gap              
+GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139                  
 GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
 GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static
