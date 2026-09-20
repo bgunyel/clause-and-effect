@@ -319,3 +319,128 @@ gate as it stood before this round.
 - The `$'…'` escape spellings of an endpoint are still not decoded, and the
   reviewer did not raise them; they remain named in `endpoint_args`' comment as
   a gap this fix neither opened nor closed.
+
+---
+
+## 2026-09-21 02:10 +03 — #196 review round 2: a guard rewritten to close a class exhibited the class
+
+rev-agent-130's round 2, against head `111a419` — Bertan's own merge of
+`origin/dev-05` at `2019e08`, resolved in the web UI, which the worktree was
+fast-forwarded to before anything was touched. Three gating classes, two of them
+new. Every claim was reproduced against both hooks before anything changed, and
+all three reproduced exactly.
+
+### The gate's second version had the defect its first version was fixed for
+
+Round 1 replaced one spelling of the graphql endpoint with three. Round 2 found
+the class intact: the enumeration was still anchored on whitespace after the
+token, and `gh` serves anything appended to an endpoint, so `graphql?x=1`,
+`/graphql?`, `graphql#x` and five more executed real GraphQL and matched none of
+the three. Eight shapes were BLOCK at `2019e08` and ALLOW at `111a419`, with the
+suite green — which is the sharpest form of what this repository keeps saying
+about check suites, arriving inside the change written to close that exact
+class.
+
+The gate normalises now instead of listing: strip a leading `scheme://host`, cut
+at the first `?` or `#`, drop **one** leading `/`, compare the remainder to
+`graphql`. A suffix nobody has thought of is answered by the cut rather than by
+an alternative added later, and the rejected spellings become a statement about
+a normalised path rather than about regex anchors.
+
+### Class 4: moving a question onto one command hands it to the tokeniser
+
+`cs_split` cuts a command at `$(` and at a backtick, so a substitution standing
+**before** the endpoint hands the loop a fragment the endpoint is not in —
+`gh api -X PUT repos/$(basename x)/pulls/5/merge` splits into `gh api -X PUT
+repos/$` — and four rules that read the command's own arguments then read a
+command with no endpoint and permit. That is the price of the move this whole
+issue is: every way the tokeniser can cut a command is a way to remove the
+subject of a question asked of that command.
+
+The base rule survives the identical cut, because a create whose base cannot be
+read falls into the arm that refuses a create naming none. The endpoint rules
+had no such arm. They have one now — a `gh api` **write** whose own arguments
+carry no token that could be its endpoint is refused — and it is this file's own
+header sentence applied to an endpoint: a destination that comes from
+configuration cannot be judged from here, so the command has to say where it is
+going.
+
+**It was priced before it was taken**, on the corpus CLAUDE.md's left-open item
+6 was settled against: 883 transcripts, 21,768 distinct commands, the 1,767
+carrying the text `api` fed to this hook and to a copy with the arm removed, so
+the difference is the arm and nothing else. **Six change verdict, all ALLOW to
+BLOCK, and all six are loops written to ask what an endpoint does while this
+issue was under review** — `for p in graphql /GRAPHQL "graphql/"; do gh api
+"$p" …; done` and five of that shape, two of them the assistant's own and the
+rest rev-agent-130's. Not one ordinary `gh api` write loses its permission. The
+arm refuses the shape someone writes to *measure* a spelling and nothing anyone
+writes to work, which is the repository's own standing rule — feed the hook on
+stdin, do not run the command to learn its verdict — arriving from the other
+side.
+
+The arm also closes two shapes nobody asked it to: the backtick spelling of the
+cut, which leaves `repos/o/r/pulls/` and carries no `$` to find it by (a
+trailing slash is not a readable endpoint — measured, `gh api rate_limit/`
+answers 404 where `gh api rate_limit` answers), and Class 3's whitespace-bearing
+positional, which was filed as accepted and is now refused.
+
+### Class 2's remainder, and where round 1's argument did and did not hold
+
+Round 1 answered the variable-endpoint transitions with a control: with the
+assignment off the line, the same commands are ALLOW at the base too, so what
+refused them was the line-wide read finding an assignment's text. The reviewer
+accepted that for the endpoint-keyed rules and showed it does not reach the
+three rules that keep `$SCAN`: those had no endpoint test at all before this
+branch, so the gate **creates** their permission rather than inheriting it. The
+arm settles them, and round 1's four accepted rows move to BLOCK with it. The
+argument was right about why `7bea85f` refused them and is superseded by a rule
+that refuses them for a different reason.
+
+### The assistant's push-back was right and its evidence was not
+
+Round 1 declined the reviewer's suggestion to leave whitespace-holding spans raw
+and priced it at four of #130's ten rows. rev-agent-130 built the faithful
+version — the `=` clause kept — and none of the four moves, because in all four
+an `=` stands before the span and the `=` clause drops it whatever the
+whitespace clause does. The assistant's mutant had dropped the `=` clause too,
+which was not the change proposed. The conclusion survived; the evidence did
+not. The reason recorded beside those rows is now the reviewer's own measurement
+— two ordinary issue writes in the quote-before-the-field-name spelling — and
+the four-row figure is withdrawn.
+
+### A backstop masks the rules in front of it
+
+Found by the assistant while re-running its own mutations after adding the arm,
+and it is the round's most transferable finding. Five single-clause mutations
+that turned rows red before the arm existed — the reader reading no span, the
+`$` handling, both backslash rules, the gate's normaliser — left **every verdict
+row unchanged** afterwards: each removes the endpoint, and the arm then refuses
+what they dropped. The suite would have gone on passing while those clauses did
+nothing.
+
+So the reason is pinned and not only the refusal. `says` reads the message, and
+the arm's message is no other arm's, so a rule that stops working now shows as
+the wrong sentence where it used to show as ALLOW. Measured after the change:
+`no-dollar`, `esc-out` and `esc-in` are each caught by exactly one row, and in
+all three cases that row is a `says` row. Without them the suite would have been
+a set of checks that cannot tell the rule they name from the backstop behind it.
+
+### Both filings, fixed
+
+The sticky `=` was prose against code: the comment claimed less than the clause
+does. The code is right — once a word carries an `=`, what follows in that word
+is a continuation of a value, and dropping is what avoids a false refusal on
+`"repos/o/r/pulls/5?foo=bar"/merge/` — so the sentence was rewritten rather than
+the rule. And `endpoint_args` used `[[:space:]]` where `lib/command-scan.sh`
+deliberately uses `index(" \t\n\v\f\r", …)` in six places; the library's comment
+says why, and this reader now does the same. Not reproducible on this machine,
+which has mawk and busybox awk: consistency with the library, not a measured
+flip.
+
+### Still open
+
+- `#198` keeps the base/endpoint policy question it was filed for; the endpoint
+  half is answered by `GH-130.6`.
+- `#138` lands after this.
+- The pull request body's cap readings are unchanged and unre-measured across
+  three merges.

@@ -844,7 +844,19 @@ gql_bases() {
 # two spans copied once by substr.
 endpoint_args() {
   printf '%s\n' "$1" | awk -v SQ=\' '
-    function isws(c) { return c != "" && c ~ /^[[:space:]]$/ }
+    # The six blanks bash splits on, by index and not by a regex class. The
+    # library makes the same test the same way in six places and its comment
+    # says why: under gawk in a UTF-8 locale [[:space:]] matches Unicode blanks
+    # such as U+3000, which bash does NOT split on, so a quoted endpoint holding
+    # one would be dropped as prose -- the permitting direction. Raised by
+    # rev-agent-130s round 2 off the library comment; this machine has mawk and
+    # busybox awk, which agree, so the fix is consistency with the library
+    # rather than a measured flip.
+    function isws(c) { return c != "" && index(" \t\n\v\f\r", c) > 0 }
+    function hasblank(t,   k) {
+      for (k = 1; k <= length(t); k++) if (isws(substr(t, k, 1))) return 1
+      return 0
+    }
     {
       n = length($0); out = ""; i = 1; seg = 1; eq = 0
       while (i <= n) {
@@ -878,10 +890,23 @@ endpoint_args() {
         out = out substr($0, seg, i - seg)
         if (!closed) { seg = i; break }
         body = substr($0, b, k - b)
-        if (body !~ /[[:space:]]/ && !eq) {
+        if (!hasblank(body) && !eq) {
           out = out body
-          # An = inside a span that was read is an = in the word s value, so a
-          # later span in the same word is a value attached to it.
+          # An `=` inside a span that was READ is an `=` in this word s value, so
+          # a later span in the same word is attached to it and is dropped. That
+          # is the clause above meaning what it says -- an `=` standing before
+          # the span, in the same word -- and it is worth spelling out because
+          # the same `=` does NOT disqualify the span it sits inside:
+          # "repos/o/r/releases?per_page=1" is read, query string and all.
+          #
+          # The asymmetry is deliberate and the direction says why. Once a word
+          # carries an `=`, what follows in that word is a continuation of a
+          # value, and nothing in the text tells a query string apart from a
+          # field there. Dropping is the reading that avoids a FALSE REFUSAL:
+          # "repos/o/r/pulls/5?foo=bar"/merge/ builds a word whose path is the
+          # pull request and whose query is the rest, so it is not the merge
+          # endpoint, and reading the second span would refuse it as one.
+          # Raised as prose-against-code by rev-agent-130s round 2.
           if (index(body, "=") > 0) eq = 1
         }
         seg = k + 1
@@ -889,6 +914,118 @@ endpoint_args() {
       }
       print out substr($0, seg, n - seg + 1)
     }
+  '
+}
+
+# Does this argument list name the graphql endpoint? Asked of endpoint_args'
+# output, so every quoting of the token has already been resolved.
+#
+# NORMALISE, THEN COMPARE. Each whitespace-delimited token is reduced the way gh
+# resolves an endpoint argument -- a leading `scheme://host` stripped, the query
+# or fragment cut at the first `?` or `#`, one leading `/` dropped -- and the
+# remainder compared to `graphql` exactly. The two versions of this that came
+# before were an equality against one spelling and then an alternation of three,
+# and a suffix walked past both; see the gate for what that cost.
+#
+# The scheme is matched case-insensitively because `HTTPS://` and `http://` both
+# resolve, measured. The PATH is not: GitHub's paths are case-sensitive and
+# `/GRAPHQL` does not answer GraphQL.
+names_graphql() {
+  printf '%s\n' "$1" | awk '
+    function norm(t,   k) {
+      # a leading scheme://host, and nothing else that looks like one
+      if (t ~ /^[A-Za-z][A-Za-z0-9+.-]*:\/\//) {
+        sub(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\/]*/, "", t)
+      }
+      k = index(t, "?"); if (k > 0) t = substr(t, 1, k - 1)
+      k = index(t, "#"); if (k > 0) t = substr(t, 1, k - 1)
+      sub(/^\//, "", t)          # ONE leading slash, so //graphql stays /graphql
+      return t
+    }
+    { for (i = 1; i <= NF; i++) if (norm($i) == "graphql") { found = 1 } }
+    END { exit(found ? 0 : 1) }
+  '
+}
+
+# Does this argument list carry a token that could be the endpoint? Asked only
+# of a WRITE, and only to decide whether the endpoint rules above were asked of
+# anything at all.
+#
+# WHY THIS EXISTS. cs_split cuts a command at `$(` and at a backtick, so a
+# substitution standing BEFORE the endpoint hands the loop a fragment the
+# endpoint is not in -- `gh api -X PUT repos/$(basename x)/pulls/5/merge` splits
+# into `gh api -X PUT repos/$`, and four rules that read this command's own
+# arguments then read a command with no endpoint in it and permit. That is the
+# cost of moving a question from the line onto one command: every way the
+# tokeniser can cut the command is a way to remove the question's subject.
+# rev-agent-130's round 2, as Class 4.
+#
+# THE BASE RULE SURVIVES THE IDENTICAL CUT, and that is the answer key rather
+# than an analogy: `gh pr create --base $(echo main)` refuses on both sides,
+# because a create whose base cannot be read falls into the arm that refuses a
+# create naming none. The endpoint rules had no such arm. This is it.
+#
+# WHAT COUNTS AS A TOKEN THAT COULD BE THE ENDPOINT, and each clause is the
+# narrowest that answers the measured shapes:
+#
+#   - not an option, so `-X` and `--field` are skipped;
+#   - not the value of `-X` or `--method`. That is the one valued flag this file
+#     already reads -- gh_api_is_write parses it -- so it is not a new list to
+#     keep current, which is what the triage of #130 rejected a positional
+#     parser for. Without it `-X PUT repos/$` would read `PUT` as the endpoint;
+#   - no `$` and no backtick in it, so a token the tokeniser cut, or one whose
+#     text is a parameter, is not read as a path it might not be;
+#   - it does not END in `/`. That is the signature of the OTHER cut: cs_split
+#     cuts at a backtick too, and `repos/o/r/pulls/`+backtick leaves
+#     `repos/o/r/pulls/`, which carries no `$` to find it by. A real endpoint
+#     does not end in a slash -- measured, `gh api rate_limit/` answers 404
+#     where `gh api rate_limit` answers -- so refusing one costs a command that
+#     does not work. This clause closes a shape that was permitted at 2019e08
+#     as well, which is a hole this branch did not open and closes on its way;
+#   - it holds a `/`, or it holds no `=`. A field is `name=value` with no path
+#     in the name, and an endpoint may carry a query string full of `=` --
+#     `repos/o/r/issues?per_page=1` is an endpoint and `title=x` is not. The
+#     first version of this clause was "no `=` at all", which read every
+#     endpoint carrying a query string as no endpoint and refused an ordinary
+#     issue write. Found by feeding it the rows rather than by reading it.
+#
+# WHAT IT COSTS, measured before it was taken. The corpus is the one CLAUDE.md's
+# left-open item 6 was settled against -- every Bash command in the local
+# session transcripts, 883 of them, 21,768 distinct commands -- and the
+# instrument is this hook rather than a regular expression describing it: each
+# of the 1,767 commands carrying the text `api` was fed to this hook and to a
+# copy with this arm taken out, so the difference is the arm and nothing else.
+#
+# SIX change verdict, all ALLOW to BLOCK, and every one of the six is a loop
+# written to ASK what an endpoint does while #130 was being reviewed --
+# `for p in graphql /GRAPHQL "graphql/"; do gh api "$p" -f query=...; done`, and
+# five more of that shape. Not one ordinary gh api write loses its permission.
+# The arm refuses the shape someone writes to find out what a spelling does,
+# which is a shape that belongs on the hook's stdin rather than on a terminal,
+# and no shape anyone writes to get work done.
+#
+# WHICH WAY AN UNKNOWN VALUED FLAG FAILS, named because it is the objection the
+# positional parser was rejected on. `-H accept` leaves `accept` looking like an
+# endpoint, so this returns true and NO refusal is added. The failure direction
+# is therefore today's verdict, not a refusal lost: this arm only ever ADDS
+# refusals, so a mistake in it costs a refusal that does not happen. That is the
+# opposite of the rejected parser, which would have replaced a working substring
+# match and lost refusals that existed.
+endpoint_seen() {
+  printf '%s\n' "$1" | awk '
+    {
+      skip = 0
+      for (i = 1; i <= NF; i++) {
+        if (skip) { skip = 0; continue }
+        if ($i == "-X" || $i == "--method") { skip = 1; continue }
+        if (substr($i, 1, 1) == "-") continue
+        if (index($i, "$") > 0 || index($i, "`") > 0) continue
+        if (substr($i, length($i), 1) == "/") continue
+        if (index($i, "/") == 0 && index($i, "=") > 0) continue
+        found = 1
+      }
+    }
+    END { exit(found ? 0 : 1) }
   '
 }
 
@@ -1175,6 +1312,7 @@ API_STATE=
 API_RELEASE=
 API_MUTATION=
 API_GRAPHQL=
+API_NO_ENDPOINT=
 while IFS= read -r CMD; do
   API_ARGS=$(cs_gh_args api <<<"$CMD") || continue
   # Short-circuited where there is no quote to read; see endpoint_args, which
@@ -1192,47 +1330,40 @@ while IFS= read -r CMD; do
   # mergePullRequest"` refused, which is the defect this fix is about with one
   # more word in it.
   #
-  # THREE SPELLINGS OF THE ENDPOINT, NOT ONE, and the first version of this
-  # knew one. Its comment said "a bare `graphql` token ... is gh's one spelling
-  # of that endpoint", and the code was exactly as wide as that sentence, which
-  # was false against the tool. gh resolves a bare path, a leading-slash path
-  # and a full URL to the same request, so `gh api /graphql` and
-  # `gh api https://api.github.com/graphql` execute a real GraphQL operation and
-  # neither carried a whitespace-anchored `graphql`. Twelve shapes were refused
-  # at 7bea85f and permitted here, and the gate closing switches off THREE rules
-  # at once -- the mutation names, updatePullRequest + state, and gql_bases with
-  # its createPullRequest arm. Found by review of this branch; the suite was
-  # green with all twelve permitted.
+  # THE ENDPOINT IS NORMALISED AND THEN COMPARED, which is the end of a class
+  # rather than another entry in a list. The first version of this gate knew one
+  # spelling, `graphql` anchored on whitespace; the second knew three, an
+  # alternation of the bare token, `/graphql` and a full URL. The class outlived
+  # the second: `gh` serves anything appended to the endpoint, so `graphql?x=1`,
+  # `/graphql?`, `graphql#x` and five more executed real GraphQL and matched
+  # none of the three. Eight shapes, refused before this branch and permitted by
+  # its own fix. Found by rev-agent-130's round 2, which is the same class its
+  # round 1 raised, surviving the change written to close it.
   #
-  # WHAT WAS MEASURED, against the live API and with `rate_limit` standing in
-  # for `graphql` so that nothing asked of it sent a mutation. Served, and
-  # matched here: the bare token; a leading slash; and any scheme://host/graphql,
-  # the scheme compared case-insensitively, `HTTPS://` and `http://` both
-  # resolving. Not served, and deliberately not matched: `graphql/` (404),
-  # `//graphql` (404) and `repos/o/r/graphql` (no such endpoint) -- each was
-  # refused at 7bea85f only because the mutation-name rule read the whole line
-  # with no gate at all, so permitting them is this gate working rather than a
-  # spelling lost. `/GRAPHQL` is excluded too: GitHub's paths are
-  # case-sensitive and it answers 502 rather than GraphQL.
+  # So the question is asked once, of the token, in the order gh resolves it:
+  # strip a leading `scheme://host`, cut at the first `?` or `#`, drop one
+  # leading `/`, and ask whether what is left is exactly `graphql`. A suffix
+  # nobody has thought of yet is answered by the cut rather than by an
+  # alternative added later.
   #
-  # WHAT IS NOT MATCHED AND IS NAMED RATHER THAN FORGOTTEN: GitHub Enterprise
-  # Server puts the endpoint at `/api/graphql`, so a full URL to a GHES host
-  # does not open the gate. This repository is on github.com and `gh api
-  # graphql` against a GHES host is spelled with `--hostname` and the bare
-  # token, which is matched. The stopping rule at the head of this file is what
-  # decides that: the list stops growing when the spellings stop being ones an
-  # agent here would plausibly write.
+  # WHAT THAT MAKES OF THE REJECTED SPELLINGS, and they are now a statement
+  # about a normalised path rather than about regex anchors. `/GRAPHQL`
+  # normalises to `GRAPHQL`, `graphql/` to `graphql/`, `//graphql` to
+  # `/graphql` -- one leading slash is dropped, not a run of them -- and
+  # `repos/o/r/graphql` to itself. None is `graphql`, and gh serves none of them
+  # as GraphQL: measured, with `rate_limit` standing in so that nothing asked of
+  # it sent a mutation. GHES's `/api/graphql` is named here and not matched,
+  # this repository being on github.com.
   #
-  # The host part is deliberately unconstrained. Checking it would be a second
-  # list to keep current -- api.github.com, a GHES host, a proxy -- and the
-  # question this gate asks is whether the command names the graphql endpoint,
-  # not whose graphql endpoint it is.
-  if printf '%s\n' "$ENDPOINT" \
-     | grep -qE '(^|[[:space:]])(graphql|/graphql|[A-Za-z][A-Za-z0-9+.-]*://[^[:space:]/]+/graphql)([[:space:]]|$)'; then
+  # The host is still unconstrained, for the reason it always was: checking it
+  # would be a second list to keep current, and the question is whether the
+  # command names the graphql endpoint, not whose.
+  if names_graphql "$ENDPOINT"; then
     API_GRAPHQL=1
   fi
   gh_api_is_write "$CMD" || continue
   API_WRITE=1
+  endpoint_seen "$ENDPOINT" || API_NO_ENDPOINT=1
   if printf '%s\n' "$ENDPOINT" | grep -qE '/pulls/[^ ]*/(merge|reviews)'; then
     API_MERGE_REVIEWS=1
   fi
@@ -1374,6 +1505,13 @@ if [ -n "$API_WRITE" ]; then
   fi
   if [ -n "$API_NO_BASE" ]; then
     echo "$BASE No base is named here, so this would go to the repository's default branch." >&2
+    exit 2
+  fi
+  # LAST, so that every arm above keeps the position it has always printed in.
+  # This one fires only when none of them could be asked: a write whose own
+  # arguments carry no token that could be the endpoint. See endpoint_seen.
+  if [ -n "$API_NO_ENDPOINT" ]; then
+    echo "Blocked: a gh api write has to name its endpoint in the command. This one does not -- the endpoint is behind a command substitution or a parameter, and a destination that is not in the text cannot be judged from here, which is the answer this repository already gives for a push and for a base. Write the path out: gh api -X POST repos/OWNER/REPO/issues -f title=..." >&2
     exit 2
   fi
 fi

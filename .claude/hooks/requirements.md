@@ -2589,11 +2589,13 @@ and held to the same standard of saying only what it asks.
 - text: The three rules that keep `$SCAN` — the graphql mutation names, the
   `updatePullRequest` half of the state rule, and `gql_bases` — fire only when some
   `gh api` call's own arguments name the graphql endpoint, tested after
-  `endpoint_args`. The endpoint is recognised in every spelling `gh` resolves to
-  it — the bare token, `/graphql`, and any `scheme://host/graphql` with the scheme
-  compared case-insensitively — under every quoting of that token, and in no
-  spelling `gh` does not serve: `graphql/`, `//graphql`, `/GRAPHQL` and
-  `repos/o/r/graphql` leave it shut. An issue body naming a mutation, naming
+  `endpoint_args`. The endpoint is recognised by NORMALISING the token and then
+  comparing it — a leading `scheme://host` stripped, the query or fragment cut at
+  the first `?` or `#`, one leading `/` dropped, the remainder compared to
+  `graphql` exactly — so every spelling `gh` resolves to that endpoint is
+  recognised, suffixes included, and no spelling it does not serve is:
+  `graphql/`, `//graphql`, `/GRAPHQL` and `repos/o/r/graphql` all leave the gate
+  shut. An issue body naming a mutation, naming
   `baseRefName`, naming `/graphql` in prose, or carrying any of them in a
   `-F body=@-` heredoc, is prose.
 - from: #130, rows 6, 7 and 9 of its table
@@ -2622,6 +2624,15 @@ and held to the same standard of saying only what it asks.
   with the gate in place, the suite green throughout. Found by rev-agent-130's
   round-1 review of #196. GitHub Enterprise Server's `/api/graphql` is named and
   not matched, this repository being on github.com.
+  AND THE ENUMERATION DID NOT SURVIVE ROUND 2, which is why the rule is a
+  normalisation and not a list. Round 1 replaced one spelling with three, and the
+  class it was written to close outlived it: `gh` serves anything appended to the
+  endpoint, so `graphql?x=1`, `/graphql?` and `graphql#x` executed real GraphQL
+  and matched none of the three. Eight shapes were refused at `2019e08` and
+  permitted by the fix, with the suite green. A guard rewritten to close a class
+  exhibiting that class is the sharpest form of what this file's coverage rules
+  are for; the normalisation ends it, because a suffix nobody has thought of is
+  answered by the cut rather than by an alternative added later.
 ### GH-148
 - text: `bash .claude/hooks/mutate-hooks.sh --list` derives every count about the
   mutation registry, and the harness's header states none of them. Its summary
@@ -2721,6 +2732,42 @@ and held to the same standard of saying only what it asks.
   what that code reads is `requirements.md` beside the harness rather than a
   file an override moves — so GH-141's exception does not apply and this is
   GH-107.2's first limit exactly. It is held by these checks and by review.
+
+### GH-130.6
+- text: A `gh api` WRITE whose own arguments carry no token that could be its
+  endpoint is refused. A token counts when it is not an option, is not the value
+  of `-X` or `--method`, holds no `$` and no backtick, does not end in `/`, and
+  either holds a `/` or holds no `=`. So a command substitution or a parameter
+  standing where the endpoint goes is refused rather than read as no endpoint at
+  all, and an ordinary write whose FIELD carries a substitution —
+  `-f body="$(cat notes.md)"` — is untouched, its endpoint still being in the
+  fragment.
+- from: #130, raised as Class 4 and as the unsettled half of Class 2 by
+  rev-agent-130's round-2 review of #196
+- kind: defect-permitting
+- status: active
+- variants: none: the subject is what the TOKENISER did to a command before any
+  rule saw it, and the transformations rewrite a command's text rather than
+  changing where `cs_split` cuts it; the `$( )` and backtick shapes it turns on
+  are not ones `INV_TRANSFORMS` generates
+- note: the reason this is a rule and not a trade is that the base rule already
+  answers the identical cut the other way — `gh pr create --base $(echo main)`
+  refuses on both sides, a create whose base cannot be read falling into the arm
+  that refuses a create naming none — and the endpoint rules had no such arm. It
+  is also this file's own header sentence applied to an endpoint: a destination
+  that comes from configuration cannot be judged from here, so the command has to
+  say where it is going. It supersedes the four rows GH-130.1, GH-130.2 and
+  GH-130.5's notes recorded as accepted in round 1: that argument was right about
+  WHY a variable endpoint was refused at `7bea85f` — the line-wide read finding an
+  assignment's text — and is answered by a rule that refuses it for a different
+  reason. The three `$SCAN` rules are why the argument could not stand on its own:
+  they had no endpoint test before this branch, so for them the gate CREATES the
+  permission rather than inheriting it. #198 keeps the policy question it was
+  filed for and is answered for the endpoint by this entry. What the arm does not
+  reach, named: an unknown valued flag leaves its value looking like an endpoint,
+  so the arm does not fire — the failure direction is today's verdict rather than
+  a refusal lost, which is the opposite of the positional parser #130's triage
+  rejected.
 
 ## Provenance: the acceptance criteria of #37–#41
 
