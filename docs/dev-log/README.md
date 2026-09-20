@@ -488,3 +488,17 @@ thing in the record.
   0003 when renamed, so its heading was corrected with the file name; every
   count inside it is the one that stood at its first commit — 31 registry
   rows, against 41 after the second merge.
+
+- [2026-09-18 · session 1](devlog_2026-09-18_session-1.md) — the follow-up review
+  of #153: `[[:space:]=]*` closes the separator, not the field. Quoting inside a
+  field name or value (`-f ba"se"=main`, `-f state=clo"sed"`) is still permitted,
+  here and on `dev-05`. It is filed as #163, to land after #130, and the claim is
+  narrowed. `--input` on a retarget is added to #138. No verdict changed.
+
+- [2026-09-18 · dev-issue-109](devlog_2026-09-18_dev-issue-109.md) — #109's
+  cross-hook checks: 41 permitted spellings run through all seven Bash hooks,
+  and all are permitted. Reading the messages for spellings found #164: a push
+  refusal that names a push another hook refuses. Every refusal arm of the two
+  boundary hooks is read to the end of its sentence, and the whole registration
+  is pinned. A 200-line heredoc takes 12–57 ms; the same lines as live commands
+  take up to 3.1 s, which is #127.
