@@ -1822,6 +1822,19 @@ The suite fails on each of these, and `--matrix` shows the rest:
   check. The fixture rule itself is hand-mutated -- four cases, three caught and
   one a recorded survivor -- in the commit that added it.
 
+  A second round of that review found two more, both of the same shape as the
+  first: a guard weaker than the prose beside it. The derivation asserting that
+  no run of the report is driven under the farm read only calls at column 0,
+  while every environment sweep in that section is an indented loop body and the
+  suite already held an indented call, so the one thing it exists to catch was
+  invisible to it; it now skips leading whitespace, and is driven over a fixture
+  whose only run is indented. And the question "does the farm hold a `gh`" was
+  asked as `command -v`, which resolves a shell function ahead of PATH -- so a
+  host exporting a `gh` wrapper got no stub and the unconditional guard aborted
+  the whole suite, which is this entry's own failure arriving by a rarer route.
+  Both the synthesis and the guard now ask the directory, and a farm built under
+  a shell that defines `gh` is a fixture here.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that
@@ -2106,3 +2119,10 @@ it has no entry above (Q16).
   requirement that would carry it is the fix, and GH-108.5 pins the verdict as it
   stands and names it a gap. An entry here would read as a requirement the hooks
   meet
+- #161: the pull request for #155; Bertan's review of it is cited where each of the
+  two things it corrected in this suite stands — a derivation of every PATH the
+  report is driven under that was anchored at column 0 and so could not see an
+  indented run, and a fixture test that asked the calling shell what the farm
+  holds, which resolves a `gh` shell function ahead of PATH and would have aborted
+  the suite on a host that exports one. Its third correction is a measurement in
+  `mutate-hooks.sh`, whose exclusivity was that host's, and is recorded there

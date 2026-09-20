@@ -46,9 +46,25 @@
 # rows as the registry then stood reported what they declare, and .claude/hooks/
 # came back byte-identical. #108's six rows were run as a named selection on the
 # same day -- baseline plus six, all caught, byte-identical after -- and not as
-# part of a whole-registry run. #155's row was run the same way and on the same
-# day: baseline plus one, caught, red in GH-108.6 and in nothing else, and
-# byte-identical after. So no run has yet exercised all thirty-one together. Saying
+# part of a whole-registry run. #155's first row, pr-hook-reads-gh-off-the-
+# environment, was run the same way and on the same day: baseline plus one,
+# caught, byte-identical after, and red in GH-108.6 and in nothing else ON A HOST
+# THAT HAS `gh`. That last clause is the one PR #161's review asked for and it is
+# not decoration. The edit inserts `command -v gh || exit 0` ABOVE the first rule
+# in the file, so on a `gh`-less host -- the machine #155 was filed about -- it
+# short-circuits `pr review`, `pr close`, the release allowlist, the base rules
+# and the api rules as well, and the run goes red across dozens of requirements.
+# The outcome is `caught` either way, since that is read off the IDs the row
+# names and is not exclusive, so nothing in this harness turns red to say so. The
+# exclusivity is recorded as this host's rather than repaired by moving the
+# anchor: a hook that reads `gh`'s presence out of the environment reads it
+# before it decides anything, so a row anchored below the rules it disables would
+# be a different and weaker mutation wearing the same name. #155's second row,
+# report-reads-gh-before-git, was run the same way on 2026-09-18, at the commit
+# that answered Bertan's review of PR #161: baseline plus one, caught, red in
+# GH-155.1 and in nothing else, byte-identical after. That one is host-
+# independent -- its `gh --version` is silent where there is no `gh` to run and
+# harmless where there is. So no run has yet exercised all thirty-one together. Saying
 # which rows a measurement covered is the whole point of recording one. No
 # per-mutation counts are recorded here on purpose -- a count in a comment is the
 # thing #107 was filed about, and the registry is re-runnable instead.

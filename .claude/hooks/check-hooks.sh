@@ -7323,10 +7323,26 @@ done
 # rather than pretending to be `gh`. A stub that exited 0 in silence would let a
 # later check read its silence as gh's answer, which is #108's own failure shape
 # arriving through the fixture instead of through a hook.
+#
+# A NAME IN THE FARM IS A FILE IN A DIRECTORY, and `command -v` answers a
+# different question. It resolves shell FUNCTIONS ahead of PATH, and bash imports
+# exported ones -- `BASH_FUNC_gh%%` in the environment -- into a non-interactive
+# script like this one. So on a host whose environment exports a `gh` wrapper,
+# `PATH=<farm>; command -v gh` says yes where the farm holds nothing: the
+# synthesis returns having written no stub, and the guard in #108, unconditional
+# as of this branch, aborts the whole suite before #104's coverage derivations
+# are reached. That is the abort-on-some-machines failure #155 exists to remove,
+# arriving by a rarer route -- found by review of PR #161 and not by a machine.
+# Every question this suite asks of a farm is asked of the directory from here
+# on, the guard below included, because the two are one rule read twice and a
+# `command -v` left in either is that abort.
+farm_has() {  # farm_has <dir> <name> -- is that name in the farm? asked of the directory
+  [ -x "$1/$2" ]
+}
 FARM_STUB_SAYS='gh: check-hooks.sh PATH-fixture stub, a name and not a program (GH-155.1)'
 farm_stub_gh() {  # farm_stub_gh <farm dir> -- give it a gh if the host gave none
   local dir="$1"
-  [ -n "$( PATH="$dir"; command -v gh )" ] && return 0
+  farm_has "$dir" gh && return 0
   # THE UNLINK IS NOT REDUNDANT WITH THE RETURN ABOVE, and this is the one line
   # here that could have damaged the invoker's machine. Every other entry in the
   # farm is a SYMLINK to a host binary, so `>` on one of them writes THROUGH the
@@ -9574,11 +9590,11 @@ for pair in "git:$ENV_NO_GIT_BIN" "gh:$ENV_NO_GH_BIN"; do
   # is a machine without git, and a farm holding no `gh` is a stub that was not
   # made. Neither is the fixture being the wrong shape, which is what the second
   # message says.
-  [ -n "$( PATH="$WITH_JQ_BIN"; command -v "$tool" )" ] || {
+  farm_has "$WITH_JQ_BIN" "$tool" || {
     echo "the symlink farm holds no $tool at all, so the $tool-less fixture is not it minus one name; the checks using it prove nothing" >&2
     exit 1
   }
-  [ -z "$( PATH="$dir"; command -v "$tool" )" ] \
+  ! farm_has "$dir" "$tool" \
     && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$dir") | grep '^[<>]')" = "< $tool" ] || {
     echo "the $tool-less PATH fixture is not the symlink farm minus $tool; the checks using it prove nothing" >&2
     exit 1
@@ -9620,15 +9636,15 @@ FARM_BUILD=$(sed -n '/^WITH_JQ_BIN=/,/^cp -a /p' "$SUITE_DIR/check-hooks.sh" \
 holds 'the farm build calls the synthesis, which a host with its own gh cannot show by running' \
       "$FARM_BUILD" 'farm_stub_gh "$WITH_JQ_BIN"'
 tok 'the symlink farm holds a gh, so the gh-less fixture is one name short of it' \
-    'gh' "$( PATH="$WITH_JQ_BIN"; command -v gh >/dev/null 2>&1 && echo gh )"
+    'gh' "$(farm_has "$WITH_JQ_BIN" gh && echo gh)"
 FARM_HOST_HAD_NO_GH="$FIXTURES/farm-from-a-host-with-no-gh"
 cp -a "$WITH_JQ_BIN" "$FARM_HOST_HAD_NO_GH"
 rm -f "$FARM_HOST_HAD_NO_GH/gh"
 tok 'a farm built from a host with no gh on PATH holds none to begin with' \
-    '' "$( PATH="$FARM_HOST_HAD_NO_GH"; command -v gh >/dev/null 2>&1 && echo gh )"
+    '' "$(farm_has "$FARM_HOST_HAD_NO_GH" gh && echo gh)"
 farm_stub_gh "$FARM_HOST_HAD_NO_GH"
 tok 'and the synthesis gives it one' \
-    'gh' "$( PATH="$FARM_HOST_HAD_NO_GH"; command -v gh >/dev/null 2>&1 && echo gh )"
+    'gh' "$(farm_has "$FARM_HOST_HAD_NO_GH" gh && echo gh)"
 FARM_HOST_HAD_NO_GH_MINUS_GH="$FIXTURES/farm-from-a-host-with-no-gh-minus-gh"
 cp -a "$FARM_HOST_HAD_NO_GH" "$FARM_HOST_HAD_NO_GH_MINUS_GH"
 rm -f "$FARM_HOST_HAD_NO_GH_MINUS_GH/gh"
@@ -9673,6 +9689,41 @@ chmod +x "$FARM_HOST_HAD_A_GH/gh"
 farm_stub_gh "$FARM_HOST_HAD_A_GH"
 tok 'a farm whose host had a gh keeps the one it had' \
     'the-host-gh' "$( PATH="$FARM_HOST_HAD_A_GH"; gh )"
+
+# WHAT DECIDES THE SYNTHESIS IS THE DIRECTORY AND NOT THE CALLING SHELL, and the
+# machine that tells those two apart is one whose environment exports a `gh`
+# function -- a wrapper in a login profile, which bash hands to a script like
+# this one as `BASH_FUNC_gh%%`. `command -v` resolves a function ahead of PATH,
+# so the test this used to make read a `gh` the farm did not hold: no stub was
+# written, and the guard above, which this branch made unconditional, aborted
+# the whole suite. #155's own failure shape, arriving by a route nothing was
+# asking about until PR #161 was reviewed.
+#
+# The function is defined and EXPORTED here because exporting is what puts it in
+# reach of the subshell the old test used, and it is unset on the next line: a
+# `gh` function left standing would be run by the checks above, which execute the
+# stub, in place of the file they are about.
+FARM_UNDER_A_GH_FUNCTION="$FIXTURES/farm-under-a-shell-that-defines-gh"
+cp -a "$FARM_HOST_HAD_NO_GH_MINUS_GH" "$FARM_UNDER_A_GH_FUNCTION"
+gh() { echo "a wrapper function in the invoker's environment, not a program in the farm"; }
+export -f gh
+farm_stub_gh "$FARM_UNDER_A_GH_FUNCTION"
+unset -f gh
+tok 'a gh the calling shell defines is not a gh in the farm, so the stub is written anyway' \
+    'gh' "$(farm_has "$FARM_UNDER_A_GH_FUNCTION" gh && echo gh)"
+# AND THE GUARD ASKS IT THE SAME WAY. The synthesis and the fixture guard are one
+# rule read twice, so a `command -v` left in the guard is the same abort with the
+# stub written: a `gh` function resolves under the `gh`-less PATH too, and the
+# one-name difference the guard demands reads as absent. Asked of the suite's
+# text because a guard whose failure is `exit 1` cannot be driven from inside the
+# run it would end. `lacks` fails on text it could not read, so a range anchor
+# that moves is red rather than vacuously green.
+FARM_GUARD=$(sed -n '/^for pair in "git:\$ENV_NO_GIT_BIN"/,/^done$/p' "$SUITE_DIR/check-hooks.sh" \
+             | sed 's/[[:space:]]*#.*$//')
+holds 'the gh-less fixture guard asks the directory whether the farm holds the name' \
+      "$FARM_GUARD" 'farm_has "$WITH_JQ_BIN" "$tool"'
+lacks 'and asks the calling shell nothing, which would resolve a function ahead of PATH' \
+      "$FARM_GUARD" 'command -v'
 
 ENV_REPOS="$FIXTURES/env"
 mkdir -p "$ENV_REPOS"
@@ -10222,10 +10273,39 @@ tok 'and it never ran that gh, which is the whole of what lets the farm carry a 
 # would turn this line red rather than quietly making the stub load-bearing.
 # #84's direction: the claim is about every consumer, so it is derived from every
 # consumer and not from the four that exist today.
-REPORT_RUN_PATHS=$(grep -o '^report_says "[^"]*"' "$SUITE_DIR/check-hooks.sh" \
-                   | sed 's/^report_says "//; s/"$//' | sort -u | tr '\n' ' ')
+#
+# READ ANYWHERE ON A LINE AND NOT ONLY AT COLUMN 0, which is #84's direction one
+# step further: a derivation anchored where the calls happen to sit today is the
+# literal list it was written to replace. Every environment sweep in this section
+# is written as an indented loop body, and the suite already holds one indented
+# call -- drive_helper's `case`, which is why this is a shape and not a
+# hypothesis -- so a later check driving the report under $WITH_JQ_BIN from
+# inside a `for` was invisible here, and the farm's stub became load-bearing with
+# this line still green. Found by review of PR #161.
+#
+# The anchor is KEPT and made to skip leading whitespace rather than dropped.
+# Dropped, the pattern matches its own source line two lines below and derives
+# `[^` as a PATH the report is driven under -- the check would go red, which is
+# the safe direction, but for a reason that has nothing to do with the report.
+report_run_paths() {  # report_run_paths <file> -- every PATH the report is driven under in it
+  grep -o '^[[:space:]]*report_says "[^"]*"' "$1" \
+    | sed 's/^[[:space:]]*report_says "//; s/"$//' | sort -u | tr '\n' ' '
+}
+REPORT_RUN_PATHS=$(report_run_paths "$SUITE_DIR/check-hooks.sh")
 tok 'every run of the report names one of four PATHs, and the farm is not among them' \
     '$ENV_NO_GH_BIN $ENV_NO_GIT_BIN $ENV_NO_GIT_GH_MARKER $PATH ' "$REPORT_RUN_PATHS"
+# The derivation asked of a file whose ONLY run is indented, because the line
+# above is worth nothing unless it can see one: driven over the suite alone, a
+# column-0 anchor and this one agree today, and would go on agreeing until the
+# first indented consumer made the difference matter. The fixture is that
+# consumer, written now rather than waited for.
+REPORT_DERIVATION_FIXTURE="$FIXTURES/a-report-run-inside-a-loop"
+{ echo 'for d in one; do'
+  echo '  report_says "$WITH_JQ_BIN" "$SOME_REPORT" fragment label'
+  echo 'done'
+} > "$REPORT_DERIVATION_FIXTURE"
+tok 'and the derivation sees an indented run, the shape every sweep in this section is written in' \
+    '$WITH_JQ_BIN ' "$(report_run_paths "$REPORT_DERIVATION_FIXTURE")"
 
 echo "--- the degraded report, produced rather than described ---"
 # The last row of #108's table: offline, the fetch reports FAILED, the settings
