@@ -28,8 +28,11 @@ the SessionStart fetch in `.claude/hooks/report-stale-branches.sh` refreshes.
 one pipeline — the report above, `no-work-on-stale-branch.sh`, and since #144
 `no-pr-decisions.sh`, which judges a pull request's base against it. So a session
 that has not fetched since a rotation reads the superseded branch as active, and
-what that costs is a refusal rather than a permit: the base rule narrows to the
-branch it can see and falls back to accepting any `dev-NN` when it can see none.
+that costs a wrong verdict in BOTH directions: `--base dev-05` is permitted after
+the rotation to `dev-06`, which lands a pull request on the branch on its way out
+and is the defect #144 exists to close, and `--base dev-06` — the correct base —
+is refused. Measured in a fixture holding only the superseded ref. Only where no
+`dev-NN` ref can be read at all does the rule fall back to accepting any of them.
 _Avoid_: development branch, current branch
 
 **Check**:

@@ -67,10 +67,17 @@
 # names, and only once a base has actually been named, so an ordinary command
 # still reaches its verdict without it. That count is checked rather than
 # claimed, through a git shim, because the first version of it forked per base
-# and said otherwise; see read_active_dev. And stale
-# refs err toward refusing a base that is right: a session that has not fetched
-# since the rotation reads the old branch as active and refuses the new one.
-# That is the refusing direction, it is visible, and `git fetch` is the fix --
+# and said otherwise; see read_active_dev.
+#
+# AND STALE REFS ARE WRONG IN BOTH DIRECTIONS, which this paragraph got wrong
+# until the third review of PR #158. It said they "err toward refusing a base
+# that is right" and called that the refusing direction, visible and safe. Half
+# of that is true and the half it leaves out is the one #144 was filed about: a
+# session that has not fetched since the rotation to dev-06 reads dev-05 as
+# active, so `--base dev-06` is refused AND `--base dev-05` is permitted, which
+# lands the pull request on the branch on its way out. Measured in a fixture
+# holding only the superseded ref, not argued. So the cost of a stale read is a
+# wrong permit as well as a wrong refusal, `git fetch` is the fix for both --
 # which the SessionStart report already runs every session, and which the
 # refusal now says in as many words. It did not until the second review of
 # PR #158, and the cost of that was the whole of the defect: the one remedy an

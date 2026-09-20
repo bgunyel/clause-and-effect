@@ -2093,8 +2093,9 @@ and held to the same standard of saying only what it asks.
   printed before the first thing that can fail, and each of the three ways it can
   have nothing to report -- a root it cannot reach, `git` off PATH, a tree that is
   not a repository -- prints a `branches: NOT READ` line naming its cause and the
-  consequence, that neither detector in `no-work-on-stale-branch.sh` is armed. The
-  exit status stays 0.
+  consequence, that neither detector in `no-work-on-stale-branch.sh` is armed.
+  Which hooks that consequence reaches is GH-144.8's, this entry claiming only
+  that the cause and a consequence are named. The exit status stays 0.
 - from: #108
 - kind: doc-claim
 - status: active
@@ -2335,9 +2336,14 @@ and held to the same standard of saying only what it asks.
   is inside this repository, so a `dev-05` payload read there is evidence only
   until the next rotation makes `dev-06` the active branch -- it would then go red
   blaming a hook that was right, which is the failure this entry exists to stop.
-  Thirty-five rows moved to `$ON_DEV` when GH-144.1 landed; the count is not
-  claimed, because what has to hold is that no bare row exists and not how many
-  scoped ones do. The derivation reads the harness word of every matching row and
+  Rows moved to `$ON_DEV` when GH-144.1 landed, and the dev-05 merge moved more.
+  HOW MANY IS NOT CLAIMED, because what has to hold is that no bare row exists
+  and not how many scoped ones do, and the derivation is what holds it. The
+  sentence that stood here claimed one in the same breath as denying it --
+  thirty-five, which was also pre-merge. The third review of PR #158 counted the
+  head and got a figure matching neither that number nor the one it derived from
+  the diff, and that disagreement is the argument for carrying no number here
+  rather than a corrected one. The derivation reads the harness word of every matching row and
   `lacks` refuses an empty read, so a derivation that stopped matching fails
   rather than reporting that no bare row was found.
 
@@ -2362,11 +2368,39 @@ and held to the same standard of saying only what it asks.
   message did not, so the one remedy an agent could read off the refusal was to
   retarget to `dev-05`, which this hook then permits, landing the pull request
   on the branch on its way out. That is what #144 was filed to stop,
-  reintroduced through the message. The stale read errs toward refusing, which
-  GH-144.1's note calls the visible direction; it is only visible if the refusal
-  says what would make it current. The converse rows are the load-bearing half:
+  reintroduced through the message. A stale read is wrong in both directions and
+  not only the refusing one -- after the rotation to `dev-06` a stale session
+  refuses `dev-06` and PERMITS `dev-05`, measured in a fixture holding only the
+  superseded ref -- so the refusal is the one place an agent can be told that
+  the read is what to fix. The framing this note carried until the third review
+  of PR #158, that the cost is a refusal rather than a permit, was the same
+  subset reasoning GH-144.6 struck, surviving one entry over. The converse rows are the load-bearing half:
   a base of main told to fetch would be a remedy that cannot work, the shape
   question having nothing to do with refs.
+
+### GH-144.8
+- text: Every line of `report-stale-branches.sh` that says a read was not made,
+  or was made against refs no fetch refreshed, names BOTH hooks that read those
+  refs -- `no-work-on-stale-branch.sh`, whose detectors go unarmed, and
+  `no-pr-decisions.sh`, whose base rule accepts any `dev-NN` for want of a ref
+  or judges against whatever branch stale refs still call active. All six lines
+  in that file say so: the three `branches: NOT READ` causes, the skipped fetch,
+  the failed fetch, and `active dev branch: none`.
+- from: #144, found by the third review of PR #158
+- kind: doc-claim
+- status: active
+- direction: static: it reads the text of a report that makes no verdict
+- note: GH-108.9 claims that each cause names a cause and a consequence; this
+  claims WHICH hooks the consequence reaches, which #144 changed from one to two
+  and which nothing updated. The report is the only place an agent is told at
+  session start that the refs under a verdict were not read, so a report naming
+  one hook leaves the other's wrong answer unexplained -- and by GH-144.7 that
+  wrong answer is a wrong permit as well as a wrong refusal. `CLAUDE.md` was
+  corrected for the same fact by the second review of PR #158 and this file was
+  not, which is the shape the third review named: a correction applied where the
+  finding pointed rather than everywhere the claim lives. It is split from
+  GH-108.9 rather than folded into it because the two fail apart -- a report
+  could name both hooks and stop printing a cause, or name a cause and one hook.
 
 ### GH-144.5
 - text: `no-pr-decisions.sh` reads `refs/remotes/origin/dev-*` once per run, however

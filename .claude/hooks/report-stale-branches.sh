@@ -43,7 +43,12 @@
 # FAILS OPEN, WITH A TIMEOUT. An offline or slow session must start. When the
 # fetch fails or times out the report says so in as many words, because the
 # consequence is not cosmetic: neither detector is armed for that session, and
-# the guard will read whatever the last successful fetch left behind.
+# the guard will read whatever the last successful fetch left behind. Since #144
+# that is two hooks and not one -- no-pr-decisions.sh derives the active dev
+# branch from the same refs and judges a pull request's base against it -- so
+# every degraded line below names both. It named only the stale-branch guard
+# until the third review of PR #158, which is the same under-count CLAUDE.md
+# carried and had fixed one round earlier.
 #
 # IT READS THE MERGE SETTINGS, BECAUSE IT IS THE ONLY PLACE THAT CAN. Both of
 # that guard's detectors rest on a repository setting no bash hook can assert,
@@ -125,7 +130,8 @@
 #
 # It matters for the reason under THE ARMING PROPERTY IS NOT SELF-ANNOUNCING.
 # Neither detector in no-work-on-stale-branch.sh is armed for such a session, and
-# that guard's silence is what a clean tree looks like too -- so a session whose
+# no-pr-decisions.sh accepts any dev-NN base for want of a ref to judge one
+# against; that guard's silence is what a clean tree looks like too -- so a session whose
 # refs were never read is indistinguishable, from the inside, from one with
 # nothing stale in it. Every other unread thing here already says so in as many
 # words: the fetch, the merge settings, the pull requests, the main ancestry.
@@ -155,23 +161,27 @@ echo "== branch lifecycle =="
 cd "$(dirname "$0")/../.." || {
   echo "branches: NOT READ -- this file could not reach the repository root from its"
   echo "          own location, so neither staleness detector in"
-  echo "          no-work-on-stale-branch.sh is armed for this session."
+  echo "          no-work-on-stale-branch.sh is armed for this session, and"
+  echo "          no-pr-decisions.sh accepts any dev-NN base for want of a ref."
   exit 0
 }
 if ! command -v git >/dev/null 2>&1; then
   echo "branches: NOT READ -- git is not on PATH, so neither staleness detector in"
-  echo "          no-work-on-stale-branch.sh is armed for this session."
+  echo "          no-work-on-stale-branch.sh is armed for this session, and"
+  echo "          no-pr-decisions.sh accepts any dev-NN base for want of a ref."
   exit 0
 fi
 git rev-parse --git-dir >/dev/null 2>&1 || {
   echo "branches: NOT READ -- this is not a git repository, so neither staleness"
-  echo "          detector in no-work-on-stale-branch.sh is armed for this session."
+  echo "          detector in no-work-on-stale-branch.sh is armed for this session,"
+  echo "          and no-pr-decisions.sh accepts any dev-NN base for want of a ref."
   exit 0
 }
 
 if ! git remote | grep -qxF origin; then
   echo "fetch: SKIPPED -- this repository has no remote named origin, so neither"
-  echo "       staleness detector in no-work-on-stale-branch.sh is armed."
+  echo "       staleness detector in no-work-on-stale-branch.sh is armed, and"
+  echo "       no-pr-decisions.sh accepts any dev-NN base for want of a ref."
   FETCHED=
   # Set with the fetch's outcome, for the main ancestry line below: a fetch that
   # never ran did not fail, and saying so would be a claim about an attempt.
@@ -186,7 +196,8 @@ else
   else
     echo "fetch: FAILED or timed out after ${FETCH_TIMEOUT}s -- remote-tracking refs are"
     echo "       as stale as the last successful fetch, so no-work-on-stale-branch.sh"
-    echo "       is not armed for this session."
+    echo "       is not armed for this session, and no-pr-decisions.sh judges a pull"
+    echo "       request's base against whatever branch those refs still call active."
     FETCHED=
     STALE_REFS=' (read against refs the failed fetch left behind)'
   fi
@@ -305,7 +316,8 @@ if [ -n "$DEV" ]; then
   echo "active dev branch: $DEV"
 else
   echo "active dev branch: none -- no refs/remotes/origin/dev-* exists, so"
-  echo "       no-work-on-stale-branch.sh abstains rather than refusing."
+  echo "       no-work-on-stale-branch.sh abstains rather than refusing, and"
+  echo "       no-pr-decisions.sh accepts any dev-NN base for want of a ref."
 fi
 
 # Whether origin/main is an ancestor of the active dev branch. This is the one

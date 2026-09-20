@@ -11006,7 +11006,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '59' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '61' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11069,7 +11069,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '57' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '59' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -11622,8 +11622,24 @@ report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
   '== branch lifecycle ==' \
   'outside a repository it still prints its heading first'
 report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
-  'no-work-on-stale-branch.sh is armed for this session.' \
+  'no-work-on-stale-branch.sh is armed for this session,' \
   'outside a repository it names what is not armed'
+# WHICH HOOKS THAT CONSEQUENCE REACHES, which is two since #144 and was written
+# as one until the third review of PR #158. The report is the only place an
+# agent is told at session start that the refs behind a verdict were not read,
+# and no-pr-decisions.sh's base rule rests on the same refs as the stale-branch
+# detectors. CLAUDE.md was corrected for this fact one review earlier and the
+# runtime message that tells an agent the same thing was not, which is why this
+# is a check and not a sentence: the claim now lives in six places in that file
+# and a derivation reads them rather than a reader remembering.
+req GH-144.8
+report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  'no-pr-decisions.sh accepts any dev-NN base for want of a ref.' \
+  'outside a repository it also names the base rule the same refs feed'
+report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  'no-pr-decisions.sh accepts any dev-NN base for want of a ref.' \
+  'and so it does with git off PATH'
+req GH-108.9
 report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
   'branches: NOT READ -- git is not on PATH' \
   'with git off PATH it names git rather than the tree'
@@ -11676,8 +11692,16 @@ report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
   'fetch: FAILED or timed out after 15s' \
   'a failed fetch is reported, and the session still starts'
 report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
-  'is not armed for this session.' \
+  'is not armed for this session, and no-pr-decisions.sh judges a pull' \
   'and it says what that leaves unarmed'
+req GH-144.8
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  "request's base against whatever branch those refs still call active." \
+  'a failed fetch says the base rule is judging against the refs it left behind'
+report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
+  'no-pr-decisions.sh accepts any dev-NN base for want of a ref.' \
+  'and with no dev ref fetched at all, that the base rule accepts any of them'
+req GH-108.10
 report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
   'merge settings: NOT READ -- no gh on PATH' \
   'the merge settings are NOT READ rather than reported as drifted'
@@ -12156,7 +12180,7 @@ GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:stati
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
 GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static
 GH-128 GH-171:gap
-GH-144.1 GH-144.2 GH-144.3:refuse-only GH-144.4:static GH-144.5 GH-144.6 GH-144.7:refuse-only
+GH-144.1 GH-144.2 GH-144.3:refuse-only GH-144.4:static GH-144.5 GH-144.6 GH-144.7:refuse-only GH-144.8:static
 '
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in

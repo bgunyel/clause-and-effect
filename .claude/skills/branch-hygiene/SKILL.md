@@ -69,9 +69,12 @@ Bertan's, for the reason the rotation is, and an agent that has produced the
 report stops there.
 
 That fetch is also what arms `.claude/hooks/no-work-on-stale-branch.sh`, which
-refuses a commit on a branch whose work is over. Both read remote-tracking refs,
-so both are exactly as fresh as that fetch; when the report says the fetch
-failed, neither detector is armed for that session.
+refuses a commit on a branch whose work is over, and — since #144 —
+`.claude/hooks/no-pr-decisions.sh`, which judges a pull request's base against
+the active dev branch it derives from those same refs. All of them are exactly
+as fresh as that fetch; when the report says the fetch failed, neither detector
+is armed for that session, and a base is judged against whatever branch the
+stale refs still call active.
 
 ```bash
 git fetch --prune
@@ -376,11 +379,18 @@ untouched, and `git worktree list` names no worktree without a branch.
   flight.
 - Rotate only after a merge, not after each session. A dev branch spanning
   several sessions is normal; two dev branches at once is not.
-- Between step 3 and step 5 both `origin/dev-NN` and `origin/dev-NN+1` exist, and
-  so they do in any agent session that fetched in that window. Nothing in this
-  procedure has to change for it: since #144 `no-pr-decisions.sh` refuses a pull
-  request based on the older of the two and names the newer, deriving the active
-  dev branch from the same highest-`origin/dev-NN` read the report above makes.
+- Between step 3 and step 4 of **Bertan's procedure** above -- the steps in this
+  note are that procedure's and not the sweep's, which runs 1 to 3 -- both
+  `origin/dev-NN` and `origin/dev-NN+1` exist, and so they do in any agent
+  session that fetched in that window. For an agent the window closes at step 4,
+  where `git push origin --delete dev-NN` takes the remote half: the next
+  SessionStart `git fetch --prune` in `report-stale-branches.sh` drops
+  `origin/dev-NN` from that session's refs. Step 5 is where Bertan's own
+  remote-tracking ref is pruned, which is a later moment and his, not an
+  agent's. Nothing in this procedure has to change for it: since #144
+  `no-pr-decisions.sh` refuses a pull request based on the older of the two and
+  names the newer, deriving the active dev branch from the same
+  highest-`origin/dev-NN` read the report above makes.
   Before that it accepted either, so the window was one in which a worktree pull
   request could land on the branch on its way out and nothing would say so.
 - Push a worktree branch with `git push -u origin <branch>` the first time, as
