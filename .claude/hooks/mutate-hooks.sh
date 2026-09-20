@@ -15,28 +15,30 @@
 #       bash .claude/hooks/mutate-hooks.sh --list     the registry, and nothing run
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
-# ABOUT TWO MINUTES A ROW: one check-hooks.sh run per mutation that applies,
-# plus the baseline -- sixty-six runs as the registry stands, not sixty-seven,
-# because the row whose edit matches nothing never reaches one. Measured twice
-# on 2026-09-17, on this machine and on registries one row apart: 47 min 34 s
-# and 45 min 24 s, at twenty-three runs, which is 124 s and 118 s a run. A run
-# under load took nearer four minutes a row.
+# TWO MINUTES A ROW, and hours for the whole registry: one check-hooks.sh run
+# per mutation that applies, plus the baseline -- seventy-nine runs as the registry
+# stands, not eighty, because the row whose edit matches nothing never reaches
+# one. Measured twice on 2026-09-17, on this machine and on registries one row
+# apart: 47 min 34 s and 45 min 24 s, at twenty-three runs. That measurement is
+# the two minutes, and the two minutes is what is written in the heading, because
+# review of PR #169 found the heading saying ABOUT AN HOUR while this paragraph
+# said ninety minutes and check-hooks.sh pinned the hour: a total goes stale
+# every time a row is added and a rate does not. Carried to sixty-seven runs the
+# rate gives nearer three hours than two, and no third whole-registry measurement has been
+# taken; a run under load took nearer four minutes a row. That is why it
+# is a separate script and why check-hooks.sh does not call it (#107). Nothing
+# here is a PreToolUse hook and settings.json does not register it. Naming rows
+# costs the baseline plus one run each, so re-asking a single rule is about four
+# minutes rather than the whole registry.
 #
-# A RATE AND NOT A TOTAL, deliberately, and this is the second thing here to be
-# rewritten that way. The line said ABOUT AN HOUR, and an hour was the total at
-# twenty-three runs; every row added since made it wronger while the sentence
-# four lines down went on calling it "those rates carried to the current count".
-# At sixty-six runs the same rate is about two and a quarter hours. The total is what goes
-# stale on every registry addition, and a check pinned the stale one in place --
-# review of PR #172 found this while that PR was editing the row count in this
-# very sentence and leaving the hour. So the rate is what is written and what
-# check-hooks.sh pins, and the multiplication is left to the reader, who has the
-# row count on the line above it.
-#
-# That cost is why it is a separate script and why check-hooks.sh does not call
-# it (#107). Nothing here is a PreToolUse hook and settings.json does not
-# register it. Naming rows costs the baseline plus one run each, so re-asking a
-# single rule is about four minutes rather than the whole registry.
+# FOUND TWICE, INDEPENDENTLY, IN THE SAME WEEK, which is worth a line because it
+# says something about the defect rather than about either reviewer. Review of
+# PR #169 found the heading contradicting its own paragraph; review of PR #172
+# found the same heading stale while that pull request was editing the row count
+# in this very sentence and leaving the total beside it untouched. Two branches
+# rewrote it as a rate within hours of each other and the merge of the two is
+# this paragraph. A total in a heading is reached by every change that adds a
+# row, and neither reviewer had to look for it.
 #
 # EXIT STATUS: non-zero when any row reports something other than the outcome it
 # declares. For every real mutation that means a survivor or an edit that did not
@@ -115,6 +117,51 @@
 # red in GH-155.1 and in nothing else, byte-identical after. That one is host-
 # independent -- its `gh --version` is silent where there is no `gh` to run and
 # harmless where there is. Neither has been run since dev-05 was merged in.
+# #109 added four -- a pass slowed past the 1 s bound on a long command, two
+# refusal messages losing the sentence their rows read, and a second hook
+# refusing a permitted read -- and ran them as a named selection on 2026-09-18,
+# before dev-05 carried #117: baseline green over 183 requirements, all four
+# caught, .claude/hooks/ byte-identical after. Its settings.json mutations
+# cannot be rows here, the file being outside the copy; they were run by hand
+# and are recorded in #109's section of check-hooks.sh. The first review of
+# PR #169 re-ran the four against its answering commit (2026-09-20), all four
+# caught and byte-identical after, and re-ran one of the by-hand six, the `ran`
+# record switched off, which was caught in eleven places. Its second review
+# found two message rules the suite stated and did not check, and #109 added
+# four rows for them -- `base-refusal-drops-the-rule-sentence`,
+# `base-refusal-drops-the-remedy-spelling`,
+# `push-refusal-stops-opening-with-the-rule` and
+# `a-new-refusal-arm-nothing-reads` -- run as one selection against the commit
+# answering it (2026-09-20): baseline green over 187 requirements, all four
+# caught, .claude/hooks/ byte-identical after. The first two survived the suite
+# before that commit, which is how the review found them and why they are rows
+# rather than a paragraph. That selection was run before dev-05 was merged in a
+# second time, at 2a52322, so it was re-run against the merged tree: baseline
+# green over 188 requirements, all four caught again, .claude/hooks/
+# byte-identical after. Its third review pointed out that
+# `push-refusal-stops-opening-with-the-rule` deletes the constant and so
+# proves a deletion, where the rows it backs claim an ORDER, so
+# `push-refusal-moves-the-rule-to-the-end` was added -- it keeps the constant
+# and puts it last, which a containment check cannot tell from the right order
+# -- and run alone against the commit answering that review (2026-09-20):
+# baseline green over 188 requirements, caught, byte-identical after. Its
+# fourth review found `arms` counting lines rather than occurrences, so a
+# second arm sharing a line with an existing one moved nothing;
+# `a-new-refusal-arm-sharing-a-line` is that mutant, run alone the same way
+# against the commit answering it: baseline green over 188 requirements,
+# caught, byte-identical after. Its fifth review found three refusal sentences
+# the suite read only by their prefix -- one of the two `no base is named`
+# arms, and both load guards -- and the three rows for them,
+# `one-of-two-no-base-arms-loses-its-sentence`,
+# `push-load-guard-drops-what-it-cannot-tell` and
+# `decision-load-guard-drops-what-it-cannot-tell`, were run as one selection
+# against the commit answering it: baseline green over 188 requirements, all
+# three caught, byte-identical after. The first of them is anchored on a range
+# rather than on its own text, because the sentence it deletes is written
+# twice in that file and deleting both is a different mutation. #155's two
+# rows have still not been run since that merge, and neither has anything
+# else here -- except the rows this branch names below, which were run
+# against each tree that carried them.
 # #134 added `control-words-not-admitted-by-anchor` and
 # `close-paren-not-a-separator` and ran the pair three times: before the merge of
 # dev-05 into it, again on that merge (2026-09-18), and again on the merge of
@@ -181,7 +228,7 @@
 # out silent while the paragraph above them claimed otherwise. Its edit makes
 # the separator test always true, so that list empties without being named. Run
 # on 2026-09-20: baseline plus one, caught, byte-identical after.
-# No run has therefore exercised all sixty-six rows together, and saying which
+# No run has therefore exercised all seventy-nine rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -255,14 +302,16 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   FIFTY-TWO real mutations, against SEVEN files in .claude/hooks/, naming
-#   FORTY-SIX requirement IDs between them, of the 165 whose status is active.
+#   SIXTY-FIVE real mutations, against EIGHT files in .claude/hooks/, naming
+#   FIFTY requirement IDs between them, of the 170 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
 # They had been wrong or moved six times in three days when #148 was filed to
-# take them out and let `--list` be the only place they are written, and #139
-# moved them eight more times.
+# take them out and let `--list` be the only place they are written; #139 moved
+# them eight more times, and #109's merge of dev-05 moved all four again. The
+# heading three paragraphs up stopped being one of them on the same merge, for
+# the same reason: see there.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
 # verify is `review` or `runbook` rather than a check here, every doc-claim about
@@ -405,6 +454,19 @@ wrapper-word-spelling-not-admitted%lib/command-scan.sh%s/SPELLING((ba|z|)sh/((ba
 prefix-word-spelling-not-reduced%lib/command-scan.sh%s/return cw_name(w)/return w/%GH-117%caught
 wrapper-surface-quotes-not-admitted%no-pr-decisions.sh%/^GH_SURFACE_ANYWHERE=/s/\["'"'"'\]\*gh\["'"'"'\]\*/gh/%GH-117%caught
 the-close-117-rejected%lib/command-scan.sh%s/SPELLING((ba|z|)sh/SPELLING(\\\\$\\\\(|(ba|z|)sh/%GH-117.1%caught
+long-command-outlasts-the-bound%no-git-push.sh%/^CMDS=\$(printf/a [ "$(echo "$COMMAND" | wc -l)" -gt 100 ] && sleep 1.1%GH-109.1%caught
+forced-push-refusal-drops-the-remedy%no-git-push.sh%s/ Add a commit instead\.//%US-7 GH-109.2%caught
+decision-refusal-drops-what-stays-allowed%no-pr-decisions.sh%/^DECIDE=/s/ Opening a PR, commenting on it and editing it are allowed;//%US-7 GH-109.2%caught
+second-hook-refuses-a-permitted-read%alembic-via-uv-group.sh%/^CMDS=\$(printf/a echo "$CMDS" | grep -q '^gh pr view' && exit 2%GH-109.5%caught
+base-refusal-drops-the-rule-sentence%no-pr-decisions.sh%/^BASE=/s/a pull request may be proposed only into the active dev branch, and the base has to be named in the command. //%US-7 FR-23 GH-109.2%caught
+base-refusal-drops-the-remedy-spelling%no-pr-decisions.sh%/^BASE=/s/ --title \.\.\. --body \.\.\.//%US-7 FR-23 GH-109.2%caught
+push-refusal-stops-opening-with-the-rule%no-git-push.sh%s/echo "\$REFUSE That is a forced push/echo "That is a forced push/%US-7 GH-109.2%caught
+a-new-refusal-arm-nothing-reads%no-git-push.sh%/^CMDS=\$(printf/a >\&2 echo "Blocked: an arm with no says row above it."%GH-109.2%caught
+push-refusal-moves-the-rule-to-the-end%no-git-push.sh%s/"\$REFUSE That is a forced push, which rewrites history the open pull request is showing. Add a commit instead."/"That is a forced push, which rewrites history the open pull request is showing. Add a commit instead. \$REFUSE"/%US-7 GH-109.2%caught
+a-new-refusal-arm-sharing-a-line%no-git-push.sh%/A wildcard refspec does not name this branch/s/$/; echo "Blocked: a second arm sharing a line." >\&2/%GH-109.2%caught
+one-of-two-no-base-arms-loses-its-sentence%no-pr-decisions.sh%/This names \$BAD_BASE/,+6s/, so this would go to the repository.s default branch//%US-7 GH-109.2%caught
+push-load-guard-drops-what-it-cannot-tell%no-git-push.sh%s/, so it cannot tell whether this command pushes, or where to//%US-7 GH-84.1 GH-109.2%caught
+decision-load-guard-drops-what-it-cannot-tell%no-pr-decisions.sh%s/, so it cannot tell whether this command decides a pull request or a release//%US-7 GH-84.1 GH-109.2%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS
