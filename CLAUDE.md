@@ -261,9 +261,9 @@ a claim without a number is a claim to re-measure.
 ## What an unattended agent may do to this repository
 
 * **Unless otherwise stated, an agent shall create a dedicated worktree for its work.**
-* **Unless otherwise stated, an agent shall create its own dedicated worktree for its work.**
 * **Unless otherwise stated, an agent shall not work on a worktree created by someone else.**
 * **If an agent finds out that a worktree already exists, it shall ask the user for permission to work in that worktree.**
+* **When an agent finishes its work in its worktree, it will commit and push to its corresponding worktree branch.**
 
 An agent may push the branch of the linked worktree it is working in —
 non-forced, and naming that branch in the command, because a bare `git push`
@@ -321,7 +321,7 @@ active dev branch — which the SessionStart report reads every session, as its
 `main ancestry` line, and argues beside that read.
 
 **Deliberately left open.** These stop mistakes, not adversaries: they read the
-text of a command, so a caller that means to evade them can. Five consequences
+text of a command, so a caller that means to evade them can. Six consequences
 are accepted rather than fixed, and they are numbered because the count is the
 part that went stale last time.
 
@@ -375,6 +375,55 @@ part that went stale last time.
    not *mistakenly* rewrite the hook that just refused it — and closing it
    would make every future hook change a two-person procedure for no gain
    against the threat actually named.
+
+6. **A command word that is a parameter or a command substitution is not
+   resolved**, because no amount of reading the text says what it expands to.
+   So `$(command -v gh) pr merge 5`, `` `command -v gh` pr merge 5 `` and
+   `$GH pr merge 5` are permitted, and so are the `git` spellings of each.
+   Raised as recommendation 4 of #117's triage, which called it a judgement
+   call to settle before implementing; it was settled by measuring, against
+   75,346 Bash commands taken from 661 local session transcripts.
+
+   **The close was written first and rejected on its own numbers.** Adding a
+   `$(` alternative to `CS_WRAPPER_RE` closes none of the four shapes above.
+   The wrapper block is an *and* — is a wrapper in a command position, and does
+   the line carry what this hook guards — and the second question is answered
+   by patterns that want the tool's name followed by whitespace. A command
+   substitution eats that boundary: the line reads `gh)`, not `gh `. Measured,
+   the alternative left `$(command -v gh) pr merge 5` and
+   `$(command -v git) push origin main` permitted, flipped only
+   `$(command -v gh) api -X PUT repos/o/r/pulls/5/merge` — which matches on the
+   `/pulls/…/merge` literal and needs no `gh` at all — and refused **9**
+   commands that should pass, 8 of them lines of `check-hooks.sh` being edited,
+   such as `"$(printf 'sudo git commit -m "git push --all origin"\n' |
+   cs_split)"`. Closing it for real would mean widening the second question so
+   that `gh)` counts as `gh`, which is consequence 2's loose question widened
+   across all prose.
+
+   **The three shapes are not one shape, and the counts are why.** In command
+   position, as `CS_WRAPPER_RE` reads one: `$(…)` 88 lines, `` `…` `` 2,469,
+   `$VAR` 377. Backticks are overwhelmingly markdown inline code inside a
+   heredoc — and that is not a measurement artifact, because these rules read
+   raw text too, so a backtick rule would refuse `cat > notes.md <<'EOF'`
+   whenever the prose says `` `git push` ``. That is consequence 3's accepted
+   class widened by three orders of magnitude. `$VAR` is an agent being *more*
+   careful about which binary it runs — `$PYTHON -m pytest` — and refusing it
+   punishes the care.
+
+   **A variable is only unresolved while it is the whole word.** `"$VENV/bin/gh"`
+   is refused, because the reduction in `cs_split` resets at each `/` and the
+   basename it is left with is `gh`, which is the name it spells whatever the
+   directory part expands to. So the permitted shape is the one where the word
+   is a variable and nothing else, and the refused shape is a path whose last
+   component is written out. That is the line this consequence draws, and it was
+   drawn by a review of the branch that wrote it: the example here said
+   `"$VENV/bin/gh"` was permitted, and the same commit refused it.
+
+   The standing rule these hooks are held to is that a newly found evasion
+   earns a fix only if it is a shape an agent would plausibly write, and none
+   of the three is: every occurrence measured was prose, an assignment, or a
+   deliberate probe. `check-hooks.sh` pins all three as permitted, so the
+   decision is a check and not only this paragraph.
 
 ## Agent skills
 

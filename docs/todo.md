@@ -1309,18 +1309,21 @@ per the priority order above.
   item restated it and was wrong, along with three other documents. This item is
   what remains, and the shape of the gap rather than its size is the part worth
   writing down: a row per rule reaches a requirement, it does not exercise every
-  check that requirement has, and 144 requirements are active. #108 registered
-  six rows with its ten requirements, reaching six of them; #109's arrive with
-  it. That #108 reached six of ten is the shape again in miniature — the four it
+  check that requirement has, and 157 requirements are active. #108 registered
+  six rows with its ten requirements, reaching six of them; #128 registered three
+  for the two rules of one fix; #109's arrive with it. That #108 reached six of
+  ten is the shape again in miniature — the four it
   did not reach are pins on behaviour no single edit to a hook flips, which is
   what a row can and cannot be written against. Five was the first answer, and a
   review found the sixth: the claim that the degraded report still reports was
   reachable after all, by deleting the line that reports it. The other four are
   abstentions and byte handling that lives in the shell rather than in a line of
-  hook code. Two kinds of rule the harness cannot reach at all — one
-  living in the tooling beside the hooks, `check-hooks.sh` and `mutate-hooks.sh`
-  themselves, and a claim about a file outside `.claude/hooks/` — are recorded in
-  its header and need a different answer, not another row.
+  hook code. #128's three are the same shape from the other end: two rules that
+  overlap, so a row per rule leaves the case the issue was filed for reachable by
+  neither, and a third row breaks both. Two kinds of rule the harness cannot
+  reach at all — one living in the tooling beside the hooks, `check-hooks.sh` and
+  `mutate-hooks.sh` themselves, and a claim about a file outside `.claude/hooks/`
+  — are recorded in its header and need a different answer, not another row.
 
 - [ ] **One high-severity Dependabot alert on `main` — reported 2026-09-04** on
   pushing `dev-04`, at `security/dependabot/6`. Not looked at: neither the

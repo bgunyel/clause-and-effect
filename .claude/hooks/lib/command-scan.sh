@@ -57,6 +57,12 @@
 # cannot be got exact by looking more carefully, because that is what the
 # previous two attempts were. The drop is a fail-safe now. See cs_normalise.
 #
+# A fourth wrong answer followed that conclusion rather than preceding it, and
+# it is #128: the fail-safe covers a body that never ends, and this one was a
+# body that began a line too early, on an opener whose own line was continued.
+# So the count is four, and the reading of it is unchanged. cs_normalise keeps
+# it.
+#
 # A fourth review, of the #43 migration, found two more -- both the same shape
 # as the first three, and both here rather than in a hook. A wrapper word was
 # stripped along with its options but not its operand, so `timeout 30 git push
@@ -303,8 +309,11 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # beginning with one read as a command position, and an early version of the
 # hooks refused the commit that introduced them.
 #
-# Joining runs after dropping, so a backslash at the end of the line before a
-# heredoc terminator cannot swallow the terminator and hide what follows.
+# The drop waits for a logical line to end, and that is #128's paragraph below:
+# a line ending in a backslash continues, and a body begins after the first line
+# that does not. Only WHERE the line ends is asked here; the joining itself is
+# still cs_join's, one pass later, so the two cannot answer the backslash
+# differently.
 #
 # Dropping is the one step here that hides commands rather than exposing them,
 # so what counts as a heredoc has to be exact in both directions -- and it was
@@ -322,11 +331,115 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # right. A heredoc that never reaches its terminator was not a heredoc, and the
 # lines held for it are given back at END rather than lost.
 #
+# A FIFTH answer followed, and the paragraph that stood at the head of this
+# comment was it: joining ran after dropping, and that order was claimed to make
+# a backslash before a terminator harmless. It did the opposite one line further
+# up. Bash joins the OPENER's own continuation before the body begins, so
+#
+#   cat <<E \
+#   x
+#   E
+#   git push --force origin main
+#
+# is `cat <<E x` with an empty body, and the push runs -- while this pass took
+# `x` for the body, ended the body at `E`, and cs_join then glued the push onto
+# the opener line, where no command stands at a command position. no-git-push.sh
+# and no-commit-to-main.sh both answered exit 0, measured. Issue #128.
+#
+# So the drop waits for the logical line to end: the opener is looked for on
+# every line of it, and the body begins after the line that ends it. WHICH line
+# that is, is bash's rule and not cs_join's -- a line continues only when its
+# run of trailing backslashes is ODD -- and the first version of this fix used
+# cs_join's looser rule instead, that any trailing backslash continues. That
+# version was wrong, in the permitting direction, and the argument that licensed
+# it is the sentence worth keeping here:
+#
+#   "Looser than bash is the safe side, because a logical line held open too
+#   long only exposes more lines as commands."
+#
+# It is false. Holding the line open moves the START OF THE BODY forward, and
+# the search for the terminator with it -- so a delimiter line that bash took as
+# the whole terminator is scanned past as though it were part of the command
+# line, the body runs on to the NEXT delimiter, and everything between them is
+# dropped. Measured on the fix that made that claim:
+#
+#   cat <<E \\
+#   E
+#   echo after
+#   git push --force origin main
+#   E
+#
+# Bash ends the command line at `cat <<E \` -- `\\` is an escaped backslash,
+# an even run, so nothing is continued -- takes the next line as the terminator
+# of an empty body, and runs `echo after` and the push. That fix emitted
+# `cat <<E \E` and NOTHING else: the push was gone, and no-git-push.sh answered
+# exit 0 where dev-05 answered exit 2. A new permitting defect in the change
+# whose subject is a permitting defect, and of the same class. Found by review of
+# this pull request, not by the suite it arrived with.
+#
+# So parity is modelled where the body starts, and the two rules are then left
+# to disagree everywhere it cannot cost anything -- except at one point. cs_join
+# joins a line ending in ANY backslash, deliberately, and it runs one pass after
+# this one; the line this pass ends a logical line on therefore gets its trailing
+# run taken off, because that line is the one cs_join could otherwise glue the
+# first line AFTER the terminator onto. Under the parity rule such a run is
+# always even, which is exactly the case bash does not join and cs_join does. A
+# trailing backslash is text of a command line and never a command, so removing
+# it can hide nothing; what it removes is the disagreement, at the only place
+# where the disagreement reaches a verdict.
+#
+# What says all of this rather than the paragraph above: 2,580 generated shapes
+# of opener, backslash run, delimiter and payload position, each RUN under bash
+# with `touch ran.flag` as the payload -- so that execution and not output is
+# what the property reads -- and then put through this pass with a push in the
+# payload's place. The property is that a push bash runs stands at the start of
+# some emitted line. dev-05 fails it 198 times, the first version of this fix 40,
+# this version 0. The harness is in the pull request, not the tree: its own first
+# two generations were green for the wrong reasons, once from a fixed
+# `E / payload / E` tail that re-closed every swallowed body and once from
+# reading `cat` printing a body line as the payload having run.
+#
+# A body line is still never joined, whether its delimiter is quoted or not,
+# because it is dropped before cs_join sees it -- so a quoted body whose every
+# line ends in a backslash still ends at its terminator, where bash ends it too.
+# Bash joins inside an UNQUOTED body and this pass does not, which ends the body
+# EARLIER than bash: the lines between are emitted rather than dropped. That is
+# the safe direction here for the reason the paragraph above is careful about --
+# ending a body early exposes lines, and it is ending one LATE, or starting one
+# late, that hides them. Deliberately not modelled rather than overlooked, and
+# the 2,580-shape run above covers body lines ending in a backslash under both
+# quotings.
+#
+# THE TRADE, taken knowingly: an opener SPLIT by the continuation -- `cat <<\` /
+# `E`, or `cat <<E\` / `x`, which bash reads as `<<E` and `<<Ex` -- is not
+# recognised as that opener, because the opener is looked for on each physical
+# line rather than on the joined text. Joining here to look at it would be the
+# join rule written twice, in the file whose header says that is the defect. So
+# either no opener is found or its delimiter never arrives, and both ends in the
+# END give-back: the lines are scanned as commands, which is where every other
+# uncertainty in this pass already lands.
+#
 # That is the answer this question should have had from the start: the exact
-# version has been got wrong three times, and each time the failure was silent
+# version has been got wrong four times, and each time the failure was silent
 # and in the permitting direction. The fail-safe costs a genuinely unterminated
 # heredoc being scanned as commands -- which bash would refuse to run anyway --
 # and it is the direction this file takes everywhere else.
+#
+# WHAT THAT DIRECTION COSTS, counted rather than asserted: the sentence above
+# says the fail-safe is paid for in refusals and does not say how many. The
+# 2,580 shapes carry a second column, which is the first one read backwards --
+# bash does NOT run the payload, yet a push in its place stands at the start of
+# an emitted line, so a hook refuses text bash never runs. Measured on the same
+# run: 750 such shapes on dev-05, 816 on the first fix, 848 here, of 2,100.
+# The rise is this change taking its own direction and not a new departure:
+# of the 124 that arrive, 108 are the END give-back and 16 the unquoted-body
+# join, both of them named above -- bash reports the heredoc unterminated and
+# the lines held for it come back as commands; a body line ending in a
+# backslash is joined by bash and not by this pass. 26 go the other way:
+# pushes that really were body text, now dropped because the body begins where
+# bash begins it. Raised on review of the pull request for #128 and kept, on
+# the grounds the whole file keeps everywhere else: a
+# refusal is visible and one edit away, and a permitted push is neither.
 cs_normalise() {
   awk '
     ind {
@@ -337,18 +450,53 @@ cs_normalise() {
       next
     }
     {
-      # A here-string is not a heredoc. Blanked at its own width, so a real
-      # heredoc later on the same line is still found where it stands.
-      scan = $0
-      gsub(/<<</, "   ", scan)
-      if (match(scan, /<<-?[[:space:]]*[^[:space:];|&<>()]+/)) {
-        d = substr(scan, RSTART, RLENGTH)
-        dash = (d ~ /^<<-/)
-        sub(/^<<-?[[:space:]]*/, "", d)
-        gsub(/[\047"]/, "", d)
-        ind = 1
+      # An opener found on an earlier line of this logical line is the one that
+      # stands: the first match wins, as it did when every logical line was one
+      # physical line. `opener` set means a body is waiting for the line to end,
+      # which it can only be while the line is still being continued.
+      if (!opener) {
+        # A here-string is not a heredoc. Blanked at its own width, so a real
+        # heredoc later on the same line is still found where it stands.
+        scan = $0
+        gsub(/<<</, "   ", scan)
+        if (match(scan, /<<-?[[:space:]]*[^[:space:];|&<>()]+/)) {
+          d = substr(scan, RSTART, RLENGTH)
+          dash = (d ~ /^<<-/)
+          sub(/^<<-?[[:space:]]*/, "", d)
+          gsub(/[\047"]/, "", d)
+          opener = 1
+        }
       }
-      print
+      if (!opener) { print; next }
+      # Where the logical line carrying the opener ends, by the rule bash uses
+      # and not the one cs_join uses: a line continues only when its run of
+      # trailing backslashes is ODD, the last one escaping the newline and the
+      # rest being escaped backslashes. An even run is text, and the line ends
+      # there. #128.
+      # p is that parity, flipped per backslash rather than taken with a
+      # modulo, so that the rule can be broken by one registered mutation:
+      # mutate-hooks.sh splits a row on % and could not carry the expression.
+      line = $0
+      n = length(line)
+      r = 0
+      p = 0
+      while (r < n && substr(line, n - r, 1) == "\\") { r++; p = 1 - p }
+      if (p) { print; next }
+      # The body starts after this line, and cs_join runs one pass later on a
+      # LOOSER rule -- it joins a line ending in ANY backslash, an escaped one
+      # included, deliberately. So an even run left standing here is the one
+      # place the two disagree where it can cost something: cs_join would glue
+      # the first line after the terminator onto this one, which is #128 again
+      # in its other spelling. Take the run off rather than hope they agree:
+      # trailing backslashes are text of the command line itself, never a
+      # command, and a line start is what every rule reads.
+      # The blanks in front of the run go with it, so that what this pass emits
+      # carries no trailing whitespace for a literal in check-hooks.sh to have
+      # to spell. Trailing blanks are not a command either.
+      if (r > 0) sub(/[ \t]*\\+$/, "", line)
+      print line
+      ind = 1
+      opener = 0
     }
     # The terminator never arrived, so this was not a heredoc and the lines were
     # dropped in error. Give them back.
@@ -372,8 +520,9 @@ cs_normalise() {
     #   - `<(...)` and `>(...)` carry a command, which is the one thing a drop
     #     must never swallow. They are not redirections and are left whole.
     #   - a redirect inside quotes is text. A commit message naming one is the
-    #     mistake the heredoc opener made three times, so quotes are tracked
-    #     character by character rather than matched around.
+    #     mistake the heredoc opener has made four times -- the header above
+    #     keeps that count -- so quotes are tracked character by character
+    #     rather than matched around.
     #   - `<<`, `<<-` and `<<<` belong to the heredoc pass above. Answering
     #     what a heredoc is a second time, here, is how the answers came to
     #     disagree in the first place; a run of two or more < is emitted whole.
@@ -690,11 +839,42 @@ CS_WRAP_WORDS="$CS_WRAP_OPTION_WORDS|$CS_WRAP_OPERAND_WORDS"
 # is pinned as a check.
 CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"
 
+# THE WRAPPER'S OWN COMMAND WORD, issue #117. The spellings cs_split normalises
+# for every other rule cannot be normalised here, because this expression reads
+# RAW TEXT: a wrapper is recognised before anything is split, and the reason it
+# is recognised at all is that its payload cannot be read. So the spellings are
+# admitted in the expression instead, and `/usr/bin/bash -c "gh pr merge 5"` --
+# permitted by all four boundary hooks before this -- is the wrapper it is.
+#
+# The same rule as cw_reduce in cs_split, written as far as a regular
+# expression reaches it: a run that ends in a slash, or a quote or a backslash,
+# repeated, in front of the name -- and quotes behind the name, since `"bash"`
+# closes after it. The run cannot cross whitespace or a separator, so the
+# command position this anchor establishes is not given up: `ls /usr/bin/bash`
+# offers no command position at that path, and `mybash -c` reaches the name
+# through no slash at all. Both are pinned.
+#
+# WHAT A REGULAR EXPRESSION DOES NOT REACH, and cw_reduce does: a quoted span in
+# the middle of the word -- `b"a"sh`, `/usr/"bin"/bash`, where the run stops at
+# the quote and the name is not whole on either side of it. That stays permitted
+# here while it is refused everywhere else, under the same trade the rest of this
+# rule takes: these stop mistakes, not adversaries, and an agent that means
+# `bash` writes one of the five.
+#
+# ONE SHAPE AND NOT TWO, which is what this paragraph said before Bertan's
+# review of the #117 branch measured it. An ESCAPED SLASH inside the path was
+# named here as a second unreachable shape and is not one: a backslash is not
+# excluded from the run, so the run takes `/usr\` and the `/` after it, and
+# `/usr\/bin\/bash -c "x"` matches. The claim was written from the shape of the
+# expression rather than from a measurement of it, which is the habit this file
+# exists to end. Both spellings are pinned now, the one that matches and the one
+# that does not, so that neither can move in silence.
+CS_WORD_SPELLING="([\\\\\"']|[^[:space:];&|()\`\"']*/)*"
 # Built unconditionally. What happens when the list it interpolates is empty is
 # not decided here: it is decided once, after cs_split, where the list's one
 # reader is withdrawn so that every consumer's load guard refuses. See
 # THE WORD LIST IS PART OF THE LOAD, below cs_split.
-CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_WRAP_WORDS)[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*((ba|z|)sh[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
+CS_WRAPPER_RE="(^[[:space:]]*|[;&|(\`][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|$CS_WORD_SPELLING($CS_WRAP_WORDS)[\\\\\"']*[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
 
 # Print one command per line, with anything that precedes the command word
 # removed, so a caller matches on ^ and never has to describe a command
@@ -866,6 +1046,131 @@ cs_split() {
     # follow it, which is what separates `sudo git` from a line ending in sudo.
     function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
     function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
+    # THE COMMAND WORD ITSELF. Issue #117: every rule in every hook recognises a
+    # command by the bare name at the head of what this function emits, and bash
+    # runs the same program when that name is spelled as a path, in quotes or
+    # behind a backslash. All five spellings of all seven refused shapes #117
+    # measured were permitted, in the five hooks it measured. Five of the six
+    # that read a command: the sixth, no-work-on-stale-branch.sh, needed a
+    # fixture the issue did not build, so it went unmeasured rather than
+    # unaffected -- it reads its git commands through this same anchor. It is
+    # checked now, beside that fixture.
+    #
+    # Here rather than in each anchor, which is the same reason the rest of this
+    # file exists: seven anchors across six hooks would be the one question
+    # answered seven times, and an anchor added later would answer it an eighth.
+    # Every consumer gets this without knowing it happened.
+    #
+    # THE RULE IS THE BASENAME AFTER UNQUOTING AND UNESCAPING, and the two
+    # halves of that are not interchangeable. Asking instead whether the guarded
+    # name appears in the word would refuse `my-gh`, which #72 decided is a
+    # different program; asking only about a leading path would miss the three
+    # quoting spellings. What bash runs is the file the word names, so the word
+    # is reduced to the name of that file and to nothing else.
+    #
+    # A slash separates path components whatever quoting it is written under --
+    # quoting changes what a character IS, not what a slash DOES -- so the
+    # decision is taken on the character after unescaping, and `/usr\/bin\/gh`
+    # reduces to gh as `/usr/bin/gh` does. The count is reset at each one rather
+    # than the string searched for one afterwards, which answers the question
+    # once instead of twice.
+    #
+    # AN ARRAY OF CELLS AND NOT A STRING, which is issue #96 rather than style,
+    # and the reason this function returns a count and prints nothing. `out =
+    # out ch` copies the whole of out to add one character, so building the name
+    # that way is quadratic in its length -- the shape #96 found in six passes
+    # of this file and fixed in all six. A command word is one word, but THE
+    # LINE CAP does not bound one (#128), and the cap is not what these passes
+    # are held fast by in the first place. Measured at the cap, LC_ALL=C, mawk
+    # 1.3.4, fastest of three: a 16 KB line with no command word to reduce costs
+    # cs_split 6 ms, a command word of 5,460 path components 14 ms, and one
+    # quoted component of 16 KB -- the whole of it walked and the whole of it
+    # printed -- 16 ms. check-hooks.sh holds the scaling at 128 KB against
+    # 512 KB, past the cap, and the string version was measured against that
+    # check rather than argued about: 416 ms and 5,310 ms, a ratio of 12.7 where
+    # the check fails at 8, against 129 ms and 497 ms for the cells.
+    #
+    # A backslash escape is read inside double quotes and not inside single
+    # quotes. That is the answer cs_normalise and the separator walk in this
+    # same function already give, and it is what bash does; giving it a third
+    # time differently is how the answers in this file came to disagree before.
+    function cw_reduce(w,   m, c, ch, q, len) {
+      cw_n = 0
+      q = ""
+      m = 1
+      len = length(w)
+      while (m <= len) {
+        c = substr(w, m, 1)
+        ch = ""
+        if (q != "") {
+          if (q == "\042" && c == "\\")      { ch = substr(w, m + 1, 1); m += 2 }
+          else if (c == q)                   { q = ""; m++ }
+          else                               { ch = c; m++ }
+        }
+        else if (c == "\\")                  { ch = substr(w, m + 1, 1); m += 2 }
+        else if (c == "\042" || c == "\047") { q = c; m++ }
+        else                                 { ch = c; m++ }
+        if (ch == "/") cw_n = 0
+        else if (ch != "") cw[++cw_n] = ch
+      }
+      return cw_n
+    }
+    # A candidate printed with its first word reduced to that name, or printed
+    # exactly as it came. Two things leave it alone, and each is a case where
+    # rewriting would say something false:
+    #
+    #   - a word carrying none of the four characters is already a bare name.
+    #     The test is also what keeps the walk off every ordinary command, and
+    #     it is why the two costs above are 6 ms and not 6 ms plus a walk;
+    #   - a word whose basename is empty names no file. `/usr/bin/ git push`
+    #     rewritten would put the first ARGUMENT where the command word goes and
+    #     read as a push.
+    #
+    # There is no third case for a word that reduces to itself, and there cannot
+    # be one: past the test above the word holds a slash, a quote or a backslash,
+    # every one of which this drops, so a reduction that changed nothing has an
+    # empty name and is already the second case.
+    # The reduced word as a STRING, for the comparisons that need one rather
+    # than a printed line: the prefix-word list and the operand-word list. A
+    # prefix word is matched BY NAME, so #117 reaches it exactly as it reaches
+    # the command word -- `/usr/bin/env gh pr merge 5`, `/usr/bin/sudo gh pr
+    # merge 5` and `"timeout" 30 gh pr merge 5` were permitted where the bare
+    # spellings are refused, measured in the triage of #117 at origin/dev-05
+    # 96c6850. Fixing the command word alone would have left all three, which is
+    # what that triage means by "the next review round finds it".
+    #
+    # BOUNDED, and that is what keeps this linear where printhead avoids the
+    # question by printing. A string has to be built to match it against a list,
+    # and building one a character at a time is the quadratic shape of #96; so a
+    # name
+    # longer than any word in either list is not built at all. It cannot be one
+    # of them, and the cost of a long word stays the cost of walking it. The
+    # bound is written here as a number well past the longest word either list
+    # holds rather than derived from them, because a derivation would have to
+    # split the lists on `|` for every token of every line.
+    function cw_name(w,   k, out) {
+      if (cw_reduce(w) == 0 || cw_n > 32) return ""
+      out = ""
+      for (k = 1; k <= cw_n; k++) out = out cw[k]
+      return out
+    }
+    # A token as the name it spells: itself when it carries none of the four
+    # characters, which is every ordinary command, and its reduction otherwise.
+    function cw_spelled(w) {
+      if (index(w, "/") == 0 && index(w, "\042") == 0 \
+          && index(w, "\047") == 0 && index(w, "\\") == 0) return w
+      return cw_name(w)
+    }
+    function printhead(s,   i, w, k) {
+      i = 1
+      while (i <= length(s) && index(" \t\n\v\f\r", substr(s, i, 1)) == 0) i++
+      w = substr(s, 1, i - 1)
+      if (index(w, "/") == 0 && index(w, "\042") == 0 \
+          && index(w, "\047") == 0 && index(w, "\\") == 0) { print s; return }
+      if (cw_reduce(w) == 0) { print s; return }
+      for (k = 1; k <= cw_n; k++) printf "%s", cw[k]
+      printf "%s\n", substr(s, i)
+    }
     {
       line = $0
       n = length(line)
@@ -887,8 +1192,15 @@ cs_split() {
         # The list arrives as a variable rather than standing here as a literal,
         # so that the wrapper anchor can admit the same words without a second
         # copy of them. Issue #79; see CS_WRAP_OPTION_WORDS above.
+        #
+        # Through cw_spelled since #117, so that a prefix word spelled as a path
+        # or in quotes is the prefix word it is. Not the control words above:
+        # quoting a RESERVED word takes its reserved meaning away, so bash runs
+        # a program named `if` for `"if" true` and the strip is right to stop.
+        # The two lists are matched by name and the reserved words are matched
+        # as syntax, and that is the whole difference.
         q = tokend(p)
-        if (q <= n && substr(line, p, q - p) ~ ("^(" wrapwords ")$")) {
+        if (q <= n && cw_spelled(substr(line, p, q - p)) ~ ("^(" wrapwords ")$")) {
           p = skipblank(q)
           while ((q = tokend(p)) <= n && substr(line, p, 1) == "-") p = skipblank(q)
           wrapped = 1
@@ -901,7 +1213,7 @@ cs_split() {
         # operand is stripped with the word, one token and only if it is not
         # itself an option.
         q = tokend(p)
-        if (q <= n && substr(line, p, q - p) ~ ("^(" operandwords ")$")) {
+        if (q <= n && cw_spelled(substr(line, p, q - p)) ~ ("^(" operandwords ")$")) {
           p = skipblank(q)
           while ((q = tokend(p)) <= n && substr(line, p, 1) == "-") p = skipblank(q)
           q = tokend(p)
@@ -918,7 +1230,7 @@ cs_split() {
       # Issue #96.
       e = n
       while (e >= p && index(" \t\n\v\f\r", substr(line, e, 1)) > 0) e--
-      if (e >= p) print substr(line, p, e - p + 1)
+      if (e >= p) printhead(substr(line, p, e - p + 1))
       # A wrapper option taking its value as a separate token leaves that value
       # where the command word has to be, and the command behind it is never at
       # ^ again: `sudo -u root git push --all origin` left `root`, `nice -n 10`
@@ -949,7 +1261,27 @@ cs_split() {
           r = skipblank(q)
           c = substr(line, r, 1)
           if (c == "\042" || c == "\047") break
-          print substr(line, r, e - r + 1)
+          # Every candidate, not only the first. A prefix word stands in front
+          # of the command word, so at the point the strip runs the word is
+          # still behind it and `sudo /usr/bin/git push` would be normalised
+          # nowhere.
+          #
+          # THE TRADE, TAKEN KNOWINGLY, and it is this pass reaching one word
+          # further than the one before it did. A tail candidate is an ARGUMENT
+          # offered as a command word, on the argument above that offering
+          # cannot hide a command -- and reducing one to its basename turns a
+          # path-shaped argument into a name a rule reads. Measured: `sudo cp
+          # /usr/bin/pytest /tmp/` offers `pytest /tmp/` and is now refused by
+          # pytest-via-uv-group.sh, where the same command without the prefix
+          # word offers no tail at all and is permitted.
+          #
+          # Taken rather than fixed, for the reason the note above gives: it is
+          # the refusing direction, the refusal names the permitted spelling,
+          # and telling an argument from a command word here is the shell parser
+          # the stopping rule in these files refuses to write. It is recorded
+          # because a refusal nobody wrote down reads as a defect to whoever
+          # meets it. check-hooks.sh pins both verdicts.
+          printhead(substr(line, r, e - r + 1))
         }
       }
     }'
@@ -1021,10 +1353,19 @@ fi
 # or more per fragment cs_split emits, so its time grows with the number of
 # fragments as well, and a short line can hold thousands: 2,500 `t;` and a
 # `gh pr merge 5` on the next line -- 5,014 bytes, a third of the cap -- took
-# no-pr-decisions.sh 6.4 s idle, found by review of PR #123. That is #127. And
-# a heredoc opener ending in a backslash lets cs_normalise emit a line past the
-# cap from lines within it, so the cap does not bound what the passes are handed
-# either. That is #128.
+# no-pr-decisions.sh 6.4 s idle, found by review of PR #123. That is #127.
+#
+# It does bound what the passes are HANDED, and until #128 it did not. A heredoc
+# opener ending in a backslash let cs_normalise emit one 600,400-byte line from
+# an input whose longest joined line was 15,011 bytes, because the drop ended
+# each body at its terminator and the join then glued forty groups into one
+# line. What holds now is an argument and not a measurement: the drop only ever
+# REMOVES lines, and it can remove a line next to a continued one only inside a
+# body -- a body begins after a line that does not end in a backslash, and the
+# lines held for it are given back together. So every joined line cs_normalise
+# emits is part of a joined line cs_within_cap measured, and no longer than it.
+# That input is pinned at 15,011 in check-hooks.sh, and reverting the fix in a
+# copy puts the 600,400 back: mutate-hooks.sh row heredoc-opener-continuation.
 #
 # Why the passes were slow is fixed too, and is the other half of #96. Six of
 # them grew a string one character or one token at a time -- cs_normalise's
@@ -1066,7 +1407,7 @@ fi
 # backslash, are refused as a 24 KB line although no line of the command is
 # longer than 80 bytes and bash would never read them as one. Taken rather than
 # fixed, because answering it means cs_within_cap deciding where a heredoc
-# ends -- the question cs_normalise has got wrong three times, asked a fourth
+# ends -- the question cs_normalise has got wrong four times, asked a fifth
 # time in a second place -- and a body whose every line ends in a backslash is
 # not something a commit message or a dev-log entry holds. check-hooks.sh pins
 # the refusal.

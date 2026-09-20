@@ -128,6 +128,10 @@ DECIDE="Blocked: deciding a pull request is Bertan's call, not an agent's. Openi
 
 BASE="Blocked: a pull request may be proposed only into the active dev branch, and the base has to be named in the command. Write: gh pr create --base dev-NN --title ... --body ..."
 
+# The two arms share the reason and each writes its own tail, as the other base
+# refusals do. See quoted_base_flag.
+QUOTED_FLAG="A base flag is written with a quote or a backslash in its name"
+
 # Every base named in one gh pr command's arguments, one per line. Prints
 # nothing when no base flag is there at all, which is the shape that lets gh
 # pick the repository's default branch for itself.
@@ -151,10 +155,12 @@ BASE="Blocked: a pull request may be proposed only into the active dev branch, a
 # -- names no base, and the caller refuses it as a create naming none, which is
 # what it is.
 #
-# The trade: quotes are stripped before this runs, so `--title "-B main"` reads
-# as a base of main and is refused. A blocked title is visible and one edit
-# away; this file has taken that direction throughout. The opposite direction is
-# not symmetrical and is not taken -- see gh_pr_web.
+# What this reads is base_args' output, with every quoted span dropped but a
+# base flag's own quoted value, so `--title "-B main"` names no base here: it is
+# prose, and on a create that names a dev base it is permitted. This sentence
+# used to say the opposite, from when quotes were stripped rather than dropped.
+# A flag whose NAME is quoted never reaches this function -- quoted_base_flag
+# refuses it first, for the reason written there.
 gh_pr_bases() {
   local TOK WANT=
   for TOK in $1; do
@@ -189,8 +195,9 @@ gh_pr_bases() {
 #     repository names flags -- that title is one a session on this very file
 #     would write. Deleting the span cannot invent a flag; unquoting one can.
 #
-# The asymmetry with gh_pr_bases is deliberate and is the whole point: quoted
-# text may still trigger a refusal there, and may not grant an exemption here.
+# The asymmetry is deliberate and is the whole point: quoted text may still
+# trigger a refusal -- quoted_base_flag refuses a base flag whose name is quoted
+# -- and may not grant an exemption here.
 # The arguments a base is read out of, with quoted text taken out of them but a
 # quoted base value kept.
 #
@@ -206,10 +213,187 @@ gh_pr_bases() {
 # span is then dropped whole, which is what gh_pr_web already did for -w and
 # what rest_bases already did by anchoring on the field flag. Three readers of
 # the same argument list, and this was the one that still read prose.
+#
+# WHAT THE DROP COSTS, and it is not only an added refusal. #139. The argument
+# above -- deleting a span cannot invent a flag -- is true, and was read as
+# though it made deleting one safe. It does not: a span that WAS a base flag,
+# `"--base" main`, is deleted with the rest, and the command then names no base.
+# On a plain create that is refused for naming none, which is why this stood.
+# On a retarget and under --web naming none is permitted, so the drop removed
+# the refusal that `--base main` meets; and beside an unquoted `--base dev-05` it
+# removed a SECOND base, the one gh takes, being the last. quoted_base_flag below
+# is the answer, and it refuses rather than reads -- reading the flag back out of
+# the quotes is the unquoting this comment already rejected.
 base_args() {
   printf '%s' "$1" \
     | sed -E "s/(--base|-[A-Za-z]*B)([[:space:]]*=?[[:space:]]*)[\"']([^\"']*)[\"']/\1\2\3/g" \
     | sed -e 's/"[^"]*"//g' -e "s/'[^']*'//g"
+}
+
+# Is a base flag's NAME written with a quote or a backslash in it? Prints the
+# first such argument, as bash would pass it, and succeeds; fails if there is
+# none. Every arm refuses on it, before any base is read. #139.
+#
+# Refused and not read, because reading it is unquoting, and unquoting is what
+# let `--body "--base dev-05"` name a base in a command that named none. A
+# refusal cannot open a pull request anywhere, so it is the direction this file
+# takes whenever a spelling cannot be judged. On a create that stood alone it
+# changes no verdict -- `gh pr create "--base" dev-05` was already refused, for
+# naming no base -- and it changes the message to the true one.
+#
+# What makes an argument one, and each clause is there because the next
+# argument over is prose that must stay permitted:
+#
+#   - it is split and dequoted as bash would, so `"--base"`, `'--base'`,
+#     `--"base"`, `"--base"=main`, `\--base` and `"-B"` are all `--base` or
+#     `-B` by the time gh sees them. A span is read as part of the argument it
+#     sits in, not as a token of its own, which is what the drop above does not
+#     do and why `--"base" main` slipped past it as `-- main`. The `$` of
+#     bash's `$'...'` and `$"..."` goes with its quote, found by review of this
+#     fix: counted as a character, it hid `$'--base' main` as `$--base`. And
+#     the escapes `$'...'` interprets are decoded as bash decodes them -- \xHH,
+#     octal, \u and \U, \cX and the one-letter ones -- because each is a
+#     spelling of a character gh receives: `$'\x2d-base'` and `$'\055\055base'`
+#     are `--base`. The first version left them as written and called them a
+#     construction rather than a spelling; Bertan's review of PR #173 retargeted
+#     onto main with both. A character outside ASCII decodes to `?`, which is no
+#     character of any flag, so only its not being one is read. A NUL -- `\0`,
+#     `\x00`, `\u0000`, `\c@` -- is not a character at all: bash drops the rest
+#     of that `$'...'` span at it and joins what follows the closing quote, so
+#     `$'--base\0' main` is `--base main` and `$'--base\0'x` is `--basex`.
+#     Decoded to `?`, the first was permitted; Bertan's second review of #173.
+#     That review also named `\^@`, which bash 5.2 does not decode.
+#
+#     `\c` IS NOT DECODED BUT REFUSED, and that is the third review's answer.
+#     Copying bash one escape at a time opened a hole beside each one it
+#     closed: `\c` took the next character as its argument even where bash's
+#     parser had already paired it -- a closing quote, or the first half of
+#     `\\` -- so the span ran on past where bash ends it; and what `\c` makes
+#     is the next BYTE masked to five bits, so `\cअ` is a NUL while `\cA` is
+#     not. So every `\c` is taken as a possible NUL: it cuts the span, only
+#     the `c` is consumed, and what follows is paired by the ordinary rules.
+#     The word is judged as cut, which is the only reading that can be a flag
+#     -- a control character is not a flag character. The trade: `$'--base\cA'`
+#     names no base in bash and is refused here. A string nobody writes.
+#   - the quote or backslash comes AT OR BEFORE the end of the flag's name. A
+#     quote after it is round the value, `--base="dev-05"` and `-B"dev-05"`,
+#     which base_args already reads and this must not refuse. What counts is
+#     the first quote that YIELDS a character: an empty span -- `''`, `""`,
+#     `$''`, `$""`, or one a NUL cuts to nothing -- holds no value to be round,
+#     so one standing at or just past the end of the name refuses too.
+#     `--base$'' main` is `--base main`, and was permitted as a quote round a
+#     value until Bertan's fourth review of PR #173. And the `=` of `--base=`
+#     counts as part of the name: a quoted or escaped `=` refuses, because the
+#     value after it is read by base_args, which knows `"` and `'` and neither
+#     `$'...'` nor a backslash -- `--base$'=main'` and `--base\=main` named no
+#     base at all until the fifth review. The trade: `--base"=dev-05"`, which
+#     base_args could read, is refused with them; `--base="dev-05"` is not.
+#     `-B` needs no such clause: gh_pr_bases reads what follows its B as the
+#     value, so a leading `=` is part of a value that is no dev branch.
+#   - the argument holds no whitespace. gh reads `--base dev-05` as one argument
+#     as an unknown flag and `-B main` as a base of ` main`, and neither names a
+#     branch, a git ref being unable to hold a space. So `--title "-B main"` and
+#     `--body "--base dev-05 is the base"` are prose and stay permitted. A
+#     quote still open where the line ends is an argument holding a newline --
+#     cs_split hands this one line of a command, and bash carries the quote on
+#     to the next -- so `--body "--base` followed by a newline is prose too.
+#     The first version saw only the line and refused it; Bertan's review of
+#     PR #173. Unless a NUL has cut that span: the newline is dropped with the
+#     rest of it, and the span closes on a later line and the word goes on
+#     there, where one line cannot follow it -- `$'--ba\0`, newline, `'se main`
+#     is `--base main`, and was permitted on its first line alone (the third
+#     review). The next line can only EXTEND the word, so it can become a flag
+#     only if it is empty so far, or begins with a dash and holds no
+#     whitespace yet; those refuse, and anything else is judged as it stands.
+#     Refusing every cut span there refused an ordinary multi-line body with a
+#     `\c` in it (the fourth review).
+#
+# The trade, taken knowingly: a whitespace-free quoted argument that merely
+# begins like the flag is refused wherever it stands, value or not, since
+# which flags take a value is gh's to know and not this file's. `--body
+# "--base"` and `--label "-Blocked"` are refused on every arm. A refusal is
+# visible and one edit away.
+quoted_base_flag() {
+  printf '%s\n' "$1" | awk '
+    # q is where the first quote or escape that YIELDS a character opened, and
+    # qe where the first span that yields none did. A span with a character in
+    # it that opens past the name is round the value; an empty one cannot be,
+    # holding nothing, so one at or just past the end of the name refuses.
+    function judge(   b) {
+      if (w !~ /[[:space:]]/ && (q || qe)) {
+        if (w ~ /^--base(=|$)/ && ((q && q <= length("--base") + (w ~ /^--base=/)) || (qe && qe <= length("--base") + 1))) { print w; found = 1; exit }
+        if (w ~ /^-[A-Za-z]*B/) { b = index(w, "B"); if ((q && q <= b) || (qe && qe <= b + 1)) { print w; found = 1; exit } }
+      }
+      w = ""; q = 0; qe = 0; inw = 0; cut = 0
+    }
+    function open(t) { st = t; op = length(w) + 1; emp = 1 }
+    function shut() { if (emp && !qe) qe = op; st = 0; cut = 0 }
+    # The value of up to MAX digits of BASE at s[i+1], consumed by advancing i.
+    function digits(base, max,   k, d, v) {
+      v = 0
+      for (k = 0; k < max && i < n; k++) {
+        d = index("0123456789abcdef", tolower(substr(s, i + 1, 1))) - 1
+        if (d < 0 || d >= base) break
+        v = v * base + d; i++
+      }
+      nd = k
+      return v
+    }
+    function chr(v) { return (v > 0 && v < 128) ? sprintf("%c", v) : "?" }
+    # Append the character V decodes to. A NUL is not a character bash can pass:
+    # it ends what the span contributes, and cut holds the word at that length
+    # until the closing quote.
+    function put(v) { if (v == 0) { if (!cut) { cut = 1; cutw = w } } else w = w chr(v) }
+    # One escape inside $'"'"'...'"'"', the backslash at s[i]. Appends what bash makes of it.
+    function ansi(   e, v) {
+      if (i >= n) { w = w "\\"; return }
+      e = substr(s, ++i, 1)
+      if (e == "x") { v = digits(16, 2); if (nd) put(v); else w = w "\\x"; return }
+      if (e == "u") { v = digits(16, 4); if (nd) put(v); else w = w "\\u"; return }
+      if (e == "U") { v = digits(16, 8); if (nd) put(v); else w = w "\\U"; return }
+      if (e ~ /[0-7]/) { i--; v = digits(8, 3); put(v % 256); return }
+      if (e == "c") { put(0); return }
+      if (e == "n") { w = w "\n"; return }
+      if (e == "t") { w = w "\t"; return }
+      if (e == "r") { w = w "\r"; return }
+      if (e == "v") { w = w "\v"; return }
+      if (e == "f") { w = w "\f"; return }
+      if (e ~ /[abeE]/) { w = w "?"; return }
+      if (e ~ /[\\"?\047]/) { w = w e; return }
+      w = w "\\" e
+    }
+    {
+      s = $0; n = length(s); st = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (st) {
+          len = length(w)
+          if (st == 1) { if (c == "\047") { shut(); continue } w = w c }
+          else if (st == 3) {
+            if (c == "\047") { shut(); continue }
+            if (c == "\\") ansi(); else w = w c
+            if (cut) w = cutw
+          } else {
+            if (c == "\"") { shut(); continue }
+            if (c == "\\" && i < n && substr(s, i + 1, 1) ~ /[\\"$`]/) { w = w substr(s, i + 1, 1); i++ } else w = w c
+          }
+          if (length(w) > len) { emp = 0; if (!q) q = op }
+          continue
+        }
+        if (c == " " || c == "\t") { if (inw) judge(); continue }
+        inw = 1
+        if (c == "$" && i < n && substr(s, i + 1, 1) == "\047") { i++; open(3); continue }
+        if (c == "$" && i < n && substr(s, i + 1, 1) == "\"") continue
+        if (c == "\047" || c == "\"") { open(c == "\"" ? 2 : 1); continue }
+        if (c == "\\" && i < n) { if (!q) q = length(w) + 1; w = w substr(s, i + 1, 1); i++; continue }
+        w = w c
+      }
+      if (inw) {
+        if (cut) { if (w == "" || (w ~ /^-/ && w !~ /[[:space:]]/)) { print (w == "" ? "a span cut to nothing" : w); found = 1; exit } }
+        else if (st) w = w "\n"; judge()
+      }
+    }
+    END { exit found ? 0 : 1 }'
 }
 
 gh_pr_web() {
@@ -408,11 +592,66 @@ VERDICT='(^|[[:space:]])(--approve|--request-changes|-[A-Za-z]*[ar][A-Za-z]*)([[
 # narrows `my-gh pr merge 5` and `my_gh pr merge 5`.
 #
 # All three are evasion shapes rather than mistakes -- `./gh` and `/usr/bin/gh`
-# still refuse, a path ending in a character that is none of gh's own -- and
-# they are accepted under the same "these stop mistakes, not adversaries" that
-# decides the rest, stated here rather than left for a later review to find.
-# All three are pinned under REGRESSION: #72 in check-hooks.sh.
-GH_SURFACE_ANYWHERE='(^|[^-A-Za-z0-9_])gh[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
+# still refuse HERE, a path ending in a character that is none of gh's own --
+# and they are accepted under the same "these stop mistakes, not adversaries"
+# that decides the rest, stated here rather than left for a later review to
+# find. All three are pinned under REGRESSION: #72 in check-hooks.sh.
+#
+# HERE, and this is the word the sentence above lacked for two issues. It is a
+# claim about THIS PATTERN, which matches raw text with a left boundary, and it
+# read as a claim about the hook. It was not one: every rule outside this
+# wrapper block found `gh` by the bare name at the head of a command cs_split
+# emits, so `/usr/bin/gh pr merge 5` unwrapped was permitted, and so was the
+# same command under each of the other four spellings. Issue #117 fixed that in
+# lib/command-scan.sh -- in cs_split for the ordinary rules and in
+# CS_WRAPPER_RE for this one, which had the identical hole one word further
+# left, `/usr/bin/bash -c "gh pr merge 5"` reaching no wrapper rule at all.
+# THE SECOND QUESTION READS A NAME TOO, and #117 reached it a round late. This
+# pattern is the loose half of the wrapper rule -- does the line carry the
+# surface this hook guards -- and it matched `gh` by its bare spelling only. So
+# `bash -c "gh pr merge 5"` was refused while `bash -c '"gh" pr merge 5"'` was
+# not, and the quoting half of #117 leaked at exactly the place the wrapper rule
+# exists to close. The path and backslash spellings already passed, because the
+# left boundary admits `/` and `\`; it is quotes alone that never produce the
+# `gh` followed by whitespace this wanted.
+#
+# The class is written here rather than taken from the library, for the reason
+# THE WORD LIST IS PART OF THE LOAD gives one level down: a shared variable that
+# came back empty would degrade this to its old spelling silently, in the
+# permitting direction, and no guard can tell an empty variable from a narrow
+# one. Four copies that check-hooks.sh derives off the files and holds to each
+# other is the answer this repository already gives for these four patterns.
+#
+# Measured before it was taken: across the 476 wrapper-carrying commands in a
+# 75,346-command corpus, widening all four changed no verdict at all. It closes
+# `"gh"` and `'gh'`; `g"h"` stays open, the same accepted gap CS_WORD_SPELLING
+# names one level up, and it is pinned.
+GH_SURFACE_ANYWHERE='(^|[^-A-Za-z0-9_])["'"'"']*gh["'"'"']*[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|release|api)([^-A-Za-z0-9_]|$)'
+
+# A pull request's state, in every spelling of the quoting AROUND the value --
+# not inside the name or the value, which is #163.
+# Two rules read it -- the wrapper arm below and the gh api write block near the
+# foot of this file -- and the pattern is written ONCE because it was written
+# twice: two copies of `"?(closed|open)"?`, each admitting a double quote and
+# not a single one, so `-f state='closed'` closed a pull request through both.
+# Two copies can be fixed apart, and a fix applied to one of them reads exactly
+# like a fix. #137. check-hooks.sh pins each call site on its own, so a copy
+# reintroduced and then corrected in one place is red rather than silent.
+#
+# NOT anchored on the field flag, where rest_bases below is. The two rules are
+# triggered oppositely and that decides it: state refuses on PRESENCE, so a
+# spelling it cannot see is a refusal that does not happen, and it has to reach
+# the graphql `state:CLOSED` inside a mutation body and a bare `state=closed`
+# sitting in a wrapped line's text, neither of which carries a flag at all.
+# Anchoring would have narrowed a rule whose whole job is to be wide. base
+# refuses on ABSENCE, so width there is what invents a base out of prose.
+#
+# What the widening costs, named: `state='open'` written in prose on a line that
+# already reaches these rules is now refused, where `state="open"` and
+# `state=open` in the same prose already were. That is CLAUDE.md's left-open
+# item 2 -- quoted text has no argument structure to say whether a word is a
+# value or prose -- and it is one edit away, not a decision that goes wrong.
+STATE_FIELD_RE='state[[:space:]]*[=:][[:space:]]*["'"'"']?(closed|open)["'"'"']?'
 
 # Every base a gh api call names, in the two shapes gh accepts one. Both print
 # the values, one per line, for bases_all_dev -- the same "every, not the last"
@@ -420,15 +659,54 @@ GH_SURFACE_ANYWHERE='(^|[^-A-Za-z0-9_])gh[[:space:]]+(.*[^-A-Za-z0-9_])?(pr|rele
 # base=main` must not be answered by whichever occurrence a rule happened to
 # look at.
 #
-# REST: the value is a FIELD, so the field flag is part of the pattern. Matching
-# the bare word instead read `-f title="base: dev-05"` as a base, so a create
-# naming none of its own was permitted. Reported on the review of be0e3c7.
-# `-f base=x`, `-fbase=x` and `--field base=x` are one request written three
-# ways; anchoring on the flag is also what keeps `rebase` and `database` the
-# words they are.
+# REST: the value is a FIELD, so the field flag is part of the pattern. This is
+# the FOURTH answer to "where does the field begin", and the first three are
+# kept here because each was right about the one it replaced, and because the
+# shape of being wrong four times is the thing worth reading.
+#
+# 1. The bare word. It read `-f title="base: dev-05"` as a base, so a create
+#    naming none of its own was permitted. Reported on the review of be0e3c7.
+# 2. The flag, with the field name immediately after it. That fixed 1 and is
+#    what keeps `rebase` and `database` the words they are -- but the quote gh
+#    accepts round a whole field goes BETWEEN the flag and the name, and the
+#    pattern had no room for it. `-f "base=dev-05"` therefore read as a create
+#    that named no base, and the single permitted destination was refused with
+#    the message that none was given. #137.
+# 3. The flag, an optional quote, then the name. That fixed 2 and left the
+#    separator itself unasked about: pflag accepts `--field=value` for a long
+#    flag and `-f=value` for a short one, so `--field=base=main` and
+#    `-f=base=main` reached GitHub with nothing here seeing a base at all.
+#    Found by Bertan's review of PR #153, in the change that answered 2.
+# 4. The flag, ANY separator gh accepts, an optional quote, then the name. The
+#    separator between a flag and its value is exactly three things -- nothing,
+#    whitespace, `=` -- so `[[:space:]=]*` is the closure and not another guess,
+#    and the quote is admitted in the one position after it. `-f base=x`,
+#    `-fbase=x`, `--field base=x`, `--field=base=x`, `-f "base=x"` and
+#    `-f='base=x'` are one request. The anchor that answers 1 is untouched:
+#    `--field=database=x` still begins `d` after the separator, and a `base`
+#    reached through no flag at all is still not a base.
+#
+#    That is a closure of the SEPARATOR, not of the field, and an earlier
+#    wording of this item claimed the second. Quoting and escaping INSIDE the
+#    name or value -- `-f ba"se"=main`, `-f base\=main`, `-f \base=main` -- is
+#    still unread, and on a retarget still permitted; so are `st"ate"=closed`
+#    and `state=clo"sed"` in STATE_FIELD_RE above. Found by the follow-up
+#    review of PR #153. A fifth regex guess is the wrong answer: the fix is to
+#    dequote each argument before reading it, and the state half of that
+#    stands on #130's per-command move. #163.
+#
+# WHICH WAY AN UNREAD SPELLING FAILS, and it is not one way. The first version
+# of this comment said a spelling this rule cannot read is only ever a permitted
+# create turned into a false refusal, never a bad base let through. That is
+# false, and finding 1 above is what it hid: the no-base arm that produces the
+# refusal is keyed on the COLLECTION endpoint, so on `PATCH /pulls/N` -- a
+# retarget -- an unread base is matched by nothing and the command is permitted.
+# So this rule fails REFUSING on a create and PERMITTING on a retarget, and only
+# the create half is the "widening is safe here" that state's comment is
+# contrasted with. Both halves are checked, in the #137 section.
 rest_bases() {
   printf '%s\n' "$1" \
-    | grep -oiE "(-[fF]|--field|--raw-field)[[:space:]]*base[[:space:]]*=[[:space:]]*[\"']?[^[:space:]\"',}]*" \
+    | grep -oiE "(-[fF]|--field|--raw-field)[[:space:]=]*[\"']?base[[:space:]]*=[[:space:]]*[\"']?[^[:space:]\"',}]*" \
     | sed -E "s/.*=[[:space:]]*[\"']?//"
 }
 
@@ -469,7 +747,7 @@ if echo "$WRAPTEXT" | grep -qE "$CS_WRAPPER_RE"; then
   if echo "$WRAPTEXT" | grep -qE "$GH_SURFACE_ANYWHERE" \
      || echo "$WRAPTEXT" | grep -qE '/pulls/[^ ]*/(merge|reviews)' \
      || echo "$WRAPTEXT" | grep -qE '/releases([^A-Za-z0-9_-]|$)' \
-     || echo "$WRAPTEXT" | grep -qiE 'state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?' \
+     || echo "$WRAPTEXT" | grep -qiE "$STATE_FIELD_RE" \
      || echo "$WRAPTEXT" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then
     echo "$DECIDE A shell wrapper does not change what the command decides, and its payload cannot be read. Run it unwrapped." >&2
     exit 2
@@ -576,7 +854,12 @@ while IFS= read -r CMD; do
   if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then
     # Two readings of one argument list. Both drop quoted spans; the base reader
     # keeps a base flag's own quoted value, which is the only quoted text either
-    # question wants.
+    # question wants. A quoted flag NAME is refused before either reading runs,
+    # since both would drop it. #139.
+    if QFLAG=$(quoted_base_flag "$RAW"); then
+      echo "$BASE $QUOTED_FLAG ($QFLAG here), so the base this names cannot be checked. Write the flag unquoted." >&2
+      exit 2
+    fi
     ARGS=$(base_args "$RAW")
     WEBARGS=$(printf '%s' "$RAW" | sed -e 's/"[^"]*"//g' -e "s/'[^']*'//g")
     BASES=$(gh_pr_bases "$ARGS")
@@ -600,10 +883,54 @@ while IFS= read -r CMD; do
   #
   # Editing a pull request stays allowed; moving its base is the same choice of
   # destination made a second time, so it is checked, and only when it is there.
+  #
+  # THE TAIL NAMES A RETARGET, NOT A CREATE, and #133 is the whole of why. $BASE
+  # is one constant for four refusals because FR-23 asks the base rule's messages
+  # to be consistent with each other -- #40 was a rule that held for
+  # `gh pr create` and not for `gh api`, and one sentence is how that is kept
+  # from happening in prose. For the three creating arms that constant is also
+  # US-7's one-step correction. For this one it is not: a retarget to the active
+  # dev branch is permitted, so the correction to `gh pr edit 5 --base main` is
+  # `gh pr edit 5 --base dev-05`, one word of the command already written. A
+  # create is not a correction of that command at all -- acted on literally it
+  # leaves the mis-targeted pull request open and opens a second beside it.
+  #
+  # So the constant stays and the tail, which is already per-arm, names this
+  # arm's own correction. The tail this replaced was "Edit anything else you
+  # like", which read against a refusal whose subject is the base says the base
+  # is the one thing that may not be edited -- when editing it to dev-NN is
+  # exactly what is allowed.
+  #
+  # THE TRADE THIS LEAVES, named rather than left to be found. $BASE still opens
+  # with `Write: gh pr create --base dev-NN --title ... --body ...`, so a refused
+  # retarget carries TWO imperatives and the wrong one comes first: an agent that
+  # acts on the first `Write:` it reads still opens a second pull request beside
+  # the mis-targeted one, which is the exact failure #133 was filed about. What
+  # #133 fixes is that the right correction is now there at all; it does not fix
+  # the order. Keeping one constant is FR-23's own requirement and is what #133
+  # asked for in as many words -- "the fix is not to break the constant" -- and
+  # the alternative, a per-arm `Write:` line, would satisfy both but rewrites all
+  # four base refusals and moves the pins on three arms this issue is not about.
+  # So it is left, deliberately, and filed as #154 rather than traded in silence;
+  # #109 owns message content. Raised by Bertan's review of PR #147.
+  #
+  # NOTHING STANDS IN THAT SENTENCE'S PLACE, and the first draft of this fix got
+  # that wrong. It ended "No other edit is checked here", which is true of this
+  # arm and not of this file: an edit sharing a line with a shell wrapper is
+  # refused, which is CLAUDE.md's left-open item 2 and applies to every command
+  # on the line. A message that has to be read against that caveat is a message
+  # an agent corrects itself from in two steps, which is the opposite of what
+  # US-7 asks. Nothing is lost by dropping it either: a refusal that names
+  # `gh pr edit <n> --base dev-NN` as the thing to write has already said that
+  # `gh pr edit` is not what is refused.
   if RAW=$(cs_gh_args 'pr edit' <<<"$CMD"); then
+    if QFLAG=$(quoted_base_flag "$RAW"); then
+      echo "$BASE $QUOTED_FLAG ($QFLAG here), so where this retargets to cannot be checked. Write the flag unquoted: gh pr edit <n> --base dev-NN." >&2
+      exit 2
+    fi
     ARGS=$(base_args "$RAW")
     if ! bases_all_dev "$(gh_pr_bases "$ARGS")"; then
-      echo "$BASE Retargeting to $BAD_BASE chooses that destination just as creating it there would. Edit anything else you like." >&2
+      echo "$BASE Retargeting to $BAD_BASE chooses that destination just as creating it there would. Retarget to the active dev branch instead: gh pr edit <n> --base dev-NN." >&2
       exit 2
     fi
   fi
@@ -667,9 +994,11 @@ if [ -n "$API_WRITE" ]; then
   # They are a write to the pull request itself rather than to a subpath, and
   # the same PATCH is how `gh pr edit` retitles one, which stays allowed -- so
   # the endpoint cannot decide this and the field has to. graphql spells the
-  # same change as a state on updatePullRequest.
+  # same change as a state on updatePullRequest. Which spellings of the field
+  # count is STATE_FIELD_RE's, at the head of this file and shared with the
+  # wrapper arm, for the reason written there: the two copies of it disagreed.
   if echo "$SCAN" | grep -qiE '(/pulls/|updatePullRequest)' \
-     && echo "$SCAN" | grep -qiE 'state[[:space:]]*[=:][[:space:]]*"?(closed|open)"?'; then
+     && echo "$SCAN" | grep -qiE "$STATE_FIELD_RE"; then
     echo "$DECIDE Setting a pull request's state through gh api closes or reopens it, which is the same decision by another name." >&2
     exit 2
   fi
