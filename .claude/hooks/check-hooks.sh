@@ -13483,15 +13483,43 @@ lacks 'and not one of them was judged in the directory the suite was started fro
 # of these, so instrumenting the leaves covers them. Both lists are read off this
 # file and compared, so a new harness is red until it records, and a `judged`
 # call deleted from an existing one is red too.
+#
+# BOTH ANCHORS TAKE LEADING WHITESPACE, and the first version of this pair took
+# neither. `/^[a-z_]+\(\) *\{/` and `/^\}/` are column-0 anchors, so a function
+# defined indented was invisible to both lists at once -- it would run a hook,
+# not record, and this `tok` would stay green. A silent false green in the guard
+# written to supersede guards with exactly that defect. PR #158's sixth review
+# found it latent and offered to let it be filed; it is fixed instead, because a
+# known permitting hole in the load-bearing derivation is a different thing from
+# one in a cheap filter, and the fix is an anchor.
+#
+# The CLOSING anchor is the half that review did not name, and it is the one that
+# would have gone wrong quietly. Widening only the opener would have started a
+# body at an indented definition and run it to the next COLUMN-0 `}`, swallowing
+# every function between and attributing their calls to it. So the close is the
+# opener's own indentation, captured when it opens and compared as a string, and
+# `&& !fn` keeps a nested definition from reopening one already in progress --
+# `override_refused` at the #107 override block is indented and nested, and is
+# the row that proves the shape occurs here.
 HOOK_RUNNERS=$(awk '
-  /^[a-z_]+\(\) *\{/ { fn = $1; sub(/\(\).*/, "", fn); body = "" }
+  /^[[:space:]]*[a-z_]+\(\) *\{/ && !fn {
+    fn = $1; sub(/\(\).*/, "", fn)
+    ind = $0; sub(/[^[:space:]].*$/, "", ind)
+    body = ""
+    next
+  }
   fn { body = body $0 "\n" }
-  /^\}/ { if (fn && body ~ /hook_path/ && fn != "hook_path") print fn; fn = "" }
+  fn && $0 == ind "}" { if (body ~ /hook_path/ && fn != "hook_path") print fn; fn = "" }
 ' "$SUITE_DIR/check-hooks.sh" | LC_ALL=C sort -u | tr '\n' ' ')
 RECORDERS=$(awk '
-  /^[a-z_]+\(\) *\{/ { fn = $1; sub(/\(\).*/, "", fn); body = "" }
+  /^[[:space:]]*[a-z_]+\(\) *\{/ && !fn {
+    fn = $1; sub(/\(\).*/, "", fn)
+    ind = $0; sub(/[^[:space:]].*$/, "", ind)
+    body = ""
+    next
+  }
   fn { body = body $0 "\n" }
-  /^\}/ { if (fn && body ~ /judged "/ && fn != "judged") print fn; fn = "" }
+  fn && $0 == ind "}" { if (body ~ /judged "/ && fn != "judged") print fn; fn = "" }
 ' "$SUITE_DIR/check-hooks.sh" | LC_ALL=C sort -u | tr '\n' ' ')
 tok 'every harness that runs a hook records what it judged, and none other does' \
     "$HOOK_RUNNERS" "$RECORDERS"
