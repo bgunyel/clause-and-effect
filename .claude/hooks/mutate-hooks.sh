@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- fifty-two runs as the
-# registry stands, not fifty-three, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- fifty-four runs as the
+# registry stands, not fifty-five, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -86,7 +86,25 @@
 # re-anchored `quoted-base-value-refused`, and all eleven #139 rows were run as
 # one selection against the commit answering it. The other twenty-three rows have
 # not been run since the files they run against changed.
-# No run has therefore exercised all fifty-two rows together, and saying which
+# #155 added two. `pr-hook-reads-gh-off-the-environment` was run as a selection
+# on 2026-09-17: baseline plus one, caught, byte-identical after, and red in
+# GH-108.6 and in nothing else ON A HOST THAT HAS `gh`. That last clause is the
+# one PR #161's review asked for and it is not decoration. The edit inserts
+# `command -v gh || exit 0` ABOVE the first rule in the file, so on a `gh`-less
+# host -- the machine #155 was filed about -- it short-circuits `pr review`,
+# `pr close`, the release allowlist, the base rules and the api rules as well,
+# and the run goes red across dozens of requirements. The outcome is `caught`
+# either way, since that is read off the IDs the row names and is not exclusive,
+# so nothing in this harness turns red to say so. The exclusivity is recorded as
+# this host's rather than repaired by moving the anchor: a hook that reads `gh`'s
+# presence out of the environment reads it before it decides anything, so a row
+# anchored below the rules it disables would be a different and weaker mutation
+# wearing the same name. `report-reads-gh-before-git` was run the same way on
+# 2026-09-18, at the commit answering that review: baseline plus one, caught,
+# red in GH-155.1 and in nothing else, byte-identical after. That one is host-
+# independent -- its `gh --version` is silent where there is no `gh` to run and
+# harmless where there is. Neither has been run since dev-05 was merged in.
+# No run has therefore exercised all fifty-four rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -160,8 +178,8 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   FIFTY real mutations, against SEVEN files in .claude/hooks/, naming
-#   FORTY-FOUR requirement IDs between them, of the 164 whose status is active.
+#   FIFTY-TWO real mutations, against SEVEN files in .claude/hooks/, naming
+#   FORTY-SIX requirement IDs between them, of the 165 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
@@ -286,6 +304,8 @@ tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 a
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught
 degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch: FAILED or timed out after /d%GH-108.10%caught
+pr-hook-reads-gh-off-the-environment%no-pr-decisions.sh%s#^if gh_rule 'pr merge'; then$#command -v gh >/dev/null 2>\&1 || exit 0\nif gh_rule 'pr merge'; then#%GH-108.6%caught
+report-reads-gh-before-git%report-stale-branches.sh%s#^if ! command -v git >/dev/null 2>&1; then$#gh --version >/dev/null 2>\&1\nif ! command -v git >/dev/null 2>\&1; then#%GH-155.1%caught
 variants-field-deleted%requirements.md%/^- variants: transformation: redirect-quoted$/d%GH-141%caught
 variants-seed-disowned%requirements.md%/^### GH-72$/,/^$/s/^- variants: seed$/- variants: none: a reason/%GH-141%caught
 heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught

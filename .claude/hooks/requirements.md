@@ -2227,6 +2227,80 @@ and held to the same standard of saying only what it asks.
   `check-hooks.sh` does and does not close, are argued under *The trade, taken
   knowingly* and are not restated here — that trade was written out in three
   places on this branch before review counted them.
+### GH-155.1
+- text: The `gh`-less PATH fixture of GH-108.6 is the symlink farm minus exactly
+  one name on every machine. The farm holds a `gh` whatever the host's PATH held:
+  the host's where there is one, and otherwise a stub the suite synthesises, which
+  refuses and names itself if anything ever runs it. `git` is never stubbed --
+  the suite runs `git` throughout, so a farm with no `git` is a machine this suite
+  cannot run on rather than a gap to synthesise over. Nothing in this suite ever
+  runs the farm's `gh`: report-stale-branches.sh is the only hook that calls `gh`
+  at all, and of the four PATHs it is driven under, none both carries a `gh` of
+  the farm's and reaches the call -- the farm minus `git` carries one and stops at
+  the `command -v git` guard standing above the first.
+- from: #155
+- kind: doc-claim
+- status: active
+- direction: static: it reads the fixtures the suite builds and the stub's own
+  text, and no hook's verdict
+- note: the fixture guard used to tolerate a farm that never held the name, so
+  that the suite would run on a machine with no `gh` at all -- and that tolerance
+  made the `gh`-less environment identical to the ordinary one on exactly those
+  machines, where the GH-108.6 checks then asserted their verdicts twice and were
+  evidence about `gh` on none of them. The property is asked of this machine and
+  of the machine this is not: a farm with `gh` taken out stands in for a host that
+  never had one, the same synthesis is run against it, and the one-name difference
+  is asserted there too. That is PR #150's manual reproduction written as a check.
+  It is the fixture rule and not a hook rule, so `mutate-hooks.sh` cannot register
+  it -- that harness refuses `check-hooks.sh` as a target by name, because an edit
+  to the copy would be executed by nothing. What the harness can hold is the hook
+  rule the fixture exists to establish, and #155 registered that: a
+  `no-pr-decisions.sh` that read `gh`'s presence out of the environment, which
+  GH-108.6 must catch. THAT ROW IS NOT EVIDENCE ABOUT WHAT #155 CHANGED, and
+  saying so is the point of writing it down: GH-108.6's `gh`-less fixture held no
+  `gh` on either kind of host, so the row would have been caught before this
+  change as well. It is a mutation GH-108.6 had none of, and it is the nearest
+  the harness can come to the fixture rule. What it does hold of this entry is
+  the second half: the ordering the stub rests on, registered answering the
+  review of PR #161. `report-reads-gh-before-git` puts a `gh` call above
+  report-stale-branches.sh's `command -v git` guard, and the check that reads a
+  marker FILE rather than a message -- that file's own `gh api` redirects stderr
+  away, so a stub announcing itself would be silenced by the line being caught --
+  goes red. That row IS evidence about what #155 changed: nothing was watching
+  the ordering before it, and the comment which asserted the farm's `gh` was
+  never run gave the wrong reason and was found wrong by review rather than by a
+  check. The fixture rule itself is hand-mutated -- four cases, three caught and
+  one a recorded survivor -- in the commit that added it.
+
+  A second round of that review found two more, both of the same shape as the
+  first: a guard weaker than the prose beside it. The derivation asserting that
+  no run of the report is driven under the farm read only calls at column 0,
+  while every environment sweep in that section is an indented loop body and the
+  suite already held an indented call, so the one thing it exists to catch was
+  invisible to it; it now skips leading whitespace, and is driven over a fixture
+  whose only run is indented. And the question "does the farm hold a `gh`" was
+  asked as `command -v`, which resolves a shell function ahead of PATH -- so a
+  host exporting a `gh` wrapper got no stub and the unconditional guard aborted
+  the whole suite, which is this entry's own failure arriving by a rarer route.
+  Both the synthesis and the guard now ask the directory, and a farm built under
+  a shell that defines `gh` is a fixture here.
+
+  A third round found the fix for the first of those carrying the same defect:
+  the heading said the derivation read a call anywhere on a line while the
+  pattern read a line start with indentation allowed, and the comment cited as
+  its evidence `drive_helper`'s `case` arm -- the one call in this suite that is
+  not a statement of its own, and the one line that pattern could not read. The
+  derivation now reads a call at a named position: a line start, after `;`, `&`,
+  `|` or `)`, or after `then`, `do` or `else`. Whitespace is deliberately not a
+  separator, so payload inside a quoted string is out of reach, and the fixtures
+  are written through a variable holding the helper's name so that this file
+  carries none of their calls in any position. What it still cannot read is a
+  call whose command word is a variable, which is stated beside it rather than
+  left to be found. A comment IS read at a separator position -- the new comment's
+  own example is one of the twelve lines matched -- and that is accepted and
+  pinned rather than filtered, because a comment can only add a PATH and never
+  hide a call, while stripping comments would cut at the first `#` and could hide
+  one.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -2526,3 +2600,10 @@ it has no entry above (Q16).
   end of a line read as a word with no whitespace, a NUL decoded as a
   character, and `\c` and cut spans read past where bash reads them -- and is
   cited where each fix stands
+- #161: the pull request for #155; Bertan's review of it is cited where each of the
+  two things it corrected in this suite stands — a derivation of every PATH the
+  report is driven under that was anchored at column 0 and so could not see an
+  indented run, and a fixture test that asked the calling shell what the farm
+  holds, which resolves a `gh` shell function ahead of PATH and would have aborted
+  the suite on a host that exports one. Its third correction is a measurement in
+  `mutate-hooks.sh`, whose exclusivity was that host's, and is recorded there
