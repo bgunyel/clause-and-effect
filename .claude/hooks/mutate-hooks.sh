@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- sixty-three runs as the
-# registry stands, not sixty-four, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- sixty-four runs as the
+# registry stands, not sixty-five, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -129,7 +129,7 @@
 # registered this row against that same requirement. The narrowing did not cost
 # the row its evidence. Said plainly because the previous merge's selection
 # found the opposite and the two are only distinguishable by running them.
-# No run has therefore exercised all sixty-three rows together, and saying which
+# No run has therefore exercised all sixty-four rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -229,7 +229,7 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   SIXTY-ONE real mutations, against SEVEN files in .claude/hooks/, naming
+#   SIXTY-TWO real mutations, against SEVEN files in .claude/hooks/, naming
 #   FIFTY-TWO requirement IDs between them, of the 173 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
@@ -357,6 +357,7 @@ base-lookup-not-version-sorted%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/| s
 base-lookup-admits-any-dev-ref%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/| grep -E '\^origin\/dev-\[0-9\]+\$' //%GH-144.1%caught
 base-lookup-refuses-when-it-cannot-read%no-pr-decisions.sh%/^may_propose_into()/,/^}/s/\[ -n "$ACTIVE_DEV" \]/[ -n "no such branch" \]/%GH-144.2 GH-108.5%caught
 report-omits-the-base-hook-where-no-ref-is-read%report-stale-branches.sh%/no-pr-decisions.sh accepts any dev-NN base/d%GH-144.8%caught
+report-omits-the-skipped-fetch-clause%report-stale-branches.sh%/staleness detector in no-work-on-stale-branch.sh is armed, and/,+1{/no-pr-decisions.sh accepts any dev-NN base/d}%GH-144.8%caught
 report-omits-the-base-hook-on-a-failed-fetch%report-stale-branches.sh%/request's base against whatever branch those refs still call active/d%GH-144.8%caught
 base-refusal-drops-the-fetch-remedy%no-pr-decisions.sh%s/ If the dev branch has rotated since this session last fetched, run git fetch and try again\.//%GH-144.7%caught
 base-lookup-read-once-per-base%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/\[ -z "$ACTIVE_DEV_READ" \] || return 0/:/%GH-144.5%caught

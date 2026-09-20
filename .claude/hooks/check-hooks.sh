@@ -2430,7 +2430,11 @@ flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'a wrapped commit on main, bash
 # is entitled to run, written in one of the five spellings.
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh pr view as an absolute path' \
   '/usr/bin/gh pr view 5'
-check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh pr create --base dev-05 as an absolute path' \
+# In $ON_DEV and not $SUITE_DIR, alone among the rows around it: what this row
+# tests is the absolute-path spelling of the command word, and since #144 a
+# dev-NN base makes the verdict depend on refs as well. Judged here it passed
+# only while dev-05 is the active branch. GH-144.4, found by the fourth review.
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'gh pr create --base dev-05 as an absolute path' \
   '/usr/bin/gh pr create --base dev-05 --title x'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh issue list, the name double quoted' \
   '"gh" issue list'
@@ -10949,7 +10953,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '291' "${TEXT_CHECK_ARGS##*COUNT }"
+    '293' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -11089,7 +11093,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '63' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '64' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11152,7 +11156,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '61' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '62' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -11913,6 +11917,30 @@ report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
 report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
   'no-pr-decisions.sh accepts any dev-NN base for want of a ref.' \
   'and so it does with git off PATH'
+# THE TWO SITES A RUN CANNOT REACH, and the entry claimed all six before the
+# fourth review of PR #158 counted them. Four of the six are driven -- the two
+# above, the failed fetch and `active dev branch: none` below. The other two are
+# held to the file, for two different reasons, and neither reason is that
+# checking them was awkward:
+#
+#   - the unreachable-root guard, for the reason the `written` pin beside it
+#     already gives: a directory unsearchable enough to fail that `cd` is one
+#     bash cannot read the file out of either, so the line cannot be run at all;
+#   - `fetch: SKIPPED`, which needs a repository with no `origin` AND a hooks
+#     copy inside it. $ENV_NO_ORIGIN is the first and holds no copy, and building
+#     a second report fixture to drive one line is a fixture whose upkeep costs
+#     more than the line is worth. Named as a trade rather than left as a gap.
+#
+# Without these two, deleting either clause alone left this suite green while
+# GH-144.8's text read false -- and the mutation registered for it could not see
+# that, its sed address taking all five matching lines at once. `report-omits-
+# the-skipped-fetch-clause` deletes exactly this one.
+written 'the unreachable-root guard names the base rule too' \
+  "$HOOKS/report-stale-branches.sh" \
+  'no-pr-decisions.sh accepts any dev-NN base for want of a ref.'
+written 'and so does the skipped fetch, where there is no origin to fetch from' \
+  "$HOOKS/report-stale-branches.sh" \
+  'staleness detector in no-work-on-stale-branch.sh is armed, and'
 req GH-108.9
 report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
   'branches: NOT READ -- git is not on PATH' \
@@ -12502,9 +12530,79 @@ holds 'every dev-NN base this suite judges on one line is judged in a named dire
   "$PR_DEV_ROW_HARNESS" 'check_in'
 lacks 'and none of those is judged wherever the suite was started from' \
   "$PR_DEV_ROW_HARNESS" 'check '
-tok 'no bare check of this hook takes its payload from a variable, so the line names it' \
-    '0' "$(grep -vE '^[[:space:]]*#' "$SUITE_DIR/check-hooks.sh" \
-           | grep -cE '(^|[[:space:]])check[[:space:]]+no-pr-decisions\.sh[[:space:]]+(ALLOW|BLOCK)[[:space:]]+"\$')"
+# WHICH DIRECTORY, and not merely that one was named. The two lines above read
+# the HARNESS WORD and nothing else, so they distinguish a named directory from
+# an inherited one and stop there -- and `check_in "$SUITE_DIR"` names a
+# directory, satisfies both, and is this repository. One such row stood at the
+# permitting rows of #117 and was found by the fourth review of PR #158, which
+# did not argue it: it added `refs/remotes/origin/dev-06` to a scratch clone and
+# ran this suite, which went from 5190 green to one FAIL blaming a hook that was
+# right. That is the failure GH-144.4 exists to stop, reproduced inside the pull
+# request that introduces the requirement.
+#
+# So the directory ARGUMENT of every matching row is read and held to a literal.
+# The literal is the strong half: a row judged somewhere new turns it red and
+# someone has to say why that directory is a fair place to judge a dev-NN base.
+# `lacks` beside it names the one failure the literal would otherwise report as
+# an anonymous diff, which is the sentence a reader needs.
+#
+# `$dir` is the loop variable of the two `for env in` loops below and above, whose
+# fixture lists are literals in this file; the third check holds those lists away
+# from $SUITE_DIR, so the variable is bounded by what the lists may say.
+#
+# WHETHER THESE TWO CAN FAIL was asked by measuring and not by registering, and
+# the reason is structural rather than an omission. #107's harness mutates the
+# hooks under judgment; check-hooks.sh is in its TOOLING list and a row naming it
+# is refused, because the harness RUNS this file rather than judging it. A row
+# that put the $SUITE_DIR spelling back was written, registered, and refused by
+# that guard -- correctly. So every GH-144.4 derivation is in a class the
+# mutation registry cannot reach, and the evidence for them is a run: with the
+# two checks below in place and the #117 row still spelled `check_in
+# "$SUITE_DIR"`, both go red, naming that directory. Measured on this branch
+# before the row was moved, and reproducible by moving it back.
+PR_DEV_ROW_DIRS=$(printf '%s\n' "$PR_JUDGED" \
+  | grep -oE '(^|[[:space:]])(check_in|flip|feed_says|feed|says_not|says|env_cmd|env_says|env_feed)[[:space:]]+"[^"]+"' \
+  | sed 's/.*"\(.*\)"/\1/' | LC_ALL=C sort -u | tr '\n' ' ')
+tok 'and the directory each one names is one of these, read off the rows themselves' \
+    '$ENV_DEV_NONE $ENV_DEV_TWO $ON_DEV $PR_NOISE $PR_ONE $PR_TEN $dir ' \
+    "$PR_DEV_ROW_DIRS"
+lacks 'so none of them is judged in this repository, where dev-05 is active today' \
+  "$PR_DEV_ROW_DIRS" '$SUITE_DIR'
+lacks 'nor does any fixture list feeding those loops name it' \
+  "$(grep -E '^[[:space:]]*(for env in|[[:space:]]+\")' "$SUITE_DIR/check-hooks.sh" \
+     | grep -E 'ENV_|PR_ONE|ON_DEV' | tr '\n' ' ')" '$SUITE_DIR'
+# A PAYLOAD HELD IN A VARIABLE, which is the third route and the one that reads
+# past the first derivation: `PR_JUDGED` matches a literal `dev-[0-9]` on the
+# line, so a payload the line does not spell is invisible to it.
+#
+# The rule here used to require the `"$` in the LABEL position, which catches the
+# `for c in ...; do check ... "$c" "$c"` shape and nothing else. A row written
+# `check no-pr-decisions.sh ALLOW 'a literal label' "$c"` escaped it and escaped
+# `PR_JUDGED` with it, so it was invisible to every GH-144.4 derivation at once.
+# Found by the fourth review of PR #158, measured against a synthetic file: the
+# old expression counts one of the two shapes and this one counts both.
+#
+# ASKED OF THE VALUE AND NOT THE SPELLING, which is what changed with it. Two
+# such rows exist and are right -- `$COMMIT_MSG` and `$NOTE` carry heredoc prose
+# naming `gh pr merge` and `git push origin main`, neither of which is a base --
+# so a rule that refuses the SHAPE would refuse them, and a count of permitted
+# ones is a number that goes stale the next time someone writes a third. What
+# has to hold is that no such payload hides a dev-NN base from the derivation
+# above, and the variable is in scope here, so its value is read rather than its
+# name argued about. The `holds` is the non-vacuity guard `lacks` would give:
+# a derivation that stopped matching would otherwise report an empty set of
+# offenders and pass.
+PR_VAR_PAYLOAD_NAMES=$(grep -vE '^[[:space:]]*#' "$SUITE_DIR/check-hooks.sh" \
+  | grep -oE '(^|[[:space:]])check[[:space:]]+no-pr-decisions\.sh[[:space:]]+(ALLOW|BLOCK)[[:space:]].*"\$\{?[A-Za-z_][A-Za-z0-9_]*' \
+  | grep -oE '\$\{?[A-Za-z_][A-Za-z0-9_]*$' | tr -d '${' | LC_ALL=C sort -u | tr '\n' ' ')
+holds 'the variable-payload derivation matches the rows that have one' \
+  "$PR_VAR_PAYLOAD_NAMES" 'COMMIT_MSG'
+PR_VAR_HIDING_A_BASE=
+for v in $PR_VAR_PAYLOAD_NAMES; do
+  case "${!v}" in *dev-[0-9]*) PR_VAR_HIDING_A_BASE="$PR_VAR_HIDING_A_BASE$v " ;; esac
+done
+tok 'and no payload it holds hides a dev-NN base from the derivation above' \
+    '' "$PR_VAR_HIDING_A_BASE"
 PR_DEV_SEED_DIRS=$(grep -E '^[a-z-]+\|no-pr-decisions\.sh\|' "$SUITE_DIR/check-hooks.sh" \
   | grep -E 'dev-[0-9]' | cut -d'|' -f1 | sort -u | tr '\n' ' ')
 holds 'every #106 seed naming a dev-NN base runs in a fixture with no dev ref' \
