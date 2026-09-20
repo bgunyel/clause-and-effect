@@ -16,7 +16,7 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT TWO MINUTES A ROW: one check-hooks.sh run per mutation that applies,
-# plus the baseline -- sixty-five runs as the registry stands, not sixty-six,
+# plus the baseline -- sixty-six runs as the registry stands, not sixty-seven,
 # because the row whose edit matches nothing never reaches one. Measured twice
 # on 2026-09-17, on this machine and on registries one row apart: 47 min 34 s
 # and 45 min 24 s, at twenty-three runs, which is 124 s and 118 s a run. A run
@@ -26,7 +26,7 @@
 # rewritten that way. The line said ABOUT AN HOUR, and an hour was the total at
 # twenty-three runs; every row added since made it wronger while the sentence
 # four lines down went on calling it "those rates carried to the current count".
-# At sixty-five runs the same rate is about two and a quarter hours. The total is what goes
+# At sixty-six runs the same rate is about two and a quarter hours. The total is what goes
 # stale on every registry addition, and a check pinned the stale one in place --
 # review of PR #172 found this while that PR was editing the row count in this
 # very sentence and leaving the hour. So the rate is what is written and what
@@ -175,7 +175,13 @@
 # names the wrong cause is worse than the one it replaced, which is why these
 # are rules with rows and not prose. Run as one selection on 2026-09-20:
 # baseline plus three, all caught, byte-identical after.
-# No run has therefore exercised all sixty-five rows together, and saying which
+# The fifth round added `emptiness-not-named`, which is the same claim asked of
+# the other four triggers: the message named what the two validity guards found
+# and said nothing for the four empty lists, so three withdrawals of five went
+# out silent while the paragraph above them claimed otherwise. Its edit makes
+# the separator test always true, so that list empties without being named. Run
+# on 2026-09-20: baseline plus one, caught, byte-identical after.
+# No run has therefore exercised all sixty-six rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -349,6 +355,7 @@ control-word-validity-not-checked%lib/command-scan.sh%s|if ($0 ~ ("^(" w ")$"))|
 awk-status-read-as-two%lib/command-scan.sh%s/^  1) CS_LISTS_VALID=0$/  1|*) CS_LISTS_VALID=0/%GH-134.1%caught
 refusal-claims-every-consumer%lib/command-scan.sh%s/every consumer that requires it refuses/every consumer refuses/%GH-134.1%caught
 refusal-names-two-lists%lib/command-scan.sh%s/CS_SEPARATORS, CS_CONTROL_WORDS, CS_WORD_SPELLING, CS_WRAP_TOKEN or CS_WRAP_WORDS/CS_SEPARATORS or CS_WRAP_WORDS/%GH-134.1%caught
+emptiness-not-named%lib/command-scan.sh%s/\[ -n "\$CS_SEPARATORS" \]/[ -n "always" ]/%GH-134.1%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught

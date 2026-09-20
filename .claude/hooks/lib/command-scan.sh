@@ -1503,6 +1503,13 @@ cs_split() {
 # for, so the library says so, on the same stderr the refusal uses and only on
 # the path where something is actually wrong. Review of PR #172.
 #
+# FOR EVERY TRIGGER AND NOT ONE OF THEM. The first version of this named only
+# what the two validity guards found, so the four emptiness withdrawals below
+# went out silent -- the claim in this paragraph was wider than the code under
+# it, which is the third time in this pull request a sentence has been. Each
+# trigger sets CS_INVALID_LIST now, and check-hooks.sh asks it of every fixture
+# rather than of the two it used to.
+#
 # THREE STATUSES AND NOT TWO, which the first version of this got wrong in the
 # commit that added it. `||` reads every non-zero awk status as the hang case,
 # and awk has three: 1 is the `exit 1` below, taken when the list matches an
@@ -1519,6 +1526,27 @@ cs_split() {
 # so a list added there and not here is red rather than silent.
 CS_LISTS_VALID=1
 CS_INVALID_LIST=
+# EMPTINESS IS A WITHDRAWAL TOO, and naming only the validity ones left three
+# of the five triggers silent -- a maintainer who deleted the last prefix word
+# from CS_WRAP_OPTION_WORDS, or emptied CS_SEPARATORS, got every Bash hook
+# refusing every command with "could not load lib/command-scan.sh" and nothing
+# else, which is word for word the failure the paragraph above says it ended.
+# Measured before this: emptying CS_CONTROL_WORDS printed a line, emptying any
+# of the other three printed none. The block said "the library knows which list
+# it withdrew for" and knew it for one trigger of five. Review of PR #172.
+#
+# Spelled out rather than looped over with eval, which is the only way a shell
+# reads a variable whose name it is handed, and is not worth having in a file
+# every hook sources. Four lines, the same four the guard below tests, in the
+# same order.
+[ -n "$CS_WRAP_OPTION_WORDS" ] \
+  || CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_WRAP_OPTION_WORDS is empty"
+[ -n "$CS_WRAP_OPERAND_WORDS" ] \
+  || CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_WRAP_OPERAND_WORDS is empty"
+[ -n "$CS_CONTROL_WORDS" ] \
+  || CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_CONTROL_WORDS is empty"
+[ -n "$CS_SEPARATORS" ] \
+  || CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_SEPARATORS is empty"
 printf '' | grep -qE "$CS_WRAPPER_RE" 2>/dev/null
 [ $? -le 1 ] || { CS_LISTS_VALID=0
   CS_INVALID_LIST="CS_WRAPPER_RE does not compile, so one of the lists it is built from holds something that is not literal there: CS_SEPARATORS, CS_CONTROL_WORDS, CS_WORD_SPELLING, CS_WRAP_TOKEN or CS_WRAP_WORDS"; }

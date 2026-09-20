@@ -8514,6 +8514,33 @@ tok 'and the line does not claim a refusal it cannot promise' \
               *'so every consumer refuses'*) echo yes ;; *) echo no ;; esac)"
 tok 'the intact library says nothing at all' \
     '' "$(cs_diagnostic_of "$HOOKS/lib/command-scan.sh")"
+# AND OF EVERY TRIGGER, not of the two the probes find. The checks above asked
+# the two validity fixtures and the intact library and stopped there, so the
+# four emptiness withdrawals could go out silent with nothing red -- measured
+# before the fix: emptying CS_CONTROL_WORDS printed a line and emptying
+# CS_SEPARATORS, CS_WRAP_OPTION_WORDS or CS_WRAP_OPERAND_WORDS printed none,
+# while the library's own paragraph claimed it named the list it withdrew for.
+# A claim wider than what is checked, which is the shape this suite has now
+# caught three times in this branch. One check per fixture, naming the list each
+# is named for, so the claim is held to the code trigger by trigger.
+req GH-134.1
+names_list() {  # names_list <library> <list> -- yes or no
+  case "$(cs_diagnostic_of "$1")" in *"$2 is empty"*) echo yes ;; *) echo no ;; esac
+}
+tok 'an empty option-word list says which list is empty' \
+    'yes' "$(names_list "$FIXTURES/emptylist-option-half.sh" CS_WRAP_OPTION_WORDS)"
+tok 'and an empty operand-word list' \
+    'yes' "$(names_list "$FIXTURES/emptylist-operand-half.sh" CS_WRAP_OPERAND_WORDS)"
+tok 'and an empty control-word list' \
+    'yes' "$(names_list "$FIXTURES/emptylist-control-words.sh" CS_CONTROL_WORDS)"
+tok 'and an empty separator list' \
+    'yes' "$(names_list "$FIXTURES/emptylist-separators.sh" CS_SEPARATORS)"
+# And that each names ITS OWN list rather than any list, which a message built
+# from the wrong variable would satisfy above.
+tok 'the separator fixture does not blame the option words' \
+    'no' "$(names_list "$FIXTURES/emptylist-separators.sh" CS_WRAP_OPTION_WORDS)"
+tok 'nor the option-word fixture the separators' \
+    'no' "$(names_list "$FIXTURES/emptylist-option-half.sh" CS_SEPARATORS)"
 # AND THE ENUMERATION IS DERIVED, not believed. The grep branch names the lists
 # CS_WRAPPER_RE is built from, and an enumeration in a message is exactly the
 # thing this repository keeps finding stale -- it named two of five when it was
@@ -11480,7 +11507,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '65' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '66' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11543,7 +11570,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '63' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '64' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
