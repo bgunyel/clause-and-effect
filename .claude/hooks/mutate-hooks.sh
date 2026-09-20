@@ -16,8 +16,8 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- sixty-one runs as the
-# registry stands, not sixty-two, because the row whose edit matches nothing
+# applies, at about two minutes, plus the baseline -- sixty-three runs as the
+# registry stands, not sixty-four, because the row whose edit matches nothing
 # never reaches one. Measured twice on 2026-09-17, on this machine and on
 # registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
 # The figure above is those rates carried to the current count and not a third
@@ -116,8 +116,20 @@
 # 2026-09-18, at the commit answering that review: baseline plus one, caught,
 # red in GH-155.1 and in nothing else, byte-identical after. That one is host-
 # independent -- its `gh --version` is silent where there is no `gh` to run and
-# harmless where there is. Neither has been run since dev-05 was merged in.
-# No run has therefore exercised all fifty-four rows together, and saying which
+# harmless where there is.
+#
+# BOTH WERE RUN AGAIN on the merge of dev-05 (#155) into #144, in a selection of
+# twelve: #155's two, #144's eight, and GH-144.8's two, against the merged tree
+# at the commit that resolved it. All twelve caught, .claude/hooks/
+# byte-identical after, and `pr-hook-reads-gh-off-the-environment` still red in
+# GH-108.6 and in nothing else -- this host having `gh`, which is the clause
+# above. That row is the one the merge put at risk and the reason the selection
+# was chosen: #144 narrowed what the GH-108.6 section claims, from a verdict in
+# every environment to every refusal made on a command's text, while #155
+# registered this row against that same requirement. The narrowing did not cost
+# the row its evidence. Said plainly because the previous merge's selection
+# found the opposite and the two are only distinguishable by running them.
+# No run has therefore exercised all sixty-three rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -217,8 +229,8 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   FIFTY-NINE real mutations, against SEVEN files in .claude/hooks/, naming
-#   FIFTY requirement IDs between them, of the 172 whose status is active.
+#   SIXTY-ONE real mutations, against SEVEN files in .claude/hooks/, naming
+#   FIFTY-TWO requirement IDs between them, of the 173 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
