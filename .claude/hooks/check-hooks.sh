@@ -8485,8 +8485,9 @@ section "=== issue #95: every hook refuses when it cannot read its input ==="
 # for the two consumers #95 added.
 
 # jq off PATH, built here rather than assumed about the machine: a directory of
-# symlinks to every executable on this suite's own PATH, and a copy of it with jq
-# removed. Every tool, not the ones a hook is known to call today -- a list of
+# symlinks to every executable on this suite's own PATH -- plus a `gh`, which GH
+# IN THE FARM below synthesises if the host gave none -- and a copy of it with
+# jq removed. Every tool, not the ones a hook is known to call today -- a list of
 # those would be a claim, and the next hook to call a new tool would refuse
 # without jq for a reason no check names.
 #
@@ -8507,6 +8508,88 @@ for d in "${SUITE_PATH_DIRS[@]}"; do
   find "$d" -maxdepth 1 \( -type f -o -type l \) -perm -u+x \
     -exec ln -s -t "$WITH_JQ_BIN" {} + 2>/dev/null
 done
+
+# GH IN THE FARM, the host's or one synthesised here (#155). The farm is the
+# invoker's PATH, so what it holds depends on the machine -- and the #108 section
+# below builds its `gh`-less environment as THIS FARM MINUS `gh`, which on a
+# machine with no `gh` was the farm minus nothing. The first guard there demanded
+# a one-name difference and aborted the whole suite on such a machine; the fix
+# that followed tolerated a no-difference copy, and bought the machine-
+# independence by leaving the GH-108.6 checks no `gh` to be evidence about on
+# exactly the machines that had none. Giving the farm one here removes the
+# choice: the difference is always one name, the guard requires it
+# unconditionally, and those checks are evidence about `gh` wherever they run.
+#
+# A STUB IS RIGHT FOR GH AND WRONG FOR GIT, and the difference is whether the
+# SUITE needs the tool or only its name. `gh` is a dependency of no hook, and
+# report-stale-branches.sh is the only file in .claude/hooks/ that calls it at
+# all -- but what the stub rests on is not that no check drives that file, it is
+# that no run of it ever executes a `gh`, and those are not the same sentence.
+# Of the four PATHs it is driven under below, two carry no `gh` of the farm's to
+# run and one stops at the not-a-repository guard before it would; the fourth is
+# the farm minus `git`, which does carry the farm's `gh`, and stops at the
+# `command -v git` guard standing above the first call. That last one is a
+# property of report-stale-branches.sh and not of this farm -- an edit there
+# reading `gh` before `git` would have this stub answering for a real one -- so
+# it is checked beside that run, under GH-155.1, rather than asserted here. A
+# name is then the whole of what the fixture wants from it.
+#
+# `git` is a dependency of this suite: every repository fixture above was built
+# with it, so a farm without a `git` is a machine this suite cannot run on rather
+# than a gap to synthesise over, and a fake `git` would be answering the very
+# questions the hooks' verdicts are read off. `git` is therefore never stubbed --
+# the farm's entry for it is the host's or the suite has already failed -- and
+# the guard in #108 says so where it treats the two alike.
+#
+# SO THE STUB EXISTS TO BE A NAME AND NOT A PROGRAM, and it says so when run
+# rather than pretending to be `gh`. A stub that exited 0 in silence would let a
+# later check read its silence as gh's answer, which is #108's own failure shape
+# arriving through the fixture instead of through a hook.
+#
+# A NAME IN THE FARM IS A FILE IN A DIRECTORY, and `command -v` answers a
+# different question. It resolves shell FUNCTIONS ahead of PATH, and bash imports
+# exported ones -- `BASH_FUNC_gh%%` in the environment -- into a non-interactive
+# script like this one. So on a host whose environment exports a `gh` wrapper,
+# `PATH=<farm>; command -v gh` says yes where the farm holds nothing: the
+# synthesis returns having written no stub, and the guard in #108, unconditional
+# as of this branch, aborts the whole suite before #104's coverage derivations
+# are reached. That is the abort-on-some-machines failure #155 exists to remove,
+# arriving by a rarer route -- found by review of PR #161 and not by a machine.
+# Every question this suite asks of a farm is asked of the directory from here
+# on, the guard below included, because the two are one rule read twice and a
+# `command -v` left in either is that abort.
+farm_has() {  # farm_has <dir> <name> -- is that name in the farm? asked of the directory
+  [ -x "$1/$2" ]
+}
+FARM_STUB_SAYS='gh: check-hooks.sh PATH-fixture stub, a name and not a program (GH-155.1)'
+farm_stub_gh() {  # farm_stub_gh <farm dir> -- give it a gh if the host gave none
+  local dir="$1"
+  farm_has "$dir" gh && return 0
+  # THE UNLINK IS NOT REDUNDANT WITH THE RETURN ABOVE, and this is the one line
+  # here that could have damaged the invoker's machine. Every other entry in the
+  # farm is a SYMLINK to a host binary, so `>` on one of them writes THROUGH the
+  # link and truncates the file it points at -- the host's own `gh`. The return
+  # above means the entry is normally not there at all, but a dangling link
+  # reaches this line too, and so would any later edit that moved the return.
+  # Found by mutation rather than by reading: with the return taken out, this line
+  # tried to write /usr/bin/gh and was refused only because that file is root's.
+  #
+  # NO CHECK COVERS THIS LINE, and taking it out is a mutation that survives --
+  # measured, not assumed. It can only be reached when the return above is wrong,
+  # so a suite in which the return is right cannot tell the two spellings apart.
+  # What the pair of mutations says is the whole of what is known: with the return
+  # gone and this line present, the host's gh is left alone and the check below
+  # names the defect; with both gone, the suite aborts at the fixture guard having
+  # tried to truncate a file it does not own.
+  rm -f "$dir/gh"
+  printf '#!/bin/bash\necho "%s" >&2\nexit 1\n' "$FARM_STUB_SAYS" > "$dir/gh" || return 1
+  chmod +x "$dir/gh"
+}
+farm_stub_gh "$WITH_JQ_BIN" || {
+  echo "no gh could be synthesised into the symlink farm; the #108 fixtures below prove nothing" >&2
+  exit 1
+}
+
 cp -a "$WITH_JQ_BIN" "$NO_JQ_BIN"
 rm -f "$NO_JQ_BIN/jq"
 [ -n "$( PATH="$WITH_JQ_BIN"; command -v jq )" ] \
@@ -11096,7 +11179,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '60' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '62' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11159,7 +11242,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '58' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '60' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -11203,42 +11286,178 @@ rm -f "$ENV_NO_GH_BIN/gh"
 # that refusal would read as the property being checked. What has to be true is
 # that the tool cannot be found under $dir, and that $dir is otherwise the farm.
 #
-# HOW IT GOT THAT WAY DEPENDS ON THE MACHINE, and the first version of this guard
-# did not allow for that. With the tool installed, the farm holds it, `rm` took it
-# out, and the two directories differ by exactly that one name. WITHOUT it, the
-# farm never held it, `rm -f` removed nothing, and the two are identical -- so a
-# guard demanding a one-name difference aborted the whole suite on any machine
+# HOW IT GOT THAT WAY USED TO DEPEND ON THE MACHINE, and no longer does. With the
+# tool installed, the farm holds it, `rm` took it out, and the two directories
+# differ by exactly that one name. WITHOUT it, the farm never held it, `rm -f`
+# removed nothing, and the two were identical -- so the first version of this
+# guard, demanding a one-name difference, aborted the whole suite on any machine
 # with no `gh`, at this section, skipping every section below it including #104's
 # coverage derivations. That is a dependence on the invoker's machine, which is
 # the one thing #103's Q21 and this section's own preamble say there must not be,
 # and the abort blamed the fixture for what was true of the machine. Found by
 # Bertan's review of PR #150; reproduced by building a farm with no `gh` in it.
 #
-# `gh` is a dependency of no hook and, before this section, of nothing in this
-# suite: `report-stale-branches.sh` is the only file that calls it and degrades to
-# `no gh on PATH` by design, which GH-108.10 drives. `git` differs only in that
-# the suite has already built its fixtures with it hundreds of lines above, so its
-# farm entry is never the missing one -- the branch below is written for both
-# because the rule is the same, not because git can take it.
+# The fix that answered that review tolerated the no-difference copy instead, and
+# said so in a paragraph here. It ran everywhere, and it paid for that in the one
+# currency this section deals in: on a machine with no `gh` the `gh`-less
+# environment WAS the ordinary environment, so the GH-108.6 checks below asserted
+# their verdicts twice rather than once and were evidence about `gh` on no such
+# machine. #155 took the tolerance back out by removing what it tolerated. The
+# farm is given a `gh` where it is built -- the host's, or a stub -- so the
+# difference here is one name on every machine and this guard requires it
+# unconditionally.
 #
-# What this costs, said rather than hidden: on a machine with no `gh` the gh-less
-# environment is the ordinary one, so the GH-108.6 checks that run under it assert
-# their verdicts twice rather than once. They are still true, and they still hold
-# the hook to a verdict that does not move; they are simply not evidence ABOUT gh
-# there. The suite says nothing about that, because a line printed only on some
-# machines is a worse thing to reason about than a check that is merely redundant.
+# WHICH TOOL MAY BE SYNTHESISED AND WHICH MAY NOT is argued in full where the stub
+# is made, under GH IN THE FARM in the #95 section above; the short of it is that
+# `gh` is a dependency of no hook, so a name is all the fixture wants of it, while
+# `git` is a dependency of this suite, so a farm with no `git` is a machine this
+# suite cannot run on and a fake one would answer the questions the hooks are
+# judged on. `report-stale-branches.sh` is the only file in .claude/hooks/ that
+# calls `gh` at all, and it degrades to `no gh on PATH` by design, which GH-108.10
+# drives. The loop below is written for both tools because the RULE is the same --
+# the farm minus exactly this one name -- and not because `git` could be stubbed
+# to satisfy it.
 for pair in "git:$ENV_NO_GIT_BIN" "gh:$ENV_NO_GH_BIN"; do
   tool=${pair%%:*}; dir=${pair#*:}
-  # Empty when the machine does not have the tool, which makes the required
-  # difference between the two directories "no difference at all".
-  want=
-  [ -n "$( PATH="$WITH_JQ_BIN"; command -v "$tool" )" ] && want="< $tool"
-  [ -z "$( PATH="$dir"; command -v "$tool" )" ] \
-    && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$dir") | grep '^[<>]')" = "$want" ] || {
+  # Asked separately from the difference below, because the two have different
+  # causes and one message for both would misname either: a farm holding no `git`
+  # is a machine without git, and a farm holding no `gh` is a stub that was not
+  # made. Neither is the fixture being the wrong shape, which is what the second
+  # message says.
+  farm_has "$WITH_JQ_BIN" "$tool" || {
+    echo "the symlink farm holds no $tool at all, so the $tool-less fixture is not it minus one name; the checks using it prove nothing" >&2
+    exit 1
+  }
+  ! farm_has "$dir" "$tool" \
+    && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$dir") | grep '^[<>]')" = "< $tool" ] || {
     echo "the $tool-less PATH fixture is not the symlink farm minus $tool; the checks using it prove nothing" >&2
     exit 1
   }
 done
+
+echo "--- the farm's gh, which is what makes the fixture above machine-independent (#155) ---"
+req GH-155.1
+# The rule the guard above now rests on, asked of this machine AND of the machine
+# this is not. What decides the fixture is whether the HOST's PATH held a `gh`:
+# where it did there is nothing to synthesise, so a check that only looked at the
+# farm as built would be green on any machine with `gh` installed and would say
+# nothing whatever about the machine that found the defect. So that machine is
+# built here -- the farm with `gh` taken out stands in for a PATH that never had
+# one -- and the same synthesis is run against it. This is PR #150's manual
+# reproduction, "reproduced by building a farm with no gh in it", written as a
+# check instead of as a sentence in a comment.
+#
+# Every expectation is a literal, the stub's own line included: these read what
+# the stub SAYS rather than asking the variable that wrote it, so an edit to that
+# message is visible here rather than silently agreed with. The stub's line is
+# pinned WHOLE and not by a leading fragment: a prefix goes on matching after the
+# rest of the sentence has been deleted, which is how a `says` check comes to
+# stand for less than its label claims.
+#
+# THE FARM BUILD CALLS THE SYNTHESIS, asked of the suite's text because on a host
+# that HAS `gh` nothing can ask it of a run. The synthesis is a fallback, so with
+# the host providing a `gh` its call is a no-op and deleting that one line leaves
+# every other check here green while the machine-independence goes back to being
+# an accident of the invoker's PATH. That is the direction #84 was filed in, one
+# level out again.
+#
+# Read from the RANGE the farm is built in rather than from the whole file: a
+# literal asserted of the file would match this check's own argument and pass with
+# the call gone. `holds` fails on text it could not read, so an anchor that moves
+# is red rather than vacuous.
+FARM_BUILD=$(sed -n '/^WITH_JQ_BIN=/,/^cp -a /p' "$SUITE_DIR/check-hooks.sh" \
+             | sed 's/[[:space:]]*#.*$//')
+holds 'the farm build calls the synthesis, which a host with its own gh cannot show by running' \
+      "$FARM_BUILD" 'farm_stub_gh "$WITH_JQ_BIN"'
+tok 'the symlink farm holds a gh, so the gh-less fixture is one name short of it' \
+    'gh' "$(farm_has "$WITH_JQ_BIN" gh && echo gh)"
+FARM_HOST_HAD_NO_GH="$FIXTURES/farm-from-a-host-with-no-gh"
+cp -a "$WITH_JQ_BIN" "$FARM_HOST_HAD_NO_GH"
+rm -f "$FARM_HOST_HAD_NO_GH/gh"
+tok 'a farm built from a host with no gh on PATH holds none to begin with' \
+    '' "$(farm_has "$FARM_HOST_HAD_NO_GH" gh && echo gh)"
+farm_stub_gh "$FARM_HOST_HAD_NO_GH"
+tok 'and the synthesis gives it one' \
+    'gh' "$(farm_has "$FARM_HOST_HAD_NO_GH" gh && echo gh)"
+FARM_HOST_HAD_NO_GH_MINUS_GH="$FIXTURES/farm-from-a-host-with-no-gh-minus-gh"
+cp -a "$FARM_HOST_HAD_NO_GH" "$FARM_HOST_HAD_NO_GH_MINUS_GH"
+rm -f "$FARM_HOST_HAD_NO_GH_MINUS_GH/gh"
+tok 'so on that machine too the gh-less copy differs from the farm by one name' \
+    '< gh' "$(diff <(ls -A "$FARM_HOST_HAD_NO_GH") <(ls -A "$FARM_HOST_HAD_NO_GH_MINUS_GH") | grep '^[<>]')"
+# What the stub does when something runs it, which nothing under the farm's PATH
+# does. The status and the sentence are asked separately: a stub that printed the
+# right line and exited 0 would be the silent permit this section is about,
+# arriving through the fixture instead of through a hook.
+#
+# THE ARGUMENTS ARE `--version` AND NOT `pr merge 5`, and that is not cosmetic.
+# The stub ignores argv entirely, so any arguments establish the same two things
+# -- and these two lines, with the marker `gh` under this same requirement beside
+# the report's own run further down, are the whole of what RUNS a `gh` in this
+# suite rather than handing its text to a hook. What they rest on is that PATH
+# names one directory holding a stub. Were that ever wrong, `gh --version`
+# against a real gh exits 0 and prints no such sentence, so both checks go red;
+# `gh pr merge 5` would have merged a pull request. The repository's own lesson
+# is that a command run to learn something once created a real release.
+tok 'the stub refuses rather than answering for gh' \
+    '1' "$( PATH="$FARM_HOST_HAD_NO_GH"; gh --version >/dev/null 2>&1; echo $? )"
+holds 'and names the fixture it is, so a check that came to depend on it says so' \
+      "$( PATH="$FARM_HOST_HAD_NO_GH"; gh --version 2>&1 >/dev/null )" \
+      'gh: check-hooks.sh PATH-fixture stub, a name and not a program (GH-155.1)'
+# And it never stands in for a `gh` the host provided. Where the host has one the
+# farm holds the host's, so the fixture is still the invoker's PATH -- which is
+# what #95 builds the farm for, and the reason the synthesis is a fallback rather
+# than an override. The marker in this fixture's `gh` is how the check tells the
+# two apart; a stub that overwrote it would print the stub's line instead.
+FARM_HOST_HAD_A_GH="$FIXTURES/farm-from-a-host-with-gh"
+cp -a "$FARM_HOST_HAD_NO_GH_MINUS_GH" "$FARM_HOST_HAD_A_GH"
+# THE SAME UNLINK, AND THE SAME REASON as the one inside the synthesis: `>` on a
+# farm entry writes THROUGH the symlink and truncates the host binary it points
+# at. This copy is taken from a farm that has already had `gh` removed, so there
+# is no link here to write through -- but that is a property of the line above,
+# and naming a different source there would turn the next line into the hazard
+# the synthesis carries a paragraph about. The unlink makes it safe by
+# construction rather than by which directory was copied.
+rm -f "$FARM_HOST_HAD_A_GH/gh"
+printf '#!/bin/bash\necho the-host-gh\n' > "$FARM_HOST_HAD_A_GH/gh"
+chmod +x "$FARM_HOST_HAD_A_GH/gh"
+farm_stub_gh "$FARM_HOST_HAD_A_GH"
+tok 'a farm whose host had a gh keeps the one it had' \
+    'the-host-gh' "$( PATH="$FARM_HOST_HAD_A_GH"; gh )"
+
+# WHAT DECIDES THE SYNTHESIS IS THE DIRECTORY AND NOT THE CALLING SHELL, and the
+# machine that tells those two apart is one whose environment exports a `gh`
+# function -- a wrapper in a login profile, which bash hands to a script like
+# this one as `BASH_FUNC_gh%%`. `command -v` resolves a function ahead of PATH,
+# so the test this used to make read a `gh` the farm did not hold: no stub was
+# written, and the guard above, which this branch made unconditional, aborted
+# the whole suite. #155's own failure shape, arriving by a route nothing was
+# asking about until PR #161 was reviewed.
+#
+# The function is defined and EXPORTED here because exporting is what puts it in
+# reach of the subshell the old test used, and it is unset on the next line: a
+# `gh` function left standing would be run by the checks above, which execute the
+# stub, in place of the file they are about.
+FARM_UNDER_A_GH_FUNCTION="$FIXTURES/farm-under-a-shell-that-defines-gh"
+cp -a "$FARM_HOST_HAD_NO_GH_MINUS_GH" "$FARM_UNDER_A_GH_FUNCTION"
+gh() { echo "a wrapper function in the invoker's environment, not a program in the farm"; }
+export -f gh
+farm_stub_gh "$FARM_UNDER_A_GH_FUNCTION"
+unset -f gh
+tok 'a gh the calling shell defines is not a gh in the farm, so the stub is written anyway' \
+    'gh' "$(farm_has "$FARM_UNDER_A_GH_FUNCTION" gh && echo gh)"
+# AND THE GUARD ASKS IT THE SAME WAY. The synthesis and the fixture guard are one
+# rule read twice, so a `command -v` left in the guard is the same abort with the
+# stub written: a `gh` function resolves under the `gh`-less PATH too, and the
+# one-name difference the guard demands reads as absent. Asked of the suite's
+# text because a guard whose failure is `exit 1` cannot be driven from inside the
+# run it would end. `lacks` fails on text it could not read, so a range anchor
+# that moves is red rather than vacuously green.
+FARM_GUARD=$(sed -n '/^for pair in "git:\$ENV_NO_GIT_BIN"/,/^done$/p' "$SUITE_DIR/check-hooks.sh" \
+             | sed 's/[[:space:]]*#.*$//')
+holds 'the gh-less fixture guard asks the directory whether the farm holds the name' \
+      "$FARM_GUARD" 'farm_has "$WITH_JQ_BIN" "$tool"'
+lacks 'and asks the calling shell nothing, which would resolve a function ahead of PATH' \
+      "$FARM_GUARD" 'command -v'
 
 ENV_REPOS="$FIXTURES/env"
 mkdir -p "$ENV_REPOS"
@@ -11489,8 +11708,18 @@ echo "--- gh off PATH, and every other environment: the pull request hook starts
 # It runs no git and no gh, so its verdict is a function of the command's text
 # alone. That is checked as the property rather than as one absence: the same two
 # payloads under every environment of this section.
+#
+# THE FARM IS THE ROW THAT MAKES THE GH-LESS ROW EVIDENCE, and `plain` cannot be
+# it. `plain` is the invoker's PATH, so on a host with no `gh` it is itself a
+# `gh`-less environment and the pair asserted the same thing twice -- which is
+# what #155 was filed about and what the stub alone does not fix. The farm always
+# holds a `gh`, the row below it is the farm minus that one name, and the contrast
+# between the two is therefore a genuine one-name contrast on every machine.
+# `plain` stays, because what it asks is the other question: that the invoker's
+# own PATH, whatever is on it, moves no verdict either.
 req GH-108.6
-for env in "plain:$ENV_PLAIN:$PATH" "gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN" \
+for env in "plain:$ENV_PLAIN:$PATH" "the farm, gh on PATH:$ENV_PLAIN:$WITH_JQ_BIN" \
+           "gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN" \
            "git off PATH:$ENV_PLAIN:$ENV_NO_GIT_BIN" "no repository:$ENV_NOREPO:$PATH" \
            "detached HEAD:$ENV_DETACHED:$PATH" "no origin:$ENV_NO_ORIGIN:$PATH" \
            "no dev ref:$ENV_DEV_NONE:$PATH" "two dev refs:$ENV_DEV_TWO:$PATH"; do
@@ -11500,9 +11729,41 @@ for env in "plain:$ENV_PLAIN:$PATH" "gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN" \
   env_cmd "$dir" "$path" no-pr-decisions.sh ALLOW "$name: gh issue list is permitted" \
     'gh issue list'
 done
-env_says "$ENV_PLAIN" "$ENV_NO_GH_BIN" no-pr-decisions.sh "Bertan's call" \
-  'gh off PATH: the refusal is word for word the one gh on PATH gets' \
+# "WORD FOR WORD" IS ASKED AS A COMPARISON, which it was not. What stood here was
+# one `env_says` against the `gh`-less PATH, and `env_says` matches a FRAGMENT --
+# so the label claimed the two refusals were identical while the check read three
+# words of one of them and never read the other at all. Two refusals differing in
+# every other word passed it. That is the defect this same section argues against
+# a hundred lines up, where the stub's sentence is pinned whole.
+#
+# Three checks, because the claim has three parts. Each side is pinned to the
+# refusal WHOLE, as a literal written from no-pr-decisions.sh rather than derived
+# from a run; then the two runs are read and compared to each other, which is the
+# only part that cannot be a literal because it is an equality between two
+# measurements. The `gh`-on-PATH side is the farm and not the invoker's PATH, for
+# the reason the loop above gives (#155).
+env_stderr() {  # env_stderr <dir> <PATH> <script> <command> -- what the hook said
+  local dir="$1" path="$2" script="$3" cmd="$4" hook
+  hook=$(hook_path "$script")
+  printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+    | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null
+}
+PR_MERGE_REFUSAL="Blocked: deciding a pull request is Bertan's call, not an agent's. Opening a PR, commenting on it and editing it are allowed; accepting, rejecting, merging and reopening are not. Leave the PR open and say it is ready to merge."
+env_says "$ENV_PLAIN" "$WITH_JQ_BIN" no-pr-decisions.sh "$PR_MERGE_REFUSAL" \
+  'gh on PATH: the whole refusal, and it is this one the gh-less side is held to' \
   'gh pr merge 5'
+env_says "$ENV_PLAIN" "$ENV_NO_GH_BIN" no-pr-decisions.sh "$PR_MERGE_REFUSAL" \
+  'gh off PATH: the whole refusal again, not a fragment of it' \
+  'gh pr merge 5'
+GH_ON_SAID=$(env_stderr "$ENV_PLAIN" "$WITH_JQ_BIN" no-pr-decisions.sh 'gh pr merge 5')
+GH_OFF_SAID=$(env_stderr "$ENV_PLAIN" "$ENV_NO_GH_BIN" no-pr-decisions.sh 'gh pr merge 5')
+# Asked before the equality, for the reason `lacks` gives about absences: two
+# hooks that crashed saying nothing compare equal, which is this check passing on
+# the case it exists to catch.
+tok 'both refusals were read, so what follows compares two texts and not two silences' \
+    'read' "$( [ -n "$GH_ON_SAID" ] && [ -n "$GH_OFF_SAID" ] && echo read )"
+tok 'and the two are word for word the same, which neither fragment above asks' \
+    "$GH_ON_SAID" "$GH_OFF_SAID"
 
 echo "--- bytes in the command nobody meant to send ---"
 # A CRLF, a non-ASCII byte and an invalid UTF-8 sequence leave the verdict where
@@ -11590,10 +11851,14 @@ echo "--- every hook exits 0 or 2, in every environment and on every payload her
 # verdicts. So the environments a hook was asked for a verdict in and the ones it
 # was asked for a status in were different sets, and nothing showed it, because
 # the count matched a literal written to match it. That is this section's own
-# shape, found here by review rather than by the suite. Ten environments against
-# ten payloads now, and the rule the first version should have been written to:
-# a case driven anywhere in this section is driven here.
+# shape, found here by review rather than by the suite. Eleven environments
+# against ten payloads now, and the rule the first version should have been
+# written to: a case driven anywhere in this section is driven here. The eleventh
+# is the symlink farm, which #155 added to the row above as the `gh`-on-PATH twin
+# of the `gh`-less one; it is here because of that rule and not for a reason of
+# its own.
 ENV_STATUS_CASES="plain:$ENV_PLAIN:$PATH
+the farm, gh on PATH:$ENV_PLAIN:$WITH_JQ_BIN
 git off PATH:$ENV_PLAIN:$ENV_NO_GIT_BIN
 gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN
 no repository:$ENV_NOREPO:$PATH
@@ -11615,7 +11880,7 @@ ENV_STATUS_PAYLOADS=(
   '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \u00e9"}}'
   "$(printf '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \377\376"}}')"
 )
-ENV_STATUS_EXPECTED=100
+ENV_STATUS_EXPECTED=110
 req GH-108.8
 for hook in $INPUT_BASH_HOOKS $INPUT_EDIT_HOOKS; do
   bad= ; n=0
@@ -11690,6 +11955,161 @@ unarmed 'no exit above the heading survives, which is what made it silent' \
 unarmed 'nor the rev-parse that exited with nothing said' \
   "$HOOKS/report-stale-branches.sh" \
   'git rev-parse --git-dir >/dev/null 2>&1 || exit 0'
+
+echo "--- and that run does not execute the gh standing beside the git it lacks (#155) ---"
+# THE ROW ABOVE IS WHERE THE FARM'S STUB COULD GO WRONG, and until this block the
+# only thing saying it does not was a sentence in the farm's own comment -- which
+# was wrong about why, and was found wrong in review rather than by a check.
+# $ENV_NO_GIT_BIN is the farm minus `git`, so it carries the farm's `gh` -- the
+# host's, or the stub synthesised for it -- on the PATH of the one file in
+# .claude/hooks/ that calls `gh` at all. What keeps that stub from ever answering
+# for a real one is an ordering INSIDE report-stale-branches.sh: its
+# `command -v git` guard exits above the first of those calls. That is a property
+# of that file and not of this fixture, so an edit there reading `gh` before
+# `git` would have the stub answering a question a verdict is read off, and the
+# comment that used to assert it could not happen would still have been green.
+#
+# THE MARKER IS A FILE AND NOT A MESSAGE, which that file's own code forces: it
+# reads `gh api` with 2>/dev/null, so a stub announcing itself on stderr would be
+# silenced by the very line this exists to catch. A file written on exec is
+# visible whatever the caller redirects. The control below runs the marker `gh`
+# on purpose first, because an absence read off a marker that never worked is
+# evidence of nothing -- the shape `lacks` refuses for text, asked here of a file.
+req GH-155.1
+ENV_NO_GIT_GH_MARKER="$FIXTURES/path-without-git-whose-gh-tells"
+ENV_GH_WAS_RUN="$FIXTURES/the-report-ran-a-gh"
+cp -a "$FARM_HOST_HAD_NO_GH" "$ENV_NO_GIT_GH_MARKER"
+rm -f "$ENV_NO_GIT_GH_MARKER/git"
+# THE SAME UNLINK AND THE SAME REASON the synthesis carries a paragraph about:
+# `>` on a farm entry writes THROUGH the symlink and truncates the host binary it
+# points at. The copy above is of a farm whose `gh` is already a written stub and
+# not a link, so there is nothing here to write through -- but that is a property
+# of the line above rather than of this one, which is exactly how the first
+# instance of this hazard got written.
+rm -f "$ENV_NO_GIT_GH_MARKER/gh"
+printf '#!/bin/bash\n: > "%s"\nexit 1\n' "$ENV_GH_WAS_RUN" > "$ENV_NO_GIT_GH_MARKER/gh"
+chmod +x "$ENV_NO_GIT_GH_MARKER/gh"
+rm -f "$ENV_GH_WAS_RUN"
+( PATH="$ENV_NO_GIT_GH_MARKER"; gh --version >/dev/null 2>&1 )
+tok 'the marker gh records having been run, so the absence below is a measurement' \
+    'ran' "$( [ -e "$ENV_GH_WAS_RUN" ] && echo ran )"
+rm -f "$ENV_GH_WAS_RUN"
+report_says "$ENV_NO_GIT_GH_MARKER" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  'branches: NOT READ -- git is not on PATH' \
+  'with a gh on PATH and no git it still names git as what it lacks'
+tok 'and it never ran that gh, which is the whole of what lets the farm carry a stub' \
+    '' "$( [ -e "$ENV_GH_WAS_RUN" ] && echo ran )"
+# THE OTHER THREE PATHS, derived off the file rather than recited: two hold no
+# `gh` at all and the third is the invoker's own, where the run stops at the
+# not-a-repository guard above. What this asks is that none of them is
+# $WITH_JQ_BIN, the farm itself -- the one PATH on which a `gh` would be both
+# present and reached -- so a later check that drove the report under the farm
+# would turn this line red rather than quietly making the stub load-bearing.
+# #84's direction: the claim is about every consumer, so it is derived from
+# every consumer it can read -- and what it cannot read is named below rather
+# than left to be discovered.
+#
+# READ AT A CALL POSITION, AND THE POSITIONS ARE NAMED: the start of a line with
+# any indentation, after a `;`, `&`, `|` or `)`, and after a `then`, `do` or
+# `else`. The last two groups are not decoration. drive_helper dispatches this
+# helper through a CASE ARM --
+#
+#     report_says) report_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' ;;
+#
+# -- where the line-start position reads the case LABEL, `report_says)`, and not
+# the call. A derivation that only skipped indentation could not see the one call
+# in this suite that is not a statement of its own, and `if ...; then report_says
+# "$WITH_JQ_BIN" ...` was invisible to it as well. Round 2 of PR #161's review
+# found the previous spelling claiming to read "anywhere on a line" while reading
+# line-start-modulo-whitespace, and citing that case arm as its evidence -- the
+# one line its own code could not read. The prose was stronger than the guard,
+# which is the defect this whole section is about, arriving in the fix for it.
+#
+# WHAT IT STILL CANNOT READ is a call whose command word is a variable: no
+# reading of the text can, because `$DRIVEN_REPORT "$WITH_JQ_BIN"` spells the
+# name nowhere. That shape is not in this file -- DRIVEN_REPORT names the helper
+# for the loop above, and the case arm is where it becomes a call, which is why
+# covering the case position covers that route whole -- and if it is ever
+# written, this derivation is evidence about the calls it can read and about
+# nothing else.
+#
+# WHITESPACE IS NOT ONE OF THE SEPARATORS, and what that excludes is a
+# `report_says "` sitting inside a quoted string -- payload rather than a call.
+# MEASURED AGAINST THIS FILE AS IT STANDS, admitting whitespace would change
+# nothing: the same twelve lines, the same four PATHs. So the exclusion is a rule
+# about what may be written here later and not a description of something this
+# file contains, and saying otherwise would be this section's own defect a third
+# time. What made it a live hazard was the previous round's fixture, which wrote
+# the call out as literal text inside an `echo`, indented, with the farm as its
+# PATH -- payload that admitting whitespace would have read as a call, injecting
+# the farm into the real derivation and turning the check red for a reason having
+# nothing to do with the report. THAT EXAMPLE IS NOT SPELLED OUT HERE, and the
+# omission is the point: a comment naming it in full would plant the thirteenth
+# match itself, which is what happened on the first attempt at this paragraph and
+# is why the claim above is a measurement and not a recollection. It is out of
+# reach now by CONSTRUCTION rather than by the quote that happens to precede it:
+# the fixtures below are written through a variable holding the helper's name, so
+# this file carries no `report_says` of theirs in any position at all.
+#
+# A COMMENT IS READ AT A SEPARATOR POSITION, and the example six lines above is
+# read: it is one of the twelve lines this derivation matches in this file, and
+# it names $PATH, which is why the literal below is what it would be without it.
+# Writing that down rather than filtering it out is the decision, and it rests on
+# the direction. A comment can only ADD a PATH to the derived set, never hide a
+# call from it, so the property this check exists for -- that no run under the
+# farm goes unseen -- survives; a comment that named the farm would turn the
+# check RED until it was reworded, which is a nuisance in the safe direction.
+# Stripping comments first would buy the tidier claim at the price of the unsafe
+# one: the strip cuts at the first `#` on a line, so a line carrying one before a
+# call would lose the call and the check would go quietly green. The line-start
+# position is the half that is closed, because a comment's first non-blank is
+# `#`; the separator positions are not, and this paragraph is the record of it.
+report_run_paths() {  # report_run_paths <file> -- every PATH the report is driven under in it
+  grep -oE '(^|[;&|)]|[[:space:]](then|do|else))[[:space:]]*report_says "[^"]*"' "$1" \
+    | sed 's/.*report_says "//; s/"$//' | sort -u | tr '\n' ' '
+}
+REPORT_RUN_PATHS=$(report_run_paths "$SUITE_DIR/check-hooks.sh")
+tok 'every run of the report names one of four PATHs, and the farm is not among them' \
+    '$ENV_NO_GH_BIN $ENV_NO_GIT_BIN $ENV_NO_GIT_GH_MARKER $PATH ' "$REPORT_RUN_PATHS"
+# THE CASE ARM, READ OUT OF THIS FILE AS IT STANDS, and not a fixture resembling
+# it: the sentence above cites it, so the citation is the thing to check. It is
+# found by its shape rather than by a line number, and the count is asserted
+# first because a derivation run over an empty extract returns the empty string,
+# which would agree with nothing and pass.
+REPORT_CASE_ARM="$FIXTURES/the-case-arm-as-this-file-writes-it"
+grep -E '^[[:space:]]*report_says\)' "$SUITE_DIR/check-hooks.sh" > "$REPORT_CASE_ARM"
+tok 'this suite holds one report_says call that is not a statement of its own, in drive_helper' \
+    '1' "$(grep -c . "$REPORT_CASE_ARM")"
+tok 'and the derivation reads that line as it stands, which the line-start spelling could not' \
+    '$PATH ' "$(report_run_paths "$REPORT_CASE_ARM")"
+# The three shapes a call is written in here, in a file whose every run is one of
+# them: an indented loop body, a case arm, and a call after `then`. None is
+# readable at the line-start position, so this fixture is red under the spelling
+# the review found and is the whole of what makes the paragraph above a claim
+# rather than a hope.
+REPORT_SAYS_NAME='report_says'
+REPORT_DERIVATION_FIXTURE="$FIXTURES/report-runs-in-the-shapes-this-suite-writes"
+{ echo 'for d in one; do'
+  echo "  $REPORT_SAYS_NAME \"\$WITH_JQ_BIN\" \"\$SOME_REPORT\" fragment label"
+  echo 'done'
+  echo 'case $h in'
+  echo "  $REPORT_SAYS_NAME) $REPORT_SAYS_NAME \"\$ENV_NO_GH_BIN\" \"\$SOME_REPORT\" fragment label ;;"
+  echo 'esac'
+  echo "if true; then $REPORT_SAYS_NAME \"\$ENV_NO_GIT_BIN\" \"\$SOME_REPORT\" fragment label; fi"
+} > "$REPORT_DERIVATION_FIXTURE"
+tok 'and it sees an indented run, a case arm and a run after then, none of which begins its line' \
+    '$ENV_NO_GH_BIN $ENV_NO_GIT_BIN $WITH_JQ_BIN ' "$(report_run_paths "$REPORT_DERIVATION_FIXTURE")"
+# The two halves of what a comment does to it, asserted rather than asserted
+# about: a commented-out call at the line-start position is not read, and one at
+# a separator position is. The second is the quirk the paragraph above accepts,
+# and it is pinned here so that accepting it is a decision on the record rather
+# than something a later reader has to rediscover by measuring.
+REPORT_COMMENT_FIXTURE="$FIXTURES/report-runs-that-are-only-prose"
+{ echo "# $REPORT_SAYS_NAME \"\$A_PATH_ONLY_A_COMMENT_NAMES\" x y z"
+  echo "# as in: $REPORT_SAYS_NAME) $REPORT_SAYS_NAME \"\$A_PATH_A_COMMENT_REACHES\" x y z ;;"
+} > "$REPORT_COMMENT_FIXTURE"
+tok 'a commented call is out of reach at the line-start position and in reach after a separator' \
+    '$A_PATH_A_COMMENT_REACHES ' "$(report_run_paths "$REPORT_COMMENT_FIXTURE")"
 
 echo "--- the degraded report, produced rather than described ---"
 # The last row of #108's table: offline, the fetch reports FAILED, the settings
@@ -12579,6 +12999,7 @@ GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:stati
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
 GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static
 GH-128 GH-171:gap
+GH-155.1:static
 GH-109.1:static GH-109.2:refuse-only GH-109.3:static GH-109.4:static
 GH-109.5:permit-only GH-164:gap
 '

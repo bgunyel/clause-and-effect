@@ -16,14 +16,14 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # TWO MINUTES A ROW, and hours for the whole registry: one check-hooks.sh run
-# per mutation that applies, plus the baseline -- sixty runs as the registry
-# stands, not sixty-one, because the row whose edit matches nothing never reaches
+# per mutation that applies, plus the baseline -- sixty-two runs as the registry
+# stands, not sixty-three, because the row whose edit matches nothing never reaches
 # one. Measured twice on 2026-09-17, on this machine and on registries one row
 # apart: 47 min 34 s and 45 min 24 s, at twenty-three runs. That measurement is
 # the two minutes, and the two minutes is what is written in the heading, because
 # review of PR #169 found the heading saying ABOUT AN HOUR while this paragraph
 # said ninety minutes and check-hooks.sh pinned the hour: a total goes stale
-# every time a row is added and a rate does not. Carried to sixty runs the
+# every time a row is added and a rate does not. Carried to sixty-two runs the
 # rate gives nearer two hours than one, and no third whole-registry measurement has been
 # taken; a run under load took nearer four minutes a row. That is why it
 # is a separate script and why check-hooks.sh does not call it (#107). Nothing
@@ -89,25 +89,46 @@
 # the answering commit. The fifth added `quoted-equals-read-as-value` and
 # re-anchored `quoted-base-value-refused`, and all eleven #139 rows were run as
 # one selection against the commit answering it. The other twenty-three rows have
-# not been run since the files they run against changed. #109 added four -- a
-# pass slowed past the 1 s bound on a long command, two refusal messages losing
-# the sentence their rows read, and a second hook refusing a permitted read --
-# and ran them as a named selection on 2026-09-18, before dev-05 carried #117:
-# baseline green over 183 requirements, all four caught, .claude/hooks/
-# byte-identical after. Its settings.json mutations cannot be rows here, the file
-# being outside the copy; they were run by hand and are recorded in #109's
-# section of check-hooks.sh. The review of PR #169 re-ran the four against its
-# first answering commit (2026-09-20), all four caught and byte-identical after,
-# and re-ran one of the by-hand six, the `ran` record switched off, which was
-# caught in eleven places. Its second review found two message rules the suite
-# stated and did not check, and #109 added four rows for them --
-# `base-refusal-drops-the-rule-sentence`, `base-refusal-drops-the-remedy-spelling`,
-# `push-refusal-stops-opening-with-the-rule` and `a-new-refusal-arm-nothing-reads`
-# -- run as one selection against the answering commit (2026-09-20): baseline
-# green over 187 requirements, all four caught, .claude/hooks/ byte-identical
-# after. The first two survived the suite before that commit, which is how the
-# review found them and why they are rows rather than a paragraph.
-# No run has therefore exercised all sixty rows together, and saying which
+# not been run since the files they run against changed.
+# #155 added two. `pr-hook-reads-gh-off-the-environment` was run as a selection
+# on 2026-09-17: baseline plus one, caught, byte-identical after, and red in
+# GH-108.6 and in nothing else ON A HOST THAT HAS `gh`. That last clause is the
+# one PR #161's review asked for and it is not decoration. The edit inserts
+# `command -v gh || exit 0` ABOVE the first rule in the file, so on a `gh`-less
+# host -- the machine #155 was filed about -- it short-circuits `pr review`,
+# `pr close`, the release allowlist, the base rules and the api rules as well,
+# and the run goes red across dozens of requirements. The outcome is `caught`
+# either way, since that is read off the IDs the row names and is not exclusive,
+# so nothing in this harness turns red to say so. The exclusivity is recorded as
+# this host's rather than repaired by moving the anchor: a hook that reads `gh`'s
+# presence out of the environment reads it before it decides anything, so a row
+# anchored below the rules it disables would be a different and weaker mutation
+# wearing the same name. `report-reads-gh-before-git` was run the same way on
+# 2026-09-18, at the commit answering that review: baseline plus one, caught,
+# red in GH-155.1 and in nothing else, byte-identical after. That one is host-
+# independent -- its `gh --version` is silent where there is no `gh` to run and
+# harmless where there is. Neither has been run since dev-05 was merged in.
+# #109 added four -- a pass slowed past the 1 s bound on a long command, two
+# refusal messages losing the sentence their rows read, and a second hook
+# refusing a permitted read -- and ran them as a named selection on 2026-09-18,
+# before dev-05 carried #117: baseline green over 183 requirements, all four
+# caught, .claude/hooks/ byte-identical after. Its settings.json mutations
+# cannot be rows here, the file being outside the copy; they were run by hand
+# and are recorded in #109's section of check-hooks.sh. The first review of
+# PR #169 re-ran the four against its answering commit (2026-09-20), all four
+# caught and byte-identical after, and re-ran one of the by-hand six, the `ran`
+# record switched off, which was caught in eleven places. Its second review
+# found two message rules the suite stated and did not check, and #109 added
+# four rows for them -- `base-refusal-drops-the-rule-sentence`,
+# `base-refusal-drops-the-remedy-spelling`,
+# `push-refusal-stops-opening-with-the-rule` and
+# `a-new-refusal-arm-nothing-reads` -- run as one selection against the commit
+# answering it (2026-09-20): baseline green over 187 requirements, all four
+# caught, .claude/hooks/ byte-identical after. The first two survived the suite
+# before that commit, which is how the review found them and why they are rows
+# rather than a paragraph. That selection was run before dev-05 was merged in a
+# second time, so #155's two rows were not in the tree it ran against.
+# No run has therefore exercised all sixty-two rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -181,8 +202,8 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   FIFTY-EIGHT real mutations, against EIGHT files in .claude/hooks/, naming
-#   FORTY-SEVEN requirement IDs between them, of the 169 whose status is active.
+#   SIXTY real mutations, against EIGHT files in .claude/hooks/, naming
+#   FORTY-NINE requirement IDs between them, of the 170 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
@@ -309,6 +330,8 @@ tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 a
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught
 degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch: FAILED or timed out after /d%GH-108.10%caught
+pr-hook-reads-gh-off-the-environment%no-pr-decisions.sh%s#^if gh_rule 'pr merge'; then$#command -v gh >/dev/null 2>\&1 || exit 0\nif gh_rule 'pr merge'; then#%GH-108.6%caught
+report-reads-gh-before-git%report-stale-branches.sh%s#^if ! command -v git >/dev/null 2>&1; then$#gh --version >/dev/null 2>\&1\nif ! command -v git >/dev/null 2>\&1; then#%GH-155.1%caught
 variants-field-deleted%requirements.md%/^- variants: transformation: redirect-quoted$/d%GH-141%caught
 variants-seed-disowned%requirements.md%/^### GH-72$/,/^$/s/^- variants: seed$/- variants: none: a reason/%GH-141%caught
 heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
