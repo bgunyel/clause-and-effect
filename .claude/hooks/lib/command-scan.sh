@@ -1502,19 +1502,49 @@ cs_split() {
 # they are right about their own case; the library knows which list it withdrew
 # for, so the library says so, on the same stderr the refusal uses and only on
 # the path where something is actually wrong. Review of PR #172.
+#
+# THREE STATUSES AND NOT TWO, which the first version of this got wrong in the
+# commit that added it. `||` reads every non-zero awk status as the hang case,
+# and awk has three: 1 is the `exit 1` below, taken when the list matches an
+# empty line; 2 is awk refusing to compile the dynamic regex at all; 127 is awk
+# not being on PATH. Measured -- `|[a`, `a(b` and `x{2,1}` each exit 2, and an
+# empty PATH exits 127 -- and each was reported as a list that hangs the strip,
+# which is the misdirection the message exists to end. Review of PR #172.
+#
+# The grep branch names the lists CS_WRAPPER_RE is built from rather than two of
+# them. It named CS_SEPARATORS and CS_WRAP_WORDS, and a control-word list that
+# would not compile sent the reader to inspect two lists that were both correct
+# -- the one list this file calls the likely edit point being the one it did not
+# name. The enumeration is held to the anchor's own definition by check-hooks.sh,
+# so a list added there and not here is red rather than silent.
 CS_LISTS_VALID=1
 CS_INVALID_LIST=
 printf '' | grep -qE "$CS_WRAPPER_RE" 2>/dev/null
 [ $? -le 1 ] || { CS_LISTS_VALID=0
-  CS_INVALID_LIST="CS_WRAPPER_RE does not compile, so CS_SEPARATORS or CS_WRAP_WORDS holds something that is not literal in it"; }
+  CS_INVALID_LIST="CS_WRAPPER_RE does not compile, so one of the lists it is built from holds something that is not literal there: CS_SEPARATORS, CS_CONTROL_WORDS, CS_WORD_SPELLING, CS_WRAP_TOKEN or CS_WRAP_WORDS"; }
 printf '\n' | awk -v w="$CS_CONTROL_WORDS" \
-  '{ if ($0 ~ ("^(" w ")$")) exit 1 }' 2>/dev/null || { CS_LISTS_VALID=0
-  CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_CONTROL_WORDS matches the empty string, which makes the strip advance by nothing and never return"; }
+  '{ if ($0 ~ ("^(" w ")$")) exit 1 }' 2>/dev/null
+CS_AWK_STATUS=$?
+case $CS_AWK_STATUS in
+  0) ;;
+  1) CS_LISTS_VALID=0
+     CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }CS_CONTROL_WORDS matches the empty string, which makes the strip advance by nothing and never return" ;;
+  *) CS_LISTS_VALID=0
+     CS_INVALID_LIST="${CS_INVALID_LIST:+$CS_INVALID_LIST; }awk exited $CS_AWK_STATUS when asked whether CS_CONTROL_WORDS matches an empty line, so that question went unanswered: at 2 the list does not compile as a regular expression, and at 127 awk is not on PATH" ;;
+esac
+unset CS_AWK_STATUS
 if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ] \
    || [ -z "$CS_CONTROL_WORDS" ] || [ -z "$CS_SEPARATORS" ] \
    || [ "$CS_LISTS_VALID" -ne 1 ]; then
+  # "every consumer that needs it", and not "every consumer". append-only-docs.sh
+  # and append-only-docs-edit.sh source this library for cs_tool_input and
+  # cs_within_cap and never call cs_split, so their load guards do not require it
+  # and they go on permitting -- measured, append-only-docs-edit.sh exits 0 with
+  # a broken control-word list. The first version of this line claimed a refusal
+  # on the one path where there is none, printed on every Edit and Write. Review
+  # of PR #172.
   [ -z "$CS_INVALID_LIST" ] \
-    || echo "lib/command-scan.sh: $CS_INVALID_LIST. cs_split is withdrawn, so every consumer refuses." >&2
+    || echo "lib/command-scan.sh: $CS_INVALID_LIST. cs_split is withdrawn, so every consumer that requires it refuses; the two document hooks need only cs_tool_input and cs_within_cap and are unaffected." >&2
   unset -f cs_split
 fi
 

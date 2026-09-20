@@ -8483,6 +8483,64 @@ sed -E "s/^CS_SEPARATORS=.*/CS_SEPARATORS=';\&|()-\`'/" "$HOOKS/lib/command-scan
   > "$FIXTURES/badlist-separators-dash.sh"
 tok 'a separator list that compiles and means something else is NOT withdrawn' \
     'present' "$(cs_split_after_loading "$FIXTURES/badlist-separators-dash.sh")"
+# WHAT THE WITHDRAWAL SAYS, which is the other half of GH-134.1 and was wrong in
+# all three of its clauses when first written. Every consumer refuses with
+# "could not load lib/command-scan.sh", which is right for a missing file and a
+# misdirection for a malformed list, so the library names the cause itself; a
+# message that names the wrong cause is worse than the one it replaced.
+cs_diagnostic_of() {  # cs_diagnostic_of <library> -- the line it prints on withdrawal
+  bash -c ". '$1'" 2>&1 >/dev/null | head -1
+}
+req GH-134.1
+# awk has three statuses here and the first version of this read them as two:
+# 1 is the empty match, 2 is a list that will not compile, 127 is no awk at all.
+# `||` called all three the hang, which is the misdirection this message exists
+# to end.
+sed -E "s/^CS_CONTROL_WORDS='(.*)'$/CS_CONTROL_WORDS='\1|[a'/" "$HOOKS/lib/command-scan.sh" \
+  > "$FIXTURES/badlist-control-words-uncompilable.sh"
+tok 'a control-word list that will not compile withdraws cs_split' \
+    'absent' "$(cs_split_after_loading "$FIXTURES/badlist-control-words-uncompilable.sh")"
+tok 'and is not reported as the list that hangs the strip' \
+    'no' "$(case "$(cs_diagnostic_of "$FIXTURES/badlist-control-words-uncompilable.sh")" in
+              *'matches the empty string'*) echo yes ;; *) echo no ;; esac)"
+tok 'the list that does hang the strip is reported as that' \
+    'yes' "$(case "$(cs_diagnostic_of "$FIXTURES/badlist-control-words-trailing-pipe.sh")" in
+              *'CS_CONTROL_WORDS matches the empty string'*) echo yes ;; *) echo no ;; esac)"
+# The claim the line makes about who refuses. Two consumers take cs_tool_input
+# and cs_within_cap and never cs_split, so "every consumer refuses" was false on
+# the one path where nothing is refused -- printed on every Edit and Write.
+tok 'and the line does not claim a refusal it cannot promise' \
+    'no' "$(case "$(cs_diagnostic_of "$FIXTURES/badlist-control-words-trailing-pipe.sh")" in
+              *'so every consumer refuses'*) echo yes ;; *) echo no ;; esac)"
+tok 'the intact library says nothing at all' \
+    '' "$(cs_diagnostic_of "$HOOKS/lib/command-scan.sh")"
+# AND THE ENUMERATION IS DERIVED, not believed. The grep branch names the lists
+# CS_WRAPPER_RE is built from, and an enumeration in a message is exactly the
+# thing this repository keeps finding stale -- it named two of five when it was
+# written, sending a reader to inspect two lists that were both correct. So the
+# names are read off the anchor's own assignment and each is required to appear
+# in the message. A list interpolated there and not named here is red; the
+# message cannot go quietly out of date as the anchor gains a list.
+req GH-134.1
+ANCHOR_LISTS=$(grep '^CS_WRAPPER_RE=' "$HOOKS/lib/command-scan.sh" \
+  | grep -oE '\$CS_[A-Z_]+' | sed 's/^\$//' | LC_ALL=C sort -u)
+DIAG_LINE=$(grep -n 'does not compile, so one of the lists' "$HOOKS/lib/command-scan.sh" | head -1)
+[ -n "$ANCHOR_LISTS" ] && [ -n "$DIAG_LINE" ] || {
+  echo "no lists were read out of CS_WRAPPER_RE, or the diagnostic line was not found; the checks below prove nothing" >&2
+  exit 1
+}
+tok 'the anchor is built from the lists this suite expects' \
+    'CS_CONTROL_WORDS CS_SEPARATORS CS_WORD_SPELLING CS_WRAP_TOKEN CS_WRAP_WORDS' \
+    "$(printf '%s' "$ANCHOR_LISTS" | tr '\n' ' ' | sed 's/ $//')"
+ANCHOR_LISTS_UNNAMED=
+for anchor_list in $ANCHOR_LISTS; do
+  case "$DIAG_LINE" in
+    *"$anchor_list"*) : ;;
+    *) ANCHOR_LISTS_UNNAMED="$ANCHOR_LISTS_UNNAMED $anchor_list" ;;
+  esac
+done
+tok 'and the refusal names every one of them, so a list added there cannot go unnamed' \
+    '' "$ANCHOR_LISTS_UNNAMED"
 
 # no-git-push.sh: the measured #79 case. Intact, `ls` is ALLOW -- the #84 block
 # above pins that -- so the BLOCK here is the guard. The prefixed push is the
@@ -11422,7 +11480,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '62' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '65' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11485,7 +11543,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '60' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '63' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:

@@ -16,7 +16,7 @@
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # ABOUT TWO MINUTES A ROW: one check-hooks.sh run per mutation that applies,
-# plus the baseline -- sixty-two runs as the registry stands, not sixty-three,
+# plus the baseline -- sixty-five runs as the registry stands, not sixty-six,
 # because the row whose edit matches nothing never reaches one. Measured twice
 # on 2026-09-17, on this machine and on registries one row apart: 47 min 34 s
 # and 45 min 24 s, at twenty-three runs, which is 124 s and 118 s a run. A run
@@ -26,7 +26,7 @@
 # rewritten that way. The line said ABOUT AN HOUR, and an hour was the total at
 # twenty-three runs; every row added since made it wronger while the sentence
 # four lines down went on calling it "those rates carried to the current count".
-# At sixty-two runs the same rate is about two hours. The total is what goes
+# At sixty-five runs the same rate is about two and a quarter hours. The total is what goes
 # stale on every registry addition, and a check pinned the stale one in place --
 # review of PR #172 found this while that PR was editing the row count in this
 # very sentence and leaving the hour. So the rate is what is written and what
@@ -165,7 +165,17 @@
 # evidence that the pin and the guard are not the same check. Run with the three
 # rows above it on 2026-09-20 against the same head: baseline plus four, all
 # caught, byte-identical after.
-# No run has therefore exercised all sixty-two rows together, and saying which
+# The fourth round added three, and all three are about what the withdrawal
+# SAYS rather than whether it happens: `awk-status-read-as-two` collapses the
+# case back onto `||`, so a control-word list that will not compile is reported
+# as one that hangs the strip; `refusal-claims-every-consumer` restores the
+# claim that every consumer refuses, which is false for the two document hooks
+# that never call cs_split; `refusal-names-two-lists` puts back the enumeration
+# that named two of the five lists CS_WRAPPER_RE is built from. A message that
+# names the wrong cause is worse than the one it replaced, which is why these
+# are rules with rows and not prose. Run as one selection on 2026-09-20:
+# baseline plus three, all caught, byte-identical after.
+# No run has therefore exercised all sixty-five rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -336,6 +346,9 @@ backslash-in-separators%lib/command-scan.sh%/^CS_SEPARATORS=/s/)/)\\/%GH-134%cau
 backslash-in-control-words%lib/command-scan.sh%/^CS_CONTROL_WORDS=/s/|coproc/|copro\\tc/%GH-134%caught
 anchor-validity-not-checked%lib/command-scan.sh%/CS_LISTS_VALID=0/s/-le 1/-le 2/%GH-134.1%caught
 control-word-validity-not-checked%lib/command-scan.sh%s|if ($0 ~ ("^(" w ")$"))|if (0)|%GH-134.1%caught
+awk-status-read-as-two%lib/command-scan.sh%s/^  1) CS_LISTS_VALID=0$/  1|*) CS_LISTS_VALID=0/%GH-134.1%caught
+refusal-claims-every-consumer%lib/command-scan.sh%s/every consumer that requires it refuses/every consumer refuses/%GH-134.1%caught
+refusal-names-two-lists%lib/command-scan.sh%s/CS_SEPARATORS, CS_CONTROL_WORDS, CS_WORD_SPELLING, CS_WRAP_TOKEN or CS_WRAP_WORDS/CS_SEPARATORS or CS_WRAP_WORDS/%GH-134.1%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught
