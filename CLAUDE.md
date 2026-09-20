@@ -321,7 +321,7 @@ active dev branch — which the SessionStart report reads every session, as its
 `main ancestry` line, and argues beside that read.
 
 **Deliberately left open.** These stop mistakes, not adversaries: they read the
-text of a command, so a caller that means to evade them can. Six consequences
+text of a command, so a caller that means to evade them can. Seven consequences
 are accepted rather than fixed, and they are numbered because the count is the
 part that went stale last time.
 
@@ -424,6 +424,23 @@ part that went stale last time.
    of the three is: every occurrence measured was prose, an assignment, or a
    deliberate probe. `check-hooks.sh` pins all three as permitted, so the
    decision is a check and not only this paragraph.
+
+7. **Prose is refused when a separator and then a control word or a `)` stand
+   in front of a wrapper word**, on a line that also carries a guarded
+   command. Since #134 the anchor opens a command position after every
+   character `cs_split` cuts on and after every word it strips, and that class
+   is still quote-blind — consequence 2's loose question, one list wider. So
+   `gh pr comment 5 --body "if true; then bash -c y; fi is now refused"` is
+   refused, a comment describing the change that refuses it; so is
+   `grep -nE "(ba|z)sh -c" notes.md && gh pr view 5`, the grep a session
+   working on these hooks writes, though the same grep alone is untouched. It
+   costs refusals and never permissions, and each shape is a check.
+
+   Consequence 2 above still holds of a wrapper merely named in passing, with
+   nothing in front of it: `echo "run bash -c later" && gh pr view 5` sits in
+   no command position and is untouched. What changed is that a separator or a
+   `)` inside the quotes now makes one, and reading whether those quotes are
+   prose is the thing a raw-text rule cannot do.
 
 ## Agent skills
 
