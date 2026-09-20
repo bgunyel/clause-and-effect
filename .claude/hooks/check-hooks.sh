@@ -5401,6 +5401,15 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
   # report reads the repository it sits in; the #98 self-test's crashing
   # fixtures carry other names. Recorded after the run, and by name rather than
   # through `hook_path`, which never sees this one. See `ran`.
+  #
+  # THE NAME IS THE WHOLE TEST, and #187 owns what that costs. `ran` refuses an
+  # absolute path because a fixture copy is not the registered hook; this steps
+  # around that rule on the strength of an invariant -- every fixture carrying
+  # this name is a byte copy -- which is written here and enforced nowhere, while
+  # `nolib_path` and `halflib_path` build modified copies of other hooks a few
+  # hundred lines down. A modified copy keeping the name would make GH-109.4
+  # green for a hook no check ran, which is what the first review of PR #169 had
+  # this record rewritten to stop.
   [ "${script##*/}" = report-stale-branches.sh ] && ran report-stale-branches.sh "$rc"
   if [ "$rc" != 0 ]; then
     fail static '%s\n         a SessionStart report must exit=%s, got exit=%s\n         output |%s|' \
@@ -5422,6 +5431,15 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
 # The failure line names every hook that did not exit 0, each with its status and
 # its stderr in the spelling `verdict` uses, since the case it exists for is a
 # second hook refusing what the first permits and the name is the whole finding.
+# ON AN EMPTY LIST IT PASSES, which is #186. The loop body would not run,
+# `refused` would stay empty, and this would print `ok ALLOW by all` for a
+# command no hook had judged -- recording permit-direction coverage for six
+# requirements on nothing. The guard that answers it today is an external one
+# beside the derivation that reads settings.json, so it covers that producer and
+# not this consumer, and `drive_helper` and `every_hook_of` already set
+# `XH_HOOKS` from elsewhere. That is the first review of PR #169's finding at a
+# second call site, and the sixth's: the guard belongs in here, as a failing
+# verdict rather than an abort.
 every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every Bash hook
   local dir="$1" label="$2" cmd="$3" hook rc err refused=
   for hook in $XH_HOOKS; do
@@ -12597,6 +12615,10 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main; reaching it through gh api m
 # write lands on after a duplication is dataflow and not text, so it is refused
 # rather than counted: `dup_stderr` below fails on any fd other than 1 being
 # pointed at 2 in either hook, which is what a duplication has to write.
+# TWO SPELLINGS IT DOES NOT REACH, found by the sixth review of PR #169 and owned
+# by #185: `exec 3>/dev/stderr`, which names the destination instead of
+# duplicating a descriptor, and a two-digit fd, which the leading `[^0-9]` cannot
+# match into. Both are the permitting direction, and neither hook writes either.
 #
 # A HEREDOC BODY IS THE SECOND, and "one shape remains" stood here until the
 # third review of PR #169 counted them. This pipeline strips whole-line comments
@@ -12708,6 +12730,31 @@ tok 'arms counts a trailing comment, which is the false red this trade accepts' 
 # Only a `}` in column 1 closes a function, which is this file's convention and
 # the same one `STATUS_READERS` names its reliance on; a one-line definition is
 # read as one.
+#
+# A ONE-LINER IS A LINE THAT CLOSES ITS OWN BODY, not a line with a brace pair on
+# it, and the sixth review of PR #169 is why that distinction is spelled out. The
+# test was `/\{.*\}/`, which any brace pair satisfies -- including one inside the
+# trailing comment this repository writes on a definition. `no-pr-decisions.sh`
+# already has two such definitions, `gh_rule` and `release_is_read`; neither
+# comment happens to hold a brace, so the table was right and one `${X:-a}` away
+# from not being. A definition read as a one-liner has `fn` cleared at once, so
+# its body is never attributed and the function is derived as `silent`.
+#
+# WHAT THAT COSTS IS NOT A GREEN RUN, and the distinction is the point. Adding a
+# function moves the pinned table and its writes move the arm count, so the run
+# goes red -- measured, 19 to 20 and a fourth row in the table. What is wrong is
+# what the red run SHOWS: `speaks silent` for a function that writes. The person
+# reconciling the table to get back to green enters that row, blesses it, and
+# has then taken `fn_calls` out of the loop for a writer -- and that state is
+# green and stays green. So this misleads the reviewer rather than hiding from
+# them, which is a smaller thing than a false green and a different thing, and
+# the two are worth telling apart because this section has produced both.
+#
+# The test asks for `;` then `}` at the end of the line instead, which is what
+# bash requires of a body closed on its own line and what a comment does not
+# have. The `sed` above strips whole-line comments only, so a trailing one
+# reaches awk intact and this is the only thing standing between it and the
+# table. Fourth spelling of the class this whole section is about.
 fn_writes() {  # fn_writes <file> -- "<function> writes|silent" a line, sorted
   sed 's/^[[:space:]]*#.*$//' "$1" \
     | sed ':a;/\\$/{N;s/\\\n//;ba}' \
@@ -12715,7 +12762,7 @@ fn_writes() {  # fn_writes <file> -- "<function> writes|silent" a line, sorted
         /^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
           fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
           seen[fn] = 1
-          if ($0 ~ /\{.*\}/) { if ($0 ~ W) w[fn] = 1; fn = ""; next }
+          if ($0 ~ /;[[:space:]]*\}[[:space:]]*$/) { if ($0 ~ W) w[fn] = 1; fn = ""; next }
           next
         }
         /^\}/ { fn = ""; next }
@@ -12784,6 +12831,12 @@ speaks() { echo "refused" >&2; }
 silent() { return 0; }
 speaks x
 FN_EOF
+cat > "$FN_FIXTURES/comment-holds-braces.sh" <<'FN_EOF'
+speaks() {  # speaks <msg> -- expands ${X:-a}
+  echo "refused" >&2
+}
+speaks x
+FN_EOF
 cat > "$FN_FIXTURES/brace-next-line.sh" <<'FN_EOF'
 outer() {
   inner()
@@ -12828,6 +12881,8 @@ speaks writes' "$(fn_writes "$FN_FIXTURES/one-call.sh")"
 tok 'fn_writes reads a one-line definition as one, and closes it there' \
     'silent silent
 speaks writes' "$(fn_writes "$FN_FIXTURES/one-liner.sh")"
+tok 'fn_writes does not read a brace pair in a trailing comment as a closed body' \
+    'speaks writes' "$(fn_writes "$FN_FIXTURES/comment-holds-braces.sh")"
 tok 'fn_calls counts one call as one' '1' "$(fn_calls "$FN_FIXTURES/one-call.sh" speaks)"
 tok 'fn_calls counts two calls sharing a line as two, which counting lines did not' \
     '2' "$(fn_calls "$FN_FIXTURES/two-calls-one-line.sh" speaks)"

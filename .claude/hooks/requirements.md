@@ -2322,20 +2322,28 @@ and held to the same standard of saying only what it asks.
 - status: active
 - direction: refuse-only: a message is written only on a refusal
 - note: "as many refusal arms as the suite reads" is counted as redirections to
-  fd 2 on one logical line, continuations folded first, whatever writes through
-  them. What a line cannot say is how often a function holding one is called, so
-  the functions each hook defines and which of them write are pinned beside the
-  count, and the call count of each that does. Two shapes are left and named
-  where the count is: a trailing comment inflates it, a redirected group counts
-  once for several arms, and a heredoc body is read as code, which #182 owns.
+  fd 2, occurrences rather than lines, continuations folded first, whatever
+  writes through them; an arm is a line, so a literal written on two arms needs
+  a row per line and not per sentence. What no count of the text can say is how
+  often a function holding a write is called, so three things are pinned beside
+  it: the functions each hook defines and which of them write, the call count of
+  each that does, and that neither hook defines a function anywhere but column 1,
+  which those derivations rest on. What the count still cannot reach is listed
+  where the count is, and deliberately not counted here -- this note said "two
+  shapes" and then listed three, in the entry whose own subject is a count in
+  prose, in the file #148 is filed about. The list is the count: a trailing
+  comment inflates it, a redirected group counts once for several arms, a heredoc
+  body is read as code (#182), an indirect call hides the arms it holds (#181),
+  and a write through a duplicated descriptor escapes every derivation at once,
+  so that shape is refused rather than counted (#185).
   "Read whole" means every shared opening on every arm that carries it --
   `$REFUSE` on sixteen arms, `$DECIDE` on seven, `$BASE` on seven -- which the
-  second review of PR #169 found true of one of the three. `$REFUSE` is also
-  read as an opening rather than as a fragment anywhere in the message, which is
-  what its rows claim and what the third review found them not asking.
-  These are arm counts, not row counts: the suite drives eight commands at
-  `$DECIDE`'s seven arms, because `gh pr close` and `gh pr reopen` reach the same
-  one, and this note said eight until that review counted the arms.
+  second review of PR #169 found true of one of the three, and the load guards
+  of neither until its fifth. `$REFUSE` is also read as an opening rather than
+  as a fragment anywhere in the message, which is what its rows claim and what
+  the third review found them not asking. These are arm counts, not row counts:
+  the suite drives eight commands at `$DECIDE`'s seven arms, because
+  `gh pr close` and `gh pr reopen` reach the same one.
 
 ### GH-109.3
 - text: `settings.json` registers exactly the seven Bash hooks under `Bash`, in a
@@ -2720,6 +2728,17 @@ it has no entry above (Q16).
 - #182: `arms` and `fn_writes` do not know where a heredoc body starts. Cited
   where the count names the shapes it cannot reach; one of the three is the
   permitting direction, which is why it is filed rather than only named
+- #185: `dup_stderr` does not reach `/dev/stderr` named on an `exec`, nor a
+  two-digit fd. Cited where that guard is, because a guard narrower than the
+  prose beside it reads as coverage -- the shape the fifth review of PR #169
+  found in `nested_defs` and the sixth found here
+- #186: `every_hook` passes on an empty hook list, and the guard answering it
+  sits at one of its producers rather than in the consumer. Cited in the helper.
+  It is the first review of PR #169's finding at a second call site
+- #187: `report_says` records the report by basename, so a modified fixture
+  keeping that name would satisfy GH-109.4 for a hook nothing ran. Cited where
+  the exception is taken. The invariant it rests on is written in a comment and
+  held by nothing
 - #179: the invariance families cannot seed a requirement whose subject is
   agreement across hooks, which is the reason GH-109.5 declares `variants:
   none`. Filed out of the second review of PR #169 so that the reason is a
