@@ -1699,6 +1699,34 @@ and held to the same standard of saying only what it asks.
   `word-brace` gap rows against its wrapped seeds are gone with it, and those
   variants are ordinary checks at the seeds' verdicts.
 
+### GH-134.1
+- text: A command-position list that is present but malformed withdraws `cs_split`,
+  as an empty one does: separators that do not compile into a bracket expression,
+  and control words that match the empty string.
+- from: #172's second review, of the fix for #134
+- kind: defect-permitting
+- status: active
+- direction: static: derived from the library's text and from whether loading it
+  defines `cs_split`, as GH-84.2 is. The verdicts a withdrawal buys are the
+  consumers' load guards, which GH-84.2 and GH-79.4 already carry, so this entry
+  would otherwise assert them a second time
+- note: the guard below `cs_split` reached emptiness only, and both lists fail
+  open when they are present and wrong. A collating element in `CS_SEPARATORS`
+  stops `CS_WRAPPER_RE` compiling, `grep -qE` exits 2, and every consumer's
+  `if grep -qE "$CS_WRAPPER_RE" && …` reads a 2 as "no wrapper": measured, a
+  wrapped `gh pr merge 5` went from BLOCK to ALLOW while the unwrapped command
+  still blocked. A trailing `|` in `CS_CONTROL_WORDS` -- the ordinary slip when
+  appending to a list #134 made the edit point for both halves -- makes the
+  alternation match the empty string, and `cs_split`'s strip advances by what it
+  matched, so it does not advance and does not return: measured, killed at 8 s
+  against exit 0 intact, and a hook the harness kills for time has permitted.
+  Each list is asked by the engine that will ask it, grep for the anchor and awk
+  for the control words, rather than by a pattern written here, for the reason
+  `lib/command-scan.sh` exists. What it does not reach is named rather than
+  implied: a `-` makes a valid range, so the class compiles and means something
+  else, and that is caught by the membership pins under GH-134 instead. Cost
+  measured at 2.6 ms to source the library before and 5.6 ms after.
+
 ### GH-135
 - text: A quoted group or subcommand word is the word it spells: `git "push" --all
   origin`, `git "commit" -m x` on main, `gh "pr" merge 5`, `gh pr "merge" 5`,
@@ -2646,6 +2674,14 @@ it has no entry above (Q16).
 - #150: the pull request for #108; Bertan's review of it is cited where each of
   the five things it corrected stands, the largest being a fixture guard that made
   the suite abort on any machine without `gh` installed
+- #172: the pull request for #134; its two reviews are cited where each thing
+  they corrected stands. The first added GH-167 and GH-175 as gaps and the
+  separator membership pins; the second found three guards that did not guard --
+  a backslash pin spelled with two backslashes and so unable to fire, a
+  malformed list that fails open, and a control-word list with no validity check
+  at all -- which is GH-134.1 and the corrected pin under GH-134. It has no
+  entry of its own, for the reason #142 has none: a count of what a review
+  corrected is the kind of number this file has already had to fix once
 - #144: the permitting gap #108 found and did not fix — a pull request based on a
   dev branch that is not the active one. It has no entry above on purpose: the
   requirement that would carry it is the fix, and GH-108.5 pins the verdict as it

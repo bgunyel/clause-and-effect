@@ -1824,28 +1824,6 @@ check no-pr-decisions.sh BLOCK 'brace group + wrapped merge' '{ bash -c "gh pr m
 # the anchor's class stopped at `(`.
 check no-pr-decisions.sh BLOCK 'case arm + wrapped merge'    'case x in x) bash -c "gh pr merge 5";; esac'
 check no-pr-decisions.sh BLOCK 'a NAME() function body + wrapped merge' 'f() { bash -c "gh pr merge 5"; }'
-# The OTHER spelling of the same construct, which neither half reaches, pinned
-# at the verdict it has rather than the one it should have. `function` is in
-# CS_CONTROL_WORDS and is stripped, but the function's NAME stands after it and
-# breaks the run of admitted prefixes before a wrapper word, so the body is at a
-# command position for nobody. Both halves agree here and are both wrong, which
-# is what makes #167 a sibling of #134 and not an instance of it. The label
-# above said "function body" and reached one spelling of two, so a reader took
-# the construct for covered -- the drift this suite exists to catch. These go
-# red when #167 is fixed, which is how the entry gets found.
-req GH-167
-check no-pr-decisions.sh ALLOW 'a function NAME body, unwrapped, is reached by nobody' \
-      'function f { gh pr merge 5; }'
-check no-pr-decisions.sh ALLOW 'nor is a wrapped one' \
-      'function f { bash -c "gh pr merge 5"; }'
-# Dropping `function` from CS_CONTROL_WORDS is the repair that suggests itself
-# and is the wrong one: the word earns its place in cs_split, which does strip
-# it, and a strip lost to buy the anchor nothing is a worse trade than the gap.
-# What it is pinned with is a line where the strip is the only thing between the
-# guarded command and ^.
-req GH-167 FR-3
-check no-pr-decisions.sh BLOCK 'and the strip the word does earn is still made' \
-      'function gh pr merge 5'
 req GH-134 FR-4 GH-43.3
 check_in "$ON_MAIN" no-commit-to-main.sh BLOCK 'then + wrapped commit on main' \
          'if true; then bash -c "git commit -m x"; fi'
@@ -1891,6 +1869,40 @@ check no-pr-decisions.sh ALLOW 'the same grep alone' \
 # and the line carries `pr`.
 check no-pr-decisions.sh BLOCK 'a PR comment quoting the fixed shape (was ALLOW)' \
       'gh pr comment 5 --body "if true; then bash -c y; fi is now refused"'
+
+section "=== issue #167: the function keyword, which neither half reaches ==="
+# Lifted out of the #134 section above, where it was first written and did not
+# belong: that section's header says every BLOCK under it was ALLOW at
+# origin/dev-05 33f7129 bar the two labelled `the control:`, and the strip check
+# at the foot of this one is a BLOCK there too. Found by review of PR #172,
+# which is the second time that header has been read against its own rows and
+# the second time it was wrong. Nothing here is #134's doing, in either
+# direction, so it is a section and not an exception clause.
+# The OTHER spelling of the same construct, which neither half reaches, pinned
+# at the verdict it has rather than the one it should have. `function` is in
+# CS_CONTROL_WORDS and is stripped, but the function's NAME stands after it and
+# breaks the run of admitted prefixes before a wrapper word, so the body is at a
+# command position for nobody. Both halves agree here and are both wrong, which
+# is what makes #167 a sibling of #134 and not an instance of it. The check in
+# the section above was labelled "function body + wrapped merge" and reached one
+# spelling of two, so a reader took the construct for covered -- the drift this
+# suite exists to catch; it names its spelling now, and so does the one at the
+# stale-branch consumer, which review of PR #172 found still carrying the label
+# this had just retired. These go red when #167 is fixed, which is how the entry
+# gets found.
+req GH-167
+check no-pr-decisions.sh ALLOW 'a function NAME body, unwrapped, is reached by nobody' \
+      'function f { gh pr merge 5; }'
+check no-pr-decisions.sh ALLOW 'nor is a wrapped one' \
+      'function f { bash -c "gh pr merge 5"; }'
+# Dropping `function` from CS_CONTROL_WORDS is the repair that suggests itself
+# and is the wrong one: the word earns its place in cs_split, which does strip
+# it, and a strip lost to buy the anchor nothing is a worse trade than the gap.
+# What it is pinned with is a line where the strip is the only thing between the
+# guarded command and ^.
+req GH-167 FR-3
+check no-pr-decisions.sh BLOCK 'and the strip the word does earn is still made' \
+      'function gh pr merge 5'
 
 section "=== issue #134: the command-position lists are written once ==="
 # The point of the fix, asserted as a property of the file rather than inferred
@@ -1979,8 +1991,16 @@ tok 'nor a close bracket, which would end the class early' \
     'no' "$(inlist "$CS_SEPARATORS" ']')"
 tok 'nor a caret, which leads a negated class' \
     'no' "$(inlist "$CS_SEPARATORS" '^')"
+# Spelled with ONE backslash. `'\\'` inside single quotes is a needle of two,
+# which no one-backslash list can hold, so the check answered `no` whatever the
+# list said and could not fail -- verified against a seven-character list
+# carrying a backslash, still green. Found by review of PR #172, and it is the
+# character in this list that matters most: `awk -v` processes escapes in the
+# value it is handed, so a backslash is where cs_split's set and the anchor's
+# set can come apart while both still look right. Measured: `;&|()`\t` is eight
+# characters to the shell and seven to awk.
 tok 'nor a backslash' \
-    'no' "$(inlist "$CS_SEPARATORS" '\\')"
+    'no' "$(inlist "$CS_SEPARATORS" '\')"
 tok 'nor an open bracket, which is the half of a collating element that makes grep exit 2' \
     'no' "$(inlist "$CS_SEPARATORS" '[')"
 
@@ -4583,8 +4603,14 @@ check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'then + a wrapped commit' \
   "if true; then sh -c 'git commit -m \"wip\"'; fi"
 check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'brace group + a wrapped cherry-pick' \
   "{ bash -c 'git cherry-pick 1234abc'; }"
-check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'function body + a wrapped merge' \
+check_in "$WT_GONE" no-work-on-stale-branch.sh BLOCK 'a NAME() function body + a wrapped merge' \
   "f() { eval 'git merge other-branch'; }"
+# And the spelling that reaches neither half, here too. #167 was pinned in one
+# consumer of four, which is the shape #84 was filed against; the label above
+# said "function body" and this is the other half of what that names.
+req GH-167
+check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'a function NAME body is reached by nobody here either' \
+  "function f { git merge other-branch; }"
 check_in "$WT_GONE" no-work-on-stale-branch.sh ALLOW 'the control: a read after then' \
   'if true; then git log --oneline -5; fi'
 
@@ -8375,6 +8401,50 @@ tok 'a library with the control words empty withdraws cs_split' \
     'absent' "$(cs_split_after_loading "$FIXTURES/emptylist-control-words.sh")"
 tok 'and one with the separators empty' \
     'absent' "$(cs_split_after_loading "$FIXTURES/emptylist-separators.sh")"
+# AND MALFORMED RATHER THAN EMPTY, which is the half the four above do not
+# reach and the half that fails open. Review of PR #172. A list that is present
+# but does not build a working expression leaves cs_split loaded, and each of
+# the two fails differently:
+#
+#   a collating element in the separators -- `[.` or `[=` -- stops the anchor
+#   compiling, so `grep -qE` exits 2 and every consumer's `if grep -qE ... &&`
+#   reads that as "no wrapper" and permits. Measured before the guard: a wrapped
+#   `gh pr merge 5` went BLOCK to ALLOW while the unwrapped one still blocked.
+#
+#   a trailing `|` in the control words makes the alternation match the empty
+#   string, and cs_split's strip advances by what it matched, so it never
+#   advances and never returns. Measured before the guard: `printf 'a\n\nb\n'
+#   | cs_split` was killed at 8 s, against exit 0 intact. A hook the harness
+#   kills for time has permitted.
+#
+# The withdrawal is asked for here and the verdict it buys is asked for below,
+# at the consumers, because a withdrawn cs_split is only worth anything if the
+# load guards act on it.
+req GH-134.1
+sed -E "s/^CS_SEPARATORS=.*/CS_SEPARATORS=';\&|()\`[.'/" "$HOOKS/lib/command-scan.sh" \
+  > "$FIXTURES/badlist-separators-collating.sh"
+sed -E "s/^CS_CONTROL_WORDS='(.*)'$/CS_CONTROL_WORDS='\1|'/" "$HOOKS/lib/command-scan.sh" \
+  > "$FIXTURES/badlist-control-words-trailing-pipe.sh"
+tok 'a library whose separators do not compile withdraws cs_split' \
+    'absent' "$(cs_split_after_loading "$FIXTURES/badlist-separators-collating.sh")"
+tok 'and one whose control words match the empty string' \
+    'absent' "$(cs_split_after_loading "$FIXTURES/badlist-control-words-trailing-pipe.sh")"
+# The fixtures have to be the shapes they are named for, or the two checks above
+# pass by loading an ordinary library and prove nothing. Counted rather than
+# written: `written` is for text claims about files that $HOOKS moves, and these
+# are files this suite just generated.
+tok 'the collating fixture really holds a collating element' \
+    '1' "$(grep -c "CS_SEPARATORS=';&|()\`\[\.'" "$FIXTURES/badlist-separators-collating.sh")"
+tok 'and the trailing-pipe fixture really ends in one' \
+    '1' "$(grep -c "CS_CONTROL_WORDS='.*coproc|'" "$FIXTURES/badlist-control-words-trailing-pipe.sh")"
+# And what the guard deliberately does NOT catch, pinned so that it is a
+# decision and not a gap someone finds later: a dash makes a range, which is a
+# class that compiles and means something else. No compile test can see it, and
+# the membership pins in the #134 section are what do.
+sed -E "s/^CS_SEPARATORS=.*/CS_SEPARATORS=';\&|()-\`'/" "$HOOKS/lib/command-scan.sh" \
+  > "$FIXTURES/badlist-separators-dash.sh"
+tok 'a separator list that compiles and means something else is NOT withdrawn' \
+    'present' "$(cs_split_after_loading "$FIXTURES/badlist-separators-dash.sh")"
 
 # no-git-push.sh: the measured #79 case. Intact, `ls` is ALLOW -- the #84 block
 # above pins that -- so the BLOCK here is the guard. The prefixed push is the
@@ -8452,9 +8522,16 @@ armed 'the library withdraws cs_split when the word list is incomplete' \
       "$HOOKS/lib/command-scan.sh" 'unset -f cs_split'
 armed 'on either half, and not on the union' \
       "$HOOKS/lib/command-scan.sh" 'if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ] \'
+req GH-134.1
+armed 'and on the validity of the two command-position lists, not only their emptiness' \
+      "$HOOKS/lib/command-scan.sh" '|| [ "$CS_LISTS_VALID" -ne 1 ]; then'
+armed 'the anchor is compiled by the engine that will run it' \
+      "$HOOKS/lib/command-scan.sh" "| grep -qE \"\$CS_WRAPPER_RE\" 2>/dev/null"
+armed 'and the control words are matched by theirs' \
+      "$HOOKS/lib/command-scan.sh" "awk -v w=\"\$CS_CONTROL_WORDS\""
 req GH-134
 armed 'and on either of the command-position lists' \
-      "$HOOKS/lib/command-scan.sh" '|| [ -z "$CS_CONTROL_WORDS" ] || [ -z "$CS_SEPARATORS" ]; then'
+      "$HOOKS/lib/command-scan.sh" '|| [ -z "$CS_CONTROL_WORDS" ] || [ -z "$CS_SEPARATORS" ] \'
 req GH-79.4
 # And that no guard learned about the list instead. A word-list guard in a hook
 # is a second answer to a question the library now answers once, and it is the
@@ -11163,7 +11240,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '303' "${TEXT_CHECK_ARGS##*COUNT }"
+    '306' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -11214,8 +11291,12 @@ case " $RUN_BY_SETTINGS " in
     pass static 'settings.json does not register the mutation harness' ;;
 esac
 written 'the harness says how it is run' "$MUT" 'bash .claude/hooks/mutate-hooks.sh'
-written 'and roughly what it costs, which is why nothing runs it for you' \
-        "$MUT" 'ABOUT AN HOUR'
+# A RATE and not a total. The literal here was `ABOUT AN HOUR`, which was the
+# total at twenty-three rows and wrong at every count since -- and pinning it
+# held the stale figure in place, which is the shape this whole file is against.
+# A rate does not move when a row is registered. Review of PR #172.
+written 'and roughly what it costs a row, which is why nothing runs it for you' \
+        "$MUT" 'ABOUT TWO MINUTES A ROW'
 written 'and what its exit status means, the two self-tests included' \
         "$MUT" 'EXIT STATUS: non-zero when any row reports something other than'
 written 'the harness refuses to mutate the hooks directory it stands in' \
@@ -11303,7 +11384,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '58' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '61' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11366,7 +11447,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '56' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '59' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -12370,7 +12451,7 @@ GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-117.1:permit-only
 GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:refuse-only GH-134 GH-135:gap GH-136:gap GH-139 GH-167:gap GH-175:gap
+GH-131:gap GH-133:refuse-only GH-134 GH-134.1:static GH-135:gap GH-136:gap GH-139 GH-167:gap GH-175:gap
 GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
 GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static

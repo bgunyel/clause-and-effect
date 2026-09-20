@@ -15,17 +15,28 @@
 #       bash .claude/hooks/mutate-hooks.sh --list     the registry, and nothing run
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
-# ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- fifty-eight runs as the
-# registry stands, not fifty-nine, because the row whose edit matches nothing
-# never reaches one. Measured twice on 2026-09-17, on this machine and on
-# registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
-# The figure above is those rates carried to the current count and not a third
-# measurement; a run under load took nearer four minutes a row. That is why it
-# is a separate script and why check-hooks.sh does not call it (#107). Nothing
-# here is a PreToolUse hook and settings.json does not register it. Naming rows
-# costs the baseline plus one run each, so re-asking a single rule is about four
-# minutes rather than an hour.
+# ABOUT TWO MINUTES A ROW: one check-hooks.sh run per mutation that applies,
+# plus the baseline -- sixty-one runs as the registry stands, not sixty-two,
+# because the row whose edit matches nothing never reaches one. Measured twice
+# on 2026-09-17, on this machine and on registries one row apart: 47 min 34 s
+# and 45 min 24 s, at twenty-three runs, which is 124 s and 118 s a run. A run
+# under load took nearer four minutes a row.
+#
+# A RATE AND NOT A TOTAL, deliberately, and this is the second thing here to be
+# rewritten that way. The line said ABOUT AN HOUR, and an hour was the total at
+# twenty-three runs; every row added since made it wronger while the sentence
+# four lines down went on calling it "those rates carried to the current count".
+# At sixty-one runs the same rate is about two hours. The total is what goes
+# stale on every registry addition, and a check pinned the stale one in place --
+# review of PR #172 found this while that PR was editing the row count in this
+# very sentence and leaving the hour. So the rate is what is written and what
+# check-hooks.sh pins, and the multiplication is left to the reader, who has the
+# row count on the line above it.
+#
+# That cost is why it is a separate script and why check-hooks.sh does not call
+# it (#107). Nothing here is a PreToolUse hook and settings.json does not
+# register it. Naming rows costs the baseline plus one run each, so re-asking a
+# single rule is about four minutes rather than the whole registry.
 #
 # EXIT STATUS: non-zero when any row reports something other than the outcome it
 # declares. For every real mutation that means a survivor or an edit that did not
@@ -125,7 +136,21 @@
 # all of them in the direction that matters. Those two figures are of the
 # pre-merge tree and were not retaken against the merged one; what was retaken is
 # the verdict, which is what the registry records.
-# No run has therefore exercised all fifty-eight rows together, and saying which
+# That review's second round added three more, and they are the answer to a
+# question it asked of the first round's work: a check that cannot fail.
+# `backslash-in-separators` exists because the backslash pin was spelled with
+# two backslashes and could not fire against any one-backslash list, so the row
+# is what says the corrected spelling can. `anchor-validity-not-checked` and
+# `control-word-validity-not-checked` break the two halves of the load-time
+# validity guard GH-134.1 adds, one each, since a guard with no row is the same
+# untested claim one level down. All three were run as one selection on
+# 2026-09-20 against the merged tree: baseline plus three, all caught,
+# byte-identical after. `caught` is this harness's word for every requirement
+# the row names having a failing check, so the outcome is what says GH-134 went
+# red for the first and GH-134.1 for the other two; it was not read off a
+# separate column, and a row naming a requirement its edit cannot reach is the
+# one the registry keeps on purpose to show what that would look like.
+# No run has therefore exercised all sixty-one rows together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -292,6 +317,9 @@ control-words-not-admitted-by-anchor%lib/command-scan.sh%s/|(\$CS_CONTROL_WORDS)
 close-paren-not-a-separator%lib/command-scan.sh%/^CS_SEPARATORS=/s/)//%GH-134%caught
 dash-in-separators%lib/command-scan.sh%/^CS_SEPARATORS=/s/)/)-/%GH-134%caught
 bracket-opens-a-collating-element%lib/command-scan.sh%/^CS_SEPARATORS=/s/`/`[./%GH-134%caught
+backslash-in-separators%lib/command-scan.sh%/^CS_SEPARATORS=/s/)/)\\/%GH-134%caught
+anchor-validity-not-checked%lib/command-scan.sh%/CS_LISTS_VALID=0/s/-le 1/-le 2/%GH-134.1%caught
+control-word-validity-not-checked%lib/command-scan.sh%s|if ($0 ~ ("^(" w ")$"))|if (0)|%GH-134.1%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught

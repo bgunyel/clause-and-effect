@@ -1438,8 +1438,57 @@ cs_split() {
 # and does not advance, and a hook the harness kills for time is a hook that
 # permitted. With CS_SEPARATORS empty nothing is cut, so a second command on a
 # line is never at ^.
+#
+# AND VALID, WHICH IS NOT THE SAME AS NON-EMPTY, and is the half the four tests
+# above do not reach and the half that fails open. Both lists are interpolated
+# into a regular expression, so a list that is malformed rather than absent
+# builds an expression that does not work, and neither reader says so. Found by
+# review of PR #172, each measured end to end:
+#
+#   CS_SEPARATORS holding `[.` or `[=` opens a collating element, so the anchor
+#   does not compile and `grep -qE` exits 2. Every consumer's guard reads
+#   `if grep -qE "$CS_WRAPPER_RE" && ...`, and a 2 is not a 0, so the whole
+#   wrapper rule is skipped: a wrapped `gh pr merge 5` went from BLOCK to ALLOW
+#   in no-pr-decisions.sh while the unwrapped command still blocked. A silent
+#   and total fail-open.
+#
+#   CS_CONTROL_WORDS holding a trailing `|` -- the ordinary slip when appending
+#   a word to a list #134 made the edit point for both halves -- makes the
+#   alternation match the empty string. cs_split's strip advances past whatever
+#   it matched, so it matches nothing, advances nothing, and the loop does not
+#   end: `printf 'a\n\nb\n' | cs_split` never returned, against exit 0 intact.
+#   A hook the harness kills for time has permitted, which the paragraph above
+#   says in as many words and did not then test for.
+#
+# Each list is asked the question BY THE ENGINE THAT WILL ASK IT -- the anchor
+# compiled by grep, the control words matched by awk -- and a failure routes to
+# the same withdrawal an empty list gets. That is why this is two processes and
+# not one pattern of this file's own: what counts as a valid bracket expression
+# is grep's answer, and what the strip will match is awk's, and writing either
+# down here would be the second answer to a question a reader already answers,
+# which is the defect class this file exists to end. The empty line rather than
+# a survey of spellings for the same reason: matching the empty string IS the
+# property that hangs the strip, so a leading `|`, a `||` and an empty
+# alternative anywhere are caught by the same test as a trailing one.
+#
+# What it does NOT reach, named rather than implied: a list that compiles and
+# means something else. `-` between two characters is a valid range, so the
+# class still builds and this guard passes it; that one is caught in
+# check-hooks.sh, by asking the lists what they hold. Validity here, membership
+# there, and neither is the other.
+#
+# The cost, measured on this machine over 60 loads each: 2.6 ms to source the
+# library before, 5.6 ms after, so about 3 ms added to a hook invocation for two
+# process spawns. Paid once per hook run, against a rule whose failure is
+# silent and total.
+CS_LISTS_VALID=1
+printf '' | grep -qE "$CS_WRAPPER_RE" 2>/dev/null
+[ $? -le 1 ] || CS_LISTS_VALID=0
+printf '\n' | awk -v w="$CS_CONTROL_WORDS" \
+  '{ if ($0 ~ ("^(" w ")$")) exit 1 }' 2>/dev/null || CS_LISTS_VALID=0
 if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ] \
-   || [ -z "$CS_CONTROL_WORDS" ] || [ -z "$CS_SEPARATORS" ]; then
+   || [ -z "$CS_CONTROL_WORDS" ] || [ -z "$CS_SEPARATORS" ] \
+   || [ "$CS_LISTS_VALID" -ne 1 ]; then
   unset -f cs_split
 fi
 
