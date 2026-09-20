@@ -2410,6 +2410,54 @@ and held to the same standard of saying only what it asks.
   gap row reads the message: it asserts the sentence is still there and turns red
   when #164 removes it.
 
+### GH-177
+- text: `append-only-docs-edit.sh` permits exactly one edit to a history entry, and
+  refuses every other one as it did. The permitted edit is an `Edit` of a
+  `docs/dev-log/` entry whose `old_string` is the file's current first line and
+  occurs in the file exactly once, whose `new_string` is a single line, which parse
+  as `# <date> · <session> — <rest>` and are byte-identical in date and rest, and
+  whose new session segment agrees with the session the file is named for where the
+  old segment does not. Agreement collapses runs of spaces and hyphens on both
+  sides, so `session-5` agrees with `session 5` and contradicts `session 2`. A
+  `Write` of an existing entry carries no `old_string` and is refused; so is a body
+  edit, a rest or date that moves with the session, a new segment agreeing with
+  nothing, an `old_string` that is not the first line, a second line smuggled into
+  `new_string`, a heading that already agrees, and the same shape under
+  `docs/lessons-learned/` or `docs/eval-reports/`.
+- from: #177, deciding what ADR 0003 left open, and ADR 0003 as amended
+- kind: defect-refusing
+- status: active
+- variants: none: the hook reads a file path and two strings out of an Edit, not a
+  command, so there is no command spelling to vary
+- note: the heading's date segment is deliberately not required to equal the file
+  name's date. An entry may open `# 2026-09-17 21:53 · dev-issue-141 — …`, where
+  that segment carries a time the file name has no room for, and requiring equality
+  would refuse the correction on exactly those entries. What is required is that the
+  segment does not move, which is what holds the exception to one part of one line.
+  The checks drive a fixture root rather than this repository, for the reason the
+  section says: after this branch `docs/dev-log/` holds no entry whose heading
+  contradicts its name, which is the branch's point, so the permitting direction has
+  no subject here and the refusing cases it is bounded by have none either.
+- note: WHAT THE SECTION IS EVIDENCE ABOUT, MEASURED RATHER THAN ASSUMED. The
+  exception was hand-swept a clause at a time — each of the 16 conditions in
+  `heading_correction` removed on a copy, and every payload the section drives
+  re-judged against the result. Seven clauses have a payload that flips when they
+  are removed: the first-line test, the occurrence test, date-unchanged,
+  rest-unchanged, new-session-agrees, old-session-differs, and the exception as a
+  whole. The rest flip nothing, and the sweep says why rather than leaving it to be
+  discovered: removing the `docs/dev-log/` prefix, the `devlog_` prefix, the `.md`
+  suffix, either heading parse or the `old_string` read leaves some later clause
+  refusing the same payload, so they are defence in depth and not dead. The two
+  single-line tests are the one case where that is worth stating in the hook as
+  well, and it is stated there. TWO OF THOSE SEVEN ARE ONLY THERE BECAUSE THE SWEEP
+  RAN. The first version of this section had no payload that isolated the
+  first-line test — its `not-first-line` case named a heading the fixture did not
+  contain, so the occurrence test refused it first, and a heading-shaped line in an
+  entry's BODY was editable with that test deleted. The occurrence test had none
+  either, until a fixture was added whose entry quotes its own heading. Both are
+  the shape #84 is about, one level in: the check existed, was green, and asked a
+  narrower question than its own label.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that

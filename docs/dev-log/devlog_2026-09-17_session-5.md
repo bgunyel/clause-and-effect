@@ -1,4 +1,4 @@
-# 2026-09-17 · session 2 — #128: a continued heredoc opener hid the command after its terminator
+# 2026-09-17 · session 5 — #128: a continued heredoc opener hid the command after its terminator
 
 **Branch** `worktree-issue-128-heredoc-opener-continuation`, cut from
 `origin/dev-05` at `befcf8a` and proposed into `dev-05`. **Check suite 3657 →

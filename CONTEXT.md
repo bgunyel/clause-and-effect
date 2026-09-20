@@ -51,6 +51,18 @@ this effect rather than by the commands that could cause it: a history entry
 of which the merge base's copy is no longer a byte prefix has been rewritten,
 whichever tool did it. A pure append leaves that prefix intact, so it is not a
 rewrite.
+
+One part of one line of a history entry is the entry's *label* rather than its
+history, and may be corrected in place: the session segment of a `docs/dev-log/`
+entry's `# <date> · <session> — <rest>` heading, when it disagrees with the
+session the file is named for, changed only to agree with it. A label that
+contradicts its own file name states nothing a reader relies on — it misfiles
+the record. The date, the rest of the heading and every byte of the body remain
+history and are refused as before, and a correction to anything the entry *says*
+still goes in the newest entry. ADR 0003 decides this (#177) and
+`append-only-docs-edit.sh` computes it; the Bash half refuses the correction in
+every spelling, because a command's text cannot show what it would leave
+unchanged.
 _Avoid_: frozen entry, published entry, old entry
 
 **Probe**:

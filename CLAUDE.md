@@ -223,6 +223,16 @@ the line between `docs/design/` and `docs/research/`):
 *should* become, not evidence about what exists. Append-only means old entries
 are history — corrections go in the newest entry, never backwards.
 
+One exception, and it is one part of one line. The session segment of a
+`docs/dev-log/` entry's `# <date> · <session> — <rest>` heading may be corrected
+in place when it contradicts the session the file is named for, because a label
+that disagrees with its own file name misfiles the record rather than recording
+anything. ADR 0003 decides it (#177), `CONTEXT.md`'s *history entry* carries the
+term, and `append-only-docs-edit.sh` computes it — so the narrowness is checked
+rather than remembered. Nothing else about an existing entry moves, a `Write` of
+one included, and `append-only-docs.sh` refuses the correction in every Bash
+spelling, because a command's text cannot show what it would leave unchanged.
+
 `ls docs/` returns seven directories, not six. `docs/agents/` is the seventh and
 is deliberately not in the table: it holds agent configuration — the issue
 tracker's conventions, the triage label mapping, the domain glossary — rather
