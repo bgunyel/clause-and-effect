@@ -7934,6 +7934,16 @@ says "$PUSH_WT" "$(nolib_path no-git-push.sh)" 'no-git-push.sh could not load' \
   'the refusal names this hook and not one of its three siblings' 'ls'
 says "$PUSH_WT" "$(nolib_path no-git-push.sh)" 'Refusing rather than permitting' \
   'and says that it is refusing rather than permitting' 'ls'
+# THE WHOLE SENTENCE, because the two rows above read its two ends and nothing
+# read between them: the clause naming what the hook cannot tell could go with
+# both of them green. This arm is inside #109's count of nineteen, so GH-109.2's
+# "every refusal arm, read whole" covered it and nothing did -- measured by the
+# fifth review of PR #169.
+req US-7 GH-84.1 GH-109.2
+says "$PUSH_WT" "$(nolib_path no-git-push.sh)" \
+  'Blocked: no-git-push.sh could not load lib/command-scan.sh, so it cannot tell whether this command pushes, or where to. Refusing rather than permitting.' \
+  'the push load guard, read whole' 'ls'
+req GH-84.1
 
 echo "--- no-pr-decisions.sh, which had no guard at all ---"
 # This file's function set is what makes one shared required list wrong: cs_gh_args
@@ -7966,6 +7976,12 @@ check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_join)" BLOCK 'a library
   'ls'
 check_in "$ON_DEV" "$(halflib_path no-pr-decisions.sh cs_within_cap)" BLOCK 'a library missing only cs_within_cap' \
   'ls'
+# The same, for the same reason: this arm is inside the count of eighteen.
+req US-7 GH-84.1 GH-109.2
+says "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" \
+  'Blocked: no-pr-decisions.sh could not load lib/command-scan.sh, so it cannot tell whether this command decides a pull request or a release. Refusing rather than permitting.' \
+  'the decision load guard, read whole' 'ls'
+req GH-84.1
 says "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" 'no-pr-decisions.sh could not load' \
   'the refusal names this hook and not one of its three siblings' 'ls'
 says "$ON_DEV" "$(nolib_path no-pr-decisions.sh)" 'Refusing rather than permitting' \
@@ -11103,7 +11119,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_DIR/check-hooks.sh")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '291' "${TEXT_CHECK_ARGS##*COUNT }"
+    '292' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -11161,6 +11177,15 @@ written 'the harness says how it is run' "$MUT" 'bash .claude/hooks/mutate-hooks
 # heading rests on is a rate, so the rate is what is pinned.
 written 'and roughly what it costs, which is why nothing runs it for you' \
         "$MUT" 'TWO MINUTES A ROW'
+# AND CLAUDE.md SAYS THE SAME, which nothing held until the fifth review of
+# PR #169 asked. The figure lives in two files; the pin above held one of them,
+# and requirements.md's #148 entry asserted that "CLAUDE.md's copy of the figure
+# moves with it" with nothing enforcing it. Two copies of a number, one pinned,
+# and a sentence claiming they move together is the shape #148 is about, arriving
+# in the change that took one instance of it out. Lower case, because CLAUDE.md
+# writes it as prose rather than as a heading.
+written 'and CLAUDE.md says the same cost, so the two copies cannot drift' \
+        "$CLAUDE_MD" 'Two minutes a row'
 written 'and what its exit status means, the two self-tests included' \
         "$MUT" 'EXIT STATUS: non-zero when any row reports something other than'
 written 'the harness refuses to mutate the hooks directory it stands in' \
@@ -11248,7 +11273,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '64' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '67' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11311,7 +11336,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '62' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '65' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -12419,8 +12444,16 @@ says "$ON_DEV" no-pr-decisions.sh "Setting a pull request's state through gh api
   'a state write says it closes or reopens' 'gh api -X PATCH repos/o/r/pulls/5 -f state=closed'
 says "$ON_DEV" no-pr-decisions.sh 'Reaching the same decision through a graphql mutation is the same decision by another name.' \
   'a decision mutation says it is the same decision' 'gh api graphql -f query="mutation { mergePullRequest(input:{x:1}) }"'
-# The API arm of the missing base, whose sentence #105 read only for gh pr
-# create and only as far as its first clause.
+# The missing base, whose sentence #105 read only as far as its first clause --
+# and which lives on two lines of the hook, one reached by `gh pr create` and one
+# by `gh api`. The fifth review of PR #169 measured the difference: the two rows
+# below drove `gh api` only, so deleting the sentence from the `gh pr create` arm
+# alone left the suite green. That is the prefix shape this section exists to
+# stop, inside the section that stops it, because the literal is duplicated and
+# the rows reached one copy of it. One row an ARM, and an arm is a line rather
+# than a sentence.
+says "$ON_DEV" no-pr-decisions.sh "No base is named here, so this would go to the repository's default branch." \
+  'a gh pr create naming no base says where it would go' 'gh pr create --title x --body y'
 says "$ON_DEV" no-pr-decisions.sh "No base is named here, so this would go to the repository's default branch." \
   'a REST create naming no base says where it would go' 'gh api -X POST repos/o/r/pulls -f head=x -f title=t'
 says "$ON_DEV" no-pr-decisions.sh "No base is named here, so this would go to the repository's default branch." \
@@ -12556,6 +12589,15 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main; reaching it through gh api m
 # written, and it is named because the count is evidence about the shapes it
 # names and about nothing else.
 #
+# A DUPLICATED DESCRIPTOR is the shape the fifth review of PR #169 added to that
+# list, and it is the permitting direction: `exec 3>&2` once, then every arm
+# writing `>&3`. The count reads the `exec` line and none of the writes, and
+# `fn_writes` calls the function holding them silent, so the call count is never
+# consulted either -- two arms, count one, both derivations quiet. Which fd a
+# write lands on after a duplication is dataflow and not text, so it is refused
+# rather than counted: `dup_stderr` below fails on any fd other than 1 being
+# pointed at 2 in either hook, which is what a duplication has to write.
+#
 # A HEREDOC BODY IS THE SECOND, and "one shape remains" stood here until the
 # third review of PR #169 counted them. This pipeline strips whole-line comments
 # and folds continuations; it does not know where a heredoc body begins. Both
@@ -12642,12 +12684,20 @@ tok 'arms counts a trailing comment, which is the false red this trade accepts' 
     '1' "$(arms "$ARMS_FIXTURES/trailing-comment.sh")"
 
 # THE ONE SHAPE COUNTING CANNOT REACH, closed here instead. A line stands for an
-# arm only while every write to stderr is at its own site. A function that writes
-# one and is called twice is two arms and one line, and no pattern over the text
-# of that line can say otherwise. `no-git-push.sh` has such a function already --
-# `check_push`, which carries ten of its nineteen writes -- so this is a live
-# assumption and not a hypothetical one, and it holds because that function is
-# called exactly once.
+# arm only while every write to stderr is written out once. A function that
+# writes one and is CALLED FROM TWO PLACES is two arms and one line, and no
+# pattern over the text of that line can say otherwise. `no-git-push.sh` has such
+# a function already -- `check_push`, which carries ten of its nineteen writes --
+# so this is a live assumption and not a hypothetical one, and it holds because
+# that function is written out at one call site.
+#
+# CALL SITES, NOT EXECUTIONS, and the fifth review of PR #169 corrected this
+# where it stood. `check_push` runs once per command fragment: its one call site
+# is inside `while IFS= read -r CMD ... done <<CMDLIST`, so a command of four
+# fragments runs it four times. That is the right answer for counting arms -- an
+# arm is a place a refusal is written, not a time one is reached, and a loop adds
+# no sentence to the file -- but the sentence that said "called exactly once"
+# taught the opposite rule in the one comment written to teach it.
 #
 # Both halves are pinned: which functions each hook defines and which of them
 # write, so a new helper moves a literal and is declared rather than absorbed;
@@ -12673,10 +12723,16 @@ fn_writes() {  # fn_writes <file> -- "<function> writes|silent" a line, sorted
         END { for (f in seen) print f, (f in w ? "writes" : "silent") }' \
     | LC_ALL=C sort
 }
-# Occurrences, not lines. `grep -c` counts matching lines, so `check_push a;
-# check_push b` on one line would read as one call and ten writes would become
-# twenty arms with both rows green -- the hole the third review of PR #169 found
-# one level below the one the second closed. `grep -o` counts each occurrence.
+# Occurrences, not lines, and tokens rather than matches. `grep -c` counted
+# matching lines, so `check_push a; check_push b` read as one call and ten writes
+# would have become twenty arms with both rows green -- the hole the third review
+# of PR #169 found one level below the one the second closed. `grep -o` then
+# counted each occurrence, and the fifth review found it counting `speaks;speaks`
+# as one, because a match takes the separator with it and the next match has none
+# left to start on. Splitting on everything that cannot be in a name counts each
+# name wherever it stands. `$` and `-` stay in the token so that `$speaks` is a
+# variable and `speaks-x` is another word, neither of them a call, which is what
+# the pattern said before.
 #
 # WHAT IT STILL CANNOT SEE, named because this number is what the arm count rests
 # on: an indirect call. Move the call into another function that is itself called
@@ -12688,8 +12744,8 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
   sed 's/^[[:space:]]*#.*$//' "$1" \
     | sed ':a;/\\$/{N;s/\\\n//;ba}' \
     | grep -vE "^(function[[:space:]]+)?$2[[:space:]]*\(\)" \
-    | grep -oE "(^|[^A-Za-z0-9_\$])$2([^A-Za-z0-9_-]|\$)" \
-    | wc -l | tr -d ' '
+    | tr -c 'A-Za-z0-9_$-' '\n' \
+    | grep -cxF -- "$2"
 }
 # DRIVEN, NOT ONLY ASSERTED, which is the rule the fixtures above are built on
 # and the fourth review of PR #169 found these two helpers exempted from. Both
@@ -12728,6 +12784,29 @@ speaks() { echo "refused" >&2; }
 silent() { return 0; }
 speaks x
 FN_EOF
+cat > "$FN_FIXTURES/brace-next-line.sh" <<'FN_EOF'
+outer() {
+  inner()
+  { echo "refused" >&2; }
+  inner a
+  inner b
+}
+outer
+FN_EOF
+cat > "$FN_FIXTURES/dup-stderr.sh" <<'FN_EOF'
+exec 3>&2
+speaks() {
+  echo "refused" >&3
+  echo "refused again" >&3
+}
+speaks
+FN_EOF
+cat > "$FN_FIXTURES/two-calls-one-separator.sh" <<'FN_EOF'
+speaks() {
+  echo "refused" >&2
+}
+speaks;speaks
+FN_EOF
 cat > "$FN_FIXTURES/awk-function.sh" <<'FN_EOF'
 awk '
     function shut() { st = 0 }
@@ -12752,6 +12831,8 @@ speaks writes' "$(fn_writes "$FN_FIXTURES/one-liner.sh")"
 tok 'fn_calls counts one call as one' '1' "$(fn_calls "$FN_FIXTURES/one-call.sh" speaks)"
 tok 'fn_calls counts two calls sharing a line as two, which counting lines did not' \
     '2' "$(fn_calls "$FN_FIXTURES/two-calls-one-line.sh" speaks)"
+tok 'fn_calls counts two calls sharing one separator as two, which matching did not' \
+    '2' "$(fn_calls "$FN_FIXTURES/two-calls-one-separator.sh" speaks)"
 # The nested case, asserted as what it does rather than as what one would want.
 tok 'fn_writes does not see a function defined inside another, and says so here' \
     'outer writes' "$(fn_writes "$FN_FIXTURES/nested.sh")"
@@ -12775,9 +12856,17 @@ tok 'and the arm count reads its three writes as one call site' \
 # the shape an author reaches for is the one without the keyword. Written down
 # rather than found later: the guard below is evidence about the parenthesis
 # form and about nothing else.
+# THE BRACE IS NOT ASKED FOR EITHER, and the fifth review of PR #169 is why.
+# This required `{` on the definition's own line, so `inner()` with its brace on
+# the next one read as clean -- `fn_writes` never entered it, its writes went to
+# the function around it, and the arm count read one for a body called twice.
+# That is round four's finding one level out: the guard written to close an
+# anchor assumption carried its own. `fn_writes` does not require the brace
+# either, so asking for it here was the guard being narrower than the thing it
+# guards.
 nested_defs() {  # nested_defs <file> -- shell function definitions that are not in column 1
   sed 's/^[[:space:]]*#.*$//' "$1" \
-    | grep -nE '^[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)[[:space:]]*\{' \
+    | grep -nE '^[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)[[:space:]]*(\{|$)' \
     | tr '\n' ' ' | sed 's/ $//'
 }
 tok 'no-git-push.sh defines every function in column 1, which fn_writes depends on' \
@@ -12788,6 +12877,24 @@ tok 'and the guard can see one, asked of a file that has one' \
     '2:  inner() { echo "refused" >&2; }' "$(nested_defs "$FN_FIXTURES/nested.sh")"
 tok 'and it does not see awk spelling its own, which is what the hooks embed' \
     '' "$(nested_defs "$FN_FIXTURES/awk-function.sh")"
+tok 'and it sees one whose brace is on the next line, which requiring the brace did not' \
+    '2:  inner()' "$(nested_defs "$FN_FIXTURES/brace-next-line.sh")"
+# The duplicated descriptor: neither derivation can see through it, so it is
+# refused in both hooks rather than counted. Asserted as what each one does, and
+# then as the absence of the shape in the files the counts are taken from.
+dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplication writes
+  sed 's/^[[:space:]]*#.*$//' "$1" \
+    | grep -nE '(^|[^0-9])[03-9]>&[[:space:]]*2' \
+    | tr '\n' ' ' | sed 's/ $//'
+}
+tok 'arms reads one for two arms written through a duplicated descriptor' \
+    '1' "$(arms "$FN_FIXTURES/dup-stderr.sh")"
+tok 'and fn_writes calls the function holding them silent, so the call count is never asked' \
+    'speaks silent' "$(fn_writes "$FN_FIXTURES/dup-stderr.sh")"
+tok 'so dup_stderr refuses the shape, and can see one' \
+    '1:exec 3>&2' "$(dup_stderr "$FN_FIXTURES/dup-stderr.sh")"
+tok 'no-git-push.sh points no other fd at 2' '' "$(dup_stderr "$HOOKS/no-git-push.sh")"
+tok 'no-pr-decisions.sh points no other fd at 2' '' "$(dup_stderr "$HOOKS/no-pr-decisions.sh")"
 
 req GH-109.2
 tok 'no-git-push.sh defines these functions, and this is which of them writes a refusal' \
@@ -12806,7 +12913,7 @@ is_dev_base silent
 quoted_base_flag silent
 release_is_read silent
 rest_bases silent' "$(fn_writes "$HOOKS/no-pr-decisions.sh")"
-tok 'check_push is called once, so each write inside it is one arm and one line' \
+tok 'check_push has one call site, so each write inside it is one arm and one line' \
     '1' "$(fn_calls "$HOOKS/no-git-push.sh" check_push)"
 
 tok 'no-git-push.sh refuses in as many places as this suite reads' '19' \
