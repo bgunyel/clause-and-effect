@@ -2310,11 +2310,14 @@ and held to the same standard of saying only what it asks.
   requirement IDs they name, the self-tests, how many requirements this file
   holds active, how many runs of `check-hooks.sh` a whole-registry pass costs —
   the baseline plus one per row whose edit applies and that pass one does not
-  refuse, which is not one per row — and about how long that pass takes, the
-  dated rate in the harness multiplied by that run count. Where one of those
-  numbers is ALSO written as a literal in `check-hooks.sh` it is a check, and
-  goes red when a row is added. Where it would be written in a comment it is not
-  written at all.
+  refuse, which is not one per row and which `--list` can over-report, because
+  it reads the table and does not apply an edit — and about how long that pass
+  takes, the dated rate in the harness multiplied by that run count. Where one
+  of those numbers is ALSO written as a literal in `check-hooks.sh` it is a
+  check, and goes red when a row is added; the registry's size, its three
+  outcome totals and its self-test total are the four of those. Where a number
+  would be written in a comment it is not written at all, and no runtime
+  magnitude is written anywhere but `--list`.
 - from: #148
 - kind: doc-claim
 - status: active
@@ -2378,7 +2381,20 @@ and held to the same standard of saying only what it asks.
   nobody runs it, and the product itself against its own multiplication. The
   rate is read out of the harness rather than restated here because it is a
   MEASUREMENT and this file has taken none; what is checked is the arithmetic
-  and that it still moves. No row of the registry can reach
+  and that it still moves.
+
+  AND THE RATE IS THE HALF #148 DID NOT FIX, which the first version of this
+  entry obscured by saying the figure "needs no maintenance". The run COUNT
+  needs none, because it is derived. The rate is a property of the machine and
+  of how big the suite has grown, nothing here derives it, and it goes stale on
+  its own: 124 s, taken 2026-09-17, was out by more than a factor of two three
+  days later, and no check could say so. Bertan's review of PR #183 found that
+  by timing the suite; re-measuring it the way the harness pays for a run — a
+  copied tree, under the override, in `--matrix` mode — gave 275/235/205 s, so
+  the gap is larger by the harness's own quantity than by direct runs. The rate
+  is dated now, it records the suite's size on that date, and a check goes red
+  once the suite has grown a quarter past it. What that cannot see is the
+  machine changing under a suite that stayed the same size, and it says so. No row of the registry can reach
   any of this: the rule is code in `mutate-hooks.sh`, which is `$TOOLING`, and
   what that code reads is `requirements.md` beside the harness rather than a
   file an override moves — so GH-141's exception does not apply and this is

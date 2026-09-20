@@ -186,3 +186,72 @@ Reverting `mutate-hooks.sh` to `origin/dev-05` turns all ten new checks red;
 restoring it turns them green. `mutate-hooks.sh -v` on both self-tests reports
 what they declare through the refactored pass one, `.claude/hooks/`
 byte-identical after.
+
+## Round three — the second review of PR #183
+
+Seven more findings. Four of the previous round's fixes verified as holding, and
+the counter-measurement on the self-test count was accepted and that finding
+withdrawn. **Check suite 5103 → 5106 results, all passing.**
+
+**The headline defect was the assistant's own, reintroduced.** Round two moved
+four absence pins off `$MUT` and onto the reflowed header, because `grep -F`
+cannot see a phrase that wraps between two comment lines. The *same commit* then
+added `unarmed … "$MUT" 'ABOUT AN HOUR'`, reading the raw file. Measured on a
+doctored copy with the wrap falling inside the phrase: the raw-file pin sees 0
+occurrences, the reflowed pin sees 1. It was the repaired defect, put back by the
+repair.
+
+The fix is the class rather than the instance. `$MUT_PROSE` is now built above
+`$MUT`'s first consumer, and every pin on the header's *prose* reads it — seven
+of them, including two that predate #148 and were wrap-blind all along. Pins on
+the harness's *code* keep reading `$MUT`, because code is below `set -u` and is
+not in the reflowed region. The rule is one sentence in the file now, which is
+what was missing when one pin could be added on the wrong side of it.
+
+**The runtime, which is the half #148 did not fix.** Bertan timed two direct
+suite runs at 196–231 s against the 124 s the branch published, and pointed out
+that "staleness is no longer possible" was false of the rate. The assistant
+re-measured the quantity the harness actually pays — a run against a copied tree,
+under `CHECK_HOOKS_DIR`, in `--matrix` mode — and got **275 s, 235 s, 205 s**.
+That is worse than his figure, so his stated caveat about method resolves against
+the old number rather than for it. There was no case to push back on.
+
+So the rate is now a directly measured per-run figure, dated, carrying the size
+of the suite it was taken at; a check goes red once the suite has grown a quarter
+past that. What it cannot see — the machine changing under a suite that stayed
+the same size — is written beside it. `--list` now says about 248 minutes, not
+112. The claims in `CLAUDE.md` and `GH-148`'s note are narrowed to match: the run
+*count* needs no maintenance because it is derived; the *rate* is a measurement
+and goes stale on its own.
+
+The other five:
+
+- **Five runtime magnitudes elsewhere in the tree**, all saying `95 s` while the
+  constant beside them said 124 s. Removed, and their absence is now pinned in
+  the reflowed header. (The review counted six; one of the three it cited in
+  `check-hooks.sh` is a `#95` issue citation rather than a figure.)
+- **`CLAUDE.md`'s "a third cannot be registered without two checks going red"
+  was false.** Relabelling an existing `caught` row's id to `selftest-*` leaves
+  the row total and all three outcome totals where they were. Measured: `--list`
+  reported `51 real mutations … 3 self-tests` with every pin green. The
+  self-test total is now pinned as a literal — the one place in this section
+  where a literal is the right instrument, because the real/self-test split is
+  exactly what a reviewer of a registry change should see move. Re-measured with
+  the pin in place: red, `want |2| got |3|`.
+- **The bracket guard's first marker could not fail.** `sed -n '1,/…/p'` always
+  starts at line 1, so a shebang is present whatever happens to the header — dead
+  weight dressed as half a guard. What can actually go wrong is the terminator,
+  so that is what is asked now, structurally. And the guard reports a failed
+  check instead of aborting the suite, with the pins it would have made vacuous
+  skipped rather than run green beside it.
+- **The run count can still be one too high**, for three pass-two cases `--list`
+  cannot see without copying the tree and applying the edit — including a row
+  declared `caught` whose anchor has rotted, which is the case the header claimed
+  to model. The claim is narrowed in both files rather than papered over.
+  Teaching `--list` to apply each edit would answer it properly and is its own
+  issue.
+- **A `2>/dev/null` on the new `ACTIVE` awk**, in the commit that fixed the same
+  mistake one file over. Removed.
+
+Findings 4, 5, 6 and 7 were offered as deferrable to a follow-up issue. All four
+were taken, because all four were in code this branch introduced.

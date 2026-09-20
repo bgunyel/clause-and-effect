@@ -20,8 +20,21 @@
 # per mutation that applies, plus the baseline. How many runs that is, and what
 # they cost in wall-clock at the row count of the day, are both on `--list`'s
 # summary and are written nowhere else (#148). The run count is not simply one
-# per row: a row whose edit matches nothing, or one pass one refuses, never
-# reaches a run.
+# per row: a row pass one refuses never reaches a run, and neither does one
+# declared `did-not-apply`.
+#
+# IT IS A PREDICTION FROM THE REGISTRY AS WRITTEN, and it can be one too many.
+# `--list` reads the table; it does not copy the tree or apply an edit, which is
+# what `the registry, and nothing run` means. So three things it cannot see
+# still cost a row its run in pass two: a target that is not writable in the
+# copy, a `sed` expression that fails, and -- the one this paragraph used to
+# claim it modelled -- an edit that applies to nothing. That last is read off
+# the DECLARED outcome here, so a row declared `caught` whose anchor a rename
+# has moved is predicted to run and reports `did-not-apply` without running.
+# The paragraph below on rows not exercised since the files under them changed
+# is the same fact from the other side, so this is not hypothetical. Bertan's
+# review of PR #183; making `--list` apply each edit to answer it properly is
+# its own change and its own issue.
 #
 # NO MAGNITUDE IS WRITTEN IN THIS HEADER, and the first version of #148's own
 # fix is why. It kept one, in capitals a few lines above here, classified it as
@@ -37,13 +50,22 @@
 # quoted anywhere in this file -- check-hooks.sh now pins its ABSENCE, and a
 # quotation would keep that pin green for the quotation's sake.
 #
-# THE MEASUREMENT IT WAS DERIVED FROM STAYS, dated and unchanged, and is now
-# carried into the estimate instead of being rounded into prose. Measured twice
-# on 2026-09-17, on this machine and on registries one row apart: 47 min 34 s
-# and 45 min 24 s, at twenty-three runs. A run under load took nearer four
-# minutes a row, so MEASURED_SECONDS below is the SLOWER of the two -- a budget
-# that is short is the one that costs somebody an afternoon. `--list` multiplies
-# that rate by the run count it derives; nothing here restates the product.
+# WHAT REPLACED IT IS A RATE, not a magnitude: how long ONE run of the suite
+# takes, carried by MEASURED_SECONDS_PER_RUN below with the date it was taken
+# and the size of the suite it was taken at. `--list` multiplies it by the run
+# count it derives; nothing here restates the product.
+#
+# THE RATE IS THE HALF #148 DID NOT FIX, and the header says so rather than
+# letting the next reader assume otherwise. The run COUNT is derived and needs
+# no maintenance. The rate is a measurement of this machine and of how big the
+# suite has grown, nothing here can derive it, and it goes stale on its own --
+# 124 s, taken 2026-09-17, was out by more than a factor of two three days
+# later. What can be said about it falsifiably is whether the suite has outgrown
+# the measurement, and check-hooks.sh asks exactly that and goes red.
+#
+# The 2026-09-17 readings are kept as the record they are: 47 min 34 s and
+# 45 min 24 s over twenty-three runs, on this machine, on registries one row
+# apart.
 #
 # check-hooks.sh does ask `--list` for the three figures its #148 checks compare
 # against derivations of their own. That runs no mutation and costs nothing.
@@ -195,7 +217,7 @@
 # full of caught mutations while establishing nothing whatever. That is its own
 # permitting direction, and the baseline is the check on it. The registry is
 # validated before the baseline is run, so a mistyped id or a malformed row costs
-# nothing rather than 95 s.
+# nothing rather than a run of the suite.
 #
 # WHAT A GREEN RUN HERE IS NOT EVIDENCE OF. The registry is a list someone wrote,
 # so this is evidence about the mutations it names and about nothing else -- the
@@ -284,18 +306,41 @@ SUITE="$SRC/check-hooks.sh"
 # neither can be a mutation target.
 TOOLING="check-hooks.sh mutate-hooks.sh"
 
-# THE MEASUREMENT, as two numbers rather than as a rounded magnitude in prose.
-# The header says where they come from: two whole-registry passes on 2026-09-17,
-# of which this is the slower, and the run count both were taken at. `--list`
-# divides one by the other and multiplies by the runs it derives, so the
-# wall-clock it prints follows the registry instead of standing still while the
-# registry grows. A rounded magnitude in the header could not do that, which is
-# why there is no longer one (#148, PR #183).
+# THE MEASUREMENT. `--list` multiplies this rate by the run count it derives, so
+# the wall-clock it prints follows the registry instead of standing still while
+# the registry grows. A rounded magnitude in the header could not do that, which
+# is why there is no longer one (#148, PR #183).
 #
-# Re-measuring means replacing BOTH of these together and saying so in the
-# header, because a rate is a ratio and half of one is not a measurement.
-MEASURED_SECONDS=2854   # 47 min 34 s
-MEASURED_RUNS=23
+# A RATE IS A MEASUREMENT AND NOT A DERIVATION, and that is the honest limit of
+# what #148 achieved. The run COUNT needs no maintenance, because it is read off
+# the registry. This does: it is a property of this machine and of how big the
+# suite has grown, nothing in this repository can derive it, and it goes stale
+# on its own. #148's first fix claimed "staleness is no longer possible" and was
+# wrong about exactly this half.
+#
+# So it is dated, it records the size of the suite it was taken at, and
+# check-hooks.sh goes red once the suite has grown well past that -- which is
+# the only falsifiable thing that can be said about a number nothing derives.
+# Re-measuring means replacing both of these together.
+#
+# MEASURED 2026-09-20, three consecutive runs of check-hooks.sh THE WAY THE
+# HARNESS PAYS FOR ONE -- against a copied tree, under CHECK_HOOKS_DIR, in
+# --matrix mode: 275 s, 235 s, 205 s. The slowest is the one carried, because a
+# budget that is short is the one that costs somebody an afternoon.
+#
+# It replaces 124 s, which was 47 min 34 s over twenty-three runs on 2026-09-17
+# and was wrong by more than a factor of two three days later, because the suite
+# had grown. Bertan's review of PR #183 caught that by timing two direct runs at
+# 196-231 s. He noted his method differed from the harness's; the figures above
+# ARE the harness's quantity and are worse than his, so the difference in method
+# resolves against the old number rather than for it.
+MEASURED_SECONDS_PER_RUN=275
+# The suite's size on that date, as the number of check results its OWN matrix
+# line reports -- which is a little under the total it prints, because the last
+# findings are appended after the record is copied for reading. That is the
+# quantity check-hooks.sh compares against, and the two have to be the same
+# quantity or the comparison drifts on a difference that means nothing.
+MEASURED_AT_RESULTS=5096
 
 # WHAT MAKES A ROW RUNNABLE, asked in one place because two callers need the
 # same answer and gave different ones. Pass one below refuses a row for five
@@ -521,7 +566,13 @@ if [ -n "$LIST" ]; then
     /^## / { id = ""; part = ($0 ~ /^## (User stories|Functional requirements|Boundary issues)$/) ? "req" : "other"; next }
     /^### / { id = (part == "req") ? $2 : ""; next }
     id != "" && /^- status:[ \t]*active[ \t]*$/ { active[id] = 1 }
-    END { n = 0; for (i in active) n++; print n + 0 }' "$SRC/requirements.md" 2>/dev/null)
+    END { n = 0; for (i in active) n++; print n + 0 }' "$SRC/requirements.md")
+  # Stderr is NOT discarded. It was, in the commit that fixed the same mistake
+  # one file over -- so why the read failed (mawk aborting on a directory, a
+  # permission error) was thrown away, and since `--list` exits 0 regardless,
+  # check-hooks.sh's capture never printed it either: the suite went red with no
+  # reason attached. Bertan's review of PR #183. It goes to this command's own
+  # stderr, which that capture keeps.
   # Nothing read is not zero, and it is not a count either. An unreadable or
   # renamed file would otherwise print `0 requirements ... are active`, which
   # reads like a measurement and is none -- the shape this whole file exists to
@@ -542,9 +593,9 @@ if [ -n "$LIST" ]; then
   # the half-minute added before the divide so the minutes round rather than
   # truncate -- a budget that is short is the one that costs somebody an
   # afternoon, and truncation is always short.
-  printf 'about %s minutes for that pass, at the %s s a run the slower 2026-09-17 measurement gives\n' \
-    "$(( (RUNS_NEEDED * MEASURED_SECONDS / MEASURED_RUNS + 30) / 60 ))" \
-    "$(( MEASURED_SECONDS / MEASURED_RUNS ))"
+  printf 'about %s minutes for that pass, at the %s s a run measured on 2026-09-20; re-measure it, it is not derived\n' \
+    "$(( (RUNS_NEEDED * MEASURED_SECONDS_PER_RUN + 30) / 60 ))" \
+    "$MEASURED_SECONDS_PER_RUN"
   exit 0
 fi
 
@@ -640,8 +691,8 @@ RUNS=0      # invocations of check-hooks.sh, for the footer
 
 # PASS ONE: THE REGISTRY AS WRITTEN, before anything is copied or run. Every
 # refusal here is about the table rather than about a hook, so answering them
-# first means a mistyped id or a malformed row costs nothing instead of the 95 s
-# the baseline takes. Rows that survive this pass are what pass two runs.
+# first means a mistyped id or a malformed row costs nothing instead of what the
+# baseline takes. Rows that survive this pass are what pass two runs.
 RUNNABLE=
 while IFS='%' read -r ID FILE EDIT REQS WANT; do
   [ -n "$ID" ] || continue
@@ -698,7 +749,8 @@ SUM_BEFORE=$(tree_sum "$SRC") || {
 }
 hooks_copy || { echo "mutate-hooks.sh: the working copy could not be made" >&2; exit 1; }
 echo "  running check-hooks.sh against $WORK ..."
-# Bounded. A run takes about 95 s; nothing in the suite bounds a hook it runs, so
+# Bounded, at several times the measured rate above; nothing in the suite bounds
+# a hook it runs, so
 # a mutation that left one looping would hang this harness rather than report
 # anything. A run killed at the bound prints no matrix, which is read below as
 # did-not-complete -- never as caught.
