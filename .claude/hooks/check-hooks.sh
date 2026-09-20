@@ -3443,6 +3443,165 @@ check no-pr-decisions.sh BLOCK '--field= on a state field'         'gh api -X PA
 req US-15 GH-137.1
 check no-pr-decisions.sh BLOCK '-F, quoted state field'               'gh api -X PATCH repos/o/r/pulls/5 -F "state=closed"'
 
+section "=== REGRESSION: #139, a quoted base flag removed the refusal it should trigger ==="
+# base_args drops every quoted span whole, and on the two arms where naming no
+# base is permitted -- a retarget, and a create under --web -- the drop removed
+# the one refusal a base of main would have met. The issue's table, every row of
+# which went red before the fix: the quote round the flag's NAME is what hid it.
+req FR-17 FR-15 US-10 GH-139
+check no-pr-decisions.sh BLOCK 'retarget, flag double-quoted'       'gh pr edit 35 "--base" main'
+check no-pr-decisions.sh BLOCK 'retarget, flag single-quoted'       "gh pr edit 35 '--base' main"
+check no-pr-decisions.sh BLOCK 'retarget, flag=value quoted whole'  'gh pr edit 35 "--base=main"'
+check no-pr-decisions.sh BLOCK 'retarget, shorthand quoted'         'gh pr edit 35 "-B" main'
+req FR-21 FR-15 GH-139
+check no-pr-decisions.sh BLOCK 'web create, flag double-quoted'     'gh pr create --web "--base" main'
+check no-pr-decisions.sh BLOCK 'web create, flag=value quoted whole' 'gh pr create --web "--base=main"'
+# Quoting that touches the flag name without standing round it, and a backslash,
+# which bash removes as it removes a quote. Not in the issue's table; each was
+# permitted on the retarget arm before the fix, for the same reason.
+req FR-17 FR-15 US-10 GH-139
+check no-pr-decisions.sh BLOCK 'retarget, quote inside the name'    'gh pr edit 35 --"base" main'
+check no-pr-decisions.sh BLOCK 'retarget, quote before the ='       'gh pr edit 35 "--base"=main'
+check no-pr-decisions.sh BLOCK 'retarget, name backslash-escaped'   'gh pr edit 35 \--base main'
+check no-pr-decisions.sh BLOCK 'retarget, bundled shorthand quoted' 'gh pr edit 35 "-dB" main'
+# bash's $'...' and $"..." quoting, which the first version of the fix counted
+# the $ of as a character. Found by review of the fix; all three were permitted.
+check no-pr-decisions.sh BLOCK "retarget, flag in \$'...'"          "gh pr edit 35 \$'--base' main"
+check no-pr-decisions.sh BLOCK 'retarget, flag in $"..."'           'gh pr edit 35 $"--base" main'
+check no-pr-decisions.sh BLOCK "web create, shorthand in \$'...'"   "gh pr create --web \$'-B' main"
+# The escapes $'...' decodes, which the first version of that answer left as
+# written and called a construction rather than a spelling. Bertan's review of
+# PR #173: bash hands gh `--base main` for each of these, and each was permitted.
+check no-pr-decisions.sh BLOCK "retarget, \\x escape in \$'...'"     "gh pr edit 35 \$'\\x2d-base' main"
+check no-pr-decisions.sh BLOCK "retarget, octal escapes in \$'...'"  "gh pr edit 35 \$'\\055\\055base' main"
+check no-pr-decisions.sh BLOCK "retarget, \\u escape in \$'...'"     "gh pr edit 35 \$'\\u002d-base' main"
+check no-pr-decisions.sh BLOCK "web create, \\x escape shorthand"    "gh pr create --web \$'\\x2dB' main"
+# A NUL the escapes produce, which the decoder turned into `?`. bash stops the
+# $'...' span at a NUL and drops what is left of it up to the closing quote, so
+# `$'--base\0' main` is `--base main`. Bertan's second review of PR #173; each of
+# these was permitted. bash 5.2 was asked what each spelling becomes before the
+# rows were written: `\c@` is a NUL, and `\^@` -- also named by that review -- is
+# not an escape at all and stays four characters, which the ALLOW row below pins.
+check no-pr-decisions.sh BLOCK "retarget, \\0 ends the \$'...' span"     "gh pr edit 35 \$'--base\\0' main"
+check no-pr-decisions.sh BLOCK "retarget, \\x00 and text after it"      "gh pr edit 35 \$'--base\\x00junk' main"
+check no-pr-decisions.sh BLOCK "retarget, \\c@ is a NUL"                "gh pr edit 35 \$'--base\\c@x' main"
+check no-pr-decisions.sh BLOCK "retarget, NUL span then the rest"      "gh pr edit 35 \$'--ba\\0'se main"
+check no-pr-decisions.sh BLOCK "web create, \\u0000 in the flag"        "gh pr create --web \$'--base\\u0000' main"
+check no-pr-decisions.sh BLOCK "dev base, then a NUL-cut second base"  "gh pr create --base dev-05 --title x --body y \$'--base\\x00' main"
+# A cut span still open at the end of the line. The newline is inside the span
+# after the NUL, so bash drops it with the rest -- the argument is `--base`, not
+# prose holding a newline. Found while answering that review, not by it.
+check no-pr-decisions.sh BLOCK "a NUL-cut span open past the line end" $'gh pr edit 35 $\'--base\\0\n\' main'
+# Bertan's third review of PR #173: four more holes, all from copying bash's
+# decoding one escape at a time. `\c` took the character after it as its
+# argument even when that was the closing quote or the first of a `\\` pair,
+# which bash's parser pairs first -- so the span never closed where bash closes
+# it, and everything after was misread. And a cut span open at the line end was
+# judged on its first line, where bash closes it on the next and the word goes
+# on. The answer is the conservative one that review suggested: every `\c` is
+# taken as a possible NUL, since what it masks is a byte and bytes are not this
+# decoder's business, and a cut span that runs past the line is refused.
+check no-pr-decisions.sh BLOCK "\\c before the closing quote"          "gh pr edit 35 \$'x\\c' \$'--base' main"
+check no-pr-decisions.sh BLOCK "web create, \\c before the quote"      "gh pr create --web \$'x\\c' \$'--base' main"
+check no-pr-decisions.sh BLOCK "\\c before a backslash pair"           "gh pr edit 35 \$'x\\c\\\\' \$'--base' main"
+check no-pr-decisions.sh BLOCK "dev base, \\c\\\\ then a quoted second" "gh pr create --base dev-05 --title x --body y \$'z\\c\\\\' '--base' main"
+check no-pr-decisions.sh BLOCK "\\c on a byte that masks to NUL"       "gh pr edit 35 \$'--base\\cअ' main"
+check no-pr-decisions.sh BLOCK "a cut span closing on the next line"  $'gh pr edit 35 $\'--ba\\0\n\'se main'
+# THE TRADE, pinned: `\cA` is byte 0x01 and no NUL, so bash passes `--base` and
+# a control character, which is no flag -- and it is refused, as every `\c`
+# after a flag's name is. Nobody writes a branch or a title that way. A `\c` in
+# a word that cannot be a flag is untouched.
+check no-pr-decisions.sh BLOCK "\\cA after the flag name, refused"     "gh pr edit 35 \$'--base\\cA' main"
+check no-pr-decisions.sh ALLOW "\\c in a word that is no flag"         "gh pr edit 35 --label \$'x\\cAy'"
+# Bertan's fourth review of PR #173. An EMPTY span right after the flag's name
+# was read as a quote round the value, which it cannot be -- it holds nothing --
+# so `--base$'' main` passed, and base_args, which does not know `$`, read
+# `--base$` as some other flag. What decides now is where the first span that
+# yields a character opens, and separately where the first span that yields
+# none does: an empty one at or just past the name's end refuses.
+check no-pr-decisions.sh BLOCK "an empty \$'' after the name"          "gh pr edit 5 --base\$'' main"
+check no-pr-decisions.sh BLOCK 'an empty $"" after the name'          'gh pr edit 5 --base$"" main'
+check no-pr-decisions.sh BLOCK "web create, an empty \$'' after it"    "gh pr create --web --base\$'' main"
+check no-pr-decisions.sh BLOCK "an empty \$'' before the ="            "gh pr edit 5 --base\$''=main"
+check no-pr-decisions.sh BLOCK "an empty \$'' inside the shorthand"    "gh pr edit 5 -B\$''main"
+check no-pr-decisions.sh BLOCK "a span cut to nothing after the name" "gh pr edit 5 --base\$'\\0' main"
+# Refused before this fix too, but by base_args' first sed and not by the rule
+# written for it -- the review called it luck. Pinned here so that it is not.
+check no-pr-decisions.sh BLOCK 'an empty "" after the name'           'gh pr edit 5 --base"" main'
+# Bertan's fifth review of PR #173. A span that yields a character just past
+# the name was taken as round the value, which assumed base_args could read the
+# value there -- and it can for `"="` and `'='`, but not for `$'='`, `$"="` or
+# `\=`, so `--base$'=main'` named no base at all. A quoted or escaped `=` is now
+# part of the name, and each of these, permitted before, is refused.
+check no-pr-decisions.sh BLOCK "an = in \$'...' after the name"         "gh pr edit 5 --base\$'=main'"
+check no-pr-decisions.sh BLOCK "an = alone in \$'...'"                   "gh pr edit 5 --base\$'='main"
+check no-pr-decisions.sh BLOCK 'an = alone in $"..."'                   'gh pr edit 5 --base$"="main'
+check no-pr-decisions.sh BLOCK 'an = and part of the value in $"..."'   'gh pr edit 5 --base$"=m"ain'
+check no-pr-decisions.sh BLOCK "an = as \\x3d"                          "gh pr edit 5 --base\$'\\x3d'main"
+check no-pr-decisions.sh BLOCK "an = as \\075"                          "gh pr edit 5 --base\$'\\075'main"
+check no-pr-decisions.sh BLOCK 'a backslash-escaped ='                  'gh pr edit 5 --base\=main'
+check no-pr-decisions.sh BLOCK "web create, an = in \$'...'"            "gh pr create --web --base\$'=main'"
+check no-pr-decisions.sh BLOCK "dev base, then an = in \$'...'"         "gh pr create --base dev-05 --title x --body y --base\$'=main'"
+# THE TRADE, and it moves a row: `--base"=dev-05"` was pinned ALLOW here as a
+# quoted value holding the =. Its = is quoted too, so it is refused with the
+# rest -- a spelling nobody writes for a base that could be written plainly.
+# The = OUTSIDE the quote is still a quoted value, `--base="dev-05"`, above.
+check no-pr-decisions.sh BLOCK 'a quoted = before a dev value'          'gh pr edit 5 --base"=dev-05"'
+# The line-end rule refused every cut span open at a line's end, and a body is
+# the ordinary thing to write across lines. A word the next line can only
+# extend can become a flag only if it is empty or begins with a dash and holds
+# no whitespace yet, so only that is refused. Red before the fix.
+check no-pr-decisions.sh ALLOW "a multi-line \$'...' body with a \\c"   $'gh pr edit 5 --body $\'Adds C:\\cache support\nsecond line\''
+check no-pr-decisions.sh BLOCK "a span cut to nothing, open at the end" $'gh pr edit 5 $\'\\c\n\'--base main'
+# Only the SPAN is cut, not the argument: text after the closing quote joins on,
+# so `$'--base\0'x` is `--basex`, which is no flag. The review proposed ending
+# the word at the NUL, which would refuse this; bash does not end it there.
+check no-pr-decisions.sh ALLOW "a NUL span, then more of the word"     "gh pr edit 35 --label \$'--base\\0'x"
+check no-pr-decisions.sh ALLOW "\\^@ is not an escape in bash"          "gh pr edit 35 --label \$'--base\\^@x'"
+# THE CREATE ARM, which the issue called safe and is not wholly. A create naming
+# no base is refused, so a quoted flag standing alone was refused for naming
+# none -- but beside an unquoted dev base it is a SECOND base, the unquoted one
+# satisfied the rule, and gh takes the last. Found while writing this fix.
+req FR-15 FR-16 GH-139
+check no-pr-decisions.sh BLOCK 'dev base, then a quoted main'       'gh pr create --base dev-05 "--base" main --title x'
+check no-pr-decisions.sh BLOCK 'dev base, then a quoted shorthand'  'gh pr create --base dev-05 --title x "-B" main'
+# The refusal names what it refused, and not the missing base it used to report
+# for a quoted flag standing alone on a create.
+req US-7 FR-23 GH-139
+says "$ON_DEV" no-pr-decisions.sh 'a quote or a backslash in its name' \
+  'a quoted base flag says it was quoted' \
+  'gh pr edit 35 "--base" main'
+says_not "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
+  'and a quoted flag on a create is not reported as no base' \
+  'gh pr create "--base" dev-05 --title x'
+# THE CONTROLS the issue names, and the prose the quote-drop exists for. A quote
+# round a VALUE is still read -- base_args' own unquoting, which this fix does
+# not touch -- and a quoted word holding whitespace is one argument that no
+# branch can be named, git refusing a space in a ref, so a title or body that
+# begins with the flag is prose and stays permitted. CONTRAST rows: every one is
+# green with the fix reverted, and says the fix did not widen past the name.
+req FR-17 FR-15 US-10 US-13 GH-139
+check no-pr-decisions.sh ALLOW 'retarget to dev, unquoted'          'gh pr edit 35 --base dev-05'
+check no-pr-decisions.sh ALLOW 'an edit naming no base'             'gh pr edit 35 --add-label bug'
+check no-pr-decisions.sh ALLOW 'retarget to dev, value quoted'      'gh pr edit 35 --base "dev-05"'
+check no-pr-decisions.sh ALLOW 'retarget to dev, = then a quote'    'gh pr edit 35 --base="dev-05"'
+check no-pr-decisions.sh ALLOW 'retarget to dev, -B then a quote'   'gh pr edit 35 -B"dev-05"'
+check no-pr-decisions.sh ALLOW 'an edit titled -B and a branch'     'gh pr edit 35 --title "-B main"'
+check no-pr-decisions.sh ALLOW 'an edit whose body opens --base'    'gh pr edit 35 --body "--base dev-05 is the base"'
+# The same prose split by a newline instead of a space. The hook reads one line
+# of a command at a time, so the quote is still open where the line ends -- and
+# the argument bash builds holds that newline, so it is prose as the space made
+# it. Refused by the first version of the fix. Bertan's review of PR #173.
+check no-pr-decisions.sh ALLOW 'an edit whose body opens --base, then a newline' $'gh pr edit 35 --base dev-05 --body "--base\nmore text"'
+# And a decoded \n inside $'...' is whitespace in the argument too. Green before
+# the escape decoding above existed, when `\n` was two characters; it is here so
+# that decoding one spelling of prose into a flag would go red.
+check no-pr-decisions.sh ALLOW "a \$'...' body opening --base, then \\n" "gh pr edit 35 --body \$'--base\\nmore text'"
+req FR-21 US-12 GH-139
+check no-pr-decisions.sh ALLOW 'the web form, no base'              'gh pr create --web'
+req FR-14 FR-15 GH-139
+check no-pr-decisions.sh ALLOW 'a body naming the flag, dev base'   'gh pr create --base dev-05 --title t --body "the --base flag"'
+
 section "=== the push argument split does not glob against the worktree ==="
 # `for TOK in $ARGS` is unquoted because the split is the point; set -f stops
 # the same line expanding ? and [...] against the files sitting next to it.
@@ -8498,8 +8657,9 @@ section "=== issue #95: every hook refuses when it cannot read its input ==="
 # for the two consumers #95 added.
 
 # jq off PATH, built here rather than assumed about the machine: a directory of
-# symlinks to every executable on this suite's own PATH, and a copy of it with jq
-# removed. Every tool, not the ones a hook is known to call today -- a list of
+# symlinks to every executable on this suite's own PATH -- plus a `gh`, which GH
+# IN THE FARM below synthesises if the host gave none -- and a copy of it with
+# jq removed. Every tool, not the ones a hook is known to call today -- a list of
 # those would be a claim, and the next hook to call a new tool would refuse
 # without jq for a reason no check names.
 #
@@ -8520,6 +8680,88 @@ for d in "${SUITE_PATH_DIRS[@]}"; do
   find "$d" -maxdepth 1 \( -type f -o -type l \) -perm -u+x \
     -exec ln -s -t "$WITH_JQ_BIN" {} + 2>/dev/null
 done
+
+# GH IN THE FARM, the host's or one synthesised here (#155). The farm is the
+# invoker's PATH, so what it holds depends on the machine -- and the #108 section
+# below builds its `gh`-less environment as THIS FARM MINUS `gh`, which on a
+# machine with no `gh` was the farm minus nothing. The first guard there demanded
+# a one-name difference and aborted the whole suite on such a machine; the fix
+# that followed tolerated a no-difference copy, and bought the machine-
+# independence by leaving the GH-108.6 checks no `gh` to be evidence about on
+# exactly the machines that had none. Giving the farm one here removes the
+# choice: the difference is always one name, the guard requires it
+# unconditionally, and those checks are evidence about `gh` wherever they run.
+#
+# A STUB IS RIGHT FOR GH AND WRONG FOR GIT, and the difference is whether the
+# SUITE needs the tool or only its name. `gh` is a dependency of no hook, and
+# report-stale-branches.sh is the only file in .claude/hooks/ that calls it at
+# all -- but what the stub rests on is not that no check drives that file, it is
+# that no run of it ever executes a `gh`, and those are not the same sentence.
+# Of the four PATHs it is driven under below, two carry no `gh` of the farm's to
+# run and one stops at the not-a-repository guard before it would; the fourth is
+# the farm minus `git`, which does carry the farm's `gh`, and stops at the
+# `command -v git` guard standing above the first call. That last one is a
+# property of report-stale-branches.sh and not of this farm -- an edit there
+# reading `gh` before `git` would have this stub answering for a real one -- so
+# it is checked beside that run, under GH-155.1, rather than asserted here. A
+# name is then the whole of what the fixture wants from it.
+#
+# `git` is a dependency of this suite: every repository fixture above was built
+# with it, so a farm without a `git` is a machine this suite cannot run on rather
+# than a gap to synthesise over, and a fake `git` would be answering the very
+# questions the hooks' verdicts are read off. `git` is therefore never stubbed --
+# the farm's entry for it is the host's or the suite has already failed -- and
+# the guard in #108 says so where it treats the two alike.
+#
+# SO THE STUB EXISTS TO BE A NAME AND NOT A PROGRAM, and it says so when run
+# rather than pretending to be `gh`. A stub that exited 0 in silence would let a
+# later check read its silence as gh's answer, which is #108's own failure shape
+# arriving through the fixture instead of through a hook.
+#
+# A NAME IN THE FARM IS A FILE IN A DIRECTORY, and `command -v` answers a
+# different question. It resolves shell FUNCTIONS ahead of PATH, and bash imports
+# exported ones -- `BASH_FUNC_gh%%` in the environment -- into a non-interactive
+# script like this one. So on a host whose environment exports a `gh` wrapper,
+# `PATH=<farm>; command -v gh` says yes where the farm holds nothing: the
+# synthesis returns having written no stub, and the guard in #108, unconditional
+# as of this branch, aborts the whole suite before #104's coverage derivations
+# are reached. That is the abort-on-some-machines failure #155 exists to remove,
+# arriving by a rarer route -- found by review of PR #161 and not by a machine.
+# Every question this suite asks of a farm is asked of the directory from here
+# on, the guard below included, because the two are one rule read twice and a
+# `command -v` left in either is that abort.
+farm_has() {  # farm_has <dir> <name> -- is that name in the farm? asked of the directory
+  [ -x "$1/$2" ]
+}
+FARM_STUB_SAYS='gh: check-hooks.sh PATH-fixture stub, a name and not a program (GH-155.1)'
+farm_stub_gh() {  # farm_stub_gh <farm dir> -- give it a gh if the host gave none
+  local dir="$1"
+  farm_has "$dir" gh && return 0
+  # THE UNLINK IS NOT REDUNDANT WITH THE RETURN ABOVE, and this is the one line
+  # here that could have damaged the invoker's machine. Every other entry in the
+  # farm is a SYMLINK to a host binary, so `>` on one of them writes THROUGH the
+  # link and truncates the file it points at -- the host's own `gh`. The return
+  # above means the entry is normally not there at all, but a dangling link
+  # reaches this line too, and so would any later edit that moved the return.
+  # Found by mutation rather than by reading: with the return taken out, this line
+  # tried to write /usr/bin/gh and was refused only because that file is root's.
+  #
+  # NO CHECK COVERS THIS LINE, and taking it out is a mutation that survives --
+  # measured, not assumed. It can only be reached when the return above is wrong,
+  # so a suite in which the return is right cannot tell the two spellings apart.
+  # What the pair of mutations says is the whole of what is known: with the return
+  # gone and this line present, the host's gh is left alone and the check below
+  # names the defect; with both gone, the suite aborts at the fixture guard having
+  # tried to truncate a file it does not own.
+  rm -f "$dir/gh"
+  printf '#!/bin/bash\necho "%s" >&2\nexit 1\n' "$FARM_STUB_SAYS" > "$dir/gh" || return 1
+  chmod +x "$dir/gh"
+}
+farm_stub_gh "$WITH_JQ_BIN" || {
+  echo "no gh could be synthesised into the symlink farm; the #108 fixtures below prove nothing" >&2
+  exit 1
+}
+
 cp -a "$WITH_JQ_BIN" "$NO_JQ_BIN"
 rm -f "$NO_JQ_BIN/jq"
 [ -n "$( PATH="$WITH_JQ_BIN"; command -v jq )" ] \
@@ -9737,10 +9979,20 @@ inv_dir() {  # inv_dir <name> -- the fixture directory a seed names
 }
 
 # THE SEEDS, one per line: <fixture>|<hook>|<verdict>|<tags>|<key>|<command>.
-# Both directions for every requirement with a command spelling, because a
-# permitting seed is as much of the family as a refusing one: two of the defect
-# rounds these families generalise were refusals of ordinary commands, and a
-# generator run only against refusals would have reported neither.
+# Both directions for every FUNCTIONAL requirement with a command spelling,
+# because a permitting seed is as much of the family as a refusing one: two of
+# the defect rounds these families generalise were refusals of ordinary
+# commands, and a generator run only against refusals would have reported
+# neither.
+#
+# FUNCTIONAL, and the word carries the whole of the difference between the two
+# halves of this table. The `GH-` half #141 added allows one direction, and says
+# so where its rule is written: the both-directions rule is #104's coverage
+# rule, and a `GH-` entry's other direction is often met by a named check above
+# rather than by a seed. GH-43.1, GH-68.1 and GH-72 are seeded ALLOW alone for
+# that reason, and the derivation's literal is where which-direction is visible.
+# This sentence said "every requirement" for one revision, with the FR-only
+# derivation underneath it, and the `GH-` seeds then contradicted it.
 #
 # Two requirements name commands and are not seeded. FR-13 says the base rule
 # lives in the pull-request hook and adds no seventh hook, which is a claim
@@ -9753,19 +10005,51 @@ inv_dir() {  # inv_dir <name> -- the fixture directory a seed names
 # directions, and the derivation at the foot of this section holds the table to
 # that.
 #
-# Functional, and not every requirement: the derivation reads `FR-` tags and
-# nothing else. Several `GH-` entries name commands too -- GH-43.6, GH-68.1,
-# GH-72 and the GH-79 family among them -- and are not seeded, and GH-94.1 is
-# seeded in one direction. That is the scope #106 asked for ("at least one per FR
-# with a command spelling"), written down here because the sentence above it read
-# for one revision as though it covered all three families.
+# THE `GH-` FAMILY IS SEEDED BY A RULE, WHICH IS #141'S. The paragraph above is
+# the FR half, and until #141 it was the whole of the table's scope: the
+# derivation read `FR-` tags and nothing else, so GH-43.6, GH-68.1, GH-72 and
+# the GH-79 family named commands and no transformation was ever asked of them,
+# and GH-94.1 was seeded in one direction. That is the scope #106 asked for
+# ("at least one per FR with a command spelling"), and it is where the
+# specification happened to land in 2026-09 rather than where the defects have
+# been: requirements.md holds 95 `GH-` entries to 49 FRs, and the `GH-` ones are
+# the ones written FROM defects. (Measured 2026-09-17. #141's own text says
+# "60-odd entries against 49 FRs", which was two different bases -- all FRs
+# against some `GH-` entries -- and is not repeated here for that reason.)
 #
-# It is also the scope's weakest point, and #141 owns deciding it rather than
-# this comment: what is seeded is what any future transformation can ever be
-# asked of, and the FR set is where the specification happened to land in
-# 2026-09 rather than where the defects have been. Some of those entries name a
-# TRANSFORMATION and not a seed -- GH-79.x is transformation 4 -- so the answer
-# is not a dozen more rows here.
+# The rule is in requirements.md, under *What the invariance families seed*,
+# because it is a rule about requirements and that file is where a requirement's
+# fields are defined. In one sentence: every `GH-` entry that is behavioural,
+# active and not `static` declares in a `variants` field whether the families
+# seed it, transform it, or reach it not at all with a reason. The derivation at
+# the foot of this section holds all three to the tables here, and the answer is
+# not a dozen more rows -- several of those entries name a TRANSFORMATION and
+# not a seed, GH-79.x being transformation 4, and asking one of those as a seed
+# would be a category error.
+#
+# How many entries are in scope and how they divide between the three values is
+# a line this section PRINTS, beside the derivation. It is deliberately not
+# written here: the four numbers stood in this comment for one revision, in the
+# same commit whose other file argues that a count in a comment is the thing
+# #107 was filed about.
+#
+# TWO THINGS ABOUT THE NEW ROWS THAT READ LIKE MISTAKES AND ARE NOT.
+#
+# `commit-push-all` and `push-all` carry the SAME command text, `git push --all
+# origin`, and that is the point of it: one is judged by no-git-push.sh in a
+# linked worktree and the other by no-commit-to-main.sh on `main`, which have
+# separate rules for a push that reaches main without naming it (FR-3 and
+# GH-43.4). Two hooks reading one command is two claims, and the table keys a
+# seed by its own name rather than by its text, so both are asked.
+#
+# GH-68.1's seed is not GH-68.1's own example. The issue's example is
+# `sed -i 's/a\|b/c/'` and the field separator here is `|`, which no seed
+# command may contain -- the loop below would read the row as cut in half. So
+# the seed carries the same shape with a `;` inside the quotes, which is the
+# separator the tokeniser's first pass cuts on anyway. The constraint is worth
+# naming rather than working around: a requirement whose only command contains a
+# `|` cannot be seeded in this table at all, and would be `variants: none` with
+# that as its reason.
 #
 # `|` is the field separator and no seed command contains one; the loop below
 # fails on a seed whose command field came out empty rather than leaving one
@@ -9775,11 +10059,13 @@ push-wt|no-git-push.sh|BLOCK|FR-3 US-2|push-all|git push --all origin
 push-wt|no-git-push.sh|BLOCK|FR-3 US-1|push-main|git push origin main
 push-wt|no-git-push.sh|BLOCK|FR-3 US-3|push-force|git push --force origin wt-branch
 push-wt|no-git-push.sh|BLOCK|FR-4|push-wrapped|bash -c "git push origin wt-branch"
-push-wt|no-git-push.sh|ALLOW|FR-3 US-3 US-4|push-own|git push origin wt-branch
+push-wt|no-git-push.sh|ALLOW|FR-3 US-3 US-4 GH-94.1|push-own|git push origin wt-branch
 push-wt|no-git-push.sh|ALLOW|FR-3|push-status|git status
+push-wt|no-git-push.sh|ALLOW|GH-68.1|push-prose-quoted|grep 'x ; git push --all origin' f
 push-main|no-git-push.sh|BLOCK|GH-94.1 US-3|push-from-main-checkout|git push origin feature-x
 hooks|no-pr-decisions.sh|BLOCK|US-15|pr-merge|gh pr merge 5
-hooks|no-pr-decisions.sh|BLOCK|FR-4|pr-merge-wrapped|bash -c "gh pr merge 5"
+hooks|no-pr-decisions.sh|BLOCK|FR-4 GH-51.1|pr-merge-wrapped|bash -c "gh pr merge 5"
+hooks|no-pr-decisions.sh|BLOCK|GH-51.2|pr-view-wrapped|bash -c "gh pr view 5"
 hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-base-main|gh pr create --base main --title x
 hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-base-main-eq|gh pr create --base=main --body y
 hooks|no-pr-decisions.sh|BLOCK|FR-15 FR-16 US-8|pr-bundled|gh pr create -dB main --body y
@@ -9789,7 +10075,7 @@ hooks|no-pr-decisions.sh|BLOCK|FR-17 FR-15 US-10|pr-retarget|gh pr edit 35 --bas
 hooks|no-pr-decisions.sh|BLOCK|FR-21 FR-15|pr-web-main|gh pr create --web --base main
 hooks|no-pr-decisions.sh|BLOCK|FR-18 FR-20 FR-15 US-11|api-rest-main|gh api -X POST repos/o/r/pulls -f base=main -f head=x
 hooks|no-pr-decisions.sh|BLOCK|FR-19 FR-15 US-11|api-graphql-main|gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:main})}'
-hooks|no-pr-decisions.sh|BLOCK|FR-48 US-15|release-create|gh release create v1
+hooks|no-pr-decisions.sh|BLOCK|FR-48 US-15 GH-97.1|release-create|gh release create v1
 hooks|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8|pr-base-dev|gh pr create --base dev-05 --title x
 hooks|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8|pr-base-dev-eq|gh pr create --base=dev-05 --body y
 hooks|no-pr-decisions.sh|ALLOW|FR-17 FR-15 US-10|pr-retarget-dev|gh pr edit 35 --base dev-05
@@ -9798,11 +10084,19 @@ hooks|no-pr-decisions.sh|ALLOW|FR-21 US-12|pr-web|gh pr create --web
 hooks|no-pr-decisions.sh|ALLOW|FR-20 US-13|api-read|gh api repos/o/r/pulls/35
 hooks|no-pr-decisions.sh|ALLOW|FR-18 FR-15 US-11|api-rest-dev|gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x
 hooks|no-pr-decisions.sh|ALLOW|FR-19 FR-15 US-11|api-graphql-dev|gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:"dev-05"})}'
-hooks|no-pr-decisions.sh|ALLOW|FR-48|release-view|gh release view v1
+hooks|no-pr-decisions.sh|BLOCK|GH-137.1|api-state-quoted|gh api -X PATCH repos/o/r/pulls/5 -f "state=closed"
+hooks|no-pr-decisions.sh|BLOCK|GH-137.2|api-base-quoted-main|gh api -X POST repos/o/r/pulls -f "base=main" -f head=x
+hooks|no-pr-decisions.sh|ALLOW|GH-137.2|api-base-quoted-dev|gh api -X POST repos/o/r/pulls -f "base=dev-05" -f head=x
+hooks|no-pr-decisions.sh|ALLOW|FR-48 GH-97.1|release-view|gh release view v1
 hooks|no-pr-decisions.sh|ALLOW|US-14|issue-list|gh issue list
 hooks|no-pr-decisions.sh|ALLOW|FR-4|wrap-benign|bash -c "gh issue list"
+hooks|no-pr-decisions.sh|ALLOW|GH-72|wrap-suffix-word|bash -c "echo high"
+hooks|append-only-docs.sh|BLOCK|GH-69.2|docs-truncate|truncate -s 0 docs/dev-log/devlog_2026-08-01_session-1.md
+hooks|append-only-docs.sh|ALLOW|GH-69.2|docs-truncate-revisable|truncate -s 0 docs/design/dependency-scanning-scope.md
 on-main|no-commit-to-main.sh|BLOCK|US-1|commit-main|git commit -m wip
-on-main|no-commit-to-main.sh|BLOCK|FR-4|commit-wrapped|bash -c "git commit -m wip"
+on-main|no-commit-to-main.sh|BLOCK|FR-4 GH-43.3|commit-wrapped|bash -c "git commit -m wip"
+on-main|no-commit-to-main.sh|BLOCK|GH-43.4|commit-push-all|git push --all origin
+on-main|no-commit-to-main.sh|ALLOW|GH-43.1|commit-prose|echo "git push origin main"
 on-dev|no-commit-to-main.sh|ALLOW|US-4|commit-dev|git commit -m wip
 wt-stale|no-work-on-stale-branch.sh|BLOCK|FR-38|commit-stale|git commit -m wip
 wt-work|no-work-on-stale-branch.sh|ALLOW|FR-38|commit-work|git commit -m wip
@@ -9819,13 +10113,15 @@ SEEDS
 #   1 leading indentation      indent-spaces indent-tab
 #   2 separators               before-* after-*, one per separator and side
 #   3 control words            word-if word-for word-brace word-subshell
-#   4 prefix words cs_split strips   pre-sudo pre-env pre-command pre-nohup pre-time
+#   4 prefix words cs_split strips   pre-sudo pre-env pre-command pre-nohup
+#                                     pre-time pre-timeout pre-nice-opt
 #   5 --flag=value / --flag value    flag-attached flag-separated
 #   6 bundled / separate short flags short-bundled short-separate
-#   7 a global flag before the subcommand   global-flag
+#   7 a global flag before the subcommand   global-flag global-flag-gitdir
 #   8 quoted / unquoted arguments    quote-double-* quote-single-*, by position
 #   9 a line continuation between arguments  continuation
 #  10 a trailing redirection          redirect-null redirect-dup
+#                                     redirect-quoted
 #  11 the command word itself (#117)  word-path word-dot word-dquoted
 #                                     word-squoted word-escaped
 #  12 an option before the subcommand that consumes the next word (#118)
@@ -9844,6 +10140,20 @@ SEEDS
 # the terminator comparison did not match. #128's own section writes the two
 # hooks and the two directions it measured; these ask the same seven of every
 # seed, which is the whole reason the families exist.
+#
+# Four of those spellings are #141's, added because a `GH-` entry named the
+# shape and the list did not have it -- which is the whole of what a
+# `variants: transformation:` value claims, and the derivation at the foot of
+# this section is what holds each to the list. `pre-timeout` is a prefix word
+# with an OPERAND of its own (CS_WRAP_OPERAND_WORDS, not the option words every
+# other `pre-*` here comes from) and `pre-nice-opt` a prefix word with a
+# SEPARATED OPTION VALUE, the two shapes GH-43.6 names that `pre-sudo` and
+# `env X=1` between them do not reach; `global-flag-gitdir` is its third,
+# `git --git-dir` beside the `-C` that `global-flag` already covers, and it
+# departs by design on the two seeds it moves; `redirect-quoted` is the quoted redirect
+# target GH-50.3 records as a knowingly-taken shortfall, and it is a shortfall
+# of the push hook alone, which is a thing one row can now say of every seed
+# rather than of the one command #50's review happened to write.
 #
 # The fourteenth is the one the triage of #117 asked for by name: a prefix word
 # is matched against a list BY NAME, exactly as the command word is matched by
@@ -9871,13 +10181,13 @@ INV_TRANSFORMS='
   before-semi before-and before-or before-pipe before-newline
   after-semi after-and after-or after-pipe after-newline
   word-if word-for word-brace word-subshell
-  pre-sudo pre-env pre-command pre-nohup pre-time
+  pre-sudo pre-env pre-command pre-nohup pre-time pre-timeout pre-nice-opt
   flag-attached flag-separated short-bundled short-separate
-  global-flag option-eats-verb
+  global-flag global-flag-gitdir option-eats-verb
   quote-double-2 quote-double-3 quote-double-4 quote-double-5 quote-double-last
   quote-single-2 quote-single-3 quote-single-4 quote-single-5 quote-single-last
   continuation
-  redirect-null redirect-dup
+  redirect-null redirect-dup redirect-quoted
   word-path word-dot word-dquoted word-squoted word-escaped
   heredoc-cont heredoc-cont-dash heredoc-cont-squote heredoc-cont-dquote
   heredoc-cont-space heredoc-cont-twice heredoc-cont-redirect
@@ -9902,6 +10212,21 @@ inv_global() {  # inv_global <command>
   case "$1" in
     'gh '*)  printf 'gh -R o/r %s' "${1#gh }" ;;
     'git '*) printf 'git -C . %s' "${1#git }" ;;
+  esac
+}
+# The OTHER directory option, in its separated spelling. GH-43.6 names "git's
+# directory options in their separated spelling" and `inv_global` writes one of
+# them, `-C`, so a `variants: transformation: global-flag` on that entry claimed
+# a shape no variant wrote. Measured on this branch, each fed to the hook on
+# stdin: `git --git-dir .git push …` and `git --work-tree . push …` are refused
+# exactly as `git -C . push …` is, and `git --git-dir .git status` is permitted
+# exactly as `git -C . status` is -- so the departures this transformation needs
+# are the departures `global-flag` already has, one option along. One of the two
+# rather than both, for the class rows' reason: two rows asserting one thing of
+# one shape is not a stronger claim than one. Found by review of this branch.
+inv_global_gitdir() {  # inv_global_gitdir <command>
+  case "$1" in
+    'git '*) printf 'git --git-dir .git %s' "${1#git }" ;;
   esac
 }
 # #118: an option before the subcommand that takes a value consumes the next
@@ -10037,11 +10362,14 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     pre-command)      printf 'command %s' "$2" ;;
     pre-nohup)        printf 'nohup %s' "$2" ;;
     pre-time)         printf 'time %s' "$2" ;;
+    pre-timeout)      printf 'timeout 30 %s' "$2" ;;
+    pre-nice-opt)     printf 'nice -n 5 %s' "$2" ;;
     flag-attached)    inv_rewrite "$2" "s/(--($INV_VALUE_FLAGS)) ([^ -][^ ]*)/\\1=\\3/" ;;
     flag-separated)   inv_rewrite "$2" "s/(--($INV_VALUE_FLAGS))=([^ ]+)/\\1 \\3/" ;;
     short-bundled)    inv_rewrite "$2" 's/ -([A-Za-z]) -([A-Za-z]) / -\1\2 /' ;;
     short-separate)   inv_rewrite "$2" 's/ -([A-Za-z])([A-Za-z]) / -\1 -\2 /' ;;
     global-flag)      inv_global "$2" ;;
+    global-flag-gitdir) inv_global_gitdir "$2" ;;
     option-eats-verb) inv_eats "$2" ;;
     quote-double-2)   inv_quote_at "$2" '"' 2 ;;
     quote-double-3)   inv_quote_at "$2" '"' 3 ;;
@@ -10056,6 +10384,7 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     continuation)     inv_continuation "$2" ;;
     redirect-null)    printf '%s >/dev/null' "$2" ;;
     redirect-dup)     printf '%s 2>&1' "$2" ;;
+    redirect-quoted)  printf '%s > "out.txt"' "$2" ;;
     pre-sudo-path)    printf '/usr/bin/sudo %s' "$2" ;;
     pre-env-path)     printf '/usr/bin/env X=1 %s' "$2" ;;
     pre-timeout-quoted) printf '"timeout" 30 %s' "$2" ;;
@@ -10135,17 +10464,22 @@ inv_show() {  # inv_show <variant>
 # it rather than letting the table rot into a list of things that were once so.
 INV_DEPARTURES=$(cat <<'EX'
 push-own|global-flag|BLOCK|design|US-3|git -C moves git's working directory, so where the push would land cannot be judged from here
+push-own|global-flag-gitdir|BLOCK|design|GH-43.6|git --git-dir moves which repository git acts on, so where the push would land cannot be judged from here
+push-own|redirect-quoted|BLOCK|design|GH-50.3|a quoted redirect target is left in the arguments and read as a second refspec, which GH-50.3 records as a knowingly-taken shortfall against #50; it is the push hook's alone, and `git status` and an ordinary `grep` wearing the same target are permitted
 commit-dev|global-flag|BLOCK|design|GH-43.2|git -C moves git's working directory, so whether the commit lands on main cannot be judged from here
+commit-dev|global-flag-gitdir|BLOCK|design|GH-43.6|git --git-dir moves which repository git acts on, so whether the commit lands on main cannot be judged from here
 pr-web|quote-double-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span whole, and quoted text may not grant an exemption
 pr-web|quote-single-4|BLOCK|design|FR-21 FR-14|base_args drops a quoted span whole, and quoted text may not grant an exemption
-pr-base-dev pr-base-dev-eq|quote-double-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
-pr-base-dev pr-base-dev-eq|quote-single-4|BLOCK|design|FR-14|base_args drops a quoted span whole, so a quoted flag names no base and unquoting it could invent one
+pr-base-dev pr-base-dev-eq|quote-double-4|BLOCK|design|FR-14 GH-139|a base flag with a quote in its name is refused rather than read, because reading it is unquoting and unquoting could invent a base
+pr-base-dev pr-base-dev-eq|quote-single-4|BLOCK|design|FR-14 GH-139|a base flag with a quote in its name is refused rather than read, because reading it is unquoting and unquoting could invent a base
+pr-retarget-dev|quote-double-5|BLOCK|design|FR-17 GH-139|a base flag with a quote in its name is refused rather than read, on the retarget arm as on the creating ones, even where the base it names is dev-NN
+pr-retarget-dev|quote-single-5|BLOCK|design|FR-17 GH-139|a base flag with a quote in its name is refused rather than read, on the retarget arm as on the creating ones, even where the base it names is dev-NN
 release-view|quote-double-3|BLOCK|gap|GH-135|the release verb in double quotes, refused by the allowlist that cannot read it
 release-view|quote-single-3|BLOCK|gap|GH-135|the release verb in single quotes, refused by the allowlist that cannot read it
 BLOCK:*|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand eats the read verb after it
 pr-view pr-base-dev pr-base-dev-eq pr-retarget-dev pr-web release-view|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand makes a guarded path unreadable, and the right verdict is a refusal whatever the seed's is|BLOCK
-push-all push-main push-force push-from-main-checkout commit-main commit-stale api-rest-main release-create pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-double-2|ALLOW|gap|GH-135|the group word in double quotes
-push-all push-main push-force push-from-main-checkout commit-main commit-stale api-rest-main release-create pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-single-2|ALLOW|gap|GH-135|the group word in single quotes
+push-all push-main push-force push-from-main-checkout commit-main commit-push-all commit-stale api-rest-main release-create pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-double-2|ALLOW|gap|GH-135|the group word in double quotes
+push-all push-main push-force push-from-main-checkout commit-main commit-push-all commit-stale api-rest-main release-create pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-single-2|ALLOW|gap|GH-135|the group word in single quotes
 pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-double-3|ALLOW|gap|GH-135|the subcommand verb in double quotes
 pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-single-3|ALLOW|gap|GH-135|the subcommand verb in single quotes
 pytest-uv alembic-uv|flag-attached|BLOCK|gap|GH-136|the dependency group named with an attached value
@@ -10153,8 +10487,12 @@ pytest-uv alembic-uv|quote-double-3|BLOCK|gap|GH-136|the group flag in double qu
 pytest-uv alembic-uv|quote-single-3|BLOCK|gap|GH-136|the group flag in single quotes
 pytest-uv alembic-uv|quote-double-4|BLOCK|gap|GH-136|the group value in double quotes
 pytest-uv alembic-uv|quote-single-4|BLOCK|gap|GH-136|the group value in single quotes
-pr-retarget pr-web-main|quote-double-5|ALLOW|gap|GH-139|the base flag in double quotes, on an arm where naming no base is permitted
-pr-retarget pr-web-main|quote-single-5|ALLOW|gap|GH-139|the base flag in single quotes, on an arm where naming no base is permitted
+docs-truncate|continuation|ALLOW|gap|GH-156|the verb and the path on either side of a backslash, which this hook's greps read as two lines and a shell runs as one
+docs-truncate|word-path|ALLOW|gap|GH-171|a command word spelled as a path, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|word-dot|ALLOW|gap|GH-171|a command word spelled with ./, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|word-dquoted|ALLOW|gap|GH-171|a double-quoted command word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|word-squoted|ALLOW|gap|GH-171|a single-quoted command word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|word-escaped|ALLOW|gap|GH-171|a backslash-escaped command word, which this hook's verb grep does not reduce to the name it spells
 EX
 )
 
@@ -10193,15 +10531,32 @@ done <<< "$INV_DEPARTURES"
 # nothing, and then every transformation that applies to it.
 declare -A INV_APPLIED
 # Every seed's command, so a variant that IS another seed's command can be
-# skipped rather than checked twice under two names. `flag-separated` on
-# `pr-base-main-eq` regenerates `pr-base-main` exactly, and `short-bundled` on
-# `pr-short-flags` regenerates `pr-bundled`; both are already checked as seeds,
-# and the ledger would carry one command as two results. `quote-*-last` took
-# this trouble from the start and the other transformations did not, which is
-# one rule applied unevenly -- Bertan's review of PR #140 named it.
+# skipped rather than checked twice under two names: both are already checked as
+# seeds, and the ledger would carry one command as two results. `quote-*-last`
+# took this trouble from the start and the other transformations did not, which
+# is one rule applied unevenly -- Bertan's review of PR #140 named it.
+#
+# KEYED BY FIXTURE AND HOOK AS WELL AS BY TEXT, which the first version was not,
+# and #141 is why. The skip's premise is that the regenerated command "is
+# already checked as a seed, with the same verdict" -- and a command's verdict
+# is a property of the text TOGETHER WITH the directory it runs in and the hook
+# that judges it. #141 seeds `git push --all origin` twice on purpose,
+# `push-all` against no-git-push.sh in a worktree and `commit-push-all` against
+# no-commit-to-main.sh on `main`, because two hooks reading one command is two
+# claims. Both are BLOCK, so keying on text alone skips nothing wrongly today;
+# it would the first time two fixtures held one command at two verdicts, and it
+# would do it by declaring a check already made. Found by review of this branch.
+#
+# The two examples this comment used to give -- `flag-separated` on
+# `pr-base-main-eq` regenerating `pr-base-main`, and `short-bundled` on
+# `pr-short-flags` regenerating `pr-bundled` -- no longer regenerate anything:
+# their tails diverged (`--body y` against `--title x`), and the counter this
+# section prints has read 0 ever since. The guard is kept because the next pair
+# of seeds that collides will collide silently, and the count is what says
+# whether it ever fires.
 declare -A INV_IS_SEED
-while IFS='|' read -r _ _ _ _ _ scmd0; do
-  [ -n "$scmd0" ] && INV_IS_SEED["$scmd0"]=1
+while IFS='|' read -r sdir0 shook0 _ _ _ scmd0; do
+  [ -n "$scmd0" ] && INV_IS_SEED["$sdir0|$shook0|$scmd0"]=1
 done <<< "$INV_SEEDS"
 INV_SEED_COUNT=0
 INV_VARIANTS=0
@@ -10245,9 +10600,11 @@ while IFS='|' read -r sdir shook swant stags skey scmd; do
       INV_SKIPPED=$((INV_SKIPPED + 1))
       continue
     fi
-    # A variant that is another seed's command is that seed's check, not a
-    # variant of this one. Its own seed row asserts it, with the same verdict.
-    if [ "$variant" != "$scmd" ] && [ -n "${INV_IS_SEED["$variant"]:-}" ]; then
+    # A variant that is another seed's command, IN THIS FIXTURE AND FOR THIS
+    # HOOK, is that seed's check and not a variant of this one. Its own seed row
+    # asserts it, with the same verdict -- which is only true when all three
+    # agree, for the reason the key above gives.
+    if [ "$variant" != "$scmd" ] && [ -n "${INV_IS_SEED["$sdir|$shook|$variant"]:-}" ]; then
       INV_REGENERATED=$((INV_REGENERATED + 1))
       continue
     fi
@@ -10304,10 +10661,234 @@ done <<< "$INV_SEEDS"
 # table, and once by a reviewer of this branch who was asked to derive the set
 # independently and got the same twelve.
 req GH-106
-tok 'the seeds cover every requirement with a command spelling, in both directions' \
+tok 'the seeds cover every functional requirement (FR-) with a command spelling, in both directions' \
   'FR-14 ALLOW BLOCK;FR-15 ALLOW BLOCK;FR-16 ALLOW BLOCK;FR-17 ALLOW BLOCK;FR-18 ALLOW BLOCK;FR-19 ALLOW BLOCK;FR-20 ALLOW BLOCK;FR-21 ALLOW BLOCK;FR-3 ALLOW BLOCK;FR-38 ALLOW BLOCK;FR-4 ALLOW BLOCK;FR-48 ALLOW BLOCK;' \
   "$(printf '%s\n' "$INV_SEEDS" \
      | awk -F'|' 'NF >= 6 { n = split($4, t, " "); for (i = 1; i <= n; i++) if (t[i] ~ /^FR-/) print t[i], $3 }' \
+     | LC_ALL=C sort -u \
+     | awk '{ v[$1] = v[$1] " " $2 } END { for (k in v) print k v[k] }' \
+     | LC_ALL=C sort | tr '\n' ';')"
+
+# AND THE `GH-` FAMILY, WHICH IS A RULE AND NOT A LITERAL. #141.
+#
+# The FR check above is a literal, and its own comment says what that cannot do:
+# the literal is the set someone chose, so an FR that names a command and was
+# never seeded is missing from both sides at once. For the `GH-` family that
+# blind spot was the whole family -- 95 entries when measured on 2026-09-17,
+# the ones written FROM defects rather than from the specification, and not
+# one of them asked for.
+#
+# So the scope is derived off requirements.md instead. Each entry in it declares
+# what the families do with it, and these three checks hold that declaration to
+# the tables above: a seed to a tagged row, a named transformation to
+# INV_TRANSFORMS, and a `none` to a reason. The rule and the argument for it are
+# in requirements.md under *What the invariance families seed*; what is here is
+# the derivation.
+#
+# WHAT IS LITERAL, since this is the check that changes what a table has to
+# hold. INV_SCOPE is the in-scope set with each entry's answer, and it is the
+# second copy #104's shape literal exists for: without it a new `GH-` entry
+# could arrive declaring `none: <plausible reason>`, or an existing one move
+# from `seed` to `none`, and nothing here would move. With it, both go red until
+# this line moves too, which is the edit a reviewer reads. The seed verdicts are
+# a literal for the same reason they are on the FR side.
+#
+# WHAT IT STILL CANNOT DO is argued where the rule is, under *The trade, taken
+# knowingly* in requirements.md, and is not restated here: `none` is a
+# declaration, and this check asks only that the reason is there. The pointer
+# rather than a fourth copy -- the trade was written out in three places on this
+# branch before review counted them.
+INV_SCOPE='
+GH-43.1:seed GH-43.2:transformation GH-43.3:seed GH-43.4:seed
+GH-43.6:transformation GH-44.1:none GH-44.2:none GH-44.3:none GH-44.4:none
+GH-44.5:none GH-44.6:none GH-47.1:transformation GH-47.2:transformation
+GH-50.1:transformation GH-50.2:none GH-50.3:transformation GH-51.1:seed
+GH-51.2:seed GH-58.1:none GH-68.1:seed GH-68.2:none GH-68.3:none GH-69.1:seed
+GH-69.2:seed GH-69.3:none GH-72:seed GH-79.1:transformation GH-79.2:none
+GH-79.3:none GH-79.4:none GH-84.1:none GH-94.1:seed GH-94.2:none GH-94.4:none
+GH-95.1:none GH-95.2:none GH-96.1:none GH-97.1:seed GH-128:transformation
+GH-117:transformation GH-133:none GH-134:transformation GH-137.1:seed
+GH-137.2:seed GH-139:transformation
+'
+# One row per entry that is either in scope or carries the field: `<ID>|in|out`,
+# the `variants` keyword, and whatever follows it. An entry out of scope is
+# emitted only when it carries the field, which is how a field written on an
+# entry that has no business with it is caught rather than ignored.
+# HOW A FIELD'S VALUE SPLITS, answered once. requirements.md's grammar says a
+# field is `- key: value` and that a value's first word may be a keyword with a
+# payload after a colon -- `refuse-only: <reason>`, `gap → #<n>`,
+# `none: <reason>` -- and two awk programs in this file have to read it: this
+# section's, and the #104 coverage machinery's a thousand lines below. It was
+# written twice the first time, which is the defect class lib/command-scan.sh's
+# header opens by naming, so it is one variable prepended to both programs
+# instead. Found by review of this branch.
+#
+# Prepended rather than sourced because awk has no include: `awk
+# "$REQ_FIELD_AWK$OTHER" file` is one program built from two strings, and the
+# functions have to come first for neither program to redefine them.
+REQ_FIELD_AWK=$(cat <<'AWK'
+  function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+  function keyword(v) { sub(/[: ].*$/, "", v); return v }
+  function after_colon(v) { if (index(v, ":") == 0) return ""; return trim(substr(v, index(v, ":") + 1)) }
+AWK
+)
+INV_VARIANTS_AWK=$(cat <<'AWK'
+  function flush(   inscope) {
+    if (id == "") return
+    # `id ~ /^GH-/` says what the rule says. requirements.md forbids a `kind` on
+    # an entry that is not a `GH-` one, so no US- or FR- entry reaches the rest
+    # of this line today (measured: 0). That is a second file's rule holding this
+    # one's condition together, which is the coupling #84 is about, so the
+    # condition carries its own copy.
+    inscope = id ~ /^GH-/ \
+              && (kind == "defect-permitting" || kind == "defect-refusing") \
+              && status == "active" && keyword(direction) != "static" && seam != "none"
+    if (inscope || variants != "")
+      printf "%s|%s|%s|%s\n", id, (inscope ? "in" : "out"), keyword(variants), after_colon(variants)
+    id = ""
+  }
+  /^### / { flush(); id = $2; kind = ""; status = ""; direction = ""; seam = ""; variants = ""; lastkey = ""; next }
+  /^## /  { flush(); next }
+  id != "" && /^- [a-z-]+:/ {
+    key = $0; sub(/^- /, "", key); sub(/:.*$/, "", key)
+    val = $0; sub(/^- [a-z-]+:[ \t]*/, "", val)
+    if (key == "kind") kind = val
+    else if (key == "status") status = val
+    else if (key == "direction") direction = val
+    else if (key == "seam") seam = val
+    else if (key == "variants") variants = val
+    lastkey = key
+    next
+  }
+  id != "" && lastkey == "variants" && /^  [^ ]/ { variants = variants " " trim($0); next }
+  END { flush() }
+AWK
+)
+# Sorted, one space between, for a comparison that reads as a set rather than as
+# whatever order a file happens to be in. Defined above the `req` below rather
+# than between it and the check it serves: a definition sets no requirement, and
+# a reader following a tag down the file should not have to step over one.
+inv_sorted() {  # inv_sorted <space-separated tokens> -- sorted, one space between
+  local out
+  # Globbing off for the split, as every other split in this section pairs it:
+  # the tokens here are `GH-<n>:<keyword>` and carry no glob character today,
+  # which is a reason this has not bitten and not a reason to leave it unpaired.
+  # The pairing is the rule; #106's own `inv_quote_at` argues it one screen up.
+  set -f
+  out=$(printf '%s ' $1 | tr ' ' '\n' | grep -v '^$' | LC_ALL=C sort | tr '\n' ' ')
+  set +f
+  printf '%s' "$out"
+}
+
+# Tagged before the loop, for the reason the departure loop above is: every
+# guard below can print before any entry has survived, and an untagged check is
+# reported by the #104 section as a second defect.
+req GH-141
+INV_SCOPE_DERIVED=
+INV_SEEDS_DECLARED=
+INV_SCOPE_BAD=0
+set -f
+INV_TRANS_LIST=" $(printf '%s ' $INV_TRANSFORMS) "
+set +f
+while IFS='|' read -r vid vin vkw vpay; do
+  [ -n "$vid" ] || continue
+  if [ "$vin" != in ]; then
+    INV_SCOPE_BAD=$((INV_SCOPE_BAD + 1))
+    fail static 'the entry %s carries a variants field and is not in the families scope, which is where that field belongs' "$vid"
+    continue
+  fi
+  INV_SCOPE_DERIVED="$INV_SCOPE_DERIVED $vid:$vkw"
+  case "$vkw" in
+    seed) INV_SEEDS_DECLARED="$INV_SEEDS_DECLARED $vid" ;;
+    transformation)
+      if [ -z "$vpay" ]; then
+        INV_SCOPE_BAD=$((INV_SCOPE_BAD + 1))
+        fail static 'the entry %s declares variants: transformation and names none' "$vid"
+      else
+        # Globbing off: a `none:` reason may hold `pre-*` and one day a
+        # transformation list could too, and a file named `pre-x` beside this
+        # suite would expand it into a name nothing holds.
+        set -f
+        for vname in $vpay; do
+          case "$INV_TRANS_LIST" in
+            *" $vname "*) : ;;
+            *) INV_SCOPE_BAD=$((INV_SCOPE_BAD + 1))
+               fail static 'the entry %s names the transformation %s, which INV_TRANSFORMS does not have' \
+                 "$vid" "$vname" ;;
+          esac
+        done
+        set +f
+      fi ;;
+    none)
+      [ -n "$vpay" ] || { INV_SCOPE_BAD=$((INV_SCOPE_BAD + 1))
+        fail static 'the entry %s declares variants: none and gives no reason' "$vid"; } ;;
+    '')
+      INV_SCOPE_BAD=$((INV_SCOPE_BAD + 1))
+      fail static 'the entry %s is in the families scope and declares no variants field at all' "$vid" ;;
+    *)
+      INV_SCOPE_BAD=$((INV_SCOPE_BAD + 1))
+      fail static 'the entry %s declares variants: %s, which is none of seed, transformation and none' \
+        "$vid" "$vkw" ;;
+  esac
+done <<< "$(awk "$REQ_FIELD_AWK$INV_VARIANTS_AWK" "$HOOKS/requirements.md")"
+# Nothing read is a defect of its own AND counts itself in, because the line
+# below is a claim about every entry in scope and an empty read makes it a claim
+# about none. Written as two statements the first time and found by review of
+# this branch: the `ok` printed beside the failure, which is the shape #98's
+# section is about -- a check that passes by computing nothing.
+if [ -z "$INV_SCOPE_DERIVED" ]; then
+  INV_SCOPE_BAD=$((INV_SCOPE_BAD + 1))
+  fail static 'no GH- entry was read out of requirements.md at all, so the three checks below say nothing'
+fi
+[ "$INV_SCOPE_BAD" -gt 0 ] \
+  || pass static 'every GH- entry in the families scope declares a variants value this suite can act on'
+
+# THE COUNTS, printed rather than written in a comment. The first version of
+# this section put "38 entries in scope, 11 seeds, 7 transformations, 20 none"
+# in the prose above, in the same commit whose other file argues that a count in
+# a comment is what #107 was filed about. Four numbers nothing derived, stale on
+# the next `GH-` entry. This line derives them; nothing restates them.
+req GH-141
+INV_SCOPE_N=0; INV_SCOPE_SEED=0; INV_SCOPE_TRANS=0; INV_SCOPE_NONE=0
+set -f
+for vtok in $INV_SCOPE_DERIVED; do
+  INV_SCOPE_N=$((INV_SCOPE_N + 1))
+  case "${vtok#*:}" in
+    seed)           INV_SCOPE_SEED=$((INV_SCOPE_SEED + 1)) ;;
+    transformation) INV_SCOPE_TRANS=$((INV_SCOPE_TRANS + 1)) ;;
+    none)           INV_SCOPE_NONE=$((INV_SCOPE_NONE + 1)) ;;
+  esac
+done
+set +f
+pass static 'the families scope holds %d GH- entries: %d seeded, %d naming a transformation, %d with no command spelling to vary' \
+  "$INV_SCOPE_N" "$INV_SCOPE_SEED" "$INV_SCOPE_TRANS" "$INV_SCOPE_NONE"
+
+req GH-141
+tok 'the GH- entries in the families scope are these, each with what it says the families do with it' \
+  "$(inv_sorted "$INV_SCOPE")" "$(inv_sorted "$INV_SCOPE_DERIVED")"
+
+# The two halves of one claim, and it is deliberately an equality and not an
+# inclusion: an entry declaring `seed` and tagged on no seed is a scope decision
+# nothing carries out, and a seed tagged with an entry that declares something
+# else is a row whose requirement disowns it. Either way one of the two is
+# wrong, and which is not this check's to say.
+req GH-141
+tok 'every GH- entry declaring variants: seed is tagged on a seed, and every GH- tag in the seed table belongs to one' \
+  "$(inv_sorted "$INV_SEEDS_DECLARED")" \
+  "$(printf '%s\n' "$INV_SEEDS" \
+     | awk -F'|' 'NF >= 6 { n = split($4, t, " "); for (i = 1; i <= n; i++) if (t[i] ~ /^GH-/) print t[i] }' \
+     | LC_ALL=C sort -u | tr '\n' ' ')"
+
+# The verdicts, as the FR check holds its own. One direction is allowed here and
+# the literal is where that shows: GH-43.1 is seeded ALLOW alone because its
+# subject is that prose naming a push is not a push, and GH-72 ALLOW alone
+# because the refusing half of it -- `./gh` and `/usr/bin/gh` still refused --
+# is GH-117's open gap, which the class rows above already assert.
+req GH-141
+tok 'the GH- seeds are tagged in the directions the table holds' \
+  'GH-137.1 BLOCK;GH-137.2 ALLOW BLOCK;GH-43.1 ALLOW;GH-43.3 BLOCK;GH-43.4 BLOCK;GH-51.1 BLOCK;GH-51.2 BLOCK;GH-68.1 ALLOW;GH-69.1 ALLOW BLOCK;GH-69.2 ALLOW BLOCK;GH-72 ALLOW;GH-94.1 ALLOW BLOCK;GH-97.1 ALLOW BLOCK;' \
+  "$(printf '%s\n' "$INV_SEEDS" \
+     | awk -F'|' 'NF >= 6 { n = split($4, t, " "); for (i = 1; i <= n; i++) if (t[i] ~ /^GH-/) print t[i], $3 }' \
      | LC_ALL=C sort -u \
      | awk '{ v[$1] = v[$1] " " $2 } END { for (k in v) print k v[k] }' \
      | LC_ALL=C sort | tr '\n' ';')"
@@ -10359,6 +10940,42 @@ done
 # What the families came to. Not a verdict of its own -- a count cannot say a
 # check is right -- but a transformation that applies to nothing, and a seed
 # table an edit has cut in half, are both invisible without it.
+#
+# WHAT IT COSTS, which #141's fourth acceptance criterion asks for. Measured on
+# 2026-09-17, on one machine, in one worktree, all runs green:
+#
+#   before #141  118.6 s                             39 seeds, 1436 variants
+#   after        116.8 117.1 118.4 119.9 122.6       46 seeds, 1807 variants
+#                133.1                               (n=6)
+#
+# 371 more variants, 26% more of them, and the difference between the two rows
+# is smaller than the range WITHIN the second: the six after-runs span 16.3 s
+# and their median is 119.2 s, against a single before-run of 118.6 s. So this
+# measurement supports "the addition did not move the run time by anything this
+# suite can resolve" and does not support a figure for how much it moved it by.
+# A second before-run was not taken and should have been; the numbers above are
+# what there is.
+#
+# The range is the finding rather than noise around one. The 133.1 s run and a
+# 116.8 s run are the same tree minutes apart, with other worktree sessions on
+# the machine -- so a few seconds read off one run of each tree, which is how
+# #140's recorded number and this branch's would have been compared, says
+# nothing at all.
+#
+# The per-variant model over-predicts, and that is worth writing down because
+# #141's cost paragraph reasons from one. Timed directly, n=100 each, one hook
+# invocation exactly as check_in makes it: 10.9 ms for append-only-docs.sh,
+# 16.0 ms for no-commit-to-main.sh, 29.8 ms for no-pr-decisions.sh. At those
+# rates 371 variants would be 5-7 s, and the suite does not show it -- a cold
+# invocation from a shell loop is not what a variant costs in the middle of a
+# run that has already paged everything in. Plan with the measured suite, not
+# with the product.
+#
+# #140's 94.0 s, which #141 reasons from, is NOT comparable with any of these:
+# the commit this branch starts from measures 118.6 s here. A budget decision
+# has to be baseline-to-after on one machine, and #141's "the same again would
+# want a decision about the budget rather than a drift into it" is about the
+# 53 s #140 added -- which this is not, on this evidence, at all.
 req GH-106
 [ "$INV_SEED_COUNT" -gt 0 ] || fail static 'the seed table yielded no seed at all'
 [ "$INV_VARIANTS" -gt 0 ] || fail static 'the transformations yielded no variant at all'
@@ -10686,7 +11303,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '43' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '58' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -10749,7 +11366,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '41' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '56' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -10793,42 +11410,178 @@ rm -f "$ENV_NO_GH_BIN/gh"
 # that refusal would read as the property being checked. What has to be true is
 # that the tool cannot be found under $dir, and that $dir is otherwise the farm.
 #
-# HOW IT GOT THAT WAY DEPENDS ON THE MACHINE, and the first version of this guard
-# did not allow for that. With the tool installed, the farm holds it, `rm` took it
-# out, and the two directories differ by exactly that one name. WITHOUT it, the
-# farm never held it, `rm -f` removed nothing, and the two are identical -- so a
-# guard demanding a one-name difference aborted the whole suite on any machine
+# HOW IT GOT THAT WAY USED TO DEPEND ON THE MACHINE, and no longer does. With the
+# tool installed, the farm holds it, `rm` took it out, and the two directories
+# differ by exactly that one name. WITHOUT it, the farm never held it, `rm -f`
+# removed nothing, and the two were identical -- so the first version of this
+# guard, demanding a one-name difference, aborted the whole suite on any machine
 # with no `gh`, at this section, skipping every section below it including #104's
 # coverage derivations. That is a dependence on the invoker's machine, which is
 # the one thing #103's Q21 and this section's own preamble say there must not be,
 # and the abort blamed the fixture for what was true of the machine. Found by
 # Bertan's review of PR #150; reproduced by building a farm with no `gh` in it.
 #
-# `gh` is a dependency of no hook and, before this section, of nothing in this
-# suite: `report-stale-branches.sh` is the only file that calls it and degrades to
-# `no gh on PATH` by design, which GH-108.10 drives. `git` differs only in that
-# the suite has already built its fixtures with it hundreds of lines above, so its
-# farm entry is never the missing one -- the branch below is written for both
-# because the rule is the same, not because git can take it.
+# The fix that answered that review tolerated the no-difference copy instead, and
+# said so in a paragraph here. It ran everywhere, and it paid for that in the one
+# currency this section deals in: on a machine with no `gh` the `gh`-less
+# environment WAS the ordinary environment, so the GH-108.6 checks below asserted
+# their verdicts twice rather than once and were evidence about `gh` on no such
+# machine. #155 took the tolerance back out by removing what it tolerated. The
+# farm is given a `gh` where it is built -- the host's, or a stub -- so the
+# difference here is one name on every machine and this guard requires it
+# unconditionally.
 #
-# What this costs, said rather than hidden: on a machine with no `gh` the gh-less
-# environment is the ordinary one, so the GH-108.6 checks that run under it assert
-# their verdicts twice rather than once. They are still true, and they still hold
-# the hook to a verdict that does not move; they are simply not evidence ABOUT gh
-# there. The suite says nothing about that, because a line printed only on some
-# machines is a worse thing to reason about than a check that is merely redundant.
+# WHICH TOOL MAY BE SYNTHESISED AND WHICH MAY NOT is argued in full where the stub
+# is made, under GH IN THE FARM in the #95 section above; the short of it is that
+# `gh` is a dependency of no hook, so a name is all the fixture wants of it, while
+# `git` is a dependency of this suite, so a farm with no `git` is a machine this
+# suite cannot run on and a fake one would answer the questions the hooks are
+# judged on. `report-stale-branches.sh` is the only file in .claude/hooks/ that
+# calls `gh` at all, and it degrades to `no gh on PATH` by design, which GH-108.10
+# drives. The loop below is written for both tools because the RULE is the same --
+# the farm minus exactly this one name -- and not because `git` could be stubbed
+# to satisfy it.
 for pair in "git:$ENV_NO_GIT_BIN" "gh:$ENV_NO_GH_BIN"; do
   tool=${pair%%:*}; dir=${pair#*:}
-  # Empty when the machine does not have the tool, which makes the required
-  # difference between the two directories "no difference at all".
-  want=
-  [ -n "$( PATH="$WITH_JQ_BIN"; command -v "$tool" )" ] && want="< $tool"
-  [ -z "$( PATH="$dir"; command -v "$tool" )" ] \
-    && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$dir") | grep '^[<>]')" = "$want" ] || {
+  # Asked separately from the difference below, because the two have different
+  # causes and one message for both would misname either: a farm holding no `git`
+  # is a machine without git, and a farm holding no `gh` is a stub that was not
+  # made. Neither is the fixture being the wrong shape, which is what the second
+  # message says.
+  farm_has "$WITH_JQ_BIN" "$tool" || {
+    echo "the symlink farm holds no $tool at all, so the $tool-less fixture is not it minus one name; the checks using it prove nothing" >&2
+    exit 1
+  }
+  ! farm_has "$dir" "$tool" \
+    && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$dir") | grep '^[<>]')" = "< $tool" ] || {
     echo "the $tool-less PATH fixture is not the symlink farm minus $tool; the checks using it prove nothing" >&2
     exit 1
   }
 done
+
+echo "--- the farm's gh, which is what makes the fixture above machine-independent (#155) ---"
+req GH-155.1
+# The rule the guard above now rests on, asked of this machine AND of the machine
+# this is not. What decides the fixture is whether the HOST's PATH held a `gh`:
+# where it did there is nothing to synthesise, so a check that only looked at the
+# farm as built would be green on any machine with `gh` installed and would say
+# nothing whatever about the machine that found the defect. So that machine is
+# built here -- the farm with `gh` taken out stands in for a PATH that never had
+# one -- and the same synthesis is run against it. This is PR #150's manual
+# reproduction, "reproduced by building a farm with no gh in it", written as a
+# check instead of as a sentence in a comment.
+#
+# Every expectation is a literal, the stub's own line included: these read what
+# the stub SAYS rather than asking the variable that wrote it, so an edit to that
+# message is visible here rather than silently agreed with. The stub's line is
+# pinned WHOLE and not by a leading fragment: a prefix goes on matching after the
+# rest of the sentence has been deleted, which is how a `says` check comes to
+# stand for less than its label claims.
+#
+# THE FARM BUILD CALLS THE SYNTHESIS, asked of the suite's text because on a host
+# that HAS `gh` nothing can ask it of a run. The synthesis is a fallback, so with
+# the host providing a `gh` its call is a no-op and deleting that one line leaves
+# every other check here green while the machine-independence goes back to being
+# an accident of the invoker's PATH. That is the direction #84 was filed in, one
+# level out again.
+#
+# Read from the RANGE the farm is built in rather than from the whole file: a
+# literal asserted of the file would match this check's own argument and pass with
+# the call gone. `holds` fails on text it could not read, so an anchor that moves
+# is red rather than vacuous.
+FARM_BUILD=$(sed -n '/^WITH_JQ_BIN=/,/^cp -a /p' "$SUITE_DIR/check-hooks.sh" \
+             | sed 's/[[:space:]]*#.*$//')
+holds 'the farm build calls the synthesis, which a host with its own gh cannot show by running' \
+      "$FARM_BUILD" 'farm_stub_gh "$WITH_JQ_BIN"'
+tok 'the symlink farm holds a gh, so the gh-less fixture is one name short of it' \
+    'gh' "$(farm_has "$WITH_JQ_BIN" gh && echo gh)"
+FARM_HOST_HAD_NO_GH="$FIXTURES/farm-from-a-host-with-no-gh"
+cp -a "$WITH_JQ_BIN" "$FARM_HOST_HAD_NO_GH"
+rm -f "$FARM_HOST_HAD_NO_GH/gh"
+tok 'a farm built from a host with no gh on PATH holds none to begin with' \
+    '' "$(farm_has "$FARM_HOST_HAD_NO_GH" gh && echo gh)"
+farm_stub_gh "$FARM_HOST_HAD_NO_GH"
+tok 'and the synthesis gives it one' \
+    'gh' "$(farm_has "$FARM_HOST_HAD_NO_GH" gh && echo gh)"
+FARM_HOST_HAD_NO_GH_MINUS_GH="$FIXTURES/farm-from-a-host-with-no-gh-minus-gh"
+cp -a "$FARM_HOST_HAD_NO_GH" "$FARM_HOST_HAD_NO_GH_MINUS_GH"
+rm -f "$FARM_HOST_HAD_NO_GH_MINUS_GH/gh"
+tok 'so on that machine too the gh-less copy differs from the farm by one name' \
+    '< gh' "$(diff <(ls -A "$FARM_HOST_HAD_NO_GH") <(ls -A "$FARM_HOST_HAD_NO_GH_MINUS_GH") | grep '^[<>]')"
+# What the stub does when something runs it, which nothing under the farm's PATH
+# does. The status and the sentence are asked separately: a stub that printed the
+# right line and exited 0 would be the silent permit this section is about,
+# arriving through the fixture instead of through a hook.
+#
+# THE ARGUMENTS ARE `--version` AND NOT `pr merge 5`, and that is not cosmetic.
+# The stub ignores argv entirely, so any arguments establish the same two things
+# -- and these two lines, with the marker `gh` under this same requirement beside
+# the report's own run further down, are the whole of what RUNS a `gh` in this
+# suite rather than handing its text to a hook. What they rest on is that PATH
+# names one directory holding a stub. Were that ever wrong, `gh --version`
+# against a real gh exits 0 and prints no such sentence, so both checks go red;
+# `gh pr merge 5` would have merged a pull request. The repository's own lesson
+# is that a command run to learn something once created a real release.
+tok 'the stub refuses rather than answering for gh' \
+    '1' "$( PATH="$FARM_HOST_HAD_NO_GH"; gh --version >/dev/null 2>&1; echo $? )"
+holds 'and names the fixture it is, so a check that came to depend on it says so' \
+      "$( PATH="$FARM_HOST_HAD_NO_GH"; gh --version 2>&1 >/dev/null )" \
+      'gh: check-hooks.sh PATH-fixture stub, a name and not a program (GH-155.1)'
+# And it never stands in for a `gh` the host provided. Where the host has one the
+# farm holds the host's, so the fixture is still the invoker's PATH -- which is
+# what #95 builds the farm for, and the reason the synthesis is a fallback rather
+# than an override. The marker in this fixture's `gh` is how the check tells the
+# two apart; a stub that overwrote it would print the stub's line instead.
+FARM_HOST_HAD_A_GH="$FIXTURES/farm-from-a-host-with-gh"
+cp -a "$FARM_HOST_HAD_NO_GH_MINUS_GH" "$FARM_HOST_HAD_A_GH"
+# THE SAME UNLINK, AND THE SAME REASON as the one inside the synthesis: `>` on a
+# farm entry writes THROUGH the symlink and truncates the host binary it points
+# at. This copy is taken from a farm that has already had `gh` removed, so there
+# is no link here to write through -- but that is a property of the line above,
+# and naming a different source there would turn the next line into the hazard
+# the synthesis carries a paragraph about. The unlink makes it safe by
+# construction rather than by which directory was copied.
+rm -f "$FARM_HOST_HAD_A_GH/gh"
+printf '#!/bin/bash\necho the-host-gh\n' > "$FARM_HOST_HAD_A_GH/gh"
+chmod +x "$FARM_HOST_HAD_A_GH/gh"
+farm_stub_gh "$FARM_HOST_HAD_A_GH"
+tok 'a farm whose host had a gh keeps the one it had' \
+    'the-host-gh' "$( PATH="$FARM_HOST_HAD_A_GH"; gh )"
+
+# WHAT DECIDES THE SYNTHESIS IS THE DIRECTORY AND NOT THE CALLING SHELL, and the
+# machine that tells those two apart is one whose environment exports a `gh`
+# function -- a wrapper in a login profile, which bash hands to a script like
+# this one as `BASH_FUNC_gh%%`. `command -v` resolves a function ahead of PATH,
+# so the test this used to make read a `gh` the farm did not hold: no stub was
+# written, and the guard above, which this branch made unconditional, aborted
+# the whole suite. #155's own failure shape, arriving by a route nothing was
+# asking about until PR #161 was reviewed.
+#
+# The function is defined and EXPORTED here because exporting is what puts it in
+# reach of the subshell the old test used, and it is unset on the next line: a
+# `gh` function left standing would be run by the checks above, which execute the
+# stub, in place of the file they are about.
+FARM_UNDER_A_GH_FUNCTION="$FIXTURES/farm-under-a-shell-that-defines-gh"
+cp -a "$FARM_HOST_HAD_NO_GH_MINUS_GH" "$FARM_UNDER_A_GH_FUNCTION"
+gh() { echo "a wrapper function in the invoker's environment, not a program in the farm"; }
+export -f gh
+farm_stub_gh "$FARM_UNDER_A_GH_FUNCTION"
+unset -f gh
+tok 'a gh the calling shell defines is not a gh in the farm, so the stub is written anyway' \
+    'gh' "$(farm_has "$FARM_UNDER_A_GH_FUNCTION" gh && echo gh)"
+# AND THE GUARD ASKS IT THE SAME WAY. The synthesis and the fixture guard are one
+# rule read twice, so a `command -v` left in the guard is the same abort with the
+# stub written: a `gh` function resolves under the `gh`-less PATH too, and the
+# one-name difference the guard demands reads as absent. Asked of the suite's
+# text because a guard whose failure is `exit 1` cannot be driven from inside the
+# run it would end. `lacks` fails on text it could not read, so a range anchor
+# that moves is red rather than vacuously green.
+FARM_GUARD=$(sed -n '/^for pair in "git:\$ENV_NO_GIT_BIN"/,/^done$/p' "$SUITE_DIR/check-hooks.sh" \
+             | sed 's/[[:space:]]*#.*$//')
+holds 'the gh-less fixture guard asks the directory whether the farm holds the name' \
+      "$FARM_GUARD" 'farm_has "$WITH_JQ_BIN" "$tool"'
+lacks 'and asks the calling shell nothing, which would resolve a function ahead of PATH' \
+      "$FARM_GUARD" 'command -v'
 
 ENV_REPOS="$FIXTURES/env"
 mkdir -p "$ENV_REPOS"
@@ -11079,8 +11832,18 @@ echo "--- gh off PATH, and every other environment: the pull request hook starts
 # It runs no git and no gh, so its verdict is a function of the command's text
 # alone. That is checked as the property rather than as one absence: the same two
 # payloads under every environment of this section.
+#
+# THE FARM IS THE ROW THAT MAKES THE GH-LESS ROW EVIDENCE, and `plain` cannot be
+# it. `plain` is the invoker's PATH, so on a host with no `gh` it is itself a
+# `gh`-less environment and the pair asserted the same thing twice -- which is
+# what #155 was filed about and what the stub alone does not fix. The farm always
+# holds a `gh`, the row below it is the farm minus that one name, and the contrast
+# between the two is therefore a genuine one-name contrast on every machine.
+# `plain` stays, because what it asks is the other question: that the invoker's
+# own PATH, whatever is on it, moves no verdict either.
 req GH-108.6
-for env in "plain:$ENV_PLAIN:$PATH" "gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN" \
+for env in "plain:$ENV_PLAIN:$PATH" "the farm, gh on PATH:$ENV_PLAIN:$WITH_JQ_BIN" \
+           "gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN" \
            "git off PATH:$ENV_PLAIN:$ENV_NO_GIT_BIN" "no repository:$ENV_NOREPO:$PATH" \
            "detached HEAD:$ENV_DETACHED:$PATH" "no origin:$ENV_NO_ORIGIN:$PATH" \
            "no dev ref:$ENV_DEV_NONE:$PATH" "two dev refs:$ENV_DEV_TWO:$PATH"; do
@@ -11090,9 +11853,41 @@ for env in "plain:$ENV_PLAIN:$PATH" "gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN" \
   env_cmd "$dir" "$path" no-pr-decisions.sh ALLOW "$name: gh issue list is permitted" \
     'gh issue list'
 done
-env_says "$ENV_PLAIN" "$ENV_NO_GH_BIN" no-pr-decisions.sh "Bertan's call" \
-  'gh off PATH: the refusal is word for word the one gh on PATH gets' \
+# "WORD FOR WORD" IS ASKED AS A COMPARISON, which it was not. What stood here was
+# one `env_says` against the `gh`-less PATH, and `env_says` matches a FRAGMENT --
+# so the label claimed the two refusals were identical while the check read three
+# words of one of them and never read the other at all. Two refusals differing in
+# every other word passed it. That is the defect this same section argues against
+# a hundred lines up, where the stub's sentence is pinned whole.
+#
+# Three checks, because the claim has three parts. Each side is pinned to the
+# refusal WHOLE, as a literal written from no-pr-decisions.sh rather than derived
+# from a run; then the two runs are read and compared to each other, which is the
+# only part that cannot be a literal because it is an equality between two
+# measurements. The `gh`-on-PATH side is the farm and not the invoker's PATH, for
+# the reason the loop above gives (#155).
+env_stderr() {  # env_stderr <dir> <PATH> <script> <command> -- what the hook said
+  local dir="$1" path="$2" script="$3" cmd="$4" hook
+  hook=$(hook_path "$script")
+  printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+    | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null
+}
+PR_MERGE_REFUSAL="Blocked: deciding a pull request is Bertan's call, not an agent's. Opening a PR, commenting on it and editing it are allowed; accepting, rejecting, merging and reopening are not. Leave the PR open and say it is ready to merge."
+env_says "$ENV_PLAIN" "$WITH_JQ_BIN" no-pr-decisions.sh "$PR_MERGE_REFUSAL" \
+  'gh on PATH: the whole refusal, and it is this one the gh-less side is held to' \
   'gh pr merge 5'
+env_says "$ENV_PLAIN" "$ENV_NO_GH_BIN" no-pr-decisions.sh "$PR_MERGE_REFUSAL" \
+  'gh off PATH: the whole refusal again, not a fragment of it' \
+  'gh pr merge 5'
+GH_ON_SAID=$(env_stderr "$ENV_PLAIN" "$WITH_JQ_BIN" no-pr-decisions.sh 'gh pr merge 5')
+GH_OFF_SAID=$(env_stderr "$ENV_PLAIN" "$ENV_NO_GH_BIN" no-pr-decisions.sh 'gh pr merge 5')
+# Asked before the equality, for the reason `lacks` gives about absences: two
+# hooks that crashed saying nothing compare equal, which is this check passing on
+# the case it exists to catch.
+tok 'both refusals were read, so what follows compares two texts and not two silences' \
+    'read' "$( [ -n "$GH_ON_SAID" ] && [ -n "$GH_OFF_SAID" ] && echo read )"
+tok 'and the two are word for word the same, which neither fragment above asks' \
+    "$GH_ON_SAID" "$GH_OFF_SAID"
 
 echo "--- bytes in the command nobody meant to send ---"
 # A CRLF, a non-ASCII byte and an invalid UTF-8 sequence leave the verdict where
@@ -11180,10 +11975,14 @@ echo "--- every hook exits 0 or 2, in every environment and on every payload her
 # verdicts. So the environments a hook was asked for a verdict in and the ones it
 # was asked for a status in were different sets, and nothing showed it, because
 # the count matched a literal written to match it. That is this section's own
-# shape, found here by review rather than by the suite. Ten environments against
-# ten payloads now, and the rule the first version should have been written to:
-# a case driven anywhere in this section is driven here.
+# shape, found here by review rather than by the suite. Eleven environments
+# against ten payloads now, and the rule the first version should have been
+# written to: a case driven anywhere in this section is driven here. The eleventh
+# is the symlink farm, which #155 added to the row above as the `gh`-on-PATH twin
+# of the `gh`-less one; it is here because of that rule and not for a reason of
+# its own.
 ENV_STATUS_CASES="plain:$ENV_PLAIN:$PATH
+the farm, gh on PATH:$ENV_PLAIN:$WITH_JQ_BIN
 git off PATH:$ENV_PLAIN:$ENV_NO_GIT_BIN
 gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN
 no repository:$ENV_NOREPO:$PATH
@@ -11205,7 +12004,7 @@ ENV_STATUS_PAYLOADS=(
   '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \u00e9"}}'
   "$(printf '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main \377\376"}}')"
 )
-ENV_STATUS_EXPECTED=100
+ENV_STATUS_EXPECTED=110
 req GH-108.8
 for hook in $INPUT_BASH_HOOKS $INPUT_EDIT_HOOKS; do
   bad= ; n=0
@@ -11280,6 +12079,161 @@ unarmed 'no exit above the heading survives, which is what made it silent' \
 unarmed 'nor the rev-parse that exited with nothing said' \
   "$HOOKS/report-stale-branches.sh" \
   'git rev-parse --git-dir >/dev/null 2>&1 || exit 0'
+
+echo "--- and that run does not execute the gh standing beside the git it lacks (#155) ---"
+# THE ROW ABOVE IS WHERE THE FARM'S STUB COULD GO WRONG, and until this block the
+# only thing saying it does not was a sentence in the farm's own comment -- which
+# was wrong about why, and was found wrong in review rather than by a check.
+# $ENV_NO_GIT_BIN is the farm minus `git`, so it carries the farm's `gh` -- the
+# host's, or the stub synthesised for it -- on the PATH of the one file in
+# .claude/hooks/ that calls `gh` at all. What keeps that stub from ever answering
+# for a real one is an ordering INSIDE report-stale-branches.sh: its
+# `command -v git` guard exits above the first of those calls. That is a property
+# of that file and not of this fixture, so an edit there reading `gh` before
+# `git` would have the stub answering a question a verdict is read off, and the
+# comment that used to assert it could not happen would still have been green.
+#
+# THE MARKER IS A FILE AND NOT A MESSAGE, which that file's own code forces: it
+# reads `gh api` with 2>/dev/null, so a stub announcing itself on stderr would be
+# silenced by the very line this exists to catch. A file written on exec is
+# visible whatever the caller redirects. The control below runs the marker `gh`
+# on purpose first, because an absence read off a marker that never worked is
+# evidence of nothing -- the shape `lacks` refuses for text, asked here of a file.
+req GH-155.1
+ENV_NO_GIT_GH_MARKER="$FIXTURES/path-without-git-whose-gh-tells"
+ENV_GH_WAS_RUN="$FIXTURES/the-report-ran-a-gh"
+cp -a "$FARM_HOST_HAD_NO_GH" "$ENV_NO_GIT_GH_MARKER"
+rm -f "$ENV_NO_GIT_GH_MARKER/git"
+# THE SAME UNLINK AND THE SAME REASON the synthesis carries a paragraph about:
+# `>` on a farm entry writes THROUGH the symlink and truncates the host binary it
+# points at. The copy above is of a farm whose `gh` is already a written stub and
+# not a link, so there is nothing here to write through -- but that is a property
+# of the line above rather than of this one, which is exactly how the first
+# instance of this hazard got written.
+rm -f "$ENV_NO_GIT_GH_MARKER/gh"
+printf '#!/bin/bash\n: > "%s"\nexit 1\n' "$ENV_GH_WAS_RUN" > "$ENV_NO_GIT_GH_MARKER/gh"
+chmod +x "$ENV_NO_GIT_GH_MARKER/gh"
+rm -f "$ENV_GH_WAS_RUN"
+( PATH="$ENV_NO_GIT_GH_MARKER"; gh --version >/dev/null 2>&1 )
+tok 'the marker gh records having been run, so the absence below is a measurement' \
+    'ran' "$( [ -e "$ENV_GH_WAS_RUN" ] && echo ran )"
+rm -f "$ENV_GH_WAS_RUN"
+report_says "$ENV_NO_GIT_GH_MARKER" "$ENV_REPORT_COPY/report-stale-branches.sh" \
+  'branches: NOT READ -- git is not on PATH' \
+  'with a gh on PATH and no git it still names git as what it lacks'
+tok 'and it never ran that gh, which is the whole of what lets the farm carry a stub' \
+    '' "$( [ -e "$ENV_GH_WAS_RUN" ] && echo ran )"
+# THE OTHER THREE PATHS, derived off the file rather than recited: two hold no
+# `gh` at all and the third is the invoker's own, where the run stops at the
+# not-a-repository guard above. What this asks is that none of them is
+# $WITH_JQ_BIN, the farm itself -- the one PATH on which a `gh` would be both
+# present and reached -- so a later check that drove the report under the farm
+# would turn this line red rather than quietly making the stub load-bearing.
+# #84's direction: the claim is about every consumer, so it is derived from
+# every consumer it can read -- and what it cannot read is named below rather
+# than left to be discovered.
+#
+# READ AT A CALL POSITION, AND THE POSITIONS ARE NAMED: the start of a line with
+# any indentation, after a `;`, `&`, `|` or `)`, and after a `then`, `do` or
+# `else`. The last two groups are not decoration. drive_helper dispatches this
+# helper through a CASE ARM --
+#
+#     report_says) report_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' ;;
+#
+# -- where the line-start position reads the case LABEL, `report_says)`, and not
+# the call. A derivation that only skipped indentation could not see the one call
+# in this suite that is not a statement of its own, and `if ...; then report_says
+# "$WITH_JQ_BIN" ...` was invisible to it as well. Round 2 of PR #161's review
+# found the previous spelling claiming to read "anywhere on a line" while reading
+# line-start-modulo-whitespace, and citing that case arm as its evidence -- the
+# one line its own code could not read. The prose was stronger than the guard,
+# which is the defect this whole section is about, arriving in the fix for it.
+#
+# WHAT IT STILL CANNOT READ is a call whose command word is a variable: no
+# reading of the text can, because `$DRIVEN_REPORT "$WITH_JQ_BIN"` spells the
+# name nowhere. That shape is not in this file -- DRIVEN_REPORT names the helper
+# for the loop above, and the case arm is where it becomes a call, which is why
+# covering the case position covers that route whole -- and if it is ever
+# written, this derivation is evidence about the calls it can read and about
+# nothing else.
+#
+# WHITESPACE IS NOT ONE OF THE SEPARATORS, and what that excludes is a
+# `report_says "` sitting inside a quoted string -- payload rather than a call.
+# MEASURED AGAINST THIS FILE AS IT STANDS, admitting whitespace would change
+# nothing: the same twelve lines, the same four PATHs. So the exclusion is a rule
+# about what may be written here later and not a description of something this
+# file contains, and saying otherwise would be this section's own defect a third
+# time. What made it a live hazard was the previous round's fixture, which wrote
+# the call out as literal text inside an `echo`, indented, with the farm as its
+# PATH -- payload that admitting whitespace would have read as a call, injecting
+# the farm into the real derivation and turning the check red for a reason having
+# nothing to do with the report. THAT EXAMPLE IS NOT SPELLED OUT HERE, and the
+# omission is the point: a comment naming it in full would plant the thirteenth
+# match itself, which is what happened on the first attempt at this paragraph and
+# is why the claim above is a measurement and not a recollection. It is out of
+# reach now by CONSTRUCTION rather than by the quote that happens to precede it:
+# the fixtures below are written through a variable holding the helper's name, so
+# this file carries no `report_says` of theirs in any position at all.
+#
+# A COMMENT IS READ AT A SEPARATOR POSITION, and the example six lines above is
+# read: it is one of the twelve lines this derivation matches in this file, and
+# it names $PATH, which is why the literal below is what it would be without it.
+# Writing that down rather than filtering it out is the decision, and it rests on
+# the direction. A comment can only ADD a PATH to the derived set, never hide a
+# call from it, so the property this check exists for -- that no run under the
+# farm goes unseen -- survives; a comment that named the farm would turn the
+# check RED until it was reworded, which is a nuisance in the safe direction.
+# Stripping comments first would buy the tidier claim at the price of the unsafe
+# one: the strip cuts at the first `#` on a line, so a line carrying one before a
+# call would lose the call and the check would go quietly green. The line-start
+# position is the half that is closed, because a comment's first non-blank is
+# `#`; the separator positions are not, and this paragraph is the record of it.
+report_run_paths() {  # report_run_paths <file> -- every PATH the report is driven under in it
+  grep -oE '(^|[;&|)]|[[:space:]](then|do|else))[[:space:]]*report_says "[^"]*"' "$1" \
+    | sed 's/.*report_says "//; s/"$//' | sort -u | tr '\n' ' '
+}
+REPORT_RUN_PATHS=$(report_run_paths "$SUITE_DIR/check-hooks.sh")
+tok 'every run of the report names one of four PATHs, and the farm is not among them' \
+    '$ENV_NO_GH_BIN $ENV_NO_GIT_BIN $ENV_NO_GIT_GH_MARKER $PATH ' "$REPORT_RUN_PATHS"
+# THE CASE ARM, READ OUT OF THIS FILE AS IT STANDS, and not a fixture resembling
+# it: the sentence above cites it, so the citation is the thing to check. It is
+# found by its shape rather than by a line number, and the count is asserted
+# first because a derivation run over an empty extract returns the empty string,
+# which would agree with nothing and pass.
+REPORT_CASE_ARM="$FIXTURES/the-case-arm-as-this-file-writes-it"
+grep -E '^[[:space:]]*report_says\)' "$SUITE_DIR/check-hooks.sh" > "$REPORT_CASE_ARM"
+tok 'this suite holds one report_says call that is not a statement of its own, in drive_helper' \
+    '1' "$(grep -c . "$REPORT_CASE_ARM")"
+tok 'and the derivation reads that line as it stands, which the line-start spelling could not' \
+    '$PATH ' "$(report_run_paths "$REPORT_CASE_ARM")"
+# The three shapes a call is written in here, in a file whose every run is one of
+# them: an indented loop body, a case arm, and a call after `then`. None is
+# readable at the line-start position, so this fixture is red under the spelling
+# the review found and is the whole of what makes the paragraph above a claim
+# rather than a hope.
+REPORT_SAYS_NAME='report_says'
+REPORT_DERIVATION_FIXTURE="$FIXTURES/report-runs-in-the-shapes-this-suite-writes"
+{ echo 'for d in one; do'
+  echo "  $REPORT_SAYS_NAME \"\$WITH_JQ_BIN\" \"\$SOME_REPORT\" fragment label"
+  echo 'done'
+  echo 'case $h in'
+  echo "  $REPORT_SAYS_NAME) $REPORT_SAYS_NAME \"\$ENV_NO_GH_BIN\" \"\$SOME_REPORT\" fragment label ;;"
+  echo 'esac'
+  echo "if true; then $REPORT_SAYS_NAME \"\$ENV_NO_GIT_BIN\" \"\$SOME_REPORT\" fragment label; fi"
+} > "$REPORT_DERIVATION_FIXTURE"
+tok 'and it sees an indented run, a case arm and a run after then, none of which begins its line' \
+    '$ENV_NO_GH_BIN $ENV_NO_GIT_BIN $WITH_JQ_BIN ' "$(report_run_paths "$REPORT_DERIVATION_FIXTURE")"
+# The two halves of what a comment does to it, asserted rather than asserted
+# about: a commented-out call at the line-start position is not read, and one at
+# a separator position is. The second is the quirk the paragraph above accepts,
+# and it is pinned here so that accepting it is a decision on the record rather
+# than something a later reader has to rediscover by measuring.
+REPORT_COMMENT_FIXTURE="$FIXTURES/report-runs-that-are-only-prose"
+{ echo "# $REPORT_SAYS_NAME \"\$A_PATH_ONLY_A_COMMENT_NAMES\" x y z"
+  echo "# as in: $REPORT_SAYS_NAME) $REPORT_SAYS_NAME \"\$A_PATH_A_COMMENT_REACHES\" x y z ;;"
+} > "$REPORT_COMMENT_FIXTURE"
+tok 'a commented call is out of reach at the line-start position and in reach after a separator' \
+    '$A_PATH_A_COMMENT_REACHES ' "$(report_run_paths "$REPORT_COMMENT_FIXTURE")"
 
 echo "--- the degraded report, produced rather than described ---"
 # The last row of #108's table: offline, the fetch reports FAILED, the settings
@@ -11416,17 +12370,19 @@ GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-117.1:permit-only
 GH-118:gap
 GH-124:static GH-127:gap GH-130:gap
-GH-131:gap GH-133:refuse-only GH-134 GH-135:gap GH-136:gap GH-139:gap GH-167:gap GH-175:gap              
+GH-131:gap GH-133:refuse-only GH-134 GH-135:gap GH-136:gap GH-139 GH-167:gap GH-175:gap
 GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
-GH-108.8:static GH-108.9:static GH-108.10:static GH-128   
+GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static
+GH-128 GH-171:gap
+GH-155.1:static
 '
+# `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
+# field grammar, which the #106 section reads too, and they live in
+# REQ_FIELD_AWK above, prepended to this program by `requirements_read`.
 REQUIREMENTS_AWK=$(cat <<'AWK'
-  function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
   function emit(res, tags, text) { printf "%s\t%s\t%s\n", res, tags, text }
   function get(id, key) { return ((id, key) in field) ? field[id, key] : "" }
-  function keyword(v) { sub(/[: ].*$/, "", v); return v }
-  function after_colon(v) { if (index(v, ":") == 0) return ""; return trim(substr(v, index(v, ":") + 1)) }
   function open_entry(id) {
     cur = id; curpart = part; lastkey = ""
     if (part == "req") {
@@ -11678,7 +12634,8 @@ AWK
 )
 requirements_read() {  # requirements_read <findings|matrix> <requirements> <ledger> <suite> <root> <runbook> <counts> <shape>
   awk -v mode="$1" -v reqs="$2" -v ledger="$3" -v suite="$4" -v root="$5" \
-      -v runbook="$6" -v counts_literal="$7" -v shape_literal="$8" "$REQUIREMENTS_AWK" </dev/null
+      -v runbook="$6" -v counts_literal="$7" -v shape_literal="$8" \
+      "$REQ_FIELD_AWK$REQUIREMENTS_AWK" </dev/null
 }
 
 echo "--- the findings, against a fixture whose every answer is written here ---"

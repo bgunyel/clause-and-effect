@@ -25,6 +25,15 @@ and the suite holds half of it: every `#<n>` cited in `check-hooks.sh` must have
 an entry here, or be listed under *Citations that are not requirements* with a
 reason.
 
+**A behavioural `GH-` entry says what #106's invariance families do with it**,
+in a `variants` field, and the families' scope is that rule rather than a list
+someone once wrote (#141). What is seeded is what any future transformation can
+ever be asked of, so leaving the choice unstated made it "whatever the
+specification happened to state as an FR in 2026-09", which has no particular
+relation to where the defects have been. *What the invariance families seed*
+below defines the scope and the three values, and the foot of #106's section in
+`check-hooks.sh` holds the seed table and the transformation list to them.
+
 ## The families
 
 - `US-n`: #36's user stories, transcribed verbatim. A story a later amendment
@@ -62,6 +71,10 @@ field, a value continuing onto lines indented by two spaces.
   `static: <reason>`, for a requirement that is one-sided (Q15). See below.
 - `seam: none` together with `verify: runbook §<n>`, `verify: review` or
   `verify: tests/<file>.py`, for a requirement no check can reach (Q17).
+- `variants`: what #106's invariance families do with this requirement. Required
+  of every `GH-` entry in their scope and written on no other entry; one of
+  `seed`, `transformation: <name> …` and `none: <reason>`. See *What the
+  invariance families seed* (#141).
 - `note`: anything a reader of the entry needs that is not one of the above.
 
 ## What covers a requirement
@@ -114,6 +127,94 @@ The suite fails on each of these, and `--matrix` shows the rest:
   number of criteria for an issue other than the number that issue has;
 - a `#<n>` cited in `check-hooks.sh` with neither an entry nor a listing under
   *Citations that are not requirements*.
+
+## What the invariance families seed
+
+#106's invariance families take a seed -- a command with a literal verdict --
+rewrite its text, and assert every variant reaches that verdict or a departure
+declared with its reason. Their leverage is that a transformation added to the
+list is asked of every seed at once, so what is seeded is what the generator can
+ever find. #106 asked for "at least one per FR with a command spelling", and the
+derivation that held the table to it read `FR-` tags and nothing else. This
+section is the rule for the other two families (#141).
+
+**In scope.** A `GH-` entry is in the families' scope when its `kind` is
+`defect-permitting` or `defect-refusing`, its `status` is `active`, and it
+declares neither `direction: static` nor `seam: none`. That is the derivable
+form of "a requirement about a verdict on a command", which is the only thing a
+variant can reach: a `doc-claim` is about what a document says, a
+`direction: static` entry about what a file or a function holds, and `seam: none`
+about what no check reaches at all. A `gap → #<n>` entry is out for the reason
+the coverage check does not ask about one either -- its behaviour does not hold
+today, and a seed whose verdict is wrong is a departure row and not a seed. The
+departure table names those, and `INV_DEPARTURES` is where they are.
+
+None of the three candidates #141 raised is both derivable and right on its own.
+`kind: defect-permitting` alone takes in every entry about the suite's own
+helpers, its tags and its timings, which name no command; "an entry naming a
+hook that judges commands" takes in the same; and "text contains a command" is
+not derivable from prose. So the scope is mechanical and the answer within it is
+declared per entry, which is the shape `direction` and `seam` already have.
+
+**Every entry in scope carries `variants`**, one of:
+
+- `seed`: the entry names a command with a verdict, and at least one seed in
+  `INV_SEEDS` is tagged with its ID. Which verdicts are seeded is in the
+  derivation's literal, and one direction is allowed -- the both-directions rule
+  is coverage's, and coverage is met by the checks above the families as much as
+  by a seed.
+- `transformation: <name> …`: the entry names a rewriting of a command rather
+  than a command, so asking it as a seed would be a category error. Each name is
+  in `INV_TRANSFORMS`, which is what makes this value a claim rather than a
+  label: an entry naming a transformation the list lacks is red until the
+  transformation is added.
+- `none: <reason>`: neither, and the reason says why. Three kinds qualify, and
+  the reason says which: a requirement whose subject is not a command spelling
+  at all -- a state of the tree, a file path, which operations a state covers,
+  where a flag stands among the arguments; a command shape the transformations
+  cannot generate, such as one written to probe the tokeniser's quote state; and
+  a command whose judged content is not in its own text.
+
+A `transformation` value names the transformations that reach the entry's
+shapes. It is not a claim that they exhaust it, and where an entry names a shape
+no transformation reaches, that shape is named as a gap rather than covered by
+the value: GH-43.6's `-C` is `global-flag` and its `--git-dir` spelling is
+`global-flag-gitdir`, and both had to be in the list for the value to be
+honest.
+
+**The third kind of `none`, named because #141's follow-up asked for the
+decision rather than the discovery.** `gh api graphql -f query=@/tmp/rel.graphql`
+and `gh api graphql --input /tmp/rel.json` put the payload in a file, so the
+thing a rule has to judge is not in the command. A generator that rewrites a
+command's text can neither produce those spellings nor say anything about one,
+and the rule that would refuse them is a rule about a file argument rather than
+about a spelling — so they are `variants: none` on whichever entry comes to own
+them, with that as the reason. The contrast that makes this a departure and not
+a limitation of the idea is the third spelling #143 measured beside those two:
+`mutation{delete"Release"(…)}` is intra-word quoting, which a quoting
+transformation does generate, and is GH-135's shape. GH-131 and GH-143.1 to
+GH-143.3 are the entries this will land on; both are out of scope today by the
+rule above — #131 is `gap → #131` and GH-143.1 to .3 are not written — and when
+either goes active the rule makes the declaration compulsory rather than
+optional, which is the point of stating a rule instead of a list.
+
+**The trade, taken knowingly.** `none` is a declaration and not a derivation, so
+an entry that ought to be seeded can be written `none` with a plausible reason,
+and this rule would not catch it. What it changes is that the choice is made
+once per entry, in writing, with a reason a reviewer reads in the diff -- where
+before it was made by an `awk` filter nobody had to argue with.
+
+What the literal in `check-hooks.sh` does close is narrower than the sentence
+that first stood here, which claimed "a value changed" and was wider than the
+guard. The literal holds each in-scope entry's ID beside its *keyword*, so a new
+entry, an entry whose answer moves between `seed`, `transformation` and `none`,
+and an answer moved to another entry each go red until the suite's copy moves
+with it. What it does not hold is the prose after the keyword: a `none` reason
+reworded, or a different transformation named, stays green. The transformation
+names have a guard of their own -- each must be in `INV_TRANSFORMS` -- and a
+reason is prose, which no literal can judge. That is #104's reason for holding
+this file's shape as a literal, applied to the one field #104 does not read,
+and held to the same standard of saying only what it asks.
 
 ## User stories
 
@@ -752,6 +853,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #43
 - kind: defect-refusing
 - status: active
+- variants: seed
 
 ### GH-43.2
 - text: `no-commit-to-main.sh` refuses a command that changes where git runs or
@@ -761,6 +863,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #43
 - kind: defect-permitting
 - status: active
+- variants: transformation: global-flag
 
 ### GH-43.3
 - text: `no-commit-to-main.sh` refuses a shell wrapper around a commit or a push,
@@ -768,6 +871,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #43
 - kind: defect-permitting
 - status: active
+- variants: seed
 
 ### GH-43.4
 - text: `no-commit-to-main.sh` refuses a push that reaches main without naming it:
@@ -776,6 +880,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #43, and the review of its migration
 - kind: defect-permitting
 - status: active
+- variants: seed
 
 ### GH-43.5
 - text: `no-commit-to-main.sh`'s refusals still name main and say which rule fired.
@@ -792,6 +897,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #43, the review of its migration and of PR #49
 - kind: defect-permitting
 - status: active
+- variants: transformation: pre-sudo pre-env pre-command pre-nohup pre-time
+  pre-timeout pre-nice-opt global-flag global-flag-gitdir
 
 ### GH-44.1
 - text: On a worktree branch whose upstream is gone, a commit, cherry-pick, revert,
@@ -799,6 +906,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #44
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is which git operations a worktree whose upstream
+  is gone refuses, not how one of them is spelled
 
 ### GH-44.2
 - text: On a worktree branch with nothing of its own that the active dev branch has
@@ -807,6 +916,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #44
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is which operations the ahead-0, behind-n state
+  refuses and which message names it, not how one of them is spelled
 
 ### GH-44.3
 - text: Under the fallback detector, a merge or rebase naming the active dev branch
@@ -816,6 +927,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #44
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is which ref a merge or rebase names, and a
+  transformation rewrites a command's text rather than replacing an argument
 
 ### GH-44.4
 - text: A mid-operation continuation (`rebase --continue`, `merge --abort`,
@@ -824,6 +937,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #44
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is where a continuation flag stands among the
+  arguments, and no transformation moves one
 
 ### GH-44.5
 - text: The guard keys on the linked worktree: a fresh branch at the dev tip and a
@@ -832,6 +947,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #44
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is which checkout the guard keys on, which is a
+  state of the tree rather than a spelling
 
 ### GH-44.6
 - text: The fallback abstains when no `refs/remotes/origin/dev-*` exists or the
@@ -839,6 +956,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #44
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is which refs the fallback finds, which is a state
+  of the tree rather than a spelling
 
 ### GH-44.7
 - text: A SessionStart hook runs `report-stale-branches.sh`, which fetches with an
@@ -855,6 +974,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #47, and the review of 02a14d8 that preceded it
 - kind: defect-permitting
 - status: active
+- variants: transformation: global-flag
 
 ### GH-47.2
 - text: Every `gh` command on the line is judged, not only the first: `cs_gh_args`
@@ -864,6 +984,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - status: active
 - direction: refuse-only: what is asserted is that a second command is reached,
   which only a refusal can show
+- variants: transformation: before-semi before-and before-or before-pipe
+  before-newline
 
 ### GH-50.1
 - text: A redirection is not an argument. An otherwise permitted push wearing one is
@@ -872,6 +994,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #50
 - kind: defect-refusing
 - status: active
+- variants: transformation: redirect-null redirect-dup
 
 ### GH-50.2
 - text: Dropping redirections hides nothing: a process substitution and a command
@@ -882,6 +1005,9 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - status: active
 - direction: refuse-only: a drop can only hide a command, and what it must not
   hide is a refusal
+- variants: none: its subject is what dropping a redirection must not hide,
+  which needs a substitution or a quoted operator written into the command
+  rather than a rewriting of a seed
 
 ### GH-50.3
 - text: A quoted redirect target is left in the arguments, so a push wearing one is
@@ -890,6 +1016,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #50
 - kind: defect-refusing
 - status: active
+- variants: transformation: redirect-quoted
 
 ### GH-51.1
 - text: A wrapped `gh pr`, `gh release` or `gh api` is refused whatever stands
@@ -897,6 +1024,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #51, and its review
 - kind: defect-permitting
 - status: active
+- variants: seed
 
 ### GH-51.2
 - text: The verb is not read inside a wrapper: a wrapped read is refused with the
@@ -905,6 +1033,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #51
 - kind: defect-refusing
 - status: active
+- variants: seed
 
 ### GH-58.1
 - text: The catch-up merge or rebase must name the commit the ancestry was read
@@ -914,6 +1043,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #58
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is which commit the catch-up merge names, and a
+  transformation rewrites a command's text rather than replacing an argument
 
 ### GH-58.2
 - text: An unresolvable dev tip withdraws the carve-out rather than widening it.
@@ -959,6 +1090,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #68
 - kind: defect-refusing
 - status: active
+- variants: seed
 
 ### GH-68.2
 - text: A closed quote restores the separator, unbalanced quoting falls back to the
@@ -966,6 +1098,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #68
 - kind: defect-refusing
 - status: active
+- variants: none: its subject is the tokeniser's quote state, which needs a
+  command written to probe it rather than a rewriting of a seed
 
 ### GH-68.3
 - text: Every wrapper detection reads the raw command text, never the split
@@ -975,6 +1109,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - status: active
 - direction: refuse-only: a rule reading fragments would permit a wrapped command,
   so only refusals can show where it reads
+- variants: none: its subject is which text a wrapper rule reads; the spellings
+  of it are the wrapped seeds' own families
 
 ### GH-69.1
 - text: `pytest-via-uv-group.sh` and `alembic-via-uv-group.sh` judge a tool at a
@@ -984,6 +1120,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #69, and its reviews
 - kind: defect-refusing
 - status: active
+- variants: seed
 
 ### GH-69.2
 - text: `append-only-docs.sh` guards each append-only directory with or without its
@@ -992,6 +1129,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #69, and its review
 - kind: defect-permitting
 - status: active
+- variants: seed
 
 ### GH-69.3
 - text: `append-only-docs-edit.sh` normalises a path before comparing it, so a
@@ -1000,6 +1138,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #69
 - kind: defect-permitting
 - status: active
+- variants: none: the hook reads a file path out of an Edit or a Write, not a
+  command, so there is no command spelling to vary
 
 ### GH-70.1
 - text: CONTEXT.md's *worktree branch* entry says the branch exists for exactly one
@@ -1041,6 +1181,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #72
 - kind: defect-refusing
 - status: active
+- variants: seed
 
 ### GH-73
 - text: CLAUDE.md's "deliberately left open" list states the wrapper trade as the
@@ -1058,6 +1199,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #79, and its review
 - kind: defect-permitting
 - status: active
+- variants: transformation: pre-sudo pre-env pre-command pre-nohup pre-time
+  pre-timeout pre-nice-opt
 
 ### GH-79.2
 - text: The wrapper anchor was widened and not dropped: prose naming a wrapper word
@@ -1066,6 +1209,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #79
 - kind: defect-permitting
 - status: active
+- variants: none: prose naming a wrapper word beside a command is a command of
+  its own rather than a rewriting of a seed
 
 ### GH-79.3
 - text: A command that runs another command and is not a prefix word (`python3 -c`,
@@ -1075,6 +1220,9 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - status: active
 - direction: permit-only: named and not closed; a refusal here would be a claim
   the fix does not make
+- variants: none: a command that runs another and is not a prefix word is named
+  and not closed, and a variant of a seed would claim a fix this one does not
+  make
 
 ### GH-79.4
 - text: The prefix words are written once, read by `cs_split` and by the anchor
@@ -1083,6 +1231,9 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #79, and PR #89
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is that one variable holds the prefix words, which
+  is the list the pre-* transformations read rather than a spelling they
+  generate
 
 ### GH-84.1
 - text: Every file that sources `lib/command-scan.sh` refuses when the library is
@@ -1092,6 +1243,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #84
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is the library's absence or a missing function,
+  which is a state of the tree rather than a spelling
 
 ### GH-84.2
 - text: Each consumer's load guard requires exactly the `cs_*` functions its code
@@ -1118,6 +1271,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #94
 - kind: defect-permitting
 - status: active
+- variants: seed
 
 ### GH-94.2
 - text: The stale guard does not apply worktree-lifecycle rules to the main checkout
@@ -1125,6 +1279,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #94
 - kind: defect-refusing
 - status: active
+- variants: none: its subject is which checkout the stale guard applies its
+  rules to, which is a state of the tree rather than a spelling
 
 ### GH-94.3
 - text: No expected verdict depends on where the suite is run: every push-hook and
@@ -1143,6 +1299,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #94, the review of PR #111
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is a directory that cannot be resolved, which is a
+  state of the tree rather than a spelling
 
 ### GH-95.1
 - text: Every hook refuses when `jq` is not on PATH, naming it, when stdin is not a
@@ -1151,6 +1309,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #95
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is the hook's input and not the command inside it,
+  which is FR-49's reason one family out
 
 ### GH-95.2
 - text: The input read is one shared reader in the library and no hook calls `jq`
@@ -1159,6 +1319,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #95
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is where the input reader lives, not how a command
+  is spelled
 
 ### GH-96.1
 - text: A command whose longest line, once joined, exceeds 16 KB is refused by every
@@ -1167,6 +1329,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #96
 - kind: defect-permitting
 - status: active
+- variants: none: its subject is a line's length, and every transformation here
+  lengthens a command by a bounded few characters
 
 ### GH-96.2
 - text: Each Bash hook finishes a command whose longest line sits at the cap in
@@ -1191,6 +1355,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #97
 - kind: defect-permitting
 - status: active
+- variants: seed
 
 ### GH-97.2
 - text: The release refusal says that any write to a release is Bertan's and that
@@ -1306,10 +1471,11 @@ The suite fails on each of these, and `--matrix` shows the rest:
 ### GH-106
 - text: Every spelling variant of a seeded command reaches that seed's verdict, or a
   verdict the suite declares for that pair with its reason. The seeds are a
-  literal table covering every requirement with a command spelling in both
-  directions; the variants come from a fixed list of transformations; and every
-  departure is declared, either by design or as a gap naming the issue that owns
-  it.
+  literal table covering every *functional* requirement with a command spelling
+  in both directions; the variants come from a fixed list of transformations; and
+  every departure is declared, either by design or as a gap naming the issue that
+  owns it. Which `GH-` requirements the table seeds is GH-141's, and one
+  direction is allowed there.
 - from: #106
 - kind: defect-permitting
 - status: active
@@ -1320,7 +1486,12 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - note: the departures are not a second opinion about a hook. A `design` row is a
   verdict the hook's own comment argues for; a `gap` row is a verdict that is
   wrong today, written at the right one and owned by an issue. #103 Q18 forbids
-  the third thing, which is calling a defect a design exception
+  the third thing, which is calling a defect a design exception.
+  The word *functional* was added to the text by #141, and it is a correction
+  rather than a widening: the derivation that held the table to this claim read
+  `FR-` tags from the day it was written, so "every requirement" was never what
+  was checked. #141 stated the rule for the other family beside it, and GH-141
+  carries it
 
 ### GH-117
 - text: A word the library recognises BY NAME is the word it spells, however it is
@@ -1337,6 +1508,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #117, found reviewing PR #115
 - kind: defect-permitting
 - status: active
+- variants: transformation: word-path word-dot word-dquoted word-squoted
+  word-escaped pre-sudo-path pre-env-path pre-timeout-quoted
 - note: the word is reduced to its basename after unquoting and unescaping, so a
   program of another name keeps it -- GH-72 decided that `my-gh` is not `gh`, and
   the permitting checks hold that decision against this one. Two places read a
@@ -1484,6 +1657,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - kind: defect-refusing
 - status: active
 - direction: refuse-only: a message is written only on a refusal
+- variants: none: its subject is the words of a refusal message, which no
+  rewriting of the refused command's spelling reaches
 - note: one `BASE` constant for four refusals is what FR-23 asks for, and for the
   three creating arms it is US-7's one-step correction too. For the retarget arm
   it is not, and "Edit anything else you like" told an agent the base may not be
@@ -1505,6 +1680,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #134, found by #106's invariance families
 - kind: defect-permitting
 - status: active
+- variants: transformation: word-if word-for word-brace
 - note: `CS_WRAPPER_RE` is matched against raw text and so carried its own
   command-position class -- start of line and `;` `&` `|` `(` and a backtick --
   where every other rule reads `cs_split`, which strips control words and cuts
@@ -1546,10 +1722,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
   What is NOT this entry is the `base_args` family -- `gh pr create "--web"` and
   `gh pr create "--base" dev-05` -- which #106 declares by design, citing the
   comment that argues quoted text may trigger a refusal and may not grant an
-  exemption. Those four rows hold only if #139 is fixed by refusing on the
-  retarget and `--web` arms rather than by teaching `base_args` to read a quoted
-  flag everywhere; #139 records that, so whoever takes it decides rather than
-  discovers it.
+  exemption. #139 was fixed by refusing a quoted base flag rather than by
+  teaching `base_args` to read one, so those rows hold; GH-139 says why.
 
 ### GH-136
 - text: The dependency group is named whichever way `uv` and bash accept it: `uv run
@@ -1564,22 +1738,65 @@ The suite fails on each of these, and `--matrix` shows the rest:
   already handles as `--base=main`, one file away.
 
 ### GH-139
-- text: A quoted base flag is still a base flag where its absence would be permitted:
-  `gh pr edit <n> "--base" main`, `"--base=main"` and `"-B" main`, and
-  `gh pr create --web "--base" main`, are refused as their unquoted spellings are.
+- text: A base flag whose name carries a quote or a backslash is refused on every
+  arm of `gh pr create` and `gh pr edit`, rather than dropped with the quoted
+  prose around it: `gh pr edit <n> "--base" main`, `'--base' main`,
+  `"--base=main"`, `"-B" main`, `--"base" main`, `\--base main`, `$'--base' main`,
+  `$'\x2d-base' main`, `$'\055\055base' main`, `$'--base\0' main`, `--base$'' main`, `--base$'=main'`,
+  `gh pr create --web "--base" main` and `gh pr create --base dev-05 "--base" main` are refused.
+  A quote round the value only (`--base="dev-05"`, `-B"dev-05"`) is read as before,
+  and a quoted argument holding whitespace is prose (`--title "-B main"`, `--body
+  "--base dev-05 is the base"`, and a body whose quote is still open where its
+  first line ends), since no git ref holds a space.
 - from: #139, found by #106's invariance families once they quoted a fifth
   argument position
 - kind: defect-permitting
-- status: gap → #139
+- status: active
+- variants: transformation: quote-double-5 quote-single-5
 - note: `base_args` drops a quoted span whole, and its comment argues that
   deleting a span cannot invent a flag. True, and not the whole of it: on the
   retarget arm and under `--web`, naming no base is permitted, so deleting the
-  span removes a refusal rather than adding one. On the three creating arms the
-  same drop is safe, because a create naming no base is refused for naming none
-  -- which is why this stood. The refusing consequences of the same drop are not
-  this entry; #106 declares those by design, citing the comment that argues them.
-  The second time the retarget arm has differed from the creating arms in a way
-  their shared reasoning missed, after #133.
+  span removed a refusal rather than adding one. The issue called the creating
+  arms safe, and they were not wholly: beside an unquoted `--base dev-05` a quoted
+  `"--base" main` is a second base, and gh takes the last. Found while writing the
+  fix, and the reason it is on every arm rather than on the two #139's comment
+  proposed. The fix refuses and does not read -- reading the flag back out of its
+  quotes is the unquoting that let `--body "--base dev-05"` name a base -- so
+  #106's four `pr-base-dev(-eq) + quote-*-4` rows keep BLOCK, now for this reason
+  and with a message that says so rather than that no base was named. The trade:
+  a whitespace-free quoted argument that merely begins like the flag is refused
+  as a value too, `--body "--base"` and `--label "-Blocked"`. The second time the
+  retarget arm differed from the creating arms in a way their shared reasoning
+  missed, after #133. Bertan's review of PR #173 found two holes in the first
+  version: the escapes inside `$'...'` were left undecoded, so `$'\x2d-base'`
+  retargeted onto main, and a quote still open at the end of a line was read as
+  a word with no whitespace, so a body opening `--base` and then a newline was
+  refused as a flag. Both are fixed and each has a mutation row. Its second
+  review found a NUL decoded as `?`: bash drops the rest of a `$'...'` span at a
+  NUL, so `$'--base\0' main` retargeted onto main. The span is now cut there and
+  what follows its closing quote still joins the word, as bash joins it --
+  `$'--base\0'x` is `--basex` and permitted. That review's `\^@` is not an escape
+  bash 5.2 decodes, and is pinned as the four characters it stays. Its third
+  review found four more, all from copying bash's decoding escape by escape:
+  `\c` took a closing quote or the first of a `\\` pair as its argument, so the
+  span ran past where bash closes it; `\c` masks a byte, so `\cअ` is a NUL; and
+  a cut span open at a line's end was judged on that line alone. The answer is
+  conservative rather than faithful: every `\c` is taken as a possible NUL and
+  cuts the span, consuming only the `c`, and a cut span open at a line's end is
+  refused. The trade: `$'--base\cA'`, which bash passes as `--base` and a
+  control character, is refused.
+  Its fourth review found two more: an EMPTY span just past the name --
+  `--base$'' main` -- was read as a quote round the value, which holding nothing
+  it cannot be, so it now refuses; and refusing every cut span open at a line's
+  end refused an ordinary multi-line body with a `\c` in it, so only a word the
+  next line could still make a flag -- empty, or dash-led with no whitespace --
+  is refused there. The rest of that review's findings are `base_args`' own and
+  predate this entry, and are left to issues of their own.
+  Its fifth review found a quoted or escaped `=` just past the name read as a
+  quote round the value, which base_args cannot read when the quote is `$'...'`,
+  `$"..."` or a backslash: `--base$'=main'` and `--base\=main` named no base.
+  The `=` is now part of the name, so those refuse -- and so does
+  `--base"=dev-05"`, which base_args could read, the trade that fix takes.
 
 ### GH-167
 - text: The `function NAME { … }` spelling of a function definition puts the
@@ -1691,7 +1908,15 @@ The suite fails on each of these, and `--matrix` shows the rest:
   `check-hooks.sh` and `mutate-hooks.sh` themselves, so #106's six self-guards and
   #104's coverage machinery — because both run from this repository whatever the
   override says; and a claim about a file outside `.claude/hooks/`, because only
-  the hooks directory is copied. A row may name only an active requirement: a
+  the hooks directory is copied. The first of those two is narrower than it reads,
+  and #141 is the case that shows where the line falls: a rule whose code is in
+  the tooling is reachable after all when what that code READS is a file the
+  override moves. GH-141's rule is code in `check-hooks.sh` and reads
+  `requirements.md`, so the registry mutates the entry rather than the rule and
+  the suite goes red on the copy. The test is whether the run reads the copy, not
+  whose file the rule sits in — and #106's own self-guards fail it, because what
+  they read is the seed table, which is in the suite.
+  A row may name only an active requirement: a
   retired or superseded one has no covering check, so a row naming it would report
   `survived` for ever and read as a defect in the hooks rather than in the row.
 
@@ -1706,6 +1931,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #137, found while grilling the fix design for #130
 - kind: defect-permitting
 - status: active
+- variants: seed
 - note: the reader stays keyed on the FIELD and not on the endpoint, for the reason
   its own comment gives — the same PATCH is how `gh pr edit` retitles a pull
   request, which stays allowed — and stays unanchored where `rest_bases` anchors
@@ -1728,6 +1954,7 @@ The suite fails on each of these, and `--matrix` shows the rest:
   found by Bertan's review of PR #153, in the change that closed the quote half
 - kind: defect-refusing
 - status: active
+- variants: seed
 - note: the fourth answer to "where does the field begin", after the bare word, the
   flag with the name immediately after it, and the flag with a quote admitted
   between; `rest_bases`' comment records all four. The separator class is the
@@ -1962,6 +2189,9 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - from: #128, found by Bertan's review of PR #123
 - kind: defect-permitting
 - status: active
+- variants: transformation: heredoc-cont heredoc-cont-dash heredoc-cont-squote
+  heredoc-cont-dquote heredoc-cont-space heredoc-cont-twice
+  heredoc-cont-redirect
 - note: the fifth answer to where a heredoc body begins and the fourth wrong one,
   and the first about the opener's own line rather than about the terminator. Two
   rules carry it. `cs_normalise`'s first pass ends the logical line by bash's
@@ -1985,6 +2215,148 @@ The suite fails on each of these, and `--matrix` shows the rest:
   made `cs_normalise` emit one 600,400-byte line, and THE LINE CAP in
   `lib/command-scan.sh` said so until this fix. #127 is the half of that claim
   which is still open.
+
+### GH-156
+- text: Every verb `append-only-docs.sh` names — `rm`, `mv`, `cp`, `truncate`,
+  `tee`, `sed -i`, `perl -i` — and a truncating redirect are refused with a
+  backslash line continuation anywhere between the verb and the path, as they are
+  on one line. `>>` behind a continuation stays permitted, and so does a
+  revisable directory.
+- from: #156, found by #106's invariance families on the first run of the
+  `continuation` transformation against an `append-only-docs.sh` seed, which is a
+  seed only because #141 brought the hook into their scope
+- kind: defect-permitting
+- status: gap → #156
+- note: the hook matches paths where they stand, with `grep -E`, and `grep`
+  matches within a line; the command never passes through `cs_join`, so a
+  continuation between the verb and the path hides the path from a rule that
+  requires both on one line. Measured: `rm`, `mv`, `tee`, `truncate` and `>` are
+  all permitted behind one backslash. `sed -i` survives by accident, its rule
+  being two greps rather than one — the verb on a line and the path anywhere —
+  which is the shape of the fix, arrived at unintentionally in one rule of four.
+  It is #84's shape again: `no-pr-decisions.sh` calls `cs_join` for this exact
+  reason and the comment above `cs_join` states the defect in the present tense,
+  one file away from the hook that has it. #106's families pin the one
+  transformation they generate, `docs-truncate + continuation`; the other
+  spellings are in the issue.
+
+### GH-171
+- text: `append-only-docs.sh` refuses a verb it names however its command word is
+  spelled: `/bin/rm`, `./truncate`, `"rm"`, `'truncate'` and `\mv` on an
+  append-only path are refused as `rm`, `truncate` and `mv` are.
+- from: #171, found by #106's invariance families when #141's `docs-truncate`
+  seed first met #117's `word-*` transformations, on the merge of dev-05 into
+  PR #160
+- kind: defect-permitting
+- status: gap → #171
+- note: the verb test is the hook's own `grep -E`, which wants the bare name
+  after a start, separator or space, and reads the raw command text; #117
+  reduced a command word to the name it spells in `cs_split`, and this hook takes
+  only `cs_tool_input` and `cs_within_cap` from the library, so the reduction
+  never reaches it. Measured on dev-05's own copy by feeding each command on
+  stdin: the bare spellings and `command rm`/`env rm` are refused, the five
+  spellings above permitted. #106's families pin the five they generate as
+  `docs-truncate + word-*` gap rows, which go red when this is fixed.
+
+### GH-141
+- text: Which `GH-` requirements #106's invariance families seed is a stated rule
+  and not a list. Every entry in their scope — behavioural, `active`, and neither
+  `static` nor seamless — declares in a `variants` field whether the families seed
+  it, name a transformation of it, or reach it not at all with a reason; a seed is
+  tagged on a row of `INV_SEEDS`, a named transformation is in `INV_TRANSFORMS`,
+  and the in-scope set with each entry's answer is held as a literal in the suite
+  as well as here.
+- from: #141, raised in Bertan's review of #140
+- kind: defect-permitting
+- status: active
+- direction: static: it reads this file, the seed table and the transformation
+  list against each other. The variants a seeded entry gains are refusing and
+  permitting checks tagged with that entry, not with this one; what is left here
+  is that the rule and the tables agree, which is read off them
+- note: the family the FR derivation could not see was the one written from
+  defects — 95 `GH-` entries against 49 FRs (measured 2026-09-17), and #140's
+  four findings were all on FR-seeded commands, which is evidence that the FR
+  set is a reasonable start and none at all that it is a sufficient one. Four
+  of #141's additions are transformations rather than seeds, because an entry
+  naming a rewriting of a command is not a command and seeding it would be a
+  category error. What this rule cannot do, and what the literal in
+  `check-hooks.sh` does and does not close, are argued under *The trade, taken
+  knowingly* and are not restated here — that trade was written out in three
+  places on this branch before review counted them.
+### GH-155.1
+- text: The `gh`-less PATH fixture of GH-108.6 is the symlink farm minus exactly
+  one name on every machine. The farm holds a `gh` whatever the host's PATH held:
+  the host's where there is one, and otherwise a stub the suite synthesises, which
+  refuses and names itself if anything ever runs it. `git` is never stubbed --
+  the suite runs `git` throughout, so a farm with no `git` is a machine this suite
+  cannot run on rather than a gap to synthesise over. Nothing in this suite ever
+  runs the farm's `gh`: report-stale-branches.sh is the only hook that calls `gh`
+  at all, and of the four PATHs it is driven under, none both carries a `gh` of
+  the farm's and reaches the call -- the farm minus `git` carries one and stops at
+  the `command -v git` guard standing above the first.
+- from: #155
+- kind: doc-claim
+- status: active
+- direction: static: it reads the fixtures the suite builds and the stub's own
+  text, and no hook's verdict
+- note: the fixture guard used to tolerate a farm that never held the name, so
+  that the suite would run on a machine with no `gh` at all -- and that tolerance
+  made the `gh`-less environment identical to the ordinary one on exactly those
+  machines, where the GH-108.6 checks then asserted their verdicts twice and were
+  evidence about `gh` on none of them. The property is asked of this machine and
+  of the machine this is not: a farm with `gh` taken out stands in for a host that
+  never had one, the same synthesis is run against it, and the one-name difference
+  is asserted there too. That is PR #150's manual reproduction written as a check.
+  It is the fixture rule and not a hook rule, so `mutate-hooks.sh` cannot register
+  it -- that harness refuses `check-hooks.sh` as a target by name, because an edit
+  to the copy would be executed by nothing. What the harness can hold is the hook
+  rule the fixture exists to establish, and #155 registered that: a
+  `no-pr-decisions.sh` that read `gh`'s presence out of the environment, which
+  GH-108.6 must catch. THAT ROW IS NOT EVIDENCE ABOUT WHAT #155 CHANGED, and
+  saying so is the point of writing it down: GH-108.6's `gh`-less fixture held no
+  `gh` on either kind of host, so the row would have been caught before this
+  change as well. It is a mutation GH-108.6 had none of, and it is the nearest
+  the harness can come to the fixture rule. What it does hold of this entry is
+  the second half: the ordering the stub rests on, registered answering the
+  review of PR #161. `report-reads-gh-before-git` puts a `gh` call above
+  report-stale-branches.sh's `command -v git` guard, and the check that reads a
+  marker FILE rather than a message -- that file's own `gh api` redirects stderr
+  away, so a stub announcing itself would be silenced by the line being caught --
+  goes red. That row IS evidence about what #155 changed: nothing was watching
+  the ordering before it, and the comment which asserted the farm's `gh` was
+  never run gave the wrong reason and was found wrong by review rather than by a
+  check. The fixture rule itself is hand-mutated -- four cases, three caught and
+  one a recorded survivor -- in the commit that added it.
+
+  A second round of that review found two more, both of the same shape as the
+  first: a guard weaker than the prose beside it. The derivation asserting that
+  no run of the report is driven under the farm read only calls at column 0,
+  while every environment sweep in that section is an indented loop body and the
+  suite already held an indented call, so the one thing it exists to catch was
+  invisible to it; it now skips leading whitespace, and is driven over a fixture
+  whose only run is indented. And the question "does the farm hold a `gh`" was
+  asked as `command -v`, which resolves a shell function ahead of PATH -- so a
+  host exporting a `gh` wrapper got no stub and the unconditional guard aborted
+  the whole suite, which is this entry's own failure arriving by a rarer route.
+  Both the synthesis and the guard now ask the directory, and a farm built under
+  a shell that defines `gh` is a fixture here.
+
+  A third round found the fix for the first of those carrying the same defect:
+  the heading said the derivation read a call anywhere on a line while the
+  pattern read a line start with indentation allowed, and the comment cited as
+  its evidence `drive_helper`'s `case` arm -- the one call in this suite that is
+  not a statement of its own, and the one line that pattern could not read. The
+  derivation now reads a call at a named position: a line start, after `;`, `&`,
+  `|` or `)`, or after `then`, `do` or `else`. Whitespace is deliberately not a
+  separator, so payload inside a quoted string is out of reach, and the fixtures
+  are written through a variable holding the helper's name so that this file
+  carries none of their calls in any position. What it still cannot read is a
+  call whose command word is a variable, which is stated beside it rather than
+  left to be found. A comment IS read at a separator position -- the new comment's
+  own example is one of the twelve lines matched -- and that is accepted and
+  pinned rather than filtered, because a comment can only add a PATH and never
+  hide a call, while stripping comments would cut at the first `#` and could hide
+  one.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -2231,8 +2603,10 @@ it has no entry above (Q16).
 - #163: the in-word half of the quoting GH-137.1 and GH-137.2 read round a field,
   found by the follow-up review of #153; it adds its requirements in the pull
   request that fixes it, after #130, rather than pinning today's verdicts
-- #141: the issue that owns deciding which non-FR requirements the invariance
-  families seed; it adds no requirement of its own until that is decided
+- #141: has an entry above, GH-141, and is listed here only because this file
+  cited it before it landed, as the issue that owned deciding which non-FR
+  requirements the invariance families seed. It decided that, and the rule is
+  *What the invariance families seed*
 - #107: has entries above, GH-107.1 and GH-107.2, and is listed here only because
   #106's section cited it before it landed — that section writes out three
   mutations of its own and says they are run by hand until the harness exists.
@@ -2277,3 +2651,15 @@ it has no entry above (Q16).
   requirement that would carry it is the fix, and GH-108.5 pins the verdict as it
   stands and names it a gap. An entry here would read as a requirement the hooks
   meet
+- #173: the pull request for #139; Bertan's review of it found the two holes
+  GH-139's note records -- `$'...'` escapes left undecoded, a quote open at the
+  end of a line read as a word with no whitespace, a NUL decoded as a
+  character, and `\c` and cut spans read past where bash reads them -- and is
+  cited where each fix stands
+- #161: the pull request for #155; Bertan's review of it is cited where each of the
+  two things it corrected in this suite stands — a derivation of every PATH the
+  report is driven under that was anchored at column 0 and so could not see an
+  indented run, and a fixture test that asked the calling shell what the farm
+  holds, which resolves a `gh` shell function ahead of PATH and would have aborted
+  the suite on a host that exports one. Its third correction is a measurement in
+  `mutate-hooks.sh`, whose exclusivity was that host's, and is recorded there
