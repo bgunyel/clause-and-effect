@@ -9511,8 +9511,17 @@ printf '#!/bin/bash\n: > "$(dirname "$0")/ran-crash-127"\necho "crash-127 fixtur
 # and allow-0 is indistinguishable from that defect, so it is this helper's
 # FAILING case and this one is its passing one.
 printf '#!/bin/bash\n: > "$(dirname "$0")/ran-speak-0"\necho "speak-0 reports something"\nexit 0\n' > "$EXITS/speak-0.sh"
+# A sixth, for `says_first` against `says`, and the fourth review of PR #169 is
+# why. Every fixture above either carries the fragment at the front or does not
+# carry it at all, so the two helpers agreed on all of them and no driven case
+# reached the branch `says_first` exists for: reverting its `"$want"*)` to
+# `*"$want"*)` left this self-test green and quietly put the sixteen `opens with
+# the rule` rows back to asserting containment, which is the defect round 3
+# filed. This one refuses saying the fragment somewhere other than the front, so
+# `says` passes it and `says_first` must not.
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-prefix-2"\necho "something else first, then prefix-2 refuses" >&2\nexit 2\n' > "$EXITS/prefix-2.sh"
 chmod +x "$EXITS"/*.sh
-for f in allow-0 block-2 crash-1 crash-127 speak-0; do
+for f in allow-0 block-2 crash-1 crash-127 speak-0 prefix-2; do
   [ -x "$EXITS/$f.sh" ] || {
     echo "the exit-status fixture $f.sh was not created; the self-test using it proves nothing" >&2
     exit 1
@@ -9629,6 +9638,18 @@ for helper in $DRIVEN_MESSAGE; do
   failure_line_says "$helper: that failure line names exit 127 and the hook's stderr" \
       127 'crash-127 fixture stderr'
 done
+
+# AND THE ONE CASE THE LOOP ABOVE CANNOT STATE: what separates `says_first` from
+# `says`. They differ on exactly one input -- a refusal that carries the fragment
+# somewhere other than the front -- and no fixture above is one, so the loop
+# drove both helpers through identical branches and a revert of the position test
+# went unseen. Two rows, the same fixture, opposite verdicts; either row alone
+# passes for a helper that is the other one.
+req GH-98 GH-124
+tok 'says: a refusal carrying the fragment anywhere passes, which is what containment means' \
+    'ok' "$(drive_helper says prefix-2 -)"
+tok 'says_first: the same refusal fails, which is the whole of the difference' \
+    'FAIL' "$(drive_helper says_first prefix-2 -)"
 
 # The timed helpers, from #96. Each times one outcome and hands any other back as
 # the status it saw: cap_timed times only a refusal, lib_run only a function that
@@ -11227,7 +11248,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '63' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '64' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
@@ -11290,7 +11311,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '61' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '62' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 section "=== issue #108: what every hook decides when its environment is broken ==="
 # #95 pinned the step where a hook reads its input. This is the step after it:
@@ -12500,6 +12521,27 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main; reaching it through gh api m
 # Both counts are what they were before either widening, which is the whole of
 # what a widening should do to a file that is clean.
 #
+# OCCURRENCES, NOT LINES, and the fourth review of PR #169 is why. This ended in
+# `grep -c` until then, which counts matching LINES -- so two writes on one
+# logical line counted as one. Measured: `; echo "..." >&2` appended to the
+# wildcard-refspec arm left the count at 19 and the whole suite green, a live
+# refusal arm that no `says` row reads, in the permitting direction, under the
+# count that makes every per-arm row load-bearing. `a-new-refusal-arm-nothing-
+# reads` does not reach it, because that row appends the arm on its own line.
+#
+# It is the defect round 3 fixed in `fn_calls`, one function below, not applied
+# to the count `fn_calls` exists to back -- the third time in this pull request
+# that a fix was made in one place and not in the place beside it. That is what
+# the fixtures below are for.
+#
+# IT CLOSED #182's THIRD SHAPE ON THE WAY, which is worth saying because that
+# shape was the reason #182 was filed rather than only named. A heredoc body line
+# ending in a backslash was swallowed by the continuation fold, so two real arms
+# read as one LINE and the count did not move. Counting occurrences, they are two
+# whatever line they end up on -- and the same closes the fold case with no
+# heredoc in it at all, which review found beside this one. What is left of #182
+# is its two inflating shapes, both false red.
+#
 # TWO TRADES, taken knowingly, and neither is the permitting direction.
 #
 # Comments are stripped whole-line only. An `echo ... >&2` written as a trailing
@@ -12519,26 +12561,24 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main; reaching it through gh api m
 # and folds continuations; it does not know where a heredoc body begins. Both
 # hooks use heredocs today -- `done <<BASELIST`, `done <<CMDLIST` -- with bodies
 # that are a bare variable, so nothing is miscounted now, and it is one edit away
-# rather than hypothetical. Three shapes, and the third is the one the first two
-# do not prepare a reader for:
+# rather than hypothetical. Two shapes survive counting occurrences, and both
+# inflate:
 #
 #   a body line carrying `>&2`                counts as an arm      (false red)
 #   `cat >&2 <<EOF` whose body carries one    counts twice for one  (false red)
-#   a body line ending in a backslash         swallows the line
-#                                             after it, so two arms
-#                                             read as one           (PERMITTING)
 #
-# `fn_writes` runs the same pipeline and inherits all three. #182 owns it, and
-# says why it was not fixed beside the rest: the other shapes review raised were
-# pattern-width and were fixed by widening the pattern, and this one needs the
-# counter to track heredoc state, which is a parser rather than a pattern. There
-# is already one of those in this repository, and CLAUDE.md records what review
-# rather than the suite found in it.
+# There was a third, and it was the permitting one -- a body line ending in a
+# backslash swallowed the line after it, so two arms read as one. Counting
+# occurrences rather than lines closed it; see above. #182 records that, and
+# what is left of it is a false red, which by the standard CLAUDE.md's
+# consequence 3 sets would not on its own have been worth a parser.
+#
+# `fn_writes` runs the same pipeline and inherits both.
 STDERR_WRITE='>&[[:space:]]*2|>[[:space:]]*/dev/stderr'
 arms() {  # arms <file> -- in how many places it writes a refusal to stderr
   sed 's/^[[:space:]]*#.*$//' "$1" \
     | sed ':a;/\\$/{N;s/\\\n//;ba}' \
-    | grep -cE "$STDERR_WRITE"
+    | grep -oE "$STDERR_WRITE" | wc -l | tr -d ' '
 }
 # WHAT `arms` COUNTS, driven against files written for it. Neither hook can show
 # this: both are clean of every shape the two widenings added, so the pair of
@@ -12569,6 +12609,13 @@ ARMS_EOF
 cat > "$ARMS_FIXTURES/dev-stderr.sh" <<'ARMS_EOF'
 echo "refused" > /dev/stderr
 ARMS_EOF
+cat > "$ARMS_FIXTURES/two-on-one-line.sh" <<'ARMS_EOF'
+echo "refused" >&2; echo "refused again" >&2
+ARMS_EOF
+cat > "$ARMS_FIXTURES/two-folded-into-one.sh" <<'ARMS_EOF'
+echo "refused" >&2 \
+  ; echo "refused again" >&2
+ARMS_EOF
 cat > "$ARMS_FIXTURES/whole-line-comment.sh" <<'ARMS_EOF'
 # echo "refused" >&2
 ARMS_EOF
@@ -12586,6 +12633,10 @@ tok 'arms counts a redirection written before the command, which the builtin-fir
 tok 'arms counts a heredoc sent to stderr, which is neither builtin' \
     '1' "$(arms "$ARMS_FIXTURES/heredoc.sh")"
 tok 'arms counts a write to /dev/stderr by name' '1' "$(arms "$ARMS_FIXTURES/dev-stderr.sh")"
+tok 'arms counts two writes sharing a line as two, which counting lines did not' \
+    '2' "$(arms "$ARMS_FIXTURES/two-on-one-line.sh")"
+tok 'arms counts two writes a continuation joined as two, for the same reason' \
+    '2' "$(arms "$ARMS_FIXTURES/two-folded-into-one.sh")"
 tok 'arms does not count a commented-out line' '0' "$(arms "$ARMS_FIXTURES/whole-line-comment.sh")"
 tok 'arms counts a trailing comment, which is the false red this trade accepts' \
     '1' "$(arms "$ARMS_FIXTURES/trailing-comment.sh")"
@@ -12640,6 +12691,104 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
     | grep -oE "(^|[^A-Za-z0-9_\$])$2([^A-Za-z0-9_-]|\$)" \
     | wc -l | tr -d ' '
 }
+# DRIVEN, NOT ONLY ASSERTED, which is the rule the fixtures above are built on
+# and the fourth review of PR #169 found these two helpers exempted from. Both
+# were pinned against the two real hooks alone, and on those `check_push` appears
+# once on one line -- so `grep -c` and `grep -o | wc -l` both return 1 and the
+# pin could not tell round 3's fix from a revert of it. A number that reads the
+# same either way is not evidence about which one is running.
+#
+# The last fixture is the third shape of the helper hole, after #181's indirect
+# call and #182's heredoc: a function defined inside another one. The patterns
+# are anchored at column 1 -- which is this file's convention and what the
+# closing `}` relies on too -- so a nested definition is never entered, its
+# writes are attributed to the function around it, which already writes, and
+# nothing moves. It is asserted here as the behaviour it is, and refused
+# outright below, because the honest fix for a convention a derivation depends on
+# is to hold the file to it rather than to widen the pattern and hope.
+FN_FIXTURES="$FIXTURES/fns"
+mkdir -p "$FN_FIXTURES"
+cat > "$FN_FIXTURES/one-call.sh" <<'FN_EOF'
+speaks() {
+  echo "refused" >&2
+}
+silent() {
+  return 0
+}
+speaks "$1"
+FN_EOF
+cat > "$FN_FIXTURES/two-calls-one-line.sh" <<'FN_EOF'
+speaks() {
+  echo "refused" >&2
+}
+speaks a; speaks b
+FN_EOF
+cat > "$FN_FIXTURES/one-liner.sh" <<'FN_EOF'
+speaks() { echo "refused" >&2; }
+silent() { return 0; }
+speaks x
+FN_EOF
+cat > "$FN_FIXTURES/awk-function.sh" <<'FN_EOF'
+awk '
+    function shut() { st = 0 }
+    { shut() }
+' "$1"
+FN_EOF
+cat > "$FN_FIXTURES/nested.sh" <<'FN_EOF'
+outer() {
+  inner() { echo "refused" >&2; }
+  inner a
+  inner b
+}
+outer
+FN_EOF
+req GH-109.2
+tok 'fn_writes tells a function that writes from one that does not' \
+    'silent silent
+speaks writes' "$(fn_writes "$FN_FIXTURES/one-call.sh")"
+tok 'fn_writes reads a one-line definition as one, and closes it there' \
+    'silent silent
+speaks writes' "$(fn_writes "$FN_FIXTURES/one-liner.sh")"
+tok 'fn_calls counts one call as one' '1' "$(fn_calls "$FN_FIXTURES/one-call.sh" speaks)"
+tok 'fn_calls counts two calls sharing a line as two, which counting lines did not' \
+    '2' "$(fn_calls "$FN_FIXTURES/two-calls-one-line.sh" speaks)"
+# The nested case, asserted as what it does rather than as what one would want.
+tok 'fn_writes does not see a function defined inside another, and says so here' \
+    'outer writes' "$(fn_writes "$FN_FIXTURES/nested.sh")"
+tok 'and the arm count reads its three writes as one call site' \
+    '1' "$(fn_calls "$FN_FIXTURES/nested.sh" outer)"
+# So the convention the derivation rests on is held, rather than assumed: a
+# definition anywhere but column 1 in either hook turns this red, and whoever
+# writes one has to say what the counts above then mean.
+# THE KEYWORD FORM IS NOT ASKED FOR, and the first run of this guard is why.
+# `no-pr-decisions.sh` embeds awk programs, and awk spells a function
+# `function shut() { ... }`, indented inside the program text -- which is the
+# shape this was written to refuse, in a language where it is ordinary. It fired
+# on line 330 immediately. Shell writes a nested function `inner() { ... }`
+# without the keyword, and awk cannot write one without it, so asking only for
+# the parenthesis form separates the two exactly today.
+#
+# THE TRADE: an indented `function inner() {` in shell is not caught, and neither
+# is it entered by `fn_writes`, which is the permitting direction. It is left
+# because closing it means telling shell text from awk text inside a quoted
+# program, which is the thing that cannot be read out of the line -- and because
+# the shape an author reaches for is the one without the keyword. Written down
+# rather than found later: the guard below is evidence about the parenthesis
+# form and about nothing else.
+nested_defs() {  # nested_defs <file> -- shell function definitions that are not in column 1
+  sed 's/^[[:space:]]*#.*$//' "$1" \
+    | grep -nE '^[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)[[:space:]]*\{' \
+    | tr '\n' ' ' | sed 's/ $//'
+}
+tok 'no-git-push.sh defines every function in column 1, which fn_writes depends on' \
+    '' "$(nested_defs "$HOOKS/no-git-push.sh")"
+tok 'no-pr-decisions.sh does too' \
+    '' "$(nested_defs "$HOOKS/no-pr-decisions.sh")"
+tok 'and the guard can see one, asked of a file that has one' \
+    '2:  inner() { echo "refused" >&2; }' "$(nested_defs "$FN_FIXTURES/nested.sh")"
+tok 'and it does not see awk spelling its own, which is what the hooks embed' \
+    '' "$(nested_defs "$FN_FIXTURES/awk-function.sh")"
+
 req GH-109.2
 tok 'no-git-push.sh defines these functions, and this is which of them writes a refusal' \
     'canonical_dir silent
@@ -12664,11 +12813,15 @@ tok 'no-git-push.sh refuses in as many places as this suite reads' '19' \
     "$(arms "$HOOKS/no-git-push.sh")"
 tok 'no-pr-decisions.sh refuses in as many places as this suite reads' '18' \
     "$(arms "$HOOKS/no-pr-decisions.sh")"
-# `a-new-refusal-arm-nothing-reads` in the registry adds a real arm to
-# no-git-push.sh in the shape review measured -- the redirection before the
-# command -- and requires this count to move. It survived the count as first
-# widened and is caught as of 2026-09-20, which is the difference between a
-# widening argued and a widening run.
+# Two registry rows add a real arm and require this count to move, because the
+# two ways of adding one are caught by different halves of the counter.
+# `a-new-refusal-arm-nothing-reads` writes it on its own line, in the shape
+# the second review measured -- the redirection before the command -- which
+# the pattern had to widen to see. `a-new-refusal-arm-sharing-a-line` appends
+# it to the wildcard-refspec arm, which the pattern always saw and the LINE
+# count never did; that is the fourth review's, and it is the one that shows
+# why this counts occurrences. Each survived the counter as it stood when it
+# was written; both caught as of 2026-09-20.
 
 echo "--- settings.json: what runs, on which tool, in what order, under what timeout ---"
 # settings.json is what makes a hook run at all, and until this section the suite
