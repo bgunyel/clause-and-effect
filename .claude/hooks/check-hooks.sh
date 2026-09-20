@@ -321,29 +321,55 @@ section() {  # section <heading> -- print it, and let no tag carry across it
 # statements until the load-contract section gave `says` its first fixture; five
 # ask it now, `feed` and `feed_says` having come with #95.
 #
-# A bare name is also the moment a check runs one of the hooks under judgment,
-# so that is where it is recorded, with the tags then in force: #109's
-# configuration section reads the record back and requires every hook
-# settings.json registers to have been run by at least one tagged check. An
-# absolute path is a fixture copy -- a hook with its library taken away, or one
-# built to crash -- and is not the registered hook, so it is not recorded. The
-# one exception is the session report, which reads the repository it sits in and
-# so is only ever run as a byte copy placed in a fixture repository: `anc_report`
-# and `report_says` record that copy as the report, and nothing here records a
-# modified one.
+# It resolves and nothing else. Which hook a check ran is recorded by `ran`
+# below, and the two were one function until review of PR #169 separated them;
+# see there for why resolving is not running.
 hook_path() {  # hook_path <script|/absolute/hook>
   case "$1" in
     /*) printf '%s\n' "$1" ;;
-    *) ran "$1"; printf '%s\n' "$HOOKS/$1" ;;
+    *) printf '%s\n' "$HOOKS/$1" ;;
   esac
 }
-# ran <hook basename> -- a tagged check has run it. Written from a subshell as
-# often as not, since hook_path is called inside $( ), so it appends to a file
+# ran <script|/absolute/hook> <exit status> -- a tagged check ran it, and it ran.
+# #109's configuration section reads the record back and requires every hook
+# settings.json registers to have been run by at least one tagged check.
+#
+# IT IS CALLED AFTER THE STATUS IS READ, never at path resolution, and review of
+# PR #169 is why. `hook_path` recorded it, and a hook that is not there or is not
+# executable resolves exactly as one that is: the path is built by string
+# concatenation, nothing tests it, and bash reports 127 having run nothing. So a
+# deleted or chmod-ed hook that every check still named would have printed
+# `derived <hook> was run N times under a tag` -- a green row, under GH-109.4's
+# tag, for a file that never started. The other checks of that hook would each
+# have gone red, loudly, by the exit-status contract below; this row would have
+# been the one place the suite said the opposite.
+#
+# So the status is the evidence, and only a status the hook itself can have
+# produced counts: 0 or 2, the two that contract accepts as a verdict. Every
+# other status FAILs the check that read it, and leaves this row saying the hook
+# was never run, which is what happened. THE LIMIT: 0 and 2 are what a running
+# hook exits with, not proof that one did -- 0 is also `true`, and a bash syntax
+# error exits 2, the case the contract below already names. This says a tagged
+# check ran the hook and got a verdict out of it, not that any check of it can
+# fail. That is mutation's question.
+#
+# An absolute path is a fixture copy -- a hook with its library taken away, or
+# one built to crash -- and is not the registered hook, so it is not recorded.
+# The one exception is the session report, which reads the repository it sits in
+# and so is only ever run as a byte copy placed in a fixture repository:
+# `report_says` records that copy as the report, by name, and nothing here
+# records a modified one. `anc_report` runs a copy too and records nothing; see
+# there for why.
+#
+# Written from a subshell as often as not -- `cap_timed` is called inside $( ),
+# and the #98 self-test runs every helper in one -- so it appends to a file
 # rather than setting a variable. An untagged run is not recorded: the #104
 # section already fails the check, and it would cover nothing here either.
 RAN=
 ran() {
+  case "$1" in /*) return 0 ;; esac
   [ -n "$RAN" ] && [ -n "$REQ" ] || return 0
+  [ "$2" = 0 ] || [ "$2" = 2 ] || return 0
   printf '%s\t%s\n' "$REQ" "$1" >> "$RAN"
 }
 # What a hook's exit status means, answered once for every helper that runs a
@@ -385,6 +411,7 @@ check() {  # check <script|/absolute/hook> <want> <label> <cmd>, run in $SUITE_D
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | "$hook" 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 
@@ -498,6 +525,7 @@ check_in() {  # check_in <dir> <script|/absolute/hook> <want> <label> <cmd>
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
     | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 
@@ -552,6 +580,7 @@ says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   if [ "$rc" != 2 ]; then
     fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
       "$label" "$want" "$rc" "$err"
@@ -574,6 +603,7 @@ says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   if [ "$rc" != 2 ]; then
     fail refuse '%s\n         wanted a refusal not saying |%s|, got exit=%s\n         stderr |%s|' \
       "$label" "$unwanted" "$rc" "$err"
@@ -5063,6 +5093,7 @@ check_file() {  # check_file <script|/absolute/hook> <want> <label> <path relati
   err=$(printf '%s' "$path" | jq -Rs '{tool_name:"Edit",tool_input:{file_path:.}}' \
     | CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 
@@ -5091,6 +5122,7 @@ feed() {  # feed <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin
   err=$(printf '%s' "$payload" \
         | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <raw stdin>
@@ -5099,6 +5131,7 @@ feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <ra
   err=$(printf '%s' "$payload" \
         | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   if [ "$rc" != 2 ]; then
     fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
       "$label" "$want" "$rc" "$err"
@@ -5126,6 +5159,7 @@ env_feed() {  # env_feed <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <lab
   err=$(printf '%s' "$payload" \
         | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 env_cmd() {  # env_cmd <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <command>
@@ -5139,6 +5173,7 @@ env_says() {  # env_says <dir> <PATH> <script|/absolute/hook> <fragment> <label>
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   if [ "$rc" != 2 ]; then
     fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
       "$label" "$want" "$rc" "$err"
@@ -5163,12 +5198,13 @@ env_says() {  # env_says <dir> <PATH> <script|/absolute/hook> <fragment> <label>
 # helpers does not have to check.
 report_says() {  # report_says <PATH> <script> <literal> <label>
   local path="$1" script="$2" want="$3" label="$4" out rc
-  # A copy of the registered report, placed in a fixture repository because the
-  # report reads the repository it sits in; the #98 self-test's crashing
-  # fixtures carry other names. See `ran`.
-  [ "${script##*/}" = report-stale-branches.sh ] && ran report-stale-branches.sh
   out=$( cd "$(dirname "$script")" && PATH="$path" bash "$script" 2>&1 )
   rc=$?
+  # A copy of the registered report, placed in a fixture repository because the
+  # report reads the repository it sits in; the #98 self-test's crashing
+  # fixtures carry other names. Recorded after the run, and by name rather than
+  # through `hook_path`, which never sees this one. See `ran`.
+  [ "${script##*/}" = report-stale-branches.sh ] && ran report-stale-branches.sh "$rc"
   if [ "$rc" != 0 ]; then
     fail static '%s\n         a SessionStart report must exit=%s, got exit=%s\n         output |%s|' \
       "$label" 0 "$rc" "$out"
@@ -5195,6 +5231,7 @@ every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every Bash hook
     err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
           | ( cd "$dir" && CLAUDE_PROJECT_DIR="$dir" "$(hook_path "$hook")" ) 2>&1 >/dev/null)
     rc=$?
+    ran "$hook" "$rc"
     [ "$rc" = 0 ] || refused="$refused
          ${hook##*/} exit=$rc stderr |$err|"
   done
@@ -5622,8 +5659,15 @@ anc_fixture() {  # anc_fixture <dir> <origin url> -- a repository with the repor
   mkdir -p "$1/.claude/hooks"
   cp -p "$HOOKS/report-stale-branches.sh" "$1/.claude/hooks/"
 }
+# IT RECORDS NOTHING, and review of PR #169 is why. `ran` takes the status the
+# hook exited with, because a hook that was never there is resolved exactly as
+# one that was; this helper takes no verdict and reads no status, so it has
+# nothing to give it. Reading one here to feed the record would put a status
+# reader in this file that the #98 self-test cannot drive -- there is no
+# expectation of its to fail -- and an undriven reader is what that self-test's
+# derivation exists to refuse. The report's record comes from `report_says`,
+# nine times under GH-108.9, which asks for the status and the sentence both.
 anc_report() {  # anc_report <repo> -- the report's output, run as that repository's hook
-  ran report-stale-branches.sh
   ( cd / && PATH="$ANC_BIN:$PATH" "$1/.claude/hooks/report-stale-branches.sh" ) 2>/dev/null
 }
 # The line and its indented continuations, and nothing after them: a NOT is
@@ -8724,6 +8768,7 @@ check_rawfile_in() {  # check_rawfile_in <dir> <script> <want> <label> <cmd>
   err=$(jq -n --rawfile c "$FIXTURES/rawfile.txt" '{tool_name:"Bash",tool_input:{command:$c}}' \
     | ( cd "$dir" && "$(hook_path "$script")" ) 2>&1 >/dev/null)
   rc=$?
+  ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
 cap_bytes() {  # cap_bytes <string>
@@ -8828,6 +8873,10 @@ cap_timed() {  # cap_timed <dir> <hook|/absolute/hook> <cmd> -- "<ms>", or "exit
     ( cd "$1" && "$(hook_path "$2")" ) < "$FIXTURES/timed.json" >/dev/null 2>&1
     rc=$?
     e=$(date +%s%N)
+    # After the end timestamp, not before it: this is the one helper whose claim
+    # is a duration, and a record written between the run and the read would be
+    # measured as the hook's.
+    ran "$2" "$rc"
     [ $rc -eq 2 ] || { printf 'exit %s\n' "$rc"; return; }
     ms=$(( (e - s) / 1000000 ))
     if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms; fi
@@ -11311,18 +11360,74 @@ says "$ON_DEV" no-pr-decisions.sh 'and this repository is public, so a release i
   'the release refusal says why a write is not an agent'"'"'s' 'gh release upload v1 a.tgz'
 says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted: a gh api request to /releases that does not write, or gh release followed by one of: list view download verify verify-asset.' \
   'the gh api release refusal names both reads that stay permitted' 'gh api -X PATCH repos/o/r/releases/1'
-# NO ARM GOES UNREAD, asked of the files rather than of this list. Every echo
-# to stderr in either hook is a refusal, and a new arm is a new echo; so each
+# NO ARM GOES UNREAD, asked of the files rather than of this list. Every write
+# to stderr in either hook is a refusal, and a new arm is a new write; so each
 # hook's count is a literal here, and adding an arm moves it -- which is the
 # moment to write that arm's row above. The count is the arms above, the load
 # guard, the cap, and the arms other sections read: the release refusals (#97),
 # the four base refusals (#105), the bare push, the main checkout, the reserved
 # branch and the unresolvable directory (#94, #108).
+#
+# WHAT SHAPE AN ARM HAS TO BE WRITTEN IN, because this count is what makes it
+# load-bearing. `arms` reads a builtin that writes and a redirection to fd 2 on
+# one logical line. It was `grep -c 'echo .*>&2'` until review of PR #169, which
+# is `echo` and one physical line: an arm written `printf '%s\n' "..." >&2`, or
+# an `echo` whose `>&2` sat on a continuation line, left the count where it was
+# and went unread -- a new refusal with no `says` row, in the permitting
+# direction, which is the direction this count exists to watch. So `printf`
+# joins `echo`, and continuations are folded first. Neither hook uses either
+# shape today; both counts were 19 and 16 before the widening and after it,
+# which is the whole of what a widening should do to a file that is clean.
+#
+# THE TRADE, taken knowingly: comments are stripped whole-line only. An
+# `echo ... >&2` written as a trailing comment on a live line inflates the count
+# and turns the run red for nothing. That is left, and it is the same trade
+# CLAUDE.md's consequence 3 takes -- a false red is visible and one edit away, a
+# new arm that nothing reads is neither -- and closing it means deciding where a
+# `#` is a comment and where it is inside a string, which is the thing that
+# cannot be read out of the text. Both files are clean on this today.
+arms() {  # arms <file> -- in how many places it writes a refusal to stderr
+  sed 's/^[[:space:]]*#.*$//' "$1" \
+    | sed ':a;/\\$/{N;s/\\\n//;ba}' \
+    | grep -cE '(echo|printf) .*>&2'
+}
+# WHAT `arms` COUNTS, driven against files written for it. Neither hook can show
+# this: both are clean of the two shapes the widening added, so the pair of
+# literals below is 19 and 16 either way, and what the count would miss is
+# invisible in a green run -- the same reason `ran` is driven directly in #109's
+# configuration section. The last two fixtures are the trade, asserted rather
+# than assumed: a whole-line comment does not count, and a trailing one does.
+ARMS_FIXTURES="$FIXTURES/arms"
+mkdir -p "$ARMS_FIXTURES"
+cat > "$ARMS_FIXTURES/echo.sh" <<'ARMS_EOF'
+echo "refused" >&2
+ARMS_EOF
+cat > "$ARMS_FIXTURES/printf.sh" <<'ARMS_EOF'
+printf 'refused\n' >&2
+ARMS_EOF
+cat > "$ARMS_FIXTURES/continued.sh" <<'ARMS_EOF'
+echo "refused" \
+  >&2
+ARMS_EOF
+cat > "$ARMS_FIXTURES/whole-line-comment.sh" <<'ARMS_EOF'
+# echo "refused" >&2
+ARMS_EOF
+cat > "$ARMS_FIXTURES/trailing-comment.sh" <<'ARMS_EOF'
+exit 0  # echo "refused" >&2
+ARMS_EOF
 req GH-109.2
+tok 'arms counts an echo redirected to stderr' '1' "$(arms "$ARMS_FIXTURES/echo.sh")"
+tok 'arms counts a printf redirected to stderr, which echo alone did not' \
+    '1' "$(arms "$ARMS_FIXTURES/printf.sh")"
+tok 'arms counts an echo whose redirection is on a continuation line' \
+    '1' "$(arms "$ARMS_FIXTURES/continued.sh")"
+tok 'arms does not count a commented-out line' '0' "$(arms "$ARMS_FIXTURES/whole-line-comment.sh")"
+tok 'arms counts a trailing comment, which is the false red this trade accepts' \
+    '1' "$(arms "$ARMS_FIXTURES/trailing-comment.sh")"
 tok 'no-git-push.sh refuses in as many places as this suite reads' '19' \
-    "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-git-push.sh" | grep -c 'echo .*>&2')"
+    "$(arms "$HOOKS/no-git-push.sh")"
 tok 'no-pr-decisions.sh refuses in as many places as this suite reads' '16' \
-    "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" | grep -c 'echo .*>&2')"
+    "$(arms "$HOOKS/no-pr-decisions.sh")"
 
 echo "--- settings.json: what runs, on which tool, in what order, under what timeout ---"
 # settings.json is what makes a hook run at all, and until this section the suite
@@ -11430,6 +11535,20 @@ echo "--- all seven Bash hooks at once: a permitted spelling is permitted by eve
 # review of this section added: the two gh api creates and the plain commit.
 XH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command' "$SETTINGS" 2>/dev/null \
              | sed 's|.*/||; s|"$||')
+# The guard BASH_HOOKS and REGISTRATION both carry, and the one derivation in
+# this section that was without it until review of PR #169. It fails green where
+# the other two fail red: `every_hook` loops over this list, so an empty one runs
+# no hook, leaves `refused` empty, and prints `ok ALLOW by all` for all 41
+# spellings -- recording permit-direction coverage for GH-109.5, US-4, US-8,
+# US-13, US-14 and FR-48 without a hook having started. The `tok` below would
+# turn the run red, so the suite as a whole still catches it; the 41 rows would
+# say the opposite anyway, and a row that says the opposite is the thing this
+# suite is for. Unreachable today, since the two earlier guards read the same
+# file.
+[ -n "$XH_HOOKS" ] || {
+  echo "no Bash hooks were read out of settings.json; the cross-hook checks below prove nothing" >&2
+  exit 1
+}
 req GH-109.5
 tok 'the cross-hook checks run seven hooks, in registered order' \
     'no-commit-to-main.sh alembic-via-uv-group.sh pytest-via-uv-group.sh append-only-docs.sh no-git-push.sh no-pr-decisions.sh no-work-on-stale-branch.sh' \
@@ -11521,13 +11640,69 @@ echo "--- every hook settings.json registers is run by a tagged check ---"
 # A hook registered and never run by any check is a hook this suite says nothing
 # about, and every count above would stay green -- the audit's finding, "a
 # registered hook with zero checks passes". Asked of what the checks actually
-# ran, which `ran` records at the moment a check names one of the hooks under
-# judgment, and not of this file's text, where a loop over a variable names no
-# hook at all. So it reads the whole run and is the last check before #104's.
+# ran, which `ran` records once a tagged check has run one of the hooks under
+# judgment and read a verdict out of it, and not of this file's text, where a
+# loop over a variable names no hook at all. So it reads the whole run and is
+# the last check before #104's.
 #
-# THE LIMIT, named: this says a tagged check ran the hook, not that any check of
-# it can fail. That is mutation's question.
+# THE LIMITS, named, both of them.
+#
+# First: this says a tagged check ran the hook, not that any check of it can
+# fail. That is mutation's question.
+#
+# Second, found by review of PR #169: what `ran` can see is that the hook
+# returned a status a running hook returns. It cannot see that the hook did the
+# work -- 0 is also what `true` exits with, and a bash syntax error exits 2, the
+# case the exit-status contract at the head of this suite already names. What it
+# no longer says is the thing review found it saying: `ran` was called from
+# `hook_path`, at path resolution, and a path is built by concatenation whether
+# the file is there or not, so a deleted or unexecutable hook that checks still
+# named was recorded as run and this row printed green over it. It is recorded
+# after the status now, and 127 does not count.
+#
+# MEASURED, 2026-09-20, by hand: a copy of .claude/hooks/ with
+# alembic-via-uv-group.sh's shebang pointed at an interpreter that is not there
+# -- the file present and executable, and nothing of it ever running -- run
+# through $CHECK_HOOKS_DIR. This row went red, "settings.json registers
+# alembic-via-uv-group.sh, and no tagged check ran it", where before the change
+# it read "was run 207 times under a tag". The other two shapes review named do
+# not reach here at all, and that is a fixture guard's doing rather than this
+# row's: a hook made unreadable stops the override's own pre-flight, and one
+# made unexecutable stops #84's nolib fixture, each before this section runs.
+# So the shape this row can be wrong about is the one that was measured, and it
+# is the one that was fixed.
+# WHAT `ran` RECORDS, asked of `ran` itself. The row below reads the record and
+# nothing else, so what the record means is the whole of what that row claims,
+# and review of PR #169 found it meaning less than the row said: `ran` was
+# called from `hook_path`, before the hook was invoked, so a hook that was not
+# there or not executable -- resolved by concatenation, run by nobody, reported
+# 127 by bash -- counted as a run. No run of this suite could show that. Every
+# other check of such a hook goes red and this row alone goes green, which is
+# the shape a check has to be driven directly to catch.
+#
+# Driven against a scratch record, so the real one is untouched; each call is a
+# command substitution and runs in a subshell besides. The expectations are
+# literals: a tab, the tag `req` set on the line above, and the name as given.
+ran_probe() {  # ran_probe <script|/absolute/hook> <exit status> -- what `ran` writes
+  local saved="$RAN" out
+  RAN="$FIXTURES/ran-probe"
+  : > "$RAN"
+  ran "$1" "$2"
+  out=$(cat "$RAN")
+  RAN="$saved"
+  printf '%s\n' "$out"
+}
 req GH-109.4
+tok 'ran records a hook that exited 0, against the tag then in force' \
+    $'GH-109.4\tprobe.sh' "$(ran_probe probe.sh 0)"
+tok 'ran records a hook that exited 2' \
+    $'GH-109.4\tprobe.sh' "$(ran_probe probe.sh 2)"
+tok 'ran records nothing for exit 127, which is a hook that never started' \
+    '' "$(ran_probe probe.sh 127)"
+tok 'ran records nothing for exit 1, which is no verdict either' \
+    '' "$(ran_probe probe.sh 1)"
+tok 'ran records nothing for a fixture copy, which is not the registered hook' \
+    '' "$(ran_probe /nowhere/probe.sh 0)"
 # The basename is read off the command field by its suffix rather than by field
 # number, because a matcher such as Edit|Write carries the separator itself.
 for hook in $(printf '%s\n' "$REGISTRATION" | grep -o '[A-Za-z0-9_.-]*\.sh' | sort -u); do

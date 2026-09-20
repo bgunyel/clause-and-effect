@@ -1951,6 +1951,10 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - kind: doc-claim
 - status: active
 - direction: refuse-only: a message is written only on a refusal
+- note: "as many refusal arms as the suite reads" is counted as writes to stderr,
+  `echo` or `printf`, continuations folded first. That shape is load-bearing and
+  is recorded beside the literal: an arm written some other way leaves the count
+  where it was and goes unread, which is the permitting direction.
 
 ### GH-109.3
 - text: `settings.json` registers exactly the seven Bash hooks under `Bash`, in a
@@ -1964,11 +1968,15 @@ The suite fails on each of these, and `--matrix` shows the rest:
 
 ### GH-109.4
 - text: Every hook `settings.json` registers, on any event and matcher, is run by at
-  least one tagged check.
+  least one tagged check, and returns that check a verdict status.
 - from: #109
 - kind: defect-permitting
 - status: active
 - direction: static: a property of the suite's run
+- note: the record is written after the status is read, and only for 0 or 2.
+  Review of PR #169 found it written at path resolution instead, where a hook
+  that was deleted or not executable is indistinguishable from one that is: it
+  counted as run, and this was the one row that would have said so.
 
 ### GH-109.5
 - text: Every permitted spelling named in CLAUDE.md's boundary section or in a
@@ -2280,3 +2288,10 @@ it has no entry above (Q16).
   requirement that would carry it is the fix, and GH-108.5 pins the verdict as it
   stands and names it a gap. An entry here would read as a requirement the hooks
   meet
+- #169: the pull request for #109; its review is cited at the three things it
+  moved. Two were checks of this suite saying more than they had established —
+  the `ran` record written at path resolution, so a hook that was never there
+  counted as run, and the refusal-arm count reading `echo` on one physical line,
+  so an arm written any other way went unread. The third was the one derivation
+  in #109's section without an empty guard. None was a defect in a hook, which is
+  why it adds no requirement: it is the same requirements, held to what they say
