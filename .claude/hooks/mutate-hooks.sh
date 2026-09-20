@@ -15,18 +15,21 @@
 #       bash .claude/hooks/mutate-hooks.sh --list     the registry, and nothing run
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
-# ABOUT AN HOUR for the whole registry: one check-hooks.sh run per mutation that
-# applies, at about two minutes, plus the baseline -- forty-three runs as the
-# registry stands, not forty-four, because the row whose edit matches nothing
-# never reaches one. Measured twice on 2026-09-17, on this machine and on
-# registries one row apart: 47 min 34 s and 45 min 24 s, at twenty-three runs.
-# Those rates carried to forty-three runs give nearer ninety minutes than sixty,
-# and no third whole-registry measurement has been taken; a run under load took
-# nearer four minutes a row. That is why it
+# TWO MINUTES A ROW, and hours for the whole registry: one check-hooks.sh run
+# per mutation that applies, plus the baseline -- sixty runs as the registry
+# stands, not sixty-one, because the row whose edit matches nothing never reaches
+# one. Measured twice on 2026-09-17, on this machine and on registries one row
+# apart: 47 min 34 s and 45 min 24 s, at twenty-three runs. That measurement is
+# the two minutes, and the two minutes is what is written in the heading, because
+# review of PR #169 found the heading saying ABOUT AN HOUR while this paragraph
+# said ninety minutes and check-hooks.sh pinned the hour: a total goes stale
+# every time a row is added and a rate does not. Carried to sixty runs the
+# rate gives nearer two hours than one, and no third whole-registry measurement has been
+# taken; a run under load took nearer four minutes a row. That is why it
 # is a separate script and why check-hooks.sh does not call it (#107). Nothing
 # here is a PreToolUse hook and settings.json does not register it. Naming rows
 # costs the baseline plus one run each, so re-asking a single rule is about four
-# minutes rather than an hour.
+# minutes rather than the whole registry.
 #
 # EXIT STATUS: non-zero when any row reports something other than the outcome it
 # declares. For every real mutation that means a survivor or an edit that did not
@@ -59,17 +62,54 @@
 # figure above was taken. #117 added five, and on the merge of dev-05 into it
 # (2026-09-18) the sixteen rows added since that measurement -- #117's, #108's,
 # #128's and #133's -- were run as one selection: baseline plus sixteen, all
-# caught, byte-identical after. The other twenty-three rows have not been run
-# since the files they run against changed. #109 added four more -- a pass
-# slowed past the 1 s bound on a long command, two refusal messages losing the
-# sentence their rows read, and a second hook refusing a permitted read -- and
-# ran them as a named selection on 2026-09-18, before dev-05 carried #117:
+# caught, byte-identical after. #141 added two, `variants-field-deleted` and
+# `variants-seed-disowned`, and on the second merge of dev-05 into it
+# (2026-09-18) ran that pair as a selection against the merged tree: baseline
+# plus two, both caught with GH-141 red, byte-identical after. #139 added three,
+# `quoted-base-flag-permitted`, `quoted-base-value-refused` and
+# `quoted-shorthand-value-refused`, and ran them as a selection (2026-09-19):
+# baseline plus three, all caught with GH-139 red, byte-identical after; it also
+# edited no-pr-decisions.sh and check-hooks.sh. Bertan's review of PR #173 added
+# `ansi-hex-escape-not-decoded` and `open-quote-holds-no-newline`, and the five
+# #139 rows were run again as one selection against the answering commit. Its
+# second review added `nul-decoded-as-a-character` and
+# `nul-cut-span-keeps-its-newline`, and all seven #139 rows were run as one
+# selection against the commit answering it. Its third review added
+# `c-escape-takes-the-next-character` and moved the edit of
+# `nul-cut-span-keeps-its-newline` onto the line that now refuses. The eight
+# #139 rows were run as one selection against the answering commit, and
+# `open-quote-holds-no-newline` reported did-not-apply: the second review had
+# written its edit against `if (st && !cut)`, which the third removed. Its edit
+# was re-anchored and it was run alone, caught; the other seven were caught in
+# the selection, and .claude/hooks/ was byte-identical after both runs. The
+# fourth review added `empty-span-read-as-value` and
+# `cut-span-at-line-end-always-refused`, re-anchored
+# `quoted-shorthand-value-refused` and `nul-cut-span-keeps-its-newline` on the
+# lines it rewrote, and all ten #139 rows were run as one selection against
+# the answering commit. The fifth added `quoted-equals-read-as-value` and
+# re-anchored `quoted-base-value-refused`, and all eleven #139 rows were run as
+# one selection against the commit answering it. The other twenty-three rows have
+# not been run since the files they run against changed. #109 added four -- a
+# pass slowed past the 1 s bound on a long command, two refusal messages losing
+# the sentence their rows read, and a second hook refusing a permitted read --
+# and ran them as a named selection on 2026-09-18, before dev-05 carried #117:
 # baseline green over 183 requirements, all four caught, .claude/hooks/
 # byte-identical after. Its settings.json mutations cannot be rows here, the file
 # being outside the copy; they were run by hand and are recorded in #109's
-# section of check-hooks.sh. No run has therefore exercised all forty-three rows
-# together, and saying which rows a measurement covered is the whole point of
-# recording one. A reader who wants "the whole registry, at this commit" has to
+# section of check-hooks.sh. The review of PR #169 re-ran the four against its
+# first answering commit (2026-09-20), all four caught and byte-identical after,
+# and re-ran one of the by-hand six, the `ran` record switched off, which was
+# caught in eleven places. Its second review found two message rules the suite
+# stated and did not check, and #109 added four rows for them --
+# `base-refusal-drops-the-rule-sentence`, `base-refusal-drops-the-remedy-spelling`,
+# `push-refusal-stops-opening-with-the-rule` and `a-new-refusal-arm-nothing-reads`
+# -- run as one selection against the answering commit (2026-09-20): baseline
+# green over 187 requirements, all four caught, .claude/hooks/ byte-identical
+# after. The first two survived the suite before that commit, which is how the
+# review found them and why they are rows rather than a paragraph.
+# No run has therefore exercised all sixty rows together, and saying which
+# rows a measurement covered is the
+# whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
 # sentence this replaced, claiming the only later edit was to this comment, was
 # worth catching. Bertan's two reviews of PR #147, and two merges of dev-05 into
@@ -141,13 +181,16 @@
 # The counts below are what `--list` prints, and nothing here restates them in
 # prose a second time:
 #
-#   FORTY-ONE real mutations, against SEVEN files in .claude/hooks/, naming
-#   FORTY-FIVE requirement IDs between them, of the 167 whose status is active.
+#   FIFTY-EIGHT real mutations, against EIGHT files in .claude/hooks/, naming
+#   FORTY-SEVEN requirement IDs between them, of the 169 whose status is active.
 #
 # Those four numbers are restated prose in a file whose own argument, three
 # paragraphs up, is that a count in a comment is the thing #107 was filed about.
-# They have now been wrong or moved seven times in three days, and #148 is filed to
-# take them out and let `--list` be the only place they are written.
+# They had been wrong or moved six times in three days when #148 was filed to
+# take them out and let `--list` be the only place they are written; #139 moved
+# them eight more times, and #109's merge of dev-05 moved all four again. The
+# heading three paragraphs up stopped being one of them on the same merge, for
+# the same reason: see there.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
 # verify is `review` or `runbook` rather than a check here, every doc-claim about
@@ -168,6 +211,16 @@
 #     one list. #106's six self-guards -- a transformation that applies to no
 #     seed, a departure row naming a seed that is not there -- are all of that
 #     kind, and #104's coverage machinery is too.
+#
+#     The seventh file is the exception that shows where the line actually
+#     falls, and it is worth reading before the next row is written. GH-141's
+#     rule is CODE in check-hooks.sh and so cannot be mutated -- but what that
+#     code READS is requirements.md, which an override does move. So the rule is
+#     reachable through its input: the two `variants-*` rows edit an entry in
+#     the copy and the suite, running from here, reads the copy and goes red.
+#     The test is not "whose file is it" but "does the run read the copy".
+#     Nothing about #106's own self-guards is reachable that way, because what
+#     they read is the seed table, which lives in the suite.
 #   - a claim about a file outside .claude/hooks/. Only the hooks directory is
 #     copied, and CLAUDE.md, CONTEXT.md, settings.json and the two skills are
 #     read from this repository whatever is being judged, so a mutation to one of
@@ -228,6 +281,17 @@ retarget-refusal-drops-the-create-comparison%no-pr-decisions.sh%s/ just as creat
 base-pattern-admits-main%no-pr-decisions.sh%/^is_dev_base()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
 pr-create-base-not-read%no-pr-decisions.sh%s/if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/if false \&\& RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/%FR-14 FR-16 US-9%caught
 web-handoff-refused%no-pr-decisions.sh%/^gh_pr_web()/,/^}/s/--web|-w) return 0 ;;/--web|-w) return 1 ;;/%FR-21 US-12%caught
+quoted-base-flag-permitted%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/END { exit found ? 0 : 1 }/END { exit 1 }/%GH-139%caught
+quoted-base-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ \&\& q <= length("--base") + (w ~ \/^--base=\/))/)/%GH-139%caught
+quoted-equals-read-as-value%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ + (w ~ \/^--base=\/))/)/%GH-139%caught
+quoted-shorthand-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if ((q \&\& q <= b)/if ((q/%GH-139%caught
+ansi-hex-escape-not-decoded%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "x") {/if (0) {/%GH-139%caught
+open-quote-holds-no-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (st) w = w "\\n"; //%GH-139%caught
+nul-decoded-as-a-character%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (v == 0) { if (!cut) { cut = 1; cutw = w } } else w = w chr(v)/w = w chr(v)/%GH-139%caught
+nul-cut-span-keeps-its-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (cut) { if (/if (0) { if (/%GH-139%caught
+empty-span-read-as-value%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ || (qe \&\& qe <= length("--base") + 1)//%GH-139%caught
+cut-span-at-line-end-always-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (w == "" || (w ~ \/^-\/ \&\& w !~ \/\[\[:space:\]\]\/))/if (1)/%GH-139%caught
+c-escape-takes-the-next-character%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "c") { put(0); return }/if (e == "c") { if (i < n) i++; w = w "?"; return }/%GH-139%caught
 api-read-taken-for-a-write%no-pr-decisions.sh%/^gh_api_is_write()/,/^}/s/^  return 1$/  return 0/%FR-20%caught
 release-allowlist-admits-a-write%no-pr-decisions.sh%/^RELEASE_READ_VERBS=/s/verify-asset"/verify-asset create edit delete"/%FR-48%caught
 bare-push-refusal-drops-the-branch%no-git-push.sh%/Name the branch: git push/s/git push <remote> \$CURRENT/git push <remote> <branch>/%US-7%caught
@@ -245,6 +309,8 @@ tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 a
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught
 degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch: FAILED or timed out after /d%GH-108.10%caught
+variants-field-deleted%requirements.md%/^- variants: transformation: redirect-quoted$/d%GH-141%caught
+variants-seed-disowned%requirements.md%/^### GH-72$/,/^$/s/^- variants: seed$/- variants: none: a reason/%GH-141%caught
 heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
@@ -257,6 +323,10 @@ long-command-outlasts-the-bound%no-git-push.sh%/^CMDS=\$(printf/a [ "$(echo "$CO
 forced-push-refusal-drops-the-remedy%no-git-push.sh%s/ Add a commit instead\.//%US-7 GH-109.2%caught
 decision-refusal-drops-what-stays-allowed%no-pr-decisions.sh%/^DECIDE=/s/ Opening a PR, commenting on it and editing it are allowed;//%US-7 GH-109.2%caught
 second-hook-refuses-a-permitted-read%alembic-via-uv-group.sh%/^CMDS=\$(printf/a echo "$CMDS" | grep -q '^gh pr view' && exit 2%GH-109.5%caught
+base-refusal-drops-the-rule-sentence%no-pr-decisions.sh%/^BASE=/s/a pull request may be proposed only into the active dev branch, and the base has to be named in the command. //%US-7 FR-23 GH-109.2%caught
+base-refusal-drops-the-remedy-spelling%no-pr-decisions.sh%/^BASE=/s/ --title \.\.\. --body \.\.\.//%US-7 FR-23 GH-109.2%caught
+push-refusal-stops-opening-with-the-rule%no-git-push.sh%s/echo "\$REFUSE That is a forced push/echo "That is a forced push/%US-7 GH-109.2%caught
+a-new-refusal-arm-nothing-reads%no-git-push.sh%/^CMDS=\$(printf/a >\&2 echo "Blocked: an arm with no says row above it."%GH-109.2%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

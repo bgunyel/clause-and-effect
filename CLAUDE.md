@@ -174,7 +174,7 @@ Whether those checks can fail is a second question, and `bash
 .claude/hooks/mutate-hooks.sh` is where it is asked (#107). It breaks one
 registered rule at a time in a copy of `.claude/hooks/` — never in this one — and
 a mutation counts as caught only when every requirement ID the registry names for
-it has a failing check. About an hour for the registry, so nothing
+it has a failing check. Two minutes a row and hours for the registry, so nothing
 runs it for you; two of its rows are self-tests, one whose edit matches nothing
 and one registered against a requirement its edit cannot reach, because an edit
 that silently fails to apply reads exactly like evidence and is none. What the
@@ -261,9 +261,9 @@ a claim without a number is a claim to re-measure.
 ## What an unattended agent may do to this repository
 
 * **Unless otherwise stated, an agent shall create a dedicated worktree for its work.**
-* **Unless otherwise stated, an agent shall create its own dedicated worktree for its work.**
 * **Unless otherwise stated, an agent shall not work on a worktree created by someone else.**
 * **If an agent finds out that a worktree already exists, it shall ask the user for permission to work in that worktree.**
+* **When an agent finishes its work in its worktree, it will commit and push to its corresponding worktree branch.**
 
 An agent may push the branch of the linked worktree it is working in —
 non-forced, and naming that branch in the command, because a bare `git push`

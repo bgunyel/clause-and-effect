@@ -463,6 +463,32 @@ thing in the record.
   that stood at its commit — 28 registry rows and a suite of 3903 at the end of
   Part 3, against 39 rows and 4346 results after the first merge.
 
+- [2026-09-17 · session dev-issue-141](devlog_2026-09-17_dev-issue-141.md)
+  — #141: #106's
+  invariance families seeded one of `requirements.md`'s three requirement
+  families, and not the one written from defects — 95 `GH-` entries to 49 FRs,
+  and the derivation read `FR-` tags only. Which `GH-` requirements are seeded
+  is a rule now: membership derived off the file, the answer declared per entry
+  in a `variants` field, and three checks holding the declarations to the seed
+  table and the transformation list. The first hook the rule brought into scope
+  failed on its first generated spelling — `append-only-docs.sh` permits `rm`,
+  `mv`, `tee`, `truncate` and a truncating redirect behind a backslash line
+  continuation, filed as #156 — and review of the assistant's own commit then
+  found a pass about nothing in the very section whose subject is guards that
+  cannot fail. 371 more variants moved the run time by less than the suite can
+  resolve, which is also why #140's recorded 94.0 s could not be compared
+  against. Writing the entry then found a second permitting defect by trying to
+  obey the convention: `append-only-docs-edit.sh` is inoperative in every linked
+  worktree, which is where agents work, filed as #159. Worked unattended; it has
+  not had Bertan's review.
+  **Named for the session rather than numbered.** It was written as session
+  5, collided on merging dev-05 with #128's entry of that name and became 7,
+  then collided again when #137's entries took 7. `db06477`'s convention
+  names it for the writing session instead. It was still a draft under ADR
+  0003 when renamed, so its heading was corrected with the file name; every
+  count inside it is the one that stood at its first commit — 31 registry
+  rows, against 41 after the second merge.
+
 - [2026-09-18 · session 1](devlog_2026-09-18_session-1.md) — the follow-up review
   of #153: `[[:space:]=]*` closes the separator, not the field. Quoting inside a
   field name or value (`-f ba"se"=main`, `-f state=clo"sed"`) is still permitted,
