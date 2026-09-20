@@ -2438,7 +2438,7 @@ and held to the same standard of saying only what it asks.
   section says: after this branch `docs/dev-log/` holds no entry whose heading
   contradicts its name, which is the branch's point, so the permitting direction has
   no subject here and the refusing cases it is bounded by have none either.
-- note: WHAT THE SECTION IS EVIDENCE ABOUT, MEASURED RATHER THAN ASSUMED. The
+  WHAT THE SECTION IS EVIDENCE ABOUT, MEASURED RATHER THAN ASSUMED. The
   exception was hand-swept a clause at a time — each of the 16 conditions in
   `heading_correction` removed on a copy, and every payload the section drives
   re-judged against the result. Seven clauses have a payload that flips when they
