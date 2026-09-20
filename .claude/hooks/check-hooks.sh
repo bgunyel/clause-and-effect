@@ -1446,7 +1446,24 @@ check no-pr-decisions.sh BLOCK 'bash -c gh pr merge'  "bash -c 'gh pr merge 35'"
 check no-pr-decisions.sh BLOCK 'sh -c gh pr merge'    'sh -c "gh pr merge 35"'
 check no-pr-decisions.sh BLOCK 'eval gh pr merge'     "eval 'gh pr merge 35'"
 check no-pr-decisions.sh BLOCK 'graphql mutation via heredoc' $'gh api graphql -f query=@- <<EOF\nmutation { mergePullRequest(input:{pullRequestId:"x"}) { clientMutationId } }\nEOF'
-check no-pr-decisions.sh BLOCK 'REST merge via heredoc body'  $'gh api -X PUT --input - <<EOF\n{"path":"/repos/o/r/pulls/5/merge"}\nEOF'
+# THIS ROW WAS A COMMAND gh REJECTS, and #130's triage is what measured it. It
+# read `gh api -X PUT --input -` with a heredoc body carrying
+# `{"path":"/repos/o/r/pulls/5/merge"}`, and `gh api` with no endpoint fails
+# with `accepts 1 arg(s), received 0` before any request is made -- `gh api
+# --help` says the endpoint argument is "either a path ... or `graphql`", and
+# there is no `path` key for it to read out of a body. So the row pinned a
+# refusal of something nobody can run, through a JSON key that decides nothing.
+#
+# Rewritten to the real shape, endpoint positional and body on stdin. The
+# verdict is BLOCK on both sides of #130 and for the same reason it always was:
+# the endpoint alone says what this is. What changes under #130 is only WHERE
+# the endpoint is read -- the writing command's own arguments rather than the
+# whole line -- and a heredoc body is no longer any command's arguments at all,
+# which is what makes rows 8 and 9 of #130's table ALLOW without an --input
+# reader. Reading an endpoint out of a request body is not a thing; reading a
+# FIELD out of one is #138's.
+check no-pr-decisions.sh BLOCK 'REST merge, endpoint named, body on stdin' \
+  $'gh api -X PUT repos/o/r/pulls/5/merge --input - <<EOF\n{"merge_method":"squash"}\nEOF'
 
 section "=== ACCEPTED false positive: quoted multi-line string, not a heredoc ==="
 # The price of allowing leading whitespace in the anchor. Kept on purpose: a
@@ -3151,8 +3168,16 @@ req GH-137.1
 tok 'no-pr-decisions.sh: the state pattern is written once, not once per call site' \
     '1' "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" \
           | grep -o 'closed|open' | wc -l | tr -d '[:space:]')"
-tok 'no-pr-decisions.sh: both state call sites read that one pattern' \
-    '2' "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" \
+# THREE CALL SITES, NOT TWO, SINCE #130. The count moved because the combined
+# `(/pulls/|updatePullRequest)` rule split in two: the REST half is in the
+# per-command loop, keyed on that command's own endpoint, and the graphql half
+# stayed on $SCAN behind the structural gate. The wrapper arm is the third and
+# is untouched. The claim this row makes is unchanged -- the pattern is written
+# once and every call site reads it -- and the number is what says how many
+# sites there are to fix apart. A split that had copied the pattern instead
+# would have moved the row above and not this one.
+tok 'no-pr-decisions.sh: all three state call sites read that one pattern' \
+    '3' "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" \
           | grep -oF 'grep -qiE "$STATE_FIELD_RE"' | wc -l | tr -d '[:space:]')"
 # The arming evidence. The state rule is keyed on the field and not on the
 # endpoint, for the reason its own comment gives -- the same PATCH is how `gh pr
@@ -3455,6 +3480,345 @@ req FR-21 US-12 GH-139
 check no-pr-decisions.sh ALLOW 'the web form, no base'              'gh pr create --web'
 req FR-14 FR-15 GH-139
 check no-pr-decisions.sh ALLOW 'a body naming the flag, dev base'   'gh pr create --base dev-05 --title t --body "the --base flag"'
+
+section "=== issue #130, gh api read an endpoint out of an issue body ==="
+# Six rules in no-pr-decisions.sh's `gh api` write block asked their question of
+# $SCAN -- the whole normalised line, quotes and all -- where the base rule had
+# been asking its own of one command since #40's review. So a write to an ISSUE
+# was refused when the text it carried named some other endpoint's path, field
+# or mutation, and a `/releases` read standing beside an unrelated issue write
+# was refused with it. The ten measured shapes are #130's table; all ten were
+# BLOCK at 8b1cbaf and all ten are ALLOW here.
+#
+# The cost landed on ordinary work, and on this repository's own: an agent
+# filing or commenting on an issue ABOUT the boundary quotes the commands it is
+# about. The issue this section answers is written that way, and so is the pull
+# request that closes it.
+#
+# THE FIX IS ONE MOVE AND ONE NEW READER. The endpoint questions go into the
+# per-command loop and are asked of `cs_gh_args api`'s output with
+# `endpoint_args` run over it; the three rules that cannot be scoped -- a
+# mutation body is cut from its command word by cs_split -- keep $SCAN and are
+# gated on some api call having actually named the graphql endpoint. Five rules
+# can regress on their own and each has its own requirement, GH-130.1 to
+# GH-130.5.
+#
+# WHAT `endpoint_args` DOES, since the rows below are what say it is right. A
+# quoted span is DROPPED when it holds whitespace, DROPPED when an `=` stands
+# before it in the same word, and UNQUOTED otherwise -- with a `$` before the
+# opening quote counted as part of the span and a backslash-escaped quote
+# counted as none. An endpoint is gh api's one positional argument and a field
+# value is attached to its `=`, so that one rule is the whole separation between
+# `gh api "graphql"`, which is refused, and `-f body="see
+# repos/o/r/pulls/5/merge"`, which is prose.
+#
+# THE FIRST VERSION OF THIS FIX TESTED A PROXY FOR THE `=` and the rows under
+# *WHAT THE PROXY COST* below are what it cost: a span was read only if it was a
+# WHOLE WORD, so `graph"ql"`, `repos/o/r/"pulls"/5/merge` and
+# `$'repos/o/r/pulls/5/merge'` each lost their endpoint and nine commands
+# refused at 7bea85f were permitted. Found by review of this branch, not by this
+# suite, which was green with the first version in place. Every one of those
+# rows is here.
+#
+# WHICH OF THESE ROWS CAN FAIL, measured rather than argued, by judging a copy
+# of .claude/hooks/ holding the pre-fix no-pr-decisions.sh through
+# $CHECK_HOOKS_DIR -- this repository's own hooks were never edited. The count
+# and the split are in the pull request; each block below says which kind it is.
+
+# THE TEN ROWS OF #130's TABLE. Every one BLOCK before the fix.
+#
+# Rows 1, 4 and 8: the /releases rule. Row 4 is the read-beside-a-write shape,
+# which `gh api -X POST repos/o/r/issues -f title=x && gh api repos/o/r/pulls`
+# has been pinned ALLOW for since the base rule went per-command -- two answers
+# to one question, one of them pinned, and that is what made this a consistency
+# fix rather than a change of policy. Row 8 is the shape this repository writes
+# long issue bodies in.
+req GH-130.1
+check no-pr-decisions.sh ALLOW 'row 1: an issue body naming /releases' \
+  'gh api -X POST repos/o/r/issues -f title=x -f body="see /releases for the tarball"'
+check no-pr-decisions.sh ALLOW "row 1 with the body in \$'...'" \
+  "gh api -X POST repos/o/r/issues -f title=x -f body=\$'see /releases for the tarball'"
+check no-pr-decisions.sh ALLOW 'row 4: a /releases read beside an issue write' \
+  'gh api repos/o/r/releases && gh api -X POST repos/o/r/issues -f title=x'
+check no-pr-decisions.sh ALLOW 'row 8: a heredoc issue body naming /releases' \
+  $'gh api -X PATCH repos/o/r/issues/27 -F body=@- <<EOF\nthe tarball is under /releases\nEOF'
+# Row 5: the merge-or-review endpoint rule.
+req GH-130.2
+check no-pr-decisions.sh ALLOW 'row 5: an issue body naming the merge endpoint' \
+  'gh api -X POST repos/o/r/issues -f title=x -f body="see repos/o/r/pulls/5/merge"'
+# Row 2: the REST half of the state rule, which needs BOTH the endpoint and the
+# field on this command. The body here carries both, and neither is the
+# command's own.
+req GH-130.3
+check no-pr-decisions.sh ALLOW 'row 2: an issue body naming a pull request and a state' \
+  'gh api -X PATCH repos/o/r/issues/27 -f body="repos/o/r/pulls/5 has state=closed"'
+# Rows 3 and 10: the no-base arm, which is keyed on the collection endpoint.
+# Row 10 is the row that decided how the unquoter had to be written: the value
+# carries no whitespace, so a reader that unquotes lone tokens has to tell it
+# from a positional endpoint by the `=` it is attached to.
+req GH-130.4
+check no-pr-decisions.sh ALLOW 'row 3: an issue body naming the pulls collection' \
+  'gh api -X PATCH repos/o/r/issues/27 -f body="the endpoint is repos/o/r/pulls"'
+check no-pr-decisions.sh ALLOW 'row 10: the same with no whitespace in the value' \
+  'gh api -X POST repos/o/r/issues -f title=x -f body="repos/o/r/pulls"'
+# ROW 10's SHAPE FOR THE OTHER THREE RULES, and it is the only shape that asks
+# the `=` question at all. Every other body row here carries whitespace in its
+# value, so the whitespace clause drops the span first and the `=` clause is
+# never reached: measured, a reader with the `=` test taken out turns row 10 red
+# and no other row in this suite. One row carrying one clause is the shape this
+# suite's header warns about, so the clause is asked of four rules and not one.
+req GH-130.2
+check no-pr-decisions.sh ALLOW 'a bodiless value naming the merge endpoint' \
+  'gh api -X POST repos/o/r/issues -f title=x -f body="repos/o/r/pulls/5/merge"'
+req GH-130.1
+check no-pr-decisions.sh ALLOW 'a bodiless value naming /releases' \
+  'gh api -X POST repos/o/r/issues -f title=x -f body="/releases"'
+req GH-130.3
+check no-pr-decisions.sh ALLOW 'a bodiless value naming a pull request, beside a state' \
+  'gh api -X PATCH repos/o/r/issues/27 -f body="repos/o/r/pulls/5" -f state=closed'
+# Rows 6, 7 and 9: the three rules that keep $SCAN, now behind the structural
+# gate. Row 7 is within a single command, which is NOT the cross-command bleed
+# gql_bases' own comment accepts -- that one is a mutation on one command and a
+# baseRefName on another, and it stays accepted below.
+req GH-130.5
+check no-pr-decisions.sh ALLOW 'row 6: an issue body naming a mutation' \
+  'gh api -X POST repos/o/r/issues -f title=x -f body="the mergePullRequest mutation"'
+check no-pr-decisions.sh ALLOW 'row 7: an issue body naming baseRefName' \
+  'gh api -X POST repos/o/r/issues -f title=x -f body="baseRefName:main is the field"'
+check no-pr-decisions.sh ALLOW 'row 9: a heredoc issue body naming a mutation' \
+  $'gh api -X PATCH repos/o/r/issues/27 -F body=@- <<EOF\nthe mergePullRequest mutation does it\nEOF'
+# THE GATE IS STRUCTURAL AND NOT TEXTUAL, and this is the row that says which.
+# None of rows 6, 7 and 9 carries the word `graphql`, so a gate that grepped the
+# command for it would pass all three and this fix would be one spelling wide of
+# the defect it closes. This body names the endpoint in prose and is the shape
+# the gate's own comment names.
+check no-pr-decisions.sh ALLOW 'an issue body naming the graphql endpoint in prose' \
+  'gh api -X POST repos/o/r/issues -f title=x -f body="the gh api graphql endpoint reaches mergePullRequest"'
+
+# THE CONTROLS from the issue, all ALLOW before the fix and all ALLOW after.
+# They are what make the ten a defect rather than the rule working: the same
+# prose was permitted through `gh issue`, and a /pulls read beside an unrelated
+# write was already permitted through `gh api`.
+req US-14
+check no-pr-decisions.sh ALLOW 'control: the gh issue spelling of the same prose' \
+  'gh issue comment 27 --body "repos/o/r/pulls"'
+req GH-130.4
+check no-pr-decisions.sh ALLOW 'control: an issue body naming a pull request' \
+  'gh api -X PATCH repos/o/r/issues/27 -f body="fixed in repos/o/r/pulls/5"'
+
+# WHAT THE ENDPOINT RULES STILL REFUSE, asked of each rule's own endpoint in
+# every spelling that is pinned anywhere: bare path, leading slash, full URL,
+# and a quoted path, which is the half of endpoint_args that UNQUOTES. A reader
+# that dropped every span rather than reading one would permit every quoted row.
+#
+# NOT NEW HERE, and an earlier wording of this paragraph said it was. #97's
+# `POST an asset to the uploads host` row already carried a single-quoted
+# endpoint, and the drop-everything mutation turns it red -- so one pin for that
+# spelling predates this fix, on the release rule, and it is the one row outside
+# this section that a reader reading no span at all would move. It passed before
+# the fix for a different reason: nothing needed unquoting when the rule read
+# $SCAN with its quotes still in it. The rows below add the spelling for the
+# other three rules and for both quote characters.
+#
+# The spellings where the quoting sits INSIDE the word are under *WHAT THE PROXY
+# COST* below, with the rest of what the first version of this fix got wrong.
+req GH-130.1 US-15 FR-48
+check no-pr-decisions.sh BLOCK 'a release write, bare path'          'gh api -X POST repos/o/r/releases -f tag_name=v1'
+check no-pr-decisions.sh BLOCK 'a release write, path double-quoted' 'gh api -X POST "repos/o/r/releases" -f tag_name=v1'
+check no-pr-decisions.sh BLOCK 'a release write, path single-quoted' "gh api -X POST 'repos/o/r/releases' -f tag_name=v1"
+req GH-130.2 US-15
+check no-pr-decisions.sh BLOCK 'the merge endpoint, leading slash'   'gh api --method POST /repos/o/r/pulls/5/reviews -f event=APPROVE'
+check no-pr-decisions.sh BLOCK 'the merge endpoint, a full URL'      'gh api https://api.github.com/repos/o/r/pulls/5/merge -X PUT'
+check no-pr-decisions.sh BLOCK 'the merge endpoint, path quoted'     'gh api "repos/o/r/pulls/5/merge" -X PUT'
+check no-pr-decisions.sh BLOCK 'the review endpoint, path quoted'    "gh api 'repos/o/r/pulls/5/reviews' -f event=APPROVE"
+# The state rule's field is read out of the command's RAW text and not out of
+# endpoint_args, because the value is the thing being judged: a dropped span
+# would turn the second of these from a refusal into a permission.
+req GH-130.3 US-15
+check no-pr-decisions.sh BLOCK 'a state write, value bare'           'gh api -X PATCH repos/o/r/pulls/5 -f state=closed'
+check no-pr-decisions.sh BLOCK 'a state write, value double-quoted'  'gh api -X PATCH repos/o/r/pulls/5 -f state="closed"'
+req GH-130.4 FR-14 US-9
+check no-pr-decisions.sh BLOCK 'a create naming no base, bare path'  'gh api -X POST repos/o/r/pulls -f head=x -f title=y'
+check no-pr-decisions.sh BLOCK 'a create naming no base, path quoted' 'gh api -X POST "repos/o/r/pulls" -f head=x -f title=y'
+# THE TWO SPELLINGS THE GATE EXISTS FOR, and neither was pinned anywhere before
+# this section. They are exactly what a fix reading the endpoint out of the
+# arguments could have lost: a textual grep for the word `graphql` would have
+# left row 6 refused, and dropping every quoted span would have left these two
+# permitted.
+req GH-130.5 US-15
+check no-pr-decisions.sh BLOCK 'graphql double-quoted, then a mutation' \
+  'gh api "graphql" -f query="mutation{mergePullRequest(input:{x:1})}"'
+check no-pr-decisions.sh BLOCK 'graphql single-quoted, then a mutation' \
+  "gh api 'graphql' -f query='mutation{mergePullRequest(input:{x:1})}'"
+check no-pr-decisions.sh BLOCK 'the gate open, a state on updatePullRequest' \
+  'gh api graphql -f query="mutation{updatePullRequest(input:{state:CLOSED})}"'
+check no-pr-decisions.sh BLOCK 'the gate open, a base of main' \
+  'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:main})}"'
+
+# THE EMISSION ORDER IS A CONTRACT, not an accident of which `if` came first.
+# Before this fix each rule printed where it stood; now each sets a flag and the
+# printing is one block below the loop, which is the move that could have
+# flipped the order. So it is asked rather than assumed: a release write and a
+# merge on one line, and the merge message is the one that comes back. The
+# `says_not` beside it is what separates "the right message" from "some
+# refusal" -- both arms refuse, so a verdict alone establishes nothing here.
+req GH-130.1 GH-130.2 US-15
+says "$SUITE_DIR" no-pr-decisions.sh 'Reaching the merge or review endpoint through gh api is the same decision by another name.' \
+  'a release write and a merge: the merge message comes first' \
+  'gh api -X POST repos/o/r/releases -f tag_name=v1 && gh api -X PUT repos/o/r/pulls/5/merge'
+says_not "$SUITE_DIR" no-pr-decisions.sh 'any write to a release is Bertan' \
+  'and the release message does not come back instead' \
+  'gh api -X POST repos/o/r/releases -f tag_name=v1 && gh api -X PUT repos/o/r/pulls/5/merge'
+req GH-130.1 GH-130.3 US-15
+says "$SUITE_DIR" no-pr-decisions.sh "Setting a pull request's state through gh api closes or reopens it" \
+  'a release write and a state write: the state message comes first' \
+  'gh api -X POST repos/o/r/releases -f tag_name=v1 && gh api -X PATCH repos/o/r/pulls/5 -f state=closed'
+req GH-130.1 GH-130.5 US-15
+says "$SUITE_DIR" no-pr-decisions.sh 'any write to a release is Bertan' \
+  'a release write and a mutation: the release message comes first' \
+  'gh api -X POST repos/o/r/releases -f tag_name=v1 && gh api graphql -f query="mutation{mergePullRequest(input:{x:1})}"'
+
+# A READ OF A DECIDING ENDPOINT BESIDE A WRITE IS A READ. Row 4 generalised:
+# the flags are set only for a command gh_api_is_write accepts, so these two are
+# the GETs they look like. Both were BLOCK before the fix, and both are the
+# shape `gh api repos/o/r/pulls/5/merge` alone has been pinned ALLOW as since
+# PR #35's review -- GET /pulls/N/merge reports whether a pull request is
+# merged and GET /pulls/N/reviews lists reviews, and refusing those refused a
+# listing rather than a decision.
+req GH-130.2 FR-20 US-13
+check no-pr-decisions.sh ALLOW 'a merge-state read beside an issue write' \
+  'gh api repos/o/r/pulls/5/merge && gh api -X POST repos/o/r/issues -f title=x'
+check no-pr-decisions.sh ALLOW 'a reviews listing beside an issue write' \
+  'gh api repos/o/r/pulls/5/reviews && gh api -X POST repos/o/r/issues -f title=x'
+
+# ACCEPTED, NOT FIXED. Three refusals this fix leaves standing, each named in
+# no-pr-decisions.sh beside the rule that makes it and each one edit away. They
+# are pinned here so that a later change that quietly takes one away is a
+# decision someone made rather than a row that moved.
+#
+#   1. `-f "body=/releases"` -- the quote before the FIELD NAME, and no
+#      whitespace in the value, so the argument is a whole word and the
+#      unquoter unquotes it. That is the price of keeping the two quoted
+#      spellings of `graphql` above refused, and the alternative test -- a lone
+#      token without an `=` in it -- fails in the PERMITTING direction on an
+#      endpoint carrying a query string.
+req GH-130.1 US-15
+check no-pr-decisions.sh BLOCK 'ACCEPTED: the quote before the field name' \
+  'gh api -X POST repos/o/r/issues -f "body=/releases"'
+#      And the same shape with no quote at all: there is no span to drop, and
+#      the value is the characters a positional endpoint would be. This half is
+#      not new and this fix does not reach it -- all three were BLOCK at
+#      7bea85f too -- but it is the other end of the same trade and the
+#      requirement texts are written against it, so it is named here rather
+#      than left to read as something the fix was supposed to have fixed.
+req GH-130.1 US-15
+check no-pr-decisions.sh BLOCK 'ACCEPTED: an unquoted value naming /releases' \
+  'gh api -X POST repos/o/r/issues -f body=/releases'
+req GH-130.4 US-15
+check no-pr-decisions.sh BLOCK 'ACCEPTED: an unquoted value naming the collection' \
+  'gh api -X POST repos/o/r/issues -f body=repos/o/r/pulls'
+req GH-130.2 US-15
+check no-pr-decisions.sh BLOCK 'ACCEPTED: an unquoted value naming the merge endpoint' \
+  'gh api -X POST repos/o/r/issues -f body=repos/o/r/pulls/5/merge'
+#   2. A quoted body whose span is still open where the line ends. cs_split
+#      hands one line of a command, so that span is an argument bash carries on
+#      to the next line, and endpoint_args leaves it exactly as written --
+#      the refusing direction, and what base_args' sed already does with one.
+#      CLAUDE.md's left-open item 3, one reader further in.
+check no-pr-decisions.sh BLOCK 'ACCEPTED: a multi-line issue body naming /releases' \
+  $'gh api -X POST repos/o/r/issues -f title=x -f body="see /releases\nfor the tarball"'
+#   3. The gate's own residual bleed: a genuine `gh api graphql` READ standing
+#      beside an issue write whose prose names a mutation. The gate is
+#      structural and a graphql call satisfies it, so the prose is refused with
+#      it. Same shape as the cross-command bleed gql_bases accepts in its own
+#      comment, and named in the gate's.
+req GH-130.5 US-15
+check no-pr-decisions.sh BLOCK 'ACCEPTED: a graphql read opens the gate for prose beside it' \
+  'gh api graphql -f query="query{repository{id}}" && gh api -X POST repos/o/r/issues -f body="the mergePullRequest mutation"'
+
+# WHAT THE PROXY COST. The first version of this fix read a span only when it
+# was a WHOLE WORD -- opening at a word boundary and closing at one -- as a
+# stand-in for "no `=` before it". Every row here was BLOCK at 7bea85f and ALLOW
+# under that proxy, measured by feeding each to both hooks; none was pinned
+# anywhere, which is why the suite was green. They are the reason the rule tests
+# the `=` where it stands.
+#
+# A `$` before the opening quote. It is part of the quoting -- bash reads
+# `$'x'` and `$"x"` as quoting -- and counted as an ordinary character it made
+# the span open at no word boundary, so the whole endpoint was dropped. This is
+# quoted_base_flag's finding, 500 lines up in the same file, arriving a second
+# time one reader over: "The `$` of bash's `$'...'` and `$"..."` goes with its
+# quote ... counted as a character, it hid `$'--base' main` as `$--base`."
+#
+# WHICH OF THESE FIVE CARRIES THE `$` CLAUSE, measured and not assumed: one, the
+# graphql row further down. Taking the `$` handling back out turns that row red
+# and leaves the four here green -- with the `=` clause right the span is read
+# anyway, and the `$` it leaves in front of the body does not stop `/pulls/` or
+# `/releases` matching mid-string. Only the gate, which wants `graphql` at a
+# word boundary, can see the difference. The four are here because each was a
+# refusal this fix turned into a permission, which is reason enough for a row;
+# they are not four pieces of evidence about one clause.
+req GH-130.2 US-15
+check no-pr-decisions.sh BLOCK "the merge endpoint in \$'...'"        "gh api \$'repos/o/r/pulls/5/merge' -X PUT"
+check no-pr-decisions.sh BLOCK 'the merge endpoint in $"..."'        'gh api $"repos/o/r/pulls/5/merge" -X PUT'
+req GH-130.1 US-15 FR-48
+check no-pr-decisions.sh BLOCK "a release write, path in \$'...'"     "gh api -X POST \$'repos/o/r/releases' -f tag_name=v1"
+req GH-130.3 US-15
+check no-pr-decisions.sh BLOCK "a state write, path in \$'...'"       "gh api -X PATCH \$'repos/o/r/pulls/5' -f state=closed"
+req GH-130.4 FR-14 US-9
+check no-pr-decisions.sh BLOCK "a create naming no base, path in \$'...'" "gh api -X POST \$'repos/o/r/pulls' -f head=x -f title=y"
+# Quoting INSIDE the word. gh runs these exactly as it runs the bare spellings,
+# and the proxy cut each word down to what stood outside the span. The first two
+# shut the graphql gate, which turns off three rules at once, and neither is
+# reached by #106's quote transformations: those quote a whole chosen argument,
+# which is the one position the reader already unquotes.
+req GH-130.5 US-15
+check no-pr-decisions.sh BLOCK 'graphql with its tail quoted'        'gh api graph"ql" -f query="mutation{mergePullRequest(input:{x:1})}"'
+check no-pr-decisions.sh BLOCK 'graphql with its head quoted'        "gh api 'graph'ql -f query=\"mutation{mergePullRequest(input:{x:1})}\""
+check no-pr-decisions.sh BLOCK "graphql in \$'...'"                   "gh api \$'graphql' -f query=\"mutation{mergePullRequest(input:{x:1})}\""
+# The two path rows are a tightening rather than a restoration: both were ALLOW
+# at 7bea85f as well, the old $SCAN-wide greps wanting `/pulls/` and `/releases`
+# with no quote inside them. Pinned as the verdicts they now have, and named as
+# a gap this fix closed on its way past rather than one it was filed for.
+req GH-130.2 US-15
+check no-pr-decisions.sh BLOCK 'one path component quoted'           'gh api repos/o/r/"pulls"/5/merge -X PUT'
+check no-pr-decisions.sh BLOCK 'the path quoted up to a slash'       "gh api 'repos/o/r/pulls'/5/merge -X PUT"
+req GH-130.1 US-15 FR-48
+check no-pr-decisions.sh BLOCK 'one release path component quoted'   'gh api -X POST repos/o/r/"releases" -f tag_name=v1'
+# A BACKSLASH-ESCAPED QUOTE IS NO QUOTE, and the reader answers that the way
+# cs_normalise and cw_reduce already do: a backslash escapes outside a span and
+# inside a double-quoted one, and not inside a single-quoted one, which is what
+# bash does. Two rules, and each is load-bearing on its own -- measured by
+# turning each off in a copy and reading which row moved.
+#
+# Out of a span: without it the escaped quote opens one, which runs to the next
+# argument carrying a quote and swallows the endpoint between them. The `\"`
+# spelling is defended twice over and the `\'` spelling only here, single quotes
+# taking no escapes inside a span.
+req GH-130.2 US-15
+check no-pr-decisions.sh BLOCK 'an escaped double quote does not open a span' \
+  'gh api -f a=\" repos/o/r/pulls/5/merge -X PUT -f b=\"'
+check no-pr-decisions.sh BLOCK 'an escaped single quote does not open a span' \
+  "gh api -f a=\\' repos/o/r/pulls/5/merge -X PUT -f b=\\'"
+# Inside a double-quoted span: without it the span closes at the escaped quote,
+# every quote after it is read one out of step, and a bare `graphql` two
+# arguments later stops reading as one -- which shuts the gate and three rules
+# with it. This is the row that says the in-span half is not the out-of-span
+# half written twice.
+req GH-130.5 US-15
+check no-pr-decisions.sh BLOCK 'an escaped quote inside a value, then graphql' \
+  'gh api -f t="a\"b" graphql -f query="mutation{mergePullRequest(input:{x:1})}"'
+# And the permitting side of the same accounting: an issue write whose values
+# carry escaped quotes, which is how a body quoting a command gets written.
+# BLOCK at 7bea85f.
+req GH-130.1
+check no-pr-decisions.sh ALLOW 'an issue body with escaped quotes, naming /releases' \
+  'gh api -X POST repos/o/r/issues -f t="say \"hi\"" -f body="see /releases"'
+# And the reader still reads a path whose own query string carries an `=`, which
+# is the case that killed the alternative test the triage rejected -- a lone
+# token with no `=` in it. The `=` that decides is the one BEFORE the span.
+req GH-130.1 US-15 FR-48
+check no-pr-decisions.sh BLOCK 'a quoted path with a query string'   'gh api "repos/o/r/releases?per_page=1" -X POST -f tag_name=v1'
 
 section "=== the push argument split does not glob against the worktree ==="
 # `for TOK in $ARGS` is unquoted because the split is the point; set -f stops
@@ -10045,7 +10409,7 @@ hooks|no-pr-decisions.sh|BLOCK|FR-14 FR-16 US-9|pr-no-base|gh pr create --title 
 hooks|no-pr-decisions.sh|BLOCK|FR-17 FR-15 US-10|pr-retarget|gh pr edit 35 --base main
 hooks|no-pr-decisions.sh|BLOCK|FR-21 FR-15|pr-web-main|gh pr create --web --base main
 hooks|no-pr-decisions.sh|BLOCK|FR-18 FR-20 FR-15 US-11|api-rest-main|gh api -X POST repos/o/r/pulls -f base=main -f head=x
-hooks|no-pr-decisions.sh|BLOCK|FR-19 FR-15 US-11|api-graphql-main|gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:main})}'
+hooks|no-pr-decisions.sh|BLOCK|FR-19 FR-15 US-11 GH-130.5|api-graphql-main|gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:main})}'
 hooks|no-pr-decisions.sh|BLOCK|FR-48 US-15 GH-97.1|release-create|gh release create v1
 hooks|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8|pr-base-dev|gh pr create --base dev-05 --title x
 hooks|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8|pr-base-dev-eq|gh pr create --base=dev-05 --body y
@@ -10683,6 +11047,7 @@ GH-79.3:none GH-79.4:none GH-84.1:none GH-94.1:seed GH-94.2:none GH-94.4:none
 GH-95.1:none GH-95.2:none GH-96.1:none GH-97.1:seed GH-128:transformation
 GH-117:transformation GH-133:none GH-137.1:seed GH-137.2:seed
 GH-139:transformation GH-109.5:none
+GH-130.1:none GH-130.2:none GH-130.3:none GH-130.4:none GH-130.5:seed
 '
 # One row per entry that is either in scope or carries the field: `<ID>|in|out`,
 # the `variants` keyword, and whatever follows it. An entry out of scope is
@@ -10855,12 +11220,15 @@ tok 'every GH- entry declaring variants: seed is tagged on a seed, and every GH-
 
 # The verdicts, as the FR check holds its own. One direction is allowed here and
 # the literal is where that shows: GH-43.1 is seeded ALLOW alone because its
-# subject is that prose naming a push is not a push, and GH-72 ALLOW alone
-# because the refusing half of it -- `./gh` and `/usr/bin/gh` still refused --
-# is GH-117's open gap, which the class rows above already assert.
+# subject is that prose naming a push is not a push, GH-72 ALLOW alone because
+# the refusing half of it -- `./gh` and `/usr/bin/gh` still refused -- is
+# GH-117's open gap, which the class rows above already assert, and GH-130.5
+# BLOCK alone because the gate's permitting half is an issue body naming a
+# mutation, which the #130 section pins directly and which no rewriting of a
+# graphql seed can produce.
 req GH-141
 tok 'the GH- seeds are tagged in the directions the table holds' \
-  'GH-137.1 BLOCK;GH-137.2 ALLOW BLOCK;GH-43.1 ALLOW;GH-43.3 BLOCK;GH-43.4 BLOCK;GH-51.1 BLOCK;GH-51.2 BLOCK;GH-68.1 ALLOW;GH-69.1 ALLOW BLOCK;GH-69.2 ALLOW BLOCK;GH-72 ALLOW;GH-94.1 ALLOW BLOCK;GH-97.1 ALLOW BLOCK;' \
+  'GH-130.5 BLOCK;GH-137.1 BLOCK;GH-137.2 ALLOW BLOCK;GH-43.1 ALLOW;GH-43.3 BLOCK;GH-43.4 BLOCK;GH-51.1 BLOCK;GH-51.2 BLOCK;GH-68.1 ALLOW;GH-69.1 ALLOW BLOCK;GH-69.2 ALLOW BLOCK;GH-72 ALLOW;GH-94.1 ALLOW BLOCK;GH-97.1 ALLOW BLOCK;' \
   "$(printf '%s\n' "$INV_SEEDS" \
      | awk -F'|' 'NF >= 6 { n = split($4, t, " "); for (i = 1; i <= n; i++) if (t[i] ~ /^GH-/) print t[i], $3 }' \
      | LC_ALL=C sort -u \
@@ -12959,6 +13327,7 @@ names_this_branch silent' "$(fn_writes "$HOOKS/no-git-push.sh")"
 tok 'no-pr-decisions.sh defines these, and none of them writes one' \
     'base_args silent
 bases_all_dev silent
+endpoint_args silent
 gh_api_is_write silent
 gh_pr_bases silent
 gh_pr_web silent
@@ -13423,7 +13792,8 @@ GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-117.1:permit-only
 GH-118:gap
-GH-124:static GH-127:gap GH-130:gap
+GH-124:static GH-127:gap GH-130:superseded-by
+GH-130.1 GH-130.2 GH-130.3 GH-130.4 GH-130.5
 GH-131:gap GH-133:refuse-only GH-134:gap GH-135:gap GH-136:gap GH-139                  
 GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         

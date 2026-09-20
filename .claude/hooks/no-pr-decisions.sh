@@ -725,6 +725,161 @@ gql_bases() {
     | sed -E "s/.*:[[:space:]]*[\"']?//"
 }
 
+# THE THIRD READER of one argument list, and the comment above base_args already
+# counts the wrong answers to that question. base_args reads a FLAG'S VALUE and
+# rest_bases reads a FIELD; this one reads a POSITIONAL, which is what a gh api
+# endpoint is, and that is the whole of why neither of the other two transfers.
+#
+# THE RULE, one clause at a time. Each quoted span in the argument list -- with
+# a `$` immediately before its opening quote counted as part of it, and a
+# backslash-escaped quote counted as no quote at all -- is
+#
+#   - DROPPED if it holds whitespace. It is prose, and unquoting it would hand
+#     the rules below a path or a mutation name that gh never sees as one.
+#   - DROPPED if an `=` stands before it in the same word. A field's value is
+#     attached to its `=`; a positional argument never is, so such a span
+#     cannot be the endpoint whatever it spells.
+#   - UNQUOTED otherwise. The word is a candidate endpoint, and quoting a path
+#     does not stop it being one: `gh api "graphql"`, `gh api $'graphql'`,
+#     `gh api graph"ql"` and `gh api repos/o/r/"pulls"/5/merge` are four
+#     spellings of two commands gh runs identically.
+#
+# THE `=` IS TESTED WHERE IT STANDS, and the first version of this fix used a
+# proxy for it: a span was read only if it was a WHOLE WORD, opening at a word
+# boundary and closing at one. That reads correctly for `-f
+# body="repos/o/r/pulls"`, where the span opens after the `=`, and wrongly
+# wherever quoting sits inside a word for some other reason. It cut `graph"ql"`
+# to `graph`, which shut the graphql gate and with it three rules; it cut
+# `repos/o/r/"pulls"/5/merge` to `repos/o/r//5/merge`; and it dropped
+# `$'repos/o/r/pulls/5/merge'` whole, the `$` making the span open at no
+# boundary at all. Nine measured refusals became permissions, every one of them
+# a command refused at 7bea85f. Found by review of this branch and not by the
+# suite, which was green. The proxy is gone and the thing it stood for is the
+# test.
+#
+# #130's triage settled the design as that proxy and named what it was reaching
+# for in the same sentence -- "a field value is attached to its `=` and a
+# positional is not". This is that sentence as the rule. The alternative the
+# triage rejected, a lone token with no `=` IN it, stays rejected and this is
+# not it: `gh api "repos/o/r/releases?per_page=1"` carries an `=` inside the
+# span and none before it, so it is read, where that test dropped a path and
+# failed in the PERMITTING direction.
+#
+# base_args' first half does not transfer either, and the issue body that asked
+# for it was corrected before this was written: that half unquotes a flag's own
+# value and is anchored on the flag name, and a positional has no flag.
+#
+# `$'...'` IS TAKEN WITH ITS QUOTE AND NOT DECODED. quoted_base_flag, 500 lines
+# above, decodes the escapes bash decodes and needed three rounds of review to
+# get that right; this reader does not, because a decoded escape is a character
+# it has nowhere to put. What it does is stop the `$` hiding the span, which is
+# the half that was a regression. So `$'repos/o/r/pulls/5/merge'` is refused and
+# `$'\x2frepos\x2f...'` is not -- a gap this fix neither opened nor closed,
+# the old $SCAN-wide grep having never matched an escape spelling either.
+#
+# TWO REFUSALS IT LEAVES, the same shape twice: a field value this reader cannot
+# tell from a positional, because in neither case is there anything in the text
+# that says which it is.
+#
+#   1. `-f "body=/releases"` -- the quote stands before the FIELD NAME, so no
+#      `=` precedes the span and the span is read. That is the price of keeping
+#      `gh api "graphql"` refused; the two are the same shape.
+#   2. `-f body=/releases` -- nothing is quoted, so there is no span to drop and
+#      the value is the characters a positional would be.
+#
+# Both refuse, both are one edit away -- put the quote round the value -- and
+# both are CLAUDE.md's left-open item 2 in a narrower place. Quoted or bare, an
+# argument's text does not say whether a word is an endpoint or prose.
+#
+# A span that is never closed on this line is left exactly as written, neither
+# unquoted nor dropped, which is what base_args' sed already does with one and
+# is the refusing direction. cs_split hands one line of a command, so that span
+# is an argument bash carries on to the next line -- an ordinary multi-line
+# body, whose first line naming `/releases` is refused. CLAUDE.md's left-open
+# item 3, one reader further in.
+#
+# THE CALLER SHORT-CIRCUITS IT ON AN ARGUMENT LIST WITH NO QUOTE IN IT, and the
+# guard is exact rather than a heuristic: this function only ever changes a
+# string at a span, a span only ever begins at a quote, and with neither quote
+# on the line none is found and the text comes back as it went in. That is the
+# test cs_spelled already makes one level down, for the same reason -- it keeps
+# the walk off every ordinary command.
+#
+# WHAT IT SAVES AND WHAT IT DOES NOT, measured rather than assumed, because the
+# first version of this comment claimed the guard paid for the whole of the move
+# and it does not. One line at the 16 KB cap made of nothing but unquoted
+# `gh api` calls, ~450 of them, minimum of five interleaved runs on a machine
+# carrying several other check suites: 11.2 s at 7bea85f, 14.0 s with this fix,
+# 16.3 s with this fix and the guard taken off. So the guard recovers about half
+# of what the reader costs where nothing is quoted, and the rest is the move
+# itself -- four questions asked once per command that used to be asked once per
+# line. On a line of quoted calls it is a no-op by construction, and the
+# readings there, 7.0 s against 10.0 s, are inside the noise of each other: a
+# control line with no gh api call on it at all, which nothing here can touch,
+# read 12.0 s and 11.9 s, so the floor is about five per cent.
+#
+# TAKEN, NOT OPTIMISED FURTHER. Every reading above is already twice past the
+# 5 s harness timeout before this fix touches it, so no verdict moves that was
+# not already wrong: that is GH-127, which #127 owns, and not this change's.
+# Prefiltering each of the four greps with a `case` was written and dropped --
+# it would have had to reproduce `grep -i` in a shell pattern to keep the state
+# rule's endpoint test where it is, and a guard a reader has to verify twice is
+# a worse trade than a stated 25 per cent on a shape nobody writes.
+#
+# THE OUTPUT IS BUILT IN RUNS AND NOT CHARACTER BY CHARACTER, which is issue #96
+# rather than style: `out = out ch` copies the whole of out to add one character,
+# so a 16 KB line would be quadratic. One append per span, and the text between
+# two spans copied once by substr.
+endpoint_args() {
+  printf '%s\n' "$1" | awk -v SQ=\' '
+    function isws(c) { return c != "" && c ~ /^[[:space:]]$/ }
+    {
+      n = length($0); out = ""; i = 1; seg = 1; eq = 0
+      while (i <= n) {
+        c = substr($0, i, 1)
+        # A backslash-escaped character is that character and never a quote, a
+        # separator or an =. cw_reduce in the library reads one the same way,
+        # and a third answer given differently here is how the answers in these
+        # files came to disagree before.
+        if (c == "\\") { i += 2; continue }
+        if (isws(c))   { eq = 0; i++; continue }
+        if (c == "=")  { eq = 1; i++; continue }
+        # A $ belongs to the quote it stands in front of. Counted as an
+        # ordinary character it made the span open at no word boundary, which
+        # is quoted_base_flag s finding one reader over.
+        d = (c == "$" && (substr($0, i + 1, 1) == "\"" || substr($0, i + 1, 1) == SQ)) ? 1 : 0
+        q = substr($0, i + d, 1)
+        if (q != "\"" && q != SQ) { i++; continue }
+        # Where the span ends. A backslash escapes inside a double-quoted span
+        # and not inside a single-quoted one, which is what bash does. The end
+        # is FOUND and the body then taken in one substr, so a long span costs
+        # one copy and not one per character.
+        b = i + d + 1
+        k = b
+        closed = 0
+        while (k <= n) {
+          ch = substr($0, k, 1)
+          if (q == "\"" && ch == "\\") { k += 2; continue }
+          if (ch == q) { closed = 1; break }
+          k++
+        }
+        out = out substr($0, seg, i - seg)
+        if (!closed) { seg = i; break }
+        body = substr($0, b, k - b)
+        if (body !~ /[[:space:]]/ && !eq) {
+          out = out body
+          # An = inside a span that was read is an = in the word s value, so a
+          # later span in the same word is a value attached to it.
+          if (index(body, "=") > 0) eq = 1
+        }
+        seg = k + 1
+        i = seg
+      }
+      print out substr($0, seg, n - seg + 1)
+    }
+  '
+}
+
 # A wrapper's payload sits inside quotes, where there is no command word for the
 # tokeniser to find, so these run unanchored over the text -- and only once a
 # wrapper has been found, never over an ordinary command.
@@ -965,19 +1120,88 @@ CMDLIST
 # than from the returned arguments -- cs_split has already scoped it to this one
 # invocation, and every option that can precede `api` is a global one carrying
 # neither a method nor a field.
+#
+# EVERY ENDPOINT QUESTION IS ASKED HERE, of this command's own arguments with
+# endpoint_args run over them, and none of them is asked of $SCAN. #130. That
+# is the same move #40's review made for the base rule and the same reason: the
+# endpoint used to be read out of the whole normalised line, quotes and all, so
+# an issue body naming `/releases`, `repos/o/r/pulls`, `repos/o/r/pulls/5/merge`
+# or `state=closed` was read as the endpoint of the write it was the body of,
+# and a `/releases` read standing beside an unrelated issue write was refused
+# with it. Ten measured shapes, in #130. This file's own comment above the
+# /releases rule recorded that bleed as known and unfixed; it is fixed, and what
+# stands in its place below is the rule and the trade now taken.
+#
+# WHAT A FLAG IS FOR. Each rule sets one, and the messages are printed after the
+# loop rather than here. Today's order is the contract: merge|reviews, then
+# state, then /releases, then the mutation names, then the base pair. Before
+# this refactor that order was the order the `if` arms happened to be written
+# in, and the move to flags is exactly the move that could flip it, so it is
+# stated rather than left to be read off the file. One check puts a release
+# write and a merge on one line and pins which message comes back.
+#
+# THE STATE FIELD IS NOT READ THIS WAY, and it is the one rule here that keeps
+# the command's raw text. Dropping a span would turn `-f state="closed"` from a
+# refusal into a permission -- the field's value is the thing being judged,
+# where an endpoint's quoting is incidental to it. So the REST half of the state
+# rule reads its ENDPOINT out of endpoint_args and its FIELD out of $CMD
+# through STATE_FIELD_RE, which is #137's and unchanged here. rest_bases is
+# flag-anchored for the same reason and is likewise handed $CMD.
+#
+# A READ OF A DECIDING ENDPOINT BESIDE A WRITE IS A READ, which is row 4 of
+# #130's table generalised: the flags are set only for a command
+# gh_api_is_write accepts, so `gh api repos/o/r/pulls/5/merge && gh api -X POST
+# repos/o/r/issues -f title=x` is the GET it looks like. That was already the
+# answer for `/pulls` -- `gh api -X POST repos/o/r/issues -f title=x && gh api
+# repos/o/r/pulls` has been pinned ALLOW since the base rule went per-command --
+# and the endpoint rules give it for the other three.
 API_WRITE=
 API_BAD_BASE=
 API_NO_BASE=
+API_MERGE_REVIEWS=
+API_STATE=
+API_RELEASE=
+API_MUTATION=
+API_GRAPHQL=
 while IFS= read -r CMD; do
-  cs_gh_args api <<<"$CMD" >/dev/null || continue
+  API_ARGS=$(cs_gh_args api <<<"$CMD") || continue
+  # Short-circuited where there is no quote to read; see endpoint_args, which
+  # is the identity on such a list and says what the test costs and saves.
+  case "$API_ARGS" in
+    *[\"\']*) ENDPOINT=$(endpoint_args "$API_ARGS") ;;
+    *)        ENDPOINT=$API_ARGS ;;
+  esac
+  # THE GRAPHQL GATE IS STRUCTURAL, and is asked of every gh api call on the
+  # line, read or write, because the three rules it gates are asked of the line.
+  # A bare `graphql` token in an api call's own arguments is gh's one spelling
+  # of that endpoint, and endpoint_args has already turned `"graphql"` and
+  # `'graphql'` into it. A textual grep for the word would have left
+  # `-f body="the gh api graphql endpoint mergePullRequest"` refused, which is
+  # the defect this fix is about with one more word in it.
+  if printf '%s\n' "$ENDPOINT" | grep -qE '(^|[[:space:]])graphql([[:space:]]|$)'; then
+    API_GRAPHQL=1
+  fi
   gh_api_is_write "$CMD" || continue
   API_WRITE=1
+  if printf '%s\n' "$ENDPOINT" | grep -qE '/pulls/[^ ]*/(merge|reviews)'; then
+    API_MERGE_REVIEWS=1
+  fi
+  # The REST half of the state rule. Its endpoint is this command's and its
+  # field is this command's; the graphql half of the same decision is below,
+  # behind the gate, because a mutation body is cut from its command word.
+  if printf '%s\n' "$ENDPOINT" | grep -qiE '/pulls/' \
+     && printf '%s\n' "$CMD" | grep -qiE "$STATE_FIELD_RE"; then
+    API_STATE=1
+  fi
+  if printf '%s\n' "$ENDPOINT" | grep -qE '/releases([^A-Za-z0-9_-]|$)'; then
+    API_RELEASE=1
+  fi
   CMD_BASES=$(rest_bases "$CMD")
   if [ -n "$CMD_BASES" ]; then
     bases_all_dev "$CMD_BASES" || API_BAD_BASE=${BAD_BASE:-nothing readable}
   # The collection endpoint is where a pull request is made; /pulls/N is one
   # that already exists and is not asked for a base it already has.
-  elif printf '%s\n' "$CMD" | grep -qE '/pulls([^/A-Za-z0-9_-]|$)'; then
+  elif printf '%s\n' "$ENDPOINT" | grep -qE '/pulls([^/A-Za-z0-9_-]|$)'; then
     API_NO_BASE=1
   fi
 done <<CMDLIST
@@ -985,65 +1209,105 @@ $CMDS
 CMDLIST
 
 if [ -n "$API_WRITE" ]; then
-  if echo "$SCAN" | grep -qE '/pulls/[^ ]*/(merge|reviews)'; then
+  # THE THREE RULES THAT KEEP $SCAN, and the gate that decides when they run.
+  # A graphql payload is cut from its command word -- cs_split splits a mutation
+  # body on its own braces and parens -- so there is no per-command text to ask
+  # these of, which is the reason gql_bases already gives for itself. What #130
+  # changes is not where they look but WHETHER: they run only when some gh api
+  # call on the line actually named the graphql endpoint. Without that, an issue
+  # body naming a mutation, or naming baseRefName, was the mutation.
+  #
+  # TWO BLEEDS THE GATE LEAVES, named here as gql_bases names its own rather
+  # than left for a later review to find:
+  #
+  #   1. Across commands, under an open gate. A mutation named on one command
+  #      and a baseRefName on another still read as one, and so does a genuine
+  #      `gh api graphql` read standing beside an issue write whose body names
+  #      a mutation -- the gate is satisfied by the graphql call, and the prose
+  #      is still refused. Both are one edit away: put them on separate lines.
+  #   2. Within one command the gate closes them, which is what fixes rows 6
+  #      and 7 of #130's table. That is the half the old acceptance never
+  #      reached, because it was written about two commands.
+  if [ -n "$API_GRAPHQL" ]; then
+    # Closing and reopening were refused in the gh pr spelling and open through
+    # gh api, so the boundary was spelling-dependent where it claimed not to be.
+    # They are a write to the pull request itself rather than to a subpath, and
+    # the same PATCH is how `gh pr edit` retitles one, which stays allowed -- so
+    # the endpoint cannot decide this and the field has to. graphql spells the
+    # same change as a state on updatePullRequest; the REST spelling of it is in
+    # the loop above, keyed on that command's own endpoint. Which spellings of
+    # the field count is STATE_FIELD_RE's, at the head of this file and shared
+    # with the wrapper arm, for the reason written there: the two copies of it
+    # disagreed.
+    if echo "$SCAN" | grep -qiE 'updatePullRequest' \
+       && echo "$SCAN" | grep -qiE "$STATE_FIELD_RE"; then
+      API_STATE=1
+    fi
+    if echo "$SCAN" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then
+      API_MUTATION=1
+    fi
+    # Where a pull request is going, reached through gh api rather than gh pr.
+    # gh_api_is_write is the gate and the endpoint is not: refusing by endpoint
+    # is what once refused a read of a pull request as though it were a
+    # decision, and a read names no destination to check.
+    #
+    # A base written into a write is that command choosing a destination,
+    # whatever the endpoint carrying it -- POST to the collection creates there,
+    # PATCH on one retargets it, and graphql spells the same field baseRefName.
+    # Retitling through that same PATCH names no base and stays allowed, so the
+    # field decides this as it already decides state.
+    #
+    # A base that is present but not readable as dev-NN is refused: an
+    # unreadable destination must not be able to look like the permitted one,
+    # which is the answer the bare push already has.
+    #
+    # The graphql half is settled here rather than in the loop above, on the
+    # whole text, for the reason gql_bases gives. It covers the retarget as well
+    # as the create: updatePullRequest carries the same field, and a rule keyed
+    # on the verb would have answered for one and not the other. The REST half
+    # is rest_bases', in the loop, and was already per-command.
+    #
+    # After the loop, so that a base read out of a mutation is the last writer
+    # into API_BAD_BASE, which is where the loop already left it.
+    GQL_BASES=$(gql_bases "$SCAN")
+    if [ -n "$GQL_BASES" ]; then
+      bases_all_dev "$GQL_BASES" || API_BAD_BASE=${BAD_BASE:-nothing readable}
+    elif echo "$SCAN" | grep -q 'createPullRequest'; then
+      API_NO_BASE=1
+    fi
+  fi
+
+  # THE EMISSION ORDER IS THE CONTRACT. Each arm above sets a flag and none of
+  # them prints; the printing is here, in the order these messages have always
+  # come back in. Stated because the move to flags is what could have flipped
+  # it, and pinned by a check that puts two of them on one line.
+  if [ -n "$API_MERGE_REVIEWS" ]; then
     echo "$DECIDE Reaching the merge or review endpoint through gh api is the same decision by another name." >&2
     exit 2
   fi
-  # Closing and reopening were refused in the gh pr spelling and open through
-  # gh api, so the boundary was spelling-dependent where it claimed not to be.
-  # They are a write to the pull request itself rather than to a subpath, and
-  # the same PATCH is how `gh pr edit` retitles one, which stays allowed -- so
-  # the endpoint cannot decide this and the field has to. graphql spells the
-  # same change as a state on updatePullRequest. Which spellings of the field
-  # count is STATE_FIELD_RE's, at the head of this file and shared with the
-  # wrapper arm, for the reason written there: the two copies of it disagreed.
-  if echo "$SCAN" | grep -qiE '(/pulls/|updatePullRequest)' \
-     && echo "$SCAN" | grep -qiE "$STATE_FIELD_RE"; then
+  if [ -n "$API_STATE" ]; then
     echo "$DECIDE Setting a pull request's state through gh api closes or reopens it, which is the same decision by another name." >&2
     exit 2
   fi
   # The gh api spelling of the release rule above. It already refused a write
   # and permitted a read before #97 brought the gh release spelling to the same
   # rule, because this block is reached only once gh_api_is_write has found a
-  # write. Found on the line and not on this command, though: the endpoint is
-  # asked of the whole text, so a read of /releases beside a write to an issue is
-  # refused with it. The bleed the base rule no longer has, still here, in the
-  # refusing direction; #97 did not ask for it and did not change it.
-  if echo "$SCAN" | grep -qE '/releases([^A-Za-z0-9_-]|$)'; then
+  # write. And now on this command and not on the line: the bleed this comment
+  # used to record as known and unfixed is #130's, and the endpoint question is
+  # asked in the loop above, of the writing command's own arguments with
+  # endpoint_args run over them. A read of /releases beside an unrelated issue
+  # write is a read; an issue body naming /releases is prose. What is refused
+  # instead, and knowingly, is `-f "body=/releases"` -- the quote before the
+  # field name makes it a whole word, so it is unquoted and read. See
+  # endpoint_args.
+  if [ -n "$API_RELEASE" ]; then
     echo "Blocked: $RELEASE_WRITE, reached through gh api no less than through gh release. Reading one is permitted: a gh api request to /releases that does not write, or gh release followed by one of: $RELEASE_READ_VERBS." >&2
     exit 2
   fi
-  if echo "$SCAN" | grep -qE 'mergePullRequest|addPullRequestReview|closePullRequest|reopenPullRequest|createRelease|updateRelease|deleteRelease'; then
+  if [ -n "$API_MUTATION" ]; then
     echo "$DECIDE Reaching the same decision through a graphql mutation is the same decision by another name." >&2
     exit 2
   fi
-
-  # Where a pull request is going, reached through gh api rather than gh pr.
-  # gh_api_is_write is the gate and the endpoint is not: refusing by endpoint is
-  # what once refused a read of a pull request as though it were a decision, and
-  # a read names no destination to check.
-  #
-  # A base written into a write is that command choosing a destination, whatever
-  # the endpoint carrying it -- POST to the collection creates there, PATCH on
-  # one retargets it, and graphql spells the same field baseRefName. Retitling
-  # through that same PATCH names no base and stays allowed, so the field
-  # decides this as it already decides state.
-  #
-  # A base that is present but not readable as dev-NN is refused: an unreadable
-  # destination must not be able to look like the permitted one, which is the
-  # answer the bare push already has.
-  #
-  # The graphql half is settled here rather than in the loop above, on the whole
-  # text, for the reason gql_bases gives. It covers the retarget as well as the
-  # create: updatePullRequest carries the same field, and a rule keyed on the
-  # verb would have answered for one and not the other.
-  GQL_BASES=$(gql_bases "$SCAN")
-  if [ -n "$GQL_BASES" ]; then
-    bases_all_dev "$GQL_BASES" || API_BAD_BASE=${BAD_BASE:-nothing readable}
-  elif echo "$SCAN" | grep -q 'createPullRequest'; then
-    API_NO_BASE=1
-  fi
-
   if [ -n "$API_BAD_BASE" ]; then
     echo "$BASE This names $API_BAD_BASE; reaching it through gh api makes it the same destination under another spelling." >&2
     exit 2
