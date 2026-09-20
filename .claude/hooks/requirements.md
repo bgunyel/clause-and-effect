@@ -1835,6 +1835,23 @@ The suite fails on each of these, and `--matrix` shows the rest:
   Both the synthesis and the guard now ask the directory, and a farm built under
   a shell that defines `gh` is a fixture here.
 
+  A third round found the fix for the first of those carrying the same defect:
+  the heading said the derivation read a call anywhere on a line while the
+  pattern read a line start with indentation allowed, and the comment cited as
+  its evidence `drive_helper`'s `case` arm -- the one call in this suite that is
+  not a statement of its own, and the one line that pattern could not read. The
+  derivation now reads a call at a named position: a line start, after `;`, `&`,
+  `|` or `)`, or after `then`, `do` or `else`. Whitespace is deliberately not a
+  separator, so payload inside a quoted string is out of reach, and the fixtures
+  are written through a variable holding the helper's name so that this file
+  carries none of their calls in any position. What it still cannot read is a
+  call whose command word is a variable, which is stated beside it rather than
+  left to be found. A comment IS read at a separator position -- the new comment's
+  own example is one of the twelve lines matched -- and that is accepted and
+  pinned rather than filtered, because a comment can only add a PATH and never
+  hide a call, while stripping comments would cut at the first `#` and could hide
+  one.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that

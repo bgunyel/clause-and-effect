@@ -10271,41 +10271,111 @@ tok 'and it never ran that gh, which is the whole of what lets the farm carry a 
 # $WITH_JQ_BIN, the farm itself -- the one PATH on which a `gh` would be both
 # present and reached -- so a later check that drove the report under the farm
 # would turn this line red rather than quietly making the stub load-bearing.
-# #84's direction: the claim is about every consumer, so it is derived from every
-# consumer and not from the four that exist today.
+# #84's direction: the claim is about every consumer, so it is derived from
+# every consumer it can read -- and what it cannot read is named below rather
+# than left to be discovered.
 #
-# READ ANYWHERE ON A LINE AND NOT ONLY AT COLUMN 0, which is #84's direction one
-# step further: a derivation anchored where the calls happen to sit today is the
-# literal list it was written to replace. Every environment sweep in this section
-# is written as an indented loop body, and the suite already holds one indented
-# call -- drive_helper's `case`, which is why this is a shape and not a
-# hypothesis -- so a later check driving the report under $WITH_JQ_BIN from
-# inside a `for` was invisible here, and the farm's stub became load-bearing with
-# this line still green. Found by review of PR #161.
+# READ AT A CALL POSITION, AND THE POSITIONS ARE NAMED: the start of a line with
+# any indentation, after a `;`, `&`, `|` or `)`, and after a `then`, `do` or
+# `else`. The last two groups are not decoration. drive_helper dispatches this
+# helper through a CASE ARM --
 #
-# The anchor is KEPT and made to skip leading whitespace rather than dropped.
-# Dropped, the pattern matches its own source line two lines below and derives
-# `[^` as a PATH the report is driven under -- the check would go red, which is
-# the safe direction, but for a reason that has nothing to do with the report.
+#     report_says) report_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' ;;
+#
+# -- where the line-start position reads the case LABEL, `report_says)`, and not
+# the call. A derivation that only skipped indentation could not see the one call
+# in this suite that is not a statement of its own, and `if ...; then report_says
+# "$WITH_JQ_BIN" ...` was invisible to it as well. Round 2 of PR #161's review
+# found the previous spelling claiming to read "anywhere on a line" while reading
+# line-start-modulo-whitespace, and citing that case arm as its evidence -- the
+# one line its own code could not read. The prose was stronger than the guard,
+# which is the defect this whole section is about, arriving in the fix for it.
+#
+# WHAT IT STILL CANNOT READ is a call whose command word is a variable: no
+# reading of the text can, because `$DRIVEN_REPORT "$WITH_JQ_BIN"` spells the
+# name nowhere. That shape is not in this file -- DRIVEN_REPORT names the helper
+# for the loop above, and the case arm is where it becomes a call, which is why
+# covering the case position covers that route whole -- and if it is ever
+# written, this derivation is evidence about the calls it can read and about
+# nothing else.
+#
+# WHITESPACE IS NOT ONE OF THE SEPARATORS, and what that excludes is a
+# `report_says "` sitting inside a quoted string -- payload rather than a call.
+# MEASURED AGAINST THIS FILE AS IT STANDS, admitting whitespace would change
+# nothing: the same twelve lines, the same four PATHs. So the exclusion is a rule
+# about what may be written here later and not a description of something this
+# file contains, and saying otherwise would be this section's own defect a third
+# time. What made it a live hazard was the previous round's fixture, which wrote
+# the call out as literal text inside an `echo`, indented, with the farm as its
+# PATH -- payload that admitting whitespace would have read as a call, injecting
+# the farm into the real derivation and turning the check red for a reason having
+# nothing to do with the report. THAT EXAMPLE IS NOT SPELLED OUT HERE, and the
+# omission is the point: a comment naming it in full would plant the thirteenth
+# match itself, which is what happened on the first attempt at this paragraph and
+# is why the claim above is a measurement and not a recollection. It is out of
+# reach now by CONSTRUCTION rather than by the quote that happens to precede it:
+# the fixtures below are written through a variable holding the helper's name, so
+# this file carries no `report_says` of theirs in any position at all.
+#
+# A COMMENT IS READ AT A SEPARATOR POSITION, and the example six lines above is
+# read: it is one of the twelve lines this derivation matches in this file, and
+# it names $PATH, which is why the literal below is what it would be without it.
+# Writing that down rather than filtering it out is the decision, and it rests on
+# the direction. A comment can only ADD a PATH to the derived set, never hide a
+# call from it, so the property this check exists for -- that no run under the
+# farm goes unseen -- survives; a comment that named the farm would turn the
+# check RED until it was reworded, which is a nuisance in the safe direction.
+# Stripping comments first would buy the tidier claim at the price of the unsafe
+# one: the strip cuts at the first `#` on a line, so a line carrying one before a
+# call would lose the call and the check would go quietly green. The line-start
+# position is the half that is closed, because a comment's first non-blank is
+# `#`; the separator positions are not, and this paragraph is the record of it.
 report_run_paths() {  # report_run_paths <file> -- every PATH the report is driven under in it
-  grep -o '^[[:space:]]*report_says "[^"]*"' "$1" \
-    | sed 's/^[[:space:]]*report_says "//; s/"$//' | sort -u | tr '\n' ' '
+  grep -oE '(^|[;&|)]|[[:space:]](then|do|else))[[:space:]]*report_says "[^"]*"' "$1" \
+    | sed 's/.*report_says "//; s/"$//' | sort -u | tr '\n' ' '
 }
 REPORT_RUN_PATHS=$(report_run_paths "$SUITE_DIR/check-hooks.sh")
 tok 'every run of the report names one of four PATHs, and the farm is not among them' \
     '$ENV_NO_GH_BIN $ENV_NO_GIT_BIN $ENV_NO_GIT_GH_MARKER $PATH ' "$REPORT_RUN_PATHS"
-# The derivation asked of a file whose ONLY run is indented, because the line
-# above is worth nothing unless it can see one: driven over the suite alone, a
-# column-0 anchor and this one agree today, and would go on agreeing until the
-# first indented consumer made the difference matter. The fixture is that
-# consumer, written now rather than waited for.
-REPORT_DERIVATION_FIXTURE="$FIXTURES/a-report-run-inside-a-loop"
+# THE CASE ARM, READ OUT OF THIS FILE AS IT STANDS, and not a fixture resembling
+# it: the sentence above cites it, so the citation is the thing to check. It is
+# found by its shape rather than by a line number, and the count is asserted
+# first because a derivation run over an empty extract returns the empty string,
+# which would agree with nothing and pass.
+REPORT_CASE_ARM="$FIXTURES/the-case-arm-as-this-file-writes-it"
+grep -E '^[[:space:]]*report_says\)' "$SUITE_DIR/check-hooks.sh" > "$REPORT_CASE_ARM"
+tok 'this suite holds one report_says call that is not a statement of its own, in drive_helper' \
+    '1' "$(grep -c . "$REPORT_CASE_ARM")"
+tok 'and the derivation reads that line as it stands, which the line-start spelling could not' \
+    '$PATH ' "$(report_run_paths "$REPORT_CASE_ARM")"
+# The three shapes a call is written in here, in a file whose every run is one of
+# them: an indented loop body, a case arm, and a call after `then`. None is
+# readable at the line-start position, so this fixture is red under the spelling
+# the review found and is the whole of what makes the paragraph above a claim
+# rather than a hope.
+REPORT_SAYS_NAME='report_says'
+REPORT_DERIVATION_FIXTURE="$FIXTURES/report-runs-in-the-shapes-this-suite-writes"
 { echo 'for d in one; do'
-  echo '  report_says "$WITH_JQ_BIN" "$SOME_REPORT" fragment label'
+  echo "  $REPORT_SAYS_NAME \"\$WITH_JQ_BIN\" \"\$SOME_REPORT\" fragment label"
   echo 'done'
+  echo 'case $h in'
+  echo "  $REPORT_SAYS_NAME) $REPORT_SAYS_NAME \"\$ENV_NO_GH_BIN\" \"\$SOME_REPORT\" fragment label ;;"
+  echo 'esac'
+  echo "if true; then $REPORT_SAYS_NAME \"\$ENV_NO_GIT_BIN\" \"\$SOME_REPORT\" fragment label; fi"
 } > "$REPORT_DERIVATION_FIXTURE"
-tok 'and the derivation sees an indented run, the shape every sweep in this section is written in' \
-    '$WITH_JQ_BIN ' "$(report_run_paths "$REPORT_DERIVATION_FIXTURE")"
+tok 'and it sees an indented run, a case arm and a run after then, none of which begins its line' \
+    '$ENV_NO_GH_BIN $ENV_NO_GIT_BIN $WITH_JQ_BIN ' "$(report_run_paths "$REPORT_DERIVATION_FIXTURE")"
+# The two halves of what a comment does to it, asserted rather than asserted
+# about: a commented-out call at the line-start position is not read, and one at
+# a separator position is. The second is the quirk the paragraph above accepts,
+# and it is pinned here so that accepting it is a decision on the record rather
+# than something a later reader has to rediscover by measuring.
+REPORT_COMMENT_FIXTURE="$FIXTURES/report-runs-that-are-only-prose"
+{ echo "# $REPORT_SAYS_NAME \"\$A_PATH_ONLY_A_COMMENT_NAMES\" x y z"
+  echo "# as in: $REPORT_SAYS_NAME) $REPORT_SAYS_NAME \"\$A_PATH_A_COMMENT_REACHES\" x y z ;;"
+} > "$REPORT_COMMENT_FIXTURE"
+tok 'a commented call is out of reach at the line-start position and in reach after a separator' \
+    '$A_PATH_A_COMMENT_REACHES ' "$(report_run_paths "$REPORT_COMMENT_FIXTURE")"
 
 echo "--- the degraded report, produced rather than described ---"
 # The last row of #108's table: offline, the fetch reports FAILED, the settings
