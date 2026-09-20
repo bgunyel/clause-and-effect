@@ -1922,8 +1922,9 @@ and held to the same standard of saying only what it asks.
 - status: active
 - direction: static: what this suite can ask of the harness is what its text says
   and whether its registry names files and requirements that are active. Whether
-  the harness is right is a run of the harness, which takes about an hour and is
-  nobody's check
+  the harness is right is a run of the harness, which is slow enough to be
+  nobody's check — roughly how slow is in the harness's own header, pinned there
+  by this suite and restated here no more than its counts are (GH-148)
 - note: the registry's size is what `bash .claude/hooks/mutate-hooks.sh --list`
   prints, and this file does not restate it — the first version did, in four
   documents, and was wrong in all four, which Bertan's review of PR #142 measured.
@@ -2494,6 +2495,106 @@ and held to the same standard of saying only what it asks.
   gap row reads the message: it asserts the sentence is still there and turns red
   when #164 removes it.
 
+### GH-148
+- text: `bash .claude/hooks/mutate-hooks.sh --list` derives every count about the
+  mutation registry, and the harness's header states none of them. Its summary
+  lines carry the rows, the real mutations among them, the files those touch, the
+  requirement IDs they name, the self-tests, how many requirements this file
+  holds active, how many runs of `check-hooks.sh` a whole-registry pass costs —
+  the baseline plus one per row whose edit applies and that pass one does not
+  refuse, which is not one per row and which `--list` can over-report, because
+  it reads the table and does not apply an edit (#193) — and about how long that pass
+  takes, the dated rate in the harness multiplied by that run count. Where one
+  of those numbers is ALSO written as a literal in `check-hooks.sh` it is a
+  check, and goes red when a row is added: the registry's size, each of its
+  three outcome totals, and its self-test total. That list is deliberately not
+  counted — the first version of this sentence counted it, said four when the
+  commit it was written in had just made it five, and nothing reads it.
+  Enumerating them says the same thing and cannot disagree with itself. Where a
+  number would be written in a comment it is not written at all, and no runtime
+  magnitude is written anywhere but `--list`.
+- from: #148
+- kind: doc-claim
+- status: active
+- direction: static: it reads what `--list` prints and what the harness's header
+  no longer says. Whether the counts are the right ones to publish is a reading
+  of the registry, not a verdict on a command
+- note: THE DISTINCTION THIS ENTRY EXISTS TO CARRY, because it is not "counts in
+  code are bad". A literal in a CHECK earns its maintenance: `check-hooks.sh`'s
+  #107 section pins the registry's size and its three outcome counts, they go
+  red the moment a row is added, and moving them is where a reviewer sees the
+  registry grow in a diff. Those stay, and #148 leaves them alone deliberately.
+  A number in a COMMENT earns nothing, because nothing reads it and nothing
+  turns red when it rots. The harness's header held four of the second kind in a
+  file whose own argument, three paragraphs above them, is that a count in a
+  comment is the thing #107 was filed about. They were wrong or moved six times
+  in three days before this issue was filed and eight times more while #139 was
+  open, and the suite reported ALL CHECKS PASSED through every one of them:
+  Bertan's review of PR #147 ran it with `THIRTY-EIGHT requirement IDs … of the
+  156` in the header against a registry holding 39 and 157, and nothing went
+  red. Three branches open against the same dev branch each had to re-derive the
+  same four numbers by hand, and a conflict whose only correct resolution is
+  "re-derive" is the worst kind there is, because both sides read as valid text.
+  THE CHECKS HOLD NO NUMBER OF THEIR OWN, which is this rule applied to the
+  suite: an active-requirement literal in `check-hooks.sh` would move with every
+  entry appended here, which is this issue recreated one directory over. Each
+  figure is compared against a derivation `check-hooks.sh` makes for itself —
+  one over this file, one over the registry rows it already reads, one over the
+  harness's two dated measurement constants — so what is asked is whether the
+  harness counts what the suite counts. THAT IS NOT THE SAME AS EITHER BEING
+  RIGHT: the active-requirement derivation is the harness's own program written
+  out a second time, so a defect the two share agrees with itself, and what the
+  check catches is the harness drifting — the figure dropped, renamed, spelled
+  off a constant, or counted by line instead of by ID. Bertan's review of PR
+  #183 found that case live rather than hypothetical, twice: neither copy was
+  section-aware, so a stray `- status: active` outside the three sections that
+  hold entries moved both together; and the run count asked only about
+  `did-not-apply`, not about the five reasons pass one refuses a row, so one
+  malformed row made both over-report by one. Both are fixed, and the chain now
+  ends somewhere that is not a copy — a third check holds the suite's count to
+  what `REQUIREMENTS_AWK`, the canonical reader of this file, makes of the same
+  file. All three derivations
+  read the directory beside the suite rather than `$HOOKS`, because the
+  `requirements.md` the harness counted is the one beside the harness; reading a
+  file the override moved would go red for the override and say nothing about
+  the arithmetic. The four `unarmed` pins are evidence about the four spellings
+  they name and about nothing else — a count written some other way is out of
+  their reach, and what holds the positive half is the `written` pin on the
+  pointer that now stands where the counts did.
+
+  THE RUNTIME IS THE CASE THAT TAUGHT THIS ENTRY WHAT A CHECK IS. The first
+  version of this fix kept one magnitude in the harness's header, `ABOUT AN
+  HOUR`, and classified it as the safe kind of literal because `check-hooks.sh`
+  pinned the string — then pointed `CLAUDE.md`, `docs/todo.md` and GH-107.2's
+  note at it, making it the only copy. It was right at twenty-three runs, had
+  never been re-derived as the registry grew past fifty, and was wrong by about
+  a factor of two. The pin could not have caught that: asserting a string is
+  present says nothing about whether the number still follows from anything.
+  Bertan's review of PR #183. So the magnitude moved to `--list`, where it is a
+  dated rate times the run count, and what the suite now pins is the absence of
+  a magnitude in the header, the sentence saying the harness is slow enough that
+  nobody runs it, and the product itself against its own multiplication. The
+  rate is read out of the harness rather than restated here because it is a
+  MEASUREMENT and this file has taken none; what is checked is the arithmetic
+  and that it still moves.
+
+  AND THE RATE IS THE HALF #148 DID NOT FIX, which the first version of this
+  entry obscured by saying the figure "needs no maintenance". The run COUNT
+  needs none, because it is derived. The rate is a property of the machine and
+  of how big the suite has grown, nothing here derives it, and it goes stale on
+  its own: 124 s, taken 2026-09-17, was out by more than a factor of two three
+  days later, and no check could say so. Bertan's review of PR #183 found that
+  by timing the suite; re-measuring it the way the harness pays for a run — a
+  copied tree, under the override, in `--matrix` mode — gave 275/235/205 s, so
+  the gap is larger by the harness's own quantity than by direct runs. The rate
+  is dated now, it records the suite's size on that date, and a check goes red
+  once the suite has grown a quarter past it. What that cannot see is the
+  machine changing under a suite that stayed the same size, and it says so. No row of the registry can reach
+  any of this: the rule is code in `mutate-hooks.sh`, which is `$TOOLING`, and
+  what that code reads is `requirements.md` beside the harness rather than a
+  file an override moves — so GH-141's exception does not apply and this is
+  GH-107.2's first limit exactly. It is held by these checks and by review.
+
 ## Provenance: the acceptance criteria of #37–#41
 
 Every criterion of the five stage tickets, quoted verbatim, with the IDs that
@@ -2804,12 +2905,15 @@ it has no entry above (Q16).
   holds, which resolves a `gh` shell function ahead of PATH and would have aborted
   the suite on a host that exports one. Its third correction is a measurement in
   `mutate-hooks.sh`, whose exclusivity was that host's, and is recorded there
-- #148: mutate-hooks.sh restating in prose the four counts `--list` derives,
-  which is open. Cited where the second review of PR #169 took one of them out:
-  the heading said ABOUT AN HOUR for a registry the paragraph under it put at
-  ninety minutes, and this suite pinned the hour. A rate does not move when a
-  row is registered and a total does, so the heading is a rate now and the pin
-  reads it. That is one of the four, not the issue
+- #148: has an entry above, GH-148, and is listed here only because #109's
+  section cited it before it landed. What that citation records is worth
+  keeping, because it is the issue found independently and from the other side:
+  the second review of PR #169 found the heading saying ABOUT AN HOUR for a
+  registry the paragraph under it put at ninety minutes, with this suite pinning
+  the hour. A rate does not move when a row is registered and a total does, so
+  #169 made the heading a rate. #148 finished it — every count about the
+  registry is derived by `--list`, the heading states no magnitude at all, and
+  the rate is measured, dated, and checked against the suite's growth
 - #154: the order of `$BASE`'s two imperatives on a retarget, which #109 left
   untouched. Cited where `says_first` says why an opening is a different question
   from a fragment: ordering is already a live concern at one of these constants,
@@ -2852,3 +2956,18 @@ it has no entry above (Q16).
   remedy tail survived green. `$REFUSE` was closed with it, on the same
   reasoning and without waiting for a round that measures it. It also found the
   `ABOUT AN HOUR` heading this file records under #148
+- #193: the issue that owns making `--list` apply each row's edit, so the run
+  count is exact rather than an upper bound and a rotted anchor surfaces without
+  a whole-registry pass. Cited beside the three pass-two cases `--list` cannot
+  see, so that the limit names what would lift it. It has no entry above on
+  purpose: the requirement that would carry it is the change, and GH-148 states
+  today's behaviour as the upper bound it is
+- #183: the pull request for #148; Bertan's review of it is cited where each of
+  the seven things it corrected stands. Two were the issue's own thesis failing
+  on the number the branch had just made load-bearing: the harness's runtime was
+  wrong by about a factor of two, and the pin classified as the safe kind of
+  literal asserted only that a string was present and so could never go red as
+  the registry grew. The rest are a count in `CLAUDE.md` that misdescribed which
+  numbers live in two places, two readers of `requirements.md` that were not
+  section-aware, a run count that included rows a pass refuses, and a suppressed
+  stderr. It is not counted here, for the reason #142's entry gives
