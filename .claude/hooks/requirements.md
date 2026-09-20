@@ -1658,7 +1658,14 @@ and held to the same standard of saying only what it asks.
   #194 because that is a property of those options rather than of the walk.
   A value token that is the STUMP of a cut substitution is not in this list:
   that one is refused, by the rule that a stump is a word the cut left
-  unfinished.
+  unfinished. Two more that are: a BACKTICK cutting an option value leaves no
+  stump at all — the fragment ends on a finished word — and the same cut inside
+  a path word defeats the rule outright, `gh pr mer` + backtick + `echo ge` +
+  backtick + ` 5` reaching gh as a merge. Both are #197, which carries them
+  together on purpose: the second is easier to write than the first and is
+  unreachable by any option-value work, so closing the first alone buys nothing
+  against the same hand and costs the message `gh release -R o/r` is refused
+  with. All four are pinned as permitted checks.
 
 ### GH-124
 - text: `feed` and `feed_says` read a hook's exit status as every other helper does,
@@ -1733,9 +1740,9 @@ and held to the same standard of saying only what it asks.
   retarget arm's tail -- already per-arm -- name its own correction, so the
   retarget's tail row now carries US-7 as well. What it does not fix is the
   order: `BASE` still opens with `Write: gh pr create --base dev-NN`, so the
-  wrong imperative is still the first one an agent reads, which is #154. Left to
-  #109: whether every other refusal message in the two files is read for its
-  words.
+  wrong imperative is still the first one an agent reads, which is #154. Whether
+  every other refusal message in the two files is read for its words was left to
+  #109, and GH-109.2 is its answer.
 
 ### GH-134
 - text: A shell wrapper is refused wherever it stands in a command position,
@@ -2366,6 +2373,114 @@ and held to the same standard of saying only what it asks.
   pinned rather than filtered, because a comment can only add a PATH and never
   hide a call, while stripping comments would cut at the first `#` and could hide
   one.
+### GH-109.1
+- text: Each Bash hook finishes a 200-line heredoc whose every body line holds
+  several separators, followed by a command it refuses, in under 1 s, fastest of
+  three, whether the opener is quoted or not.
+- from: #109, and #103 Q28
+- kind: defect-permitting
+- status: active
+- direction: static: a bound on time, not a verdict
+- note: measured at 9 to 33 ms, because a heredoc body is dropped before any pass
+  reads it. The same 200 lines as live commands take up to 3.1 s, which is #127's
+  per-fragment cost and is not bounded here.
+
+### GH-109.2
+- text: Every refusal arm of `no-git-push.sh` and `no-pr-decisions.sh` says the rule
+  it applies, or the spelling that is permitted instead, in a sentence read whole;
+  and each file has as many refusal arms as the suite reads.
+- from: #109, and #103 Q3
+- kind: doc-claim
+- status: active
+- direction: refuse-only: a message is written only on a refusal
+- note: "as many refusal arms as the suite reads" is counted as redirections to
+  fd 2, occurrences rather than lines, continuations folded first, whatever
+  writes through them; an arm is a line, so a literal written on two arms needs
+  a row per line and not per sentence. What no count of the text can say is how
+  often a function holding a write is called, so three things are pinned beside
+  it: the functions each hook defines and which of them write, the call count of
+  each that does, and that neither hook defines a function anywhere but column 1,
+  which those derivations rest on. What the count still cannot reach is listed
+  where the count is, and deliberately not counted here -- this note said "two
+  shapes" and then listed three, in the entry whose own subject is a count in
+  prose, in the file #148 is filed about. The list is the count: a trailing
+  comment inflates it, a redirected group counts once for several arms, a heredoc
+  body is read as code (#182), an indirect call hides the arms it holds (#181),
+  and a write through a duplicated descriptor escapes every derivation at once,
+  so that shape is refused rather than counted (#185).
+  "Read whole" means every shared opening on every arm that carries it --
+  `$REFUSE` on sixteen arms, `$DECIDE` on seven, `$BASE` on seven -- which the
+  second review of PR #169 found true of one of the three, and the load guards
+  of neither until its fifth. `$REFUSE` is also read as an opening rather than
+  as a fragment anywhere in the message, which is what its rows claim and what
+  the third review found them not asking. These are arm counts, not row counts:
+  the suite drives eight commands at `$DECIDE`'s seven arms, because
+  `gh pr close` and `gh pr reopen` reach the same one.
+
+### GH-109.3
+- text: `settings.json` registers exactly the seven Bash hooks under `Bash`, in a
+  fixed order, `append-only-docs-edit.sh` under `Edit|Write`, and the report under
+  `SessionStart`, each at its `.claude/hooks/` path; every `PreToolUse` timeout is
+  5 and the report's is 50.
+- from: #109
+- kind: defect-permitting
+- status: active
+- direction: static: configuration the harness reads
+
+### GH-109.4
+- text: Every hook `settings.json` registers, on any event and matcher, is run by at
+  least one tagged check that names it, and returns that check a verdict status.
+- from: #109
+- kind: defect-permitting
+- status: active
+- direction: static: a property of the suite's run
+- note: the record is written after the status is read, and only for 0 or 2.
+  Review of PR #169 found it written at path resolution instead, where a hook
+  that was deleted or not executable is indistinguishable from one that is: it
+  counted as run, and this was the one row that would have said so. "Names it"
+  is the third review of the same pull request: `every_hook` runs whatever is
+  registered under `Bash`, so while its runs counted, this requirement could
+  not fail for any of the seven Bash hooks -- it was satisfied by the
+  registration it is about. It no longer records.
+
+### GH-109.5
+- text: Every permitted spelling named in CLAUDE.md's boundary section or in a
+  refusal message is permitted by all seven Bash hooks, run in their registered
+  order from the context where it is meant to be permitted, each exiting exactly 0.
+- from: #109, and #103 Q20 and Q21
+- kind: defect-refusing
+- status: active
+- direction: permit-only: the claim is that nothing refuses these; what refuses
+  anything else is every other requirement's
+- variants: none: its subject is not a spelling but how many hooks have to agree
+  on one. A seed names one hook, so a variant of one of these spellings is a
+  claim about that hook and is some other entry's; the conjunction over seven,
+  which is the whole of what this requires, has no seed shape. The spellings
+  themselves are ordinary and the transformations would generate from them
+  happily -- which is why this says `none` with a reason rather than being left
+  out of scope. A seed table row naming every hook rather than one would make
+  this a `seed`, and that is a change to #106's machinery and not to this entry:
+  #179 owns it
+- note: the 41 spellings are a hand-written literal and are not derived off
+  CLAUDE.md's boundary section, so one added there or named in a new refusal
+  message is outside this requirement until someone adds it. Deriving them was
+  measured and declined -- the section's command spans are mostly bare tool
+  names and spellings it refuses, and a derivation wrong in the permitting
+  direction would answer falsely where a short list only leaves a spelling
+  unasked. The argument is in `check-hooks.sh` beside the list; #180 owns the
+  gap it leaves
+
+### GH-164
+- text: No refusal message tells an agent to use a spelling that another hook
+  refuses. `no-commit-to-main.sh`'s push refusal says "Push your dev-NN branch and
+  open a PR instead", and `no-git-push.sh` refuses that push from every checkout an
+  agent could stand in.
+- from: #164, found by #109's cross-hook checks
+- kind: doc-claim
+- status: gap → #164
+- note: the verdicts are right (US-2), so the defect is in the message, and the
+  gap row reads the message: it asserts the sentence is still there and turns red
+  when #164 removes it.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -2625,9 +2740,6 @@ it has no entry above (Q16).
   left and has taken all fifteen off; it adds checks, not requirements of its own,
   and the three defects found doing it are #130, #131 and #133, which have entries
   above
-- #109: the issue that owns what a refusal says; cited where a message is pinned
-  for its words, so that a reworded message is changed in one place and checked in
-  another. The defect #133 records is its to fix
 - #110: the live acceptance runbook, not yet written; `verify: runbook §<n>` names
   its sections
 - #111: a pull request, for #94
@@ -2672,6 +2784,54 @@ it has no entry above (Q16).
   holds, which resolves a `gh` shell function ahead of PATH and would have aborted
   the suite on a host that exports one. Its third correction is a measurement in
   `mutate-hooks.sh`, whose exclusivity was that host's, and is recorded there
+- #148: mutate-hooks.sh restating in prose the four counts `--list` derives,
+  which is open. Cited where the second review of PR #169 took one of them out:
+  the heading said ABOUT AN HOUR for a registry the paragraph under it put at
+  ninety minutes, and this suite pinned the hour. A rate does not move when a
+  row is registered and a total does, so the heading is a rate now and the pin
+  reads it. That is one of the four, not the issue
+- #154: the order of `$BASE`'s two imperatives on a retarget, which #109 left
+  untouched. Cited where `says_first` says why an opening is a different question
+  from a fragment: ordering is already a live concern at one of these constants,
+  which is what made it worth asking at the other
+- #181: `fn_calls` cannot see an indirect call, so a wrapper around a function
+  that writes a refusal hides arms from the count. Cited beside that helper,
+  which names what it can and cannot see
+- #182: `arms` and `fn_writes` do not know where a heredoc body starts. Cited
+  where the count names the shapes it cannot reach; one of the three is the
+  permitting direction, which is why it is filed rather than only named
+- #185: `dup_stderr` does not reach `/dev/stderr` named on an `exec`, nor a
+  two-digit fd. Cited where that guard is, because a guard narrower than the
+  prose beside it reads as coverage -- the shape the fifth review of PR #169
+  found in `nested_defs` and the sixth found here
+- #186: `every_hook` passes on an empty hook list, and the guard answering it
+  sits at one of its producers rather than in the consumer. Cited in the helper.
+  It is the first review of PR #169's finding at a second call site
+- #187: `report_says` records the report by basename, so a modified fixture
+  keeping that name would satisfy GH-109.4 for a hook nothing ran. Cited where
+  the exception is taken. The invariant it rests on is written in a comment and
+  held by nothing
+- #179: the invariance families cannot seed a requirement whose subject is
+  agreement across hooks, which is the reason GH-109.5 declares `variants:
+  none`. Filed out of the second review of PR #169 so that the reason is a
+  question someone can answer rather than a paragraph in an entry
+- #180: GH-109.5's 41 spellings are hand-written with no tripwire on CLAUDE.md's
+  boundary section. The derivation was measured and declined, and the decline
+  was accepted; this owns the residual gap rather than closing it, which is the
+  class #164 came from
+- #169: the pull request for #109; its two reviews are cited at each thing they
+  moved, and every one of them is this suite saying more than it had
+  established rather than a defect in a hook — which is why the pull request
+  adds no requirement of its own. The first found the `ran` record written at
+  path resolution, so a hook that was never there counted as run; the
+  refusal-arm count reading `echo` on one physical line; and the one derivation
+  in #109's section without an empty guard. The second measured what the first
+  had left: the widened count still missed a redirection written before the
+  command, a heredoc, and a helper called more than once, and `$BASE` was a
+  shared opening read only by its prefix, so deleting its rule sentence or its
+  remedy tail survived green. `$REFUSE` was closed with it, on the same
+  reasoning and without waiting for a round that measures it. It also found the
+  `ABOUT AN HOUR` heading this file records under #148
 - #184: the pull request for #118; Bertan's three reviews of it are cited where
   each thing they corrected stands. The largest were two spellings of the
   refused command still permitted — an option made last by a backtick, and a
@@ -2686,3 +2846,11 @@ it has no entry above (Q16).
   one more: it is third-order, none of the three recognised options taking a
   value that may contain whitespace, so there is no decision behind it to
   require. A check pins the permitted verdict and its label names the issue
+- #197: a command substitution cutting inside an option value, which leaves no
+  stump, and the same cut inside a path word, which defeats the rule outright.
+  Found by the class sweep in that review's round 4. No entry above for #191's
+  reason, and the two are one issue on purpose — the second is easier to write
+  than the first and is unreachable by option-value work, so a fix that closed
+  only the first would re-create the asymmetry it was meant to remove. Three
+  checks pin the permitted verdicts and a fourth pins the contrast that says the
+  first is a gap in the rule rather than the rule working

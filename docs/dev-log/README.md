@@ -488,6 +488,20 @@ thing in the record.
   0003 when renamed, so its heading was corrected with the file name; every
   count inside it is the one that stood at its first commit — 31 registry
   rows, against 41 after the second merge.
+
+- [2026-09-18 · session 1](devlog_2026-09-18_session-1.md) — the follow-up review
+  of #153: `[[:space:]=]*` closes the separator, not the field. Quoting inside a
+  field name or value (`-f ba"se"=main`, `-f state=clo"sed"`) is still permitted,
+  here and on `dev-05`. It is filed as #163, to land after #130, and the claim is
+  narrowed. `--input` on a retarget is added to #138. No verdict changed.
+
+- [2026-09-18 · dev-issue-109](devlog_2026-09-18_dev-issue-109.md) — #109's
+  cross-hook checks: 41 permitted spellings run through all seven Bash hooks,
+  and all are permitted. Reading the messages for spellings found #164: a push
+  refusal that names a push another hook refuses. Every refusal arm of the two
+  boundary hooks is read to the end of its sentence, and the whole registration
+  is pinned. A 200-line heredoc takes 12–57 ms; the same lines as live commands
+  take up to 3.1 s, which is #127.
 - [2026-09-20 · session clause-and-effect-37](devlog_2026-09-20_clause-and-effect-37.md)
   — #118: an option written in front of a gh subcommand eats the next word, so
   the verb every rule in `no-pr-decisions.sh` read was not the verb gh runs —
@@ -500,6 +514,10 @@ thing in the record.
   of them comments or checks claiming more than the code does; the mutation
   harness then rejected one of the session's own registry rows as a requirement
   too wide.
-  **This index skips 2026-09-18 to 09-20.** Those entries exist and have no rows
-  here; this row was added because the entry above it was the last one indexed,
-  not because the gap was filled.
+  **Seven entries still have no row here**, derived rather than described:
+  `devlog_2026-09-17_session-7`, `_session-8`, `_session-issue-155`,
+  `devlog_2026-09-18_session-issue-155`, and the three
+  `devlog_2026-09-20_session-*`. This row was added because the entry above it
+  was the last one indexed, not because the gap was filled. The merge of
+  `dev-05` at 7bea85f closed two of the nine that stood when this was first
+  written.

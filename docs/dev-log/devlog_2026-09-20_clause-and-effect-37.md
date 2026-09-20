@@ -485,3 +485,104 @@ other change, and nothing would say so. Pinned as a permitted BOUNDARY check.
 - The registry is at 62 rows and has still never been run in one pass.
 - #184's three review rounds are recorded in `requirements.md`'s cited-issues
   section, with #191 and #194 and why neither has a requirement entry.
+
+---
+
+# 2026-09-20 21:53 +03 · session `clause-and-effect-37` — #118 round five: the base moved, and every pinned number with it
+
+**Branch** `worktree-issue-118-gh-preoption`, answering round 4 of Bertan's
+review of PR #184 and merging the base branch. No gating code finding.
+`origin/dev-05` moved 2a52322 → **7bea85f** (PR #169, #109's cross-hook checks,
+thirteen commits). **Check suite 5182 → 5387 results on the merged tree, all
+passing.**
+
+## Two residuals the documented list did not name, both left open
+
+The sweep found the fragment class in two more places, both pre-existing and
+identical at `dev-05`, both confirmed here before anything was written:
+
+- **a backtick cutting an option VALUE leaves no stump.**
+  ``gh pr -R foo`echo bar` merge 5`` arrives as the fragment `gh pr -R foo`, and
+  `foo` is a finished word, so round 3's stump rule cannot reach it. gh receives
+  `[pr] [-R] [foobar] [merge] [5]` — a real merge. The `$( )` spelling of the
+  same command *is* refused, leaving `foo$`.
+- **the same cut inside a PATH word defeats the rule outright.**
+  ``gh pr mer`echo ge` 5`` reaches gh as `[pr] [merge] [5]`. GH-135's family in
+  its split spelling; no option-value work reaches it.
+
+**The first is closable and was not closed.** Bertan's argument, which this
+branch accepted: the second is strictly easier to write than the first and is
+unreachable by the same means, so closing the first buys nothing against the
+same hand, while costing the two message checks round 2 pinned on
+`gh release -R o/r`. CLAUDE.md's model is *stop mistakes, not adversaries*, and
+nobody writes either by mistake.
+
+That cost was re-measured rather than taken on trust: a patched copy refuses the
+residual, `gh release -R o/r` stays refused, and the only failures in the 1,272
+results the scratch harness reaches are exactly those two message checks. The
+harness copies `.claude/hooks/` only, so it aborts at the append-only Edit
+fixtures for want of a `docs/` tree — the full-sweep number is Bertan's, and
+this run corroborates it up to that point rather than repeating it.
+
+Both are **#197**, filed carrying the pair on purpose: a fix that closed only
+the option-value half would re-create the asymmetry it was meant to remove. The
+residual list in `check-hooks.sh` is four rows now, each pinned as a permitted
+check, plus the `$( )` contrast that says the third row is a gap in the rule
+rather than the rule working.
+
+## The merge, and the four conflicts
+
+Each conflict had two real sides; none could be resolved by preferring a branch.
+
+`docs/dev-log/README.md` — both sides append index rows. Kept both. The
+parenthetical claiming the index "skips 2026-09-18 to 09-20" was stale the
+moment `dev-05` indexed two of those entries, so it is **derived** now: seven
+entries have no row, listed by name, from a script that diffs the directory
+against the index rather than from memory.
+
+`requirements.md` — both sides append to the cited-issues list, neither about
+the other. Kept both.
+
+`check-hooks.sh`, three hunks. `INV_SCOPE` is a union — each side declares what
+its own issue does with the families. The two registry counts are the
+interesting ones: **neither side's number was right and their sum was not
+either**, because the merged registry holds both sides' rows. Re-derived off the
+merged file: **75 rows, 73 caught**.
+
+`mutate-hooks.sh`, two hunks. The heading paragraph is `dev-05`'s, taken whole —
+PR #169 rewrote it precisely to stop it carrying a *total* that goes stale every
+time a row is registered, and this merge is an instance of that: both sides
+carried a different total for the same paragraph. The `MEASURED IS NOT CURRENT`
+chain keeps both sides' paragraphs with one closing sentence, recounted.
+
+## The stale line no conflict marker showed
+
+`mutate-hooks.sh` said *"Carried to sixty-seven runs the rate gives nearer two
+hours than one"* — `dev-05`'s count, carried identically by both sides of that
+hunk, so it conflicted with nothing and merged clean and wrong. Found by
+grepping the whole file for every old number rather than by reading the diff.
+It is corrected to seventy-five, and the sentence now says that it is itself an
+instance of the paragraph above it.
+
+Two more of the same shape were found by the suite rather than by grep, because
+they are checks: the text-check count (292 → 293) and **`no-pr-decisions.sh`
+refuses in as many places as this suite reads** (18 → 19). The second is
+#109's new refusal-arm counter meeting #118's unreadable pass, which is a
+nineteenth arm — and it moved *at the merge* rather than when the arm was
+written, because the counter arrived on the other side of it. Neither side held
+a wrong number; the line was clean and stale. The arm's own sentence is read, by
+the three `says`/`says_not` checks round 2 added, which is what the count is a
+proxy for and does not itself assert.
+
+## Still open after round five
+
+- Everything under the previous entries' *Still open* stands.
+- **#197**: a substitution cutting an option value, and the same cut in a path
+  word. Both pinned as permitted, both left open, and filed together for the
+  reason above.
+- #194, #191: as before.
+- The registry is at **75 rows** and has still never been run in one pass.
+  #155's two rows and the pre-#118 rows have not been run since the files they
+  run against changed.
+- `docs/dev-log/README.md` indexes 42 of 49 entries; the seven without a row are
+  named there.
