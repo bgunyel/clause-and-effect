@@ -444,3 +444,93 @@ flip.
 - `#138` lands after this.
 - The pull request body's cap readings are unchanged and unre-measured across
   three merges.
+
+---
+
+## 2026-09-21 03:40 +03 — #196 review round 3: the rule that needed two tokens
+
+rev-agent-130's round 3, against head `6306546`. It verified rather than
+re-asserted: the clean suite at that head (ALL CHECKS PASSED, 5534 `ok` rows,
+zero FAIL), `arm-off` at 19 and `no-dollar` at 1, and it took the masking finding
+seriously enough to change its own method — `no-dollar`'s single red row is a
+`says` row, so a verdict-only count would have reported that clause caught while
+nothing about its verdict moved. Class 1 it closed by trying to break the
+normaliser rather than re-checking it: port, port plus query, userinfo, uppercase
+host, `///graphql`, `graphql;x`, `//api.github.com/graphql`, a trailing space —
+every spelling that escapes it is one GitHub answers Not Found to.
+
+### One class left, in the one rule that needs two tokens
+
+The fail-closed arm closes Class 4 wherever a rule needs ONE thing from the
+command: the endpoint is either in the fragment or the write is refused. The
+state rule needs two — `/pulls/` out of `endpoint_args`, `state` out of the raw
+command — and a cut **between** them defeated it while the arm stayed silent,
+the endpoint half being present and readable. `gh api -X PATCH repos/o/r/pulls/5
+-f m="$(cat c)" -f state=closed` closes a pull request and was permitted, in six
+spellings including the backtick.
+
+The control that settles what kind of defect it is: the same two tokens with the
+field **before** the substitution never stopped refusing. Tokenisation, not
+policy.
+
+The fix is the second of the two directions offered, because it generalises:
+`line_was_cut` is `endpoint_seen`'s sibling, and a two-token rule reads the line
+for its second token when a command on that line was cut. **It has to be
+line-wide, and that is its honest limit** — a `$(` leaves a `$` at the end of the
+fragment and can be seen per command, a backtick leaves nothing at all, `-f m=`
+being indistinguishable from a field with an empty value. The endpoint is
+deliberately given no fallback: a cut before the endpoint stays the arm's and
+refuses, because a line-wide reading of an endpoint is the bleed #130 was filed
+for.
+
+Priced the way the arm was, on the same corpus and with the hook as the
+instrument: 884 transcripts, 21,895 distinct commands, the 1,793 carrying `api`
+fed to this hook and to a copy with the fallback removed. **Zero change
+verdict.** It buys six measured refusals and costs nothing observed. None of
+#130's ten rows can reach it either — every one writes to an issue, and this rule
+needs `/pulls/` on the writing command's own endpoint.
+
+### What the reviewer withdrew, and what it asked for instead
+
+Round 2 it had warned the arm might refuse ordinary work; round 3 it measured the
+warning instead of repeating it — 703 transcripts, 18,517 commands, 52 writes
+with a substitution or parameter in the endpoint token, and exactly one verdict
+change, its own probe loop. It also built the narrower arm it would have proposed
+and dropped it on its own numbers, because it gives up two closures this one
+makes for free. The one ask was a pinned row for the arm's accepted cost, and
+`gh api -X POST "repos/$OWNER/$REPO/issues" -f title=x` now carries it: a cost
+nobody writes down is a cost nobody can notice growing.
+
+### Three reds of the assistant's own, and one of them is the better finding
+
+The clean run caught three. The state pattern's call sites went from three to
+four, the fallback being a fourth reader of it; `line_was_cut` was missing from
+the sorted function table; and **`requirements.md`'s own grammar check caught a
+malformed entry** — the assistant appended a second `- note:` to GH-130.3 instead
+of extending the first, and the suite reported `the field note is given twice`.
+That file's rules are load-bearing in a way this session had underweighted: it is
+the only check that reads the shape of an entry rather than its content.
+
+### The mutation harness caught its own drift
+
+Restructuring the state rule into a nested `if` moved the anchor `state-arg`
+mutates, and `edit.py` reported `MUTATION DID NOT APPLY` rather than judging an
+unmutated copy and reporting a number. That is the self-test `mutate-hooks.sh`
+keeps a row for, arriving in an ad-hoc harness: an edit that silently fails to
+apply reads exactly like evidence and is none. The anchor was rewritten and a
+pre-flight added that tries every anchor against a throwaway copy before the
+batch runs, so drift is found before a run rather than after one.
+
+Its first output reported three anchors missing, and all three were the
+pre-flight's own limitation rather than drift — it extracts `edit` lines with
+`sed` and mangles the multi-line ones. Confirmed by grepping the hook directly:
+`gate-enum`, `arm-off` and `fall-off` each appear exactly once. Recorded because
+a checker that cries wolf is a checker someone learns to skim.
+
+### Still open
+
+- `#201`, the pull request body edited through `gh api` reading as a state
+  decision, and the unreadable-state-field measurement on `#198`: both filed by
+  rev-agent-130.
+- The cap readings, now five merges old, and the `awk` the arm and the fallback
+  each add per writing command. Unmeasured by either side.

@@ -1029,6 +1029,55 @@ endpoint_seen() {
   '
 }
 
+# Was a command on this line CUT by the tokeniser? The sibling of endpoint_seen,
+# and the question a rule asks when it needs TWO tokens off one command.
+#
+# WHY TWO IS DIFFERENT. endpoint_seen closes the class for every rule that needs
+# ONE thing from the command: the endpoint is either in the fragment or the write
+# is refused. The state rule needs two -- `/pulls/` out of endpoint_args and
+# `state` out of the raw command -- and a cut BETWEEN them defeats it while the
+# arm stays silent, because the endpoint half is present and readable.
+# `gh api -X PATCH repos/o/r/pulls/5 -f m="$(cat c)" -f state=closed` closes a
+# pull request and was permitted. It is order-dependent -- `-f state=closed`
+# before the substitution still refuses -- which is what says the defect is
+# tokenisation and not policy. Six spellings, rev-agent-130's round 3.
+#
+# WHY THE ANSWER IS LINE-WIDE AND NOT PER COMMAND, which is the honest limit of
+# it. cs_split cuts at `$(` and at a backtick. A `$(` leaves a `$` at the end of
+# the fragment, so that cut can be seen from the fragment; a backtick leaves
+# NOTHING -- `-f m=` is what remains, which is indistinguishable from a field
+# with an empty value -- so the backtick spelling cannot be found per command at
+# all, and the review's table has it. The question is therefore asked of the
+# line: if anything on this line was cut, a two-token rule reads the line for its
+# second token.
+#
+# THE FALLBACK IS A SHAPE THIS FILE ALREADY USES for the same reason. The
+# mutation names and gql_bases read $SCAN because a mutation body is cut from its
+# command word; this is that, narrowed to lines where a cut actually happened
+# rather than applied to every line.
+#
+# WHAT IT COSTS: the bleed #130 removed, back on cut lines only. A write to
+# /pulls/N on a line carrying a substitution, with the text `state=closed`
+# somewhere else on that line, is refused though the state may be prose. None of
+# #130's ten rows can reach it -- every one writes to an ISSUE, and this rule
+# needs `/pulls/` on the writing command's own endpoint.
+#
+# Priced the way the arm was, on the same corpus and with this hook as the
+# instrument: 884 transcripts, 21,895 distinct commands, the 1,793 carrying the
+# text `api` fed to this hook and to a copy with the fallback taken out. ZERO
+# change verdict. It buys six measured refusals and costs nothing observed.
+#
+# THE ENDPOINT IS NOT ASKED THIS WAY. A cut before the endpoint is
+# endpoint_seen's, and it refuses rather than falling back, because a line-wide
+# reading of an endpoint is the bleed #130 was filed for.
+line_was_cut() {
+  case "$1" in
+    *'$('*) return 0 ;;
+    *'`'*)  return 0 ;;
+  esac
+  return 1
+}
+
 # A wrapper's payload sits inside quotes, where there is no command word for the
 # tokeniser to find, so these run unanchored over the text -- and only once a
 # wrapper has been found, never over an ordinary command.
@@ -1355,6 +1404,13 @@ while IFS= read -r CMD; do
   # it sent a mutation. GHES's `/api/graphql` is named here and not matched,
   # this repository being on github.com.
   #
+  # NOT MATCHED IS NOT THE SAME AS PERMITTED, and a reader will take a list of
+  # spellings a gate does not open for as a list of spellings that get through.
+  # Three of these four are permitted; `graphql/` is REFUSED, by the no-endpoint
+  # arm rather than by anything here, a trailing slash being the signature of a
+  # command cut at a backtick. This paragraph is about what opens the gate. The
+  # verdict is the file's. Raised by rev-agent-130's round 3.
+  #
   # The host is still unconstrained, for the reason it always was: checking it
   # would be a second list to keep current, and the question is whether the
   # command names the graphql endpoint, not whose.
@@ -1367,12 +1423,22 @@ while IFS= read -r CMD; do
   if printf '%s\n' "$ENDPOINT" | grep -qE '/pulls/[^ ]*/(merge|reviews)'; then
     API_MERGE_REVIEWS=1
   fi
-  # The REST half of the state rule. Its endpoint is this command's and its
-  # field is this command's; the graphql half of the same decision is below,
-  # behind the gate, because a mutation body is cut from its command word.
-  if printf '%s\n' "$ENDPOINT" | grep -qiE '/pulls/' \
-     && printf '%s\n' "$CMD" | grep -qiE "$STATE_FIELD_RE"; then
-    API_STATE=1
+  # The REST half of the state rule. Its endpoint is this command's; its field is
+  # this command's too, unless the tokeniser cut a command on this line, in which
+  # case the field is read off the line -- see line_was_cut. The graphql half of
+  # the same decision is below, behind the gate, because a mutation body is cut
+  # from its command word.
+  #
+  # THE ONLY RULE HERE THAT NEEDS TWO TOKENS OFF ONE COMMAND, which is why it is
+  # the only one with a fallback. Every other rule in this loop needs the
+  # endpoint and nothing else, so a cut either leaves the endpoint readable or
+  # removes it and the arm refuses.
+  if printf '%s\n' "$ENDPOINT" | grep -qiE '/pulls/'; then
+    if printf '%s\n' "$CMD" | grep -qiE "$STATE_FIELD_RE"; then
+      API_STATE=1
+    elif line_was_cut "$SCAN" && printf '%s\n' "$SCAN" | grep -qiE "$STATE_FIELD_RE"; then
+      API_STATE=1
+    fi
   fi
   if printf '%s\n' "$ENDPOINT" | grep -qE '/releases([^A-Za-z0-9_-]|$)'; then
     API_RELEASE=1

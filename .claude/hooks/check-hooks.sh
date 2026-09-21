@@ -3457,16 +3457,21 @@ req GH-137.1
 tok 'no-pr-decisions.sh: the state pattern is written once, not once per call site' \
     '1' "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" \
           | grep -o 'closed|open' | wc -l | tr -d '[:space:]')"
-# THREE CALL SITES, NOT TWO, SINCE #130. The count moved because the combined
-# `(/pulls/|updatePullRequest)` rule split in two: the REST half is in the
-# per-command loop, keyed on that command's own endpoint, and the graphql half
-# stayed on $SCAN behind the structural gate. The wrapper arm is the third and
-# is untouched. The claim this row makes is unchanged -- the pattern is written
-# once and every call site reads it -- and the number is what says how many
-# sites there are to fix apart. A split that had copied the pattern instead
+# FOUR CALL SITES SINCE #130, AND THE COUNT HAS MOVED TWICE. It was two. The
+# combined `(/pulls/|updatePullRequest)` rule split in two -- the REST half in
+# the per-command loop, keyed on that command's own endpoint, the graphql half
+# on $SCAN behind the structural gate -- and the wrapper arm is the third and is
+# untouched. The FOURTH is the REST half's line fallback, added when
+# rev-agent-130's round 3 found that a command substitution between the rule's
+# two halves defeated it: a rule that reads the pattern in two places reads it in
+# two places, and both are call sites of the one pattern.
+#
+# The claim this row makes is unchanged through both moves -- the pattern is
+# written once and every call site reads it -- and the number is what says how
+# many sites there are to fix apart. A split that had copied the pattern instead
 # would have moved the row above and not this one.
-tok 'no-pr-decisions.sh: all three state call sites read that one pattern' \
-    '3' "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" \
+tok 'no-pr-decisions.sh: all four state call sites read that one pattern' \
+    '4' "$(sed 's/^[[:space:]]*#.*$//' "$HOOKS/no-pr-decisions.sh" \
           | grep -oF 'grep -qiE "$STATE_FIELD_RE"' | wc -l | tr -d '[:space:]')"
 # The arming evidence. The state rule is keyed on the field and not on the
 # endpoint, for the reason its own comment gives -- the same PATCH is how `gh pr
@@ -4051,6 +4056,80 @@ check no-pr-decisions.sh BLOCK 'a state write, a full URL'         'gh api -X PA
 req GH-130.4 FR-14 US-9
 check no-pr-decisions.sh BLOCK 'a create naming no base, leading slash' 'gh api -X POST /repos/o/r/pulls -f head=x -f title=y'
 check no-pr-decisions.sh BLOCK 'a create naming no base, a full URL'    'gh api -X POST https://api.github.com/repos/o/r/pulls -f head=x -f title=y'
+
+# THE ONE RULE THAT NEEDS TWO TOKENS OFF ONE COMMAND, and the last member of
+# Class 4. The arm closes that class wherever a rule needs ONE thing from the
+# command: the endpoint is either in the fragment or the write is refused. The
+# state rule needs two -- `/pulls/` from `endpoint_args` and `state` from the raw
+# command -- and a cut BETWEEN them defeated it while the arm stayed silent,
+# because the endpoint half was present and readable. `PATCH /pulls/5` with
+# `state=closed` closes a pull request, so this is the decision the rule exists
+# for, reached by putting a command substitution between its two halves.
+#
+# Six spellings, every one BLOCK at `2019e08` and ALLOW at `6306546`, found by
+# rev-agent-130's round 3. The field half now falls back to the line when the
+# line carries a cut; see `line_was_cut`. Priced on the corpus the arm was priced
+# against -- 884 transcripts, 21,895 distinct commands, the 1,793 carrying `api`
+# fed to this hook and to a copy with the fallback removed -- and ZERO change
+# verdict: it buys these six and costs nothing observed.
+req GH-130.3 US-15
+check no-pr-decisions.sh BLOCK 'a substitution between the endpoint and the state' \
+  'gh api -X PATCH repos/o/r/pulls/5 -f m="$(cat c)" -f state=closed'
+check no-pr-decisions.sh BLOCK 'the backtick spelling of the same cut' \
+  'gh api -X PATCH repos/o/r/pulls/5 -f m=`cat c` -f state=closed'
+check no-pr-decisions.sh BLOCK 'the same, state value double-quoted' \
+  'gh api -X PATCH repos/o/r/pulls/5 -f m="$(cat c)" -f state="closed"'
+check no-pr-decisions.sh BLOCK 'the same, reopening rather than closing' \
+  'gh api -X PATCH repos/o/r/pulls/5 -f m="$(cat c)" -f state=open'
+check no-pr-decisions.sh BLOCK 'the same, endpoint quoted' \
+  'gh api -X PATCH "repos/o/r/pulls/5" -f m="$(cat c)" -f state=closed'
+check no-pr-decisions.sh BLOCK 'the same, method spelled --method' \
+  'gh api --method PATCH repos/o/r/pulls/5 -f m="$(cat c)" -f state=closed'
+# THE ROW THAT SAYS IT WAS TOKENISATION AND NOT POLICY: the same two tokens with
+# the field BEFORE the substitution, which never stopped refusing. If a later
+# change makes the fallback unnecessary, this row does not move and the six above
+# do.
+check no-pr-decisions.sh BLOCK 'the state field before the substitution' \
+  'gh api -X PATCH repos/o/r/pulls/5 -f state=closed -f m="$(cat c)"'
+# WHAT THE FALLBACK MUST NOT REACH. It is line-wide, so the question is whether
+# an ordinary write to a pull request survives a substitution on its line. Each
+# of these carries a cut and no state; the last carries a state that belongs to
+# another command and an endpoint that is not a pull request.
+req GH-130.3 US-13
+check no-pr-decisions.sh ALLOW 'a pull request body from a substitution' \
+  'gh api -X PATCH repos/o/r/pulls/5 -f body="$(cat notes.md)"'
+check no-pr-decisions.sh ALLOW 'a pull request title from a substitution' \
+  'gh api -X PATCH repos/o/r/pulls/5 -f title="$(cat t)"'
+req GH-130.3 US-14
+check no-pr-decisions.sh ALLOW 'an issue write on a line naming a state' \
+  'echo "state=closed" && gh api -X PATCH repos/o/r/issues/27 -f body="$(cat n)"'
+# THE SWEEP THE CLASS ASKS: which rules need two tokens off one command, and what
+# each does under a cut between them. Five need the endpoint and nothing else, so
+# a cut either leaves it readable or removes it and the arm refuses. `rest_bases`
+# needs two -- its flag and its value -- and refuses already, because an
+# unreadable base falls into the no-base arm. That row is the answer key, and it
+# is the third round running that it has been.
+req GH-130.6 US-15
+check no-pr-decisions.sh BLOCK 'merge endpoint, cut after it'   'gh api -X PUT repos/o/r/pulls/5/merge -f m="$(cat c)"'
+req GH-130.6 US-15 FR-48
+check no-pr-decisions.sh BLOCK 'releases, cut after it'         'gh api -X POST repos/o/r/releases -f m="$(cat c)" -f tag_name=v1'
+req GH-130.6 FR-14 US-9
+check no-pr-decisions.sh BLOCK 'the no-base arm, cut after it'  'gh api -X POST repos/o/r/pulls -f m="$(cat c)" -f head=x'
+req GH-130.6 US-15
+check no-pr-decisions.sh BLOCK 'the gate, cut after it'         'gh api graphql -f m="$(cat c)" -f query="mutation{mergePullRequest(input:{x:1})}"'
+req FR-18 FR-15 US-11
+check no-pr-decisions.sh BLOCK 'and the base rule, which needs two and refuses' \
+  'gh api -X POST repos/o/r/pulls -f base="$(echo main)" -f head=x'
+
+# THE ARM'S ACCEPTED COST, pinned at rev-agent-130's request so the row exists if
+# the corpus ever grows one. Three shapes were raised as ones the arm refuses and
+# nothing decides; all three are CONSTRUCTED rather than observed --
+# `"repos/$OWNER/$REPO/issues"` appears nowhere in 18,517 corpus commands except
+# in files written while this was being reviewed. One is pinned here, because a
+# cost nobody has written down is a cost nobody can notice growing.
+req GH-130.6
+check no-pr-decisions.sh BLOCK 'ACCEPTED: an issue write whose owner and repo are parameters' \
+  'gh api -X POST "repos/$OWNER/$REPO/issues" -f title=x'
 
 # THE ARM IS A BACKSTOP, AND A BACKSTOP MASKS THE RULES IN FRONT OF IT. Every
 # row above reads a verdict, and once a `gh api` write whose endpoint cannot be
@@ -14529,6 +14608,7 @@ gh_pr_web silent
 gh_rule silent
 gql_bases silent
 is_dev_base silent
+line_was_cut silent
 names_graphql silent
 quoted_base_flag silent
 release_is_read silent

@@ -2565,6 +2565,21 @@ and held to the same standard of saying only what it asks.
   endpoint's quoting is incidental to it and a field value's is the thing being
   judged. The reader is GH-137.1's and is unchanged. The graphql half of the same
   decision, `updatePullRequest` plus a state, is GH-130.5's.
+  THE ONLY RULE IN THE LOOP THAT NEEDS TWO TOKENS OFF ONE COMMAND, and the
+  last member of Class 4. `endpoint_args` gives it the endpoint and the raw command
+  gives it the field, so a command substitution standing BETWEEN the two defeated
+  it while GH-130.6's arm stayed silent — the endpoint half being present and
+  readable. `gh api -X PATCH repos/o/r/pulls/5 -f m="$(cat c)" -f state=closed`
+  closes a pull request and was permitted; six spellings, including the backtick,
+  found by rev-agent-130's round-3 review of #196. It was order-dependent, the
+  field before the substitution still refusing, which is what said the defect was
+  tokenisation rather than policy. The field half now falls back to the line when
+  the line carries a cut, which is the shape the mutation names already have for
+  the same reason, narrowed to lines where a cut happened. Line-wide and not per
+  command because a backtick cut leaves nothing in the fragment to find it by. Its
+  cost is the bleed #130 removed, back on cut lines only, and no row of #130's ten
+  can reach it: every one of them writes to an ISSUE, and this rule needs `/pulls/`
+  on the writing command's own endpoint.
 
 ### GH-130.4
 - text: The `API_NO_BASE` arm reads the collection endpoint out of the writing
@@ -2767,7 +2782,12 @@ and held to the same standard of saying only what it asks.
   reach, named: an unknown valued flag leaves its value looking like an endpoint,
   so the arm does not fire — the failure direction is today's verdict rather than
   a refusal lost, which is the opposite of the positional parser #130's triage
-  rejected.
+  rejected. AND IT DOES NOT REACH A RULE THAT NEEDS TWO TOKENS: the arm asks about
+  the endpoint, so a cut between a rule's two halves leaves it silent. One rule
+  needs two, and GH-130.3 carries what that took. The refusing cost was asked of
+  the corpus rather than argued, and the three shapes raised against it are
+  constructed rather than observed; one is pinned as its accepted cost so that a
+  cost nobody wrote down cannot grow unnoticed.
 
 ## Provenance: the acceptance criteria of #37–#41
 
