@@ -819,24 +819,34 @@ gql_bases() {
 #
 # WHAT IT SAVES AND WHAT IT DOES NOT, measured rather than assumed, because the
 # first version of this comment claimed the guard paid for the whole of the move
-# and it does not. One line at the 16 KB cap made of nothing but unquoted
-# `gh api` calls, ~450 of them, minimum of five interleaved runs on a machine
-# carrying several other check suites: 11.2 s at 7bea85f, 14.0 s with this fix,
-# 16.3 s with this fix and the guard taken off. So the guard recovers about half
-# of what the reader costs where nothing is quoted, and the rest is the move
-# itself -- four questions asked once per command that used to be asked once per
-# line. On a line of quoted calls it is a no-op by construction, and the
-# readings there, 7.0 s against 10.0 s, are inside the noise of each other: a
-# control line with no gh api call on it at all, which nothing here can touch,
-# read 12.0 s and 11.9 s, so the floor is about five per cent.
+# and it does not. It recovers roughly half of what the reader costs where
+# nothing is quoted; the rest is the move itself, four questions asked once per
+# command that used to be asked once per line. On a line of quoted calls the
+# guard is a no-op by construction.
 #
-# TAKEN, NOT OPTIMISED FURTHER. Every reading above is already twice past the
-# 5 s harness timeout before this fix touches it, so no verdict moves that was
+# THE WHOLE COST OF THIS BRANCH AT THE CAP, re-measured against 2019e08 -- the
+# base this head merges -- after the arm and the state fallback were added, each
+# of which adds work per writing command. One line at the 16 KB cap, ~450 calls,
+# minimum of five interleaved runs on a loaded machine:
+#
+#   nothing but unquoted `gh api` calls          6.7 s -> 8.9 s
+#   the same with a quoted field value           4.7 s -> 6.8 s
+#   the same with a substitution in each call    9.5 s -> 11.9 s
+#   a control line with no gh api call at all    7.7 s ->  8.4 s
+#
+# The control is the noise floor and it moved nine per cent, which nothing here
+# can have caused, so the added cost is roughly fifteen to thirty-five per cent
+# and not the forty the raw ratios read as. This paragraph carried readings
+# against 7bea85f through five merges before they were taken again; both sides
+# of the review had named them as the one figure neither would defend.
+#
+# TAKEN, NOT OPTIMISED FURTHER. Every reading above is already past the 5 s
+# harness timeout before this branch touches it, so no verdict moves that was
 # not already wrong: that is GH-127, which #127 owns, and not this change's.
-# Prefiltering each of the four greps with a `case` was written and dropped --
-# it would have had to reproduce `grep -i` in a shell pattern to keep the state
+# Prefiltering each of the greps with a `case` was written and dropped -- it
+# would have had to reproduce `grep -i` in a shell pattern to keep the state
 # rule's endpoint test where it is, and a guard a reader has to verify twice is
-# a worse trade than a stated 25 per cent on a shape nobody writes.
+# a worse trade than a stated third on a shape nobody writes.
 #
 # THE OUTPUT IS BUILT IN RUNS AND NOT CHARACTER BY CHARACTER, which is issue #96
 # rather than style: `out = out ch` copies the whole of out to add one character,

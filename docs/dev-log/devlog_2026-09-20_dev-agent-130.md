@@ -534,3 +534,80 @@ a checker that cries wolf is a checker someone learns to skim.
   rev-agent-130.
 - The cap readings, now five merges old, and the `awk` the arm and the fallback
   each add per writing command. Unmeasured by either side.
+
+---
+
+## 2026-09-21 04:55 +03 — #196 review round 4: the loop closes, and the last number gets measured
+
+rev-agent-130's round 4 gates on nothing and closes the review. Every figure this
+branch reported reproduces on its runs at `0d33b4c`: ALL CHECKS PASSED with 5550
+`ok` rows and zero red, `revert` 36 (30 verdict + 6 `says`), `arm-off` 20 (17 +
+3), `fall-off` 7 (6 + 1). Class 4's last member is closed in all six spellings
+and the order control is unchanged.
+
+**The sweep that mattered was the one in the other direction**, and it is the
+reviewer's rather than this branch's idea: whether a line-wide second token
+re-opens the bleed #130 was filed for. `gh api -X PATCH repos/o/r/issues/27 -f
+m="$(cat c)" -f body="repos/o/r/pulls/5 has state=closed"` — a cut line naming a
+state and a pull request — is BLOCK at `2019e08` and ALLOW here, because the rule
+still asks `/pulls/` of the *writing command's own* endpoint. The fallback
+reaches the line for its second token and never for its first. Across 35
+re-measured shapes the only base-to-head refusal left is the arm's accepted cost,
+which is pinned.
+
+### The unexplained observation was explained, and by the reviewer
+
+The refusal this branch handed over unreproduced is #202, reproduced first try.
+The piece that defeats minimising is that it needs the **trailing `gh api`
+write** — which is the part anyone drops first when reducing a case. In a quoted
+heredoc bash substitutes nothing, so backticks in the body are literal;
+`cs_normalise` reads them as a substitution anyway when a command follows the
+delimiter, and the text between them becomes a command. So prose *quoting* a
+release write is a release write. The pair that proves it is the mechanism and
+not the word: the same backticks round an **issue** write are permitted.
+Pre-existing, `cs_normalise`'s, BLOCK on both sides.
+
+Handing it over unexplained rather than tidied was the right call, and it is the
+fifth time this session that what found a defect was a real command failing
+rather than a check.
+
+### The one number neither side would defend, now measured
+
+Both sides had flagged the cap readings as undefended: they were taken against
+`7bea85f` and carried through five merges, and the arm and the state fallback
+each add work per writing command. Re-measured against `2019e08`, the base this
+head merges, minimum of five interleaved runs on a loaded machine at the 16 KB
+cap:
+
+| line, ~450 calls | `2019e08` | `0d33b4c` |
+|---|---|---|
+| nothing but unquoted `gh api` calls | 6.7 s | 8.9 s |
+| the same with a quoted field value | 4.7 s | 6.8 s |
+| the same with a substitution in each call | 9.5 s | 11.9 s |
+| a control line with no `gh api` call at all | 7.7 s | 8.4 s |
+
+The control moved nine per cent and nothing in this branch can have caused it, so
+the added cost is roughly fifteen to thirty-five per cent rather than the forty
+the raw ratios read as. Every reading is past the 5 s harness timeout on both
+sides, which is GH-127 and #127's. The comment in the hook carries these numbers
+now instead of the stale ones.
+
+### What the review returned, across four rounds
+
+Five classes named. Three closed by fixes on this branch — the endpoint
+recogniser, the unreadable destination, and per-command text lost to the
+tokeniser. One has a pre-existing member that lives on #198. The fifth is this
+branch's own and the reviewer says it is the one it would keep: **a backstop
+masks the rules in front of it**, found by re-running the mutations after adding
+the arm and watching five single-clause mutations stop reddening any verdict row.
+
+Two of this branch's pushbacks corrected the reviewer, and three of the
+reviewer's findings corrected this branch — including the round-1 proxy, which
+turned nine refusals into permissions with the suite green, and the round-2
+finding that the fix for that class exhibited the class.
+
+### Not merged
+
+CLAUDE.md reserves it, the reviewer does not merge either, and the command is
+Bertan's. The branch is mergeable and clean at `0d33b4c`; residual work is filed
+as #198, #201 and #202, and #138 lands after this.
