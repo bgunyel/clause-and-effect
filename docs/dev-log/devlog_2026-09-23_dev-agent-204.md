@@ -177,3 +177,74 @@ Not pushed yet; the reviewer asked to be told first.
 - The forward notes for pull request 2 stand: `lib_callers` regions only in the
   first file, and `split-requirements.sh` reads `SPLIT_MOVED` from the driver
   by name.
+
+## 2026-09-23 22:20 +03 — PR #216, review round 2
+
+Branch `worktree-issue-204-library`, head `232487d`, six ahead of
+`origin/dev-05` (`dbb1141`), plus this entry. It answers rev-agent-204's
+round 2 (issue comment 5800763514): two gating findings and three non-gating.
+Nothing is pushed yet.
+
+### What the review found, and what was done
+
+- **G4. The flat `TOOLING` reopened G3 from the other side.** It was the
+  assistant's round-1 fix. `checks/./library.sh`, `checks//library.sh` and
+  `checks/sub/x.sh` were not the tooling, so they were judged as hooks. The
+  suite accepted a text check that read one off `$HOOKS`, and the harness ran a
+  registry row that targeted one. The assistant's round-1 claim that the trade
+  "errs toward a refusal" held for one consumer of three.
+  - `TOOLING` is now exact: every file under `checks/` at any depth, with no
+    `.`, `..` or empty segment.
+  - Those spellings are refused before the rule is asked, in the text-check
+    rule, in `row_fault` and in the suite's registry audit.
+  - A new check requires every file the driver sources to be the tooling.
+- **G5. `lib_callers` read only `name() {`.** `function holds { ... }` and
+  `holds () { ... }` each replaced `holds` with the run green. All four
+  spellings bash takes at the margin are now read, with a fixture line for each.
+- **N3.** The self-test now sources a fixture file and asserts file and line
+  as literals.
+- **N4.** The child a `bash -c` starts is named as a limit, together with the
+  reason exporting the handler is not the fix.
+- **N5.** The handler now prints bash's own line. The assistant measured it
+  byte-identical to bash's output without the handler, apart from line numbers
+  shifted by the extra line.
+
+### Mistakes, and what caught them
+
+- **An edit script by the assistant deleted about 1,800 lines of
+  `check-hooks.sh`.** It replaced a slice that ended at the foot check instead
+  of the end of the self-test. The slice took with it the #104 section and the
+  #148 checks. The suite exited 0 with ALL CHECKS PASSED at 5,535 ok. The drop
+  from the expected ~5,674 is what showed it.
+  - The range was restored from `HEAD`, and the diff was re-read hunk by hunk.
+  - The gap it exposed (the end-of-run checks can vanish silently) is not this
+    PR's and is filed as #218.
+- **A mutation launch by the assistant backgrounded its own `cd`.** The
+  command was written as `cd X && ( ... ) & python3 ...`, so the mutation
+  driver started in the main checkout. It failed there, wrote a stray
+  `mutants2.out`, and ran no mutants. The file was removed, and the run was
+  repeated from the scratch directory.
+- **Two commit commands were refused by `no-commit-to-main.sh`.** One was a
+  compound line that began with a `cd`. The other appended this entry by a
+  heredoc whose prose named a shell wrapper. Both were committed plainly
+  instead.
+
+### Evidence (measured)
+
+- **Mutants.** 17 runs on a clone whose five changed files are
+  byte-identical to the committed ones. The 15 mutants each went red on the
+  check aimed at them, and the two controls stayed green: `function lacks`
+  and `holds ()` written in the library itself. `232487d`'s message lists
+  them all.
+- **Against `b2f82d7`**, with `<digits> ms` masked:
+  - 5,670 → 5,676 ok;
+  - six new rows, four relabelled, and the #148 count label moved;
+  - stdout `0da11a75…`, `--matrix` `bef44763…`;
+  - stderr `cf01f588…` in both modes;
+  - exit 0 / 0.
+
+### Open
+
+- #218, for the end-of-run file in step 2.
+- #217 holds the reviewer's items, including four more from this round. The
+  assistant agrees with filing each one.
