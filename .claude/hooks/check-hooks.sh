@@ -178,7 +178,8 @@
 # several fixture guards named that for the one cause each guarded; nothing named
 # the class. Every helper that runs a hook now reads its exit status one way --
 # exit 0 is ALLOW, exit 2 is BLOCK, anything else FAILs the check whatever it
-# expected -- and `verdict`, below, is where that is answered and argued.
+# expected -- and `verdict`, in checks/library.sh, is where that is answered
+# and argued.
 #
 # THE SUITE IS MORE THAN THIS FILE. The helpers that more than one section calls
 # -- `check`, `says`, `tok`, `pass` and `fail` among them -- are in
@@ -238,14 +239,26 @@ HOOKS=$SUITE_DIR
 # an accepted mutation target, judged on text nobody executed.
 #
 # IT IS A RULE AND NOT A LIST (#204): a regular expression over a path relative
-# to .claude/hooks/, matching the two files above and everything under checks/,
+# to .claude/hooks/, matching the two files above and every file in checks/,
 # where the files this suite sources live. A list is what the next file is not
 # on, and a file under checks/ is added by every loop that writes checks, so the
-# rule is written for the directory and adding one never touches it. It is
-# spelled in bracket expressions rather than with backslashes because awk and
-# [[ =~ ]] read it too, and `awk -v` would eat a backslash. mutate-hooks.sh
+# rule is written for the directory and adding one never touches it.
+#
+# A FILE IN checks/, ONE LEVEL, NOT A PATH THAT STARTS THERE. It was `checks/.+`,
+# which took `checks/../no-git-push.sh` -- a hook -- as the tooling, so a text
+# check spelled `$SUITE_DIR/checks/../no-git-push.sh` was accepted and read this
+# repository's hook under an override instead of the copy. Found by review of
+# PR #216. The name may not open with a dot, which is what keeps `.` and `..`
+# out; the trade, taken knowingly, is that a dotfile or a subdirectory under
+# checks/ is not the tooling either. #204 lays the directory out flat, and a
+# file the rule does not take errs toward a refusal: the text-check rule reports
+# a read of it off $SUITE_DIR, and a registry row targeting one cannot come back
+# caught, because nothing runs it.
+#
+# It is spelled in bracket expressions rather than with backslashes because awk
+# and [[ =~ ]] read it too, and `awk -v` would eat a backslash. mutate-hooks.sh
 # spells it identically, and the #204 section holds the two to each other.
-TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/.+)$'
+TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/[^/.][^/]*)$'
 # An override that names a directory missing one of the files beside this suite
 # would turn most of this suite red for that reason, and a harness reading the
 # result would count every mutation as caught -- its permitting direction. So
@@ -306,6 +319,28 @@ declare -F record pass fail req section >/dev/null || {
   echo "$SUITE_SOURCED loaded without the functions every check prints through; nothing was judged" >&2
   exit 1
 }
+# AND A LIBRARY THAT LOADED WITHOUT ONE OF ITS OTHER FUNCTIONS is the same
+# hazard one helper at a time, which the five names above do not ask about: with
+# `lacks` deleted from the library the run printed 35 `command not found` lines
+# on stderr, 35 fewer results, and ALL CHECKS PASSED. Found by review of PR
+# #216. A list of the other names would be what the next helper is not on, so
+# the question is asked of every command instead: bash calls this function for
+# any command it cannot find, and it writes down which. That is all it can do.
+# Bash runs it in an environment of its own -- a fork, even when the missing
+# command was called from this shell -- so a FAILED it set would be lost and a
+# `fail` it called would go unrecorded, and inside a $( ) anything it printed on
+# stdout would become the captured value. So it appends to $NOT_FOUND, prints
+# bash's own message on stderr, and returns bash's own status, and the foot of
+# this suite fails on anything in that file. Measured, both halves: the handler
+# sets nothing a caller can see, and records from a $( ), a ( ), this shell and
+# a library function alike. $NOT_FOUND is set once the fixtures directory
+# exists; a command missing before then still prints, and is not counted.
+NOT_FOUND=
+command_not_found_handle() {
+  [ -n "$NOT_FOUND" ] && printf '%s at %s:%s\n' "$1" "${BASH_SOURCE[1]##*/}" "${BASH_LINENO[0]}" >> "$NOT_FOUND"
+  printf '%s: %s: command not found\n' "${BASH_SOURCE[1]##*/}" "$1" >&2
+  return 127
+}
 
 # Two throwaway repositories, one on main and one on a dev branch, so that a
 # hook reading `git branch --show-current` can be asked both questions from a
@@ -317,6 +352,8 @@ LEDGER="$FIXTURES/ledger"
 : > "$LEDGER"
 RAN="$FIXTURES/ran"
 : > "$RAN"
+NOT_FOUND="$FIXTURES/not-found"
+: > "$NOT_FOUND"
 # THE SUITE'S OWN TEXT, which several checks below read: a pinned sentence, a
 # derivation over every function, the header. It is more than this file, so no
 # check names this file to read it -- a read of check-hooks.sh alone would miss
@@ -7830,9 +7867,9 @@ section "=== the tokeniser's header names every hook that sources it ==="
 # source it at all -- true of the hooks it knew about, false of the repository.
 # A sentence that has gone stale twice is checked rather than maintained.
 #
-# It sits here, after the section above, because it uses that section's
-# `present`. Written where it belongs by subject, it ran before the helper
-# existed: twelve `present: command not found` lines, no FAILED set, and the
+# It sits here, after the section above, because it used that section's
+# `present`, which is in checks/library.sh now. Written where it belongs by
+# subject, it ran before the helper existed: twelve `present: command not found` lines, no FAILED set, and the
 # suite green. A check that cannot fail is the thing this file is most for.
 #
 # The paragraph is the first comment block, which is where the claim is made;
@@ -10123,7 +10160,8 @@ armed 'the cap is 16384 bytes, written as the literal the issue decided' \
       "$HOOKS/lib/command-scan.sh" 'CS_LINE_CAP=16384'
 
 section "=== the exit-status helpers themselves: #98 ==="
-# The rule, and what it replaced, is written above `verdict`. Nothing else in this
+# The rule, and what it replaced, is written above `verdict`, in
+# checks/library.sh. Nothing else in this
 # suite drives a helper with a hook that crashes, so these ask the helpers
 # directly, in the manner of the `unarmed` self-test above: the helper runs in a
 # subshell with its own FAILED, and what is asserted is the FAILED it leaves --
@@ -11779,7 +11817,19 @@ armed 'and $CHECK_HOOKS_DIR is what moves them' \
 # Continuation lines are joined, the call is cut into shell words, and the third
 # word is the one asked. The count is pinned beside it, so a derivation that
 # stopped matching is red rather than empty.
-TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
+#
+# A `..` IN THE PATH IS REFUSED BEFORE ANYTHING ELSE IS ASKED of it, because it
+# can leave the directory the variable in front of it names, and then which of
+# the two directories the file is in cannot be read off the spelling at all.
+# Review of PR #216 found the tooling rule taking `$SUITE_DIR/checks/../` as the
+# way to a hook; this closes the spelling for every variable, and not only
+# for the one rule that took it.
+#
+# The files are read one at a time rather than as $SUITE_TEXT, so that a fault
+# is reported at the file and line it is on: the concatenated text would put a
+# fault in the library at a line past the end of this file (review of PR #216).
+text_check_faults() {  # text_check_faults <file>... -- "<file>:<line>: <fault>" a line, then "COUNT <n>"
+  awk -v tooling="$TOOLING" -v dir="$SUITE_DIR/" '
   function toks(s,   i, n, c, q, start) {
     ntok = 0; i = 1; n = length(s)
     while (i <= n) {
@@ -11806,16 +11856,19 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
     if (sub(/^\$(SUITE_DIR|HOOKS)\//, "", p) || sub(/^.*\/\.claude\/hooks\//, "", p)) return p
     sub(/.*\//, "", p); return p
   }
+  FNR == 1 { buf = ""; open = 0; file = (substr(FILENAME, 1, length(dir)) == dir) ? substr(FILENAME, length(dir) + 1) : FILENAME }
   { line = $0; sub(/[ \t]+$/, "", line) }
-  line ~ /\\$/ { sub(/\\$/, "", line); if (!open) open = NR; buf = buf line; next }
-  { full = buf line; buf = ""; start = open ? open : NR; open = 0 }
+  line ~ /\\$/ { sub(/\\$/, "", line); if (!open) open = FNR; buf = buf line; next }
+  { full = buf line; buf = ""; start = file ":" (open ? open : FNR); open = 0 }
   full !~ /^[ \t]*(armed|unarmed|written)[ \t]/ { next }
   { seen++
     toks(full)
     if (ntok < 3) { print start ": fewer than three arguments"; next }
     a = tok[3]
     gsub(/"/, "", a)
-    if (a !~ /^\$/)
+    if (a ~ /(^|\/)\.\.(\/|$)/)
+      print start ": " tok[3] " has a .. in it, so which directory it reads cannot be told from its spelling"
+    else if (a !~ /^\$/)
       print start ": " tok[3] " is a bare name, read from the directory this suite runs in"
     else if (tooling_rel(a) ~ tooling) {
       if (a !~ /^\$SUITE_DIR\//)
@@ -11824,7 +11877,29 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
     else if (a ~ /\.sh$/ && a !~ /^\$HOOKS\//)
       print start ": " tok[3] " names a hook and is read from $HOOKS" }
   END { print "COUNT " seen + 0 }
-' "$SUITE_TEXT")
+' "$@"
+}
+# DRIVEN FIRST, against two files whose every answer is written here: a fault
+# on a joined continuation line in the first, and one in the second, each
+# reported at its own file and line, and a `..` refused whichever variable it
+# follows -- the spelling the tooling rule once took, and one through $HOOKS,
+# which no rule took and which leaves the copy all the same. The fixture lines
+# are printed rather than written in a heredoc, because this derivation reads
+# this file's heredoc bodies as code, and a line of them opening with `armed`
+# would be counted as a real check.
+req GH-204.3 GH-204.4
+TCF_ONE="$FIXTURES/text-check-one.sh"
+TCF_TWO="$FIXTURES/text-check-two.sh"
+printf '%s\n' 'x=1' "armed 'fine' \"\$HOOKS/no-git-push.sh\" 'y'" "written 'joined' \\" \
+  "  \"\$SUITE_DIR/checks/../no-git-push.sh\" 'y'" > "$TCF_ONE"
+printf '%s\n' "unarmed 'up' \"\$HOOKS/../hooks/no-git-push.sh\" 'y'" "armed 'bare' check-hooks.sh 'y'" > "$TCF_TWO"
+tok 'a text-check fault is reported at its own file and line, and a .. is refused after any variable' \
+"$TCF_ONE:3: \"\$SUITE_DIR/checks/../no-git-push.sh\" has a .. in it, so which directory it reads cannot be told from its spelling
+$TCF_TWO:1: \"\$HOOKS/../hooks/no-git-push.sh\" has a .. in it, so which directory it reads cannot be told from its spelling
+$TCF_TWO:2: check-hooks.sh is a bare name, read from the directory this suite runs in
+COUNT 4" "$(text_check_faults "$TCF_ONE" "$TCF_TWO")"
+req GH-107.1
+TEXT_CHECK_ARGS=$(text_check_faults "${SUITE_FILES[@]}")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
     '316' "${TEXT_CHECK_ARGS##*COUNT }"
@@ -11940,7 +12015,7 @@ armed 'a row naming an absolute path or climbing out with .. is refused before t
 armed 'and a row targeting the tooling beside the hooks, which runs from the repository' \
       "$MUT" 'if [[ $FILE =~ $TOOLING ]]; then'
 armed 'which the harness reads from the same list this suite does' \
-      "$MUT" "TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/.+)\$'"
+      "$MUT" "TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/[^/.][^/]*)\$'"
 # THE OUTCOME FIELD IS TIED TO THE ID. Every real mutation expects `caught`, and
 # the other two words belong to rows whose id says they are self-tests. Untied,
 # the field was also how a real survivor could be declared expected: the row
@@ -14424,6 +14499,8 @@ lib_callers() {  # lib_callers <file>... -- "<function> <callers> <file>" a line
       text = line
       if (body == "" && line ~ /^[A-Za-z_][A-Za-z0-9_]*\(\)[ \t]*(\{.*)?$/) {
         name = line; sub(/\(.*/, "", name)
+        if (name in defined) twice[name] = twice[name] " " FILENAME ":" FNR
+        else at[name] = FILENAME ":" FNR
         defined[name] = FILENAME
         rest = line; sub(/^[^{]*/, "", rest); sub(/[ \t]+$/, "", rest)
         text = rest
@@ -14457,6 +14534,7 @@ lib_callers() {  # lib_callers <file>... -- "<function> <callers> <file>" a line
         }
       } while (changed)
       for (f in defined) if (!(f in unset_)) print f, split(eff[f], rs, " "), defined[f]
+      for (f in twice) print "= " f " is defined more than once: " at[f] twice[f]
     }' "$@" 2>/dev/null | LC_ALL=C sort
 }
 # The functions on the wrong side of the file boundary, given the derivation and
@@ -14527,6 +14605,42 @@ printf "x='unclosed\n" > "$LIB_FIX/open-quote.sh"
 tok 'a file the scanner does not finish in plain code is reported' \
     "! $LIB_FIX/open-quote.sh ends inside a quote" \
     "$(lib_callers "$LIB_FIX/open-quote.sh" | grep '^!')"
+# A NAME DEFINED TWICE IS REPORTED, in one file or across the boundary. Bash
+# keeps the last definition it reads, so a helper written again further down --
+# the library's names are English words, and an issue file wanting its own
+# `holds` is the likely way -- silently replaces the library's for every check
+# after it. Found by review of PR #216: `holds() { pass static '%s' "$1"; }`
+# inserted into this file above the #204 section turned every later `holds`
+# into an unconditional pass, with the run green, because the derivation kept
+# the last definition it saw and never said there had been two.
+printf '%s\n' 'holds() { :; }' 'section "=== later ==="' 'holds() { pass static x; }' 'lacks() { :; }' \
+  > "$LIB_FIX/redefined-driver.sh"
+printf '%s\n' 'lacks() { :; }' > "$LIB_FIX/redefined-library.sh"
+tok 'a function defined twice is named with each place, in one file and across the boundary' \
+"= holds is defined more than once: $LIB_FIX/redefined-driver.sh:1 $LIB_FIX/redefined-driver.sh:3
+= lacks is defined more than once: $LIB_FIX/redefined-driver.sh:4 $LIB_FIX/redefined-library.sh:1" \
+    "$(lib_callers "$LIB_FIX/redefined-driver.sh" "$LIB_FIX/redefined-library.sh" | grep '^=')"
+# AND ACROSS THE OTHER FILE SOURCED INTO THIS SHELL. The suite sources the
+# tokeniser under check to call its functions, so a function of the suite that
+# shares a name with one of the tokeniser's is the same replacement across a
+# second boundary: defined below the source line, the suite's own would be what
+# every tokeniser check called. The tokeniser's names are what sourcing it
+# defines, read in a shell of its own, and a tokeniser that defined none says so
+# rather than colliding with nothing.
+tokeniser_collisions() {  # tokeniser_collisions <lib_callers output> <tokeniser> -- the names both define
+  local names
+  names=$(bash -c '. "$1" 2>/dev/null; declare -F' _ "$2" | awk '{ print $3 }' | LC_ALL=C sort -u)
+  [ -n "$names" ] || { echo "! $2 defined no function when sourced"; return; }
+  LC_ALL=C comm -12 <(printf '%s\n' "$1" | awk 'NF == 3 { print $1 }' | LC_ALL=C sort -u) \
+           <(printf '%s\n' "$names")
+}
+printf '%s\n' 'cs_split() { :; }' 'holds() { :; }' > "$LIB_FIX/tokeniser.sh"
+tok 'a function the tokeniser also defines is named' \
+    'holds' "$(tokeniser_collisions "$(lib_callers "$LIB_FIX/redefined-driver.sh")" "$LIB_FIX/tokeniser.sh")"
+: > "$LIB_FIX/no-functions.sh"
+tok 'and a tokeniser that defined nothing is reported, not taken for one with no collisions' \
+    "! $LIB_FIX/no-functions.sh defined no function when sourced" \
+    "$(tokeniser_collisions "$(lib_callers "$LIB_FIX/redefined-driver.sh")" "$LIB_FIX/no-functions.sh")"
 
 # THIS SUITE. The files are $SUITE_FILES, because the question is which file
 # each function is defined in, and $SUITE_TEXT has no boundaries.
@@ -14544,6 +14658,10 @@ tok 'the scanner finished every file of this suite in plain code' \
     '' "$(printf '%s\n' "$LIB_CALLERS" | grep '^!')"
 tok 'every function called from more than one section is in checks/library.sh, and no other is' \
     '' "$(lib_misplaced "$LIB_CALLERS" "$LIB_PATH")"
+tok 'no function of this suite is defined twice, in one file or across the files of the suite' \
+    '' "$(printf '%s\n' "$LIB_CALLERS" | grep '^=')"
+tok 'and none shares a name with a function of the tokeniser this suite sources' \
+    '' "$(tokeniser_collisions "$LIB_CALLERS" "$HOOKS/lib/command-scan.sh")"
 
 # THE LIBRARY RUNS NOTHING. It is sourced before the first section, so a check
 # written into it would run ahead of every fixture under whatever tag was set.
@@ -14607,10 +14725,17 @@ holds 'and a range that is there is read, whole' "$SR_SELF" 'return 1'
 # does not ask, named: a bare relative name, read from this suite's own working
 # directory, and awk's `$0`. The fixture spells the file through $D, so that its
 # own lines are not among what the second check finds.
+#
+# A PATH THAT WALKS THROUGH ANOTHER DIRECTORY TO GET THERE is the driver too:
+# `$SUITE_DIR/checks/../check-hooks.sh` names it, and the pattern asked only for
+# the name straight after the variable. Found sweeping for the class review of
+# PR #216 named in the tooling rule, a `..` taking a path out of the directory
+# it starts in. Any directory between the variable and the name is allowed for,
+# so a path that names no real file there is refused too, which a reader sees.
 direct_self_reads() {  # direct_self_reads <file>... -- "<file>:<line>" for each read of the driver by path
   awk '/^SUITE_FILES=\(/ { next }
        /^[ \t]*#/ { next }
-       /\$\{?(SUITE_DIR|HOOKS)\}?"?\/check-hooks\.sh/ &&
+       /\$\{?(SUITE_DIR|HOOKS)\}?"?(\/[^ \t";|&()]*)?\/check-hooks\.sh/ &&
          !/(^|[ \t;|&(])bash[ \t]+"\$\{?SUITE_DIR\}?\/check-hooks\.sh"/ { print FILENAME ":" FNR }' "$@"
 }
 DSR_FIX="$FIXTURES/direct-self-reads.sh"
@@ -14622,24 +14747,28 @@ out=\$(bash "\$SUITE_DIR/$D.sh" 2>&1)
 # sed -n 1p "\$SUITE_DIR/$D.sh"
 awk 1 "\${HOOKS}/$D.sh"
 sed -n 1p "\$SUITE_DIR"/$D.sh
+cat "\$SUITE_DIR/checks/../$D.sh"
 DSR
 tok 'a read of the driver by path is found, and the file list, a run and a comment are not' \
-    "$DSR_FIX:2 $DSR_FIX:5 $DSR_FIX:6" "$(direct_self_reads "$DSR_FIX" | tr '\n' ' ' | sed 's/ $//')"
+    "$DSR_FIX:2 $DSR_FIX:5 $DSR_FIX:6 $DSR_FIX:7" "$(direct_self_reads "$DSR_FIX" | tr '\n' ' ' | sed 's/ $//')"
 tok 'no code in this suite reads the driver by its path' \
     '' "$(direct_self_reads "${SUITE_FILES[@]}")"
 
 # THE TOOLING RULE covers the directory, so that a file added under checks/ is
 # covered without touching it. Asked of paths whose answer is written here,
-# among them the near misses a pattern written loosely would take.
+# among them the near misses a pattern written loosely would take: a `.` or `..`
+# segment, which `checks/.+` took (review of PR #216), and the dotfile and the
+# subdirectory the fix gives up, pinned so that the trade is a check.
 req GH-204.4
-tok 'TOOLING matches the suite, the harness and every path under checks/, and nothing else' \
-    'check-hooks.sh:yes mutate-hooks.sh:yes checks/library.sh:yes checks/GH-130.sh:yes no-git-push.sh:no lib/command-scan.sh:no checks:no checks/:no checks.sh:no xchecks/a.sh:no check-hooksXsh:no lib/check-hooks.sh:no' \
+tok 'TOOLING matches the suite, the harness and every file in checks/, and nothing else' \
+    'check-hooks.sh:yes mutate-hooks.sh:yes checks/library.sh:yes checks/GH-130.sh:yes no-git-push.sh:no lib/command-scan.sh:no checks:no checks/:no checks.sh:no xchecks/a.sh:no check-hooksXsh:no lib/check-hooks.sh:no checks/../no-git-push.sh:no checks/./library.sh:no checks/..:no checks//library.sh:no checks/sub/a.sh:no checks/.a.sh:no' \
     "$(for p in check-hooks.sh mutate-hooks.sh checks/library.sh checks/GH-130.sh no-git-push.sh \
-                lib/command-scan.sh checks checks/ checks.sh xchecks/a.sh check-hooksXsh lib/check-hooks.sh; do
+                lib/command-scan.sh checks checks/ checks.sh xchecks/a.sh check-hooksXsh lib/check-hooks.sh \
+                checks/../no-git-push.sh checks/./library.sh checks/.. checks//library.sh checks/sub/a.sh checks/.a.sh; do
          if [[ $p =~ $TOOLING ]]; then printf '%s:yes ' "$p"; else printf '%s:no ' "$p"; fi
        done | sed 's/ $//')"
 armed 'the suite spells the rule as the harness does' \
-      "$SUITE_TEXT" "TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/.+)\$'"
+      "$SUITE_TEXT" "TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/[^/.][^/]*)\$'"
 # The harness's own row check, run rather than read: its function and its rule
 # are taken out of its text and asked about a row, in a subshell of their own.
 # A function that is not there to take out answers so, rather than with the
@@ -14671,6 +14800,34 @@ checks_on() {  # checks_on <space-separated list> -- the names under checks/ tha
 tok 'no file under checks/ is on the list of hook files' '' "$(checks_on "$HOOK_FILES")"
 tok 'nor on the list of tokeniser consumers' '' "$(checks_on "$CS_SOURCERS")"
 
+# A COMMAND THAT IS NOT FOUND IS WRITTEN DOWN, wherever it was called. Driven
+# here against a file of its own, so that what it records does not turn this run
+# red, from each place a helper is called: a $( ), a ( ), this shell, and inside
+# a function, which is how a helper missing from the library is reached. The
+# names are spelled so that no function of this suite could ever be one.
+req GH-204.5
+NF_RUN=$NOT_FOUND
+NOT_FOUND="$FIXTURES/not-found-driven"
+: > "$NOT_FOUND"
+nf_caller() { nf_missing_in_a_function "$@"; }
+NF_CAPTURED=$(nf_missing_in_a_capture 2>/dev/null; echo "status $?")
+( nf_missing_in_a_subshell ) 2>/dev/null
+nf_missing_in_this_shell 2>/dev/null
+nf_caller 2>/dev/null
+NF_STDERR=$( { nf_missing_on_stderr; } 2>&1 >/dev/null)
+NOT_FOUND=$NF_RUN
+unset -f nf_caller
+tok 'a command that is not found is written down from a $( ), a ( ), this shell and a function' \
+    'nf_missing_in_a_capture
+nf_missing_in_a_subshell
+nf_missing_in_this_shell
+nf_missing_in_a_function
+nf_missing_on_stderr' "$(awk '{ print $1 }' "$FIXTURES/not-found-driven")"
+tok 'and prints nothing into the value a $( ) captures, which gets the status bash gives' \
+    'status 127' "$NF_CAPTURED"
+tok 'and says so on stderr, as bash would' \
+    'check-hooks.sh: nf_missing_on_stderr: command not found' "$NF_STDERR"
+
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads the requirements -- requirements.md, and the `GH-` entries
 # under requirements/ since #200 -- and the tags every check above carries, and
@@ -14679,7 +14836,7 @@ section "=== issue #104: every requirement is covered, and every check says whic
 # computed, and it is the only place.
 #
 # Every check above is recorded as it prints, with its tags and its direction --
-# see `record` near the head of this suite. What is read here is that record,
+# see `record` in checks/library.sh. What is read here is that record,
 # and nothing in it is derived by running a hook a second time.
 #
 # THE KNOWN GAPS ARE MARKED, NOT HIDDEN. An active requirement with no covering
@@ -14775,7 +14932,7 @@ GH-155.1:static GH-148:static
 GH-109.1:static GH-109.2:refuse-only GH-109.3:static GH-109.4:static
 GH-109.5:permit-only GH-164:gap
 GH-200.1:static GH-200.2:static GH-200.3:static GH-200.4:static GH-200.5:static
-GH-204.1:static GH-204.2:static GH-204.3:static GH-204.4:static
+GH-204.1:static GH-204.2:static GH-204.3:static GH-204.4:static GH-204.5:static
 '
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in
@@ -16471,6 +16628,20 @@ elif [ "$RESULTS_NOW" -gt "$(( MUT_AT_RESULTS * 5 / 4 ))" ]; then
 else
   pass static 'the suite has not outgrown the measurement the harness rate rests on: %s results then, %s now' \
     "$MUT_AT_RESULTS" "$RESULTS_NOW"
+fi
+
+# NO COMMAND THIS RUN CALLED WAS MISSING: what `command_not_found_handle`, at
+# the head of this suite, wrote down. Asked last because it is about every check
+# above, and asked with `pass` and `fail` because they are the functions the head
+# already requires; a missing `tok` would be one of the things this reports.
+# What it cannot see, named: a command missing in the --matrix program below,
+# which runs after it, and one missing before the fixtures directory existed.
+req GH-204.5
+if [ -s "$NOT_FOUND" ]; then
+  fail static 'a command this suite called was not found, so every check that called it asked nothing:\n%s' \
+    "$(sort "$NOT_FOUND" | uniq -c | sed 's/^ */       /')"
+else
+  pass static 'no command this suite called was missing, in this shell or in any subshell of it'
 fi
 
 # --matrix: every requirement, from the record as it stands now, the findings

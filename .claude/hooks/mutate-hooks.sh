@@ -472,13 +472,15 @@ SUITE="$SRC/check-hooks.sh"
 }
 
 # The files beside the hooks that are not hooks: this harness, the suite, and
-# everything under checks/, which the suite sources. A rule over a path relative
+# every file in checks/, which the suite sources. A rule over a path relative
 # to the hooks directory rather than a list of names, so that a file added under
-# checks/ is covered without touching it (#204). check-hooks.sh keeps the same
+# checks/ is covered without touching it (#204). One level, and no name opening
+# with a dot, so that `checks/../<hook>.sh` is not taken as the tooling; the
+# refusal of a `..` below then answers it. check-hooks.sh keeps the same
 # rule under the same name, where the two directories are split, and holds this
 # spelling to its own. Nothing it matches is ever executed out of the copy, so
 # nothing it matches can be a mutation target.
-TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/.+)$'
+TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/[^/.][^/]*)$'
 
 # THE MEASUREMENT. `--list` multiplies this rate by the run count it derives, so
 # the wall-clock it prints follows the registry instead of standing still while
@@ -781,7 +783,7 @@ if [ -n "$LIST" ]; then
   # AND THE SPLIT SET BESIDE IT, which is where every `GH-` entry is (#200): one
   # file per ID under requirements/, each holding one entry and no `##` heading,
   # so each opens as a section that holds requirements. Listed here rather than
-  # by check-hooks.sh's `requirements_split`, which this script cannot source;
+  # by `requirements_split` in checks/library.sh, which this script cannot source;
   # the order does not matter to a count, and every name in the directory is
   # read, as there, so a misnamed file is counted rather than skipped. Regular
   # files only, as there too: mawk aborts on a directory, and check-hooks.sh's
