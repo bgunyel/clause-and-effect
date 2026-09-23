@@ -256,11 +256,12 @@ HOOKS=$SUITE_DIR
 # `checks//library.sh` and `checks/sub/x.sh` were then not the tooling, so they
 # were judged as hooks, and a hook is accepted when it is read from $HOOKS and
 # runnable as a registry row. So the rule is exact, and the spellings it does
-# not take are not left to fall through. The two consumers that ACCEPT on it
-# -- the text-check rule, which takes a tooling file read off $SUITE_DIR, and the
-# #204 check that every file the driver sources is the tooling -- refuse an
-# empty, `.` or `..` segment before they ask this, so a looser rule there could
-# not accept one. The harness's `row_fault` and this
+# not take are not left to fall through. A consumer that ACCEPTS on it -- the
+# text-check rule, which takes a tooling file read off $SUITE_DIR, and the #204
+# check that every file the driver sources is the tooling are the ones today --
+# refuses an empty, `.` or `..` segment before it asks this, so a looser rule
+# there could not accept one; each such refusal is driven by a fixture of its
+# own. The harness's `row_fault` and this
 # suite's audit of the registry ask this first, and refuse on every branch,
 # this one included: their order decides which reason is printed, never
 # whether the row runs (review of PR #216, round 3, which found this comment
@@ -551,15 +552,14 @@ for n in $(compgen -v); do
 done'
 declare -A LOADED_FROM=()
 for f in "${SUITE_FILES[@]:1}" "$HOOKS/lib/command-scan.sh"; do
-  LOADED_N=${#LOADED_BODY[@]}
-  while IFS= read -r -d '' k && IFS= read -r -d '' v; do
-    LOADED_BODY[$k]=$v
-    LOADED_FROM[$k]=$f
-  done < <(env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$f")
-  [ "${#LOADED_BODY[@]}" -gt "$LOADED_N" ] || {
+  record_of "$f" "$FIXTURES/record" || {
     echo "sourcing $f alone defined nothing, so nothing of it can be compared at the foot; nothing was judged" >&2
     exit 1
   }
+  while IFS= read -r -d '' k && IFS= read -r -d '' v; do
+    LOADED_BODY[$k]=$v
+    LOADED_FROM[$k]=$f
+  done < "$FIXTURES/record"
 done
 # The names sourcing the library defined, which the #204 section holds the
 # scanner that reads its text to.
@@ -571,8 +571,7 @@ SUITE_LOADED=$(for k in "${!LOADED_FROM[@]}"; do
 # runs it to decide whether a function was redefined, and a function it called
 # could be the one redefined: round 4 of the review replaced `fail` with a
 # no-op, and the foot's own verdict went with it. So nothing here calls a
-# function, and the foot sets FAILED itself. The #204 section runs the same
-# text against a fixture.
+# function. The #204 section runs the same text against a fixture.
 LOADED_CHANGED_CODE='for LOADED_K in "${!LOADED_BODY[@]}"; do
   if [[ $LOADED_K == \$* ]]; then
     LOADED_NOW=$(declare -p "${LOADED_K#\$}" 2>/dev/null); LOADED_NOW=${LOADED_NOW#declare -* }
@@ -581,6 +580,23 @@ LOADED_CHANGED_CODE='for LOADED_K in "${!LOADED_BODY[@]}"; do
   fi
   [[ $LOADED_NOW == "${LOADED_BODY[$LOADED_K]}" ]] || printf "%s\n" "$LOADED_K"
 done'
+# AND THE VERDICT THOSE TWO QUESTIONS GIVE, the last statement before this
+# suite exits. The foot of the #104 section records a row for each, but a row is
+# printed and recorded through `pass` and `fail`, and a redefined helper can
+# undo whatever FAILED said before it: `fail() { FAILED=0; }` exited 0 with the
+# foot red (round 5 of the review). So the verdict is taken again after every
+# helper has run, from this text, which calls none; it can set FAILED and cannot
+# clear it. Code in a variable so that the #204 section can drive it with a
+# fixture for each way it has to fail.
+FOOT_VERDICT_CODE='LOADED_CHANGED=$(eval "$LOADED_CHANGED_CODE")
+if [[ -n $LOADED_CHANGED ]]; then
+  printf "%s\n" "a function or tokeniser variable this run started with was redefined or removed during it:" "$LOADED_CHANGED" >&2
+  FAILED=1
+fi
+if [[ -s $NOT_FOUND ]]; then
+  printf "%s\n" "a command this suite called was not found:" "$(< "$NOT_FOUND")" >&2
+  FAILED=1
+fi'
 
 # A property of two files at once, which is what `armed` cannot express: it
 # asks whether a file contains a constant, never whether two files agree. These
@@ -14816,6 +14832,8 @@ present 'the functions recorded at the start include the ones every check prints
         pass "${!LOADED_BODY[*]}"
 present 'and the tokeniser'"'"'s' cs_split "${!LOADED_BODY[*]}"
 present 'and the variables the tokeniser sets' '$CS_WRAPPER_RE' "${!LOADED_BODY[*]}"
+present 'and the not-found handler, which the head records where it defines it' \
+        'command_not_found_handle' "${!LOADED_BODY[*]}"
 LC_FIX="$FIXTURES/loaded-changed.sh"
 printf '%s\n' "holds() ( pass static '%s' \"\$1\" )" 'unset -f lacks' 'CS_LINE_CAP=1' 'fail() ( : )' > "$LC_FIX"
 tok 'a function this run started with, redefined in any spelling or removed, is named, and so is a tokeniser variable set again' \
@@ -14824,12 +14842,68 @@ fail
 holds
 lacks' "$( ( . "$LC_FIX"; eval "$LOADED_CHANGED_CODE" ) | LC_ALL=C sort)"
 tok 'and none has been, so far' '' "$(eval "$LOADED_CHANGED_CODE")"
+# A variable's attributes are not part of what is compared, so an exported copy
+# of a tokeniser variable -- the invoker's, or this shell's -- is not a change.
+tok 'a tokeniser variable exported, with its value unchanged, is not a change' \
+    '' "$( export CS_LINE_CAP; eval "$LOADED_CHANGED_CODE" )"
 # THE RECORD IS WHAT THE FILES DEFINE, NOT WHAT THIS SHELL HELD at some line:
 # a redefinition in the prelude, before the record was taken, became the
-# baseline (round 4). A child that sources the library alone is asked for
-# `holds`, and this shell's `holds` is held to it.
-tok 'the record of holds is what sourcing the library alone defines' \
-    "$(env -i PATH="$PATH" "$BASH" -c '. "$1"; declare -f holds' _ "$LIB_PATH")" "${LOADED_BODY[holds]}"
+# baseline (round 4). Asked of every function the library defines, by a child
+# that sources it alone and is written here rather than through `record_of`:
+# with the record read off this shell instead, a redefinition of any of them in
+# the prelude is a name below (round 5 found the row asking of `holds` alone).
+tok 'the record of every function of the library is what sourcing the library alone defines' '' \
+    "$(env -i PATH="$PATH" "$BASH" -c '. "$1"; shift; for n; do printf "%s\0%s\0" "$n" "$(declare -f "$n")"; done' \
+         _ "$LIB_PATH" $SUITE_LOADED \
+       | while IFS= read -r -d '' n && IFS= read -r -d '' d; do
+           [[ $d == "${LOADED_BODY[$n]}" ]] || printf '%s\n' "$n"
+         done)"
+present 'and it asked of the library'"'"'s functions, pass among them' pass "${SUITE_LOADED//$'\n'/ }"
+# `record_of` keeps the invoker's environment out: a function this shell exports
+# is not in the child before the file is sourced, so it is recorded as the
+# file defines it and not dropped as though the child had started with it. And
+# a file that defines nothing is refused, which the head stops the run on.
+tok 'record_of records a function the invoker exports, as the file defines it' \
+    "$(declare -f holds)" \
+    "$( export -f holds; record_of "$LIB_PATH" "$FIXTURES/record-exported"
+        while IFS= read -r -d '' n && IFS= read -r -d '' d; do
+          [[ $n == holds ]] && printf '%s' "$d"
+        done < "$FIXTURES/record-exported" )"
+: > "$FIXTURES/defines-nothing.sh"
+tok 'and refuses a file that defines nothing' \
+    'status 1' "$(record_of "$FIXTURES/defines-nothing.sh" "$FIXTURES/record-nothing"; echo "status $?")"
+# THE FINAL VERDICT, driven: FOOT_VERDICT_CODE in a subshell of its own for each
+# way it has to fail -- a recorded function redefined, a command not found, and
+# a helper that clears FAILED run before it, round 5's `fail() { FAILED=0; }` --
+# and once where it must not.
+FV_NONE="$FIXTURES/verdict-none"
+FV_SOME="$FIXTURES/verdict-some"
+: > "$FV_NONE"
+printf '%s\n' 'x.sh: line 1: nf_x: command not found' > "$FV_SOME"
+tok 'the final verdict fails on a redefinition, a missing command and a cleared FAILED, and on nothing else' \
+'clean 0
+redefined 1
+missing 1
+cleared 1' "$( ( FAILED=0; NOT_FOUND=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "clean $FAILED" )
+     ( FAILED=0; NOT_FOUND=$FV_NONE; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "redefined $FAILED" )
+     ( FAILED=0; NOT_FOUND=$FV_SOME; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "missing $FAILED" )
+     ( FAILED=1; NOT_FOUND=$FV_NONE; fail() { FAILED=0; }; fail; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "cleared $FAILED" ) )"
+tok 'and says why on stderr' \
+'a function or tokeniser variable this run started with was redefined or removed during it:
+holds
+a command this suite called was not found:
+x.sh: line 1: nf_x: command not found' \
+    "$( ( NOT_FOUND=$FV_SOME; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>&1 >/dev/null ) )"
+# AND IT IS WHAT THE DRIVER ENDS ON: the verdict is only final if nothing that
+# could clear FAILED runs after it, so its place is asserted, not only its text.
+# The driver's last four statements, comments and blank lines aside, as a
+# literal; the first line of the literal is split, so that this check's own text
+# is not what it finds.
+tok 'the driver ends by taking the final verdict, then printing it and exiting with it' \
+'eval "$FOOT_VERDICT''_CODE"
+echo
+if [[ $FAILED -eq 0 ]]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
+exit $FAILED' "$(grep -v '^[[:space:]]*#' "${SUITE_FILES[0]}" | grep -v '^[[:space:]]*$' | tail -4)"
 
 # THE LIBRARY RUNS NOTHING. It is sourced before the first section, so a check
 # written into it would run ahead of every fixture under whatever tag was set.
@@ -14978,12 +15052,20 @@ armed 'and names such a row as a fault' \
 # to $SUITE_SOURCED in a spelling the rule does not take would be sourced, and
 # judged as a hook everywhere else. It accepts on TOOLING, so it asks the
 # segments first, as the text-check rule does (round 4 of the review found it
-# asking none).
-tok 'every file the driver sources is the tooling' '' \
-    "$(for f in $SUITE_SOURCED; do
-         case "/$f/" in */./*|*/../*|*//*) printf '%s ' "$f"; continue ;; esac
-         [[ $f =~ $TOOLING ]] || printf '%s ' "$f"
-       done)"
+# asking none). Driven, since the segment question only decides anything once
+# TOOLING is looser than it is today (round 5 found it deletable with the run
+# green): a fixture list, asked under a rule loose enough to take every entry.
+sourced_not_tooling() {  # sourced_not_tooling <list> -- each entry that is not the tooling, a segment asked first
+  local f
+  for f in $1; do
+    case "/$f/" in */./*|*/../*|*//*) printf '%s ' "$f"; continue ;; esac
+    [[ $f =~ $TOOLING ]] || printf '%s ' "$f"
+  done
+}
+tok 'every file the driver sources is the tooling' '' "$(sourced_not_tooling "$SUITE_SOURCED")"
+tok 'and a path with a ., .. or empty segment is not, even under a rule loose enough to take it' \
+    'checks/./library.sh checks//x.sh checks/../x.sh ' \
+    "$(TOOLING='^checks/.+$'; sourced_not_tooling 'checks/./library.sh checks//x.sh checks/../x.sh checks/x.sh')"
 present 'and it sources at least one, so the check above asked something' \
         checks/library.sh "$SUITE_SOURCED"
 # The two audits that walk the hooks directory looking for hooks, and must not
@@ -15038,10 +15120,17 @@ tok 'and prints nothing into the value a $( ) captures, which gets the status ba
 # BASH_SOURCE, so no line needs normalising. The child is this shell's own
 # interpreter, $BASH, and not the first `bash` on PATH; and BASH_ENV is taken
 # from it, so no file it names can give the child a handler of its own (round
-# 4). The literal is asked too, so that the two agreeing on something wrong is
-# not a pass.
+# 4) -- and, since round 5, the whole environment, as below. The literal is
+# asked too, so that the two agreeing on something wrong is not a pass.
+NF_CHILD=(env -i PATH="$PATH" "$BASH")
 tok 'and prints on stderr exactly what this bash prints for the same file without it' \
-    "$(env -u BASH_ENV "$BASH" "$NF_FIX" 2>&1 >/dev/null)" "$(cat "$FIXTURES/not-found-stderr")"
+    "$("${NF_CHILD[@]}" "$NF_FIX" 2>&1 >/dev/null)" "$(cat "$FIXTURES/not-found-stderr")"
+# The child is started with an empty environment, as the record's is: BASH_ENV
+# can name a file that defines a handler, and an exported function is in the
+# environment too, and either would make this the handler compared with itself
+# (round 5). Asked: the handler exported from this shell does not reach it.
+tok 'and the bash it is compared with has no handler, even one this shell exports' \
+    '' "$( export -f 'command_not_found_handle'; "${NF_CHILD[@]}" -c 'type -t command_not_found_handle' )"
 tok 'which is the line written down' "$NF_WANT" "$(cat "$FIXTURES/not-found-stderr")"
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
@@ -16847,16 +16936,13 @@ else
 fi
 
 # EVERY FUNCTION THIS RUN STARTED WITH IS THE ONE IT ENDS WITH: see
-# LOADED_BODY at the head of this suite. Asked here, after every check, and
-# decided without calling a function: the one redefined could be `fail`, and a
-# no-op `fail` would take this verdict with it (round 4). So FAILED is set and
-# the names printed on stderr here, before `fail` is asked to record the row.
+# LOADED_BODY at the head of this suite. Asked here, after every check, as a
+# row; the verdict it gives is taken again by FOOT_VERDICT_CODE, the last thing
+# this suite runs, because `fail` could be the function redefined (round 4) and
+# a redefined helper can clear FAILED after this has set it (round 5).
 req GH-204.1
 LOADED_CHANGED=$(eval "$LOADED_CHANGED_CODE")
 if [[ -n $LOADED_CHANGED ]]; then
-  FAILED=1
-  printf '%s\n' 'a function or tokeniser variable this run started with was redefined or removed during it:' \
-    "$LOADED_CHANGED" >&2
   fail static 'a function or tokeniser variable this run started with was redefined or removed during it, so every check after that asked a different one:\n%s' \
     "$(printf '%s\n' "$LOADED_CHANGED" | sed 's/^/       /')"
 else
@@ -16865,18 +16951,15 @@ fi
 
 # NO COMMAND THIS RUN CALLED WAS MISSING: what `command_not_found_handle`, at
 # the head of this suite, wrote down. Asked last because it is about every check
-# above, and decided without calling a function, as the check above is and for
-# its reason: FAILED is set and the record printed on stderr here, and only then
-# is `fail` asked to record the row. A missing `tok` would be one of the things
-# this reports.
+# above, as a row; the verdict is taken again by FOOT_VERDICT_CODE, for the
+# reason the check above gives. A missing `tok` would be one of the things this
+# reports.
 # What it cannot see, named at the handler: a command missing before the
 # fixtures directory existed, one missing in the --matrix program below, which
 # runs after this, and one missing in a child run with `bash -c`, which is
 # another shell and not a subshell of this one.
 req GH-204.5
 if [[ -s $NOT_FOUND ]]; then
-  FAILED=1
-  printf '%s\n' 'a command this suite called was not found:' "$(< "$NOT_FOUND")" >&2
   fail static 'a command this suite called was not found, so every check that called it asked nothing:\n%s' \
     "$(sort "$NOT_FOUND" | uniq -c | sed 's/^ */       /')"
 else
@@ -16895,6 +16978,9 @@ if [ -n "$MATRIX" ]; then
     FAILED=1
   fi
 fi
+# The foot's two questions, asked again after every helper has run, and the
+# only statements between them and the exit are builtins. See FOOT_VERDICT_CODE.
+eval "$FOOT_VERDICT_CODE"
 echo
-if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
+if [[ $FAILED -eq 0 ]]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
 exit $FAILED

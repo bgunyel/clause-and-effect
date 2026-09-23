@@ -886,3 +886,12 @@ suite_range() {  # suite_range <variable> <sed address> <sed address> -- 1 on an
     "$2" "$3"
   return 1
 }
+# What sourcing <file> alone defines, with an empty environment, written to
+# <out> as NUL-separated name/definition pairs by the program in $LOADED_CHILD;
+# 1 if that is nothing. The head of check-hooks.sh records what it runs against
+# this way, and the #204 section drives it: an exported function kept out, a
+# file that defines nothing refused.
+record_of() {  # record_of <file> <out> -- 1 if sourcing <file> alone defined nothing
+  env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$1" > "$2"
+  [ -s "$2" ]
+}
