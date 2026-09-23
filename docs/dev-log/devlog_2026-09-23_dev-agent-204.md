@@ -104,3 +104,76 @@ mutation-checked on a scratch copy.
 - Single-caller helpers still defined in the driver's prelude, such as
   `dev_read_count` and `numeric`, go with their section's checks when step 2
   splits the file.
+
+## 2026-09-23 21:25 +03 — PR #216, review round 1
+
+Branch `worktree-issue-204-library`, head `782f47b`, four ahead of
+`origin/dev-05` (`dbb1141`), plus this entry. It answers rev-agent-204's
+round 1 (issue comment 5800015183): three gating findings, two non-gating.
+Not pushed yet; the reviewer asked to be told first.
+
+### What the review found, and what was done
+
+- **G1, a helper missing from the library ran green.** The load guard asked
+  for five names. The reviewer measured `lacks` deleted: 35 fewer results and
+  ALL CHECKS PASSED. The driver now defines `command_not_found_handle`.
+  Measured by the assistant before it was written: bash runs the handler in a
+  forked environment even for a command called from the main shell, so a
+  `FAILED=1` it sets is lost. It therefore appends to `$NOT_FOUND`, and a check
+  at the foot fails on anything there. New requirement GH-204.5.
+- **G2, a redefined helper replaced the library's silently.** `lib_callers` now
+  reports every name defined more than once, with each place.
+- **G3, `checks/.+` took `checks/../no-git-push.sh` as the tooling.** It is now
+  `checks/[^/.][^/]*` in both files. The trade: a dotfile or a subdirectory
+  under `checks/` is not the tooling either. It is recorded in the comment, in
+  GH-204.4 and in the pinned literal list.
+- **N1.** The text-check derivation became `text_check_faults`, which reads the
+  files one by one and reports `file:line`.
+- **N2.** The four stale pointers the reviewer listed were fixed. The
+  assistant's sweep found a fifth: "that section's `present`".
+
+### What the sweeps found beyond the findings
+
+- G2's class, a name defined on both sides of a sourcing boundary: the suite
+  also sources `lib/command-scan.sh` into its own shell. No name is shared
+  today. A check now asks it, and a tokeniser that defines nothing is reported
+  rather than read as colliding with nothing. The tokeniser's variables were
+  swept too. The suite assigns none of its twelve at the top level. Every hit
+  was inside a `sed` or `grep` string. That is not checked.
+- G3's class, a `..` taking a path out of its directory: the text-check rule
+  also accepted `$HOOKS/../hooks/x.sh`, and now refuses a `..` after any
+  variable. `direct_self_reads` missed `$SUITE_DIR/checks/../check-hooks.sh`,
+  and now finds it. `row_fault` already refused a `..` target.
+- G1's class, a guard narrower than its prose: the new handler's own blind
+  spots are named in GH-204.5. They are a command missing in the `--matrix`
+  program, which runs after the foot check, and one missing before the fixtures
+  directory exists.
+
+### Mistakes, and what caught them
+
+- The assistant's first `tokeniser_collisions` sorted with `LC_ALL=C` and ran
+  `comm` in the ambient locale. `comm` warned "not in sorted order" on stderr,
+  and the suite stayed green. The comparison could have missed a shared name.
+  Caught by diffing stderr against the review's recorded hash, before any
+  mutation run; `comm` now runs under `LC_ALL=C`.
+- The assistant's first stderr comparison was run on a `git archive` copy. That
+  copy is not a repository and has no `docs/`, so its stderr differed for that
+  reason alone. It was redone on a clone at `1cb7f22`.
+
+### Evidence (measured)
+
+- Thirteen mutants were run on a clone, each checked to apply exactly once. All
+  thirteen went red on the check aimed at them. They are listed in `782f47b`'s
+  message.
+- The clone's `check-hooks.sh` sha256 equals the committed one: `6e687416…`.
+- Against `1cb7f22`, with `<digits> ms` masked: 5,660 → 5,670 ok. The stdout
+  diff is the ten new rows, one relabelled row and the count labels. Stderr is
+  identical in both modes: `cf01f588…`, the review's hash. Both modes exit 0.
+
+### Open
+
+- #217 holds the reviewer's five narrow items. The assistant agrees with filing
+  each rather than gating on it.
+- The forward notes for pull request 2 stand: `lib_callers` regions only in the
+  first file, and `split-requirements.sh` reads `SPLIT_MOVED` from the driver
+  by name.
