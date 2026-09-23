@@ -352,8 +352,9 @@ declare -F record pass fail req section >/dev/null || {
 #
 # WHAT IT DOES NOT REACH, named. $NOT_FOUND is set once the fixtures directory
 # exists, so a command missing before then still prints and is not counted. A
-# command missing in the --matrix program, which runs after the foot, is not
-# asked. And a child the suite runs with `bash -c` -- GH-204.2's library-alone
+# command missing in the --matrix program is counted: it runs after the foot's
+# rows but before the final verdict, which reads the record last. And a child
+# the suite runs with `bash -c` -- GH-204.2's library-alone
 # legs among them -- is another shell, which does not inherit the handler.
 # Exporting it is not the answer: the hooks this suite runs are such children
 # too, and they would inherit it and change their own stderr (review of PR
@@ -382,6 +383,11 @@ LEDGER="$FIXTURES/ledger"
 RAN="$FIXTURES/ran"
 : > "$RAN"
 NOT_FOUND="$FIXTURES/not-found"
+# Where the verdict expects the record to be. The GH-204.5 self-test points
+# $NOT_FOUND elsewhere and puts it back, and a section that copied that and did
+# not put it back would leave the handler writing where nothing reads; the
+# verdict fails on the two differing (round 6 of the review of PR #216).
+NOT_FOUND_AT_HEAD=$NOT_FOUND
 : > "$NOT_FOUND"
 # THE SUITE'S OWN TEXT, which several checks below read: a pinned sentence, a
 # derivation over every function, the header. It is more than this file, so no
@@ -596,7 +602,26 @@ fi
 if [[ -s $NOT_FOUND ]]; then
   printf "%s\n" "a command this suite called was not found:" "$(< "$NOT_FOUND")" >&2
   FAILED=1
+fi
+if [[ $NOT_FOUND != "$NOT_FOUND_AT_HEAD" ]]; then
+  printf "%s\n" "the not-found record was moved during the run, so what was written to $NOT_FOUND_AT_HEAD was not read:" "$NOT_FOUND" >&2
+  FAILED=1
 fi'
+# AND A FAIL THE LEDGER HOLDS FAILS THE RUN, whatever FAILED says by then: a
+# second source for the verdict, independent of the first. The #204 section
+# drives the verdict above with a fixture that goes red if it clears a failure
+# it was given, but that row can only print a FAIL; a verdict mutated to clear
+# FAILED would clear the FAIL it had just caused, and a red run would exit 0 with
+# ALL CHECKS PASSED (round 6 of the review of PR #216). Every FAIL printed in
+# this shell is recorded, by `fail`, so the ledger is the record of what failed,
+# and this reads it with builtins alone.
+# A row is `tags TAB direction TAB result TAB label`, and neither the tags, the
+# direction nor the label can hold a tab, so a FAIL result is the one row with
+# TAB FAIL TAB in it; matched whole, because reading fields with IFS set to a tab
+# would collapse an empty tag field and read the wrong column.
+LEDGER_VERDICT_CODE='while IFS= read -r LEDGER_ROW; do
+  if [[ $LEDGER_ROW == *$'"'"'\t'"'"'FAIL$'"'"'\t'"'"'* ]]; then FAILED=1; fi
+done < "$LEDGER"'
 
 # A property of two files at once, which is what `armed` cannot express: it
 # asks whether a file contains a constant, never whether two files agree. These
@@ -14880,30 +14905,51 @@ FV_NONE="$FIXTURES/verdict-none"
 FV_SOME="$FIXTURES/verdict-some"
 : > "$FV_NONE"
 printf '%s\n' 'x.sh: line 1: nf_x: command not found' > "$FV_SOME"
-tok 'the final verdict fails on a redefinition, a missing command and a cleared FAILED, and on nothing else' \
+# `kept` is the one that asks whether it can clear what it was given: FAILED
+# already 1, and nothing redefined or missing. Without it a `FAILED=0` at the
+# top of the verdict let a red suite exit 0 with ALL CHECKS PASSED (round 6).
+# `moved` is the record pointed elsewhere and not put back.
+tok 'the final verdict fails on a redefinition, a missing command, a cleared FAILED and a moved record, keeps a failure it was given, and fails on nothing else' \
 'clean 0
 redefined 1
 missing 1
-cleared 1' "$( ( FAILED=0; NOT_FOUND=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "clean $FAILED" )
-     ( FAILED=0; NOT_FOUND=$FV_NONE; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "redefined $FAILED" )
-     ( FAILED=0; NOT_FOUND=$FV_SOME; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "missing $FAILED" )
-     ( FAILED=1; NOT_FOUND=$FV_NONE; fail() { FAILED=0; }; fail; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "cleared $FAILED" ) )"
+cleared 1
+kept 1
+moved 1' "$( ( FAILED=0; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "clean $FAILED" )
+     ( FAILED=0; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "redefined $FAILED" )
+     ( FAILED=0; NOT_FOUND=$FV_SOME; NOT_FOUND_AT_HEAD=$FV_SOME; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "missing $FAILED" )
+     ( FAILED=1; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; fail() { FAILED=0; }; fail; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "cleared $FAILED" )
+     ( FAILED=1; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "kept $FAILED" )
+     ( FAILED=0; NOT_FOUND=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "moved $FAILED" ) )"
 tok 'and says why on stderr' \
 'a function or tokeniser variable this run started with was redefined or removed during it:
 holds
 a command this suite called was not found:
 x.sh: line 1: nf_x: command not found' \
-    "$( ( NOT_FOUND=$FV_SOME; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>&1 >/dev/null ) )"
+    "$( ( NOT_FOUND=$FV_SOME; NOT_FOUND_AT_HEAD=$FV_SOME; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>&1 >/dev/null ) )"
+# THE LEDGER'S VERDICT, driven: a ledger holding a FAIL row fails the run
+# whatever FAILED says, and one holding only ok rows leaves FAILED as it was.
+LV_FAIL="$FIXTURES/ledger-with-fail"
+LV_OK="$FIXTURES/ledger-all-ok"
+printf '\tstatic\tok\tuntagged, fine\nGH-1\tstatic\tFA''IL\tnot fine\n' > "$LV_FAIL"
+printf 'GH-1\tstatic\tok\tfine\n' > "$LV_OK"
+tok 'a FAIL the ledger holds fails the run, whatever FAILED says, and ok rows do not' \
+'with a fail 1
+all ok 0
+all ok, already failed 1' "$( ( FAILED=0; LEDGER=$LV_FAIL; eval "$LEDGER_VERDICT_CODE"; echo "with a fail $FAILED" )
+     ( FAILED=0; LEDGER=$LV_OK; eval "$LEDGER_VERDICT_CODE"; echo "all ok $FAILED" )
+     ( FAILED=1; LEDGER=$LV_OK; eval "$LEDGER_VERDICT_CODE"; echo "all ok, already failed $FAILED" ) )"
 # AND IT IS WHAT THE DRIVER ENDS ON: the verdict is only final if nothing that
 # could clear FAILED runs after it, so its place is asserted, not only its text.
-# The driver's last four statements, comments and blank lines aside, as a
-# literal; the first line of the literal is split, so that this check's own text
-# is not what it finds.
+# The driver's last five statements, comments and blank lines aside, as a
+# literal; the first two lines of the literal are split, so that this check's
+# own text is not what it finds.
 tok 'the driver ends by taking the final verdict, then printing it and exiting with it' \
 'eval "$FOOT_VERDICT''_CODE"
+eval "$LEDGER_VERDICT''_CODE"
 echo
 if [[ $FAILED -eq 0 ]]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
-exit $FAILED' "$(grep -v '^[[:space:]]*#' "${SUITE_FILES[0]}" | grep -v '^[[:space:]]*$' | tail -4)"
+exit $FAILED' "$(grep -v '^[[:space:]]*#' "${SUITE_FILES[0]}" | grep -v '^[[:space:]]*$' | tail -5)"
 
 # THE LIBRARY RUNS NOTHING. It is sourced before the first section, so a check
 # written into it would run ahead of every fixture under whatever tag was set.
@@ -15066,6 +15112,10 @@ tok 'every file the driver sources is the tooling' '' "$(sourced_not_tooling "$S
 tok 'and a path with a ., .. or empty segment is not, even under a rule loose enough to take it' \
     'checks/./library.sh checks//x.sh checks/../x.sh ' \
     "$(TOOLING='^checks/.+$'; sourced_not_tooling 'checks/./library.sh checks//x.sh checks/../x.sh checks/x.sh')"
+# And the other arm, which the real list never reaches because every entry of it
+# is the tooling: a hook's name, under the real rule (round 6).
+tok 'and a path that is not the tooling is reported, under the real rule' \
+    'no-git-push.sh ' "$(sourced_not_tooling 'checks/library.sh no-git-push.sh')"
 present 'and it sources at least one, so the check above asked something' \
         checks/library.sh "$SUITE_SOURCED"
 # The two audits that walk the hooks directory looking for hooks, and must not
@@ -16954,9 +17004,10 @@ fi
 # above, as a row; the verdict is taken again by FOOT_VERDICT_CODE, for the
 # reason the check above gives. A missing `tok` would be one of the things this
 # reports.
-# What it cannot see, named at the handler: a command missing before the
-# fixtures directory existed, one missing in the --matrix program below, which
-# runs after this, and one missing in a child run with `bash -c`, which is
+# What this row cannot see and the final verdict can: a command missing in the
+# --matrix program below, which runs after this row and before the verdict.
+# What neither can, named at the handler: a command missing before the fixtures
+# directory existed, and one missing in a child run with `bash -c`, which is
 # another shell and not a subshell of this one.
 req GH-204.5
 if [[ -s $NOT_FOUND ]]; then
@@ -16978,9 +17029,13 @@ if [ -n "$MATRIX" ]; then
     FAILED=1
   fi
 fi
-# The foot's two questions, asked again after every helper has run, and the
-# only statements between them and the exit are builtins. See FOOT_VERDICT_CODE.
+# The foot's two questions, asked again after every helper has run, and then the
+# ledger, for a FAIL the first verdict did not keep. Between
+# them and the exit stand only `echo`, `[[ ]]` and `exit`, which are builtins and
+# a keyword -- unless a function shadows a builtin of that name, the limit
+# GH-204.1 names (round 6 of the review). See FOOT_VERDICT_CODE.
 eval "$FOOT_VERDICT_CODE"
+eval "$LEDGER_VERDICT_CODE"
 echo
 if [[ $FAILED -eq 0 ]]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
 exit $FAILED
