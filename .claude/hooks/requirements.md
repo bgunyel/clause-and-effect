@@ -25,8 +25,9 @@ check means the same thing for as long as this repository exists.
 of its own under `requirements/`, and tags the check that fails without the fix
 (Q16). A pull request carries no ID of its own; its issue does. This is what
 keeps the matrix whole after #103's work ends, and the suite holds half of it:
-every `#<n>` cited in `check-hooks.sh` must have an entry here, or be listed
-under *Citations that are not requirements* with a reason.
+every `#<n>` cited in `check-hooks.sh` must have an entry, here or under
+`requirements/`, or be listed under *Citations that are not requirements* with a
+reason.
 
 **A behavioural `GH-` entry says what #106's invariance families do with it**,
 in a `variants` field, and the families' scope is that rule rather than a list
@@ -1265,3 +1266,7 @@ it has no entry above (Q16).
   numbers live in two places, two readers of `requirements.md` that were not
   section-aware, a run count that included rows a pass refuses, and a suppressed
   stderr. It is not counted here, for the reason #142's entry gives
+- #210: the pull request for #200; rev-agent-200's review of it is cited where
+  what it found stands -- `split-requirements.sh` refusing what the reader would
+  refuse in a file it writes, and the fixtures that tell the split set's `*`
+  from a narrower glob, in the suite and in the harness

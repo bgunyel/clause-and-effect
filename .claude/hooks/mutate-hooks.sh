@@ -393,8 +393,9 @@
 #
 # Its summary lines carry all of them -- the rows, how many are real mutations,
 # how many files in .claude/hooks/ those touch, how many requirement IDs they
-# name, how many self-tests, how many requirements requirements.md still holds
-# active, and how many runs of check-hooks.sh a whole-registry pass costs.
+# name, how many self-tests, how many requirements requirements.md and
+# requirements/ still hold active, and how many runs of check-hooks.sh a
+# whole-registry pass costs.
 #
 # #148 IS WHY NONE OF THEM IS WRITTEN HERE, and the distinction it draws is the
 # part worth carrying forward, because it is not "counts are bad". A literal in
@@ -441,13 +442,14 @@
 #     seed, a departure row naming a seed that is not there -- are all of that
 #     kind, and #104's coverage machinery is too.
 #
-#     The seventh file is the exception that shows where the line actually
+#     The requirements are the exception that shows where the line actually
 #     falls, and it is worth reading before the next row is written. GH-141's
 #     rule is CODE in check-hooks.sh and so cannot be mutated -- but what that
-#     code READS is requirements.md, which an override does move. So the rule is
-#     reachable through its input: the two `variants-*` rows edit an entry in
-#     the copy and the suite, running from here, reads the copy and goes red.
-#     The test is not "whose file is it" but "does the run read the copy".
+#     code READS is the requirements -- requirements.md and, since #200, the
+#     `GH-` entries under requirements/ -- which an override does move. So the
+#     rule is reachable through its input: the two `variants-*` rows each edit
+#     an entry's file in the copy, and the suite, running from here, reads the
+#     copy and goes red. The test is not "whose file is it" but "does the run read the copy".
 #     Nothing about #106's own self-guards is reachable that way, because what
 #     they read is the seed table, which lives in the suite.
 #   - a claim about a file outside .claude/hooks/. Only the hooks directory is
@@ -756,7 +758,8 @@ if [ -n "$LIST" ]; then
   # in the hooks rather than in the row, which is why check-hooks.sh's registry
   # audit refuses one. Counted by ID rather than by line, so that an entry
   # carrying the field twice counts once, and read from beside this script
-  # because that is the requirements.md this registry's rows are judged against.
+  # because that is the requirements.md, and the requirements/ beside it, that
+  # this registry's rows are judged against.
   # The status line is matched the way that audit matches it, whitespace either
   # side of the word tolerated -- two readings of one field that disagree about
   # a trailing space are a defect waiting to happen.

@@ -561,8 +561,8 @@ flip() {  # flip <dir> <script> <was> <want> <label> <cmd>
 # rewrites them as ordinary checks. That is the intended outcome and not a
 # regression, in the manner of the accepted-gap sections above.
 #
-# It covers nothing. A gap's tags are the requirement its issue owns, which
-# requirements.md marks `gap → #<n>`, so the #104 coverage check does not ask
+# It covers nothing. A gap's tags are the requirement its issue owns, which its
+# entry marks `gap → #<n>`, so the #104 coverage check does not ask
 # about it; and the direction it records is the one it actually reads, which is
 # today's verdict, because a matrix saying a permitted command is refused
 # somewhere would be this file lying in the permitting direction.
@@ -11720,8 +11720,8 @@ inv_show() {  # inv_show <variant>
 # at the correct verdict, which `gap` prints, and asserts the wrong one until
 # the issue named closes, at which point it goes red and is rewritten as an
 # ordinary check. Its tags are the gap's own requirement ID and never the
-# seed's, so a gap covers nothing: requirements.md marks those entries
-# `gap → #<n>` and the coverage check does not ask about them.
+# seed's, so a gap covers nothing: each such entry is marked `gap → #<n>`, and
+# the coverage check does not ask about them.
 #
 # A SEVENTH FIELD carries the right verdict where it is not the seed's, and this
 # is the case the first version of this table could not say at all. A gap was
@@ -11972,8 +11972,8 @@ tok 'the seeds cover every functional requirement (FR-) with a command spelling,
 # the ones written FROM defects rather than from the specification, and not
 # one of them asked for.
 #
-# So the scope is derived off requirements.md instead. Each entry in it declares
-# what the families do with it, and these three checks hold that declaration to
+# So the scope is derived off the entries instead, which are files under
+# requirements/ since #200. Each one declares what the families do with it, and these three checks hold that declaration to
 # the tables above: a seed to a tagged row, a named transformation to
 # INV_TRANSFORMS, and a `none` to a reason. The rule and the argument for it are
 # in requirements.md under *What the invariance families seed*; what is here is
@@ -12060,7 +12060,13 @@ requirements_split() {  # requirements_split <requirements.md> -- the split set 
   # The path is printed here, by the shell, and never handed to `awk -v`, which
   # reads a backslash in it as an escape; requirements_read takes the list
   # through the environment for the same reason.
-  ( cd -- "$dir" && for f in *; do
+  #
+  # Globbing on in the subshell, whatever the caller left it: this file turns it
+  # off around its splits, and under `set -f` the `*` below is the one name `*`,
+  # which is no file, so the split set would be read as empty. No caller does so
+  # today (rev-agent-200 logged every call over a whole run: none under `-f`),
+  # and that is a reason this has not bitten rather than a guard.
+  ( set +f; cd -- "$dir" && for f in *; do
       [ -e "$f" ] && printf '%s\t%s\n' "${f%.md}" "$dir/$f"
     done ) | LC_ALL=C sort -t "$(printf '\t')" -k1,1V | cut -f2-
 }
@@ -12331,7 +12337,8 @@ section "=== issue #107: the mutation harness, and the hooks directory it judges
 # that can go wrong independently of each other.
 #
 # GH-107.1 is the alternative hooks directory. $CHECK_HOOKS_DIR moves what this
-# suite JUDGES -- the hook files, the library, their text, requirements.md --
+# suite JUDGES -- the hook files, the library, their text, requirements.md and
+# requirements/ --
 # and moves nothing it judges them AGAINST, which stays this repository's:
 # settings.json, CLAUDE.md, CONTEXT.md, the two skills, the working directory a
 # hook is run in, and this file. The head of this suite argues that split; what
@@ -12736,6 +12743,20 @@ tok 'the registry holds as many mutations as this suite expects' \
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
+# The status of the entry headed `h`, or `<no entry>`, read over requirements.md
+# and the split set. An entry ends at the next heading, or where its file ends
+# (#200): without the first line, an entry with no status would be given the
+# status of whatever the next file opens with, if that is not a heading. Both
+# halves of that are FR-45 findings of their own, so the line changes what this
+# audit says only where the suite is red already -- and there it is the
+# difference between the audit naming the row's real fault and naming another.
+# A named program so that the #200 section can drive that line with a fixture.
+MUT_STATUS_AWK='
+  FNR == 1 && f { exit }
+  $0 == h { f = 1; found = 1; next }
+  f && /^(### |## )/ { exit }
+  f && /^- status:/ { sub(/^- status:[ \t]*/, ""); print; exit }
+  END { if (!found) print "<no entry>" }'
 # AND THE OUTCOMES OF THE ROWS A PASS WOULD ACTUALLY RUN, which is a different
 # list from the one above and is what the #148 run-count check needs. The five
 # reasons the harness's pass one refuses a row are asked here, in this file's own
@@ -12803,12 +12824,7 @@ while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
   # the split set, and the one that was not would have called a real entry
   # missing.
   for MR in $MREQS; do
-    MR_STATUS=$(awk -v h="### $MR" '
-      FNR == 1 && f { exit }
-      $0 == h { f = 1; found = 1; next }
-      f && /^(### |## )/ { exit }
-      f && /^- status:/ { sub(/^- status:[ \t]*/, ""); print; exit }
-      END { if (!found) print "<no entry>" }' "$HOOKS/requirements.md" ${MUT_REQ_SPLIT[@]+"${MUT_REQ_SPLIT[@]}"})
+    MR_STATUS=$(awk -v h="### $MR" "$MUT_STATUS_AWK" "$HOOKS/requirements.md" ${MUT_REQ_SPLIT[@]+"${MUT_REQ_SPLIT[@]}"})
     if [ "$MR_STATUS" = "<no entry>" ]; then
       MUT_BAD="$MUT_BAD  $MID: names $MR, which neither requirements.md nor requirements/ has an entry for
 "
@@ -12861,17 +12877,18 @@ tok 'and every other registered mutation is expected to be caught' \
 #
 # WHY NEITHER FIGURE BELOW IS A LITERAL HERE, which is #148's own rule turned on
 # this file: an active-requirement count written here would move with every
-# entry added to requirements.md, and a suite that has to be edited whenever a
-# requirement is filed is this issue recreated one directory over. So each is
-# compared against a value derived here instead -- one from requirements.md, one
+# entry added to requirements.md or requirements/, and a suite that has to be
+# edited whenever a requirement is filed is this issue recreated one directory
+# over. So each is compared against a value derived here instead -- one from
+# requirements.md and requirements/, one
 # from the registry rows read above -- and this section holds no number of its
 # own. The pins above can do it because what they count is the registry, which
 # is the thing a reviewer of a registry change is looking at.
 #
 # READ OFF $SUITE_DIR, like $MUT and for the same reason. The harness that runs
-# is the one a person started, and the requirements.md it counted is the one
-# beside it; comparing its arithmetic against a reading of a DIFFERENT file would
-# go red for the override rather than for the harness.
+# is the one a person started, and the requirements.md and requirements/ it
+# counted are the ones beside it; comparing its arithmetic against a reading of
+# DIFFERENT files would go red for the override rather than for the harness.
 req GH-148
 # STDERR IS KEPT, not discarded. The harness says WHY it refused on stderr --
 # that it could not resolve its own directory, that the suite is not beside it,
@@ -15050,7 +15067,8 @@ for hook in $(printf '%s\n' "$REGISTRATION" | grep -o '[A-Za-z0-9_.-]*\.sh' | so
 done
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
-# The suite reads requirements.md and the tags every check above carries, and
+# The suite reads the requirements -- requirements.md, and the `GH-` entries
+# under requirements/ since #200 -- and the tags every check above carries, and
 # fails when the two do not meet. requirements.md says what a requirement is,
 # what its fields mean and what covers one; this section is where that is
 # computed, and it is the only place.
@@ -15090,11 +15108,12 @@ section "=== issue #104: every requirement is covered, and every check says whic
 # the issues and not off requirements.md, which is what makes a criterion deleted
 # from the provenance section fail rather than shorten the count it is held to.
 PROVENANCE_COUNTS='37:8 38:6 39:6 40:13 41:8'
-# THE SHAPE OF requirements.md, as a literal: every entry by ID, and beside each
+# THE SHAPE OF THE REQUIREMENTS, requirements.md and requirements/ (#200), as a
+# literal: every entry by ID, and beside each
 # one whatever takes it off the both-directions rule -- a status other than
 # active, a declared direction, and `seam: none` with the kind of its `verify`.
 # Those three are everything the coverage check reads off an entry, so an edit
-# to requirements.md that changes what the check asks of any requirement changes
+# to an entry that changes what the check asks of any requirement changes
 # this literal: a marker added, taken off or moved to another entry, a direction
 # declared, a move to no seam, a deletion. Each of those turned an uncovered
 # requirement green with no finding at all.
@@ -15888,6 +15907,70 @@ OUT=$(req_fixture "$REQ_FIX/split-appended")
 holds 'a GH- entry appended to requirements.md the old way fails, and says where it goes' "$OUT" \
   "FAIL${TAB}FR-45${TAB}GH-5.1: a GH- entry in requirements.md, where each is a file of its own under requirements/"
 lacks 'and the entries are not called well formed' "$OUT" 'every requirement entry is well formed'
+# EVERY NAME IN THE DIRECTORY IS READ, and these two are what tell the `*` in
+# requirements_split from a narrower glob. Every misnamed fixture above is misnamed
+# INSIDE `GH-*.md`, so with the glob narrowed to that the suite stayed green --
+# and a misnamed file holding a retired entry was never read, a false green in
+# the permitting direction (rev-agent-200, round 1 of PR #210). One name for each
+# way out of the pattern: a prefix that is not `GH-`, and an extension that is
+# not `.md`. The entry is retired, because an active one is counted as well by
+# the harness, which lists the directory for itself and so caught the narrowed
+# glob by accident, under a finding that was not this one.
+req FR-45 GH-200.1 GH-200.2
+for SPLIT_NAME in gh-5.3.md GH-5.3.txt; do
+  cp -r "$REQ_FIX/clean" "$REQ_FIX/split-name-$SPLIT_NAME"
+  printf '### GH-5.3\n- text: an entry under a name outside the pattern\n- from: the fixture\n- kind: doc-claim\n- status: retired: a reason\n' \
+    > "$REQ_FIX/split-name-$SPLIT_NAME/requirements/$SPLIT_NAME"
+  req_split_changed "split-name-$SPLIT_NAME"
+  OUT=$(req_fixture "$REQ_FIX/split-name-$SPLIT_NAME")
+  holds "a file named $SPLIT_NAME, outside GH-*.md, is read and found misnamed" "$OUT" \
+    "FAIL${TAB}FR-45${TAB}requirements/$SPLIT_NAME: holds GH-5.3, and a file is named by the ID it holds"
+done
+# And whatever globbing its caller left off. This file turns it off around its
+# splits, and under `set -f` the directory's `*` is the one name `*`, which is no
+# file -- so the split set would be read as empty, and every entry in it lost.
+req GH-200.2
+set -f
+SPLIT_NOGLOB=$(requirements_split "$REQ_FIX/clean/requirements.md" | sed 's|.*/||')
+set +f
+tok 'the split set is listed with globbing off in the caller' 'GH-5.1.md' "$SPLIT_NOGLOB"
+# WHERE A FILE ENDS, ITS ENTRY ENDS, in the two programs that read the union a
+# line at a time rather than through `take`: the families' scope and the
+# registry audit's status. Asked with a file that opens with something other
+# than its heading, which is a FR-45 finding of its own -- so this is about what
+# the rest of the suite says once it is red, and without it each program gives
+# the entry before the fields of the file after. Each is asked a second
+# question whose answer is not empty, so that a program that printed nothing
+# for a reason of its own cannot pass for the one that ended the entry.
+req GH-200.2
+mkdir -p "$REQ_FIX/split-ends"
+printf '### GH-5\n- kind: defect-permitting\n- status: active\n- variants: seed\n' > "$REQ_FIX/split-ends/GH-5.md"
+printf '### GH-6\n- text: an entry with no status\n' > "$REQ_FIX/split-ends/GH-6.md"
+printf -- '- variants: none: a line before its heading\n- status: active\n### GH-7\n- kind: doc-claim\n- status: retired: a reason\n' \
+  > "$REQ_FIX/split-ends/GH-7.md"
+tok "the families' scope ends an entry where its file ends" 'GH-5|in|seed|' \
+  "$(awk "$REQ_FIELD_AWK$INV_VARIANTS_AWK" "$REQ_FIX/split-ends/GH-5.md" "$REQ_FIX/split-ends/GH-7.md")"
+tok "and so does the registry audit's status" '[] [retired: a reason]' \
+  "[$(awk -v h='### GH-6' "$MUT_STATUS_AWK" "$REQ_FIX/split-ends/GH-6.md" "$REQ_FIX/split-ends/GH-7.md")] [$(awk -v h='### GH-7' "$MUT_STATUS_AWK" "$REQ_FIX/split-ends/GH-6.md" "$REQ_FIX/split-ends/GH-7.md")]"
+# THE HARNESS LISTS THE DIRECTORY FOR ITSELF, because it cannot source this
+# file, and says it reads every name there as this file does. Asked of a copy of
+# it in a fixture directory, where `--list` counts what is beside it: one active
+# entry in requirements.md, and one under each of three names in requirements/,
+# two of them outside `GH-*.md`. The harness only needs a check-hooks.sh beside
+# it to be readable, and runs none of it for `--list`.
+req GH-148 GH-200.2
+HARNESS_FIX="$FIXTURES/harness-split"
+mkdir -p "$HARNESS_FIX/requirements"
+cp "$SUITE_DIR/mutate-hooks.sh" "$HARNESS_FIX/mutate-hooks.sh"
+: > "$HARNESS_FIX/check-hooks.sh"
+printf '# A fixture\n\n## Functional requirements\n\n### FR-1\n- status: active\n\n## Boundary issues\n' \
+  > "$HARNESS_FIX/requirements.md"
+printf '### GH-5\n- status: active\n' > "$HARNESS_FIX/requirements/GH-5.md"
+printf '### GH-6\n- status: active\n' > "$HARNESS_FIX/requirements/gh-6.md"
+printf '### GH-7\n- status: active\n' > "$HARNESS_FIX/requirements/GH-7.txt"
+tok 'the harness counts an active entry beside it under any name' \
+  '4 requirements in requirements.md and requirements/ are active, which is what a row may name' \
+  "$(bash "$HARNESS_FIX/mutate-hooks.sh" --list 2>&1 | grep 'are active')"
 
 # THE ORDER IS VERSION ORDER ON THE ID, asked of names whose byte order and
 # whose creation order are both different from it: byte order puts GH-10 first
@@ -16004,7 +16087,8 @@ tok 'and each is in the split set with the checksum and length it had there (an 
 # it is asked what they need: that it moves every entry byte for byte and
 # leaves the rest of the file as it was, that a second run moves nothing, and
 # that it refuses -- writing nothing at all -- a file already there holding
-# something else, an ID outside the grammar and an ID written twice. Its output is read with a `|`
+# something else, an ID outside the grammar, an ID written twice, and whatever
+# the reader would refuse in a file it wrote. Its output is read with a `|`
 # after it, because `$( )` drops trailing newlines and a file's last byte is
 # part of what is asked.
 req GH-200.5
@@ -16039,8 +16123,9 @@ cat > "$SPLIT_FIX/before/requirements.md" <<'REQS'
 REQS
 cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/moved"
 SPLIT_OUT=$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/moved" 2>&1; printf 'exit %s' "$?")
-tok 'split-requirements.sh moves every GH- entry and says which' \
-  'moved 2 GH- entries into requirements/: GH-5.1 GH-5
+tok 'split-requirements.sh moves every GH- entry and says which, and which files it wrote' \
+  'taken out of requirements.md: GH-5.1 GH-5
+files written to requirements/: GH-5.1 GH-5
 exit 0' "$SPLIT_OUT"
 tok 'each entry is a file of its own, byte for byte' \
   '### GH-5
@@ -16105,13 +16190,65 @@ tok 'and nothing is written' 'no requirements/' \
 cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/half"
 mkdir "$SPLIT_FIX/half/requirements"
 cp "$SPLIT_FIX/moved/requirements/GH-5.md" "$SPLIT_FIX/half/requirements/GH-5.md"
-tok 'an entry whose file already holds exactly it is no conflict' \
-  'moved 2 GH- entries into requirements/: GH-5.1 GH-5
+tok 'an entry whose file already holds exactly it is no conflict, and is said apart from the file written' \
+  'taken out of requirements.md: GH-5.1 GH-5
+files written to requirements/: GH-5.1
+already in requirements/ with the same bytes, and left as it was: GH-5
 exit 0' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/half" 2>&1; printf 'exit %s' "$?")"
 if diff -r -q "$SPLIT_FIX/moved" "$SPLIT_FIX/half" > /dev/null 2>&1; then
   pass static 'and the result is the one a first run gives'
 else
   fail static 'and the result is the one a first run gives: %s differs from %s' "$SPLIT_FIX/half" "$SPLIT_FIX/moved"
+fi
+# WHAT THE READER WOULD REFUSE IN A FILE THIS WRITES, it refuses before writing
+# one (rev-agent-200, round 1 of PR #210). The first two are what the pull
+# requests across the split meet: a merge that appends an entry directly under
+# `## Boundary issues` leaves the pointer paragraph inside the entry's block, and
+# a script that moved it would have taken the paragraph out of requirements.md
+# into the entry's file, where the reader goes red on the entry and the repair
+# that turns it green deletes the paragraph. The paragraph here stands after the
+# last entry, as the pointer does after an entry appended above it.
+cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/prose"
+sed -i '24a A paragraph after the entries, which is no field of either.' "$SPLIT_FIX/prose/requirements.md"
+tok 'a line inside an entry that is no field of it is refused, and says where it is' \
+  'split-requirements.sh: refused, and nothing was moved:
+  line 25: GH-5: a line that is no field of the entry, which would be moved into requirements/GH-5.md with it; move the line above the heading of the entry: A paragraph after the entries, which is no field of either.
+exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/prose" 2>&1; printf 'exit %s' "$?")"
+tok 'and nothing is written' 'no requirements/' \
+  "$([ -e "$SPLIT_FIX/prose/requirements" ] && printf 'requirements/ written' || printf 'no requirements/')"
+# A continuation continues a field, so one straight after the heading continues
+# nothing -- the reader's `lastkey`, which the script's `field` mirrors.
+cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/orphan"
+sed -i 's/^### GH-5\.1$/&\n  a continuation of no field/' "$SPLIT_FIX/orphan/requirements.md"
+tok 'a continuation with no field before it is refused' \
+  'split-requirements.sh: refused, and nothing was moved:
+  line 13: GH-5.1: a line that is no field of the entry, which would be moved into requirements/GH-5.1.md with it; move the line above the heading of the entry:   a continuation of no field
+exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/orphan" 2>&1; printf 'exit %s' "$?")"
+# The heading is the whole of it, trimmed, as the reader reads it; the script
+# named the file from the first word, so `### GH-5 (reopened)` was written to
+# GH-5.md and the reader then found the file misnamed and outside the grammar.
+cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/heading"
+sed -i 's/^### GH-5$/### GH-5 (reopened)/' "$SPLIT_FIX/heading/requirements.md"
+tok 'a heading that is more than its ID is refused' \
+  'split-requirements.sh: refused, and nothing was moved:
+  line 18: GH-5 (reopened): a heading is its ID and nothing else, and the file would be named GH-5.md
+exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/heading" 2>&1; printf 'exit %s' "$?")"
+tok 'and nothing is written' 'no requirements/' \
+  "$([ -e "$SPLIT_FIX/heading/requirements" ] && printf 'requirements/ written' || printf 'no requirements/')"
+# THE ONE EXCEPTION TO BYTE FOR BYTE, taken knowingly and pinned: awk ends every
+# line it prints with a newline, so a last line that had none gains one. Here
+# the file ends inside GH-5, with no newline, and GH-5.md comes out as it does
+# from the fixture that has one.
+mkdir "$SPLIT_FIX/no-newline"
+printf '%s' "$(head -n 23 "$SPLIT_FIX/before/requirements.md")" > "$SPLIT_FIX/no-newline/requirements.md"
+tok 'the fixture for it ends with no newline, which is what makes the check below one' \
+  '0' "$(tail -c 1 "$SPLIT_FIX/no-newline/requirements.md" | wc -l | tr -d ' ')"
+bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/no-newline" > /dev/null 2>&1
+if cmp -s "$SPLIT_FIX/moved/requirements/GH-5.md" "$SPLIT_FIX/no-newline/requirements/GH-5.md"; then
+  pass static 'a last line with no newline gains one in the file it is moved to'
+else
+  fail static 'a last line with no newline gains one in the file it is moved to: %s is not %s' \
+    "$SPLIT_FIX/no-newline/requirements/GH-5.md" "$SPLIT_FIX/moved/requirements/GH-5.md"
 fi
 
 echo "--- every result goes through pass and fail ---"
@@ -16159,14 +16296,14 @@ done <<< "$FINDINGS"
 # that are the same short program written twice -- so a defect they share agrees
 # with itself, which that section says in as many words. This is the link that
 # makes it mean something: REQUIREMENTS_AWK is the canonical reader of
-# requirements.md, section-aware, entry-aware and separately checked by the
+# requirements.md and the split set beside it, section-aware, entry-aware and separately checked by the
 # fixture above, and its matrix line publishes an active count of its own. A
 # stray `- status: active` in a section that holds no entries moves the short
 # program and does not move this one. Bertan's review of PR #183 named exactly
 # that case.
 #
-# Read over $SUITE_DIR/requirements.md, which is the file the short program and
-# the harness both counted; $HOOKS is where the repository's own findings above
+# Read over $SUITE_DIR/requirements.md and the split set beside it, which are
+# what the short program and the harness both counted; $HOOKS is where the repository's own findings above
 # come from, and comparing across the two would go red for an override.
 req GH-148
 MUT_MATRIX_LINE=$(requirements_read matrix "$SUITE_DIR/requirements.md" "$FIXTURES/ledger-read" \

@@ -26,13 +26,29 @@
 # separator between entries and belong to neither. The block is written to
 # requirements/<ID>.md byte for byte, and it and its separator are taken out of
 # requirements.md. No entry is reworded, reordered internally or corrected.
+# Byte for byte with one exception, taken knowingly: awk ends every line it
+# prints with a newline, so a requirements.md whose last line has none gains one
+# in whichever file that line lands. The suite reads the two alike, and pins it.
 #
-# WHAT IT REFUSES, before it writes anything. An ID outside the grammar *The
-# families* states, an ID moved twice, and a file already under requirements/
-# whose content differs from the block that would replace it -- the last is two
-# loops having written one ID, and which of them is right is a person's call. A
-# file that already holds exactly that block is left alone, which is what makes
-# a second run a no-op.
+# WHAT IT REFUSES, before it writes anything. Everything the suite's reader
+# (FR-45, REQUIREMENTS_AWK's `take`) would refuse in a file this writes, and
+# three things of its own. Of the reader's: a heading that is more than its ID
+# -- `### GH-7 (reopened)` would be written to GH-7.md, and the reader reads the
+# whole heading -- and a line inside the block that is neither a `- key:` field,
+# nor the continuation of one, nor blank. The second is the one a merge makes:
+# an entry appended directly under `## Boundary issues` sits above the pointer
+# paragraph there, the block runs to the next heading, and moving it would carry
+# the paragraph into the entry's file, out of requirements.md, where the reader
+# goes red on the entry file and the repair it invites deletes the paragraph for
+# good (rev-agent-200, round 1 of PR #210). The reader's other split-set rules
+# are ones this cannot produce: a block opens at its heading, so nothing stands
+# before it, and ends at the next `###` or `##`, so a file holds one entry and
+# no `##` heading. Of its own: an ID outside the grammar *The families* states,
+# an ID moved twice, and a file already under requirements/ whose content
+# differs from the block that would replace it -- the last is two loops having
+# written one ID, and which of them is right is a person's call. A file that
+# already holds exactly that block is left alone, which is what makes a second
+# run a no-op.
 set -u
 
 DIR=${1:-$(dirname -- "$0")}
@@ -63,13 +79,28 @@ awk -v stage="$STAGE" '
   /^### / {
     flush_entry()
     if (part == "req" && $2 ~ /^GH-/) {
-      if ($2 !~ /^GH-[1-9][0-9]*(\.[1-9][0-9]*)?$/) { print $2 ": not an ID of the GH family grammar, ^GH-[1-9][0-9]*(\\.[1-9][0-9]*)?$" > (stage "/refused"); bad = 1 }
+      # The whole heading, trimmed, as the reader reads it -- not the word awk
+      # splits off it.
+      hid = substr($0, 5); sub(/^[ \t]+/, "", hid); sub(/[ \t]+$/, "", hid)
+      if (hid != $2) { print "line " NR ": " hid ": a heading is its ID and nothing else, and the file would be named " $2 ".md" > (stage "/refused"); bad = 1 }
+      else if ($2 !~ /^GH-[1-9][0-9]*(\.[1-9][0-9]*)?$/) { print $2 ": not an ID of the GH family grammar, ^GH-[1-9][0-9]*(\\.[1-9][0-9]*)?$" > (stage "/refused"); bad = 1 }
       else if ($2 in seen) { print $2 ": the ID is used twice" > (stage "/refused"); bad = 1 }
-      seen[$2] = 1; id = $2; body = $0 "\n"; held = ""; next
+      seen[$2] = 1; id = $2; body = $0 "\n"; held = ""; field = 0; stray = 0; next
     }
   }
   /^[ \t]*$/ { held = held $0 "\n"; next }
-  id != "" { body = body held $0 "\n"; held = ""; next }
+  # The field grammar the reader holds: `- key:` opens a field, two spaces and
+  # then a non-space continue the one before, and anything else after the
+  # heading is a line that is no field of the entry. One report per entry: the
+  # first line of a paragraph says where it is, and the rest says nothing more.
+  id != "" {
+    if ($0 ~ /^- [a-z-]+:/) field = 1
+    else if (!(field && $0 ~ /^  [^ ]/)) {
+      field = 0
+      if (!stray++) { print "line " NR ": " id ": a line that is no field of the entry, which would be moved into requirements/" id ".md with it; move the line above the heading of the entry: " $0 > (stage "/refused"); bad = 1 }
+    }
+    body = body held $0 "\n"; held = ""; next
+  }
   { printf "%s%s\n", held, $0 > (stage "/requirements.md"); held = "" }
   END {
     flush_entry()
@@ -103,11 +134,23 @@ if [ -n "$CONFLICTS" ]; then
 fi
 
 mkdir -p -- "$SPLIT" || { echo "split-requirements.sh: could not make $SPLIT; nothing was moved" >&2; exit 1; }
+# Which files are new is said apart from which were there already, because a
+# branch merging the split holds some of each, and the new ones are the ones it
+# has to look at. One line saying "moved" of both hid that.
+WRITTEN=
+KEPT=
 while IFS= read -r id; do
-  [ -e "$SPLIT/$id.md" ] || cp -- "$STAGE/entries/$id.md" "$SPLIT/$id.md" || {
+  if [ -e "$SPLIT/$id.md" ]; then
+    KEPT="$KEPT $id"
+    continue
+  fi
+  cp -- "$STAGE/entries/$id.md" "$SPLIT/$id.md" || {
     echo "split-requirements.sh: could not write requirements/$id.md; requirements.md is unchanged, and the files written before it stay" >&2
     exit 1
   }
+  WRITTEN="$WRITTEN $id"
 done < "$STAGE/moved"
 cp -- "$STAGE/requirements.md" "$REQS" || { echo "split-requirements.sh: could not rewrite $REQS; every entry is in requirements/ and also still in it" >&2; exit 1; }
-printf 'moved %s GH- entries into requirements/: %s\n' "$(grep -c . "$STAGE/moved")" "$(paste -sd ' ' "$STAGE/moved")"
+printf 'taken out of requirements.md: %s\n' "$(paste -sd ' ' "$STAGE/moved")"
+[ -z "$WRITTEN" ] || printf 'files written to requirements/:%s\n' "$WRITTEN"
+[ -z "$KEPT" ] || printf 'already in requirements/ with the same bytes, and left as it was:%s\n' "$KEPT"
