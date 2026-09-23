@@ -317,3 +317,70 @@ Nothing is pushed yet.
   both predate this PR.
 - #217 has two more items from this round. The assistant agrees with filing
   both.
+
+## 2026-09-23 23:45 +03 — PR #216, review round 4
+
+Branch `worktree-issue-204-library`, head `052cc89`, eleven ahead of
+`origin/dev-05` (`dbb1141`), plus this entry. It answers rev-agent-204's
+round 4 (issue comment 5802237280): two gating findings, both edges of the
+assistant's round-3 runtime comparison, and two non-gating. Nothing is pushed
+yet.
+
+### What the review found, and what was done
+
+- **G8. The record was taken about 200 lines after the library loaded.** A
+  redefinition in between became the baseline.
+  - The reviewer suggested recording each file right after it is sourced. The
+    assistant went one step further and removed the window altogether: each file
+    is now sourced alone in an `env -i` child, and what that child defines is
+    the record.
+  - Measured before relying on it: for all 65 names, the child's output is
+    byte-identical to what a sourcing shell prints.
+  - The empty environment also answers the two environment-dependent items the
+    reviewer added to #217 this round, exported functions and exported `CS_*`
+    variables.
+- **G7. The foot's verdict ran through `fail` and `loaded_changed`, both in the
+  record.**
+  - The comparison is now code in a variable that calls no function.
+  - The foot sets `FAILED` and prints to stderr itself before it asks `fail` to
+    record the row.
+  - The not-found foot had the same shape and was changed the same way.
+- **N10.** `env -u BASH_ENV "$BASH"`, plus the literal beside the differential.
+  On this machine `$BASH` and `bash` resolve to the same binary, so no mutant
+  can tell them apart. The commit says so rather than claiming it as checked.
+- **N11.** The sourced-files check now asks the segments before `TOOLING`, and
+  the prose names both consumers that accept on it.
+
+### Mistakes, and what caught them
+
+- **The assistant wrote the self-test's `| sort` outside its `$( )`.** The
+  pipe text became part of the actual value, and the check went red on the
+  first run. The run was not green for the wrong reason, but the literal was
+  wrong until the second run.
+- **The assistant's first attempt at the mutant file generated Python from a
+  format string with nested escapes, and failed to parse.** The file was written
+  directly instead, with a `--check` mode that confirms each edit applies
+  exactly once before any run.
+
+### Evidence (measured)
+
+- **Mutants.** 8 runs, counted from the driver's output. Each behaved as
+  `052cc89`'s message says. Two of them are reversions that turn a finding back
+  green or remove a row from the failures, which shows those lines carry the fix:
+  - the foot's inline verdict reverted: the reviewer's no-op `fail` is back to
+    exit 0;
+  - the segment `case` reverted: the sourced-files row drops out of the
+    failures.
+- **Against `dad8d11`**, with `<digits> ms` masked:
+  - 5,683 → 5,685 ok;
+  - stdout `72ef0b02…`, `--matrix` `10bd5929…`;
+  - stderr `cf01f588…` in both modes;
+  - exit 0 / 0.
+
+### Open
+
+- **Driver functions stay outside the record,** apart from the handler. They
+  are named in GH-204.1. `requirements_read`, which the #104 coverage reads
+  through, is one of them.
+- **#218 is the other edge, one level out:** the foot check itself can be
+  deleted and the run stays green.
