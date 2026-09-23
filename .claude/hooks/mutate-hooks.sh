@@ -533,10 +533,11 @@ MEASURED_SECONDS_PER_RUN=275
 MEASURED_AT_RESULTS=5296
 
 # WHAT MAKES A ROW RUNNABLE, asked in one place because two callers need the
-# same answer and gave different ones. Pass one below refuses a row for five
-# reasons; `--list`'s run count has to predict which rows a pass will actually
-# run. It did not ask any of the five -- it counted every row whose outcome was
-# not did-not-apply -- so one malformed row made it over-report by one, and
+# same answer and gave different ones. Pass one below refuses a row for each
+# reason this function gives; `--list`'s run count has to predict which rows a
+# pass will actually run. It did not ask any of them -- it counted every row
+# whose outcome was not did-not-apply -- so one malformed row made it
+# over-report by one, and
 # check-hooks.sh's #148 check made the identical omission and stayed green: the
 # doubled-program failure its own comment warns about, arriving in the first
 # commit that wrote the warning. Bertan's review of PR #183.
@@ -953,7 +954,7 @@ while IFS='%' read -r ID FILE EDIT REQS WANT; do
     case " $SELECTED " in *" $ID "*) ;; *) continue ;; esac
   fi
   MATCHED=$((MATCHED + 1))
-  # The five refusals are row_fault's, above, because `--list` has to predict
+  # The refusals are row_fault's, above, because `--list` has to predict
   # which rows this pass will run and the two have to mean the same thing by a
   # runnable row. What is this pass's alone is reporting the reason and counting
   # the row out; what the reason SAYS is written once.

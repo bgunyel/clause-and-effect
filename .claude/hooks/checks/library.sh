@@ -886,3 +886,17 @@ suite_range() {  # suite_range <variable> <sed address> <sed address> -- 1 on an
     "$2" "$3"
   return 1
 }
+# Which of the functions and tokeniser variables the run started with --
+# LOADED_BODY, recorded at the head of check-hooks.sh, a variable's key opening
+# with `$` -- bash now holds differently, or not at all. The #204 section drives
+# it, and the foot of the suite asks it last.
+loaded_changed() {  # loaded_changed -- "<function>" or "$<variable>" a line, sorted, for each one changed or removed
+  local k now
+  for k in "${!LOADED_BODY[@]}"; do
+    case "$k" in
+      '$'*) now=$(declare -p "${k#'$'}" 2>/dev/null) ;;
+      *) now=$(declare -f "$k" 2>/dev/null) ;;
+    esac
+    [ "$now" == "${LOADED_BODY[$k]}" ] || printf '%s\n' "$k"
+  done | LC_ALL=C sort
+}
