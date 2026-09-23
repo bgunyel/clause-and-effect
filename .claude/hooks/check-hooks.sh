@@ -12054,6 +12054,15 @@ AWK
 # out, because vim's swap file is one and is not an entry. An editor's backup
 # that is not a dotfile -- emacs's `GH-5.md~` -- is read, and turns the suite red
 # for as long as it is there, which is the failing direction and is taken.
+#
+# REGULAR FILES ONLY, AND THE REST NAMED BY requirements_split_other. A name
+# that is not a regular file -- a directory, a dangling link -- was handed to
+# awk with the rest, on the argument that the canonical reader reports a file
+# it cannot read. Under mawk, which is the awk here and on the CI runner, it
+# does not: `getline` on a directory aborts the program ("read error (Is a
+# directory)"), so the suite went red with seven findings and none of them named
+# the directory (rev-agent-200, round 4 of PR #210, measured on mawk 1.3.4). So
+# no reader is given one, and the canonical reader names each one instead.
 requirements_split() {  # requirements_split <requirements.md> -- the split set beside it, one path a line
   local dir
   dir="$(dirname -- "$1")/requirements"
@@ -12068,8 +12077,16 @@ requirements_split() {  # requirements_split <requirements.md> -- the split set 
   # today (rev-agent-200 logged every call over a whole run: none under `-f`),
   # and that is a reason this has not bitten rather than a guard.
   ( set +f; cd -- "$dir" && for f in *; do
-      [ -e "$f" ] && printf '%s\t%s\n' "${f%.md}" "$dir/$f"
+      [ -f "$f" ] && printf '%s\t%s\n' "${f%.md}" "$dir/$f"
     done ) | LC_ALL=C sort -t "$(printf '\t')" -k1,1V | cut -f2-
+}
+requirements_split_other() {  # requirements_split_other <requirements.md> -- names beside it that are not regular files
+  local dir
+  dir="$(dirname -- "$1")/requirements"
+  [ -d "$dir" ] || return 0
+  ( set +f; cd -- "$dir" && for f in *; do
+      { [ -e "$f" ] || [ -L "$f" ]; } && [ ! -f "$f" ] && printf '%s\n' "$f"
+    done ) | LC_ALL=C sort
 }
 INV_VARIANTS_AWK=$(cat <<'AWK'
   function flush(   inscope) {
@@ -15287,6 +15304,11 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       else if (nh == 0) problem[++nproblem] = "requirements/" sname ": holds no entry"
     }
     insplit = 0
+    # A name there that is not a regular file is never handed to getline, which
+    # under mawk aborts on a directory; it is named here instead.
+    nother = split(ENVIRON["REQ_SPLIT_OTHER"], splitother, "\n")
+    for (sp = 1; sp <= nother; sp++)
+      if (splitother[sp] != "") problem[++nproblem] = "requirements/" splitother[sp] ": not a regular file, where each entry is a file of its own"
     runbook_read = 0
     while ((getline line < runbook) > 0) {
       runbook_read = 1
@@ -15475,6 +15497,7 @@ AWK
 # one half without the other.
 requirements_read() {  # requirements_read <findings|matrix> <requirements> <ledger> <suite> <root> <runbook> <counts> <shape>
   REQ_SPLIT_LIST=$(requirements_split "$2") \
+  REQ_SPLIT_OTHER=$(requirements_split_other "$2") \
   awk -v mode="$1" -v reqs="$2" -v ledger="$3" -v suite="$4" -v root="$5" \
       -v runbook="$6" -v counts_literal="$7" -v shape_literal="$8" \
       "$REQ_FIELD_AWK$REQUIREMENTS_AWK" </dev/null
@@ -15933,6 +15956,18 @@ for SPLIT_NAME in gh-5.3.md GH-5.3.txt; do
   holds "a file named $SPLIT_NAME, outside GH-*.md, is read and found misnamed" "$OUT" \
     "FAIL${TAB}FR-45${TAB}requirements/$SPLIT_NAME: holds GH-5.3, and a file is named by the ID it holds"
 done
+# A NAME THAT IS NOT A REGULAR FILE is named, and never handed to awk: under
+# mawk a directory in the list aborted the canonical reader, and the suite went
+# red with no finding that named it (rev-agent-200, round 4 of PR #210).
+req FR-45 GH-200.1 GH-200.2
+cp -r "$REQ_FIX/clean" "$REQ_FIX/split-dir"
+mkdir "$REQ_FIX/split-dir/requirements/old"
+printf '### GH-5.9\n- text: an entry in a subdirectory\n- from: the fixture\n- kind: doc-claim\n- status: retired: a reason\n' \
+  > "$REQ_FIX/split-dir/requirements/old/GH-5.9.md"
+req_split_changed split-dir
+OUT=$(req_fixture "$REQ_FIX/split-dir")
+holds 'a directory among the split set is named, rather than aborting the reader' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}requirements/old: not a regular file, where each entry is a file of its own"
 # And whatever globbing its caller left off. This file turns it off around its
 # splits, and under `set -f` the directory's `*` is the one name `*`, which is no
 # file -- so the split set would be read as empty, and every entry in it lost.
@@ -15975,6 +16010,10 @@ printf '# A fixture\n\n## Functional requirements\n\n### FR-1\n- status: active\
 printf '### GH-5\n- status: active\n' > "$HARNESS_FIX/requirements/GH-5.md"
 printf '### GH-6\n- status: active\n' > "$HARNESS_FIX/requirements/gh-6.md"
 printf '### GH-7\n- status: active\n' > "$HARNESS_FIX/requirements/GH-7.txt"
+# And a directory, which mawk aborts on if it is handed one: the count is still
+# the four, not a refusal to count.
+mkdir "$HARNESS_FIX/requirements/old"
+printf '### GH-9\n- status: active\n' > "$HARNESS_FIX/requirements/old/GH-9.md"
 tok 'the harness counts an active entry beside it under any name' \
   '4 requirements in requirements.md and requirements/ are active, which is what a row may name' \
   "$(bash "$HARNESS_FIX/mutate-hooks.sh" --list 2>&1 | grep 'are active')"
@@ -16069,19 +16108,34 @@ GH-143.4:1351248197:1919 GH-143.5:2325415628:855 GH-148:2277754167:7215
 GH-155.1:3143088805:5291 GH-156:1579607799:1497 GH-164:1173286345:555
 GH-167:3774825998:1365 GH-171:1548953849:1055 GH-175:1964502293:1348
 '
-SPLIT_MOVED_N=0
-SPLIT_MOVED_BAD=
+# Each token that the split set beside <dir> does not bear out, as ` ID:absent`
+# or ` ID:changed(now ID:<cksum>:<length>)`. A changed entry says the token it
+# has now, so that the red says how to move it (rev-agent-200, round 4 of PR
+# #210); whether the change was meant is the reviewer's to say, not this line's.
+# A function so that a fixture can ask it that, which a loop over this
+# repository's own entries -- none of them changed -- never could.
+split_moved_bad() {  # split_moved_bad <requirements dir> <literal>
+  local tok id now bad=
+  set -f
+  for tok in $2; do
+    id=${tok%%:*}
+    if [ ! -f "$1/$id.md" ]; then
+      bad="$bad $id:absent"
+    else
+      now=$(cksum < "$1/$id.md" | awk '{ print $1 ":" $2 }')
+      [ "$now" = "${tok#*:}" ] || bad="$bad $id:changed(now $id:$now)"
+    fi
+  done
+  set +f
+  printf '%s' "$bad"
+}
 set -f
-for SPLIT_TOK in $SPLIT_MOVED; do
-  SPLIT_MOVED_N=$((SPLIT_MOVED_N + 1))
-  SPLIT_ID=${SPLIT_TOK%%:*}
-  if [ ! -f "$HOOKS/requirements/$SPLIT_ID.md" ]; then
-    SPLIT_MOVED_BAD="$SPLIT_MOVED_BAD $SPLIT_ID:absent"
-  elif [ "$(cksum < "$HOOKS/requirements/$SPLIT_ID.md" | awk '{ print $1 ":" $2 }')" != "${SPLIT_TOK#*:}" ]; then
-    SPLIT_MOVED_BAD="$SPLIT_MOVED_BAD $SPLIT_ID:changed"
-  fi
-done
+SPLIT_MOVED_N=$(printf '%s ' $SPLIT_MOVED | wc -w | tr -d ' ')
 set +f
+SPLIT_MOVED_BAD=$(split_moved_bad "$HOOKS/requirements" "$SPLIT_MOVED")
+tok 'a token the split set does not bear out is named, with the one the file bears now' \
+  ' GH-5.1:changed(now GH-5.1:2666001811:149) GH-6:absent' \
+  "$(split_moved_bad "$REQ_FIX/clean/requirements" 'GH-5.1:1:1 GH-6:1:1')"
 # 117 is the number of `### GH-` headings requirements.md held at 4e91496,
 # counted there when the literal was written; nothing in a shallow checkout can
 # count it again, so this holds the literal to that measurement and no more.
@@ -16096,7 +16150,8 @@ tok 'and each is in the split set with the checksum and length it had there (an 
 # that it refuses -- writing nothing at all -- a file already there holding
 # something else, an ID outside the grammar, an ID written twice, whatever the
 # reader would refuse in a file it wrote, and a `GH-` heading where the reader
-# reads none. Its output is read with a `|`
+# reads none; and that on the merge that brings the split it compares each
+# entry three ways. Its output is read with a `|`
 # after it, because `$( )` drops trailing newlines and a file's last byte is
 # part of what is asked.
 req GH-200.5
@@ -16160,8 +16215,9 @@ tok 'and requirements.md keeps everything else, and one blank line between secti
 tok 'and it wrote the two files it named and nothing else' 'GH-5.1.md GH-5.md' \
   "$(ls "$SPLIT_FIX/moved/requirements" | LC_ALL=C sort | paste -sd ' ')"
 cp -r "$SPLIT_FIX/moved" "$SPLIT_FIX/again"
-tok 'a second run moves nothing' \
+tok 'a second run moves nothing, and does not claim a committed merge has nothing to carry' \
   'requirements.md holds no GH- entry; nothing to move
+(a merge of the split already committed is compared three ways with --base <its merge base> --branch <the branch before it>)
 exit 0' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/again" 2>&1; printf 'exit %s' "$?")"
 if diff -r -q "$SPLIT_FIX/moved" "$SPLIT_FIX/again" > /dev/null 2>&1; then
   pass static 'and changes nothing'
@@ -16173,7 +16229,7 @@ mkdir "$SPLIT_FIX/conflict/requirements"
 printf '### GH-5\n- text: another loop wrote this ID first\n' > "$SPLIT_FIX/conflict/requirements/GH-5.md"
 tok 'a file already there holding something else is refused' \
   'split-requirements.sh: refused, and nothing was moved:
-  GH-5: requirements/GH-5.md is there already and holds something else
+  GH-5: requirements/GH-5.md is there already and holds something else; with a merge in progress, run this with no directory, which compares three ways
 exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/conflict" 2>&1; printf 'exit %s' "$?")"
 tok 'and nothing is written: requirements.md is as it was, and the other entry was not moved' \
   'GH-5.md' "$(ls "$SPLIT_FIX/conflict/requirements" | paste -sd ' ')$(cmp -s "$SPLIT_FIX/before/requirements.md" "$SPLIT_FIX/conflict/requirements.md" || printf ' requirements.md changed')"
@@ -16289,6 +16345,124 @@ else
   fail static 'a last line with no newline gains one in the file it is moved to: %s is not %s' \
     "$SPLIT_FIX/no-newline/requirements/GH-5.md" "$SPLIT_FIX/moved/requirements/GH-5.md"
 fi
+
+# THREE WAYS, ON THE MERGE THAT BRINGS THE SPLIT (rev-agent-200, round 4 of PR
+# #210). That merge is a content conflict on requirements.md, and a two-way run
+# could not tell a branch's edit from its stale copy: keeping the dev side lost
+# the edit with "nothing to move", exit 0, and keeping the branch side refused
+# the stale copies alongside the edits. Measured on #158 and #184. The fixture
+# is that merge in small: a base with three entries; a branch that edits GH-5
+# and appends GH-8; a dev side that splits and then edits GH-6, and carries a
+# check-hooks.sh holding GH-5's token. Its tokens are cksum and length of the
+# base's GH-5 block and of the branch's, written here as measured.
+S3="$SPLIT_FIX/three"
+G3="git -C $S3/repo -c user.email=checks@example.invalid -c user.name=checks"
+git init -q -b dev "$S3/repo"
+cat > "$S3/repo/requirements.md" <<'REQS'
+# A fixture
+
+## Boundary issues
+
+### GH-5
+- text: an entry the branch edits
+- from: the fixture
+- kind: doc-claim
+- status: active
+
+### GH-6
+- text: an entry the dev side edits
+- from: the fixture
+- kind: doc-claim
+- status: active
+
+### GH-7
+- text: an entry nobody edits
+- from: the fixture
+- kind: doc-claim
+- status: active
+
+## Provenance: the fixture's criteria
+REQS
+$G3 add -A && $G3 commit -qm base
+$G3 checkout -q -b feature
+sed -i 's/^- text: an entry the branch edits$/- text: an entry the branch edited/' "$S3/repo/requirements.md"
+sed -i 's/^## Provenance: /### GH-8\n- text: an entry the branch appends\n- from: the fixture\n- kind: doc-claim\n- status: active\n\n&/' \
+  "$S3/repo/requirements.md"
+$G3 commit -qam branch
+$G3 checkout -q dev
+cp "$HOOKS/split-requirements.sh" "$S3/repo/split-requirements.sh"
+bash "$S3/repo/split-requirements.sh" "$S3/repo" > /dev/null 2>&1
+sed -i 's/^- text: an entry the dev side edits$/- text: an entry the dev side edited/' "$S3/repo/requirements/GH-6.md"
+printf "SPLIT_MOVED='\nGH-5:3493104077:98 GH-6:1:1\n'\n" > "$S3/repo/check-hooks.sh"
+$G3 add -A && $G3 commit -qm split
+$G3 checkout -q feature
+$G3 merge -q --no-edit dev > /dev/null 2>&1
+S3_BASE=$($G3 rev-parse --short "$($G3 merge-base HEAD MERGE_HEAD)")
+S3_HEAD=$($G3 rev-parse --short HEAD)
+# Each run below is on a copy of this merge, stopped where it conflicted, and
+# each copy is asserted to be one: a merge that did not conflict would leave
+# nothing to resolve, and every check would be about something else.
+if [ "$($G3 status --porcelain requirements.md)" != 'UU requirements.md' ]; then
+  echo "the three-way fixture's merge did not conflict on requirements.md; the checks against it prove nothing" >&2
+  exit 1
+fi
+S3_WANT="a merge is in progress: each GH- entry is compared three ways, against the merge base $S3_BASE and HEAD at $S3_HEAD
+files written to requirements/: GH-5 GH-8
+GH-5: changed on HEAD only since the base, so its SPLIT_MOVED token in check-hooks.sh moves from GH-5:3493104077:98 to GH-5:1218492981:99
+changed on the dev side only since the base, and left as it was: GH-6
+unchanged on both sides since the base, and left as it was: 1
+exit 0"
+# The dev side kept: the resolution a one-line side against a whole section
+# invites, and the one that lost the branch's edit in silence.
+cp -a "$S3/repo" "$S3/theirs"
+git -C "$S3/theirs" checkout -q --theirs requirements.md
+tok 'with the dev side of requirements.md kept, the branch edit is still found, in git, and written' \
+  "$S3_WANT" "$(bash "$S3/theirs/split-requirements.sh" 2>&1; printf 'exit %s' "$?")"
+tok 'the branch edit is what GH-5 now holds, and the dev edit what GH-6 does' \
+  '- text: an entry the branch edited|- text: an entry the dev side edited' \
+  "$(sed -n 2p "$S3/theirs/requirements/GH-5.md")|$(sed -n 2p "$S3/theirs/requirements/GH-6.md")"
+# The branch side kept: the same classification, and the entries taken out.
+cp -a "$S3/repo" "$S3/ours"
+git -C "$S3/ours" checkout -q --ours requirements.md
+tok 'with the branch side kept, the same, and its copies are taken out of requirements.md' \
+  "$(printf '%s\n' "$S3_WANT" | sed '1a taken out of requirements.md: GH-5 GH-6 GH-7 GH-8')" \
+  "$(bash "$S3/ours/split-requirements.sh" 2>&1; printf 'exit %s' "$?")"
+tok 'and requirements.md is then the dev side'"'"'s, byte for byte' '' \
+  "$(git -C "$S3/ours" show MERGE_HEAD:requirements.md | cmp -s - "$S3/ours/requirements.md" || printf 'differs')"
+# Changed on both sides since the base: refused, and nothing written. The dev
+# side's file is read from the working tree, so editing it is the dev change.
+cp -a "$S3/repo" "$S3/both"
+git -C "$S3/both" checkout -q --theirs requirements.md
+sed -i 's/^- from: the fixture$/- from: the fixture, amended on the dev side/' "$S3/both/requirements/GH-5.md"
+tok 'an entry changed on both sides since the base is refused, and nothing is written' \
+  "${S3_WANT%%$'\n'*}
+split-requirements.sh: refused, and nothing was moved:
+  GH-5: changed on HEAD and on the dev side since the base; carry both changes into requirements/GH-5.md by hand
+exit 1 no GH-8.md" \
+  "$(bash "$S3/both/split-requirements.sh" 2>&1; printf 'exit %s' "$?"; [ -e "$S3/both/requirements/GH-8.md" ] || printf ' no GH-8.md')"
+# A version in requirements.md that the branch never committed would be lost by
+# a run that writes the branch's, so it is refused.
+cp -a "$S3/repo" "$S3/edited"
+git -C "$S3/edited" checkout -q --ours requirements.md
+sed -i 's/^- text: an entry nobody edits$/- text: an entry edited while resolving/' "$S3/edited/requirements.md"
+tok 'an entry requirements.md holds in a version the branch never committed is refused' \
+  "${S3_WANT%%$'\n'*}
+split-requirements.sh: refused, and nothing was moved:
+  GH-7: requirements.md holds a version of it that HEAD does not; commit it on the branch first, or carry it into requirements/GH-7.md by hand
+exit 1" "$(bash "$S3/edited/split-requirements.sh" 2>&1; printf 'exit %s' "$?")"
+# A merge already committed has no MERGE_HEAD, and is asked with --base and
+# --branch; a directory given is never compared three ways unasked.
+cp -a "$S3/repo" "$S3/committed"
+git -C "$S3/committed" checkout -q --theirs requirements.md
+git -C "$S3/committed" add -A
+git -C "$S3/committed" -c user.email=checks@example.invalid -c user.name=checks commit -qm merged
+S3C_BASE=$(git -C "$S3/committed" merge-base HEAD^1 HEAD^2)
+tok 'a committed merge is compared three ways when asked, with the same answer' \
+  "$(printf '%s\n' "$S3_WANT" | sed '1d; s/on HEAD only/on HEAD^1 only/')" \
+  "$(bash "$S3/committed/split-requirements.sh" --base "$S3C_BASE" --branch HEAD^1 "$S3/committed" 2>&1; printf 'exit %s' "$?")"
+tok 'and half of a three-way comparison is a usage error' \
+  'usage: bash .claude/hooks/split-requirements.sh [--base <rev> --branch <rev>] [<hooks directory>]
+exit 64' "$(bash "$HOOKS/split-requirements.sh" --base HEAD "$S3/committed" 2>&1; printf 'exit %s' "$?")"
 
 echo "--- every result goes through pass and fail ---"
 # A result printed any other way is printed and not recorded, so it covers

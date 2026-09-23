@@ -780,10 +780,12 @@ if [ -n "$LIST" ]; then
   # so each opens as a section that holds requirements. Listed here rather than
   # by check-hooks.sh's `requirements_split`, which this script cannot source;
   # the order does not matter to a count, and every name in the directory is
-  # read, as there, so a misnamed file is counted rather than skipped.
+  # read, as there, so a misnamed file is counted rather than skipped. Regular
+  # files only, as there too: mawk aborts on a directory, and check-hooks.sh's
+  # canonical reader is what names one.
   REQ_SPLIT=()
   if [ -d "$SRC/requirements" ]; then
-    for f in "$SRC"/requirements/*; do [ -e "$f" ] && REQ_SPLIT+=("$f"); done
+    for f in "$SRC"/requirements/*; do [ -f "$f" ] && REQ_SPLIT+=("$f"); done
   fi
   ACTIVE=$(awk '
     FNR == 1 && FILENAME != ARGV[1] { part = "req"; id = "" }

@@ -138,8 +138,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
 - a `GH-` entry out of place: one left in this file, a file under
   `requirements/` whose name is not the ID it holds, one holding a second entry
   or none, one with text before its heading, a `##` heading in it, or a line
-  after its heading that is no field of the entry, and an ID there outside the
-  `GH-` grammar;
+  after its heading that is no field of the entry, an ID there outside the
+  `GH-` grammar, and a name there that is not a regular file;
 - a check recording a direction other than refuse, permit and static;
 - a shape other than the one the suite holds as a literal: every entry by ID,
   with whatever takes it off the both-directions rule beside it -- a status
@@ -1272,3 +1272,8 @@ it has no entry above (Q16).
   what it found stands -- `split-requirements.sh` refusing what the reader would
   refuse in a file it writes, and the fixtures that tell the split set's `*`
   from a narrower glob, in the suite and in the harness
+- #158: the pull request for #144, open across the split; it and #184 are the
+  merges `split-requirements.sh` was measured on, and the reason it compares
+  three ways on a merge (rev-agent-200's round 4 of #210)
+- #184: the pull request for #118, open across the split; cited beside #158,
+  for the same measurement

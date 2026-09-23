@@ -3,7 +3,7 @@
 # requirements/, named by its ID (#200). Not a hook: settings.json does not run
 # it, and nothing runs it for you.
 #
-#   bash .claude/hooks/split-requirements.sh [<hooks directory>]
+#   bash .claude/hooks/split-requirements.sh [--base <rev> --branch <rev>] [<hooks directory>]
 #
 # WHY THE LEDGER IS SPLIT. requirements.md held two populations with opposite
 # write patterns: the stated boundary (`US-`, `FR-`), written rarely and on
@@ -19,6 +19,24 @@
 # Each of them, once it merges the dev branch that carries the split, holds its
 # own entries in requirements.md again, and this is what moves them: it is
 # re-runnable, and running it on a tree already split does nothing.
+#
+# THREE WAYS, ON THE MERGE THAT BRINGS THE SPLIT. Such a merge is a content
+# conflict on requirements.md, the branch's whole `GH-` section against the dev
+# side's pointer paragraph, and neither way of resolving it by hand is safe on
+# its own. Keeping the dev side throws away every edit the branch made to an
+# entry that already existed, silently, and a two-way run then says there is
+# nothing to move while GH-200.4's literal vouches for the stale file. Keeping
+# the branch side refuses every entry that differs from its file, but half of
+# those are the branch's stale copies of entries the dev side changed, and two
+# sides cannot say which is newer. Measured on #158 and #184 (rev-agent-200,
+# round 4 of PR #210). So with a merge in progress, run with no directory, this
+# reads the base and the branch side out of git, whatever the working tree was
+# resolved to, and for each `GH-` entry of the branch asks who changed it since
+# the base: the branch only, and its version is written, with the SPLIT_MOVED
+# token that has to move; the dev side only, and its file is kept; both, and it
+# is refused. A merge already committed is compared the same way with
+# `--base <merge base> --branch <the branch's commit before the merge>`.
+# Without either, it is the two-way run the rest of this header describes.
 #
 # WHAT IT DOES, and nothing else. Every `### GH-` heading under one of the three
 # `##` sections that hold requirements opens a block, which runs to the line
@@ -50,26 +68,77 @@
 # rather than passed over with "nothing to move" (rev-agent-200, round 2 of
 # PR #210). Of its own: an ID outside the grammar *The families* states,
 # an ID moved twice, and a file already under requirements/ whose content
-# differs from the block that would replace it -- the last is two loops having
-# written one ID, and which of them is right is a person's call. A file that
-# already holds exactly that block is left alone, which is what makes a second
-# run a no-op.
+# differs from the block that would replace it -- in a two-way run, and in a
+# three-way run where the base does not hold the ID, that is two loops having
+# written one ID, and which of them is right is a person's call. A three-way run
+# also refuses an entry changed on both sides since the base, an entry the base
+# holds and the branch does not, and an entry requirements.md holds in a version
+# the branch never committed, which a run that writes the branch's would lose.
+# A file that already holds exactly that block is left alone, which is what
+# makes a second run a no-op.
 set -u
 
-DIR=${1:-$(dirname -- "$0")}
+usage() {
+  echo "usage: bash .claude/hooks/split-requirements.sh [--base <rev> --branch <rev>] [<hooks directory>]" >&2
+  exit 64
+}
+BASE_REV=
+BRANCH_REV=
+DIR=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --base) [ $# -ge 2 ] || usage; BASE_REV=$2; shift 2 ;;
+    --branch) [ $# -ge 2 ] || usage; BRANCH_REV=$2; shift 2 ;;
+    -*) usage ;;
+    *) [ -z "$DIR" ] || usage; DIR=$1; shift ;;
+  esac
+done
+# Both or neither: a base with no branch, or a branch with no base, is half of
+# a three-way comparison, and there is no half that means anything.
+if { [ -n "$BASE_REV" ] && [ -z "$BRANCH_REV" ]; } || { [ -z "$BASE_REV" ] && [ -n "$BRANCH_REV" ]; }; then
+  usage
+fi
+DIR_GIVEN=1
+[ -n "$DIR" ] || { DIR=$(dirname -- "$0"); DIR_GIVEN=; }
 REQS="$DIR/requirements.md"
 SPLIT="$DIR/requirements"
 [ -r "$REQS" ] || { echo "split-requirements.sh: $REQS is not a readable file; nothing was moved" >&2; exit 1; }
 [ ! -e "$SPLIT" ] || [ -d "$SPLIT" ] || { echo "split-requirements.sh: $SPLIT is there and is not a directory; nothing was moved" >&2; exit 1; }
 
+g() { git -C "$DIR" "$@"; }
+
+# A MERGE IN PROGRESS IS COMPARED THREE WAYS without being asked, when this is
+# run as it is meant to be run -- with no directory, on the repository's own
+# hooks -- because that is the moment the branch side, the dev side and their
+# base are all still to hand. The branch is whichever side of the merge still
+# holds `GH-` entries in its requirements.md; when both or neither do, nothing
+# about the split is being merged, and two ways is all there is. A directory
+# given is never compared three ways unasked, so that the suite's fixtures, run
+# in a repository mid-merge, are not read against that repository's history.
+if [ -z "$BASE_REV" ] && [ -z "$DIR_GIVEN" ] && g rev-parse -q --verify MERGE_HEAD > /dev/null 2>&1; then
+  holds_gh() { g show "$1:./requirements.md" 2>/dev/null | grep -q '^### GH-'; }
+  if holds_gh HEAD && ! holds_gh MERGE_HEAD; then BRANCH_REV=HEAD
+  elif holds_gh MERGE_HEAD && ! holds_gh HEAD; then BRANCH_REV=MERGE_HEAD
+  fi
+  if [ -n "$BRANCH_REV" ]; then
+    BASE_REV=$(g merge-base HEAD MERGE_HEAD) || { echo "split-requirements.sh: a merge is in progress and git names no merge base for it; nothing was moved" >&2; exit 1; }
+    echo "a merge is in progress: each GH- entry is compared three ways, against the merge base $(g rev-parse --short "$BASE_REV") and $BRANCH_REV at $(g rev-parse --short "$BRANCH_REV")"
+  fi
+fi
+if [ -n "$BASE_REV" ]; then
+  for rev in "$BASE_REV" "$BRANCH_REV"; do
+    g rev-parse -q --verify "$rev^{commit}" > /dev/null 2>&1 || {
+      echo "split-requirements.sh: $rev is not a commit in the repository that holds $DIR; nothing was moved" >&2; exit 1; }
+  done
+fi
+
 STAGE=$(mktemp -d) || { echo "split-requirements.sh: mktemp -d failed; nothing was moved" >&2; exit 1; }
 trap 'rm -rf -- "$STAGE"' EXIT
-mkdir -- "$STAGE/entries"
 
 # Blank lines are held back rather than printed, so that a run of them is given
 # to whatever comes next: to the file when the next line is the file's, and to
 # nothing when the next line opens a `GH-` entry or ends one.
-awk -v stage="$STAGE" '
+EXTRACT=$(cat <<'AWK'
   function flush_entry() {
     # Nothing is written once an ID has been refused, and a refused ID never
     # names a file: it is outside the grammar, so it could name any path.
@@ -126,51 +195,161 @@ awk -v stage="$STAGE" '
     flush_entry()
     if (held != "") printf "%s", held > (stage "/requirements.md")
     exit bad
-  }' "$REQS" || {
-  if [ -s "$STAGE/refused" ]; then
-    echo "split-requirements.sh: refused, and nothing was moved:" >&2
-    sed 's/^/  /' "$STAGE/refused" >&2
-  else
-    echo "split-requirements.sh: awk could not read $REQS; nothing was moved" >&2
-  fi
+  }
+AWK
+)
+extract() {  # extract <requirements.md> <stage> -- its GH- entries under <stage>/entries, in order in <stage>/moved
+  mkdir -p -- "$2/entries" && : > "$2/moved" && awk -v stage="$2" "$EXTRACT" "$1"
+}
+refused() {  # refused <file of refusals> -- prints them and stops
+  echo "split-requirements.sh: refused, and nothing was moved:" >&2
+  sed 's/^/  /' "$1" >&2
   exit 1
 }
 
-if [ ! -s "$STAGE/moved" ]; then
-  echo "requirements.md holds no GH- entry; nothing to move"
+extract "$REQS" "$STAGE/w" || {
+  [ -s "$STAGE/w/refused" ] && refused "$STAGE/w/refused"
+  echo "split-requirements.sh: awk could not read $REQS; nothing was moved" >&2
+  exit 1
+}
+
+# ---------------------------------------------------------------------------
+# TWO WAYS: requirements.md against the files. What it holds is what moves.
+# ---------------------------------------------------------------------------
+if [ -z "$BASE_REV" ]; then
+  if [ ! -s "$STAGE/w/moved" ]; then
+    echo "requirements.md holds no GH- entry; nothing to move"
+    # Not a reassurance about a merge already committed: its branch side is in
+    # git, and only a three-way run reads it there.
+    echo "(a merge of the split already committed is compared three ways with --base <its merge base> --branch <the branch before it>)"
+    exit 0
+  fi
+  CONFLICTS=
+  while IFS= read -r id; do
+    if [ -e "$SPLIT/$id.md" ] && ! cmp -s -- "$STAGE/w/entries/$id.md" "$SPLIT/$id.md"; then
+      CONFLICTS="$CONFLICTS$id: requirements/$id.md is there already and holds something else; with a merge in progress, run this with no directory, which compares three ways
+"
+    fi
+  done < "$STAGE/w/moved"
+  if [ -n "$CONFLICTS" ]; then
+    printf '%s' "$CONFLICTS" > "$STAGE/refused"
+    refused "$STAGE/refused"
+  fi
+  mkdir -p -- "$SPLIT" || { echo "split-requirements.sh: could not make $SPLIT; nothing was moved" >&2; exit 1; }
+  # Which files are new is said apart from which were there already, because a
+  # branch merging the split holds some of each, and the new ones are the ones
+  # it has to look at. One line saying "moved" of both hid that.
+  WRITTEN=
+  KEPT=
+  while IFS= read -r id; do
+    if [ -e "$SPLIT/$id.md" ]; then
+      KEPT="$KEPT $id"
+      continue
+    fi
+    cp -- "$STAGE/w/entries/$id.md" "$SPLIT/$id.md" || {
+      echo "split-requirements.sh: could not write requirements/$id.md; requirements.md is unchanged, and the files written before it stay" >&2
+      exit 1
+    }
+    WRITTEN="$WRITTEN $id"
+  done < "$STAGE/w/moved"
+  cp -- "$STAGE/w/requirements.md" "$REQS" || { echo "split-requirements.sh: could not rewrite $REQS; every entry is in requirements/ and also still in it" >&2; exit 1; }
+  printf 'taken out of requirements.md: %s\n' "$(paste -sd ' ' "$STAGE/w/moved")"
+  [ -z "$WRITTEN" ] || printf 'files written to requirements/:%s\n' "$WRITTEN"
+  [ -z "$KEPT" ] || printf 'already in requirements/ with the same bytes, and left as it was:%s\n' "$KEPT"
   exit 0
 fi
 
-CONFLICTS=
-while IFS= read -r id; do
-  if [ -e "$SPLIT/$id.md" ] && ! cmp -s -- "$STAGE/entries/$id.md" "$SPLIT/$id.md"; then
-    CONFLICTS="$CONFLICTS  $id: requirements/$id.md is there already and holds something else
-"
-  fi
-done < "$STAGE/moved"
-if [ -n "$CONFLICTS" ]; then
-  printf 'split-requirements.sh: refused, and nothing was moved:\n%s' "$CONFLICTS" >&2
+# ---------------------------------------------------------------------------
+# THREE WAYS: the base, the branch, and the file the dev side holds.
+# ---------------------------------------------------------------------------
+# Both sides of the comparison are read out of git, never out of the working
+# tree: a merge resolved by keeping the dev side of requirements.md has thrown
+# the branch's entries away there, and they are still in the branch's commit.
+g show "$BASE_REV:./requirements.md" > "$STAGE/base.md" 2> /dev/null \
+  || { echo "split-requirements.sh: $BASE_REV holds no requirements.md at the path of $DIR; nothing was moved" >&2; exit 1; }
+g show "$BRANCH_REV:./requirements.md" > "$STAGE/branch.md" 2> /dev/null \
+  || { echo "split-requirements.sh: $BRANCH_REV holds no requirements.md at the path of $DIR; nothing was moved" >&2; exit 1; }
+extract "$STAGE/base.md" "$STAGE/b" || {
+  echo "split-requirements.sh: the base's requirements.md is one this cannot read into entries, so nothing can be compared with it; nothing was moved" >&2
+  [ ! -s "$STAGE/b/refused" ] || sed 's/^/  /' "$STAGE/b/refused" >&2
   exit 1
+}
+extract "$STAGE/branch.md" "$STAGE/r" || {
+  [ -s "$STAGE/r/refused" ] && { sed "s/^/$BRANCH_REV: /" "$STAGE/r/refused" > "$STAGE/refused"; refused "$STAGE/refused"; }
+  echo "split-requirements.sh: awk could not read $BRANCH_REV's requirements.md; nothing was moved" >&2
+  exit 1
+}
+if [ ! -s "$STAGE/w/moved" ] && [ ! -s "$STAGE/r/moved" ]; then
+  echo "neither requirements.md nor $BRANCH_REV holds a GH- entry; nothing to move"
+  exit 0
 fi
 
-mkdir -p -- "$SPLIT" || { echo "split-requirements.sh: could not make $SPLIT; nothing was moved" >&2; exit 1; }
-# Which files are new is said apart from which were there already, because a
-# branch merging the split holds some of each, and the new ones are the ones it
-# has to look at. One line saying "moved" of both hid that.
-WRITTEN=
-KEPT=
+: > "$STAGE/refused"
+# What requirements.md holds is taken out of it and never written anywhere:
+# each entry there must be the branch's own, because a version the branch never
+# committed would be lost by a run that writes the branch's.
 while IFS= read -r id; do
-  if [ -e "$SPLIT/$id.md" ]; then
-    KEPT="$KEPT $id"
-    continue
+  if [ ! -e "$STAGE/r/entries/$id.md" ]; then
+    echo "$id: requirements.md holds it and $BRANCH_REV does not; commit it on the branch first, or carry it into requirements/$id.md by hand" >> "$STAGE/refused"
+  elif ! cmp -s -- "$STAGE/w/entries/$id.md" "$STAGE/r/entries/$id.md"; then
+    echo "$id: requirements.md holds a version of it that $BRANCH_REV does not; commit it on the branch first, or carry it into requirements/$id.md by hand" >> "$STAGE/refused"
   fi
-  cp -- "$STAGE/entries/$id.md" "$SPLIT/$id.md" || {
+done < "$STAGE/w/moved"
+while IFS= read -r id; do
+  [ -e "$STAGE/r/entries/$id.md" ] \
+    || echo "$id: in the base and not on $BRANCH_REV; a ledger entry is marked rather than deleted, so restore it on the branch" >> "$STAGE/refused"
+done < "$STAGE/b/moved"
+# Per entry of the branch, whose side moved since the base.
+WRITE=
+OURS=
+THEIRS=
+KEPT=
+SAME=0
+while IFS= read -r id; do
+  R="$STAGE/r/entries/$id.md"; B="$STAGE/b/entries/$id.md"; F="$SPLIT/$id.md"
+  if [ -e "$B" ] && cmp -s -- "$R" "$B"; then
+    # Unchanged on the branch: whatever the dev side holds stands.
+    if [ ! -e "$F" ]; then WRITE="$WRITE $id"
+    elif cmp -s -- "$F" "$B"; then SAME=$((SAME + 1))
+    else THEIRS="$THEIRS $id"
+    fi
+  elif [ ! -e "$F" ]; then WRITE="$WRITE $id"
+  elif cmp -s -- "$F" "$R"; then KEPT="$KEPT $id"
+  elif [ -e "$B" ] && cmp -s -- "$F" "$B"; then WRITE="$WRITE $id"; OURS="$OURS $id"
+  elif [ -e "$B" ]; then
+    echo "$id: changed on $BRANCH_REV and on the dev side since the base; carry both changes into requirements/$id.md by hand" >> "$STAGE/refused"
+  else
+    echo "$id: requirements/$id.md is there already and holds something else; two loops wrote this ID, and which is right is a person's call" >> "$STAGE/refused"
+  fi
+done < "$STAGE/r/moved"
+[ ! -s "$STAGE/refused" ] || refused "$STAGE/refused"
+
+mkdir -p -- "$SPLIT" || { echo "split-requirements.sh: could not make $SPLIT; nothing was moved" >&2; exit 1; }
+for id in $WRITE; do
+  cp -- "$STAGE/r/entries/$id.md" "$SPLIT/$id.md" || {
     echo "split-requirements.sh: could not write requirements/$id.md; requirements.md is unchanged, and the files written before it stay" >&2
     exit 1
   }
-  WRITTEN="$WRITTEN $id"
-done < "$STAGE/moved"
-cp -- "$STAGE/requirements.md" "$REQS" || { echo "split-requirements.sh: could not rewrite $REQS; every entry is in requirements/ and also still in it" >&2; exit 1; }
-printf 'taken out of requirements.md: %s\n' "$(paste -sd ' ' "$STAGE/moved")"
-[ -z "$WRITTEN" ] || printf 'files written to requirements/:%s\n' "$WRITTEN"
+done
+if [ -s "$STAGE/w/moved" ]; then
+  cp -- "$STAGE/w/requirements.md" "$REQS" || { echo "split-requirements.sh: could not rewrite $REQS; every entry is in requirements/ and also still in it" >&2; exit 1; }
+  printf 'taken out of requirements.md: %s\n' "$(paste -sd ' ' "$STAGE/w/moved")"
+fi
+[ -z "$WRITE" ] || printf 'files written to requirements/:%s\n' "$WRITE"
+# An entry the branch changed is one GH-200.4's literal holds still, if it is
+# one of the 117 the split moved, and its token has to move with it: said
+# here, with both tokens, because the suite's red would otherwise be the first
+# anyone heard of it.
+for id in $OURS; do
+  new="$id:$(cksum < "$SPLIT/$id.md" | awk '{ print $1 ":" $2 }')"
+  old=$(grep -oE "(^|[[:space:]])${id//./\\.}:[0-9]+:[0-9]+" "$DIR/check-hooks.sh" 2> /dev/null | head -n 1 | tr -d '[:space:]')
+  if [ -n "$old" ]; then
+    printf '%s: changed on %s only since the base, so its SPLIT_MOVED token in check-hooks.sh moves from %s to %s\n' "$id" "$BRANCH_REV" "$old" "$new"
+  else
+    printf '%s: changed on %s only since the base; check-hooks.sh holds no SPLIT_MOVED token for it\n' "$id" "$BRANCH_REV"
+  fi
+done
+[ -z "$THEIRS" ] || printf 'changed on the dev side only since the base, and left as it was:%s\n' "$THEIRS"
 [ -z "$KEPT" ] || printf 'already in requirements/ with the same bytes, and left as it was:%s\n' "$KEPT"
+[ "$SAME" = 0 ] || printf 'unchanged on both sides since the base, and left as it was: %s\n' "$SAME"
+exit 0
