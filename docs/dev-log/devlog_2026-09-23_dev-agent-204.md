@@ -248,3 +248,14 @@ Nothing is pushed yet.
 - #218, for the end-of-run file in step 2.
 - #217 holds the reviewer's items, including four more from this round. The
   assistant agrees with filing each one.
+
+### Correction, 2026-09-23 22:40 +03
+
+The mutant count above is wrong, and so is the one in `232487d`'s message.
+The run was **16**: 14 mutants, each red on the check aimed at it, and 2
+controls, both green. The assistant wrote "17 runs" and "15 mutants" without
+counting the driver's output. It then wrote a sentence into the round-2 reply
+that explained the wrong total by saying one row stood for two mutants, which
+was not true. It found the error while re-reading the posted reply. The reply
+and the PR body were corrected in place; this entry and the commit message
+stay as they were.
