@@ -226,16 +226,26 @@ cd "$(dirname "$0")" || exit 1
 SUITE_DIR=$(pwd)
 HOOKS=$SUITE_DIR
 # THE TOOLING BESIDE THE HOOKS: the files in .claude/hooks/ that are not hooks
-# and are not judged as ones. This suite, and the harness that runs it against a
-# copy of the rest. One list, because three questions that read it are one fact
-# -- neither file is executed from $HOOKS, whatever an override says. Neither is
-# a tokeniser consumer though both name the library in code; neither can be a
-# mutation target, because the copy's text of either would be read and never
-# run; and the text of both is read off $SUITE_DIR below rather than off $HOOKS.
+# and are not judged as ones. This suite, the files it sources, and the harness
+# that runs it against a copy of the rest. One rule, because three questions
+# that read it are one fact -- none of them is executed from $HOOKS, whatever an
+# override says. None is a tokeniser consumer though each of the two above names
+# the library in code; none can be a mutation target, because the copy's text
+# would be read and never run; and their text is read off $SUITE_DIR below
+# rather than off $HOOKS.
 # It was three separate spellings of that one fact before Bertan's review of
 # PR #142, and the one it did not have was the middle one: mutate-hooks.sh was
 # an accepted mutation target, judged on text nobody executed.
-TOOLING="check-hooks.sh mutate-hooks.sh"
+#
+# IT IS A RULE AND NOT A LIST (#204): a regular expression over a path relative
+# to .claude/hooks/, matching the two files above and everything under checks/,
+# where the files this suite sources live. A list is what the next file is not
+# on, and a file under checks/ is added by every loop that writes checks, so the
+# rule is written for the directory and adding one never touches it. It is
+# spelled in bracket expressions rather than with backslashes because awk and
+# [[ =~ ]] read it too, and `awk -v` would eat a backslash. mutate-hooks.sh
+# spells it identically, and the #204 section holds the two to each other.
+TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/.+)$'
 # An override that names a directory missing one of the files beside this suite
 # would turn most of this suite red for that reason, and a harness reading the
 # result would count every mutation as caught -- its permitting direction. So
@@ -316,13 +326,17 @@ RAN="$FIXTURES/ran"
 #
 # SOURCE ORDER is this driver first and then each file in $SUITE_SOURCED in the
 # order it is sourced, so the header this suite opens with is still the first
-# thing in it.
+# thing in it. $SUITE_FILES is that list, and the line that sets it is the one
+# place code names this file by its path, other than to run it; the #204
+# section holds the suite to that. A check that needs to know where one file
+# ends and the next begins -- which function is defined where -- reads the
+# files it lists.
+SUITE_FILES=("$SUITE_DIR/check-hooks.sh")
+for f in $SUITE_SOURCED; do
+  SUITE_FILES+=("$SUITE_DIR/$f")
+done
 suite_text() {  # suite_text -- every file of this suite, in source order
-  local f
-  cat -- "$SUITE_DIR/check-hooks.sh" || return 1
-  for f in $SUITE_SOURCED; do
-    cat -- "$SUITE_DIR/$f" || return 1
-  done
+  cat -- "${SUITE_FILES[@]}"
 }
 SUITE_TEXT="$FIXTURES/suite-text"
 suite_text > "$SUITE_TEXT" || {
@@ -7848,10 +7862,10 @@ CS_SOURCERS=$(for f in "$HOOKS"/*.sh; do
 # a second spelling of one fact is the one that goes stale. The needle stays the
 # loose one -- a hook that sources the library by some other spelling has to stay
 # in this audit, which is the failure it exists for -- so what is written down is
-# who may mention the file without loading it.
-CS_NOT_CONSUMERS=$TOOLING
+# who may mention the file without loading it. The names above are relative to
+# $HOOKS, which is what the rule reads, because every one of them is at its top.
 CS_SOURCERS=$(for f in $CS_SOURCERS; do
-    case " $CS_NOT_CONSUMERS " in *" $f "*) continue ;; esac
+    [[ $f =~ $TOOLING ]] && continue
     printf '%s\n' "$f"
   done | tr '\n' ' ')
 [ -n "$CS_NAMED" ] && [ -n "$CS_SOURCERS" ] || {
@@ -8943,7 +8957,7 @@ req GH-134.1
 # rows and requires nothing, so a glob over *.sh calls the harness a consumer.
 # Found by this check failing on its first run, which is the shape it is for.
 NO_CS_SPLIT=$(for hook_file in "$HOOKS"/*.sh; do
-  case " $TOOLING " in *" ${hook_file##*/} "*) continue ;; esac
+  [[ ${hook_file#"$HOOKS"/} =~ $TOOLING ]] && continue
   grep -q 'lib/command-scan.sh' "$hook_file" || continue
   grep -q 'command -v cs_split' "$hook_file" && continue
   printf '%s ' "${hook_file##*/}"
@@ -11760,7 +11774,7 @@ armed 'and $CHECK_HOOKS_DIR is what moves them' \
 # already argued. "A variable" alone would not have been enough -- it accepts
 # "$SUITE_DIR/no-git-push.sh", which is the same defect one door along.
 #
-# Derived off this file's text rather than listed, for the reason every derived
+# Derived off this suite's text rather than listed, for the reason every derived
 # list here carries: a list is what the next call added would not be on.
 # Continuation lines are joined, the call is cut into shell words, and the third
 # word is the one asked. The count is pinned beside it, so a derivation that
@@ -11782,6 +11796,16 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
       tok[++ntok] = substr(s, start, i - start)
     }
   }
+  # The path TOOLING is asked of: relative to the hooks directory where the
+  # spelling says so, and otherwise its last component, so that a tooling file
+  # named through any other variable -- $REPO_ROOT/.claude/hooks/mutate-hooks.sh
+  # -- is still the tooling and still has to be read from $SUITE_DIR. A file
+  # under checks/ named that way is the one it cannot place, which is taken:
+  # every read of one here is spelled $SUITE_DIR/checks/.
+  function tooling_rel(p) {
+    if (sub(/^\$(SUITE_DIR|HOOKS)\//, "", p) || sub(/^.*\/\.claude\/hooks\//, "", p)) return p
+    sub(/.*\//, "", p); return p
+  }
   { line = $0; sub(/[ \t]+$/, "", line) }
   line ~ /\\$/ { sub(/\\$/, "", line); if (!open) open = NR; buf = buf line; next }
   { full = buf line; buf = ""; start = open ? open : NR; open = 0 }
@@ -11791,11 +11815,9 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
     if (ntok < 3) { print start ": fewer than three arguments"; next }
     a = tok[3]
     gsub(/"/, "", a)
-    base = a
-    sub(/.*\//, "", base)
     if (a !~ /^\$/)
       print start ": " tok[3] " is a bare name, read from the directory this suite runs in"
-    else if (index(" " tooling " ", " " base " ") > 0) {
+    else if (tooling_rel(a) ~ tooling) {
       if (a !~ /^\$SUITE_DIR\//)
         print start ": " tok[3] " is the tooling beside the hooks and is read from $SUITE_DIR"
     }
@@ -11805,7 +11827,7 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
 ' "$SUITE_TEXT")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '314' "${TEXT_CHECK_ARGS##*COUNT }"
+    '316' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -11916,9 +11938,9 @@ armed 'a row naming an absolute path or climbing out with .. is refused before t
 # these pins red and be reported as caught, for a file whose running instance was
 # never touched. One list, read here and there. Bertan's review of PR #142.
 armed 'and a row targeting the tooling beside the hooks, which runs from the repository' \
-      "$MUT" 'case " $TOOLING " in *" $FILE "*)'
+      "$MUT" 'if [[ $FILE =~ $TOOLING ]]; then'
 armed 'which the harness reads from the same list this suite does' \
-      "$MUT" 'TOOLING="check-hooks.sh mutate-hooks.sh"'
+      "$MUT" "TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/.+)\$'"
 # THE OUTCOME FIELD IS TIED TO THE ID. Every real mutation expects `caught`, and
 # the other two words belong to rows whose id says they are self-tests. Untied,
 # the field was also how a real survivor could be declared expected: the row
@@ -12026,7 +12048,7 @@ while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
     caught:*|survived:selftest-*|did-not-apply:selftest-*) ;;
     *) MUT_ROW_RUNS= ;;
   esac
-  case " $TOOLING " in *" $MFILE "*) MUT_ROW_RUNS= ;; esac
+  [[ $MFILE =~ $TOOLING ]] && MUT_ROW_RUNS=
   case "$MFILE" in /*|*/../*|../*|*/..|..) MUT_ROW_RUNS= ;; esac
   [ -n "$MFILE" ] && [ -n "$MEDIT" ] && [ -n "$MREQS" ] && [ -n "$MWANT" ] || MUT_ROW_RUNS=
   [ -z "$MUT_ROW_RUNS" ] || MUT_RUN_OUTCOMES="$MUT_RUN_OUTCOMES$MWANT
@@ -12034,9 +12056,8 @@ while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
   [ -n "$MFILE" ] && [ -n "$MEDIT" ] && [ -n "$MREQS" ] && [ -n "$MWANT" ] \
     || { MUT_BAD="$MUT_BAD  $MID: the row does not split into five fields
 "; continue; }
-  case " $TOOLING " in *" $MFILE "*)
-    MUT_BAD="$MUT_BAD  $MID: targets $MFILE, which the harness runs rather than judges
-" ;; esac
+  [[ $MFILE =~ $TOOLING ]] && MUT_BAD="$MUT_BAD  $MID: targets $MFILE, which the harness runs rather than judges
+"
   # A path INSIDE the hooks directory, asked of the table as written. An absolute
   # one, or one climbing out with .., names a file the copy does not hold and the
   # edit would land wherever it points. The harness refuses such a row itself;
@@ -14310,6 +14331,346 @@ for hook in $(printf '%s\n' "$REGISTRATION" | grep -o '[A-Za-z0-9_.-]*\.sh' | so
   fi
 done
 
+section "=== issue #204: the helper library, the suite's own text, and the tooling rule ==="
+# THE SUITE IS SPLIT BY WHO WRITES IT. Every loop appended to one file, so every
+# two loops running at once conflicted in it: every one of the six orderings of
+# the three pull requests open on 2026-09-23 (#204's measurement). The first step of the split takes out what every section shares, the
+# helpers, into checks/library.sh; this section holds the three things that
+# step rests on. Which functions are in the library is derived rather than
+# listed. The suite reads its own text through two helpers, because it is more
+# than one file now. And the tooling rule covers the directory the library
+# lives in, so that no audit of the hooks mistakes it for one.
+#
+# WHICH FUNCTIONS BELONG IN THE LIBRARY, derived off the code. The rule is the
+# library header's: a function with callers in more than one file of the suite,
+# each section of check-hooks.sh counting as a file of its own and its prelude as
+# another, and a call made inside a function counting for every caller of that
+# function. So `record` belongs there because `pass` does, and a helper called
+# from one section alone stays beside it.
+#
+# The derivation reads CODE. Quoted text, comments and heredoc bodies are blanked
+# first, by a scanner that follows single, double and $'...' quotes and a $( )
+# inside double quotes -- which is where most helpers are called, as the last
+# argument of a `tok` -- because the name of nearly every helper here is also an
+# English word, and a label saying "holds" is not a call to `holds`. A function
+# the suite takes away again with `unset -f` is a fixture standing in for a
+# program, as `gh` does in #108's section, and not a helper.
+#
+# WHAT IT DOES NOT SEE, named. A call made through a variable counts only where
+# the name is written as a bare word, which is how `drive_helper` is handed each
+# helper it drives. A function defined indented -- inside another one, or inside
+# an `if`, as `override_refused` is in #107's section -- is not a definition to
+# it: its body is read as part of the code around it, as `fn_writes` reads the
+# hooks. And a `case` arm's
+# `)` inside a $( ) closes it early, so the scanner reads the rest of that arm as
+# quoted. The ones that stand in the #84 section each come back to code by the
+# end of their line. A file the scanner does not finish in plain code -- inside a
+# quote, a heredoc or a function body -- is reported as a line of its own, and
+# the check below fails on any such line.
+lib_callers() {  # lib_callers <file>... -- "<function> <callers> <file>" a line, the first file the driver
+  awk '
+    function top() { return substr(st, length(st), 1) }
+    function push(c) { st = st c }
+    function pop() { if (length(st) > 1) st = substr(st, 1, length(st) - 1) }
+    function code(raw,   out, i, n, c, t, rest, m) {
+      out = ""; n = length(raw); i = 1
+      while (i <= n) {
+        c = substr(raw, i, 1); t = top()
+        if (t == "S") { if (c == "'"'"'") pop(); out = out " "; i++; continue }
+        if (t == "A") {
+          if (c == "\\") { out = out "  "; i += 2; continue }
+          if (c == "'"'"'") pop(); out = out " "; i++; continue
+        }
+        if (t == "D") {
+          if (c == "\\") { out = out "  "; i += 2; continue }
+          if (c == "\"") { pop(); out = out " "; i++; continue }
+          if (substr(raw, i, 2) == "$(" && substr(raw, i, 3) != "$((") { push("P"); out = out "$("; i += 2; continue }
+          out = out " "; i++; continue
+        }
+        if (c == "\\") { out = out "  "; i += 2; continue }
+        if (substr(raw, i, 2) == "$'"'"'") { push("A"); out = out "  "; i += 2; continue }
+        if (c == "'"'"'") { push("S"); out = out " "; i++; continue }
+        if (c == "\"") { push("D"); out = out " "; i++; continue }
+        if (c == "#" && (i == 1 || substr(raw, i - 1, 1) ~ /[ \t;(|&]/)) break
+        if (substr(raw, i, 2) == "$(" && substr(raw, i, 3) != "$((") { push("P"); out = out "$("; i += 2; continue }
+        if (c == "(" && t == "P") { push("P"); out = out c; i++; continue }
+        if (c == ")" && t == "P") { pop(); out = out c; i++; continue }
+        if (substr(raw, i, 2) == "<<" && substr(raw, i, 3) != "<<<") {
+          rest = substr(raw, i + 2)
+          if (match(rest, /^-?[ \t]*['"'"'"]?[A-Za-z_][A-Za-z0-9_]*/)) {
+            m = substr(rest, 1, RLENGTH)
+            hstrip[++npend] = (substr(m, 1, 1) == "-")
+            sub(/^-?[ \t]*['"'"'"]?/, "", m)
+            hterm[npend] = m
+            if (substr(rest, RLENGTH + 1, 1) ~ /['"'"'"]/) RLENGTH++
+            out = out sprintf("%" (RLENGTH + 2) "s", ""); i += RLENGTH + 2; continue
+          }
+        }
+        out = out c; i++
+      }
+      return out
+    }
+    function ended(f) { if (st != "C" || inhd || body != "") print "! " f " ends inside " (inhd ? "a heredoc" : body != "" ? "a function" : "a quote") }
+    FNR == 1 { if (file) ended(prev); prev = FILENAME; file++; region = (file == 1) ? "prelude" : FILENAME; st = "C"; npend = 0; inhd = 0; body = "" }
+    inhd {
+      cand = $0; if (hstrip[inhd]) sub(/^\t+/, "", cand)
+      if (cand == hterm[inhd]) { inhd = (inhd < npend) ? inhd + 1 : 0; if (!inhd) npend = 0 }
+      next
+    }
+    {
+      if (file == 1 && $0 ~ /^section "/) region = "section:" FNR
+      line = code($0)
+      if (npend) inhd = 1
+      text = line
+      if (body == "" && line ~ /^[A-Za-z_][A-Za-z0-9_]*\(\)[ \t]*(\{.*)?$/) {
+        name = line; sub(/\(.*/, "", name)
+        defined[name] = FILENAME
+        rest = line; sub(/^[^{]*/, "", rest); sub(/[ \t]+$/, "", rest)
+        text = rest
+        body = (rest ~ /^\{.*\}$/) ? "" : name
+        owner = name
+      } else owner = body
+      if (body != "" && line ~ /^\}/) body = ""
+      if (match(line, /unset -f[ \t]+[A-Za-z_][A-Za-z0-9_]*/)) {
+        u = substr(line, RSTART, RLENGTH); sub(/unset -f[ \t]+/, "", u); unset_[u] = 1
+      }
+      s = text
+      while (match(s, /[A-Za-z_][A-Za-z0-9_]*/)) {
+        w = substr(s, RSTART, RLENGTH)
+        before = (RSTART > 1) ? substr(s, RSTART - 1, 1) : ""
+        after = substr(s, RSTART + RLENGTH, 1)
+        s = substr(s, RSTART + RLENGTH)
+        if (before ~ /[A-Za-z0-9_$.\/-]/ || after ~ /[A-Za-z0-9_.=\/-]/) continue
+        if (owner != "") {
+          if (w != owner && !((owner, w) in seen)) { seen[owner, w] = 1; eg[++nedge] = owner; ef[nedge] = w }
+        } else if (index(eff[w], " " region " ") == 0) eff[w] = eff[w] " " region " "
+      }
+    }
+    END {
+      ended(prev)
+      do {
+        changed = 0
+        for (e = 1; e <= nedge; e++) {
+          nr = split(eff[eg[e]], rs, " ")
+          for (j = 1; j <= nr; j++)
+            if (index(eff[ef[e]], " " rs[j] " ") == 0) { eff[ef[e]] = eff[ef[e]] " " rs[j] " "; changed = 1 }
+        }
+      } while (changed)
+      for (f in defined) if (!(f in unset_)) print f, split(eff[f], rs, " "), defined[f]
+    }' "$@" 2>/dev/null | LC_ALL=C sort
+}
+# The functions on the wrong side of the file boundary, given the derivation and
+# the library's path: "<function> belongs in the library" or "<function> does
+# not", a line, sorted.
+lib_misplaced() {  # lib_misplaced <lib_callers output> <library path>
+  printf '%s\n' "$1" | awk -v lib="$2" '
+    NF == 3 && $2 > 1 && $3 != lib { print $1 " belongs in the library, called from " $2 " places" }
+    NF == 3 && $2 <= 1 && $3 == lib { print $1 " does not belong in the library, called from " $2 }'
+}
+req GH-204.1
+# DRIVEN FIRST, against a fixture whose every answer is written here: a driver
+# with a prelude and two sections, and a library. `both` is called from both
+# sections and `once` from one; `shared`, in the library, from section two, and
+# `through` only from inside `shared`; `stub` is unset again, as a fixture is.
+# Names are also written where a call is not: in a label, a comment and a
+# heredoc body.
+LIB_FIX="$FIXTURES/library-rule"
+mkdir -p "$LIB_FIX"
+cat > "$LIB_FIX/driver.sh" <<'LIBFIX'
+#!/bin/bash
+both() { :; }
+once() { :; }
+stub() { :; }
+section "=== one ==="
+both a
+once b
+stub c
+tok 'both once shared through' "$(both x)"
+section "=== two ==="
+# once, in a comment
+cat <<'BODY'
+once
+BODY
+both e
+x=$(shared y)
+stub d
+unset -f stub
+LIBFIX
+cat > "$LIB_FIX/library.sh" <<'LIBFIX'
+shared() {
+  through "$1"
+}
+through() { :; }
+tok() { :; }
+section() { :; }
+LIBFIX
+tok 'the derivation counts each section as a caller, and reads no label, comment or heredoc' \
+"both 2 $LIB_FIX/driver.sh
+once 1 $LIB_FIX/driver.sh
+section 2 $LIB_FIX/library.sh
+shared 1 $LIB_FIX/library.sh
+through 1 $LIB_FIX/library.sh
+tok 1 $LIB_FIX/library.sh" \
+    "$(lib_callers "$LIB_FIX/driver.sh" "$LIB_FIX/library.sh")"
+# A third section calling `shared` gives it two callers, and `through` the same
+# two, though nothing outside the library calls `through` at all.
+printf 'section "=== three ==="\nshared z\n' >> "$LIB_FIX/driver.sh"
+tok 'a call made inside a function counts for every caller of that function' \
+"shared 2 $LIB_FIX/library.sh
+through 2 $LIB_FIX/library.sh" \
+    "$(lib_callers "$LIB_FIX/driver.sh" "$LIB_FIX/library.sh" | grep -E '^(shared|through) ')"
+tok 'and a function on the wrong side is named, in both directions' \
+"both belongs in the library, called from 2 places
+tok does not belong in the library, called from 1" \
+    "$(lib_misplaced "$(lib_callers "$LIB_FIX/driver.sh" "$LIB_FIX/library.sh")" "$LIB_FIX/library.sh")"
+printf "x='unclosed\n" > "$LIB_FIX/open-quote.sh"
+tok 'a file the scanner does not finish in plain code is reported' \
+    "! $LIB_FIX/open-quote.sh ends inside a quote" \
+    "$(lib_callers "$LIB_FIX/open-quote.sh" | grep '^!')"
+
+# THIS SUITE. The files are $SUITE_FILES, because the question is which file
+# each function is defined in, and $SUITE_TEXT has no boundaries.
+# The derivation has to have read something, or an empty answer below would
+# pass: `pass` is called from every section, and `inv_apply` from #106's alone.
+LIB_PATH="$SUITE_DIR/checks/library.sh"
+LIB_CALLERS=$(lib_callers "${SUITE_FILES[@]}")
+tok 'the derivation over this suite places pass in the library and inv_apply beside its section' \
+    'inv_apply 1 driver
+pass library' \
+    "$(printf '%s\n' "$LIB_CALLERS" | awk -v lib="$LIB_PATH" '
+        $1 == "pass" && $2 > 1 && $3 == lib { print "pass library" }
+        $1 == "inv_apply" { print $1, $2, ($3 == lib ? "library" : "driver") }' | LC_ALL=C sort)"
+tok 'the scanner finished every file of this suite in plain code' \
+    '' "$(printf '%s\n' "$LIB_CALLERS" | grep '^!')"
+tok 'every function called from more than one section is in checks/library.sh, and no other is' \
+    '' "$(lib_misplaced "$LIB_CALLERS" "$LIB_PATH")"
+
+# THE LIBRARY RUNS NOTHING. It is sourced before the first section, so a check
+# written into it would run ahead of every fixture under whatever tag was set.
+# Sourced here in a shell of its own, with a ledger of its own, and asked what it
+# printed on either stream, what it recorded, and that it defined the functions
+# every check prints through -- the last, so that a library that did not load
+# at all cannot pass for one that loaded quietly.
+#
+# AND IT DEFINES FUNCTIONS AND NOTHING ELSE, which printing nothing does not
+# show: an assignment, a `set -e`, a `cd` or a trap at the library's top level
+# is silent. So the shell's state is written down before the library is sourced
+# and after it -- every variable, every option, the working directory, the
+# umask and the traps -- and the two have to be the same. The variables bash
+# itself moves between two reads are left out, by name.
+req GH-204.2
+LIB_ALONE="$FIXTURES/library-alone"
+mkdir -p "$LIB_ALONE"
+: > "$LIB_ALONE/ledger"
+tok 'sourcing the library alone prints nothing and defines what every check prints through' \
+    'defined' \
+    "$(bash -c 'LEDGER=$1; REQ=GH-0; . "$2" 2>&1
+                declare -F record pass fail req section >/dev/null && echo defined' \
+         _ "$LIB_ALONE/ledger" "$LIB_PATH" 2>&1)"
+tok 'and records nothing in the ledger it was given' \
+    '0' "$(wc -c < "$LIB_ALONE/ledger" | tr -d ' ')"
+lib_state() {  # lib_state -- this shell's variables, options, directory, umask and traps
+  ( set -o posix; set ) | grep -vE '^(_|BASH_ARGC|BASH_ARGV|BASH_COMMAND|BASH_LINENO|BASH_SOURCE|BASH_SUBSHELL|BASHPID|EPOCHREALTIME|EPOCHSECONDS|FUNCNAME|LINENO|PIPESTATUS|RANDOM|SECONDS|SRANDOM)='
+  set -o; shopt; pwd; umask; trap -p
+}
+tok 'and changes nothing else about the shell that sources it' \
+    'unchanged' \
+    "$(export -f lib_state
+       bash -c 'lib_state > "$1/before"; . "$2" >/dev/null 2>&1; lib_state > "$1/after"
+                cmp -s "$1/before" "$1/after" && echo unchanged || diff "$1/before" "$1/after"' \
+         _ "$LIB_ALONE" "$LIB_PATH" 2>&1)"
+
+# THE SUITE READS ITS OWN TEXT THROUGH TWO HELPERS. $SUITE_TEXT is every file of
+# it, the driver first, so the header is still its opening. A read of the driver
+# alone would stop seeing whatever moved into the library, and the absence it
+# then reported would be of text that is there.
+req GH-204.3
+tok 'the suite text opens with the driver header' \
+    '# Regression checks for the hooks under .claude/hooks/ and what they rest on.' \
+    "$(sed -n 2p "$SUITE_TEXT")"
+written 'and holds the library' "$SUITE_TEXT" '# THE HELPER LIBRARY of the hook check suite.'
+# A range that matched nothing is a FAIL. Driven in a subshell, as the #98
+# self-test drives its helpers: the FAIL it prints there is the one asserted and
+# is not recorded, so it does not turn this run red. The anchor is split, so
+# that this line is not among its matches, and so is the result word, because
+# the #104 section reads this suite for a quoted line opening with one.
+tok 'a range of the suite text that matched nothing FAILs, and says which range' \
+    "  FA""IL the suite text from /^no such ""line$/ to /^}/ is empty, so what is asked of it is asked of nothing
+status 1" \
+    "$(suite_range SR_NONE '/^no such ''line$/' '/^}/'; echo "status $?")"
+suite_range SR_SELF '/^suite_range() {/' '/^}/'
+holds 'and a range that is there is read, whole' "$SR_SELF" 'return 1'
+# NO CODE NAMES THE DRIVER TO READ IT. Its path, under $SUITE_DIR or $HOOKS in
+# any of the spellings a reader writes, is on the line that lists the suite's
+# files and on the one line that runs it. Whole-line comments are skipped; a
+# trailing one is read, which errs toward a refusal a reader can see. What this
+# does not ask, named: a bare relative name, read from this suite's own working
+# directory, and awk's `$0`. The fixture spells the file through $D, so that its
+# own lines are not among what the second check finds.
+direct_self_reads() {  # direct_self_reads <file>... -- "<file>:<line>" for each read of the driver by path
+  awk '/^SUITE_FILES=\(/ { next }
+       /^[ \t]*#/ { next }
+       /\$\{?(SUITE_DIR|HOOKS)\}?"?\/check-hooks\.sh/ &&
+         !/(^|[ \t;|&(])bash[ \t]+"\$\{?SUITE_DIR\}?\/check-hooks\.sh"/ { print FILENAME ":" FNR }' "$@"
+}
+DSR_FIX="$FIXTURES/direct-self-reads.sh"
+D=check-hooks
+cat > "$DSR_FIX" <<DSR
+SUITE_FILES=("\$SUITE_DIR/$D.sh")
+grep -c x "\$SUITE_DIR/$D.sh"
+out=\$(bash "\$SUITE_DIR/$D.sh" 2>&1)
+# sed -n 1p "\$SUITE_DIR/$D.sh"
+awk 1 "\${HOOKS}/$D.sh"
+sed -n 1p "\$SUITE_DIR"/$D.sh
+DSR
+tok 'a read of the driver by path is found, and the file list, a run and a comment are not' \
+    "$DSR_FIX:2 $DSR_FIX:5 $DSR_FIX:6" "$(direct_self_reads "$DSR_FIX" | tr '\n' ' ' | sed 's/ $//')"
+tok 'no code in this suite reads the driver by its path' \
+    '' "$(direct_self_reads "${SUITE_FILES[@]}")"
+
+# THE TOOLING RULE covers the directory, so that a file added under checks/ is
+# covered without touching it. Asked of paths whose answer is written here,
+# among them the near misses a pattern written loosely would take.
+req GH-204.4
+tok 'TOOLING matches the suite, the harness and every path under checks/, and nothing else' \
+    'check-hooks.sh:yes mutate-hooks.sh:yes checks/library.sh:yes checks/GH-130.sh:yes no-git-push.sh:no lib/command-scan.sh:no checks:no checks/:no checks.sh:no xchecks/a.sh:no check-hooksXsh:no lib/check-hooks.sh:no' \
+    "$(for p in check-hooks.sh mutate-hooks.sh checks/library.sh checks/GH-130.sh no-git-push.sh \
+                lib/command-scan.sh checks checks/ checks.sh xchecks/a.sh check-hooksXsh lib/check-hooks.sh; do
+         if [[ $p =~ $TOOLING ]]; then printf '%s:yes ' "$p"; else printf '%s:no ' "$p"; fi
+       done | sed 's/ $//')"
+armed 'the suite spells the rule as the harness does' \
+      "$SUITE_TEXT" "TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/.+)\$'"
+# The harness's own row check, run rather than read: its function and its rule
+# are taken out of its text and asked about a row, in a subshell of their own.
+# A function that is not there to take out answers so, rather than with the
+# empty string a runnable row answers with.
+harness_row_fault() {  # harness_row_fault <file> -- what mutate-hooks.sh's row_fault says of a row targeting it
+  local fn
+  fn=$(sed -n '/^row_fault() {/,/^}/p' "$MUT")
+  [ -n "$fn" ] || { echo "row_fault is not in $MUT"; return; }
+  ( eval "$fn"; eval "$(grep -E '^TOOLING=' "$MUT")"; row_fault x "$1" 's/a/b/' GH-1 caught )
+}
+tok 'the harness refuses a registry row that targets a file under checks/' \
+    'checks/library.sh runs from the repository rather than from the copy, so a mutation to it would be read and never executed' \
+    "$(harness_row_fault checks/library.sh)"
+tok 'and runs one that targets a hook' '' "$(harness_row_fault no-git-push.sh)"
+# The two audits that walk the hooks directory looking for hooks, and must not
+# find the suite's own files among them. Neither can today: both glob the top
+# of the directory and lib/. What these hold is that a glob widened to reach
+# checks/ -- which is what finding the next hook in a subdirectory would take --
+# turns them red rather than making the library a hook.
+CHECKS_NAMES=$(cd "$SUITE_DIR/checks" && ls | tr '\n' ' ')
+present 'the checks directory holds the library, so the two below ask about something' \
+        library.sh "$CHECKS_NAMES"
+checks_on() {  # checks_on <space-separated list> -- the names under checks/ that are on it
+  local n
+  for n in $CHECKS_NAMES; do
+    case " $1 " in *" $n "*) printf '%s ' "$n" ;; esac
+  done
+}
+tok 'no file under checks/ is on the list of hook files' '' "$(checks_on "$HOOK_FILES")"
+tok 'nor on the list of tokeniser consumers' '' "$(checks_on "$CS_SOURCERS")"
+
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads the requirements -- requirements.md, and the `GH-` entries
 # under requirements/ since #200 -- and the tags every check above carries, and
@@ -14414,6 +14775,7 @@ GH-155.1:static GH-148:static
 GH-109.1:static GH-109.2:refuse-only GH-109.3:static GH-109.4:static
 GH-109.5:permit-only GH-164:gap
 GH-200.1:static GH-200.2:static GH-200.3:static GH-200.4:static GH-200.5:static
+GH-204.1:static GH-204.2:static GH-204.3:static GH-204.4:static
 '
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in

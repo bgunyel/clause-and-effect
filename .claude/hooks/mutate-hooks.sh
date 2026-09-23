@@ -471,11 +471,14 @@ SUITE="$SRC/check-hooks.sh"
   echo "mutate-hooks.sh: $SUITE is not there, so there is no suite to run" >&2; exit 1
 }
 
-# The files beside the hooks that are not hooks. check-hooks.sh keeps the same
-# list under the same name, where the two directories are split, and its registry
-# audit holds this table to it. Neither file is ever executed out of the copy, so
-# neither can be a mutation target.
-TOOLING="check-hooks.sh mutate-hooks.sh"
+# The files beside the hooks that are not hooks: this harness, the suite, and
+# everything under checks/, which the suite sources. A rule over a path relative
+# to the hooks directory rather than a list of names, so that a file added under
+# checks/ is covered without touching it (#204). check-hooks.sh keeps the same
+# rule under the same name, where the two directories are split, and holds this
+# spelling to its own. Nothing it matches is ever executed out of the copy, so
+# nothing it matches can be a mutation target.
+TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/.+)$'
 
 # THE MEASUREMENT. `--list` multiplies this rate by the run count it derives, so
 # the wall-clock it prints follows the registry instead of standing still while
@@ -564,10 +567,10 @@ row_fault() {  # row_fault <id> <file> <edit> <reqs> <want> -- a reason, or noth
   # paragraph at its head says why -- and so is this file. An edit to either copy
   # would be read by the suite's text checks and executed by nothing, so whatever
   # this harness reported would be about a file that never ran.
-  case " $TOOLING " in *" $FILE "*)
+  if [[ $FILE =~ $TOOLING ]]; then
     echo "$FILE runs from the repository rather than from the copy, so a mutation to it would be read and never executed"
-    return ;;
-  esac
+    return
+  fi
   # A file IN the working copy, spelled as a path relative to it. An absolute
   # path, or one climbing out with .., is an edit to whatever it names -- this
   # repository's own hooks among the things it could name -- and the sum taken at

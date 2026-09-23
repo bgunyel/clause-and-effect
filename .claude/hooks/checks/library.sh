@@ -35,7 +35,7 @@
 # prints the result, rather than by a comment nothing reads (#103 Q2).
 #
 # `pass` and `fail` are that call, and nothing else prints a result: the #104
-# section derives that from this file. Each takes the direction of the check,
+# section derives that from this suite's text. Each takes the direction of the check,
 # which requirements.md defines -- refuse for a BLOCK or a refusal's message,
 # permit for an ALLOW, static for a check that reads no verdict -- because a
 # requirement is covered by a refusing and a permitting check, not by a count.
@@ -330,7 +330,7 @@ says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
 # #84's defect with nothing at all watching for it. Bertan's review of PR #142.
 #
 # Asked here, at the moment the file is read, because that is the only question
-# no spelling can hide from: the derivation in the #107 section reads this file's
+# no spelling can hide from: the derivation in the #107 section reads this suite's
 # text and cannot see through a variable, and it was a variable holding a bare
 # name that the first version of this fix left behind.
 absolute_or_fail() {  # absolute_or_fail <label> <file> -- 0 when absolute
@@ -818,7 +818,7 @@ library_under_a_second() {  # library_under_a_second <label> <call> <out>
 # WHERE THE `GH-` ENTRIES ARE, answered once (#200). They are not in
 # requirements.md: each is a file of its own under requirements/ beside it, named
 # by its ID, because every review loop appended to one section of one file and
-# every pair of concurrent branches conflicted there. Every reader in this file
+# every pair of concurrent branches conflicted there. Every reader in this suite
 # reads the union, and every one of them asks this function for the second half
 # of it, so that there is one answer to which files and in which order.
 #
