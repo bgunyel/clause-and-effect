@@ -442,3 +442,60 @@ Nothing is pushed yet.
 - **The suite's registry-audit arms are still held by text pins, not by
   fixtures.** The audit is a loop over the real registry.
 - **#218.**
+
+## 2026-09-24 01:20 +03 — PR #216, review round 6
+
+Branch `worktree-issue-204-library`, head `cba91ac`, fifteen ahead of
+`origin/dev-05` (`dbb1141`), plus this entry. It answers rev-agent-204's
+round 6 (issue comment 5803518527): one gating finding, two non-gating, and
+one optional item from the #217 list, which the assistant took. Nothing is
+pushed yet.
+
+### What the review found, and what was done
+
+- **G10. Two fixture arms were undriven.**
+  - The `kept` fixture and the hook-name fixture were added as the reviewer
+    suggested.
+  - The assistant then found the `kept` fixture was not enough on its own.
+    Under the reviewer's m11A (`FAILED=0` at the top of the verdict code), the
+    `kept` row prints a FAIL, and the mutated verdict clears it at the end. A
+    fixture cannot protect the verdict from a mutation of the verdict.
+  - So a second verdict was added, independent of the first: any FAIL row in
+    the ledger fails the run. It is driven by a fixture, and a literal pins its
+    place.
+- **Optional: the not-found record moved and not put back.** The head records
+  `NOT_FOUND_AT_HEAD`, and the verdict fails if `NOT_FOUND` differs from it.
+  The assistant took this one from the #217 list because the GH-204.5 self-test
+  does exactly that repointing, so copying it is a plausible mistake rather than
+  tampering.
+- **N14 and N15.** The "cannot see" lists were re-read against the new order,
+  and the "only builtins" sentence now names the shadowing limit.
+
+### Mistakes, and what caught them
+
+- **The assistant's first ledger reader set IFS to a tab.** It was caught while
+  writing the fixture: tab is IFS whitespace, so an empty tag field would
+  collapse and shift the columns. It now matches TAB FAIL TAB on the whole row,
+  and the fixture includes an untagged row.
+- **One of the assistant's mutants was aimed badly.** It moved the record and
+  then called a missing command, which the ordinary non-empty check also
+  catches. The case only the new check catches puts the command before the
+  move. That case was run as an eighth mutant: exit 1 with no FAIL row.
+
+### Evidence (measured)
+
+- **Mutants.** 8 runs, as listed in `cba91ac`'s message. One is a reversion:
+  with the ledger verdict removed, m11A2 exits 0 with ALL CHECKS PASSED and
+  three FAIL rows printed.
+- **Against `ed79413`**, with `<digits> ms` masked:
+  - 5,695 → 5,697 ok;
+  - stdout `1c05a05e…`, `--matrix` `8e954e5d…`;
+  - stderr `cf01f588…` in both modes;
+  - exit 0 / 0.
+
+### Open
+
+- **The tampering items stay in #217 by the reviewer's design.** They are:
+  shadowed builtins, an EXIT trap, a reassigned `LOADED_BODY` or
+  `FOOT_VERDICT_CODE`, and a redefined `record_of`.
+- **#218.**
