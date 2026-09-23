@@ -472,15 +472,16 @@ SUITE="$SRC/check-hooks.sh"
 }
 
 # The files beside the hooks that are not hooks: this harness, the suite, and
-# every file in checks/, which the suite sources. A rule over a path relative
+# every file under checks/, which the suite sources. A rule over a path relative
 # to the hooks directory rather than a list of names, so that a file added under
-# checks/ is covered without touching it (#204). One level, and no name opening
-# with a dot, so that `checks/../<hook>.sh` is not taken as the tooling; the
-# refusal of a `..` below then answers it. check-hooks.sh keeps the same
+# checks/ is covered without touching it (#204). At any depth, and no segment
+# that is `.` or `..`, so that `checks/../<hook>.sh` is not taken as the
+# tooling; `row_fault` refuses a path with such a segment, or an empty one,
+# before the write, and check-hooks.sh says why. check-hooks.sh keeps the same
 # rule under the same name, where the two directories are split, and holds this
 # spelling to its own. Nothing it matches is ever executed out of the copy, so
 # nothing it matches can be a mutation target.
-TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/[^/.][^/]*)$'
+TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+)(/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+))*)$'
 
 # THE MEASUREMENT. `--list` multiplies this rate by the run count it derives, so
 # the wall-clock it prints follows the registry instead of standing still while
@@ -581,6 +582,17 @@ row_fault() {  # row_fault <id> <file> <edit> <reqs> <want> -- a reason, or noth
   case "$FILE" in
     /*|*/../*|../*|*/..|..)
       echo "the target $FILE is not a path inside the hooks directory"
+      return ;;
+  esac
+  # AND ONE WITH A `.` SEGMENT OR AN EMPTY ONE, which names a file inside the
+  # copy but not in the spelling TOOLING reads: `checks/./library.sh` is the
+  # library, and the rule, which asks for a plain path, does not take it -- so
+  # the row was runnable, against a file nothing executes (review of PR #216,
+  # round 2). Refused rather than normalised: the registry is written by hand,
+  # and the plain spelling is one edit away.
+  case "$FILE" in
+    .|./*|*/.|*/./*|*//*|*/)
+      echo "the target $FILE has a . segment or an empty one; name it plainly, relative to the hooks directory"
       return ;;
   esac
 }
