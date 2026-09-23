@@ -38,7 +38,7 @@
 # "Whatever the working tree was resolved to" is true of the entries and of
 # nothing else in requirements.md. Resolve that file hunk by hunk: a side kept
 # whole drops the other side's changes outside the entries, and a run that
-# sees requirements.md differ from the dev side's there says so.
+# finds requirements.md lacking lines either side added there says so.
 #
 # WHEN IT COMPARES THREE WAYS is decided by the state of the repository, not by
 # how this was called -- a directory argument and a rebase each fell through to
@@ -155,7 +155,11 @@ if g rev-parse --git-dir > /dev/null 2>&1; then
   GITDIR=$(g rev-parse --absolute-git-dir)
   if [ -z "$BASE_REV" ]; then
     INFLIGHT=
-    if [ -e "$GITDIR/rebase-merge" ] || [ -e "$GITDIR/rebase-apply" ] || g rev-parse -q --verify REBASE_HEAD > /dev/null 2>&1; then INFLIGHT="a rebase"
+    # The two directories are the two rebase backends, and each is its own arm
+    # with its own fixture. REBASE_HEAD is not asked: it was a third arm, and
+    # measured it exists only beside one of the two, so no state reaches it
+    # alone and no fixture could hold it (rev-agent-200, round 6 of PR #210).
+    if [ -e "$GITDIR/rebase-merge" ] || [ -e "$GITDIR/rebase-apply" ]; then INFLIGHT="a rebase"
     elif g rev-parse -q --verify CHERRY_PICK_HEAD > /dev/null 2>&1; then INFLIGHT="a cherry-pick"
     elif g rev-parse -q --verify REVERT_HEAD > /dev/null 2>&1; then INFLIGHT="a revert"
     elif [ -e "$GITDIR/SQUASH_MSG" ] && ! g rev-parse -q --verify MERGE_HEAD > /dev/null 2>&1; then INFLIGHT="a squash merge"
@@ -169,7 +173,12 @@ if g rev-parse --git-dir > /dev/null 2>&1; then
         BASE_REV=$(g merge-base HEAD MERGE_HEAD) || stop "a merge is in progress and git names no merge base for it"
         MODE="a merge is in progress"
       fi
-    elif g rev-parse -q --verify HEAD^2 > /dev/null 2>&1 && ! holds_gh HEAD; then
+    # Whatever HEAD holds: a merge committed with the branch side of
+    # requirements.md kept still holds its entries, and the three-way run takes
+    # them out as it does during the merge. Asking that HEAD held none sent that
+    # merge to the two-way run, which refused both kinds of change as two loops
+    # having written one ID (rev-agent-200, round 6 of PR #210).
+    elif g rev-parse -q --verify HEAD^2 > /dev/null 2>&1; then
       if holds_gh HEAD^1 && ! holds_gh HEAD^2; then BRANCH_REV=HEAD^1; DEV_REV=HEAD^2
       elif holds_gh HEAD^2 && ! holds_gh HEAD^1; then BRANCH_REV=HEAD^2; DEV_REV=HEAD^1
       fi
@@ -337,7 +346,13 @@ extract "$STAGE/base.md" "$STAGE/b" || {
   exit 1
 }
 extract "$STAGE/branch.md" "$STAGE/r" || {
-  [ -s "$STAGE/r/refused" ] && { sed "s/^/$BRANCH_REV: /" "$STAGE/r/refused" > "$STAGE/refused"; refused "$STAGE/refused"; }
+  # These are in the branch's commit, which every run reads again, so a rerun
+  # cannot clear them and the remedy says where they can be.
+  [ -s "$STAGE/r/refused" ] && {
+    sed "s/^/$BRANCH_REV: /" "$STAGE/r/refused" > "$STAGE/refused"
+    echo "each of these is in $BRANCH_REV's committed requirements.md, which every run reads again: abort the merge, fix it on the branch, and merge again" >> "$STAGE/refused"
+    refused "$STAGE/refused"
+  }
   echo "split-requirements.sh: awk could not read $BRANCH_REV's requirements.md; nothing was moved" >&2
   exit 1
 }
@@ -454,13 +469,20 @@ for id in $RES; do token_line "$id" "resolved by hand"; done
 # added outside the entries since the base that requirements.md no longer
 # holds -- #158 and #184 each add citations there, which the dev side kept
 # whole drops without a word from the first question.
+#
+# The same question of each side, and not "does the file differ from the dev
+# side": both #158 and #184 add citations outside the entries, so the right
+# resolution differs from the dev side too, and a warning that fires on the
+# right resolution teaches people to ignore it (rev-agent-200, round 6).
+lacks() {  # lacks <side's stripped requirements.md> <rev> -- warns of lines that side added since the base and the file lacks
+  local nmiss
+  diff -- "$STAGE/b/requirements.md" "$1" | sed -n 's/^> //p' > "$STAGE/added"
+  [ -s "$STAGE/added" ] || return 0
+  nmiss=$(grep -Fxvc -f "$REQS" "$STAGE/added")
+  [ "$nmiss" = 0 ] || printf 'requirements.md lacks lines %s added outside the GH- entries since the base, lines missing: %s -- a side the merge kept whole drops the other side'"'"'s changes there, and git diff %s %s -- requirements.md says which\n' "$2" "$nmiss" "$(g rev-parse --short "$BASE_REV")" "$2"
+}
 if [ -n "$DEV_REV" ] && g show "$DEV_REV:./requirements.md" > "$STAGE/dev.md" 2> /dev/null; then
-  NDIFF=$(diff -- "$STAGE/dev.md" "$REQS" | grep -c '^[<>]')
-  [ "$NDIFF" = 0 ] || printf 'requirements.md differs from %s outside the GH- entries, lines that differ: %s -- a side the merge kept whole drops the other side'"'"'s changes there, and git diff %s -- requirements.md says which\n' "$DEV_REV" "$NDIFF" "$DEV_REV"
+  lacks "$STAGE/dev.md" "$DEV_REV"
 fi
-diff -- "$STAGE/b/requirements.md" "$STAGE/r/requirements.md" | sed -n 's/^> //p' > "$STAGE/branch-added"
-if [ -s "$STAGE/branch-added" ]; then
-  NMISS=$(grep -Fxvc -f "$REQS" "$STAGE/branch-added")
-  [ "$NMISS" = 0 ] || printf 'requirements.md lacks lines %s added outside the GH- entries since the base, lines missing: %s -- a side the merge kept whole drops the other side'"'"'s changes there, and git diff %s %s -- requirements.md says which\n' "$BRANCH_REV" "$NMISS" "$(g rev-parse --short "$BASE_REV")" "$BRANCH_REV"
-fi
+lacks "$STAGE/r/requirements.md" "$BRANCH_REV"
 exit 0
