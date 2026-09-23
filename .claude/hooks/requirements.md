@@ -1617,12 +1617,21 @@ and held to the same standard of saying only what it asks.
   write on the same line is a read.
 - from: #130, found while covering US-14 for #105
 - kind: defect-refusing
-- status: gap → #130
+- status: superseded-by: GH-130.1
 - note: the four refusals are in `no-pr-decisions.sh`'s `$SCAN`-wide rules and the
   `API_NO_BASE` arm. The `gh issue` spelling of the same text is permitted, so the
   boundary is spelling-dependent where #36 says it is not. Not CLAUDE.md's
   left-open item 2: that item's subject is a line carrying a wrapper, and none of
   these does.
+  SUPERSEDED BY FIVE, and by GH-130.1 only because a `superseded-by` names one ID.
+  The text above was written against the four shapes #130 was filed with; grilling
+  the fix on 2026-09-16 found six more, making ten, and the ten fall to five rules
+  that can each regress on its own: GH-130.1 the `/releases` endpoint, GH-130.2
+  `/pulls/N/merge` and `/pulls/N/reviews`, GH-130.3 the REST half of `/pulls/` plus
+  `state`, GH-130.4 the `API_NO_BASE` arm, and GH-130.5 the structural gate over
+  the three rules that keep `$SCAN`. Keeping this entry as one would have meant one
+  bit of coverage for five rules, which is the thing a sub-ID exists to stop (Q14).
+  The ID stays because #130, #105 and the pull request that closed it all cite it.
 
 ### GH-131
 - text: A creating spelling of `gh issue develop` is refused, whichever of `--base`,
@@ -2495,6 +2504,150 @@ and held to the same standard of saying only what it asks.
   gap row reads the message: it asserts the sentence is still there and turns red
   when #164 removes it.
 
+### GH-130.1
+- text: The `/releases` rule in `no-pr-decisions.sh`'s `gh api` write block reads
+  its endpoint out of the WRITING COMMAND'S OWN arguments with `endpoint_args` run
+  over them. A write whose own endpoint is `/releases` is refused in each spelling
+  pinned for it — bare path, full URL, the path quoted whole, the path quoted in
+  part, and the path in `$'...'` — and a `/releases` read standing beside an
+  unrelated write is a read. An issue body naming `/releases` in a QUOTED `-f`
+  value, or in a `-F body=@-` heredoc, is prose.
+- from: #130, rows 1, 4 and 8 of its table
+- kind: defect-refusing
+- status: active
+- variants: none: what separates a read span from a dropped one is an `=` standing
+  before it in the same word, and no transformation in `INV_TRANSFORMS` generates
+  that — the quote family quotes a whole chosen argument, which is the one position
+  this reader already unquotes, so every variant it can make reaches the rule's
+  easy half and none reaches the boundary the rule turns on
+- note: the rule's own comment recorded this bleed as known and unfixed before the
+  fix, which is why #130 was filed rather than pinned. QUOTED is load-bearing in the
+  text above, and both halves of what it excludes are refused and pinned beside each
+  other: `-f "body=/releases"`, the quote standing before the FIELD NAME so that no
+  `=` precedes the span, and `-f body=/releases` with nothing quoted at all, where
+  there is no span to drop. Neither is a defect this issue introduced — both were
+  refused at 7bea85f — and neither can be told from a positional endpoint by text.
+  The first is the price of GH-130.5's two quoted spellings of `graphql`.
+
+### GH-130.2
+- text: The `/pulls/N/merge` and `/pulls/N/reviews` rule reads its endpoint out of
+  the writing command's own arguments with `endpoint_args` run over them. A write to
+  either endpoint is refused in each spelling pinned for it, the path quoted whole,
+  quoted in part and written in `$'...'` included; a GET of either, whether alone or
+  standing beside an unrelated write, is the read it is; and an issue body naming
+  one of them in a quoted value is prose.
+- from: #130, row 5 of its table
+- kind: defect-refusing
+- status: active
+- variants: none: as GH-130.1 — what decides is an `=` standing before the span in
+  the same word, and no transformation generates that
+- note: the read-beside-a-write half generalises the control the issue rests on,
+  `gh api -X POST repos/o/r/issues -f title=x && gh api repos/o/r/pulls`, which has
+  been pinned ALLOW since the base rule went per-command. Two spellings this rule
+  refuses were permitted at 7bea85f as well as under the first version of this fix:
+  `repos/o/r/"pulls"/5/merge` and `'repos/o/r/pulls'/5/merge`, which the `$SCAN`-wide
+  grep did not match because it wanted `/pulls/` with no quote inside it. Closed on
+  the way past rather than filed for, and pinned as the verdicts they now have.
+
+### GH-130.3
+- text: The REST half of the state rule requires the endpoint and the field on ONE
+  command: `/pulls/` read out of that command's arguments through
+  `endpoint_args`, and `state` read out of that command's RAW text through
+  `STATE_FIELD_RE`. A `-f state="closed"` on a pull request is refused; an issue
+  body naming a pull request and a state is prose.
+- from: #130, row 2 of its table
+- kind: defect-refusing
+- status: active
+- variants: none: as GH-130.1 — what decides is an `=` standing before the span in
+  the same word, and no transformation generates that
+- note: the field is deliberately NOT read through `endpoint_args`, because dropping
+  a span would turn `-f state="closed"` from a refusal into a permission: an
+  endpoint's quoting is incidental to it and a field value's is the thing being
+  judged. The reader is GH-137.1's and is unchanged. The graphql half of the same
+  decision, `updatePullRequest` plus a state, is GH-130.5's.
+  THE ONLY RULE IN THE LOOP THAT NEEDS TWO TOKENS OFF ONE COMMAND, and the
+  last member of Class 4. `endpoint_args` gives it the endpoint and the raw command
+  gives it the field, so a command substitution standing BETWEEN the two defeated
+  it while GH-130.6's arm stayed silent — the endpoint half being present and
+  readable. `gh api -X PATCH repos/o/r/pulls/5 -f m="$(cat c)" -f state=closed`
+  closes a pull request and was permitted; six spellings, including the backtick,
+  found by rev-agent-130's round-3 review of #196. It was order-dependent, the
+  field before the substitution still refusing, which is what said the defect was
+  tokenisation rather than policy. The field half now falls back to the line when
+  the line carries a cut, which is the shape the mutation names already have for
+  the same reason, narrowed to lines where a cut happened. Line-wide and not per
+  command because a backtick cut leaves nothing in the fragment to find it by. Its
+  cost is the bleed #130 removed, back on cut lines only, and no row of #130's ten
+  can reach it: every one of them writes to an ISSUE, and this rule needs `/pulls/`
+  on the writing command's own endpoint.
+
+### GH-130.4
+- text: The `API_NO_BASE` arm reads the collection endpoint out of the writing
+  command's own arguments with `endpoint_args` run over them. A `gh api` create
+  against `/pulls` naming no base is refused in each spelling pinned for it, the
+  path quoted whole and the path in `$'...'` included; an issue body naming
+  `repos/o/r/pulls` in a QUOTED value, with or without whitespace in it, is prose.
+- from: #130, rows 3 and 10 of its table
+- kind: defect-refusing
+- status: active
+- variants: none: as GH-130.1 — what decides is an `=` standing before the span in
+  the same word, and no transformation generates that
+- note: row 10 is the row that decided how the reader had to be written. Its value
+  carries no whitespace, so telling it from a positional endpoint needs the `=` it
+  is attached to; the alternative test, a lone token with no `=` in it, was rejected
+  for failing in the PERMITTING direction on an endpoint carrying a query string.
+  QUOTED again excludes the bare `-f body=repos/o/r/pulls`, refused at 7bea85f and
+  refused still, which is GH-130.1's note. `rest_bases`, the other half of this arm,
+  stays flag-anchored and is handed the command's raw text, for GH-130.3's reason.
+
+### GH-130.5
+- text: The three rules that keep `$SCAN` — the graphql mutation names, the
+  `updatePullRequest` half of the state rule, and `gql_bases` — fire only when some
+  `gh api` call's own arguments name the graphql endpoint, tested after
+  `endpoint_args`. The endpoint is recognised by NORMALISING the token and then
+  comparing it — a leading `scheme://host` stripped, the query or fragment cut at
+  the first `?` or `#`, one leading `/` dropped, the remainder compared to
+  `graphql` exactly — so every spelling `gh` resolves to that endpoint is
+  recognised, suffixes included, and no spelling it does not serve is:
+  `graphql/`, `//graphql`, `/GRAPHQL` and `repos/o/r/graphql` all leave the gate
+  shut. An issue body naming a mutation, naming
+  `baseRefName`, naming `/graphql` in prose, or carrying any of them in a
+  `-F body=@-` heredoc, is prose.
+- from: #130, rows 6, 7 and 9 of its table
+- kind: defect-refusing
+- status: active
+- variants: seed
+- note: structural and not textual on purpose. A grep for the word `graphql` would
+  have left `-f body="the gh api graphql endpoint reaches mergePullRequest"`
+  refused, which is the defect one spelling out; and dropping every quoted span
+  rather than reading one would have lost the two quoted spellings of the endpoint,
+  neither of which was pinned anywhere before this fix. This is the one of the five
+  whose subject is a TOKEN rather than which span is read, so it is the one a quote
+  transformation reaches: `api-graphql-main` carries its ID, and `quote-double-3`
+  over that seed is `gh api "graphql"`. Two bleeds the gate leaves, both accepted
+  and both named in its comment: `gql_bases`' own cross-command bleed is untouched,
+  and a genuine `gh api graphql` READ beside an issue write whose prose names a
+  mutation satisfies the gate, so the prose is refused with it. Row 7 is neither of
+  those — it is one command, which the old acceptance never reached. Three further
+  spellings were permitted under the first version of this fix and are pinned:
+  `graph"ql"`, `'graph'ql` and `$'graphql'`, each of which the whole-word proxy cut
+  down to something the gate could not see. THE PATH SPELLINGS ARE A SECOND ROUND:
+  the gate first knew one, `graphql` anchored on whitespace, and its comment said
+  in as many words that this was gh's one spelling of the endpoint. It is not —
+  `/graphql` and `https://api.github.com/graphql` execute real GraphQL, measured
+  against the live API — and twelve shapes were refused at `7bea85f` and permitted
+  with the gate in place, the suite green throughout. Found by rev-agent-130's
+  round-1 review of #196. GitHub Enterprise Server's `/api/graphql` is named and
+  not matched, this repository being on github.com.
+  AND THE ENUMERATION DID NOT SURVIVE ROUND 2, which is why the rule is a
+  normalisation and not a list. Round 1 replaced one spelling with three, and the
+  class it was written to close outlived it: `gh` serves anything appended to the
+  endpoint, so `graphql?x=1`, `/graphql?` and `graphql#x` executed real GraphQL
+  and matched none of the three. Eight shapes were refused at `2019e08` and
+  permitted by the fix, with the suite green. A guard rewritten to close a class
+  exhibiting that class is the sharpest form of what this file's coverage rules
+  are for; the normalisation ends it, because a suffix nobody has thought of is
+  answered by the cut rather than by an alternative added later.
 ### GH-148
 - text: `bash .claude/hooks/mutate-hooks.sh --list` derives every count about the
   mutation registry, and the harness's header states none of them. Its summary
@@ -2594,6 +2747,47 @@ and held to the same standard of saying only what it asks.
   what that code reads is `requirements.md` beside the harness rather than a
   file an override moves — so GH-141's exception does not apply and this is
   GH-107.2's first limit exactly. It is held by these checks and by review.
+
+### GH-130.6
+- text: A `gh api` WRITE whose own arguments carry no token that could be its
+  endpoint is refused. A token counts when it is not an option, is not the value
+  of `-X` or `--method`, holds no `$` and no backtick, does not end in `/`, and
+  either holds a `/` or holds no `=`. So a command substitution or a parameter
+  standing where the endpoint goes is refused rather than read as no endpoint at
+  all, and an ordinary write whose FIELD carries a substitution —
+  `-f body="$(cat notes.md)"` — is untouched, its endpoint still being in the
+  fragment.
+- from: #130, raised as Class 4 and as the unsettled half of Class 2 by
+  rev-agent-130's round-2 review of #196
+- kind: defect-permitting
+- status: active
+- variants: none: the subject is what the TOKENISER did to a command before any
+  rule saw it, and the transformations rewrite a command's text rather than
+  changing where `cs_split` cuts it; the `$( )` and backtick shapes it turns on
+  are not ones `INV_TRANSFORMS` generates
+- note: the reason this is a rule and not a trade is that the base rule already
+  answers the identical cut the other way — `gh pr create --base $(echo main)`
+  refuses on both sides, a create whose base cannot be read falling into the arm
+  that refuses a create naming none — and the endpoint rules had no such arm. It
+  is also this file's own header sentence applied to an endpoint: a destination
+  that comes from configuration cannot be judged from here, so the command has to
+  say where it is going. It supersedes the four rows GH-130.1, GH-130.2 and
+  GH-130.5's notes recorded as accepted in round 1: that argument was right about
+  WHY a variable endpoint was refused at `7bea85f` — the line-wide read finding an
+  assignment's text — and is answered by a rule that refuses it for a different
+  reason. The three `$SCAN` rules are why the argument could not stand on its own:
+  they had no endpoint test before this branch, so for them the gate CREATES the
+  permission rather than inheriting it. #198 keeps the policy question it was
+  filed for and is answered for the endpoint by this entry. What the arm does not
+  reach, named: an unknown valued flag leaves its value looking like an endpoint,
+  so the arm does not fire — the failure direction is today's verdict rather than
+  a refusal lost, which is the opposite of the positional parser #130's triage
+  rejected. AND IT DOES NOT REACH A RULE THAT NEEDS TWO TOKENS: the arm asks about
+  the endpoint, so a cut between a rule's two halves leaves it silent. One rule
+  needs two, and GH-130.3 carries what that took. The refusing cost was asked of
+  the corpus rather than argued, and the three shapes raised against it are
+  constructed rather than observed; one is pinned as its accepted cost so that a
+  cost nobody wrote down cannot grow unnoticed.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -2840,6 +3034,20 @@ it has no entry above (Q16).
 - #163: the in-word half of the quoting GH-137.1 and GH-137.2 read round a field,
   found by the follow-up review of #153; it adds its requirements in the pull
   request that fixes it, after #130, rather than pinning today's verdicts
+- #198: `no-pr-decisions.sh` refuses an unreadable base and permits an unreadable
+  endpoint, and says so nowhere. Raised as Class 2 of rev-agent-130's round-1
+  review of #196 and filed rather than fixed there: the four transitions that
+  review measured were the line-wide read finding an assignment's text, which is
+  #130's own defect, and what is left over is a policy #130's scope does not
+  reach. Cited in the accepted-verdict rows that pin today's answer
+- #196: a pull request, for #130; rev-agent-130's review rounds are cited where
+  each thing they found stands
+- #138: no field rule reads a JSON request body supplied by `--input`; the last of
+  the three the grilling of #130 split out, after #137 and #130 themselves. Cited
+  in the `gh api` heredoc row #130 rewrote, to say what that row is NOT about:
+  reading an ENDPOINT out of a request body is not a thing, `gh api` taking the
+  endpoint as its one positional argument, and reading a FIELD out of one is
+  #138's. It adds its requirements in the pull request that fixes it
 - #141: has an entry above, GH-141, and is listed here only because this file
   cited it before it landed, as the issue that owned deciding which non-FR
   requirements the invariance families seed. It decided that, and the rule is
