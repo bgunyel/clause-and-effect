@@ -384,9 +384,11 @@ RAN="$FIXTURES/ran"
 : > "$RAN"
 NOT_FOUND="$FIXTURES/not-found"
 # Where the verdict expects the record to be. The GH-204.5 self-test points
-# $NOT_FOUND elsewhere and puts it back, and a section that copied that and did
-# not put it back would leave the handler writing where nothing reads; the
-# verdict fails on the two differing (round 6 of the review of PR #216).
+# $NOT_FOUND elsewhere and puts it back. A section that copied that and did not
+# put it back would leave the handler and the verdict both on the new file, and
+# whatever the handler had written to this one before the move would never be
+# read; the verdict fails on the two differing, and says so (round 6 of the
+# review of PR #216; this comment had the hazard backwards until round 7).
 NOT_FOUND_AT_HEAD=$NOT_FOUND
 : > "$NOT_FOUND"
 # THE SUITE'S OWN TEXT, which several checks below read: a pinned sentence, a
@@ -586,8 +588,10 @@ LOADED_CHANGED_CODE='for LOADED_K in "${!LOADED_BODY[@]}"; do
   fi
   [[ $LOADED_NOW == "${LOADED_BODY[$LOADED_K]}" ]] || printf "%s\n" "$LOADED_K"
 done'
-# AND THE VERDICT THOSE TWO QUESTIONS GIVE, the last statement before this
-# suite exits. The foot of the #104 section records a row for each, but a row is
+# AND THE VERDICT THOSE QUESTIONS GIVE -- a recorded function or variable
+# changed, a command not found, the not-found record moved -- taken after every
+# check and every helper, and followed only by LEDGER_VERDICT_CODE below and the
+# exit. The foot of the #104 section records a row for each, but a row is
 # printed and recorded through `pass` and `fail`, and a redefined helper can
 # undo whatever FAILED said before it: `fail() { FAILED=0; }` exited 0 with the
 # foot red (round 5 of the review). So the verdict is taken again after every
@@ -14898,9 +14902,13 @@ tok 'record_of records a function the invoker exports, as the file defines it' \
 tok 'and refuses a file that defines nothing' \
     'status 1' "$(record_of "$FIXTURES/defines-nothing.sh" "$FIXTURES/record-nothing"; echo "status $?")"
 # THE FINAL VERDICT, driven: FOOT_VERDICT_CODE in a subshell of its own for each
-# way it has to fail -- a recorded function redefined, a command not found, and
-# a helper that clears FAILED run before it, round 5's `fail() { FAILED=0; }` --
-# and once where it must not.
+# way it has to fail -- a recorded function redefined, a command not found, the
+# record moved, a helper that clears FAILED run before it (round 5's
+# `fail() { FAILED=0; }`), and a failure it was given with nothing else wrong --
+# and once where it must not. Each row carries the requirement whose clause it
+# establishes: the redefinition is GH-204.1's, the missing command and the moved
+# record GH-204.5's, and a verdict that keeps a failure both of theirs (round 7
+# found the GH-204.5 arms tagged GH-204.1).
 FV_NONE="$FIXTURES/verdict-none"
 FV_SOME="$FIXTURES/verdict-some"
 : > "$FV_NONE"
@@ -14909,24 +14917,36 @@ printf '%s\n' 'x.sh: line 1: nf_x: command not found' > "$FV_SOME"
 # already 1, and nothing redefined or missing. Without it a `FAILED=0` at the
 # top of the verdict let a red suite exit 0 with ALL CHECKS PASSED (round 6).
 # `moved` is the record pointed elsewhere and not put back.
-tok 'the final verdict fails on a redefinition, a missing command, a cleared FAILED and a moved record, keeps a failure it was given, and fails on nothing else' \
-'clean 0
-redefined 1
-missing 1
-cleared 1
-kept 1
-moved 1' "$( ( FAILED=0; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "clean $FAILED" )
-     ( FAILED=0; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "redefined $FAILED" )
-     ( FAILED=0; NOT_FOUND=$FV_SOME; NOT_FOUND_AT_HEAD=$FV_SOME; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "missing $FAILED" )
-     ( FAILED=1; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; fail() { FAILED=0; }; fail; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "cleared $FAILED" )
-     ( FAILED=1; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "kept $FAILED" )
+tok 'the final verdict fails on a recorded function redefined' \
+    'redefined 1' \
+    "$( FAILED=0; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "redefined $FAILED" )"
+req GH-204.5
+tok 'the final verdict fails on a missing command and on a moved record' \
+'missing 1
+moved 1' "$( ( FAILED=0; NOT_FOUND=$FV_SOME; NOT_FOUND_AT_HEAD=$FV_SOME; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "missing $FAILED" )
      ( FAILED=0; NOT_FOUND=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "moved $FAILED" ) )"
+req GH-204.1 GH-204.5
+tok 'the final verdict keeps a failure it was given, through a helper that clears it too, and fails on nothing else' \
+'clean 0
+cleared 1
+kept 1' "$( ( FAILED=0; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "clean $FAILED" )
+     ( FAILED=1; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; fail() { FAILED=0; }; fail; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "cleared $FAILED" )
+     ( FAILED=1; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "kept $FAILED" ) )"
 tok 'and says why on stderr' \
 'a function or tokeniser variable this run started with was redefined or removed during it:
 holds
 a command this suite called was not found:
 x.sh: line 1: nf_x: command not found' \
     "$( ( NOT_FOUND=$FV_SOME; NOT_FOUND_AT_HEAD=$FV_SOME; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>&1 >/dev/null ) )"
+# AND THE TAGS ARE THE ONES WRITTEN ABOVE, read back from the ledger: a row under
+# the wrong `req` covers the wrong requirement, and nothing else would say so.
+tok 'the verdict rows are recorded under the requirement each establishes' \
+'GH-204.1 | the final verdict fails on a recorded function redefined
+GH-204.5 | the final verdict fails on a missing command and on a moved record
+GH-204.1 GH-204.5 | the final verdict keeps a failure it was given, through a helper that clears it too, and fails on nothing else
+GH-204.1 GH-204.5 | and says why on stderr' \
+    "$(awk -F'\t' '$4 ~ /^the final verdict / || $4 == "and says why on stderr" { print $1 " | " $4 }' "$LEDGER")"
+req GH-204.1
 # THE LEDGER'S VERDICT, driven: a ledger holding a FAIL row fails the run
 # whatever FAILED says, and one holding only ok rows leaves FAILED as it was.
 LV_FAIL="$FIXTURES/ledger-with-fail"
@@ -16987,8 +17007,8 @@ fi
 
 # EVERY FUNCTION THIS RUN STARTED WITH IS THE ONE IT ENDS WITH: see
 # LOADED_BODY at the head of this suite. Asked here, after every check, as a
-# row; the verdict it gives is taken again by FOOT_VERDICT_CODE, the last thing
-# this suite runs, because `fail` could be the function redefined (round 4) and
+# row; the verdict it gives is taken again by FOOT_VERDICT_CODE after every
+# helper has run, because `fail` could be the function redefined (round 4) and
 # a redefined helper can clear FAILED after this has set it (round 5).
 req GH-204.1
 LOADED_CHANGED=$(eval "$LOADED_CHANGED_CODE")
@@ -17017,6 +17037,27 @@ else
   pass static 'no command this suite called was missing, in this shell or in any subshell of it'
 fi
 
+# THE NOT-FOUND RECORD IS WHERE THE HEAD PUT IT: the verdict's third question,
+# which had no row, so a run it failed ended SOME CHECKS FAILED with every row
+# green and only a line on stderr to say why (round 7 of the review). Asked
+# here as a row like its two siblings, and taken again by FOOT_VERDICT_CODE.
+req GH-204.5
+if [[ $NOT_FOUND != "$NOT_FOUND_AT_HEAD" ]]; then
+  fail static 'the not-found record was moved during the run and not put back, so what was written to %s before the move was not read; it is %s now' \
+    "$NOT_FOUND_AT_HEAD" "$NOT_FOUND"
+else
+  pass static 'the not-found record is where the head put it, so what the handler wrote is what the verdict reads'
+fi
+# EACH OF THE VERDICT'S QUESTIONS HAS ITS ROW, read back from the ledger: the
+# last three rows recorded are the three above, under the requirement each
+# establishes -- so a question with no row, or a row under the wrong tag, is
+# red here and not only a line on stderr.
+req GH-204.1 GH-204.5
+tok 'the verdict'"'"'s three questions end the ledger, each as a row under its own requirement' \
+'GH-204.1
+GH-204.5
+GH-204.5' "$(tail -n 3 "$LEDGER" | cut -f1)"
+
 # --matrix: every requirement, from the record as it stands now, the findings
 # above included, and then the verdict line the run would have printed.
 if [ -n "$MATRIX" ]; then
@@ -17029,7 +17070,7 @@ if [ -n "$MATRIX" ]; then
     FAILED=1
   fi
 fi
-# The foot's two questions, asked again after every helper has run, and then the
+# The foot's questions, asked again after every helper has run, and then the
 # ledger, for a FAIL the first verdict did not keep. Between
 # them and the exit stand only `echo`, `[[ ]]` and `exit`, which are builtins and
 # a keyword -- unless a function shadows a builtin of that name, the limit
