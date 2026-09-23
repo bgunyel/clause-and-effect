@@ -259,3 +259,61 @@ that explained the wrong total by saying one row stood for two mutants, which
 was not true. It found the error while re-reading the posted reply. The reply
 and the PR body were corrected in place; this entry and the commit message
 stay as they were.
+
+## 2026-09-23 23:05 +03 — PR #216, review round 3
+
+Branch `worktree-issue-204-library`, head `4c4c664`, nine ahead of
+`origin/dev-05` (`dbb1141`), plus this entry. It answers rev-agent-204's
+round 3 (issue comment 5801600362): one gating finding and four non-gating.
+Nothing is pushed yet.
+
+### What the review found, and what was done
+
+- **G6. G2's class for the third time.** `holds() ( ... )` and
+  `holds ( ) { ... }` passed all four spellings the scanner read.
+  - The reviewer proposed closing the class at runtime instead of adding a
+    fifth spelling. The assistant agreed and did not look for a cheaper
+    closure, because a function body can be any compound command, so a text
+    reader stays one spelling behind.
+  - Every function the run starts with is now recorded with `declare -f` once
+    the library, the tokeniser and the handler are loaded.
+  - The tokeniser's variables are recorded too, with `declare -p`. They are the
+    sibling the assistant's round-1 sweep reported and left unchecked, and this
+    mechanism covers them for free.
+  - The foot of the run fails on any of them that changed or went missing.
+  - A cross-check ties the scanner to bash: the names sourcing the library
+    defines must be the ones the scanner places there.
+  - The text-level duplicate report stays as the early warning, and its label no
+    longer claims every spelling.
+- **N6.** Three stale counts of `row_fault`'s refusals. The reviewer found two;
+  the third, in `check-hooks.sh` at the #148 run-count audit, was the one
+  `/code-review` had pointed at. The counts were removed rather than updated,
+  since CLAUDE.md says a number in a comment earns nothing.
+- **N7.** Prose corrected, consumers not reordered. The assistant pushed back on
+  reordering: the text-check rule is the one consumer that accepts the tooling,
+  and it already asks the segments first. `row_fault` and the registry audit
+  refuse on every branch, so their order changes only the reason printed.
+- **N8.** GH-204.4 now says the text-check rule judges spelling, not what a
+  variable holds.
+- **N9.** The handler's stderr is now compared with what a child `bash` prints
+  for the same file. The child does not inherit the handler.
+
+### Evidence (measured)
+
+- **Mutants.** 9 runs on a clone whose six changed files are byte-identical to
+  the committed ones; the assistant counted the driver's output lines this time
+  (9). 8 mutants went red on the check aimed at them. 1 control stayed green:
+  `CS_LINE_CAP` set again to the value it already has.
+- **Against `d64e1fd`**, with `<digits> ms` masked:
+  - 5,676 → 5,683 ok;
+  - seven new rows and two relabelled;
+  - stdout `46d8497e…`, `--matrix` `571a268d…`;
+  - stderr `cf01f588…` in both modes;
+  - exit 0 / 0.
+
+### Open
+
+- #218 and #219 (the latter the reviewer's, on `unarmed` passing a directory)
+  both predate this PR.
+- #217 has two more items from this round. The assistant agrees with filing
+  both.
