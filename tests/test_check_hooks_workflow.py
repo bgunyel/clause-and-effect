@@ -11,8 +11,9 @@ is such an `if:`, and a job skipped by one reports Success, even as a required
 check, so a title edit would put a green `check-hooks` on a red pull request.
 
 Three steps are run here too, each lifted out of the file as text and run
-with GitHub's own bash flags against fakes: the one that refuses a credential,
-the one that records the suite's exit status, and the one that exits with it.
+against fakes under the flags the runner uses: the one that refuses a
+credential, the one that records the suite's exit status, and the one that
+exits with it.
 The last two are what give the job its colour, so a defect in either is a green
 job on a red suite; and a guard that only ever runs on a hosted runner has
 never been seen to refuse anything.
@@ -23,11 +24,25 @@ the claims here are about the exact lines the workflow carries.
 import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
 
 WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "check-hooks.yml"
+
+# How the runner runs a `run:` block of a workflow that declares no `shell:`:
+# `bash -e {0}`, with no `pipefail`. Observed, not assumed: every step of
+# run 35836366963 (#206) logged `shell: /usr/bin/bash -e {0}`. `shell: bash`
+# would be `bash --noprofile --norc -eo pipefail {0}` instead -- a harness
+# that ran that while the runner ran this let `PIPESTATUS[0]` -> `$?` survive,
+# a green job on every red suite (#206, round 2). So these are the flags, and
+# `test_no_step_declares_a_shell` holds the workflow to them.
+RUNNER_BASH = ["bash", "-e"]
+# Variables that would give the harness's bash options the runner's does not
+# have: SHELLOPTS and BASHOPTS switch options on at startup, and BASH_ENV (ENV
+# for sh) names a file a non-interactive bash sources first.
+RUNNER_UNSET = ("SHELLOPTS", "BASHOPTS", "BASH_ENV", "ENV")
 
 
 def lines():
@@ -67,11 +82,42 @@ def step_script(name):
     return "\n".join(body) + "\n"
 
 
+def run_script(script, env, cwd=None):
+    """Run `script` as the runner runs a `run:` block: written to a file and
+    run as `bash -e {0}`, with nothing in the environment that sets a flag."""
+    env = {k: v for k, v in env.items() if k not in RUNNER_UNSET}
+    with tempfile.NamedTemporaryFile("w", suffix=".sh") as fh:
+        fh.write(script)
+        fh.flush()
+        return subprocess.run([*RUNNER_BASH, fh.name], env=env, capture_output=True, text=True, cwd=cwd)
+
+
 def run_step(name, env, cwd=None):
-    """Run a step's script the way GitHub runs a `run:` block: `bash
-    --noprofile --norc -eo pipefail {0}`."""
-    return subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", step_script(name)],
-                          env=env, capture_output=True, text=True, cwd=cwd)
+    return run_script(step_script(name), env, cwd)
+
+
+def test_no_step_declares_a_shell():
+    """RUNNER_BASH is the runner's default shell, and is right only while
+    nothing in the workflow replaces it -- a `defaults: run: shell:` or a
+    step's own `shell:`. Declaring one is a change to this harness too."""
+    declared = [line for line in lines() if re.match(r"^\s*(shell|defaults):", line)]
+    assert declared == []
+
+
+def test_the_harness_runs_a_step_under_the_runners_flags_only(tmp_path):
+    """A caller whose environment would switch `pipefail` on -- exported
+    SHELLOPTS, or a BASH_ENV file that sets it -- must not pass it on: that is
+    the harness being more protective than the runner again."""
+    bash_env = tmp_path / "bash_env"
+    bash_env.write_text("set -o pipefail\n")
+    env = {**os.environ, "SHELLOPTS": "pipefail", "BASH_ENV": str(bash_env)}
+
+    result = run_script('echo "flags=$-"\nset -o | grep -E "^(errexit|pipefail)[[:space:]]"\n', env)
+
+    assert result.returncode == 0, result.stderr
+    out = result.stdout.split()
+    assert out[0].startswith("flags=") and "e" in out[0]
+    assert out[1:] == ["errexit", "on", "pipefail", "off"]
 
 
 @pytest.mark.parametrize("git_exit, refused, message", [
@@ -131,10 +177,9 @@ def fake_bin(tmp_path, **scripts):
 def test_the_suite_step_records_the_suites_status_not_tees(tmp_path, suite_exit):
     """`sudo` is faked as the whole suite: it prints a row and exits with the
     suite's status. The status recorded must be the suite's, not `tee`'s --
-    `tee` exits 0, and a recorded 0 is a green job. `PIPESTATUS[1]` is caught
-    here; `$?` is not, and is not a defect while the step runs under
-    `pipefail`, as GitHub runs it: the pipeline's status is then the suite's
-    non-zero one. `PIPESTATUS[0]` does not depend on that flag."""
+    `tee` exits 0, and a recorded 0 is a green job. Both `PIPESTATUS[1]` and
+    `$?` are that defect under the runner's `bash -e`, which has no `pipefail`,
+    and both are caught here. `PIPESTATUS[0]` is right with or without it."""
     bin_dir = fake_bin(tmp_path, sudo=f"echo '  ok   a row'\nexit {suite_exit}",
                        git="echo fake-git")
     runner_temp = tmp_path / "runner-temp"

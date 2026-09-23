@@ -47,9 +47,9 @@
 # MEASURED: one full run takes 204 s on a 6-core workstation (#199, at
 # 111a419), and a simulation of this runner -- a shallow detached checkout,
 # empty HOME, no git configuration, `env -i` -- passed with 5550 rows and no
-# FAIL on 9c7dfdb, twice, in 176 s and 198 s. On a hosted
-# 2-core runner this pull request's first run took 308 s for the same 5550 rows
-# (run 35836366963, #206). The step timeout is well above that because a hook
+# FAIL on 9c7dfdb, twice, in 176 s and 198 s. On a hosted 2-core runner this
+# pull request's first run took 308 s for the same 5550 rows (run 35836366963,
+# #206). The step timeout is well above that because a hook
 # invocation has been seen spinning for 11 hours (#199) and #127 records the 5 s
 # per-call timeout exceeded; the job timeout bounds the rest.
 #
@@ -97,9 +97,10 @@ jobs:
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: >-
-          python3 .github/scripts/check_hooks_ci.py verify-merge
-          --head-sha "$HEAD_SHA" --base-ref "$BASE_REF" --output "$GITHUB_OUTPUT"
+        run: |
+          python3 --version
+          python3 .github/scripts/check_hooks_ci.py verify-merge \
+            --head-sha "$HEAD_SHA" --base-ref "$BASE_REF" --output "$GITHUB_OUTPUT"
 
       # A step of its own, so a refusal here skips the suite and the report
       # rather than reaching the report as an exit status the suite never had.

@@ -111,6 +111,10 @@ def fake(tmp_path):
                 "POLL_SECONDS": "0", "WAIT_TRIES": "3",
                 **overrides,
             }
+            # The script sets its own options; a caller's exported SHELLOPTS or
+            # BASH_ENV would add to them, and the runner has neither.
+            for name in ("SHELLOPTS", "BASHOPTS", "BASH_ENV", "ENV"):
+                env.pop(name, None)
             return subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True)
 
     return Fake()

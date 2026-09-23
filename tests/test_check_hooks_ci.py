@@ -24,13 +24,20 @@ nothing reaches a network.
 """
 import json
 import os
+import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 SCRIPT = Path(__file__).resolve().parent.parent / ".github" / "scripts" / "check_hooks_ci.py"
+
+# The workflow runs this script with the runner's `python3`, not this project's
+# 3.13: ubuntu-24.04 ships 3.12, which every check-hooks run logs from its
+# verify step. Run under `sys.executable`, a 3.13-only construct would pass
+# here and fail there -- the harness more capable than the runner (#206,
+# round 2). So the script is run by a 3.12, and its absence fails, not skips.
+RUNNER_PYTHON = shutil.which("python3.12")
 
 GIT_ENV = {
     **os.environ,
@@ -44,8 +51,9 @@ GIT_ENV = {
 
 
 def run_script(*args, cwd=None):
+    assert RUNNER_PYTHON, "python3.12, the runner's python3, is needed to run check_hooks_ci.py as CI does"
     return subprocess.run(
-        [sys.executable, str(SCRIPT), *args],
+        [RUNNER_PYTHON, str(SCRIPT), *args],
         cwd=cwd, env=GIT_ENV, capture_output=True, text=True,
     )
 
