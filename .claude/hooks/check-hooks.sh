@@ -16,11 +16,14 @@
 # any run of it makes: its header counts what its rows reach and names two kinds
 # of rule they cannot reach at all. The unqualified sentence stood here until
 # Bertan's review of PR #142, contradicting the harness's own header and
-# CLAUDE.md both.
+# CLAUDE.md both. And split-requirements.sh, which moves `GH-` entries out of
+# requirements.md into a file each and which nothing runs for you either: it is
+# run here only against fixtures, in the #200 section.
 # Most checks run a hook as a process and read
 # its verdict; the rest read one of these files, and each kind is introduced
 # where it begins. Every check carries the IDs of the requirements it
-# establishes, which requirements.md beside this suite defines, and a requirement
+# establishes, which requirements.md and the requirements/ directory beside this
+# suite define, and a requirement
 # no check reaches points at the runbook.md it is verified by once that is
 # written. The section "this suite's header names every file it checks" holds
 # this paragraph to settings.json, to the disk and to what the suite reads.
@@ -194,8 +197,8 @@
 INVOKED_FROM=$PWD
 cd "$(dirname "$0")" || exit 1
 # TWO DIRECTORIES, ONE OF THEM BY DEFAULT THE OTHER. $HOOKS is what is JUDGED:
-# the hook files run as processes, the library they source, the text of each and
-# requirements.md beside them. $SUITE_DIR is what they are judged AGAINST and
+# the hook files run as processes, the library they source, the text of each,
+# and requirements.md and requirements/ beside them. $SUITE_DIR is what they are judged AGAINST and
 # where this file itself lives: settings.json, CLAUDE.md, CONTEXT.md, the two
 # skills, and this suite's own text. Every path below is one or the other on
 # purpose, and the split is what #107's harness needs -- it copies the hooks to
@@ -242,7 +245,7 @@ if [ -n "${CHECK_HOOKS_DIR:-}" ]; then
     echo "CHECK_HOOKS_DIR=$CHECK_HOOKS_DIR is not a directory; nothing was judged" >&2
     exit 1
   }
-  for f in "$SUITE_DIR"/*.sh "$SUITE_DIR"/lib/*.sh "$SUITE_DIR"/*.md; do
+  for f in "$SUITE_DIR"/*.sh "$SUITE_DIR"/lib/*.sh "$SUITE_DIR"/*.md "$SUITE_DIR"/requirements/*; do
     [ -r "$f" ] || continue
     [ -r "$HOOKS/${f#"$SUITE_DIR"/}" ] || {
       echo "CHECK_HOOKS_DIR=$HOOKS does not hold ${f#"$SUITE_DIR"/}, which is beside this suite; the checks against it would prove nothing" >&2
@@ -12024,6 +12027,43 @@ REQ_FIELD_AWK=$(cat <<'AWK'
   function after_colon(v) { if (index(v, ":") == 0) return ""; return trim(substr(v, index(v, ":") + 1)) }
 AWK
 )
+# WHERE THE `GH-` ENTRIES ARE, answered once (#200). They are not in
+# requirements.md: each is a file of its own under requirements/ beside it, named
+# by its ID, because every review loop appended to one section of one file and
+# every pair of concurrent branches conflicted there. Every reader in this file
+# reads the union, and every one of them asks this function for the second half
+# of it, so that there is one answer to which files and in which order.
+#
+# THE SPLIT SET IS FOUND BESIDE THE requirements.md IT IS GIVEN, never at a
+# fixed path. That is what lets a fixture carry a split set of its own, and what
+# makes a mutated copy under CHECK_HOOKS_DIR -- where mutate-hooks.sh edits a
+# `GH-` file -- the one that is read, with no caller having to pass a second
+# path and no caller able to forget to.
+#
+# VERSION ORDER ON THE ID, which is `sort -V`: numeric by issue and then by
+# sub-ID, a bare `GH-<n>` before its `GH-<n>.1`, and `GH-108.10` after
+# `GH-108.9`. The file system's order is the byte order of the names, which puts
+# `GH-100` before `GH-43.1`, and the order the entries used to have was the
+# order they were appended in -- neither is a stated sort. The matrix presents
+# the entries in the order this prints them, and the #200 checks hold it to that.
+#
+# EVERY NAME IN THE DIRECTORY, not every `GH-*.md`, so that a file misnamed out
+# of the pattern is read and found malformed rather than never read at all -- a
+# narrower glob fails silent, in the permitting direction. Dotfiles are left
+# out, because vim's swap file is one and is not an entry. An editor's backup
+# that is not a dotfile -- emacs's `GH-5.md~` -- is read, and turns the suite red
+# for as long as it is there, which is the failing direction and is taken.
+requirements_split() {  # requirements_split <requirements.md> -- the split set beside it, one path a line
+  local dir
+  dir="$(dirname -- "$1")/requirements"
+  [ -d "$dir" ] || return 0
+  # The path is printed here, by the shell, and never handed to `awk -v`, which
+  # reads a backslash in it as an escape; requirements_read takes the list
+  # through the environment for the same reason.
+  ( cd -- "$dir" && for f in *; do
+      [ -e "$f" ] && printf '%s\t%s\n' "${f%.md}" "$dir/$f"
+    done ) | LC_ALL=C sort -t "$(printf '\t')" -k1,1V | cut -f2-
+}
 INV_VARIANTS_AWK=$(cat <<'AWK'
   function flush(   inscope) {
     if (id == "") return
@@ -12039,6 +12079,9 @@ INV_VARIANTS_AWK=$(cat <<'AWK'
       printf "%s|%s|%s|%s\n", id, (inscope ? "in" : "out"), keyword(variants), after_colon(variants)
     id = ""
   }
+  # A file of the split set ends its entry where it ends (#200), whatever the
+  # next file opens with.
+  FNR == 1 { flush() }
   /^### / { flush(); id = $2; kind = ""; status = ""; direction = ""; seam = ""; variants = ""; lastkey = ""; next }
   /^## /  { flush(); next }
   id != "" && /^- [a-z-]+:/ {
@@ -12122,15 +12165,19 @@ while IFS='|' read -r vid vin vkw vpay; do
       fail static 'the entry %s declares variants: %s, which is none of seed, transformation and none' \
         "$vid" "$vkw" ;;
   esac
-done <<< "$(awk "$REQ_FIELD_AWK$INV_VARIANTS_AWK" "$HOOKS/requirements.md")"
+done <<< "$(mapfile -t REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
+            awk "$REQ_FIELD_AWK$INV_VARIANTS_AWK" "$HOOKS/requirements.md" ${REQ_SPLIT[@]+"${REQ_SPLIT[@]}"})"
 # Nothing read is a defect of its own AND counts itself in, because the line
 # below is a claim about every entry in scope and an empty read makes it a claim
 # about none. Written as two statements the first time and found by review of
 # this branch: the `ok` printed beside the failure, which is the shape #98's
 # section is about -- a check that passes by computing nothing.
+# The two lines below are also where a scope read that lost the split set goes
+# red, every in-scope entry being a `GH-` one (#200).
+req GH-141 GH-200.2
 if [ -z "$INV_SCOPE_DERIVED" ]; then
   INV_SCOPE_BAD=$((INV_SCOPE_BAD + 1))
-  fail static 'no GH- entry was read out of requirements.md at all, so the three checks below say nothing'
+  fail static 'no GH- entry was read out of requirements.md and requirements/ at all, so the three checks below say nothing'
 fi
 [ "$INV_SCOPE_BAD" -gt 0 ] \
   || pass static 'every GH- entry in the families scope declares a variants value this suite can act on'
@@ -12688,6 +12735,7 @@ tok 'the registry holds as many mutations as this suite expects' \
     '81' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
+mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
 # AND THE OUTCOMES OF THE ROWS A PASS WOULD ACTUALLY RUN, which is a different
 # list from the one above and is what the #148 run-count check needs. The five
 # reasons the harness's pass one refuses a row are asked here, in this file's own
@@ -12748,16 +12796,24 @@ while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
   # paragraph says it exists to prevent, and it did not ask it. Bertan's review
   # of PR #142. A `gap` is refused by the same rule and for the same reason: the
   # entry names the issue that owes it a check, so there is nothing to go red.
+  #
+  # Asked of requirements.md and the split set beside it together (#200), which
+  # is where a row's `GH-` IDs now are. One awk over the union rather than a
+  # grep and then an awk, because each of the two would have had to be given
+  # the split set, and the one that was not would have called a real entry
+  # missing.
   for MR in $MREQS; do
-    if ! grep -qx -- "### $MR" "$HOOKS/requirements.md"; then
-      MUT_BAD="$MUT_BAD  $MID: names $MR, which requirements.md has no entry for
+    MR_STATUS=$(awk -v h="### $MR" '
+      FNR == 1 && f { exit }
+      $0 == h { f = 1; found = 1; next }
+      f && /^(### |## )/ { exit }
+      f && /^- status:/ { sub(/^- status:[ \t]*/, ""); print; exit }
+      END { if (!found) print "<no entry>" }' "$HOOKS/requirements.md" ${MUT_REQ_SPLIT[@]+"${MUT_REQ_SPLIT[@]}"})
+    if [ "$MR_STATUS" = "<no entry>" ]; then
+      MUT_BAD="$MUT_BAD  $MID: names $MR, which neither requirements.md nor requirements/ has an entry for
 "
       continue
     fi
-    MR_STATUS=$(awk -v h="### $MR" '
-      $0 == h { f = 1; next }
-      f && /^### / { exit }
-      f && /^- status:/ { sub(/^- status:[ \t]*/, ""); print; exit }' "$HOOKS/requirements.md")
     case "${MR_STATUS%%[ :]*}" in
       active) ;;
       *) MUT_BAD="$MUT_BAD  $MID: names $MR, whose status is ${MR_STATUS%%[ :]*} rather than active, so no check covers it
@@ -12765,6 +12821,9 @@ while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
     esac
   done
 done <<< "$MUT_ROWS"
+# And where an audit that lost the split set goes red: most rows name a `GH-`
+# ID, and each would be called missing (#200).
+req GH-107.2 GH-200.2
 if [ -z "$MUT_BAD" ]; then
   pass static 'every registered mutation names a file and requirements that exist'
 else
@@ -12869,21 +12928,34 @@ fi
 # the check under `--- this repository ---` holds this count to what THAT reader
 # makes of the same file. So the chain is harness -> here -> canonical, and only
 # the middle link is a copied program.
+#
+# AND IT READS THE SPLIT SET, which is where the `GH-` entries are (#200). A
+# file there holds one entry and no `##` heading, so it opens as a section that
+# holds requirements; without that line every `GH-` entry would be read under
+# requirements.md's last heading, which holds none, and both counts would drop
+# by the whole ledger together.
+mapfile -t REQ_ACTIVE_SPLIT < <(requirements_split "$SUITE_DIR/requirements.md")
 REQ_ACTIVE_HERE=$(awk '
+  FNR == 1 && FILENAME != ARGV[1] { part = "req"; id = "" }
   /^## / { id = ""
            part = ($0 ~ /^## (User stories|Functional requirements|Boundary issues)$/) ? "req" : "other"
            next }
   /^### / { id = (part == "req") ? $2 : ""; next }
   id != "" && /^- status:[ \t]*active[ \t]*$/ { active[id] = 1 }
-  END { n = 0; for (i in active) n++; print n + 0 }' "$SUITE_DIR/requirements.md")
+  END { n = 0; for (i in active) n++; print n + 0 }' "$SUITE_DIR/requirements.md" \
+  ${REQ_ACTIVE_SPLIT[@]+"${REQ_ACTIVE_SPLIT[@]}"})
 MUT_ACTIVE=$(printf '%s\n' "$MUT_LIST" \
-             | awk '/requirements in requirements.md are active/ { print $1; exit }')
+             | awk '/requirements in requirements.md and requirements\/ are active/ { print $1; exit }')
 # Nothing read is not agreement. Both sides empty compares equal, which is this
 # check passing by computing nothing -- the shape #98's section is about, and the
 # reason the harness prints a phrase rather than 0 when it reads no entry either.
 if [ -z "$REQ_ACTIVE_HERE" ] || [ "$REQ_ACTIVE_HERE" = 0 ]; then
-  fail static 'no active requirement was counted out of requirements.md, so what --list prints is being compared against nothing'
+  fail static 'no active requirement was counted out of requirements.md and requirements/, so what --list prints is being compared against nothing'
 else
+  # Tagged GH-200.2 as well: a count on either side that lost the split set is
+  # one this line compares against the other, and against the canonical reader
+  # below.
+  req GH-148 GH-200.2
   tok 'the harness derives how many requirements are active, and derives the number this suite does' \
       "$REQ_ACTIVE_HERE" "$MUT_ACTIVE"
 fi
@@ -15078,6 +15150,7 @@ GH-128 GH-171:gap
 GH-155.1:static GH-148:static
 GH-109.1:static GH-109.2:refuse-only GH-109.3:static GH-109.4:static
 GH-109.5:permit-only GH-164:gap
+GH-200.1:static GH-200.2:static GH-200.3:static GH-200.4:static GH-200.5:static
 '
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in
@@ -15111,46 +15184,83 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
   function counts(id) {
     return (cnt[id, "refuse"] + 0) " refusing, " (cnt[id, "permit"] + 0) " permitting, " (cnt[id, "static"] + 0) " static"
   }
+  # One line of requirements.md or of a file of the split set. `insplit` says
+  # which, and `sname` names the file: a file there holds one `GH-` entry and
+  # nothing else, named by its ID (#200), and each way of breaking that is a
+  # finding of its own rather than a line read as something it is not.
+  function take(line) {
+    if (line ~ /^## /) {
+      cur = ""
+      if (insplit) { problem[++nproblem] = "requirements/" sname ": a ## heading, where a file here holds one entry and nothing else"; return }
+      heading = substr(line, 4)
+      if (line ~ /^## Provenance/) part = "prov"
+      else if (line ~ /^## Citations that are not requirements/) part = "cite"
+      else if (line ~ /^## (User stories|Functional requirements|Boundary issues)$/) part = "req"
+      else part = "other"
+      return
+    }
+    if (line ~ /^### /) {
+      hid = trim(substr(line, 5))
+      if (insplit) {
+        if (++nh > 1) problem[++nproblem] = "requirements/" sname ": holds a second entry, " hid ", where a file holds one"
+        else {
+          if (sname != hid ".md") problem[++nproblem] = "requirements/" sname ": holds " hid ", and a file is named by the ID it holds"
+          if (hid !~ /^GH-[1-9][0-9]*(\.[1-9][0-9]*)?$/) problem[++nproblem] = hid ": not an ID of the grammar the split set holds, GH-<n> or GH-<n>.<m>"
+        }
+        open_entry(hid)
+      } else if (part == "req" || part == "prov") {
+        if (part == "req" && hid ~ /^GH-/) problem[++nproblem] = hid ": a GH- entry in requirements.md, where each is a file of its own under requirements/"
+        open_entry(hid)
+      } else {
+        cur = ""
+        if (hid ~ /^(US|FR|GH)-[0-9]/ || hid ~ /^#[0-9]+\.[0-9]+$/)
+          problem[++nproblem] = hid ": an entry under the heading \"" heading "\", where no entry is read"
+      }
+      return
+    }
+    if (insplit && nh == 0 && line !~ /^[ \t]*$/) {
+      problem[++nproblem] = "requirements/" sname ": text before its heading, where a file holds one entry and nothing else"
+      return
+    }
+    if (part == "cite" && line ~ /^- #[0-9]+: ./) {
+      n = line; sub(/^- #/, "", n); sub(/:.*$/, "", n); exempt[n] = 1
+      return
+    }
+    if (cur != "" && line ~ /^- [a-z-]+:/) {
+      key = line; sub(/^- /, "", key); sub(/:.*$/, "", key)
+      val = line; sub(/^- [a-z-]+:/, "", val); val = trim(val)
+      if ((cur, key) in field) problem[++nproblem] = cur ": the field " key " is given twice"
+      field[cur, key] = val; lastkey = key
+      return
+    }
+    if (cur != "" && lastkey != "" && line ~ /^  [^ ]/) {
+      field[cur, lastkey] = field[cur, lastkey] " " trim(line)
+      return
+    }
+    if (line !~ /^[ \t]*$/) {
+      if (insplit) problem[++nproblem] = "requirements/" sname ": a line that is no field of its entry, where a file holds one entry and nothing else"
+      lastkey = ""
+    }
+  }
   BEGIN {
     H = "#"
     # --- the requirements file ---------------------------------------------------
-    part = ""; cur = ""
-    while ((getline line < reqs) > 0) {
-      if (line ~ /^## /) {
-        cur = ""; heading = substr(line, 4)
-        if (line ~ /^## Provenance/) part = "prov"
-        else if (line ~ /^## Citations that are not requirements/) part = "cite"
-        else if (line ~ /^## (User stories|Functional requirements|Boundary issues)$/) part = "req"
-        else part = "other"
-        continue
-      }
-      if (line ~ /^### /) {
-        if (part == "req" || part == "prov") open_entry(trim(substr(line, 5)))
-        else {
-          cur = ""; hid = trim(substr(line, 5))
-          if (hid ~ /^(US|FR|GH)-[0-9]/ || hid ~ /^#[0-9]+\.[0-9]+$/)
-            problem[++nproblem] = hid ": an entry under the heading \"" heading "\", where no entry is read"
-        }
-        continue
-      }
-      if (part == "cite" && line ~ /^- #[0-9]+: ./) {
-        n = line; sub(/^- #/, "", n); sub(/:.*$/, "", n); exempt[n] = 1
-        continue
-      }
-      if (cur != "" && line ~ /^- [a-z-]+:/) {
-        key = line; sub(/^- /, "", key); sub(/:.*$/, "", key)
-        val = line; sub(/^- [a-z-]+:/, "", val); val = trim(val)
-        if ((cur, key) in field) problem[++nproblem] = cur ": the field " key " is given twice"
-        field[cur, key] = val; lastkey = key
-        continue
-      }
-      if (cur != "" && lastkey != "" && line ~ /^  [^ ]/) {
-        field[cur, lastkey] = field[cur, lastkey] " " trim(line)
-        continue
-      }
-      if (line !~ /^[ \t]*$/) lastkey = ""
-    }
+    part = ""; cur = ""; insplit = 0
+    while ((getline line < reqs) > 0) take(line)
     close(reqs)
+    # --- the split set beside it, in the order requirements_split gives -----------
+    # Through the environment rather than -v, which would read a backslash in a
+    # path as an escape. A file that cannot be read is a finding, not a skip.
+    nsplit = split(ENVIRON["REQ_SPLIT_LIST"], splitpath, "\n")
+    for (sp = 1; sp <= nsplit; sp++) {
+      sname = splitpath[sp]; sub(/^.*\//, "", sname)
+      insplit = 1; part = "req"; heading = ""; cur = ""; lastkey = ""; nh = 0
+      while ((rs = (getline line < splitpath[sp])) > 0) take(line)
+      close(splitpath[sp])
+      if (rs < 0) problem[++nproblem] = "requirements/" sname ": could not be read"
+      else if (nh == 0) problem[++nproblem] = "requirements/" sname ": holds no entry"
+    }
+    insplit = 0
     runbook_read = 0
     while ((getline line < runbook) > 0) {
       runbook_read = 1
@@ -15294,12 +15404,12 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       exit
     }
 
-    if (nreq == 0) emit("FAIL", "FR-45", "nothing was read out of the requirements file, so every finding below is evidence of nothing")
-    else emit("ok", "FR-45", "the requirements file holds " nreq " requirements and " ncrit " criteria")
+    if (nreq == 0) emit("FAIL", "FR-45", "nothing was read out of requirements.md and requirements/, so every finding below is evidence of nothing")
+    else emit("ok", "FR-45", "requirements.md and requirements/ hold " nreq " requirements and " ncrit " criteria")
     if (nproblem == 0) emit("ok", "FR-45", "every requirement entry is well formed")
     for (i = 1; i <= nproblem; i++) emit("FAIL", "FR-45", problem[i])
     if (nunknown == 0) emit("ok", "GH-104.2", "every tag names a requirement")
-    for (i = 1; i <= nunknown; i++) emit("FAIL", "GH-104.2", "a check is tagged " unknownorder[i] ", which is not in the requirements file: " unknown[unknownorder[i]])
+    for (i = 1; i <= nunknown; i++) emit("FAIL", "GH-104.2", "a check is tagged " unknownorder[i] ", which is not in requirements.md or requirements/: " unknown[unknownorder[i]])
     if (nres == 0) emit("FAIL", "GH-104.1", "no check result was recorded, so no tag was read")
     else if (nuntagged == 0 && nbaddir == 0) emit("ok", "GH-104.1", "every check carries a tag and a direction")
     for (i = 1; i <= nuntagged; i++) emit("FAIL", "GH-104.1", "a check carries no tag: " untagged[i])
@@ -15314,9 +15424,9 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
     }
     if (nuncovered == 0) emit("ok", "FR-46 FR-33", "every active requirement is covered")
     if (onlyfile == "" && onlylit == "")
-      emit("ok", "FR-45 FR-46", "requirements.md has the shape this suite holds: " nreq " entries by ID, " (noffrule + 0) " of them off the both-directions rule")
+      emit("ok", "FR-45 FR-46", "requirements.md and requirements/ have the shape this suite holds: " nreq " entries by ID, " (noffrule + 0) " of them off the both-directions rule")
     else {
-      shapemsg = "requirements.md has changed shape"
+      shapemsg = "requirements.md and requirements/ have changed shape"
       if (onlyfile != "") shapemsg = shapemsg "; only it holds" onlyfile
       if (onlylit != "") shapemsg = shapemsg "; only this suite holds" onlylit
       emit("FAIL", "FR-45 FR-46", shapemsg)
@@ -15334,7 +15444,11 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
   }
 AWK
 )
+# <requirements> is requirements.md, and the split set is read from beside it
+# by requirements_split -- so every caller reads the union, and none can pass
+# one half without the other.
 requirements_read() {  # requirements_read <findings|matrix> <requirements> <ledger> <suite> <root> <runbook> <counts> <shape>
+  REQ_SPLIT_LIST=$(requirements_split "$2") \
   awk -v mode="$1" -v reqs="$2" -v ledger="$3" -v suite="$4" -v root="$5" \
       -v runbook="$6" -v counts_literal="$7" -v shape_literal="$8" \
       "$REQ_FIELD_AWK$REQUIREMENTS_AWK" </dev/null
@@ -15399,13 +15513,6 @@ cat > "$REQ_FIX/clean/requirements.md" <<REQS
 
 ## Boundary issues
 
-### GH-5.1
-- text: a sub-issue that is permit-only
-- from: the fixture
-- kind: defect-permitting
-- status: active
-- direction: permit-only: a reason
-
 ## Provenance: the fixture's criteria
 
 ### ${H}37.1
@@ -15419,6 +15526,16 @@ cat > "$REQ_FIX/clean/requirements.md" <<REQS
 ## Citations that are not requirements
 
 - ${H}9: a reason
+REQS
+# The `GH-` entry is a file of its own beside it, as in the repository (#200).
+mkdir -p "$REQ_FIX/clean/requirements"
+cat > "$REQ_FIX/clean/requirements/GH-5.1.md" <<'REQS'
+### GH-5.1
+- text: a sub-issue that is permit-only
+- from: the fixture
+- kind: defect-permitting
+- status: active
+- direction: permit-only: a reason
 REQS
 printf '%s\t%s\t%s\t%s\n' \
   'US-1' refuse ok 'BLOCK one' \
@@ -15447,12 +15564,12 @@ TAB=$'\t'
 
 req GH-104.1 GH-104.2 GH-104.3 FR-45 FR-46 FR-47 FR-33
 tok 'the clean fixture: every finding holds, one line each' \
-"ok${TAB}FR-45${TAB}the requirements file holds 7 requirements and 2 criteria
+"ok${TAB}FR-45${TAB}requirements.md and requirements/ hold 7 requirements and 2 criteria
 ok${TAB}FR-45${TAB}every requirement entry is well formed
 ok${TAB}GH-104.2${TAB}every tag names a requirement
 ok${TAB}GH-104.1${TAB}every check carries a tag and a direction
 ok${TAB}FR-46 FR-33${TAB}every active requirement is covered
-ok${TAB}FR-45 FR-46${TAB}requirements.md has the shape this suite holds: 7 entries by ID, 6 of them off the both-directions rule
+ok${TAB}FR-45 FR-46${TAB}requirements.md and requirements/ have the shape this suite holds: 7 entries by ID, 6 of them off the both-directions rule
 ok${TAB}FR-47${TAB}every stage-ticket criterion is carried or dropped, and each ticket has all of its criteria
 ok${TAB}GH-104.3${TAB}every issue the suite cites has an entry or a reason" \
   "$(req_fixture "$REQ_FIX/clean")"
@@ -15468,7 +15585,7 @@ req GH-104.2
 req_mutant unknown-tag ledger 's/^US-2\t/US-9\t/'
 OUT=$(req_fixture "$REQ_FIX/unknown-tag")
 holds 'a tag naming an ID not in the file fails, and names the check carrying it' "$OUT" \
-  "FAIL${TAB}GH-104.2${TAB}a check is tagged US-9, which is not in the requirements file: says three"
+  "FAIL${TAB}GH-104.2${TAB}a check is tagged US-9, which is not in requirements.md or requirements/: says three"
 lacks 'and the suite does not also say every tag names a requirement' "$OUT" 'every tag names a requirement'
 req FR-47
 req_mutant delete-a-mapping requirements.md '/^- maps: US-1, FR-1$/d'
@@ -15537,7 +15654,7 @@ req_mutant superseded-unknown requirements.md 's/^- status: superseded-by: FR-1$
 OUT=$(req_fixture "$REQ_FIX/superseded-unknown")
 holds 'a supersession naming no entry fails' "$OUT" \
   "FAIL${TAB}FR-45${TAB}FR-4: superseded by FR-9, which is not a requirement"
-req_mutant no-kind requirements.md '/^- kind: defect-permitting$/d'
+req_mutant no-kind requirements/GH-5.1.md '/^- kind: defect-permitting$/d'
 OUT=$(req_fixture "$REQ_FIX/no-kind")
 holds 'a GH entry with no kind fails' "$OUT" "FAIL${TAB}FR-45${TAB}GH-5.1: the kind is missing"
 req_mutant no-reason requirements.md 's/^- direction: static: a reason$/- direction: static:/'
@@ -15582,33 +15699,33 @@ req FR-45 FR-46
 req_mutant gap-added requirements.md 's/^- status: superseded-by: FR-1$/- status: gap → '"${H}"'8/'
 OUT=$(req_fixture "$REQ_FIX/gap-added")
 holds 'an entry marked a gap changes the shape this suite holds' "$OUT" \
-  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds FR-4:gap; only this suite holds FR-4:superseded-by"
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md and requirements/ have changed shape; only it holds FR-4:gap; only this suite holds FR-4:superseded-by"
 req_mutant review-added requirements.md 's|^- verify: tests/present.py$|- verify: review|'
 OUT=$(req_fixture "$REQ_FIX/review-added")
 holds 'and so does an entry moved to verification by review' "$OUT" \
-  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds FR-2:review; only this suite holds FR-2:tests"
-req_mutant retired-marked requirements.md '/^### GH-5.1$/,/^- direction:/s/^- status: active$/- status: retired: a reason/'
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md and requirements/ have changed shape; only it holds FR-2:review; only this suite holds FR-2:tests"
+req_mutant retired-marked requirements/GH-5.1.md '/^### GH-5.1$/,/^- direction:/s/^- status: active$/- status: retired: a reason/'
 OUT=$(req_fixture "$REQ_FIX/retired-marked")
 holds 'and an active entry marked retired' "$OUT" \
-  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds GH-5.1:retired,permit-only; only this suite holds GH-5.1:permit-only"
-req_mutant drifted-marked requirements.md '/^### GH-5.1$/,/^- direction:/s/^- status: active$/- status: drifted: some evidence/'
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md and requirements/ have changed shape; only it holds GH-5.1:retired,permit-only; only this suite holds GH-5.1:permit-only"
+req_mutant drifted-marked requirements/GH-5.1.md '/^### GH-5.1$/,/^- direction:/s/^- status: active$/- status: drifted: some evidence/'
 OUT=$(req_fixture "$REQ_FIX/drifted-marked")
 holds 'and one marked drifted' "$OUT" \
-  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds GH-5.1:drifted,permit-only; only this suite holds GH-5.1:permit-only"
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md and requirements/ have changed shape; only it holds GH-5.1:drifted,permit-only; only this suite holds GH-5.1:permit-only"
 req_mutant tests-verified requirements.md 's/^- direction: refuse-only: a reason$/- seam: none\n- verify: tests\/present.py/'
 OUT=$(req_fixture "$REQ_FIX/tests-verified")
 holds 'and one moved to no seam, verified by a test file that is there' "$OUT" \
-  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds US-2:tests; only this suite holds US-2:refuse-only"
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md and requirements/ have changed shape; only it holds US-2:tests; only this suite holds US-2:refuse-only"
 req_mutant entry-deleted requirements.md '/^### US-2$/,/^- direction: refuse-only: a reason$/d'
 OUT=$(req_fixture "$REQ_FIX/entry-deleted")
 holds 'and an entry deleted outright, which the header forbids' "$OUT" \
-  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only this suite holds US-2:refuse-only"
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md and requirements/ have changed shape; only this suite holds US-2:refuse-only"
 # A story covered in both directions declares itself one-sided, which no count
 # held: every entry's direction is its own.
 req_mutant direction-added requirements.md '/^### US-1$/,/^### US-2$/s/^- status: active$/&\n- direction: permit-only: a reason/'
 OUT=$(req_fixture "$REQ_FIX/direction-added")
 tok 'a direction declared changes the shape, and that is the only finding' \
-  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds US-1:permit-only; only this suite holds US-1" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md and requirements/ have changed shape; only it holds US-1:permit-only; only this suite holds US-1" \
   "$(grep "^FAIL" <<< "$OUT")"
 # A gap whose tags meet coverage is made active, and its marker is put on an
 # entry that is active: the count of every status stays where it was. The ledger
@@ -15623,14 +15740,14 @@ if cmp -s "$REQ_FIX/clean/requirements.md" "$REQ_FIX/gap-swapped/requirements.md
 fi
 OUT=$(req_fixture "$REQ_FIX/gap-swapped")
 tok 'a gap marker moved from one entry to another changes the shape, and that is the only finding' \
-  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md has changed shape; only it holds US-1:gap FR-3; only this suite holds US-1 FR-3:gap" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md and requirements/ have changed shape; only it holds US-1:gap FR-3; only this suite holds US-1 FR-3:gap" \
   "$(grep "^FAIL" <<< "$OUT")"
 req FR-45
 printf '' > "$REQ_FIX/empty-requirements.md"
 OUT=$(requirements_read findings "$REQ_FIX/empty-requirements.md" "$REQ_FIX/clean/ledger" \
         "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")
 holds 'a requirements file that holds nothing fails, rather than covering everything' "$OUT" \
-  "FAIL${TAB}FR-45${TAB}nothing was read out of the requirements file, so every finding below is evidence of nothing"
+  "FAIL${TAB}FR-45${TAB}nothing was read out of requirements.md and requirements/, so every finding below is evidence of nothing"
 
 echo "--- the matrix, against the same fixture ---"
 req GH-104.4
@@ -15674,6 +15791,328 @@ holds 'and does not say it of a gap no check can reach' \
   "$(requirements_read matrix "$REQ_FIX/seam-gap/requirements.md" "$REQ_FIX/clean/ledger" \
        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")" \
   "FR-2  gap → ${H}7  not asked (0 refusing, 0 permitting, 0 static, seam: none, verify: tests/present.py)"
+
+echo "--- #200: every GH- entry is a file of its own, beside requirements.md ---"
+# The `GH-` entries were one section of requirements.md, appended to by every
+# review loop, and every pair of concurrent branches conflicted on it -- six
+# merges of six on 2026-09-20, none of them on code. Each is now a file under
+# requirements/, named by its ID and holding that entry and nothing else, and
+# requirements.md holds none. The readers above find the files through
+# requirements_split, which is the one answer to which files and in what order.
+#
+# A mutant here is the clean fixture copied whole with its split set changed,
+# and the change is asserted to have taken, for req_mutant's reason: a command
+# that did nothing leaves the clean fixture, and every FAIL expected of it would
+# be missing for that reason rather than the one it names.
+req_split_changed() {  # req_split_changed <name> -- exits unless the mutant differs from the clean fixture
+  if diff -r -q "$REQ_FIX/clean" "$REQ_FIX/$1" > /dev/null 2>&1; then
+    echo "the requirements mutant $1 did not change the fixture; the checks against it prove nothing" >&2
+    exit 1
+  fi
+}
+# THE CHECK THAT FAILS WITHOUT THE SPLIT WORKING. A reader that does not find
+# the split set reads every `GH-` entry as absent, and nothing about an absence
+# is malformed -- so the finding that goes red is the shape, which is the literal
+# that holds every entry by ID. In the repository that is every `GH-` entry
+# dropping out of REQUIREMENT_SHAPE at once.
+req FR-45 FR-46 GH-200.1 GH-200.2
+cp -r "$REQ_FIX/clean" "$REQ_FIX/split-lost"
+rm -r "$REQ_FIX/split-lost/requirements"
+req_split_changed split-lost
+OUT=$(req_fixture "$REQ_FIX/split-lost")
+holds 'a split set that is not read loses its entries, and the shape says which' "$OUT" \
+  "FAIL${TAB}FR-45 FR-46${TAB}requirements.md and requirements/ have changed shape; only this suite holds GH-5.1:permit-only"
+# Each way a file breaks "one entry, named by its ID, and nothing else" is a
+# finding of its own. #200's triage named the first three.
+req FR-45 GH-200.1
+cp -r "$REQ_FIX/clean" "$REQ_FIX/split-misnamed"
+mv "$REQ_FIX/split-misnamed/requirements/GH-5.1.md" "$REQ_FIX/split-misnamed/requirements/GH-5.2.md"
+req_split_changed split-misnamed
+OUT=$(req_fixture "$REQ_FIX/split-misnamed")
+holds 'a file whose name disagrees with the heading it holds fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}requirements/GH-5.2.md: holds GH-5.1, and a file is named by the ID it holds"
+lacks 'and the entries are not called well formed' "$OUT" 'every requirement entry is well formed'
+cp -r "$REQ_FIX/clean" "$REQ_FIX/split-two"
+printf '\n### GH-5.2\n- text: a second entry\n- from: the fixture\n- kind: doc-claim\n- status: retired: a reason\n' \
+  >> "$REQ_FIX/split-two/requirements/GH-5.1.md"
+req_split_changed split-two
+OUT=$(req_fixture "$REQ_FIX/split-two")
+holds 'a file holding two entries fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}requirements/GH-5.1.md: holds a second entry, GH-5.2, where a file holds one"
+lacks 'and the entries are not called well formed' "$OUT" 'every requirement entry is well formed'
+# `GH-05` passes the family test open_entry makes, `^GH-[0-9]+`, so the grammar
+# is the only thing that can refuse it -- and a file named for it agrees with its
+# heading, so the name check says nothing either.
+cp -r "$REQ_FIX/clean" "$REQ_FIX/split-grammar"
+printf '### GH-05\n- text: an ID with a leading zero\n- from: the fixture\n- kind: doc-claim\n- status: retired: a reason\n' \
+  > "$REQ_FIX/split-grammar/requirements/GH-05.md"
+req_split_changed split-grammar
+OUT=$(req_fixture "$REQ_FIX/split-grammar")
+holds 'a file whose ID breaks the grammar fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}GH-05: not an ID of the grammar the split set holds, GH-<n> or GH-<n>.<m>"
+lacks 'and the entries are not called well formed' "$OUT" 'every requirement entry is well formed'
+# The rest of "nothing else", and the entry written the old way.
+cp -r "$REQ_FIX/clean" "$REQ_FIX/split-preamble"
+sed -i '1i a line before the heading' "$REQ_FIX/split-preamble/requirements/GH-5.1.md"
+req_split_changed split-preamble
+OUT=$(req_fixture "$REQ_FIX/split-preamble")
+holds 'a file with text before its heading fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}requirements/GH-5.1.md: text before its heading, where a file holds one entry and nothing else"
+cp -r "$REQ_FIX/clean" "$REQ_FIX/split-section"
+printf '\n## A section\n' >> "$REQ_FIX/split-section/requirements/GH-5.1.md"
+req_split_changed split-section
+OUT=$(req_fixture "$REQ_FIX/split-section")
+holds 'a file with a section heading in it fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}requirements/GH-5.1.md: a ## heading, where a file here holds one entry and nothing else"
+# After the heading too: a line that is neither a field, nor the continuation
+# of one, nor blank. In requirements.md such a line is prose between entries;
+# in a file that holds one entry it can only be something that is not the entry.
+cp -r "$REQ_FIX/clean" "$REQ_FIX/split-stray"
+printf '\na paragraph that is no field\n' >> "$REQ_FIX/split-stray/requirements/GH-5.1.md"
+req_split_changed split-stray
+OUT=$(req_fixture "$REQ_FIX/split-stray")
+holds 'a file with a line after its entry that is no field of it fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}requirements/GH-5.1.md: a line that is no field of its entry, where a file holds one entry and nothing else"
+lacks 'and the entries are not called well formed' "$OUT" 'every requirement entry is well formed'
+cp -r "$REQ_FIX/clean" "$REQ_FIX/split-empty"
+: > "$REQ_FIX/split-empty/requirements/GH-6.md"
+req_split_changed split-empty
+OUT=$(req_fixture "$REQ_FIX/split-empty")
+holds 'a file holding no entry fails' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}requirements/GH-6.md: holds no entry"
+cp -r "$REQ_FIX/clean" "$REQ_FIX/split-appended"
+sed -i '/^## Boundary issues$/r '"$REQ_FIX/clean/requirements/GH-5.1.md" "$REQ_FIX/split-appended/requirements.md"
+rm "$REQ_FIX/split-appended/requirements/GH-5.1.md"
+req_split_changed split-appended
+OUT=$(req_fixture "$REQ_FIX/split-appended")
+holds 'a GH- entry appended to requirements.md the old way fails, and says where it goes' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}GH-5.1: a GH- entry in requirements.md, where each is a file of its own under requirements/"
+lacks 'and the entries are not called well formed' "$OUT" 'every requirement entry is well formed'
+
+# THE ORDER IS VERSION ORDER ON THE ID, asked of names whose byte order and
+# whose creation order are both different from it: byte order puts GH-10 first
+# and GH-5.10 before GH-5.2, and the files are written in neither order. The
+# expected sequence is written out, not computed with the `sort -V` the function
+# uses.
+req GH-200.3
+cp -r "$REQ_FIX/clean" "$REQ_FIX/split-order"
+for SPLIT_ID in GH-10 GH-5.10 GH-9 GH-5 GH-5.2; do
+  printf '### %s\n- text: an entry whose place is asked\n- from: the fixture\n- kind: doc-claim\n- status: retired: a reason\n' \
+    "$SPLIT_ID" > "$REQ_FIX/split-order/requirements/$SPLIT_ID.md"
+done
+tok 'the split set is listed in version order on the ID' \
+  'GH-5.md GH-5.1.md GH-5.2.md GH-5.10.md GH-9.md GH-10.md' \
+  "$(requirements_split "$REQ_FIX/split-order/requirements.md" | sed 's|.*/||' | paste -sd ' ')"
+tok 'and the matrix presents the entries in that order' \
+  'GH-5 GH-5.1 GH-5.2 GH-5.10 GH-9 GH-10' \
+  "$(requirements_read matrix "$REQ_FIX/split-order/requirements.md" "$REQ_FIX/clean/ledger" \
+       "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE" \
+     | awk '/^GH-/ { print $1 }' | paste -sd ' ')"
+# And of this repository, where the order the entries used to have was the order
+# they were appended in. The only derivation here is `sort -V`, which is the
+# order #200 states, over the IDs the matrix printed -- so what goes red is the
+# matrix disagreeing with the statement, whatever the function does.
+REPO_GH_ORDER=$(requirements_read matrix "$HOOKS/requirements.md" "$REQ_FIX/empty-ledger" \
+                  "$SUITE_DIR/check-hooks.sh" "$REPO_ROOT" "$HOOKS/runbook.md" \
+                  "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE" | awk '/^GH-/ { print $1 }')
+if [ -z "$REPO_GH_ORDER" ]; then
+  fail static 'the matrix of this repository printed no GH- entry, so its order says nothing'
+else
+  tok "this repository's matrix presents every GH- entry in version order" \
+    "$(printf '%s\n' "$REPO_GH_ORDER" | LC_ALL=C sort -V)" "$REPO_GH_ORDER"
+fi
+
+# THE SPLIT ROUND-TRIPS: every entry #200 moved is in the split set, byte for
+# byte, with a checksum and a length each taken off requirements.md as it stood
+# before the
+# split (4e91496), not off the files -- so the literal is evidence about the move
+# and not a copy of what it checks. Checked by the suite rather than asserted in
+# a pull request, which is #200's own acceptance criterion.
+#
+# THE TRADE, taken knowingly. The literal holds these entries still, so an edit
+# to one of them -- a gap marker taken off when its issue lands, a note amended
+# -- turns this red, and moving its token is part of that edit. That is #200's
+# second design point, that a ledger entry is immutable once written and a
+# correction is a new entry that supersedes it, held to these 117 and to no
+# entry written after them. The cost is one token in this file per such edit,
+# and the benefit is that an entry changed by accident -- a merge that resolved
+# a conflict inside one, a script that rewrote one -- cannot pass as unchanged.
+req GH-200.4
+SPLIT_MOVED='
+GH-43.1:3016071546:230 GH-43.2:3981155595:365 GH-43.3:3296458999:202
+GH-43.4:1176774999:332 GH-43.5:2245854857:208 GH-43.6:2896846372:505
+GH-44.1:2920400005:350 GH-44.2:685382692:425 GH-44.3:4195638298:507
+GH-44.4:883040912:413 GH-44.5:2792005444:377 GH-44.6:2286241849:333
+GH-44.7:2281562543:294 GH-47.1:3798972667:325 GH-47.2:3262982810:416
+GH-50.1:963858542:304 GH-50.2:2971482831:527 GH-50.3:3158273160:290
+GH-51.1:716105133:249 GH-51.2:3449319844:309 GH-58.1:2879788571:473
+GH-58.2:4131600584:347 GH-61:1785465042:435 GH-62:2642290802:294
+GH-63:977837279:276 GH-68.1:2776987324:213 GH-68.2:3577127727:364
+GH-68.3:2786679676:404 GH-69.1:3360809505:349 GH-69.2:1687396498:282
+GH-69.3:2307590211:365 GH-70.1:2457716069:251 GH-70.2:553276152:312
+GH-70.3:1835051587:271 GH-71:1705493727:261 GH-72:2730174427:276
+GH-73:1740680021:328 GH-79.1:1156543033:392 GH-79.2:2448772362:387
+GH-79.3:1044006035:492 GH-79.4:4164888728:423 GH-84.1:1415289798:456
+GH-84.2:1913130545:311 GH-84.3:3264922817:232 GH-94.1:1818629125:343
+GH-94.2:871862042:365 GH-94.3:777013953:257 GH-94.4:2033462644:487
+GH-95.1:2814035934:383 GH-95.2:1943897409:371 GH-96.1:2653392487:401
+GH-96.2:2058708649:267 GH-96.3:2380602582:309 GH-97.1:1432229579:335
+GH-97.2:3203520091:343 GH-98:2426143346:340 GH-99.1:529824382:413
+GH-99.2:3044304870:258 GH-99.3:2321070265:293 GH-100:466656719:350
+GH-101:3549404229:283 GH-102:4072209571:222 GH-104.1:673865969:159
+GH-104.2:3422979425:190 GH-104.3:275267075:273 GH-104.4:1322410782:241
+GH-104.5:3422391122:300 GH-106:3704976515:1535 GH-107.1:3959444618:2375
+GH-107.2:2755331717:3017 GH-108.1:1735229711:765 GH-108.2:2104747290:1161
+GH-108.3:3492012368:611 GH-108.4:272803982:544 GH-108.5:1162982285:1240
+GH-108.6:1295126848:567 GH-108.7:132764282:816 GH-108.8:32710089:758
+GH-108.9:1920560325:1237 GH-108.10:1327094914:1146 GH-109.1:722393216:550
+GH-109.2:3501734001:2130 GH-109.3:655958765:398 GH-109.4:2245848118:874
+GH-109.5:1126951843:1652 GH-117:149840679:3224 GH-117.1:2522200149:1957
+GH-118:4142000930:1501 GH-124:95512510:244 GH-127:705289083:213
+GH-128:3819682974:2698 GH-130:3976834831:1480 GH-130.1:2601395581:1689
+GH-130.2:2650910486:1268 GH-130.3:3706264335:2146 GH-130.4:1739224337:1217
+GH-130.5:423110139:3450 GH-130.6:3398838914:2836 GH-131:976030016:1610
+GH-133:1655092711:1513 GH-134:2462285111:1737 GH-134.1:175342827:1850
+GH-135:2245415987:1695 GH-136:1821333198:624 GH-137.1:2188355493:1363
+GH-137.2:3816430604:1859 GH-139:2474037372:4416 GH-141:4095480653:1665
+GH-143.4:1351248197:1919 GH-143.5:2325415628:855 GH-148:2277754167:7215
+GH-155.1:3143088805:5291 GH-156:1579607799:1497 GH-164:1173286345:555
+GH-167:3774825998:1365 GH-171:1548953849:1055 GH-175:1964502293:1348
+'
+SPLIT_MOVED_N=0
+SPLIT_MOVED_BAD=
+set -f
+for SPLIT_TOK in $SPLIT_MOVED; do
+  SPLIT_MOVED_N=$((SPLIT_MOVED_N + 1))
+  SPLIT_ID=${SPLIT_TOK%%:*}
+  if [ ! -f "$HOOKS/requirements/$SPLIT_ID.md" ]; then
+    SPLIT_MOVED_BAD="$SPLIT_MOVED_BAD $SPLIT_ID:absent"
+  elif [ "$(cksum < "$HOOKS/requirements/$SPLIT_ID.md" | awk '{ print $1 ":" $2 }')" != "${SPLIT_TOK#*:}" ]; then
+    SPLIT_MOVED_BAD="$SPLIT_MOVED_BAD $SPLIT_ID:changed"
+  fi
+done
+set +f
+# 117 is the number of `### GH-` headings requirements.md held at 4e91496,
+# counted there when the literal was written; nothing in a shallow checkout can
+# count it again, so this holds the literal to that measurement and no more.
+tok 'the literal holds as many entries as requirements.md held before the split, measured at 4e91496' '117' "$SPLIT_MOVED_N"
+tok 'and each is in the split set with the checksum and length it had there (an entry named here is absent or changed)' \
+  '' "$SPLIT_MOVED_BAD"
+
+# split-requirements.sh, AGAINST A FIXTURE. It is what the pull requests open
+# across the split will run once they merge the dev branch that carries it, so
+# it is asked what they need: that it moves every entry byte for byte and
+# leaves the rest of the file as it was, that a second run moves nothing, and
+# that it refuses -- writing nothing at all -- a file already there holding
+# something else, an ID outside the grammar and an ID written twice. Its output is read with a `|`
+# after it, because `$( )` drops trailing newlines and a file's last byte is
+# part of what is asked.
+req GH-200.5
+SPLIT_FIX="$FIXTURES/split-requirements"
+mkdir -p "$SPLIT_FIX/before"
+cat > "$SPLIT_FIX/before/requirements.md" <<'REQS'
+# A fixture
+
+## Functional requirements
+
+### FR-1
+- text: an entry that stays
+- from: the fixture
+- status: active
+
+## Boundary issues
+
+### GH-5.1
+- text: a sub-entry, written first
+- from: the fixture
+- kind: doc-claim
+- status: active
+
+### GH-5
+- text: a bare entry,
+  continued on a second line
+- from: the fixture
+- kind: doc-claim
+- status: active
+
+## Provenance: the fixture's criteria
+REQS
+cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/moved"
+SPLIT_OUT=$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/moved" 2>&1; printf 'exit %s' "$?")
+tok 'split-requirements.sh moves every GH- entry and says which' \
+  'moved 2 GH- entries into requirements/: GH-5.1 GH-5
+exit 0' "$SPLIT_OUT"
+tok 'each entry is a file of its own, byte for byte' \
+  '### GH-5
+- text: a bare entry,
+  continued on a second line
+- from: the fixture
+- kind: doc-claim
+- status: active
+|' "$(cat "$SPLIT_FIX/moved/requirements/GH-5.md"; printf '|')"
+tok 'and requirements.md keeps everything else, and one blank line between sections' \
+  '# A fixture
+
+## Functional requirements
+
+### FR-1
+- text: an entry that stays
+- from: the fixture
+- status: active
+
+## Boundary issues
+
+## Provenance: the fixture'"'"'s criteria
+|' "$(cat "$SPLIT_FIX/moved/requirements.md"; printf '|')"
+tok 'and it wrote the two files it named and nothing else' 'GH-5.1.md GH-5.md' \
+  "$(ls "$SPLIT_FIX/moved/requirements" | LC_ALL=C sort | paste -sd ' ')"
+cp -r "$SPLIT_FIX/moved" "$SPLIT_FIX/again"
+tok 'a second run moves nothing' \
+  'requirements.md holds no GH- entry; nothing to move
+exit 0' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/again" 2>&1; printf 'exit %s' "$?")"
+if diff -r -q "$SPLIT_FIX/moved" "$SPLIT_FIX/again" > /dev/null 2>&1; then
+  pass static 'and changes nothing'
+else
+  fail static 'and changes nothing: a second run changed %s' "$SPLIT_FIX/again"
+fi
+cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/conflict"
+mkdir "$SPLIT_FIX/conflict/requirements"
+printf '### GH-5\n- text: another loop wrote this ID first\n' > "$SPLIT_FIX/conflict/requirements/GH-5.md"
+tok 'a file already there holding something else is refused' \
+  'split-requirements.sh: refused, and nothing was moved:
+  GH-5: requirements/GH-5.md is there already and holds something else
+exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/conflict" 2>&1; printf 'exit %s' "$?")"
+tok 'and nothing is written: requirements.md is as it was, and the other entry was not moved' \
+  'GH-5.md' "$(ls "$SPLIT_FIX/conflict/requirements" | paste -sd ' ')$(cmp -s "$SPLIT_FIX/before/requirements.md" "$SPLIT_FIX/conflict/requirements.md" || printf ' requirements.md changed')"
+cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/grammar"
+sed -i 's/^### GH-5$/### GH-05/' "$SPLIT_FIX/grammar/requirements.md"
+tok 'an ID outside the grammar is refused' \
+  'split-requirements.sh: refused, and nothing was moved:
+  GH-05: not an ID of the GH family grammar, ^GH-[1-9][0-9]*(\.[1-9][0-9]*)?$
+exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/grammar" 2>&1; printf 'exit %s' "$?")"
+tok 'and nothing is written' 'no requirements/' \
+  "$([ -e "$SPLIT_FIX/grammar/requirements" ] && printf 'requirements/ written' || printf 'no requirements/')"
+cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/twice"
+sed -i 's/^### GH-5$/### GH-5.1/' "$SPLIT_FIX/twice/requirements.md"
+tok 'an ID written twice is refused' \
+  'split-requirements.sh: refused, and nothing was moved:
+  GH-5.1: the ID is used twice
+exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/twice" 2>&1; printf 'exit %s' "$?")"
+tok 'and nothing is written' 'no requirements/' \
+  "$([ -e "$SPLIT_FIX/twice/requirements" ] && printf 'requirements/ written' || printf 'no requirements/')"
+# The pull requests across the split hold files already: an entry whose file is
+# there with the same bytes is not a conflict, and is left alone.
+cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/half"
+mkdir "$SPLIT_FIX/half/requirements"
+cp "$SPLIT_FIX/moved/requirements/GH-5.md" "$SPLIT_FIX/half/requirements/GH-5.md"
+tok 'an entry whose file already holds exactly it is no conflict' \
+  'moved 2 GH- entries into requirements/: GH-5.1 GH-5
+exit 0' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/half" 2>&1; printf 'exit %s' "$?")"
+if diff -r -q "$SPLIT_FIX/moved" "$SPLIT_FIX/half" > /dev/null 2>&1; then
+  pass static 'and the result is the one a first run gives'
+else
+  fail static 'and the result is the one a first run gives: %s differs from %s' "$SPLIT_FIX/half" "$SPLIT_FIX/moved"
+fi
 
 echo "--- every result goes through pass and fail ---"
 # A result printed any other way is printed and not recorded, so it covers

@@ -657,8 +657,8 @@ report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT
 degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch: FAILED or timed out after /d%GH-108.10%caught
 pr-hook-reads-gh-off-the-environment%no-pr-decisions.sh%s#^if gh_rule 'pr merge'; then$#command -v gh >/dev/null 2>\&1 || exit 0\nif gh_rule 'pr merge'; then#%GH-108.6%caught
 report-reads-gh-before-git%report-stale-branches.sh%s#^if ! command -v git >/dev/null 2>&1; then$#gh --version >/dev/null 2>\&1\nif ! command -v git >/dev/null 2>\&1; then#%GH-155.1%caught
-variants-field-deleted%requirements.md%/^- variants: transformation: redirect-quoted$/d%GH-141%caught
-variants-seed-disowned%requirements.md%/^### GH-72$/,/^$/s/^- variants: seed$/- variants: none: a reason/%GH-141%caught
+variants-field-deleted%requirements/GH-50.3.md%/^- variants: transformation: redirect-quoted$/d%GH-141%caught
+variants-seed-disowned%requirements/GH-72.md%/^### GH-72$/,/^$/s/^- variants: seed$/- variants: none: a reason/%GH-141%caught
 heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
@@ -771,11 +771,23 @@ if [ -n "$LIST" ]; then
   # says a doubled program cannot find. Bertan's review of PR #183. The section
   # rule is check-hooks.sh's REQUIREMENTS_AWK, which is the canonical reader of
   # this file, and the check compares this count against that reader's own.
+  #
+  # AND THE SPLIT SET BESIDE IT, which is where every `GH-` entry is (#200): one
+  # file per ID under requirements/, each holding one entry and no `##` heading,
+  # so each opens as a section that holds requirements. Listed here rather than
+  # by check-hooks.sh's `requirements_split`, which this script cannot source;
+  # the order does not matter to a count, and every name in the directory is
+  # read, as there, so a misnamed file is counted rather than skipped.
+  REQ_SPLIT=()
+  if [ -d "$SRC/requirements" ]; then
+    for f in "$SRC"/requirements/*; do [ -e "$f" ] && REQ_SPLIT+=("$f"); done
+  fi
   ACTIVE=$(awk '
+    FNR == 1 && FILENAME != ARGV[1] { part = "req"; id = "" }
     /^## / { id = ""; part = ($0 ~ /^## (User stories|Functional requirements|Boundary issues)$/) ? "req" : "other"; next }
     /^### / { id = (part == "req") ? $2 : ""; next }
     id != "" && /^- status:[ \t]*active[ \t]*$/ { active[id] = 1 }
-    END { n = 0; for (i in active) n++; print n + 0 }' "$SRC/requirements.md")
+    END { n = 0; for (i in active) n++; print n + 0 }' "$SRC/requirements.md" ${REQ_SPLIT[@]+"${REQ_SPLIT[@]}"})
   # Stderr is NOT discarded. It was, in the commit that fixed the same mistake
   # one file over -- so why the read failed (mawk aborting on a directory, a
   # permission error) was thrown away, and since `--list` exits 0 regardless,
@@ -789,9 +801,9 @@ if [ -n "$LIST" ]; then
   # the words check-hooks.sh's #148 check reads the figure out of, so that check
   # goes red rather than picking a number out of an apology.
   if [ -n "$ACTIVE" ] && [ "$ACTIVE" != 0 ]; then
-    printf '%s requirements in requirements.md are active, which is what a row may name\n' "$ACTIVE"
+    printf '%s requirements in requirements.md and requirements/ are active, which is what a row may name\n' "$ACTIVE"
   else
-    printf 'NO ACTIVE REQUIREMENT WAS READ OUT OF requirements.md, so how many a row may name is not known here\n'
+    printf 'NO ACTIVE REQUIREMENT WAS READ OUT OF requirements.md AND requirements/, so how many a row may name is not known here\n'
   fi
   # AT MOST, and the word is the whole point of it. This is a prediction off the
   # table, so it counts rows whose edit is DECLARED to apply; only a run can see
