@@ -16220,7 +16220,7 @@ cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/prose"
 sed -i '24a A paragraph after the entries, which is no field of either.' "$SPLIT_FIX/prose/requirements.md"
 tok 'a line inside an entry that is no field of it is refused, and says where it is' \
   'split-requirements.sh: refused, and nothing was moved:
-  line 25: GH-5: a line that is no field of the entry, which would be moved into requirements/GH-5.md with it; move the line above the heading of the entry: A paragraph after the entries, which is no field of either.
+  line 25: GH-5: a line that is no field of the entry, which would be moved into requirements/GH-5.md with it; take the line out of every entry: put the GH- entries of this section below it, or it above the first of them: A paragraph after the entries, which is no field of either.
 exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/prose" 2>&1; printf 'exit %s' "$?")"
 tok 'and nothing is written' 'no requirements/' \
   "$([ -e "$SPLIT_FIX/prose/requirements" ] && printf 'requirements/ written' || printf 'no requirements/')"
@@ -16230,7 +16230,7 @@ cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/orphan"
 sed -i 's/^### GH-5\.1$/&\n  a continuation of no field/' "$SPLIT_FIX/orphan/requirements.md"
 tok 'a continuation with no field before it is refused' \
   'split-requirements.sh: refused, and nothing was moved:
-  line 13: GH-5.1: a line that is no field of the entry, which would be moved into requirements/GH-5.1.md with it; move the line above the heading of the entry:   a continuation of no field
+  line 13: GH-5.1: a line that is no field of the entry, which would be moved into requirements/GH-5.1.md with it; take the line out of every entry: put the GH- entries of this section below it, or it above the first of them:   a continuation of no field
 exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/orphan" 2>&1; printf 'exit %s' "$?")"
 # The heading is the whole of it, trimmed, as the reader reads it; the script
 # named the file from the first word, so `### GH-5 (reopened)` was written to

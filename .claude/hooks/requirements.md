@@ -128,7 +128,8 @@ A requirement with `seam: none` needs no check, and has none tagged with it; its
 The suite fails on each of these, and `--matrix` shows the rest:
 
 - an `active` requirement that is not covered;
-- a check with no tags, or a tag naming an ID not in this file;
+- a check with no tags, or a tag naming an ID that neither this file nor
+  `requirements/` holds;
 - an entry that is malformed: an ID out of family, one used twice, one under a
   `##` heading that holds no entries, a missing field, an unknown status or kind,
   a `superseded-by` naming no entry, a `direction` with no reason, `seam: none`
@@ -136,8 +137,9 @@ The suite fails on each of these, and `--matrix` shows the rest:
   it after all;
 - a `GH-` entry out of place: one left in this file, a file under
   `requirements/` whose name is not the ID it holds, one holding a second entry
-  or none, one with text before its heading or a `##` heading in it, and an ID
-  there outside the `GH-` grammar;
+  or none, one with text before its heading, a `##` heading in it, or a line
+  after its heading that is no field of the entry, and an ID there outside the
+  `GH-` grammar;
 - a check recording a direction other than refuse, permit and static;
 - a shape other than the one the suite holds as a literal: every entry by ID,
   with whatever takes it off the both-directions rule beside it -- a status

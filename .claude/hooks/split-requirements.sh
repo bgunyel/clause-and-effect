@@ -109,11 +109,15 @@ awk -v stage="$STAGE" '
   # then a non-space continue the one before, and anything else after the
   # heading is a line that is no field of the entry. One report per entry: the
   # first line of a paragraph says where it is, and the rest says nothing more.
+  # The remedy takes the line clear of every entry at once. It said "above the
+  # heading of the entry", which only moves the line into the entry before: with
+  # two entries appended above a paragraph, each run refused the next one up,
+  # one run per entry (rev-agent-200, round 3 of PR #210).
   id != "" {
     if ($0 ~ /^- [a-z-]+:/) field = 1
     else if (!(field && $0 ~ /^  [^ ]/)) {
       field = 0
-      if (!stray++) { print "line " NR ": " id ": a line that is no field of the entry, which would be moved into requirements/" id ".md with it; move the line above the heading of the entry: " $0 > (stage "/refused"); bad = 1 }
+      if (!stray++) { print "line " NR ": " id ": a line that is no field of the entry, which would be moved into requirements/" id ".md with it; take the line out of every entry: put the GH- entries of this section below it, or it above the first of them: " $0 > (stage "/refused"); bad = 1 }
     }
     body = body held $0 "\n"; held = ""; next
   }
