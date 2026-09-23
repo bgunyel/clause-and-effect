@@ -514,7 +514,8 @@ all taken. Nothing is pushed yet.
     joined, found a sixth: the foot row's comment calling the verdict "the last
     thing this suite runs".
   - The `NOT_FOUND_AT_HEAD` comment, which the assistant wrote in round 6, had
-    the hazard backwards. It is corrected, and the comment says it was.
+    the hazard backwards. The assistant corrected it, and the comment now says
+    that it was wrong until round 7.
 - **N17. Wrong tags.**
   - The `moved` arm ran under GH-204.1. The assistant's sweep found the round-5
     `missing` arm under the same wrong tag.
@@ -528,13 +529,13 @@ all taken. Nothing is pushed yet.
 ### Mistakes, and what caught them
 
 - **The assistant's first edit script asserted the wrong slice length (16
-  lines against 18).** The assertion stopped it before any write. The slice
-  was printed and checked, and was the intended one: the verdict row and the
-  stderr row.
+  lines against 18).** The assertion stopped it before any write. The
+  assistant printed the slice and checked it: it was the intended one, the
+  verdict row and the stderr row.
 - **The assistant's first commit message said "five new rows, one removed".**
-  The diff has six new and one removed; five is the net. It was caught
-  re-reading the diff before any push, and the unpushed commit's message was
-  amended.
+  The diff has six new and one removed; five is the net. The assistant caught
+  it by re-reading the diff before any push, and amended the unpushed commit's
+  message.
 
 ### Evidence (measured)
 
@@ -553,3 +554,30 @@ all taken. Nothing is pushed yet.
   and the proposal to make the verdict's variables `readonly`.
 - **#218.**
 - **Pull request 2.**
+
+### Voice, corrected after round 8
+
+Round 8 of the review found three sentences in this entry that put the
+assistant's own corrections in the passive, which CLAUDE.md does not allow for
+errors and corrections. The assistant rewrote them above; this entry is the
+newest and unmerged.
+
+The assistant then grepped the whole file and found the same pattern in older
+entries. Those stay as written, because the log is append-only. In each of the
+following the agent was the assistant, and the sentence should have said so:
+
+- **2026-09-23 20:30:** "They are fixed" (stale comments from the move).
+- **Round 1:**
+  - "were fixed" (the four stale pointers);
+  - "It was redone on a clone" (the `git archive` stderr comparison).
+- **Round 2:**
+  - "The range was restored … the diff was re-read" (the deleted #104 section);
+  - "The file was removed, and the run was repeated" (the stray `mutants2.out`);
+  - "Both were committed plainly" (the two refused commits);
+  - "The reply and the PR body were corrected in place" (the mutant count).
+- **Round 3:** "The counts were removed rather than updated". That was the
+  assistant's decision.
+- **Round 4:** "The file was written directly instead" (the mutant driver).
+- **Round 5:** "The count was checked against the output" (the commit message).
+- **Round 6:** "It was caught while writing the fixture" (the tab-IFS ledger
+  reader).

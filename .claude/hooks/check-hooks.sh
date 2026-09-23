@@ -590,8 +590,8 @@ LOADED_CHANGED_CODE='for LOADED_K in "${!LOADED_BODY[@]}"; do
 done'
 # AND THE VERDICT THOSE QUESTIONS GIVE -- a recorded function or variable
 # changed, a command not found, the not-found record moved -- taken after every
-# check and every helper, and followed only by LEDGER_VERDICT_CODE below and the
-# exit. The foot of the #104 section records a row for each, but a row is
+# check and every helper, and followed only by LEDGER_VERDICT_CODE below, the
+# blank `echo` and the `if` that print the summary line, and the exit. The foot of the #104 section records a row for each, but a row is
 # printed and recorded through `pass` and `fail`, and a redefined helper can
 # undo whatever FAILED said before it: `fail() { FAILED=0; }` exited 0 with the
 # foot red (round 5 of the review). So the verdict is taken again after every
@@ -14913,19 +14913,19 @@ FV_NONE="$FIXTURES/verdict-none"
 FV_SOME="$FIXTURES/verdict-some"
 : > "$FV_NONE"
 printf '%s\n' 'x.sh: line 1: nf_x: command not found' > "$FV_SOME"
-# `kept` is the one that asks whether it can clear what it was given: FAILED
-# already 1, and nothing redefined or missing. Without it a `FAILED=0` at the
-# top of the verdict let a red suite exit 0 with ALL CHECKS PASSED (round 6).
-# `moved` is the record pointed elsewhere and not put back.
 tok 'the final verdict fails on a recorded function redefined' \
     'redefined 1' \
     "$( FAILED=0; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "redefined $FAILED" )"
 req GH-204.5
+# `moved` is the record pointed elsewhere and not put back.
 tok 'the final verdict fails on a missing command and on a moved record' \
 'missing 1
 moved 1' "$( ( FAILED=0; NOT_FOUND=$FV_SOME; NOT_FOUND_AT_HEAD=$FV_SOME; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "missing $FAILED" )
      ( FAILED=0; NOT_FOUND=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "moved $FAILED" ) )"
 req GH-204.1 GH-204.5
+# `kept` is the one that asks whether it can clear what it was given: FAILED
+# already 1, and nothing redefined or missing. Without it a `FAILED=0` at the
+# top of the verdict let a red suite exit 0 with ALL CHECKS PASSED (round 6).
 tok 'the final verdict keeps a failure it was given, through a helper that clears it too, and fails on nothing else' \
 'clean 0
 cleared 1
@@ -17020,9 +17020,11 @@ else
 fi
 
 # NO COMMAND THIS RUN CALLED WAS MISSING: what `command_not_found_handle`, at
-# the head of this suite, wrote down. Asked last because it is about every check
-# above, as a row; the verdict is taken again by FOOT_VERDICT_CODE, for the
-# reason the check above gives. A missing `tok` would be one of the things this
+# the head of this suite, wrote down. Asked here because it is about every check
+# above, as a row; the two rows below it run after it, so a command missing in
+# them is not in what this row reads, and FOOT_VERDICT_CODE, which reads the
+# record again after them, is what sees it -- for the reason the check above
+# gives. A missing `tok` would be one of the things this
 # reports.
 # What this row cannot see and the final verdict can: a command missing in the
 # --matrix program below, which runs after this row and before the verdict.
