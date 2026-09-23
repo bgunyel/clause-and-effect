@@ -16217,7 +16217,7 @@ tok 'and it wrote the two files it named and nothing else' 'GH-5.1.md GH-5.md' \
 cp -r "$SPLIT_FIX/moved" "$SPLIT_FIX/again"
 tok 'a second run moves nothing, and does not claim a committed merge has nothing to carry' \
   'requirements.md holds no GH- entry; nothing to move
-(a merge of the split already committed is compared three ways with --base <its merge base> --branch <the branch before it>)
+(a merge of the split finished before the last commit, or a rebase, is compared three ways with --base <where the branch forked> --branch <the branch as it was before>)
 exit 0' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/again" 2>&1; printf 'exit %s' "$?")"
 if diff -r -q "$SPLIT_FIX/moved" "$SPLIT_FIX/again" > /dev/null 2>&1; then
   pass static 'and changes nothing'
@@ -16229,10 +16229,19 @@ mkdir "$SPLIT_FIX/conflict/requirements"
 printf '### GH-5\n- text: another loop wrote this ID first\n' > "$SPLIT_FIX/conflict/requirements/GH-5.md"
 tok 'a file already there holding something else is refused' \
   'split-requirements.sh: refused, and nothing was moved:
-  GH-5: requirements/GH-5.md is there already and holds something else; with a merge in progress, run this with no directory, which compares three ways
+  GH-5: requirements/GH-5.md is there already and holds something else. Two loops wrote this ID, or a merge or rebase of the split finished earlier, which --base and --branch compare three ways; once the file is the right one, run this again with --resolved GH-5
 exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/conflict" 2>&1; printf 'exit %s' "$?")"
 tok 'and nothing is written: requirements.md is as it was, and the other entry was not moved' \
   'GH-5.md' "$(ls "$SPLIT_FIX/conflict/requirements" | paste -sd ' ')$(cmp -s "$SPLIT_FIX/before/requirements.md" "$SPLIT_FIX/conflict/requirements.md" || printf ' requirements.md changed')"
+# And the remedy it gives is one a second run accepts: the file named with
+# --resolved is left as it is, and the rest moves.
+cp -r "$SPLIT_FIX/conflict" "$SPLIT_FIX/conflict-resolved"
+tok 'and named with --resolved, a second run accepts it and leaves that file' \
+  'taken out of requirements.md: GH-5.1 GH-5
+files written to requirements/: GH-5.1
+resolved by hand, and left as it was: GH-5
+exit 0 - text: another loop wrote this ID first' \
+  "$(bash "$HOOKS/split-requirements.sh" --resolved GH-5 "$SPLIT_FIX/conflict-resolved" 2>&1; printf 'exit %s ' "$?"; sed -n 2p "$SPLIT_FIX/conflict-resolved/requirements/GH-5.md")"
 cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/grammar"
 sed -i 's/^### GH-5$/### GH-05/' "$SPLIT_FIX/grammar/requirements.md"
 tok 'an ID outside the grammar is refused' \
@@ -16352,9 +16361,11 @@ fi
 # the edit with "nothing to move", exit 0, and keeping the branch side refused
 # the stale copies alongside the edits. Measured on #158 and #184. The fixture
 # is that merge in small: a base with three entries; a branch that edits GH-5
-# and appends GH-8; a dev side that splits and then edits GH-6, and carries a
-# check-hooks.sh holding GH-5's token. Its tokens are cksum and length of the
-# base's GH-5 block and of the branch's, written here as measured.
+# and appends GH-8 and a line outside the entries; a dev side that splits,
+# edits GH-6, keeps a pointer
+# paragraph under `## Boundary issues`, and carries a check-hooks.sh holding
+# GH-5's token. Its tokens are cksum and length of the base's GH-5 block, of
+# the branch's, and of the dev side's amendment, written here as measured.
 S3="$SPLIT_FIX/three"
 G3="git -C $S3/repo -c user.email=checks@example.invalid -c user.name=checks"
 git init -q -b dev "$S3/repo"
@@ -16388,13 +16399,17 @@ $G3 checkout -q -b feature
 sed -i 's/^- text: an entry the branch edits$/- text: an entry the branch edited/' "$S3/repo/requirements.md"
 sed -i 's/^## Provenance: /### GH-8\n- text: an entry the branch appends\n- from: the fixture\n- kind: doc-claim\n- status: active\n\n&/' \
   "$S3/repo/requirements.md"
+sed -i 's/^## Provenance: .*$/&\n- a criterion the branch adds, outside the entries/' "$S3/repo/requirements.md"
 $G3 commit -qam branch
 $G3 checkout -q dev
 cp "$HOOKS/split-requirements.sh" "$S3/repo/split-requirements.sh"
 bash "$S3/repo/split-requirements.sh" "$S3/repo" > /dev/null 2>&1
 sed -i 's/^- text: an entry the dev side edits$/- text: an entry the dev side edited/' "$S3/repo/requirements/GH-6.md"
+sed -i 's/^## Boundary issues$/&\n\nA pointer paragraph, as the dev side keeps one./' "$S3/repo/requirements.md"
 printf "SPLIT_MOVED='\nGH-5:3493104077:98 GH-6:1:1\n'\n" > "$S3/repo/check-hooks.sh"
 $G3 add -A && $G3 commit -qm split
+# Before the merge, for the ways of bringing the split that are not one.
+cp -a "$S3/repo" "$S3/pre"
 $G3 checkout -q feature
 $G3 merge -q --no-edit dev > /dev/null 2>&1
 S3_BASE=$($G3 rev-parse --short "$($G3 merge-base HEAD MERGE_HEAD)")
@@ -16411,58 +16426,156 @@ files written to requirements/: GH-5 GH-8
 GH-5: changed on HEAD only since the base, so its SPLIT_MOVED token in check-hooks.sh moves from GH-5:3493104077:98 to GH-5:1218492981:99
 changed on the dev side only since the base, and left as it was: GH-6
 unchanged on both sides since the base, and left as it was: 1
+requirements.md lacks lines HEAD added outside the GH- entries since the base, lines missing: 1 -- a side the merge kept whole drops the other side's changes there, and git diff $S3_BASE HEAD -- requirements.md says which
 exit 0"
+S3_FIRST=${S3_WANT%%$'\n'*}
+# The dev side kept whole drops the branch's line outside the entries, and the
+# branch side kept whole drops the dev side's pointer paragraph: each is said.
+S3_LACKS="requirements.md lacks lines HEAD added outside the GH- entries since the base, lines missing: 1 -- a side the merge kept whole drops the other side's changes there, and git diff $S3_BASE HEAD -- requirements.md says which"
+S3_DIFFERS="requirements.md differs from MERGE_HEAD outside the GH- entries, lines that differ: 3 -- a side the merge kept whole drops the other side's changes there, and git diff MERGE_HEAD -- requirements.md says which"
+# Unmerged: refused before anything is read, and not as a stray line at the
+# conflict markers, whose remedy -- move entries around them -- is wrong here.
+cp -a "$S3/repo" "$S3/unmerged"
+tok 'an unmerged requirements.md is refused, with a remedy that is about the merge' \
+  'split-requirements.sh: requirements.md is unmerged. Resolve it first, hunk by hunk: the GH- entries are read out of git, so either side of those will do, but keep the dev side'"'"'s pointer paragraph and whatever else either side changed outside them; then run this again; nothing was moved
+exit 1' "$(bash "$S3/unmerged/split-requirements.sh" 2>&1; printf 'exit %s' "$?")"
 # The dev side kept: the resolution a one-line side against a whole section
 # invites, and the one that lost the branch's edit in silence.
 cp -a "$S3/repo" "$S3/theirs"
 git -C "$S3/theirs" checkout -q --theirs requirements.md
+git -C "$S3/theirs" add requirements.md
+# Copied before any run here, so that each starts from the resolved merge.
+cp -a "$S3/theirs" "$S3/theirs-dir"
+cp -a "$S3/theirs" "$S3/theirs-notoken"
+cp -a "$S3/theirs" "$S3/both"
 tok 'with the dev side of requirements.md kept, the branch edit is still found, in git, and written' \
   "$S3_WANT" "$(bash "$S3/theirs/split-requirements.sh" 2>&1; printf 'exit %s' "$?")"
 tok 'the branch edit is what GH-5 now holds, and the dev edit what GH-6 does' \
   '- text: an entry the branch edited|- text: an entry the dev side edited' \
   "$(sed -n 2p "$S3/theirs/requirements/GH-5.md")|$(sed -n 2p "$S3/theirs/requirements/GH-6.md")"
-# The branch side kept: the same classification, and the entries taken out.
+# The same with the directory given, which the usage line allows, and which a
+# first version ran two ways -- "nothing to move", exit 0, the edit lost
+# (rev-agent-200, round 5 of PR #210).
+tok 'and with the directory given, the same' \
+  "$S3_WANT" "$(bash "$S3/theirs-dir/split-requirements.sh" "$S3/theirs-dir" 2>&1; printf 'exit %s' "$?")"
+# The old token is read from the dev side in git, not from the working tree's
+# check-hooks.sh, which the real merges leave conflicted.
+rm "$S3/theirs-notoken/check-hooks.sh"
+tok 'and the token it moves from is read from the dev side in git' \
+  "$S3_WANT" "$(bash "$S3/theirs-notoken/split-requirements.sh" 2>&1; printf 'exit %s' "$?")"
+# The branch side kept whole: the same entries, its copies taken out -- and the
+# dev side's pointer paragraph gone with the rest of that side, which the run
+# says, because the entries are the only part of the file read out of git.
 cp -a "$S3/repo" "$S3/ours"
 git -C "$S3/ours" checkout -q --ours requirements.md
-tok 'with the branch side kept, the same, and its copies are taken out of requirements.md' \
-  "$(printf '%s\n' "$S3_WANT" | sed '1a taken out of requirements.md: GH-5 GH-6 GH-7 GH-8')" \
+git -C "$S3/ours" add requirements.md
+cp -a "$S3/ours" "$S3/edited"
+tok 'with the branch side kept whole, the same entries, and a warning about the rest of the file' \
+  "$S3_FIRST
+taken out of requirements.md: GH-5 GH-6 GH-7 GH-8
+files written to requirements/: GH-5 GH-8
+GH-5: changed on HEAD only since the base, so its SPLIT_MOVED token in check-hooks.sh moves from GH-5:3493104077:98 to GH-5:1218492981:99
+changed on the dev side only since the base, and left as it was: GH-6
+unchanged on both sides since the base, and left as it was: 1
+$S3_DIFFERS
+exit 0" \
   "$(bash "$S3/ours/split-requirements.sh" 2>&1; printf 'exit %s' "$?")"
-tok 'and requirements.md is then the dev side'"'"'s, byte for byte' '' \
-  "$(git -C "$S3/ours" show MERGE_HEAD:requirements.md | cmp -s - "$S3/ours/requirements.md" || printf 'differs')"
-# Changed on both sides since the base: refused, and nothing written. The dev
-# side's file is read from the working tree, so editing it is the dev change.
-cp -a "$S3/repo" "$S3/both"
-git -C "$S3/both" checkout -q --theirs requirements.md
+# Changed on both sides since the base: refused, and nothing written; then
+# carried by hand and named with --resolved, which a second run accepts.
 sed -i 's/^- from: the fixture$/- from: the fixture, amended on the dev side/' "$S3/both/requirements/GH-5.md"
 tok 'an entry changed on both sides since the base is refused, and nothing is written' \
-  "${S3_WANT%%$'\n'*}
+  "$S3_FIRST
 split-requirements.sh: refused, and nothing was moved:
-  GH-5: changed on HEAD and on the dev side since the base; carry both changes into requirements/GH-5.md by hand
+  GH-5: changed on HEAD and on the dev side since the base. Carry both changes into requirements/GH-5.md by hand, then run this again with --resolved GH-5
 exit 1 no GH-8.md" \
   "$(bash "$S3/both/split-requirements.sh" 2>&1; printf 'exit %s' "$?"; [ -e "$S3/both/requirements/GH-8.md" ] || printf ' no GH-8.md')"
+tok 'and the remedy it gives is one a second run accepts' \
+  "$S3_FIRST
+files written to requirements/: GH-8
+resolved by hand, and left as it was: GH-5
+GH-5: resolved by hand, so its SPLIT_MOVED token in check-hooks.sh moves from GH-5:3493104077:98 to GH-5:3275260752:123
+changed on the dev side only since the base, and left as it was: GH-6
+unchanged on both sides since the base, and left as it was: 1
+$S3_LACKS
+exit 0" "$(bash "$S3/both/split-requirements.sh" --resolved GH-5 2>&1; printf 'exit %s' "$?")"
 # A version in requirements.md that the branch never committed would be lost by
 # a run that writes the branch's, so it is refused.
-cp -a "$S3/repo" "$S3/edited"
-git -C "$S3/edited" checkout -q --ours requirements.md
 sed -i 's/^- text: an entry nobody edits$/- text: an entry edited while resolving/' "$S3/edited/requirements.md"
 tok 'an entry requirements.md holds in a version the branch never committed is refused' \
-  "${S3_WANT%%$'\n'*}
+  "$S3_FIRST
 split-requirements.sh: refused, and nothing was moved:
-  GH-7: requirements.md holds a version of it that HEAD does not; commit it on the branch first, or carry it into requirements/GH-7.md by hand
+  GH-7: requirements.md holds a version of it that HEAD does not. Carry that version into requirements/GH-7.md by hand, then run this again with --resolved GH-7
 exit 1" "$(bash "$S3/edited/split-requirements.sh" 2>&1; printf 'exit %s' "$?")"
-# A merge already committed has no MERGE_HEAD, and is asked with --base and
-# --branch; a directory given is never compared three ways unasked.
+sed -n '/^### GH-7$/,/^- status: active$/p' "$S3/edited/requirements.md" > "$S3/edited/requirements/GH-7.md"
+tok 'and carried by hand and named with --resolved, a second run accepts it' \
+  "$S3_FIRST
+taken out of requirements.md: GH-5 GH-6 GH-7 GH-8
+files written to requirements/: GH-5 GH-8
+GH-5: changed on HEAD only since the base, so its SPLIT_MOVED token in check-hooks.sh moves from GH-5:3493104077:98 to GH-5:1218492981:99
+resolved by hand, and left as it was: GH-7
+GH-7: resolved by hand; check-hooks.sh holds no SPLIT_MOVED token for it
+changed on the dev side only since the base, and left as it was: GH-6
+$S3_DIFFERS
+exit 0" "$(bash "$S3/edited/split-requirements.sh" --resolved GH-7 2>&1; printf 'exit %s' "$?")"
+# An entry the base holds and the branch dropped: a ledger entry is marked, not
+# deleted, so it is refused -- and named with --resolved when the dev side's
+# file is the one that stands.
+cp -a "$S3/pre" "$S3/dropped"
+git -C "$S3/dropped" checkout -q feature
+sed -i '/^### GH-7$/,/^$/d' "$S3/dropped/requirements.md"
+git -C "$S3/dropped" -c user.email=checks@example.invalid -c user.name=checks commit -qam dropped
+git -C "$S3/dropped" -c user.email=checks@example.invalid -c user.name=checks merge -q --no-edit dev > /dev/null 2>&1
+git -C "$S3/dropped" checkout -q --theirs requirements.md
+git -C "$S3/dropped" add requirements.md
+S3D_FIRST="a merge is in progress: each GH- entry is compared three ways, against the merge base $S3_BASE and HEAD at $(git -C "$S3/dropped" rev-parse --short HEAD)"
+tok 'an entry the base holds and the branch dropped is refused' \
+  "$S3D_FIRST
+split-requirements.sh: refused, and nothing was moved:
+  GH-7: in the base and not on HEAD, and a ledger entry is marked rather than deleted. Restore it on the branch; or, if requirements/GH-7.md is right as it is, run this again with --resolved GH-7
+exit 1" "$(bash "$S3/dropped/split-requirements.sh" 2>&1; printf 'exit %s' "$?")"
+tok 'and named with --resolved, a second run accepts it' \
+  "$S3D_FIRST
+files written to requirements/: GH-5 GH-8
+GH-5: changed on HEAD only since the base, so its SPLIT_MOVED token in check-hooks.sh moves from GH-5:3493104077:98 to GH-5:1218492981:99
+resolved by hand, and left as it was: GH-7
+GH-7: resolved by hand; check-hooks.sh holds no SPLIT_MOVED token for it
+changed on the dev side only since the base, and left as it was: GH-6
+$S3_LACKS
+exit 0" "$(bash "$S3/dropped/split-requirements.sh" --resolved GH-7 2>&1; printf 'exit %s' "$?")"
+# A merge committed: the last commit is it, and it is found without being asked;
+# one committed earlier is asked with --base and --branch, as given.
 cp -a "$S3/repo" "$S3/committed"
 git -C "$S3/committed" checkout -q --theirs requirements.md
 git -C "$S3/committed" add -A
 git -C "$S3/committed" -c user.email=checks@example.invalid -c user.name=checks commit -qm merged
+cp -a "$S3/committed" "$S3/committed-flags"
 S3C_BASE=$(git -C "$S3/committed" merge-base HEAD^1 HEAD^2)
-tok 'a committed merge is compared three ways when asked, with the same answer' \
-  "$(printf '%s\n' "$S3_WANT" | sed '1d; s/on HEAD only/on HEAD^1 only/')" \
-  "$(bash "$S3/committed/split-requirements.sh" --base "$S3C_BASE" --branch HEAD^1 "$S3/committed" 2>&1; printf 'exit %s' "$?")"
+tok 'a merge that is the last commit is compared three ways without being asked' \
+  "$(printf '%s\n' "$S3_WANT" | sed '1s/^a merge is in progress/the last commit is a merge that brought the split/; s/and HEAD at/and HEAD^1 at/; s/on HEAD only/on HEAD^1 only/; s/lines HEAD added/lines HEAD^1 added/; s/ HEAD -- requirements/ HEAD^1 -- requirements/')" \
+  "$(bash "$S3/committed/split-requirements.sh" 2>&1; printf 'exit %s' "$?")"
+tok 'and one named with --base and --branch the same' \
+  "$(printf '%s\n' "$S3_WANT" | sed '1d; s/on HEAD only/on HEAD^1 only/; s/lines HEAD added/lines HEAD^1 added/; s/ HEAD -- requirements/ HEAD^1 -- requirements/')" \
+  "$(bash "$S3/committed-flags/split-requirements.sh" --base "$S3C_BASE" --branch HEAD^1 "$S3/committed-flags" 2>&1; printf 'exit %s' "$?")"
 tok 'and half of a three-way comparison is a usage error' \
-  'usage: bash .claude/hooks/split-requirements.sh [--base <rev> --branch <rev>] [<hooks directory>]
+  'usage: bash .claude/hooks/split-requirements.sh [--base <rev> --branch <rev>] [--resolved <ID>]... [<hooks directory>]
 exit 64' "$(bash "$HOOKS/split-requirements.sh" --base HEAD "$S3/committed" 2>&1; printf 'exit %s' "$?")"
+# A rebase replays the branch's commits one at a time, and this compares an
+# entry across one merge, so it is refused -- with the dev side kept, which is
+# `--ours` during a rebase, the first version ran two ways and lost the edit
+# (rev-agent-200, round 5 of PR #210). Nothing is written.
+cp -a "$S3/pre" "$S3/rebase"
+git -C "$S3/rebase" checkout -q feature
+git -C "$S3/rebase" -c user.email=checks@example.invalid -c user.name=checks rebase -q dev > /dev/null 2>&1
+if ! git -C "$S3/rebase" rev-parse -q --verify REBASE_HEAD > /dev/null 2>&1; then
+  echo "the three-way fixture's rebase did not stop; the check against it proves nothing" >&2
+  exit 1
+fi
+git -C "$S3/rebase" checkout -q --ours requirements.md
+git -C "$S3/rebase" add requirements.md
+tok 'a rebase in progress is refused, and nothing is written' \
+  'split-requirements.sh: a rebase is in progress, and this compares a GH- entry across one merge, not across commits replayed one at a time. Abort it and bring the dev branch in with a merge, then run this during that merge; or finish it and run this with --base <where the branch forked> --branch <the branch as it was before>; nothing was moved
+exit 1 - text: an entry the branch edits' \
+  "$(bash "$S3/rebase/split-requirements.sh" 2>&1; printf 'exit %s ' "$?"; sed -n 2p "$S3/rebase/requirements/GH-5.md")"
 
 echo "--- every result goes through pass and fail ---"
 # A result printed any other way is printed and not recorded, so it covers
