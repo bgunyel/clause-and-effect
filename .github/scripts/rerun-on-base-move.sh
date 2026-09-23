@@ -44,8 +44,15 @@
 # refusal fails this job like any other.
 #
 # Every API failure is loud. A read that fails is an error for that pull
-# request and fails the job, and never reads as "nothing to do": an empty list
-# of runs and a failed request for it are not the same answer.
+# request and fails the job, and never reads as a routine answer: an empty list
+# of runs and a failed request for it are not the same answer, and neither are
+# a merge ref GitHub has not rebuilt yet, or a run that has not stopped yet, and
+# a failed request to find out. Where a failed read leaves the re-run still
+# possible, it is still asked for, because skipping it would leave the stale
+# green standing; the job is red either way. Two reads leave nothing to ask
+# for: the list of open pull requests, whose failure fails the job before any
+# pull request is looked at, and a pull request's list of runs, whose failure
+# leaves no run to re-run.
 #
 # Needs: REPO (owner/name), BASE (the branch pushed), TIP (its new commit), and
 # GH_TOKEN with actions:write, pull-requests:read and contents:read -- the last
@@ -74,18 +81,28 @@ while read -r pr head <&3; do
 
   rebuilt=
   for ((i = 0; i < WAIT_TRIES; i++)); do
-    read -r mergeable merge_sha < <(gh api "repos/$REPO/pulls/$pr" \
-                                      --jq '"\(.mergeable) \(.merge_commit_sha)"')
+    if ! state=$(gh api "repos/$REPO/pulls/$pr" --jq '"\(.mergeable) \(.merge_commit_sha)"'); then
+      echo "::error::#$pr: could not read the pull request, so whether its merge ref is rebuilt on $TIP is unknown; re-running it anyway"
+      status=1 rebuilt=unread
+      break
+    fi
+    read -r mergeable merge_sha <<< "$state"
     if [ "$mergeable" = false ]; then
       echo "::warning::#$pr conflicts with $BASE at $TIP, so GitHub will not rebuild its merge ref; the re-run will fail on that"
       rebuilt=conflict
       break
     fi
-    if [ "$mergeable" = true ] && [ -n "$merge_sha" ] && [ "$merge_sha" != null ] \
-       && [ "$(gh api "repos/$REPO/commits/$merge_sha" --jq '.parents[0].sha')" = "$TIP" ]; then
-      echo "#$pr: the merge ref is rebuilt on $TIP"
-      rebuilt=yes
-      break
+    if [ "$mergeable" = true ] && [ -n "$merge_sha" ] && [ "$merge_sha" != null ]; then
+      if ! first_parent=$(gh api "repos/$REPO/commits/$merge_sha" --jq '.parents[0].sha'); then
+        echo "::error::#$pr: could not read the parents of its merge commit $merge_sha, so whether its merge ref is rebuilt on $TIP is unknown; re-running it anyway"
+        status=1 rebuilt=unread
+        break
+      fi
+      if [ "$first_parent" = "$TIP" ]; then
+        echo "#$pr: the merge ref is rebuilt on $TIP"
+        rebuilt=yes
+        break
+      fi
     fi
     sleep "$POLL_SECONDS"
   done
@@ -111,10 +128,18 @@ while read -r pr head <&3; do
     echo "#$pr: $url is $run_status and may have fetched the old merge; cancelling it"
     gh api -X POST "repos/$REPO/actions/runs/$run_id/cancel" >/dev/null \
       || echo "::warning::#$pr: the cancel of $url was refused; it may have finished meanwhile"
+    stopped=
     for ((i = 0; i < WAIT_TRIES; i++)); do
-      [ "$(gh api "repos/$REPO/actions/runs/$run_id" --jq .status)" = completed ] && break
+      if ! now=$(gh api "repos/$REPO/actions/runs/$run_id" --jq .status); then
+        echo "::error::#$pr: could not read the status of $url, so whether it has stopped is unknown; asking for its re-run anyway"
+        status=1 stopped=unread
+        break
+      fi
+      [ "$now" = completed ] && { stopped=yes; break; }
       sleep "$POLL_SECONDS"
     done
+    [ -n "$stopped" ] \
+      || echo "::warning::#$pr: $url did not stop within the wait, and GitHub refuses to re-run a run that has not stopped"
   fi
 
   if gh api -X POST "repos/$REPO/actions/runs/$run_id/rerun" >/dev/null; then

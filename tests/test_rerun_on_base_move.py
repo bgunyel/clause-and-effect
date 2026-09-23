@@ -102,13 +102,14 @@ def fake(tmp_path):
             f = data / "requests"
             return f.read_text().splitlines() if f.exists() else []
 
-        def run(self):
+        def run(self, **overrides):
             env = {
                 **os.environ,
                 "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
                 "FAKE_DIR": str(data),
                 "REPO": REPO, "BASE": BASE, "TIP": TIP,
                 "POLL_SECONDS": "0", "WAIT_TRIES": "3",
+                **overrides,
             }
             return subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True)
 
@@ -172,6 +173,7 @@ def test_it_cancels_a_run_in_progress_before_rerunning_it(fake):
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert fake.requests() == [CANCEL, RERUN]
+    assert "::warning::" not in result.stdout
 
 
 def test_a_conflicting_pull_request_is_still_rerun_so_the_conflict_turns_it_red(fake):
@@ -284,6 +286,10 @@ def test_a_run_that_never_stops_is_still_asked_to_rerun_after_the_wait(fake):
     assert result.returncode == 1
     assert fake.requests() == [CANCEL, RERUN]
     assert fake.gets().count(f"GET repos/{REPO}/actions/runs/42") == 3
+    assert (
+        f"::warning::#7: https://github.com/{REPO}/actions/runs/42 did not stop within the wait, "
+        "and GitHub refuses to re-run a run that has not stopped"
+    ) in result.stdout.splitlines()
 
 
 def test_a_refused_cancel_is_reported_and_the_rerun_still_asked_for(fake):
@@ -302,3 +308,86 @@ def test_a_refused_cancel_is_reported_and_the_rerun_still_asked_for(fake):
         "it may have finished meanwhile"
     ) in result.stdout.splitlines()
     assert fake.requests() == [CANCEL, RERUN]
+
+
+def test_a_failed_pull_request_listing_fails_the_job_rather_than_reading_as_none_open(fake):
+    """No PULLS fixture: the fake gh exits 1. Read as "no open pull request", a
+    failed list would leave every pull request into the branch on a stale green
+    behind a green job -- the defect this script exists for, in silence."""
+    result = fake.run()
+
+    assert result.returncode == 1
+    assert f"::error::could not list the open pull requests into {BASE}" in result.stdout.splitlines()
+    assert f"no open pull request targets {BASE}" not in result.stdout.splitlines()
+    assert fake.requests() == []
+
+
+NOT_REBUILT = (
+    f"::warning::#7: GitHub did not rebuild the merge ref on {TIP} within the wait; "
+    "the re-run will fail if it still has not"
+)
+
+
+def test_a_failed_pull_request_read_fails_the_job_and_is_not_blamed_on_github(fake):
+    """No PR fixture. The re-run is still asked for: skipping it would leave the
+    stale green standing."""
+    one_open_pr(fake)
+    fake.serve(RUNS, {"workflow_runs": [{"id": 42, "status": "completed"}]})
+
+    result = fake.run()
+
+    assert result.returncode == 1
+    assert (
+        f"::error::#7: could not read the pull request, so whether its merge ref is rebuilt "
+        f"on {TIP} is unknown; re-running it anyway"
+    ) in result.stdout.splitlines()
+    assert NOT_REBUILT not in result.stdout.splitlines()
+    assert fake.gets().count(f"GET {PR}") == 1
+    assert fake.requests() == [RERUN]
+
+
+def test_a_failed_merge_commit_read_fails_the_job_and_is_not_blamed_on_github(fake):
+    """No commits fixture for the merge commit."""
+    one_open_pr(fake)
+    fake.serve(PR, {"mergeable": True, "merge_commit_sha": MERGE})
+    fake.serve(RUNS, {"workflow_runs": [{"id": 42, "status": "completed"}]})
+
+    result = fake.run()
+
+    assert result.returncode == 1
+    assert (
+        f"::error::#7: could not read the parents of its merge commit {MERGE}, so whether its "
+        f"merge ref is rebuilt on {TIP} is unknown; re-running it anyway"
+    ) in result.stdout.splitlines()
+    assert NOT_REBUILT not in result.stdout.splitlines()
+    assert fake.gets().count(f"GET repos/{REPO}/commits/{MERGE}") == 1
+    assert fake.requests() == [RERUN]
+
+
+def test_a_failed_run_status_read_fails_the_job_and_the_rerun_is_still_asked_for(fake):
+    """No fixture for the run's own status, polled after the cancel."""
+    one_open_pr(fake)
+    fake.serve(PR, {"mergeable": True, "merge_commit_sha": MERGE})
+    fake.serve(f"repos/{REPO}/commits/{MERGE}", {"parents": [{"sha": TIP}, {"sha": HEAD}]})
+    fake.serve(RUNS, {"workflow_runs": [{"id": 42, "status": "in_progress"}]})
+
+    result = fake.run()
+
+    assert result.returncode == 1
+    assert (
+        f"::error::#7: could not read the status of https://github.com/{REPO}/actions/runs/42, "
+        "so whether it has stopped is unknown; asking for its re-run anyway"
+    ) in result.stdout.splitlines()
+    assert "did not stop within the wait" not in result.stdout
+    assert fake.gets().count(f"GET repos/{REPO}/actions/runs/42") == 1
+    assert fake.requests() == [CANCEL, RERUN]
+
+
+@pytest.mark.parametrize("variable", ["REPO", "BASE", "TIP"])
+def test_an_empty_input_is_refused_before_any_request(fake, variable):
+    """An empty BASE would list pull requests into no particular branch."""
+    result = fake.run(**{variable: ""})
+
+    assert result.returncode != 0
+    assert fake.gets() == []
+    assert fake.requests() == []

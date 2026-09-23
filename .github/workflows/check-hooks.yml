@@ -16,6 +16,21 @@
 # `verify-merge` then fails the job unless the commit under test has the pull
 # request's head as its second parent and the base's current tip as its first.
 #
+# A RETARGET IS A BASE MOVE, SO `edited` IS A TRIGGER. Changing a pull request's
+# base -- dev-04 to dev-05, the routine rotation -- fires `edited`, which the
+# default types leave out. Without it the check from the old base stands, and a
+# base-moved re-run replays that run's payload, so verify-merge would read the
+# old base's tip and fail for the wrong reason. `edited` also fires on a title or
+# body edit, and those run the whole suite too; that cost is taken knowingly.
+# The cheaper shape -- a job-level `if:` that lets `edited` through only with
+# `github.event.changes.base` set -- is refused: a job skipped by its `if:`
+# reports Success, "even if it is a required check" (GitHub's docs, "Using
+# conditions to control job execution"), so a title edit on a red pull request
+# would leave a green `check-hooks` as the latest on its head. It would also
+# join this concurrency group and cancel the run in progress. A retarget out of
+# dev-* fires nothing here, by the branch filter; that pull request's last check
+# stands, and it is outside what this check covers.
+#
 # NO TOKEN AND NO NETWORK REACH THE SUITE, so a green run is itself the evidence
 # that the suite needs neither (#199 asked for that to be confirmed rather than
 # believed). The job's token is read-only, checkout persists no credential, and
@@ -29,11 +44,12 @@
 # same measurement without root: unprivileged `unshare -rn` is refused by
 # Ubuntu 24.04's user-namespace restriction, which is why this is shown here.
 #
-# MEASURED BEFORE THIS WAS WRITTEN: one full run takes 204 s on a 6-core
-# workstation (#199, at 111a419), and a simulation of this runner -- a shallow
-# detached checkout, empty HOME, no git configuration, `env -i` -- passed with
-# 5550 rows and no FAIL on 9c7dfdb, twice, in 176 s and 198 s. A hosted 2-core runner is
-# expected at 6-8 minutes. The step timeout is well above that because a hook
+# MEASURED: one full run takes 204 s on a 6-core workstation (#199, at
+# 111a419), and a simulation of this runner -- a shallow detached checkout,
+# empty HOME, no git configuration, `env -i` -- passed with 5550 rows and no
+# FAIL on 9c7dfdb, twice, in 176 s and 198 s. On a hosted
+# 2-core runner this pull request's first run took 308 s for the same 5550 rows
+# (run 35836366963, #206). The step timeout is well above that because a hook
 # invocation has been seen spinning for 11 hours (#199) and #127 records the 5 s
 # per-call timeout exceeded; the job timeout bounds the rest.
 #
@@ -45,6 +61,7 @@ name: hook checks
 on:
   pull_request:
     branches: ['dev-*']
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -86,14 +103,23 @@ jobs:
 
       # A step of its own, so a refusal here skips the suite and the report
       # rather than reaching the report as an exit status the suite never had.
+      # `git config --get-regexp` exits 1 for "no match" and other non-zero
+      # codes for a config it could not read (3) or a pattern it refused (6),
+      # so only a 1 is the answer "no credential".
       - name: refuse a credential the suite could reach
         run: |
           if [ -n "${GITHUB_TOKEN:-}${GH_TOKEN:-}" ]; then
             echo "::error::a token is in the suite's environment; the suite must run without one"
             exit 1
           fi
-          if git config --get-regexp '^http\..*\.extraheader$'; then
+          found=0
+          git config --get-regexp '^http\..*\.extraheader$' || found=$?
+          if [ "$found" -eq 0 ]; then
             echo "::error::checkout left a credential in .git/config; the suite must run without one"
+            exit 1
+          fi
+          if [ "$found" -ne 1 ]; then
+            echo "::error::git config exited $found, so whether checkout left a credential is unknown; the suite must not run on that"
             exit 1
           fi
 
