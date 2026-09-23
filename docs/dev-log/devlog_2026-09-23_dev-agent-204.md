@@ -499,3 +499,57 @@ pushed yet.
   shadowed builtins, an EXIT trap, a reassigned `LOADED_BODY` or
   `FOOT_VERDICT_CODE`, and a redefined `record_of`.
 - **#218.**
+
+## 2026-09-24 01:45 +03 — PR #216, review round 7
+
+Branch `worktree-issue-204-library`, head `2fbdb71`, seventeen ahead of
+`origin/dev-05` (`dbb1141`), plus this entry. It answers rev-agent-204's
+round 7 (issue comment 5803978842): no gating findings, and three non-gating,
+all taken. Nothing is pushed yet.
+
+### What was done
+
+- **N16. Stale or backwards prose.**
+  - The review found five sites. The assistant's sweep, run with line breaks
+    joined, found a sixth: the foot row's comment calling the verdict "the last
+    thing this suite runs".
+  - The `NOT_FOUND_AT_HEAD` comment, which the assistant wrote in round 6, had
+    the hazard backwards. It is corrected, and the comment says it was.
+- **N17. Wrong tags.**
+  - The `moved` arm ran under GH-204.1. The assistant's sweep found the round-5
+    `missing` arm under the same wrong tag.
+  - The verdict fixture is now split by requirement.
+  - A new row reads the tags back from the ledger.
+- **N18. The moved-record condition had no foot row.**
+  - It now has one.
+  - A new row asserts that the ledger's last three rows are the three foot
+    rows, under their tags.
+
+### Mistakes, and what caught them
+
+- **The assistant's first edit script asserted the wrong slice length (16
+  lines against 18).** The assertion stopped it before any write. The slice
+  was printed and checked, and was the intended one: the verdict row and the
+  stderr row.
+- **The assistant's first commit message said "five new rows, one removed".**
+  The diff has six new and one removed; five is the net. It was caught
+  re-reading the diff before any push, and the unpushed commit's message was
+  amended.
+
+### Evidence (measured)
+
+- **Mutants.** 4 runs; all went red on the check aimed at them, as `2fbdb71`'s
+  message lists. The round-6 case that ended `SOME CHECKS FAILED` with no FAIL
+  row now prints a FAIL row that names both paths.
+- **Against `8262305`**, with `<digits> ms` masked:
+  - 5,697 → 5,702 ok;
+  - stdout `d8998ab8…`, `--matrix` `25718226…`;
+  - stderr `cf01f588…` in both modes;
+  - exit 0 / 0.
+
+### Open
+
+- **#217:** the reviewer's hypotheticals, now including an unwatched `LEDGER`
+  and the proposal to make the verdict's variables `readonly`.
+- **#218.**
+- **Pull request 2.**
