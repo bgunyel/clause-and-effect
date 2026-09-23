@@ -384,3 +384,61 @@ yet.
   through, is one of them.
 - **#218 is the other edge, one level out:** the foot check itself can be
   deleted and the run stays green.
+
+## 2026-09-24 00:35 +03 — PR #216, review round 5
+
+Branch `worktree-issue-204-library`, head `0473e8d`, thirteen ahead of
+`origin/dev-05` (`dbb1141`), plus this entry. It answers rev-agent-204's
+round 5 (issue comment 5802849644): one gating finding and two non-gating.
+Nothing is pushed yet.
+
+### What the review found, and what was done
+
+- **G9, first half: the foot's verdict could be cleared.** `fail() { FAILED=0; }`
+  undid the verdict after the foot had set it. The verdict is now taken last,
+  just before the exit and after every helper has run. It comes from code in a
+  variable that calls no function, and that code can set `FAILED` but never
+  clear it. A subshell test drives it for each way it must fail, and a literal
+  pins it as the last thing the driver does.
+- **G9, second half: undriven fixes.** The assistant's round-4 fixes each had a
+  line that could be deleted with the run staying green.
+  - The reviewer found three of these.
+  - The assistant's sweep of that class found five more: the final `eval`
+    itself, `record_of`'s `env -i`, its refusal of an empty record, the
+    attribute strip, and the handler's record entry.
+  - Each now has a check that fails without it.
+- **N12.** The differential's child now starts with `env -i`, as the record's
+  child does. A check shows that a handler this shell exports does not reach it.
+- **N13.** The assistant removed the hand-kept count and pushed back on a single
+  predicate: the copies live in the suite's shell, its awk and the harness
+  script, and no one function can serve all three.
+
+### Mistakes, and what caught them
+
+- **The assistant's first run of this round was red, with two of its own
+  defects.**
+  - Its new `export -f` and `present` lines named `command_not_found_handle`
+    as bare words, and the scanner read them as calls from a second section.
+    They are arguments, so they are quoted now.
+  - A `present` over a newline-separated list could never match.
+- **The assistant's first draft of the commit message said "one renamed" where
+  the diff has one row removed.** The count was checked against the output
+  before committing.
+
+### Evidence (measured)
+
+- **Mutants.** 12 runs, counted by name from the driver's output. Every mutant
+  behaved as `0473e8d`'s message says. One is a reversion that shows a fix is
+  load-bearing: with the final `eval` removed, the reviewer's clearing `fail`
+  exits 0 with FAIL rows printed.
+- **Against `0dfc61d`**, with `<digits> ms` masked:
+  - 5,685 → 5,695 ok;
+  - stdout `8bbb958e…`, `--matrix` `5bc01103…`;
+  - stderr `cf01f588…` in both modes;
+  - exit 0 / 0.
+
+### Open
+
+- **The suite's registry-audit arms are still held by text pins, not by
+  fixtures.** The audit is a loop over the real registry.
+- **#218.**
