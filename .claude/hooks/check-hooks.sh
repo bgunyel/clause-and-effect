@@ -2873,7 +2873,8 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'a directory named for the command is n
 #
 # PERMIT-ONLY, and it has to be: there is no refusing half of an accepted gap,
 # and writing one would be this suite claiming a refusal that does not happen.
-# requirements.md carries the direction and the reason with it.
+# The entry, requirements/GH-117.1.md, carries the direction and the reason with
+# it.
 #
 # Each of the three was measured across 75,346 commands before it was accepted,
 # and the paragraph holds the numbers. The one thing these rows add over the
@@ -12838,7 +12839,10 @@ while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
   done
 done <<< "$MUT_ROWS"
 # And where an audit that lost the split set goes red: most rows name a `GH-`
-# ID, and each would be called missing (#200).
+# ID, and each would be called missing (#200). The tag is this result's and no
+# other's, so it is closed on the line after: left open, it tagged the three
+# outcome pins below with GH-200.2 as well, which read the registry and nothing
+# the split changed (rev-agent-200, round 2 of PR #210).
 req GH-107.2 GH-200.2
 if [ -z "$MUT_BAD" ]; then
   pass static 'every registered mutation names a file and requirements that exist'
@@ -12846,6 +12850,7 @@ else
   fail static 'a registered mutation names something that is not there:\n%s' \
     "$(printf '%s' "$MUT_BAD" | sed 's/^/       /')"
 fi
+req GH-107.2
 # THE SELF-TESTS ARE REGISTERED, which is #107's acceptance criterion and the
 # only thing that says the two words this harness reports are read off anything.
 # One row whose edit matches nothing, one registered against a requirement its
@@ -12880,9 +12885,8 @@ tok 'and every other registered mutation is expected to be caught' \
 # entry added to requirements.md or requirements/, and a suite that has to be
 # edited whenever a requirement is filed is this issue recreated one directory
 # over. So each is compared against a value derived here instead -- one from
-# requirements.md and requirements/, one
-# from the registry rows read above -- and this section holds no number of its
-# own. The pins above can do it because what they count is the registry, which
+# requirements.md and requirements/, one from the registry rows read above --
+# and this section holds no number of its own. The pins above can do it because what they count is the registry, which
 # is the thing a reviewer of a registry change is looking at.
 #
 # READ OFF $SUITE_DIR, like $MUT and for the same reason. The harness that runs
@@ -12966,13 +12970,16 @@ MUT_ACTIVE=$(printf '%s\n' "$MUT_LIST" \
 # Nothing read is not agreement. Both sides empty compares equal, which is this
 # check passing by computing nothing -- the shape #98's section is about, and the
 # reason the harness prints a phrase rather than 0 when it reads no entry either.
+#
+# Tagged GH-200.2 as well: a count on either side that lost the split set is one
+# this compares against the other, and against the canonical reader below. The
+# tag is above the `if` so that the failing branch carries it too; inside the
+# `else` it tagged only the pass, and a count that read nothing went red under
+# GH-148 alone (rev-agent-200, round 2 of PR #210).
+req GH-148 GH-200.2
 if [ -z "$REQ_ACTIVE_HERE" ] || [ "$REQ_ACTIVE_HERE" = 0 ]; then
   fail static 'no active requirement was counted out of requirements.md and requirements/, so what --list prints is being compared against nothing'
 else
-  # Tagged GH-200.2 as well: a count on either side that lost the split set is
-  # one this line compares against the other, and against the canonical reader
-  # below.
-  req GH-148 GH-200.2
   tok 'the harness derives how many requirements are active, and derives the number this suite does' \
       "$REQ_ACTIVE_HERE" "$MUT_ACTIVE"
 fi
@@ -16087,8 +16094,9 @@ tok 'and each is in the split set with the checksum and length it had there (an 
 # it is asked what they need: that it moves every entry byte for byte and
 # leaves the rest of the file as it was, that a second run moves nothing, and
 # that it refuses -- writing nothing at all -- a file already there holding
-# something else, an ID outside the grammar, an ID written twice, and whatever
-# the reader would refuse in a file it wrote. Its output is read with a `|`
+# something else, an ID outside the grammar, an ID written twice, whatever the
+# reader would refuse in a file it wrote, and a `GH-` heading where the reader
+# reads none. Its output is read with a `|`
 # after it, because `$( )` drops trailing newlines and a file's last byte is
 # part of what is asked.
 req GH-200.5
@@ -16235,14 +16243,45 @@ tok 'a heading that is more than its ID is refused' \
 exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/heading" 2>&1; printf 'exit %s' "$?")"
 tok 'and nothing is written' 'no requirements/' \
   "$([ -e "$SPLIT_FIX/heading/requirements" ] && printf 'requirements/ written' || printf 'no requirements/')"
+# A `GH-` HEADING OUTSIDE THE THREE REQUIREMENT SECTIONS is refused, and says
+# where it stands. The script had no answer for it: it was passed over, and the
+# run said "requirements.md holds no GH- entry; nothing to move" of a file that
+# held one, while the reader went red with a finding that did not say where the
+# entry belongs (rev-agent-200, round 2 of PR #210). `## Provenance` is the
+# heading after `## Boundary issues`, which is where a merge resolved by hand
+# lands; before the first `##` is the one place with no heading at all, and the
+# two are the script's two ways of not being in one.
+cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/provenance"
+printf '\n### GH-6\n- text: an entry under the provenance\n- from: the fixture\n- kind: doc-claim\n- status: active\n' \
+  >> "$SPLIT_FIX/provenance/requirements.md"
+tok 'a GH- entry under a heading that holds no requirement is refused, and says which' \
+  "split-requirements.sh: refused, and nothing was moved:
+  line 27: GH-6: a GH- entry under \"## Provenance: the fixture's criteria\", where the reader reads none; move it to the end of ## Boundary issues and run this again
+exit 1" "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/provenance" 2>&1; printf 'exit %s' "$?")"
+tok 'and nothing is written' 'no requirements/' \
+  "$([ -e "$SPLIT_FIX/provenance/requirements" ] && printf 'requirements/ written' || printf 'no requirements/')"
+cp -r "$SPLIT_FIX/before" "$SPLIT_FIX/first"
+sed -i '1a ### GH-6' "$SPLIT_FIX/first/requirements.md"
+tok 'and so is one before the first ## heading' \
+  'split-requirements.sh: refused, and nothing was moved:
+  line 2: GH-6: a GH- entry before the first ## heading, where the reader reads none; move it to the end of ## Boundary issues and run this again
+exit 1' "$(bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/first" 2>&1; printf 'exit %s' "$?")"
 # THE ONE EXCEPTION TO BYTE FOR BYTE, taken knowingly and pinned: awk ends every
 # line it prints with a newline, so a last line that had none gains one. Here
 # the file ends inside GH-5, with no newline, and GH-5.md comes out as it does
 # from the fixture that has one.
 mkdir "$SPLIT_FIX/no-newline"
 printf '%s' "$(head -n 23 "$SPLIT_FIX/before/requirements.md")" > "$SPLIT_FIX/no-newline/requirements.md"
-tok 'the fixture for it ends with no newline, which is what makes the check below one' \
-  '0' "$(tail -c 1 "$SPLIT_FIX/no-newline/requirements.md" | wc -l | tr -d ' ')"
+# That the fixture ends with no newline is what makes the check below one, and
+# it is asked the way req_split_changed asks it of a mutant -- by stopping the
+# run -- rather than as a check of its own: a fixture built wrong is no
+# evidence about the script, and a result tagged GH-200.5 would have covered
+# the requirement with a question about the fixture (rev-agent-200's round 2 of
+# PR #210 named that class, and this was its instance in the round-1 delta).
+if [ "$(tail -c 1 "$SPLIT_FIX/no-newline/requirements.md" | wc -l | tr -d ' ')" != 0 ]; then
+  echo "the no-newline fixture ends with a newline; the check against it proves nothing" >&2
+  exit 1
+fi
 bash "$HOOKS/split-requirements.sh" "$SPLIT_FIX/no-newline" > /dev/null 2>&1
 if cmp -s "$SPLIT_FIX/moved/requirements/GH-5.md" "$SPLIT_FIX/no-newline/requirements/GH-5.md"; then
   pass static 'a last line with no newline gains one in the file it is moved to'

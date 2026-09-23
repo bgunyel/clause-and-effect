@@ -43,7 +43,12 @@
 # good (rev-agent-200, round 1 of PR #210). The reader's other split-set rules
 # are ones this cannot produce: a block opens at its heading, so nothing stands
 # before it, and ends at the next `###` or `##`, so a file holds one entry and
-# no `##` heading. Of its own: an ID outside the grammar *The families* states,
+# no `##` heading. And the one rule the reader keeps about requirements.md
+# itself that a `GH-` heading can break: it reads entries under the three
+# requirement sections only, so a `### GH-` heading under any other `##`
+# heading, or before the first, is refused here too, with where it stands,
+# rather than passed over with "nothing to move" (rev-agent-200, round 2 of
+# PR #210). Of its own: an ID outside the grammar *The families* states,
 # an ID moved twice, and a file already under requirements/ whose content
 # differs from the block that would replace it -- the last is two loops having
 # written one ID, and which of them is right is a person's call. A file that
@@ -75,6 +80,17 @@ awk -v stage="$STAGE" '
   /^## / {
     flush_entry()
     part = ($0 ~ /^## (User stories|Functional requirements|Boundary issues)$/) ? "req" : "other"
+    heading = $0
+  }
+  # A `GH-` heading anywhere else is refused, not moved and not passed over: the
+  # reader refuses it under every other heading and before the first, and a
+  # run that said "no GH- entry; nothing to move" of a file holding one sent
+  # the person to a red it did not explain. It is where a merge lands an entry
+  # it resolved by hand, `## Provenance` being the heading after
+  # `## Boundary issues` (rev-agent-200, round 2 of PR #210).
+  /^### / && part != "req" && $2 ~ /^GH-/ {
+    print "line " NR ": " $2 ": a GH- entry " (heading == "" ? "before the first ## heading" : "under \"" heading "\"") ", where the reader reads none; move it to the end of ## Boundary issues and run this again" > (stage "/refused"); bad = 1
+    next
   }
   /^### / {
     flush_entry()
