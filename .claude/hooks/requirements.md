@@ -1277,3 +1277,8 @@ it has no entry above (Q16).
   three ways on a merge (rev-agent-200's round 4 of #210)
 - #184: the pull request for #118, open across the split; cited beside #158,
   for the same measurement
+- #216: the pull request for #204's first step; rev-agent-204's review of it is
+  cited where what it found stands -- a helper missing from the library running
+  as `command not found` with the run green, a helper redefined in a later
+  section replacing it silently, and `checks/.+` taking `checks/../<hook>.sh`
+  as the tooling

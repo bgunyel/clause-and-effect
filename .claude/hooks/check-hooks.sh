@@ -178,7 +178,13 @@
 # several fixture guards named that for the one cause each guarded; nothing named
 # the class. Every helper that runs a hook now reads its exit status one way --
 # exit 0 is ALLOW, exit 2 is BLOCK, anything else FAILs the check whatever it
-# expected -- and `verdict`, below, is where that is answered and argued.
+# expected -- and `verdict`, in checks/library.sh, is where that is answered
+# and argued.
+#
+# THE SUITE IS MORE THAN THIS FILE. The helpers that more than one section calls
+# -- `check`, `says`, `tok`, `pass` and `fail` among them -- are in
+# checks/library.sh beside it, which this file sources before its first check.
+# Its header states which functions belong there.
 #
 # Run: bash .claude/hooks/check-hooks.sh
 #      bash .claude/hooks/check-hooks.sh --matrix   the requirements matrix, issue #104
@@ -221,16 +227,51 @@ cd "$(dirname "$0")" || exit 1
 SUITE_DIR=$(pwd)
 HOOKS=$SUITE_DIR
 # THE TOOLING BESIDE THE HOOKS: the files in .claude/hooks/ that are not hooks
-# and are not judged as ones. This suite, and the harness that runs it against a
-# copy of the rest. One list, because three questions that read it are one fact
-# -- neither file is executed from $HOOKS, whatever an override says. Neither is
-# a tokeniser consumer though both name the library in code; neither can be a
-# mutation target, because the copy's text of either would be read and never
-# run; and the text of both is read off $SUITE_DIR below rather than off $HOOKS.
+# and are not judged as ones. This suite, the files it sources, and the harness
+# that runs it against a copy of the rest. One rule, because three questions
+# that read it are one fact -- none of them is executed from $HOOKS, whatever an
+# override says. None is a tokeniser consumer though each of the two above names
+# the library in code; none can be a mutation target, because the copy's text
+# would be read and never run; and their text is read off $SUITE_DIR below
+# rather than off $HOOKS.
 # It was three separate spellings of that one fact before Bertan's review of
 # PR #142, and the one it did not have was the middle one: mutate-hooks.sh was
 # an accepted mutation target, judged on text nobody executed.
-TOOLING="check-hooks.sh mutate-hooks.sh"
+#
+# IT IS A RULE AND NOT A LIST (#204): a regular expression over a path relative
+# to .claude/hooks/, matching the two files above and every file under checks/,
+# where the files this suite sources live. A list is what the next file is not
+# on, and a file under checks/ is added by every loop that writes checks, so the
+# rule is written for the directory and adding one never touches it.
+#
+# EVERY FILE UNDER checks/, AT ANY DEPTH, SPELLED PLAINLY. Each segment after
+# `checks/` is a name that is not `.` and not `..`: one not opening with a dot,
+# or a dot and then something other than a dot, or two dots and then anything
+# at all -- so `.a.sh` and `...` are names and `.` and `..` are not. It was
+# `checks/.+`, which took `checks/../no-git-push.sh`, a hook, as the tooling:
+# a text check spelled `$SUITE_DIR/checks/../no-git-push.sh` was accepted and
+# read this repository's hook under an override instead of the copy (review of
+# PR #216, round 1). Its first fix was one level with no leading dot, which
+# reopened the class from the other side (round 2): `checks/./library.sh`,
+# `checks//library.sh` and `checks/sub/x.sh` were then not the tooling, so they
+# were judged as hooks, and a hook is accepted when it is read from $HOOKS and
+# runnable as a registry row. So the rule is exact, and the spellings it does
+# not take are not left to fall through. A consumer that ACCEPTS on it -- the
+# text-check rule, which takes a tooling file read off $SUITE_DIR, and the #204
+# check that every file the driver sources is the tooling are the ones today --
+# refuses an empty, `.` or `..` segment before it asks this, so a looser rule
+# there could not accept one; each such refusal is driven by a fixture of its
+# own. The harness's `row_fault` and this
+# suite's audit of the registry ask this first, and refuse on every branch,
+# this one included: their order decides which reason is printed, never
+# whether the row runs (review of PR #216, round 3, which found this comment
+# saying every consumer asked the segments first; round 4 found the second
+# consumer that accepts, which asked none).
+#
+# It is spelled in bracket expressions rather than with backslashes because awk
+# and [[ =~ ]] read it too, and `awk -v` would eat a backslash. mutate-hooks.sh
+# spells it identically, and the #204 section holds the two to each other.
+TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+)(/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+))*)$'
 # An override that names a directory missing one of the files beside this suite
 # would turn most of this suite red for that reason, and a harness reading the
 # result would count every mutation as caught -- its permitting direction. So
@@ -264,165 +305,72 @@ esac
 if [ -n "$MATRIX" ]; then exec 3>&1 >/dev/null; fi
 
 FAILED=0
-# EVERY RESULT IS RECORDED, WITH THE REQUIREMENTS IT ESTABLISHES. Issue #104.
-# Nothing connected the requirements in requirements.md to the checks meant to
-# verify them, so "is this requirement verified?" had no answer short of reading
-# this file, and a requirement no check names was invisible. Each check now
-# carries the IDs it establishes, and the suite reads them back at its foot: an
-# active requirement with no covering check fails it, and --matrix prints every
-# ID with its checks and their results.
-#
-# A tag is the value of REQ when a check prints its result, set by `req` and
-# cleared by `section`, so a new section cannot inherit the tags of the one above
-# it: a check written under a fresh heading with no `req` is untagged, and an
-# untagged check fails. The association is made at runtime, by the one call that
-# prints the result, rather than by a comment nothing reads (#103 Q2).
-#
-# `pass` and `fail` are that call, and nothing else prints a result: the #104
-# section derives that from this file. Each takes the direction of the check,
-# which requirements.md defines -- refuse for a BLOCK or a refusal's message,
-# permit for an ALLOW, static for a check that reads no verdict -- because a
-# requirement is covered by a refusing and a permitting check, not by a count.
-#
-# A result printed by a subshell is not recorded. The #98 self-test drives each
-# helper inside one, against hooks built to crash, and what it asserts is the
-# helper's own result, which is recorded where it prints; the helper's inner
-# line is about a fixture and establishes nothing. The limit, named: a real check
-# run inside a subshell would print and go uncounted, so it would neither cover
-# its tags nor be refused for having none.
+# The ledger, the tag and the record of which hooks ran. What each one is, and
+# the functions that write them -- `record`, `pass`, `fail`, `req`, `section`
+# and `ran` -- are in the helper library; the variables are set here because
+# the library defines functions and nothing else.
 LEDGER=
 REQ=
-record() {  # record <refuse|permit|static> <ok|FAIL> <label>
-  [ -n "$LEDGER" ] && [ "$BASHPID" = "$$" ] || return 0
-  printf '%s\t%s\t%s\t%s\n' "$REQ" "$1" "$2" "${3//$'\t'/ }" >> "$LEDGER"
-}
-pass() {  # pass <refuse|permit|static> <format> [arguments...] -- an ok line, recorded
-  local dir="$1" fmt="$2" line
-  shift 2
-  printf -v line "$fmt" "$@"
-  printf '  ok   %s\n' "$line"
-  record "$dir" ok "${line%%$'\n'*}"
-}
-fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, recorded
-  local dir="$1" fmt="$2" line
-  shift 2
-  printf -v line "$fmt" "$@"
-  printf '  FAIL %s\n' "$line"
-  FAILED=1
-  record "$dir" FAIL "${line%%$'\n'*}"
-}
-req() {  # req <ID>... -- the requirements the checks after this establish
-  REQ="$*"
-}
-section() {  # section <heading> -- print it, and let no tag carry across it
-  REQ=
-  printf '%s\n' "$1"
-}
-# Where a hook is, given what a check names: a bare filename is one of this
-# repository's, an absolute path is a fixture copy of one. Written once because
-# three helpers below asked it, and they answered it in three identical `case`
-# statements until the load-contract section gave `says` its first fixture; five
-# ask it now, `feed` and `feed_says` having come with #95.
-#
-# It resolves and nothing else. Which hook a check ran is recorded by `ran`
-# below, and the two were one function until review of PR #169 separated them;
-# see there for why resolving is not running.
-hook_path() {  # hook_path <script|/absolute/hook>
-  case "$1" in
-    /*) printf '%s\n' "$1" ;;
-    *) printf '%s\n' "$HOOKS/$1" ;;
-  esac
-}
-# ran <script|/absolute/hook> <exit status> -- a tagged check ran it, and it ran.
-# #109's configuration section reads the record back and requires every hook
-# settings.json registers to have been run by at least one tagged check.
-#
-# IT IS CALLED AFTER THE STATUS IS READ, never at path resolution, and review of
-# PR #169 is why. `hook_path` recorded it, and a hook that is not there or is not
-# executable resolves exactly as one that is: the path is built by string
-# concatenation, nothing tests it, and bash reports 127 having run nothing. So a
-# deleted or chmod-ed hook that every check still named would have printed
-# `derived <hook> was run N times under a tag` -- a green row, under GH-109.4's
-# tag, for a file that never started. The other checks of that hook would each
-# have gone red, loudly, by the exit-status contract below; this row would have
-# been the one place the suite said the opposite.
-#
-# So the status is the evidence, and only a status the hook itself can have
-# produced counts: 0 or 2, the two that contract accepts as a verdict. Every
-# other status FAILs the check that read it, and leaves this row saying the hook
-# was never run, which is what happened. THE LIMIT: 0 and 2 are what a running
-# hook exits with, not proof that one did -- 0 is also `true`, and a bash syntax
-# error exits 2, the case the contract below already names. This says a tagged
-# check ran the hook and got a verdict out of it, not that any check of it can
-# fail. That is mutation's question.
-#
-# AND THE RUN HAS TO BE A CHECK'S, not the registration's. `every_hook` runs
-# every hook settings.json registers under Bash, so its runs say nothing about
-# whether anyone wrote a check for one; it is the only caller that does not
-# record, and it says why where it runs them. Everything else here is named by
-# the check that runs it.
-#
-# An absolute path is a fixture copy -- a hook with its library taken away, or
-# one built to crash -- and is not the registered hook, so it is not recorded.
-# The one exception is the session report, which reads the repository it sits in
-# and so is only ever run as a byte copy placed in a fixture repository:
-# `report_says` records that copy as the report, by name, and nothing here
-# records a modified one. `anc_report` runs a copy too and records nothing; see
-# there for why.
-#
-# Written from a subshell as often as not -- `cap_timed` is called inside $( ),
-# and the #98 self-test runs every helper in one -- so it appends to a file
-# rather than setting a variable. An untagged run is not recorded: the #104
-# section already fails the check, and it would cover nothing here either.
 RAN=
-ran() {
-  case "$1" in /*) return 0 ;; esac
-  [ -n "$RAN" ] && [ -n "$REQ" ] || return 0
-  [ "$2" = 0 ] || [ "$2" = 2 ] || return 0
-  printf '%s\t%s\n' "$REQ" "$1" >> "$RAN"
-}
-# What a hook's exit status means, answered once for every helper that runs a
-# hook and reads one: exit 0 is ALLOW, exit 2 is BLOCK, and anything else FAILs
-# the check whatever it expected. `says`, `says_not` and `feed_says` ask only for
-# 2, because every one of their claims is about a refusal.
+# THE HELPER LIBRARY, checks/library.sh: every function this suite calls from
+# more than one of its sections, and nothing else. Its header states the rule.
 #
-# Until #98 each helper read the status as one bit -- 2 was BLOCK and everything
-# else ALLOW -- and `says_not` did not read it at all. So a hook that did not run
-# passed every ALLOW-expecting check it was given, and every message a crashed
-# hook's stderr happened not to contain: 127 for a hook, interpreter or tool that
-# is not there, 1 for a `cd` into a fixture that is not there. Several fixture
-# guards below carry their own account of one of those causes; this is the class.
-# The #103 audit found every committed hook exiting only 0 or 2, and tightening
-# the reading turned no check here red.
-#
-# The failure line carries the exit status and what the hook wrote to stderr,
-# because FAIL alone names no cause and a crash is the case where the cause is the
-# whole finding. The self-test at the foot of this suite drives every such helper
-# with a hook that exits 1 and one that exits 127.
-#
-# One case this does not close, measured rather than reasoned: a bash syntax
-# error exits 2, not 1, so a hook that does not parse reads as BLOCK and passes
-# every BLOCK-expecting `check` against it. `says` is what separates the two,
-# where a check has one beside it.
-verdict() {  # verdict <want> <exit status> <stderr> <label>
-  local want="$1" rc="$2" err="$3" label="$4" got dir
-  case "$rc" in 0) got=ALLOW ;; 2) got=BLOCK ;; *) got=FAIL ;; esac
-  case "$want" in BLOCK) dir=refuse ;; ALLOW) dir=permit ;; *) dir=static ;; esac
-  if [ "$got" = "$want" ]; then
-    pass "$dir" '%-5s %s' "$got" "$label"
-  else
-    fail "$dir" 'want=%s got=%s exit=%s  %s\n         stderr |%s|' \
-      "$want" "$got" "$rc" "$label" "$err"
-  fi
+# The files this driver sources, in the order it sources them. Read off
+# $SUITE_DIR and never off $HOOKS: they are the suite that runs, not the hooks
+# it judges, which is the reason given for this file in the two-directories
+# paragraph above. A library that did not load would leave every check below a
+# `command not found`, which prints no FAIL and sets no FAILED -- a green run
+# having asked nothing -- so it stops the run instead.
+SUITE_SOURCED="checks/library.sh"
+for f in $SUITE_SOURCED; do
+  . "$SUITE_DIR/$f" || {
+    echo "$f did not load; nothing was judged" >&2
+    exit 1
+  }
+done
+declare -F record pass fail req section >/dev/null || {
+  echo "$SUITE_SOURCED loaded without the functions every check prints through; nothing was judged" >&2
+  exit 1
 }
-check() {  # check <script|/absolute/hook> <want> <label> <cmd>, run in $SUITE_DIR
-  local script="$1" want="$2" label="$3" cmd="$4" rc err hook
-  hook=$(hook_path "$script")
-  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | "$hook" 2>&1 >/dev/null)
-  rc=$?
-  ran "$script" "$rc"
-  verdict "$want" "$rc" "$err" "$label"
+# AND A LIBRARY THAT LOADED WITHOUT ONE OF ITS OTHER FUNCTIONS is the same
+# hazard one helper at a time, which the five names above do not ask about: with
+# `lacks` deleted from the library the run printed 35 `command not found` lines
+# on stderr, 35 fewer results, and ALL CHECKS PASSED. Found by review of PR
+# #216. A list of the other names would be what the next helper is not on, so
+# the question is asked of every command instead: bash calls this function for
+# any command it cannot find, and it writes down which. That is all it can do.
+# Bash runs it in an environment of its own -- a fork, even when the missing
+# command was called from this shell -- so a FAILED it set would be lost and a
+# `fail` it called would go unrecorded, and inside a $( ) anything it printed on
+# stdout would become the captured value. So it writes one line, the one bash
+# would have printed -- `<file>: line <n>: <command>: command not found`, the
+# file as it was run or sourced -- to $NOT_FOUND and to stderr, and returns
+# bash's own status, and the foot of this suite fails on anything in that file.
+# Measured, both halves: the handler sets nothing a caller can see, and records
+# from a $( ), a ( ), this shell and a function alike; and with the handler and
+# without it, bash's stderr is byte for byte the same.
+#
+# WHAT IT DOES NOT REACH, named. $NOT_FOUND is set once the fixtures directory
+# exists, so a command missing before then still prints and is not counted. A
+# command missing in the --matrix program is counted: it runs after the foot's
+# rows but before the final verdict, which reads the record last. And a child
+# the suite runs with `bash -c` -- GH-204.2's library-alone
+# legs among them -- is another shell, which does not inherit the handler.
+# Exporting it is not the answer: the hooks this suite runs are such children
+# too, and they would inherit it and change their own stderr (review of PR
+# #216, round 2).
+NOT_FOUND=
+command_not_found_handle() {
+  local line
+  printf -v line '%s: line %s: %s: command not found' "${BASH_SOURCE[1]}" "${BASH_LINENO[0]}" "$1"
+  [ -n "$NOT_FOUND" ] && printf '%s\n' "$line" >> "$NOT_FOUND"
+  printf '%s\n' "$line" >&2
+  return 127
 }
+# Recorded on the line after its definition, for the reason LOADED_BODY below
+# gives: a redefinition of the handler would silence every missing command.
+declare -A LOADED_BODY=()
+LOADED_BODY[command_not_found_handle]=$(declare -f command_not_found_handle)
 
 # Two throwaway repositories, one on main and one on a dev branch, so that a
 # hook reading `git branch --show-current` can be asked both questions from a
@@ -434,6 +382,41 @@ LEDGER="$FIXTURES/ledger"
 : > "$LEDGER"
 RAN="$FIXTURES/ran"
 : > "$RAN"
+NOT_FOUND="$FIXTURES/not-found"
+# Where the verdict expects the record to be. The GH-204.5 self-test points
+# $NOT_FOUND elsewhere and puts it back. A section that copied that and did not
+# put it back would leave the handler and the verdict both on the new file, and
+# whatever the handler had written to this one before the move would never be
+# read; the verdict fails on the two differing, and says so (round 6 of the
+# review of PR #216; this comment had the hazard backwards until round 7).
+NOT_FOUND_AT_HEAD=$NOT_FOUND
+: > "$NOT_FOUND"
+# THE SUITE'S OWN TEXT, which several checks below read: a pinned sentence, a
+# derivation over every function, the header. It is more than this file, so no
+# check names this file to read it -- a read of check-hooks.sh alone would miss
+# whatever is in the library and pass for its absence. They read $SUITE_TEXT,
+# every file of the suite in source order, or a range of it through
+# `suite_range`, which fails on a range that matched nothing.
+#
+# SOURCE ORDER is this driver first and then each file in $SUITE_SOURCED in the
+# order it is sourced, so the header this suite opens with is still the first
+# thing in it. $SUITE_FILES is that list, and the line that sets it is the one
+# place code names this file by its path, other than to run it; the #204
+# section holds the suite to that. A check that needs to know where one file
+# ends and the next begins -- which function is defined where -- reads the
+# files it lists.
+SUITE_FILES=("$SUITE_DIR/check-hooks.sh")
+for f in $SUITE_SOURCED; do
+  SUITE_FILES+=("$SUITE_DIR/$f")
+done
+suite_text() {  # suite_text -- every file of this suite, in source order
+  cat -- "${SUITE_FILES[@]}"
+}
+SUITE_TEXT="$FIXTURES/suite-text"
+suite_text > "$SUITE_TEXT" || {
+  echo "the suite's own text could not be read; the checks that read it would prove nothing" >&2
+  exit 1
+}
 git init -q -b main "$FIXTURES/on-main"
 git init -q -b dev-99 "$FIXTURES/on-dev"
 ON_MAIN="$FIXTURES/on-main"
@@ -526,232 +509,123 @@ done
 # them; see the load-contract section for why that question is asked in one place
 # now.
 
-# check, with the hook's working directory named rather than inherited. The
-# hook is invoked by absolute path because it sources lib/ relative to $0.
-check_in() {  # check_in <dir> <script|/absolute/hook> <want> <label> <cmd>
-  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" rc err hook
-  hook=$(hook_path "$script")
-  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
-    | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
-  rc=$?
-  ran "$script" "$rc"
-  verdict "$want" "$rc" "$err" "$label"
-}
-
-# A check whose verdict the #43 migration changed. Both verdicts are literals:
-# `was` is what the file returned before it, `want` what it returns after, and
-# the run prints both so the flip is visible rather than inferred. Reverting
-# the migration fails exactly these, reporting got=<was>.
-flip() {  # flip <dir> <script> <was> <want> <label> <cmd>
-  check_in "$1" "$2" "$4" "$5 (was $3)" "$6"
-}
-
-# A check whose verdict is WRONG today, and whose right verdict is written down
-# beside it. Issue #106's invariance families generate variants faster than the
-# defects they find can be fixed, and #103's Q18 says what to do with one: file
-# it, write the check at the correct verdict, and mark it a gap -- never declare
-# it an exception, which is what silencing it would look like.
-#
-# Both verdicts are literals, as `flip`'s are, and the difference between the
-# two helpers is which way the arrow points. `flip` records a verdict a change
-# deliberately moved, correct on both sides of it. `gap` records one that is
-# wrong now: `right` is what the hook should return and `today` what it does, so
-# the run asserts `today` and says in its own line that it is not the answer. The
-# issue closing turns exactly these red, with got equal to `right`, and the fix
-# rewrites them as ordinary checks. That is the intended outcome and not a
-# regression, in the manner of the accepted-gap sections above.
-#
-# It covers nothing. A gap's tags are the requirement its issue owns, which its
-# entry marks `gap → #<n>`, so the #104 coverage check does not ask
-# about it; and the direction it records is the one it actually reads, which is
-# today's verdict, because a matrix saying a permitted command is refused
-# somewhere would be this file lying in the permitting direction.
-gap() {  # gap <dir> <script> <right> <today> <label> <cmd>
-  check_in "$1" "$2" "$4" "$5 [gap: $3 is the right verdict, $4 is today's]" "$6"
-}
-
-# Which refusal fired, not just that one did. no-commit-to-main.sh is kept
-# beside a hook that would refuse most of the same commands only because its
-# message names main and says why main is closed; nothing above can tell the
-# three messages apart, so a change routing every path through one of them
-# would leave the suite green and the file pointless.
-# Both take a fixture path through hook_path, as check_in does: the load-contract
-# section at the foot of this suite drives copies of a hook that sit outside
-# $HOOKS, and which refusal one of those gives is the claim there. says_not has no
-# such caller today and resolves one anyway, because the pair diverging is how the
-# next reader learns the wrong rule about which of the two can be pointed at a
-# fixture.
-# Both FAIL unless the hook refused, with exit 2: see `verdict`. A crashed hook's
-# stderr is not a refusal, and it passed `says_not` whenever it lacked the fragment.
-says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
-  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err rc hook
-  hook=$(hook_path "$script")
-  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
-        | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
-  rc=$?
-  ran "$script" "$rc"
-  if [ "$rc" != 2 ]; then
-    fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
-      "$label" "$want" "$rc" "$err"
-    return
-  fi
-  case "$err" in
-    *"$want"*) pass refuse 'says  %s' "$label" ;;
-    *) fail refuse '%s\n         wanted the refusal to say |%s|\n         it said |%s|' \
-         "$label" "$want" "$err" ;;
-  esac
-}
-
-# The other half of says: a refusal that must not say something. The fallback
-# detector cannot tell a merged branch from one cut before the dev branch moved,
-# so a message claiming a merge there would be a claim the hook cannot support.
-# Nothing above can catch a message saying too much.
-# The third of the family: a refusal that must BEGIN with something. `says` and
-# `says_not` both ask about containment, which is the right question for a tail
-# -- an arm's own sentence can sit anywhere in its message and still be the thing
-# that tells the arm from its neighbours. It is the wrong question for an
-# opening. Sixteen rows below are labelled "opens with the rule", and until the
-# third review of PR #169 every one of them passed for a message carrying the
-# rule ANYWHERE, including appended after the arm's tail -- which is the order
-# #154 is filed about, at the other constant. The mutation behind them deletes
-# the constant, so it proved the deletion and never the order its own id claims.
-#
-# Position is all that separates this from `says`, so it reads the exit status
-# the same way and is driven by the same self-test list.
-says_first() {  # says_first <dir> <script|/absolute/hook> <opening> <label> <cmd>
-  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err rc hook
-  hook=$(hook_path "$script")
-  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
-        | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
-  rc=$?
-  ran "$script" "$rc"
-  if [ "$rc" != 2 ]; then
-    fail refuse '%s\n         wanted a refusal opening with |%s|, got exit=%s\n         stderr |%s|' \
-      "$label" "$want" "$rc" "$err"
-    return
-  fi
-  case "$err" in
-    "$want"*) pass refuse 'says  %s' "$label" ;;
-    *"$want"*) fail refuse '%s\n         the refusal says |%s| but does not open with it\n         it said |%s|' \
-         "$label" "$want" "$err" ;;
-    *) fail refuse '%s\n         wanted the refusal to open with |%s|\n         it said |%s|' \
-         "$label" "$want" "$err" ;;
-  esac
-}
-says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
-  local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err rc hook
-  hook=$(hook_path "$script")
-  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
-        | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
-  rc=$?
-  ran "$script" "$rc"
-  if [ "$rc" != 2 ]; then
-    fail refuse '%s\n         wanted a refusal not saying |%s|, got exit=%s\n         stderr |%s|' \
-      "$label" "$unwanted" "$rc" "$err"
-    return
-  fi
-  case "$err" in
-    *"$unwanted"*) fail refuse '%s\n         the refusal must not say |%s|\n         it said |%s|' \
-         "$label" "$unwanted" "$err" ;;
-    *) pass refuse 'says  %s' "$label" ;;
-  esac
-}
-
-# A property of a file rather than of a process. See the arming section at the
-# foot of this suite for why one file in .claude/ needs this and the others do
-# not. Fixed strings, not patterns: the expectation is the line as written.
-# Comments are stripped before the search, and that is the whole point rather
-# than a detail: `grep -qF` over raw file text matches a literal that has been
-# commented OUT, so every one of these stayed green while the line it names did
-# nothing. Found by review of PR #64, not by this suite. Comment-out-and-leave
-# is how a shell script ordinarily gets edited, not a constructed evasion, so
-# this is the permitting-direction defect these checks exist to catch, in the
-# checks themselves. None of the literals below contains a `#`, so stripping
-# from the first one is safe for them.
-# THE FILE HAS TO BE NAMED ABSOLUTELY, asked of all three of these helpers by the
-# one below. A relative name -- a bare `no-git-push.sh`, or a `$hook` holding
-# one -- is read from this process's working directory, which is $SUITE_DIR, so
-# under a $CHECK_HOOKS_DIR override the check reads this repository's own hooks
-# and says nothing whatever about the copy under judgment. Sixty-nine calls were
-# spelled that way, among them every pin that a hook does not source the library
-# unguarded: a copy with the guard deleted printed ok for all of them, which is
-# #84's defect with nothing at all watching for it. Bertan's review of PR #142.
-#
-# Asked here, at the moment the file is read, because that is the only question
-# no spelling can hide from: the derivation in the #107 section reads this file's
-# text and cannot see through a variable, and it was a variable holding a bare
-# name that the first version of this fix left behind.
-absolute_or_fail() {  # absolute_or_fail <label> <file> -- 0 when absolute
-  case "$2" in
-    /*) return 0 ;;
-    *) fail static '%s\n         %s is not an absolute path, so it is read from this suite'"'"'s own directory and not from the hooks under judgment' \
-         "$1" "$2"
-       return 1 ;;
-  esac
-}
-
-armed() {  # armed <label> <file> <literal>
-  absolute_or_fail "$1" "$2" || return
-  if sed 's/[[:space:]]*#.*$//' "$2" 2>/dev/null | grep -qF -- "$3"; then
-    pass static 'armed %s' "$1"
-  else
-    fail static '%s\n         expected %s to contain |%s|' "$1" "$2" "$3"
-  fi
-}
-
-# A fixture guard rather than a check, and it stops the suite rather than
-# failing one line. An unmade worktree makes ( cd "$dir" && hook ) return 1,
-# which `verdict` FAILs; this names the cause once, where a column of FAILs would
-# each blame its own check. Said once here rather than three times below.
-need_worktree() {  # need_worktree <dir> <fixture name>
-  [ -d "$1" ] && return 0
-  echo "the $2 worktree was not created; the checks against it prove nothing" >&2
-  exit 1
-}
-
-# `armed` strips a shell comment before it looks, so that commenting a line out
-# can no longer satisfy a pin. That makes it a pin on code, and its header says
-# so: none of its literals carries a `#`. Two kinds of file here are not code.
-# Prose in a comment is the whole of what some pins assert -- an argument the
-# other file points at, which lives nowhere but a comment -- and a markdown
-# fixture opens its headings with the same character, so stripping erases the
-# line rather than a trailing remark. Routed through `armed`, such a pin cannot
-# pass: measured, not reasoned, on the boundary-section check that dev-05 is
-# red on today. This reads the file as written, and the name says which.
-prose_count() {  # prose_count <file> <literal> -- how many lines say it
-  grep -cF -- "$2" "$1" 2>/dev/null
-}
-
-written() {  # written <label> <file> <literal> -- the file as written, # and all
-  absolute_or_fail "$1" "$2" || return
-  if grep -qF -- "$3" "$2" 2>/dev/null; then
-    pass static 'written %s' "$1"
-  else
-    fail static '%s\n         expected %s to still say |%s|' "$1" "$2" "$3"
-  fi
-}
-
-# The absence has to be an absence IN a file that was read. `grep -qF` on a file
-# that is not there exits 2, which fell into the else arm and reported ok -- so
-# every pin below would have passed for a file renamed or deleted away, which is
-# the permitting direction and the same shape as the #84 defect these were added
-# for. Found by review of that change, not by this suite.
-unarmed() {  # unarmed <label> <file> <literal>
-  absolute_or_fail "$1" "$2" || return
-  if [ ! -r "$2" ]; then
-    fail static '%s\n         %s cannot be read, so the absence of |%s| is evidence of nothing' \
-      "$1" "$2" "$3"
-  elif grep -qF -- "$3" "$2" 2>/dev/null; then
-    fail static '%s\n         %s must not contain |%s|' "$1" "$2" "$3"
-  else
-    pass static 'armed %s' "$1"
-  fi
-}
-
 # The library UNDER CHECK, not the one beside this file: the checks below call
 # its functions directly, and under #107's override the copy being judged is the
 # one they have to call.
 . "$HOOKS/lib/command-scan.sh"
+
+# EVERY FUNCTION AND VARIABLE THE LIBRARY AND THE TOKENISER DEFINE, as bash
+# holds them. The foot of this suite asks each one again and fails on any that
+# was redefined or removed in between, which is how a helper written again in a
+# later section -- the library's names are English words -- replaces the
+# library's for every check after it without a word; and a tokeniser variable
+# such as `CS_WRAPPER_RE` assigned again would change the tokeniser every later
+# check asks about. The handler is recorded where it is defined, above.
+#
+# Read off bash and not off the text, because the text has had to be read three
+# times: `name() {` alone, then with `name ()`, `function name` and
+# `function name()`, and round 3 of the review of PR #216 found `holds() ( ... )`
+# and `holds ( ) { ... }` passing all four. The body of a function is any
+# compound command bash takes, so a reader of its text is always one spelling
+# behind; `declare -f` is bash's own reading, and a body that changed changed
+# whatever it was spelled as.
+#
+# AND READ OFF THE FILES, NOT OFF THIS SHELL AT SOME LINE. The record was taken
+# of this shell once both were loaded, about 200 lines after the library, and a
+# redefinition in between became the baseline itself: `holds ( ) { ... }` in the
+# prelude survived green (round 4). So each file is sourced alone in a child
+# with an empty environment, which defines what the file defines and nothing
+# else, and what that child holds is the record -- there is no line of this
+# file between the source and the record for anything to stand in. The empty
+# environment is also why a function or a `CS_*` variable exported by whoever
+# ran this suite is neither added to the record nor dropped from it. A
+# variable's attributes are left out of the comparison, so an exported copy of
+# one cannot make a false red: its value is what the tokeniser reads. Measured
+# before it was relied on: for all 65 names, what the child prints is
+# byte-identical to what a shell that sourced the same files prints.
+#
+# What it does not reach, named: a function the driver defines -- a prelude or
+# section helper, not across the file boundary -- other than the handler; a
+# redefinition that puts the same body back; and a builtin the comparison uses,
+# `declare`, `printf` or `eval`, shadowed by a function of that name.
+LOADED_CHILD='bf=" $(compgen -A function | tr "\n" " ") "; bv=" $(compgen -v | tr "\n" " ") bf bv n v "
+. "$1" >/dev/null 2>&1 || exit 1
+for n in $(compgen -A function); do
+  [[ $bf == *" $n "* ]] && continue
+  printf "%s\0%s\0" "$n" "$(declare -f "$n")"
+done
+for n in $(compgen -v); do
+  [[ $bv == *" $n "* || $n == BASH_* || $n == _ ]] && continue
+  v=$(declare -p "$n"); printf "\$%s\0%s\0" "$n" "${v#declare -* }"
+done'
+declare -A LOADED_FROM=()
+for f in "${SUITE_FILES[@]:1}" "$HOOKS/lib/command-scan.sh"; do
+  record_of "$f" "$FIXTURES/record" || {
+    echo "sourcing $f alone defined nothing, so nothing of it can be compared at the foot; nothing was judged" >&2
+    exit 1
+  }
+  while IFS= read -r -d '' k && IFS= read -r -d '' v; do
+    LOADED_BODY[$k]=$v
+    LOADED_FROM[$k]=$f
+  done < "$FIXTURES/record"
+done
+# The names sourcing the library defined, which the #204 section holds the
+# scanner that reads its text to.
+SUITE_LOADED=$(for k in "${!LOADED_FROM[@]}"; do
+                 [[ $k != \$* && ${LOADED_FROM[$k]} != "$HOOKS/lib/command-scan.sh" ]] && printf '%s\n' "$k"
+               done | LC_ALL=C sort)
+# WHICH OF THEM BASH NOW HOLDS DIFFERENTLY, OR NOT AT ALL: a name a line, in no
+# order. Code in a variable and not a function, because the foot of this suite
+# runs it to decide whether a function was redefined, and a function it called
+# could be the one redefined: round 4 of the review replaced `fail` with a
+# no-op, and the foot's own verdict went with it. So nothing here calls a
+# function. The #204 section runs the same text against a fixture.
+LOADED_CHANGED_CODE='for LOADED_K in "${!LOADED_BODY[@]}"; do
+  if [[ $LOADED_K == \$* ]]; then
+    LOADED_NOW=$(declare -p "${LOADED_K#\$}" 2>/dev/null); LOADED_NOW=${LOADED_NOW#declare -* }
+  else
+    LOADED_NOW=$(declare -f "$LOADED_K" 2>/dev/null)
+  fi
+  [[ $LOADED_NOW == "${LOADED_BODY[$LOADED_K]}" ]] || printf "%s\n" "$LOADED_K"
+done'
+# AND THE VERDICT THOSE QUESTIONS GIVE -- a recorded function or variable
+# changed, a command not found, the not-found record moved -- taken after every
+# check and every helper, and followed only by LEDGER_VERDICT_CODE below, the
+# blank `echo` and the `if` that print the summary line, and the exit. The foot of the #104 section records a row for each, but a row is
+# printed and recorded through `pass` and `fail`, and a redefined helper can
+# undo whatever FAILED said before it: `fail() { FAILED=0; }` exited 0 with the
+# foot red (round 5 of the review). So the verdict is taken again after every
+# helper has run, from this text, which calls none; it can set FAILED and cannot
+# clear it. Code in a variable so that the #204 section can drive it with a
+# fixture for each way it has to fail.
+FOOT_VERDICT_CODE='LOADED_CHANGED=$(eval "$LOADED_CHANGED_CODE")
+if [[ -n $LOADED_CHANGED ]]; then
+  printf "%s\n" "a function or tokeniser variable this run started with was redefined or removed during it:" "$LOADED_CHANGED" >&2
+  FAILED=1
+fi
+if [[ -s $NOT_FOUND ]]; then
+  printf "%s\n" "a command this suite called was not found:" "$(< "$NOT_FOUND")" >&2
+  FAILED=1
+fi
+if [[ $NOT_FOUND != "$NOT_FOUND_AT_HEAD" ]]; then
+  printf "%s\n" "the not-found record was moved during the run, so what was written to $NOT_FOUND_AT_HEAD was not read:" "$NOT_FOUND" >&2
+  FAILED=1
+fi'
+# AND A FAIL THE LEDGER HOLDS FAILS THE RUN, whatever FAILED says by then: a
+# second source for the verdict, independent of the first. The #204 section
+# drives the verdict above with a fixture that goes red if it clears a failure
+# it was given, but that row can only print a FAIL; a verdict mutated to clear
+# FAILED would clear the FAIL it had just caused, and a red run would exit 0 with
+# ALL CHECKS PASSED (round 6 of the review of PR #216). Every FAIL printed in
+# this shell is recorded, by `fail`, so the ledger is the record of what failed,
+# and this reads it with builtins alone.
+# A row is `tags TAB direction TAB result TAB label`, and neither the tags, the
+# direction nor the label can hold a tab, so a FAIL result is the one row with
+# TAB FAIL TAB in it; matched whole, because reading fields with IFS set to a tab
+# would collapse an empty tag field and read the wrong column.
+LEDGER_VERDICT_CODE='while IFS= read -r LEDGER_ROW; do
+  if [[ $LEDGER_ROW == *$'"'"'\t'"'"'FAIL$'"'"'\t'"'"'* ]]; then FAILED=1; fi
+done < "$LEDGER"'
 
 # A property of two files at once, which is what `armed` cannot express: it
 # asks whether a file contains a constant, never whether two files agree. These
@@ -813,14 +687,6 @@ beside() {  # beside <label> <file> <literal>
 # matching a literal. An absent derivation must not reach `[ -gt ]`, which
 # errors rather than answering.
 numeric() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
-
-tok() {  # tok <label> <expected> <actual>
-  if [ "$3" = "$2" ]; then
-    pass static '%s' "$1"
-  else
-    fail static '%s\n         want |%s|\n         got  |%s|' "$1" "$2" "$3"
-  fi
-}
 
 section "=== the tokeniser itself ==="
 # Every defect on PR #35 was one question -- how far around a matched token to
@@ -6374,186 +6240,11 @@ check append-only-docs.sh ALLOW 'the append that is documented is still permitte
 # real paths in this repository, with CLAUDE_PROJECT_DIR naming the root it
 # anchors to. A new seam in this suite, named as one.
 REPO_ROOT=$(cd "$SUITE_DIR/../.." && pwd)
-check_file() {  # check_file <script|/absolute/hook> <want> <label> <path relative to the repo>
-  local script="$1" want="$2" label="$3" path="$4" rc err hook
-  hook=$(hook_path "$script")
-  err=$(printf '%s' "$path" | jq -Rs '{tool_name:"Edit",tool_input:{file_path:.}}' \
-    | CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" 2>&1 >/dev/null)
-  rc=$?
-  ran "$script" "$rc"
-  verdict "$want" "$rc" "$err" "$label"
-}
 
-# feed and feed_says: a hook handed raw stdin rather than a command. Every
-# helper above builds its payload with jq from a string, so none of them can hand
-# a hook a tool call that is not JSON, or one whose field is not a string --
-# which is the seam issue #95 is about, and its section at the foot of this suite
-# is where these are mostly driven. The hook runs in $ON_DEV with
-# CLAUDE_PROJECT_DIR naming this repository, so one helper serves the Bash hooks
-# and the Edit hook alike, and PATH is an argument so that jq can be taken off it.
-#
-# Both read the exit status as every helper above does since #98, `feed` through
-# `verdict` and `feed_says` as `says` does. That matters more here than anywhere.
-# A hook that dies on malformed input exits 1 or 127, the harness treats that as a
-# non-blocking error and runs the command, and a helper reading "not 2" as ALLOW
-# would pass it as a permit nobody looks at twice.
-#
-# They were written for #95 with a reading of their own, and merged with #98's
-# beside it rather than under it (#124): `feed` mapped the status itself and threw
-# the hook's stderr away, so its failure line named no cause, and `feed_says` did
-# not read the status at all, so a hook that crashed printing the fragment passed.
-# That second shape is the one #98 removed from `says`.
-feed() {  # feed <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin>
-  local path="$1" script="$2" want="$3" label="$4" payload="$5" rc err hook
-  hook=$(hook_path "$script")
-  err=$(printf '%s' "$payload" \
-        | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
-  rc=$?
-  ran "$script" "$rc"
-  verdict "$want" "$rc" "$err" "$label"
-}
-feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <raw stdin>
-  local path="$1" script="$2" want="$3" label="$4" payload="$5" err rc hook
-  hook=$(hook_path "$script")
-  err=$(printf '%s' "$payload" \
-        | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
-  rc=$?
-  ran "$script" "$rc"
-  if [ "$rc" != 2 ]; then
-    fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
-      "$label" "$want" "$rc" "$err"
-    return
-  fi
-  case "$err" in
-    *"$want"*) pass refuse 'says  %s' "$label" ;;
-    *) fail refuse '%s\n         wanted the refusal to say |%s|\n         it said |%s|' \
-         "$label" "$want" "$err" ;;
-  esac
-}
-
-# env_feed, env_cmd, env_says and report_says: issue #108, where a hook's verdict
-# is read against an ENVIRONMENT this suite built -- git off PATH, a directory
-# that is no repository, a detached HEAD, no origin, no dev-NN ref or two. Every
-# helper above fixes one half of that and leaves the other to the invoker:
-# check_in names a directory and takes the suite's PATH, feed names a PATH and
-# runs in $ON_DEV. These name both, which is what each row of #108's table needs.
-# They are up here with the others rather than in that section because the #98
-# self-test below drives every helper that reads a hook's exit status, and a
-# function defined after it has not been defined when it runs.
-env_feed() {  # env_feed <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin>
-  local dir="$1" path="$2" script="$3" want="$4" label="$5" payload="$6" rc err hook
-  hook=$(hook_path "$script")
-  err=$(printf '%s' "$payload" \
-        | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
-  rc=$?
-  ran "$script" "$rc"
-  verdict "$want" "$rc" "$err" "$label"
-}
 env_cmd() {  # env_cmd <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <command>
   local dir="$1" path="$2" script="$3" want="$4" label="$5" cmd="$6"
   env_feed "$dir" "$path" "$script" "$want" "$label" \
     "$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}')"
-}
-env_says() {  # env_says <dir> <PATH> <script|/absolute/hook> <fragment> <label> <command>
-  local dir="$1" path="$2" script="$3" want="$4" label="$5" cmd="$6" rc err hook
-  hook=$(hook_path "$script")
-  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
-        | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
-  rc=$?
-  ran "$script" "$rc"
-  if [ "$rc" != 2 ]; then
-    fail refuse '%s\n         wanted a refusal saying |%s|, got exit=%s\n         stderr |%s|' \
-      "$label" "$want" "$rc" "$err"
-    return
-  fi
-  case "$err" in
-    *"$want"*) pass refuse 'says  %s' "$label" ;;
-    *) fail refuse '%s\n         wanted the refusal to say |%s|\n         it said |%s|' \
-         "$label" "$want" "$err" ;;
-  esac
-}
-# The one helper here that runs no hook: report-stale-branches.sh is a
-# SessionStart report, so what is asked of it is that it exited 0 AND said a
-# literal -- #108's GH-108.9, where the failure it pins was a silent exit 0. Both
-# halves are in one helper because either alone passes the thing the other
-# catches: a report that says the right sentence and then exits 1 stops the
-# session, and one that exits 0 having said nothing is the defect itself. The
-# script is a parameter so that the #98 self-test can point it at a fixture; the
-# section that uses it passes a copy of the file outside any repository. Its
-# argument order is the family's -- the environment first, then what is run, then
-# what is expected of it, then the label -- so that a reader moving between these
-# helpers does not have to check.
-report_says() {  # report_says <PATH> <script> <literal> <label>
-  local path="$1" script="$2" want="$3" label="$4" out rc
-  out=$( cd "$(dirname "$script")" && PATH="$path" bash "$script" 2>&1 )
-  rc=$?
-  # A copy of the registered report, placed in a fixture repository because the
-  # report reads the repository it sits in; the #98 self-test's crashing
-  # fixtures carry other names. Recorded after the run, and by name rather than
-  # through `hook_path`, which never sees this one. See `ran`.
-  #
-  # THE NAME IS THE WHOLE TEST, and #187 owns what that costs. `ran` refuses an
-  # absolute path because a fixture copy is not the registered hook; this steps
-  # around that rule on the strength of an invariant -- every fixture carrying
-  # this name is a byte copy -- which is written here and enforced nowhere, while
-  # `nolib_path` and `halflib_path` build modified copies of other hooks a few
-  # hundred lines down. A modified copy keeping the name would make GH-109.4
-  # green for a hook no check ran, which is what the first review of PR #169 had
-  # this record rewritten to stop.
-  [ "${script##*/}" = report-stale-branches.sh ] && ran report-stale-branches.sh "$rc"
-  if [ "$rc" != 0 ]; then
-    fail static '%s\n         a SessionStart report must exit=%s, got exit=%s\n         output |%s|' \
-      "$label" 0 "$rc" "$out"
-  elif [ "${out#*"$want"}" = "$out" ]; then
-    fail static '%s\n         wanted the report to say |%s|\n         it said |%s|' "$label" "$want" "$out"
-  else
-    pass static 'report %s' "$label"
-  fi
-}
-
-# every_hook: issue #109. One command through every hook named in $XH_HOOKS, in
-# that order -- the Bash hooks settings.json registers, read in #109's section --
-# and a pass only if every one exits exactly 0, which is how the harness decides
-# whether a command runs at all. Every helper above runs one hook; this is the
-# one question none of them can ask. It is defined here, with the others, because
-# the #98 self-test below drives it and runs before #109's section does.
-#
-# The failure line names every hook that did not exit 0, each with its status and
-# its stderr in the spelling `verdict` uses, since the case it exists for is a
-# second hook refusing what the first permits and the name is the whole finding.
-# ON AN EMPTY LIST IT PASSES, which is #186. The loop body would not run,
-# `refused` would stay empty, and this would print `ok ALLOW by all` for a
-# command no hook had judged -- recording permit-direction coverage for six
-# requirements on nothing. The guard that answers it today is an external one
-# beside the derivation that reads settings.json, so it covers that producer and
-# not this consumer, and `drive_helper` and `every_hook_of` already set
-# `XH_HOOKS` from elsewhere. That is the first review of PR #169's finding at a
-# second call site, and the sixth's: the guard belongs in here, as a failing
-# verdict rather than an abort.
-every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every Bash hook
-  local dir="$1" label="$2" cmd="$3" hook rc err refused=
-  for hook in $XH_HOOKS; do
-    err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
-          | ( cd "$dir" && CLAUDE_PROJECT_DIR="$dir" "$(hook_path "$hook")" ) 2>&1 >/dev/null)
-    rc=$?
-    # IT DOES NOT RECORD, and the third review of PR #169 is why. This loop runs
-    # whatever settings.json registers under Bash, so a run of it is derived from
-    # the registration and not from anyone having written a check. Feeding the
-    # GH-109.4 record from here made that row self-satisfying for the seven Bash
-    # hooks: register one, write no checks for it, and the row printed `was run
-    # 41 times under a tag` -- which is the case the audit filed it for, "a
-    # registered hook with zero checks passes", passing. The same shape the first
-    # review found one level down, where `ran` was fed from `hook_path` and a
-    # resolution counted as a run. A record has to come from something other than
-    # the fact it attests.
-    [ "$rc" = 0 ] || refused="$refused
-         ${hook##*/} exit=$rc stderr |$err|"
-  done
-  if [ -z "$refused" ]; then
-    pass permit 'ALLOW by all  %s' "$label"
-  else
-    fail permit '%s\n         wanted every Bash hook to exit 0; these did not:%s' "$label" "$refused"
-  fi
 }
 
 # An ALLOW that came from the path simply not being there would say nothing
@@ -6994,24 +6685,6 @@ anc_line() {  # anc_line <report output>
 anc_count() {  # anc_count <report output> -- how many main ancestry lines it printed
   printf '%s\n' "$1" | grep -c '^main ancestry: '
 }
-holds() {  # holds <label> <text> <literal>
-  case "$2" in
-    *"$3"*) pass static 'holds %s' "$1" ;;
-    *) fail static '%s\n         expected |%s|\n         in |%s|' "$1" "$3" "$2" ;;
-  esac
-}
-# The absence has to be an absence in something that was read, for the reason
-# `unarmed` gives: an empty line is what a deleted read prints.
-lacks() {  # lacks <label> <text> <literal>
-  if [ -z "$2" ]; then
-    fail static '%s\n         nothing was read, so the absence of |%s| is evidence of nothing' "$1" "$3"
-  else
-    case "$2" in
-      *"$3"*) fail static '%s\n         must not contain |%s|\n         in |%s|' "$1" "$3" "$2" ;;
-      *) pass static 'lacks %s' "$1" ;;
-    esac
-  fi
-}
 anc_need() {  # anc_need <repo> <ref>... -- a fixture guard, as need_worktree is
   local repo="$1" ref
   shift
@@ -7450,15 +7123,6 @@ section "=== CLAUDE.md names every hook that carries the boundary ==="
 # the section is right not to name. Adding a boundary hook and not the sentence
 # turns this red; adding a hook about documents or commands means adding it
 # here, deliberately, with a reason.
-# A third helper, because the two above read a file and this asks about a list
-# this suite has computed. One membership convention, written once: the spaces
-# belong to the pattern, so no literal carries its own.
-present() {  # present <label> <needle> <space-separated haystack>
-  case " $3 " in
-    *" $2 "*) pass static '%s' "$1" ;;
-    *) fail static '%s' "$1" ;;
-  esac
-}
 
 CLAUDE_MD="$SUITE_DIR/../../CLAUDE.md"
 SECTION="$FIXTURES/boundary-section.md"
@@ -8118,9 +7782,9 @@ unarmed 'the branch-hygiene skill does not describe worktrees forking from HEAD'
 # quoted words so that this line does not contain the phrase it refuses.
 req GH-99.1
 unarmed 'this section'"'"'s head no longer counts its citations at three' \
-  "$SUITE_DIR/check-hooks.sh" "three citations"" named below"
+  "$SUITE_TEXT" "three citations"" named below"
 unarmed 'nor at four, the number a correction would have reached for' \
-  "$SUITE_DIR/check-hooks.sh" "four citations"" named below"
+  "$SUITE_TEXT" "four citations"" named below"
 echo "--- issue #105: CONTEXT.md defines check and probe against each other ---"
 # FR-11. The distinction this suite's own header cites -- "Check, not probe" --
 # and the collision CONTEXT.md was started for (#38). It is a PAIR of
@@ -8353,18 +8017,14 @@ section "=== the tokeniser's header names every hook that sources it ==="
 # source it at all -- true of the hooks it knew about, false of the repository.
 # A sentence that has gone stale twice is checked rather than maintained.
 #
-# It sits here, after the section above, because it uses that section's
-# `present`. Written where it belongs by subject, it ran before the helper
-# existed: twelve `present: command not found` lines, no FAILED set, and the
+# It sits here, after the section above, because it used that section's
+# `present`, which is in checks/library.sh now. Written where it belongs by
+# subject, it ran before the helper existed: twelve `present: command not found` lines, no FAILED set, and the
 # suite green. A check that cannot fail is the thing this file is most for.
 #
 # The paragraph is the first comment block, which is where the claim is made;
 # the rest of the header is history and names files for other reasons.
 CS_LIB="$HOOKS/lib/command-scan.sh"
-# Written once, because this suite's own header is audited the same way below.
-first_comment_block() {  # first_comment_block <file> -- after the shebang, up to the first bare #
-  awk 'NR == 1 { next } /^#$/ { exit } /^#/ { print; next } { exit }' "$1" 2>/dev/null
-}
 req GH-63
 CS_HEADER=$(first_comment_block "$CS_LIB")
 CS_NAMED=$(printf '%s\n' "$CS_HEADER" | grep -oE '[A-Za-z0-9_-]+\.sh' | sort -u | tr '\n' ' ')
@@ -8389,10 +8049,10 @@ CS_SOURCERS=$(for f in "$HOOKS"/*.sh; do
 # a second spelling of one fact is the one that goes stale. The needle stays the
 # loose one -- a hook that sources the library by some other spelling has to stay
 # in this audit, which is the failure it exists for -- so what is written down is
-# who may mention the file without loading it.
-CS_NOT_CONSUMERS=$TOOLING
+# who may mention the file without loading it. The names above are relative to
+# $HOOKS, which is what the rule reads, because every one of them is at its top.
 CS_SOURCERS=$(for f in $CS_SOURCERS; do
-    case " $CS_NOT_CONSUMERS " in *" $f "*) continue ;; esac
+    [[ $f =~ $TOOLING ]] && continue
     printf '%s\n' "$f"
   done | tr '\n' ' ')
 [ -n "$CS_NAMED" ] && [ -n "$CS_SOURCERS" ] || {
@@ -8740,7 +8400,7 @@ section "=== this suite's header names every file it checks ==="
 # boundary-section audit above, so it has to stay below it.
 req GH-102
 SELF_PARAGRAPH="$FIXTURES/check-hooks-first-paragraph.txt"
-first_comment_block "$SUITE_DIR/check-hooks.sh" > "$SELF_PARAGRAPH"
+first_comment_block "$SUITE_TEXT" > "$SELF_PARAGRAPH"
 written 'the extracted paragraph is the one that states the scope' \
   "$SELF_PARAGRAPH" 'Regression checks for'
 unarmed 'and it stops before the paragraph after it' \
@@ -8768,7 +8428,7 @@ RUN_BY_SETTINGS=$(jq -r '.hooks[][]?.hooks[]?.command' "$SETTINGS" 2>/dev/null \
 # #126 it was the only `.sh` path spelled this way. Beside this suite, under
 # $HOOKS itself, only `md` is read this way: every `.sh` there is on the disk
 # listing already, this suite among them, and the header does not name itself.
-READ_DOCS=$(grep -oE '"\$(SUITE_DIR/\.\./[^"]*\.(json|md|sh)|HOOKS/[^"/]*\.md)"' "$SUITE_DIR/check-hooks.sh" \
+READ_DOCS=$(grep -oE '"\$(SUITE_DIR/\.\./[^"]*\.(json|md|sh)|HOOKS/[^"/]*\.md)"' "$SUITE_TEXT" \
   | sed 's|.*/||; s|"$||' | sort -u | tr '\n' ' ')
 [ -n "$SELF_NAMED" ] && [ -n "$RUN_BY_SETTINGS" ] && [ -n "$READ_DOCS" ] \
   && [ -n "$HOOK_FILES" ] || {
@@ -8802,7 +8462,7 @@ set +f
 # says nothing about a pointer reworded some other way, and is here so that
 # restoring the old sentence turns something red.
 SELF_WHOLE_HEADER="$FIXTURES/check-hooks-header.txt"
-awk 'NR == 1 { next } /^#/ { print; next } { exit }' "$SUITE_DIR/check-hooks.sh" > "$SELF_WHOLE_HEADER"
+awk 'NR == 1 { next } /^#/ { print; next } { exit }' "$SUITE_TEXT" > "$SELF_WHOLE_HEADER"
 written 'the whole header runs on past the first paragraph' \
   "$SELF_WHOLE_HEADER" 'A hook is a process'
 unarmed 'and it points at no number below it, since none is there' \
@@ -9484,7 +9144,7 @@ req GH-134.1
 # rows and requires nothing, so a glob over *.sh calls the harness a consumer.
 # Found by this check failing on its first run, which is the shape it is for.
 NO_CS_SPLIT=$(for hook_file in "$HOOKS"/*.sh; do
-  case " $TOOLING " in *" ${hook_file##*/} "*) continue ;; esac
+  [[ ${hook_file#"$HOOKS"/} =~ $TOOLING ]] && continue
   grep -q 'lib/command-scan.sh' "$hook_file" || continue
   grep -q 'command -v cs_split' "$hook_file" && continue
   printf '%s ' "${hook_file##*/}"
@@ -9914,82 +9574,7 @@ for d in "${SUITE_PATH_DIRS[@]}"; do
     -exec ln -s -t "$WITH_JQ_BIN" {} + 2>/dev/null
 done
 
-# GH IN THE FARM, the host's or one synthesised here (#155). The farm is the
-# invoker's PATH, so what it holds depends on the machine -- and the #108 section
-# below builds its `gh`-less environment as THIS FARM MINUS `gh`, which on a
-# machine with no `gh` was the farm minus nothing. The first guard there demanded
-# a one-name difference and aborted the whole suite on such a machine; the fix
-# that followed tolerated a no-difference copy, and bought the machine-
-# independence by leaving the GH-108.6 checks no `gh` to be evidence about on
-# exactly the machines that had none. Giving the farm one here removes the
-# choice: the difference is always one name, the guard requires it
-# unconditionally, and those checks are evidence about `gh` wherever they run.
-#
-# A STUB IS RIGHT FOR GH AND WRONG FOR GIT, and the difference is whether the
-# SUITE needs the tool or only its name. `gh` is a dependency of no hook, and
-# report-stale-branches.sh is the only file in .claude/hooks/ that calls it at
-# all -- but what the stub rests on is not that no check drives that file, it is
-# that no run of it ever executes a `gh`, and those are not the same sentence.
-# Of the four PATHs it is driven under below, two carry no `gh` of the farm's to
-# run and one stops at the not-a-repository guard before it would; the fourth is
-# the farm minus `git`, which does carry the farm's `gh`, and stops at the
-# `command -v git` guard standing above the first call. That last one is a
-# property of report-stale-branches.sh and not of this farm -- an edit there
-# reading `gh` before `git` would have this stub answering for a real one -- so
-# it is checked beside that run, under GH-155.1, rather than asserted here. A
-# name is then the whole of what the fixture wants from it.
-#
-# `git` is a dependency of this suite: every repository fixture above was built
-# with it, so a farm without a `git` is a machine this suite cannot run on rather
-# than a gap to synthesise over, and a fake `git` would be answering the very
-# questions the hooks' verdicts are read off. `git` is therefore never stubbed --
-# the farm's entry for it is the host's or the suite has already failed -- and
-# the guard in #108 says so where it treats the two alike.
-#
-# SO THE STUB EXISTS TO BE A NAME AND NOT A PROGRAM, and it says so when run
-# rather than pretending to be `gh`. A stub that exited 0 in silence would let a
-# later check read its silence as gh's answer, which is #108's own failure shape
-# arriving through the fixture instead of through a hook.
-#
-# A NAME IN THE FARM IS A FILE IN A DIRECTORY, and `command -v` answers a
-# different question. It resolves shell FUNCTIONS ahead of PATH, and bash imports
-# exported ones -- `BASH_FUNC_gh%%` in the environment -- into a non-interactive
-# script like this one. So on a host whose environment exports a `gh` wrapper,
-# `PATH=<farm>; command -v gh` says yes where the farm holds nothing: the
-# synthesis returns having written no stub, and the guard in #108, unconditional
-# as of this branch, aborts the whole suite before #104's coverage derivations
-# are reached. That is the abort-on-some-machines failure #155 exists to remove,
-# arriving by a rarer route -- found by review of PR #161 and not by a machine.
-# Every question this suite asks of a farm is asked of the directory from here
-# on, the guard below included, because the two are one rule read twice and a
-# `command -v` left in either is that abort.
-farm_has() {  # farm_has <dir> <name> -- is that name in the farm? asked of the directory
-  [ -x "$1/$2" ]
-}
 FARM_STUB_SAYS='gh: check-hooks.sh PATH-fixture stub, a name and not a program (GH-155.1)'
-farm_stub_gh() {  # farm_stub_gh <farm dir> -- give it a gh if the host gave none
-  local dir="$1"
-  farm_has "$dir" gh && return 0
-  # THE UNLINK IS NOT REDUNDANT WITH THE RETURN ABOVE, and this is the one line
-  # here that could have damaged the invoker's machine. Every other entry in the
-  # farm is a SYMLINK to a host binary, so `>` on one of them writes THROUGH the
-  # link and truncates the file it points at -- the host's own `gh`. The return
-  # above means the entry is normally not there at all, but a dangling link
-  # reaches this line too, and so would any later edit that moved the return.
-  # Found by mutation rather than by reading: with the return taken out, this line
-  # tried to write /usr/bin/gh and was refused only because that file is root's.
-  #
-  # NO CHECK COVERS THIS LINE, and taking it out is a mutation that survives --
-  # measured, not assumed. It can only be reached when the return above is wrong,
-  # so a suite in which the return is right cannot tell the two spellings apart.
-  # What the pair of mutations says is the whole of what is known: with the return
-  # gone and this line present, the host's gh is left alone and the check below
-  # names the defect; with both gone, the suite aborts at the fixture guard having
-  # tried to truncate a file it does not own.
-  rm -f "$dir/gh"
-  printf '#!/bin/bash\necho "%s" >&2\nexit 1\n' "$FARM_STUB_SAYS" > "$dir/gh" || return 1
-  chmod +x "$dir/gh"
-}
 farm_stub_gh "$WITH_JQ_BIN" || {
   echo "no gh could be synthesised into the symlink farm; the #108 fixtures below prove nothing" >&2
   exit 1
@@ -10333,30 +9918,6 @@ tok 'every Bash hook runs under the 5 s timeout the 1 s bound is set against' \
     '5' "$(jq -r '[.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].timeout]
                   | unique | map(tostring) | join(" ")' "$SUITE_DIR/../settings.json")"
 
-# Where each hook holds an opinion, and one short command it refuses on its
-# content. Literals per hook, so that an at-the-cap refusal can be told apart
-# from the cap's; a hook added to settings.json with no row here fails below
-# rather than going unasked.
-cap_dir() {  # cap_dir <hook>
-  case "$1" in
-    no-commit-to-main.sh) printf '%s\n' "$ON_MAIN" ;;
-    no-work-on-stale-branch.sh) printf '%s\n' "$WT_STALE" ;;
-    # Every no-git-push.sh check runs in the push fixture #94 built, so that
-    # where the command runs is a named directory and not the suite's own.
-    no-git-push.sh) printf '%s\n' "$PUSH_WT" ;;
-    *) printf '%s\n' "$ON_DEV" ;;
-  esac
-}
-cap_refused() {  # cap_refused <hook>
-  case "$1" in
-    no-git-push.sh) printf '%s' 'git push --force origin main' ;;
-    no-pr-decisions.sh) printf '%s' 'gh pr merge 5' ;;
-    no-commit-to-main.sh|no-work-on-stale-branch.sh) printf '%s' 'git commit -m wip' ;;
-    pytest-via-uv-group.sh) printf '%s' 'pytest tests/' ;;
-    alembic-via-uv-group.sh) printf '%s' 'alembic upgrade head' ;;
-    append-only-docs.sh) printf '%s' 'rm -rf docs/dev-log' ;;
-  esac
-}
 # The hooks that call cs_within_cap, derived off their code in the load-contract
 # section, are the Bash hooks settings.json registers -- no more, since the Edit
 # hook reads no command, and no fewer, which is the #84 shape.
@@ -10396,35 +9957,8 @@ cap_wide() {  # cap_wide <bytes> -- `echo git ` and two-byte characters, and an 
   printf 'echo git %s' "$(printf '\303\251%.0s' $(seq 1 $(( n / 2 ))))"
   [ $(( n % 2 )) -eq 0 ] || printf a
 }
-# check_in, encoding the command with --rawfile rather than -Rs, and used only by
-# the two wide checks below. jq 1.7's -Rs -- which every other helper here
-# encodes with -- splits a multibyte character near its read-buffer boundary into
-# two U+FFFD: measured, the 16384-byte wide line reached the hook as 16392 bytes,
-# over the cap, and was refused for that. Aligning the characters to an even
-# offset did not avoid it, and --rawfile and --arg both hand it over intact. The
-# hooks' own `jq -r` decodes the harness's JSON intact too, so the defect is in
-# this suite's encode alone, and no check before this section carries a multibyte
-# command long enough to meet it.
-#
-# It reads the status through `verdict`, as check_in does. Its first version read
-# it as one bit, the #98 defect itself: a crashed hook passed the wide ALLOW.
-# Found by review of PR #123 once #98 was merged in, not by this suite.
-check_rawfile_in() {  # check_rawfile_in <dir> <script> <want> <label> <cmd>
-  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" rc err
-  printf '%s' "$cmd" > "$FIXTURES/rawfile.txt"
-  err=$(jq -n --rawfile c "$FIXTURES/rawfile.txt" '{tool_name:"Bash",tool_input:{command:$c}}' \
-    | ( cd "$dir" && "$(hook_path "$script")" ) 2>&1 >/dev/null)
-  rc=$?
-  ran "$script" "$rc"
-  verdict "$want" "$rc" "$err" "$label"
-}
 cap_bytes() {  # cap_bytes <string>
   printf '%s' "$1" | wc -c | tr -d ' '
-}
-cap_guard() {  # cap_guard <fixture> <want> <got>
-  [ "$2" = "$3" ] && return 0
-  echo "the $1 fixture measures $3 where it was built to be $2; the checks using it prove nothing" >&2
-  exit 1
 }
 AT_CAP=$(cap_line 16384)
 OVER_CAP=$(cap_line 16385)
@@ -10507,40 +10041,6 @@ tok 'the #128 shape is within the cap' \
     'within' \
     "$(printf '%s\n' "$HEREDOC_CONT_40" | cs_within_cap && echo within || echo over)"
 req GH-96.1
-
-# The fastest of three runs, stopping at the first one under the bound, since
-# the fastest is then under it too. Only a run that refused is timed: a hook
-# that dies before reading anything is fast as well, so a time with no verdict
-# beside it would pass for a hook that is not there.
-cap_timed() {  # cap_timed <dir> <hook|/absolute/hook> <cmd> -- "<ms>", or "exit <rc>" for a run that did not refuse
-  local i s e ms rc best=
-  printf '%s' "$3" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' > "$FIXTURES/timed.json"
-  for i in 1 2 3; do
-    s=$(date +%s%N)
-    ( cd "$1" && "$(hook_path "$2")" ) < "$FIXTURES/timed.json" >/dev/null 2>&1
-    rc=$?
-    e=$(date +%s%N)
-    # After the end timestamp, not before it: this is the one helper whose claim
-    # is a duration, and a record written between the run and the read would be
-    # measured as the hook's.
-    ran "$2" "$rc"
-    [ $rc -eq 2 ] || { printf 'exit %s\n' "$rc"; return; }
-    ms=$(( (e - s) / 1000000 ))
-    if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms; fi
-    [ "$best" -lt 1000 ] && break
-  done
-  printf '%s\n' "$best"
-}
-under_a_second() {  # under_a_second <label> <cap_timed output>
-  case "$2" in
-    exit*) fail static '%s\n         the timed command was not refused (%s), so its time is not the judged path' "$1" "$2" ;;
-    *) if [ "$2" -lt 1000 ]; then
-         pass static 'timed %s: fastest %s ms' "$1" "$2"
-       else
-         fail static '%s\n         fastest of three was %s ms; the bound is 1000' "$1" "$2"
-       fi ;;
-  esac
-}
 
 for hook in $BASH_HOOKS; do
   req GH-96.1
@@ -10626,34 +10126,6 @@ check_in "$WT_WORK" no-work-on-stale-branch.sh BLOCK \
 LIB_LONG="$FIXTURES/line-512k.txt"
 { cap_line 524288 '; git push --force origin main'; printf '\n'; } > "$LIB_LONG"
 cap_guard '512 KB library line' 524289 "$(wc -c < "$LIB_LONG" | tr -d ' ')"
-# One helper for every library timing below. It prints "<ms> <exit>" for the
-# fastest of three runs, leaves the last run's output in the named file, and
-# cuts a run off at 20 s. The exit status is printed because a time with no
-# verdict beside it would pass for a function that is not there: renamed away,
-# a call fails in a few milliseconds at every size, and the first version of the
-# scaling checks below reported that as linear. Found by review, not by this
-# suite.
-lib_run() {  # lib_run <input> <out> <call> -- "<ms> <exit>", fastest of three
-  local i s e ms rc best= bestrc=
-  for i in 1 2 3; do
-    s=$(date +%s%N)
-    timeout 20 bash -c ". '$HOOKS/lib/command-scan.sh' && $3" < "$1" > "$2" 2>/dev/null
-    rc=$?
-    e=$(date +%s%N)
-    ms=$(( (e - s) / 1000000 ))
-    if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms bestrc=$rc; fi
-  done
-  printf '%s %s\n' "$best" "$bestrc"
-}
-library_under_a_second() {  # library_under_a_second <label> <call> <out>
-  local r
-  r=$(lib_run "$LIB_LONG" "$3" "$2")
-  if [ "${r#* }" != 0 ]; then
-    fail static '%s\n         %s exited %s, so its time is not the time of the pass' "$1" "$2" "${r#* }"
-  else
-    under_a_second "$1" "${r% *}"
-  fi
-}
 req GH-96.2
 library_under_a_second 'cs_normalise over one 512 KB line' cs_normalise "$FIXTURES/normalised.txt"
 tok 'cs_normalise hands that line back whole, rather than capping it' \
@@ -10838,7 +10310,8 @@ armed 'the cap is 16384 bytes, written as the literal the issue decided' \
       "$HOOKS/lib/command-scan.sh" 'CS_LINE_CAP=16384'
 
 section "=== the exit-status helpers themselves: #98 ==="
-# The rule, and what it replaced, is written above `verdict`. Nothing else in this
+# The rule, and what it replaced, is written above `verdict`, in
+# checks/library.sh. Nothing else in this
 # suite drives a helper with a hook that crashes, so these ask the helpers
 # directly, in the manner of the `unarmed` self-test above: the helper runs in a
 # subshell with its own FAILED, and what is asserted is the FAILED it leaves --
@@ -11105,7 +10578,7 @@ tok 'every_hook: two permitting hooks pass' 'ok' "$(every_hook_of allow-0 allow-
 # line to end it. Both are the permitting direction. It does find names with
 # capitals or digits, and the `function` keyword with or without parens. Comments
 # are stripped first, as cs_calls strips them.
-STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$SUITE_DIR/check-hooks.sh" \
+STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$SUITE_TEXT" \
   | awk '/^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
            fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
          }
@@ -12028,58 +11501,6 @@ REQ_FIELD_AWK=$(cat <<'AWK'
   function after_colon(v) { if (index(v, ":") == 0) return ""; return trim(substr(v, index(v, ":") + 1)) }
 AWK
 )
-# WHERE THE `GH-` ENTRIES ARE, answered once (#200). They are not in
-# requirements.md: each is a file of its own under requirements/ beside it, named
-# by its ID, because every review loop appended to one section of one file and
-# every pair of concurrent branches conflicted there. Every reader in this file
-# reads the union, and every one of them asks this function for the second half
-# of it, so that there is one answer to which files and in which order.
-#
-# THE SPLIT SET IS FOUND BESIDE THE requirements.md IT IS GIVEN, never at a
-# fixed path. That is what lets a fixture carry a split set of its own, and what
-# makes a mutated copy under CHECK_HOOKS_DIR -- where mutate-hooks.sh edits a
-# `GH-` file -- the one that is read, with no caller having to pass a second
-# path and no caller able to forget to.
-#
-# VERSION ORDER ON THE ID, which is `sort -V`: numeric by issue and then by
-# sub-ID, a bare `GH-<n>` before its `GH-<n>.1`, and `GH-108.10` after
-# `GH-108.9`. The file system's order is the byte order of the names, which puts
-# `GH-100` before `GH-43.1`, and the order the entries used to have was the
-# order they were appended in -- neither is a stated sort. The matrix presents
-# the entries in the order this prints them, and the #200 checks hold it to that.
-#
-# EVERY NAME IN THE DIRECTORY, not every `GH-*.md`, so that a file misnamed out
-# of the pattern is read and found malformed rather than never read at all -- a
-# narrower glob fails silent, in the permitting direction. Dotfiles are left
-# out, because vim's swap file is one and is not an entry. An editor's backup
-# that is not a dotfile -- emacs's `GH-5.md~` -- is read, and turns the suite red
-# for as long as it is there, which is the failing direction and is taken.
-#
-# REGULAR FILES ONLY, AND THE REST NAMED BY requirements_split_other. A name
-# that is not a regular file -- a directory, a dangling link -- was handed to
-# awk with the rest, on the argument that the canonical reader reports a file
-# it cannot read. Under mawk, which is the awk here and on the CI runner, it
-# does not: `getline` on a directory aborts the program ("read error (Is a
-# directory)"), so the suite went red with seven findings and none of them named
-# the directory (rev-agent-200, round 4 of PR #210, measured on mawk 1.3.4). So
-# no reader is given one, and the canonical reader names each one instead.
-requirements_split() {  # requirements_split <requirements.md> -- the split set beside it, one path a line
-  local dir
-  dir="$(dirname -- "$1")/requirements"
-  [ -d "$dir" ] || return 0
-  # The path is printed here, by the shell, and never handed to `awk -v`, which
-  # reads a backslash in it as an escape; requirements_read takes the list
-  # through the environment for the same reason.
-  #
-  # Globbing on in the subshell, whatever the caller left it: this file turns it
-  # off around its splits, and under `set -f` the `*` below is the one name `*`,
-  # which is no file, so the split set would be read as empty. No caller does so
-  # today (rev-agent-200 logged every call over a whole run: none under `-f`),
-  # and that is a reason this has not bitten rather than a guard.
-  ( set +f; cd -- "$dir" && for f in *; do
-      [ -f "$f" ] && printf '%s\t%s\n' "${f%.md}" "$dir/$f"
-    done ) | LC_ALL=C sort -t "$(printf '\t')" -k1,1V | cut -f2-
-}
 requirements_split_other() {  # requirements_split_other <requirements.md> -- names beside it that are not regular files
   local dir
   dir="$(dirname -- "$1")/requirements"
@@ -12272,7 +11693,8 @@ tok 'the GH- seeds are tagged in the directions the table holds' \
 # Comments are stripped first, as cs_calls and STATUS_READERS strip them, so an
 # arm named in the prose above does not count as one.
 req GH-106
-INV_ARMS=$(sed -n '/^inv_apply() {/,/^}/p' "$SUITE_DIR/check-hooks.sh" \
+suite_range INV_APPLY_TEXT '/^inv_apply() {/' '/^}/'
+INV_ARMS=$(printf '%s\n' "$INV_APPLY_TEXT" \
   | sed 's/[[:space:]]*#.*$//' \
   | awk 'match($0, /^[[:space:]]+[a-z0-9-]+\)/) {
            a = substr($0, RSTART, RLENGTH); sub(/[[:space:]]*/, "", a); sub(/\)$/, "", a)
@@ -12516,9 +11938,9 @@ fi
 # above and by review, which is what the harness's own limit paragraph says of
 # every rule that lives in this file.
 armed 'the hooks under check default to the ones beside this suite' \
-      "$SUITE_DIR/check-hooks.sh" 'HOOKS=$SUITE''_DIR'
+      "$SUITE_TEXT" 'HOOKS=$SUITE''_DIR'
 armed 'and $CHECK_HOOKS_DIR is what moves them' \
-      "$SUITE_DIR/check-hooks.sh" 'CDPATH= cd -- "$CHECK_HOOKS''_DIR" 2>/dev/null && pwd)'
+      "$SUITE_TEXT" 'CDPATH= cd -- "$CHECK_HOOKS''_DIR" 2>/dev/null && pwd)'
 
 
 # AND THAT EVERY TEXT CHECK READS THE DIRECTORY UNDER JUDGMENT. `armed`,
@@ -12540,12 +11962,27 @@ armed 'and $CHECK_HOOKS_DIR is what moves them' \
 # already argued. "A variable" alone would not have been enough -- it accepts
 # "$SUITE_DIR/no-git-push.sh", which is the same defect one door along.
 #
-# Derived off this file's text rather than listed, for the reason every derived
+# Derived off this suite's text rather than listed, for the reason every derived
 # list here carries: a list is what the next call added would not be on.
 # Continuation lines are joined, the call is cut into shell words, and the third
 # word is the one asked. The count is pinned beside it, so a derivation that
 # stopped matching is red rather than empty.
-TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
+#
+# A `..` IN THE PATH IS REFUSED BEFORE ANYTHING ELSE IS ASKED of it, because it
+# can leave the directory the variable in front of it names, and then which of
+# the two directories the file is in cannot be read off the spelling at all.
+# Review of PR #216 found the tooling rule taking `$SUITE_DIR/checks/../` as the
+# way to a hook; this closes the spelling for every variable, and not only
+# for the one rule that took it. A `.` segment and an empty one are refused with
+# it (round 2): they leave nothing, but TOOLING asks for a plain path, so
+# `$HOOKS/checks/./library.sh` was not the tooling, was judged a hook, and was
+# accepted for being read from $HOOKS.
+#
+# The files are read one at a time rather than as $SUITE_TEXT, so that a fault
+# is reported at the file and line it is on: the concatenated text would put a
+# fault in the library at a line past the end of this file (review of PR #216).
+text_check_faults() {  # text_check_faults <file>... -- "<file>:<line>: <fault>" a line, then "COUNT <n>"
+  awk -v tooling="$TOOLING" -v dir="$SUITE_DIR/" '
   function toks(s,   i, n, c, q, start) {
     ntok = 0; i = 1; n = length(s)
     while (i <= n) {
@@ -12562,30 +11999,70 @@ TEXT_CHECK_ARGS=$(awk -v tooling="$TOOLING" '
       tok[++ntok] = substr(s, start, i - start)
     }
   }
+  # The path TOOLING is asked of: relative to the hooks directory where the
+  # spelling says so, and otherwise its last component, so that a tooling file
+  # named through any other variable -- $REPO_ROOT/.claude/hooks/mutate-hooks.sh
+  # -- is still the tooling and still has to be read from $SUITE_DIR. A file
+  # under checks/ named that way is the one it cannot place, which is taken:
+  # every read of one here is spelled $SUITE_DIR/checks/.
+  function tooling_rel(p) {
+    if (sub(/^\$(SUITE_DIR|HOOKS)\//, "", p) || sub(/^.*\/\.claude\/hooks\//, "", p)) return p
+    sub(/.*\//, "", p); return p
+  }
+  FNR == 1 { buf = ""; open = 0; file = (substr(FILENAME, 1, length(dir)) == dir) ? substr(FILENAME, length(dir) + 1) : FILENAME }
   { line = $0; sub(/[ \t]+$/, "", line) }
-  line ~ /\\$/ { sub(/\\$/, "", line); if (!open) open = NR; buf = buf line; next }
-  { full = buf line; buf = ""; start = open ? open : NR; open = 0 }
+  line ~ /\\$/ { sub(/\\$/, "", line); if (!open) open = FNR; buf = buf line; next }
+  { full = buf line; buf = ""; start = file ":" (open ? open : FNR); open = 0 }
   full !~ /^[ \t]*(armed|unarmed|written)[ \t]/ { next }
   { seen++
     toks(full)
     if (ntok < 3) { print start ": fewer than three arguments"; next }
     a = tok[3]
     gsub(/"/, "", a)
-    base = a
-    sub(/.*\//, "", base)
-    if (a !~ /^\$/)
+    if (a ~ /(^|\/)\.\.?(\/|$)/ || a ~ /\/\//)
+      print start ": " tok[3] " has a . or .. segment or an empty one, so which directory it reads cannot be told from its spelling"
+    else if (a !~ /^\$/)
       print start ": " tok[3] " is a bare name, read from the directory this suite runs in"
-    else if (index(" " tooling " ", " " base " ") > 0) {
+    else if (tooling_rel(a) ~ tooling) {
       if (a !~ /^\$SUITE_DIR\//)
         print start ": " tok[3] " is the tooling beside the hooks and is read from $SUITE_DIR"
     }
     else if (a ~ /\.sh$/ && a !~ /^\$HOOKS\//)
       print start ": " tok[3] " names a hook and is read from $HOOKS" }
   END { print "COUNT " seen + 0 }
-' "$SUITE_DIR/check-hooks.sh")
+' "$@"
+}
+# DRIVEN FIRST, against two files whose every answer is written here: a fault
+# on a joined continuation line in the first, and one in the second, each
+# reported at its own file and line, and a `..`, a `.` or an empty segment
+# refused whichever variable it follows -- the spelling the tooling rule once
+# took, one through $HOOKS, which no rule took and which leaves the copy all the
+# same, and the two round 2 of the review found judged as hooks. A file in a
+# subdirectory of checks/, read off $SUITE_DIR, is the tooling and passes. The
+# fixture lines are printed rather than written in a heredoc, because this
+# derivation reads this file's heredoc bodies as code, and a line of them
+# opening with `armed` would be counted as a real check.
+req GH-204.3 GH-204.4
+TCF_ONE="$FIXTURES/text-check-one.sh"
+TCF_TWO="$FIXTURES/text-check-two.sh"
+printf '%s\n' 'x=1' "armed 'fine' \"\$HOOKS/no-git-push.sh\" 'y'" "written 'joined' \\" \
+  "  \"\$SUITE_DIR/checks/../no-git-push.sh\" 'y'" > "$TCF_ONE"
+printf '%s\n' "unarmed 'up' \"\$HOOKS/../hooks/no-git-push.sh\" 'y'" "armed 'bare' check-hooks.sh 'y'" \
+  "armed 'dot' \"\$HOOKS/checks/./library.sh\" 'y'" "armed 'empty' \"\$HOOKS/checks//library.sh\" 'y'" \
+  "armed 'deeper' \"\$SUITE_DIR/checks/sub/x.sh\" 'y'" > "$TCF_TWO"
+TCF_WHY='has a . or .. segment or an empty one, so which directory it reads cannot be told from its spelling'
+tok 'a text-check fault is reported at its own file and line, and a ., .. or empty segment is refused after any variable' \
+"$TCF_ONE:3: \"\$SUITE_DIR/checks/../no-git-push.sh\" $TCF_WHY
+$TCF_TWO:1: \"\$HOOKS/../hooks/no-git-push.sh\" $TCF_WHY
+$TCF_TWO:2: check-hooks.sh is a bare name, read from the directory this suite runs in
+$TCF_TWO:3: \"\$HOOKS/checks/./library.sh\" $TCF_WHY
+$TCF_TWO:4: \"\$HOOKS/checks//library.sh\" $TCF_WHY
+COUNT 7" "$(text_check_faults "$TCF_ONE" "$TCF_TWO")"
+req GH-107.1
+TEXT_CHECK_ARGS=$(text_check_faults "${SUITE_FILES[@]}")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '314' "${TEXT_CHECK_ARGS##*COUNT }"
+    '318' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -12696,9 +12173,9 @@ armed 'a row naming an absolute path or climbing out with .. is refused before t
 # these pins red and be reported as caught, for a file whose running instance was
 # never touched. One list, read here and there. Bertan's review of PR #142.
 armed 'and a row targeting the tooling beside the hooks, which runs from the repository' \
-      "$MUT" 'case " $TOOLING " in *" $FILE "*)'
+      "$MUT" 'if [[ $FILE =~ $TOOLING ]]; then'
 armed 'which the harness reads from the same list this suite does' \
-      "$MUT" 'TOOLING="check-hooks.sh mutate-hooks.sh"'
+      "$MUT" "TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+)(/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+))*)\$'"
 # THE OUTCOME FIELD IS TIED TO THE ID. Every real mutation expects `caught`, and
 # the other two words belong to rows whose id says they are self-tests. Untied,
 # the field was also how a real survivor could be declared expected: the row
@@ -12776,7 +12253,7 @@ MUT_STATUS_AWK='
   f && /^- status:/ { sub(/^- status:[ \t]*/, ""); print; exit }
   END { if (!found) print "<no entry>" }'
 # AND THE OUTCOMES OF THE ROWS A PASS WOULD ACTUALLY RUN, which is a different
-# list from the one above and is what the #148 run-count check needs. The five
+# list from the one above and is what the #148 run-count check needs. The
 # reasons the harness's pass one refuses a row are asked here, in this file's own
 # shell rather than by calling the harness's `row_fault` -- so the two are
 # genuinely separate programs, which is the whole point of the comparison. The
@@ -12806,17 +12283,17 @@ while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
     caught:*|survived:selftest-*|did-not-apply:selftest-*) ;;
     *) MUT_ROW_RUNS= ;;
   esac
-  case " $TOOLING " in *" $MFILE "*) MUT_ROW_RUNS= ;; esac
+  [[ $MFILE =~ $TOOLING ]] && MUT_ROW_RUNS=
   case "$MFILE" in /*|*/../*|../*|*/..|..) MUT_ROW_RUNS= ;; esac
+  case "$MFILE" in .|./*|*/.|*/./*|*//*|*/) MUT_ROW_RUNS= ;; esac
   [ -n "$MFILE" ] && [ -n "$MEDIT" ] && [ -n "$MREQS" ] && [ -n "$MWANT" ] || MUT_ROW_RUNS=
   [ -z "$MUT_ROW_RUNS" ] || MUT_RUN_OUTCOMES="$MUT_RUN_OUTCOMES$MWANT
 "
   [ -n "$MFILE" ] && [ -n "$MEDIT" ] && [ -n "$MREQS" ] && [ -n "$MWANT" ] \
     || { MUT_BAD="$MUT_BAD  $MID: the row does not split into five fields
 "; continue; }
-  case " $TOOLING " in *" $MFILE "*)
-    MUT_BAD="$MUT_BAD  $MID: targets $MFILE, which the harness runs rather than judges
-" ;; esac
+  [[ $MFILE =~ $TOOLING ]] && MUT_BAD="$MUT_BAD  $MID: targets $MFILE, which the harness runs rather than judges
+"
   # A path INSIDE the hooks directory, asked of the table as written. An absolute
   # one, or one climbing out with .., names a file the copy does not hold and the
   # edit would land wherever it points. The harness refuses such a row itself;
@@ -12824,6 +12301,12 @@ while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
   # row of that shape is red here without anyone running it.
   case "$MFILE" in /*|*/../*|../*|*/..|..)
     MUT_BAD="$MUT_BAD  $MID: names $MFILE, which is not a path inside the hooks directory
+" ;; esac
+  # And one with a `.` segment or an empty one, which the harness refuses too:
+  # TOOLING asks for a plain path, so `checks/./library.sh` would otherwise be
+  # judged a hook (review of PR #216, round 2).
+  case "$MFILE" in .|./*|*/.|*/./*|*//*|*/)
+    MUT_BAD="$MUT_BAD  $MID: names $MFILE, which has a . segment or an empty one
 " ;; esac
   [ -r "$HOOKS/$MFILE" ] || MUT_BAD="$MUT_BAD  $MID: names $MFILE, which is not a file in the hooks directory
 "
@@ -13231,8 +12714,8 @@ req GH-155.1
 # literal asserted of the file would match this check's own argument and pass with
 # the call gone. `holds` fails on text it could not read, so an anchor that moves
 # is red rather than vacuous.
-FARM_BUILD=$(sed -n '/^WITH_JQ_BIN=/,/^cp -a /p' "$SUITE_DIR/check-hooks.sh" \
-             | sed 's/[[:space:]]*#.*$//')
+suite_range FARM_BUILD '/^WITH_JQ_BIN=/' '/^cp -a /'
+FARM_BUILD=$(printf '%s\n' "$FARM_BUILD" | sed 's/[[:space:]]*#.*$//')
 holds 'the farm build calls the synthesis, which a host with its own gh cannot show by running' \
       "$FARM_BUILD" 'farm_stub_gh "$WITH_JQ_BIN"'
 tok 'the symlink farm holds a gh, so the gh-less fixture is one name short of it' \
@@ -13318,8 +12801,8 @@ tok 'a gh the calling shell defines is not a gh in the farm, so the stub is writ
 # text because a guard whose failure is `exit 1` cannot be driven from inside the
 # run it would end. `lacks` fails on text it could not read, so a range anchor
 # that moves is red rather than vacuously green.
-FARM_GUARD=$(sed -n '/^for pair in "git:\$ENV_NO_GIT_BIN"/,/^done$/p' "$SUITE_DIR/check-hooks.sh" \
-             | sed 's/[[:space:]]*#.*$//')
+suite_range FARM_GUARD '/^for pair in "git:\$ENV_NO_GIT_BIN"/' '/^done$/'
+FARM_GUARD=$(printf '%s\n' "$FARM_GUARD" | sed 's/[[:space:]]*#.*$//')
 holds 'the gh-less fixture guard asks the directory whether the farm holds the name' \
       "$FARM_GUARD" 'farm_has "$WITH_JQ_BIN" "$tool"'
 lacks 'and asks the calling shell nothing, which would resolve a function ahead of PATH' \
@@ -13934,7 +13417,7 @@ report_run_paths() {  # report_run_paths <file> -- every PATH the report is driv
   grep -oE '(^|[;&|)]|[[:space:]](then|do|else))[[:space:]]*report_says "[^"]*"' "$1" \
     | sed 's/.*report_says "//; s/"$//' | sort -u | tr '\n' ' '
 }
-REPORT_RUN_PATHS=$(report_run_paths "$SUITE_DIR/check-hooks.sh")
+REPORT_RUN_PATHS=$(report_run_paths "$SUITE_TEXT")
 tok 'every run of the report names one of four PATHs, and the farm is not among them' \
     '$ENV_NO_GH_BIN $ENV_NO_GIT_BIN $ENV_NO_GIT_GH_MARKER $PATH ' "$REPORT_RUN_PATHS"
 # THE CASE ARM, READ OUT OF THIS FILE AS IT STANDS, and not a fixture resembling
@@ -13943,7 +13426,7 @@ tok 'every run of the report names one of four PATHs, and the farm is not among 
 # first because a derivation run over an empty extract returns the empty string,
 # which would agree with nothing and pass.
 REPORT_CASE_ARM="$FIXTURES/the-case-arm-as-this-file-writes-it"
-grep -E '^[[:space:]]*report_says\)' "$SUITE_DIR/check-hooks.sh" > "$REPORT_CASE_ARM"
+grep -E '^[[:space:]]*report_says\)' "$SUITE_TEXT" > "$REPORT_CASE_ARM"
 tok 'this suite holds one report_says call that is not a statement of its own, in drive_helper' \
     '1' "$(grep -c . "$REPORT_CASE_ARM")"
 tok 'and the derivation reads that line as it stands, which the line-start spelling could not' \
@@ -15090,6 +14573,636 @@ for hook in $(printf '%s\n' "$REGISTRATION" | grep -o '[A-Za-z0-9_.-]*\.sh' | so
   fi
 done
 
+section "=== issue #204: the helper library, the suite's own text, and the tooling rule ==="
+# THE SUITE IS SPLIT BY WHO WRITES IT. Every loop appended to one file, so every
+# two loops running at once conflicted in it: every one of the six orderings of
+# the three pull requests open on 2026-09-23 (#204's measurement). The first step of the split takes out what every section shares, the
+# helpers, into checks/library.sh; this section holds the three things that
+# step rests on. Which functions are in the library is derived rather than
+# listed. The suite reads its own text through two helpers, because it is more
+# than one file now. And the tooling rule covers the directory the library
+# lives in, so that no audit of the hooks mistakes it for one.
+#
+# WHICH FUNCTIONS BELONG IN THE LIBRARY, derived off the code. The rule is the
+# library header's: a function with callers in more than one file of the suite,
+# each section of check-hooks.sh counting as a file of its own and its prelude as
+# another, and a call made inside a function counting for every caller of that
+# function. So `record` belongs there because `pass` does, and a helper called
+# from one section alone stays beside it.
+#
+# The derivation reads CODE. Quoted text, comments and heredoc bodies are blanked
+# first, by a scanner that follows single, double and $'...' quotes and a $( )
+# inside double quotes -- which is where most helpers are called, as the last
+# argument of a `tok` -- because the name of nearly every helper here is also an
+# English word, and a label saying "holds" is not a call to `holds`. A function
+# the suite takes away again with `unset -f` is a fixture standing in for a
+# program, as `gh` does in #108's section, and not a helper.
+#
+# WHAT IT DOES NOT SEE, named. A call made through a variable counts only where
+# the name is written as a bare word, which is how `drive_helper` is handed each
+# helper it drives. A function defined indented -- inside another one, or inside
+# an `if`, as `override_refused` is in #107's section -- is not a definition to
+# it: its body is read as part of the code around it, as `fn_writes` reads the
+# hooks. And a `case` arm's
+# `)` inside a $( ) closes it early, so the scanner reads the rest of that arm as
+# quoted. The ones that stand in the #84 section each come back to code by the
+# end of their line. A file the scanner does not finish in plain code -- inside a
+# quote, a heredoc or a function body -- is reported as a line of its own, and
+# the check below fails on any such line.
+lib_callers() {  # lib_callers <file>... -- "<function> <callers> <file>" a line, the first file the driver
+  awk '
+    function top() { return substr(st, length(st), 1) }
+    function push(c) { st = st c }
+    function pop() { if (length(st) > 1) st = substr(st, 1, length(st) - 1) }
+    function code(raw,   out, i, n, c, t, rest, m) {
+      out = ""; n = length(raw); i = 1
+      while (i <= n) {
+        c = substr(raw, i, 1); t = top()
+        if (t == "S") { if (c == "'"'"'") pop(); out = out " "; i++; continue }
+        if (t == "A") {
+          if (c == "\\") { out = out "  "; i += 2; continue }
+          if (c == "'"'"'") pop(); out = out " "; i++; continue
+        }
+        if (t == "D") {
+          if (c == "\\") { out = out "  "; i += 2; continue }
+          if (c == "\"") { pop(); out = out " "; i++; continue }
+          if (substr(raw, i, 2) == "$(" && substr(raw, i, 3) != "$((") { push("P"); out = out "$("; i += 2; continue }
+          out = out " "; i++; continue
+        }
+        if (c == "\\") { out = out "  "; i += 2; continue }
+        if (substr(raw, i, 2) == "$'"'"'") { push("A"); out = out "  "; i += 2; continue }
+        if (c == "'"'"'") { push("S"); out = out " "; i++; continue }
+        if (c == "\"") { push("D"); out = out " "; i++; continue }
+        if (c == "#" && (i == 1 || substr(raw, i - 1, 1) ~ /[ \t;(|&]/)) break
+        if (substr(raw, i, 2) == "$(" && substr(raw, i, 3) != "$((") { push("P"); out = out "$("; i += 2; continue }
+        if (c == "(" && t == "P") { push("P"); out = out c; i++; continue }
+        if (c == ")" && t == "P") { pop(); out = out c; i++; continue }
+        if (substr(raw, i, 2) == "<<" && substr(raw, i, 3) != "<<<") {
+          rest = substr(raw, i + 2)
+          if (match(rest, /^-?[ \t]*['"'"'"]?[A-Za-z_][A-Za-z0-9_]*/)) {
+            m = substr(rest, 1, RLENGTH)
+            hstrip[++npend] = (substr(m, 1, 1) == "-")
+            sub(/^-?[ \t]*['"'"'"]?/, "", m)
+            hterm[npend] = m
+            if (substr(rest, RLENGTH + 1, 1) ~ /['"'"'"]/) RLENGTH++
+            out = out sprintf("%" (RLENGTH + 2) "s", ""); i += RLENGTH + 2; continue
+          }
+        }
+        out = out c; i++
+      }
+      return out
+    }
+    function ended(f) { if (st != "C" || inhd || body != "") print "! " f " ends inside " (inhd ? "a heredoc" : body != "" ? "a function" : "a quote") }
+    FNR == 1 { if (file) ended(prev); prev = FILENAME; file++; region = (file == 1) ? "prelude" : FILENAME; st = "C"; npend = 0; inhd = 0; body = "" }
+    inhd {
+      cand = $0; if (hstrip[inhd]) sub(/^\t+/, "", cand)
+      if (cand == hterm[inhd]) { inhd = (inhd < npend) ? inhd + 1 : 0; if (!inhd) npend = 0 }
+      next
+    }
+    {
+      if (file == 1 && $0 ~ /^section "/) region = "section:" FNR
+      line = code($0)
+      if (npend) inhd = 1
+      text = line
+      if (body == "" && line ~ /^(function[ \t]+[A-Za-z_][A-Za-z0-9_]*([ \t]*\(\))?|[A-Za-z_][A-Za-z0-9_]*[ \t]*\(\))[ \t]*(\{.*)?$/) {
+        name = line; sub(/^function[ \t]+/, "", name); sub(/[ \t({].*/, "", name)
+        if (name in defined) twice[name] = twice[name] " " FILENAME ":" FNR
+        else at[name] = FILENAME ":" FNR
+        defined[name] = FILENAME
+        rest = line; sub(/^[^{]*/, "", rest); sub(/[ \t]+$/, "", rest)
+        text = rest
+        body = (rest ~ /^\{.*\}$/) ? "" : name
+        owner = name
+      } else owner = body
+      if (body != "" && line ~ /^\}/) body = ""
+      if (match(line, /unset -f[ \t]+[A-Za-z_][A-Za-z0-9_]*/)) {
+        u = substr(line, RSTART, RLENGTH); sub(/unset -f[ \t]+/, "", u); unset_[u] = 1
+      }
+      s = text
+      while (match(s, /[A-Za-z_][A-Za-z0-9_]*/)) {
+        w = substr(s, RSTART, RLENGTH)
+        before = (RSTART > 1) ? substr(s, RSTART - 1, 1) : ""
+        after = substr(s, RSTART + RLENGTH, 1)
+        s = substr(s, RSTART + RLENGTH)
+        if (before ~ /[A-Za-z0-9_$.\/-]/ || after ~ /[A-Za-z0-9_.=\/-]/) continue
+        if (owner != "") {
+          if (w != owner && !((owner, w) in seen)) { seen[owner, w] = 1; eg[++nedge] = owner; ef[nedge] = w }
+        } else if (index(eff[w], " " region " ") == 0) eff[w] = eff[w] " " region " "
+      }
+    }
+    END {
+      ended(prev)
+      do {
+        changed = 0
+        for (e = 1; e <= nedge; e++) {
+          nr = split(eff[eg[e]], rs, " ")
+          for (j = 1; j <= nr; j++)
+            if (index(eff[ef[e]], " " rs[j] " ") == 0) { eff[ef[e]] = eff[ef[e]] " " rs[j] " "; changed = 1 }
+        }
+      } while (changed)
+      for (f in defined) if (!(f in unset_)) print f, split(eff[f], rs, " "), defined[f]
+      for (f in twice) print "= " f " is defined more than once: " at[f] twice[f]
+    }' "$@" 2>/dev/null | LC_ALL=C sort
+}
+# The functions on the wrong side of the file boundary, given the derivation and
+# the library's path: "<function> belongs in the library" or "<function> does
+# not", a line, sorted.
+lib_misplaced() {  # lib_misplaced <lib_callers output> <library path>
+  printf '%s\n' "$1" | awk -v lib="$2" '
+    NF == 3 && $2 > 1 && $3 != lib { print $1 " belongs in the library, called from " $2 " places" }
+    NF == 3 && $2 <= 1 && $3 == lib { print $1 " does not belong in the library, called from " $2 }'
+}
+req GH-204.1
+# DRIVEN FIRST, against a fixture whose every answer is written here: a driver
+# with a prelude and two sections, and a library. `both` is called from both
+# sections and `once` from one; `shared`, in the library, from section two, and
+# `through` only from inside `shared`; `stub` is unset again, as a fixture is.
+# Names are also written where a call is not: in a label, a comment and a
+# heredoc body.
+LIB_FIX="$FIXTURES/library-rule"
+mkdir -p "$LIB_FIX"
+cat > "$LIB_FIX/driver.sh" <<'LIBFIX'
+#!/bin/bash
+both() { :; }
+once() { :; }
+stub() { :; }
+section "=== one ==="
+both a
+once b
+stub c
+tok 'both once shared through' "$(both x)"
+section "=== two ==="
+# once, in a comment
+cat <<'BODY'
+once
+BODY
+both e
+x=$(shared y)
+stub d
+unset -f stub
+LIBFIX
+cat > "$LIB_FIX/library.sh" <<'LIBFIX'
+shared() {
+  through "$1"
+}
+through() { :; }
+tok() { :; }
+section() { :; }
+LIBFIX
+tok 'the derivation counts each section as a caller, and reads no label, comment or heredoc' \
+"both 2 $LIB_FIX/driver.sh
+once 1 $LIB_FIX/driver.sh
+section 2 $LIB_FIX/library.sh
+shared 1 $LIB_FIX/library.sh
+through 1 $LIB_FIX/library.sh
+tok 1 $LIB_FIX/library.sh" \
+    "$(lib_callers "$LIB_FIX/driver.sh" "$LIB_FIX/library.sh")"
+# A third section calling `shared` gives it two callers, and `through` the same
+# two, though nothing outside the library calls `through` at all.
+printf 'section "=== three ==="\nshared z\n' >> "$LIB_FIX/driver.sh"
+tok 'a call made inside a function counts for every caller of that function' \
+"shared 2 $LIB_FIX/library.sh
+through 2 $LIB_FIX/library.sh" \
+    "$(lib_callers "$LIB_FIX/driver.sh" "$LIB_FIX/library.sh" | grep -E '^(shared|through) ')"
+tok 'and a function on the wrong side is named, in both directions' \
+"both belongs in the library, called from 2 places
+tok does not belong in the library, called from 1" \
+    "$(lib_misplaced "$(lib_callers "$LIB_FIX/driver.sh" "$LIB_FIX/library.sh")" "$LIB_FIX/library.sh")"
+printf "x='unclosed\n" > "$LIB_FIX/open-quote.sh"
+tok 'a file the scanner does not finish in plain code is reported' \
+    "! $LIB_FIX/open-quote.sh ends inside a quote" \
+    "$(lib_callers "$LIB_FIX/open-quote.sh" | grep '^!')"
+# A NAME DEFINED TWICE IS REPORTED, in one file or across the boundary. Bash
+# keeps the last definition it reads, so a helper written again further down --
+# the library's names are English words, and an issue file wanting its own
+# `holds` is the likely way -- silently replaces the library's for every check
+# after it. Found by review of PR #216: `holds() { pass static '%s' "$1"; }`
+# inserted into this file above the #204 section turned every later `holds`
+# into an unconditional pass, with the run green, because the derivation kept
+# the last definition it saw and never said there had been two.
+printf '%s\n' 'holds() { :; }' 'section "=== later ==="' 'holds() { pass static x; }' 'lacks() { :; }' \
+  > "$LIB_FIX/redefined-driver.sh"
+printf '%s\n' 'lacks() { :; }' > "$LIB_FIX/redefined-library.sh"
+# IN THE FOUR SPELLINGS THE SCANNER READS AT THE LEFT MARGIN. The definition
+# test asked for `name() {` alone, so `function holds { ... }` and
+# `holds () { ... }` inserted above the #204 section each replaced the library's
+# `holds` with the run green (review of PR #216, round 2). They are one spelling
+# each here, with the brace on the line and on a line of its own. Not every
+# spelling: round 3 found `holds() ( ... )` and `holds ( ) { ... }` passing all
+# four, which is why the loaded functions are also compared at runtime, below.
+# This stays as the early warning that names a file and a line.
+printf '%s\n' 'holds() { :; }' 'function holds { :; }' 'function lacks() { :; }' 'lacks () { :; }' \
+  'function present' '{' '  :' '}' 'present () {' '  :' '}' > "$LIB_FIX/spellings.sh"
+tok 'a function defined twice is named in the four spellings the scanner reads: name(), name (), function name, function name ()' \
+"= holds is defined more than once: $LIB_FIX/spellings.sh:1 $LIB_FIX/spellings.sh:2
+= lacks is defined more than once: $LIB_FIX/spellings.sh:3 $LIB_FIX/spellings.sh:4
+= present is defined more than once: $LIB_FIX/spellings.sh:5 $LIB_FIX/spellings.sh:9" \
+    "$(lib_callers "$LIB_FIX/spellings.sh" | grep '^=')"
+tok 'a function defined twice is named with each place, in one file and across the boundary' \
+"= holds is defined more than once: $LIB_FIX/redefined-driver.sh:1 $LIB_FIX/redefined-driver.sh:3
+= lacks is defined more than once: $LIB_FIX/redefined-driver.sh:4 $LIB_FIX/redefined-library.sh:1" \
+    "$(lib_callers "$LIB_FIX/redefined-driver.sh" "$LIB_FIX/redefined-library.sh" | grep '^=')"
+# AND ACROSS THE OTHER FILE SOURCED INTO THIS SHELL. The suite sources the
+# tokeniser under check to call its functions, so a function of the suite that
+# shares a name with one of the tokeniser's is the same replacement across a
+# second boundary: defined below the source line, the suite's own would be what
+# every tokeniser check called. The tokeniser's names are what sourcing it
+# defines, read in a shell of its own, and a tokeniser that defined none says so
+# rather than colliding with nothing.
+tokeniser_collisions() {  # tokeniser_collisions <lib_callers output> <tokeniser> -- the names both define
+  local names
+  names=$(bash -c '. "$1" 2>/dev/null; declare -F' _ "$2" | awk '{ print $3 }' | LC_ALL=C sort -u)
+  [ -n "$names" ] || { echo "! $2 defined no function when sourced"; return; }
+  LC_ALL=C comm -12 <(printf '%s\n' "$1" | awk 'NF == 3 { print $1 }' | LC_ALL=C sort -u) \
+           <(printf '%s\n' "$names")
+}
+printf '%s\n' 'cs_split() { :; }' 'holds() { :; }' > "$LIB_FIX/tokeniser.sh"
+tok 'a function the tokeniser also defines is named' \
+    'holds' "$(tokeniser_collisions "$(lib_callers "$LIB_FIX/redefined-driver.sh")" "$LIB_FIX/tokeniser.sh")"
+: > "$LIB_FIX/no-functions.sh"
+tok 'and a tokeniser that defined nothing is reported, not taken for one with no collisions' \
+    "! $LIB_FIX/no-functions.sh defined no function when sourced" \
+    "$(tokeniser_collisions "$(lib_callers "$LIB_FIX/redefined-driver.sh")" "$LIB_FIX/no-functions.sh")"
+
+# THIS SUITE. The files are $SUITE_FILES, because the question is which file
+# each function is defined in, and $SUITE_TEXT has no boundaries.
+# The derivation has to have read something, or an empty answer below would
+# pass: `pass` is called from every section, and `inv_apply` from #106's alone.
+LIB_PATH="$SUITE_DIR/checks/library.sh"
+LIB_CALLERS=$(lib_callers "${SUITE_FILES[@]}")
+tok 'the derivation over this suite places pass in the library and inv_apply beside its section' \
+    'inv_apply 1 driver
+pass library' \
+    "$(printf '%s\n' "$LIB_CALLERS" | awk -v lib="$LIB_PATH" '
+        $1 == "pass" && $2 > 1 && $3 == lib { print "pass library" }
+        $1 == "inv_apply" { print $1, $2, ($3 == lib ? "library" : "driver") }' | LC_ALL=C sort)"
+tok 'the scanner finished every file of this suite in plain code' \
+    '' "$(printf '%s\n' "$LIB_CALLERS" | grep '^!')"
+tok 'every function called from more than one section is in checks/library.sh, and no other is' \
+    '' "$(lib_misplaced "$LIB_CALLERS" "$LIB_PATH")"
+tok 'no function of this suite is defined twice, in one file or across the files of the suite' \
+    '' "$(printf '%s\n' "$LIB_CALLERS" | grep '^=')"
+tok 'and none shares a name with a function of the tokeniser this suite sources' \
+    '' "$(tokeniser_collisions "$LIB_CALLERS" "$HOOKS/lib/command-scan.sh")"
+# The scanner and bash agree on what the library defines: the names sourcing it
+# added are the names the scanner places there. A definition the scanner cannot
+# read, in the library, is a name bash has and it does not.
+tok 'the functions sourcing the library defined are the ones the scanner reads in it' \
+    "$SUITE_LOADED" \
+    "$(printf '%s\n' "$LIB_CALLERS" | awk -v lib="$LIB_PATH" 'NF == 3 && $3 == lib { print $1 }' | LC_ALL=C sort)"
+# AND AT RUNTIME, WHATEVER THE SPELLING. $LOADED_CHANGED_CODE compares every
+# function and tokeniser variable recorded at the head against what bash holds
+# now; the foot of this suite runs it once, at the end. Driven here in a
+# subshell, so that what it redefines stays there: a fixture file, sourced,
+# redefines `holds` in one of the two spellings round 3 of the review found
+# passing the scanner, removes `lacks`, sets a tokeniser variable again -- and
+# replaces `fail`, which the foot must not need (round 4).
+present 'the functions recorded at the start include the ones every check prints through' \
+        pass "${!LOADED_BODY[*]}"
+present 'and the tokeniser'"'"'s' cs_split "${!LOADED_BODY[*]}"
+present 'and the variables the tokeniser sets' '$CS_WRAPPER_RE' "${!LOADED_BODY[*]}"
+present 'and the not-found handler, which the head records where it defines it' \
+        'command_not_found_handle' "${!LOADED_BODY[*]}"
+LC_FIX="$FIXTURES/loaded-changed.sh"
+printf '%s\n' "holds() ( pass static '%s' \"\$1\" )" 'unset -f lacks' 'CS_LINE_CAP=1' 'fail() ( : )' > "$LC_FIX"
+tok 'a function this run started with, redefined in any spelling or removed, is named, and so is a tokeniser variable set again' \
+    '$CS_LINE_CAP
+fail
+holds
+lacks' "$( ( . "$LC_FIX"; eval "$LOADED_CHANGED_CODE" ) | LC_ALL=C sort)"
+tok 'and none has been, so far' '' "$(eval "$LOADED_CHANGED_CODE")"
+# A variable's attributes are not part of what is compared, so an exported copy
+# of a tokeniser variable -- the invoker's, or this shell's -- is not a change.
+tok 'a tokeniser variable exported, with its value unchanged, is not a change' \
+    '' "$( export CS_LINE_CAP; eval "$LOADED_CHANGED_CODE" )"
+# THE RECORD IS WHAT THE FILES DEFINE, NOT WHAT THIS SHELL HELD at some line:
+# a redefinition in the prelude, before the record was taken, became the
+# baseline (round 4). Asked of every function the library defines, by a child
+# that sources it alone and is written here rather than through `record_of`:
+# with the record read off this shell instead, a redefinition of any of them in
+# the prelude is a name below (round 5 found the row asking of `holds` alone).
+tok 'the record of every function of the library is what sourcing the library alone defines' '' \
+    "$(env -i PATH="$PATH" "$BASH" -c '. "$1"; shift; for n; do printf "%s\0%s\0" "$n" "$(declare -f "$n")"; done' \
+         _ "$LIB_PATH" $SUITE_LOADED \
+       | while IFS= read -r -d '' n && IFS= read -r -d '' d; do
+           [[ $d == "${LOADED_BODY[$n]}" ]] || printf '%s\n' "$n"
+         done)"
+present 'and it asked of the library'"'"'s functions, pass among them' pass "${SUITE_LOADED//$'\n'/ }"
+# `record_of` keeps the invoker's environment out: a function this shell exports
+# is not in the child before the file is sourced, so it is recorded as the
+# file defines it and not dropped as though the child had started with it. And
+# a file that defines nothing is refused, which the head stops the run on.
+tok 'record_of records a function the invoker exports, as the file defines it' \
+    "$(declare -f holds)" \
+    "$( export -f holds; record_of "$LIB_PATH" "$FIXTURES/record-exported"
+        while IFS= read -r -d '' n && IFS= read -r -d '' d; do
+          [[ $n == holds ]] && printf '%s' "$d"
+        done < "$FIXTURES/record-exported" )"
+: > "$FIXTURES/defines-nothing.sh"
+tok 'and refuses a file that defines nothing' \
+    'status 1' "$(record_of "$FIXTURES/defines-nothing.sh" "$FIXTURES/record-nothing"; echo "status $?")"
+# THE FINAL VERDICT, driven: FOOT_VERDICT_CODE in a subshell of its own for each
+# way it has to fail -- a recorded function redefined, a command not found, the
+# record moved, a helper that clears FAILED run before it (round 5's
+# `fail() { FAILED=0; }`), and a failure it was given with nothing else wrong --
+# and once where it must not. Each row carries the requirement whose clause it
+# establishes: the redefinition is GH-204.1's, the missing command and the moved
+# record GH-204.5's, and a verdict that keeps a failure both of theirs (round 7
+# found the GH-204.5 arms tagged GH-204.1).
+FV_NONE="$FIXTURES/verdict-none"
+FV_SOME="$FIXTURES/verdict-some"
+: > "$FV_NONE"
+printf '%s\n' 'x.sh: line 1: nf_x: command not found' > "$FV_SOME"
+tok 'the final verdict fails on a recorded function redefined' \
+    'redefined 1' \
+    "$( FAILED=0; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "redefined $FAILED" )"
+req GH-204.5
+# `moved` is the record pointed elsewhere and not put back.
+tok 'the final verdict fails on a missing command and on a moved record' \
+'missing 1
+moved 1' "$( ( FAILED=0; NOT_FOUND=$FV_SOME; NOT_FOUND_AT_HEAD=$FV_SOME; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "missing $FAILED" )
+     ( FAILED=0; NOT_FOUND=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "moved $FAILED" ) )"
+req GH-204.1 GH-204.5
+# `kept` is the one that asks whether it can clear what it was given: FAILED
+# already 1, and nothing redefined or missing. Without it a `FAILED=0` at the
+# top of the verdict let a red suite exit 0 with ALL CHECKS PASSED (round 6).
+tok 'the final verdict keeps a failure it was given, through a helper that clears it too, and fails on nothing else' \
+'clean 0
+cleared 1
+kept 1' "$( ( FAILED=0; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "clean $FAILED" )
+     ( FAILED=1; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; fail() { FAILED=0; }; fail; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "cleared $FAILED" )
+     ( FAILED=1; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "kept $FAILED" ) )"
+tok 'and says why on stderr' \
+'a function or tokeniser variable this run started with was redefined or removed during it:
+holds
+a command this suite called was not found:
+x.sh: line 1: nf_x: command not found' \
+    "$( ( NOT_FOUND=$FV_SOME; NOT_FOUND_AT_HEAD=$FV_SOME; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>&1 >/dev/null ) )"
+# AND THE TAGS ARE THE ONES WRITTEN ABOVE, read back from the ledger: a row under
+# the wrong `req` covers the wrong requirement, and nothing else would say so.
+tok 'the verdict rows are recorded under the requirement each establishes' \
+'GH-204.1 | the final verdict fails on a recorded function redefined
+GH-204.5 | the final verdict fails on a missing command and on a moved record
+GH-204.1 GH-204.5 | the final verdict keeps a failure it was given, through a helper that clears it too, and fails on nothing else
+GH-204.1 GH-204.5 | and says why on stderr' \
+    "$(awk -F'\t' '$4 ~ /^the final verdict / || $4 == "and says why on stderr" { print $1 " | " $4 }' "$LEDGER")"
+req GH-204.1
+# THE LEDGER'S VERDICT, driven: a ledger holding a FAIL row fails the run
+# whatever FAILED says, and one holding only ok rows leaves FAILED as it was.
+LV_FAIL="$FIXTURES/ledger-with-fail"
+LV_OK="$FIXTURES/ledger-all-ok"
+printf '\tstatic\tok\tuntagged, fine\nGH-1\tstatic\tFA''IL\tnot fine\n' > "$LV_FAIL"
+printf 'GH-1\tstatic\tok\tfine\n' > "$LV_OK"
+tok 'a FAIL the ledger holds fails the run, whatever FAILED says, and ok rows do not' \
+'with a fail 1
+all ok 0
+all ok, already failed 1' "$( ( FAILED=0; LEDGER=$LV_FAIL; eval "$LEDGER_VERDICT_CODE"; echo "with a fail $FAILED" )
+     ( FAILED=0; LEDGER=$LV_OK; eval "$LEDGER_VERDICT_CODE"; echo "all ok $FAILED" )
+     ( FAILED=1; LEDGER=$LV_OK; eval "$LEDGER_VERDICT_CODE"; echo "all ok, already failed $FAILED" ) )"
+# AND IT IS WHAT THE DRIVER ENDS ON: the verdict is only final if nothing that
+# could clear FAILED runs after it, so its place is asserted, not only its text.
+# The driver's last five statements, comments and blank lines aside, as a
+# literal; the first two lines of the literal are split, so that this check's
+# own text is not what it finds.
+tok 'the driver ends by taking the final verdict, then printing it and exiting with it' \
+'eval "$FOOT_VERDICT''_CODE"
+eval "$LEDGER_VERDICT''_CODE"
+echo
+if [[ $FAILED -eq 0 ]]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
+exit $FAILED' "$(grep -v '^[[:space:]]*#' "${SUITE_FILES[0]}" | grep -v '^[[:space:]]*$' | tail -5)"
+
+# THE LIBRARY RUNS NOTHING. It is sourced before the first section, so a check
+# written into it would run ahead of every fixture under whatever tag was set.
+# Sourced here in a shell of its own, with a ledger of its own, and asked what it
+# printed on either stream, what it recorded, and that it defined the functions
+# every check prints through -- the last, so that a library that did not load
+# at all cannot pass for one that loaded quietly.
+#
+# AND IT DEFINES FUNCTIONS AND NOTHING ELSE, which printing nothing does not
+# show: an assignment, a `set -e`, a `cd` or a trap at the library's top level
+# is silent. So the shell's state is written down before the library is sourced
+# and after it -- every variable, every option, the working directory, the
+# umask and the traps -- and the two have to be the same. The variables bash
+# itself moves between two reads are left out, by name.
+req GH-204.2
+LIB_ALONE="$FIXTURES/library-alone"
+mkdir -p "$LIB_ALONE"
+: > "$LIB_ALONE/ledger"
+tok 'sourcing the library alone prints nothing and defines what every check prints through' \
+    'defined' \
+    "$(bash -c 'LEDGER=$1; REQ=GH-0; . "$2" 2>&1
+                declare -F record pass fail req section >/dev/null && echo defined' \
+         _ "$LIB_ALONE/ledger" "$LIB_PATH" 2>&1)"
+tok 'and records nothing in the ledger it was given' \
+    '0' "$(wc -c < "$LIB_ALONE/ledger" | tr -d ' ')"
+lib_state() {  # lib_state -- this shell's variables, options, directory, umask and traps
+  ( set -o posix; set ) | grep -vE '^(_|BASH_ARGC|BASH_ARGV|BASH_COMMAND|BASH_LINENO|BASH_SOURCE|BASH_SUBSHELL|BASHPID|EPOCHREALTIME|EPOCHSECONDS|FUNCNAME|LINENO|PIPESTATUS|RANDOM|SECONDS|SRANDOM)='
+  set -o; shopt; pwd; umask; trap -p
+}
+tok 'and changes nothing else about the shell that sources it' \
+    'unchanged' \
+    "$(export -f lib_state
+       bash -c 'lib_state > "$1/before"; . "$2" >/dev/null 2>&1; lib_state > "$1/after"
+                cmp -s "$1/before" "$1/after" && echo unchanged || diff "$1/before" "$1/after"' \
+         _ "$LIB_ALONE" "$LIB_PATH" 2>&1)"
+
+# THE SUITE READS ITS OWN TEXT THROUGH TWO HELPERS. $SUITE_TEXT is every file of
+# it, the driver first, so the header is still its opening. A read of the driver
+# alone would stop seeing whatever moved into the library, and the absence it
+# then reported would be of text that is there.
+req GH-204.3
+tok 'the suite text opens with the driver header' \
+    '# Regression checks for the hooks under .claude/hooks/ and what they rest on.' \
+    "$(sed -n 2p "$SUITE_TEXT")"
+written 'and holds the library' "$SUITE_TEXT" '# THE HELPER LIBRARY of the hook check suite.'
+# A range that matched nothing is a FAIL. Driven in a subshell, as the #98
+# self-test drives its helpers: the FAIL it prints there is the one asserted and
+# is not recorded, so it does not turn this run red. The anchor is split, so
+# that this line is not among its matches, and so is the result word, because
+# the #104 section reads this suite for a quoted line opening with one.
+tok 'a range of the suite text that matched nothing FAILs, and says which range' \
+    "  FA""IL the suite text from /^no such ""line$/ to /^}/ is empty, so what is asked of it is asked of nothing
+status 1" \
+    "$(suite_range SR_NONE '/^no such ''line$/' '/^}/'; echo "status $?")"
+suite_range SR_SELF '/^suite_range() {/' '/^}/'
+holds 'and a range that is there is read, whole' "$SR_SELF" 'return 1'
+# NO CODE NAMES THE DRIVER TO READ IT. Its path, under $SUITE_DIR or $HOOKS in
+# any of the spellings a reader writes, is on the line that lists the suite's
+# files and on the one line that runs it. Whole-line comments are skipped; a
+# trailing one is read, which errs toward a refusal a reader can see. What this
+# does not ask, named: a bare relative name, read from this suite's own working
+# directory, and awk's `$0`. The fixture spells the file through $D, so that its
+# own lines are not among what the second check finds.
+#
+# A PATH THAT WALKS THROUGH ANOTHER DIRECTORY TO GET THERE is the driver too:
+# `$SUITE_DIR/checks/../check-hooks.sh` names it, and the pattern asked only for
+# the name straight after the variable. Found sweeping for the class review of
+# PR #216 named in the tooling rule, a `..` taking a path out of the directory
+# it starts in. Any directory between the variable and the name is allowed for,
+# so a path that names no real file there is refused too, which a reader sees.
+direct_self_reads() {  # direct_self_reads <file>... -- "<file>:<line>" for each read of the driver by path
+  awk '/^SUITE_FILES=\(/ { next }
+       /^[ \t]*#/ { next }
+       /\$\{?(SUITE_DIR|HOOKS)\}?"?(\/[^ \t";|&()]*)?\/check-hooks\.sh/ &&
+         !/(^|[ \t;|&(])bash[ \t]+"\$\{?SUITE_DIR\}?\/check-hooks\.sh"/ { print FILENAME ":" FNR }' "$@"
+}
+DSR_FIX="$FIXTURES/direct-self-reads.sh"
+D=check-hooks
+cat > "$DSR_FIX" <<DSR
+SUITE_FILES=("\$SUITE_DIR/$D.sh")
+grep -c x "\$SUITE_DIR/$D.sh"
+out=\$(bash "\$SUITE_DIR/$D.sh" 2>&1)
+# sed -n 1p "\$SUITE_DIR/$D.sh"
+awk 1 "\${HOOKS}/$D.sh"
+sed -n 1p "\$SUITE_DIR"/$D.sh
+cat "\$SUITE_DIR/checks/../$D.sh"
+DSR
+tok 'a read of the driver by path is found, and the file list, a run and a comment are not' \
+    "$DSR_FIX:2 $DSR_FIX:5 $DSR_FIX:6 $DSR_FIX:7" "$(direct_self_reads "$DSR_FIX" | tr '\n' ' ' | sed 's/ $//')"
+tok 'no code in this suite reads the driver by its path' \
+    '' "$(direct_self_reads "${SUITE_FILES[@]}")"
+
+# THE TOOLING RULE covers the directory, so that a file added under checks/ is
+# covered without touching it. Asked of paths whose answer is written here,
+# among them the near misses a pattern written loosely would take: a `..`
+# segment, which `checks/.+` took (review of PR #216, round 1), and the `.`,
+# empty, subdirectory and dotfile spellings the first fix got wrong from the
+# other side (round 2) -- the last two are the tooling, the others are not.
+req GH-204.4
+tok 'TOOLING matches the suite, the harness and every file under checks/, and nothing else' \
+    'check-hooks.sh:yes mutate-hooks.sh:yes checks/library.sh:yes checks/GH-130.sh:yes no-git-push.sh:no lib/command-scan.sh:no checks:no checks/:no checks.sh:no xchecks/a.sh:no check-hooksXsh:no lib/check-hooks.sh:no checks/../no-git-push.sh:no checks/./library.sh:no checks/.:no checks/..:no checks//library.sh:no checks/sub/:no checks/sub/./a.sh:no checks/sub/a.sh:yes checks/.a.sh:yes checks/..a:yes checks/...:yes' \
+    "$(for p in check-hooks.sh mutate-hooks.sh checks/library.sh checks/GH-130.sh no-git-push.sh \
+                lib/command-scan.sh checks checks/ checks.sh xchecks/a.sh check-hooksXsh lib/check-hooks.sh \
+                checks/../no-git-push.sh checks/./library.sh checks/. checks/.. checks//library.sh checks/sub/ \
+                checks/sub/./a.sh checks/sub/a.sh checks/.a.sh checks/..a checks/...; do
+         if [[ $p =~ $TOOLING ]]; then printf '%s:yes ' "$p"; else printf '%s:no ' "$p"; fi
+       done | sed 's/ $//')"
+armed 'the suite spells the rule as the harness does' \
+      "$SUITE_TEXT" "TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+)(/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+))*)\$'"
+# The harness's own row check, run rather than read: its function and its rule
+# are taken out of its text and asked about a row, in a subshell of their own.
+# A function that is not there to take out answers so, rather than with the
+# empty string a runnable row answers with.
+harness_row_fault() {  # harness_row_fault <file> -- what mutate-hooks.sh's row_fault says of a row targeting it
+  local fn
+  fn=$(sed -n '/^row_fault() {/,/^}/p' "$MUT")
+  [ -n "$fn" ] || { echo "row_fault is not in $MUT"; return; }
+  ( eval "$fn"; eval "$(grep -E '^TOOLING=' "$MUT")"; row_fault x "$1" 's/a/b/' GH-1 caught )
+}
+tok 'the harness refuses a registry row that targets a file under checks/' \
+    'checks/library.sh runs from the repository rather than from the copy, so a mutation to it would be read and never executed' \
+    "$(harness_row_fault checks/library.sh)"
+tok 'and runs one that targets a hook' '' "$(harness_row_fault no-git-push.sh)"
+# The spellings round 2 of the review found runnable, each answered by the rule
+# that owns it: a subdirectory is the tooling, and a `.` or an empty segment is
+# refused before the rule is asked -- as `..` already was.
+tok 'and refuses a subdirectory of checks/, a . segment and an empty one' \
+    'checks/sub/x.sh runs from the repository rather than from the copy, so a mutation to it would be read and never executed
+the target checks/./library.sh has a . segment or an empty one; name it plainly, relative to the hooks directory
+the target checks//library.sh has a . segment or an empty one; name it plainly, relative to the hooks directory
+the target no-git-push.sh/ has a . segment or an empty one; name it plainly, relative to the hooks directory
+the target checks/../no-git-push.sh is not a path inside the hooks directory' \
+    "$(for p in checks/sub/x.sh checks/./library.sh checks//library.sh no-git-push.sh/ checks/../no-git-push.sh; do
+         harness_row_fault "$p"
+       done)"
+# The suite's own audit of the registry refuses the same spellings, so that a
+# row naming one is red without anyone running the harness. That audit is a loop
+# over the real registry and has no fixture, so its two arms are pinned as text,
+# each needle split so that this line is not among its matches.
+armed 'the suite audit of the registry does not count a row with a . or an empty segment as runnable' \
+      "$SUITE_TEXT" 'case "$MFILE" in .|./*|*/.|*/./*|*//*|*/) MUT_ROW''_RUNS= ;; esac'
+armed 'and names such a row as a fault' \
+      "$SUITE_TEXT" 'names $MFILE, which has a . segment ''or an empty one'
+# EVERY FILE THE DRIVER SOURCES IS THE TOOLING, so that the rule is tied to what
+# actually runs rather than to where the files happen to be today: a file added
+# to $SUITE_SOURCED in a spelling the rule does not take would be sourced, and
+# judged as a hook everywhere else. It accepts on TOOLING, so it asks the
+# segments first, as the text-check rule does (round 4 of the review found it
+# asking none). Driven, since the segment question only decides anything once
+# TOOLING is looser than it is today (round 5 found it deletable with the run
+# green): a fixture list, asked under a rule loose enough to take every entry.
+sourced_not_tooling() {  # sourced_not_tooling <list> -- each entry that is not the tooling, a segment asked first
+  local f
+  for f in $1; do
+    case "/$f/" in */./*|*/../*|*//*) printf '%s ' "$f"; continue ;; esac
+    [[ $f =~ $TOOLING ]] || printf '%s ' "$f"
+  done
+}
+tok 'every file the driver sources is the tooling' '' "$(sourced_not_tooling "$SUITE_SOURCED")"
+tok 'and a path with a ., .. or empty segment is not, even under a rule loose enough to take it' \
+    'checks/./library.sh checks//x.sh checks/../x.sh ' \
+    "$(TOOLING='^checks/.+$'; sourced_not_tooling 'checks/./library.sh checks//x.sh checks/../x.sh checks/x.sh')"
+# And the other arm, which the real list never reaches because every entry of it
+# is the tooling: a hook's name, under the real rule (round 6).
+tok 'and a path that is not the tooling is reported, under the real rule' \
+    'no-git-push.sh ' "$(sourced_not_tooling 'checks/library.sh no-git-push.sh')"
+present 'and it sources at least one, so the check above asked something' \
+        checks/library.sh "$SUITE_SOURCED"
+# The two audits that walk the hooks directory looking for hooks, and must not
+# find the suite's own files among them. Neither can today: both glob the top
+# of the directory and lib/. What these hold is that a glob widened to reach
+# checks/ -- which is what finding the next hook in a subdirectory would take --
+# turns them red rather than making the library a hook.
+CHECKS_NAMES=$(cd "$SUITE_DIR/checks" && ls | tr '\n' ' ')
+present 'the checks directory holds the library, so the two below ask about something' \
+        library.sh "$CHECKS_NAMES"
+checks_on() {  # checks_on <space-separated list> -- the names under checks/ that are on it
+  local n
+  for n in $CHECKS_NAMES; do
+    case " $1 " in *" $n "*) printf '%s ' "$n" ;; esac
+  done
+}
+tok 'no file under checks/ is on the list of hook files' '' "$(checks_on "$HOOK_FILES")"
+tok 'nor on the list of tokeniser consumers' '' "$(checks_on "$CS_SOURCERS")"
+
+# A COMMAND THAT IS NOT FOUND IS WRITTEN DOWN, wherever it was called, with the
+# file and the line that called it. Driven here against a record of its own, so
+# that what it writes does not turn this run red, from a fixture file sourced
+# into this shell -- so that each call is at a line this check can write down
+# as a literal -- from each place a helper is called: a $( ), a ( ), this shell,
+# and inside a function, which is how a helper missing from the library is
+# reached, and where the line is the function's and not its caller's. The names
+# are spelled so that no function of this suite could ever be one.
+req GH-204.5
+NF_RUN=$NOT_FOUND
+NOT_FOUND="$FIXTURES/not-found-driven"
+NF_FIX="$FIXTURES/not-found-fixture.sh"
+: > "$NOT_FOUND"
+printf '%s\n' 'nf_caller() {' '  nf_missing_in_a_function' '}' \
+  'NF_CAPTURED=$(nf_missing_in_a_capture; echo "status $?")' '( nf_missing_in_a_subshell )' \
+  'nf_missing_in_this_shell' 'nf_caller' > "$NF_FIX"
+. "$NF_FIX" 2> "$FIXTURES/not-found-stderr"
+NOT_FOUND=$NF_RUN
+unset -f nf_caller
+NF_WANT="$NF_FIX: line 4: nf_missing_in_a_capture: command not found
+$NF_FIX: line 5: nf_missing_in_a_subshell: command not found
+$NF_FIX: line 6: nf_missing_in_this_shell: command not found
+$NF_FIX: line 2: nf_missing_in_a_function: command not found"
+tok 'a command that is not found is written down with its file and line, from a $( ), a ( ), this shell and a function' \
+    "$NF_WANT" "$(cat "$FIXTURES/not-found-driven")"
+tok 'and prints nothing into the value a $( ) captures, which gets the status bash gives' \
+    'status 127' "$NF_CAPTURED"
+# AND WHAT BASH ITSELF PRINTS FOR THE SAME FILE, asked of bash rather than of a
+# literal in the handler's own format: a check written in the format of what it
+# checks would stay green under a bash whose message differed (review of PR
+# #216, round 3). A child does not inherit the handler, so it prints bash's own
+# message, and the path it was given is the path the handler read off
+# BASH_SOURCE, so no line needs normalising. The child is this shell's own
+# interpreter, $BASH, and not the first `bash` on PATH; and BASH_ENV is taken
+# from it, so no file it names can give the child a handler of its own (round
+# 4) -- and, since round 5, the whole environment, as below. The literal is
+# asked too, so that the two agreeing on something wrong is not a pass.
+NF_CHILD=(env -i PATH="$PATH" "$BASH")
+tok 'and prints on stderr exactly what this bash prints for the same file without it' \
+    "$("${NF_CHILD[@]}" "$NF_FIX" 2>&1 >/dev/null)" "$(cat "$FIXTURES/not-found-stderr")"
+# The child is started with an empty environment, as the record's is: BASH_ENV
+# can name a file that defines a handler, and an exported function is in the
+# environment too, and either would make this the handler compared with itself
+# (round 5). Asked: the handler exported from this shell does not reach it.
+tok 'and the bash it is compared with has no handler, even one this shell exports' \
+    '' "$( export -f 'command_not_found_handle'; "${NF_CHILD[@]}" -c 'type -t command_not_found_handle' )"
+tok 'which is the line written down' "$NF_WANT" "$(cat "$FIXTURES/not-found-stderr")"
+
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads the requirements -- requirements.md, and the `GH-` entries
 # under requirements/ since #200 -- and the tags every check above carries, and
@@ -15098,7 +15211,7 @@ section "=== issue #104: every requirement is covered, and every check says whic
 # computed, and it is the only place.
 #
 # Every check above is recorded as it prints, with its tags and its direction --
-# see `record` near the head of this suite. What is read here is that record,
+# see `record` in checks/library.sh. What is read here is that record,
 # and nothing in it is derived by running a hook a second time.
 #
 # THE KNOWN GAPS ARE MARKED, NOT HIDDEN. An active requirement with no covering
@@ -15194,6 +15307,7 @@ GH-155.1:static GH-148:static
 GH-109.1:static GH-109.2:refuse-only GH-109.3:static GH-109.4:static
 GH-109.5:permit-only GH-164:gap
 GH-200.1:static GH-200.2:static GH-200.3:static GH-200.4:static GH-200.5:static
+GH-204.1:static GH-204.2:static GH-204.3:static GH-204.4:static GH-204.5:static
 '
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in
@@ -16042,7 +16156,7 @@ tok 'and the matrix presents the entries in that order' \
 # order #200 states, over the IDs the matrix printed -- so what goes red is the
 # matrix disagreeing with the statement, whatever the function does.
 REPO_GH_ORDER=$(requirements_read matrix "$HOOKS/requirements.md" "$REQ_FIX/empty-ledger" \
-                  "$SUITE_DIR/check-hooks.sh" "$REPO_ROOT" "$HOOKS/runbook.md" \
+                  "$SUITE_TEXT" "$REPO_ROOT" "$HOOKS/runbook.md" \
                   "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE" | awk '/^GH-/ { print $1 }')
 if [ -z "$REPO_GH_ORDER" ]; then
   fail static 'the matrix of this repository printed no GH- entry, so its order says nothing'
@@ -16808,7 +16922,7 @@ req GH-104.1
 tok 'the only lines that print a check result are the two in pass and fail' \
 "  printf '  o"'k'"   %s\n' \"\$line\"
   printf '  F"'AIL'" %s\n' \"\$line\"" \
-  "$(sed 's/[[:space:]]*#.*$//' "$SUITE_DIR/check-hooks.sh" | grep -E "['\"]  (ok   |FAI""L )")"
+  "$(sed 's/[[:space:]]*#.*$//' "$SUITE_TEXT" | grep -E "['\"]  (ok   |FAI""L )")"
 
 echo "--- this repository ---"
 # The record is copied before it is read, because every line printed below is
@@ -16816,7 +16930,7 @@ echo "--- this repository ---"
 # check above this line; their own results reach the matrix and not this reading.
 cp "$LEDGER" "$FIXTURES/ledger-read"
 FINDINGS=$(requirements_read findings "$HOOKS/requirements.md" "$FIXTURES/ledger-read" \
-             "$SUITE_DIR/check-hooks.sh" "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE")
+             "$SUITE_TEXT" "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE")
 FINDINGS_STATUS=$?
 # An awk that failed may print nothing, or only the findings before the failure,
 # and a loop over what it printed passes by asking too little -- the permitting
@@ -16849,7 +16963,7 @@ done <<< "$FINDINGS"
 # come from, and comparing across the two would go red for an override.
 req GH-148
 MUT_MATRIX_LINE=$(requirements_read matrix "$SUITE_DIR/requirements.md" "$FIXTURES/ledger-read" \
-                    "$SUITE_DIR/check-hooks.sh" "$REPO_ROOT" "$SUITE_DIR/runbook.md" \
+                    "$SUITE_TEXT" "$REPO_ROOT" "$SUITE_DIR/runbook.md" \
                     "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE" \
                   | awk '/^requirements matrix: / { print; exit }')
 REQ_ACTIVE_CANON=$(printf '%s\n' "$MUT_MATRIX_LINE" \
@@ -16891,10 +17005,65 @@ else
     "$MUT_AT_RESULTS" "$RESULTS_NOW"
 fi
 
+# EVERY FUNCTION THIS RUN STARTED WITH IS THE ONE IT ENDS WITH: see
+# LOADED_BODY at the head of this suite. Asked here, after every check, as a
+# row; the verdict it gives is taken again by FOOT_VERDICT_CODE after every
+# helper has run, because `fail` could be the function redefined (round 4) and
+# a redefined helper can clear FAILED after this has set it (round 5).
+req GH-204.1
+LOADED_CHANGED=$(eval "$LOADED_CHANGED_CODE")
+if [[ -n $LOADED_CHANGED ]]; then
+  fail static 'a function or tokeniser variable this run started with was redefined or removed during it, so every check after that asked a different one:\n%s' \
+    "$(printf '%s\n' "$LOADED_CHANGED" | sed 's/^/       /')"
+else
+  pass static 'every function and tokeniser variable this run started with is the one it ended with'
+fi
+
+# NO COMMAND THIS RUN CALLED WAS MISSING: what `command_not_found_handle`, at
+# the head of this suite, wrote down. Asked here because it is about every check
+# above, as a row; the two rows below it run after it, so a command missing in
+# them is not in what this row reads, and FOOT_VERDICT_CODE, which reads the
+# record again after them, is what sees it -- for the reason the check above
+# gives. A missing `tok` would be one of the things this
+# reports.
+# What this row cannot see and the final verdict can: a command missing in the
+# --matrix program below, which runs after this row and before the verdict.
+# What neither can, named at the handler: a command missing before the fixtures
+# directory existed, and one missing in a child run with `bash -c`, which is
+# another shell and not a subshell of this one.
+req GH-204.5
+if [[ -s $NOT_FOUND ]]; then
+  fail static 'a command this suite called was not found, so every check that called it asked nothing:\n%s' \
+    "$(sort "$NOT_FOUND" | uniq -c | sed 's/^ */       /')"
+else
+  pass static 'no command this suite called was missing, in this shell or in any subshell of it'
+fi
+
+# THE NOT-FOUND RECORD IS WHERE THE HEAD PUT IT: the verdict's third question,
+# which had no row, so a run it failed ended SOME CHECKS FAILED with every row
+# green and only a line on stderr to say why (round 7 of the review). Asked
+# here as a row like its two siblings, and taken again by FOOT_VERDICT_CODE.
+req GH-204.5
+if [[ $NOT_FOUND != "$NOT_FOUND_AT_HEAD" ]]; then
+  fail static 'the not-found record was moved during the run and not put back, so what was written to %s before the move was not read; it is %s now' \
+    "$NOT_FOUND_AT_HEAD" "$NOT_FOUND"
+else
+  pass static 'the not-found record is where the head put it, so what the handler wrote is what the verdict reads'
+fi
+# EACH OF THE VERDICT'S QUESTIONS HAS ITS ROW, read back from the ledger: the
+# last three rows recorded are the three above, under the requirement each
+# establishes -- so a question with no row, or a row under the wrong tag, is
+# red here and not only a line on stderr.
+req GH-204.1 GH-204.5
+tok 'the verdict'"'"'s three questions end the ledger, each as a row under its own requirement' \
+'GH-204.1
+GH-204.5
+GH-204.5' "$(tail -n 3 "$LEDGER" | cut -f1)"
+
 # --matrix: every requirement, from the record as it stands now, the findings
 # above included, and then the verdict line the run would have printed.
 if [ -n "$MATRIX" ]; then
-  requirements_read matrix "$HOOKS/requirements.md" "$LEDGER" "$SUITE_DIR/check-hooks.sh" \
+  requirements_read matrix "$HOOKS/requirements.md" "$LEDGER" "$SUITE_TEXT" \
     "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE" >&3
   MATRIX_STATUS=$?
   exec >&3
@@ -16903,6 +17072,13 @@ if [ -n "$MATRIX" ]; then
     FAILED=1
   fi
 fi
+# The foot's questions, asked again after every helper has run, and then the
+# ledger, for a FAIL the first verdict did not keep. Between
+# them and the exit stand only `echo`, `[[ ]]` and `exit`, which are builtins and
+# a keyword -- unless a function shadows a builtin of that name, the limit
+# GH-204.1 names (round 6 of the review). See FOOT_VERDICT_CODE.
+eval "$FOOT_VERDICT_CODE"
+eval "$LEDGER_VERDICT_CODE"
 echo
-if [ $FAILED -eq 0 ]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
+if [[ $FAILED -eq 0 ]]; then echo "ALL CHECKS PASSED"; else echo "SOME CHECKS FAILED"; fi
 exit $FAILED

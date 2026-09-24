@@ -471,11 +471,17 @@ SUITE="$SRC/check-hooks.sh"
   echo "mutate-hooks.sh: $SUITE is not there, so there is no suite to run" >&2; exit 1
 }
 
-# The files beside the hooks that are not hooks. check-hooks.sh keeps the same
-# list under the same name, where the two directories are split, and its registry
-# audit holds this table to it. Neither file is ever executed out of the copy, so
-# neither can be a mutation target.
-TOOLING="check-hooks.sh mutate-hooks.sh"
+# The files beside the hooks that are not hooks: this harness, the suite, and
+# every file under checks/, which the suite sources. A rule over a path relative
+# to the hooks directory rather than a list of names, so that a file added under
+# checks/ is covered without touching it (#204). At any depth, and no segment
+# that is `.` or `..`, so that `checks/../<hook>.sh` is not taken as the
+# tooling; `row_fault` refuses a path with such a segment, or an empty one,
+# before the write, and check-hooks.sh says why. check-hooks.sh keeps the same
+# rule under the same name, where the two directories are split, and holds this
+# spelling to its own. Nothing it matches is ever executed out of the copy, so
+# nothing it matches can be a mutation target.
+TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+)(/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+))*)$'
 
 # THE MEASUREMENT. `--list` multiplies this rate by the run count it derives, so
 # the wall-clock it prints follows the registry instead of standing still while
@@ -527,10 +533,11 @@ MEASURED_SECONDS_PER_RUN=275
 MEASURED_AT_RESULTS=5296
 
 # WHAT MAKES A ROW RUNNABLE, asked in one place because two callers need the
-# same answer and gave different ones. Pass one below refuses a row for five
-# reasons; `--list`'s run count has to predict which rows a pass will actually
-# run. It did not ask any of the five -- it counted every row whose outcome was
-# not did-not-apply -- so one malformed row made it over-report by one, and
+# same answer and gave different ones. Pass one below refuses a row for each
+# reason this function gives; `--list`'s run count has to predict which rows a
+# pass will actually run. It did not ask any of them -- it counted every row
+# whose outcome was not did-not-apply -- so one malformed row made it
+# over-report by one, and
 # check-hooks.sh's #148 check made the identical omission and stayed green: the
 # doubled-program failure its own comment warns about, arriving in the first
 # commit that wrote the warning. Bertan's review of PR #183.
@@ -564,10 +571,10 @@ row_fault() {  # row_fault <id> <file> <edit> <reqs> <want> -- a reason, or noth
   # paragraph at its head says why -- and so is this file. An edit to either copy
   # would be read by the suite's text checks and executed by nothing, so whatever
   # this harness reported would be about a file that never ran.
-  case " $TOOLING " in *" $FILE "*)
+  if [[ $FILE =~ $TOOLING ]]; then
     echo "$FILE runs from the repository rather than from the copy, so a mutation to it would be read and never executed"
-    return ;;
-  esac
+    return
+  fi
   # A file IN the working copy, spelled as a path relative to it. An absolute
   # path, or one climbing out with .., is an edit to whatever it names -- this
   # repository's own hooks among the things it could name -- and the sum taken at
@@ -576,6 +583,17 @@ row_fault() {  # row_fault <id> <file> <edit> <reqs> <want> -- a reason, or noth
   case "$FILE" in
     /*|*/../*|../*|*/..|..)
       echo "the target $FILE is not a path inside the hooks directory"
+      return ;;
+  esac
+  # AND ONE WITH A `.` SEGMENT OR AN EMPTY ONE, which names a file inside the
+  # copy but not in the spelling TOOLING reads: `checks/./library.sh` is the
+  # library, and the rule, which asks for a plain path, does not take it -- so
+  # the row was runnable, against a file nothing executes (review of PR #216,
+  # round 2). Refused rather than normalised: the registry is written by hand,
+  # and the plain spelling is one edit away.
+  case "$FILE" in
+    .|./*|*/.|*/./*|*//*|*/)
+      echo "the target $FILE has a . segment or an empty one; name it plainly, relative to the hooks directory"
       return ;;
   esac
 }
@@ -778,7 +796,7 @@ if [ -n "$LIST" ]; then
   # AND THE SPLIT SET BESIDE IT, which is where every `GH-` entry is (#200): one
   # file per ID under requirements/, each holding one entry and no `##` heading,
   # so each opens as a section that holds requirements. Listed here rather than
-  # by check-hooks.sh's `requirements_split`, which this script cannot source;
+  # by `requirements_split` in checks/library.sh, which this script cannot source;
   # the order does not matter to a count, and every name in the directory is
   # read, as there, so a misnamed file is counted rather than skipped. Regular
   # files only, as there too: mawk aborts on a directory, and check-hooks.sh's
@@ -936,7 +954,7 @@ while IFS='%' read -r ID FILE EDIT REQS WANT; do
     case " $SELECTED " in *" $ID "*) ;; *) continue ;; esac
   fi
   MATCHED=$((MATCHED + 1))
-  # The five refusals are row_fault's, above, because `--list` has to predict
+  # The refusals are row_fault's, above, because `--list` has to predict
   # which rows this pass will run and the two have to mean the same thing by a
   # runnable row. What is this pass's alone is reporting the reason and counting
   # the row out; what the reason SAYS is written once.
