@@ -791,9 +791,11 @@ GH-167:3774825998:1365 GH-171:1548953849:1055 GH-175:1964502293:1348
 # #205 made a new entry a declaration in its issue file and its file a thing
 # generated from it. These stay hand-written, and none is rewritten, migrated
 # or declared; an entry outside them is generated, or the run is red. The list
-# never grows -- a branch cut before #205 that adds a hand-written entry turns
-# it into a declaration when it merges across -- so no loop edits this, and
-# the #205 issue file holds it to its count and its checksum. Here and not in
+# never grows -- a branch cut before #205 that adds a hand-written entry
+# deletes the file, declares the entry and runs the generator when it merges
+# across, since the generator does not replace a hand-written file -- so no
+# loop edits this, and the #205 issue file holds it to its count and its
+# checksum. Here and not in
 # that file because the #141 section in the unsplit file, sourced before any
 # issue file, reads it too.
 REQUIREMENTS_LEGACY='

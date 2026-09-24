@@ -116,8 +116,11 @@ runs it against fixtures and against the repository.
   `shape_pin`, and `variants_pin` waits for a file whose entry is in the
   families' scope. That move is expected, not a defect.
 - **A branch cut before #205 that adds a hand-written `GH-` entry** is red once
-  it merges across. The remedy is to turn the entry into a declaration and run
-  the generator. Adding the ID to `REQUIREMENTS_LEGACY` is not a remedy. The
+  it merges across. The remedy is to delete the hand-written
+  `requirements/GH-<n>.md`, declare the entry in its issue file, and run the
+  generator. The file must go first, because the generator refuses a
+  declared ID whose file is hand-written and leaves that file alone. Adding
+  the ID to `REQUIREMENTS_LEGACY` is not a remedy. The
   #205 issue file holds that list to its count and checksum, so a new ID there
   shows in two places.
 - **The two readings of a declaration meet in the files.** The generator reads

@@ -1707,10 +1707,16 @@ R205_DECLARED_IDS=$(while IFS= read -r -d '' R205_REC; do printf '%s\n' "${R205_
   || fail static 'no issue file declared an entry, so the checks below ask about none'
 tok 'every GH- entry outside the legacy set is, byte for byte, its declaration as this run read it, and every legacy entry is a hand-written file' \
   '' "$(generated_bad "$DECLARED" "$HOOKS/requirements" "$REQUIREMENTS_LEGACY")"
+# The script is the judged one, and it is run over the issue files this run
+# sourced and the judged requirements/, which `generator_view` puts in one
+# directory; the #205 issue file drives it against a judged side that has no
+# checks/. In this repository the two sides are one directory, so what here
+# names $SUITE_DIR rather than $HOOKS is asked only by that fixture.
 req GH-205.2
+R205_VIEW=$(generator_view "$SUITE_DIR" "$HOOKS" "$FIXTURES/generator-view")
 tok 'generate-requirements.sh reads the declarations this run read, and would write nothing' \
   "generate-requirements.sh: every generated entry is its declaration: $R205_DECLARED_IDS
-exit 0" "$(bash "$HOOKS/generate-requirements.sh" --check "$HOOKS" 2>&1; printf 'exit %s' "$?")"
+exit 0" "$(bash "$HOOKS/generate-requirements.sh" --check "$R205_VIEW" 2>&1; printf 'exit %s' "$?")"
 # #211, decided: the shared literals hold the legacy entries, and a generated
 # entry's tokens are pinned in its issue file. The shape pins are compared with
 # the entries in the #104 findings below, handed over as REQUIREMENT_SHAPE_HELD;

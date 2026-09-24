@@ -433,8 +433,55 @@ tok 'and --check reports the refusal alone, not the stale file beside it' \
 'generate-requirements.sh: refused, and nothing was written:
   checks/GH-6.sh: line 1: GH-06 is not an ID of the grammar GH-<n> or GH-<n>.<m>
 exit 1' "$(r205_gen --check "$R205/partial")"
-tok 'a malformed argument list is a usage error, each way' '64 64' \
+tok 'a malformed argument list is a usage error, each way, an empty directory among them' '64 64 64' \
   "$(bash "$HOOKS/generate-requirements.sh" --bogus > /dev/null 2>&1; printf '%s ' "$?"
-     bash "$HOOKS/generate-requirements.sh" "$R205/gen" "$R205/gen" > /dev/null 2>&1; printf '%s' "$?")"
+     bash "$HOOKS/generate-requirements.sh" "$R205/gen" "$R205/gen" > /dev/null 2>&1; printf '%s ' "$?"
+     bash "$HOOKS/generate-requirements.sh" --check '' > /dev/null 2>&1; printf '%s' "$?")"
+
+# A READING THAT FOUND NOTHING BECAUSE IT READ NOTHING is refused, each way it
+# happens, rather than taken for a directory with nothing to generate: a
+# directory that is not there, one with no checks/, and an awk that died
+# (review of PR #222, round 3).
+tok 'a hooks directory that is not there is refused' \
+"generate-requirements.sh: refused, and nothing was written:
+  $R205/no-such-dir is not a directory holding checks/, so there is no issue file to read
+exit 1" "$(r205_gen --check "$R205/no-such-dir")"
+mkdir -p "$R205/no-checks/requirements"
+tok 'and so is one with no checks/' \
+"generate-requirements.sh: refused, and nothing was written:
+  $R205/no-checks is not a directory holding checks/, so there is no issue file to read
+exit 1" "$(r205_gen "$R205/no-checks")"
+# The awk that dies is a stand-in first on PATH that exits 2, since a file awk
+# cannot open is readable all the same to root.
+mkdir -p "$R205/dead-awk"
+printf '#!/bin/sh\nexit 2\n' > "$R205/dead-awk/awk"
+chmod +x "$R205/dead-awk/awk"
+tok 'an awk that died is a failed reading, not an empty one' \
+'generate-requirements.sh: reading the issue files failed, awk exit 2; nothing was written
+exit 1' "$(PATH="$R205/dead-awk:$PATH" r205_gen --check "$R205/gen")"
+# The stage's path reaches awk whole: under a TMPDIR holding a backslash and a
+# `t`, which `awk -v` would read as a tab and fail to open, the refusal is still
+# the one the declaration earns.
+r205_refused tmpdir
+printf 'requirement GH-6\tjunk <<%sREQ%s\n' "'" "'" > "$R205/tmpdir/checks/GH-6.sh"
+mkdir -p "$R205/tmp\\t"
+tok 'a TMPDIR holding a backslash escape is a path, not an escape' \
+"generate-requirements.sh: refused, and nothing was written:
+  checks/GH-6.sh: line 1: a declaration spelled other than requirement <ID> <<'REQ': requirement GH-6$(printf '\t')junk <<'REQ'
+exit 1" "$(TMPDIR="$R205/tmp\\t" r205_gen --check "$R205/tmpdir")"
+
+# HELD TO THIS SUITE, the script is run over `generator_view`: the issue files
+# from the suite's side and requirements/ from the judged side. So a judged side
+# with no checks/ is not asked for one, and it is its requirements/, not the
+# suite's, that are read. The suite's side here is the written fixture.
+mkdir -p "$R205/judged"; cp -r "$R205/gen/requirements" "$R205/judged/"
+tok 'over the view, a judged side with no checks/ is read against the suite'"'"'s declarations' \
+'generate-requirements.sh: every generated entry is its declaration: GH-5 GH-5.1
+exit 0' "$(r205_gen --check "$(generator_view "$R205/gen" "$R205/judged" "$R205/view")")"
+printf -- '- note: stale on the judged side\n' >> "$R205/judged/requirements/GH-5.md"
+tok 'and it is the judged side'"'"'s requirements/ that is read' \
+'generate-requirements.sh: not what the issue files declare:
+  requirements/GH-5.md differs from its declaration in checks/GH-5.sh
+exit 1' "$(r205_gen --check "$(generator_view "$R205/gen" "$R205/judged" "$R205/view")")"
 
 sourced_to_end

@@ -73,12 +73,26 @@ while [ $# -gt 0 ]; do
   case $1 in
     --check) CHECK=1; shift ;;
     -*) usage ;;
-    *) [ -z "$DIR" ] || usage; DIR=$1; shift ;;
+    *) [ -z "$DIR" ] && [ -n "$1" ] || usage; DIR=$1; shift ;;
   esac
 done
+# An empty argument is a usage error and not the default: a caller whose
+# directory came out empty would otherwise be answered about this script's own.
 [ -n "$DIR" ] || DIR=$(dirname -- "$0")
-SPLIT="$DIR/requirements"
 NAME=generate-requirements.sh
+# A directory that is not there, or holds no checks/, is refused rather than
+# read: its listing would be empty, and an empty reading is what a directory
+# with nothing to generate looks like, so it would pass (review of PR #222,
+# round 3). The directory is made absolute here, so that no operand handed to
+# awk below reads as a `var=value` assignment, which a relative path whose
+# first segment holds a `=` would.
+GIVEN=$DIR
+DIR=$(CDPATH= cd -- "$GIVEN" 2>/dev/null && pwd) && [ -d "$DIR/checks" ] || {
+  echo "$NAME: refused, and nothing was written:"
+  echo "  $GIVEN is not a directory holding checks/, so there is no issue file to read"
+  exit 1
+}
+SPLIT="$DIR/requirements"
 # Globbing off for every unquoted list below; the two listings that need a
 # glob turn it on in their own subshell.
 set -f
@@ -97,7 +111,14 @@ trap 'rm -rf "$STAGE"' EXIT
 # as $STAGE/<ID>, the file it would write; each thing it refuses is a line of
 # $STAGE/.problems. `rel` is the issue file's path relative to the hooks
 # directory, which is what the `generated` field names.
-awk -v stage="$STAGE" '
+#
+# The stage's path reaches awk through its environment and not through `-v`,
+# which reads backslash escapes in the value: a TMPDIR holding `\t` made the
+# path one awk could not open (review of PR #222, round 3). And awk's status is
+# read, because an awk that died has staged nothing and refused nothing, which
+# is what a clean reading looks like.
+STAGE="$STAGE" awk '
+  BEGIN { stage = ENVIRON["STAGE"] }
   function problem(s) { print s >> (stage "/.problems") }
   FNR == 1 {
     if (open != "") problem(rel ": " openid " is declared at line " openline " and never closed by a line reading REQ")
@@ -127,6 +148,11 @@ awk -v stage="$STAGE" '
     for (i = 1; i <= nids; i++) if (ids[i] !~ /^\(/) { f = stage "/" ids[i]; printf "%s", doc[ids[i]] > f; close(f) }
   }
 ' ${ISSUE_FILES[@]+"${ISSUE_FILES[@]}"} </dev/null
+AWK_STATUS=$?
+if [ "$AWK_STATUS" != 0 ]; then
+  echo "$NAME: reading the issue files failed, awk exit $AWK_STATUS; nothing was written"
+  exit 1
+fi
 
 DECLARED=$( (set +f; cd -- "$STAGE" && for f in GH-*; do [ -f "$f" ] && printf '%s\n' "$f"; done) | LC_ALL=C sort -V)
 

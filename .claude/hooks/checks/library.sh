@@ -1147,3 +1147,18 @@ legacy_tokens() {  # legacy_tokens <in|out> <legacy literal> <tokens>
     fi
   done | LC_ALL=C sort | tr '\n' ' '
 }
+# The directory generate-requirements.sh is run over when it is held to this
+# suite: the issue files from the suite's side and requirements/ from the
+# judged side, each a symbolic link. The script reads both out of one hooks
+# directory, and the two sides are one directory until an override parts them.
+# Under CHECK_HOOKS_DIR the issue files are the tooling, whose text is read off
+# $SUITE_DIR and never off the copy, and they are what this run sourced and
+# declared. Reading the copy's instead asks the copy for a checks/ directory
+# the override guard does not require, and a copy without one turned the
+# GH-205.2 row red for that reason alone (review of PR #222, round 3). Prints
+# the directory.
+generator_view() {  # generator_view <suite dir> <hooks dir> <into>
+  rm -rf -- "$3" && mkdir -p -- "$3" \
+    && ln -s -- "$1/checks" "$3/checks" && ln -s -- "$2/requirements" "$3/requirements" \
+    && printf '%s' "$3"
+}

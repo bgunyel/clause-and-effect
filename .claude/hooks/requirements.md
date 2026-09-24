@@ -1322,3 +1322,7 @@ it has no entry above (Q16).
 - #211: the issue that found every new `GH-` entry still appending a token to
   `REQUIREMENT_SHAPE` and `INV_SCOPE` after the split; #205 decided it, and the
   decision is GH-205.3, so it has no entry of its own
+- #222: the pull request for #205; rev-agent-205's review of it is cited where
+  what it found stands -- a generator that read nothing and reported a pass,
+  and a stage path `awk -v` could mangle, which the generator now refuses and
+  reads whole
