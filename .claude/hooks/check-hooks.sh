@@ -199,10 +199,12 @@
 #     the line `sourced_to_end` and calls it nowhere else, and is added at the
 #     end of $SUITE_CHECKS below. `source_checks` fails the run on a file under
 #     checks/ that is on no list, and on one that does not end with that line;
-#     the record fails it on a second call. Nothing refuses a heading printed
-#     with `echo`: it is not written down, so GH-204.8's check counts its rows
-#     for the heading before it, and it does not clear REQ, so the last tag
-#     before it carries into its rows.
+#     the record fails it on a second call. Every heading the file prints,
+#     its opening one and any after it, is printed with `section`. Nothing
+#     refuses one printed with `echo` or `printf`: it is not written down, so
+#     GH-204.8's check counts its rows for the heading before it; and past the
+#     file's opening -- where `source_checks` has already cleared REQ -- it
+#     does not clear REQ, so the tag before it carries into its rows.
 #   - An existing issue's checks move out of the unsplit file only when a loop
 #     touches them for its own reasons.
 #   - A move keeps the same set of rows, keeps their order within the issue file

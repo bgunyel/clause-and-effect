@@ -1783,7 +1783,7 @@ fi
 # matrix: the unsplit file's text pin of it shows only that it is written
 # (rounds 3 and 4 of the review of PR #220).
 req GH-204.8
-tok 'every section heading this run printed has at least one row under it' \
+tok 'every heading section wrote down has at least one row under it' \
     '' "$(sections_without_rows "$HEADINGS" "$LEDGER")"
 [ -s "$HEADINGS" ] || fail static 'no section heading was written down, so the check above asked nothing'
 
@@ -1847,7 +1847,7 @@ tok 'the heading question and the verdict'"'"'s three questions end the ledger, 
 GH-204.1
 GH-204.5
 GH-204.5
-every section heading this run printed has at least one row under it' \
+every heading section wrote down has at least one row under it' \
     "$(tail -n 4 "$LEDGER" | cut -f1; tail -n 4 "$LEDGER" | head -n 1 | cut -f4)"
 
 # --matrix: every requirement, from the record as it stands now, the findings

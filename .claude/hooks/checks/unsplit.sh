@@ -14891,14 +14891,46 @@ tok 'and one with a row under it is not' 'B' \
 # that the row in that place is this question's and not another GH-204.8 row
 # (round 4).
 HEADINGS_ROW=$(cat <<'EOF'
-tok 'every section heading this run printed has at least one row under it' \
+tok 'every heading section wrote down has at least one row under it' \
     '' "$(sections_without_rows "$HEADINGS" "$LEDGER")"
 EOF
 )
-tok 'the end-of-run file asks every heading this run printed for a row' \
+tok 'the end-of-run file asks every heading section wrote down for a row' \
     "$HEADINGS_ROW" \
-    "$(grep -F -A1 "tok 'every section heading this run printed has at least one row under it'" "$SUITE_DIR/checks/$SUITE_LAST")"
-tok 'the headings this run printed are written down, this section'"'"'s the last so far' \
+    "$(grep -F -A1 "tok 'every heading section wrote down has at least one row under it'" "$SUITE_DIR/checks/$SUITE_LAST")"
+tok 'the headings section printed are written down, this section'"'"'s the last so far' \
     "=== issue #204: the driver sources each file of checks/ whole, in order, in this shell ===" \
     "$(tail -n 1 "$HEADINGS" | cut -f2)"
+# THE TRADE GH-204.8 RECORDS, held as behaviour and not as text: a heading
+# printed with `echo` is not written down, so the question above counts its
+# rows for the heading before it and finds nothing wrong; and it does not clear
+# REQ, so the tag before it carries into its rows -- which only happens past a
+# file's opening, since `source_checks` clears REQ before each file. A row that
+# read the suite's text for such a heading was dropped (round 5 of the review
+# of PR #220); this pins what passing it means, so a change to `section` or
+# `heading_mark` that alters it goes red here (round 6). Run in this shell,
+# with a headings record and a ledger of its own, because both are written only
+# from the shell the driver runs in; the two are put back before anything is
+# asked, so a FAIL below is recorded in the real ledger.
+EH_HEADINGS=$HEADINGS EH_LEDGER=$LEDGER
+HEADINGS="$SRC_FIX/echo-heading.headings"; LEDGER="$SRC_FIX/echo-heading.ledger"
+: > "$HEADINGS"; : > "$LEDGER"
+{ REQ=GH-9
+  section '=== fixture: printed with section ==='
+  pass static 'a row under the section heading'
+  REQ=GH-0
+  pass static 'a tagged row'
+  echo '=== fixture: printed with echo ==='
+  pass static 'a row under the echo heading'
+} > /dev/null
+HEADINGS=$EH_HEADINGS LEDGER=$EH_LEDGER
+req GH-204.8
+tok 'a heading printed with echo is not written down, and section is' \
+    '0|=== fixture: printed with section ===' "$(tr '\t' '|' < "$SRC_FIX/echo-heading.headings")"
+tok 'so the heading question counts its row for the heading before it, and finds nothing' \
+    '' "$(sections_without_rows "$SRC_FIX/echo-heading.headings" "$SRC_FIX/echo-heading.ledger")"
+tok 'and the tag before it carries into its row, where section clears it' \
+'|a row under the section heading
+GH-0|a tagged row
+GH-0|a row under the echo heading' "$(cut -f1,4 "$SRC_FIX/echo-heading.ledger" | tr '\t' '|')"
 sourced_to_end
