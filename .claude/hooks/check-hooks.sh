@@ -229,9 +229,11 @@
 #     token of it goes into REQUIREMENT_SHAPE or INV_SCOPE, which hold the
 #     entries written before #205 (#205). `requirement`, `shape_pin` and
 #     `variants_pin` are defined in checks/GH-205.sh while it is their one
-#     caller; the first other issue file that calls them moves all three into
-#     the library, which the library-membership check then asks for, and until
-#     then an issue file that calls them is listed after GH-205.sh.
+#     caller. Each moves into the library once another file calls it, and not
+#     before: the library-membership check asks it of each function by itself,
+#     so a file that calls `requirement` and `shape_pin` and not `variants_pin`
+#     moves those two and leaves the third. Until one moves, an issue file that
+#     calls it is listed after GH-205.sh.
 #
 # Run: bash .claude/hooks/check-hooks.sh
 #      bash .claude/hooks/check-hooks.sh --matrix   the requirements matrix, issue #104

@@ -1725,7 +1725,8 @@ req GH-205.3
 tok 'REQUIREMENT_SHAPE and INV_SCOPE hold legacy entries only, and each generated entry is pinned once, in the issue file that declares it' \
   '' "$(pins_bad "$DECLARED" "$PINNED" "$REQUIREMENT_SHAPE" "$INV_SCOPE" "$REQUIREMENTS_LEGACY")"
 tok 'the generated entries in the families scope are these, each with what it says the families do with it, as their issue files pin them' \
-  "$(legacy_tokens out '' "$(awk -F'\t' '$1 == "variants" { print $3 }' "$PINNED")")" \
+  "$(awk -F'\t' '$1 == "variants" { n = split($3, t, " "); for (i = 1; i <= n; i++) print t[i] }' "$PINNED" \
+       | LC_ALL=C sort | tr '\n' ' ')" \
   "$(legacy_tokens out "$REQUIREMENTS_LEGACY" "$INV_SCOPE_DERIVED")"
 
 echo "--- every result goes through pass and fail ---"

@@ -149,6 +149,26 @@ req GH-205.3
 tok 'shape_pin and variants_pin record the kind, the issue file and the tokens, whitespace folded' \
   "$(printf 'shape\tchecks/GH-205.sh\tGH-9.1:static GH-9.2 \nvariants\tchecks/GH-205.sh\tGH-9.2:none \n')" \
   "$(cat "$R205/pins")"
+# And the file named is the CALLER's, not the file defining the three: every
+# call above is in this file, which defines them too, so the two are one path
+# and the index of BASH_SOURCE is not asked. A file sourced from a fixture is
+# outside .claude/hooks/, so it is named by its whole path. Its declaration is
+# written with an `@` taken off as the file is made, as the fixtures below are.
+sed 's/@requirement/requirement/' > "$R205/caller.sh" <<'FIX'
+@requirement GH-9.3 <<'REQ'
+- text: from another file
+REQ
+shape_pin 'GH-9.3:static'
+variants_pin 'GH-9.3:none'
+FIX
+: > "$R205/caller-record"; : > "$R205/caller-pins"
+(DECLARED="$R205/caller-record" PINNED="$R205/caller-pins"; source "$R205/caller.sh")
+req GH-205.1 GH-205.3
+tok 'each of the three names the file that called it, not the one that defines it' \
+  "$(printf 'GH-9.3\t%s\t- text: from another file\n\0' "$R205/caller.sh" | od -c)
+$(printf 'shape\t%s\tGH-9.3:static \nvariants\t%s\tGH-9.3:none ' "$R205/caller.sh" "$R205/caller.sh")" \
+  "$(od -c < "$R205/caller-record")
+$(cat "$R205/caller-pins")"
 
 # generated_bad, against a fixture holding one of each thing it names. The
 # record is written with printf, as `requirement` writes it; GH-1 and GH-2 are
@@ -212,6 +232,18 @@ GH-9: its shape pinned in checks/GH-7.sh, and no issue file declares it' \
 tok 'and with each pinned once where it is declared, and the shared literals legacy, nothing' '' \
   "$(pins_bad "$R205/pins-declared" <(printf '%s\n' $'shape\tchecks/GH-7.sh\tGH-7 GH-7.1:static' $'shape\tchecks/GH-8.sh\tGH-8' $'variants\tchecks/GH-7.sh\tGH-7.1:none') \
       'US-1 GH-1:static' 'GH-1:seed' 'GH-1')"
+# A declaration with no ID -- what `requirement "$UNSET"` records -- beside a
+# real pin finding. The finding is still named: an empty ID made a subscript
+# ends the helper before it prints anything, and none of the records above has
+# one. The declaration itself is `generated_bad`'s to name, as out of grammar.
+{
+  cat "$R205/pins-declared"
+  printf '\tchecks/GH-7.sh\t- text: no ID\n\0'
+} > "$R205/pins-empty-id"
+tok 'and a declaration with no ID leaves the pin findings beside it named' \
+'GH-9: its shape pinned in checks/GH-7.sh, and no issue file declares it' \
+  "$(pins_bad "$R205/pins-empty-id" <(printf '%s\n' $'shape\tchecks/GH-7.sh\tGH-7 GH-7.1:static GH-9' $'shape\tchecks/GH-8.sh\tGH-8') \
+      'US-1 GH-1:static' 'GH-1:seed' 'GH-1' 2>&1)"
 
 # legacy_tokens, which splits a literal's tokens by whether the ID is legacy:
 # the #141 comparison asks for the legacy half, and the end of the run for the
@@ -298,7 +330,7 @@ r205_issue "$R205/spelled/checks/GH-6.sh" <<'FIX'
 @requirement GH-6.3 extra <<'REQ'
 @requirement  GH-6.4 <<'REQ'
 FIX
-tok 'a declaration spelled any other way is refused: indented, unquoted, another delimiter, a second word, a double space' \
+tok 'a declaration spelled each of these other ways is refused: indented, unquoted, another delimiter, a second word, a double space' \
 "generate-requirements.sh: refused, and nothing was written:
   checks/GH-6.sh: line 1: a declaration spelled other than requirement <ID> <<'REQ':   requirement GH-6 <<'REQ'
   checks/GH-6.sh: line 2: a declaration spelled other than requirement <ID> <<'REQ': requirement GH-6.1 <<REQ

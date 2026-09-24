@@ -1089,8 +1089,13 @@ pins_bad() {  # pins_bad <declared record> <pinned record> <shape literal> <scop
   set -f
   legacy=" $(printf '%s ' $5)"
   {
+    # A declaration with no ID is skipped rather than made a subscript: an
+    # empty one is `bad array subscript`, which ends this group before it has
+    # printed a line, so every finding below goes unprinted and the run reads
+    # it as none. `generated_bad` names that declaration, as an ID out of grammar.
     while IFS= read -r -d '' rec; do
       id=${rec%%$'\t'*}; rec=${rec#*$'\t'}
+      [[ -n $id ]] || continue
       [[ -n ${declared[$id]+set} ]] || declared[$id]=${rec%%$'\t'*}
     done < "$1"
     for tok in $3; do

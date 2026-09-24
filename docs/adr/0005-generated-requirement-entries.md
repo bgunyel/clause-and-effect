@@ -110,9 +110,11 @@ runs it against fixtures and against the repository.
   round.
 - **`requirement`, `shape_pin` and `variants_pin` are defined in the #205 issue
   file**, because the library holds a function only once it has callers in
-  more than one file (ADR 0004). The first other issue file that declares an
-  entry calls them, and the library-membership check then goes red until they
-  move into `checks/library.sh`. That move is expected, not a defect.
+  more than one file (ADR 0004). The check asks that of each function by
+  itself, so each moves into `checks/library.sh` once another file calls it:
+  the first other issue file that declares an entry moves `requirement` and
+  `shape_pin`, and `variants_pin` waits for a file whose entry is in the
+  families' scope. That move is expected, not a defect.
 - **A branch cut before #205 that adds a hand-written `GH-` entry** is red once
   it merges across. The remedy is to turn the entry into a declaration and run
   the generator. Adding the ID to `REQUIREMENTS_LEGACY` is not a remedy. The
@@ -122,8 +124,11 @@ runs it against fixtures and against the repository.
   the issue files as text, and bash reads them when the suite runs. A
   declaration spelled in a way one reads and the other does not, such as
   inside an `if` that never runs or inside a fixture heredoc, turns one of the
-  two checks red. The generator also refuses every spelling other than
-  `requirement <ID> <<'REQ'` at the start of a line.
+  two checks red. The generator also refuses a line whose first word, after
+  any indentation, is `requirement` followed by `GH-`, when it is spelled other
+  than `requirement <ID> <<'REQ'` at the start of the line. A call it does not
+  read that way at all, such as `x=1 requirement GH-7`, is not refused by it:
+  bash records the call, and the entry is found declared and not written.
 - **Still shared:** `INV_SEEDS`, the seed table a new entry declaring
   `variants: seed` must be tagged in, stays in the unsplit file. The mutation
   registry stays in `mutate-hooks.sh` (#215).
