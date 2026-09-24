@@ -11443,7 +11443,7 @@ req GH-107.1
 TEXT_CHECK_ARGS=$(text_check_faults "${SUITE_FILES[@]}")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '319' "${TEXT_CHECK_ARGS##*COUNT }"
+    '318' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -14833,16 +14833,28 @@ tok 'the unsplit file is the first the driver sourced, and runs in the shell tha
 tok 'the driver calls source_checks once, on its list with the end-of-run file after it' \
     'source_checks "$SUITE_DIR/checks" $SUITE_CHECKS "$SUITE_LAST"' \
     "$(grep -E '^[[:space:]]*source_checks[[:space:]]' "${SUITE_FILES[0]}")"
+# Its first line alone, and that is accepted: the body is held by what it is
+# compared with, since a body that dropped a `start`, an `end` or the line an
+# end marker names would differ from the record every file writes, and the row
+# below, the verdict and the EXIT trap would each go red (round 2 of the review
+# of PR #220).
 tok 'and the record it is held to names the same list in the same order' \
     'SOURCED_WANT=$(for f in $SUITE_CHECKS $SUITE_LAST; do' \
     "$(grep -E '^SOURCED_WANT=' "${SUITE_FILES[0]}")"
 # And compares the record with it once the last file has run, as a row. The row
 # prints only when they differ -- a row printed after the last file would land
 # after the matrix --matrix prints -- so it is pinned as text, as the unsplit
-# file's #204 section pins the registry audit's arms.
-tok 'the driver compares the record with what its list says once the last file has run' \
-    '[[ $(< "$SOURCED") == "$SOURCED_WANT" ]] \' \
-    "$(grep -F '[[ $(< "$SOURCED") == "$SOURCED_WANT" ]]' "${SUITE_FILES[0]}")"
+# file's #204 section pins the registry audit's arms. The whole statement and
+# not its first line: a `|| :` for the `|| fail` would keep a first-line pin
+# green with the row gone (round 2 of the review of PR #220).
+SV_ROW=$(cat <<'EOF'
+[[ $(< "$SOURCED") == "$SOURCED_WANT" ]] \
+  || fail static 'the files the driver sources did not each run from start to end, in order, in this shell; the sourcing record says:\n%s' \
+       "$(sed 's/^/         /' "$SOURCED")"
+EOF
+)
+tok 'the driver compares the record with what its list says once the last file has run, and fails the run when they differ' \
+    "$SV_ROW" "$(grep -F -A2 '[[ $(< "$SOURCED") == "$SOURCED_WANT" ]]' "${SUITE_FILES[0]}")"
 # And the verdict takes the record again after every helper, before the two
 # verdicts the #204 section in the unsplit file holds the driver's last lines to.
 tok 'the driver takes the sourcing verdict just before the other two' \
@@ -14865,10 +14877,17 @@ printf 'row\n' >> "$SRC_FIX/headings-ledger"
 tok 'and one with a row under it is not' 'B' \
     "$(sections_without_rows "$SRC_FIX/headings" "$SRC_FIX/headings-ledger")"
 # The end-of-run file's question, which only it can ask once every row is in,
-# pinned as text so that deleting it is red here. The needle is split, so that
-# this line is not among its matches.
-armed 'the end-of-run file asks every heading this run printed for a row' \
-      "$SUITE_TEXT" '"$(sections_without_rows "$HEADINGS" "$LED''GER")"'
+# pinned as text so that deleting it is red here. The whole statement, read out
+# of that file alone: a pin of its argument would stay green with the `tok` in
+# front of it made a `:` (round 2 of the review of PR #220).
+HEADINGS_ROW=$(cat <<'EOF'
+tok 'every section heading this run printed has at least one row under it' \
+    '' "$(sections_without_rows "$HEADINGS" "$LEDGER")"
+EOF
+)
+tok 'the end-of-run file asks every heading this run printed for a row' \
+    "$HEADINGS_ROW" \
+    "$(grep -F -A1 "tok 'every section heading this run printed has at least one row under it'" "$SUITE_DIR/checks/$SUITE_LAST")"
 tok 'the headings this run printed are written down, this section'"'"'s the last so far' \
     "=== issue #204: the driver sources each file of checks/ whole, in order, in this shell ===" \
     "$(tail -n 1 "$HEADINGS" | cut -f2)"

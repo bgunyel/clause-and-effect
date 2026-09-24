@@ -195,11 +195,12 @@
 #
 # HOW A LOOP ADDS TO THE SUITE, which is the conventions and not the reasons:
 #   - A new issue's checks go in a new issue file, named by the issue, which
-#     opens with its own section heading, ends with the line `sourced_to_end`
-#     and calls it nowhere else, and is added at the end of $SUITE_CHECKS
-#     below. `source_checks` fails the run on a file under checks/ that is on
-#     no list, and on one that does not end with that line; the record fails it
-#     on a second call.
+#     opens with its own section heading, printed with `section` -- a heading
+#     printed with `echo` is one GH-204.8's check cannot see -- ends with the
+#     line `sourced_to_end` and calls it nowhere else, and is added at the end
+#     of $SUITE_CHECKS below. `source_checks` fails the run on a file under
+#     checks/ that is on no list, and on one that does not end with that line;
+#     the record fails it on a second call.
 #   - An existing issue's checks move out of the unsplit file only when a loop
 #     touches them for its own reasons.
 #   - A move keeps the same set of rows, keeps their order within the issue file
