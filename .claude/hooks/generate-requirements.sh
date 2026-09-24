@@ -33,7 +33,8 @@
 #
 # WHAT IT REFUSES, before it writes anything: a line whose first word, after
 # any indentation, is `requirement` followed by `GH-`, spelled any other way --
-# indented, unquoted, a delimiter other than REQ, a second word after the ID --
+# indented, unquoted, a delimiter other than REQ, a second word after the ID,
+# whether a space or a tab stands before it --
 # because the suite runs the file and reads what
 # bash read, and a spelling this reads differently from bash is a second
 # parser that can disagree with the first; an ID outside the grammar; an ID
@@ -55,8 +56,10 @@
 # way this does: the suite records every `requirement` call it runs and holds
 # each file to that record too, so the two readings meet in the files.
 #
-# --check writes nothing. It prints what a run would refuse and every file that
-# is not what its declaration would write, and exits 1 on either; otherwise it
+# --check writes nothing. It prints what a run would refuse, and exits 1; a
+# refusal is reported alone, because the declarations a refused run would
+# write are not settled until it is answered. With no refusal it prints every
+# file that is not what its declaration would write, and exits 1; otherwise it
 # names the generated entries, one line, and exits 0.
 set -u
 
@@ -113,7 +116,7 @@ awk -v stage="$STAGE" '
     body = body $0 "\n"; nbody++; next
   }
   /^[ \t]*requirement[ \t]+GH-/ {
-    if ($0 !~ /^requirement GH-[^ ]+ <<'"'"'REQ'"'"'$/) { problem(rel ": line " FNR ": a declaration spelled other than requirement <ID> <<'"'"'REQ'"'"': " $0); next }
+    if ($0 !~ /^requirement GH-[^ \t]+ <<'"'"'REQ'"'"'$/) { problem(rel ": line " FNR ": a declaration spelled other than requirement <ID> <<'"'"'REQ'"'"': " $0); next }
     openid = $2
     if (openid !~ /^GH-[1-9][0-9]*(\.[1-9][0-9]*)?$/) { problem(rel ": line " FNR ": " openid " is not an ID of the grammar GH-<n> or GH-<n>.<m>"); openid = "(" openid ")" }
     open = "y"; openline = FNR; body = ""; nbody = 0

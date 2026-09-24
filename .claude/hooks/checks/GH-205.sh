@@ -77,9 +77,10 @@ requirement GH-205.2 <<'REQ'
   declaration never closed; a body that is empty, holds a line that is no
   field, or carries a `generated` field of its own; a declared ID whose file
   is hand-written; and a generated file no issue file declares any more. With
-  `--check` it writes nothing, names each file that is not what its
-  declaration would write, and exits 1; and against this repository it names
-  the entries the suite ran a declaration of, and no others.
+  `--check` it writes nothing and exits 1 on a refusal, which it reports
+  alone; with none, it names each file that is not what its declaration would
+  write and exits 1. Against this repository it names the entries the suite
+  ran a declaration of, and no others.
 - from: #205
 - kind: defect-permitting
 - status: active
@@ -330,13 +331,17 @@ r205_issue "$R205/spelled/checks/GH-6.sh" <<'FIX'
 @requirement GH-6.3 extra <<'REQ'
 @requirement  GH-6.4 <<'REQ'
 FIX
-tok 'a declaration spelled each of these other ways is refused: indented, unquoted, another delimiter, a second word, a double space' \
+# A second word after a tab, which bash splits as it splits a space, written
+# with printf so that the tab is seen in this file.
+printf 'requirement GH-6.5\tjunk <<%sREQ%s\n' "'" "'" >> "$R205/spelled/checks/GH-6.sh"
+tok 'a declaration spelled each of these other ways is refused: indented, unquoted, another delimiter, a second word after a space or a tab, a double space' \
 "generate-requirements.sh: refused, and nothing was written:
   checks/GH-6.sh: line 1: a declaration spelled other than requirement <ID> <<'REQ':   requirement GH-6 <<'REQ'
   checks/GH-6.sh: line 2: a declaration spelled other than requirement <ID> <<'REQ': requirement GH-6.1 <<REQ
   checks/GH-6.sh: line 3: a declaration spelled other than requirement <ID> <<'REQ': requirement GH-6.2 <<'EOF'
   checks/GH-6.sh: line 4: a declaration spelled other than requirement <ID> <<'REQ': requirement GH-6.3 extra <<'REQ'
   checks/GH-6.sh: line 5: a declaration spelled other than requirement <ID> <<'REQ': requirement  GH-6.4 <<'REQ'
+  checks/GH-6.sh: line 6: a declaration spelled other than requirement <ID> <<'REQ': requirement GH-6.5$(printf '\t')junk <<'REQ'
 exit 1|GH-4.md GH-5.1.md GH-5.md" "$(r205_gen "$R205/spelled"; printf '|'; r205_after "$R205/spelled")"
 r205_refused grammar
 r205_issue "$R205/grammar/checks/GH-6.sh" <<'FIX'
@@ -424,6 +429,10 @@ REQ
 FIX
 tok 'and a refusal writes nothing at all, not even the file it would have rewritten' \
 'exit 1|1' "$(bash "$HOOKS/generate-requirements.sh" "$R205/partial" > /dev/null 2>&1; printf 'exit %s|' "$?"; grep -c 'stale' "$R205/partial/requirements/GH-5.md")"
+tok 'and --check reports the refusal alone, not the stale file beside it' \
+'generate-requirements.sh: refused, and nothing was written:
+  checks/GH-6.sh: line 1: GH-06 is not an ID of the grammar GH-<n> or GH-<n>.<m>
+exit 1' "$(r205_gen --check "$R205/partial")"
 tok 'a malformed argument list is a usage error, each way' '64 64' \
   "$(bash "$HOOKS/generate-requirements.sh" --bogus > /dev/null 2>&1; printf '%s ' "$?"
      bash "$HOOKS/generate-requirements.sh" "$R205/gen" "$R205/gen" > /dev/null 2>&1; printf '%s' "$?")"
