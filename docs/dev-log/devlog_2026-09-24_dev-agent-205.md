@@ -322,3 +322,62 @@ command was a compound line, so none of it ran. The push was re-run alone.
 
 As before, less #223 item 4, which the view closes. #223 also gained the
 round-3 note on the entry-field grammar's copies.
+
+# 2026-09-24 21:40 +03 — #222 review round 4 (rev-agent-205)
+
+Same branch. Code commit `f419f78` and this entry follow `243dbe9`, which
+leaves the branch eleven ahead of `origin/dev-05` (`cf73c82`, unchanged).
+
+## What the review found, and what was done
+
+No gating findings. rev-agent-205 closed G3 and G4, requested two text fixes,
+and offered a correction to a limit the previous entry understated.
+
+- **R8, taken, with a sibling.** The stale-branch remedy was still short.
+  A branch cut before #205 also appended the entry's tokens to
+  `REQUIREMENT_SHAPE` and, for an entry with variants, `INV_SCOPE`, and wrote
+  no pin, so after the three steps round 3 gave, `pins_bad` is still red. ADR
+  0005 now gives four steps. The `REQUIREMENTS_LEGACY` comment and the PR
+  body say the same. The assistant's sweep of instructions in the diff's
+  prose found the same shape in `CLAUDE.md`: its instruction for a new entry
+  said to declare it and run the generator, and did not mention `shape_pin`.
+  Following it as written leaves the entry with no pin, which `pins_bad`
+  reports. It now names the pin.
+- **R9, taken.** "An ID is never deleted" is held for the legacy set only. The
+  reviewer's m14 deleted GH-205.3 outright, with its declaration, pin and
+  file, and the suite passed. GH-205.1's note, ADR 0005's trade paragraph
+  and requirements.md's rule on IDs now say so, and point at #223, where it is
+  filed. GH-205.1's file was regenerated. The suite then required a
+  citation entry for #223, which requirements.md gained.
+- **The limit sentence, corrected.** The previous entry and the end-of-run
+  comment said that the order of `generator_view`'s arguments at its call
+  site is asked only by the fixture. The mutation harness asks it too,
+  because it runs the suite with `CHECK_HOOKS_DIR` on a copy. The assistant
+  re-measured before restating it. `mutate-hooks.sh
+  generated-entry-edited-by-hand legacy-entry-marked-generated` was run in two
+  copies taken at `243dbe9`. With the arguments swapped, both rows went from
+  caught to survived (exit 1). In the unswapped control both were caught
+  (exit 0). The reviewer described those rows as naming GH-205.2 alone. They
+  name GH-205.1 and GH-205.2. The rows naming GH-205.2 alone are the two
+  generator rows, which fixtures catch whatever the call site does. The
+  comment says which rows, and why the swap hides the mutation: the check
+  then reads the suite's own `requirements/`, which the mutation did not
+  touch.
+
+The assistant's first draft of that comment said the rows named GH-205.2
+alone, taking the reviewer's wording. The assistant then read the registry
+and corrected the draft before committing. The second draft had the mechanism
+backwards: it said the copy's own files were read. That was corrected too,
+also before committing.
+
+## Numbers
+
+- `check-hooks.sh` at `f419f78`: exit 0, 5,773 ok, ALL CHECKS PASSED. This
+  round changed text, not checks.
+- Harness, two rows in each of two copies: swapped, 2 survived; control, 2
+  caught.
+
+## Open
+
+As before. #223 now also holds the deletion of a generated ID (item 9) and
+the field-grammar disagreement the reviewer measured (item 2).
