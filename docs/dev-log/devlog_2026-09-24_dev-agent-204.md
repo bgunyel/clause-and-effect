@@ -469,3 +469,83 @@ them.
 
 - Unchanged: #212, #217, and #221. The verdict rows' tag-only read went to
   #217.
+
+## 2026-09-24 15:40 +03 — PR #220, review round 6
+
+Branch `worktree-issue-204-driver`, commits `d9f2665..4949d44` plus this entry,
+fifteen ahead of `origin/dev-05` (`6884732`). rev-agent-204's round 6 is
+[comment 5813340218](https://github.com/bgunyel/clause-and-effect/pull/220#issuecomment-5813340218),
+with four small gating items, I to L.
+
+### Correction to the round-5 entry
+
+Two decisions in the round-5 entry were written in the passive, and a decision
+needs a named agent:
+- "So the row and its fixture are dropped" should read: *the assistant dropped
+  the row and its fixture*;
+- "It was not taken" should read: *the assistant declined the cleanup*.
+
+The reviewer asked for the round-5 entry to be edited, since it is still in the
+worktree. The assistant declined to edit it and makes the correction here
+instead. `CLAUDE.md` and the dev-log README both say corrections come forward
+in the newest entry, and the README's index already has this case: "session
+1's entry stands as written, since append-only means the correction comes
+forward."
+
+### I: taken
+
+With the static row gone, four texts claimed every printed heading. They now
+say what they read, which is a heading `section` wrote down:
+- GH-204.8's statement;
+- *every heading section wrote down has at least one row under it*;
+- *the end-of-run file asks every heading section wrote down for a row*;
+- *the headings section printed are written down…*.
+
+### J: taken
+
+The driver's convention said an `echo` *opening* heading carries `REQ`. It
+does not: `source_checks` clears `REQ` before each file. The carry happens only
+past a file's opening. The convention and GH-204.8's note now say so, and name
+`printf` beside `echo`.
+
+### K: taken
+
+The trade now has its test. A fixture in the GH-204.8 block runs in the
+driver's shell, because `record` and `heading_mark` write only from there. It
+points `HEADINGS` and `LEDGER` at files of its own, prints one heading with
+`section` and one with `echo`, each with rows, and puts both variables back
+before asking three things:
+- only the `section` heading was written down;
+- the heading question finds nothing wrong;
+- the row after the `echo` heading carries the tag before it, and the row
+  after `section` carries none.
+
+The assistant wrote the expected ledger literal with tabs in it at first, and
+replaced them with `tr '\t' '|'`, so that the suite's source holds no tab.
+
+### Mistakes, and what caught them
+
+- **The first commit command was refused.** It carried the commit and the
+  mutant runs, with their `cd` into scratch clones, in one Bash command.
+  `no-commit-to-main.sh` refuses a commit it cannot place. The assistant
+  re-ran the commit on its own.
+
+### Evidence (measured)
+
+- `4949d44`: 5,731 `ok`, exit 0, `ALL CHECKS PASSED`. The three new rows are
+  the fixture's; the fixture's own rows went to its own ledger.
+- Mutants on `4949d44`, each on its own scratch clone, each diff checked to
+  have applied:
+  - `section` no longer calls `heading_mark`: exit 1, with five FAILs,
+    including the new fixture's first;
+  - `section` no longer clears `REQ`: exit 1, on the new fixture's third row
+    **alone**. Before this round nothing held that;
+  - `heading_mark` returns at once: exit 1, with four FAILs, including the new
+    fixture's first.
+
+### Open
+
+- The reviewer's behavioural comparison of printed `===` lines with
+  `$HEADINGS` is not filed. The trade is pinned, and the assistant does not
+  judge the remaining spellings worth an issue.
+- Unchanged: #212, #217, #221.
