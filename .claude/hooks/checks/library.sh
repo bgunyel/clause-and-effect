@@ -1039,24 +1039,41 @@ sections_without_rows() {  # sections_without_rows <headings record> <ledger> --
 # issue file, not as the generator reads the text, so the generator's reading
 # is not the expectation its output is held to; the generator's own check,
 # beside this one, is where the two readings meet.
+# The grammar of a generated entry's ID, for the two helpers below; the
+# generator's awk spells it again, since it is a program of its own (#223). A
+# function and not a variable, since the library defines functions and nothing
+# else.
+generated_id() {  # generated_id <ID> -- true when it is GH-<n> or GH-<n>.<m>
+  local re='^GH-[1-9][0-9]*([.][1-9][0-9]*)?$'
+  [[ $1 =~ $re ]]
+}
 generated_bad() {  # generated_bad <declared record> <requirements dir> <legacy literal>
-  local - rec id file body want seen=' ' legacy f
+  local - rec id file body want seen=' ' legacy f n
   set -f
   legacy=" $(printf '%s ' $3)"
   {
     while IFS= read -r -d '' rec; do
       id=${rec%%$'\t'*}; rec=${rec#*$'\t'}
       file=${rec%%$'\t'*}; body=${rec#*$'\t'}
-      if [[ ! $id =~ ^GH-[1-9][0-9]*(\.[1-9][0-9]*)?$ ]]; then
+      if ! generated_id "$id"; then
         printf '%s: declared in %s, and not an ID of the grammar GH-<n> or GH-<n>.<m>\n' "$id" "$file"; continue
       fi
       case "$seen" in *" $id "*) printf '%s: declared a second time, in %s\n' "$id" "$file"; continue ;; esac
       seen="$seen$id "
       case "$legacy" in *" $id "*) printf '%s: declared in %s, and a legacy entry, which stays hand-written\n' "$id" "$file"; continue ;; esac
+      # An entry of #<n> is declared in #<n>'s issue file and in no other, which
+      # is what "its issue file" means (review of PR #222, round 5).
+      n=${id#GH-}; n=${n%%.*}
+      if [[ $file != "checks/GH-$n.sh" ]]; then
+        printf '%s: declared in %s, where an entry of #%s is declared in checks/GH-%s.sh\n' "$id" "$file" "$n" "$n"; continue
+      fi
       want="### $id"$'\n'"$body- generated: $file"$'\n'
+      # Compared with cmp and not in a command substitution, which drops a NUL:
+      # a file with one inserted read as its declaration (review of PR #222,
+      # round 5).
       if [ ! -f "$2/$id.md" ]; then
         printf 'requirements/%s.md: declared in %s, and not written\n' "$id" "$file"
-      elif [[ "$(cat -- "$2/$id.md"; printf x)" != "${want}x" ]]; then
+      elif ! cmp -s -- "$2/$id.md" <(printf '%s' "$want"); then
         printf 'requirements/%s.md: not, byte for byte, its declaration in %s\n' "$id" "$file"
       fi
     done < "$1"
@@ -1089,13 +1106,14 @@ pins_bad() {  # pins_bad <declared record> <pinned record> <shape literal> <scop
   set -f
   legacy=" $(printf '%s ' $5)"
   {
-    # A declaration with no ID is skipped rather than made a subscript: an
-    # empty one is `bad array subscript`, which ends this group before it has
-    # printed a line, so every finding below goes unprinted and the run reads
-    # it as none. `generated_bad` names that declaration, as an ID out of grammar.
+    # A declaration whose ID is out of grammar is skipped, since
+    # `generated_bad` names it and no pin can make it right. The empty ID among
+    # them has to be: made a subscript it is `bad array subscript`, which ends
+    # this group before it has printed a line, so every finding below goes
+    # unprinted and the run reads it as none.
     while IFS= read -r -d '' rec; do
       id=${rec%%$'\t'*}; rec=${rec#*$'\t'}
-      [[ -n $id ]] || continue
+      generated_id "$id" || continue
       [[ -n ${declared[$id]+set} ]] || declared[$id]=${rec%%$'\t'*}
     done < "$1"
     for tok in $3; do

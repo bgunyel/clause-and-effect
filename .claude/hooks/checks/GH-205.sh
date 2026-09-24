@@ -45,9 +45,11 @@ variants_pin() {  # variants_pin '<ID>:<keyword>...' -- the variants of entries 
 requirement GH-205.1 <<'REQ'
 - text: A `GH-` entry outside the legacy set is generated. Its file under
   `requirements/` is, byte for byte, the heading `### <ID>`, the body of the
-  `requirement <ID> <<'REQ'` heredoc that declares it in an issue file as bash
-  read it when the suite ran that file, and a last field,
-  `- generated: checks/GH-<n>.sh`, naming the file. Every file outside the
+  `requirement <ID> <<'REQ'` heredoc that declares it in its issue's file as
+  bash read it when the suite ran that file, and a last field,
+  `- generated: checks/GH-<n>.sh`, naming the file. An entry of #<n>, `GH-<n>`
+  or `GH-<n>.<m>`, is declared in `checks/GH-<n>.sh` and in no other file.
+  Every file outside the
   legacy set has one declaration, and no legacy ID has any; every legacy ID
   keeps its file, and none carries a `generated` field. The legacy set is the
   130 `GH-` entries `requirements/` held at cf73c82, which the driver holds as
@@ -186,16 +188,18 @@ mkdir -p "$R205/bad/requirements"
   printf 'GH-7\tchecks/GH-8.sh\t- text: again\n\0'
   printf 'GH-07\tchecks/GH-7.sh\t- text: out of grammar\n\0'
   printf 'GH-1\tchecks/GH-7.sh\t- text: a legacy ID\n\0'
+  printf 'GH-9\tchecks/GH-7.sh\t- text: in another issue'"'"'s file\n\0'
 } > "$R205/bad/record"
 printf '### GH-7\n- text: good\n- generated: checks/GH-7.sh\n' > "$R205/bad/requirements/GH-7.md"
 printf '### GH-7.1\n- text: edited by hand\n- generated: checks/GH-7.sh\n' > "$R205/bad/requirements/GH-7.1.md"
 printf '### GH-1\n- text: legacy\n- generated: checks/GH-7.sh\n' > "$R205/bad/requirements/GH-1.md"
 printf '### GH-6\n- text: hand-written after the legacy set\n' > "$R205/bad/requirements/GH-6.md"
-tok 'generated_bad names each entry that is not its declaration, and each file outside the legacy set nothing declares' \
+tok 'generated_bad names each entry that is not its declaration or is declared outside its issue'"'"'s file, and each file outside the legacy set nothing declares' \
 'GH-07: declared in checks/GH-7.sh, and not an ID of the grammar GH-<n> or GH-<n>.<m>
 GH-1: declared in checks/GH-7.sh, and a legacy entry, which stays hand-written
 GH-2: a legacy entry with no file, where an ID is never deleted
 GH-7: declared a second time, in checks/GH-8.sh
+GH-9: declared in checks/GH-7.sh, where an entry of #9 is declared in checks/GH-9.sh
 requirements/GH-1.md: a legacy entry carrying a generated field, which only a declared entry'"'"'s file carries
 requirements/GH-6.md: outside the legacy set, and no issue file the suite ran declares it
 requirements/GH-7.1.md: not, byte for byte, its declaration in checks/GH-7.sh
@@ -211,6 +215,12 @@ tok 'a generated file that lost its last newline is not its declaration' \
   "$(generated_bad "$R205/newline/record" "$R205/newline/requirements" '')"
 printf '\n' >> "$R205/newline/requirements/GH-7.md"
 tok 'and with it back, it is' '' "$(generated_bad "$R205/newline/record" "$R205/newline/requirements" '')"
+# And a NUL, which a command substitution drops, so that a comparison read
+# through one took this file for its declaration.
+printf '### GH-7\0\n- text: good\n- generated: checks/GH-7.sh\n' > "$R205/newline/requirements/GH-7.md"
+tok 'and a NUL inserted in it is a byte that is not its declaration' \
+  'requirements/GH-7.md: not, byte for byte, its declaration in checks/GH-7.sh' \
+  "$(generated_bad "$R205/newline/record" "$R205/newline/requirements" '')"
 
 # pins_bad, against a fixture holding one of each thing it names. GH-1 is the
 # legacy set.
@@ -239,12 +249,15 @@ tok 'and with each pinned once where it is declared, and the shared literals leg
 # A declaration with no ID -- what `requirement "$UNSET"` records -- beside a
 # real pin finding. The finding is still named: an empty ID made a subscript
 # ends the helper before it prints anything, and none of the records above has
-# one. The declaration itself is `generated_bad`'s to name, as out of grammar.
+# one. The declaration itself is `generated_bad`'s to name, as out of grammar,
+# and so is one whose ID is out of grammar and not empty, which pins_bad would
+# otherwise ask for a pin no ID of that spelling can take.
 {
   cat "$R205/pins-declared"
   printf '\tchecks/GH-7.sh\t- text: no ID\n\0'
+  printf 'GH-07\tchecks/GH-7.sh\t- text: out of grammar\n\0'
 } > "$R205/pins-empty-id"
-tok 'and a declaration with no ID leaves the pin findings beside it named' \
+tok 'and a declaration with no ID, or one out of grammar, leaves the pin findings beside it named and is not itself asked for a pin' \
 'GH-9: its shape pinned in checks/GH-7.sh, and no issue file declares it' \
   "$(pins_bad "$R205/pins-empty-id" <(printf '%s\n' $'shape\tchecks/GH-7.sh\tGH-7 GH-7.1:static GH-9' $'shape\tchecks/GH-8.sh\tGH-8') \
       'US-1 GH-1:static' 'GH-1:seed' 'GH-1' 2>&1)"
@@ -294,15 +307,11 @@ tok 'a run writes each declared entry, in version order, and leaves the hand-wri
 'wrote requirements/GH-5.md
 wrote requirements/GH-5.1.md
 exit 0' "$(r205_gen "$R205/gen")"
+# Read through od, since a command substitution drops a NUL and the label says
+# byte for byte.
 tok 'the file is the heading, the fields byte for byte, and the issue file named last' \
-'### GH-5.1
-- text: a sub-entry,
-  continued
-- from: the fixture
-- generated: checks/GH-5.sh
-|### GH-4
-- text: hand-written
-|' "$(cat "$R205/gen/requirements/GH-5.1.md"; printf '|'; cat "$R205/gen/requirements/GH-4.md"; printf '|')"
+  "$(printf '### GH-5.1\n- text: a sub-entry,\n  continued\n- from: the fixture\n- generated: checks/GH-5.sh\n|### GH-4\n- text: hand-written\n|' | od -c)" \
+  "$({ cat "$R205/gen/requirements/GH-5.1.md"; printf '|'; cat "$R205/gen/requirements/GH-4.md"; printf '|'; } | od -c)"
 tok 'a second run writes nothing' \
 'generate-requirements.sh: every generated entry is its declaration; nothing was written
 exit 0' "$(r205_gen "$R205/gen")"

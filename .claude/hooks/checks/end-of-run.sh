@@ -1705,7 +1705,7 @@ R205_DECLARED_IDS=$(while IFS= read -r -d '' R205_REC; do printf '%s\n' "${R205_
                       | LC_ALL=C sort -V | tr '\n' ' ' | sed 's/ $//')
 [ -n "$R205_DECLARED_IDS" ] \
   || fail static 'no issue file declared an entry, so the checks below ask about none'
-tok 'every GH- entry outside the legacy set is, byte for byte, its declaration as this run read it, and every legacy entry is a hand-written file' \
+tok 'every GH- entry outside the legacy set is, byte for byte, its declaration as this run read it, in its own issue'"'"'s file, and every legacy entry is a hand-written file' \
   '' "$(generated_bad "$DECLARED" "$HOOKS/requirements" "$REQUIREMENTS_LEGACY")"
 # The script is the judged one, and it is run over the issue files this run
 # sourced and the judged requirements/, which `generator_view` puts in one

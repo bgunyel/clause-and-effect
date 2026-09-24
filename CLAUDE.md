@@ -163,7 +163,9 @@ that closes every open pull request. Its evidence is the check suite —
 `bash .claude/hooks/check-hooks.sh` — and no fix lands without a check that
 fails without the fix. That fix also declares its issue's `GH-<n>` entry in
 its issue file, beside the check it tags, and pins its shape there with
-`shape_pin`; `bash .claude/hooks/generate-requirements.sh` writes the entry's file,
+`shape_pin`, and its `variants` keyword with `variants_pin` when the entry is
+in the invariance families' scope; `bash .claude/hooks/generate-requirements.sh`
+writes the entry's file,
 `.claude/hooks/requirements/GH-<n>.md`, from the declaration, so the suite's
 coverage check can see the requirement it establishes; the entries written
 before that (#205) stay hand-written files, and the `US-`/`FR-` boundary stays
