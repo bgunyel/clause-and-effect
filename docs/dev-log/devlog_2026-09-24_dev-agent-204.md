@@ -275,3 +275,64 @@ for a new issue file.
 
 - #221 still holds round 1's Findings 2 and 3.
 - The reviewer's declined simplifications were not taken.
+
+## 2026-09-24 13:30 +03 — PR #220, review round 3
+
+Branch `worktree-issue-204-driver`, commits `c65e040..3941e7b` plus this entry,
+nine ahead of `origin/dev-05` (`6884732`). rev-agent-204's round 3 is
+[comment 5811959759](https://github.com/bgunyel/clause-and-effect/pull/220#issuecomment-5811959759).
+It corrects its own round 2: on a sound run, the mutated driver row survives
+green, which the assistant's round-2 measurement had shown. Nothing is gating.
+
+### C: taken, with the behavioural check the reviewer offered
+
+A text pin shows a statement is written, not that it runs. The reviewer's
+mutants each stayed green at `c65e040`:
+- W1, a `||` ending the line before the driver row;
+- W2, the same before the end-of-run heading row;
+- W3, the heading row's `req` deleted.
+
+The limit is stated at both pins. The assistant also took the optional
+behavioural read. The end-of-run file's last check now reads `tail -n 4` of the
+ledger, not `tail -n 3`, and expects the heading row's `GH-204.8` first. At
+`3941e7b`, W2 and W3 go red on it, and W1 stays green. W1 is accepted, since the
+driver row records nothing on a sound run and `SOURCED_VERDICT_CODE` is its
+backstop.
+
+### D: taken, and the optional static check with it
+
+A heading printed with `echo` also leaves `REQ` uncleared. That second effect is
+now named in GH-204.8 and in the driver's convention. The assistant took the
+optional static row as well. The reviewer called it one line, and it holds a
+trade:
+- The first pattern the assistant wrote matched only `echo` or `printf`
+  followed directly by the `===`. `printf '%s\n' '=== …'` is at least as
+  likely a spelling, and it passed. The pattern now also takes a `%s\n` format.
+  Tried on a sample file, it matches the three heading shapes and not
+  `printf 'section "=== three ==="'`, which is the shape the #204 step-1
+  fixtures write.
+- A heading printed from a variable is named as unseen.
+
+### Mistakes, and what caught them
+
+- **The first echo-heading mutants proved nothing specific.** They went red
+  for a second reason: the heading cited `#999`, and the #104 citation audit
+  refused it. The assistant re-ran both with an uncited heading.
+
+### Evidence (measured)
+
+- `3941e7b`: 5,729 `ok`, exit 0, `ALL CHECKS PASSED`, one row more than
+  round 2: the static heading row.
+- Mutants, each on its own scratch clone, each diff checked to have applied:
+  - W1 at `3941e7b`: exit 0, `ALL CHECKS PASSED`. This is the accepted limit.
+  - W2 at `3941e7b`: exit 1, on the `tail -n 4` row alone.
+  - W3 at `3941e7b`: exit 1, on the `tail -n 4` row alone.
+  - `echo "=== an echo heading ==="`: exit 0 at `c65e040`; exit 1 at
+    `3941e7b`, on the new row alone.
+  - `printf '%s\n' '=== a printf heading ==='`: exit 0 at `c65e040`; exit 1 at
+    `3941e7b`, on the new row alone.
+
+### Open
+
+- W3's class is #212's. The step-1 fragment pins and the `tok`+`grep` idiom are
+  #217's. The `printf -v` evasion of the `SOURCED_WANT` pin is #221's.
