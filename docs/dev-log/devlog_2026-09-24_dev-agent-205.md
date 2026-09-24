@@ -124,3 +124,73 @@ The assistant took two defaults and stated them to Bertan before building. Q3
 - **#211** closes with this pull request's merge. A `Closes` keyword does not
   link on a `dev-NN` base, so it needs closing by hand or through
   `addCloseIssueReferences`.
+
+# 2026-09-24 19:45 +03 — #222 review round 1 (rev-agent-205)
+
+Same branch, same worktree. This round's code commit and this entry follow
+`8f97885`, which leaves the branch five ahead of `origin/dev-05` (`cf73c82`,
+unchanged since the branch was cut).
+
+## What the review found, and what was done
+
+rev-agent-205 posted one gating finding and five requested ones, plus #223 for
+the narrow items. The assistant reproduced G1 before fixing it, and
+mutation-checked every new row in a scratch copy of the worktree. Every
+figure below was measured this session.
+
+- **G1, taken.** The previous entry says the bad-subscript error in
+  `pins_bad` was fixed in `1f5c7b3`. That was half true, and the assistant
+  wrote it: the pin loop was guarded, and the declaration loop beside it was
+  not. A record with an empty ID, which is what `requirement "$UNSET"` writes,
+  ended the `{ … } | sort` group with `declared: bad array subscript` before
+  it printed a line. Probed directly, a fixture with three pin findings printed
+  none and returned 0. The declaration loop now skips an empty ID, which
+  `generated_bad` already names as out of grammar. A new fixture row puts an
+  empty-ID record beside a real pin finding. Removing the guard turns that
+  row, and only that row, red. The reviewer's m9b (a shape pin moved into
+  `REQUIREMENT_SHAPE`, plus an empty-ID declaration) now fails 3 rows, the
+  `pins_bad` row among them, where it failed 2 before.
+- **R1, taken.** ADR 0005 still claimed the generator refuses "every spelling
+  other than" the canonical one. It now states the guard as the script header
+  does, and says what a call the guard does not read (`x=1 requirement GH-7`)
+  meets instead. The fixture label "any other way" became "each of these other
+  ways".
+- **R2, taken.** `lib_misplaced` asks its question of each function by itself,
+  so moving all three at once is red whenever the new caller does not call
+  `variants_pin`. The driver's conventions and ADR 0005 now say each function
+  moves on its own second caller. The previous entry's Open list repeats the
+  "moves all three" claim; this entry is its correction.
+- **R3, taken.** A fixture now sources a file in `$R205` that calls
+  `requirement`, `shape_pin` and `variants_pin`, and it expects that file's
+  path in both records. Breaking each of the three `BASH_SOURCE[1]` into `[0]`
+  is red on that row, 1 FAIL each. Before this fixture, m11 passed the whole
+  suite.
+- **R4, taken.** The families-scope row's expected side splits and sorts the
+  pins with `awk | sort` and no longer calls `legacy_tokens`. m12
+  (`legacy_tokens`'s `out` branch prints nothing) is still red on the fixture
+  row, 1 FAIL.
+- **R5, declined.** `shape_pin` and `variants_pin` are two names because a
+  declaring file writes them. A shared body under both would move the caller
+  to `BASH_SOURCE[2]`, and R3 just showed that this index is the detail that
+  had no check. `generated_bad`'s narrower glob is backed by #200's
+  misnamed-file check, as the reviewer notes, and a `grep` per legacy file is
+  130 small processes a run.
+
+A sentinel line on any abort of the two helpers was considered as the
+general fix for G1's class, and the assistant rejected it. Once the empty ID
+is guarded, no input to either helper is known to end the group early, so the
+sentinel would be an assertion nothing can drive.
+
+## Numbers
+
+- `bash .claude/hooks/check-hooks.sh` at this round's code commit: exit 0,
+  5,766 ok, ALL CHECKS PASSED. That is 5,764 plus the two new rows.
+- Mutants, each one whole suite run in its own copy: unguarded declaration
+  loop 1 FAIL, m9b 3 FAIL, `BASH_SOURCE[0]` in `requirement`, `shape_pin` and
+  `variants_pin` 1 FAIL each, m12 1 FAIL.
+
+## Open
+
+Everything from the previous entry's Open list stands, except its line about
+the library move, which R2 corrected above. #223 holds the reviewer's five
+narrow items.
