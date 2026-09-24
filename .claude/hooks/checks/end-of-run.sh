@@ -1833,18 +1833,22 @@ else
   pass static 'the not-found record is where the head put it, so what the handler wrote is what the verdict reads'
 fi
 # EACH OF THE VERDICT'S QUESTIONS HAS ITS ROW, read back from the ledger: the
-# last three rows recorded are the three above, under the requirement each
-# establishes -- so a question with no row, or a row under the wrong tag, is
-# red here and not only a line on stderr. And the heading question's row before
-# them: a text pin shows that it is written, and only the ledger that it ran,
-# under GH-204.8 -- a `||` ending the line before it, or its `req` lost, left
-# the pin green (round 3 of the review of PR #220).
+# last four rows recorded are the heading question's and the verdict's three,
+# above, each under the requirement it establishes -- so a question with no
+# row, or a row under the wrong tag, is red here and not only a line on stderr.
+# The heading question is among them because a text pin shows that it is
+# written, and only the ledger that it ran, under GH-204.8 -- a `||` ending the
+# line before it, or its `req` lost, left the pin green (round 3 of the review
+# of PR #220). Its label is read as well as its tag, so the GH-204.8 row in that
+# place is that question's and not another's (round 4).
 req GH-204.1 GH-204.5 GH-204.8
 tok 'the heading question and the verdict'"'"'s three questions end the ledger, each as a row under its own requirement' \
 'GH-204.8
 GH-204.1
 GH-204.5
-GH-204.5' "$(tail -n 4 "$LEDGER" | cut -f1)"
+GH-204.5
+every section heading this run printed has at least one row under it' \
+    "$(tail -n 4 "$LEDGER" | cut -f1; tail -n 4 "$LEDGER" | head -n 1 | cut -f4)"
 
 # --matrix: every requirement, from the record as it stands now, the findings
 # above included, and then the verdict line the run would have printed.

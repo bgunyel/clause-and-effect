@@ -198,7 +198,9 @@
 #     opens with its own section heading, printed with `section` -- a heading
 #     printed with `echo` is not written down, so GH-204.8's check counts its
 #     rows for the heading before it, and does not clear REQ, so the last tag
-#     before it carries into its rows -- ends with the line `sourced_to_end`
+#     before it carries into its rows; the suite refuses a line that opens with
+#     `echo` or `printf` and prints a `===`, and sees no other spelling --
+#     ends with the line `sourced_to_end`
 #     and calls it nowhere else, and is added at the end of $SUITE_CHECKS
 #     below. `source_checks` fails the run on a file under
 #     checks/ that is on no list, and on one that does not end with that line;

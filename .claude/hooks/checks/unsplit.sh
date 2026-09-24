@@ -14899,13 +14899,43 @@ tok 'the end-of-run file asks every heading this run printed for a row' \
 tok 'the headings this run printed are written down, this section'"'"'s the last so far' \
     "=== issue #204: the driver sources each file of checks/ whole, in order, in this shell ===" \
     "$(tail -n 1 "$HEADINGS" | cut -f2)"
-# And every `===` heading goes through `section`, which writes it down and
-# clears REQ. One printed with `echo` or `printf` would be neither: the check
-# above would count its rows for the heading before it, and the tag the rows
-# before it ended under would carry into its own (round 3 of the review of PR
-# #220). Read as text, so what it sees is a line that opens with `echo` or
-# `printf`, then options or a `%s\n` format, then a literal `===`; a heading
-# printed from a variable is not seen.
-tok 'no file of the suite prints a === heading other than through section' \
-    '' "$(grep -nE '^[[:space:]]*(echo|printf)[[:space:]]+(-[a-zA-Z]+[[:space:]]+|['"'"'"]%s\\n['"'"'"][[:space:]]+)*['"'"'"]?===' "${SUITE_FILES[@]}")"
+# And a `===` heading is printed through `section`, which writes it down and
+# clears REQ. One printed with `echo` or `printf` would do neither: the
+# end-of-run file's heading question would count its rows for the heading
+# before it, and the tag the rows before it ended under would carry into its
+# own (round 3 of the review of PR #220). Read as text, and what it reads is
+# narrower than every spelling, so the label says what it reads: a line that
+# opens with `echo` or `printf`, then any options or a `%s\n` format, then a
+# literal `===`, with any `\n` before it. That is the spelling of the `---`
+# subheadings, which is the one a heading would be written by copying. What it
+# does not see, pinned by the fixture as unseen: a heading printed after a
+# `;`, a `&&` or a `{`, after `command`, or from a variable (round 4). And a
+# fixture line that writes a `===` line to a file with an `echo` or `printf` at
+# the start of its own line would be refused, although it prints no heading.
+ECHO_HEADING_RE='^[[:space:]]*(echo|printf)[[:space:]]+(-[-a-zA-Z]+[[:space:]]+|['"'"'"]%s\\n['"'"'"][[:space:]]+)*['"'"'"]?(\\n)*==='
+# Driven both ways first, against a file whose every answer is written here:
+# the spellings it refuses, and those it passes -- `section` itself, the #204
+# step-1 fixture shape, a `---` subheading, and each shape it does not see.
+printf '%s\n' \
+  'echo '"'"'=== a ==='"'"'' \
+  '  printf '"'"'%s\n'"'"' "=== b ==="' \
+  'echo -e "\n=== c ==="' \
+  'printf -- '"'"'=== d ===\n'"'"'' \
+  'printf '"'"'\n=== e ===\n'"'"'' \
+  'section "=== f ==="' \
+  'printf '"'"'section "=== g ==="\n'"'"'' \
+  'echo "--- h ---"' \
+  'echo; echo "=== i ==="' \
+  '[ -n x ] && echo "=== j ==="' \
+  '{ echo "=== k ==="; }' \
+  'command printf '"'"'%s\n'"'"' '"'"'=== l ==='"'"'' > "$SRC_FIX/echo-headings.sh"
+tok 'a line that opens with echo or printf and prints a === heading is found, and the spellings it does not read are not' \
+'1:echo '"'"'=== a ==='"'"'
+2:  printf '"'"'%s\n'"'"' "=== b ==="
+3:echo -e "\n=== c ==="
+4:printf -- '"'"'=== d ===\n'"'"'
+5:printf '"'"'\n=== e ===\n'"'"'' \
+    "$(grep -nE "$ECHO_HEADING_RE" "$SRC_FIX/echo-headings.sh")"
+tok 'no line of the suite that opens with echo or printf prints a === heading' \
+    '' "$(grep -nE "$ECHO_HEADING_RE" "${SUITE_FILES[@]}")"
 sourced_to_end
