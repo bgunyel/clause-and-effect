@@ -411,3 +411,61 @@ the heading row's label.
 ### Open
 
 - Unchanged from round 3: #212, #217 and #221.
+
+## 2026-09-24 15:00 +03 — PR #220, review round 5
+
+Branch `worktree-issue-204-driver`, commits `79669c7..9f9931f` plus this entry,
+thirteen ahead of `origin/dev-05` (`6884732`). rev-agent-204's round 5 is
+[comment 5812956923](https://github.com/bgunyel/clause-and-effect/pull/220#issuecomment-5812956923),
+with two gating items, G and H.
+
+### G: the static heading row is dropped
+
+The label from round 4 was still false for a line it named: the reviewer
+measured `printf '%s\n\n' '=== zz ==='` printing a heading past it green. The
+reviewer asked for the claim to be bounded or the row dropped, and preferred
+dropping.
+
+The assistant first tried bounding it. The only label true by construction was
+"no line matches `ECHO_HEADING_RE`", which tells a reader nothing. "A spelling
+its fixture refuses" is as vague as the label it would replace. So the row and
+its fixture are dropped. The assistant's round-3 addition cost three rounds and
+closed nothing that stayed closed.
+
+The trade is recorded in GH-204.8's note and in the driver's convention:
+nothing refuses a heading printed with `echo`. It was measured as well. At
+`9f9931f`, `echo "=== an echo heading ==="` prints its heading, and the run
+exits 0 with `ALL CHECKS PASSED`. No check pins that it passes, because such a
+check would be a text rule of the kind just dropped.
+
+### H: taken
+
+Three descriptions said the ledger read took the tag alone, after round 4 made
+it take the label too:
+- the row's own label, which now ends *the heading question's under its own
+  label*;
+- the heading question's comment in the end-of-run file;
+- the text pin's comment in `unsplit.sh`.
+
+The assistant also reflowed the driver's new-issue-file convention, which its
+round-3 and round-4 edits had left with short, ragged lines.
+
+The reviewer offered a cleanup, reading `tail -n 4` once instead of twice. It
+was not taken: the two reads are plain, and the ledger does not change between
+them.
+
+### Evidence (measured)
+
+- `9f9931f`: 5,728 `ok`, exit 0, `ALL CHECKS PASSED`, two rows fewer than
+  round 4, the dropped row and its fixture.
+- Mutants on `9f9931f`, each on its own scratch clone, each diff checked to
+  have applied:
+  - `echo "=== an echo heading ==="`: exit 0, one heading printed. This is the
+    trade;
+  - W2 plus a stand-in `GH-204.8` row: exit 1, on the ledger read;
+  - W3: exit 1, on the ledger read.
+
+### Open
+
+- Unchanged: #212, #217, and #221. The verdict rows' tag-only read went to
+  #217.
