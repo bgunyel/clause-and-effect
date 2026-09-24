@@ -1024,3 +1024,118 @@ sections_without_rows() {  # sections_without_rows <headings record> <ledger> --
     { at[NR] = $1; name[NR] = $2 }
     END { for (i = 1; i <= NR; i++) if (((i < NR) ? at[i + 1] : total) == at[i]) print name[i] }' "$1"
 }
+
+# THE GENERATED ENTRIES (#205). A `GH-` entry outside the legacy set is declared
+# by `requirement` in an issue file, and its file under requirements/ is written
+# from that declaration by generate-requirements.sh. These two read the record
+# the run kept of what it declared and pinned -- $DECLARED, a record per
+# `requirement` call, `<ID> TAB <issue file> TAB <body>` ended by a NUL, and
+# $PINNED, a line per `shape_pin` or `variants_pin` call, `<shape|variants> TAB
+# <issue file> TAB <tokens>` -- and print what does not hold, a line each,
+# sorted, and nothing when all of it does. Each is driven against a fixture in
+# the #205 issue file, and against this repository at the end of the run.
+#
+# Each file is held to the declaration as BASH read it when the suite ran the
+# issue file, not as the generator reads the text, so the generator's reading
+# is not the expectation its output is held to; the generator's own check,
+# beside this one, is where the two readings meet.
+generated_bad() {  # generated_bad <declared record> <requirements dir> <legacy literal>
+  local - rec id file body want seen=' ' legacy f
+  set -f
+  legacy=" $(printf '%s ' $3)"
+  {
+    while IFS= read -r -d '' rec; do
+      id=${rec%%$'\t'*}; rec=${rec#*$'\t'}
+      file=${rec%%$'\t'*}; body=${rec#*$'\t'}
+      if [[ ! $id =~ ^GH-[1-9][0-9]*(\.[1-9][0-9]*)?$ ]]; then
+        printf '%s: declared in %s, and not an ID of the grammar GH-<n> or GH-<n>.<m>\n' "$id" "$file"; continue
+      fi
+      case "$seen" in *" $id "*) printf '%s: declared a second time, in %s\n' "$id" "$file"; continue ;; esac
+      seen="$seen$id "
+      case "$legacy" in *" $id "*) printf '%s: declared in %s, and a legacy entry, which stays hand-written\n' "$id" "$file"; continue ;; esac
+      want="### $id"$'\n'"$body- generated: $file"$'\n'
+      if [ ! -f "$2/$id.md" ]; then
+        printf 'requirements/%s.md: declared in %s, and not written\n' "$id" "$file"
+      elif [[ "$(cat -- "$2/$id.md"; printf x)" != "${want}x" ]]; then
+        printf 'requirements/%s.md: not, byte for byte, its declaration in %s\n' "$id" "$file"
+      fi
+    done < "$1"
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      id=${f%.md}
+      case "$legacy" in
+        *" $id "*) grep -q '^- generated:' -- "$2/$f" \
+                     && printf 'requirements/%s: a legacy entry carrying a generated field, which only a declared entry'"'"'s file carries\n' "$f" ;;
+        *) case "$seen" in
+             *" $id "*) ;;
+             *) printf 'requirements/%s: outside the legacy set, and no issue file the suite ran declares it\n' "$f" ;;
+           esac ;;
+      esac
+    done < <(set +f; cd -- "$2" 2>/dev/null && for f in GH-*.md; do [ -f "$f" ] && printf '%s\n' "$f"; done)
+    for id in $3; do
+      [ -f "$2/$id.md" ] || printf '%s: a legacy entry with no file, where an ID is never deleted\n' "$id"
+    done
+  } | LC_ALL=C sort
+}
+# What the pins get wrong: a generated entry in either shared literal, which is
+# the hunk every loop edited until the pins (#211); a pin naming an entry no
+# issue file declares, or one another issue file declares; an entry pinned twice
+# of one kind; and a declared entry with no shape pin. Whether the pinned tokens
+# are what the entries say is the comparison each shared literal already had,
+# which the end of the run hands them to.
+pins_bad() {  # pins_bad <declared record> <pinned record> <shape literal> <scope literal> <legacy literal>
+  local - rec id file kind tok legacy
+  local -A declared=() pinned=()
+  set -f
+  legacy=" $(printf '%s ' $5)"
+  {
+    while IFS= read -r -d '' rec; do
+      id=${rec%%$'\t'*}; rec=${rec#*$'\t'}
+      [[ -n ${declared[$id]+set} ]] || declared[$id]=${rec%%$'\t'*}
+    done < "$1"
+    for tok in $3; do
+      id=${tok%%:*}
+      [[ $id == GH-* && $legacy != *" $id "* ]] \
+        && printf '%s: in REQUIREMENT_SHAPE, which holds the legacy entries; a generated entry'"'"'s shape is pinned in the issue file that declares it\n' "$id"
+    done
+    for tok in $4; do
+      id=${tok%%:*}
+      [[ $id == GH-* && $legacy != *" $id "* ]] \
+        && printf '%s: in INV_SCOPE, which holds the legacy entries; a generated entry'"'"'s variants are pinned in the issue file that declares it\n' "$id"
+    done
+    while IFS=$'\t' read -r kind file rec; do
+      for tok in $rec; do
+        id=${tok%%:*}
+        if [[ -z ${declared[$id]+set} ]]; then
+          printf '%s: its %s pinned in %s, and no issue file declares it\n' "$id" "$kind" "$file"
+        elif [[ ${declared[$id]} != "$file" ]]; then
+          printf '%s: its %s pinned in %s, and declared in %s, where its pin belongs\n' "$id" "$kind" "$file" "${declared[$id]}"
+        fi
+        if [[ -n ${pinned[$kind:$id]+set} ]]; then
+          printf '%s: its %s pinned a second time, in %s\n' "$id" "$kind" "$file"
+        fi
+        pinned[$kind:$id]=1
+      done
+    done < "$2"
+    for id in "${!declared[@]}"; do
+      [[ $legacy == *" $id "* || -n ${pinned[shape:$id]+set} ]] \
+        || printf '%s: declared in %s, and its shape pinned nowhere\n' "$id" "${declared[$id]}"
+    done
+  } | LC_ALL=C sort
+}
+# The tokens of a shape or scope literal whose ID is in the legacy set, or is
+# not, sorted and a space after each: how the #141 comparison keeps to the
+# legacy entries and the end of the run to the generated ones, since the
+# derivation reads both.
+legacy_tokens() {  # legacy_tokens <in|out> <legacy literal> <tokens>
+  local - tok legacy
+  set -f
+  legacy=" $(printf '%s ' $2)"
+  for tok in $3; do
+    if [[ $legacy == *" ${tok%%:*} "* ]]; then
+      [ "$1" = in ] && printf '%s\n' "$tok"
+    else
+      [ "$1" = out ] && printf '%s\n' "$tok"
+    fi
+  done | LC_ALL=C sort | tr '\n' ' '
+}

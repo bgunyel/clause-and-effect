@@ -18,7 +18,10 @@
 # Bertan's review of PR #142, contradicting the harness's own header and
 # CLAUDE.md both. And split-requirements.sh, which moves `GH-` entries out of
 # requirements.md into a file each and which nothing runs for you either: it is
-# run here only against fixtures, in the #200 section.
+# run here only against fixtures, in the #200 section. And
+# generate-requirements.sh, which writes the `GH-` entries the issue files
+# declare into that directory, and which this suite runs with --check against
+# fixtures and against this repository (#205).
 # Most checks run a hook as a process and read
 # its verdict; the rest read one of these files, and each kind is introduced
 # where it begins. Every check carries the IDs of the requirements it
@@ -217,6 +220,14 @@
 #     tags. Coverage is a property of the tags in the ledger, never of which
 #     file a check is in, so a check tagged GH-148 is not moved into a GH-148
 #     file for its tag.
+#   - A new `GH-` entry is declared in the issue file whose checks establish
+#     it, with `requirement <ID> <<'REQ'` at the start of a line and its fields
+#     as the body, and its shape is pinned there too, with `shape_pin` -- and
+#     its `variants` keyword with `variants_pin`, when it is in the invariance
+#     families' scope. Its file under requirements/ is written by
+#     `bash .claude/hooks/generate-requirements.sh` and never by hand, and no
+#     token of it goes into REQUIREMENT_SHAPE or INV_SCOPE, which hold the
+#     entries written before #205 (#205).
 #
 # Run: bash .claude/hooks/check-hooks.sh
 #      bash .claude/hooks/check-hooks.sh --matrix   the requirements matrix, issue #104
@@ -367,7 +378,7 @@ RAN=
 # every check below a `command not found`, which prints no FAIL and sets no
 # FAILED -- a green run having asked nothing -- so it stops the run instead.
 SUITE_LIBRARY=library.sh
-SUITE_CHECKS="unsplit.sh"
+SUITE_CHECKS="unsplit.sh GH-205.sh"
 SUITE_LAST=end-of-run.sh
 SUITE_SOURCED=
 for f in $SUITE_LIBRARY $SUITE_CHECKS $SUITE_LAST; do
@@ -461,6 +472,14 @@ RAN="$FIXTURES/ran"
 # printed; see `heading_mark` in the library.
 HEADINGS="$FIXTURES/headings"
 : > "$HEADINGS"
+# What the issue files declared and pinned (#205): a record per `requirement`
+# call and a line per `shape_pin` or `variants_pin` call, which the end of the
+# run holds the files under requirements/ and the shared literals to. See
+# `generated_bad` in the library for what each holds.
+DECLARED="$FIXTURES/declared"
+: > "$DECLARED"
+PINNED="$FIXTURES/pinned"
+: > "$PINNED"
 NOT_FOUND="$FIXTURES/not-found"
 # Where the verdict expects the record to be. The GH-204.5 self-test points
 # $NOT_FOUND elsewhere and puts it back. A section that copied that and did not
@@ -760,6 +779,33 @@ GH-137.2:3816430604:1859 GH-139:2474037372:4416 GH-141:4095480653:1665
 GH-143.4:1351248197:1919 GH-143.5:2325415628:855 GH-148:2277754167:7215
 GH-155.1:3143088805:5291 GH-156:1579607799:1497 GH-164:1173286345:555
 GH-167:3774825998:1365 GH-171:1548953849:1055 GH-175:1964502293:1348
+'
+
+# THE LEGACY SET (#205): every `GH-` entry requirements/ held at cf73c82, when
+# #205 made a new entry a declaration in its issue file and its file a thing
+# generated from it. These stay hand-written, and none is rewritten, migrated
+# or declared; an entry outside them is generated, or the run is red. The list
+# never grows -- a branch cut before #205 that adds a hand-written entry turns
+# it into a declaration when it merges across -- so no loop edits this, and
+# the #205 issue file holds it to its count and its checksum. Here and not in
+# that file because the #141 section in the unsplit file, sourced before any
+# issue file, reads it too.
+REQUIREMENTS_LEGACY='
+GH-43.1 GH-43.2 GH-43.3 GH-43.4 GH-43.5 GH-43.6 GH-44.1 GH-44.2 GH-44.3
+GH-44.4 GH-44.5 GH-44.6 GH-44.7 GH-47.1 GH-47.2 GH-50.1 GH-50.2 GH-50.3
+GH-51.1 GH-51.2 GH-58.1 GH-58.2 GH-61 GH-62 GH-63 GH-68.1 GH-68.2 GH-68.3
+GH-69.1 GH-69.2 GH-69.3 GH-70.1 GH-70.2 GH-70.3 GH-71 GH-72 GH-73 GH-79.1
+GH-79.2 GH-79.3 GH-79.4 GH-84.1 GH-84.2 GH-84.3 GH-94.1 GH-94.2 GH-94.3
+GH-94.4 GH-95.1 GH-95.2 GH-96.1 GH-96.2 GH-96.3 GH-97.1 GH-97.2 GH-98 GH-99.1
+GH-99.2 GH-99.3 GH-100 GH-101 GH-102 GH-104.1 GH-104.2 GH-104.3 GH-104.4
+GH-104.5 GH-106 GH-107.1 GH-107.2 GH-108.1 GH-108.2 GH-108.3 GH-108.4
+GH-108.5 GH-108.6 GH-108.7 GH-108.8 GH-108.9 GH-108.10 GH-109.1 GH-109.2
+GH-109.3 GH-109.4 GH-109.5 GH-117 GH-117.1 GH-118 GH-124 GH-127 GH-128 GH-130
+GH-130.1 GH-130.2 GH-130.3 GH-130.4 GH-130.5 GH-130.6 GH-131 GH-133 GH-134
+GH-134.1 GH-135 GH-136 GH-137.1 GH-137.2 GH-139 GH-141 GH-143.4 GH-143.5
+GH-148 GH-155.1 GH-156 GH-164 GH-167 GH-171 GH-175 GH-200.1 GH-200.2 GH-200.3
+GH-200.4 GH-200.5 GH-204.1 GH-204.2 GH-204.3 GH-204.4 GH-204.5 GH-204.6
+GH-204.7 GH-204.8
 '
 
 # THE CHECKS, sourced into this shell: $SUITE_CHECKS in the order it is written,

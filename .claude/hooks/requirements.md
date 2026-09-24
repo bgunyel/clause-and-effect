@@ -22,11 +22,13 @@ under `checks/` that it sources (#204), and where this file says
 **IDs are never renumbered and never reused.** A requirement that stops being
 true is marked, never deleted: its `status` says what became of it. A new `US-`
 or `FR-` requirement is appended at the end of its family; a new `GH-` one is a
-new file, `requirements/<ID>.md`. So an ID cited in an issue, a commit or a
-check means the same thing for as long as this repository exists.
+new file, `requirements/<ID>.md`, generated from its declaration (below). So an
+ID cited in an issue, a commit or a check means the same thing for as long as
+this repository exists.
 
-**A pull request that fixes a hook defect adds its `GH-<n>` entry**, as a file
-of its own under `requirements/`, and tags the check that fails without the fix
+**A pull request that fixes a hook defect adds its `GH-<n>` entry**, declared
+in its issue file and written to a file of its own under `requirements/` by
+`generate-requirements.sh`, and tags the check that fails without the fix
 (Q16). A pull request carries no ID of its own; its issue does. This is what
 keeps the matrix whole after #103's work ends, and the suite holds half of it:
 every `#<n>` cited in `check-hooks.sh` must have an entry, here or under
@@ -69,6 +71,24 @@ the order `--matrix` presents them in. `split-requirements.sh` moves any `GH-`
 entry found in this file into its own, and refuses to overwrite a file that
 holds something else.
 
+**A `GH-` entry written after #205 is declared, and its file is generated.**
+The issue file whose checks establish it, `checks/GH-<n>.sh`, declares it with
+a heredoc at the start of a line, `requirement <ID> <<'REQ'`, whose body is the
+entry's fields in the grammar below; `bash .claude/hooks/generate-requirements.sh`
+writes `requirements/<ID>.md` from it -- the heading, the body byte for byte,
+and a last field, `generated`, naming the issue file -- and a file carrying
+that field is never edited by hand. The same issue file pins the entry's shape
+with `shape_pin`, and its `variants` keyword with `variants_pin` when it has
+one, in the tokens `REQUIREMENT_SHAPE` and `INV_SCOPE` use; those two literals
+hold the entries written before #205 and no others. Those entries -- the
+legacy set, which the driver holds as `REQUIREMENTS_LEGACY` and which never
+grows -- stay hand-written: none is rewritten, migrated or declared, and an
+entry outside it that is not its declaration is red. The residue this leaves
+with no check site is not a list of its own: a `gap` or `seam: none` entry is
+declared in the issue file of the work that wrote it, like any other, with no
+check tagged. Why this form and what was rejected is
+`docs/adr/0005-generated-requirement-entries.md`.
+
 #37–#41 get no IDs of their own, because their content is the FRs (Q12). Their
 acceptance criteria are quoted at the foot of this file, each mapped to the IDs
 that carry it or marked dropped (Q23).
@@ -101,6 +121,8 @@ field, a value continuing onto lines indented by two spaces.
   `seed`, `transformation: <name> …` and `none: <reason>`. See *What the
   invariance families seed* (#141).
 - `note`: anything a reader of the entry needs that is not one of the above.
+- `generated`: the issue file an entry is declared in, written last by
+  `generate-requirements.sh` and on no hand-written entry (#205).
 
 ## What covers a requirement
 
@@ -145,7 +167,8 @@ The suite fails on each of these, and `--matrix` shows the rest:
   after its heading that is no field of the entry, an ID there outside the
   `GH-` grammar, and a name there that is not a regular file;
 - a check recording a direction other than refuse, permit and static;
-- a shape other than the one the suite holds as a literal: every entry by ID,
+- a shape other than the one the suite holds as a literal -- `REQUIREMENT_SHAPE`
+  and the shape pins of the issue files (#205): every entry by ID,
   with whatever takes it off the both-directions rule beside it -- a status
   other than `active`, a declared `direction`, and `seam: none` with the kind of
   its `verify`. Those are everything the coverage check reads off an entry, so
@@ -1294,3 +1317,6 @@ it has no entry above (Q16).
   cited where what it found stands -- an end marker written before a file's
   last line and followed by a `return`, which the record read as a whole run
   until the marker carried the line it was written from
+- #211: the issue that found every new `GH-` entry still appending a token to
+  `REQUIREMENT_SHAPE` and `INV_SCOPE` after the split; #205 decided it, and the
+  decision is GH-205.3, so it has no entry of its own

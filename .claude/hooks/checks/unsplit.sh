@@ -11028,9 +11028,13 @@ set +f
 pass static 'the families scope holds %d GH- entries: %d seeded, %d naming a transformation, %d with no command spelling to vary' \
   "$INV_SCOPE_N" "$INV_SCOPE_SEED" "$INV_SCOPE_TRANS" "$INV_SCOPE_NONE"
 
+# The legacy entries only (#205): an entry written after #205 pins its variants
+# in the issue file that declares it, and the end of the run compares those
+# pins with this derivation, which is where every issue file has run.
 req GH-141
-tok 'the GH- entries in the families scope are these, each with what it says the families do with it' \
-  "$(inv_sorted "$INV_SCOPE")" "$(inv_sorted "$INV_SCOPE_DERIVED")"
+tok 'the legacy GH- entries in the families scope are these, each with what it says the families do with it' \
+  "$(inv_sorted "$INV_SCOPE")" \
+  "$(inv_sorted "$(legacy_tokens in "$REQUIREMENTS_LEGACY" "$INV_SCOPE_DERIVED")")"
 
 # The two halves of one claim, and it is deliberately an equality and not an
 # inclusion: an entry declaring `seed` and tagged on no seed is a scope decision
@@ -11615,7 +11619,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '81' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '85' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11741,7 +11745,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '79' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '83' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
