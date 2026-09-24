@@ -20,7 +20,9 @@ under `checks/` that it sources (#204), and where this file says
 ## The rules this file keeps
 
 **IDs are never renumbered and never reused.** A requirement that stops being
-true is marked, never deleted: its `status` says what became of it. A new `US-`
+true is marked, never deleted: its `status` says what became of it. The suite
+holds that for the `GH-` entries written before #205, and not yet for a
+generated one (#223). A new `US-`
 or `FR-` requirement is appended at the end of its family; a new `GH-` one is a
 new file, `requirements/<ID>.md`, generated from its declaration (below). So an
 ID cited in an issue, a commit or a check means the same thing for as long as
@@ -1326,3 +1328,7 @@ it has no entry above (Q16).
   what it found stands -- a generator that read nothing and reported a pass,
   and a stage path `awk -v` could mangle, which the generator now refuses and
   reads whole
+- #223: the issue holding what review of #222 filed rather than gated; it is
+  cited where a rule is held for the legacy entries and not yet for a
+  generated one -- an ID deleted outright, with its declaration, its pin and
+  its file, which nothing disagrees with afterwards

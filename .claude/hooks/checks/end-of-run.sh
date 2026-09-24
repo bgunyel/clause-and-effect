@@ -1710,8 +1710,14 @@ tok 'every GH- entry outside the legacy set is, byte for byte, its declaration a
 # The script is the judged one, and it is run over the issue files this run
 # sourced and the judged requirements/, which `generator_view` puts in one
 # directory; the #205 issue file drives it against a judged side that has no
-# checks/. In this repository the two sides are one directory, so what here
-# names $SUITE_DIR rather than $HOOKS is asked only by that fixture.
+# checks/. In this repository the two sides are one directory, so this suite
+# cannot see the two arguments swapped here. The harness can, because it runs
+# the suite with CHECK_HOOKS_DIR on a copy: swapped, the two rows that edit a
+# file under requirements/ and name GH-205.2 among their IDs,
+# generated-entry-edited-by-hand and legacy-entry-marked-generated, go from
+# caught to survived, since this check then reads the suite's requirements/,
+# which the mutation did not touch, and not the mutated copy's (review of PR
+# #222, round 4, and re-measured).
 req GH-205.2
 R205_VIEW=$(generator_view "$SUITE_DIR" "$HOOKS" "$FIXTURES/generator-view")
 tok 'generate-requirements.sh reads the declarations this run read, and would write nothing' \

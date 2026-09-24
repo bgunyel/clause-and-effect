@@ -76,7 +76,13 @@ document means that no second copy of the text is written by hand.
   reviewer sees move in the diff, and one writer edits it. What it gives up:
   the copy stands in the same file as the declaration and is written in the
   same commit by the same hand. `REQUIREMENT_SHAPE` was the same to
-  `requirements.md`, so it is a second copy, not a second author.
+  `requirements.md`, so it is a second copy, not a second author. The same
+  holds for deletion. A generated entry deleted outright, with its
+  declaration, its pin and its file removed in one commit, leaves nothing
+  behind that disagrees, so the suite passes. Before #205 such a deletion
+  also edited the shared literal. The rule that an ID is never deleted is
+  held for the legacy set only, and holding it for a generated ID would need
+  history or a grow-only ledger of IDs, which is a shared hunk again (#223).
 
 **Telling legacy from generated (Q4).**
 
@@ -116,11 +122,18 @@ runs it against fixtures and against the repository.
   `shape_pin`, and `variants_pin` waits for a file whose entry is in the
   families' scope. That move is expected, not a defect.
 - **A branch cut before #205 that adds a hand-written `GH-` entry** is red once
-  it merges across. The remedy is to delete the hand-written
-  `requirements/GH-<n>.md`, declare the entry in its issue file, and run the
-  generator. The file must go first, because the generator refuses a
-  declared ID whose file is hand-written and leaves that file alone. Adding
-  the ID to `REQUIREMENTS_LEGACY` is not a remedy. The
+  it merges across. The remedy has four steps:
+  1. Delete the hand-written `requirements/GH-<n>.md`.
+  2. Declare the entry in its issue file.
+  3. Move its token out of `REQUIREMENT_SHAPE` into a `shape_pin` in that
+     issue file, and out of `INV_SCOPE` into a `variants_pin` if it has one.
+  4. Run the generator.
+
+  The file must go first, because the generator refuses a declared ID whose
+  file is hand-written and leaves that file alone. The tokens must move,
+  because a branch cut before #205 appended them to the shared literals and
+  wrote no pin, and `pins_bad` names both halves of that. Adding the ID to
+  `REQUIREMENTS_LEGACY` is not a remedy. The
   #205 issue file holds that list to its count and checksum, so a new ID there
   shows in two places.
 - **The two readings of a declaration meet in the files.** The generator reads
