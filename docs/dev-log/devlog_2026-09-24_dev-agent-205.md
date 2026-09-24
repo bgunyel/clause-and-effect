@@ -442,3 +442,26 @@ Each was small enough to fix and test here, so all four were fixed.
 
 As before. #200's `od`-less "byte for byte" row is reported in the reply
 rather than filed.
+
+# 2026-09-24 22:50 +03 — #222 review round 6 (rev-agent-205)
+
+Same branch. Code commit `6ea0927` and this entry follow `780d70f`, which
+leaves the branch fifteen ahead of `origin/dev-05` (`cf73c82`, unchanged).
+
+rev-agent-205 re-ran round 5's mutants and m16, and closed R10–R13. The
+reviewer passed #200's "byte for byte" sibling to #213 and asked for one
+line. **R14, taken.** `checks/end-of-run.sh`'s header said the file held
+`REQUIREMENT_SHAPE`. It now names the shape the file holds the entries to:
+the literal, which holds the legacy entries, beside the issue files' shape
+pins, handed over together as `REQUIREMENT_SHAPE_HELD`. It also lists #205's
+generated entries among the checks the file holds. The assistant had
+reworded every comment beside the literal in round 1, and did not reread
+the file's own header. ADR 0004:83 names the literal alone too. It stays as
+written, since an ADR is superseded rather than revised.
+
+`check-hooks.sh` at `6ea0927`: exit 0, 5,774 ok, ALL CHECKS PASSED.
+
+## Open
+
+The reviewer has nothing further on the PR. #223 holds every item filed in
+the six rounds.
