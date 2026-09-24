@@ -381,3 +381,64 @@ also before committing.
 
 As before. #223 now also holds the deletion of a generated ID (item 9) and
 the field-grammar disagreement the reviewer measured (item 2).
+
+# 2026-09-24 22:20 +03 — #222 review round 5 (rev-agent-205)
+
+Same branch. Code commit `87e5f71` and this entry follow `40f2f2b`, which
+leaves the branch thirteen ahead of `origin/dev-05` (`cf73c82`, unchanged).
+
+## What the review found, and what was done
+
+No gating findings. rev-agent-205 confirmed round 4, including the
+assistant's correction of which harness rows the view swap reaches. The
+reviewer asked for three small fixes, R10–R12, and offered R13. For R11 and
+R12 the choice between fixing here and filing was left to the assistant.
+Each was small enough to fix and test here, so all four were fixed.
+
+- **R10, taken.** `CLAUDE.md`'s new-entry instruction, extended in round 4
+  with `shape_pin`, still left out `variants_pin` for an entry in the
+  invariance families' scope. The assistant stopped at the one pin R8's
+  example named, and did not check the instruction against the driver's
+  conventions, which name both. It names both now.
+- **R11, taken.** Nothing tied a declared ID to the issue file that declares
+  it. The reviewer's m16 declared GH-229.1 in `checks/GH-205.sh`, and the
+  suite passed. `generated_bad` now names an entry of #<n> declared anywhere
+  but `checks/GH-<n>.sh`, and GH-205.1's text says so. Its file was
+  regenerated, and its end-of-run row's label names the rule. The generator
+  does not refuse this. GH-205.2 does not claim it, and the suite holds it.
+  m16 was re-run: the generator writes the file, and the suite is red,
+  1 FAIL, on GH-205.1's row. The assistant's first m16 probe had a
+  `retired` status with no reason and so drew a second, unrelated FAIL. It
+  was re-run with a reason.
+- **R12, taken, with a sibling.** `generated_bad` compared through a command
+  substitution, which drops a NUL, so its "byte for byte" was not. It now
+  compares with `cmp -s` against `printf '%s' "$want"`. A new fixture row
+  inserts a NUL. The sibling is the generator-output fixture row labelled
+  "byte for byte", which compared via `$(cat …)`; it now reads both sides
+  through `od -c`. A mutant that makes the generator write a NUL after the
+  heading fails that row and GH-205.2's cross-check. #200's own row
+  (`end-of-run.sh:1089`, "each entry is a file of its own, byte for byte")
+  has the same shape. It is not this PR's code, so it is reported, not
+  changed.
+- **R13, taken.** `pins_bad` skipped only an empty ID, so it asked an
+  out-of-grammar ID such as `GH-07` for a pin no spelling of it can take. It
+  now skips every ID out of grammar. The grammar is now `generated_id`, a
+  library function that both helpers call, rather than a second regex
+  literal. The assistant's first version was a library variable, which the
+  #204 check "changes nothing else about the shell that sources it" refused,
+  1 FAIL: the library defines functions and nothing else. The existing
+  empty-ID fixture gained a `GH-07` record. Reverting to the empty-only guard
+  fails that row, and so does removing the guard.
+
+## Numbers
+
+- `check-hooks.sh` at `87e5f71`: exit 0, 5,774 ok, ALL CHECKS PASSED. That is
+  5,773 plus the NUL row; the other fixes extended existing rows.
+- Mutants, one whole suite run each: ownership check removed, 1 FAIL;
+  command-substitution comparison restored, 1 FAIL; empty-only guard, 1 FAIL;
+  no guard, 1 FAIL; generator writes a NUL, 2 FAIL; m16, 1 FAIL.
+
+## Open
+
+As before. #200's `od`-less "byte for byte" row is reported in the reply
+rather than filed.
