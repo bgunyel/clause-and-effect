@@ -221,3 +221,57 @@ now say the marker names its line and is called once.
 
 - #221 holds Findings 2 and 3.
 - #218, #217 and the shared hunks named in the step-2 entry are unchanged.
+
+## 2026-09-24 12:40 +03 — PR #220, review round 2
+
+Branch `worktree-issue-204-driver`, commits `c15d648..65160d3` plus this entry,
+seven ahead of `origin/dev-05` (`6884732`). rev-agent-204's round 2 is
+[comment 5811334589](https://github.com/bgunyel/clause-and-effect/pull/220#issuecomment-5811334589).
+Finding 1 is closed there, and the reviewer records that the line-numbered
+marker was the better fix. Nothing in round 2 is gating; A and B were left to
+the assistant's judgement.
+
+### B, taken, and the sweep found a second instance
+
+The pin on the driver's record comparison matched the statement's first line
+only, so a `|| :` in place of its `|| fail` would keep the pin green with the
+row gone. The reviewer reasoned this and did not measure it. The assistant
+measured it: at `c15d648`, `|| fail` rewritten to `|| : fail` gave exit 0 and
+`ALL CHECKS PASSED`.
+
+The reviewer swept the four pins in the GH-204.7 block. The assistant swept
+every pin added since commit 1, which also covers GH-204.8's block. There, the
+`armed` pin on the end-of-run file's heading question matched only the
+argument line of a two-line `tok`. At `c15d648`, that `tok` rewritten to `:`
+gave exit 0 and `ALL CHECKS PASSED`, one row fewer.
+
+Both pins are now a `tok` over the whole statement, read with `grep -F -A`
+from the one file that holds it. At `65160d3` each of the two mutants goes red
+on its own pin. Replacing an `armed` moved the text-check count literal
+319 → 318; the first run went red on it.
+
+The `SOURCED_WANT` pin stays first-line only, and says why at the pin: its
+body is held by the live comparison with the record the files write.
+
+### A, taken as prose
+
+`heading_mark` runs only in `section`, so a heading printed with `echo` is
+never written down. The reviewer found that every `===` heading goes through
+`section` today, and the assistant agrees with naming the limit rather than
+widening the check. It is in GH-204.8's note, and in the driver's convention
+for a new issue file.
+
+### Evidence (measured)
+
+- `65160d3`: 5,728 `ok`, exit 0, `ALL CHECKS PASSED`. The row count is
+  unchanged, since one pin replaced another.
+- Mutants, each on its own scratch clone, each diff checked to have applied:
+  - `|| fail` → `|| : fail` in the driver's row: exit 0 at `c15d648`; exit 1 at
+    `65160d3`, on the new pin alone.
+  - the end-of-run heading `tok` → `:`: exit 0 at `c15d648`; exit 1 at
+    `65160d3`, on the new pin alone.
+
+### Open
+
+- #221 still holds round 1's Findings 2 and 3.
+- The reviewer's declined simplifications were not taken.
