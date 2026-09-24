@@ -26,8 +26,8 @@ _Avoid_: development branch, current branch
 
 **Check**:
 An assertion whose expected verdict is written out in advance, so running it can
-only agree or disagree with what was already claimed. Every assertion in
-`.claude/hooks/check-hooks.sh` is a check.
+only agree or disagree with what was already claimed. Every assertion in the
+check suite, `.claude/hooks/check-hooks.sh` and the files it sources, is a check.
 _Avoid_: probe, test
 
 **History entry**:
@@ -52,6 +52,14 @@ of which the merge base's copy is no longer a byte prefix has been rewritten,
 whichever tool did it. A pure append leaves that prefix intact, so it is not a
 rewrite.
 _Avoid_: frozen entry, published entry, old entry
+
+**Issue file**:
+The checks written by the work that closed one issue, kept in one file named by
+that issue, under `.claude/hooks/checks/`. Tags name what a check covers; an
+issue file names who wrote it, so its checks may carry any requirement's tags.
+It is not a section, which is a heading in the suite's output that rows from
+several issue files may sit under.
+_Avoid_: family, section
 
 **Probe**:
 An empirical measurement whose answer is not known until it runs. Each

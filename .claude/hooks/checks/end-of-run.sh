@@ -114,6 +114,7 @@ GH-109.1:static GH-109.2:refuse-only GH-109.3:static GH-109.4:static
 GH-109.5:permit-only GH-164:gap
 GH-200.1:static GH-200.2:static GH-200.3:static GH-200.4:static GH-200.5:static
 GH-204.1:static GH-204.2:static GH-204.3:static GH-204.4:static GH-204.5:static
+GH-204.6:static GH-204.7:static GH-204.8:static
 '
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in
@@ -1772,6 +1773,16 @@ else
     "$MUT_AT_RESULTS" "$RESULTS_NOW"
 fi
 
+# EVERY SECTION HEADING HAS A ROW UNDER IT, a `---` subheading's rows counting
+# for its `===` heading: asked here, once every row but the foot's is in the
+# ledger, of every heading `section` wrote down (see `heading_mark`, and #204's
+# step-2 section at the end of the unsplit file, which drives the reading). A heading moved into another file
+# without its rows, or left behind when they moved, is a heading of nothing.
+req GH-204.8
+tok 'every section heading this run printed has at least one row under it' \
+    '' "$(sections_without_rows "$HEADINGS" "$LEDGER")"
+[ -s "$HEADINGS" ] || fail static 'no section heading was written down, so the check above asked nothing'
+
 # EVERY FUNCTION THIS RUN STARTED WITH IS THE ONE IT ENDS WITH: see
 # LOADED_BODY at the head of this suite. Asked here, after every check, as a
 # row; the verdict it gives is taken again by FOOT_VERDICT_CODE after every
@@ -1839,3 +1850,4 @@ if [ -n "$MATRIX" ]; then
     FAILED=1
   fi
 fi
+sourced_to_end

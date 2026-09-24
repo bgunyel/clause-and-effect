@@ -181,10 +181,36 @@
 # expected -- and `verdict`, in checks/library.sh, is where that is answered
 # and argued.
 #
-# THE SUITE IS MORE THAN THIS FILE. The helpers that more than one section calls
-# -- `check`, `says`, `tok`, `pass` and `fail` among them -- are in
-# checks/library.sh beside it, which this file sources before its first check.
-# Its header states which functions belong there.
+# THE SUITE IS MORE THAN THIS FILE, which is its driver (#204). Every check is in
+# a file under checks/ that this file sources, and this file keeps what they
+# share: the arguments, the prelude and every fixture more than one of them
+# uses, the list of what it sources and in which order, and the final verdict.
+# checks/library.sh holds the helpers more than one file calls, and its header
+# states which functions belong there. checks/unsplit.sh holds every check
+# written before the split. An issue file, checks/GH-<n>.sh, holds the checks
+# the work that closed issue <n> wrote. And checks/end-of-run.sh holds the
+# checks that read the whole record, and is sourced last. The words are
+# CONTEXT.md's, and why the suite is split this way, and what was rejected, is
+# docs/adr/0004-check-suite-split-by-issue.md; what follows is only how.
+#
+# HOW A LOOP ADDS TO THE SUITE, which is the conventions and not the reasons:
+#   - A new issue's checks go in a new issue file, named by the issue, which
+#     opens with its own section heading, ends with the line `sourced_to_end`,
+#     and is added at the end of $SUITE_CHECKS below. `source_checks` fails the
+#     run on a file under checks/ that is on no list, and on one that does not
+#     end with that line.
+#   - An existing issue's checks move out of the unsplit file only when a loop
+#     touches them for its own reasons.
+#   - A move keeps the same set of rows, keeps their order within the issue file
+#     they move to, and keeps every `says_first` pair in one file.
+#   - A move leaves no section heading behind with no rows under it, and none
+#     orphaned: the heading is printed by the issue file or by this driver.
+#   - A fixture moves into this prelude only when an issue file that owns it
+#     moves, and a fixture more than one issue file uses belongs here.
+#   - A check lives in the file of the issue whose work wrote it, whatever its
+#     tags. Coverage is a property of the tags in the ledger, never of which
+#     file a check is in, so a check tagged GH-148 is not moved into a GH-148
+#     file for its tag.
 #
 # Run: bash .claude/hooks/check-hooks.sh
 #      bash .claude/hooks/check-hooks.sh --matrix   the requirements matrix, issue #104
@@ -313,27 +339,40 @@ LEDGER=
 REQ=
 RAN=
 # THE HELPER LIBRARY, checks/library.sh: every function this suite calls from
-# more than one of its sections, and nothing else. Its header states the rule.
+# more than one of its files, and nothing else. Its header states the rule.
 #
-# The files this driver sources, in the order it sources them: the library
-# first, here, and then the checks, at the end of this prelude -- the unsplit
-# file, and the end-of-run file last. $SUITE_SOURCED is all of them. Read off
-# $SUITE_DIR and never off $HOOKS: they are the suite that runs, not the hooks
-# it judges, which is the reason given for this file in the two-directories
-# paragraph above. A library that did not load would leave every check below a
-# `command not found`, which prints no FAIL and sets no FAILED -- a green run
-# having asked nothing -- so it stops the run instead.
-SUITE_LIBRARY="checks/library.sh"
-SUITE_CHECKS="checks/unsplit.sh checks/end-of-run.sh"
-SUITE_SOURCED="$SUITE_LIBRARY $SUITE_CHECKS"
-for f in $SUITE_LIBRARY; do
-  . "$SUITE_DIR/$f" || {
-    echo "$f did not load; nothing was judged" >&2
-    exit 1
-  }
+# THE FILES THIS DRIVER SOURCES, all of them under checks/, in the order it
+# sources them: the library first, here, and then the checks, through
+# `source_checks` at the end of this prelude -- $SUITE_CHECKS in the order it is
+# written, the unsplit file first and then each issue file, and $SUITE_LAST
+# after them, whatever $SUITE_CHECKS says. A list and never a glob: the order is
+# load-bearing, since `says_first` and every check that reads what an earlier
+# one left behind depend on it, and a directory listing has no order anyone
+# chose. An issue file is added by writing its name at the end of
+# $SUITE_CHECKS; `source_checks` fails the run on a file under checks/ that is
+# on no list. That makes this line the one every loop that adds an issue file
+# edits, and two such loops conflict here: a trade taken knowingly, since the
+# order has to be written somewhere, and the conflict is one line whose
+# resolution is to keep both names. ADR 0004 records it. $SUITE_SOURCED is all of them, as paths under this directory.
+#
+# Read off $SUITE_DIR and never off $HOOKS: they are the suite that runs, not
+# the hooks it judges, which is the reason given for this file in the
+# two-directories paragraph above. A library that did not load would leave
+# every check below a `command not found`, which prints no FAIL and sets no
+# FAILED -- a green run having asked nothing -- so it stops the run instead.
+SUITE_LIBRARY=library.sh
+SUITE_CHECKS="unsplit.sh"
+SUITE_LAST=end-of-run.sh
+SUITE_SOURCED=
+for f in $SUITE_LIBRARY $SUITE_CHECKS $SUITE_LAST; do
+  SUITE_SOURCED="$SUITE_SOURCED${SUITE_SOURCED:+ }checks/$f"
 done
+. "$SUITE_DIR/checks/$SUITE_LIBRARY" || {
+  echo "checks/$SUITE_LIBRARY did not load; nothing was judged" >&2
+  exit 1
+}
 declare -F record pass fail req section >/dev/null || {
-  echo "$SUITE_LIBRARY loaded without the functions every check prints through; nothing was judged" >&2
+  echo "checks/$SUITE_LIBRARY loaded without the functions every check prints through; nothing was judged" >&2
   exit 1
 }
 # AND A LIBRARY THAT LOADED WITHOUT ONE OF ITS OTHER FUNCTIONS is the same
@@ -381,11 +420,39 @@ LOADED_BODY[command_not_found_handle]=$(declare -f command_not_found_handle)
 # suite that runs on neither. They hold no commits and no remotes: an unborn
 # branch is still reported by name, and nothing here reaches a remote.
 FIXTURES=$(mktemp -d)
-trap 'rm -rf "$FIXTURES"' EXIT
+# THE SOURCING RECORD, and what it has to say by the end: every file
+# `source_checks` sources, started and run to its last line, in the order it was
+# listed, in this shell. See `source_checks` in the library for how each marker
+# is written, and the checks after the last file for how the two are compared.
+SOURCED="$FIXTURES/sourced"
+: > "$SOURCED"
+SOURCED_SHELL=$$
+SOURCED_WANT=$(for f in $SUITE_CHECKS $SUITE_LAST; do
+                 printf 'start %s\nend %s\n' "$SUITE_DIR/checks/$f" "$SUITE_DIR/checks/$f"
+               done)
+# THE EXIT TRAP, which removes the fixtures and asks one question on the way out
+# that nothing else can: a check file that runs `exit 0` ends the run there, with
+# no verdict printed and a status a caller reads as a pass. So a run leaving
+# with status 0 and a sourcing record short of what it has to say leaves with 1
+# instead, and says why. Any other status is kept: a fixture guard's `exit 1`
+# already fails, and a usage error's 64 is set before this trap is. Code in a
+# variable so that the #204 checks can drive it.
+SUITE_EXIT_CODE='SUITE_STATUS=$?
+if [[ $SUITE_STATUS == 0 && -n $SOURCED ]] && [[ $(< "$SOURCED") != "$SOURCED_WANT" ]]; then
+  printf "%s\n" "the run ended with status 0 before every file it sources had run to its last line; the sourcing record says:" "$(< "$SOURCED")" >&2
+  SUITE_STATUS=1
+fi
+rm -rf "$FIXTURES"
+exit $SUITE_STATUS'
+trap "$SUITE_EXIT_CODE" EXIT
 LEDGER="$FIXTURES/ledger"
 : > "$LEDGER"
 RAN="$FIXTURES/ran"
 : > "$RAN"
+# Every section heading, with the number of rows the ledger held when it was
+# printed; see `heading_mark` in the library.
+HEADINGS="$FIXTURES/headings"
+: > "$HEADINGS"
 NOT_FOUND="$FIXTURES/not-found"
 # Where the verdict expects the record to be. The GH-204.5 self-test points
 # $NOT_FOUND elsewhere and puts it back. A section that copied that and did not
@@ -403,8 +470,9 @@ NOT_FOUND_AT_HEAD=$NOT_FOUND
 # `suite_range`, which fails on a range that matched nothing.
 #
 # SOURCE ORDER is this driver first and then each file in $SUITE_SOURCED in the
-# order it is sourced -- the library, the unsplit file, the end-of-run file --
-# so the header this suite opens with is still the first thing in it. $SUITE_FILES is that list, and the line that sets it is the one
+# order it is sourced -- the library, the unsplit file, each issue file, the
+# end-of-run file -- so the header this suite opens with is still the first
+# thing in it. $SUITE_FILES is that list, and the line that sets it is the one
 # place code names this file by its path, other than to run it; the #204
 # section holds the suite to that. A check that needs to know where one file
 # ends and the next begins -- which function is defined where -- reads the
@@ -563,7 +631,7 @@ for n in $(compgen -v); do
   v=$(declare -p "$n"); printf "\$%s\0%s\0" "$n" "${v#declare -* }"
 done'
 declare -A LOADED_FROM=()
-for f in "$SUITE_DIR/$SUITE_LIBRARY" "$HOOKS/lib/command-scan.sh"; do
+for f in "$SUITE_DIR/checks/$SUITE_LIBRARY" "$HOOKS/lib/command-scan.sh"; do
   record_of "$f" "$FIXTURES/record" || {
     echo "sourcing $f alone defined nothing, so nothing of it can be compared at the foot; nothing was judged" >&2
     exit 1
@@ -613,6 +681,14 @@ if [[ -s $NOT_FOUND ]]; then
 fi
 if [[ $NOT_FOUND != "$NOT_FOUND_AT_HEAD" ]]; then
   printf "%s\n" "the not-found record was moved during the run, so what was written to $NOT_FOUND_AT_HEAD was not read:" "$NOT_FOUND" >&2
+  FAILED=1
+fi'
+# AND THE SOURCING RECORD IS WHAT IT HAS TO SAY, asked after every helper has
+# run for the reason FOOT_VERDICT_CODE gives, and before it: nothing between
+# this and the exit can clear FAILED. Code in a variable, calling no function,
+# so that the #204 checks drive it.
+SOURCED_VERDICT_CODE='if [[ $(< "$SOURCED") != "$SOURCED_WANT" ]]; then
+  printf "%s\n" "the files the driver sources did not each run from start to end, in order, in this shell; the sourcing record says:" "$(< "$SOURCED")" >&2
   FAILED=1
 fi'
 # AND A FAIL THE LEDGER HOLDS FAILS THE RUN, whatever FAILED says by then: a
@@ -678,18 +754,27 @@ GH-155.1:3143088805:5291 GH-156:1579607799:1497 GH-164:1173286345:555
 GH-167:3774825998:1365 GH-171:1548953849:1055 GH-175:1964502293:1348
 '
 
-# THE CHECKS, sourced into this shell in the order $SUITE_CHECKS gives: the
-# unsplit file, which holds every check written before the suite was split, and
-# the end-of-run file last, which reads the record every check before it wrote.
-for f in $SUITE_CHECKS; do
-  . "$SUITE_DIR/$f"
-done
+# THE CHECKS, sourced into this shell: $SUITE_CHECKS in the order it is written,
+# and the end-of-run file last, which reads the record every check before it
+# wrote. This is the one call of `source_checks`, and the #204 checks hold it to
+# that.
+source_checks "$SUITE_DIR/checks" $SUITE_CHECKS "$SUITE_LAST"
+# AND WHAT IT SOURCED IS WHAT IT WAS GIVEN: every file started and ran to its
+# last line, in order, in this shell. A row only when it did not, because a row
+# printed here would come after the matrix --matrix has already printed. Asked
+# again by SOURCED_VERDICT_CODE, after every helper has run.
+req GH-204.7
+[[ $(< "$SOURCED") == "$SOURCED_WANT" ]] \
+  || fail static 'the files the driver sources did not each run from start to end, in order, in this shell; the sourcing record says:\n%s' \
+       "$(sed 's/^/         /' "$SOURCED")"
+REQ=
 
 # The foot's questions, asked again after every helper has run, and then the
 # ledger, for a FAIL the first verdict did not keep. Between
 # them and the exit stand only `echo`, `[[ ]]` and `exit`, which are builtins and
 # a keyword -- unless a function shadows a builtin of that name, the limit
 # GH-204.1 names (round 6 of the review). See FOOT_VERDICT_CODE.
+eval "$SOURCED_VERDICT_CODE"
 eval "$FOOT_VERDICT_CODE"
 eval "$LEDGER_VERDICT_CODE"
 echo

@@ -7195,7 +7195,7 @@ written 'a check has its expected verdict written out in advance' \
 written 'so running it can only agree or disagree with what was already claimed' \
   "$CHECK_ENTRY" 'only agree or disagree with what was already claimed'
 written 'and every assertion in this suite is one' \
-  "$CHECK_ENTRY" '`.claude/hooks/check-hooks.sh` is a check.'
+  "$CHECK_ENTRY" '`.claude/hooks/check-hooks.sh` and the files it sources, is a check.'
 written 'a probe has no answer until it runs' \
   "$PROBE_ENTRY" 'not known until it runs'
 written 'and each scripts/probe_*.py is one' "$PROBE_ENTRY" '`scripts/probe_*.py` is a probe'
@@ -11443,7 +11443,7 @@ req GH-107.1
 TEXT_CHECK_ARGS=$(text_check_faults "${SUITE_FILES[@]}")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '318' "${TEXT_CHECK_ARGS##*COUNT }"
+    '319' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -14584,3 +14584,265 @@ tok 'and the bash it is compared with has no handler, even one this shell export
     '' "$( export -f 'command_not_found_handle'; "${NF_CHILD[@]}" -c 'type -t command_not_found_handle' )"
 tok 'which is the line written down' "$NF_WANT" "$(cat "$FIXTURES/not-found-stderr")"
 
+# #204, STEP 2: the checks the driver's sourcing rests on. They are here, at the
+# end of the unsplit file, and not in an issue file of their own, because the
+# brief for step 2 keeps the unsplit file the only file of checks; the first
+# issue file is the next loop's to write, and the driver's header says how.
+section "=== issue #204: the driver sources each file of checks/ whole, in order, in this shell ==="
+# WHAT THE DRIVER RESTS ON ONCE IT IS A DRIVER. Every check lives in a file it
+# sources, so what used to be true by construction -- one file, run top to
+# bottom -- is now a claim about `source_checks`, and each clause of it is a
+# way the run could ask less than it says and stay green. Driven here against
+# fixture files whose every answer is written as a literal: a file the list
+# names and the directory lacks, a file the directory holds and no list names,
+# a file sourced outside the shell that records, one that returns or exits
+# partway through, a `req` that would carry across the boundary, and a file
+# that leaves the shell changed.
+#
+# Each fixture runs `source_checks` in a subshell of its own, with a record of
+# its own, and names that subshell as the one that records -- the driver's
+# $SOURCED_SHELL is this shell -- so what it writes is its own, and a FAIL it
+# prints is the one asserted and is not recorded, as in the #98 self-test. The
+# FAIL prefix is rewritten on the way out, because the #104 section reads this
+# suite for a quoted line opening with a result word.
+sourcing_run() {  # sourcing_run <dir> <file>... -- what source_checks printed, REQ after it, and its record
+  ( cd -- "$(dirname -- "$1")" || exit 1
+    umask 022
+    # A trap of its own, because a subshell shows its parent's traps only until
+    # it sets one, and then drops them all from `trap -p` (measured, bash 5.2):
+    # the first trap a fixture set would otherwise read as every other removed.
+    trap ':' EXIT
+    SOURCED="$1.record"; : > "$SOURCED"; SOURCED_SHELL=$BASHPID; SUITE_LIBRARY=library.sh
+    # Entered with a tag already set, as a driver that left one would: the first
+    # file must open without it, which only the clear before each file gives --
+    # the one after each file cannot reach the first.
+    REQ=GH-0
+    source_checks "$@" > "$1.out"
+    sed 's/^  FAIL /FAIL: /' "$1.out"
+    printf 'REQ=[%s] after the last file\n' "$REQ"
+    sed 's/^/record: /' "$SOURCED" )
+}
+SRC_FIX="$FIXTURES/sourcing"
+mkdir -p "$SRC_FIX/whole" "$SRC_FIX/returns" "$SRC_FIX/no-end" "$SRC_FIX/exits" "$SRC_FIX/state"
+# Each says what REQ was when it opened, and then ends inside a `req`.
+printf '%s\n' 'printf "a.sh opened with REQ=[%s]\n" "$REQ"' 'req GH-1' 'sourced_to_end' > "$SRC_FIX/whole/a.sh"
+printf '%s\n' 'printf "b.sh opened with REQ=[%s]\n" "$REQ"' 'req GH-2' 'sourced_to_end' > "$SRC_FIX/whole/b.sh"
+req GH-204.6
+tok '(v) no tag reaches a file from before it, whether set before the first or left by the file before, nor outlasts the last, and each listed file is recorded from start to end' \
+"a.sh opened with REQ=[]
+b.sh opened with REQ=[]
+REQ=[] after the last file
+record: start $SRC_FIX/whole/a.sh
+record: end $SRC_FIX/whole/a.sh
+record: start $SRC_FIX/whole/b.sh
+record: end $SRC_FIX/whole/b.sh" "$(sourcing_run "$SRC_FIX/whole" a.sh b.sh)"
+tok '(i) a listed file the directory does not hold is a FAIL, and the files around it still run' \
+"a.sh opened with REQ=[]
+FAIL: gone.sh is on the list the driver sources and is not a file in $SRC_FIX/whole, so no check in it ran
+b.sh opened with REQ=[]
+REQ=[] after the last file
+record: start $SRC_FIX/whole/a.sh
+record: end $SRC_FIX/whole/a.sh
+record: start $SRC_FIX/whole/b.sh
+record: end $SRC_FIX/whole/b.sh" "$(sourcing_run "$SRC_FIX/whole" a.sh gone.sh b.sh)"
+tok '(ii) a file the directory holds and no list names is a FAIL' \
+"FAIL: b.sh is under $SRC_FIX/whole and on no list the driver sources, so no check in it runs
+a.sh opened with REQ=[]
+REQ=[] after the last file
+record: start $SRC_FIX/whole/a.sh
+record: end $SRC_FIX/whole/a.sh" "$(sourcing_run "$SRC_FIX/whole" a.sh)"
+# The library the driver sourced before any of them is the one other file the
+# directory may hold, and it is named by $SUITE_LIBRARY, which sourcing_run sets
+# to library.sh for the fixtures.
+printf '%s\n' ': the library' > "$SRC_FIX/whole/library.sh"
+tok 'and the library is not one' \
+"a.sh opened with REQ=[]
+b.sh opened with REQ=[]
+REQ=[] after the last file
+record: start $SRC_FIX/whole/a.sh
+record: end $SRC_FIX/whole/a.sh
+record: start $SRC_FIX/whole/b.sh
+record: end $SRC_FIX/whole/b.sh" "$(sourcing_run "$SRC_FIX/whole" a.sh b.sh)"
+rm -f "$SRC_FIX/whole/library.sh"
+# (iii) Sourced in a subshell: the markers are written from the recording shell
+# alone, so a file run anywhere else leaves none, and the routine's own question
+# goes red for each file -- in the subshell, where its FAIL prints and is not
+# recorded, which is why the driver asks the record again from its own shell.
+tok '(iii) files sourced in a subshell leave no marker, and each is a FAIL' \
+"a.sh opened with REQ=[]
+FAIL: a.sh did not run to its last line in this shell: it returned early, or was sourced in a subshell, and its end marker is not the last one recorded
+b.sh opened with REQ=[]
+FAIL: b.sh did not run to its last line in this shell: it returned early, or was sourced in a subshell, and its end marker is not the last one recorded
+record: (none)" \
+    "$( ( SOURCED="$SRC_FIX/subshell.record"; : > "$SOURCED"; SOURCED_SHELL=$BASHPID; SUITE_LIBRARY=library.sh
+          ( source_checks "$SRC_FIX/whole" a.sh b.sh ) > "$SRC_FIX/subshell.out"
+          sed 's/^  FAIL /FAIL: /' "$SRC_FIX/subshell.out"
+          [ -s "$SOURCED" ] && sed 's/^/record: /' "$SOURCED" || echo 'record: (none)' ) )"
+# (iv) A `return` partway through ends the `.` exactly as the end of the file
+# does, which is why the file writes its own end marker; and a file that does not
+# end with the call that writes it is refused before it runs.
+printf '%s\n' 'if true; then' '  return 0' 'fi' 'sourced_to_end' > "$SRC_FIX/returns/a.sh"
+tok '(iv) a file that returns partway through is a FAIL, with no end marker' \
+"FAIL: a.sh did not run to its last line in this shell: it returned early, or was sourced in a subshell, and its end marker is not the last one recorded
+REQ=[] after the last file
+record: start $SRC_FIX/returns/a.sh" "$(sourcing_run "$SRC_FIX/returns" a.sh)"
+printf '%s\n' ': a file with no end marker' > "$SRC_FIX/no-end/a.sh"
+tok 'and so is a file that does not end with the call that writes the marker' \
+"FAIL: a.sh does not end with the line sourced_to_end, so nothing can say it ran to its end
+FAIL: a.sh did not run to its last line in this shell: it returned early, or was sourced in a subshell, and its end marker is not the last one recorded
+REQ=[] after the last file
+record: start $SRC_FIX/no-end/a.sh" "$(sourcing_run "$SRC_FIX/no-end" a.sh)"
+# (vi) Four files, each leaving one kind of state changed, run in order: each is
+# compared with the state the one before it left, so each FAIL names its own
+# change and no other. The first also sets errexit, which a command
+# substitution reads as off whatever it is set to -- the reason `shell_state`
+# writes from this shell and not through a $( ).
+printf '%s\n' 'set -f -e' 'sourced_to_end' > "$SRC_FIX/state/opt.sh"
+printf '%s\n' 'cd /' 'sourced_to_end' > "$SRC_FIX/state/dir.sh"
+printf '%s\n' "trap ':' USR1" 'sourced_to_end' > "$SRC_FIX/state/trap.sh"
+printf '%s\n' 'umask 077' 'sourced_to_end' > "$SRC_FIX/state/umask.sh"
+tok '(vi) a file that leaves an option, the directory, a trap or the umask changed is a FAIL, which names the change' \
+"FAIL: opt.sh left the shell changed:
+         was: set +o errexit
+         now: set -o errexit
+         was: set +o noglob
+         now: set -o noglob
+FAIL: dir.sh left the shell changed:
+         was: directory $SRC_FIX
+         now: directory /
+FAIL: trap.sh left the shell changed:
+         now: trap -- ':' SIGUSR1
+FAIL: umask.sh left the shell changed:
+         was: 0022
+         now: 0077
+REQ=[] after the last file
+record: start $SRC_FIX/state/opt.sh
+record: end $SRC_FIX/state/opt.sh
+record: start $SRC_FIX/state/dir.sh
+record: end $SRC_FIX/state/dir.sh
+record: start $SRC_FIX/state/trap.sh
+record: end $SRC_FIX/state/trap.sh
+record: start $SRC_FIX/state/umask.sh
+record: end $SRC_FIX/state/umask.sh" "$(sourcing_run "$SRC_FIX/state" opt.sh dir.sh trap.sh umask.sh)"
+
+# WHAT THE DRIVER ASKS OF THE RECORD ONCE THE LAST FILE HAS RUN, and on the way
+# out. The routine's own questions are asked in whatever shell it runs in, so a
+# routine run in a subshell prints its FAILs there and they are not counted. So
+# the driver compares the record with $SOURCED_WANT, every listed file started
+# and ended in order, from its own shell: once as a row, once in the final
+# verdict, SOURCED_VERDICT_CODE, and once in the EXIT trap, SUITE_EXIT_CODE,
+# for a file that ran `exit 0` and ended the run before either. The two pieces
+# of code are driven here, each in a subshell of its own.
+req GH-204.7
+SV_WANT="start $SRC_FIX/whole/a.sh
+end $SRC_FIX/whole/a.sh
+start $SRC_FIX/whole/b.sh
+end $SRC_FIX/whole/b.sh"
+printf '%s\n' "$SV_WANT" > "$SRC_FIX/complete.record"
+printf '%s\n' "start $SRC_FIX/whole/a.sh" > "$SRC_FIX/short.record"
+: > "$SRC_FIX/empty.record"
+tok 'the final verdict fails on a record that is short or empty, keeps a failure it was given, and fails on nothing else' \
+'complete 0
+short 1
+empty 1
+complete, already failed 1' \
+    "$( ( FAILED=0; SOURCED="$SRC_FIX/complete.record"; SOURCED_WANT=$SV_WANT; eval "$SOURCED_VERDICT_CODE" 2>/dev/null; echo "complete $FAILED" )
+        ( FAILED=0; SOURCED="$SRC_FIX/short.record"; SOURCED_WANT=$SV_WANT; eval "$SOURCED_VERDICT_CODE" 2>/dev/null; echo "short $FAILED" )
+        ( FAILED=0; SOURCED="$SRC_FIX/empty.record"; SOURCED_WANT=$SV_WANT; eval "$SOURCED_VERDICT_CODE" 2>/dev/null; echo "empty $FAILED" )
+        ( FAILED=1; SOURCED="$SRC_FIX/complete.record"; SOURCED_WANT=$SV_WANT; eval "$SOURCED_VERDICT_CODE" 2>/dev/null; echo "complete, already failed $FAILED" ) )"
+tok 'and says why on stderr' \
+"the files the driver sources did not each run from start to end, in order, in this shell; the sourcing record says:
+start $SRC_FIX/whole/a.sh" \
+    "$( ( SOURCED="$SRC_FIX/short.record"; SOURCED_WANT=$SV_WANT; eval "$SOURCED_VERDICT_CODE" 2>&1 >/dev/null ) )"
+# The EXIT trap, installed in a subshell as the driver installs it, over files
+# that run whole, one that exits 0 partway, and one that exits 3 partway. Its
+# code removes $FIXTURES, so each names a scratch directory of its own, and is
+# asked afterwards whether that went too.
+printf '%s\n' 'exit 0' 'sourced_to_end' > "$SRC_FIX/exits/zero.sh"
+printf '%s\n' 'exit 3' 'sourced_to_end' > "$SRC_FIX/exits/three.sh"
+exit_run() {  # exit_run <dir> <file> -- "status <n>", then what the trap said on stderr
+  ( FIXTURES="$SRC_FIX/exit-scratch"; mkdir -p "$FIXTURES"
+    SOURCED="$SRC_FIX/exit.record"; : > "$SOURCED"; SOURCED_SHELL=$BASHPID; SUITE_LIBRARY=library.sh
+    SOURCED_WANT="start $1/$2
+end $1/$2"
+    trap "$SUITE_EXIT_CODE" EXIT
+    source_checks "$1" "$2" > /dev/null ) 2> "$SRC_FIX/exit.err"
+  printf 'status %s\n' "$?"
+  cat "$SRC_FIX/exit.err"
+  [ -d "$SRC_FIX/exit-scratch" ] && echo 'the scratch directory is still there'
+}
+tok 'a file that exits 0 partway through leaves the run with status 1, and says why' \
+"status 1
+the run ended with status 0 before every file it sources had run to its last line; the sourcing record says:
+start $SRC_FIX/exits/zero.sh" "$(exit_run "$SRC_FIX/exits" zero.sh)"
+tok 'and one that exits with a failure keeps its status' \
+'status 3' "$(exit_run "$SRC_FIX/exits" three.sh)"
+# The whole directory holds zero.sh and three.sh too, so each run is also
+# refused one of the other as unlisted; what is asked is the status and the
+# trap's message, and the listed file here runs whole.
+rm -f "$SRC_FIX/exits/zero.sh" "$SRC_FIX/exits/three.sh"
+printf '%s\n' ': runs whole' 'sourced_to_end' > "$SRC_FIX/exits/whole.sh"
+tok 'and a run whose every file ran whole leaves with its own status and removes the fixtures' \
+'status 0' "$(exit_run "$SRC_FIX/exits" whole.sh)"
+# And the trap this run is under is that code, word for word.
+tok 'the EXIT trap this suite runs under is SUITE_EXIT_CODE' 'same' \
+    "$( eval "set -- $(trap -p EXIT)"; [ "$3" = "$SUITE_EXIT_CODE" ] && echo same )"
+
+# THE ORDER THE DRIVER STATES, held at both ends: the unsplit file first and the
+# end-of-run file last. Only the ends, because an issue file is added between
+# them by the loop that writes it, and a literal of the whole list here would be
+# the one line every such loop edits -- the conflict this split exists to end.
+tok 'the driver sources the unsplit file first and the end-of-run file last' \
+"start $SUITE_DIR/checks/unsplit.sh
+end $SUITE_DIR/checks/end-of-run.sh" \
+    "$(printf '%s\n' "$SOURCED_WANT" | sed -n '1p;$p')"
+# And so far it has: while the unsplit file runs, the record holds its start
+# and nothing else, so this file is the first the driver sourced and is running
+# in the shell that records.
+tok 'the unsplit file is the first the driver sourced, and runs in the shell that records' \
+    "start $SUITE_DIR/checks/unsplit.sh" "$(cat "$SOURCED")"
+# The driver sources through the routine once, and nowhere else: a second call,
+# or a `.` of a check file of its own, would run checks the record never names.
+tok 'the driver calls source_checks once, on its list with the end-of-run file after it' \
+    'source_checks "$SUITE_DIR/checks" $SUITE_CHECKS "$SUITE_LAST"' \
+    "$(grep -E '^[[:space:]]*source_checks[[:space:]]' "${SUITE_FILES[0]}")"
+tok 'and the record it is held to names the same list in the same order' \
+    'SOURCED_WANT=$(for f in $SUITE_CHECKS $SUITE_LAST; do' \
+    "$(grep -E '^SOURCED_WANT=' "${SUITE_FILES[0]}")"
+# And compares the record with it once the last file has run, as a row. The row
+# prints only when they differ -- a row printed after the last file would land
+# after the matrix --matrix prints -- so it is pinned as text, as the unsplit
+# file's #204 section pins the registry audit's arms.
+tok 'the driver compares the record with what its list says once the last file has run' \
+    '[[ $(< "$SOURCED") == "$SOURCED_WANT" ]] \' \
+    "$(grep -F '[[ $(< "$SOURCED") == "$SOURCED_WANT" ]]' "${SUITE_FILES[0]}")"
+# And the verdict takes the record again after every helper, before the two
+# verdicts the #204 section in the unsplit file holds the driver's last lines to.
+tok 'the driver takes the sourcing verdict just before the other two' \
+'eval "$SOURCED_VERDICT''_CODE"
+eval "$FOOT_VERDICT''_CODE"' \
+    "$(grep -v '^[[:space:]]*#' "${SUITE_FILES[0]}" | grep -v '^[[:space:]]*$' | tail -6 | head -2)"
+
+# EVERY SECTION HEADING HAS A ROW UNDER IT, a `---` subheading's rows counting
+# for the `===` heading above it. `section` writes each heading down with the
+# rows the ledger held when it was printed; the end-of-run file asks the whole
+# record, once every row is in it. Driven here: a heading followed by another
+# with no row between them, and one the ledger ends on.
+req GH-204.8
+printf '0\tA\n2\tB\n2\tC\n5\tD\n' > "$SRC_FIX/headings"
+printf 'row\n%.0s' 1 2 3 4 5 > "$SRC_FIX/headings-ledger"
+tok 'a heading with no row before the next one, or before the ledger ends, is named' \
+'B
+D' "$(sections_without_rows "$SRC_FIX/headings" "$SRC_FIX/headings-ledger")"
+printf 'row\n' >> "$SRC_FIX/headings-ledger"
+tok 'and one with a row under it is not' 'B' \
+    "$(sections_without_rows "$SRC_FIX/headings" "$SRC_FIX/headings-ledger")"
+# The end-of-run file's question, which only it can ask once every row is in,
+# pinned as text so that deleting it is red here. The needle is split, so that
+# this line is not among its matches.
+armed 'the end-of-run file asks every heading this run printed for a row' \
+      "$SUITE_TEXT" '"$(sections_without_rows "$HEADINGS" "$LED''GER")"'
+tok 'the headings this run printed are written down, this section'"'"'s the last so far' \
+    "=== issue #204: the driver sources each file of checks/ whole, in order, in this shell ===" \
+    "$(tail -n 1 "$HEADINGS" | cut -f2)"
+sourced_to_end

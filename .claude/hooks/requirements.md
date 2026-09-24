@@ -13,6 +13,10 @@ there has no check that covers it. Both are next to the suite and outside the
 `docs/` taxonomy on purpose (Q6): they are an input to the checks, not
 documentation of them.
 
+`check-hooks.sh` is the suite's driver: the checks themselves are in the files
+under `checks/` that it sources (#204), and where this file says
+`check-hooks.sh` holds, cites or checks something, it means the suite.
+
 ## The rules this file keeps
 
 **IDs are never renumbered and never reused.** A requirement that stops being
@@ -36,7 +40,7 @@ ever be asked of, so leaving the choice unstated made it "whatever the
 specification happened to state as an FR in 2026-09", which has no particular
 relation to where the defects have been. *What the invariance families seed*
 below defines the scope and the three values, and the foot of #106's section in
-`check-hooks.sh` holds the seed table and the transformation list to them.
+`checks/unsplit.sh` holds the seed table and the transformation list to them.
 
 ## The families
 
@@ -1282,3 +1286,7 @@ it has no entry above (Q16).
   as `command not found` with the run green, a helper redefined in a later
   section replacing it silently, and `checks/.+` taking `checks/../<hook>.sh`
   as the tooling
+- #212: the issue that owns a tag reaching into the checks after it, or missing
+  an arm of an `if`, within one file. Cited where `source_checks` clears `REQ` at
+  every file boundary, which closes that class at the boundary and nowhere
+  else; it has no entry above because the general fix is #212's to choose
