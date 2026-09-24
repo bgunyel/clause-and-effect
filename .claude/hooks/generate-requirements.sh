@@ -31,9 +31,10 @@
 # declared -- `- generated: checks/GH-<n>.sh` -- which is what tells a reader
 # not to edit it, and what tells this script the file is its own to rewrite.
 #
-# WHAT IT REFUSES, before it writes anything: a line that opens a declaration
-# spelled any other way -- indented, unquoted, a delimiter other than REQ, a
-# second word after the ID -- because the suite runs the file and reads what
+# WHAT IT REFUSES, before it writes anything: a line whose first word, after
+# any indentation, is `requirement` followed by `GH-`, spelled any other way --
+# indented, unquoted, a delimiter other than REQ, a second word after the ID --
+# because the suite runs the file and reads what
 # bash read, and a spelling this reads differently from bash is a second
 # parser that can disagree with the first; an ID outside the grammar; an ID
 # declared twice; a declaration never closed; a body that is empty, holds a
@@ -41,6 +42,12 @@
 # ID whose file is there and is not generated, which is hand-written and not
 # this script's to replace; and a generated file whose ID no issue file
 # declares any more, which a declaration taken away has left behind.
+#
+# WHAT IT DOES NOT SEE, named: a call whose first word is not `requirement` --
+# `x=1 requirement GH-7 <<'REQ'` -- or whose ID is quoted or built by another
+# command. Such a line is none of this script's; bash still runs it, and the
+# suite, which records what bash declared, finds the entry declared and not
+# written.
 #
 # WHAT IT DOES NOT DECIDE, named. Whether an entry outside the legacy set is
 # generated at all, and whether a legacy ID is declared -- the set is the

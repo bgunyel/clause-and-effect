@@ -52,7 +52,8 @@ section "=== issue #104: every requirement is covered, and every check says whic
 # from the provenance section fail rather than shorten the count it is held to.
 PROVENANCE_COUNTS='37:8 38:6 39:6 40:13 41:8'
 # THE SHAPE OF THE REQUIREMENTS, requirements.md and requirements/ (#200), as a
-# literal: every entry by ID, and beside each
+# literal and, since #205, the shape pins of the issue files beside it: every
+# entry by ID between them, and beside each
 # one whatever takes it off the both-directions rule -- a status other than
 # active, a declared direction, and `seam: none` with the kind of its `verify`.
 # Those three are everything the coverage check reads off an entry, so an edit
@@ -796,8 +797,8 @@ req_split_changed() {  # req_split_changed <name> -- exits unless the mutant dif
 # THE CHECK THAT FAILS WITHOUT THE SPLIT WORKING. A reader that does not find
 # the split set reads every `GH-` entry as absent, and nothing about an absence
 # is malformed -- so the finding that goes red is the shape, which is the literal
-# that holds every entry by ID. In the repository that is every `GH-` entry
-# dropping out of REQUIREMENT_SHAPE at once.
+# and the pins that hold every entry by ID between them. In the repository that
+# is every `GH-` entry dropping out of REQUIREMENT_SHAPE_HELD at once.
 req FR-45 FR-46 GH-200.1 GH-200.2
 cp -r "$REQ_FIX/clean" "$REQ_FIX/split-lost"
 rm -r "$REQ_FIX/split-lost/requirements"
@@ -1714,7 +1715,12 @@ exit 0" "$(bash "$HOOKS/generate-requirements.sh" --check "$HOOKS" 2>&1; printf 
 # entry's tokens are pinned in its issue file. The shape pins are compared with
 # the entries in the #104 findings below, handed over as REQUIREMENT_SHAPE_HELD;
 # the variants pins are compared here, with the scope the #141 section derived,
-# whose own comparison holds INV_SCOPE to the legacy entries alone.
+# whose own comparison holds INV_SCOPE to the legacy entries alone. Both sides
+# of the last check are empty today, because no generated entry is in the
+# families' scope yet: what it would compare is the split `legacy_tokens` makes,
+# which the #205 issue file asks of a fixture, and the pins, which it asks of
+# `variants_pin`; what it asks of this repository is nothing until such an entry
+# is written.
 req GH-205.3
 tok 'REQUIREMENT_SHAPE and INV_SCOPE hold legacy entries only, and each generated entry is pinned once, in the issue file that declares it' \
   '' "$(pins_bad "$DECLARED" "$PINNED" "$REQUIREMENT_SHAPE" "$INV_SCOPE" "$REQUIREMENTS_LEGACY")"

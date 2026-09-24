@@ -69,7 +69,9 @@ files are read in version order on the ID -- what `sort -V` gives, a bare
 `GH-<n>` before its `GH-<n>.1` and `GH-108.10` after `GH-108.9` -- and that is
 the order `--matrix` presents them in. `split-requirements.sh` moves any `GH-`
 entry found in this file into its own, and refuses to overwrite a file that
-holds something else.
+holds something else; an entry it moves that is not in the legacy set (below)
+is red all the same, because an entry written after #205 is declared rather
+than written.
 
 **A `GH-` entry written after #205 is declared, and its file is generated.**
 The issue file whose checks establish it, `checks/GH-<n>.sh`, declares it with

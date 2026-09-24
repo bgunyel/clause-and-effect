@@ -227,7 +227,11 @@
 #     families' scope. Its file under requirements/ is written by
 #     `bash .claude/hooks/generate-requirements.sh` and never by hand, and no
 #     token of it goes into REQUIREMENT_SHAPE or INV_SCOPE, which hold the
-#     entries written before #205 (#205).
+#     entries written before #205 (#205). `requirement`, `shape_pin` and
+#     `variants_pin` are defined in checks/GH-205.sh while it is their one
+#     caller; the first other issue file that calls them moves all three into
+#     the library, which the library-membership check then asks for, and until
+#     then an issue file that calls them is listed after GH-205.sh.
 #
 # Run: bash .claude/hooks/check-hooks.sh
 #      bash .claude/hooks/check-hooks.sh --matrix   the requirements matrix, issue #104

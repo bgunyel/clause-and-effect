@@ -20,8 +20,10 @@ section "=== issue #205: an entry written after it is declared in its issue file
 # says so, with its tag, where a `fail` here would carry whatever tag stood
 # before the declaration.
 requirement() {  # requirement <ID> -- declare a generated GH- entry; its fields on stdin
-  local body
-  IFS= read -r -d '' body
+  local body=
+  # A call with no heredoc would read the terminal and wait; it records an
+  # empty body instead, which the end of the run reports as not its file.
+  [ -t 0 ] || IFS= read -r -d '' body
   printf '%s\t%s\t%s\0' "$*" "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$body" >> "$DECLARED"
 }
 # THE PINS, #211's decision: the second copy of an entry's shape, and of its
@@ -69,8 +71,9 @@ REQ
 requirement GH-205.2 <<'REQ'
 - text: `generate-requirements.sh` writes each declared entry's file and
   nothing else, and a second run writes nothing. It refuses, writing nothing:
-  a line opening a declaration other than as `requirement <ID> <<'REQ'` at
-  the start of a line; an ID outside the grammar; an ID declared twice; a
+  a line whose first word, after any indentation, is `requirement` followed
+  by `GH-`, spelled other than `requirement <ID> <<'REQ'` at the start of the
+  line; an ID outside the grammar; an ID declared twice; a
   declaration never closed; a body that is empty, holds a line that is no
   field, or carries a `generated` field of its own; a declared ID whose file
   is hand-written; and a generated file no issue file declares any more. With
@@ -81,6 +84,11 @@ requirement GH-205.2 <<'REQ'
 - kind: defect-permitting
 - status: active
 - direction: static: it runs the script against fixtures and reads what it wrote and printed
+- note: A call the script does not read at all -- `x=1 requirement GH-7`,
+  a quoted ID, a declaration built by another command -- is not refused by
+  it, because a text reader is always one spelling behind bash. Bash records
+  it when the suite runs the file, and GH-205.1's check then finds an entry
+  declared and not written, so the run is red where the script was silent.
 REQ
 requirement GH-205.3 <<'REQ'
 - text: `REQUIREMENT_SHAPE` and `INV_SCOPE` hold legacy `GH-` entries only. A
@@ -190,10 +198,11 @@ req GH-205.3
 } > "$R205/pins-declared"
 printf '%s\n' \
   $'shape\tchecks/GH-7.sh\tGH-7:static GH-9 GH-8' \
-  $'shape\tchecks/GH-7.sh\tGH-7' \
+  $'shape\tchecks/GH-7.sh\tGH-7 :static' \
   $'variants\tchecks/GH-7.sh\tGH-7.1:none' > "$R205/pins-pinned"
 tok 'pins_bad names a generated entry in either shared literal, and each pin that is not once, in the file that declares it' \
-'GH-7.1: declared in checks/GH-7.sh, and its shape pinned nowhere
+':static: a pin with no ID, in checks/GH-7.sh
+GH-7.1: declared in checks/GH-7.sh, and its shape pinned nowhere
 GH-7.1: in INV_SCOPE, which holds the legacy entries; a generated entry'"'"'s variants are pinned in the issue file that declares it
 GH-7: in REQUIREMENT_SHAPE, which holds the legacy entries; a generated entry'"'"'s shape is pinned in the issue file that declares it
 GH-7: its shape pinned a second time, in checks/GH-7.sh

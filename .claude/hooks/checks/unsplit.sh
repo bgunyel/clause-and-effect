@@ -10835,11 +10835,13 @@ tok 'the seeds cover every functional requirement (FR-) with a command spelling,
 # the derivation.
 #
 # WHAT IS LITERAL, since this is the check that changes what a table has to
-# hold. INV_SCOPE is the in-scope set with each entry's answer, and it is the
-# second copy #104's shape literal exists for: without it a new `GH-` entry
-# could arrive declaring `none: <plausible reason>`, or an existing one move
-# from `seed` to `none`, and nothing here would move. With it, both go red until
-# this line moves too, which is the edit a reviewer reads. The seed verdicts are
+# hold. INV_SCOPE is the in-scope set of the legacy entries with each entry's
+# answer, and it is the second copy #104's shape literal exists for: without it
+# an entry could move from `seed` to `none: <plausible reason>` and nothing here
+# would move. With it, that goes red until this line moves too, which is the
+# edit a reviewer reads. An entry written after #205 is not here: its issue file
+# pins its answer with `variants_pin`, which is the same second copy in a file
+# one loop writes, and the end of the run compares the two. The seed verdicts are
 # a literal for the same reason they are on the FR side.
 #
 # WHAT IT STILL CANNOT DO is argued where the rule is, under *The trade, taken

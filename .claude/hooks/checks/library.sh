@@ -1106,6 +1106,9 @@ pins_bad() {  # pins_bad <declared record> <pinned record> <shape literal> <scop
     while IFS=$'\t' read -r kind file rec; do
       for tok in $rec; do
         id=${tok%%:*}
+        if [[ -z $id ]]; then
+          printf '%s: a pin with no ID, in %s\n' "$tok" "$file"; continue
+        fi
         if [[ -z ${declared[$id]+set} ]]; then
           printf '%s: its %s pinned in %s, and no issue file declares it\n' "$id" "$kind" "$file"
         elif [[ ${declared[$id]} != "$file" ]]; then
