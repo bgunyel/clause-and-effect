@@ -194,3 +194,58 @@ sentinel would be an assertion nothing can drive.
 Everything from the previous entry's Open list stands, except its line about
 the library move, which R2 corrected above. #223 holds the reviewer's five
 narrow items.
+
+# 2026-09-24 20:16 +03 — #222 review round 2 (rev-agent-205)
+
+Same branch. Code commit `b7bd9ec` and this entry follow `cd53d82`, which
+leaves the branch seven ahead of `origin/dev-05` (`cf73c82`, unchanged).
+
+## What the review found, and what was done
+
+rev-agent-205 re-ran round 1's mutants and closed G1. The reviewer then swept
+what the generator's regexes admit rather than what its prose says, and found
+one gating finding and one requested finding. Two narrow items went to #223.
+
+- **G2, taken.** The spelling guard matched the ID with `[^ ]+`, which admits
+  a tab. So `requirement GH-7<TAB>junk <<'REQ'` passed the guard, awk's
+  default field splitting made `$2` `GH-7`, and the file was written under
+  GH-7. Bash meanwhile recorded the call's ID as `GH-7 junk`. The assistant
+  wrote the class `[^ ]` in the first commit, and the previous round's sweep,
+  like the reviewer's first sweep, read the words and not the character class.
+  It is `[^ \t]+` now, the header names the tab, and the `spelled` fixture
+  gains a tab line, written with `printf` so the tab can be seen. Reverting
+  the class fails that row only (1 FAIL).
+- **R6, taken as a narrowing.** `--check` exits on a refusal before its
+  staleness pass, and the header said it prints both. The assistant chose to
+  narrow the prose rather than run the staleness pass as well. A refused run's
+  staged set is missing the refused declarations, so a staleness report beside
+  it would be about a partial set. The header and GH-205.2 now say a refusal
+  is reported alone, and GH-205.2's file was regenerated. A new fixture row
+  runs `--check` on the `partial` fixture, which has a stale file beside a
+  refusal, and expects the refusal alone. A mutant confined to `--check` that
+  goes on to the staleness pass fails that row only (1 FAIL). A first mutant,
+  which deleted the refusal's `exit 1` outright, also broke the write path
+  (9 FAIL). It said nothing about `--check` alone, so the narrower one
+  replaced it.
+
+## Sweeps
+
+- **Every character class in the diff, against a tab.** The trigger and blank
+  line tests already name `[ \t]`. The continuation test `^  [^ ]` is the same
+  class the entry readers use (`end-of-run.sh:214`, `unsplit.sh:10926`), so the
+  generator and the readers cannot disagree about a continuation. The pins
+  split on bash's IFS on both the writing and the reading side. No other gap
+  was found.
+- **Every copy of the `--check` claim.** Only the header, GH-205.2 and the PR
+  body's summary carried it. The PR body is updated too.
+
+## Numbers
+
+- `check-hooks.sh` at `b7bd9ec`: exit 0, 5,767 ok, ALL CHECKS PASSED. That is
+  5,766 plus the `--check` row; the tab joined an existing row.
+
+## Open
+
+As before. #223 now also holds the reviewer's round-2 items: a generated file
+whose marker is deleted reads as hand-written, and `DECLARED`/`PINNED` are
+generic names.
