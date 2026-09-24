@@ -1,8 +1,11 @@
 #!/bin/bash
 # THE END-OF-RUN FILE of the hook check suite: the checks that read the whole
 # record every check before them wrote -- every requirement covered, every check
-# tagged and given a direction, #148's count chain -- and REQUIREMENT_SHAPE with
-# them. check-hooks.sh sources it last, whatever else it sources.
+# tagged and given a direction, #148's count chain, #205's generated entries --
+# and the shape they are held to with them: REQUIREMENT_SHAPE, which holds the
+# legacy entries, and the issue files' shape pins beside it, handed over
+# together as REQUIREMENT_SHAPE_HELD. check-hooks.sh sources it last, whatever
+# else it sources.
 #
 # THE COMMENTS KEPT THE POSITIONAL WORDS they were written with. "Above",
 # "below", "this file" and "this suite" in a comment here mean the suite as one
@@ -52,7 +55,8 @@ section "=== issue #104: every requirement is covered, and every check says whic
 # from the provenance section fail rather than shorten the count it is held to.
 PROVENANCE_COUNTS='37:8 38:6 39:6 40:13 41:8'
 # THE SHAPE OF THE REQUIREMENTS, requirements.md and requirements/ (#200), as a
-# literal: every entry by ID, and beside each
+# literal and, since #205, the shape pins of the issue files beside it: every
+# entry by ID between them, and beside each
 # one whatever takes it off the both-directions rule -- a status other than
 # active, a declared direction, and `seam: none` with the kind of its `verify`.
 # Those three are everything the coverage check reads off an entry, so an edit
@@ -75,6 +79,15 @@ PROVENANCE_COUNTS='37:8 38:6 39:6 40:13 41:8'
 # establish covers that ID all the same, and only reading the check says so. And
 # the direction each check records, which is this file's code, not
 # requirements.md's.
+#
+# IT HOLDS THE LEGACY ENTRIES AND NO OTHER `GH-` ONE (#205). Every loop that
+# added an entry appended a token here, so the conflict #200 took out of
+# requirements.md stood in this hunk instead. An entry written after #205 is
+# declared in its issue file, and its token is pinned there with `shape_pin`;
+# what the comparison is handed is this literal with every pin,
+# REQUIREMENT_SHAPE_HELD below, and the #205 checks at the end of this section
+# go red on a generated entry written here and on a pin that is not once, in
+# the issue file that declares its entry.
 REQUIREMENT_SHAPE='
 US-1:refuse-only US-2:refuse-only US-3 US-4:permit-only US-5:gap,runbook
 US-6:gap,runbook US-7:refuse-only US-8 US-9 US-10 US-11 US-12
@@ -116,6 +129,10 @@ GH-200.1:static GH-200.2:static GH-200.3:static GH-200.4:static GH-200.5:static
 GH-204.1:static GH-204.2:static GH-204.3:static GH-204.4:static GH-204.5:static
 GH-204.6:static GH-204.7:static GH-204.8:static
 '
+# Every shape pin the issue files recorded, as tokens; see `shape_pin` in the
+# #205 issue file.
+REQUIREMENT_SHAPE_PINNED=$(awk -F'\t' '$1 == "shape" { print $3 }' "$PINNED" | tr '\n' ' ')
+REQUIREMENT_SHAPE_HELD="$REQUIREMENT_SHAPE $REQUIREMENT_SHAPE_PINNED"
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in
 # REQ_FIELD_AWK above, prepended to this program by `requirements_read`.
@@ -783,8 +800,8 @@ req_split_changed() {  # req_split_changed <name> -- exits unless the mutant dif
 # THE CHECK THAT FAILS WITHOUT THE SPLIT WORKING. A reader that does not find
 # the split set reads every `GH-` entry as absent, and nothing about an absence
 # is malformed -- so the finding that goes red is the shape, which is the literal
-# that holds every entry by ID. In the repository that is every `GH-` entry
-# dropping out of REQUIREMENT_SHAPE at once.
+# and the pins that hold every entry by ID between them. In the repository that
+# is every `GH-` entry dropping out of REQUIREMENT_SHAPE_HELD at once.
 req FR-45 FR-46 GH-200.1 GH-200.2
 cp -r "$REQ_FIX/clean" "$REQ_FIX/split-lost"
 rm -r "$REQ_FIX/split-lost/requirements"
@@ -964,7 +981,7 @@ tok 'and the matrix presents the entries in that order' \
 # matrix disagreeing with the statement, whatever the function does.
 REPO_GH_ORDER=$(requirements_read matrix "$HOOKS/requirements.md" "$REQ_FIX/empty-ledger" \
                   "$SUITE_TEXT" "$REPO_ROOT" "$HOOKS/runbook.md" \
-                  "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE" | awk '/^GH-/ { print $1 }')
+                  "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE_HELD" | awk '/^GH-/ { print $1 }')
 if [ -z "$REPO_GH_ORDER" ]; then
   fail static 'the matrix of this repository printed no GH- entry, so its order says nothing'
 else
@@ -1675,6 +1692,58 @@ tok 'a malformed argument list is a usage error, each way' '64 64 64' \
      bash "$HOOKS/split-requirements.sh" --bogus > /dev/null 2>&1; printf '%s ' "$?"
      bash "$HOOKS/split-requirements.sh" "$S3P" "$S3P" > /dev/null 2>&1; printf '%s' "$?")"
 
+echo "--- #205: every GH- entry outside the legacy set is generated from its declaration ---"
+# Asked here, after the last issue file, because the record of what was
+# declared and pinned is complete only once every issue file has run. The
+# helpers are the library's, and the #205 issue file drives each against a
+# fixture first.
+#
+# What was declared is the record bash wrote as it ran each `requirement`
+# call, and the files are held to it; the generator's own reading of the issue
+# files is then held to the same IDs. So the two readings of one declaration --
+# bash's and the generator's awk -- meet in the files, and a declaration one of
+# them reads and the other does not is red in one of the two checks below.
+req GH-205.1
+R205_DECLARED_IDS=$(while IFS= read -r -d '' R205_REC; do printf '%s\n' "${R205_REC%%$'\t'*}"; done < "$DECLARED" \
+                      | LC_ALL=C sort -V | tr '\n' ' ' | sed 's/ $//')
+[ -n "$R205_DECLARED_IDS" ] \
+  || fail static 'no issue file declared an entry, so the checks below ask about none'
+tok 'every GH- entry outside the legacy set is, byte for byte, its declaration as this run read it, in its own issue'"'"'s file, and every legacy entry is a hand-written file' \
+  '' "$(generated_bad "$DECLARED" "$HOOKS/requirements" "$REQUIREMENTS_LEGACY")"
+# The script is the judged one, and it is run over the issue files this run
+# sourced and the judged requirements/, which `generator_view` puts in one
+# directory; the #205 issue file drives it against a judged side that has no
+# checks/. In this repository the two sides are one directory, so this suite
+# cannot see the two arguments swapped here. The harness can, because it runs
+# the suite with CHECK_HOOKS_DIR on a copy: swapped, the two rows that edit a
+# file under requirements/ and name GH-205.2 among their IDs,
+# generated-entry-edited-by-hand and legacy-entry-marked-generated, go from
+# caught to survived, since this check then reads the suite's requirements/,
+# which the mutation did not touch, and not the mutated copy's (review of PR
+# #222, round 4, and re-measured).
+req GH-205.2
+R205_VIEW=$(generator_view "$SUITE_DIR" "$HOOKS" "$FIXTURES/generator-view")
+tok 'generate-requirements.sh reads the declarations this run read, and would write nothing' \
+  "generate-requirements.sh: every generated entry is its declaration: $R205_DECLARED_IDS
+exit 0" "$(bash "$HOOKS/generate-requirements.sh" --check "$R205_VIEW" 2>&1; printf 'exit %s' "$?")"
+# #211, decided: the shared literals hold the legacy entries, and a generated
+# entry's tokens are pinned in its issue file. The shape pins are compared with
+# the entries in the #104 findings below, handed over as REQUIREMENT_SHAPE_HELD;
+# the variants pins are compared here, with the scope the #141 section derived,
+# whose own comparison holds INV_SCOPE to the legacy entries alone. Both sides
+# of the last check are empty today, because no generated entry is in the
+# families' scope yet: what it would compare is the split `legacy_tokens` makes,
+# which the #205 issue file asks of a fixture, and the pins, which it asks of
+# `variants_pin`; what it asks of this repository is nothing until such an entry
+# is written.
+req GH-205.3
+tok 'REQUIREMENT_SHAPE and INV_SCOPE hold legacy entries only, and each generated entry is pinned once, in the issue file that declares it' \
+  '' "$(pins_bad "$DECLARED" "$PINNED" "$REQUIREMENT_SHAPE" "$INV_SCOPE" "$REQUIREMENTS_LEGACY")"
+tok 'the generated entries in the families scope are these, each with what it says the families do with it, as their issue files pin them' \
+  "$(awk -F'\t' '$1 == "variants" { n = split($3, t, " "); for (i = 1; i <= n; i++) print t[i] }' "$PINNED" \
+       | LC_ALL=C sort | tr '\n' ' ')" \
+  "$(legacy_tokens out "$REQUIREMENTS_LEGACY" "$INV_SCOPE_DERIVED")"
+
 echo "--- every result goes through pass and fail ---"
 # A result printed any other way is printed and not recorded, so it covers
 # nothing and is refused for having no tag by nothing. The lines that print a
@@ -1698,7 +1767,7 @@ echo "--- this repository ---"
 # check above this line; their own results reach the matrix and not this reading.
 cp "$LEDGER" "$FIXTURES/ledger-read"
 FINDINGS=$(requirements_read findings "$HOOKS/requirements.md" "$FIXTURES/ledger-read" \
-             "$SUITE_TEXT" "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE")
+             "$SUITE_TEXT" "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE_HELD")
 FINDINGS_STATUS=$?
 # An awk that failed may print nothing, or only the findings before the failure,
 # and a loop over what it printed passes by asking too little -- the permitting
@@ -1732,7 +1801,7 @@ done <<< "$FINDINGS"
 req GH-148
 MUT_MATRIX_LINE=$(requirements_read matrix "$SUITE_DIR/requirements.md" "$FIXTURES/ledger-read" \
                     "$SUITE_TEXT" "$REPO_ROOT" "$SUITE_DIR/runbook.md" \
-                    "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE" \
+                    "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE_HELD" \
                   | awk '/^requirements matrix: / { print; exit }')
 REQ_ACTIVE_CANON=$(printf '%s\n' "$MUT_MATRIX_LINE" \
                    | awk -F'[;,] *' '{ print $2 }' | awk '{ print $1 }')
@@ -1854,7 +1923,7 @@ every heading section wrote down has at least one row under it' \
 # above included, and then the verdict line the run would have printed.
 if [ -n "$MATRIX" ]; then
   requirements_read matrix "$HOOKS/requirements.md" "$LEDGER" "$SUITE_TEXT" \
-    "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE" >&3
+    "$REPO_ROOT" "$HOOKS/runbook.md" "$PROVENANCE_COUNTS" "$REQUIREMENT_SHAPE_HELD" >&3
   MATRIX_STATUS=$?
   exec >&3
   if [ "$MATRIX_STATUS" != 0 ]; then

@@ -10835,11 +10835,13 @@ tok 'the seeds cover every functional requirement (FR-) with a command spelling,
 # the derivation.
 #
 # WHAT IS LITERAL, since this is the check that changes what a table has to
-# hold. INV_SCOPE is the in-scope set with each entry's answer, and it is the
-# second copy #104's shape literal exists for: without it a new `GH-` entry
-# could arrive declaring `none: <plausible reason>`, or an existing one move
-# from `seed` to `none`, and nothing here would move. With it, both go red until
-# this line moves too, which is the edit a reviewer reads. The seed verdicts are
+# hold. INV_SCOPE is the in-scope set of the legacy entries with each entry's
+# answer, and it is the second copy #104's shape literal exists for: without it
+# an entry could move from `seed` to `none: <plausible reason>` and nothing here
+# would move. With it, that goes red until this line moves too, which is the
+# edit a reviewer reads. An entry written after #205 is not here: its issue file
+# pins its answer with `variants_pin`, which is the same second copy in a file
+# one loop writes, and the end of the run compares the two. The seed verdicts are
 # a literal for the same reason they are on the FR side.
 #
 # WHAT IT STILL CANNOT DO is argued where the rule is, under *The trade, taken
@@ -11028,9 +11030,13 @@ set +f
 pass static 'the families scope holds %d GH- entries: %d seeded, %d naming a transformation, %d with no command spelling to vary' \
   "$INV_SCOPE_N" "$INV_SCOPE_SEED" "$INV_SCOPE_TRANS" "$INV_SCOPE_NONE"
 
+# The legacy entries only (#205): an entry written after #205 pins its variants
+# in the issue file that declares it, and the end of the run compares those
+# pins with this derivation, which is where every issue file has run.
 req GH-141
-tok 'the GH- entries in the families scope are these, each with what it says the families do with it' \
-  "$(inv_sorted "$INV_SCOPE")" "$(inv_sorted "$INV_SCOPE_DERIVED")"
+tok 'the legacy GH- entries in the families scope are these, each with what it says the families do with it' \
+  "$(inv_sorted "$INV_SCOPE")" \
+  "$(inv_sorted "$(legacy_tokens in "$REQUIREMENTS_LEGACY" "$INV_SCOPE_DERIVED")")"
 
 # The two halves of one claim, and it is deliberately an equality and not an
 # inclusion: an entry declaring `seed` and tagged on no seed is a scope decision
@@ -11615,7 +11621,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '81' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '85' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11741,7 +11747,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '79' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '83' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.

@@ -700,6 +700,10 @@ a-new-refusal-arm-sharing-a-line%no-git-push.sh%/A wildcard refspec does not nam
 one-of-two-no-base-arms-loses-its-sentence%no-pr-decisions.sh%/This names \$BAD_BASE/,+6s/, so this would go to the repository.s default branch//%US-7 GH-109.2%caught
 push-load-guard-drops-what-it-cannot-tell%no-git-push.sh%s/, so it cannot tell whether this command pushes, or where to//%US-7 GH-84.1 GH-109.2%caught
 decision-load-guard-drops-what-it-cannot-tell%no-pr-decisions.sh%s/, so it cannot tell whether this command decides a pull request or a release//%US-7 GH-84.1 GH-109.2%caught
+generated-entry-edited-by-hand%requirements/GH-205.1.md%s/^- from: #205$/- from: #205, edited by hand/%GH-205.1 GH-205.2%caught
+legacy-entry-marked-generated%requirements/GH-61.md%$a- generated: checks/GH-61.sh%GH-205.1 GH-205.2%caught
+generator-drops-the-generated-field%generate-requirements.sh%s/ body "- generated: " rel "\\n"/ body/%GH-205.2%caught
+generator-replaces-a-hand-written-file%generate-requirements.sh%s/if \[ -e "\$f" \] [&][&] ! grep/if false \&\& ! grep/%GH-205.2%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS
