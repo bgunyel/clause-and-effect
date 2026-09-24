@@ -1778,10 +1778,10 @@ fi
 # ledger, of every heading `section` wrote down (see `heading_mark`, and #204's
 # step-2 section at the end of the unsplit file, which drives the reading). A
 # heading moved into another file without its rows, or left behind when they
-# moved, is a heading of nothing. That the row below ran, under its own tag, is
-# read back from the ledger by the last check before the matrix: the unsplit
-# file's text pin of it shows only that it is written (round 3 of the review of
-# PR #220).
+# moved, is a heading of nothing. That the row below ran, under its own tag and
+# with its own label, is read back from the ledger by the last check before the
+# matrix: the unsplit file's text pin of it shows only that it is written
+# (rounds 3 and 4 of the review of PR #220).
 req GH-204.8
 tok 'every section heading this run printed has at least one row under it' \
     '' "$(sections_without_rows "$HEADINGS" "$LEDGER")"
@@ -1842,7 +1842,7 @@ fi
 # of PR #220). Its label is read as well as its tag, so the GH-204.8 row in that
 # place is that question's and not another's (round 4).
 req GH-204.1 GH-204.5 GH-204.8
-tok 'the heading question and the verdict'"'"'s three questions end the ledger, each as a row under its own requirement' \
+tok 'the heading question and the verdict'"'"'s three questions end the ledger, each as a row under its own requirement, the heading question'"'"'s under its own label' \
 'GH-204.8
 GH-204.1
 GH-204.5
