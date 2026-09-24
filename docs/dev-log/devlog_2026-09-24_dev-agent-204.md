@@ -142,3 +142,82 @@ in four places, and each is in the pull request:
 - **#189, #184 and #158 must rebase across this move.**
 - **Nobody has written an issue file yet.** The next loop that writes checks
   writes the first.
+
+## 2026-09-24 11:50 +03 — PR #220, review round 1
+
+Branch `worktree-issue-204-driver`, commits `8b9f906..56e86fe` plus this entry,
+five ahead of `origin/dev-05` (`6884732`). rev-agent-204's round 1 is
+[comment 5810561483](https://github.com/bgunyel/clause-and-effect/pull/220#issuecomment-5810561483):
+one gating finding, two filed as #221, one prose.
+
+### Finding 1, taken with a different fix
+
+An end marker written before a file's last line, followed by a `return`,
+passed as a whole run. The reviewer's m8c showed it: exit 0, `ALL CHECKS
+PASSED`, one row short. The routine asked the marker's presence and its place
+in the record, and both held.
+
+The reviewer suggested counting the lines that read `sourced_to_end` and
+requiring one. The assistant declined that and measured why: the count is a
+text proxy for a runtime property, and `if true; then sourced_to_end; return
+0; fi` is not a line that reads `sourced_to_end`. On a clone of `8b9f906` with
+the count applied as "at most one" and that line inserted before the unsplit
+file's last row, the suite exited 0 with `ALL CHECKS PASSED` and one row fewer.
+The same clone with the own-line m8c shape went red, so the count closes the
+instance named and not its sibling.
+
+What was done instead: `sourced_to_end` records `BASH_LINENO[0]`, measured on
+bash 5.2.21 to be the line in the sourced file. The routine, the driver's
+`SOURCED_WANT` and so its row, its verdict and its EXIT trap all expect
+`end <file> <last line>`. The (iv') fixture carries both shapes, the own-line
+one and the one-line one. A stray second marker with no `return` passes the
+routine's last-marker question, and the driver's whole-record comparison
+catches it; the verdict fixture now has that `long` record.
+
+### Findings 2 and 3, agreed as filed
+
+Each needs two independent mistakes in one file, and each mistake alone is
+caught. The assistant agrees with filing them in #221 rather than gating. This
+round's change leaves both where they were.
+
+### Finding 4, taken, and the sweep widened it
+
+The routine's comment named three questions in an order the code does not
+follow. It now names five, in code order. GH-204.6's text had the same defect:
+it said "records a start marker, clears `REQ`" where the code clears first. It
+now follows the code. GH-204.7 and GH-204.8 state no sequence and were left.
+ADR 0004's summary sentence names no count and was left. Its consequence bullet
+on the end marker, and the driver header's convention for a new issue file,
+now say the marker names its line and is called once.
+
+### Mistakes, and what caught them
+
+- **The assistant's first mutant of the reviewer's fix proved nothing.** It
+  applied the count as "exactly one", and it went red. The cause was the
+  existing no-end fixture, where a file with no marker now printed an extra
+  FAIL, and not the shape under test. The assistant re-ran it as "at most one",
+  which is the reviewer's intent, and that run is the one reported above.
+- **The citation audit went red on the first run.** The new comments cite
+  #220, which had no entry, and the #104 audit refused it. #220 now has one
+  under the citations that are not requirements.
+
+### Evidence (measured)
+
+- Head `56e86fe`: 5,728 `ok`, exit 0, `ALL CHECKS PASSED`. That is one more row
+  than round 1's 5,727, the (iv') row.
+- Mutants, each on its own scratch clone, each diff checked to have applied:
+  - m8c on `56e86fe` (own-line marker and `return` before the last row): exit
+    1, FAILs from the routine and the driver's row.
+  - m8d on `56e86fe` (the one-line shape): exit 1, the same two FAILs.
+  - m10 on `56e86fe` (a stray marker with no `return`): exit 1, the driver's
+    row alone.
+  - m11 on `56e86fe` (the routine accepts any line number): exit 1, the (iv')
+    row alone.
+  - The reviewer's count, as "at most one", on `8b9f906`, with the one-line
+    shape: **exit 0, `ALL CHECKS PASSED`**, 5,726 `ok`. With the own-line
+    shape: exit 1.
+
+### Open
+
+- #221 holds Findings 2 and 3.
+- #218, #217 and the shared hunks named in the step-2 entry are unchanged.
