@@ -1290,3 +1290,7 @@ it has no entry above (Q16).
   an arm of an `if`, within one file. Cited where `source_checks` clears `REQ` at
   every file boundary, which closes that class at the boundary and nowhere
   else; it has no entry above because the general fix is #212's to choose
+- #220: the pull request for #204's second step; rev-agent-204's review of it is
+  cited where what it found stands -- an end marker written before a file's
+  last line and followed by a `return`, which the record read as a whole run
+  until the marker carried the line it was written from

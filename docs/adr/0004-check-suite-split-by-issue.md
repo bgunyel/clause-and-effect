@@ -87,7 +87,9 @@ is therefore a file with one writer, and two loops never open the same one.
 - Each file writes its own end marker with its last line, `sourced_to_end`.
   Bash returns from `.` the same way at a `return` halfway through a file as at
   its end, so a marker written by the routine after the `.` would call a file
-  that returned early whole. A file that runs `exit 0` ends the run before the
+  that returned early whole. The marker names the line it was written from,
+  and the routine asks that it is the file's last: a marker's presence alone
+  would pass a file that wrote one early and then returned. A file that runs `exit 0` ends the run before the
   routine can ask anything, so the driver's EXIT trap turns a status of 0 into 1
   when the record is short.
 - The sourcing record is a file of its own, not rows in the ledger. The ledger

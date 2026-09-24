@@ -905,14 +905,15 @@ record_of() {  # record_of <file> <out> -- 1 if sourcing <file> alone defined no
 }
 
 # THE SOURCING ROUTINE (#204). check-hooks.sh sources every file of checks/ but
-# this one through it, once, in the order of one list the driver writes. For
-# each file it records a start marker, clears REQ, sources the file into this
-# shell, clears REQ again, and asks three things of what happened, failing the
-# run on each: that the file was there, that it ran to its last line in this
-# shell, and that it left the shell's options, working directory, umask and
-# traps as it found them. Before any of that it asks that every file under the
-# directory is on the list or is this library, so an issue file added and not
-# listed is a FAIL rather than a file whose checks never ran.
+# this one through it, once, in the order of one list the driver writes. It asks
+# five things, failing the run on each, in this order. First, once: that every
+# file under the directory is on the list or is this library, so an issue file
+# added and not listed is a FAIL rather than a file whose checks never ran. Then
+# for each file, which it opens by clearing REQ: that the file is there; that
+# its last line is `sourced_to_end`; and, once it has recorded a start marker,
+# sourced the file into this shell and cleared REQ again, that the file left the
+# shell's options, working directory, umask and traps as it found them, and
+# that it ran to its last line in this shell.
 #
 # REQ IS CLEARED AT EVERY FILE BOUNDARY, as `section` clears it at a heading:
 # a file that ended inside a `req` would otherwise tag the first rows of the
@@ -924,8 +925,13 @@ record_of() {  # record_of <file> <out> -- 1 if sourcing <file> alone defined no
 # reached its end or ran a `return` halfway through it -- measured, bash 5.2:
 # the status and everything after the `.` are the same -- so a marker written
 # here after the `.` would say a file that returned early had run whole. The
-# marker, and the file's last line being the call that writes it, are both
-# asked. An `exit` ends the run before anything here can ask, so the driver's
+# marker carries the line it was written from, and what is asked is that the
+# last marker recorded is the file's own, written from its last line. A marker
+# asked only for its presence would pass a file that wrote one early and then
+# returned (round 1 of the review of PR #220). Counting the lines that read
+# `sourced_to_end` would not close that: `sourced_to_end; return 0` is not such
+# a line, and it returns early all the same. The line the call was made from is
+# what the marker is meant to attest, so it is the thing asked. An `exit` ends the run before anything here can ask, so the driver's
 # EXIT trap asks it (SUITE_EXIT_CODE). A file sourced outside this shell --
 # inside a ( ) or a $( ) -- writes no marker, because `sourced_mark` writes only
 # from $SOURCED_SHELL, the shell the driver runs in, as `record` does; so its
@@ -968,8 +974,8 @@ source_checks() {  # source_checks <dir> <file>... -- source each file of <dir>,
     cmp -s "$SOURCED.before" "$SOURCED.after" \
       || sourcing_fail '%s left the shell changed:\n%s' "$sc_file" \
            "$(diff "$SOURCED.before" "$SOURCED.after" | sed -n 's/^< /         was: /p; s/^> /         now: /p')"
-    [ "$(tail -n 1 -- "$SOURCED" 2>/dev/null)" = "end $sc_dir/$sc_file" ] \
-      || sourcing_fail '%s did not run to its last line in this shell: it returned early, or was sourced in a subshell, and its end marker is not the last one recorded' \
+    [ "$(tail -n 1 -- "$SOURCED" 2>/dev/null)" = "end $sc_dir/$sc_file $(sed -n '$=' -- "$sc_dir/$sc_file")" ] \
+      || sourcing_fail '%s did not run to its last line in this shell: it returned early, or was sourced in a subshell, and the last marker recorded is not its end marker written from its last line' \
            "$sc_file"
   done
 }
@@ -990,16 +996,18 @@ sourcing_fail() {  # sourcing_fail <format> [arguments...]
 shell_state() {  # shell_state <out> -- `set +o`, `shopt -p`, the directory, the umask and `trap -p`
   { set +o; shopt -p; printf 'directory %s\n' "$PWD"; umask; trap -p; } > "$1"
 }
-# The sourcing record, $SOURCED: "start <file>" and "end <file>", a line each,
-# written from $SOURCED_SHELL and from no subshell of it.
+# The sourcing record, $SOURCED: "start <file>" and "end <file> <line>", a line
+# each, written from $SOURCED_SHELL and from no subshell of it.
 sourced_mark() {  # sourced_mark <start|end> <file>
   [ -n "$SOURCED" ] && [ "$BASHPID" = "$SOURCED_SHELL" ] || return 0
   printf '%s %s\n' "$1" "$2" >> "$SOURCED"
 }
 # THE LAST LINE OF EVERY FILE source_checks SOURCES, and nothing else: the file
-# that calls it is the one that reached its end.
+# that calls it, and the line it was called from, which is that file's last
+# only if the file reached its end. BASH_LINENO[0] is the line in the sourced
+# file, not in the driver (measured, bash 5.2).
 sourced_to_end() {  # sourced_to_end -- the end marker of the file that calls it
-  sourced_mark end "${BASH_SOURCE[1]}"
+  sourced_mark end "${BASH_SOURCE[1]} ${BASH_LINENO[0]}"
 }
 
 # EVERY SECTION HEADING HAS A ROW UNDER IT. `section` writes each heading down

@@ -195,10 +195,11 @@
 #
 # HOW A LOOP ADDS TO THE SUITE, which is the conventions and not the reasons:
 #   - A new issue's checks go in a new issue file, named by the issue, which
-#     opens with its own section heading, ends with the line `sourced_to_end`,
-#     and is added at the end of $SUITE_CHECKS below. `source_checks` fails the
-#     run on a file under checks/ that is on no list, and on one that does not
-#     end with that line.
+#     opens with its own section heading, ends with the line `sourced_to_end`
+#     and calls it nowhere else, and is added at the end of $SUITE_CHECKS
+#     below. `source_checks` fails the run on a file under checks/ that is on
+#     no list, and on one that does not end with that line; the record fails it
+#     on a second call.
 #   - An existing issue's checks move out of the unsplit file only when a loop
 #     touches them for its own reasons.
 #   - A move keeps the same set of rows, keeps their order within the issue file
@@ -422,13 +423,15 @@ LOADED_BODY[command_not_found_handle]=$(declare -f command_not_found_handle)
 FIXTURES=$(mktemp -d)
 # THE SOURCING RECORD, and what it has to say by the end: every file
 # `source_checks` sources, started and run to its last line, in the order it was
-# listed, in this shell. See `source_checks` in the library for how each marker
+# listed, in this shell -- each end marker naming the line it was written from,
+# which is the file's last. See `source_checks` in the library for how each marker
 # is written, and the checks after the last file for how the two are compared.
 SOURCED="$FIXTURES/sourced"
 : > "$SOURCED"
 SOURCED_SHELL=$$
 SOURCED_WANT=$(for f in $SUITE_CHECKS $SUITE_LAST; do
-                 printf 'start %s\nend %s\n' "$SUITE_DIR/checks/$f" "$SUITE_DIR/checks/$f"
+                 printf 'start %s\nend %s %s\n' "$SUITE_DIR/checks/$f" "$SUITE_DIR/checks/$f" \
+                   "$(sed -n '$=' -- "$SUITE_DIR/checks/$f" 2>/dev/null)"
                done)
 # THE EXIT TRAP, which removes the fixtures and asks one question on the way out
 # that nothing else can: a check file that runs `exit 0` ends the run there, with
