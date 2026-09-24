@@ -14846,7 +14846,12 @@ tok 'and the record it is held to names the same list in the same order' \
 # after the matrix --matrix prints -- so it is pinned as text, as the unsplit
 # file's #204 section pins the registry audit's arms. The whole statement and
 # not its first line: a `|| :` for the `|| fail` would keep a first-line pin
-# green with the row gone (round 2 of the review of PR #220).
+# green with the row gone (round 2 of the review of PR #220). What a text pin
+# cannot show is that the statement runs: a `||` ending the line before it, or
+# an `if false` around it, keeps the pin green and the row off (round 3), and
+# no wider grep ends that, since there is always a line above. Accepted, as a
+# shape nobody writes by mistake; SOURCED_VERDICT_CODE, driven above, asks the
+# same question again, and a text pin is not what backs it.
 SV_ROW=$(cat <<'EOF'
 [[ $(< "$SOURCED") == "$SOURCED_WANT" ]] \
   || fail static 'the files the driver sources did not each run from start to end, in order, in this shell; the sourcing record says:\n%s' \
@@ -14879,7 +14884,10 @@ tok 'and one with a row under it is not' 'B' \
 # The end-of-run file's question, which only it can ask once every row is in,
 # pinned as text so that deleting it is red here. The whole statement, read out
 # of that file alone: a pin of its argument would stay green with the `tok` in
-# front of it made a `:` (round 2 of the review of PR #220).
+# front of it made a `:` (round 2 of the review of PR #220). A text pin shows it
+# is written and not that it runs -- a `||` ending the line before it keeps this
+# green (round 3) -- so the end-of-run file reads its row back from the ledger,
+# under GH-204.8, as the fourth row from the end.
 HEADINGS_ROW=$(cat <<'EOF'
 tok 'every section heading this run printed has at least one row under it' \
     '' "$(sections_without_rows "$HEADINGS" "$LEDGER")"
@@ -14891,4 +14899,13 @@ tok 'the end-of-run file asks every heading this run printed for a row' \
 tok 'the headings this run printed are written down, this section'"'"'s the last so far' \
     "=== issue #204: the driver sources each file of checks/ whole, in order, in this shell ===" \
     "$(tail -n 1 "$HEADINGS" | cut -f2)"
+# And every `===` heading goes through `section`, which writes it down and
+# clears REQ. One printed with `echo` or `printf` would be neither: the check
+# above would count its rows for the heading before it, and the tag the rows
+# before it ended under would carry into its own (round 3 of the review of PR
+# #220). Read as text, so what it sees is a line that opens with `echo` or
+# `printf`, then options or a `%s\n` format, then a literal `===`; a heading
+# printed from a variable is not seen.
+tok 'no file of the suite prints a === heading other than through section' \
+    '' "$(grep -nE '^[[:space:]]*(echo|printf)[[:space:]]+(-[a-zA-Z]+[[:space:]]+|['"'"'"]%s\\n['"'"'"][[:space:]]+)*['"'"'"]?===' "${SUITE_FILES[@]}")"
 sourced_to_end
