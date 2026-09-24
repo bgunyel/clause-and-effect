@@ -1,8 +1,11 @@
 #!/bin/bash
 # THE END-OF-RUN FILE of the hook check suite: the checks that read the whole
 # record every check before them wrote -- every requirement covered, every check
-# tagged and given a direction, #148's count chain -- and REQUIREMENT_SHAPE with
-# them. check-hooks.sh sources it last, whatever else it sources.
+# tagged and given a direction, #148's count chain, #205's generated entries --
+# and the shape they are held to with them: REQUIREMENT_SHAPE, which holds the
+# legacy entries, and the issue files' shape pins beside it, handed over
+# together as REQUIREMENT_SHAPE_HELD. check-hooks.sh sources it last, whatever
+# else it sources.
 #
 # THE COMMENTS KEPT THE POSITIONAL WORDS they were written with. "Above",
 # "below", "this file" and "this suite" in a comment here mean the suite as one
