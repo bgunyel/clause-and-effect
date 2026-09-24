@@ -4,11 +4,18 @@
 # the suite that runs, not of the hooks it judges.
 #
 # WHAT BELONGS HERE: a function with callers in more than one file of the
-# suite, where each section of check-hooks.sh counts as a caller of its own,
-# and so does its prelude. A call made from inside a function here counts for
+# suite. It counts calling files, not sections: each issue file is one caller
+# and so is the end-of-run file, and so is the driver's prelude. While a caller
+# is still in the unsplit file, each section of that file counts as a caller of
+# its own, which is what gives the rule a meaning before any issue file holds
+# the section that calls. A call made from inside a function here counts for
 # every caller of that function, so `record` is here because `pass` is. A
 # helper with one caller stays beside that caller, and comes here when a second
-# one appears.
+# one appears; two sections of one issue file are one caller, because only one
+# issue's work edits them. The #204 section in the unsplit file derives the set
+# from the code and fails on a function on the wrong side, in either
+# direction. Why it counts files and not sections is
+# docs/adr/0004-check-suite-split-by-issue.md.
 #
 # WHAT IT DOES: it defines functions and nothing else. Sourcing it runs no
 # check, prints nothing and records nothing; the variables its functions read
@@ -17,8 +24,8 @@
 #
 # THE COMMENTS MOVED HERE WITH THEIR FUNCTIONS, and they kept the positional
 # words they were written with. "Above", "below", "the foot of this suite" and
-# "this file" in a function's comment mean check-hooks.sh as it stood around
-# that function, which is where its callers still are.
+# "this file" in a function's comment mean the suite as one text, its files in
+# the order the driver sources them, around where that function stood.
 
 # EVERY RESULT IS RECORDED, WITH THE REQUIREMENTS IT ESTABLISHES. Issue #104.
 # Nothing connected the requirements in requirements.md to the checks meant to
@@ -71,6 +78,7 @@ req() {  # req <ID>... -- the requirements the checks after this establish
 section() {  # section <heading> -- print it, and let no tag carry across it
   REQ=
   printf '%s\n' "$1"
+  heading_mark "$1"
 }
 # Where a hook is, given what a check names: a bare filename is one of this
 # repository's, an absolute path is a fixture copy of one. Written once because
@@ -894,4 +902,125 @@ suite_range() {  # suite_range <variable> <sed address> <sed address> -- 1 on an
 record_of() {  # record_of <file> <out> -- 1 if sourcing <file> alone defined nothing
   env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$1" > "$2"
   [ -s "$2" ]
+}
+
+# THE SOURCING ROUTINE (#204). check-hooks.sh sources every file of checks/ but
+# this one through it, once, in the order of one list the driver writes. It asks
+# five things, failing the run on each, in this order. First, once: that every
+# file under the directory is on the list or is this library, so an issue file
+# added and not listed is a FAIL rather than a file whose checks never ran. Then
+# for each file, which it opens by clearing REQ: that the file is there; that
+# its last line is `sourced_to_end`; and, once it has recorded a start marker,
+# sourced the file into this shell and cleared REQ again, that the file left the
+# shell's options, working directory, umask and traps as it found them, and
+# that it ran to its last line in this shell.
+#
+# REQ IS CLEARED AT EVERY FILE BOUNDARY, as `section` clears it at a heading:
+# a file that ended inside a `req` would otherwise tag the first rows of the
+# next one with requirements they do not establish (#212's class, closed here
+# at the boundary only).
+#
+# THE END MARKER IS WRITTEN BY THE FILE, not by this routine: every file's last
+# line is `sourced_to_end`. Bash returns from `.` the same way whether the file
+# reached its end or ran a `return` halfway through it -- measured, bash 5.2:
+# the status and everything after the `.` are the same -- so a marker written
+# here after the `.` would say a file that returned early had run whole. The
+# marker carries the line it was written from, and what is asked is that the
+# last marker recorded is the file's own, written from its last line. A marker
+# asked only for its presence would pass a file that wrote one early and then
+# returned (round 1 of the review of PR #220). Counting the lines that read
+# `sourced_to_end` would not close that: `sourced_to_end; return 0` is not such
+# a line, and it returns early all the same. The line the call was made from is
+# what the marker is meant to attest, so it is the thing asked. An `exit` ends the run before anything here can ask, so the driver's
+# EXIT trap asks it (SUITE_EXIT_CODE). A file sourced outside this shell --
+# inside a ( ) or a $( ) -- writes no marker, because `sourced_mark` writes only
+# from $SOURCED_SHELL, the shell the driver runs in, as `record` does; so its
+# checks, which would print and go uncounted, are a FAIL instead.
+#
+# The names it keeps are prefixed, because a file it sources shares them: a
+# check file assigning `f` at its top level, as several do, would otherwise
+# change which file this routine asks about next. What a file does to this
+# routine's positional parameters it does to its own: `.` hands the file this
+# function's, so a check file reads no `$1` at its top level. And a `declare`
+# at a file's top level declares a variable local to this routine, not a global:
+# the #106 section's `declare -A INV_DEP` and its three siblings are such, and
+# they work because every reader of them runs inside this call. A variable
+# read after the last file has run -- by the driver's verdict, say -- has to be
+# declared in the driver or with `declare -g`.
+source_checks() {  # source_checks <dir> <file>... -- source each file of <dir>, in order, into this shell
+  local sc_dir=$1 sc_file
+  shift
+  [ -n "$SOURCED" ] || { sourcing_fail 'there is no sourcing record, so nothing can say what ran'; return 1; }
+  while IFS= read -r sc_file; do
+    case " $* $SUITE_LIBRARY " in *" $sc_file "*) continue ;; esac
+    sourcing_fail '%s is under %s and on no list the driver sources, so no check in it runs' \
+      "$sc_file" "$sc_dir"
+  done < <(cd -- "$sc_dir" 2>/dev/null && find . ! -type d | sed 's|^\./||' | LC_ALL=C sort)
+  for sc_file; do
+    REQ=
+    if [ ! -f "$sc_dir/$sc_file" ]; then
+      sourcing_fail '%s is on the list the driver sources and is not a file in %s, so no check in it ran' \
+        "$sc_file" "$sc_dir"
+      continue
+    fi
+    [ "$(tail -n 1 -- "$sc_dir/$sc_file")" = sourced_to_end ] \
+      || sourcing_fail '%s does not end with the line sourced_to_end, so nothing can say it ran to its end' \
+           "$sc_file"
+    shell_state "$SOURCED.before"
+    sourced_mark start "$sc_dir/$sc_file"
+    . "$sc_dir/$sc_file"
+    REQ=
+    shell_state "$SOURCED.after"
+    cmp -s "$SOURCED.before" "$SOURCED.after" \
+      || sourcing_fail '%s left the shell changed:\n%s' "$sc_file" \
+           "$(diff "$SOURCED.before" "$SOURCED.after" | sed -n 's/^< /         was: /p; s/^> /         now: /p')"
+    [ "$(tail -n 1 -- "$SOURCED" 2>/dev/null)" = "end $sc_dir/$sc_file $(sed -n '$=' -- "$sc_dir/$sc_file")" ] \
+      || sourcing_fail '%s did not run to its last line in this shell: it returned early, or was sourced in a subshell, and the last marker recorded is not its end marker written from its last line' \
+           "$sc_file"
+  done
+}
+# A FAIL of the routine's, under its own requirement and no other, which it
+# leaves untagged after -- the file after it opens untagged anyway.
+sourcing_fail() {  # sourcing_fail <format> [arguments...]
+  REQ=GH-204.6
+  fail static "$@"
+  REQ=
+}
+# What a file the routine sources must leave as it found it, a line each:
+# every `set -o` and `shopt` option, the working directory, the umask and every
+# trap. The driver's `trap ... EXIT` is in it before every file and after, so it
+# is expected state and not a change. Written to a file by this shell, in a
+# group and not through a $( ): a command substitution reads errexit as off
+# whatever this shell has it set to (measured, bash 5.2; a ( ) subshell keeps
+# it), so a `set -e` left behind would not show.
+shell_state() {  # shell_state <out> -- `set +o`, `shopt -p`, the directory, the umask and `trap -p`
+  { set +o; shopt -p; printf 'directory %s\n' "$PWD"; umask; trap -p; } > "$1"
+}
+# The sourcing record, $SOURCED: "start <file>" and "end <file> <line>", a line
+# each, written from $SOURCED_SHELL and from no subshell of it.
+sourced_mark() {  # sourced_mark <start|end> <file>
+  [ -n "$SOURCED" ] && [ "$BASHPID" = "$SOURCED_SHELL" ] || return 0
+  printf '%s %s\n' "$1" "$2" >> "$SOURCED"
+}
+# THE LAST LINE OF EVERY FILE source_checks SOURCES, and nothing else: the file
+# that calls it, and the line it was called from, which is that file's last
+# only if the file reached its end. BASH_LINENO[0] is the line in the sourced
+# file, not in the driver (measured, bash 5.2).
+sourced_to_end() {  # sourced_to_end -- the end marker of the file that calls it
+  sourced_mark end "${BASH_SOURCE[1]} ${BASH_LINENO[0]}"
+}
+
+# EVERY SECTION HEADING HAS A ROW UNDER IT. `section` writes each heading down
+# with the number of rows the ledger held when it was printed, and a heading
+# the next one follows with no row recorded between them -- or that the ledger
+# ends on -- is a heading of nothing. A `---` subheading is printed with `echo`
+# and is not written down, so its rows count for the `===` heading above it.
+heading_mark() {  # heading_mark <heading>
+  [ -n "$HEADINGS" ] && [ -n "$LEDGER" ] && [ "$BASHPID" = "$$" ] || return 0
+  printf '%s\t%s\n' "$(wc -l < "$LEDGER")" "$1" >> "$HEADINGS"
+}
+sections_without_rows() {  # sections_without_rows <headings record> <ledger> -- each heading with no row under it
+  awk -F'\t' -v total="$(wc -l < "$2")" '
+    { at[NR] = $1; name[NR] = $2 }
+    END { for (i = 1; i <= NR; i++) if (((i < NR) ? at[i + 1] : total) == at[i]) print name[i] }' "$1"
 }
