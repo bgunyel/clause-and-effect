@@ -336,3 +336,78 @@ trade:
 
 - W3's class is #212's. The step-1 fragment pins and the `tok`+`grep` idiom are
   #217's. The `printf -v` evasion of the `SOURCED_WANT` pin is #221's.
+
+## 2026-09-24 14:20 +03 — PR #220, review round 4
+
+Branch `worktree-issue-204-driver`, commits `65c6649..19ce7dd` plus this entry,
+eleven ahead of `origin/dev-05` (`6884732`). rev-agent-204's round 4 is
+[comment 5812509939](https://github.com/bgunyel/clause-and-effect/pull/220#issuecomment-5812509939),
+with two gating items, E and F.
+
+### E: the assistant's round-3 row had the class it was added to close
+
+The static heading row was labelled *no file of the suite prints a `===`
+heading other than through section*. It read only lines that open with `echo`
+or `printf`. The reviewer measured `echo; echo "=== zz ==="` printing a heading
+past it, green. Nothing drove the pattern either.
+
+The reviewer offered three ways out: drop the row, make it honest, or make it
+behavioural. The assistant made it honest and kept it:
+- The spelling it reads is the spelling of the `---` subheadings, so it is the
+  spelling a heading gets when it is written by copying them.
+- The behavioural form would need the run's stdout teed through the driver.
+  That changes the output path the step-1 byte-identity measurement rests on,
+  which is too much to buy for the implausible spellings it would add.
+
+What the row is now:
+- **The label** says what the row reads.
+- **The pattern** also takes `--` and a `\n` before the `===`.
+- **A fixture** drives the pattern both ways. Five spellings are refused. These
+  pass, pinned: `section`, the step-1 fixture shape, a `---` subheading, and
+  the unseen `;`, `&&`, `{` and `command` shapes.
+- **GH-204.8** names both limits: the unseen spellings, and the false red on a
+  fixture line that writes a `===` line.
+
+### F: taken, and the assistant repeated the class while fixing it
+
+The ledger read's comment still said three rows; it now says four. The unsplit
+comment's "the check above" now names the end-of-run file's question. The
+driver's convention now says what the suite refuses.
+
+The assistant's first draft of the new comment restated two counts, "68 `---`
+subheadings" and "five … seven … four" fixture lines. That is the class being
+fixed, and both were removed before the commit. A grep for `last three`,
+`tail -n 3`, `three rows` and `end the ledger` across the hooks, the
+requirements and the ADRs found no other stale instance.
+
+The non-gating tag-only read was taken as well. The ledger read now also reads
+the heading row's label.
+
+### Mistakes, and what caught them
+
+- **Two of the assistant's mutants were void.** R1's edit did not apply,
+  because its anchor carried a trailing space. The driver script ran the suite
+  anyway, and it was green. R4 wrote `\\n`, which is the slip the reviewer
+  recorded for its own printf mutant this round. Both were rebuilt with quoted
+  heredocs. Only the rebuilt runs are counted below.
+
+### Evidence (measured)
+
+- `19ce7dd`: 5,730 `ok`, exit 0, `ALL CHECKS PASSED`. That is one row more
+  than round 3: the fixture row.
+- Mutants on `19ce7dd`, each on its own scratch clone, each diff checked to
+  have applied:
+  - the pattern made to match nothing (`===` → `====`): exit 1, on the fixture
+    row alone. The row over the suite stays green, which is what an undriven
+    pattern would have hidden;
+  - the `^[[:space:]]*` anchor dropped: exit 1, on both rows;
+  - `echo "=== zz ==="`: exit 1, on the suite row;
+  - `printf '\n=== zz ===\n'`, which printed one `=== zz` line: exit 1, on the
+    suite row;
+  - `echo; echo "=== zz ==="`: exit 0. This is the named limit;
+  - W2 plus a stand-in `GH-204.8` row after the heading row: exit 1, on the
+    ledger read's label.
+
+### Open
+
+- Unchanged from round 3: #212, #217 and #221.
