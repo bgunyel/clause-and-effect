@@ -249,3 +249,76 @@ one gating finding and one requested finding. Two narrow items went to #223.
 As before. #223 now also holds the reviewer's round-2 items: a generated file
 whose marker is deleted reads as hand-written, and `DECLARED`/`PINNED` are
 generic names.
+
+# 2026-09-24 20:53 +03 — #222 review round 3 (rev-agent-205)
+
+Same branch. Code commit `4e150c2` and this entry follow `0780086`, which
+leaves the branch nine ahead of `origin/dev-05` (`cf73c82`, unchanged).
+
+## What the review found, and what was done
+
+rev-agent-205 closed G2 and R6 and widened the "empty means success" sweep to
+the generator's inputs. That sweep found two gating findings and one requested
+finding.
+
+- **G3, taken, with two siblings of its own.** The generator reported a clean
+  pass in three cases: a directory that is not there, a directory with no
+  `checks/`, and an awk that died. The awk case was reachable: `awk -v stage=`
+  read a TMPDIR holding `\t` as a tab, so awk could not open its own stage.
+  The assistant wrote `awk -v` in the first commit, although the `TOOLING`
+  comment and `requirements_split` both name it as the reason this repository
+  does not pass paths through `-v`. The fix has four parts:
+  - the directory is resolved and must hold `checks/`, or the run is refused;
+  - the stage reaches awk through `ENVIRON`;
+  - a non-zero awk status is a failed reading, and nothing is written;
+  - an empty directory argument is a usage error.
+
+  The last was found while the assistant wired the view below: an empty
+  argument fell back to the script's own directory, so a view that failed to
+  build would have been answered about the wrong tree. Resolving the
+  directory to an absolute path also closes a quieter sibling. A relative
+  path whose first segment holds a `=` would have reached awk as a
+  `var=value` operand. Six new rows drive these, the dead awk through a stub
+  `awk` first on `PATH` that exits 2. A `chmod 000` issue file was probed
+  first and works, but root reads such a file all the same, so the stub is
+  the fixture. Each part's mutant fails its own row (1 FAIL each; removing
+  the whole directory guard fails 2).
+- **G4, taken, by reading the issue files from the suite's side.** Of the
+  reviewer's two options, the assistant chose the one the driver's own
+  `TOOLING` rule points to. `checks/` is tooling, whose text is read off
+  `$SUITE_DIR` and never off the judged copy. Requiring a copy of it in the
+  judged tree would have satisfied the guard while contradicting that rule.
+  `generator_view`, in the library, builds a directory from the suite's
+  `checks/` and the judged `requirements/`, each a symbolic link, and the
+  cross-check runs the judged generator over it. This also closes #223 item 4.
+  Two fixture rows drive the view against a judged side that has no
+  `checks/`, one of them with a stale judged file. Swapping either link fails
+  its row. The reviewer's scenario was re-run: `CHECK_HOOKS_DIR` pointed at a
+  copy of `.claude/hooks/` without `checks/` now exits 0 with 5,773 ok, where
+  it had 1 unrelated FAIL. One limit, stated beside the call: in this
+  repository both sides are one directory, so the end-of-run call site's
+  choice of `$SUITE_DIR` is asked only by the fixture, not by any normal run.
+- **R7, taken.** The remedy for a branch cut before #205 now says to delete
+  the hand-written file first. It is fixed in ADR 0005, the `REQUIREMENTS_LEGACY`
+  comment and the PR body. This entry corrects the first entry's Open line,
+  which gave the same remedy without that step.
+
+The suite requires every issue it cites to have an entry or a reason, and
+the new comments cite PR #222. requirements.md gained a `- #222:` line in the
+form #210, #216 and #220 already use. The suite had caught this, 1 FAIL,
+before the line was added.
+
+The assistant's first push this round was refused by `no-git-push.sh`, which
+read a `2>&1` written after the branch name as the push's destination. The
+command was a compound line, so none of it ran. The push was re-run alone.
+
+## Numbers
+
+- `check-hooks.sh` at `4e150c2`: exit 0, 5,773 ok, ALL CHECKS PASSED. That is
+  5,767 plus six rows: the missing directory, the missing `checks/`, the dead
+  awk, the TMPDIR, and the two view rows. The usage row gained a third case.
+
+## Open
+
+As before, less #223 item 4, which the view closes. #223 also gained the
+round-3 note on the entry-field grammar's copies.
