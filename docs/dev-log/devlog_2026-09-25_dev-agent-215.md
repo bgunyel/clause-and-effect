@@ -392,3 +392,103 @@ The harness diff against `5017b2b` is now +17 / −0.
 - The freeze paragraph is now pinned word for word. So any later edit to it,
   a legitimate one included, has to change the literal in GH-215.sh in the same
   commit.
+
+---
+
+# 2026-09-25 18:11 +03 — #230 review round 3 (rev-agent-215)
+
+Branch `worktree-issue-215-freeze-run-log`. This round's commits are
+`cd2467c`, the fix, and this entry. The branch is ten ahead of
+`origin/dev-05` (`5017b2b`) once this entry is committed.
+
+The review re-ran its mutants at `5b9b745` and confirmed the round-2 fixes. It
+accepted the `d0a910a` sibling. It raised two gating classes and three
+non-gating notes. The assistant took all five.
+
+## C9: a fix with no check that fails without it
+
+Round 1 made `comment_reflow` tolerate a trailing blank and a deeper indent,
+and made GH-215's two bare lines accept `#` plus blanks. The review reverted
+each of the four in a clone of the suite, and every one stayed green. The
+assistant's four whitespace mutants had been edits of the harness, which is
+whitespace-clean today, so nothing in the suite asked the question. That is a
+breach of CLAUDE.md's guard-code rule, and the assistant should have caught it
+in round 1: that round's own evidence said the tolerance was proven by hand
+mutations and by no check.
+
+The review offered a choice: fixtures, or drop the tolerance. The assistant
+chose fixtures. Round 1 measured the tolerance's failure as six false reds, in
+the refusing direction, one edit away. The fixtures cost three checks.
+
+- **GH-215's two extractions became functions of the file they read**,
+  `r215_below` and `r215_freeze`, still defined in GH-215.sh, which is their
+  only calling file.
+- **Three checks drive them against literals.**
+  - `comment_reflow` is fed `#  a \n#     b\n` and must give `a b `.
+  - A fixture harness has bare lines of `# `, `#  ` and `#   `, and a freeze
+    paragraph with a trailing blank and an indented line. `r215_freeze` must
+    give `FROZEN, a paragraph wrapped and indented ` and `r215_below` must give
+    `WHAT A MUTATION IS. The next rule. `.
+
+## C6: three more claims broader than their checks
+
+- **The freeze paragraph**, and its literal in step, now says GH-215.sh holds
+  the rest of the header "to how often it says three words the log's records
+  are written in; it names the three". The paragraph had said "no run record in
+  the words the log's records are written in", and `ran` and `caught` are such
+  words too.
+- **The date label** called the six dates "none of them a record of a run".
+  But two of them are the rate's readings, which GH-215.sh's own header calls
+  run records. The label now says "the six ISO dates it carried at #215". The
+  entry's text said "so no other paragraph records a run in the words…". It now
+  says which record is red: one anywhere outside the log with an ISO date, or
+  one in the header in one of the three words.
+- **"date" is now "ISO date"** wherever a claim rests on the count. WHAT IT
+  DOES NOT SEE names a record dated `On 26 September` as unseen.
+
+## Non-gating notes, taken
+
+- **GH-205.sh's BASH_SOURCE comment** said every call there is defined in the
+  same file, so the index is not asked. That stopped being true when this
+  branch moved `requirement` and `shape_pin` into the library in round 0. It
+  now says the index is asked for those two, and not for `variants_pin`.
+- **"twelve times"** for `caught` is now dated at #215, and says "paragraphs",
+  since some of the twelve are in history paragraphs rather than rules.
+- **The trade now names the literals `6` and `5` as a shared edit point.** Two
+  pull requests that each add an ISO date or a `baseline` either conflict on
+  the literal, or merge clean at the wrong value and go red.
+
+## Measured
+
+All runs were in `git clone`s, under `env -i`. `cd2467c`: 5,792 ok / 0 FAIL,
+three more than round 2's figure. `--list` is identical to round 1's. The
+harness diff against `5017b2b` is +18 / −0.
+
+| mutant, at `cd2467c` | FAILs |
+|---|---|
+| `comment_reflow` without `tr -s ' '` | 2: the reflow fixture, the freeze fixture |
+| `comment_reflow` stripping `^# \{0,1\}`, #215's first reader | 1: the reflow fixture |
+| `r215_freeze`'s bare line back to `/^#$/` | 1: the freeze fixture |
+| `r215_below`'s bare line back to `/^#$/` | 1: the below fixture |
+| **the C9 sweep:** the log's last line deleted from the harness | 7, including `outside the log, the header is read to its last paragraph` |
+
+The last row is the assistant's own sweep for C9's siblings. It asks whether
+round 1's guard, which checks that the header was read to its end, can fail.
+It can. In that run the `selection` `lacks` stayed green, because the
+truncated text lacks everything, and that is the case the guard exists for.
+The other round-1 and round-2 fixes are driven by the real harness, as the
+review measured for case folding.
+
+## Mistakes, attributed
+
+- **The assistant shipped round 1's whitespace fix without a check that fails
+  without it**, and called hand mutations of a whitespace-clean file evidence.
+- **The assistant's first rewrap of GH-215's text put `written` at the start of
+  a heredoc line.** The suite's text-check derivation reads heredoc bodies as
+  code, counted it as a 319th text check and called it a bare file name: two
+  FAILs. The assistant rewrapped the sentence. The guard worked as designed, in
+  the refusing direction.
+
+## Open
+
+- Not yet reviewed by Bertan. The heads-up on #184 and #158 stands.
