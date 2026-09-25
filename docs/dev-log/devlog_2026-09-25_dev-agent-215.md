@@ -284,3 +284,111 @@ continuation line, which is why it turned three.
 - Not yet reviewed by Bertan. The heads-up on #184 and #158 still stands. A
   record either one keeps outside the region, in the log's words, now turns
   GH-215 red too.
+
+---
+
+# 2026-09-25 17:22 +03 — #230 review round 2 (rev-agent-215)
+
+Branch `worktree-issue-215-freeze-run-log`. This round's commits are:
+
+- `575df8d`, the fix;
+- `d0a910a`, a sibling found by the sweep;
+- this entry.
+
+The branch is eight ahead of `origin/dev-05` (`5017b2b`) once this entry is
+committed.
+
+The review re-ran its round-1 mutants at `cf0ecda` and confirmed the round-1
+fixes. It also accepted both of the assistant's round-1 corrections. It raised
+three new classes. The assistant took all three, and found one more sibling
+itself.
+
+## C1 inside its own fix: the vocabulary was narrower than a record
+
+The review wrote records in the log's own phrasing, and the phrase list passed
+them: `came back byte-identical`, `the baseline was green`, and a sentence
+opening `Selection of`, which passed because `lacks` is case-sensitive.
+It also deleted the clause `because for several runs it is the only record
+there is` from the freeze paragraph, and every check stayed green: the claims
+were asked as clauses.
+
+The review proposed pinning the freeze paragraph by its whole reflowed text.
+The assistant agrees. In round 1 the assistant declined that pin on the
+reviewer's own framing, that it "closes only the first placement". That was the
+wrong reason: the first placement is the one the header itself calls the likely
+spot.
+
+- **The freeze paragraph is now compared whole**, as `comment_reflow` reads it,
+  against a heredoc literal. The four claim checks stay beside it, so a red
+  names which claim went.
+- **The phrase list became stems, with case folded.** The assistant measured the
+  header outside the log, case folded: `selection` 0, `byte-identical` 1 (in A
+  MUTATION THAT DOES NOT APPLY IS A FAILURE), and `baseline` 5 (the pass-cost
+  rules and THE BASELINE RUN). The stems replace the four phrase checks with
+  three: one `lacks` and two counts. Every phrase from round 1 contains a stem,
+  so the net is strictly wider.
+- **`caught` is not asked**, and the header now says why. The header's rules use
+  it twelve times, as the harness's word for an outcome, so a count would go red
+  on the next rule about outcomes.
+
+## C6: a claim broader than its check
+
+- **The freeze paragraph** said GH-215.sh holds "the rest of this file" to the
+  log's words, but the words are asked only of the header. It now says the log is
+  held to its bytes, this paragraph to its words, the rest of the file to its
+  dates, and the rest of the header to the log's words.
+- **The same overclaim in GH-215.sh's own header.** The sweep found "So the rest
+  of the file is asked for the words", and it is fixed in `d0a910a`. The review
+  had called GH-215.sh's header accurate. Its WHAT IT DOES NOT SEE bullet was
+  accurate, but that sentence was not.
+- **The round-1 entry** above says the freeze paragraph's closing sentence holds
+  "the rest of the file to carrying no record in the log's words". That was the
+  assistant's overclaim. This entry corrects it, and the round-1 entry stands
+  as written.
+
+## C7 and the rate
+
+- **C7.** `unsplit.sh`'s statement of the prose-pin rule now names
+  `comment_reflow`: `$MUT_PROSE` when a pin asks the whole header, one paragraph
+  when it asks one.
+- **The rate.** The date count's label and the rate bullet now say that a
+  re-measure which adds a dated sentence moves the literal `6`.
+
+## Measured
+
+There were 19 full-suite runs, each in its own `git clone`, under `env -i`,
+with the mutants applied by the same script as round 1. Controls: `575df8d`
+5,789 ok / 0 FAIL. `d0a910a` (comment only) gave 5,789 / 0 in the worktree, and
+`--list` was identical to round 1's.
+
+| mutant | `cf0ecda` | `575df8d` |
+|---|---|---|
+| own-phrasing record, last sentence of the freeze paragraph | green | 3 FAIL: whole paragraph, `byte-identical`, `baseline` |
+| `Selection of …` paragraph below WHAT A MUTATION IS | green | 1 FAIL: `selection` |
+| `came back byte-identical` paragraph above the freeze paragraph | green | 1 FAIL: `byte-identical` |
+| `the baseline was green` paragraph above the freeze paragraph | green | 1 FAIL: `baseline` |
+| clause `because for several runs…` deleted | green | 1 FAIL: whole paragraph |
+| undated, stem-free record in the freeze paragraph | — | 1 FAIL: whole paragraph |
+| round 1's record as the freeze paragraph's last sentence | — | 3 FAIL: whole paragraph, dates, `byte-identical` |
+| rate re-measure adding a dated sentence | — | 1 FAIL: dates, whose label names the re-measure |
+| **named gap:** undated, stem-free record below WHAT A MUTATION IS | — | green |
+| **named gap:** undated phrased record below `set -u` | — | green |
+| controls: freeze paragraph rewrapped at 60 columns; a trailing blank; `#   ` indent | — | green |
+
+The harness diff against `5017b2b` is now +17 / −0.
+
+## Mistakes, attributed
+
+- **The assistant took the reviewer's framing as its reason to decline in round
+  1**, instead of asking which placement mattered most. Its own header had
+  already answered that.
+- **The assistant wrote the C6 overclaim twice in round 1**: once in the freeze
+  paragraph and once in GH-215.sh's header. The review found the first, and the
+  assistant's sweep found the second.
+
+## Open
+
+- Not yet reviewed by Bertan. The heads-up on #184 and #158 stands.
+- The freeze paragraph is now pinned word for word. So any later edit to it,
+  a legitimate one included, has to change the literal in GH-215.sh in the same
+  commit.
