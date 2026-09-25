@@ -42,9 +42,10 @@ Two subcommands, one per thing a green run has to be true about:
     that writes its one code block (#207). A failing row is shown if it fits
     what is left of `SUMMARY_BLOCK_BYTES`, fences counted; a row that does
     not fit is skipped rather than ending the list, and the summary counts
-    what it left out. Without a failing row, the log's last `TAIL_LINES` lines are
-    shown, cut from their start to the same budget, and the summary says how
-    many bytes were cut.
+    what it left out. When the suite exits non-zero without a failing row,
+    the log's last `TAIL_LINES` lines are shown, cut from their start to the
+    same budget, and the summary says how many bytes were cut. An exit 0
+    shows no tail, even when the log does not support it (#228).
 
     The job's colour comes from the suite's exit status, not from here. This
     exits 1 only when that status claims a pass the log does not support -- an

@@ -513,8 +513,8 @@ def test_report_counts_a_shown_rows_fence_against_the_rows_after_it(tmp_path):
 )
 def test_report_cuts_a_log_tail_over_budget_and_says_so(tmp_path, tail, block, cut):
     """
-    The no-failing-row path shows the log's last lines, and one of them can be
-    any length (#207): a 2 MiB final line once made a 2 MiB summary, which
+    A non-zero exit with no failing row shows the log's last lines, and one of
+    them can be any length (#207): a 2 MiB final line once made a 2 MiB summary, which
     GitHub refuses whole. The tail is kept from its end, where a guard's
     message is, and what was cut is said rather than silently left out.
     """
