@@ -91,11 +91,14 @@
 # what the checks below pin:
 #   - an ISO date, YYYY-MM-DD: six, over the whole file. Three in the
 #     header -- `124 s, taken 2026-09-17`, `The 2026-09-17 readings` and the
-#     freeze paragraph's quotation of the log's first line -- and three
-#     below `set -u`, at
-#     MEASURED_SECONDS_PER_RUN: MEASURED 2026-09-20, the 124 s it replaced on
-#     2026-09-17, and the `--list` line that prints the rate's date. A date has
-#     no blank in it, so it is counted on the lines as written. A count and not
+#     freeze paragraph's quotation of the log's first line -- and three below
+#     `set -u`, at MEASURED_SECONDS_PER_RUN: MEASURED 2026-09-20, the 124 s it
+#     replaced on 2026-09-17, and the `--list` line that prints the rate's
+#     date. The header's are counted on its prose as comment_reflow reads it,
+#     which rejoins a date broken at a hyphen across a line; the code's on its
+#     lines as written, where a comment is indented and the reader cannot
+#     rejoin it. The review's fourth round measured the first version, which
+#     counted every line as written, pass `2026-09-` over `26`. A count and not
 #     the list, so a re-measure of the rate that replaces its date in place
 #     stays green, and an ISO date added anywhere outside the log is red. That
 #     includes a re-measure that adds a dated sentence beside the old one, as
@@ -128,10 +131,13 @@
 # as in `ran it alone against the commit answering it: caught.` -- and a record
 # in the code below `set -u` that has no ISO date, whatever its words. A record
 # dated `On 26 September` is one of those: only YYYY-MM-DD is counted, which is
-# how every record in the log is dated. The first is not how any record in the
-# log was written, measured as above. It also does not
-# see whether a later session recorded its run in its dev-log at all, because no
-# file here can say that a run happened.
+# how every record in the log is dated, and so is a date broken at a hyphen
+# across two lines of the code. The first is not how any record in the log was
+# written, measured as above. The counts see net growth and nothing else: a
+# record that adds a `baseline` in the same diff that rewords one away is green,
+# and so is a date swapped for another. It also does not see whether a later
+# session recorded its run in its dev-log at all, because no file here can say
+# that a run happened.
 #
 # THE TRADE, taken knowingly: a block that is stale by construction stays in
 # the file, and a later run is no longer recorded beside the rows it ran. Stale
@@ -162,11 +168,12 @@ requirement GH-215 <<'REQ'
   MUTATION IS`. The freeze paragraph names both lines. It says the log's
   present tense is #215's, and that a run after #215 is recorded in the
   dev-log of the session that ran it. The freeze paragraph holds its words
-  and no others. Outside the log, the harness carries the six ISO dates it
-  carried at #215, and its header's prose, case folded, says `selection`
-  nowhere, `byte-identical` once and `baseline` five times. So a record is
-  red that is written anywhere outside the log with an ISO date, or in the
-  header in one of those three words.
+  and no others. Outside the log, the harness carries six ISO dates, as at
+  #215, and its header's prose, case folded, says `selection` nowhere,
+  `byte-identical` once and `baseline` five times, read with a word broken
+  at a hyphen across two lines rejoined. So a record is red that carries an
+  ISO date anywhere outside the log -- in the code, on one line -- or says
+  one of those three words in the header.
 - from: #215
 - kind: doc-claim
 - status: active
@@ -228,8 +235,13 @@ r215_freeze() {  # r215_freeze <file> -- the paragraph above the log, as comment
 # as the words they carry; and a bare line with a blank on it is still bare,
 # above the log and below it. #215's first reader took `# ?` off and squeezed
 # nothing, and its bare lines were `^#$`; each of those turns one of these red.
+# And a word broken at a hyphen is rejoined, a trailing blank after the hyphen
+# allowed, while a dash ending a line is not: the suspended hyphen `pre-` reads
+# as `pre-b`, which is the trade the reader's comment records.
 tok 'comment_reflow reads a trailing blank and a deeper indent as the words alone' \
     'a b ' "$(printf '#  a \n#     b\n' | comment_reflow)"
+tok 'and rejoins a word broken at a hyphen, and not a dash' \
+    'a pre-b -- c ' "$(printf '#  a pre- \n# b --\n# c\n' | comment_reflow)"
 R215_FIX="$FIXTURES/r215-harness.sh"
 printf '%s\n' '# a rule' '# ' '# FROZEN, a paragraph ' '#   wrapped and indented' '#  ' \
   "$R215_FIRST" '# the log' "$R215_LAST" '#   ' '# WHAT A MUTATION IS. The next rule.' \
@@ -272,17 +284,36 @@ holds 'and says a later run is recorded in the dev-log of the session that ran i
 
 # THE REST OF THE FILE, with the log cut out by the same two lines. With the
 # last line gone nothing after the first is read, which the header's closing
-# words below say. Dates are counted on every line of the file; the phrases are
-# asked of the header's prose, to `set -u`, joined.
-R215_REST_LINES=$(R215_FIRST=$R215_FIRST R215_LAST=$R215_LAST awk '
-  $0 == ENVIRON["R215_FIRST"] { off = 1 }
-  !off { print }
-  off && $0 == ENVIRON["R215_LAST"] { off = 0 }' "$R215_MUT")
-R215_REST=$(printf '%s\n' "$R215_REST_LINES" | sed -n '1,/^set -u$/p' | comment_reflow)
+# words below say. Dates are counted on the header's prose, joined, and on the
+# code's lines as written; the words are asked of the header's prose. Each is a
+# function of the file it reads, so a fixture drives the join as well as the
+# harness: the harness has no date broken across a line today, so a count that
+# stopped rejoining one would stay green on it alone.
+r215_outside() {  # r215_outside <file> -- the file with the log cut out
+  R215_FIRST=$R215_FIRST R215_LAST=$R215_LAST awk '
+    $0 == ENVIRON["R215_FIRST"] { off = 1 }
+    !off { print }
+    off && $0 == ENVIRON["R215_LAST"] { off = 0 }' "$1"
+}
+r215_header() {  # r215_header <file> -- the header outside the log, as comment_reflow reads it
+  r215_outside "$1" | sed -n '1,/^set -u$/p' | comment_reflow
+}
+r215_dates() {  # r215_dates <file> -- how many ISO dates stand outside the log
+  { r215_header "$1"; echo; r215_outside "$1" | sed -n '/^set -u$/,$p'; } \
+    | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | grep -c ''
+}
+# The fixture: a date broken at its hyphen in the header, which counts; one
+# inside the log, which does not; one whole in the code, which counts.
+R215_DATES_FIX="$FIXTURES/r215-dates.sh"
+printf '%s\n' '# ran on 2026-09-' '# 26, caught.' '#' "$R215_FIRST" '# 2026-01-01' "$R215_LAST" \
+  'set -u' '  # re-measured 2026-09-20' > "$R215_DATES_FIX"
+tok 'a date broken across a line of the header is counted, and one inside the log is not' \
+    '2' "$(r215_dates "$R215_DATES_FIX")"
+R215_REST=$(r215_header "$R215_MUT")
 holds 'outside the log, the header is read to its last paragraph' "$R215_REST" \
   'the documents it is judged against stay this repository'
-tok 'and outside the log the harness carries the six ISO dates it carried at #215 (a re-measure of the rate that adds a date moves this literal)' \
-    '6' "$(printf '%s\n' "$R215_REST_LINES" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | grep -c '')"
+tok 'and outside the log the harness carries six ISO dates, as at #215 (a re-measure of the rate that adds a date moves this literal)' \
+    '6' "$(r215_dates "$R215_MUT")"
 # Case folded, so a record opening `Selection of` or written in capitals is read
 # as one written in lower case.
 R215_REST=${R215_REST,,}

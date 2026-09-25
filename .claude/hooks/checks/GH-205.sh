@@ -140,8 +140,9 @@ tok 'shape_pin and variants_pin record the kind, the issue file and the tokens, 
 # are defined in the library, so for those two the index of BASH_SOURCE is
 # already asked above; `variants_pin` is still defined here, so for it the two
 # are one path and it is not. A file sourced from a fixture asks it of all
-# three. It is outside .claude/hooks/, so it is named by its whole path. Its declaration is
-# written with an `@` taken off as the file is made, as the fixtures below are.
+# three, and that file is outside .claude/hooks/, so it is named by its whole
+# path. Its declaration is written with an `@` taken off as the file is made,
+# as the fixtures below are.
 sed 's/@requirement/requirement/' > "$R205/caller.sh" <<'FIX'
 @requirement GH-9.3 <<'REQ'
 - text: from another file

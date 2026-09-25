@@ -1219,6 +1219,19 @@ shape_pin() {  # shape_pin '<ID>[:<shape>]...' -- the shape of entries this issu
 # `# ?` off and squeezed nothing, so a trailing blank or a deeper indent turned
 # its pins red where $MUT_PROSE's stayed green; review of #215's pull request
 # measured both.
+#
+# A WORD BROKEN AT A HYPHEN IS REJOINED. A line that ends in a letter or digit
+# and a hyphen, blanks after it allowed, is joined to the next with no blank,
+# so `2026-09-` over `26` reads as a date and `byte-` over `identical` as one
+# word; the join with a blank split both, a record written that way passed
+# GH-215's counts, and a rewrap that broke `DEV-LOG` turned its paragraph pin
+# red (review of #215's pull request, fourth round). Only at a line's end, so a
+# hyphen followed by a blank inside a line stays as written; and not after a
+# hyphen, so ` --` ending a line is still a dash. The trade: a suspended hyphen
+# at a line's end, `pre-` over `and post-`, reads as `pre-and`. None stood in
+# the harness's header when this was written.
 comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on one line out
-  sed -e 's/^#[ \t]\{0,3\}//' | tr '\n' ' ' | tr -s ' '
+  sed -e 's/^#[ \t]\{0,3\}//' \
+    | sed -e ':a' -e '/[[:alnum:]]-[ \t]*$/{N;s/-[ \t]*\n[ \t]*/-/;ba' -e '}' \
+    | tr '\n' ' ' | tr -s ' '
 }
