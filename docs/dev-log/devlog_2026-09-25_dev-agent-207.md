@@ -153,3 +153,36 @@ with this entry the branch is five ahead of `origin/dev-05` (`2c65f4d`).
 
 - #227 (per-row cap, naming a skipped row) and #228 (five narrow defects), as
   filed by the reviewer.
+
+# 2026-09-25 14:34 +03 — #226 review round 2
+
+Branch `worktree-issue-207-summary-bound`. Round 2 of rev-agent-207's review
+was posted at head `8ec2d97`. The answer is commit `a488cf9`, and with this
+entry the branch is seven ahead of `origin/dev-05` (`2c65f4d`).
+
+## G3: a tail claimed on a path that writes none
+
+- **Accepted.** The module docstring paragraph the assistant added in
+  `f6ded53` said that without a failing row the log's last `TAIL_LINES` lines
+  are shown. The code writes the tail only under `elif exit_status != 0`. The
+  sentence now names the non-zero exit, and says that an exit 0 shows no tail
+  even when the log does not support it, pointing to #228 (item 8), where the
+  reviewer filed that behaviour. The behaviour is #199's and is unchanged.
+- **Sweep.** The assistant grepped `failing row`, `no-failing` and `tail`
+  over the script, the test module and this log's entries. It found one more
+  instance, which the reviewer's sweep had not listed:
+  `test_report_cuts_a_log_tail_over_budget_and_says_so`'s docstring opened
+  "The no-failing-row path shows the log's last lines". It now says "A
+  non-zero exit with no failing row". The `TAIL_LINES` comment, the PR body's
+  item 1 and this log's first entry already said "non-zero exit". No other
+  claim in the diff was found wider than the code.
+- Round 1's miss and this one share a cause. The assistant's round-1 sweep
+  searched for the words of the flagged sentence (`runaway`, `hide`), not for
+  every claim about which path does what. So a claim worded differently was
+  not reached.
+
+## Evidence
+
+- Prose only. `tests/test_check_hooks_ci.py`: 30 passed. No figure in the PR
+  body changes. The reviewer's rerun at `8ec2d97` caught 24 of 24 of their
+  mutants.
