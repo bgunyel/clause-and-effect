@@ -135,10 +135,12 @@ req GH-205.3
 tok 'shape_pin and variants_pin record the kind, the issue file and the tokens, whitespace folded' \
   "$(printf 'shape\tchecks/GH-205.sh\tGH-9.1:static GH-9.2 \nvariants\tchecks/GH-205.sh\tGH-9.2:none \n')" \
   "$(cat "$R205/pins")"
-# And the file named is the CALLER's, not the file defining the three: every
-# call above is in this file, which defines them too, so the two are one path
-# and the index of BASH_SOURCE is not asked. A file sourced from a fixture is
-# outside .claude/hooks/, so it is named by its whole path. Its declaration is
+# And the file named is the CALLER's, not the file defining the three. The
+# calls above are all in this file. Since #215, `requirement` and `shape_pin`
+# are defined in the library, so for those two the index of BASH_SOURCE is
+# already asked above; `variants_pin` is still defined here, so for it the two
+# are one path and it is not. A file sourced from a fixture asks it of all
+# three. It is outside .claude/hooks/, so it is named by its whole path. Its declaration is
 # written with an `@` taken off as the file is made, as the fixtures below are.
 sed 's/@requirement/requirement/' > "$R205/caller.sh" <<'FIX'
 @requirement GH-9.3 <<'REQ'

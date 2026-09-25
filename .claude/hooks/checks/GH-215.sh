@@ -89,14 +89,15 @@
 # passed: `came back byte-identical`, `the baseline was green`, and a sentence
 # opening `Selection of`. Outside the log those words stand as follows, which is
 # what the checks below pin:
-#   - a date: six, over the whole file. Three in the header -- `124 s, taken
-#     2026-09-17`, `The 2026-09-17 readings` and the freeze paragraph's
-#     quotation of the log's first line -- and three below `set -u`, at
+#   - an ISO date, YYYY-MM-DD: six, over the whole file. Three in the
+#     header -- `124 s, taken 2026-09-17`, `The 2026-09-17 readings` and the
+#     freeze paragraph's quotation of the log's first line -- and three
+#     below `set -u`, at
 #     MEASURED_SECONDS_PER_RUN: MEASURED 2026-09-20, the 124 s it replaced on
 #     2026-09-17, and the `--list` line that prints the rate's date. A date has
 #     no blank in it, so it is counted on the lines as written. A count and not
 #     the list, so a re-measure of the rate that replaces its date in place
-#     stays green, and a date added anywhere outside the log is red. That
+#     stays green, and an ISO date added anywhere outside the log is red. That
 #     includes a re-measure that adds a dated sentence beside the old one, as
 #     the last two did: it moves this literal, and the red's label says so.
 #   - in the header's prose, read through comment_reflow with case folded:
@@ -110,7 +111,8 @@
 # for a reason of its own. That is the direction to be wrong in: the red names
 # the word, and whoever wrote it decides whether it is a record. `caught` is not
 # asked, though nearly every record says it: it is the harness's word for an
-# outcome, and the header's rules use it twelve times.
+# outcome, and at #215 the header's paragraphs outside the log said it twelve
+# times, in its rules and its history paragraphs alike.
 #
 # AND THE FREEZE PARAGRAPH BY ITS WORDS, because a list of words can always be
 # written around, and that paragraph is where the next loop would write. So it
@@ -122,10 +124,12 @@
 # red names which claim went, not only that the paragraph changed.
 #
 # WHAT IT DOES NOT SEE, named. A run recorded outside the log and the freeze
-# paragraph in none of those words -- no date, and none of the three stems, as
-# in `ran it alone against the commit answering it: caught.` -- and a record in
-# the code below `set -u` that has no date, whatever its words. The first is not
-# how any record in the log was written, measured as above. It also does not
+# paragraph in none of those words -- no ISO date, and none of the three stems,
+# as in `ran it alone against the commit answering it: caught.` -- and a record
+# in the code below `set -u` that has no ISO date, whatever its words. A record
+# dated `On 26 September` is one of those: only YYYY-MM-DD is counted, which is
+# how every record in the log is dated. The first is not how any record in the
+# log was written, measured as above. It also does not
 # see whether a later session recorded its run in its dev-log at all, because no
 # file here can say that a run happened.
 #
@@ -139,7 +143,12 @@
 # dated file under docs/. The header would then lose the only copy of several
 # of these records beside the rows they describe. The dev-logs of the sessions
 # that made them are append-only, so the log cannot be handed back to them
-# either.
+# either. And the literals here are a point two pull requests can both edit:
+# two that each add an ISO date, or a `baseline`, both move `6` or `5`, and the
+# two edits either conflict or merge clean at the wrong value and go red. That
+# is visible, in the refusing direction, and rarer than the append it replaces,
+# which every loop made; review of #215's pull request noted it in its third
+# round.
 
 section "=== issue #215: the harness's run log is frozen, and a later run is recorded in the dev-log ==="
 
@@ -153,10 +162,11 @@ requirement GH-215 <<'REQ'
   MUTATION IS`. The freeze paragraph names both lines. It says the log's
   present tense is #215's, and that a run after #215 is recorded in the
   dev-log of the session that ran it. The freeze paragraph holds its words
-  and no others. Outside the log, the harness carries six dates, and its
-  header's prose, case folded, says `selection` nowhere, `byte-identical`
-  once and `baseline` five times, so no other paragraph records a run in the
-  words the log's records use.
+  and no others. Outside the log, the harness carries the six ISO dates it
+  carried at #215, and its header's prose, case folded, says `selection`
+  nowhere, `byte-identical` once and `baseline` five times. So a record is
+  red that is written anywhere outside the log with an ISO date, or in the
+  header in one of those three words.
 - from: #215
 - kind: doc-claim
 - status: active
@@ -168,8 +178,8 @@ requirement GH-215 <<'REQ'
   rewrapping either paragraph is not. The freeze paragraph is compared whole
   because a list of words can be written around, and it is where a loop
   would write. What it does not see: a run recorded elsewhere outside the log
-  in none of the log's words, an undated one below `set -u`, and whether a
-  later run was recorded anywhere at all.
+  with no ISO date and none of the three words, one below `set -u` with no ISO
+  date, and whether a later run was recorded anywhere at all.
 REQ
 shape_pin 'GH-215:static'
 
@@ -192,26 +202,52 @@ tok 'and holds, byte for byte, the 216 lines it held at #215' \
          $0 == ENVIRON["R215_FIRST"] { on = 1 }
          on { print }
          on && $0 == ENVIRON["R215_LAST"] { exit }' "$R215_MUT" | cksum)"
+# THE TWO NEIGHBOURS, each read by a function of the file it reads, so that a
+# fixture can drive them as well as the harness (review of #215's pull request,
+# third round: the whitespace they tolerate was a fix no check failed without).
+#
 # The line after the log's last has to be bare, `#` and blanks only, or nothing
-# is reported; the one after that is read through comment_reflow and cut to the
-# length of the literal it is compared with.
-R215_NEXT='WHAT A MUTATION IS.'
-R215_BELOW=$(R215_LAST=$R215_LAST awk '
-  n == 1 { if ($0 !~ /^#[ \t]*$/) exit; n = 2; next }
-  n == 2 { print; exit }
-  $0 == ENVIRON["R215_LAST"] { n = 1 }' "$R215_MUT" | comment_reflow)
-tok 'nothing is appended after it: the paragraph below it is the rule WHAT A MUTATION IS' \
-    "$R215_NEXT" "${R215_BELOW:0:${#R215_NEXT}}"
+# is reported; the one after that is read through comment_reflow.
+r215_below() {  # r215_below <file> -- the line after the one after the log, as comment_reflow reads it
+  R215_LAST=$R215_LAST awk '
+    n == 1 { if ($0 !~ /^#[ \t]*$/) exit; n = 2; next }
+    n == 2 { print; exit }
+    $0 == ENVIRON["R215_LAST"] { n = 1 }' "$1" | comment_reflow
+}
 # THE FREEZE PARAGRAPH is the paragraph before the log's first line, read
 # through comment_reflow. The line directly above the first has to be bare, `#`
-# and blanks only, or nothing is reported. The paragraph's claims below are asked
-# of this text and not of the whole header, so a claim moved into any other
-# paragraph is red; and they are asked of it joined, because a phrase this long
-# crosses a line break wherever the wrap falls.
-R215_FREEZE=$(R215_FIRST=$R215_FIRST awk '
-  $0 == ENVIRON["R215_FIRST"] { if (bare) printf "%s", last; exit }
-  /^#[ \t]*$/ { last = cur; cur = ""; bare = 1; next }
-  { cur = cur $0 "\n"; bare = 0 }' "$R215_MUT" | comment_reflow)
+# and blanks only, or nothing is reported.
+r215_freeze() {  # r215_freeze <file> -- the paragraph above the log, as comment_reflow reads it
+  R215_FIRST=$R215_FIRST awk '
+    $0 == ENVIRON["R215_FIRST"] { if (bare) printf "%s", last; exit }
+    /^#[ \t]*$/ { last = cur; cur = ""; bare = 1; next }
+    { cur = cur $0 "\n"; bare = 0 }' "$1" | comment_reflow
+}
+# Driven first, against literals: comment_reflow takes `#` and up to three
+# blanks off, joins, and squeezes, so a trailing blank and a deeper indent read
+# as the words they carry; and a bare line with a blank on it is still bare,
+# above the log and below it. #215's first reader took `# ?` off and squeezed
+# nothing, and its bare lines were `^#$`; each of those turns one of these red.
+tok 'comment_reflow reads a trailing blank and a deeper indent as the words alone' \
+    'a b ' "$(printf '#  a \n#     b\n' | comment_reflow)"
+R215_FIX="$FIXTURES/r215-harness.sh"
+printf '%s\n' '# a rule' '# ' '# FROZEN, a paragraph ' '#   wrapped and indented' '#  ' \
+  "$R215_FIRST" '# the log' "$R215_LAST" '#   ' '# WHAT A MUTATION IS. The next rule.' \
+  > "$R215_FIX"
+tok 'the freeze paragraph is read above a bare line that carries blanks' \
+    'FROZEN, a paragraph wrapped and indented ' "$(r215_freeze "$R215_FIX")"
+tok 'and the rule below the log is read past a bare line that carries blanks' \
+    'WHAT A MUTATION IS. The next rule. ' "$(r215_below "$R215_FIX")"
+
+R215_NEXT='WHAT A MUTATION IS.'
+R215_BELOW=$(r215_below "$R215_MUT")
+tok 'nothing is appended after it: the paragraph below it is the rule WHAT A MUTATION IS' \
+    "$R215_NEXT" "${R215_BELOW:0:${#R215_NEXT}}"
+# The paragraph's claims below are asked of this text and not of the whole
+# header, so a claim moved into any other paragraph is red; and they are asked
+# of it joined, because a phrase this long crosses a line break wherever the
+# wrap falls.
+R215_FREEZE=$(r215_freeze "$R215_MUT")
 R215_OPENS='THE RUN LOG BELOW IS FROZEN, AT #215,'
 tok 'nor before it: the paragraph above it is the one that freezes it' \
     "$R215_OPENS" "${R215_FREEZE:0:${#R215_OPENS}}"
@@ -219,7 +255,7 @@ tok 'nor before it: the paragraph above it is the one that freezes it' \
 # whole clause. The literal is the paragraph as comment_reflow reads it, with
 # the one blank the reader leaves at its end taken off.
 R215_WORDS=$(cat <<'WORDS'
-THE RUN LOG BELOW IS FROZEN, AT #215, and nothing is appended to it. It is the dated account of which rows were run, when, against what and with what outcome, from the line that opens `MEASURED, 2026-09-17, at the commit that answered that review` to the line that ends `the registry is re-runnable instead.`, and it is kept verbatim because for several runs it is the only record there is. Its present tense is #215's: a row it says has not been run since, or a whole-registry run it says nothing has made, is a claim about the tree at #215 and about no later one. A RUN AFTER #215 IS RECORDED IN THE DEV-LOG OF THE SESSION THAT RAN IT, under docs/dev-log/, whose README states the conventions -- never here. Every loop that registered a row appended a paragraph to this log, and that shared append, not the registry, is where concurrent pull requests conflicted in this file. checks/GH-215.sh holds the log to its bytes, this paragraph to its words, the rest of this file to the dates it carries, and the rest of this header to carrying no run record in the words the log's records are written in; it says which paragraphs it covers, which it leaves out, and which records it cannot see.
+THE RUN LOG BELOW IS FROZEN, AT #215, and nothing is appended to it. It is the dated account of which rows were run, when, against what and with what outcome, from the line that opens `MEASURED, 2026-09-17, at the commit that answered that review` to the line that ends `the registry is re-runnable instead.`, and it is kept verbatim because for several runs it is the only record there is. Its present tense is #215's: a row it says has not been run since, or a whole-registry run it says nothing has made, is a claim about the tree at #215 and about no later one. A RUN AFTER #215 IS RECORDED IN THE DEV-LOG OF THE SESSION THAT RAN IT, under docs/dev-log/, whose README states the conventions -- never here. Every loop that registered a row appended a paragraph to this log, and that shared append, not the registry, is where concurrent pull requests conflicted in this file. checks/GH-215.sh holds the log to its bytes, this paragraph to its words, the rest of this file to the ISO dates it carries, and the rest of this header to how often it says three words the log's records are written in; it names the three, says which paragraphs it covers and which it leaves out, and which records it cannot see.
 WORDS
 )
 tok 'the freeze paragraph holds these words and no others, however it is wrapped' \
@@ -245,7 +281,7 @@ R215_REST_LINES=$(R215_FIRST=$R215_FIRST R215_LAST=$R215_LAST awk '
 R215_REST=$(printf '%s\n' "$R215_REST_LINES" | sed -n '1,/^set -u$/p' | comment_reflow)
 holds 'outside the log, the header is read to its last paragraph' "$R215_REST" \
   'the documents it is judged against stay this repository'
-tok 'and outside the log the harness carries six dates, none of them a record of a run (a re-measure of the rate that adds a date moves this literal)' \
+tok 'and outside the log the harness carries the six ISO dates it carried at #215 (a re-measure of the rate that adds a date moves this literal)' \
     '6' "$(printf '%s\n' "$R215_REST_LINES" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | grep -c '')"
 # Case folded, so a record opening `Selection of` or written in capitals is read
 # as one written in lower case.
