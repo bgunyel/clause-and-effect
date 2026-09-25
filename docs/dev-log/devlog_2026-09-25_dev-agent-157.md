@@ -320,3 +320,144 @@ this round's pins, rather than carry its figure into the pull request body.
 The section was rewrapped at every width from 24 to 100, with a 2-space
 continuation: 77 rewraps, all green. 48 of them break a word at a hyphen,
 not the round-0 entry's 44, because the README's wording changed.
+
+
+# 2026-09-25 22:33 +03 — #234 review round 2: the pins are chained, and the Edit guard is fed a real worktree
+
+Branch `worktree-issue-157-devlog-naming-pin`, on `origin/dev-05` at
+`72798ad`. This round is `b85996a`, on top of the pushed `141e8c0`, plus
+this entry: seven ahead of `origin/dev-05` once it is committed. Not pushed.
+
+rev-agent-157 reviewed `141e8c0`. It re-verified round 1's fixes and
+posted seven new findings, three of them gating. The assistant reproduced
+the gating ones in scratch copies before changing anything, and accepted
+all seven. On R2-F the assistant went past the note and closed it, because
+the fix was one line. The assistant's round-1 pushback on D was confirmed.
+R2-A shows the assistant's own fix for D still had the shape of the class.
+
+## R2-A: the round-1 pin end was supplied by the qualifier itself
+
+The round-1 pins ended on the ` - ` that opens the next bullet.
+`comment_reflow` flattens a nested sub-bullet, and an inline spaced
+hyphen, to those same three characters. So a qualifier written either way
+supplied the anchor, and rev-agent-157 measured three such mutants green.
+
+rev-agent-157 offered two fixes, and the assistant chose the first: each
+pin runs on into the first words of the next bullet. The second fix,
+refusing nested list markers, would have to name every marker: `-`, `*`,
+`1.`, a tab. The chain needs no list, so the assistant also chained the
+first pin to the head of the section. Measured, rows R2A-1 to R2A-7 below:
+
+- **Red:** everything added from the section's first word to the opening
+  words of the bullet after the append rule. That covers a nested `-`,
+  `*` or numbered item, an inline ` - `, a paragraph before the list, a
+  new bullet between two pinned ones, and a qualifier at the end of the
+  unpinned date bullet.
+- **Still unseen, and named in the header:**
+  - text in the middle of the unpinned date bullet, which is not #157's
+    rule (row R2A-8);
+  - a new bullet after the chain, which is #145's case (row R2A-9).
+- **The cost:** rewording a bullet's first words turns the pin above it
+  red.
+
+## R2-B: the Edit fixture was a directory the likely fix would not read
+
+rev-agent-157 built #159's first proposed remedy as a mutant. That remedy
+resolves the enclosing repository with `git rev-parse --show-toplevel`.
+Against the plain nested directory the assistant had used in round 1, the
+remedy left the full suite green. The fixture is now a real repository
+with a linked worktree inside it, made with `git worktree add` and guarded
+with `need_worktree`. Measured: each of #159's two remedies turns four
+checks red (H4 and H6 below), and a #176-shaped mutant turns its heredoc
+check red (H1).
+
+## R2-C: corrections to round-1 claims, from the assistant
+
+- **What the pins catch.** The round-1 entry said, under D, that ending
+  each pin on the next bullet's `- ` meant a qualifier "anywhere inside" a
+  bullet goes red. The assistant had measured a qualifier after a
+  bullet's last sentence, not one written as a nested sub-bullet or an
+  inline ` - `. Those stayed green. The same claim stood in:
+  - the `GH-157.sh` header;
+  - GH-157.1 and GH-157.2;
+  - the pull request body.
+
+  All of them now state the measured chain.
+- **What a fix would turn red.** The round-1 entry said "whichever issue
+  lands, its check points back at the sentence". The round-1 citation for
+  #159 in `requirements.md` said the same, and so did the round-1 reply
+  on #234. The assistant had measured one remedy of #159, not "whichever
+  fix". Everything now says what is measured: each remedy the two issues
+  propose turns a check red. A fix of another shape is not known to.
+
+## R2-D, R2-E, R2-F, R2-G
+
+- **R2-D.** Fed on stdin, the Edit guard also permits an Edit of the main
+  checkout's entry when the project directory is the worktree.
+  rev-agent-157 measured it, and the fixture reproduces it. The README now
+  names the gap as an entry outside the session's project directory, in
+  another checkout, with both directions given. GH-157.3 feeds both
+  directions, plus a BLOCK control for each checkout's own entry.
+- **R2-E.** `check_file` sends only Edit. GH-157.3 now goes through `feed`
+  with a local `r157_call` building an Edit or a Write call. That is 8 Edit
+  guard rows: 2 tools, each with 2 permitted cases and 2 refused.
+- **R2-F.** The absences read the section lowercased, with `SESSION-NAME`
+  taken out first:
+  - `Session-N` and `SESSION-1` after the chain are red;
+  - a sentence repeating `SESSION-NAME` is green (row R2F-3).
+- **R2-G.**
+  - The header says a re-indent with spaces is not a change, and that a
+    tab turns a pin red (row R2G, refusing direction).
+  - The header cites #235 where it says the header audit holds the README.
+    `requirements.md` has a citation entry for #235.
+
+## Mutation evidence
+
+The runs used the round-1 reduced driver, with `ON_DEV` added for `feed`,
+in scratch copies. The unmutated control is ok=24, FAIL=0, and no row
+came out other than expected.
+
+| rows | result |
+|---|---|
+| round-1 rows 1–17, re-run | all red except the reflows, which are green |
+| 13, 18, 19: a new bullet beside the naming bullet | red, now inside the chain |
+| 18b, 19b: the same after the chain | green, named |
+| R2A-1 to R2A-7 | red |
+| R2A-8, R2A-9 | green, named |
+| R2F-1, R2F-2, R2F-4 | red |
+| R2F-3 (control) | green |
+| R2G (tab) | red |
+| H1, H2, H3, H5 | red, 1 each |
+| H4 (#159's trailing-segment remedy) | red, 4 |
+| H6 (#159's git remedy) | red, 4 |
+
+The rewraps were re-run against the chained pins: 77 widths, all green,
+48 of them breaking at a hyphen.
+
+## Counts
+
+`bash .claude/hooks/check-hooks.sh` at `b85996a`, input hashes unchanged
+across the run:
+
+| tree | results | FAIL | exit | wall-clock |
+|---|---|---|---|---|
+| `141e8c0` (round 1) | 5814 | 0 | 0 | 3 min 10 s |
+| `b85996a` | 5820 | 0 | 0 | 3 min 4 s |
+
+The issue file's results went from 18 to 24:
+
+- 1 `tok`;
+- 5 chained `holds`;
+- 3 `lacks`;
+- 7 heredoc checks;
+- 8 Edit-guard checks.
+
+`generate-requirements.sh --check` passes.
+
+## Open
+
+- **#159 and #176.** A remedy of either issue as proposed turns a GH-157.3
+  check red.
+- **#232, #233, #235 and #236** are as filed.
+- **For Bertan.** #157's third acceptance box and the `base-72798ad`
+  worktree are as before.
