@@ -57,10 +57,11 @@ thing in the record.
 - An append is made with `>>` from Bash, and an entry that exists is never
   edited with the Edit or Write tool. `append-only-docs.sh` reads a heredoc's
   text as part of the command, so a heredoc append whose prose reads as a
-  command that rewrites an entry can be refused (#176): a `sed -i` anywhere in
-  the text, for example, or an `rm`, an `mv` or a `>` followed on its line by a
-  path under this directory. Write the text to a scratch file with the Write
-  tool first, and append it with `cat <file> >> <entry>`.
+  command that rewrites an entry can be refused: a `sed -i` anywhere in the
+  text, for example, or an `rm` or an `mv` followed on its line by a path under
+  this directory (#237), or a `>` followed on its line by such a path (#176).
+  Write the text to a scratch file with the Write tool first, and append it
+  with `cat <file> >> <entry>`.
   `append-only-docs-edit.sh` does not yet refuse Edit or Write on an entry
   outside the session's project directory, in another checkout of this
   repository: a linked worktree's entry when the project directory is the main

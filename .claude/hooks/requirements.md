@@ -1344,20 +1344,30 @@ it has no entry above (Q16).
   (GH-157.3), against a real linked worktree. Each of the two remedies the
   issue proposes was measured turning a check there red. It adds its
   requirements in the pull request that fixes it
-- #176: the heredoc append `append-only-docs.sh` refuses because the heredoc's
-  prose reads as a command that rewrites an entry. Cited in #157's issue file,
-  where the dev-log README routes around it -- a scratch file, appended with
-  `cat <file> >> <entry>` -- and GH-157.3 feeds the guard the README's
-  examples at today's verdict; a fix that stops reading a heredoc's body was
-  measured turning those checks red. Whether it is fixed or accepted is its
-  own decision, so it has no entry above
+- #176: the heredoc append `append-only-docs.sh` refuses because a `>` in the
+  heredoc's prose, with a guarded path after it, reads as a truncating
+  redirect. Cited in #157's issue file, where the dev-log README routes
+  around it -- a scratch file, appended with `cat <file> >> <entry>` -- and
+  GH-157.3 feeds the guard the README's `>` example at today's verdict;
+  taking the `>` rule out of the guard was measured turning that check red.
+  Whether it is fixed or accepted is its own decision, so it has no entry
+  above
+- #237: the same refusal from the guard's other two rules, a `sed -i` or an
+  `rm`, `mv`, `cp`, `truncate` or `tee` read out of a heredoc's prose, which
+  #176's proposed remedy does not reach. Filed from review of #234 (round 3),
+  when the dev-log README was found citing #176 for all four of its
+  examples. Cited in #157's issue file beside the `sed -i`, `rm` and `mv`
+  rows; taking the `sed -i` rule, or `mv`, out of the guard was measured
+  turning the row it decides red. Fix or accept is its own decision, so it
+  has no entry above
 - #234: the pull request for #157; rev-agent-157's review of it is cited where
   what it found stands -- a README sentence about a guard, pinned as text,
   that the guard did not bear out, which is why GH-157.3 feeds the guards the
   README's own examples, against a fixture the proposed fixes of #159 read;
   an absence asked of one spelling of the numbered name, then of one case of
   its stem; and a bullet pinned a sentence at a time, then ending on a ` - `
-  a nested sub-bullet supplies, which is why the pins are chained
+  a nested sub-bullet supplies, then chained by pins that were each a
+  substring match anywhere, which is why the span is one literal
 - #235: the issue that owns the #102 header audit comparing basenames. Cited
   in #157's issue file, which spells the dev-log README's path so that the
   audit asks for it, and which says the audit is satisfied by any file named
