@@ -39,10 +39,10 @@ Two subcommands, one per thing a green run has to be true about:
     lines, and the hook's stderr is the part a reviewer needs.
 
     The summary stays under GitHub's 1 MiB cap for any log, on either path
-    that writes its one code block (#207). Failing rows are shown while their
-    block fits `SUMMARY_BLOCK_BYTES`, fences counted; a row that does not fit
-    is skipped rather than ending the list, and the summary counts what it
-    left out. Without a failing row, the log's last `TAIL_LINES` lines are
+    that writes its one code block (#207). A failing row is shown if it fits
+    what is left of `SUMMARY_BLOCK_BYTES`, fences counted; a row that does
+    not fit is skipped rather than ending the list, and the summary counts
+    what it left out. Without a failing row, the log's last `TAIL_LINES` lines are
     shown, cut from their start to the same budget, and the summary says how
     many bytes were cut.
 
@@ -72,11 +72,12 @@ PASSED_LINE = "ALL CHECKS PASSED"
 FAILED_LINE = "SOME CHECKS FAILED"
 # GitHub refuses a step summary over 1 MiB, and the whole summary is lost with
 # it. The summary carries at most one code block, the failing rows or the log's
-# tail, and everything around it is a few hundred bytes, so the bound is put on
-# that block: half the cap, counted in UTF-8 bytes, which is what GitHub counts,
-# and counted with its fences. A fence is one backtick longer than the longest
-# run inside it, so a block of backticks is three times its text; a budget on
-# the text alone let 500 KiB of rows make a 1.1 MiB summary (#207). A row count
+# tail, and everything around it is under 1 KiB (460 bytes beside a full tail
+# block, measured for #207), so the bound is put on that block: half the cap,
+# counted in UTF-8 bytes, which is what GitHub counts, and counted with its
+# fences. A fence is one backtick longer than the longest run inside it, so a
+# block that is one run of backticks is three times its text; a budget on the
+# text alone let 500 KiB of rows make a 1.1 MiB summary (#207). A row count
 # would not bound it either: a row's detail lines have no length limit.
 SUMMARY_BLOCK_BYTES = 512 * 1024
 # A suite that exits non-zero with no failing row stopped in a guard, and a
@@ -224,25 +225,25 @@ def clip_from_end(lines, budget):
             size += line_bytes(line)
             longest = max(longest, run)
             continue
-        data = line.encode("utf-8")
+        encoded = line.encode("utf-8")
 
-        def tail(n):
+        def last_bytes(n):
             # "ignore" drops the bytes of a character the cut splits, so a
             # longer cut never decodes to less text, and the bisection's
             # "fits" is monotone. "replace" would break both: U+FFFD is three
             # bytes standing for one.
-            return data[len(data) - n:].decode("utf-8", "ignore")
+            return encoded[len(encoded) - n:].decode("utf-8", "ignore")
 
-        low, high = 0, len(data)
+        low, high = 0, len(encoded)
         while low < high:
             mid = (low + high + 1) // 2
-            part = tail(mid)
+            part = last_bytes(mid)
             if fenced_size(size + line_bytes(part), max(longest, longest_run(part))) <= budget:
                 low = mid
             else:
                 high = mid - 1
         if low:
-            kept.append(tail(low))
+            kept.append(last_bytes(low))
         break
     kept.reverse()
     return kept, sum(map(line_bytes, lines)) - sum(map(line_bytes, kept))
