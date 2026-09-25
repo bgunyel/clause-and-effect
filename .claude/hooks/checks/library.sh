@@ -19,8 +19,9 @@
 #
 # WHAT IT DOES: it defines functions and nothing else. Sourcing it runs no
 # check, prints nothing and records nothing; the variables its functions read
-# -- $LEDGER, $REQ, $RAN, $HOOKS, $FIXTURES and the fixtures' own -- are set by
-# check-hooks.sh, before the call that reads them.
+# -- $LEDGER, $REQ, $RAN, $HOOKS, $FIXTURES, $SUITE_DIR, $DECLARED, $PINNED and
+# the fixtures' own -- are set by check-hooks.sh, before the call that reads
+# them.
 #
 # THE COMMENTS MOVED HERE WITH THEIR FUNCTIONS, and they kept the positional
 # words they were written with. "Above", "below", "the foot of this suite" and
@@ -1179,4 +1180,58 @@ generator_view() {  # generator_view <suite dir> <hooks dir> <into>
   rm -rf -- "$3" && mkdir -p -- "$3" \
     && ln -s -- "$1/checks" "$3/checks" && ln -s -- "$2/requirements" "$3/requirements" \
     && printf '%s' "$3"
+}
+# THE DECLARATION, as bash reads it (#205; here since #215's issue file became
+# its second caller). The fields arrive on stdin from a quoted heredoc, so
+# nothing in them is expanded, and they are recorded with the issue file that
+# declared them -- the path under .claude/hooks/, which is what the `generated`
+# field of the file names. BASH_SOURCE[1] is the file the call was made from,
+# wherever this function is defined. Nothing is judged here: an ID out of
+# grammar or declared twice is recorded all the same, and the end of the run
+# says so, with its tag, where a `fail` here would carry whatever tag stood
+# before the declaration.
+requirement() {  # requirement <ID> -- declare a generated GH- entry; its fields on stdin
+  local body=
+  # A call with no heredoc would read the terminal and wait; it records an
+  # empty body instead, which the end of the run reports as not its file.
+  [ -t 0 ] || IFS= read -r -d '' body
+  printf '%s\t%s\t%s\0' "$*" "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$body" >> "$DECLARED"
+}
+# THE PINS, #211's decision: the second copy of an entry's shape, and of its
+# variants keyword when it is in the invariance families' scope, written in the
+# issue file that declares it rather than in REQUIREMENT_SHAPE and INV_SCOPE,
+# which every loop used to edit. The tokens are those literals' own,
+# `<ID>[:<keyword>]`, and are recorded one line per call, whitespace folded.
+# `variants_pin`, its twin for the variants keyword, is in the #205 issue file
+# while that file is its one caller.
+shape_pin() {  # shape_pin '<ID>[:<shape>]...' -- the shape of entries this issue file declares
+  local -
+  set -f
+  printf 'shape\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$PINNED"
+}
+# THE READER OF A HEADER'S PROSE (#183's, a function since #215's issue file
+# became its second caller). Comment lines on stdin, one line of prose out: the
+# `#` and up to three blanks after it taken off each line, the lines joined, and
+# every run of spaces squeezed to one. A pin on hand-wrapped prose reads this and
+# not the file, because a phrase crosses a line break wherever the wrap falls;
+# and it reads it through this one function, because a second copy of the
+# reader is a second rule of what rewrapping may do. #215's first reader took
+# `# ?` off and squeezed nothing, so a trailing blank or a deeper indent turned
+# its pins red where $MUT_PROSE's stayed green; review of #215's pull request
+# measured both.
+#
+# A WORD BROKEN AT A HYPHEN IS REJOINED. A line that ends in a letter or digit
+# and a hyphen, blanks after it allowed, is joined to the next with no blank,
+# so `2026-09-` over `26` reads as a date and `byte-` over `identical` as one
+# word; the join with a blank split both, a record written that way passed
+# GH-215's counts, and a rewrap that broke `DEV-LOG` turned its paragraph pin
+# red (review of #215's pull request, fourth round). Only at a line's end, so a
+# hyphen followed by a blank inside a line stays as written; and not after a
+# hyphen, so ` --` ending a line is still a dash. The trade: a suspended hyphen
+# at a line's end, `pre-` over `and post-`, reads as `pre-and`. None stood in
+# the harness's header when this was written.
+comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on one line out
+  sed -e 's/^#[ \t]\{0,3\}//' \
+    | sed -e ':a' -e '/[[:alnum:]]-[ \t]*$/{N;s/-[ \t]*\n[ \t]*/-/;ba' -e '}' \
+    | tr '\n' ' ' | tr -s ' '
 }

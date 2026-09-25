@@ -120,6 +120,24 @@
 # is one, this is it, and it was Bertan's review of PR #142 that found the gap.
 # Both self-tests are additionally required to be present, one of each outcome.
 #
+# THE RUN LOG BELOW IS FROZEN, AT #215, and nothing is appended to it. It is the
+# dated account of which rows were run, when, against what and with what
+# outcome, from the line that opens `MEASURED, 2026-09-17, at the commit that
+# answered that review` to the line that ends `the registry is re-runnable
+# instead.`, and it is kept verbatim because for several runs it is the only
+# record there is. Its present tense is #215's: a row it says has not been run
+# since, or a whole-registry run it says nothing has made, is a claim about the
+# tree at #215 and about no later one. A RUN AFTER #215 IS RECORDED IN THE
+# DEV-LOG OF THE SESSION THAT RAN IT, under docs/dev-log/, whose README states
+# the conventions -- never here. Every loop that registered a row appended a
+# paragraph to this log, and that shared append, not the registry, is where
+# concurrent pull requests conflicted in this file. checks/GH-215.sh holds the
+# log to its bytes, this paragraph to its words, the rest of this file to the
+# ISO dates it carries, and the rest of this header to how often it says three
+# words the log's records are written in; it names the three, says which
+# paragraphs it covers and which it leaves out, and which records it cannot
+# see.
+#
 # MEASURED, 2026-09-17, at the commit that answered that review: all twenty-three
 # rows as the registry then stood reported what they declare, and .claude/hooks/
 # came back byte-identical.

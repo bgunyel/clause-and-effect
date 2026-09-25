@@ -130,7 +130,7 @@ GH-204.1:static GH-204.2:static GH-204.3:static GH-204.4:static GH-204.5:static
 GH-204.6:static GH-204.7:static GH-204.8:static
 '
 # Every shape pin the issue files recorded, as tokens; see `shape_pin` in the
-# #205 issue file.
+# helper library.
 REQUIREMENT_SHAPE_PINNED=$(awk -F'\t' '$1 == "shape" { print $3 }' "$PINNED" | tr '\n' ' ')
 REQUIREMENT_SHAPE_HELD="$REQUIREMENT_SHAPE $REQUIREMENT_SHAPE_PINNED"
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's

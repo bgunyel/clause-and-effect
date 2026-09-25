@@ -11202,9 +11202,10 @@ section "=== issue #107: the mutation harness, and the hooks directory it judges
 # Bertan's review of PR #142; the registry audit below refuses such a row.
 MUT="$SUITE_DIR/mutate-hooks.sh"
 
-# THE HARNESS'S HEADER, REFLOWED ONTO ONE LINE, and every pin on its PROSE reads
-# this rather than the file. `written`, `unarmed` and `armed` are `grep -F` on
-# lines, and a hand-wrapped comment breaks phrases wherever column 79 falls --
+# THE HARNESS'S HEADER, REFLOWED ONTO ONE LINE, and a pin on its PROSE reads
+# this, or a part of the header read by the same function, rather than the
+# file. `written`, `unarmed` and `armed` are `grep -F` on lines, and a
+# hand-wrapped comment breaks phrases wherever column 79 falls --
 # so a pin naming a phrase longer than a few words is a coin flip against the
 # wrap, and it loses in the permitting direction. That is not hypothetical here:
 # #148's first commit had four absence pins on the file, three went red on a
@@ -11213,9 +11214,11 @@ MUT="$SUITE_DIR/mutate-hooks.sh"
 # the reflow -- and the SAME commit then added `unarmed ... 'ABOUT AN HOUR'`
 # against the file, reintroducing the defect it had just repaired. Bertan's
 # review of PR #183 found it. So the reflow is built here, above every consumer,
-# and the rule is now one sentence: a pin on the header's PROSE takes
-# $MUT_PROSE, a pin on the harness's CODE takes $MUT. Code is below `set -u` and
-# is not in this region at all.
+# and the rule is now one sentence: a pin on the header's PROSE reads it
+# through comment_reflow -- $MUT_PROSE when it asks the whole header, which is
+# most of them, and one paragraph of it when it asks one, as #215's issue file
+# does -- and a pin on the harness's CODE takes $MUT. Code is below `set -u`
+# and is not in this region at all.
 #
 # A path under $FIXTURES may stand where the text-check derivation above wants a
 # hook or the tooling only because of the line that writes it, two lines down.
@@ -11223,8 +11226,7 @@ MUT="$SUITE_DIR/mutate-hooks.sh"
 # a fixture is a third place, neither $HOOKS nor $SUITE_DIR -- so what holds it
 # is this sentence and that line, not that check.
 MUT_PROSE="$FIXTURES/mutate-hooks-header.txt"
-sed -n '1,/^set -u$/p' "$MUT" | sed -e 's/^#[ \t]\{0,3\}//' | tr '\n' ' ' | tr -s ' ' \
-  > "$MUT_PROSE"
+sed -n '1,/^set -u$/p' "$MUT" | comment_reflow > "$MUT_PROSE"
 
 # IS THAT THE WHOLE HEADER? A region that stopped early would make every absence
 # below vacuous, because an absence is what a truncated file has most of. Two

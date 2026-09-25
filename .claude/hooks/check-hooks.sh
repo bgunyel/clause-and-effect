@@ -227,13 +227,13 @@
 #     families' scope. Its file under requirements/ is written by
 #     `bash .claude/hooks/generate-requirements.sh` and never by hand, and no
 #     token of it goes into REQUIREMENT_SHAPE or INV_SCOPE, which hold the
-#     entries written before #205 (#205). `requirement`, `shape_pin` and
-#     `variants_pin` are defined in checks/GH-205.sh while it is their one
-#     caller. Each moves into the library once another file calls it, and not
-#     before: the library-membership check asks it of each function by itself,
-#     so a file that calls `requirement` and `shape_pin` and not `variants_pin`
-#     moves those two and leaves the third. Until one moves, an issue file that
-#     calls it is listed after GH-205.sh.
+#     entries written before #205 (#205). `requirement` and `shape_pin` are
+#     in the library, moved there by #215, whose issue file was their second
+#     caller. `variants_pin` is defined in checks/GH-205.sh while that is its
+#     one caller, and moves into the library once another file calls it, and
+#     not before: the library-membership check asks it of each function by
+#     itself. Until it moves, an issue file that calls it is listed after
+#     GH-205.sh.
 #
 # Run: bash .claude/hooks/check-hooks.sh
 #      bash .claude/hooks/check-hooks.sh --matrix   the requirements matrix, issue #104
@@ -384,7 +384,7 @@ RAN=
 # every check below a `command not found`, which prints no FAIL and sets no
 # FAILED -- a green run having asked nothing -- so it stops the run instead.
 SUITE_LIBRARY=library.sh
-SUITE_CHECKS="unsplit.sh GH-205.sh"
+SUITE_CHECKS="unsplit.sh GH-205.sh GH-215.sh"
 SUITE_LAST=end-of-run.sh
 SUITE_SOURCED=
 for f in $SUITE_LIBRARY $SUITE_CHECKS $SUITE_LAST; do

@@ -12,30 +12,10 @@
 
 section "=== issue #205: an entry written after it is declared in its issue file, and its file is generated ==="
 
-# THE DECLARATION, as bash reads it. The fields arrive on stdin from a quoted
-# heredoc, so nothing in them is expanded, and they are recorded with the issue
-# file that declared them -- the path under .claude/hooks/, which is what the
-# `generated` field of the file names. Nothing is judged here: an ID out of
-# grammar or declared twice is recorded all the same, and the end of the run
-# says so, with its tag, where a `fail` here would carry whatever tag stood
-# before the declaration.
-requirement() {  # requirement <ID> -- declare a generated GH- entry; its fields on stdin
-  local body=
-  # A call with no heredoc would read the terminal and wait; it records an
-  # empty body instead, which the end of the run reports as not its file.
-  [ -t 0 ] || IFS= read -r -d '' body
-  printf '%s\t%s\t%s\0' "$*" "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$body" >> "$DECLARED"
-}
-# THE PINS, #211's decision: the second copy of an entry's shape, and of its
-# variants keyword when it is in the invariance families' scope, written in the
-# issue file that declares it rather than in REQUIREMENT_SHAPE and INV_SCOPE,
-# which every loop used to edit. The tokens are those literals' own,
-# `<ID>[:<keyword>]`, and are recorded one line per call, whitespace folded.
-shape_pin() {  # shape_pin '<ID>[:<shape>]...' -- the shape of entries this issue file declares
-  local -
-  set -f
-  printf 'shape\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$PINNED"
-}
+# `requirement`, the declaration, and `shape_pin` are in the library since
+# #215's issue file became their second caller; their comments moved with them.
+# `variants_pin` is `shape_pin`'s twin for the variants keyword, and stays here
+# while this file is its one caller.
 variants_pin() {  # variants_pin '<ID>:<keyword>...' -- the variants of entries this issue file declares
   local -
   set -f
@@ -155,11 +135,14 @@ req GH-205.3
 tok 'shape_pin and variants_pin record the kind, the issue file and the tokens, whitespace folded' \
   "$(printf 'shape\tchecks/GH-205.sh\tGH-9.1:static GH-9.2 \nvariants\tchecks/GH-205.sh\tGH-9.2:none \n')" \
   "$(cat "$R205/pins")"
-# And the file named is the CALLER's, not the file defining the three: every
-# call above is in this file, which defines them too, so the two are one path
-# and the index of BASH_SOURCE is not asked. A file sourced from a fixture is
-# outside .claude/hooks/, so it is named by its whole path. Its declaration is
-# written with an `@` taken off as the file is made, as the fixtures below are.
+# And the file named is the CALLER's, not the file defining the three. The
+# calls above are all in this file. Since #215, `requirement` and `shape_pin`
+# are defined in the library, so for those two the index of BASH_SOURCE is
+# already asked above; `variants_pin` is still defined here, so for it the two
+# are one path and it is not. A file sourced from a fixture asks it of all
+# three, and that file is outside .claude/hooks/, so it is named by its whole
+# path. Its declaration is written with an `@` taken off as the file is made,
+# as the fixtures below are.
 sed 's/@requirement/requirement/' > "$R205/caller.sh" <<'FIX'
 @requirement GH-9.3 <<'REQ'
 - text: from another file
