@@ -79,13 +79,16 @@
 # So the rest of the file is asked for the words a record is written in, which
 # are the log's own.
 # Every sentence of the log that records a run carries a date, or one of
-# `byte-identical after`, `selection` and `baseline`, measured at #215 by
-# splitting the log into sentences. The review proposed a date and
-# `byte-identical after` alone, and said every record carries one of them:
-# `#128 added three and ran them the same way, baseline plus three, all caught
-# with GH-128 red.` carries neither, and nor does the sentence that ran the five
-# #139 rows again. Outside the log those words stand as follows, which is what
-# the checks below pin:
+# `byte-identical`, `selection` and `baseline`, measured at #215 by splitting
+# the log into sentences. The review proposed a date and `byte-identical
+# after` alone, and said every record carries one of them: `#128 added three
+# and ran them the same way, baseline plus three, all caught with GH-128 red.`
+# carries neither, and nor does the sentence that ran the five #139 rows again.
+# The words are asked as stems and with case folded, because the review's
+# second round wrote records in the log's own phrasing that a list of phrases
+# passed: `came back byte-identical`, `the baseline was green`, and a sentence
+# opening `Selection of`. Outside the log those words stand as follows, which is
+# what the checks below pin:
 #   - a date: six, over the whole file. Three in the header -- `124 s, taken
 #     2026-09-17`, `The 2026-09-17 readings` and the freeze paragraph's
 #     quotation of the log's first line -- and three below `set -u`, at
@@ -93,24 +96,38 @@
 #     2026-09-17, and the `--list` line that prints the rate's date. A date has
 #     no blank in it, so it is counted on the lines as written. A count and not
 #     the list, so a re-measure of the rate that replaces its date in place
-#     stays green, and a date added anywhere outside the log is red.
-#   - `byte-identical after`, `selection` and `baseline green`: none, in the
-#     header's prose. The code below `set -u` says `selection` in a comment
-#     about how rows are named and `byte-identical` in its messages, so these
-#     are asked of the header only, read through comment_reflow.
-#   - `baseline plus`: once in the header's prose, in the rule that says what
-#     naming rows costs, `the baseline plus one run each`. So it is a count too.
+#     stays green, and a date added anywhere outside the log is red. That
+#     includes a re-measure that adds a dated sentence beside the old one, as
+#     the last two did: it moves this literal, and the red's label says so.
+#   - in the header's prose, read through comment_reflow with case folded:
+#     `selection` none; `byte-identical` once, in the rule that a mutation
+#     leaving its file byte-identical is a failure; `baseline` five times, in
+#     the rules on what a pass costs and in THE BASELINE RUN. So the last two
+#     are counts. The code below `set -u` says `selection` in a comment about
+#     how rows are named and `byte-identical` in its messages, so these are
+#     asked of the header only.
 # The price is a red on a rule that comes to use one of those words, or a date,
 # for a reason of its own. That is the direction to be wrong in: the red names
-# the paragraph's words, and whoever wrote them decides whether they are a
-# record.
+# the word, and whoever wrote it decides whether it is a record. `caught` is not
+# asked, though nearly every record says it: it is the harness's word for an
+# outcome, and the header's rules use it twelve times.
 #
-# WHAT IT DOES NOT SEE, named. A run recorded in none of those words -- no
-# date, and none of the four phrases -- anywhere outside the log, and a record
-# in the code below `set -u` that has no date. The first is not how any record
-# in the log was written. It also does not see whether a later session recorded
-# its run in its dev-log at all, because no file here can say that a run
-# happened.
+# AND THE FREEZE PARAGRAPH BY ITS WORDS, because a list of words can always be
+# written around, and that paragraph is where the next loop would write. So it
+# is compared whole, as comment_reflow reads it, with a literal: any sentence
+# added to it is red whatever its words, and so is a clause taken out of one --
+# review's second round deleted `because for several runs it is the only record
+# there is` and every check stayed green, since the claims below are asked as
+# clauses. Rewrapping it stays green. The four claims are kept beside it, so a
+# red names which claim went, not only that the paragraph changed.
+#
+# WHAT IT DOES NOT SEE, named. A run recorded outside the log and the freeze
+# paragraph in none of those words -- no date, and none of the three stems, as
+# in `ran it alone against the commit answering it: caught.` -- and a record in
+# the code below `set -u` that has no date, whatever its words. The first is not
+# how any record in the log was written, measured as above. It also does not
+# see whether a later session recorded its run in its dev-log at all, because no
+# file here can say that a run happened.
 #
 # THE TRADE, taken knowingly: a block that is stale by construction stays in
 # the file, and a later run is no longer recorded beside the rows it ran. Stale
@@ -135,10 +152,11 @@ requirement GH-215 <<'REQ'
   that freezes it, and the paragraph directly below is the rule `WHAT A
   MUTATION IS`. The freeze paragraph names both lines. It says the log's
   present tense is #215's, and that a run after #215 is recorded in the
-  dev-log of the session that ran it. Outside the log, the harness carries
-  six dates, and its header's prose carries none of `byte-identical after`,
-  `selection` or `baseline green`, and `baseline plus` only once, so no
-  other paragraph records a run in the words the log's records use.
+  dev-log of the session that ran it. The freeze paragraph holds its words
+  and no others. Outside the log, the harness carries six dates, and its
+  header's prose, case folded, says `selection` nowhere, `byte-identical`
+  once and `baseline` five times, so no other paragraph records a run in the
+  words the log's records use.
 - from: #215
 - kind: doc-claim
 - status: active
@@ -147,9 +165,11 @@ requirement GH-215 <<'REQ'
   errors, and a correction goes in the newest dev-log. The neighbours are
   asked by their opening words, through the reader every pin on the header's
   prose takes, so a record appended after the log's last line is red, and
-  rewrapping either paragraph is not. What it does not see: a run recorded
-  outside the log in none of the log's words, an undated one below `set -u`,
-  and whether a later run was recorded anywhere at all.
+  rewrapping either paragraph is not. The freeze paragraph is compared whole
+  because a list of words can be written around, and it is where a loop
+  would write. What it does not see: a run recorded elsewhere outside the log
+  in none of the log's words, an undated one below `set -u`, and whether a
+  later run was recorded anywhere at all.
 REQ
 shape_pin 'GH-215:static'
 
@@ -195,8 +215,16 @@ R215_FREEZE=$(R215_FIRST=$R215_FIRST awk '
 R215_OPENS='THE RUN LOG BELOW IS FROZEN, AT #215,'
 tok 'nor before it: the paragraph above it is the one that freezes it' \
     "$R215_OPENS" "${R215_FREEZE:0:${#R215_OPENS}}"
-# Each literal is one whole sentence of the freeze paragraph, or its whole
-# clause.
+# The whole paragraph, and then each claim: one whole sentence of it, or its
+# whole clause. The literal is the paragraph as comment_reflow reads it, with
+# the one blank the reader leaves at its end taken off.
+R215_WORDS=$(cat <<'WORDS'
+THE RUN LOG BELOW IS FROZEN, AT #215, and nothing is appended to it. It is the dated account of which rows were run, when, against what and with what outcome, from the line that opens `MEASURED, 2026-09-17, at the commit that answered that review` to the line that ends `the registry is re-runnable instead.`, and it is kept verbatim because for several runs it is the only record there is. Its present tense is #215's: a row it says has not been run since, or a whole-registry run it says nothing has made, is a claim about the tree at #215 and about no later one. A RUN AFTER #215 IS RECORDED IN THE DEV-LOG OF THE SESSION THAT RAN IT, under docs/dev-log/, whose README states the conventions -- never here. Every loop that registered a row appended a paragraph to this log, and that shared append, not the registry, is where concurrent pull requests conflicted in this file. checks/GH-215.sh holds the log to its bytes, this paragraph to its words, the rest of this file to the dates it carries, and the rest of this header to carrying no run record in the words the log's records are written in; it says which paragraphs it covers, which it leaves out, and which records it cannot see.
+WORDS
+)
+tok 'the freeze paragraph holds these words and no others, however it is wrapped' \
+    "$R215_WORDS" "${R215_FREEZE% }"
+
 holds 'the freeze paragraph says the run log is frozen at #215' "$R215_FREEZE" \
   'THE RUN LOG BELOW IS FROZEN, AT #215, and nothing is appended to it.'
 holds 'and names the lines it runs from and to, by their text' "$R215_FREEZE" \
@@ -217,13 +245,16 @@ R215_REST_LINES=$(R215_FIRST=$R215_FIRST R215_LAST=$R215_LAST awk '
 R215_REST=$(printf '%s\n' "$R215_REST_LINES" | sed -n '1,/^set -u$/p' | comment_reflow)
 holds 'outside the log, the header is read to its last paragraph' "$R215_REST" \
   'the documents it is judged against stay this repository'
-tok 'and outside the log the harness carries six dates, none of them a record of a run' \
+tok 'and outside the log the harness carries six dates, none of them a record of a run (a re-measure of the rate that adds a date moves this literal)' \
     '6' "$(printf '%s\n' "$R215_REST_LINES" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | grep -c '')"
-lacks "and the header outside the log does not say a run left the hooks byte-identical after" \
-  "$R215_REST" 'byte-identical after'
-lacks 'nor that rows were run as a selection' "$R215_REST" 'selection'
-lacks 'nor that a baseline was green' "$R215_REST" 'baseline green'
-tok 'and says baseline plus once, in the rule on what naming rows costs, and in no record' \
-    '1' "$(printf '%s' "$R215_REST" | grep -oF 'baseline plus' | grep -c '')"
+# Case folded, so a record opening `Selection of` or written in capitals is read
+# as one written in lower case.
+R215_REST=${R215_REST,,}
+lacks 'and the header outside the log says selection nowhere, as a record of rows run together would' \
+  "$R215_REST" 'selection'
+tok 'says byte-identical once, in the rule on a mutation that does not apply, and in no record' \
+    '1' "$(printf '%s' "$R215_REST" | grep -oF 'byte-identical' | grep -c '')"
+tok 'and says baseline five times, in the rules on what a pass costs and in THE BASELINE RUN, and in no record' \
+    '5' "$(printf '%s' "$R215_REST" | grep -oF 'baseline' | grep -c '')"
 
 sourced_to_end

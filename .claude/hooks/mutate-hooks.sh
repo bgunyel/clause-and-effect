@@ -132,9 +132,10 @@
 # the conventions -- never here. Every loop that registered a row appended a
 # paragraph to this log, and that shared append, not the registry, is where
 # concurrent pull requests conflicted in this file. checks/GH-215.sh holds the
-# log to its bytes, and the rest of this file to carrying no run record in the
-# words the log's records are written in; it says which paragraphs it covers,
-# which it leaves out, and which records it cannot see.
+# log to its bytes, this paragraph to its words, the rest of this file to the
+# dates it carries, and the rest of this header to carrying no run record in
+# the words the log's records are written in; it says which paragraphs it
+# covers, which it leaves out, and which records it cannot see.
 #
 # MEASURED, 2026-09-17, at the commit that answered that review: all twenty-three
 # rows as the registry then stood reported what they declare, and .claude/hooks/
