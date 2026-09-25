@@ -40,15 +40,33 @@ thing in the record.
 
 ## Conventions
 
-- File name: `devlog_YYYY-MM-DD_SESSION-NAME.md`, where `SESSION-NAME` is the session 
-  name of the agent writing the dev-log. 
-- If the agent does not know its session name, or it is in doubt, it should call 
+- File name: `devlog_YYYY-MM-DD_SESSION-NAME.md`, where `SESSION-NAME` is the
+  session name of the agent writing the dev-log.
+- The name is never a number counted from the entries that already exist. A
+  worktree branch sees only the dev branch and itself, so two branches writing
+  on the same day count to the same number, and an entry cannot be renamed
+  once it exists (#157). Entries named under the earlier numbered convention
+  keep their names: they are history.
+- If the agent does not know its session name, or it is in doubt, it should call
   the `ListAgents` function to see its session name.
-- A dev-log entry should start with date and time of the entry. Open with 
-  branch, commit range, and how far ahead of its root branch the current branch 
+- A dev-log entry should start with date and time of the entry. Open with
+  branch, commit range, and how far ahead of its root branch the current branch
   ended up.
-- If the dev-log file that the agent is trying to write already exists, 
-  the agent should  append a new dev-log entry to the file with a date and time. 
+- If the dev-log file that the agent is trying to write already exists,
+  the agent should append a new dev-log entry to the file with a date and time.
+- An append is made with `>>` from Bash, and an entry that exists is never
+  edited with the Edit or Write tool. `append-only-docs.sh` reads a heredoc's
+  text as part of the command, so a heredoc append whose prose reads as a
+  command that rewrites an entry can be refused: a `sed -i` anywhere in the
+  text, for example, or an `rm` or an `mv` followed on its line by a path under
+  this directory (#237), or a `>` followed on its line by such a path (#176).
+  Write the text to a scratch file with the Write tool first, and append it
+  with `cat <file> >> <entry>`.
+  `append-only-docs-edit.sh` does not yet refuse Edit or Write on an entry
+  outside the session's project directory, in another checkout of this
+  repository: a linked worktree's entry when the project directory is the main
+  checkout, or the main checkout's when it is the worktree (#159). There this
+  rule is held by the agent and not by a guard.
 - Written for technical readers who know the codebase. Prefer measured numbers
   and commit SHAs over recollection — and say which figures were measured versus
   recalled.
