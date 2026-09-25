@@ -1332,3 +1332,7 @@ it has no entry above (Q16).
   cited where a rule is held for the legacy entries and not yet for a
   generated one -- an ID deleted outright, with its declaration, its pin and
   its file, which nothing disagrees with afterwards
+- #159: `append-only-docs-edit.sh` is inoperative in every linked worktree. Cited
+  in #157's issue file, which pins the dev-log README saying so, so that the
+  README gives the append rule as an instruction rather than as something the
+  guard holds. It adds its requirements in the pull request that fixes it

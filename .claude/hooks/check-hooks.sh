@@ -6,7 +6,9 @@
 # The session report, report-stale-branches.sh, and the tokeniser most of them
 # source, lib/command-scan.sh. And the files that run or describe them: the
 # settings.json that registers them, and CLAUDE.md, CONTEXT.md and the
-# branch-hygiene skill's SKILL.md. And the one script outside .claude/hooks/
+# branch-hygiene skill's SKILL.md, and the dev-log's README.md, whose rules
+# for naming an entry and appending to one are pinned (#157). And the one
+# script outside .claude/hooks/
 # that reads the session report, the housekeeping skill's
 # housekeeping-commands.sh. And the one file beside this suite that nothing here
 # runs, mutate-hooks.sh, which runs THIS suite against a mutated copy of the
@@ -384,7 +386,7 @@ RAN=
 # every check below a `command not found`, which prints no FAIL and sets no
 # FAILED -- a green run having asked nothing -- so it stops the run instead.
 SUITE_LIBRARY=library.sh
-SUITE_CHECKS="unsplit.sh GH-205.sh GH-215.sh"
+SUITE_CHECKS="unsplit.sh GH-205.sh GH-215.sh GH-157.sh"
 SUITE_LAST=end-of-run.sh
 SUITE_SOURCED=
 for f in $SUITE_LIBRARY $SUITE_CHECKS $SUITE_LAST; do
