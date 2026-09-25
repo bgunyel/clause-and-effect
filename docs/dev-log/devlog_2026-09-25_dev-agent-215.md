@@ -133,3 +133,154 @@ count, 195 → 196, which counts GH-215.
   triage. When either one merges `dev-05`, a record it keeps inside the
   frozen region turns GH-215 red. The remedy is to move that paragraph into the dev-log of
   the session that ran it, which is what the freeze paragraph says to do.
+
+---
+
+# 2026-09-25 16:21 +03 — #230 review round 1 (rev-agent-215)
+
+Branch `worktree-issue-215-freeze-run-log`. This round's commits are `6687d3e`,
+the fix, and this entry. The branch is five ahead of `origin/dev-05` (`5017b2b`)
+once this entry is committed. The review, at `8abaf6f`, raised four classes. The
+assistant took C1 with a different signature from the one proposed, took C2 and
+widened it to a sibling the review had called correct, and took C3 and C4 as
+written.
+
+## C1: a record one paragraph past the fence. Taken, with a wider signature
+
+Review measured three placements that passed at `8abaf6f`: the last sentence of
+the freeze paragraph, a new paragraph above it, and a new paragraph below WHAT A
+MUTATION IS. The first is where the next loop would write, so the shared append
+hunk had moved, not gone.
+
+The review proposed pinning the date count outside the region, and the absence
+of `byte-identical after`. It said every record in the log carries one of the
+two. The assistant split the frozen region into sentences and measured that
+claim. It is false: `#128 added three and ran them the same way, baseline plus
+three, all caught with GH-128 red.` carries neither. Neither does the sentence
+that re-ran the five #139 rows as one selection. Every sentence in the log that
+records a run carries a date, or one of `byte-identical after`, `selection` and
+`baseline`. The run-sentences that carry none were all commentary, not records.
+
+Outside the region, measured at `8abaf6f`:
+
+- **Dates, over the whole file: 6.** Three are in the header and three below
+  `set -u`, at the rate.
+- **In the header's prose, read as `$MUT_PROSE` reads it:**
+  - `byte-identical after`: 0
+  - `selection`: 0 (the code below `set -u` says it once, in a comment)
+  - `baseline green`: 0
+  - `baseline plus`: 1, in the rule on what naming rows costs
+
+GH-215.sh now pins those as six checks: a holds that the region was read to the
+header's last paragraph, the date count `6`, three `lacks`, and the
+`baseline plus` count `1`. What it names as unseen:
+
+- a record with no date and none of the four phrases;
+- an undated record below `set -u`.
+
+## C2: a second reader of the header's prose. Taken, and one sibling widened
+
+The reader is now one function, `comment_reflow` in `checks/library.sh`, since
+the #204 membership rule puts a helper with two calling files there. `$MUT_PROSE`
+is built with it, and so are GH-215's freeze paragraph and its neighbour below.
+The assistant declined to write a third copy of the `sed | tr | tr`, because a
+copy is how this class arose.
+
+The review called the neighbour reads correct to read raw bytes. The assistant
+measured that and disagrees, for both bare lines, which sit outside the
+checksum. At `8abaf6f`:
+
+- a trailing blank on the bare `#` below the log is 1 false red;
+- the same blank on the bare `#` above the log is 5 false reds: the neighbour
+  above and all four claims.
+
+Both reads now take a bare line to be `#` and blanks only. The lines inside the
+region are still compared byte for byte, on purpose.
+
+## C3 and C4, and the library header
+
+- **C3.** The trade now says the log names 45 registry row ids (the assistant
+  measured the backticked ids in the region against the `MUTATIONS` rows), and
+  that a later rename leaves the log naming rows that do not exist.
+- **C4.** The review is right that the round-0 entry put several of the
+  assistant's errors in the passive or on an artifact. That entry is
+  append-only, so here they are, attributed:
+  - The assistant asked the four freeze-paragraph claims of the whole header.
+  - The assistant gave a wrong reason for `holds` in `9732562`'s message.
+  - The assistant called the 2026-09-17 readings a measurement of the rate
+    and not a run.
+  - The assistant's left-out list omitted several dated paragraphs.
+  - The assistant hand-counted the neighbour pins' prefix widths.
+  - The assistant first tried to commit on a base eight commits behind
+    `origin/dev-05`, and the stale-branch guard refused it. The assistant then
+    fast-forwarded the branch to `5017b2b`.
+- **Library header.** `$SUITE_DIR`, `$DECLARED` and `$PINNED` are now listed.
+  The omission predates this branch, as the review measured.
+- **The freeze paragraph's closing sentence** now says GH-215.sh also holds the
+  rest of the file to carrying no record in the log's words, so the next loop
+  sees why it went red. The harness diff against `5017b2b` is now +16 / −0.
+
+## Measured
+
+The runs were 26 full-suite runs, each in its own `git clone` of the named
+commit, with the mutant applied by a script that exits non-zero when its edit
+does not apply. Each ran under `env -i`, so no exported function reaches the
+suite (#231).
+
+**Controls:**
+
+- `6687d3e`: 5,789 ok, 0 FAIL.
+- `8abaf6f`: 5,783 ok, 0 FAIL.
+
+**The review's three survivors:**
+
+| mutant | at `8abaf6f` | at `6687d3e` |
+|---|---|---|
+| record as the freeze paragraph's last sentence | green | 2 FAIL: date count, `byte-identical after` |
+| record as a paragraph above the freeze paragraph | green | 2 FAIL: the same two |
+| record as a paragraph below WHAT A MUTATION IS | green | 2 FAIL: the same two |
+
+**One signature each, appended to the freeze paragraph at `6687d3e`.** Each
+turned exactly its own check red, one FAIL:
+
+- date only;
+- `byte-identical after` only;
+- `selection` only;
+- `baseline green` only;
+- `baseline plus` only. This one is green at `8abaf6f`. It has no date and no
+  `byte-identical after`, so the review's proposed pin would have passed it.
+- a dated record below `set -u`, caught by the date count.
+
+**Whitespace:**
+
+| mutant | at `8abaf6f` | at `6687d3e` |
+|---|---|---|
+| trailing blank on a freeze-paragraph line | 1 FAIL | green |
+| freeze-paragraph continuation lines indented `#   ` | 3 FAIL | green |
+| trailing blank on the bare line below the log | 1 FAIL | green |
+| trailing blank on the bare line above the log | 5 FAIL | green |
+
+The review's indent mutant turned one check red. The assistant's indented every
+continuation line, which is why it turned three.
+
+**Named gaps, run so that the table is not assumed.** Both green at
+`6687d3e`, as GH-215.sh says they will be:
+
+- an undated record with none of the four phrases, in the freeze paragraph;
+- an undated record below `set -u`.
+
+**Rewrap control.** The freeze paragraph rewrapped at 60 columns is green.
+
+## Mistakes, attributed
+
+- **The assistant first cited "PR #230" in the new comments.** The citation
+  check went red: #230 had no entry and no reason. Giving it one would mean
+  appending a line to `requirements.md`'s citation list, which is the
+  shared-append hunk class this issue removes. The assistant cited "#215's pull
+  request" instead, and #215 has an entry.
+
+## Open
+
+- Not yet reviewed by Bertan. The heads-up on #184 and #158 still stands. A
+  record either one keeps outside the region, in the log's words, now turns
+  GH-215 red too.
