@@ -76,8 +76,8 @@
 # freeze paragraph, a paragraph above it, and a paragraph below WHAT A MUTATION
 # IS. The first is where the next loop would write, since that paragraph is the
 # one about runs, and two loops writing there conflict as #184 and #158 did.
-# So the rest of the file is asked for the words a record is written in, which
-# are the log's own.
+# So the rest of the file is asked for the dates a record carries, and the rest
+# of the header for the words a record is written in, which are the log's own.
 # Every sentence of the log that records a run carries a date, or one of
 # `byte-identical`, `selection` and `baseline`, measured at #215 by splitting
 # the log into sentences. The review proposed a date and `byte-identical
