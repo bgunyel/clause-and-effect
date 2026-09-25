@@ -7,9 +7,8 @@
 # source, lib/command-scan.sh. And the files that run or describe them: the
 # settings.json that registers them, and CLAUDE.md, CONTEXT.md and the
 # branch-hygiene skill's SKILL.md, and the dev-log's README.md, whose rules
-# for naming an entry and appending to one are pinned (#157). And the one
-# script outside .claude/hooks/
-# that reads the session report, the housekeeping skill's
+# for naming an entry and appending to one are pinned (#157). And the one script
+# outside .claude/hooks/ reading the session report, the housekeeping skill's
 # housekeeping-commands.sh. And the one file beside this suite that nothing here
 # runs, mutate-hooks.sh, which runs THIS suite against a mutated copy of the
 # hooks: its registry and its guards are checked as text, in the #107 section,

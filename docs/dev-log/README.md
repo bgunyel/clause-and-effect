@@ -56,12 +56,14 @@ thing in the record.
   the agent should append a new dev-log entry to the file with a date and time.
 - An append is made with `>>` from Bash, and an entry that exists is never
   edited with the Edit or Write tool. `append-only-docs.sh` reads a heredoc's
-  text as part of the command, so a heredoc append whose prose mentions a path
-  under this directory can be refused; write the text to a scratch file with
-  the Write tool first, and append it with `cat <file> >> <entry>`.
-  `append-only-docs-edit.sh` does not yet refuse Edit or Write in a linked
-  worktree, which is where agents write entries (#159), so in a worktree this
-  rule is held by the agent and not by a guard.
+  text as part of the command, so a heredoc append whose prose reads as a
+  command that rewrites an entry can be refused (#176): a `sed -i` anywhere in
+  the text, for example, or an `rm`, an `mv` or a `>` followed on its line by a
+  path under this directory. Write the text to a scratch file with the Write
+  tool first, and append it with `cat <file> >> <entry>`.
+  `append-only-docs-edit.sh` does not yet refuse Edit or Write on an entry in a
+  linked worktree when the session's project directory is the main checkout
+  (#159), so there this rule is held by the agent and not by a guard.
 - Written for technical readers who know the codebase. Prefer measured numbers
   and commit SHAs over recollection — and say which figures were measured versus
   recalled.
