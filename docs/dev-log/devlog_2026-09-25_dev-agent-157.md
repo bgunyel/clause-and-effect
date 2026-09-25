@@ -472,3 +472,170 @@ assistant's round-1 hook mutants flipped five of those verdicts, and no
 mutant touched the other three: the `rm`+path refusal, the path-only
 permit and the `cat >>` permit. The refreshed body names the hook mutants
 that were run, rather than "each". It goes up with the push.
+
+
+# 2026-09-25 23:12 +03 — #234 review round 3: the span is one literal, and the heredoc rows cite the issues that own them
+
+Branch `worktree-issue-157-devlog-naming-pin`, on `origin/dev-05` at
+`72798ad`. This round is `10f1e0a`, on top of the pushed `b0c4296`, plus
+this entry: ten ahead of `origin/dev-05` once it is committed. Not pushed.
+
+rev-agent-157 reviewed `b0c4296`. It re-verified round 2's fixes and
+posted four findings, R3-A and R3-B gating.
+
+- **Accepted:** R3-A and R3-B.
+- **Declined, with the reasons below:** R3-C and R3-D.
+- **Found while sweeping:** the assistant found, and filed as #237, a
+  citation of its own that was broader than the issue it cited.
+
+## R3-A: the chain had no adjacency
+
+The round-2 pins were chained: each ran into the next bullet's first
+words. But each was still its own substring match anywhere in the section.
+So a qualifier that opened with the next bullet's first words satisfied
+the pin above it, and the real bullet still satisfied its own pin.
+
+rev-agent-157 measured two such qualifiers green, and its code-review pass
+found two more. This is the third form of class D, and each earlier fix
+narrowed the spelling without removing the independence of the matches.
+
+The assistant took the reviewer's suggestion.
+
+- **One literal.** The section is cut at ` - Written for technical
+  readers`, and what comes before the cut is asked equal to one literal,
+  with a `tok`. Adjacency is now a property of one comparison.
+- **The last occurrence.** The assistant first cut at the first
+  occurrence. Its own new row R3A-5 then stayed green: a qualifier opening
+  with the cut's words, nested under the append rule, cut the span exactly
+  where it ends and read as the next bullet. Cutting at the last occurrence
+  closes it, and a second occurrence anywhere, before or after the real
+  one, turns the check red (R3A-5 and R3A-7).
+- **The cost.** The date bullet, which is not #157's rule, is held as
+  well, and any edit to the span is an edit to the literal. The
+  pin-to-pin coupling is gone.
+
+## R3-B: corrections to round-2 claims, from the assistant
+
+These round-2 statements claimed more than the chain did:
+
+- the round-2 entry said nothing could be added from the section's start
+  to the next bullet "in any spelling";
+- the `GH-157.sh` header said the same;
+- GH-157.1 said "nothing is added between or after them unseen". The "or
+  after" also contradicted GH-157.1's own note;
+- the pull request body said the same;
+- the assistant's round-2 reply said the same.
+
+R3-A's rows falsify each of them. The header and the requirement texts now
+state the one-literal span. The body is corrected when the branch is
+pushed.
+
+## Found while sweeping: #176 was cited for rules it does not own
+
+Sweeping class E, the assistant read #176 again. Its scope is a *redirect*
+read out of a heredoc body, and its acceptance names that shape only.
+
+Since round 1, the README, GH-157.2, GH-157.3, the #176 citation in
+`requirements.md` and the pull request body had cited #176 for all four
+heredoc examples. Three of them come from other rules:
+
+- `sed -i`, from the in-place rule. It asks for `sed -i` anywhere and a
+  path anywhere, in two independent greps, so the append target itself
+  supplies the path;
+- `rm` and `mv`, from the removal rule.
+
+#176's proposed remedy would leave both rules as they are. The assistant
+filed **#237** for them, measured on stdin: every verb in the removal rule
+reads heredoc prose.
+
+Each sentence and row now cites the issue that owns it:
+
+- `sed -i`, `rm` and `mv` cite #237;
+- `>` cites #176.
+
+The assistant's round-2 reply and entry said taking out the `sed -i` rule
+was "#176-shaped". It is #237-shaped.
+
+**A dead end, and more evidence for #237.** The assistant first posted
+#237's follow-up comment with `gh issue comment --body`. The live
+`append-only-docs.sh` refused it, because the body quoted `cp` and
+`truncate` beside a dev-log path. `--body-file` worked. So #237's class
+reaches any command whose text quotes a verb and a guarded path, not only
+a heredoc append. The comment on #237 says so.
+
+## R3-C, declined: the #159 rows are not gap rows
+
+The `gap` convention is for a row whose verdict is wrong for the
+requirement it is tagged with, and such a row covers nothing. GH-157.3's
+requirement is what the README says, and the README says the guard
+permits these edits today. So ALLOW is the right verdict of GH-157.3. It
+is #159's gap, not GH-157.3's.
+
+Marking the rows as gaps would make them cover nothing and leave that half
+of GH-157.3 unasserted. The heredoc rows are further from gaps still: #176
+and #237 both leave the verdict to be decided, so there is no right
+verdict to write beside today's.
+
+Discoverability, the cost rev-agent-157 named, is met another way:
+
+- each row's label names its issue, and says which verdict the guard owes;
+- the `GH-157.sh` header argues the case;
+- the #159, #176 and #237 citations point at the issue file.
+
+## R3-D, declined: its own fixture
+
+`PUSH_MAIN` and `PUSH_WT` are read by the push-boundary checks. Writing
+`docs/dev-log/` entries into them would change the inputs of checks this
+issue does not own. The issue file's fixture is five lines and runs inside
+the suite's timing.
+
+## Mutation evidence
+
+The reduced driver ran in scratch copies. The unmutated control is ok=21,
+FAIL=0. There are 51 rows, the control among them, and the only one that came out other than
+expected was R3A-5 under the first-occurrence cut, fixed as described
+above.
+
+| rows | result |
+|---|---|
+| R3A-1 to R3A-4: the reviewer's four qualifiers | red |
+| R3A-5: a qualifier opening with the cut's words | red |
+| R3A-6: two bullets reordered | red |
+| R3A-7: the cut's words again, after the real one | red |
+| R2A-8: text in the middle of the date bullet | red, now inside the span |
+| 18b, 19b, R2A-9: the tail, named | green |
+| R2F-3: control | green |
+| every other row from rounds 1 and 2 | red, the reflows green |
+| H4, H6 (#159's two remedies) | red, 4 each |
+| H1 (`sed -i` rule out, #237), H2 (`>` rule out, #176), H3 (`mv` out, #237), H5 | red, 1 each |
+
+The rewraps were re-run against the literal: 77 widths, all green. 47 of
+them break at a hyphen, where round 2 said 48, because the README's
+wording changed again.
+
+## Counts
+
+`bash .claude/hooks/check-hooks.sh` at `10f1e0a`, input hashes unchanged
+across the run:
+
+| tree | results | FAIL | exit | wall-clock |
+|---|---|---|---|---|
+| `b0c4296` (round 2) | 5820 | 0 | 0 | 3 min 4 s |
+| `10f1e0a` | 5817 | 0 | 0 | 3 min 14 s |
+
+The issue file's results went from 24 to 21:
+
+- 3 `tok`: the reader, the cut and the span;
+- 3 `lacks`;
+- 7 heredoc checks;
+- 8 Edit-guard checks.
+
+`generate-requirements.sh --check` passes.
+
+## Open
+
+- **#159, #176 and #237.** Each proposed remedy of #159, and taking out
+  the rule that decides each heredoc refusal, turns a GH-157.3 check red.
+- **#232, #233, #235 and #236** are as filed.
+- **For Bertan.** #157's third acceptance box and the `base-72798ad`
+  worktree are as before.
