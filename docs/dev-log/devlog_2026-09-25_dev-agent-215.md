@@ -492,3 +492,113 @@ review measured for case folding.
 ## Open
 
 - Not yet reviewed by Bertan. The heads-up on #184 and #158 stands.
+
+---
+
+# 2026-09-25 19:23 +03 — #230 review round 4 (rev-agent-215)
+
+Branch `worktree-issue-215-freeze-run-log`. This round's commits are
+`5a75534`, the fix, and this entry. The branch is twelve ahead of
+`origin/dev-05` (`5017b2b`) once this entry is committed.
+
+The review re-ran every round-1 to round-3 mutant at `70c289d` and confirmed
+C9's fix. It raised one gating class, C10, and two non-gating notes. The
+assistant took all three. It narrowed the proposed rejoin, and found that the
+narrowed version needed a C9-style fixture of its own.
+
+## C10: a token split by the wrap it is read across
+
+`comment_reflow` joined lines with a blank, and the date count read raw lines.
+So these records passed the counts:
+
+- `2026-09-` over `26`, which is no date on either reading;
+- `byte-` over `identical`, which reads as `byte- identical`.
+
+Separately, a `textwrap` rewrap that broke `DEV-LOG` turned the whole-paragraph
+pin red. The first case contradicted GH-215's text, which says a record with an
+ISO date is red.
+
+- **The review proposed** rejoining `[[:alnum:]]- ` everywhere in the joined
+  text. **The assistant narrowed it** to a line's end. A second `sed` loop
+  joins a line ending in a letter or digit, a hyphen and optional blanks to the
+  next line, with no blank between. A mid-line `x- y` is left alone, and so is
+  a dash ending a line. What that trades away, a suspended hyphen at a line's
+  end (`pre-` over `and post-` reads as `pre-and`), is in `comment_reflow`'s
+  comment. The review's sweep found no suspended hyphen in the header's prose.
+- **The header's dates are now counted on its joined prose.** The code's dates,
+  below `set -u`, are still counted on raw lines, because an indented comment
+  there keeps its `#` and cannot be rejoined by a reader that strips only
+  column 0. That gap is named: a date broken across two lines of the code is
+  not seen.
+- **C9, applied to this round's own fix.** The harness holds neither a
+  hyphen-broken word nor a hyphen-broken date, so both changes would have
+  shipped with no check that fails without them. Two fixtures:
+  - `comment_reflow` fed `#  a pre- \n# b --\n# c\n` must give
+    `a pre-b -- c `. That covers the rejoin, a trailing blank after the
+    hyphen, and a dash left alone.
+  - The date count became `r215_dates <file>`, built on `r215_outside` and
+    `r215_header`. It is driven with a fixture holding a header date broken at
+    its hyphen, a date inside the log and a whole date in the code, and must
+    give `2`.
+
+## Non-gating notes, taken
+
+- **"six ISO dates, as at #215"** now replaces "the six it carried", in the
+  label and the text. The check counts, so a claim of identity overstated it.
+  WHAT IT DOES NOT SEE now says the counts see net growth only: a `baseline`
+  added in the same diff that rewords one away is green, and so is a date
+  swapped for another.
+- **GH-205.sh's comment** is rewrapped to 80 columns, and its antecedent is
+  now the fixture file, not the index.
+- **Declined:** the `/code-review` suggestion, which the review relayed, to pin
+  an ordered list of the header's paragraph openings. Every loop that adds a
+  rule paragraph would then edit that shared literal, which recreates the
+  shared hunk in a new place, and it still misses a sentence appended inside a
+  rule.
+
+## Measured
+
+There were 12 full-suite runs in `git clone`s under `env -i`. Control
+`5a75534`: 5,794 ok / 0 FAIL, two more than round 3. `--list` is identical to
+round 1's, and the harness diff is still +18 / −0.
+
+| mutant | `70c289d` | `5a75534` |
+|---|---|---|
+| `…on 2026-09-` / `26: caught.` below WHAT A MUTATION IS | green | 1 FAIL: dates |
+| `…came back byte-` / `identical…` below WHAT A MUTATION IS | green | 1 FAIL: `byte-identical` |
+| freeze paragraph rewrapped at 62 columns with `textwrap` defaults | 2 FAIL: false red | green |
+| **named gap:** a date broken across two lines below `set -u` | — | green |
+| suite: the rejoin `sed` removed | — | 2 FAIL: rejoin fixture, date fixture |
+| suite: `r215_dates` back to raw lines | — | 1 FAIL: date fixture |
+| suite: `tr -s ' '` removed (round 3's mutant, re-spelt for the new body) | — | 2 FAIL |
+| suite: strip back to `^# \{0,1\}` (re-spelt likewise) | — | 2 FAIL |
+
+At `70c289d` the assistant's numbers match the review's exactly. The last two
+rows re-spell round 3's C9 mutants, because the three-stage body no longer
+matches the old edit strings. They show the round-3 fixtures still bite.
+
+## Sweep for C10's siblings
+
+- **Readers in this diff that cross a wrap:** the whole-paragraph pin, the four
+  claims and the stems all read through `comment_reflow`, so all are fixed.
+  `r215_below` reads one line; the review declined that one, and so does the
+  assistant.
+- **The markdown reader `flatten`** in `unsplit.sh`, used on CLAUDE.md,
+  CONTEXT.md and the ADRs, joins with a blank too. None of the files it reads
+  has a line ending in a hyphen-broken word today, measured with a grep. It is
+  outside this diff, so it is reported and not changed.
+
+## Mistakes, attributed
+
+- **The assistant wrote "a date has no blank in it, so it is counted on the
+  lines as written"** in round 1 without asking whether a wrap could put a line
+  break inside one. It can.
+- **The assistant's first append of this entry used an anchor that stands
+  twice in this file.** The Edit refused it, and the commit chained after it
+  found nothing to commit, so nothing was pushed half-done.
+
+## Open
+
+- Not yet reviewed by Bertan. The heads-up on #184 and #158 stands.
+- `flatten` shares C10's latent shape. That is noted here, and nothing is
+  filed, because nothing it reads triggers it today.
