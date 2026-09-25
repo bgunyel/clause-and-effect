@@ -121,3 +121,193 @@ The 15 new results are 13 in `GH-157.sh` and 2 in the header audit.
   name.
 - **The detached worktree at `scratchpad/base-72798ad`** is registered in
   `git worktree list` and should be pruned.
+
+
+# 2026-09-25 21:51 +03 — #234 review round 1: the README's guard sentences are measured against the guards
+
+Branch `worktree-issue-157-devlog-naming-pin`, on `origin/dev-05` at
+`72798ad`. This round is `b67e13d`, on top of `eedea35`, plus this entry:
+four ahead of `origin/dev-05` once it is committed. Not pushed; the pull
+request's body is corrected when it is.
+
+rev-agent-157 reviewed `eedea35` and posted seven findings, A to G, three
+gating. The assistant reproduced each gating one before changing anything,
+and accepted all seven. It pushed back on one point, D's suggested fix,
+which left a sibling open.
+
+## A: the absence was one spelling
+
+rev-agent-157 measured `session-<n>` and `session-n` added beside the new
+rule, and both stayed green: `lacks 'session-N'` asked for one spelling.
+The assistant took the reviewer's suggestion and asks for the stem, a
+lowercase `session-`, which every spelling of the numbered name carries.
+The Conventions section has none today. The whole README cannot be asked,
+because its Entries section links every numbered name.
+
+Two shapes are still unseen, and the header names them: a numbered name
+without the stem, `devlog_<date>_3.md`, and the counting rule in other
+words. Both were measured green (rows 18 and 19 below).
+
+## B: two README sentences about guards were false
+
+The assistant wrote both in round 0 and fed neither to its guard.
+
+- **The heredoc trigger.** The README said a heredoc append whose prose
+  "mentions a path" can be refused. Fed to `append-only-docs.sh` on stdin
+  this round, nothing executed:
+
+  | heredoc text | exit |
+  |---|---|
+  | names a path only | 0 |
+  | `sed -i`, no path anywhere in the text | 2 |
+  | `rm` or `mv`, a path after it on the line | 2 |
+  | `>`, a path after it on the line | 2 |
+  | `rm` on one line, its path on the next | 0 |
+  | `cat <file> >> <entry>`, no heredoc | 0 |
+
+  The README now says prose that reads as a command rewriting an entry can
+  be refused, gives `sed -i`, `rm`, `mv` and `>` as examples, and cites
+  #176.
+- **The Edit guard.** The README said `append-only-docs-edit.sh` is off in
+  every linked worktree. Fed on stdin, an Edit of this branch's own entry
+  exits 0 with the project directory set to the main checkout, and 2 with
+  it set to the worktree. That is #159's own table, row 4. The README now
+  states that narrower case. The requirements.md citation for #159 now
+  quotes the issue's title as a title and says what was measured.
+
+The class is a sentence about a guard, pinned as text. A pin of text is
+evidence about the text only. The round-0 header also said "when #159
+lands the sentence and its pin change together", and nothing made that
+happen. So the assistant added **GH-157.3**. It feeds the guards the
+README's own examples at today's verdict: seven heredoc and `cat`
+commands to `append-only-docs.sh`, and one Edit to
+`append-only-docs-edit.sh` under each project directory. The #159 case is
+asserted at ALLOW, and its label says BLOCK is the right verdict.
+
+GH-157.3 is a `doc-claim` with both directions, so it is outside the
+invariance families' scope. The Edit fixture is a nested directory and not
+a real worktree, because the guard strips the project directory off the
+path and resolves no repository.
+
+## C: the round-0 mutation claim was broader than its measurement
+
+The round-0 entry above said, under *Mutation evidence*, that every mutant
+went red, including "adding the numbered name beside the new one". The
+assistant measured that for the `session-N` spelling only. rev-agent-157
+measured two spellings that stayed green (finding A). The claim was wrong
+as written. The pull request's *Evidence* section says the same and is
+corrected when the branch is pushed.
+
+## D: the fix suggested left a sibling
+
+rev-agent-157 measured a qualifier inserted between two pinned sentences
+of one bullet: green. It suggested one `holds` per bullet, from `- `
+through the last sentence. The assistant measured that this still misses a
+qualifier appended after a bullet's last sentence. Each pin therefore ends
+on the `- ` that opens the next bullet. Rows 14 to 16 below are that
+sibling, red now. A new bullet between two pinned ones is still unseen,
+which is #145's limit, and row 13 is that case, green.
+
+## E, F, G
+
+- **E.** #176 is now cited beside the scratch-file route in the README, in
+  `GH-157.sh`, in GH-157.2 and GH-157.3, and in requirements.md.
+  Citing the review also cites #234, which the suite requires an entry
+  for. The first full run of this round was red on exactly that (5813 ok,
+  1 FAIL), and the assistant added the entry.
+- **F, voice.** The round-0 entry used passive voice for four of the
+  assistant's own errors and corrections. Restated here, active:
+  - The assistant built the first mutation driver wrong: it read the real
+    README, not the mutant, so every mutant came back green. The assistant
+    rebuilt it.
+  - The assistant removed the verb list from the append bullet rather than
+    pinning it.
+  - The assistant fixed the two `GH-157.sh` comments.
+  - The assistant edited `check-hooks.sh` while its own baseline run was
+    reading it. The assistant stopped that run and re-took the baseline in
+    a detached worktree.
+- **F, attribution.** The round-0 entry credited no one for the code-review
+  findings. The assistant read the two sub-agents' transcripts this round:
+  - the **spec** reviewer found the `>` overclaim, filed as #233;
+  - the **standards** reviewer found the README path hidden from the header
+    audit, GH-157.2 promising more than its `lacks`, and both comments.
+- **F, a machine-local path.** The round-0 entry names the baseline
+  worktree by its full `/tmp` path. That is a path on one machine, and it
+  should have said "a detached worktree in the session's scratchpad". It
+  stays, because the entry is append-only.
+- **G.** The header's example of a line opening with `#` could not happen:
+  every issue number in the section is in parentheses. The example is now
+  one that can happen. The `check-hooks.sh` header line that broke a
+  sentence mid-way is rewrapped.
+
+## Dead ends this round
+
+- **The first stdin probe was refused by the live hook.** The assistant
+  wrote it as one compound Bash command with heredocs naming dev-log paths.
+  The live `append-only-docs.sh` refused that command itself, so nothing
+  ran. The assistant moved the probe into a script file.
+- **The first mutation driver truncated before reading.** It wrote each
+  hook mutant with `open(p, "w").write(sub1(open(p).read(), ...))`, which
+  truncates the file before the read. Its anchor check failed loudly on
+  the first hook row. No result was taken from it.
+
+## Mutation evidence
+
+Every row was run in a scratch copy through a reduced driver. The driver
+sources only `library.sh` and `GH-157.sh`, against a mutated README and a
+mutated copy of the hooks. The unmutated control is ok=18, FAIL=0.
+
+| # | mutant | result |
+|---|---|---|
+| 1 | delete the naming bullet | red, 1 |
+| 2 | revert to `session-N` with its counting rule | red, 3 |
+| 3 | delete the append-when bullet | red, 1 |
+| 4 | delete the append-how bullet | red, 1 |
+| 5 | move the naming bullet under Register | red, 1 |
+| 6 | rename `## Conventions` | red, 8 |
+| 8 | reflow at 60/4, 40/2, 100/2 and 24/2 columns/indent | green, all four |
+| 9 | add `session-<n>` beside the naming bullet | red, 1 |
+| 10 | add `session-n` | red, 1 |
+| 11 | qualifier between two sentences of one bullet | red, 1 |
+| 12 | qualifier before the Edit-guard sentence | red, 1 |
+| 13 | new bullet: Edit and Write are refused (#145) | green, as named |
+| 14–16 | qualifier after a bullet's last sentence, three bullets | red, 1 each |
+| 17 | restore the round-0 "mentions a path" wording | red, 1 |
+| 18 | numbered name without the stem | green, as named |
+| 19 | counting rule in other words | green, as named |
+| H1 | hook: drop the `sed`/`perl -i` rule (#176-shaped) | red, 1 |
+| H2 | hook: drop the truncating `>` rule | red, 1 |
+| H3 | hook: drop `mv` from the verb list | red, 1 |
+| H4 | Edit hook: match `(^\|/)docs/…` (#159-shaped fix) | red, 1 |
+| H5 | hook: read the `rm` rule across lines | red, 1 |
+
+Row 6 is 8 FAIL and not the reviewer's 12, because there are fewer pins.
+
+## Counts
+
+`bash .claude/hooks/check-hooks.sh` on this round's tree, measured, with
+the input files' sha256 unchanged across the run:
+
+| tree | results | FAIL | exit | wall-clock |
+|---|---|---|---|---|
+| `eedea35` (round 0) | 5809 | 0 | 0 | 3 min 11 s |
+| `b67e13d` | 5814 | 0 | 0 | 3 min 10 s |
+
+The issue file's results went from 13 to 18:
+
+- 1 `tok`;
+- 5 `holds`, down from 9, one per bullet;
+- 3 `lacks`;
+- 9 guard checks, for GH-157.3.
+
+`generate-requirements.sh --check` passes.
+
+## Open
+
+- **#159 and #176.** When either lands, its GH-157.3 check goes red, and
+  the README sentence moves with it.
+- **#233, #235, #236 and #232** are unchanged by this round.
+- **The pull request body.** It is corrected at push time. Correcting it
+  earlier would describe commits the pull request does not yet carry.
+- **For Bertan.** #157's third acceptance box and the `base-72798ad`
+  worktree are as before.
