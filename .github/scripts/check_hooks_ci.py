@@ -38,6 +38,14 @@ Two subcommands, one per thing a green run has to be true about:
     heading (``===`` or ``---``) or blank line; a `fail` message may span
     lines, and the hook's stderr is the part a reviewer needs.
 
+    The summary stays under GitHub's 1 MiB cap for any log, on either path
+    that writes its one code block (#207). Failing rows are shown while their
+    block fits `SUMMARY_BLOCK_BYTES`, fences counted; a row that does not fit
+    is skipped rather than ending the list, and the summary counts what it
+    left out. Without a failing row, the log's last `TAIL_LINES` lines are
+    shown, cut from their start to the same budget, and the summary says how
+    many bytes were cut.
+
     The job's colour comes from the suite's exit status, not from here. This
     exits 1 only when that status claims a pass the log does not support -- an
     exit 0 with a failing row, with a log whose last non-empty line is not
@@ -63,14 +71,20 @@ FAIL_PREFIX = "  FAIL "
 PASSED_LINE = "ALL CHECKS PASSED"
 FAILED_LINE = "SOME CHECKS FAILED"
 # GitHub refuses a step summary over 1 MiB, and the whole summary is lost with
-# it. Failing rows are added whole until the next would take their text past
-# half of that, so the bound is on bytes, which is what GitHub counts. A row
-# count would not bound it: a row's detail lines have no length limit. Rows
-# past the budget are left to the uploaded log, and the summary says how many.
-SUMMARY_ROW_BYTES = 512 * 1024
+# it. The summary carries at most one code block, the failing rows or the log's
+# tail, and everything around it is a few hundred bytes, so the bound is put on
+# that block: half the cap, counted in UTF-8 bytes, which is what GitHub counts,
+# and counted with its fences. A fence is one backtick longer than the longest
+# run inside it, so a block of backticks is three times its text; a budget on
+# the text alone let 500 KiB of rows make a 1.1 MiB summary (#207). A row count
+# would not bound it either: a row's detail lines have no length limit.
+SUMMARY_BLOCK_BYTES = 512 * 1024
 # A suite that exits non-zero with no failing row stopped in a guard, and a
 # guard's message is its last few lines. Forty covers a message and the
 # section headings before it, and is enough to say where the suite stopped.
+# Forty lines are not a bound in bytes -- one line of a log can be any length
+# -- so the tail is also cut to SUMMARY_BLOCK_BYTES, from its start, keeping
+# the end where the message is, and the summary says how much was cut.
 TAIL_LINES = 40
 
 
@@ -173,11 +187,65 @@ def parse_log(text):
     return passed, failing, verdict
 
 
+def longest_run(line):
+    return max((len(run) for run in re.findall(r"`+", line)), default=0)
+
+
 def fenced(lines):
     """A code block whose fence is longer than any backtick run inside it."""
-    longest = max((len(run) for line in lines for run in re.findall(r"`+", line)), default=0)
-    fence = "`" * max(3, longest + 1)
+    fence = "`" * max(3, max((longest_run(line) for line in lines), default=0) + 1)
     return f"{fence}text\n" + "".join(f"{line}\n" for line in lines) + f"{fence}\n"
+
+
+def fenced_size(text_bytes, longest):
+    """The bytes `fenced` writes for lines of `text_bytes` bytes, newlines
+    included, whose longest backtick run is `longest`: the lines, two fences,
+    the info string `text` and a newline after each fence."""
+    return text_bytes + 2 * max(3, longest + 1) + 6
+
+
+def line_bytes(line):
+    return len(line.encode("utf-8")) + 1
+
+
+def clip_from_end(lines, budget):
+    """
+    The last of `lines` whose fenced block fits in `budget` bytes, and how many
+    bytes of `lines` that leaves out. The first line from the end that does not
+    fit whole is kept in part, from its end, at a character boundary: the
+    largest part that fits, found by bisection because a part's fence depends
+    on the backticks in it and grows with it.
+    """
+    kept, size, longest = [], 0, 0
+    for line in reversed(lines):
+        run = longest_run(line)
+        if fenced_size(size + line_bytes(line), max(longest, run)) <= budget:
+            kept.append(line)
+            size += line_bytes(line)
+            longest = max(longest, run)
+            continue
+        data = line.encode("utf-8")
+
+        def tail(n):
+            # "ignore" drops the bytes of a character the cut splits, so a
+            # longer cut never decodes to less text, and the bisection's
+            # "fits" is monotone. "replace" would break both: U+FFFD is three
+            # bytes standing for one.
+            return data[len(data) - n:].decode("utf-8", "ignore")
+
+        low, high = 0, len(data)
+        while low < high:
+            mid = (low + high + 1) // 2
+            part = tail(mid)
+            if fenced_size(size + line_bytes(part), max(longest, longest_run(part))) <= budget:
+                low = mid
+            else:
+                high = mid - 1
+        if low:
+            kept.append(tail(low))
+        break
+    kept.reverse()
+    return kept, sum(map(line_bytes, lines)) - sum(map(line_bytes, kept))
 
 
 def report(log_path, exit_status, seconds, tested_commit, json_path, summary_path, output):
@@ -226,13 +294,23 @@ def report(log_path, exit_status, seconds, tested_commit, json_path, summary_pat
         parts.append(f"**{problem}**\n\n")
     if failing:
         parts.append(f"### Failing rows ({failed})\n\n")
-        shown, size, rows_shown = [], 0, 0
+        # A row that does not fit is skipped, and the loop goes on: the rows
+        # after it may fit, and one runaway row must not hide them (#207). The
+        # trade is that a skipped row's name is not on the page, only in the
+        # count below and in the uploaded log. Cutting the row to the budget
+        # left would keep its name, but a row that size takes all of it and
+        # hides the rest again. A cap on every row would keep both; it changes
+        # what a shown row is, which #207 did not ask for, and is left open.
+        shown, size, longest, rows_shown = [], 0, 0, 0
         for block in failing:
-            block_size = sum(len(line.encode("utf-8")) + 1 for line in block)
-            if size + block_size > SUMMARY_ROW_BYTES:
-                break
+            block_size = sum(map(line_bytes, block))
+            block_longest = max(map(longest_run, block))
+            if fenced_size(size + block_size,
+                           max(longest, block_longest)) > SUMMARY_BLOCK_BYTES:
+                continue
             shown.extend(block)
             size += block_size
+            longest = max(longest, block_longest)
             rows_shown += 1
         if shown:
             parts.append(fenced(shown))
@@ -242,7 +320,11 @@ def report(log_path, exit_status, seconds, tested_commit, json_path, summary_pat
     elif exit_status != 0:
         parts.append(f"The suite exited {exit_status} without printing a failing row. "
                      "The end of its log:\n\n")
-        parts.append(fenced(text.splitlines()[-TAIL_LINES:]))
+        tail, cut = clip_from_end(text.splitlines()[-TAIL_LINES:], SUMMARY_BLOCK_BYTES)
+        parts.append(fenced(tail))
+        if cut:
+            parts.append(f"\nThe first {cut} bytes of those lines are cut, to keep this "
+                         "summary under GitHub's 1 MiB limit. The uploaded log holds them.\n")
     parts.append("\nThe full log and this summary's numbers as JSON are uploaded as "
                  "this run's `check-hooks-attempt-N` artifact.\n")
     with open(summary_path, "a", encoding="utf-8") as fh:

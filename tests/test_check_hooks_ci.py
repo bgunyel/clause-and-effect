@@ -390,3 +390,141 @@ def test_report_says_every_row_was_left_out_when_the_first_is_over_budget(tmp_pa
     summary = paths["summary.md"].read_text()
     assert len(summary.encode("utf-8")) < 1024 * 1024
     assert "1 more failing row(s) are in the uploaded log." in summary.splitlines()
+
+
+def test_report_skips_a_row_over_budget_and_shows_the_rows_after_it(tmp_path):
+    """
+    One runaway row must not hide the rows behind it (#207). The 600 KiB row is
+    left to the uploaded log and counted; the two small rows after it fit, so
+    they are shown, and the count names only the row that is not.
+    """
+    detail = "    " + "x" * (600 * 1024)
+    log = f"  FAIL big\n{detail}\n  FAIL small-1\n  FAIL small-2\n\nSOME CHECKS FAILED\n"
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert len(summary.encode("utf-8")) <= 1048576
+    assert "```text\n  FAIL small-1\n  FAIL small-2\n```\n" in summary
+    assert "  FAIL big" not in summary.splitlines()
+    assert "1 more failing row(s) are in the uploaded log." in summary.splitlines()
+
+
+def test_report_counts_the_fence_against_the_row_budget(tmp_path):
+    """
+    A fence is one backtick longer than the longest run inside it, and there
+    are two, so a block's size is not its text's. Row a is 300 KiB of backticks:
+    its text fits the 512 KiB budget, its fenced block (about 900 KiB) does not.
+    Counted on text alone, a and b together are 500 KiB, and the summary they
+    make is 1.1 MiB -- past GitHub's cap, and lost.
+    """
+    log = (
+        "  FAIL a\n    " + "`" * (300 * 1024) + "\n"
+        "  FAIL b\n    " + "x" * (200 * 1024) + "\n"
+        "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert len(summary.encode("utf-8")) <= 1048576
+    assert "  FAIL a" not in summary.splitlines()
+    assert "```text\n  FAIL b\n    " + "x" * 204800 + "\n```\n" in summary
+    assert "1 more failing row(s) are in the uploaded log." in summary.splitlines()
+
+
+@pytest.mark.parametrize(
+    ("last_line", "block", "cut"),
+    [
+        ("y" * (2 * 1024 * 1024),
+         "```text\n" + "y" * 524275 + "\n```\n",
+         1572892),
+        # The fence grows with the backticks it holds: a third of the budget
+        # is text, and two thirds are the fences either side of it.
+        ("`" * (2 * 1024 * 1024),
+         "`" * 174760 + "text\n" + "`" * 174759 + "\n" + "`" * 174760 + "\n",
+         1922408),
+        # Counted in bytes, not characters, and never cut inside one: the odd
+        # byte of a split two-byte character is dropped, and counted as cut.
+        ("é" * (1024 * 1024),
+         "```text\n" + "é" * 262137 + "\n```\n",
+         1572893),
+        # 524,275 bytes of room hold 131,068 four-byte characters and three
+        # bytes over. A split character's bytes are dropped, not shown: as
+        # U+FFFD, one of them would fit in those three.
+        ("😀" * 540000,
+         "```text\n" + "😀" * 131068 + "\n```\n",
+         1635743),
+    ],
+    ids=["ascii", "backticks", "two-byte", "four-byte"],
+)
+def test_report_cuts_a_log_tail_over_budget_and_says_so(tmp_path, last_line, block, cut):
+    """
+    The no-failing-row path shows the log's last lines, and one of them can be
+    any length (#207): a 2 MiB final line once made a 2 MiB summary, which
+    GitHub refuses whole. The tail is kept from its end, where a guard's
+    message is, and what was cut is said rather than silently left out.
+    """
+    log = "  ok   a check\n" + last_line + "\n"
+    result, paths = report(tmp_path, log, 2)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert len(summary.encode("utf-8")) <= 1048576
+    assert (
+        "The suite exited 2 without printing a failing row. The end of its log:\n\n"
+        + block
+        + f"\nThe first {cut} bytes of those lines are cut, to keep this summary under "
+        "GitHub's 1 MiB limit. The uploaded log holds them.\n"
+    ) in summary
+
+
+def test_report_does_not_say_a_short_tail_was_cut(tmp_path):
+    log = "  ok   a check\nguard: stopped here\n"
+    result, paths = report(tmp_path, log, 2)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert "```text\n  ok   a check\nguard: stopped here\n```\n" in summary
+    assert "are cut" not in summary
+
+
+@pytest.mark.parametrize("heading", ["=== the next section ===", "--- this repository ---"],
+                         ids=["equals", "dashes"])
+def test_report_ends_a_failing_row_at_a_section_heading(tmp_path, heading):
+    """A heading closes a failing row's detail, so what follows it -- here a
+    library's stderr, printed before the row it belongs to -- is not shown as
+    the failing row's."""
+    log = (
+        "  FAIL a row\n"
+        "    its detail\n"
+        f"{heading}\n"
+        "lib/command-scan.sh: a stray line of stderr\n"
+        "  ok   a later row\n"
+        "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "```text\n  FAIL a row\n    its detail\n```\n" in paths["summary.md"].read_text()
+
+
+def test_verify_merge_reads_parents_from_the_header_and_not_the_message(tmp_path, merge_repo):
+    """
+    A commit object is a header, a blank line and the message. Only the header
+    names parents, so a message line that happens to open `parent ` must not be
+    read as one. GitHub's merge messages carry none today; nothing else stops a
+    later one from doing so.
+    """
+    origin, base, head, merge = merge_repo
+    tree = git(origin, "rev-parse", f"{merge}^{{tree}}")
+    worded = git(origin, "commit-tree", tree, "-p", base, "-p", head,
+                 "-m", "Merge feature into dev-05",
+                 "-m", "parent of this change is the feature branch")
+    git(origin, "update-ref", "refs/pull/7/merge", worded)
+    work = checkout(tmp_path, origin, "refs/pull/7/merge")
+
+    result = run_script("verify-merge", "--head-sha", head, "--base-ref", "dev-05", cwd=work)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"  second parent (head): {head}" in result.stdout.splitlines()
