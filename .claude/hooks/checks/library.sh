@@ -19,8 +19,9 @@
 #
 # WHAT IT DOES: it defines functions and nothing else. Sourcing it runs no
 # check, prints nothing and records nothing; the variables its functions read
-# -- $LEDGER, $REQ, $RAN, $HOOKS, $FIXTURES and the fixtures' own -- are set by
-# check-hooks.sh, before the call that reads them.
+# -- $LEDGER, $REQ, $RAN, $HOOKS, $FIXTURES, $SUITE_DIR, $DECLARED, $PINNED and
+# the fixtures' own -- are set by check-hooks.sh, before the call that reads
+# them.
 #
 # THE COMMENTS MOVED HERE WITH THEIR FUNCTIONS, and they kept the positional
 # words they were written with. "Above", "below", "the foot of this suite" and
@@ -1207,4 +1208,17 @@ shape_pin() {  # shape_pin '<ID>[:<shape>]...' -- the shape of entries this issu
   local -
   set -f
   printf 'shape\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$PINNED"
+}
+# THE READER OF A HEADER'S PROSE (#183's, a function since #215's issue file
+# became its second caller). Comment lines on stdin, one line of prose out: the
+# `#` and up to three blanks after it taken off each line, the lines joined, and
+# every run of spaces squeezed to one. A pin on hand-wrapped prose reads this and
+# not the file, because a phrase crosses a line break wherever the wrap falls;
+# and it reads it through this one function, because a second copy of the
+# reader is a second rule of what rewrapping may do. #215's first reader took
+# `# ?` off and squeezed nothing, so a trailing blank or a deeper indent turned
+# its pins red where $MUT_PROSE's stayed green; review of #215's pull request
+# measured both.
+comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on one line out
+  sed -e 's/^#[ \t]\{0,3\}//' | tr '\n' ' ' | tr -s ' '
 }

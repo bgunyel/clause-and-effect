@@ -11223,8 +11223,7 @@ MUT="$SUITE_DIR/mutate-hooks.sh"
 # a fixture is a third place, neither $HOOKS nor $SUITE_DIR -- so what holds it
 # is this sentence and that line, not that check.
 MUT_PROSE="$FIXTURES/mutate-hooks-header.txt"
-sed -n '1,/^set -u$/p' "$MUT" | sed -e 's/^#[ \t]\{0,3\}//' | tr '\n' ' ' | tr -s ' ' \
-  > "$MUT_PROSE"
+sed -n '1,/^set -u$/p' "$MUT" | comment_reflow > "$MUT_PROSE"
 
 # IS THAT THE WHOLE HEADER? A region that stopped early would make every absence
 # below vacuous, because an absence is what a truncated file has most of. Two
