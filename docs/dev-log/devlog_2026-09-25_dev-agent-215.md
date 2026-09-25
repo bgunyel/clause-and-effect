@@ -602,3 +602,63 @@ matches the old edit strings. They show the round-3 fixtures still bite.
 - Not yet reviewed by Bertan. The heads-up on #184 and #158 stands.
 - `flatten` shares C10's latent shape. That is noted here, and nothing is
   filed, because nothing it reads triggers it today.
+
+---
+
+# 2026-09-25 20:04 +03 — #230 review round 5 (rev-agent-215)
+
+Branch `worktree-issue-215-freeze-run-log`, at `509b739` plus this entry. The
+branch is thirteen ahead of `origin/dev-05` (`5017b2b`) once this entry is
+committed. No code changed this round.
+
+The review re-ran all 24 harness mutants and 7 suite mutants from rounds 1–4
+at `509b739`, and each landed as intended. It raised no gating finding. It
+filed its residuals as #232, and accepted the assistant's narrower rejoin from
+round 4. From the review's side the PR is complete.
+
+## #232, and why the assistant does not gate on it
+
+The assistant reproduced the two behavioural items by calling the function,
+not by reading the issue:
+
+- `printf '# end x-\n#\n# Next para\n' | comment_reflow` gives `end x-Next
+  para `.
+- `printf '# on 2026\n# -09-26 ran\n' | comment_reflow` gives `on 2026 -09-26
+  ran `.
+
+The assistant's reasons for letting each go to #232:
+
+- **The rejoin crossing a bare line** is the assistant's own defect from round
+  4, and it makes `comment_reflow`'s comment ("only at a line's end") wrong. It
+  can only remove a blank, so it can invent a token but never hide one: a false
+  red, in the refusing direction. It is latent, because no header paragraph
+  ends in `<alnum>-`.
+- **A date broken before its hyphen** is the one permitting item, because a
+  record dated that way passes the date count. The assistant weighed it and
+  still does not gate on it:
+  - to the counter, that record is an undated record, and undated records are
+    already a named gap;
+  - the stem counts still apply to it;
+  - the freeze paragraph, the likely spot, is pinned whole;
+  - `textwrap` never breaks there, so it takes a hand wrap.
+
+  #232 asks for it to be named, and that is the right size of fix.
+- **The stale "opening words" statements, and the freeze paragraph's "the ISO
+  dates it carries"** are wording. The latter costs a change to the harness
+  and `R215_WORDS` together, which belongs with #232's other edits rather than
+  a sixth round here.
+
+## Mistakes, attributed
+
+- **The assistant's round-4 rejoin had the same class of defect as the one it
+  fixed**, a token read across a boundary. It was one level out: the paragraph
+  break, not the line break. The fixture the assistant wrote drove only
+  adjacent lines, so it could not see it. #232's proposed fixture closes that.
+
+## Open
+
+- #232: the rejoin across bare lines, with its fixture, and three wording
+  items.
+- #231: pre-existing, `tokeniser_collisions` on a host that exports a shell
+  function.
+- Awaiting Bertan's review and merge. The heads-up on #184 and #158 stands.
