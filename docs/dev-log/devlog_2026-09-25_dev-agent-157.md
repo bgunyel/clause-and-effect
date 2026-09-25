@@ -311,3 +311,12 @@ The issue file's results went from 13 to 18:
   earlier would describe commits the pull request does not yet carry.
 - **For Bertan.** #157's third acceptance box and the `base-72798ad`
   worktree are as before.
+
+
+# 2026-09-25 22:05 +03 — #234 round 1, addendum: the rewrap figure re-measured
+
+Before pushing, the assistant re-ran the round-0 rewrap measurement against
+this round's pins, rather than carry its figure into the pull request body.
+The section was rewrapped at every width from 24 to 100, with a 2-space
+continuation: 77 rewraps, all green. 48 of them break a word at a hyphen,
+not the round-0 entry's 44, because the README's wording changed.
