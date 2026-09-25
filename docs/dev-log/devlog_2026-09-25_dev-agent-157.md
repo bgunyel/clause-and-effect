@@ -461,3 +461,14 @@ The issue file's results went from 18 to 24:
 - **#232, #233, #235 and #236** are as filed.
 - **For Bertan.** #157's third acceptance box and the `base-72798ad`
   worktree are as before.
+
+
+# 2026-09-25 22:41 +03 — #234 round 2, addendum: one more R2-C sibling, in the pull request body
+
+The assistant swept R2-C's class over the pull request body while drafting
+its refresh, and found one sibling the review did not name. The round-1
+body said "each guard verdict GH-157.3 asserts, flipped in the hook". The
+assistant's round-1 hook mutants flipped five of those verdicts, and no
+mutant touched the other three: the `rm`+path refusal, the path-only
+permit and the `cat >>` permit. The refreshed body names the hook mutants
+that were run, rather than "each". It goes up with the push.
