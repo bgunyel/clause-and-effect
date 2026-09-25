@@ -81,3 +81,75 @@ code is `.github/scripts/check_hooks_ci.py` and its tests; nothing under
 - Whether to cap each failing row, so a skipped row's name stays on the page.
 - #224, item 3: how a failing row's detail lines are chosen. The new `===`/`---`
   test pins today's boundary rule, which #224 will have to keep or update.
+
+# 2026-09-25 14:24 +03 — #226 review round 1
+
+Branch `worktree-issue-207-summary-bound`. Round 1 of rev-agent-207's review
+was posted on PR #226 at head `150151a`. The answer is commit `86e8ff1`, and
+with this entry the branch is five ahead of `origin/dev-05` (`2c65f4d`).
+
+## G1: carried state never driven past its first element
+
+- **Accepted.** Every tail case had one line over the budget, and every fence
+  case one backtick row, so the carried `size` and `longest` were never read.
+  Two tail cases were added to `test_report_cuts_a_log_tail_over_budget_and_says_so`
+  (the parameter `last_line` was renamed `tail`, since these are several
+  lines): `size-carried` (three 200 KiB lines, each fitting alone, two
+  together) and `fence-carried` (a plain line cut by the fence of a backtick
+  line kept after it). One rows test was added,
+  `test_report_counts_a_shown_rows_fence_against_the_rows_after_it`: a shown
+  backtick row's fence keeps a later plain row out, and a nine-byte row after
+  that still fits. Every expected block and cut is hand-derived. The two tail
+  blocks come to exactly 524,288 bytes fenced, so they also pin
+  `fenced_size` at the budget's edge.
+- **Mutation check**, script backed up to the scratchpad and restored from
+  that copy after each mutant, sha256 compared: the reviewer's A3, M4 and M5
+  are now caught (2, 1 and 1 failing tests), and A1, A2 and A4–A6 are still
+  caught.
+- **Sweep beyond the diff.** The same class was looked for in every
+  accumulator in the script, not only the diff's: `parse_log`'s `passed`,
+  `failing` and a row's `block`, `verify_merge`'s `parents`, and `report`'s
+  `problems`. The first four are driven past one element by existing tests
+  (mutants S5 and S6 caught). `problems`, from #199, was not. The only
+  two-problem case asserted its first message, and nothing asserted the
+  summary's bold lines at all. Four mutants survived: the verdict check as
+  `elif` (S1), no problem in the summary (S2), and only the first problem in
+  the summary (S3) or in the log (S4). The assistant made
+  `test_report_refuses_a_pass_the_log_does_not_support` assert the exact list
+  of `::error::` lines and of bold summary lines. S2–S4 were then caught; S1
+  still survived, because its `elif` hangs off `results == 0` and no case had
+  zero rows and no verdict together. An empty-log case was added, which kills
+  it. All 14 mutants are caught.
+
+## G2: the claim wider than the code
+
+- **Accepted, and the prose fix was chosen over the per-row cap.** A row that
+  fits and nearly fills the budget still hides the rows after it, as the
+  reviewer measured. The per-row cap now has its own issue, #227, which also
+  covers naming a skipped row. Doing it here would enlarge a PR whose
+  acceptance criteria are already met, and what a shown row is remains
+  Bertan's call. The rows-loop comment now says what the code does and names
+  #227.
+- **Sweep.** The assistant grepped the script, the test module and this log for
+  `runaway` and `hide`. It found one more over-claim that the review's sweep
+  missed: `test_report_skips_a_row_over_budget_and_shows_the_rows_after_it`'s
+  docstring said "One runaway row must not hide the rows behind it". Fixed to
+  "A row over the budget". Commit `f6ded53`'s subject carries the same words.
+  It is left, because rewriting a pushed commit needs a forced push. The PR
+  title is to be reworded when this round is pushed.
+
+## Evidence
+
+- `make test` in the worktree: 660 passed, 5 xfailed (656 before, plus two
+  tail cases, one rows test and one empty-log case).
+- Re-measured with the test harness's arguments (`--seconds 204
+  --tested-commit abc123`), under `python3.12`: the issue's item 1 gives a
+  524,753-byte summary cutting 1,572,892 bytes; item 2 gives 378 bytes and
+  "1 more failing row(s)"; the fence case gives 1,126,724 bytes at `2c65f4d`.
+  The earlier 524,748 and 373 are 5 bytes lower because the Spec reviewer
+  passed other arguments; the behaviour is the same.
+
+## Open
+
+- #227 (per-row cap, naming a skipped row) and #228 (five narrow defects), as
+  filed by the reviewer.
