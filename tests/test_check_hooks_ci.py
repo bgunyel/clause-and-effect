@@ -309,25 +309,39 @@ def test_report_shows_the_log_tail_when_the_suite_fails_without_a_failing_row(tm
 
 
 @pytest.mark.parametrize(
-    ("log_text", "exit_status", "message"),
+    ("log_text", "exit_status", "problems"),
     [
+        # Two problems at once: failing rows, and a verdict that is not the
+        # pass. Each is its own annotation and its own line of the summary.
         (FAILING_LOG, 0,
-         "::error::the suite exited 0 but its log holds 2 failing row(s)"),
+         ["the suite exited 0 but its log holds 2 failing row(s)",
+          "the suite exited 0 but its log does not end with ALL CHECKS PASSED"]),
         (PASSING_LOG.replace("ALL CHECKS PASSED", ""), 0,
-         "::error::the suite exited 0 but its log does not end with ALL CHECKS PASSED"),
+         ["the suite exited 0 but its log does not end with ALL CHECKS PASSED"]),
         ("\nALL CHECKS PASSED\n", 0,
-         "::error::the suite exited 0 but its log holds no result row at all"),
+         ["the suite exited 0 but its log holds no result row at all"]),
+        # A suite that printed nothing at all: no row, and no verdict either.
+        ("", 0,
+         ["the suite exited 0 but its log holds no result row at all",
+          "the suite exited 0 but its log does not end with ALL CHECKS PASSED"]),
     ],
-    ids=["exit-0-with-fails", "exit-0-without-verdict", "exit-0-with-no-rows"],
+    ids=["exit-0-with-fails", "exit-0-without-verdict", "exit-0-with-no-rows",
+         "exit-0-with-an-empty-log"],
 )
-def test_report_refuses_a_pass_the_log_does_not_support(tmp_path, log_text, exit_status, message):
+def test_report_refuses_a_pass_the_log_does_not_support(tmp_path, log_text, exit_status, problems):
     """The job's colour comes from the suite's exit status. These are the cases
-    where that status and the log disagree, and a green job would be the lie."""
+    where that status and the log disagree, and a green job would be the lie.
+    Every problem found is annotated and printed in the summary, not only the
+    first."""
     result, paths = report(tmp_path, log_text, exit_status)
 
     assert result.returncode == 1
-    assert message in result.stdout.splitlines()
-    assert paths["summary.md"].read_text().startswith("## check-hooks: FAILED\n")
+    assert [line for line in result.stdout.splitlines() if line.startswith("::error::")] == [
+        f"::error::{problem}" for problem in problems]
+    summary = paths["summary.md"].read_text()
+    assert [line for line in summary.splitlines() if line.startswith("**")] == [
+        f"**{problem}**" for problem in problems]
+    assert summary.startswith("## check-hooks: FAILED\n")
 
 
 def test_report_fences_a_failing_row_that_carries_backticks(tmp_path):
@@ -394,7 +408,7 @@ def test_report_says_every_row_was_left_out_when_the_first_is_over_budget(tmp_pa
 
 def test_report_skips_a_row_over_budget_and_shows_the_rows_after_it(tmp_path):
     """
-    One runaway row must not hide the rows behind it (#207). The 600 KiB row is
+    A row over the budget must not hide the rows behind it (#207). The 600 KiB row is
     left to the uploaded log and counted; the two small rows after it fit, so
     they are shown, and the count names only the row that is not.
     """
@@ -433,8 +447,33 @@ def test_report_counts_the_fence_against_the_row_budget(tmp_path):
     assert "1 more failing row(s) are in the uploaded log." in summary.splitlines()
 
 
+def test_report_counts_a_shown_rows_fence_against_the_rows_after_it(tmp_path):
+    """
+    A fence is the block's, not a row's: row a's 102,400 backticks make the
+    fence 102,401 wide for every row shown with it. So row b, 307,214 bytes of
+    plain text, does not fit beside a (614,436 bytes fenced), though a and b
+    with plain fences would be 409,640 and fit. Row c, nine bytes, still fits.
+    """
+    log = (
+        "  FAIL a\n    " + "`" * 102400 + "\n"
+        "  FAIL b\n    " + "x" * 307200 + "\n"
+        "  FAIL c\n"
+        "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert (
+        "`" * 102401 + "text\n  FAIL a\n    " + "`" * 102400 + "\n  FAIL c\n"
+        + "`" * 102401 + "\n"
+    ) in summary
+    assert "  FAIL b" not in summary.splitlines()
+    assert "1 more failing row(s) are in the uploaded log." in summary.splitlines()
+
+
 @pytest.mark.parametrize(
-    ("last_line", "block", "cut"),
+    ("tail", "block", "cut"),
     [
         ("y" * (2 * 1024 * 1024),
          "```text\n" + "y" * 524275 + "\n```\n",
@@ -455,17 +494,31 @@ def test_report_counts_the_fence_against_the_row_budget(tmp_path):
         ("😀" * 540000,
          "```text\n" + "😀" * 131068 + "\n```\n",
          1635743),
+        # Each of these lines fits the budget alone, and together they do not:
+        # z and y whole are 409,602 bytes, so x keeps 114,673 of its 204,800.
+        # Only the size carried from z and y says so; a clip that forgot it
+        # would keep all three whole and cut nothing.
+        ("x" * 204800 + "\n" + "y" * 204800 + "\n" + "z" * 204800,
+         "```text\n" + "x" * 114673 + "\n" + "y" * 204800 + "\n" + "z" * 204800 + "\n```\n",
+         90142),
+        # The x line is cut by a fence it holds no backtick of: the run of
+        # 102,400 after it, kept first, makes the fence 102,401 wide, and that
+        # fence is the block's fence whichever line is being measured.
+        ("x" * 307200 + "\n" + "`" * 102400 + "\nend",
+         "`" * 102401 + "text\n" + "x" * 217074 + "\n" + "`" * 102400 + "\nend\n"
+         + "`" * 102401 + "\n",
+         90141),
     ],
-    ids=["ascii", "backticks", "two-byte", "four-byte"],
+    ids=["ascii", "backticks", "two-byte", "four-byte", "size-carried", "fence-carried"],
 )
-def test_report_cuts_a_log_tail_over_budget_and_says_so(tmp_path, last_line, block, cut):
+def test_report_cuts_a_log_tail_over_budget_and_says_so(tmp_path, tail, block, cut):
     """
     The no-failing-row path shows the log's last lines, and one of them can be
     any length (#207): a 2 MiB final line once made a 2 MiB summary, which
     GitHub refuses whole. The tail is kept from its end, where a guard's
     message is, and what was cut is said rather than silently left out.
     """
-    log = "  ok   a check\n" + last_line + "\n"
+    log = "  ok   a check\n" + tail + "\n"
     result, paths = report(tmp_path, log, 2)
 
     assert result.returncode == 0, result.stdout + result.stderr

@@ -295,13 +295,15 @@ def report(log_path, exit_status, seconds, tested_commit, json_path, summary_pat
         parts.append(f"**{problem}**\n\n")
     if failing:
         parts.append(f"### Failing rows ({failed})\n\n")
-        # A row that does not fit is skipped, and the loop goes on: the rows
-        # after it may fit, and one runaway row must not hide them (#207). The
-        # trade is that a skipped row's name is not on the page, only in the
-        # count below and in the uploaded log. Cutting the row to the budget
-        # left would keep its name, but a row that size takes all of it and
-        # hides the rest again. A cap on every row would keep both; it changes
-        # what a shown row is, which #207 did not ask for, and is left open.
+        # A row that does not fit is skipped, and the loop goes on, so a row
+        # over the budget no longer hides the rows after it (#207). A row that
+        # fits still can: rows are taken in log order, and one that nearly
+        # fills the budget leaves no room for the rest, which are skipped and
+        # counted. The trade is that a skipped row's name is not on the page,
+        # only in the count below and in the uploaded log. Cutting the row to
+        # the budget left would keep its name, but a row that size takes all of
+        # it and hides the rest again. A cap on every row would settle both; it
+        # changes what a shown row is, which #207 did not ask for, and is #227.
         shown, size, longest, rows_shown = [], 0, 0, 0
         for block in failing:
             block_size = sum(map(line_bytes, block))
