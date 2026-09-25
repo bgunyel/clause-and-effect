@@ -61,9 +61,11 @@ thing in the record.
   the text, for example, or an `rm`, an `mv` or a `>` followed on its line by a
   path under this directory. Write the text to a scratch file with the Write
   tool first, and append it with `cat <file> >> <entry>`.
-  `append-only-docs-edit.sh` does not yet refuse Edit or Write on an entry in a
-  linked worktree when the session's project directory is the main checkout
-  (#159), so there this rule is held by the agent and not by a guard.
+  `append-only-docs-edit.sh` does not yet refuse Edit or Write on an entry
+  outside the session's project directory, in another checkout of this
+  repository: a linked worktree's entry when the project directory is the main
+  checkout, or the main checkout's when it is the worktree (#159). There this
+  rule is held by the agent and not by a guard.
 - Written for technical readers who know the codebase. Prefer measured numbers
   and commit SHAs over recollection — and say which figures were measured versus
   recalled.

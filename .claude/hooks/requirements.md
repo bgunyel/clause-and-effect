@@ -1333,24 +1333,32 @@ it has no entry above (Q16).
   generated one -- an ID deleted outright, with its declaration, its pin and
   its file, which nothing disagrees with afterwards
 - #159: the issue filed as "append-only-docs-edit.sh is inoperative in every
-  linked worktree". What it measured is narrower than its title: the guard
-  permits an Edit of an entry in a linked worktree when the session's project
-  directory is the main checkout, and refuses it when the project directory is
-  the worktree. Cited in #157's issue file, which pins the dev-log README
-  saying so, so that the README gives the append rule as an instruction rather
-  than as something the guard holds, and which feeds the guard both cases at
-  today's verdict (GH-157.3), so the README's sentence goes red with the fix.
-  It adds its requirements in the pull request that fixes it
+  linked worktree". What it measured is narrower than its title, and review
+  of #234 measured the other half: the guard permits an Edit or a Write of an
+  entry in another checkout of this repository than the session's project
+  directory -- a linked worktree's entry when the project directory is the
+  main checkout, and the main checkout's when it is the worktree. Cited in
+  #157's issue file, which pins the dev-log README saying so, so that the
+  README gives the append rule as an instruction rather than as something the
+  guard holds, and which feeds the guard both directions at today's verdict
+  (GH-157.3), against a real linked worktree. Each of the two remedies the
+  issue proposes was measured turning a check there red. It adds its
+  requirements in the pull request that fixes it
 - #176: the heredoc append `append-only-docs.sh` refuses because the heredoc's
   prose reads as a command that rewrites an entry. Cited in #157's issue file,
   where the dev-log README routes around it -- a scratch file, appended with
   `cat <file> >> <entry>` -- and GH-157.3 feeds the guard the README's
-  examples at today's verdict, so the route and the defect cannot part
-  silently. Whether it is fixed or accepted is its own decision, so it has no
-  entry above
+  examples at today's verdict; a fix that stops reading a heredoc's body was
+  measured turning those checks red. Whether it is fixed or accepted is its
+  own decision, so it has no entry above
 - #234: the pull request for #157; rev-agent-157's review of it is cited where
   what it found stands -- a README sentence about a guard, pinned as text,
   that the guard did not bear out, which is why GH-157.3 feeds the guards the
-  README's own examples; an absence asked of one spelling of the numbered
-  name; and a bullet pinned a sentence at a time, so a qualifier between two
-  of its sentences went unseen
+  README's own examples, against a fixture the proposed fixes of #159 read;
+  an absence asked of one spelling of the numbered name, then of one case of
+  its stem; and a bullet pinned a sentence at a time, then ending on a ` - `
+  a nested sub-bullet supplies, which is why the pins are chained
+- #235: the issue that owns the #102 header audit comparing basenames. Cited
+  in #157's issue file, which spells the dev-log README's path so that the
+  audit asks for it, and which says the audit is satisfied by any file named
+  `README.md`
