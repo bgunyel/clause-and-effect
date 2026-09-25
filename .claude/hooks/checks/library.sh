@@ -1180,3 +1180,31 @@ generator_view() {  # generator_view <suite dir> <hooks dir> <into>
     && ln -s -- "$1/checks" "$3/checks" && ln -s -- "$2/requirements" "$3/requirements" \
     && printf '%s' "$3"
 }
+# THE DECLARATION, as bash reads it (#205; here since #215's issue file became
+# its second caller). The fields arrive on stdin from a quoted heredoc, so
+# nothing in them is expanded, and they are recorded with the issue file that
+# declared them -- the path under .claude/hooks/, which is what the `generated`
+# field of the file names. BASH_SOURCE[1] is the file the call was made from,
+# wherever this function is defined. Nothing is judged here: an ID out of
+# grammar or declared twice is recorded all the same, and the end of the run
+# says so, with its tag, where a `fail` here would carry whatever tag stood
+# before the declaration.
+requirement() {  # requirement <ID> -- declare a generated GH- entry; its fields on stdin
+  local body=
+  # A call with no heredoc would read the terminal and wait; it records an
+  # empty body instead, which the end of the run reports as not its file.
+  [ -t 0 ] || IFS= read -r -d '' body
+  printf '%s\t%s\t%s\0' "$*" "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$body" >> "$DECLARED"
+}
+# THE PINS, #211's decision: the second copy of an entry's shape, and of its
+# variants keyword when it is in the invariance families' scope, written in the
+# issue file that declares it rather than in REQUIREMENT_SHAPE and INV_SCOPE,
+# which every loop used to edit. The tokens are those literals' own,
+# `<ID>[:<keyword>]`, and are recorded one line per call, whitespace folded.
+# `variants_pin`, its twin for the variants keyword, is in the #205 issue file
+# while that file is its one caller.
+shape_pin() {  # shape_pin '<ID>[:<shape>]...' -- the shape of entries this issue file declares
+  local -
+  set -f
+  printf 'shape\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$PINNED"
+}

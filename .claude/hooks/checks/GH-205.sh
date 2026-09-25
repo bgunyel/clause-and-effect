@@ -12,30 +12,10 @@
 
 section "=== issue #205: an entry written after it is declared in its issue file, and its file is generated ==="
 
-# THE DECLARATION, as bash reads it. The fields arrive on stdin from a quoted
-# heredoc, so nothing in them is expanded, and they are recorded with the issue
-# file that declared them -- the path under .claude/hooks/, which is what the
-# `generated` field of the file names. Nothing is judged here: an ID out of
-# grammar or declared twice is recorded all the same, and the end of the run
-# says so, with its tag, where a `fail` here would carry whatever tag stood
-# before the declaration.
-requirement() {  # requirement <ID> -- declare a generated GH- entry; its fields on stdin
-  local body=
-  # A call with no heredoc would read the terminal and wait; it records an
-  # empty body instead, which the end of the run reports as not its file.
-  [ -t 0 ] || IFS= read -r -d '' body
-  printf '%s\t%s\t%s\0' "$*" "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$body" >> "$DECLARED"
-}
-# THE PINS, #211's decision: the second copy of an entry's shape, and of its
-# variants keyword when it is in the invariance families' scope, written in the
-# issue file that declares it rather than in REQUIREMENT_SHAPE and INV_SCOPE,
-# which every loop used to edit. The tokens are those literals' own,
-# `<ID>[:<keyword>]`, and are recorded one line per call, whitespace folded.
-shape_pin() {  # shape_pin '<ID>[:<shape>]...' -- the shape of entries this issue file declares
-  local -
-  set -f
-  printf 'shape\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$PINNED"
-}
+# `requirement`, the declaration, and `shape_pin` are in the library since
+# #215's issue file became their second caller; their comments moved with them.
+# `variants_pin` is `shape_pin`'s twin for the variants keyword, and stays here
+# while this file is its one caller.
 variants_pin() {  # variants_pin '<ID>:<keyword>...' -- the variants of entries this issue file declares
   local -
   set -f
