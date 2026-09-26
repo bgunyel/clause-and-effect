@@ -126,8 +126,10 @@ REQ
 requirement GH-144.4 <<'REQ'
 - text: Every check in the suite whose payload names a `dev-NN` base names
   the directory it is judged in -- `$ON_DEV` for the shape question, a ref fixture
-  for the branch question -- and none is judged in the directory the suite was
-  started from.
+  for the branch question -- and no run of `no-pr-decisions.sh` whose stdin names
+  `dev-` and a digit is made in a directory that reads this repository's refs:
+  the checkout, any subdirectory of it, or a worktree sharing its refs. That is
+  read off a record the hook's own process writes, whatever route started it.
 - from: #144
 - kind: doc-claim
 - status: active
@@ -159,15 +161,23 @@ requirement GH-144.4 <<'REQ'
   There is a second class in it, quieter: a derivation that matches nothing
   returns nothing, and nothing holds no offender, so a row no pattern reaches
   reads exactly like a row that passed.
-  So the claim is read off the RUN instead. Every harness that runs a hook
-  records the directory it actually entered, the script and the payload as the
-  shell expanded it; none of the five shapes survives expansion, because a
-  variable arrives expanded, a loop arrives once per iteration and a continuation
-  is joined before the parser is done. What remains assumed is that every harness
-  records, which is one claim about the helpers' bodies and is itself derived:
-  the set of functions calling `hook_path` is compared with the set calling
-  `judged`, so a harness added later that does not record is red. That check
-  found two on its first run.
+  So the claim is read off the RUN instead, and none of the five shapes survives
+  that: a variable arrives expanded, a loop once per iteration, a continuation
+  joined. The first record was written by the helpers, each calling `judged`,
+  with a derivation holding the helpers that call `hook_path` equal to the ones
+  that call `judged`; it found two helpers that recorded nothing on its first
+  run, and it was the same rule over shell source one level up. Round 1 of the
+  review after the merge across the split measured it past three ways -- a hook
+  run outside any function, a helper whose name held a digit, and an opener
+  broken in both lists, which left two empty lists equal -- and found its reader
+  refusing only the string `$SUITE_DIR`, and losing a base a newline had put on
+  a line of its own. So the record is written by the hook's process, through
+  BASH_ENV, with the directory it is really in and its stdin on one line; the
+  reader resolves each directory to its git common directory and compares it
+  with this repository's; a fixture record holds the reader to naming the
+  repository's root and a subdirectory of it; and runs by four routes that use
+  no helper -- direct, through `bash`, through a symbolic link, and with a
+  newline before the base -- are asked to appear in the record as they ran.
   THE THREE TEXT DERIVATIONS ARE KEPT AS THE CHEAP ONES, with the three shapes
   they still miss written beside them rather than patched, and `feed`/`feed_says`
   removed from the directory alternation -- their first argument is a PATH, so a
@@ -240,8 +250,9 @@ requirement GH-144.6 <<'REQ'
 REQ
 requirement GH-144.7 <<'REQ'
 - text: A refusal for the branch question also names the read its verdict rests
-  on: it says to run `git fetch` and try again if the dev branch has rotated
-  since this session last fetched. The sentence is on all four spellings, and on
+  on: it says to run `git fetch --prune` and try again if the dev branch has
+  rotated since this session last fetched. The sentence is on all four
+  spellings, and on
   none of the refusals read off the text of the command alone -- a base of main,
   a base that is not `dev-NN`, and a create naming no base at all.
 - from: #144, found by the second review of PR #158
@@ -268,7 +279,12 @@ requirement GH-144.7 <<'REQ'
   subset reasoning GH-144.6 struck, surviving one entry over. The converse rows
   are the load-bearing half:
   a base of main told to fetch would be a remedy that cannot work, the shape
-  question having nothing to do with refs.
+  question having nothing to do with refs. The remedy names `--prune` since
+  round 1 of the review after the merge across the split, which measured a bare
+  `git fetch` keeping a remote-tracking ref whose branch was deleted, so that
+  doing exactly what the message said repeated the refusal. What this does not
+  reach is the permitting half of a stale read: a permit has no message, so a
+  stale session's `--base dev-05` goes through without a word. That is #238.
 REQ
 requirement GH-144.8 <<'REQ'
 - text: Every line of `report-stale-branches.sh` that says a read was not made,
@@ -441,16 +457,16 @@ says_not "$ENV_DEV_TWO" no-pr-decisions.sh 'the active dev branch here' \
 # refusal read off the text of the command alone must NOT offer a fetch, there
 # being nothing a fetch would change about it.
 req GH-144.7
-env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch and try again' \
+env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune and try again' \
   'the create refusal says what would make the read current' \
   'gh pr create --base dev-05 --title t --body b'
-env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch and try again' \
+env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune and try again' \
   'so does the retarget refusal' \
   'gh pr edit 5 --base dev-05'
-env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch and try again' \
+env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune and try again' \
   'so does the REST refusal' \
   'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x'
-env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch and try again' \
+env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune and try again' \
   'and so does the graphql refusal' \
   'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}"'
 says_not "$ENV_DEV_TWO" no-pr-decisions.sh 'git fetch' \
@@ -778,6 +794,41 @@ holds 'every #106 seed naming a dev-NN base runs in a fixture with no dev ref' \
 lacks 'and none of them runs in this repository' \
   "$PR_DEV_SEED_DIRS" 'hooks'
 
+# THE RECORD THE END-OF-RUN FILE READS DOES NOT DEPEND ON THE ROUTE, asked of the
+# routes the record exists to reach. It is written by the hook's own process,
+# through BASH_ENV (see the driver's prelude), so these four runs use no helper
+# at all: one started directly at this file's top level, which is the shape
+# review of PR #158 measured past the helper-written record; one through `bash`;
+# one whose directory is reached through a symbolic link, which must be recorded
+# as the directory the process is really in; and one whose payload puts the
+# base after a newline, which the first record wrote across two lines and its
+# reader then did not credit. Each payload names the route, and the base after
+# it, so a record that split one run in two or lost its base reads as a
+# different row here.
+req GH-144.4
+PR_ONE_P=$(cd -- "$PR_ONE" && pwd -P)
+ln -s -- "$PR_ONE" "$FIXTURES/pr-one-link"
+PR_ROUTES_AT=$(wc -l < "$JUDGED")
+printf '%s' 'gh pr create --title route-direct --base dev-05' | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+  | ( cd -- "$PR_ONE" && "$HOOKS/no-pr-decisions.sh" ) > /dev/null 2>&1
+printf '%s' 'gh pr create --title route-bash --base dev-05' | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+  | ( cd -- "$PR_ONE" && bash "$HOOKS/no-pr-decisions.sh" ) > /dev/null 2>&1
+printf '%s' 'gh pr create --title route-link --base dev-05' | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+  | ( cd -- "$FIXTURES/pr-one-link" && "$HOOKS/no-pr-decisions.sh" ) > /dev/null 2>&1
+printf 'gh pr create --title route-newline\n  --base dev-05' \
+  | ( cd -- "$PR_ONE" && "$HOOKS/no-pr-decisions.sh" ) > /dev/null 2>&1
+tok 'every route to the hook is recorded by the hook, one line a run, in the directory it ran in, with its base' \
+'$PR_ONE no-pr-decisions.sh route-direct
+$PR_ONE no-pr-decisions.sh route-bash
+$PR_ONE no-pr-decisions.sh route-link
+$PR_ONE no-pr-decisions.sh route-newline' \
+  "$(tail -n +"$((PR_ROUTES_AT + 1))" "$JUDGED" \
+     | awk -F'\t' -v d="$PR_ONE_P" '{
+         n = split($2, p, "/")
+         r = $3; if (match(r, /route-[a-z]+ +--base dev-05/)) r = substr(r, RSTART, RLENGTH); sub(/ +--base dev-05$/, "", r)
+         print ($1 == d ? "$PR_ONE" : $1), p[n], r
+       }')"
+
 # WHAT THE SESSION REPORT SAYS ABOUT THE BASE RULE (GH-144.8), driven against
 # #108's copies of the report:  outside a repository and with git
 # off PATH, and  after a fetch that failed. The rows beside
@@ -823,8 +874,11 @@ report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
 # one is deleted, and a pin on it says nothing about any site. The row is what
 # said so; the pins read as evidence and were none.
 #
-# So the sites are derived instead. Every run of adjacent `echo` lines is one
-# message; a message is in scope when it says a read was not made or was made
+# So the sites are derived instead. Every run of adjacent `echo` or `printf`
+# lines is one message, in either quote -- the report prints every message with
+# `echo "` today, and a message added with `printf` or single quotes would
+# otherwise be outside the scope this claims to cover, which is the shape round 1
+# of the review after the merge across the split asked to be swept for; a message is in scope when it says a read was not made or was made
 # against refs no fetch refreshed -- which is what its staleness-detector,
 # not-armed or abstains wording marks -- and every message in scope must name
 # no-pr-decisions.sh too. The echo scaffolding is stripped and the whitespace
@@ -837,10 +891,10 @@ report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
 # subject is that guard's ahead/behind test. Both correctly name one hook, and a
 # derivation that swept them in would be the correction applied one site too far.
 REPORT_DEGRADED=$(awk '
-  /^[[:space:]]*echo "/ {
+  /^[[:space:]]*(echo|printf)[[:space:]]/ {
     if (!g) { g = 1; t = ""; s = NR }
     line = $0
-    sub(/^[[:space:]]*echo "/, "", line); sub(/"[[:space:]]*$/, "", line)
+    sub(/^[[:space:]]*(echo|printf)[[:space:]]+["\047]?/, "", line); sub(/["\047][^"\047]*$/, "", line)
     t = t " " line
     next
   }

@@ -727,7 +727,7 @@ base-lookup-refuses-when-it-cannot-read%no-pr-decisions.sh%/^may_propose_into()/
 report-omits-the-base-hook-where-no-ref-is-read%report-stale-branches.sh%/no-pr-decisions.sh accepts any dev-NN base/d%GH-144.8%caught
 report-omits-the-skipped-fetch-clause%report-stale-branches.sh%/staleness detector in no-work-on-stale-branch.sh is armed, and/,+1{/no-pr-decisions.sh accepts any dev-NN base/d}%GH-144.8%caught
 report-omits-the-base-hook-on-a-failed-fetch%report-stale-branches.sh%/request's base against whatever branch those refs still call active/d%GH-144.8%caught
-base-refusal-drops-the-fetch-remedy%no-pr-decisions.sh%s/ If the dev branch has rotated since this session last fetched, run git fetch and try again\.//%GH-144.7%caught
+base-refusal-drops-the-fetch-remedy%no-pr-decisions.sh%s/ If the dev branch has rotated since this session last fetched, run git fetch --prune and try again\.//%GH-144.7%caught
 base-lookup-read-once-per-base%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/\[ -z "$ACTIVE_DEV_READ" \] || return 0/:/%GH-144.5%caught
 tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 and (.[0].tool_name == "Bash") and/%GH-108.1%caught
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught

@@ -144,23 +144,6 @@ ran() {
   [ "$2" = 0 ] || [ "$2" = 2 ] || return 0
   printf '%s\t%s\n' "$REQ" "$1" >> "$RAN"
 }
-# WHAT WAS JUDGED WHERE, recorded as it happens rather than read off the suite's
-# text afterwards (#144). Every helper that runs a hook writes one line to
-# $JUDGED: the directory it actually cd's to, the script it ran, and the payload
-# as the shell expanded it. GH-144.4's text derivations read the source instead,
-# and four review rounds of PR #158 found four shapes they could not see -- a
-# payload in a `for` list, a payload behind a continuation, a loop variable read
-# after the loop, and a PATH argument mistaken for a directory. None of those is
-# a shape here: a variable arrives expanded, a loop arrives once per iteration,
-# and the directory is the one the subshell entered. The #144 issue file reads
-# the record, and derives that every helper calling `hook_path` calls this.
-# Unset, as `ran` is, it records nothing: a fixture self-test that sources this
-# library alone has no record to write to, and the reader's `holds` is what
-# fails a run that recorded nothing.
-judged() {  # judged <dir> <script> <payload> -- one row, as it ran
-  [ -n "$JUDGED" ] || return 0
-  printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$JUDGED"
-}
 # What a hook's exit status means, answered once for every helper that runs a
 # hook and reads one: exit 0 is ALLOW, exit 2 is BLOCK, and anything else FAILs
 # the check whatever it expected. `says`, `says_not` and `feed_says` ask only for
@@ -197,7 +180,6 @@ verdict() {  # verdict <want> <exit status> <stderr> <label>
 }
 check() {  # check <script|/absolute/hook> <want> <label> <cmd>, run in $SUITE_DIR
   local script="$1" want="$2" label="$3" cmd="$4" rc err hook
-  judged "$SUITE_DIR" "$script" "$cmd"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' | "$hook" 2>&1 >/dev/null)
   rc=$?
@@ -209,7 +191,6 @@ check() {  # check <script|/absolute/hook> <want> <label> <cmd>, run in $SUITE_D
 # hook is invoked by absolute path because it sources lib/ relative to $0.
 check_in() {  # check_in <dir> <script|/absolute/hook> <want> <label> <cmd>
   local dir="$1" script="$2" want="$3" label="$4" cmd="$5" rc err hook
-  judged "$dir" "$script" "$cmd"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
     | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
@@ -265,7 +246,6 @@ gap() {  # gap <dir> <script> <right> <today> <label> <cmd>
 # stderr is not a refusal, and it passed `says_not` whenever it lacked the fragment.
 says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
   local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err rc hook
-  judged "$dir" "$script" "$cmd"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
@@ -301,7 +281,6 @@ says() {  # says <dir> <script|/absolute/hook> <fragment> <label> <cmd>
 # the same way and is driven by the same self-test list.
 says_first() {  # says_first <dir> <script|/absolute/hook> <opening> <label> <cmd>
   local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err rc hook
-  judged "$dir" "$script" "$cmd"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
@@ -322,7 +301,6 @@ says_first() {  # says_first <dir> <script|/absolute/hook> <opening> <label> <cm
 }
 says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
   local dir="$1" script="$2" unwanted="$3" label="$4" cmd="$5" err rc hook
-  judged "$dir" "$script" "$cmd"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
@@ -441,7 +419,6 @@ tok() {  # tok <label> <expected> <actual>
 
 check_file() {  # check_file <script|/absolute/hook> <want> <label> <path relative to the repo>
   local script="$1" want="$2" label="$3" path="$4" rc err hook
-  judged "$SUITE_DIR" "$script" "$path"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$path" | jq -Rs '{tool_name:"Edit",tool_input:{file_path:.}}' \
     | CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" 2>&1 >/dev/null)
@@ -471,7 +448,6 @@ check_file() {  # check_file <script|/absolute/hook> <want> <label> <path relati
 # That second shape is the one #98 removed from `says`.
 feed() {  # feed <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin>
   local path="$1" script="$2" want="$3" label="$4" payload="$5" rc err hook
-  judged "$ON_DEV" "$script" "$payload"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$payload" \
         | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
@@ -481,7 +457,6 @@ feed() {  # feed <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin
 }
 feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <raw stdin>
   local path="$1" script="$2" want="$3" label="$4" payload="$5" err rc hook
-  judged "$ON_DEV" "$script" "$payload"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$payload" \
         | ( cd "$ON_DEV" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
@@ -511,7 +486,6 @@ feed_says() {  # feed_says <PATH> <script|/absolute/hook> <fragment> <label> <ra
 # them is defined before any section runs.
 env_feed() {  # env_feed <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <raw stdin>
   local dir="$1" path="$2" script="$3" want="$4" label="$5" payload="$6" rc err hook
-  judged "$dir" "$script" "$payload"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$payload" \
         | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
@@ -529,7 +503,6 @@ env_cmd() {  # env_cmd <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label
 
 env_says() {  # env_says <dir> <PATH> <script|/absolute/hook> <fragment> <label> <command>
   local dir="$1" path="$2" script="$3" want="$4" label="$5" cmd="$6" rc err hook
-  judged "$dir" "$script" "$cmd"
   hook=$(hook_path "$script")
   err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
         | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null)
@@ -559,7 +532,6 @@ env_says() {  # env_says <dir> <PATH> <script|/absolute/hook> <fragment> <label>
 # helpers does not have to check.
 report_says() {  # report_says <PATH> <script> <literal> <label>
   local path="$1" script="$2" want="$3" label="$4" out rc
-  judged "$(dirname "$script")" "$script" ""
   out=$( cd "$(dirname "$script")" && PATH="$path" bash "$script" 2>&1 )
   rc=$?
   # A copy of the registered report, placed in a fixture repository because the
@@ -608,13 +580,6 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
 every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every Bash hook
   local dir="$1" label="$2" cmd="$3" hook rc err refused=
   for hook in $XH_HOOKS; do
-    # It records for GH-144.4 although it records nothing for GH-109.4, and the
-    # two are different questions. `ran` is not fed from here because a run
-    # derived from the registration would make that row self-satisfying, which
-    # is the note below. `judged` asks where a dev-NN payload was judged, and
-    # this loop judges one in $dir like any other harness; leaving it out would
-    # be the blind spot GH-144.4 was rebuilt to remove.
-    judged "$dir" "$hook" "$cmd"
     err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
           | ( cd "$dir" && CLAUDE_PROJECT_DIR="$dir" "$(hook_path "$hook")" ) 2>&1 >/dev/null)
     rc=$?
@@ -789,7 +754,6 @@ cap_refused() {  # cap_refused <hook>
 # Found by review of PR #123 once #98 was merged in, not by this suite.
 check_rawfile_in() {  # check_rawfile_in <dir> <script> <want> <label> <cmd>
   local dir="$1" script="$2" want="$3" label="$4" cmd="$5" rc err
-  judged "$dir" "$script" "$cmd"
   printf '%s' "$cmd" > "$FIXTURES/rawfile.txt"
   err=$(jq -n --rawfile c "$FIXTURES/rawfile.txt" '{tool_name:"Bash",tool_input:{command:$c}}' \
     | ( cd "$dir" && "$(hook_path "$script")" ) 2>&1 >/dev/null)
@@ -810,7 +774,6 @@ cap_guard() {  # cap_guard <fixture> <want> <got>
 # beside it would pass for a hook that is not there.
 cap_timed() {  # cap_timed <dir> <hook|/absolute/hook> <cmd> -- "<ms>", or "exit <rc>" for a run that did not refuse
   local i s e ms rc best=
-  judged "$1" "$2" "$3"
   printf '%s' "$3" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' > "$FIXTURES/timed.json"
   for i in 1 2 3; do
     s=$(date +%s%N)

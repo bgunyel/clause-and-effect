@@ -15,106 +15,100 @@
 
 section "=== issue #144: what was judged where, read off the run and not off the suite's text ==="
 # WHY THIS IS HERE AND NOT IN THE #144 ISSUE FILE, which holds the rest of
-# GH-144.4. It reads $JUDGED, the record every row that ran a hook wrote, and
-# asks that no dev-NN payload was judged where the suite was started from; asked
-# from an issue file, it would read only the rows of the files sourced before
-# that one, and an issue file listed after it could judge a bare dev-NN row
-# unseen. This file is sourced after every other, which is the reason the #205
-# checks that read every issue file's declarations stand here too. It is first
-# here so that its rows are in the ledger the #104 findings below are read from.
+# GH-144.4. It reads $JUDGED, the record every run of no-pr-decisions.sh wrote,
+# and asks that no dev-NN payload was judged against this repository's refs;
+# asked from an issue file, it would read only the runs of the files sourced
+# before that one, and an issue file listed after it could judge a bare dev-NN
+# row unseen. This file is sourced after every other, which is the reason the
+# #205 checks that read every issue file's declarations stand here too. It is
+# first here so that its rows are in the ledger the #104 findings below are read
+# from.
 #
-# THE DERIVATIONS IN THE #144 ISSUE FILE READ THE SUITE'S TEXT; THIS ONE READS THE
-# RUN, and that is the whole difference. GH-144.4's three source derivations were strengthened twice
-# and got past twice: PR #158's fourth review found a row spelled
-# `check_in "$SUITE_DIR"`, which satisfied a rule that read the harness word and
-# not the directory, and its fifth found three more shapes -- a payload sitting
-# in a `for` list, a payload behind a `\` continuation, and a loop variable whose
-# value was read once after the loop rather than once per row -- plus the fourth
-# review's own defect reached by the first of those.
+# THE DERIVATIONS IN THE #144 ISSUE FILE READ THE SUITE'S TEXT; THIS READS THE
+# RUN, and that is the whole difference. GH-144.4's three source derivations
+# were strengthened twice and got past twice: PR #158's fourth review found a
+# row spelled `check_in "$SUITE_DIR"`, which satisfied a rule that read the
+# harness word and not the directory, and its fifth found three more shapes --
+# a payload in a `for` list, a payload behind a `\` continuation, and a loop
+# variable read once after the loop rather than once per row. A rule about shell
+# source enforced by grepping shell source will always have another spelling:
+# #128's heredoc opener, #137's quote spellings, #139's quoted `=` and #155's
+# two guards are the same wall lower down.
 #
-# Each fix was an instance patch. The CLASS is a guard narrower than the prose
-# beside it, and a rule about shell source enforced by grepping shell source will
-# always have another spelling: it is #128's heredoc opener, #137's quote
-# spellings, #139's quoted `=` and #155's two guards, one level up. A fifth
-# strengthening would be the same bet.
+# AND THE RECORD IS WRITTEN BY THE HOOK'S PROCESS, which is the second time
+# that lesson was needed. Until round 1 of PR #158's review after the merge
+# across the split, each helper called a `judged` function, and a derivation
+# held the helpers calling `hook_path` equal to the ones calling `judged` --
+# the rule over shell source again, one level up, where it had moved from row
+# spellings to helper definitions. That review measured it past three ways: a
+# hook run at a file's top level, outside any function, which neither list saw;
+# a helper whose name holds a digit, which its opener did not match; and the
+# opener broken in both copies, which left two empty lists equal and the row
+# green. It also found what the reader then did with the record: it refused the
+# one string $SUITE_DIR, so a row judged in $REPO_ROOT passed, and it read a
+# payload line by line, so a newline moved `--base dev-05` onto a line with no
+# script beside it. So BASH_ENV writes the record from inside the hook's process
+# (see the driver's prelude), whatever route started it, with the directory the
+# process is really in and a payload that is one line; and the reader below
+# resolves each directory to the repository whose refs a hook run there reads.
 #
-# There is a second class in them and it is the quieter one. A derivation that
-# matches nothing returns nothing, and nothing contains no offender, so a row no
-# pattern reaches reads exactly like a row that passed. `lacks` refuses an empty
-# read for that reason, but it can only refuse the empty it is handed -- it
-# cannot know that a row existed and was not matched.
+# WHAT THE READER ASKS. Of every recorded run of a file named no-pr-decisions.sh
+# whose stdin names `dev-` and a digit anywhere -- wider than a base, on purpose:
+# a false red names a row to look at, a false green names nothing -- the
+# directory is resolved with git to its common directory, and none may be this
+# repository's. Asked with git and not by path, because a linked worktree and the
+# main checkout it hangs off share one set of refs from two unrelated paths. A
+# directory that no longer exists when this runs is named too, having left
+# nothing to resolve. WHAT IT DOES NOT SEE: a hook run under GIT_DIR, which reads
+# the refs that names rather than its directory's; no check here sets one for
+# no-pr-decisions.sh.
 #
-# So this asks the question of the RUN. Every harness that runs a hook calls
-# `judged` with the directory it actually enters, the script it runs and the
-# payload as the shell expanded it. A variable arrives expanded, a loop arrives
-# once per iteration, a continuation has already been joined by the parser, and
-# a hard-coded `cd "$ON_DEV"` is recorded as $ON_DEV rather than read off an
-# argument that is a PATH. None of the five shapes above is a shape here,
-# because none of them survives expansion.
-#
-# WHAT IS STILL ASSUMED, so that it is not mistaken for closed: that every
-# harness records. That is one claim about the helpers' bodies rather than an
-# open claim about every row spelling, and the next check derives it rather than
-# trusting this comment -- a harness added later that runs a hook and does not
-# record turns it red.
+# `judged_here` is a function so that the fixture after it can be handed a record
+# written for it, which the repository's own record -- clean when the suite is --
+# never could be.
 req GH-144.4
-JUDGED_DEV_DIRS=$(grep -P "\tdev-|dev-[0-9]" "$JUDGED" 2>/dev/null \
-  | grep -F 'no-pr-decisions.sh' | cut -f1 | LC_ALL=C sort -u | tr '\n' ' ')
-holds 'the run recorded dev-NN payloads judged against this hook, so the absence below is one that was looked for' \
-  "$JUDGED_DEV_DIRS" "$ON_DEV"
-lacks 'and not one of them was judged in the directory the suite was started from' \
-  "$JUDGED_DEV_DIRS" "$SUITE_DIR"
-
-# THE ONE ASSUMPTION, derived. A harness runs a hook exactly when its body calls
-# `hook_path`; the delegating ones (env_cmd, flip) reach a hook only through one
-# of these, so instrumenting the leaves covers them. Both lists are read off every
-# file of the suite, in source order and with the body reset at each file's first
-# line, and compared, so a new harness is red until it records, and a `judged`
-# call deleted from an existing one is red too. Since the split (#204) most of the
-# harnesses are in the library and one, env_stderr, is in the unsplit file, so a
-# derivation reading check-hooks.sh alone would compare two empty lists and pass.
-#
-# BOTH ANCHORS TAKE LEADING WHITESPACE, and the first version of this pair took
-# neither. `/^[a-z_]+\(\) *\{/` and `/^\}/` are column-0 anchors, so a function
-# defined indented was invisible to both lists at once -- it would run a hook,
-# not record, and this `tok` would stay green. A silent false green in the guard
-# written to supersede guards with exactly that defect. PR #158's sixth review
-# found it latent and offered to let it be filed; it is fixed instead, because a
-# known permitting hole in the load-bearing derivation is a different thing from
-# one in a cheap filter, and the fix is an anchor.
-#
-# The CLOSING anchor is the half that review did not name, and it is the one that
-# would have gone wrong quietly. Widening only the opener would have started a
-# body at an indented definition and run it to the next COLUMN-0 `}`, swallowing
-# every function between and attributing their calls to it. So the close is the
-# opener's own indentation, captured when it opens and compared as a string, and
-# `&& !fn` keeps a nested definition from reopening one already in progress --
-# `override_refused` at the #107 override block is indented and nested, and is
-# the row that proves the shape occurs here.
-HOOK_RUNNERS=$(awk '
-  FNR == 1 { fn = "" }
-  /^[[:space:]]*[a-z_]+\(\) *\{/ && !fn {
-    fn = $1; sub(/\(\).*/, "", fn)
-    ind = $0; sub(/[^[:space:]].*$/, "", ind)
-    body = ""
-    next
-  }
-  fn { body = body $0 "\n" }
-  fn && $0 == ind "}" { if (body ~ /hook_path/ && fn != "hook_path") print fn; fn = "" }
-' "${SUITE_FILES[@]}" | LC_ALL=C sort -u | tr '\n' ' ')
-RECORDERS=$(awk '
-  FNR == 1 { fn = "" }
-  /^[[:space:]]*[a-z_]+\(\) *\{/ && !fn {
-    fn = $1; sub(/\(\).*/, "", fn)
-    ind = $0; sub(/[^[:space:]].*$/, "", ind)
-    body = ""
-    next
-  }
-  fn { body = body $0 "\n" }
-  fn && $0 == ind "}" { if (body ~ /judged "/ && fn != "judged") print fn; fn = "" }
-' "${SUITE_FILES[@]}" | LC_ALL=C sort -u | tr '\n' ' ')
-tok 'every harness that runs a hook records what it judged, and none other does' \
-    "$HOOK_RUNNERS" "$RECORDERS"
+judged_here() {  # judged_here <record> <common dir> -- each dev-NN run's directory that reads <common dir>'s refs
+  local dir common
+  awk -F'\t' '$2 ~ /(^|\/)no-pr-decisions\.sh$/ && $3 ~ /dev-[0-9]/ { print $1 }' "$1" \
+    | LC_ALL=C sort -u \
+    | while IFS= read -r dir; do
+        if ! [ -d "$dir" ]; then
+          printf '%s (gone, so nothing says whose refs it read)\n' "$dir"
+          continue
+        fi
+        common=$(cd -- "$dir" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || continue
+        [ "$common" = "$2" ] && printf '%s\n' "$dir"
+      done
+}
+THIS_COMMON=$(cd -- "$REPO_ROOT" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+[ -n "$THIS_COMMON" ] \
+  || fail static 'this repository has no git common directory to compare with, so the checks below prove nothing'
+ON_DEV_P=$(cd -- "$ON_DEV" && pwd -P)
+REPO_ROOT_P=$(cd -- "$REPO_ROOT" && pwd -P)
+LIB_P=$(cd -- "$SUITE_DIR/lib" && pwd -P)
+# The reader, handed a record: a dev-NN run in the repository's root and one in
+# a subdirectory of it are named, and neither is $SUITE_DIR -- the one string the
+# first reader refused. A run in $ON_DEV is not, nor is a run in the repository
+# whose payload names no dev branch. The last line is a run whose base the first
+# reader could not see, a newline having put it on a line of its own.
+printf '%s\t%s\t%s\n' \
+  "$REPO_ROOT_P" "$HOOKS/no-pr-decisions.sh" '{"tool_name":"Bash","tool_input":{"command":"gh pr create --base dev-05"}}' \
+  "$LIB_P" /x/no-pr-decisions.sh 'gh pr edit 5 --base dev-06' \
+  "$ON_DEV_P" "$HOOKS/no-pr-decisions.sh" 'gh pr create --base dev-05' \
+  "$REPO_ROOT_P" "$HOOKS/no-pr-decisions.sh" 'gh pr create --base main' \
+  "$REPO_ROOT_P" "$HOOKS/no-git-push.sh" 'git push origin dev-05' > "$FIXTURES/judged-fixture"
+tok 'the reader names a dev-NN run in any directory of this repository, and no other run' \
+  "$(printf '%s\n' "$REPO_ROOT_P" "$LIB_P" | LC_ALL=C sort)" \
+  "$(judged_here "$FIXTURES/judged-fixture" "$THIS_COMMON")"
+# And the repository's own record. The `holds` is the half that makes the
+# `tok` after it a finding and not an absence: $ON_DEV is where the #40 rows
+# judge a dev-NN base, so a record that holds no run there is a record that was
+# not written, and a reader that matched nothing would otherwise report no
+# offender and pass.
+holds 'the run recorded dev-NN payloads judged in $ON_DEV, so the absence below is one that was looked for' \
+  "$(awk -F'\t' '$2 ~ /(^|\/)no-pr-decisions\.sh$/ && $3 ~ /dev-[0-9]/ { print $1 }' "$JUDGED")" "$ON_DEV_P"
+tok 'and not one dev-NN payload was judged in a directory that reads this repository'"'"'s refs' \
+  '' "$(judged_here "$JUDGED" "$THIS_COMMON")"
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads the requirements -- requirements.md, and the `GH-` entries

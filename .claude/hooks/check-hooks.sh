@@ -473,10 +473,45 @@ LEDGER="$FIXTURES/ledger"
 : > "$LEDGER"
 RAN="$FIXTURES/ran"
 : > "$RAN"
-# Every hook run, with the directory it ran in and its payload as expanded; see
-# `judged` in the library, and the #144 issue file for what reads it.
+# WHAT no-pr-decisions.sh WAS ASKED, AND WHERE, written by the hook's own
+# process rather than by the helper that ran it (#144). Every run of a file named
+# no-pr-decisions.sh this suite starts appends one line to $JUDGED: the directory
+# the process is in, resolved with `pwd -P`; the path it was started by; and its
+# stdin, with newlines, tabs and NULs made spaces so that one run is one line.
+# GH-144.4 reads it at the head of the end-of-run file.
+#
+# THROUGH BASH_ENV, which bash sources before the script whenever it starts one
+# non-interactively, so the record does not depend on the route a check takes to
+# the hook: a helper, a loop at a file's top level, `bash <hook>`, or a copy of
+# the hook in a fixture all start a bash that reads it. It was a `judged` call in
+# each helper, and a derivation holding the helpers that call `hook_path` equal
+# to the ones that call `judged`. Review of PR #158's round 1 measured that
+# route past it three ways -- a hook run outside any function, a helper whose
+# name holds a digit, and both lists matching nothing -- and a derivation over
+# source text will always have another spelling, which is the reason this record
+# was built to replace the text derivations in the first place.
+#
+# WHAT IT DOES TO THE HOOK: it reads stdin into a file, records it, and hands the
+# hook that file as its stdin, byte for byte; the file is unlinked once opened.
+# Every tool is an absolute path, resolved here, because many checks run the hook
+# under a PATH that holds none of them. It touches no other script, and unsets
+# the one variable it sets. What it cannot see, named: a process started with
+# BASH_ENV cleared (`env -i`, which this suite uses only to load its own library
+# in a child), and a hook that is not bash.
 JUDGED="$FIXTURES/judged"
 : > "$JUDGED"
+JUDGED_ENV="$FIXTURES/judged-env.sh"
+{
+  printf 'case ${0##*/} in\n  no-pr-decisions.sh)\n'
+  printf '    if __judged_in=$(%q %q); then\n' "$(command -v mktemp)" "$FIXTURES/judged-stdin.XXXXXX"
+  printf '      %q > "$__judged_in"\n' "$(command -v cat)"
+  printf '      printf %q "$(pwd -P)" "$0" "$(%q %q %q < "$__judged_in")" >> %q\n' \
+    '%s\t%s\t%s\n' "$(command -v tr)" '\n\t\0' '   ' "$JUDGED"
+  printf '      exec 0< "$__judged_in"\n'
+  printf '      %q -f -- "$__judged_in"\n' "$(command -v rm)"
+  printf '    fi\n    unset __judged_in ;;\nesac\n'
+} > "$JUDGED_ENV"
+export BASH_ENV="$JUDGED_ENV"
 # Every section heading, with the number of rows the ledger held when it was
 # printed; see `heading_mark` in the library.
 HEADINGS="$FIXTURES/headings"

@@ -77,9 +77,15 @@
 # active, so `--base dev-06` is refused AND `--base dev-05` is permitted, which
 # lands the pull request on the branch on its way out. Measured in a fixture
 # holding only the superseded ref, not argued. So the cost of a stale read is a
-# wrong permit as well as a wrong refusal, `git fetch` is the fix for both --
-# which the SessionStart report already runs every session, and which the
-# refusal now says in as many words. It did not until the second review of
+# wrong permit as well as a wrong refusal, `git fetch --prune` is the fix for
+# both -- which the SessionStart report already runs every session, and which
+# the refusal now says in as many words. `--prune` and not a bare fetch, which
+# keeps a remote-tracking ref whose branch has been deleted: a dev-06 pushed and
+# then removed stays origin/dev-06 here after `git fetch`, and dev-05 is refused
+# again. Round 1 of the review after the merge across the split measured that,
+# and it was reproduced before this line changed. The permitting half has no
+# refusal to say it in: a stale session's `--base dev-05` is permitted without a
+# word, which is #238's. It did not until the second review of
 # PR #158, and the cost of that was the whole of the defect: the one remedy an
 # agent could read off "this names dev-06, which is not dev-05, the active dev
 # branch here" was to retarget to dev-05, which this hook then permits, landing
@@ -548,7 +554,7 @@ may_propose_into() {
   [ -n "$ACTIVE_DEV" ] || return 0
   if [ "$1" != "$ACTIVE_DEV" ]; then
     BAD_BASE_WHY="is not $ACTIVE_DEV, the active dev branch here"
-    BAD_BASE_FETCH=' If the dev branch has rotated since this session last fetched, run git fetch and try again.'
+    BAD_BASE_FETCH=' If the dev branch has rotated since this session last fetched, run git fetch --prune and try again.'
     return 1
   fi
   return 0

@@ -1359,6 +1359,14 @@ it has no entry above (Q16).
   rows; taking the `sed -i` rule, or `mv`, out of the guard was measured
   turning the row it decides red. Fix or accept is its own decision, so it
   has no entry above
+- #238: the permitting half of a stale read, which #144 leaves: a session that
+  fetched before a dev branch rotated reads the outgoing branch as active, so
+  `--base dev-05` is permitted without a word, and no refusal exists to name
+  the remedy in. Filed from round 1 of rev-agent-pr-158's review of PR #158,
+  after the merge across the split. Cited in GH-144.7's note and in
+  `no-pr-decisions.sh`'s header, where the refusing half is answered by the
+  message and this half is not. It needs a network read to close, so fix or
+  accept is its own decision, and it has no entry above
 - #234: the pull request for #157; rev-agent-157's review of it is cited where
   what it found stands -- a README sentence about a guard, pinned as text,
   that the guard did not bear out, which is why GH-157.3 feeds the guards the

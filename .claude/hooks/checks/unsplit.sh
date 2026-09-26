@@ -12593,7 +12593,6 @@ done
 # the reason the loop above gives (#155).
 env_stderr() {  # env_stderr <dir> <PATH> <script> <command> -- what the hook said
   local dir="$1" path="$2" script="$3" cmd="$4" hook
-  judged "$dir" "$script" "$cmd"
   hook=$(hook_path "$script")
   printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
     | ( cd "$dir" && PATH="$path" CLAUDE_PROJECT_DIR="$REPO_ROOT" "$hook" ) 2>&1 >/dev/null
