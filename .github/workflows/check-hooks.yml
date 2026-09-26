@@ -1,0 +1,174 @@
+# The hook check suite, run on the merge result of every pull request into a
+# dev branch (#199). Before this, `bash .claude/hooks/check-hooks.sh` had only
+# ever run on a contributor's machine, on a branch tip, into a directory deleted
+# when the run ended -- so nothing ever tested the commit a merge would produce,
+# and the only record that a run happened was prose in a pull request comment.
+#
+# THE CHECK NAME IS `check-hooks` AND STAYS THAT. It is what a ruleset would
+# require (#203); renaming the job or this workflow's jobs orphans a required
+# check. Registering it is not done here; whether and how a ruleset requires it
+# is #203's decision.
+#
+# WHAT IS TESTED IS THE MERGE, AND THAT IS VERIFIED RATHER THAN ASSUMED.
+# `refs/pull/N/merge` is checked out by name, not `github.sha`, so a re-run --
+# which check-hooks-base-moved.yml starts whenever the base moves -- fetches the
+# merge as GitHub has rebuilt it, not the one this run was first triggered on.
+# `verify-merge` then fails the job unless the commit under test has the pull
+# request's head as its second parent and the base's current tip as its first.
+#
+# A RETARGET IS A BASE MOVE, SO `edited` IS A TRIGGER. Changing a pull request's
+# base -- dev-04 to dev-05, the routine rotation -- fires `edited`, which the
+# default types leave out. Without it the check from the old base stands, and a
+# base-moved re-run replays that run's payload, so verify-merge would read the
+# old base's tip and fail for the wrong reason. `edited` also fires on a title or
+# body edit, and those run the whole suite too; that cost is taken knowingly.
+# The cheaper shape -- a job-level `if:` that lets `edited` through only with
+# `github.event.changes.base` set -- is refused: a job skipped by its `if:`
+# reports Success, "even if it is a required check" (GitHub's docs, "Using
+# conditions to control job execution"), so a title edit on a red pull request
+# would leave a green `check-hooks` as the latest on its head. It would also
+# join this concurrency group and cancel the run in progress. A retarget out of
+# dev-* fires nothing here, by the branch filter; that pull request's last check
+# stands, and it is outside what this check covers.
+#
+# NO TOKEN AND NO NETWORK REACH THE SUITE, so a green run is itself the evidence
+# that the suite needs neither (#199 asked for that to be confirmed rather than
+# believed). The job's token is read-only, checkout persists no credential, and
+# the step before the suite refuses to go on if either is present. The suite
+# then runs under `env -i`, which strips every variable a token could be in,
+# and inside `sudo unshare --net`, a network namespace holding only the loopback
+# a new namespace starts with, down -- the log prints /proc/net/dev from inside
+# it, so which interfaces the suite could see is in every run -- as the runner's
+# own user again. `gh` is stubbed inside the suite's own fixtures, and every
+# fetch it makes is from a local fixture remote. A workstation cannot take the
+# same measurement without root: unprivileged `unshare -rn` is refused by
+# Ubuntu 24.04's user-namespace restriction, which is why this is shown here.
+#
+# MEASURED: one full run takes 204 s on a 6-core workstation (#199, at
+# 111a419), and a simulation of this runner -- a shallow detached checkout,
+# empty HOME, no git configuration, `env -i` -- passed with 5550 rows and no
+# FAIL on 9c7dfdb, twice, in 176 s and 198 s. On a hosted 2-core runner this
+# pull request's first run took 308 s for the same 5550 rows (run 35836366963,
+# #206). The step timeout is well above that because a hook
+# invocation has been seen spinning for 11 hours (#199) and #127 records the 5 s
+# per-call timeout exceeded; the job timeout bounds the rest.
+#
+# #203 will add `merge_group`. For that event `github.sha` is the merge-queue
+# commit, which is what the checkout falls back to, and verify-merge is scoped
+# to pull_request because a merge-queue commit is a different shape.
+name: hook checks
+
+on:
+  pull_request:
+    branches: ['dev-*']
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-hooks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-hooks:
+    name: check-hooks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      results: ${{ steps.report.outputs.results }}
+      passed: ${{ steps.report.outputs.passed }}
+      failed: ${{ steps.report.outputs.failed }}
+      seconds: ${{ steps.report.outputs.seconds }}
+      exit_status: ${{ steps.report.outputs.exit_status }}
+      tested_commit: ${{ steps.verify.outputs.tested_commit }}
+    steps:
+      - name: check out the merge result
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.sha }}
+          persist-credentials: false
+
+      - name: verify the tested commit is the merge on the current base
+        id: verify
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          python3 --version
+          python3 .github/scripts/check_hooks_ci.py verify-merge \
+            --head-sha "$HEAD_SHA" --base-ref "$BASE_REF" --output "$GITHUB_OUTPUT"
+
+      # A step of its own, so a refusal here skips the suite and the report
+      # rather than reaching the report as an exit status the suite never had.
+      # `git config --get-regexp` exits 1 for "no match" and other non-zero
+      # codes for a config it could not read (3) or a pattern it refused (6),
+      # so only a 1 is the answer "no credential".
+      - name: refuse a credential the suite could reach
+        run: |
+          if [ -n "${GITHUB_TOKEN:-}${GH_TOKEN:-}" ]; then
+            echo "::error::a token is in the suite's environment; the suite must run without one"
+            exit 1
+          fi
+          found=0
+          git config --get-regexp '^http\..*\.extraheader$' || found=$?
+          if [ "$found" -eq 0 ]; then
+            echo "::error::checkout left a credential in .git/config; the suite must run without one"
+            exit 1
+          fi
+          if [ "$found" -ne 1 ]; then
+            echo "::error::git config exited $found, so whether checkout left a credential is unknown; the suite must not run on that"
+            exit 1
+          fi
+
+      - name: run the check suite
+        id: suite
+        timeout-minutes: 20
+        run: |
+          out="$RUNNER_TEMP/check-hooks"
+          mkdir -p "$out"
+          date +%s > "$out/started"
+          git --version
+          echo "tested commit: $(git rev-parse HEAD)"
+          set +e
+          # The outer shell expands $(id -un), $HOME and $PATH before sudo runs,
+          # so the suite gets the runner's user and paths and nothing else.
+          sudo unshare --net -- sudo -u "$(id -un)" \
+            env -i HOME="$HOME" PATH="$PATH" LANG=C.UTF-8 \
+            bash -c 'echo "network inside the suite'\''s namespace:"; cat /proc/net/dev; exec bash .claude/hooks/check-hooks.sh' \
+            2>&1 | tee "$out/check-hooks.log"
+          echo "${PIPESTATUS[0]}" > "$out/exit_status"
+          exit 0
+
+      - name: report
+        id: report
+        if: always() && steps.suite.outcome != 'skipped'
+        run: |
+          out="$RUNNER_TEMP/check-hooks"
+          # No exit status means the step timed out or was cancelled mid-run.
+          status=$(cat "$out/exit_status" 2>/dev/null || echo 124)
+          seconds=$(( $(date +%s) - $(cat "$out/started") ))
+          touch "$out/check-hooks.log"
+          python3 .github/scripts/check_hooks_ci.py report \
+            --log "$out/check-hooks.log" --exit-status "$status" --seconds "$seconds" \
+            --tested-commit "$(git rev-parse HEAD)" --json "$out/check-hooks.json" \
+            --summary "$GITHUB_STEP_SUMMARY" --output "$GITHUB_OUTPUT"
+
+      - name: upload the log and the counts
+        if: always() && steps.suite.outcome != 'skipped'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: check-hooks-attempt-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/check-hooks/check-hooks.log
+            ${{ runner.temp }}/check-hooks/check-hooks.json
+          if-no-files-found: error
+
+      - name: the suite's verdict
+        run: |
+          status=$(cat "$RUNNER_TEMP/check-hooks/exit_status" 2>/dev/null || echo 124)
+          echo "check-hooks.sh exited $status"
+          exit "$status"

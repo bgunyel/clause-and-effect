@@ -161,26 +161,57 @@ because a defect there corrupts every measurement taken on it. `.claude/hooks/`
 is neither: a defect there corrupts no measurement, and it can permit an act
 that closes every open pull request. Its evidence is the check suite —
 `bash .claude/hooks/check-hooks.sh` — and no fix lands without a check that
-fails without the fix. That fix also appends its issue's `GH-<n>` entry to
-`.claude/hooks/requirements.md` and tags the check with it, so the suite's
-coverage check can see the requirement it establishes. The shared tokeniser
-alone has had nine defects found by review rather than by the suite: five in one
-round on PR #35, three in a second, one in a third — and two of those five
-arrived with the fixes to the previous two. Every one was silent and in the
-permitting direction, and the suite was green before each round. A check suite
-is evidence about the cases it names and about nothing else.
+fails without the fix. That fix also declares its issue's `GH-<n>` entry in
+its issue file, beside the check it tags, and pins its shape there with
+`shape_pin`, and its `variants` keyword with `variants_pin` when the entry is
+in the invariance families' scope; `bash .claude/hooks/generate-requirements.sh`
+writes the entry's file,
+`.claude/hooks/requirements/GH-<n>.md`, from the declaration, so the suite's
+coverage check can see the requirement it establishes; the entries written
+before that (#205) stay hand-written files, and the `US-`/`FR-` boundary stays
+in `.claude/hooks/requirements.md` (#200). The shared
+tokeniser alone has had nine defects found by review rather than by the suite:
+five in one round on PR #35, three in a second, one in a third — and two of
+those five arrived with the fixes to the previous two. Every one was silent and
+in the permitting direction, and the suite was green before each round. A check
+suite is evidence about the cases it names and about nothing else.
+
+`check-hooks.sh` is the suite's driver, and the command you run; the checks
+themselves are in the files under `.claude/hooks/checks/` that it sources. A new
+issue's checks go in an **issue file** of their own, `checks/GH-<n>.sh`, and the
+driver's header states the conventions for adding and moving them
+(`docs/adr/0004-check-suite-split-by-issue.md` says why). Where this file says
+`check-hooks.sh` does something, it means the suite.
 
 Whether those checks can fail is a second question, and `bash
 .claude/hooks/mutate-hooks.sh` is where it is asked (#107). It breaks one
 registered rule at a time in a copy of `.claude/hooks/` — never in this one — and
 a mutation counts as caught only when every requirement ID the registry names for
-it has a failing check. Two minutes a row and hours for the registry, so nothing
-runs it for you; two of its rows are self-tests, one whose edit matches nothing
-and one registered against a requirement its edit cannot reach, because an edit
-that silently fails to apply reads exactly like evidence and is none. What the
-registry covers is `--list`'s last line and is written down nowhere else: a row
-per rule, not per requirement, so a requirement with a row is one some mutation
-reaches rather than one whose every check has been exercised.
+it has a failing check. Slow enough that nothing runs it for you, and `--list`
+says how slow at the size the registry is now: it multiplies a measured rate by
+the runs a pass needs, so the figure follows the registry instead of standing
+still while it grows (#148). The *rate* is a measurement and not a derivation —
+it goes stale as the suite grows, which it did, by more than a factor of two in
+three days — so it is dated, and a check goes red once the suite has outgrown
+it. Two of its rows are self-tests, one whose edit matches nothing and one
+registered against a requirement its edit cannot reach, because an edit that
+silently fails to apply reads exactly like evidence and is none — and their
+number is pinned as a literal, so a third cannot be registered without a check
+going red.
+
+Every *count* about that registry is derived by `--list`: the rows, the files
+they touch, the requirement IDs they name, how many requirements are active, and
+the runs a whole pass costs. What it costs in wall-clock is that last count times
+a rate, and the rate is the one number here nothing can derive. What the registry
+covers is there too — a row per rule, not per requirement, so a requirement with
+a row is one some mutation reaches rather than one whose every check has been
+exercised. Several of those numbers are *also* written as literals in the
+check suite, and that duplication is deliberate rather than a lapse: a
+literal in a check earns its maintenance, because adding a row turns it red and
+somebody has to look at it. A number in a comment earns nothing, because nothing
+reads it and nothing turns red when it rots — which is why the harness's header
+now states none, and why the one magnitude it kept had gone wrong by a factor of
+two before anybody noticed.
 
 Issue #84 is the same shape one level out, and it is the reason that last
 sentence is worth re-reading. The defect was not in the tokeniser but in the
@@ -199,7 +230,7 @@ it needs the same guard one level up. It deliberately does **not** count its
 consumers, and #69 is why. That issue rebuilt the two convention hooks on the
 tokeniser in the same week and hit the identical trap from the other end,
 requiring `cs_split` and not `cs_normalise` — so the count was four when #84
-was filed and six when it landed. `check-hooks.sh` derives the list off the
+was filed and six when it landed. The check suite derives the list off the
 files instead, and derives each consumer's call set against its required set: a
 fixture per consumer per function says the guards are right today, and only the
 derivation survives the next `cs_*` added to one of them.
@@ -284,8 +315,11 @@ once that has merged. `main` and `dev-NN` are Bertan's to push; `main`
 is additionally protected server-side by the `main-branch-protection` ruleset,
 which requires a pull request. Enforced by `.claude/hooks/no-git-push.sh`,
 `no-pr-decisions.sh`, `no-commit-to-main.sh` and `no-work-on-stale-branch.sh`,
-all four built on `.claude/hooks/lib/command-scan.sh`, the last of them reading
-refs that `report-stale-branches.sh` prunes for it each session;
+all four built on `.claude/hooks/lib/command-scan.sh`, two of them —
+`no-pr-decisions.sh` for the branch a pull request's base is judged against, and
+`no-work-on-stale-branch.sh` for the branch a commit is measured against —
+reading refs that `report-stale-branches.sh` prunes for them each session, so
+that both are only as current as that session's fetch;
 `bash .claude/hooks/check-hooks.sh` checks the boundary in both directions, and
 that this paragraph names every hook that carries it. Hooks see only the Bash
 tool, so Bertan's own terminal is not subject to any of this.
@@ -321,7 +355,7 @@ active dev branch — which the SessionStart report reads every session, as its
 `main ancestry` line, and argues beside that read.
 
 **Deliberately left open.** These stop mistakes, not adversaries: they read the
-text of a command, so a caller that means to evade them can. Six consequences
+text of a command, so a caller that means to evade them can. Eight consequences
 are accepted rather than fixed, and they are numbered because the count is the
 part that went stale last time.
 
@@ -424,6 +458,37 @@ part that went stale last time.
    of the three is: every occurrence measured was prose, an assignment, or a
    deliberate probe. `check-hooks.sh` pins all three as permitted, so the
    decision is a check and not only this paragraph.
+
+7. **Prose is refused when a separator and then a control word or a `)` stand
+   in front of a wrapper word**, on a line that also carries a guarded
+   command. Since #134 the anchor opens a command position after every
+   character `cs_split` cuts on and after every word it strips, and that class
+   is still quote-blind — consequence 2's loose question, one list wider. So
+   `gh pr comment 5 --body "if true; then bash -c y; fi is now refused"` is
+   refused, a comment describing the change that refuses it; so is
+   `grep -nE "(ba|z)sh -c" notes.md && gh pr view 5`, the grep a session
+   working on these hooks writes, though the same grep alone is untouched. It
+   costs refusals and never permissions, and each shape is a check.
+
+   Consequence 2 above still holds of a wrapper merely named in passing, with
+   nothing in front of it: `echo "run bash -c later" && gh pr view 5` sits in
+   no command position and is untouched. What changed is that a separator or a
+   `)` inside the quotes now makes one, and reading whether those quotes are
+   prose is the thing a raw-text rule cannot do.
+
+8. **A pull request into another repository is judged against this
+   repository's active dev branch.** Since #144, `no-pr-decisions.sh` reads
+   the refs of the directory its process runs in, which is the session's, and
+   nothing on the command line moves that: `-R other/repo`, `--repo`,
+   `GH_REPO=` and an earlier `cd` all reach the same read. So
+   `gh pr create -R other/repo --base dev-04`, permitted before #144, is
+   refused naming this repository's active branch, and no base both passes
+   here and names the other repository's real one. The way through is `--web`
+   with no base, where a person picks it. This is the one consequence here that
+   comes from reading refs rather than the text of a command. It is left open
+   under the stopping rule, because opening a pull request into another
+   repository is not a shape an agent working here writes by accident.
+   GH-144.6 pins it as verdicts.
 
 ## Agent skills
 

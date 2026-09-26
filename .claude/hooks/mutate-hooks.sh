@@ -15,25 +15,95 @@
 #       bash .claude/hooks/mutate-hooks.sh --list     the registry, and nothing run
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
-# TWO MINUTES A ROW, and hours for the whole registry: one check-hooks.sh run
-# per mutation that applies, plus the baseline -- seventy-five runs as the registry
-# stands, not seventy-six, because the row whose edit matches nothing never reaches
-# one. Measured twice on 2026-09-17, on this machine and on registries one row
-# apart: 47 min 34 s and 45 min 24 s, at twenty-three runs. That measurement is
-# the two minutes, and the two minutes is what is written in the heading, because
-# review of PR #169 found the heading saying ABOUT AN HOUR while this paragraph
-# said ninety minutes and check-hooks.sh pinned the hour: a total goes stale
-# every time a row is added and a rate does not. Carried to seventy-five runs the
-# rate gives nearer two and a half hours than one, and no third whole-registry
-# measurement has been taken; a run under load took nearer four minutes a row.
-# This sentence is an instance of what the one before it says: #118's merge of
-# dev-05 at 7bea85f found `sixty-seven` here, carried identically by both sides
-# of the merge and so conflicting with neither. That is why it
-
-# is a separate script and why check-hooks.sh does not call it (#107). Nothing
-# here is a PreToolUse hook and settings.json does not register it. Naming rows
-# costs the baseline plus one run each, so re-asking a single rule is about four
-# minutes rather than the whole registry.
+# SLOW ENOUGH THAT NOTHING RUNS IT FOR YOU, which is why it is a separate script
+# and why check-hooks.sh never runs the registry (#107). One check-hooks.sh run
+# per mutation that applies, plus the baseline. How many runs that is, and what
+# they cost in wall-clock at the row count of the day, are both on `--list`'s
+# summary and are written nowhere else (#148). The run count is not simply one
+# per row: a row pass one refuses never reaches a run, and neither does one
+# declared `did-not-apply`.
+#
+# IT IS A PREDICTION FROM THE REGISTRY AS WRITTEN, and it can be one too many.
+# `--list` reads the table; it does not copy the tree or apply an edit, which is
+# what `the registry, and nothing run` means. So three things it cannot see
+# still cost a row its run in pass two: a target that is not writable in the
+# copy, a `sed` expression that fails, and -- the one this paragraph used to
+# claim it modelled -- an edit that applies to nothing. That last is read off
+# the DECLARED outcome here, so a row declared `caught` whose anchor a rename
+# has moved is predicted to run and reports `did-not-apply` without running.
+# The paragraph below on rows not exercised since the files under them changed
+# is the same fact from the other side, so this is not hypothetical. Bertan's
+# review of PR #183. Making `--list` apply each edit would answer it properly
+# and would surface a rotted anchor in a second rather than after a whole pass;
+# that changes what `--list` is -- `the registry, and nothing run` -- so it is
+# #193 and not this.
+#
+# NO MAGNITUDE IS WRITTEN IN THIS HEADER, and the first version of #148's own
+# fix is why. It kept one, in capitals a few lines above here, classified it as
+# the safe kind of number because a check pinned the string, and pointed
+# CLAUDE.md, docs/todo.md and GH-107.2's note at it. The figure was right at
+# twenty-three runs and had never been re-derived as the registry grew past
+# fifty, so it was wrong by about a factor of two AND was by then the only copy
+# left. The pin could not have caught that: it asserted a string was present,
+# never that the number still followed from anything. A literal in a check earns
+# its maintenance only when the check goes red as the thing it counts moves, and
+# that one could not move at all. Bertan's review of PR #183, in the branch
+# whose whole subject is that distinction. The old wording is deliberately not
+# quoted anywhere in this file -- check-hooks.sh now pins its ABSENCE, and a
+# quotation would keep that pin green for the quotation's sake.
+#
+# WHAT REPLACED IT IS A RATE, not a magnitude: how long ONE run of the suite
+# takes, carried by MEASURED_SECONDS_PER_RUN below with the date it was taken
+# and the size of the suite it was taken at. `--list` multiplies it by the run
+# count it derives; nothing here restates the product.
+#
+# AND IT WENT STALE A THIRD AND FOURTH TIME WHILE THIS BRANCH WAS OPEN, which is
+# the strongest evidence this issue has. #172's sixth review found the count in
+# that paragraph naming a figure two merges behind, IN THE SENTENCE RECORDING
+# THAT IT HAD GONE STALE TWICE, and rewrote it as a crossing point rather than a
+# count -- and the rewrite still carried a count, which this merge made wrong
+# again. Four times in one paragraph whose subject is that counts in prose go
+# wrong, each time caught by a person reading it and never by a check. That
+# paragraph is the one replaced here.
+#
+# #169 REACHED HALF OF THIS INDEPENDENTLY, which is worth recording because it
+# is the same defect found from the other side. Its second review caught this
+# heading and the paragraph under it giving two different totals for one
+# registry, with check-hooks.sh pinning one of them, and made the heading a RATE
+# on the reasoning #148 rests on: a total goes stale every time a row is
+# registered and a rate does not. Merging that branch here replaces the
+# rate-in-prose with a rate in a constant that `--list` multiplies, which is the
+# rest of the same thought. Neither of the two figures is quoted here, and that
+# is not squeamishness: check-hooks.sh pins the ABSENCE of the older one in this
+# header, and a quotation would hold that pin green for the quotation's sake.
+# requirements.md's citation list carries both, where nothing pins them.
+#
+# THE RATE IS THE HALF #148 DID NOT FIX, and the header says so rather than
+# letting the next reader assume otherwise. The run COUNT is derived and needs
+# no maintenance. The rate is a measurement of this machine and of how big the
+# suite has grown, nothing here can derive it, and it goes stale on its own --
+# 124 s, taken 2026-09-17, was out by more than a factor of two three days
+# later. What can be said about it falsifiably is whether the suite has outgrown
+# the measurement, and check-hooks.sh asks exactly that and goes red.
+#
+# The 2026-09-17 readings are kept as the record they are: 47 min 34 s and
+# 45 min 24 s over twenty-three runs, on this machine, on registries one row
+# apart.
+#
+# check-hooks.sh does ask `--list` for the three figures its #148 checks compare
+# against derivations of their own. That runs no mutation and costs nothing.
+# Nothing here is a PreToolUse hook and settings.json does not register it.
+# Naming rows costs the baseline plus one run each, so re-asking a single rule
+# is two runs.
+#
+# FOUND TWICE, INDEPENDENTLY, IN THE SAME WEEK, which is worth a line because it
+# says something about the defect rather than about either reviewer. Review of
+# PR #169 found the heading contradicting its own paragraph; review of PR #172
+# found the same heading stale while that pull request was editing the row count
+# in this very sentence and leaving the total beside it untouched. Two branches
+# rewrote it as a rate within hours of each other and the merge of the two is
+# this paragraph. A total in a heading is reached by every change that adds a
+# row, and neither reviewer had to look for it.
 #
 # EXIT STATUS: non-zero when any row reports something other than the outcome it
 # declares. For every real mutation that means a survivor or an edit that did not
@@ -49,6 +119,24 @@
 # leave the exit status at 0 for a self-test and non-zero for a real row; there
 # is one, this is it, and it was Bertan's review of PR #142 that found the gap.
 # Both self-tests are additionally required to be present, one of each outcome.
+#
+# THE RUN LOG BELOW IS FROZEN, AT #215, and nothing is appended to it. It is the
+# dated account of which rows were run, when, against what and with what
+# outcome, from the line that opens `MEASURED, 2026-09-17, at the commit that
+# answered that review` to the line that ends `the registry is re-runnable
+# instead.`, and it is kept verbatim because for several runs it is the only
+# record there is. Its present tense is #215's: a row it says has not been run
+# since, or a whole-registry run it says nothing has made, is a claim about the
+# tree at #215 and about no later one. A RUN AFTER #215 IS RECORDED IN THE
+# DEV-LOG OF THE SESSION THAT RAN IT, under docs/dev-log/, whose README states
+# the conventions -- never here. Every loop that registered a row appended a
+# paragraph to this log, and that shared append, not the registry, is where
+# concurrent pull requests conflicted in this file. checks/GH-215.sh holds the
+# log to its bytes, this paragraph to its words, the rest of this file to the
+# ISO dates it carries, and the rest of this header to how often it says three
+# words the log's records are written in; it names the three, says which
+# paragraphs it covers and which it leaves out, and which records it cannot
+# see.
 #
 # MEASURED, 2026-09-17, at the commit that answered that review: all twenty-three
 # rows as the registry then stood reported what they declare, and .claude/hooks/
@@ -92,8 +180,8 @@
 # lines it rewrote, and all ten #139 rows were run as one selection against
 # the answering commit. The fifth added `quoted-equals-read-as-value` and
 # re-anchored `quoted-base-value-refused`, and all eleven #139 rows were run as
-# one selection against the commit answering it. The other twenty-three rows have
-# not been run since the files they run against changed.
+# one selection against the commit answering it. The rows named in none of the
+# selections above have not been run since the files they run against changed.
 # #155 added two. `pr-hook-reads-gh-off-the-environment` was run as a selection
 # on 2026-09-17: baseline plus one, caught, byte-identical after, and red in
 # GH-108.6 and in nothing else ON A HOST THAT HAS `gh`. That last clause is the
@@ -155,81 +243,97 @@
 # rather than on its own text, because the sentence it deletes is written
 # twice in that file and deleting both is a different mutation. #155's two
 # rows have still not been run since that merge, and neither has anything
-# else here.
-# #118 added four: `gh-option-never-unreadable`, `gh-unreadable-pass-removed`,
-# `release-read-granted-when-opaque` and `git-globals-list-short-again`. They
-# were run as one selection against the commit answering it, baseline plus four;
-# three were caught and the fourth is the paragraph after this one. A second run
-# took that one alone, caught. .claude/hooks/ was byte-identical after both.
+# else here -- except the rows this branch names below, which were run
+# against each tree that carried them.
+# #134 added `control-words-not-admitted-by-anchor` and
+# `close-paren-not-a-separator` and ran the pair three times: before the merge of
+# dev-05 into it, again on that merge (2026-09-18), and again on the merge of
+# 2026-09-20 -- baseline plus two each time, both caught with GH-134 red,
+# byte-identical after. Both break a list that both halves read since #134, so
+# each breaks cs_split and the anchor together, and so does
+# `control-words-not-stripped` now; no row breaks one reader alone, which is what
+# the single spelling was for. The review of PR #172 added `dash-in-separators`
+# and `bracket-opens-a-collating-element`, for the half of the separator list
+# that emptiness does not reach -- whether what is in it is literal inside a
+# bracket expression -- and ran that pair on 2026-09-20 before the merge and
+# again after it. The two fail differently and that is why they are two rows,
+# measured on the same machine on the same day: the dash compiles, so the class
+# silently becomes a range and the damage runs both ways, 602 checks red with
+# 305 of them a BLOCK become an ALLOW and 248 the reverse; the bracket opened a
+# collating element and was then the permitting one, 289 red with 274 of them
+# permitting.
 #
-# THEY ARE NOT ONE RULE SPELLED FOUR TIMES, and each is the reason the one
-# before it is not enough. `gh-option-never-unreadable` makes ghopt stop
-# reporting an unreadable option, which is the rule itself; it goes red across
-# fifteen requirements. `gh-unreadable-pass-removed` is narrower and turns none
-# of those red: with the pass gone every command it refuses is STILL refused, by
-# the decision rule that #118's third outcome sends it to, so only the `says`
-# checks on the refusal's own text move. A row against the rule and none against
-# the message would have left that loop covered by nothing.
-# `release-read-granted-when-opaque` is narrower again and is the only one of
-# the four whose subject no verdict in this suite can reach: release_is_read
-# reads cs_gh_opaque's status as 1-or-nothing rather than with `&& return 1`,
-# and the two differ only when the call does not run at all. It is caught by the
-# `armed` pin on that line, which is what that pin is for.
-# `git-globals-list-short-again` is the issue's other half, git's list of
-# globals taking a separate value, which shares no code with the gh shape and
-# would have been the one rule of the four with no row at all -- found by a
-# review that reverted the two entries in a copy and watched three flips go back
-# to ALLOW with nothing in this registry to say so.
-#
-# AND AFTER THE MERGE OF dev-05 AT 7bea85f, all eight were run again against
-# the merged tree, because that merge brought in #109's rows and moved the
-# registry from 62 to 75: baseline green over 188 requirements, all eight
-# caught, .claude/hooks/ byte-identical after. #155's two rows and everything
-# registered before #118 have still not been run since the files they run
-# against changed.
-#
-# ROUND 3 ADDED `gh-stump-compared-as-raw-text`, which stops the stump going
-# through ghreduce while the option token beside it still does -- the defect
-# that round found, Class B living inside the fix for Class A. All eight #118
-# rows were run as one selection against the commit answering round 3.
-#
-# SEVEN WERE CAUGHT AND THE EIGHTH DID NOT APPLY, and the row was stale rather
-# than the rule. `gh-valued-option-eats-past-the-end` was anchored on the guard
-# as round 2 wrote it, `substr(line, p, q - p) == "$"`, and round 3 rewrote that
-# line; the harness reported `did-not-apply` and said why -- the edit left the
-# file byte-identical, so the run after it would have been a run of unmutated
-# hooks reported as evidence. That is the self-test shape happening to a real
-# row, which is what the `did-not-apply` outcome exists to make visible. The row
-# is re-anchored on the head of the line rather than on its body, which is the
-# part a later fix is least likely to move, and was re-run alone, caught.
-#
-# ROUND 2 ADDED `gh-valued-option-eats-past-the-end`, which takes out the guard
-# saying a recognised valued option needs a value that is there. That is the
-# same rule as `gh-last-token-exempt-again` one option-kind along -- the walk
-# reasoning about a command while holding a fragment -- and it is a row of its
-# own because the two are separate lines closing separate halves, and a registry
-# row per rule is what this file counts. All seven #118 rows were run as one
-# selection against the commit answering round 2: baseline plus seven, all
-# caught, .claude/hooks/ byte-identical after.
-#
-# ROUND 1 OF THE REVIEW OF PR #184 ADDED TWO MORE AND RE-ANCHORED A THIRD.
-# `gh-option-spelling-not-reduced` takes the reduction back out of ghopt, so a
-# quoted option ends the walk again; `gh-last-token-exempt-again` puts the
-# last-token exemption back, which is the defect the backtick spelling walked
-# through. `gh-option-never-unreadable` was re-anchored: the two gh functions
-# became one awk program in CS_GH_AWK, so an anchor on `cs_gh_opaque` no longer
-# reaches the classification. All six #118 rows were run as one selection
-# against the commit answering that review: baseline plus six, all caught,
-# .claude/hooks/ byte-identical after.
-#
-# THE FOURTH ROW REPORTED `survived` ON THE FIRST RUN, and the row was wrong
-# rather than the rule. `release-read-granted-when-opaque` named `GH-118 FR-48`,
-# and the check its edit turns red carries GH-118 alone: `no failing check for
-# FR-48; red instead: GH-118` is what this harness printed. That is the harness
-# doing what it exists to do to a claim written one requirement too wide, and it
-# is recorded because a registry row is itself a claim and this one was made
-# before it was measured.
-# No run has therefore exercised all seventy-five rows together, and saying which
+# THE BRACKET FIGURE IS HISTORY AND THE DASH FIGURE IS NOT, which the first
+# version of this caveat did not distinguish -- it disclaimed the dev-05 merge
+# and said nothing about the guard the same review added. GH-134.1 withdraws
+# cs_split for a list that does not compile, so re-measured against the head
+# that has it, the bracket is 1564 checks red with NONE permitting and 1444
+# refusing. The dash is unchanged, because a range compiles and the guard is
+# right not to see it. Read 289/274 as the measurement that justified the guard,
+# not as what a malformed separator list costs today.
+# That review's second round added three more, and they are the answer to a
+# question it asked of the first round's work: a check that cannot fail.
+# `backslash-in-separators` exists because the backslash pin was spelled with
+# two backslashes and could not fire against any one-backslash list, so the row
+# is what says the corrected spelling can. `anchor-validity-not-checked` and
+# `control-word-validity-not-checked` break the two halves of the load-time
+# validity guard GH-134.1 adds, one each, since a guard with no row is the same
+# untested claim one level down. All three were run as one selection on
+# 2026-09-20 against the merged tree: baseline plus three, all caught,
+# byte-identical after. `caught` is this harness's word for every requirement
+# the row names having a failing check, so the outcome is what says GH-134 went
+# red for the first and GH-134.1 for the other two; it was not read off a
+# separate column, and a row naming a requirement its edit cannot reach is the
+# one the registry keeps on purpose to show what that would look like.
+# The third round added `backslash-in-control-words`, which is the same question
+# asked of the other list: CS_CONTROL_WORDS is read raw by grep and
+# escape-processed by `awk -v`, exactly as CS_SEPARATORS is, and had word pins
+# only. Its edit puts a `\t` inside a word rather than breaking the list,
+# deliberately -- the two load-time guards both pass it, since the anchor still
+# compiles and the words still do not match the empty string, so the row is
+# caught by the character pin and by nothing else. That is what makes it
+# evidence that the pin and the guard are not the same check. Run with the three
+# rows above it on 2026-09-20 against the same head: baseline plus four, all
+# caught, byte-identical after.
+# The fourth round added three, and all three are about what the withdrawal
+# SAYS rather than whether it happens: `awk-status-read-as-two` collapses the
+# case back onto `||`, so a control-word list that will not compile is reported
+# as one that hangs the strip; `refusal-claims-every-consumer` restores the
+# claim that every consumer refuses, which is false for the two document hooks
+# that never call cs_split; `refusal-names-two-lists` puts back the enumeration
+# that named two of the five lists CS_WRAPPER_RE is built from. A message that
+# names the wrong cause is worse than the one it replaced, which is why these
+# are rules with rows and not prose. Run as one selection on 2026-09-20:
+# baseline plus three, all caught, byte-identical after.
+# The fifth round added `emptiness-not-named`, which is the same claim asked of
+# the other four triggers: the message named what the two validity guards found
+# and said nothing for the four empty lists, so three withdrawals of five went
+# out silent while the paragraph above them claimed otherwise. Its edit makes
+# the separator test always true, so that list empties without being named. Run
+# on 2026-09-20: baseline plus one, caught, byte-identical after.
+# All twelve rows over this library's two lists and its load guard -- six on
+# GH-134 and six on GH-134.1 -- were run as one selection against the merge of
+# dev-05 at 7bea85f (2026-09-20), the merge that carried #109's checks over all
+# seven hooks: baseline green over 191 requirements, all twelve caught,
+# .claude/hooks/ byte-identical after. That is the first run here that has
+# exercised a whole family together rather than the rows one round added.
+# The sixth round added two, and both break a DERIVATION rather than a rule:
+# `guard-trigger-loses-its-name` deletes the line naming a list the guard still
+# tests, which is the fifth-trigger slip that round measured by construction;
+# `doc-hook-function-not-named` drops one of the two functions the message says
+# the document hooks need. Neither is reachable by driving a fixture -- the
+# point of both checks is that they read the guard's own condition and the
+# hooks' own load guards rather than a list written beside them. Run as a
+# selection on 2026-09-20: baseline plus two, both caught, byte-identical after.
+# #148 registered no row -- what it changed is `--list`, which no run reads --
+# and ran `selftest-anchor-that-matches-nothing` alone on 2026-09-20 to say the
+# harness still starts: the baseline green, the row did-not-apply as it
+# declares, .claude/hooks/ byte-identical after. That is evidence that this file
+# still runs and about nothing else. The first version of this sentence gave the
+# baseline's requirement count, which nothing reads and which read as the active
+# count and is not one; review of the branch that wrote it took it out, in the
+# commit whose whole subject is that.
+# No run has therefore exercised the whole registry together, and saying which
 # rows a measurement covered is the
 # whole point of recording one. A reader who wants "the whole registry, at this commit" has to
 # run it -- which is the answer #107 built rather than a gap, and is why the
@@ -288,7 +392,7 @@
 # full of caught mutations while establishing nothing whatever. That is its own
 # permitting direction, and the baseline is the check on it. The registry is
 # validated before the baseline is run, so a mistyped id or a malformed row costs
-# nothing rather than 95 s.
+# nothing rather than a run of the suite.
 #
 # WHAT A GREEN RUN HERE IS NOT EVIDENCE OF. The registry is a list someone wrote,
 # so this is evidence about the mutations it names and about nothing else -- the
@@ -296,23 +400,75 @@
 # weaker here. `caught` says some check tagged with that requirement went red; it
 # does not say the RIGHT check went red, and nothing here can say that.
 #
+# TWO ROWS FOR ONE CLAIM, #144's, and it is #128's overlap one rule out. Until
+# #144 the dev-NN pattern was the whole of the base rule, so
+# `base-pattern-admits-main` -- admitting main to that pattern -- permitted a
+# pull request into main and turned every check of that refusal red. #144 put a
+# second question behind it, and MEASURED against the merged tree that row
+# SURVIVED: with the pattern admitting main, `gh pr create --base main` is still
+# refused here, because main is not the branch origin holds highest. Driven by
+# hand in both states to be sure it was the mechanism and not the fixture: exit
+# 2 in this repository, exit 0 in a fixture with no dev ref, where the pattern
+# is the whole rule again.
+#
+# So the row no longer establishes what its requirement list claimed. It is
+# narrowed to what it does establish -- the refusals that change their WORDING
+# here, and GH-144.2, whose no-dev-ref rows are exactly where the pattern is
+# still load-bearing -- and `base-admits-main-outright` carries the full list by
+# breaking the thing that now decides, main accepted before either question is
+# asked. Neither row alone reproduces "a pull request into main is permitted"
+# in a repository with a dev ref, which is the state this one is in.
+#
+# WORTH SAYING PLAINLY, because it is a consequence of #144 nobody wrote down:
+# the dev-NN shape test is no longer load-bearing for main wherever a dev ref
+# can be read. That is defence in depth and the verdict is unchanged, but it
+# means the evidence those five requirements rested on had quietly moved, and
+# only a mutation run says so. Found by re-running #144's rows against the
+# merged tree rather than carrying their pre-merge verdicts forward.
+#
+# Written here and not beside #128's paragraph, which is inside the run log #215
+# froze: the account of when these rows were run is in the dev-logs of PR #158's
+# sessions, and this paragraph keeps only the rule.
+#
 # WHAT IS REGISTERED, counted rather than characterised, because the sentence
 # that characterised it ("the rules that gained checks under #103") claimed the
 # whole of two issues and named eight rows -- and the count that replaced it was
 # itself wrong, in four documents, until Bertan's review of PR #142 measured it.
-# The counts below are what `--list` prints, and nothing here restates them in
-# prose a second time:
+# Every count about this registry is derived, and this is where the pointer
+# stands instead of the numbers:
 #
-#   SIXTY-FIVE real mutations, against EIGHT files in .claude/hooks/, naming
-#   FIFTY requirement IDs between them, of the 170 whose status is active.
+#   bash .claude/hooks/mutate-hooks.sh --list
 #
-# Those four numbers are restated prose in a file whose own argument, three
-# paragraphs up, is that a count in a comment is the thing #107 was filed about.
-# They had been wrong or moved six times in three days when #148 was filed to
-# take them out and let `--list` be the only place they are written; #139 moved
-# them eight more times, and #109's merge of dev-05 moved all four again. The
-# heading three paragraphs up stopped being one of them on the same merge, for
-# the same reason: see there.
+# Its summary lines carry all of them -- the rows, how many are real mutations,
+# how many files in .claude/hooks/ those touch, how many requirement IDs they
+# name, how many self-tests, how many requirements requirements.md and
+# requirements/ still hold active, and how many runs of check-hooks.sh a
+# whole-registry pass costs.
+#
+# #148 IS WHY NONE OF THEM IS WRITTEN HERE, and the distinction it draws is the
+# part worth carrying forward, because it is not "counts are bad". A literal in
+# a CHECK earns its maintenance: check-hooks.sh's #107 section pins this
+# registry's size and each of its three outcome counts, and those go red the
+# moment a row is added, so moving them is where a reviewer sees it grow in a diff.
+# They stay. A number in a COMMENT earns nothing, because nothing reads it and
+# nothing turns red when it rots. This header held four of the second kind, in a
+# file whose own argument three paragraphs up is that a count in a comment is
+# the thing #107 was filed about. They were wrong or moved six times in three
+# days before #148 was filed, and eight times more while #139 was open, silently
+# every time -- a whole-registry pass reported ALL CHECKS PASSED beside prose
+# naming a row count the registry had already outgrown. #109's merge of dev-05
+# moved all four again while this branch was open, and its own header says so --
+# which is the three-way conflict #148 was filed about, arriving on schedule.
+#
+# AND #134's MERGE SHIPPED THREE OF THE FOUR WRONG ON THE ACTIVE DEV BRANCH.
+# Measured at df60fa1, before this branch merged anything: the paragraph these
+# lines replace claimed sixty-five real mutations naming fifty requirement IDs,
+# of a hundred and seventy active; the files under it held seventy-nine, fifty-
+# two and a hundred and seventy-two. Out by fourteen, two and two, on dev-05,
+# green. The numbers are spelled out here rather than written as figures on
+# purpose -- check-hooks.sh pins the ABSENCE of that paragraph's phrasing in this
+# header, and quoting it to make the point would hold those pins green for the
+# quotation's sake. That is the same trap this file walked into one merge ago.
 #
 # What that leaves out, so that nobody has to infer it: every requirement whose
 # verify is `review` or `runbook` rather than a check here, every doc-claim about
@@ -334,13 +490,14 @@
 #     seed, a departure row naming a seed that is not there -- are all of that
 #     kind, and #104's coverage machinery is too.
 #
-#     The seventh file is the exception that shows where the line actually
+#     The requirements are the exception that shows where the line actually
 #     falls, and it is worth reading before the next row is written. GH-141's
 #     rule is CODE in check-hooks.sh and so cannot be mutated -- but what that
-#     code READS is requirements.md, which an override does move. So the rule is
-#     reachable through its input: the two `variants-*` rows edit an entry in
-#     the copy and the suite, running from here, reads the copy and goes red.
-#     The test is not "whose file is it" but "does the run read the copy".
+#     code READS is the requirements -- requirements.md and, since #200, the
+#     `GH-` entries under requirements/ -- which an override does move. So the
+#     rule is reachable through its input: the two `variants-*` rows each edit
+#     an entry's file in the copy, and the suite, running from here, reads the
+#     copy and goes red. The test is not "whose file is it" but "does the run read the copy".
 #     Nothing about #106's own self-guards is reachable that way, because what
 #     they read is the seed table, which lives in the suite.
 #   - a claim about a file outside .claude/hooks/. Only the hooks directory is
@@ -362,11 +519,132 @@ SUITE="$SRC/check-hooks.sh"
   echo "mutate-hooks.sh: $SUITE is not there, so there is no suite to run" >&2; exit 1
 }
 
-# The files beside the hooks that are not hooks. check-hooks.sh keeps the same
-# list under the same name, where the two directories are split, and its registry
-# audit holds this table to it. Neither file is ever executed out of the copy, so
-# neither can be a mutation target.
-TOOLING="check-hooks.sh mutate-hooks.sh"
+# The files beside the hooks that are not hooks: this harness, the suite, and
+# every file under checks/, which the suite sources. A rule over a path relative
+# to the hooks directory rather than a list of names, so that a file added under
+# checks/ is covered without touching it (#204). At any depth, and no segment
+# that is `.` or `..`, so that `checks/../<hook>.sh` is not taken as the
+# tooling; `row_fault` refuses a path with such a segment, or an empty one,
+# before the write, and check-hooks.sh says why. check-hooks.sh keeps the same
+# rule under the same name, where the two directories are split, and holds this
+# spelling to its own. Nothing it matches is ever executed out of the copy, so
+# nothing it matches can be a mutation target.
+TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+)(/([^/.][^/]*|[.][^/.][^/]*|[.][.][^/]+))*)$'
+
+# THE MEASUREMENT. `--list` multiplies this rate by the run count it derives, so
+# the wall-clock it prints follows the registry instead of standing still while
+# the registry grows. A rounded magnitude in the header could not do that, which
+# is why there is no longer one (#148, PR #183).
+#
+# A RATE IS A MEASUREMENT AND NOT A DERIVATION, and that is the honest limit of
+# what #148 achieved. The run COUNT needs no maintenance, because it is read off
+# the registry. This does: it is a property of this machine and of how big the
+# suite has grown, nothing in this repository can derive it, and it goes stale
+# on its own. #148's first fix claimed "staleness is no longer possible" and was
+# wrong about exactly this half.
+#
+# So it is dated, it records the size of the suite it was taken at, and
+# check-hooks.sh goes red once the suite has grown well past that -- which is
+# the only falsifiable thing that can be said about a number nothing derives.
+# Re-measuring means replacing both of these together.
+#
+# MEASURED 2026-09-20, three consecutive runs of check-hooks.sh THE WAY THE
+# HARNESS PAYS FOR ONE -- against a copied tree, under CHECK_HOOKS_DIR, in
+# --matrix mode: 275 s, 235 s, 205 s. The slowest is the one carried, because a
+# budget that is short is the one that costs somebody an afternoon.
+#
+# It replaces 124 s, which was 47 min 34 s over twenty-three runs on 2026-09-17
+# and was wrong by more than a factor of two three days later, because the suite
+# had grown. Bertan's review of PR #183 caught that by timing two direct runs at
+# 196-231 s. He noted his method differed from the harness's; the figures above
+# ARE the harness's quantity and are worse than his, so the difference in method
+# resolves against the old number rather than for it.
+# RE-MEASURED after #169's merge, and the figure held. That merge added about
+# 200 check results, so the rate was taken again the same way against the merged
+# tree: 274 s, 250 s, 266 s. The slowest is under the reading above, so the
+# constant does not move -- the suite grew without the run getting slower.
+MEASURED_SECONDS_PER_RUN=275
+# The suite's size when the rate was last CONFIRMED, as the number of check
+# results its OWN matrix line reports -- which is a little under the total it
+# prints, because the last findings are appended after the record is copied for
+# reading. That is the quantity check-hooks.sh compares against, and the two
+# have to be the same quantity or the comparison drifts on a difference that
+# means nothing.
+#
+# THIS MOVES ONLY WHEN SOMEBODY MEASURES, which is the whole of its value and is
+# why it was not re-derived from the merged tree the way the registry counts
+# were. Re-deriving it would slide the staleness check's baseline forward with
+# nothing measured, which silences the check instead of answering it -- the same
+# shape as correcting a stale count in prose rather than deriving it. It moves
+# here because the rate above was actually re-taken at this size, not because
+# the tree grew.
+MEASURED_AT_RESULTS=5296
+
+# WHAT MAKES A ROW RUNNABLE, asked in one place because two callers need the
+# same answer and gave different ones. Pass one below refuses a row for each
+# reason this function gives; `--list`'s run count has to predict which rows a
+# pass will actually run. It did not ask any of them -- it counted every row
+# whose outcome was not did-not-apply -- so one malformed row made it
+# over-report by one, and
+# check-hooks.sh's #148 check made the identical omission and stayed green: the
+# doubled-program failure its own comment warns about, arriving in the first
+# commit that wrote the warning. Bertan's review of PR #183.
+#
+# The reason text is returned rather than printed, so pass one keeps reporting
+# it per row and `--list` can ask the same question in silence. An empty answer
+# means runnable, which is the one spelling that cannot be confused with a
+# reason a reader could act on.
+row_fault() {  # row_fault <id> <file> <edit> <reqs> <want> -- a reason, or nothing
+  local ID="$1" FILE="$2" EDIT="$3" REQS="$4" WANT="$5"
+  if [ -z "$FILE" ] || [ -z "$EDIT" ] || [ -z "$REQS" ] || [ -z "$WANT" ]; then
+    echo "the registry row does not split into five fields on %"
+    return
+  fi
+  # The outcome, and whose it is. `caught` is every real mutation's; the other
+  # two words belong to the self-tests, which say so in their ids. Untied, the
+  # fifth field was the way to declare a real survivor expected and keep this
+  # harness at exit 0.
+  case "$WANT" in
+    caught|survived|did-not-apply) ;;
+    *) echo "the expected outcome $WANT is none of caught, survived and did-not-apply"
+       return ;;
+  esac
+  case "$WANT:$ID" in
+    caught:*|survived:selftest-*|did-not-apply:selftest-*) ;;
+    *) echo "only a selftest-* row may expect $WANT; a real mutation expects caught"
+       return ;;
+  esac
+  # The tooling beside the hooks is not a mutation target. The suite that runs is
+  # this repository's, whatever CHECK_HOOKS_DIR says -- the two-directories
+  # paragraph at its head says why -- and so is this file. An edit to either copy
+  # would be read by the suite's text checks and executed by nothing, so whatever
+  # this harness reported would be about a file that never ran.
+  if [[ $FILE =~ $TOOLING ]]; then
+    echo "$FILE runs from the repository rather than from the copy, so a mutation to it would be read and never executed"
+    return
+  fi
+  # A file IN the working copy, spelled as a path relative to it. An absolute
+  # path, or one climbing out with .., is an edit to whatever it names -- this
+  # repository's own hooks among the things it could name -- and the sum taken at
+  # the end would report that after the write rather than instead of it. Refused
+  # on the spelling, which is the only moment before the write.
+  case "$FILE" in
+    /*|*/../*|../*|*/..|..)
+      echo "the target $FILE is not a path inside the hooks directory"
+      return ;;
+  esac
+  # AND ONE WITH A `.` SEGMENT OR AN EMPTY ONE, which names a file inside the
+  # copy but not in the spelling TOOLING reads: `checks/./library.sh` is the
+  # library, and the rule, which asks for a plain path, does not take it -- so
+  # the row was runnable, against a file nothing executes (review of PR #216,
+  # round 2). Refused rather than normalised: the registry is written by hand,
+  # and the plain spelling is one edit away.
+  case "$FILE" in
+    .|./*|*/.|*/./*|*//*|*/)
+      echo "the target $FILE has a . segment or an empty one; name it plainly, relative to the hooks directory"
+      return ;;
+  esac
+}
 
 VERBOSE=
 LIST=
@@ -394,13 +672,28 @@ MUTATIONS=$(cat <<'MUTATIONS'
 sudo-not-a-wrapper%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/sudo|//%FR-4 US-15 US-1 GH-79.1%caught
 nohup-not-a-wrapper%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%FR-4 US-15 GH-79.1%caught
 control-words-not-stripped%lib/command-scan.sh%s/\[{}!\]|if|then|elif|else|fi|while|until|for|do|done|case|esac|select|function|coproc/cs-matches-no-control-word/%FR-3 US-1 US-15%caught
+control-words-not-admitted-by-anchor%lib/command-scan.sh%s/|(\$CS_CONTROL_WORDS)\[\[:space:\]\]+|/|/%GH-134%caught
+close-paren-not-a-separator%lib/command-scan.sh%/^CS_SEPARATORS=/s/)//%GH-134%caught
+dash-in-separators%lib/command-scan.sh%/^CS_SEPARATORS=/s/)/)-/%GH-134%caught
+bracket-opens-a-collating-element%lib/command-scan.sh%/^CS_SEPARATORS=/s/`/`[./%GH-134%caught
+backslash-in-separators%lib/command-scan.sh%/^CS_SEPARATORS=/s/)/)\\/%GH-134%caught
+backslash-in-control-words%lib/command-scan.sh%/^CS_CONTROL_WORDS=/s/|coproc/|copro\\tc/%GH-134%caught
+anchor-validity-not-checked%lib/command-scan.sh%/CS_LISTS_VALID=0/s/-le 1/-le 2/%GH-134.1%caught
+control-word-validity-not-checked%lib/command-scan.sh%s|if ($0 ~ ("^(" w ")$"))|if (0)|%GH-134.1%caught
+awk-status-read-as-two%lib/command-scan.sh%s/^  1) CS_LISTS_VALID=0$/  1|*) CS_LISTS_VALID=0/%GH-134.1%caught
+refusal-claims-every-consumer%lib/command-scan.sh%s/every consumer that requires it refuses/every consumer refuses/%GH-134.1%caught
+refusal-names-two-lists%lib/command-scan.sh%s/CS_SEPARATORS, CS_CONTROL_WORDS, CS_WORD_SPELLING, CS_WRAP_TOKEN or CS_WRAP_WORDS/CS_SEPARATORS or CS_WRAP_WORDS/%GH-134.1%caught
+emptiness-not-named%lib/command-scan.sh%s/\[ -n "\$CS_SEPARATORS" \]/[ -n "always" ]/%GH-134.1%caught
+guard-trigger-loses-its-name%lib/command-scan.sh%s/}CS_SEPARATORS is empty"/}"/%GH-134.1%caught
+doc-hook-function-not-named%lib/command-scan.sh%s/cs_tool_input and cs_within_cap/cs_tool_input/%GH-134.1%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught
 base-refusal-drops-the-spelling%no-pr-decisions.sh%/^BASE=/s/Write: gh pr create --base dev-NN/Name a base/%US-7 FR-23%caught
 retarget-refusal-drops-the-retarget-spelling%no-pr-decisions.sh%s/ Retarget to the active dev branch instead: gh pr edit <n> --base dev-NN\.//%US-7 FR-23 GH-133%caught
 retarget-refusal-drops-the-create-comparison%no-pr-decisions.sh%s/ just as creating it there would//%FR-23%caught
-base-pattern-admits-main%no-pr-decisions.sh%/^is_dev_base()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
+base-pattern-admits-main%no-pr-decisions.sh%/^may_propose_into()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-18 GH-144.2%caught
+base-admits-main-outright%no-pr-decisions.sh%s/^may_propose_into() {$/may_propose_into() {\n  case "$1" in main) return 0 ;; esac/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
 pr-create-base-not-read%no-pr-decisions.sh%s/if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/if false \&\& RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/%FR-14 FR-16 US-9%caught
 web-handoff-refused%no-pr-decisions.sh%/^gh_pr_web()/,/^}/s/--web|-w) return 0 ;;/--web|-w) return 1 ;;/%FR-21 US-12%caught
 quoted-base-flag-permitted%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/END { exit found ? 0 : 1 }/END { exit 1 }/%GH-139%caught
@@ -435,14 +728,32 @@ merged-branch-not-gone%no-work-on-stale-branch.sh%s/= "\[gone\]"/= "never-this-s
 bare-pytest-permitted%pytest-via-uv-group.sh%s/grep -qE '\^(pytest|/grep -qE '^(no-such-tool-at-all|/%GH-69.1%caught
 unresolved-git-dir-permits%no-git-push.sh%/could not be resolved, so whether this runs/,+1s/exit 2/exit 0/%GH-108.2%caught
 dev-branch-not-version-sorted%no-work-on-stale-branch.sh%s/| sort -V | tail -1)/| sort | head -1)/%GH-108.5%caught
+base-lookup-never-finds-a-branch%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/origin\/dev-\*/origin\/no-such-ref-\*/%GH-144.1 GH-144.3%caught
+base-lookup-not-version-sorted%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/| sort -V | tail -1)/| sort | head -1)/%GH-144.1 GH-144.3%caught
+base-lookup-admits-any-dev-ref%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/| grep -E '\^origin\/dev-\[0-9\]+\$' //%GH-144.1%caught
+base-lookup-refuses-when-it-cannot-read%no-pr-decisions.sh%/^may_propose_into()/,/^}/s/\[ -n "$ACTIVE_DEV" \]/[ -n "no such branch" \]/%GH-144.2 GH-108.5%caught
+report-omits-the-base-hook-where-no-ref-is-read%report-stale-branches.sh%/no-pr-decisions.sh accepts any dev-NN base/d%GH-144.8%caught
+report-omits-the-skipped-fetch-clause%report-stale-branches.sh%/staleness detector in no-work-on-stale-branch.sh is armed, and/,+1{/no-pr-decisions.sh accepts any dev-NN base/d}%GH-144.8%caught
+report-omits-the-base-hook-on-a-failed-fetch%report-stale-branches.sh%/request's base against whatever branch those refs still call active/d%GH-144.8%caught
+base-refusal-drops-the-fetch-remedy%no-pr-decisions.sh%s/ If the dev branch has rotated since this session last fetched, run git fetch --prune on its own, then run this again: the refs are read before anything on this line runs\.//%GH-144.7%caught
+base-lookup-read-once-per-base%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/\[ -z "$ACTIVE_DEV_READ" \] || return 0/:/%GH-144.5%caught
+base-lookup-reads-the-short-name%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/refname:lstrip=2/refname:short/%GH-144.1%caught
+dev-branch-read-by-short-name%no-work-on-stale-branch.sh%s/refname:lstrip=2)' 'refs/refname:short)' 'refs/%GH-108.5%caught
+base-remedy-offered-to-main%no-pr-decisions.sh%/^may_propose_into()/,/^}/{/^    BAD_BASE_FETCH=$/d}%GH-144.7%caught
+base-reason-reset-by-a-passing-base%no-pr-decisions.sh%/^bases_all_proposable()/,/^}/s/^  BAD_BASE=$/  BAD_BASE=\n  BAD_BASE_WHY='is not a dev-NN branch'\n  BAD_BASE_FETCH=/%GH-144.3 GH-144.7%caught
+dev-branch-measured-by-short-name%no-work-on-stale-branch.sh%s/rev-list --left-right --count "refs\/remotes\/$DEV\.\.\./rev-list --left-right --count "$DEV.../%GH-108.5%caught
+report-measures-by-short-name%report-stale-branches.sh%s/rev-list --left-right --count "refs\/remotes\/$DEV\.\.\./rev-list --left-right --count "$DEV.../%GH-62%caught
+stale-remedy-names-the-short-name%no-work-on-stale-branch.sh%s/git merge ${DEV:+refs\/remotes\/}/git merge /%GH-44.3%caught
+gone-remedy-names-the-short-name%no-work-on-stale-branch.sh%s/Make a new worktree from ${DEV:+refs\/remotes\/}/Make a new worktree from /%GH-44.1%caught
+fast-forward-hint-names-the-short-name%no-work-on-stale-branch.sh%s/naming refs\/remotes\/$DEV would be a fast-forward/naming $DEV would be a fast-forward/%GH-44.3%caught
 tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 and (.[0].tool_name == "Bash") and/%GH-108.1%caught
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught
 degraded-report-hides-a-failed-fetch%report-stale-branches.sh%/^    echo "fetch: FAILED or timed out after /d%GH-108.10%caught
 pr-hook-reads-gh-off-the-environment%no-pr-decisions.sh%s#^if gh_rule 'pr merge'; then$#command -v gh >/dev/null 2>\&1 || exit 0\nif gh_rule 'pr merge'; then#%GH-108.6%caught
 report-reads-gh-before-git%report-stale-branches.sh%s#^if ! command -v git >/dev/null 2>&1; then$#gh --version >/dev/null 2>\&1\nif ! command -v git >/dev/null 2>\&1; then#%GH-155.1%caught
-variants-field-deleted%requirements.md%/^- variants: transformation: redirect-quoted$/d%GH-141%caught
-variants-seed-disowned%requirements.md%/^### GH-72$/,/^$/s/^- variants: seed$/- variants: none: a reason/%GH-141%caught
+variants-field-deleted%requirements/GH-50.3.md%/^- variants: transformation: redirect-quoted$/d%GH-141%caught
+variants-seed-disowned%requirements/GH-72.md%/^### GH-72$/,/^$/s/^- variants: seed$/- variants: none: a reason/%GH-141%caught
 heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
@@ -464,6 +775,10 @@ a-new-refusal-arm-sharing-a-line%no-git-push.sh%/A wildcard refspec does not nam
 one-of-two-no-base-arms-loses-its-sentence%no-pr-decisions.sh%/This names \$BAD_BASE/,+6s/, so this would go to the repository.s default branch//%US-7 GH-109.2%caught
 push-load-guard-drops-what-it-cannot-tell%no-git-push.sh%s/, so it cannot tell whether this command pushes, or where to//%US-7 GH-84.1 GH-109.2%caught
 decision-load-guard-drops-what-it-cannot-tell%no-pr-decisions.sh%s/, so it cannot tell whether this command decides a pull request or a release//%US-7 GH-84.1 GH-109.2%caught
+generated-entry-edited-by-hand%requirements/GH-205.1.md%s/^- from: #205$/- from: #205, edited by hand/%GH-205.1 GH-205.2%caught
+legacy-entry-marked-generated%requirements/GH-61.md%$a- generated: checks/GH-61.sh%GH-205.1 GH-205.2%caught
+generator-drops-the-generated-field%generate-requirements.sh%s/ body "- generated: " rel "\\n"/ body/%GH-205.2%caught
+generator-replaces-a-hand-written-file%generate-requirements.sh%s/if \[ -e "\$f" \] [&][&] ! grep/if false \&\& ! grep/%GH-205.2%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS
@@ -493,15 +808,30 @@ if [ -n "$LIST" ]; then
   # The counts are printed rather than restated in prose anywhere, which is the
   # whole of #107's complaint applied to this file's own header: the previous
   # version characterised the registry in four documents and got the number
-  # wrong in all four.
+  # wrong in all four. #148 finished that -- the header states none of these and
+  # points here instead, and check-hooks.sh's #148 checks compare the two figures
+  # below against a derivation of each it makes for itself.
   ROWS=0
   REAL=0
   SELFTESTS=0
+  RUNS_NEEDED=1   # the baseline, which a pass pays before it believes any row
   FILES=
   IDS=
   while IFS='%' read -r id file edit reqs want; do
     [ -n "$id" ] || continue
     ROWS=$((ROWS + 1))
+    # A PASS IS NOT ONE RUN PER ROW, and two separate things take rows off the
+    # count. A row whose edit is expected to leave its target byte-identical
+    # never reaches a run -- that is what the self-test expecting did-not-apply
+    # establishes. And a row pass one refuses never reaches one either, which
+    # this line asked nothing about until Bertan's review of PR #183: a single
+    # malformed row made this figure predict one run more than the pass performs.
+    # Both are read off the registry, which moves when the registry does, and
+    # never off a constant, which is the thing #148 was filed about.
+    if [ -z "$(row_fault "$id" "$file" "$edit" "$reqs" "$want")" ] \
+       && [ "$want" != did-not-apply ]; then
+      RUNS_NEEDED=$((RUNS_NEEDED + 1))
+    fi
     case "$id" in
       selftest-*) SELFTESTS=$((SELFTESTS + 1)) ;;
       *) REAL=$((REAL + 1))
@@ -518,6 +848,84 @@ if [ -n "$LIST" ]; then
     "$(printf '%s' "$FILES" | sort -u | grep -c .)" \
     "$(printf '%s' "$IDS" | sort -u | grep -c .)" \
     "$SELFTESTS"
+  # WHAT A ROW MAY NAME INTO, which is the denominator the header used to write
+  # out beside the numerator. The fourth field is only ever an ACTIVE
+  # requirement -- a retired or superseded one has no covering check, so a row
+  # naming it would report `survived` on every run for ever and read as a defect
+  # in the hooks rather than in the row, which is why check-hooks.sh's registry
+  # audit refuses one. Counted by ID rather than by line, so that an entry
+  # carrying the field twice counts once, and read from beside this script
+  # because that is the requirements.md, and the requirements/ beside it, that
+  # this registry's rows are judged against.
+  # The status line is matched the way that audit matches it, whitespace either
+  # side of the word tolerated -- two readings of one field that disagree about
+  # a trailing space are a defect waiting to happen.
+  #
+  # SECTION-AWARE, because requirements.md is not all entries. Its `##` headings
+  # divide it, and only three of them hold requirements; `## Provenance` holds
+  # `### #37.1` criteria and the sections above hold prose. Reading `### `
+  # anywhere, and never clearing the id at a `##` boundary, counted a stray
+  # `- status: active` in a later section against whichever heading was last
+  # seen -- and check-hooks.sh's #148 check made the same mistake, so the two
+  # agreed and were wrong together, which is the one failure its own comment
+  # says a doubled program cannot find. Bertan's review of PR #183. The section
+  # rule is check-hooks.sh's REQUIREMENTS_AWK, which is the canonical reader of
+  # this file, and the check compares this count against that reader's own.
+  #
+  # AND THE SPLIT SET BESIDE IT, which is where every `GH-` entry is (#200): one
+  # file per ID under requirements/, each holding one entry and no `##` heading,
+  # so each opens as a section that holds requirements. Listed here rather than
+  # by `requirements_split` in checks/library.sh, which this script cannot source;
+  # the order does not matter to a count, and every name in the directory is
+  # read, as there, so a misnamed file is counted rather than skipped. Regular
+  # files only, as there too: mawk aborts on a directory, and check-hooks.sh's
+  # canonical reader is what names one.
+  REQ_SPLIT=()
+  if [ -d "$SRC/requirements" ]; then
+    for f in "$SRC"/requirements/*; do [ -f "$f" ] && REQ_SPLIT+=("$f"); done
+  fi
+  ACTIVE=$(awk '
+    FNR == 1 && FILENAME != ARGV[1] { part = "req"; id = "" }
+    /^## / { id = ""; part = ($0 ~ /^## (User stories|Functional requirements|Boundary issues)$/) ? "req" : "other"; next }
+    /^### / { id = (part == "req") ? $2 : ""; next }
+    id != "" && /^- status:[ \t]*active[ \t]*$/ { active[id] = 1 }
+    END { n = 0; for (i in active) n++; print n + 0 }' "$SRC/requirements.md" ${REQ_SPLIT[@]+"${REQ_SPLIT[@]}"})
+  # Stderr is NOT discarded. It was, in the commit that fixed the same mistake
+  # one file over -- so why the read failed (mawk aborting on a directory, a
+  # permission error) was thrown away, and since `--list` exits 0 regardless,
+  # check-hooks.sh's capture never printed it either: the suite went red with no
+  # reason attached. Bertan's review of PR #183. It goes to this command's own
+  # stderr, which that capture keeps.
+  # Nothing read is not zero, and it is not a count either. An unreadable or
+  # renamed file would otherwise print `0 requirements ... are active`, which
+  # reads like a measurement and is none -- the shape this whole file exists to
+  # argue against. The failure says so in a line of its own, carrying none of
+  # the words check-hooks.sh's #148 check reads the figure out of, so that check
+  # goes red rather than picking a number out of an apology.
+  if [ -n "$ACTIVE" ] && [ "$ACTIVE" != 0 ]; then
+    printf '%s requirements in requirements.md and requirements/ are active, which is what a row may name\n' "$ACTIVE"
+  else
+    printf 'NO ACTIVE REQUIREMENT WAS READ OUT OF requirements.md AND requirements/, so how many a row may name is not known here\n'
+  fi
+  # AT MOST, and the word is the whole point of it. This is a prediction off the
+  # table, so it counts rows whose edit is DECLARED to apply; only a run can see
+  # one whose anchor has rotted, or a target the copy cannot write, or a `sed`
+  # that fails. The header and GH-148 both say so, and this line -- the one a
+  # person actually reads -- said `plus one per row whose edit applies` flat.
+  # The caveat was in the two places nobody looks and missing from the one they
+  # do. Bertan's review of PR #183.
+  printf '%s runs of check-hooks.sh for a whole-registry pass, at most: the baseline plus every row the table declares runnable; only a run sees an edit that applies to nothing\n' \
+    "$RUNS_NEEDED"
+  # AND WHAT THAT COSTS, derived here rather than rounded into the header. The
+  # rate is the dated measurement above divided by the run count it was taken
+  # at; the product follows the registry, which is the whole of #148 applied to
+  # the one number that had already rotted. Integer arithmetic throughout, with
+  # the half-minute added before the divide so the minutes round rather than
+  # truncate -- a budget that is short is the one that costs somebody an
+  # afternoon, and truncation is always short.
+  printf 'about %s minutes for that pass, at the %s s a run measured on 2026-09-20; re-measure it, it is not derived\n' \
+    "$(( (RUNS_NEEDED * MEASURED_SECONDS_PER_RUN + 30) / 60 ))" \
+    "$MEASURED_SECONDS_PER_RUN"
   exit 0
 fi
 
@@ -613,8 +1021,8 @@ RUNS=0      # invocations of check-hooks.sh, for the footer
 
 # PASS ONE: THE REGISTRY AS WRITTEN, before anything is copied or run. Every
 # refusal here is about the table rather than about a hook, so answering them
-# first means a mistyped id or a malformed row costs nothing instead of the 95 s
-# the baseline takes. Rows that survive this pass are what pass two runs.
+# first means a mistyped id or a malformed row costs nothing instead of what the
+# baseline takes. Rows that survive this pass are what pass two runs.
 RUNNABLE=
 while IFS='%' read -r ID FILE EDIT REQS WANT; do
   [ -n "$ID" ] || continue
@@ -625,46 +1033,16 @@ while IFS='%' read -r ID FILE EDIT REQS WANT; do
     case " $SELECTED " in *" $ID "*) ;; *) continue ;; esac
   fi
   MATCHED=$((MATCHED + 1))
-  if [ -z "$FILE" ] || [ -z "$EDIT" ] || [ -z "$REQS" ] || [ -z "$WANT" ]; then
-    echo "  FAIL $ID: the registry row does not split into five fields on %"
+  # The refusals are row_fault's, above, because `--list` has to predict
+  # which rows this pass will run and the two have to mean the same thing by a
+  # runnable row. What is this pass's alone is reporting the reason and counting
+  # the row out; what the reason SAYS is written once.
+  FAULT=$(row_fault "$ID" "$FILE" "$EDIT" "$REQS" "$WANT")
+  if [ -n "$FAULT" ]; then
+    echo "  FAIL $ID: $FAULT"
     FAILED=1
     continue
   fi
-  # The outcome, and whose it is. `caught` is every real mutation's; the other
-  # two words belong to the self-tests, which say so in their ids. Untied, the
-  # fifth field was the way to declare a real survivor expected and keep this
-  # harness at exit 0.
-  case "$WANT" in
-    caught|survived|did-not-apply) ;;
-    *) echo "  FAIL $ID: the expected outcome $WANT is none of caught, survived and did-not-apply"
-       FAILED=1; continue ;;
-  esac
-  case "$WANT:$ID" in
-    caught:*|survived:selftest-*|did-not-apply:selftest-*) ;;
-    *) echo "  FAIL $ID: only a selftest-* row may expect $WANT; a real mutation expects caught"
-       FAILED=1; continue ;;
-  esac
-  # The tooling beside the hooks is not a mutation target. The suite that runs is
-  # this repository's, whatever CHECK_HOOKS_DIR says -- the two-directories
-  # paragraph at its head says why -- and so is this file. An edit to either copy
-  # would be read by the suite's text checks and executed by nothing, so whatever
-  # this harness reported would be about a file that never ran.
-  case " $TOOLING " in *" $FILE "*)
-    echo "  FAIL $ID: $FILE runs from the repository rather than from the copy, so a mutation to it would be read and never executed"
-    FAILED=1
-    continue ;;
-  esac
-  # A file IN the working copy, spelled as a path relative to it. An absolute
-  # path, or one climbing out with .., is an edit to whatever it names -- this
-  # repository's own hooks among the things it could name -- and the sum taken at
-  # the end would report that after the write rather than instead of it. Refused
-  # on the spelling, which is the only moment before the write.
-  case "$FILE" in
-    /*|*/../*|../*|*/..|..)
-      echo "  FAIL $ID: the target $FILE is not a path inside the hooks directory"
-      FAILED=1
-      continue ;;
-  esac
   RUNNABLE="$RUNNABLE$ID%$FILE%$EDIT%$REQS%$WANT
 "
 done <<< "$MUTATIONS"
@@ -701,7 +1079,8 @@ SUM_BEFORE=$(tree_sum "$SRC") || {
 }
 hooks_copy || { echo "mutate-hooks.sh: the working copy could not be made" >&2; exit 1; }
 echo "  running check-hooks.sh against $WORK ..."
-# Bounded. A run takes about 95 s; nothing in the suite bounds a hook it runs, so
+# Bounded, at several times the measured rate above; nothing in the suite bounds
+# a hook it runs, so
 # a mutation that left one looping would hang this harness rather than report
 # anything. A run killed at the bound prints no matrix, which is read below as
 # did-not-complete -- never as caught.

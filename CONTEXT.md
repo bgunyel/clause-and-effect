@@ -22,12 +22,23 @@ with commits nobody has pushed. A worktree branch is therefore never cut from
 it. Bringing it up to date is not an agent's to do either — moving it is a
 reserved act, below — so the tip an agent reads is the remote-tracking ref, which
 the SessionStart fetch in `.claude/hooks/report-stale-branches.sh` refreshes.
+
+*Which* `dev-NN` is active is read the same way everywhere: the highest
+`refs/remotes/origin/dev-[0-9]+` by version sort. Three files derive it from that
+one pipeline — the report above, `no-work-on-stale-branch.sh`, and since #144
+`no-pr-decisions.sh`, which judges a pull request's base against it. So a session
+that has not fetched since a rotation reads the superseded branch as active, and
+that costs a wrong verdict in BOTH directions: `--base dev-05` is permitted after
+the rotation to `dev-06`, which lands a pull request on the branch on its way out
+and is the defect #144 exists to close, and `--base dev-06` — the correct base —
+is refused. Measured in a fixture holding only the superseded ref. Only where no
+`dev-NN` ref can be read at all does the rule fall back to accepting any of them.
 _Avoid_: development branch, current branch
 
 **Check**:
 An assertion whose expected verdict is written out in advance, so running it can
-only agree or disagree with what was already claimed. Every assertion in
-`.claude/hooks/check-hooks.sh` is a check.
+only agree or disagree with what was already claimed. Every assertion in the
+check suite, `.claude/hooks/check-hooks.sh` and the files it sources, is a check.
 _Avoid_: probe, test
 
 **History entry**:
@@ -52,6 +63,14 @@ of which the merge base's copy is no longer a byte prefix has been rewritten,
 whichever tool did it. A pure append leaves that prefix intact, so it is not a
 rewrite.
 _Avoid_: frozen entry, published entry, old entry
+
+**Issue file**:
+The checks written by the work that closed one issue, kept in one file named by
+that issue, under `.claude/hooks/checks/`. Tags name what a check covers; an
+issue file names who wrote it, so its checks may carry any requirement's tags.
+It is not a section, which is a heading in the suite's output that rows from
+several issue files may sit under.
+_Avoid_: family, section
 
 **Probe**:
 An empirical measurement whose answer is not known until it runs. Each
