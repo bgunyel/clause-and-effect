@@ -100,6 +100,16 @@
 # split, for the two hooks, and fixed in all three copies at once. lstrip=2
 # strips `refs/remotes/` and cannot be ambiguous.
 #
+# THE NAME IS A LABEL AND NOT A REVISION, which round 3 of the same review
+# measured one step on. DEV is the string `origin/dev-06`, and git resolves that
+# string as a revision by its own precedence, a local branch or tag before a
+# remote-tracking ref: so the ahead/behind test below, given `$DEV...`, measured
+# the shadow, and a shadow left at an older commit made a stale branch look
+# clear and its commit silently permitted. Every use of DEV as a revision --
+# here, in the report's own ahead/behind test, and in the remedy the refusal
+# prints -- is written `refs/remotes/$DEV`; the uses that compare it as a string
+# or print it keep the short form, which is what an agent reads.
+#
 # report-stale-branches.sh and, since #144, no-pr-decisions.sh derive the same
 # branch from the same two lines and do not re-argue any of this: one argument,
 # for the three copies. Why a copy is preferred to a shared helper, and what
@@ -291,7 +301,7 @@ BEHIND=0
 if [ "$TRACK" = "[gone]" ]; then
   STATE=GONE
 elif [ -n "$DEV" ] && [ "origin/$CURRENT" != "$DEV" ]; then
-  COUNTS=$(git rev-list --left-right --count "$DEV...refs/heads/$CURRENT" 2>/dev/null)
+  COUNTS=$(git rev-list --left-right --count "refs/remotes/$DEV...refs/heads/$CURRENT" 2>/dev/null)
   BEHIND=$(printf '%s' "$COUNTS" | cut -f1)
   AHEAD=$(printf '%s' "$COUNTS" | cut -f2)
   # An unreadable count is not a stale branch. Abstaining is the same answer
@@ -307,7 +317,7 @@ fi
 [ "$STATE" = "CLEAR" ] && exit 0
 
 GONE_REFUSE="Blocked: this worktree branch has been merged. Its branch on the remote is gone, which is what delete_branch_on_merge does when a pull request lands, so work added here now sits on a branch nothing will merge again. Make a new worktree from ${DEV:-the active dev branch} and move the work there."
-STALE_REFUSE="Blocked: this worktree branch has no work of its own and ${DEV:-the active dev branch} is $BEHIND commit(s) ahead of it. A commit here would be the first thing on a branch the active dev branch has already moved past. Catch up first -- git merge ${DEV:-the active dev branch} is permitted from here -- or make a new worktree."
+STALE_REFUSE="Blocked: this worktree branch has no work of its own and ${DEV:-the active dev branch} is $BEHIND commit(s) ahead of it. A commit here would be the first thing on a branch the active dev branch has already moved past. Catch up first -- git merge ${DEV:+refs/remotes/}${DEV:-the active dev branch} is permitted from here -- or make a new worktree."
 
 refuse() {
   if [ "$STATE" = "GONE" ]; then echo "$GONE_REFUSE $1" >&2; else echo "$STALE_REFUSE $1" >&2; fi

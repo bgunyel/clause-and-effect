@@ -733,6 +733,9 @@ base-lookup-reads-the-short-name%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/r
 dev-branch-read-by-short-name%no-work-on-stale-branch.sh%s/refname:lstrip=2)' 'refs/refname:short)' 'refs/%GH-108.5%caught
 base-remedy-offered-to-main%no-pr-decisions.sh%/^may_propose_into()/,/^}/{/^    BAD_BASE_FETCH=$/d}%GH-144.7%caught
 base-reason-reset-by-a-passing-base%no-pr-decisions.sh%/^bases_all_proposable()/,/^}/s/^  BAD_BASE=$/  BAD_BASE=\n  BAD_BASE_WHY='is not a dev-NN branch'\n  BAD_BASE_FETCH=/%GH-144.3 GH-144.7%caught
+dev-branch-measured-by-short-name%no-work-on-stale-branch.sh%s/rev-list --left-right --count "refs\/remotes\/$DEV\.\.\./rev-list --left-right --count "$DEV.../%GH-108.5%caught
+report-measures-by-short-name%report-stale-branches.sh%s/rev-list --left-right --count "refs\/remotes\/$DEV\.\.\./rev-list --left-right --count "$DEV.../%GH-62%caught
+stale-remedy-names-the-short-name%no-work-on-stale-branch.sh%s/git merge ${DEV:+refs\/remotes\/}/git merge /%GH-44.3%caught
 tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 and (.[0].tool_name == "Bash") and/%GH-108.1%caught
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught

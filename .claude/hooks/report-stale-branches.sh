@@ -387,7 +387,9 @@ while IFS=$'\t' read -r BRANCH TRACK; do
   AHEAD=
   BEHIND=
   if [ -n "$DEV" ]; then
-    COUNTS=$(git rev-list --left-right --count "$DEV...refs/heads/$BRANCH" 2>/dev/null)
+    # refs/remotes/ and not the bare name: see THE NAME IS A LABEL AND NOT A
+    # REVISION in no-work-on-stale-branch.sh's header.
+    COUNTS=$(git rev-list --left-right --count "refs/remotes/$DEV...refs/heads/$BRANCH" 2>/dev/null)
     BEHIND=$(printf '%s' "$COUNTS" | cut -f1)
     AHEAD=$(printf '%s' "$COUNTS" | cut -f2)
   fi

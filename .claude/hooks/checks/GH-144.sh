@@ -440,17 +440,32 @@ env_cmd "$PR_NOISE" "$PATH" no-pr-decisions.sh BLOCK 'and neither is a base spel
 # Each is asserted to shadow, by printing the short form and finding it
 # lengthened: a fixture whose shadow did not take would pass every row below
 # with the defect in place.
+#
+# AND THE SHADOW STANDS AT BASE, NOT AT THE TIP, which is round 3 of the same
+# review. The first version put it on the commit origin/dev-06 names, so a
+# consumer that resolved the name `origin/dev-06` as a revision -- and git
+# resolves a local branch or tag before a remote-tracking ref -- measured the
+# same commit either way, and these rows could say which NAME was printed and
+# not which OBJECT was measured. Two consumers did exactly that: the stale
+# guard's and the report's `rev-list "$DEV..."`, which silently permitted a
+# commit on the stale branch and dropped it from the report. At base the shadow
+# is level with the stale branch, so a consumer measuring the shadow calls the
+# branch clear and the rows below go red; they did, before the two consumers
+# were qualified as `refs/remotes/$DEV`. The fixture guard asserts the shadow
+# and the ref it shadows are different commits.
 PR_SHADOW_BRANCH="$ENV_REPOS/shadow-branch"
 PR_SHADOW_TAG="$ENV_REPOS/shadow-tag"
 env_lifecycle "$PR_SHADOW_BRANCH" dev-05:base dev-06:tip
 env_lifecycle "$PR_SHADOW_TAG" dev-05:base dev-06:tip
-git -C "$PR_SHADOW_BRANCH" branch origin/dev-06 refs/remotes/origin/dev-06
-git -C "$PR_SHADOW_TAG" tag origin/dev-06 refs/remotes/origin/dev-06
+git -C "$PR_SHADOW_BRANCH" branch origin/dev-06 refs/remotes/origin/dev-05
+git -C "$PR_SHADOW_TAG" tag origin/dev-06 refs/remotes/origin/dev-05
 mkdir -p "$PR_SHADOW_BRANCH/.claude/hooks"
 cp -- "$HOOKS/report-stale-branches.sh" "$PR_SHADOW_BRANCH/.claude/hooks/"
 for d in "$PR_SHADOW_BRANCH" "$PR_SHADOW_TAG"; do
   [ "$(git -C "$d" for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' | LC_ALL=C sort | tr '\n' ' ')" \
       = 'origin/dev-05 remotes/origin/dev-06 ' ] \
+    && [ "$(git -C "$d" rev-parse origin/dev-06)" = "$(git -C "$d" rev-parse refs/heads/stale-branch)" ] \
+    && [ "$(git -C "$d" rev-parse refs/remotes/origin/dev-06)" != "$(git -C "$d" rev-parse refs/heads/stale-branch)" ] \
     && [ -d "$d/wt-stale" ] || {
     echo "the #144 shadow fixture $d does not shadow origin/dev-06; every row read against it would pass with the defect in place" >&2
     exit 1
@@ -482,6 +497,26 @@ req GH-62
 report_says "$ENV_NO_GH_BIN" "$PR_SHADOW_BRANCH/.claude/hooks/report-stale-branches.sh" \
   'active dev branch: origin/dev-06' \
   'and the session report names dev-06 with a local branch of that name beside it'
+report_says "$ENV_NO_GH_BIN" "$PR_SHADOW_BRANCH/.claude/hooks/report-stale-branches.sh" \
+  'stale-branch -- no work of its own; origin/dev-06 is 1 ahead of it' \
+  'and measures the stale branch against the ref, not against the older commit the local branch names'
+# AND THE WAY OUT THE STALE GUARD'S REFUSAL NAMES HAS TO WORK THERE TOO. It
+# said `git merge origin/dev-06`, and with a shadow that name is the shadow: the
+# carve-out compares the object the name resolves to with the ref's and refuses
+# it, so the one remedy the refusal offered was refused. It names
+# `refs/remotes/origin/dev-06` now, which the carve-out's whitelist already
+# held and which resolves to the ref whatever else stands beside it.
+req GH-44.3 US-7
+env_says "$PR_SHADOW_BRANCH/wt-stale" "$PATH" no-work-on-stale-branch.sh 'git merge refs/remotes/origin/dev-06 is permitted' \
+  'the stale refusal names a merge that resolves to the ref, not to the local branch beside it' \
+  'git commit -m "wip"'
+req GH-44.3
+env_cmd "$PR_SHADOW_BRANCH/wt-stale" "$PATH" no-work-on-stale-branch.sh ALLOW \
+  'and that merge is permitted there' \
+  'git merge refs/remotes/origin/dev-06'
+env_cmd "$PR_SHADOW_BRANCH/wt-stale" "$PATH" no-work-on-stale-branch.sh BLOCK \
+  'while the short name, which is the older local branch there, is refused' \
+  'git merge origin/dev-06'
 
 # THE REFUSAL NAMES THE BRANCH IT EXPECTED, which is what makes it one edit from
 # correct -- #133's complaint about the retarget message, answered here for the

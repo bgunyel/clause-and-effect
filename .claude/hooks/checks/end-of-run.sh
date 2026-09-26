@@ -67,10 +67,16 @@ section "=== issue #144: what was judged where, read off the run and not off the
 # written for it, which the repository's own record -- clean when the suite is --
 # never could be.
 req GH-144.4
+# `judged_dev_dirs` is the one filter both rows below read the record through,
+# so that the `holds` certifies the set `judged_here` resolves: two copies of it
+# were one widening away from certifying a set the reader did not read (round 3
+# of PR #158's review after the merge across the split).
+judged_dev_dirs() {  # judged_dev_dirs <record> -- the directory of each run of no-pr-decisions.sh whose stdin names dev-NN
+  awk -F'\t' '$2 ~ /(^|\/)no-pr-decisions\.sh$/ && $3 ~ /dev-[0-9]/ { print $1 }' "$1" | LC_ALL=C sort -u
+}
 judged_here() {  # judged_here <record> <common dir> -- each dev-NN run's directory that reads <common dir>'s refs
   local dir common
-  awk -F'\t' '$2 ~ /(^|\/)no-pr-decisions\.sh$/ && $3 ~ /dev-[0-9]/ { print $1 }' "$1" \
-    | LC_ALL=C sort -u \
+  judged_dev_dirs "$1" \
     | while IFS= read -r dir; do
         if ! [ -d "$dir" ]; then
           printf '%s (gone, so nothing says whose refs it read)\n' "$dir"
@@ -106,7 +112,7 @@ tok 'the reader names a dev-NN run in any directory of this repository, and no o
 # not written, and a reader that matched nothing would otherwise report no
 # offender and pass.
 holds 'the run recorded dev-NN payloads judged in $ON_DEV, so the absence below is one that was looked for' \
-  "$(awk -F'\t' '$2 ~ /(^|\/)no-pr-decisions\.sh$/ && $3 ~ /dev-[0-9]/ { print $1 }' "$JUDGED")" "$ON_DEV_P"
+  "$(judged_dev_dirs "$JUDGED")" "$ON_DEV_P"
 tok 'and not one dev-NN payload was judged in a directory that reads this repository'"'"'s refs' \
   '' "$(judged_here "$JUDGED" "$THIS_COMMON")"
 
