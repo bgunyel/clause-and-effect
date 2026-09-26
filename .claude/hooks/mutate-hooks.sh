@@ -714,6 +714,7 @@ gh-option-spelling-not-reduced%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^    
 gh-last-token-exempt-again%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^        q = tokend(p)$/        q = tokend(p); if (q > n) break/%GH-118 US-15%caught
 gh-valued-option-eats-past-the-end%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s#^          if (q <= p .*#          if (0) { opaque = 1; break }#%GH-118 US-15%caught
 gh-stump-compared-as-raw-text%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^          val = ghreduce(substr(line, p, q - p))$/          val = substr(line, p, q - p)/%GH-118 US-15%caught
+gh-attached-value-not-asked%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^        if (k == 2 \&\& ghattached(tk)/        if (0 \&\& ghattached(tk)/%GH-118 US-15%caught
 gh-unreadable-pass-removed%no-pr-decisions.sh%s/^    if cs_gh_opaque "$GHPATH" <<<"$CMD"; then$/    if false \&\& cs_gh_opaque "$GHPATH" <<<"$CMD"; then/%GH-118 US-7%caught
 release-read-granted-when-opaque%no-pr-decisions.sh%/^release_is_read()/,/^}/s/^  case $? in 1) ;; \*) return 1 ;; esac$/  case $? in 0) return 1 ;; esac/%GH-118%caught
 git-globals-list-short-again%lib/command-scan.sh%s/|--exec-path|--config-env|--attr-source|/|--exec-path|/%GH-118 FR-3 FR-38 US-1%caught

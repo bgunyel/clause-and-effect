@@ -1408,3 +1408,15 @@ it has no entry above (Q16).
   only the first would re-create the asymmetry it was meant to remove. Three
   checks pin the permitted verdicts and a fourth pins the contrast that says the
   first is a gap in the rule rather than the rule working
+- #166: `$'…'` and `$"…"` quoting, not read as quoting at any position. Cited
+  in #118's issue file, where `gh pr $'-t' view merge 5`, its locale spelling
+  and an ANSI-C option in front of the group are pinned as permitted boundary
+  rows: `ghreduce` takes the quotes out and leaves the `$`, so the token does
+  not open with a dash and the walk stops on it. Found by round 5 of the
+  review of #184. It adds its requirements in the pull request that fixes it
+- #242: no load-time compile check for the library's awk programs, so one
+  that does not compile fails open. Cited beside the `CS_GH_AWK` withdrawal in
+  `lib/command-scan.sh` and in `no-pr-decisions.sh`, where round 5 of the review
+  of #184 found the withdrawal called the one state a `command -v` guard cannot
+  see when it is the harmless one of two. It concerns every awk program the
+  library carries, so it has no entry above

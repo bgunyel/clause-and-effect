@@ -1959,6 +1959,24 @@ CS_GH_AWK='
     if (t ~ /^--repo=/ || t ~ /^--hostname=/ || t ~ /^-R./) return 2
     return 3
   }
+  # THE VALUE A RECOGNISED OPTION CARRIES IN ITS OWN TOKEN, into `att`: after the
+  # `=` of --repo= and --hostname=, and after -R, with the `=` pflag takes off
+  # the value of a shorthand taken off too. Succeeds only for those spellings, so
+  # --version and --help, which return 2 and carry nothing, are not asked.
+  function ghattached(t) {
+    t = ghreduce(t)
+    if (t ~ /^--(repo|hostname)=/) { att = substr(t, index(t, "=") + 1); return 1 }
+    if (t ~ /^-R./) { att = substr(t, 3); sub(/^=/, "", att); return 1 }
+    return 0
+  }
+  # AN UNFINISHED WORD, which is what a cut leaves where a value was: nothing
+  # after reduction, or a word ending on the character that opened the
+  # substitution. One test for both places a value is written -- the next word
+  # and the option own token -- because round 5 of the review found it asked of
+  # the first only: `gh pr -R $(echo o/r) merge 5` was refused and
+  # `gh pr --repo=$(echo o/r) merge 5` permitted, both a merge of PR 5. The table
+  # under A STUMP IS AN INCOMPLETE WORD below says what each cut leaves.
+  function unfinished(v) { return v == "" || v ~ /[$<>]$/ }
   BEGIN { strip = sprintf("%c%c%c", 34, 39, 92); nparts = split(want, part, /[[:space:]]+/) }
   {
     line = $0
@@ -1971,9 +1989,14 @@ CS_GH_AWK='
       p = 1
       while (p <= n) {
         q = tokend(p)
-        k = ghopt(substr(line, p, q - p))
+        tk = substr(line, p, q - p)
+        k = ghopt(tk)
         if (k == 0) break
         if (k == 3) { opaque = 1; break }
+        # The attached value, asked what the separate one is asked below. A
+        # backtick after `--repo=` leaves the token `--repo=` and so an empty
+        # value; `$(` leaves `--repo=$`. Both are a value in another fragment.
+        if (k == 2 && ghattached(tk) && unfinished(att)) { opaque = 1; break }
         p = skipblank(q)
         # A RECOGNISED VALUED OPTION NEEDS A VALUE, and round 2 of the review
         # found this line eating past the end of a fragment when it has none.
@@ -2034,7 +2057,7 @@ CS_GH_AWK='
         if (k == 1) {
           q = tokend(p)
           val = ghreduce(substr(line, p, q - p))
-          if (q <= p || val == "" || val ~ /[$<>]$/) { opaque = 1; break }
+          if (q <= p || unfinished(val)) { opaque = 1; break }
           p = skipblank(q)
         }
       }
@@ -2179,6 +2202,17 @@ cs_gh_args() {  # cs_gh_args <subcommand path> -- stdin: one command
 # the refusal names the library instead of arriving as every gh command being
 # refused for no stated reason. check-hooks.sh drives the emptied variable and
 # asserts which direction it fails in.
+#
+# IT COVERS THE HARMLESS STATE OF TWO, and the sentence above said "a state"
+# as though there were one. A CS_GH_AWK that does not COMPILE is the other:
+# awk exits 2 without reading, cs_gh_args fails, every caller reads "not this
+# path", and every gh rule permits. Measured -- one extra `{` on the first
+# function line and `gh pr merge 5` and `gh pr create --base main` are both
+# permitted. The suite goes red on it, so it is not silent there; the exposure
+# is a live session between saving such a file and the next run. Nothing here
+# checks that a program compiles, for this one or for the other awk programs in
+# this file, and #242 owns that for all of them. Found by round 5 of the review
+# of PR #184.
 #
 # AND IT SAYS WHICH VARIABLE IT WITHDREW FOR, which the first version of this did
 # not: a consumer's guard names the library and nothing inside it, and #134.1

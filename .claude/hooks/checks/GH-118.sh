@@ -376,6 +376,64 @@ req GH-118 US-13
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: a quoted value holding whitespace, several tokens here; #194' \
   'gh pr -R '"'"'$(echo o/r)'"'"' merge 5'
 
+# ROUND 5: THE SAME CUT IN THE OTHER PLACE A VALUE IS WRITTEN. Rounds 2 and 3
+# asked whether a value was cut off only where it is the NEXT word; a value
+# carried in the option's own token -- `--repo=o/r`, `--hostname=h`, `-Ro/r`,
+# `-R=o/r` -- went through unasked, so `--repo=$` ended the fragment, no path
+# word followed, and every rule read "not this path". Each of these reaches gh
+# as the decision it names; `-R $(echo o/r)`, the separate spelling of the
+# first, was already refused, so two spellings of one command disagreed. Each
+# was PERMITTED at a6a0ffd and at dev-05 5d95c8a, measured by feeding the hook.
+# The fix is one test, `unfinished`, asked at both places, not a second copy.
+req GH-118 US-15
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an attached --repo= value cut by $( ), then a merge' \
+  'gh pr --repo=$(echo o/r) merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an attached --repo= value cut by a backtick, leaving it empty' \
+  'gh pr --repo=`echo o/r` merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the attached shorthand, the substitution quoted' \
+  'gh pr -R"$(echo o/r)" merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the attached shorthand before the group' \
+  'gh -R$(echo o/r) pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'the -R= spelling, which pflag reads as -R' \
+  'gh pr -R=$(echo o/r) merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a quoted backtick in an attached value, which reduces to nothing' \
+  'gh pr --repo="`echo o/r`" merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an attached stump with text in front of it' \
+  'gh pr --repo=foo$(echo bar) merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an attached <( ) stump' \
+  'gh pr --repo=<(echo o/r) merge 5'
+req GH-118 FR-15 FR-16
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an attached --hostname= stump before a create naming main' \
+  'gh pr --hostname=$(echo h) create --base main --title x'
+req GH-118 US-15
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an attached --hostname= stump before an api merge' \
+  'gh --hostname=$(echo h) api -X PUT repos/o/r/pulls/5/merge'
+# The message is the unreadable one, which is the one that names a correction.
+req GH-118 US-7
+says "$SUITE_DIR" no-pr-decisions.sh 'option before its subcommand' \
+  'an attached stump is refused as unreadable, not as a merge' \
+  'gh pr --repo=$(echo o/r) merge 5'
+# THE TRADE, and it is the only refusing-direction flip here: an attached value
+# that is empty as written, not by a cut, is refused with the cut ones, since
+# after reduction the two are one token. It names no repository.
+req GH-118 US-13
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'THE TRADE: --repo= with nothing after it, before a read' \
+  'gh pr --repo= view 5'
+# And what the test must not cost: a finished attached value, in every spelling,
+# before a read. `$X` is a finished word to this walk -- cs_split does not cut
+# at a parameter -- so it is read as a value like any other.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'an attached --repo= value before a read' \
+  'gh pr --repo=o/r view 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'the -R= spelling before a read' \
+  'gh -R=o/r pr view 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'an attached --hostname= value before a read' \
+  'gh --hostname=h pr view 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'an attached parameter, uncut, before a read' \
+  'gh pr --repo=$X view 5'
+req GH-118 FR-48
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'an attached --repo= value before a release read' \
+  'gh release --repo=o/r view v1'
+
 # AND WHAT THE k==1 GUARD MUST NOT REFUSE: a fragment that ends after a value it
 # really has. `gh release -R o/r` is the whole of its command, gh runs no verb
 # for it, and the release allowlist refuses it with the message naming the five
@@ -394,10 +452,11 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a valued option with its value, 
   'gh release -R o/r view v1'
 
 # WHAT THE FIXES STILL LEAVE, pinned as permitted so the boundary is evidence
-# rather than a sentence. None of the four is #118 to answer and all four are
-# unchanged from dev-05. It was two until round 4 of the review swept the class
-# and found the other two, which is the reason the list is derived from probes
-# rather than written from memory of what was fixed.
+# rather than a sentence. None of it is #118 to answer and all of it is
+# unchanged from dev-05. It is not counted here: the count went stale as the
+# list grew, round 4 of the review adding two rows and round 5 more, which is
+# also why the list is derived from probes rather than written from memory of
+# what was fixed.
 #
 #   - a quoted PATH WORD. Only the option spelling is reduced, deliberately:
 #     the reducer that would read `"pr"` as `pr` is cw_reduce, which also takes
@@ -421,6 +480,13 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a valued option with its value, 
 #     [pr] [merge] [5]. This is GH-135's family in its split spelling where the
 #     entry has the quoted one, and no amount of option-value work reaches it.
 #     #197.
+#   - an option in ANSI-C or locale quotes, `$'-t'` or `$"-t"`. ghreduce takes
+#     the quotes out and leaves the `$`, so the token opens with `$` rather than
+#     a dash, the walk stops and reads it as a path word, and the path does not
+#     match. gh receives [-t] and runs the merge. #166 owns these quotes at
+#     every position -- the command word, the group, the verb, an option -- and
+#     reducing them here alone would be a third reducer beside cw_reduce and
+#     ghreduce answering one question. Round 5 of the review.
 #
 # WHY THE THIRD IS LEFT OPEN, since it is the one this branch could have closed.
 # The fourth is strictly EASIER to write than the third and is unreachable by
@@ -431,10 +497,18 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a valued option with its value, 
 req GH-118 US-13
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: a quoted group word, which is #135 and not this' \
   'gh "pr" merge 5'
-check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the option itself inside a substitution' \
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the option itself inside a substitution; CLAUDE.md consequences 4 and 6' \
   'gh pr `echo -t` view merge 5'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: a backtick cutting an option value, leaving no stump; #197' \
   'gh pr -R foo`echo bar` merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the same cut in an attached value, which leaves none either; #197' \
+  'gh pr --repo=foo`echo bar` merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: an option in ANSI-C quotes; #166' \
+  "gh pr \$'-t' view merge 5"
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: an option in locale quotes; #166' \
+  'gh pr $"-t" view merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: an option in ANSI-C quotes before the group; #166' \
+  "gh \$'--squash' view pr merge 5"
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the same cut inside a path word; #197' \
   'gh pr mer`echo ge` 5'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the same cut inside the group word; #197' \
@@ -497,6 +571,27 @@ says "$SUITE_DIR" no-pr-decisions.sh 'option before its subcommand' \
 says_not "$SUITE_DIR" no-pr-decisions.sh 'deciding a pull request' \
   'and does not tell an unreadable issue command that it decides a pull request' \
   'gh --squash view issue list'
+
+# CLAUDE.md RECORDS THE TRADE, as its ninth deliberately-left-open consequence.
+# Round 5 of the review found the refused reads recorded in the library and in
+# GH-118's entry and nowhere in the document that grants them: CLAUDE.md grants
+# reading a pull request "through `gh pr view`", and its consequence 2 says this
+# hook asks only for the `pr|release|api` group, while `gh pr --json title view
+# 5` and `gh --paginate issue list` are both refused. Consequence 1 is the
+# precedent -- a refused read the paragraph grants gets a numbered entry. The
+# count at the head of the list is held to the items by #73's check; these hold
+# the item to the spellings it names, and the verdict each names is pinned.
+req GH-118 US-13
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an unreadable option before an unguarded group, the one CLAUDE.md names' \
+  'gh --paginate issue list'
+R118_LEFT_OPEN=$(awk '/^\*\*Deliberately left open\.\*\*/ { f = 1 } f && /^## / { exit } f' \
+  "$SUITE_DIR/../../CLAUDE.md")
+holds 'CLAUDE.md names the refused pull request read as a left-open consequence' \
+  "$R118_LEFT_OPEN" '`gh pr --json title view 5` although the paragraph above grants'
+holds 'and the refused read of a group no rule guards' \
+  "$R118_LEFT_OPEN" '`gh --paginate issue list` is refused although'
+holds 'and the one edit that corrects both' \
+  "$R118_LEFT_OPEN" '`gh pr view 5 --json title`'
 
 # THE GIT HALF, which is a different defect wearing the same shape. git rejects
 # an unknown global option itself -- `git --bogus push origin main` exits with

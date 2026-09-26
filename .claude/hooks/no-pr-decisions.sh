@@ -200,9 +200,15 @@
 #
 # The two share one awk program, CS_GH_AWK in the library, so in practice they
 # arrive and leave together -- and the library withdraws both if that program is
-# empty, which turns the one state a `command -v` guard cannot see into the one
-# it can. That is the library answering for itself and not a reason to require
-# fewer names here: #84 is the issue about a guard that named a subset.
+# empty, which turns one state a `command -v` guard cannot see into one it can.
+# It is the harmless one of two. An empty program is valid awk and refuses every
+# gh rule on its own; a program that does not COMPILE is the other state, and it
+# fails open -- measured, one extra `{` in it and `gh pr merge 5` is permitted.
+# Nothing here or in the library guards that one; #242 owns it, for every awk
+# program the library carries. Round 5 of the review of PR #184 found this
+# sentence calling the covered state "the one". The withdrawal is the library
+# answering for itself and not a reason to require fewer names here: #84 is the
+# issue about a guard that named a subset.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
 if ! command -v cs_normalise >/dev/null 2>&1 \

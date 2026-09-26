@@ -11735,7 +11735,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '112' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '113' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11861,7 +11861,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '110' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '111' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
@@ -13884,7 +13884,7 @@ echo "--- all seven Bash hooks at once: a permitted spelling is permitted by eve
 #
 # So a derivation would have to read grant from refusal out of the prose around
 # each span, and that section is written to be full of near-misses: its whole
-# second half is six numbered consequences whose subject is spellings that read
+# second half is numbered consequences whose subject is spellings that read
 # as permitted and are not, or read as evasions and are permitted. A derivation
 # that got one wrong in the permitting direction would put an `ALLOW by all` row
 # here for a command CLAUDE.md refuses, which is this suite asserting the
