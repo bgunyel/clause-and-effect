@@ -250,11 +250,14 @@ requirement GH-144.6 <<'REQ'
 REQ
 requirement GH-144.7 <<'REQ'
 - text: A refusal for the branch question also names the read its verdict rests
-  on: it says to run `git fetch --prune` and try again if the dev branch has
-  rotated since this session last fetched. The sentence is on all four
-  spellings, and on
-  none of the refusals read off the text of the command alone -- a base of main,
-  a base that is not `dev-NN`, and a create naming no base at all.
+  on: it says to run `git fetch --prune` on its own and then run the command
+  again if the dev branch has rotated since this session last fetched. The
+  sentence is on all four spellings, and on none of the refusals read off the
+  text of the command alone -- a base of main, a base that is not `dev-NN`, and
+  a create naming no base at all. Where a line names more than one base, the
+  reason and the sentence are the last refusal's: a base of main refused after
+  a `dev-NN` one is not offered a fetch, and a base that passes after a refused
+  one leaves the refusal's reason and sentence standing.
 - from: #144, found by the second review of PR #158
 - kind: defect-permitting
 - status: active
@@ -285,6 +288,9 @@ requirement GH-144.7 <<'REQ'
   doing exactly what the message said repeated the refusal. What this does not
   reach is the permitting half of a stale read: a permit has no message, so a
   stale session's `--base dev-05` goes through without a word. That is #238.
+  Round 2 of that review measured the next step: the refs are read before
+  anything on the line runs, so a fetch written on the same line as the create
+  changed nothing, and the remedy now says to run it on its own.
 REQ
 requirement GH-144.8 <<'REQ'
 - text: Every line of `report-stale-branches.sh` that says a read was not made,
@@ -416,6 +422,67 @@ env_cmd "$PR_NOISE" "$PATH" no-pr-decisions.sh ALLOW 'origin/dev-foo and origin/
 env_cmd "$PR_NOISE" "$PATH" no-pr-decisions.sh BLOCK 'and neither is a base spelled that way' \
   'gh pr create --base dev-foo --title t --body b'
 
+# A NAME THAT SHADOWS THE REF, the third way the read can pick the wrong branch,
+# and the one round 2 of PR #158's review after the merge across the split
+# measured as a permit. `%(refname:short)` prints the shortest UNAMBIGUOUS
+# name, so a local branch or tag named origin/dev-06 lengthened
+# refs/remotes/origin/dev-06 to remotes/origin/dev-06, the filter dropped it, and
+# dev-05 was read as active: `--base dev-05` permitted, `--base dev-06` refused.
+# A mistaken `git checkout -b origin/dev-06 origin/dev-06` is all it takes. The
+# three copies now read `%(refname:lstrip=2)`, which cannot be ambiguous, and all
+# three are driven here in fixtures holding such a shadow: this hook, the stale
+# guard, and the session report. #62's comparison holds their text equal; these
+# hold what the text does, which is the half a coordinated edit of all three
+# would leave that comparison green on.
+#
+# The fixtures are the #108 lifecycle shape -- dev-05 at base, dev-06 at the tip,
+# a stale worktree between them -- so the guard's verdict says which ref it took.
+# Each is asserted to shadow, by printing the short form and finding it
+# lengthened: a fixture whose shadow did not take would pass every row below
+# with the defect in place.
+PR_SHADOW_BRANCH="$ENV_REPOS/shadow-branch"
+PR_SHADOW_TAG="$ENV_REPOS/shadow-tag"
+env_lifecycle "$PR_SHADOW_BRANCH" dev-05:base dev-06:tip
+env_lifecycle "$PR_SHADOW_TAG" dev-05:base dev-06:tip
+git -C "$PR_SHADOW_BRANCH" branch origin/dev-06 refs/remotes/origin/dev-06
+git -C "$PR_SHADOW_TAG" tag origin/dev-06 refs/remotes/origin/dev-06
+mkdir -p "$PR_SHADOW_BRANCH/.claude/hooks"
+cp -- "$HOOKS/report-stale-branches.sh" "$PR_SHADOW_BRANCH/.claude/hooks/"
+for d in "$PR_SHADOW_BRANCH" "$PR_SHADOW_TAG"; do
+  [ "$(git -C "$d" for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' | LC_ALL=C sort | tr '\n' ' ')" \
+      = 'origin/dev-05 remotes/origin/dev-06 ' ] \
+    && [ -d "$d/wt-stale" ] || {
+    echo "the #144 shadow fixture $d does not shadow origin/dev-06; every row read against it would pass with the defect in place" >&2
+    exit 1
+  }
+done
+[ -s "$PR_SHADOW_BRANCH/.claude/hooks/report-stale-branches.sh" ] || {
+  echo "the report was not copied into the #144 shadow fixture; the row read against it would prove nothing" >&2
+  exit 1
+}
+# Written out a row per fixture rather than looped, so that the GH-144.4 text
+# derivation below reads each fixture's name off its row.
+req GH-144.1
+env_cmd "$PR_SHADOW_BRANCH" "$PATH" no-pr-decisions.sh ALLOW 'a local branch named origin/dev-06 does not hide the active dev branch' \
+  'gh pr create --base dev-06 --title t --body b'
+env_cmd "$PR_SHADOW_BRANCH" "$PATH" no-pr-decisions.sh BLOCK 'and beside it the branch on its way out is still refused' \
+  'gh pr create --base dev-05 --title t --body b'
+env_cmd "$PR_SHADOW_TAG" "$PATH" no-pr-decisions.sh ALLOW 'nor does a local tag of that name' \
+  'gh pr create --base dev-06 --title t --body b'
+env_cmd "$PR_SHADOW_TAG" "$PATH" no-pr-decisions.sh BLOCK 'and beside it the branch on its way out is still refused' \
+  'gh pr create --base dev-05 --title t --body b'
+req GH-108.5
+env_says "$PR_SHADOW_BRANCH/wt-stale" "$PATH" no-work-on-stale-branch.sh 'origin/dev-06' \
+  'the stale guard measures against dev-06 with a local branch of that name beside it' \
+  'git commit -m "wip"'
+env_says "$PR_SHADOW_TAG/wt-stale" "$PATH" no-work-on-stale-branch.sh 'origin/dev-06' \
+  'and with a local tag of that name beside it' \
+  'git commit -m "wip"'
+req GH-62
+report_says "$ENV_NO_GH_BIN" "$PR_SHADOW_BRANCH/.claude/hooks/report-stale-branches.sh" \
+  'active dev branch: origin/dev-06' \
+  'and the session report names dev-06 with a local branch of that name beside it'
+
 # THE REFUSAL NAMES THE BRANCH IT EXPECTED, which is what makes it one edit from
 # correct -- #133's complaint about the retarget message, answered here for the
 # rule this issue adds. All four spellings, because three of them reach one
@@ -457,16 +524,16 @@ says_not "$ENV_DEV_TWO" no-pr-decisions.sh 'the active dev branch here' \
 # refusal read off the text of the command alone must NOT offer a fetch, there
 # being nothing a fetch would change about it.
 req GH-144.7
-env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune and try again' \
+env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune on its own, then run this again' \
   'the create refusal says what would make the read current' \
   'gh pr create --base dev-05 --title t --body b'
-env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune and try again' \
+env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune on its own, then run this again' \
   'so does the retarget refusal' \
   'gh pr edit 5 --base dev-05'
-env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune and try again' \
+env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune on its own, then run this again' \
   'so does the REST refusal' \
   'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x'
-env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune and try again' \
+env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'run git fetch --prune on its own, then run this again' \
   'and so does the graphql refusal' \
   'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}"'
 says_not "$ENV_DEV_TWO" no-pr-decisions.sh 'git fetch' \
@@ -478,6 +545,36 @@ says_not "$ENV_DEV_TWO" no-pr-decisions.sh 'git fetch' \
 says_not "$ENV_DEV_TWO" no-pr-decisions.sh 'git fetch' \
   'nor is a create that names no base' \
   'gh pr create --title t --body b'
+# AND WHEN A LINE NAMES MORE THAN ONE BASE, the reason and the remedy are the
+# last refusal's. The rows above name one base a line, and round 2 of PR #158's
+# review after the merge across the split measured what that left: with the
+# remedy's reset gone from both places that then held one, a base of main after
+# a dev-05 was told to fetch -- the remedy this entry says main never gets --
+# and nothing here went red. One reset stands now, where main is refused, and
+# the two rows after this drive it: a REST base of main after a REST dev-05, and
+# a graphql main after a REST dev-05, the second reaching the refusal through
+# the other of the two calls the gh api block makes.
+says "$ENV_DEV_TWO" no-pr-decisions.sh 'This names main, which is not a dev-NN branch;' \
+  'a REST dev-05 then a REST main: the refusal is main'"'"'s' \
+  'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x && gh api -X POST repos/o/r/pulls -f base=main -f head=y'
+says_not "$ENV_DEV_TWO" no-pr-decisions.sh 'git fetch' \
+  'and main is not told to fetch because a dev-05 was refused before it' \
+  'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x && gh api -X POST repos/o/r/pulls -f base=main -f head=y'
+says_not "$ENV_DEV_TWO" no-pr-decisions.sh 'git fetch' \
+  'nor when main is the graphql base after a REST dev-05' \
+  'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x && gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"main\"})}"'
+# The converse, and the reason `api_bad_base` is gone rather than covered. It
+# carried the reason and the remedy past a later call that reset them, and the
+# reset was a seed at the head of bases_all_proposable that no path needed:
+# removing the seed removed the need, and a copy kept for a hazard that no
+# longer exists is the dead code that review found beside it. What must hold is
+# that a base that PASSES after a refused one leaves the refusal's reason and
+# remedy standing, which is what this row reads. It goes red if a reset comes
+# back.
+req GH-144.3 GH-144.7
+env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'This names dev-05, which is not dev-06, the active dev branch here; reaching it through gh api makes it the same destination under another spelling. If the dev branch has rotated' \
+  'a REST dev-05 refused, then a graphql dev-06 that passes: the refusal keeps dev-05'"'"'s reason and remedy' \
+  'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x && gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"dev-06\"})}"'
 
 # THE DEGRADED CASE: a read that comes back empty. This is the half #108
 # declined to trade away, and it is why the lookup could be made at all -- the
@@ -542,7 +639,7 @@ env_says "$ENV_DEV_TWO" "$ENV_NO_GIT_BIN" no-pr-decisions.sh 'not a dev-NN branc
 PR_COUNT_SHIM="$FIXTURES/git-counting-shim"
 PR_COUNT_LOG="$FIXTURES/for-each-ref-calls"
 mkdir -p "$PR_COUNT_SHIM"
-printf '#!/bin/bash\nfor a in "$@"; do\n  [ "$a" = for-each-ref ] && { printf x >> %s; break; }\ndone\nexec %s "$@"\n' \
+printf '#!/bin/bash\nfor a in "$@"; do\n  [ "$a" = for-each-ref ] && { printf x >> %q; break; }\ndone\nexec %q "$@"\n' \
   "$PR_COUNT_LOG" "$REAL_GIT" > "$PR_COUNT_SHIM/git"
 chmod +x "$PR_COUNT_SHIM/git"
 # Both halves of the shim, asserted, for the reason #111's is: a count read off a
@@ -741,7 +838,7 @@ PR_DEV_ROW_DIRS=$(printf '%s\n' "$PR_JUDGED" \
   | grep -oE '(^|[[:space:]])(check_in|flip|says_not|says|env_cmd|env_says|env_feed)[[:space:]]+"[^"]+"' \
   | sed 's/.*"\(.*\)"/\1/' | LC_ALL=C sort -u | tr '\n' ' ')
 tok 'and the directory each one names is one of these, read off the rows themselves' \
-    '$ENV_DEV_NONE $ENV_DEV_TWO $ON_DEV $PR_NOISE $PR_ONE $PR_TEN $dir ' \
+    '$ENV_DEV_NONE $ENV_DEV_TWO $ON_DEV $PR_NOISE $PR_ONE $PR_SHADOW_BRANCH $PR_SHADOW_TAG $PR_TEN $dir ' \
     "$PR_DEV_ROW_DIRS"
 lacks 'so none of them is judged in this repository, where dev-05 is active today' \
   "$PR_DEV_ROW_DIRS" '$SUITE_DIR'

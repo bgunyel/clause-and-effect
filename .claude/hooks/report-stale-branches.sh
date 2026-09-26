@@ -129,11 +129,12 @@
 # reader skims rather than one under a heading.
 #
 # It matters for the reason under THE ARMING PROPERTY IS NOT SELF-ANNOUNCING.
-# Neither detector in no-work-on-stale-branch.sh is armed for such a session, and
-# no-pr-decisions.sh accepts any dev-NN base for want of a ref to judge one
-# against; that guard's silence is what a clean tree looks like too -- so a session whose
-# refs were never read is indistinguishable, from the inside, from one with
-# nothing stale in it. Every other unread thing here already says so in as many
+# Neither detector in no-work-on-stale-branch.sh is armed for such a session,
+# and the stale guard's silence is what a clean tree looks like too -- so a
+# session whose refs were never read is indistinguishable, from the inside,
+# from one with nothing stale in it. no-pr-decisions.sh is in the same position
+# one step over: it accepts any dev-NN base for want of a ref to judge one
+# against, and a permit looks the same whether or not a ref was read. Every other unread thing here already says so in as many
 # words: the fetch, the merge settings, the pull requests, the main ancestry.
 # These two were the exception, and there is no reason for them to be one.
 #
@@ -310,7 +311,7 @@ pr_of() {  # pr_of <branch>
 # corrected. The next two lines stand verbatim in that file and in
 # no-pr-decisions.sh as well:
 # check-hooks.sh holds the three equal, so a change here is a change there.
-DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
+DEV=$(git for-each-ref --format='%(refname:lstrip=2)' 'refs/remotes/origin/dev-*' 2>/dev/null \
       | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
 if [ -n "$DEV" ]; then
   echo "active dev branch: $DEV"

@@ -90,10 +90,21 @@
 # zero-padding, so a lexical sort would be correct today and wrong at dev-10;
 # the version sort does not depend on that mandate holding.
 #
-# report-stale-branches.sh derives the same branch from the same two lines and
-# does not re-argue any of this: one argument, for both copies. Why a copy is
-# preferred to a shared helper, and what holds the two copies equal, is in
-# check-hooks.sh at the arming section.
+# And each ref is printed `%(refname:lstrip=2)`, never `%(refname:short)`. The
+# short form is the shortest UNAMBIGUOUS name, so a local branch or tag named
+# origin/dev-06 lengthens refs/remotes/origin/dev-06 to remotes/origin/dev-06,
+# the filter drops it, and dev-05 is read as active -- this guard measuring
+# against the branch on its way out, and no-pr-decisions.sh permitting a pull
+# request into it. A mistaken `git checkout -b origin/dev-06 origin/dev-06` is
+# enough. Measured by round 2 of PR #158's review after the merge across the
+# split, for the two hooks, and fixed in all three copies at once. lstrip=2
+# strips `refs/remotes/` and cannot be ambiguous.
+#
+# report-stale-branches.sh and, since #144, no-pr-decisions.sh derive the same
+# branch from the same two lines and do not re-argue any of this: one argument,
+# for the three copies. Why a copy is preferred to a shared helper, and what
+# holds the three copies equal, is in the check suite at the arming section,
+# which since the split (#204) stands in checks/unsplit.sh.
 #
 # When no such ref exists -- a fresh clone, or the rotation window after the
 # merged dev-NN is deleted and its successor is not yet pushed -- the guard
@@ -270,7 +281,7 @@ CURRENT=$(git branch --show-current 2>/dev/null)
 # are both load-bearing. The next two lines stand verbatim in
 # no-pr-decisions.sh and in report-stale-branches.sh as well:
 # check-hooks.sh holds the three equal, so a change here is a change there.
-DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
+DEV=$(git for-each-ref --format='%(refname:lstrip=2)' 'refs/remotes/origin/dev-*' 2>/dev/null \
       | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
 
 TRACK=$(git for-each-ref --format='%(upstream:track)' "refs/heads/$CURRENT" 2>/dev/null)

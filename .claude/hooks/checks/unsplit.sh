@@ -5874,7 +5874,7 @@ unarmed 'the report deletes nothing on the remote' \
 # #144's third copy joined the arrangement rather than changing it, and carries
 # the three checks the other two do.
 DEV_DERIVATION=$(cat <<'DERIVATION'
-DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
+DEV=$(git for-each-ref --format='%(refname:lstrip=2)' 'refs/remotes/origin/dev-*' 2>/dev/null \
       | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
 DERIVATION
 )
@@ -11681,7 +11681,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '95' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '99' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11807,7 +11807,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '93' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '97' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
@@ -12306,32 +12306,8 @@ git -C "$ENV_NO_ORIGIN" $GE commit -q --allow-empty -m base
 # against dev-05 it is level and clear. A refusal there is evidence that the
 # HIGHEST was taken, and the message names which. A fixture with both refs at the
 # tip would refuse whichever was chosen and would be evidence about neither.
-env_lifecycle() {  # env_lifecycle <dir> <ref at base>... -- with <ref at tip> last
-  local dir="$1" base tip r
-  git init -q -b main "$dir"
-  git -C "$dir" remote add origin "$FIXTURES/unreachable-remote.git"
-  git -C "$dir" $GE commit -q --allow-empty -m base
-  base=$(git -C "$dir" rev-parse HEAD)
-  git -C "$dir" $GE commit -q --allow-empty -m advance
-  tip=$(git -C "$dir" rev-parse HEAD)
-  shift
-  for r in "$@"; do
-    case "$r" in
-      *:tip) git -C "$dir" update-ref "refs/remotes/origin/${r%:tip}" "$tip" ;;
-      *) git -C "$dir" update-ref "refs/remotes/origin/${r%:base}" "$base" ;;
-    esac
-  done
-  # ahead == 0, behind == 1 against any ref at the tip: the fallback detector's case.
-  git -C "$dir" branch stale-branch "$base"
-  git -C "$dir" worktree add -q "$dir/wt-stale" stale-branch
-  # upstream configured, remote-tracking ref absent: the gone detector's case,
-  # placed at the tip so the fallback cannot fire here and a refusal is the gone
-  # detector's alone.
-  git -C "$dir" branch gone-branch "$tip"
-  git -C "$dir" config -f "$dir/.git/config" branch.gone-branch.remote origin
-  git -C "$dir" config -f "$dir/.git/config" branch.gone-branch.merge refs/heads/gone-branch
-  git -C "$dir" worktree add -q "$dir/wt-gone" gone-branch
-}
+# env_lifecycle, which builds each of them, is in the library since the #144
+# issue file built a third with it.
 ENV_DEV_NONE="$ENV_REPOS/no-dev-ref"
 ENV_DEV_TWO="$ENV_REPOS/two-dev-refs"
 env_lifecycle "$ENV_DEV_NONE"
@@ -13694,8 +13670,7 @@ tok 'no-git-push.sh defines these functions, and this is which of them writes a 
 check_push writes
 names_this_branch silent' "$(fn_writes "$HOOKS/no-git-push.sh")"
 tok 'no-pr-decisions.sh defines these, and none of them writes one' \
-    'api_bad_base silent
-base_args silent
+    'base_args silent
 bases_all_proposable silent
 endpoint_args silent
 endpoint_seen silent

@@ -85,7 +85,10 @@
 # again. Round 1 of the review after the merge across the split measured that,
 # and it was reproduced before this line changed. The permitting half has no
 # refusal to say it in: a stale session's `--base dev-05` is permitted without a
-# word, which is #238's. It did not until the second review of
+# word, which is #238's. And the fetch has to be a command of its own: this hook
+# reads the refs before anything on the line runs, so `git fetch --prune && gh
+# pr create --base dev-06` is refused exactly as the create alone was. Round 2
+# of the same review measured that, and the refusal says it. It did not until the second review of
 # PR #158, and the cost of that was the whole of the defect: the one remedy an
 # agent could read off "this names dev-06, which is not dev-05, the active dev
 # branch here" was to retarget to dev-05, which this hook then permits, landing
@@ -526,7 +529,7 @@ read_active_dev() {
 # exactly that reason: the three are compared as strings, and an indented copy is
 # a different string.
 # check-hooks.sh holds the three equal, so a change here is a change there.
-DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
+DEV=$(git for-each-ref --format='%(refname:lstrip=2)' 'refs/remotes/origin/dev-*' 2>/dev/null \
       | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
   ACTIVE_DEV=${DEV#origin/}
 }
@@ -554,7 +557,7 @@ may_propose_into() {
   [ -n "$ACTIVE_DEV" ] || return 0
   if [ "$1" != "$ACTIVE_DEV" ]; then
     BAD_BASE_WHY="is not $ACTIVE_DEV, the active dev branch here"
-    BAD_BASE_FETCH=' If the dev branch has rotated since this session last fetched, run git fetch --prune and try again.'
+    BAD_BASE_FETCH=' If the dev branch has rotated since this session last fetched, run git fetch --prune on its own, then run this again: the refs are read before anything on this line runs.'
     return 1
   fi
   return 0
@@ -594,15 +597,18 @@ gh_api_is_write() {
 
 # Refuse unless every base in a newline-separated list is one a pull request may
 # be proposed into. The offending one is left in BAD_BASE for the caller's
-# message and why it offends in BAD_BASE_WHY, which is seeded here so that a
-# caller reaching its message with no base to name -- the unreadable REST field,
-# which fails the shape test -- still prints a true clause. An empty list is no
+# message, and why it offends in BAD_BASE_WHY and BAD_BASE_FETCH, which
+# may_propose_into sets on every path that refuses -- the unreadable REST field
+# included, an empty base failing the shape test. Nothing is seeded here: this
+# function refuses only through that one, so a seed would be overwritten on
+# every path that reads it. Two seeds stood here, and round 2 of PR #158's
+# review after the merge across the split measured them dead: removing either
+# changed no message, since each covered for the other and for
+# may_propose_into, and nothing in the suite could say so. An empty list is no
 # bases, which is a different question and the caller's to ask.
 bases_all_proposable() {
   local B
   BAD_BASE=
-  BAD_BASE_WHY='is not a dev-NN branch'
-  BAD_BASE_FETCH=
   [ -n "$1" ] || return 0
   while IFS= read -r B; do
     if ! may_propose_into "$B"; then BAD_BASE=$B; return 1; fi
@@ -1520,8 +1526,6 @@ CMDLIST
 # and the endpoint rules give it for the other three.
 API_WRITE=
 API_BAD_BASE=
-API_BAD_BASE_WHY=
-API_BAD_BASE_FETCH=
 API_NO_BASE=
 API_MERGE_REVIEWS=
 API_STATE=
@@ -1529,16 +1533,6 @@ API_RELEASE=
 API_MUTATION=
 API_GRAPHQL=
 API_NO_ENDPOINT=
-# The offending base and why it offends are taken together, because BAD_BASE_WHY
-# belongs to the last bases_all_proposable call and this block makes two of them: a
-# REST base refused in the loop, then a graphql list that passes, left the base
-# named in one variable and the reason reset in the other. Last failure wins, as
-# API_BAD_BASE already did.
-api_bad_base() {
-  API_BAD_BASE=${BAD_BASE:-nothing readable}
-  API_BAD_BASE_WHY=$BAD_BASE_WHY
-  API_BAD_BASE_FETCH=$BAD_BASE_FETCH
-}
 while IFS= read -r CMD; do
   API_ARGS=$(cs_gh_args api <<<"$CMD") || continue
   # Short-circuited where there is no quote to read; see endpoint_args, which
@@ -1622,7 +1616,7 @@ while IFS= read -r CMD; do
   fi
   CMD_BASES=$(rest_bases "$CMD")
   if [ -n "$CMD_BASES" ]; then
-    bases_all_proposable "$CMD_BASES" || api_bad_base
+    bases_all_proposable "$CMD_BASES" || API_BAD_BASE=${BAD_BASE:-nothing readable}
   # The collection endpoint is where a pull request is made; /pulls/N is one
   # that already exists and is not asked for a base it already has.
   elif printf '%s\n' "$ENDPOINT" | grep -qE '/pulls([^/A-Za-z0-9_-]|$)'; then
@@ -1695,7 +1689,7 @@ if [ -n "$API_WRITE" ]; then
     # into API_BAD_BASE, which is where the loop already left it.
     GQL_BASES=$(gql_bases "$SCAN")
     if [ -n "$GQL_BASES" ]; then
-      bases_all_proposable "$GQL_BASES" || api_bad_base
+      bases_all_proposable "$GQL_BASES" || API_BAD_BASE=${BAD_BASE:-nothing readable}
     elif echo "$SCAN" | grep -q 'createPullRequest'; then
       API_NO_BASE=1
     fi
@@ -1743,7 +1737,14 @@ if [ -n "$API_WRITE" ]; then
     exit 2
   fi
   if [ -n "$API_BAD_BASE" ]; then
-    echo "$BASE This names $API_BAD_BASE, which $API_BAD_BASE_WHY; reaching it through gh api makes it the same destination under another spelling.$API_BAD_BASE_FETCH" >&2
+    # BAD_BASE_WHY and BAD_BASE_FETCH are read here, after every base on the line
+    # has been judged, and are the last refusal's: only may_propose_into writes
+    # them, and only when it refuses. The base's own name is taken at the
+    # refusal, into API_BAD_BASE, because bases_all_proposable clears BAD_BASE
+    # on every call. A REST base refused and a graphql base that passes after it
+    # is the row that holds this, and it went red when a seed that reset the
+    # reason stood at the head of bases_all_proposable.
+    echo "$BASE This names $API_BAD_BASE, which $BAD_BASE_WHY; reaching it through gh api makes it the same destination under another spelling.$BAD_BASE_FETCH" >&2
     exit 2
   fi
   if [ -n "$API_NO_BASE" ]; then

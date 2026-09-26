@@ -493,6 +493,36 @@ env_feed() {  # env_feed <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <lab
   ran "$script" "$rc"
   verdict "$want" "$rc" "$err" "$label"
 }
+# A lifecycle repository for the #108 dev-ref fixtures: a stale worktree branch
+# at base and a merged one whose upstream is gone, under the origin/dev-NN refs
+# given, each at base or at the tip. The unsplit file's #108 section says why
+# the refs are placed so; here since #144's issue file built a fixture with it.
+env_lifecycle() {  # env_lifecycle <dir> <ref at base>... -- with <ref at tip> last
+  local dir="$1" base tip r
+  git init -q -b main "$dir"
+  git -C "$dir" remote add origin "$FIXTURES/unreachable-remote.git"
+  git -C "$dir" $GE commit -q --allow-empty -m base
+  base=$(git -C "$dir" rev-parse HEAD)
+  git -C "$dir" $GE commit -q --allow-empty -m advance
+  tip=$(git -C "$dir" rev-parse HEAD)
+  shift
+  for r in "$@"; do
+    case "$r" in
+      *:tip) git -C "$dir" update-ref "refs/remotes/origin/${r%:tip}" "$tip" ;;
+      *) git -C "$dir" update-ref "refs/remotes/origin/${r%:base}" "$base" ;;
+    esac
+  done
+  # ahead == 0, behind == 1 against any ref at the tip: the fallback detector's case.
+  git -C "$dir" branch stale-branch "$base"
+  git -C "$dir" worktree add -q "$dir/wt-stale" stale-branch
+  # upstream configured, remote-tracking ref absent: the gone detector's case,
+  # placed at the tip so the fallback cannot fire here and a refusal is the gone
+  # detector's alone.
+  git -C "$dir" branch gone-branch "$tip"
+  git -C "$dir" config -f "$dir/.git/config" branch.gone-branch.remote origin
+  git -C "$dir" config -f "$dir/.git/config" branch.gone-branch.merge refs/heads/gone-branch
+  git -C "$dir" worktree add -q "$dir/wt-gone" gone-branch
+}
 # Here since #144's issue file became its second caller, beside the one it
 # delegates to; a command where env_feed takes raw stdin.
 env_cmd() {  # env_cmd <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <command>

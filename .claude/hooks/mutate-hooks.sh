@@ -727,8 +727,12 @@ base-lookup-refuses-when-it-cannot-read%no-pr-decisions.sh%/^may_propose_into()/
 report-omits-the-base-hook-where-no-ref-is-read%report-stale-branches.sh%/no-pr-decisions.sh accepts any dev-NN base/d%GH-144.8%caught
 report-omits-the-skipped-fetch-clause%report-stale-branches.sh%/staleness detector in no-work-on-stale-branch.sh is armed, and/,+1{/no-pr-decisions.sh accepts any dev-NN base/d}%GH-144.8%caught
 report-omits-the-base-hook-on-a-failed-fetch%report-stale-branches.sh%/request's base against whatever branch those refs still call active/d%GH-144.8%caught
-base-refusal-drops-the-fetch-remedy%no-pr-decisions.sh%s/ If the dev branch has rotated since this session last fetched, run git fetch --prune and try again\.//%GH-144.7%caught
+base-refusal-drops-the-fetch-remedy%no-pr-decisions.sh%s/ If the dev branch has rotated since this session last fetched, run git fetch --prune on its own, then run this again: the refs are read before anything on this line runs\.//%GH-144.7%caught
 base-lookup-read-once-per-base%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/\[ -z "$ACTIVE_DEV_READ" \] || return 0/:/%GH-144.5%caught
+base-lookup-reads-the-short-name%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/refname:lstrip=2/refname:short/%GH-144.1%caught
+dev-branch-read-by-short-name%no-work-on-stale-branch.sh%s/refname:lstrip=2)' 'refs/refname:short)' 'refs/%GH-108.5%caught
+base-remedy-offered-to-main%no-pr-decisions.sh%/^may_propose_into()/,/^}/{/^    BAD_BASE_FETCH=$/d}%GH-144.7%caught
+base-reason-reset-by-a-passing-base%no-pr-decisions.sh%/^bases_all_proposable()/,/^}/s/^  BAD_BASE=$/  BAD_BASE=\n  BAD_BASE_WHY='is not a dev-NN branch'\n  BAD_BASE_FETCH=/%GH-144.3 GH-144.7%caught
 tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 and (.[0].tool_name == "Bash") and/%GH-108.1%caught
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught
