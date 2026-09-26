@@ -248,7 +248,9 @@ requirement GH-144.6 <<'REQ'
   moves the command and not the hook, so the sentence named the wrong directory in
   the one case where the two differ. The verdicts were right and only the account
   of them was wrong, which is why the correction is a wording change and two more
-  rows rather than a fix.
+  rows rather than a fix. `CLAUDE.md` lists it as the eighth consequence left
+  open, since round 5 of the review after the merge across the split: the first
+  there that comes from reading refs rather than a command's text.
 REQ
 requirement GH-144.7 <<'REQ'
 - text: A refusal for the branch question also names the read its verdict rests

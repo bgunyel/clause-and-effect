@@ -355,7 +355,7 @@ active dev branch — which the SessionStart report reads every session, as its
 `main ancestry` line, and argues beside that read.
 
 **Deliberately left open.** These stop mistakes, not adversaries: they read the
-text of a command, so a caller that means to evade them can. Seven consequences
+text of a command, so a caller that means to evade them can. Eight consequences
 are accepted rather than fixed, and they are numbered because the count is the
 part that went stale last time.
 
@@ -475,6 +475,20 @@ part that went stale last time.
    no command position and is untouched. What changed is that a separator or a
    `)` inside the quotes now makes one, and reading whether those quotes are
    prose is the thing a raw-text rule cannot do.
+
+8. **A pull request into another repository is judged against this
+   repository's active dev branch.** Since #144, `no-pr-decisions.sh` reads
+   the refs of the directory its process runs in, which is the session's, and
+   nothing on the command line moves that: `-R other/repo`, `--repo`,
+   `GH_REPO=` and an earlier `cd` all reach the same read. So
+   `gh pr create -R other/repo --base dev-04`, permitted before #144, is
+   refused naming this repository's active branch, and no base both passes
+   here and names the other repository's real one. The way through is `--web`
+   with no base, where a person picks it. This is the one consequence here that
+   comes from reading refs rather than the text of a command. It is left open
+   under the stopping rule, because opening a pull request into another
+   repository is not a shape an agent working here writes by accident.
+   GH-144.6 pins it as verdicts.
 
 ## Agent skills
 

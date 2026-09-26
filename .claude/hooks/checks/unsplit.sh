@@ -6663,6 +6663,7 @@ CLAIMED_WORD=$(printf '%s\n' "$LEFT_OPEN" \
 case "$CLAIMED_WORD" in
   Two) CLAIMED=2 ;;  Three) CLAIMED=3 ;;  Four) CLAIMED=4 ;;
   Five) CLAIMED=5 ;; Six) CLAIMED=6 ;;    Seven) CLAIMED=7 ;;
+  Eight) CLAIMED=8 ;; Nine) CLAIMED=9 ;;  Ten) CLAIMED=10 ;;
   *) CLAIMED="no count read from the list head" ;;
 esac
 # Top-level items only: the second consequence carries an indented continuation
