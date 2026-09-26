@@ -161,26 +161,57 @@ because a defect there corrupts every measurement taken on it. `.claude/hooks/`
 is neither: a defect there corrupts no measurement, and it can permit an act
 that closes every open pull request. Its evidence is the check suite —
 `bash .claude/hooks/check-hooks.sh` — and no fix lands without a check that
-fails without the fix. That fix also appends its issue's `GH-<n>` entry to
-`.claude/hooks/requirements.md` and tags the check with it, so the suite's
-coverage check can see the requirement it establishes. The shared tokeniser
-alone has had nine defects found by review rather than by the suite: five in one
-round on PR #35, three in a second, one in a third — and two of those five
-arrived with the fixes to the previous two. Every one was silent and in the
-permitting direction, and the suite was green before each round. A check suite
-is evidence about the cases it names and about nothing else.
+fails without the fix. That fix also declares its issue's `GH-<n>` entry in
+its issue file, beside the check it tags, and pins its shape there with
+`shape_pin`, and its `variants` keyword with `variants_pin` when the entry is
+in the invariance families' scope; `bash .claude/hooks/generate-requirements.sh`
+writes the entry's file,
+`.claude/hooks/requirements/GH-<n>.md`, from the declaration, so the suite's
+coverage check can see the requirement it establishes; the entries written
+before that (#205) stay hand-written files, and the `US-`/`FR-` boundary stays
+in `.claude/hooks/requirements.md` (#200). The shared
+tokeniser alone has had nine defects found by review rather than by the suite:
+five in one round on PR #35, three in a second, one in a third — and two of
+those five arrived with the fixes to the previous two. Every one was silent and
+in the permitting direction, and the suite was green before each round. A check
+suite is evidence about the cases it names and about nothing else.
+
+`check-hooks.sh` is the suite's driver, and the command you run; the checks
+themselves are in the files under `.claude/hooks/checks/` that it sources. A new
+issue's checks go in an **issue file** of their own, `checks/GH-<n>.sh`, and the
+driver's header states the conventions for adding and moving them
+(`docs/adr/0004-check-suite-split-by-issue.md` says why). Where this file says
+`check-hooks.sh` does something, it means the suite.
 
 Whether those checks can fail is a second question, and `bash
 .claude/hooks/mutate-hooks.sh` is where it is asked (#107). It breaks one
 registered rule at a time in a copy of `.claude/hooks/` — never in this one — and
 a mutation counts as caught only when every requirement ID the registry names for
-it has a failing check. Two minutes a row and hours for the registry, so nothing
-runs it for you; two of its rows are self-tests, one whose edit matches nothing
-and one registered against a requirement its edit cannot reach, because an edit
-that silently fails to apply reads exactly like evidence and is none. What the
-registry covers is `--list`'s last line and is written down nowhere else: a row
-per rule, not per requirement, so a requirement with a row is one some mutation
-reaches rather than one whose every check has been exercised.
+it has a failing check. Slow enough that nothing runs it for you, and `--list`
+says how slow at the size the registry is now: it multiplies a measured rate by
+the runs a pass needs, so the figure follows the registry instead of standing
+still while it grows (#148). The *rate* is a measurement and not a derivation —
+it goes stale as the suite grows, which it did, by more than a factor of two in
+three days — so it is dated, and a check goes red once the suite has outgrown
+it. Two of its rows are self-tests, one whose edit matches nothing and one
+registered against a requirement its edit cannot reach, because an edit that
+silently fails to apply reads exactly like evidence and is none — and their
+number is pinned as a literal, so a third cannot be registered without a check
+going red.
+
+Every *count* about that registry is derived by `--list`: the rows, the files
+they touch, the requirement IDs they name, how many requirements are active, and
+the runs a whole pass costs. What it costs in wall-clock is that last count times
+a rate, and the rate is the one number here nothing can derive. What the registry
+covers is there too — a row per rule, not per requirement, so a requirement with
+a row is one some mutation reaches rather than one whose every check has been
+exercised. Several of those numbers are *also* written as literals in the
+check suite, and that duplication is deliberate rather than a lapse: a
+literal in a check earns its maintenance, because adding a row turns it red and
+somebody has to look at it. A number in a comment earns nothing, because nothing
+reads it and nothing turns red when it rots — which is why the harness's header
+now states none, and why the one magnitude it kept had gone wrong by a factor of
+two before anybody noticed.
 
 Issue #84 is the same shape one level out, and it is the reason that last
 sentence is worth re-reading. The defect was not in the tokeniser but in the
@@ -199,7 +230,7 @@ it needs the same guard one level up. It deliberately does **not** count its
 consumers, and #69 is why. That issue rebuilt the two convention hooks on the
 tokeniser in the same week and hit the identical trap from the other end,
 requiring `cs_split` and not `cs_normalise` — so the count was four when #84
-was filed and six when it landed. `check-hooks.sh` derives the list off the
+was filed and six when it landed. The check suite derives the list off the
 files instead, and derives each consumer's call set against its required set: a
 fixture per consumer per function says the guards are right today, and only the
 derivation survives the next `cs_*` added to one of them.

@@ -6,23 +6,35 @@ permanent ID, so that "is this requirement verified?" is answered by
 The decisions behind this file are #103's, taken in a grilling session on
 2026-09-13, and their question numbers (Q2, Q6 …) are cited below. #104 built it.
 
-`check-hooks.sh` reads this file. Every check there carries the IDs it
-establishes, and the suite fails when an active requirement here has no check
-that covers it. It is next to the suite and outside the `docs/` taxonomy on
-purpose (Q6): it is an input to the checks, not documentation of them.
+`check-hooks.sh` reads this file and the `requirements/` directory beside it,
+which holds the `GH-` entries one file each (#200). Every check there carries
+the IDs it establishes, and the suite fails when an active requirement here or
+there has no check that covers it. Both are next to the suite and outside the
+`docs/` taxonomy on purpose (Q6): they are an input to the checks, not
+documentation of them.
+
+`check-hooks.sh` is the suite's driver: the checks themselves are in the files
+under `checks/` that it sources (#204), and where this file says
+`check-hooks.sh` holds, cites or checks something, it means the suite.
 
 ## The rules this file keeps
 
 **IDs are never renumbered and never reused.** A requirement that stops being
-true is marked, never deleted: its `status` says what became of it. A new
-requirement is appended at the end of its family. So an ID cited in an issue, a
-commit or a check means the same thing for as long as this repository exists.
+true is marked, never deleted: its `status` says what became of it. The suite
+holds that for the `GH-` entries written before #205, and not yet for a
+generated one (#223). A new `US-`
+or `FR-` requirement is appended at the end of its family; a new `GH-` one is a
+new file, `requirements/<ID>.md`, generated from its declaration (below). So an
+ID cited in an issue, a commit or a check means the same thing for as long as
+this repository exists.
 
-**A pull request that fixes a hook defect appends its `GH-<n>` entry** and tags
-the check that fails without the fix (Q16). A pull request carries no ID of its
-own; its issue does. This is what keeps the matrix whole after #103's work ends,
-and the suite holds half of it: every `#<n>` cited in `check-hooks.sh` must have
-an entry here, or be listed under *Citations that are not requirements* with a
+**A pull request that fixes a hook defect adds its `GH-<n>` entry**, declared
+in its issue file and written to a file of its own under `requirements/` by
+`generate-requirements.sh`, and tags the check that fails without the fix
+(Q16). A pull request carries no ID of its own; its issue does. This is what
+keeps the matrix whole after #103's work ends, and the suite holds half of it:
+every `#<n>` cited in `check-hooks.sh` must have an entry, here or under
+`requirements/`, or be listed under *Citations that are not requirements* with a
 reason.
 
 **A behavioural `GH-` entry says what #106's invariance families do with it**,
@@ -32,7 +44,7 @@ ever be asked of, so leaving the choice unstated made it "whatever the
 specification happened to state as an FR in 2026-09", which has no particular
 relation to where the defects have been. *What the invariance families seed*
 below defines the scope and the three values, and the foot of #106's section in
-`check-hooks.sh` holds the seed table and the transformation list to them.
+`checks/unsplit.sh` holds the seed table and the transformation list to them.
 
 ## The families
 
@@ -42,7 +54,44 @@ below defines the scope and the three values, and the foot of #106's section in
   and its Amendments, one per behaviour that can be tested on its own.
 - `GH-<n>` and `GH-<n>.<m>`: the issues after #36 that change what a hook decides
   or what the suite pins (Q7, Q13). A sub-ID is used when one issue names more
-  than one behaviour that can fail independently (Q14).
+  than one behaviour that can fail independently (Q14). The grammar is
+  `GH-[1-9][0-9]*` with an optional `.[1-9][0-9]*`, and a bare ID may stand
+  beside its own sub-IDs. A loop mints IDs only under its own issue's number, so
+  two loops should never mint the same one; if two do, it is an add/add conflict
+  on one path, which git stops on.
+
+**Where a `GH-` entry lives (#200).** Not in this file. Each is
+`requirements/<ID>.md` beside it, holding that entry's `### <ID>` block and
+nothing else, because the `GH-` family is a ledger appended to by every review
+loop, and while it was a section here every pair of concurrent branches
+conflicted on it. A ledger entry has a unique name, so adding one is adding a
+file, which git merges without a decision; `US-` and `FR-` stay here, where a
+conflict means two authors redefined the boundary and a person should look. The
+files are read in version order on the ID -- what `sort -V` gives, a bare
+`GH-<n>` before its `GH-<n>.1` and `GH-108.10` after `GH-108.9` -- and that is
+the order `--matrix` presents them in. `split-requirements.sh` moves any `GH-`
+entry found in this file into its own, and refuses to overwrite a file that
+holds something else; an entry it moves that is not in the legacy set (below)
+is red all the same, because an entry written after #205 is declared rather
+than written.
+
+**A `GH-` entry written after #205 is declared, and its file is generated.**
+The issue file whose checks establish it, `checks/GH-<n>.sh`, declares it with
+a heredoc at the start of a line, `requirement <ID> <<'REQ'`, whose body is the
+entry's fields in the grammar below; `bash .claude/hooks/generate-requirements.sh`
+writes `requirements/<ID>.md` from it -- the heading, the body byte for byte,
+and a last field, `generated`, naming the issue file -- and a file carrying
+that field is never edited by hand. The same issue file pins the entry's shape
+with `shape_pin`, and its `variants` keyword with `variants_pin` when it has
+one, in the tokens `REQUIREMENT_SHAPE` and `INV_SCOPE` use; those two literals
+hold the entries written before #205 and no others. Those entries -- the
+legacy set, which the driver holds as `REQUIREMENTS_LEGACY` and which never
+grows -- stay hand-written: none is rewritten, migrated or declared, and an
+entry outside it that is not its declaration is red. The residue this leaves
+with no check site is not a list of its own: a `gap` or `seam: none` entry is
+declared in the issue file of the work that wrote it, like any other, with no
+check tagged. Why this form and what was rejected is
+`docs/adr/0005-generated-requirement-entries.md`.
 
 #37–#41 get no IDs of their own, because their content is the FRs (Q12). Their
 acceptance criteria are quoted at the foot of this file, each mapped to the IDs
@@ -76,6 +125,8 @@ field, a value continuing onto lines indented by two spaces.
   `seed`, `transformation: <name> …` and `none: <reason>`. See *What the
   invariance families seed* (#141).
 - `note`: anything a reader of the entry needs that is not one of the above.
+- `generated`: the issue file an entry is declared in, written last by
+  `generate-requirements.sh` and on no hand-written entry (#205).
 
 ## What covers a requirement
 
@@ -107,14 +158,21 @@ A requirement with `seam: none` needs no check, and has none tagged with it; its
 The suite fails on each of these, and `--matrix` shows the rest:
 
 - an `active` requirement that is not covered;
-- a check with no tags, or a tag naming an ID not in this file;
+- a check with no tags, or a tag naming an ID that neither this file nor
+  `requirements/` holds;
 - an entry that is malformed: an ID out of family, one used twice, one under a
   `##` heading that holds no entries, a missing field, an unknown status or kind,
   a `superseded-by` naming no entry, a `direction` with no reason, `seam: none`
   with a `verify` that does not resolve, and `seam: none` with checks tagged with
   it after all;
+- a `GH-` entry out of place: one left in this file, a file under
+  `requirements/` whose name is not the ID it holds, one holding a second entry
+  or none, one with text before its heading, a `##` heading in it, or a line
+  after its heading that is no field of the entry, an ID there outside the
+  `GH-` grammar, and a name there that is not a regular file;
 - a check recording a direction other than refuse, permit and static;
-- a shape other than the one the suite holds as a literal: every entry by ID,
+- a shape other than the one the suite holds as a literal -- `REQUIREMENT_SHAPE`
+  and the shape pins of the issue files (#205): every entry by ID,
   with whatever takes it off the both-directions rule beside it -- a status
   other than `active`, a declared `direction`, and `seam: none` with the kind of
   its `verify`. Those are everything the coverage check reads off an entry, so
@@ -847,1923 +905,9 @@ and held to the same standard of saying only what it asks.
 
 ## Boundary issues
 
-### GH-43.1
-- text: `no-commit-to-main.sh` does not read text as a command: a heredoc body or a
-  quoted string naming a commit or a push to main is permitted.
-- from: #43
-- kind: defect-refusing
-- status: active
-- variants: seed
-
-### GH-43.2
-- text: `no-commit-to-main.sh` refuses a command that changes where git runs or
-  which branch is checked out before a commit or push (`cd`, `GIT_DIR=`, `-C`,
-  `--git-dir`, `checkout main`, `switch main`), because it reads the branch where
-  the hook runs.
-- from: #43
-- kind: defect-permitting
-- status: active
-- variants: transformation: global-flag
-
-### GH-43.3
-- text: `no-commit-to-main.sh` refuses a shell wrapper around a commit or a push,
-  consistent with its two siblings.
-- from: #43
-- kind: defect-permitting
-- status: active
-- variants: seed
-
-### GH-43.4
-- text: `no-commit-to-main.sh` refuses a push that reaches main without naming it:
-  `--all`, `--mirror`, configuration set inline, and `HEAD` or `@` while on main.
-  A push of a dev branch is none of its business.
-- from: #43, and the review of its migration
-- kind: defect-permitting
-- status: active
-- variants: seed
-
-### GH-43.5
-- text: `no-commit-to-main.sh`'s refusals still name main and say which rule fired.
-- from: #43
-- kind: doc-claim
-- status: active
-- direction: refuse-only: a message is written only on a refusal
-
-### GH-43.6
-- text: A prefix word with an operand (`timeout 30`), a prefix word the list lacked
-  (`sudo`, `doas`, `setsid`, `chronic`), a prefix word's separated option value,
-  and git's directory options in their separated spelling do not hide a command,
-  in any hook.
-- from: #43, the review of its migration and of PR #49
-- kind: defect-permitting
-- status: active
-- variants: transformation: pre-sudo pre-env pre-command pre-nohup pre-time
-  pre-timeout pre-nice-opt global-flag global-flag-gitdir
-
-### GH-44.1
-- text: On a worktree branch whose upstream is gone, a commit, cherry-pick, revert,
-  am, merge and rebase are refused, with a message naming the merge.
-- from: #44
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is which git operations a worktree whose upstream
-  is gone refuses, not how one of them is spelled
-
-### GH-44.2
-- text: On a worktree branch with nothing of its own that the active dev branch has
-  moved past (ahead 0, behind more than 0), the same commands are refused, with a
-  message about state and not about a merge.
-- from: #44
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is which operations the ahead-0, behind-n state
-  refuses and which message names it, not how one of them is spelled
-
-### GH-44.3
-- text: Under the fallback detector, a merge or rebase naming the active dev branch
-  is permitted, being a fast-forward, and one naming anything else, naming
-  nothing, forced to commit, or preceded by a move of directory or branch, is
-  refused. Under `upstream: gone` both are refused.
-- from: #44
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is which ref a merge or rebase names, and a
-  transformation rewrites a command's text rather than replacing an argument
-
-### GH-44.4
-- text: A mid-operation continuation (`rebase --continue`, `merge --abort`,
-  `cherry-pick --skip`) is permitted in a refused state, and a continuation flag
-  anywhere but in that position, a commit message included, is not.
-- from: #44
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is where a continuation flag stands among the
-  arguments, and no transformation moves one
-
-### GH-44.5
-- text: The guard keys on the linked worktree: a fresh branch at the dev tip and a
-  branch carrying work are permitted, and so is the main checkout at the same
-  commit as a stale branch.
-- from: #44
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is which checkout the guard keys on, which is a
-  state of the tree rather than a spelling
-
-### GH-44.6
-- text: The fallback abstains when no `refs/remotes/origin/dev-*` exists or the
-  ancestry cannot be read, and `upstream: gone` still refuses then.
-- from: #44
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is which refs the fallback finds, which is a state
-  of the tree rather than a spelling
-
-### GH-44.7
-- text: A SessionStart hook runs `report-stale-branches.sh`, which fetches with an
-  explicit prune, is bounded and fails open, reports, and removes nothing.
-- from: #44
-- kind: defect-permitting
-- status: active
-- direction: static: arming properties, asserted as literals (FR-40)
-
-### GH-47.1
-- text: A flag written before the group or before the subcommand (`-R`, `--repo`,
-  `--hostname`) evades no `gh` rule, and does not make an ordinary subcommand a
-  decision.
-- from: #47, and the review of 02a14d8 that preceded it
-- kind: defect-permitting
-- status: active
-- variants: transformation: global-flag
-
-### GH-47.2
-- text: Every `gh` command on the line is judged, not only the first: `cs_gh_args`
-  answers about the first match, so the rules loop per command.
-- from: #47
-- kind: defect-permitting
-- status: active
-- direction: refuse-only: what is asserted is that a second command is reached,
-  which only a refusal can show
-- variants: transformation: before-semi before-and before-or before-pipe
-  before-newline
-
-### GH-50.1
-- text: A redirection is not an argument. An otherwise permitted push wearing one is
-  permitted, in every spelling of the operator, and a refused push wearing one is
-  still refused.
-- from: #50
-- kind: defect-refusing
-- status: active
-- variants: transformation: redirect-null redirect-dup
-
-### GH-50.2
-- text: Dropping redirections hides nothing: a process substitution and a command
-  substitution used as a target keep their command, and a redirect inside quotes
-  is text.
-- from: #50
-- kind: defect-permitting
-- status: active
-- direction: refuse-only: a drop can only hide a command, and what it must not
-  hide is a refusal
-- variants: none: its subject is what dropping a redirection must not hide,
-  which needs a substitution or a quoted operator written into the command
-  rather than a rewriting of a seed
-
-### GH-50.3
-- text: A quoted redirect target is left in the arguments, so a push wearing one is
-  refused; the same target unquoted is permitted. Taken knowingly, as a shortfall
-  against #50.
-- from: #50
-- kind: defect-refusing
-- status: active
-- variants: transformation: redirect-quoted
-
-### GH-51.1
-- text: A wrapped `gh pr`, `gh release` or `gh api` is refused whatever stands
-  between `gh` and the group, a flag or a line continuation included.
-- from: #51, and its review
-- kind: defect-permitting
-- status: active
-- variants: seed
-
-### GH-51.2
-- text: The verb is not read inside a wrapper: a wrapped read is refused with the
-  writes, the refusal reaches an unwrapped `gh` command sharing the line in either
-  order, and a wrapper named only in passing reaches nothing.
-- from: #51
-- kind: defect-refusing
-- status: active
-- variants: seed
-
-### GH-58.1
-- text: The catch-up merge or rebase must name the commit the ancestry was read
-  against: a local `dev-NN` that has diverged, is behind, or does not exist is
-  refused in its short and `refs/heads/` spellings, and the remote spelling is
-  permitted.
-- from: #58
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is which commit the catch-up merge names, and a
-  transformation rewrites a command's text rather than replacing an argument
-
-### GH-58.2
-- text: An unresolvable dev tip withdraws the carve-out rather than widening it.
-- from: #58
-- kind: defect-permitting
-- status: active
-- direction: static: no running hook reaches that line, because the ancestry read
-  fails first and the guard abstains, so the line is pinned as text; the
-  abstention beside it is GH-44.6's verdict
-
-### GH-61
-- text: `docs/research/` is named in CLAUDE.md's documentation table, and stays
-  outside the append-only guard.
-- from: #61
-- kind: doc-claim
-- status: active
-- seam: none
-- verify: tests/test_docs_directory_naming.py
-- note: in the shape #103 Q30 gave it. The checks that `docs/research/` stays
-  writable carry GH-69.2 and GH-69.3, whose rules they exercise; tagged GH-61 as
-  well, they would contradict its `seam: none`
-
-### GH-62
-- text: The two derivations of the active dev branch, in the guard and in the
-  report, are each pinned whole and held equal to each other, and their
-  rationale is argued once.
-- from: #62
-- kind: defect-permitting
-- status: active
-- direction: static: a property of two files' text
-
-### GH-63
-- text: CLAUDE.md's boundary paragraph names every hook `settings.json` registers
-  for the boundary, and names none that is not registered or not on disk.
-- from: #63
-- kind: doc-claim
-- status: active
-- direction: static: a document asserted against configuration
-
-### GH-68.1
-- text: A separator inside quotes does not cut a command, so an ordinary `sed` or
-  `grep` naming a push or a commit is permitted.
-- from: #68
-- kind: defect-refusing
-- status: active
-- variants: seed
-
-### GH-68.2
-- text: A closed quote restores the separator, unbalanced quoting falls back to the
-  old splitting, and a substitution inside double quotes still splits out.
-- from: #68
-- kind: defect-refusing
-- status: active
-- variants: none: its subject is the tokeniser's quote state, which needs a
-  command written to probe it rather than a rewriting of a seed
-
-### GH-68.3
-- text: Every wrapper detection reads the raw command text, never the split
-  fragments.
-- from: #68
-- kind: defect-refusing
-- status: active
-- direction: refuse-only: a rule reading fragments would permit a wrapped command,
-  so only refusals can show where it reads
-- variants: none: its subject is which text a wrapper rule reads; the spellings
-  of it are the wrapped seeds' own families
-
-### GH-69.1
-- text: `pytest-via-uv-group.sh` and `alembic-via-uv-group.sh` judge a tool at a
-  command position: a mention in an argument or in prose is permitted, and the
-  tool run bare, behind a runner without the group, or behind a prefix word is
-  refused.
-- from: #69, and its reviews
-- kind: defect-refusing
-- status: active
-- variants: seed
-
-### GH-69.2
-- text: `append-only-docs.sh` guards each append-only directory with or without its
-  trailing slash, in a doubled-slash or dot-segment spelling, and against
-  `truncate` and `tee`.
-- from: #69, and its review
-- kind: defect-permitting
-- status: active
-- variants: seed
-
-### GH-69.3
-- text: `append-only-docs-edit.sh` normalises a path before comparing it, so a
-  leading `./`, a `..` or a doubled slash does not permit an edit of an existing
-  entry.
-- from: #69
-- kind: defect-permitting
-- status: active
-- variants: none: the hook reads a file path out of an Edit or a Write, not a
-  command, so there is no command spelling to vary
-
-### GH-70.1
-- text: CONTEXT.md's *worktree branch* entry says the branch exists for exactly one
-  pull request and that its worktree is not reused.
-- from: #70
-- kind: doc-claim
-- status: active
-- direction: static: a claim about what CONTEXT.md says
-
-### GH-70.2
-- text: The `branch-hygiene` skill holds the sweep both hooks cite: unlock, remove
-  the worktree, delete the branch with `-d` and never `-D`, leave the unclassified
-  alone, and state its cadence.
-- from: #70
-- kind: doc-claim
-- status: active
-- direction: static: a claim about what the skill says
-
-### GH-70.3
-- text: *Reserved act* names removing a worktree or deleting a worktree branch, and
-  the skill cites the enumeration rather than counting it.
-- from: #70
-- kind: doc-claim
-- status: active
-- direction: static: a claim about what CONTEXT.md and the skill say
-
-### GH-71
-- text: The merge settings are read by the report rather than recorded by hand in
-  the guard's header, which was false in both directions in turn.
-- from: #71
-- kind: doc-claim
-- status: active
-- direction: static: FR-41 to FR-44 carry the mechanism
-
-### GH-72
-- text: `gh` is matched as a word in the wrapper rule, not as a suffix: a wrapped
-  command whose prose holds a word ending in `gh` is permitted, and `./gh` and
-  `/usr/bin/gh` are still refused.
-- from: #72
-- kind: defect-refusing
-- status: active
-- variants: seed
-
-### GH-73
-- text: CLAUDE.md's "deliberately left open" list states the wrapper trade as the
-  hooks act on it: wrapped reads are refused, the refusal reaches across the line
-  in either order, the push half and the pull-request half differ, and its head
-  count matches its items.
-- from: #73
-- kind: doc-claim
-- status: active
-
-### GH-79.1
-- text: A wrapper behind a prefix word `cs_split` already strips (`sudo`, `timeout`,
-  `xargs`, `env`, `nohup`, with separated option values up to the bound) is
-  refused by every hook with a wrapper rule.
-- from: #79, and its review
-- kind: defect-permitting
-- status: active
-- variants: transformation: pre-sudo pre-env pre-command pre-nohup pre-time
-  pre-timeout pre-nice-opt
-
-### GH-79.2
-- text: The wrapper anchor was widened and not dropped: prose naming a wrapper word
-  and a push on one line stays permitted, and the quote-blind soft spot it keeps
-  is pinned in both directions.
-- from: #79
-- kind: defect-permitting
-- status: active
-- variants: none: prose naming a wrapper word beside a command is a command of
-  its own rather than a rewriting of a seed
-
-### GH-79.3
-- text: A command that runs another command and is not a prefix word (`python3 -c`,
-  `perl -e`, `find -exec sh -c`) is out of reach, named and not closed.
-- from: #79
-- kind: defect-permitting
-- status: active
-- direction: permit-only: named and not closed; a refusal here would be a claim
-  the fix does not make
-- variants: none: a command that runs another and is not a prefix word is named
-  and not closed, and a variant of a seed would claim a fix this one does not
-  make
-
-### GH-79.4
-- text: The prefix words are written once, read by `cs_split` and by the anchor
-  through one variable, and an emptied list withdraws `cs_split` so that every
-  consumer refuses.
-- from: #79, and PR #89
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is that one variable holds the prefix words, which
-  is the list the pre-* transformations read rather than a spelling they
-  generate
-
-### GH-84.1
-- text: Every file that sources `lib/command-scan.sh` refuses when the library is
-  absent, when any one `cs_*` function it calls is missing, or when the word list
-  is empty, and the refusal names the hook and says it is refusing rather than
-  permitting.
-- from: #84
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is the library's absence or a missing function,
-  which is a state of the tree rather than a spelling
-
-### GH-84.2
-- text: Each consumer's load guard requires exactly the `cs_*` functions its code
-  calls, tests the library before sourcing it, and the list of consumers is the
-  list of files that source it.
-- from: #84
-- kind: defect-permitting
-- status: active
-- direction: static: derived from the files' text
-
-### GH-84.3
-- text: THE LOAD CONTRACT is written in the library, where a rename is made, and each
-  consumer points at it by name.
-- from: #84
-- kind: doc-claim
-- status: active
-- direction: static: a claim about what the files say
-
-### GH-94.1
-- text: The push hook recognises the main checkout at its root, below it and through
-  a symlink, and refuses a push of its branch as the main checkout; the linked
-  worktree at the same depths is permitted its own branch and refused main and a
-  dev branch.
-- from: #94
-- kind: defect-permitting
-- status: active
-- variants: seed
-
-### GH-94.2
-- text: The stale guard does not apply worktree-lifecycle rules to the main checkout
-  at any depth, and still applies them to a stale worktree at every depth.
-- from: #94
-- kind: defect-refusing
-- status: active
-- variants: none: its subject is which checkout the stale guard applies its
-  rules to, which is a state of the tree rather than a spelling
-
-### GH-94.3
-- text: No expected verdict depends on where the suite is run: every push-hook and
-  stale-guard check runs in a named directory of a fixture the suite builds.
-- from: #94
-- kind: defect-permitting
-- status: active
-- seam: none
-- verify: review
-
-### GH-94.4
-- text: An unresolvable `--git-common-dir`, or a directory outside any repository,
-  is refused by the push hook as unresolvable rather than as the main checkout,
-  and the stale guard abstains; the two copies of `canonical_dir` are identical and
-  do not follow `CDPATH`.
-- from: #94, the review of PR #111
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is a directory that cannot be resolved, which is a
-  state of the tree rather than a spelling
-
-### GH-95.1
-- text: Every hook refuses when `jq` is not on PATH, naming it, when stdin is not a
-  single JSON object, and when the field it reads is missing or not a string; an
-  empty string is permitted.
-- from: #95
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is the hook's input and not the command inside it,
-  which is FR-49's reason one family out
-
-### GH-95.2
-- text: The input read is one shared reader in the library and no hook calls `jq`
-  itself; the trade that an environment without `jq` refuses the commands the
-  convention hooks permit is recorded and pinned.
-- from: #95
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is where the input reader lives, not how a command
-  is spelled
-
-### GH-96.1
-- text: A command whose longest line, once joined, exceeds 16 KB is refused by every
-  Bash hook with the cap's message; a line at the cap and 200 KB across 80-column
-  lines are judged on their content.
-- from: #96
-- kind: defect-permitting
-- status: active
-- variants: none: its subject is a line's length, and every transformation here
-  lengthens a command by a bounded few characters
-
-### GH-96.2
-- text: Each Bash hook finishes a command whose longest line sits at the cap in
-  under 1 s, fastest of three, and the library's passes are linear.
-- from: #96
-- kind: defect-permitting
-- status: active
-- direction: static: a bound on time, not a verdict
-
-### GH-96.3
-- text: `cs_within_cap` fails closed when a function it calls is missing or the cap
-  is empty; the cap is the literal 16384; the copied awk helpers are identical.
-- from: #96, and the review of PR #123
-- kind: defect-permitting
-- status: active
-- direction: static: seam 2 and the library's text
-
-### GH-97.1
-- text: Every `gh release` subcommand but `list`, `view`, `download`, `verify` and
-  `verify-asset` is refused, whatever flag stands before it and wherever it sits on
-  the line, and a `gh api` write to a release is refused while a read is permitted.
-- from: #97
-- kind: defect-permitting
-- status: active
-- variants: seed
-
-### GH-97.2
-- text: The release refusal says that any write to a release is Bertan's and that
-  reading one is permitted, and CLAUDE.md and CONTEXT.md say "any write to a
-  release".
-- from: #97
-- kind: doc-claim
-- status: active
-- direction: refuse-only: a message is written only on a refusal, and the documents
-  are held to the same words
-
-### GH-98
-- text: Every helper that runs a hook reads exit 0 as ALLOW, 2 as BLOCK and anything
-  else as FAIL, with the status and stderr on the failure line, and a self-test
-  drives each against hooks that exit 0, 2, 1 and 127.
-- from: #98
-- kind: defect-permitting
-- status: active
-- direction: static: a property of the suite's helpers
-
-### GH-99.1
-- text: CLAUDE.md gives the two routes to a worktree branch starting at
-  `origin/dev-NN` and says nothing enforces them; CONTEXT.md's *active dev branch*
-  says the tip is the remote-tracking ref and the local branch a working copy; and
-  *reserved act* names moving a local `main` or `dev-NN`.
-- from: #99
-- kind: doc-claim
-- status: active
-- direction: static: a claim about what the documents say
-
-### GH-99.2
-- text: `worktree.baseRef` is `fresh`, so a skipped step starts from `origin/main`
-  and is refused, rather than from HEAD and permitted.
-- from: #99
-- kind: defect-permitting
-- status: active
-- direction: static: configuration the harness reads
-
-### GH-99.3
-- text: The report prints one `main ancestry` line: NOT an ancestor, an ancestor, or
-  NOT READ, with a suffix when no fetch refreshed the refs, and no line when there
-  is no dev ref.
-- from: #99
-- kind: defect-permitting
-- status: active
-- direction: static: the report's output
-
-### GH-100
-- text: The report classifies branches by pull request, as the sweep defines its
-  classes, and falls back to ref state and says so when pull requests cannot be
-  read; the skill's definitions name the wording the report prints.
-- from: #100
-- kind: doc-claim
-- status: active
-- direction: static: the report's output and the skill's text
-
-### GH-101
-- text: `lib/command-scan.sh` and every file that sources it say a guard "requires"
-  a function, and use "probe" nowhere but in the one line that names the rename.
-- from: #101
-- kind: doc-claim
-- status: active
-- direction: static: a claim about the words the files use
-
-### GH-102
-- text: The suite's header names every file it checks, and points at no count that
-  is not there.
-- from: #102
-- kind: doc-claim
-- status: active
-- direction: static: a claim about what the suite's header says
-
-### GH-104.1
-- text: A check with no tags fails the suite.
-- from: #104
-- kind: defect-permitting
-- status: active
-- direction: static: a property of the tags
-
-### GH-104.2
-- text: A tag naming an ID that is not in `requirements.md` fails the suite.
-- from: #104
-- kind: defect-permitting
-- status: active
-- direction: static: a property of the tags
-
-### GH-104.3
-- text: A `#<n>` cited in `check-hooks.sh` with no entry in `requirements.md` and no
-  listing as a citation that is not a requirement fails the suite.
-- from: #104
-- kind: defect-permitting
-- status: active
-- direction: static: a property of the suite's text
-
-### GH-104.4
-- text: `check-hooks.sh --matrix` prints, per ID, its status, its tagged checks with
-  their results, and whether coverage is met.
-- from: #104
-- kind: defect-permitting
-- status: active
-- direction: static: the matrix's output
-
-### GH-104.5
-- text: The rule that a pull request fixing a hook defect appends its `GH-<n>` entry
-  and tags the check that fails without the fix is written in this file's header
-  and in CLAUDE.md's guard-code paragraph.
-- from: #104
-- kind: doc-claim
-- status: active
-- seam: none
-- verify: review
-
-### GH-106
-- text: Every spelling variant of a seeded command reaches that seed's verdict, or a
-  verdict the suite declares for that pair with its reason. The seeds are a
-  literal table covering every *functional* requirement with a command spelling
-  in both directions; the variants come from a fixed list of transformations; and
-  every departure is declared, either by design or as a gap naming the issue that
-  owns it. Which `GH-` requirements the table seeds is GH-141's, and one
-  direction is allowed there.
-- from: #106
-- kind: defect-permitting
-- status: active
-- direction: static: a property of the seed table, the transformation list and the
-  departure table. The variants themselves establish the requirements their seeds
-  are tagged with, one refusing or permitting check each; what is left for this
-  entry is that the three tables say what they claim to, which is read off them
-- note: the departures are not a second opinion about a hook. A `design` row is a
-  verdict the hook's own comment argues for; a `gap` row is a verdict that is
-  wrong today, written at the right one and owned by an issue. #103 Q18 forbids
-  the third thing, which is calling a defect a design exception.
-  The word *functional* was added to the text by #141, and it is a correction
-  rather than a widening: the derivation that held the table to this claim read
-  `FR-` tags from the day it was written, so "every requirement" was never what
-  was checked. #141 stated the rule for the other family beside it, and GH-141
-  carries it
-
-### GH-117
-- text: A word the library recognises BY NAME is the word it spells, however it is
-  spelled: `/usr/bin/gh pr merge 5`, `./gh …`, `"git" push origin main`, `'git' …`
-  and `\git …` reach the verdict their bare-name spelling reaches, in every hook.
-  That covers three kinds of word and not one, because all three are matched by
-  name: the command word; the prefix words `cs_split` strips, so that
-  `/usr/bin/env gh pr merge 5` and `"timeout" 30 gh pr merge 5` are refused as
-  their bare spellings are; and the wrapper words, so that CLAUDE.md's
-  deliberately-left-open item 1 holds for `/bin/bash -c …` as it does for
-  `bash -c …`. Partial quoting counts, `g"h"` being `gh`, and so does a tilde
-  path. A reserved word does not: quoting one takes its reserved meaning away, so
-  `"if"` is a program named `if` and the control-word strip is right to stop.
-- from: #117, found reviewing PR #115
-- kind: defect-permitting
-- status: active
-- variants: transformation: word-path word-dot word-dquoted word-squoted
-  word-escaped pre-sudo-path pre-env-path pre-timeout-quoted
-- note: the word is reduced to its basename after unquoting and unescaping, so a
-  program of another name keeps it -- GH-72 decided that `my-gh` is not `gh`, and
-  the permitting checks hold that decision against this one. Two places read a
-  command word and both are in `lib/command-scan.sh`: `cw_reduce` in `cs_split`,
-  reached through `printhead` for the word a rule anchors on and through
-  `cw_spelled` for the prefix and operand word lists, and `CS_WORD_SPELLING` in
-  `CS_WRAPPER_RE`, which reads raw text and so admits the spellings itself.
-  #106's families carried the five spellings as departure rows against every
-  refused seed until this landed; the rows are gone, and those variants now reach
-  their seed's verdict under the seed's own tags. The families also gained
-  transformation 13, the prefix word spelled otherwise.
-  A FOURTH SITE, found by review of the branch rather than by the suite: the
-  wrapper rule asks two questions, and its second one -- does the line carry the
-  surface this hook guards -- is each hook's own pattern and matched the guarded
-  name by its bare spelling only. So `bash -c '"gh" pr merge 5"'` was permitted
-  where the bare spelling is refused, and the text above said "in every hook"
-  while four hooks said otherwise. All four patterns admit a quoted spelling
-  now; `check-hooks.sh` derives the set off `settings.json` rather than listing
-  it, so a fifth boundary hook is asked the same question without anyone
-  revising a sentence. Measured before it was taken: across the 476
-  wrapper-carrying commands of a 75,346-command corpus, widening all four
-  changed no verdict.
-  What is NOT decided here is a command word that is a parameter or command
-  substitution -- `$(command -v gh) pr merge 5` -- which cannot be resolved from
-  text at all. #117's triage raises it as recommendation 4 and calls it the
-  maintainer's judgement; it stays permitted, and the decision is Bertan's,
-  either a refusal or a sixth numbered item in CLAUDE.md's *Deliberately left
-  open*. It is named here so that the gap is on the record rather than implied by
-  the absence of a check.
-
-### GH-117.1
-- text: A command word that is a parameter or a command substitution is not
-  resolved, and is permitted rather than refused: `$(command -v gh) pr merge 5`,
-  `` `command -v gh` pr merge 5 ``, `$GH pr merge 5` and the `git` spellings of
-  each reach no hook rule. CLAUDE.md's *Deliberately left open* carries it as
-  consequence 6, with the measurement that decided it and the close that was
-  rejected.
-- from: #117, recommendation 4 of its triage comment, which raised it as a
-  judgement call for the maintainer to settle before implementation
-- kind: doc-claim
-- status: active
-- direction: permit-only: an accepted gap has no refusing half, and writing one
-  would claim a refusal that does not happen. What the refusing direction would
-  normally buy -- evidence the rule fires -- is bought instead by the paragraph
-  checks, which hold the document to naming these three shapes and to carrying
-  the number it was decided on.
-- note: settled by measuring rather than by judgement, against 75,346 Bash
-  commands from 661 local session transcripts. The close was written first: a
-  `$(` alternative to `CS_WRAPPER_RE` closes none of the four shapes, because the
-  wrapper block also asks whether the line carries the guarded surface and a
-  command substitution eats the boundary that question needs -- the line reads
-  `gh)`, not `gh `. It flipped only the `gh api` spelling, which matches on the
-  `/pulls/…/merge` literal and needs no `gh` at all, and it refused 9 commands
-  that should pass, 8 of them lines of `check-hooks.sh` being edited. One of
-  those 9 is kept as a check, so a later attempt at the same close fails in this
-  suite rather than in a review. The three shapes are also not one shape: in
-  command position the corpus holds 88 `$(…)`, 2,469 backticks and 377 `$VAR`,
-  and a backtick rule would refuse a heredoc whose prose says `` `git push` ``,
-  which is consequence 3 widened by three orders of magnitude.
-
-### GH-118
-- text: A `gh` command carrying any option other than `-R`, `--repo` or
-  `--hostname` before a word of a guarded subcommand path is refused as
-  unreadable, whatever verb it appears to name. A shorthand that is unknown or
-  takes a value consumes the next word, so the verb the hook reads is not the
-  verb `gh` runs: `gh pr -t view merge 5` is a merge and `gh release -t list
-  create v1` is a create.
-- from: #118, found reviewing PR #115; the refuse-the-shape decision is that
-  issue's agent brief, and the spelling is corrected by the measurement in #106's
-  comment on it
-- kind: defect-permitting
-- status: gap → #118
-- note: the spelling matters and the issue's original example is not one `gh`
-  runs. Cobra treats an unknown LONGHAND as a boolean, so `gh pr --squash view 5`
-  returns `unknown flag: --squash` and eats nothing; it is a shorthand that
-  consumes the next word. Measured on gh 2.45.0.
-  The requirement is a refusal of the shape and not a reading of the verb, so it
-  is not verdict-preserving in either direction: #106's families pin every
-  refused `gh pr` and `gh release` seed as permitted, and also six PERMITTED
-  seeds whose right verdict is BLOCK although their seed's is ALLOW --
-  `gh pr -t view view 5` is a read the rule refuses. That second set is why the
-  departure table carries a right verdict of its own. `gh issue` is not a guarded
-  group, so `gh issue -t list list` stays ALLOW; `gh api` takes no group, so the
-  shape does not arise there.
-
-### GH-124
-- text: `feed` and `feed_says` read a hook's exit status as every other helper does,
-  and the #98 self-test drives both.
-- from: #124
-- kind: defect-permitting
-- status: active
-- direction: static: a property of the suite's helpers
-
-### GH-127
-- text: A command inside the 16 KB line cap whose fragments are numerous enough to
-  outlast the 5 s timeout is refused within the timeout.
-- from: #127
-- kind: defect-permitting
-- status: gap → #127
-
-### GH-130
-- text: A `gh api` write to an issue is judged on that command's own arguments, with
-  quoted spans dropped: an issue body naming `/releases`, `repos/o/r/pulls` or
-  `state=closed` is prose, and a read of `/releases` beside an unrelated issue
-  write on the same line is a read.
-- from: #130, found while covering US-14 for #105
-- kind: defect-refusing
-- status: gap → #130
-- note: the four refusals are in `no-pr-decisions.sh`'s `$SCAN`-wide rules and the
-  `API_NO_BASE` arm. The `gh issue` spelling of the same text is permitted, so the
-  boundary is spelling-dependent where #36 says it is not. Not CLAUDE.md's
-  left-open item 2: that item's subject is a line carrying a wrapper, and none of
-  these does.
-
-### GH-131
-- text: A creating spelling of `gh issue develop` is refused, whichever of `--base`,
-  `--name`, `--checkout` and `--branch-repo` it carries and whether it carries none;
-  the read spelling `gh issue develop --list` is permitted.
-- from: #131, found while covering US-14 for #105
-- kind: defect-permitting
-- status: gap → #131
-- note: `gh issue develop` creates a branch ON THE REMOTE: an issue subcommand by
-  name, which US-14 says stays available, and a ref-creating write by effect, which
-  CLAUDE.md says is the whole of what an agent may push. #105 pinned the read and
-  left the creating spellings unpinned rather than pin a verdict that might be wrong
-  (Q18); the verdict was taken on 2026-09-17 and is #131's second comment — refuse
-  the creating spellings, permit `--list`, which is Q26's `gh release` shape. This
-  entry's text was rewritten when that verdict landed: as first written it required
-  only that the question "is decided", which no check can falsify in either
-  direction, so under Q15 it could never have been covered. A `gap → #<n>` entry's
-  text is provisional in exactly this way, and is restated in the behaviour when its
-  verdict is taken. US-14 is covered by the other twelve rows either way, being
-  `direction: permit-only`. The verdict is deliberately narrow: it refuses this
-  subcommand and not the `createLinkedBranch` mutation underneath it, which is
-  GH-143's along with the rest of the class, a rule against the porcelain with the
-  plumbing left open being the shape #47 and #97 both ended at. See
-  `docs/adr/0002-boundary-stated-in-effects.md`.
-
-### GH-133
-- text: A refused retarget names the correction for a retarget. `gh pr edit <n>
-  --base dev-NN` is permitted, so the one-step correction is one word of the
-  command already written, not the create the four base refusals share, and the
-  message does not also say the base is the one thing that may not be edited.
-- from: #133, found by Bertan's review of #132
-- kind: defect-refusing
-- status: active
-- direction: refuse-only: a message is written only on a refusal
-- variants: none: its subject is the words of a refusal message, which no
-  rewriting of the refused command's spelling reaches
-- note: one `BASE` constant for four refusals is what FR-23 asks for, and for the
-  three creating arms it is US-7's one-step correction too. For the retarget arm
-  it is not, and "Edit anything else you like" told an agent the base may not be
-  edited, when editing it to `dev-NN` is what is allowed. So the same message was
-  evidence for FR-23 and against US-7, and #105's retarget rows were tagged FR-23
-  alone while this stood open. The fix keeps the constant and lets the
-  retarget arm's tail -- already per-arm -- name its own correction, so the
-  retarget's tail row now carries US-7 as well. What it does not fix is the
-  order: `BASE` still opens with `Write: gh pr create --base dev-NN`, so the
-  wrong imperative is still the first one an agent reads, which is #154. Whether
-  every other refusal message in the two files is read for its words was left to
-  #109, and GH-109.2 is its answer.
-
-### GH-134
-- text: A shell wrapper is refused wherever it stands in a command position,
-  control words included: `if true; then bash -c "…"; fi`, the `for`, `while`,
-  `until`, `case` and `else` bodies, a function body and `{ …; }` are each a
-  command position, as they already are for the unwrapped command.
-- from: #134, found by #106's invariance families
-- kind: defect-permitting
-- status: active
-- variants: transformation: word-if word-for word-brace
-- note: `CS_WRAPPER_RE` is matched against raw text and so carried its own
-  command-position class -- start of line and `;` `&` `|` `(` and a backtick --
-  where every other rule reads `cs_split`, which strips control words and cuts
-  on `)` as well. The two answers disagreed, which is the defect class
-  `lib/command-scan.sh` exists to end. The fix spells both lists once,
-  `CS_SEPARATORS` and `CS_CONTROL_WORDS`, and both halves read them; the suite
-  pins that as text and each list emptied as a withdrawal of `cs_split`. `in` is
-  deliberately not a control word: it introduces the words of a `for` or a
-  `case`, never a command, and `cs_split` has never stripped it. The widening
-  costs refusals in one shape, named and pinned: prose that puts a quote-blind
-  separator and then a control word or a `)` in front of a wrapper word, on a
-  line that carries a guarded command -- a regex alternation such as
-  `(ba|z)sh -c`, and a pull request comment quoting the shape this entry fixed,
-  among them. `function NAME { … }` is out of reach of both halves alike and is
-  #167, not this entry. #106's three `word-if`, `word-for` and
-  `word-brace` gap rows against its wrapped seeds are gone with it, and those
-  variants are ordinary checks at the seeds' verdicts.
-
-### GH-134.1
-- text: A command-position list that is present but malformed withdraws `cs_split`,
-  as an empty one does: separators that do not compile into a bracket expression,
-  and control words that match the empty string.
-- from: #172's second review, of the fix for #134
-- kind: defect-permitting
-- status: active
-- direction: static: derived from the library's text and from whether loading it
-  defines `cs_split`, as GH-84.2 is. The verdicts a withdrawal buys are the
-  consumers' load guards, which GH-84.2 and GH-79.4 already carry, so this entry
-  would otherwise assert them a second time
-- note: the guard below `cs_split` reached emptiness only, and both lists fail
-  open when they are present and wrong. A collating element in `CS_SEPARATORS`
-  stops `CS_WRAPPER_RE` compiling, `grep -qE` exits 2, and every consumer's
-  `if grep -qE "$CS_WRAPPER_RE" && …` reads a 2 as "no wrapper": measured, a
-  wrapped `gh pr merge 5` went from BLOCK to ALLOW while the unwrapped command
-  still blocked. A trailing `|` in `CS_CONTROL_WORDS` -- the ordinary slip when
-  appending to a list #134 made the edit point for both halves -- makes the
-  alternation match the empty string, and `cs_split`'s strip advances by what it
-  matched, so it does not advance and does not return: measured, killed at 8 s
-  against exit 0 intact, and a hook the harness kills for time has permitted.
-  Each list is asked by the engine that will ask it, grep for the anchor and awk
-  for the control words, rather than by a pattern written here, for the reason
-  `lib/command-scan.sh` exists. What it does not reach is named rather than
-  implied: a `-` makes a valid range, so the class compiles and means something
-  else, and that is caught by the membership pins under GH-134 instead. Cost
-  measured at 2.6 ms to source the library before and 5.6 ms after.
-
-### GH-135
-- text: A quoted group or subcommand word is the word it spells: `git "push" --all
-  origin`, `git "commit" -m x` on main, `gh "pr" merge 5`, `gh pr "merge" 5`,
-  `gh "api" …` and `gh "release" create v1` reach the verdicts their unquoted
-  spellings reach.
-- from: #135, found by #106's invariance families
-- kind: defect-permitting
-- status: gap → #135
-- note: one word past #117, and a different fix site: the command word is found by
-  an anchor, the group and verb by `cs_git_args`, `cs_gh_args` and the verb tests.
-  The contrast that makes it a defect rather than a policy is that a quoted VALUE
-  is read correctly -- `--base "dev-05"` is permitted and `--base "main"` refused
-  -- so `base_args` knows what a quote is and the group and verb tests do not.
-  Both directions are this entry. The permitting half is above; the refusing half
-  is `gh release "view" v1`, refused because the read-verb allowlist is
-  `cs_gh_args "release <verb>"` per verb and cannot read a quoted one. #106 first
-  declared that one by design, citing the allowlist's fail-closed comment, and
-  Bertan's review of PR #140 corrected it: that comment argues for refusing a
-  subcommand `gh` adds later, and a quoted `view` is not one. It is a gap here,
-  in the function this entry already names as the fix site.
-  What is NOT this entry is the `base_args` family -- `gh pr create "--web"` and
-  `gh pr create "--base" dev-05` -- which #106 declares by design, citing the
-  comment that argues quoted text may trigger a refusal and may not grant an
-  exemption. #139 was fixed by refusing a quoted base flag rather than by
-  teaching `base_args` to read one, so those rows hold; GH-139 says why.
-
-### GH-136
-- text: The dependency group is named whichever way `uv` and bash accept it: `uv run
-  --group=test …`, `--group "test"` and `"--group" test` are the sanctioned
-  invocation that `--group test` is, in both uv-group hooks.
-- from: #136, found by #106's invariance families
-- kind: defect-refusing
-- status: gap → #136
-- note: the hooks' own header argues a different quoting trade knowingly -- that a
-  command name inside a quoted argument is treated as an invocation, so prose is
-  refused -- and this is not that. `--group=test` is the shape the base rule
-  already handles as `--base=main`, one file away.
-
-### GH-139
-- text: A base flag whose name carries a quote or a backslash is refused on every
-  arm of `gh pr create` and `gh pr edit`, rather than dropped with the quoted
-  prose around it: `gh pr edit <n> "--base" main`, `'--base' main`,
-  `"--base=main"`, `"-B" main`, `--"base" main`, `\--base main`, `$'--base' main`,
-  `$'\x2d-base' main`, `$'\055\055base' main`, `$'--base\0' main`, `--base$'' main`, `--base$'=main'`,
-  `gh pr create --web "--base" main` and `gh pr create --base dev-05 "--base" main` are refused.
-  A quote round the value only (`--base="dev-05"`, `-B"dev-05"`) is read as before,
-  and a quoted argument holding whitespace is prose (`--title "-B main"`, `--body
-  "--base dev-05 is the base"`, and a body whose quote is still open where its
-  first line ends), since no git ref holds a space.
-- from: #139, found by #106's invariance families once they quoted a fifth
-  argument position
-- kind: defect-permitting
-- status: active
-- variants: transformation: quote-double-5 quote-single-5
-- note: `base_args` drops a quoted span whole, and its comment argues that
-  deleting a span cannot invent a flag. True, and not the whole of it: on the
-  retarget arm and under `--web`, naming no base is permitted, so deleting the
-  span removed a refusal rather than adding one. The issue called the creating
-  arms safe, and they were not wholly: beside an unquoted `--base dev-05` a quoted
-  `"--base" main` is a second base, and gh takes the last. Found while writing the
-  fix, and the reason it is on every arm rather than on the two #139's comment
-  proposed. The fix refuses and does not read -- reading the flag back out of its
-  quotes is the unquoting that let `--body "--base dev-05"` name a base -- so
-  #106's four `pr-base-dev(-eq) + quote-*-4` rows keep BLOCK, now for this reason
-  and with a message that says so rather than that no base was named. The trade:
-  a whitespace-free quoted argument that merely begins like the flag is refused
-  as a value too, `--body "--base"` and `--label "-Blocked"`. The second time the
-  retarget arm differed from the creating arms in a way their shared reasoning
-  missed, after #133. Bertan's review of PR #173 found two holes in the first
-  version: the escapes inside `$'...'` were left undecoded, so `$'\x2d-base'`
-  retargeted onto main, and a quote still open at the end of a line was read as
-  a word with no whitespace, so a body opening `--base` and then a newline was
-  refused as a flag. Both are fixed and each has a mutation row. Its second
-  review found a NUL decoded as `?`: bash drops the rest of a `$'...'` span at a
-  NUL, so `$'--base\0' main` retargeted onto main. The span is now cut there and
-  what follows its closing quote still joins the word, as bash joins it --
-  `$'--base\0'x` is `--basex` and permitted. That review's `\^@` is not an escape
-  bash 5.2 decodes, and is pinned as the four characters it stays. Its third
-  review found four more, all from copying bash's decoding escape by escape:
-  `\c` took a closing quote or the first of a `\\` pair as its argument, so the
-  span ran past where bash closes it; `\c` masks a byte, so `\cअ` is a NUL; and
-  a cut span open at a line's end was judged on that line alone. The answer is
-  conservative rather than faithful: every `\c` is taken as a possible NUL and
-  cuts the span, consuming only the `c`, and a cut span open at a line's end is
-  refused. The trade: `$'--base\cA'`, which bash passes as `--base` and a
-  control character, is refused.
-  Its fourth review found two more: an EMPTY span just past the name --
-  `--base$'' main` -- was read as a quote round the value, which holding nothing
-  it cannot be, so it now refuses; and refusing every cut span open at a line's
-  end refused an ordinary multi-line body with a `\c` in it, so only a word the
-  next line could still make a flag -- empty, or dash-led with no whitespace --
-  is refused there. The rest of that review's findings are `base_args`' own and
-  predate this entry, and are left to issues of their own.
-  Its fifth review found a quoted or escaped `=` just past the name read as a
-  quote round the value, which base_args cannot read when the quote is `$'...'`,
-  `$"..."` or a backslash: `--base$'=main'` and `--base\=main` named no base.
-  The `=` is now part of the name, so those refuse -- and so does
-  `--base"=dev-05"`, which base_args could read, the trade that fix takes.
-
-### GH-167
-- text: The `function NAME { … }` spelling of a function definition puts the
-  function's name where the command word has to be, so its body is refused by no
-  boundary hook, wrapped or unwrapped. The `NAME() { … }` spelling is refused as
-  it should be.
-- from: #167, found by the spec review of the fix for #134
-- kind: defect-permitting
-- status: gap → #167
-- note: `cs_split` strips `function` as a control word and stops at the name,
-  which it then takes for the command word; `(` and `)` are separators, so the
-  other spelling puts the brace at the head of its own fragment and is reached.
-  Since #134 the wrapper anchor reads the same control words, and it misses this
-  shape for the same reason -- the name breaks the run of admitted prefixes
-  before the wrapper word -- so both halves agree here and are both wrong. That
-  is what makes it a sibling of #134 rather than an instance of it, and why
-  dropping `function` from `CS_CONTROL_WORDS` is the wrong repair: the word
-  earns its place in `cs_split`, which does strip it, and taking it out would
-  lose that strip to buy the anchor nothing. What the word needs is its operand
-  stripped with it, as `CS_WRAP_OPERAND_WORDS` does for `timeout` and `flock`.
-  The checks are written at the measured verdict and not the correct one, so the
-  fix turns them red and finds this entry.
-
-### GH-175
-- text: A shell wrapper is read as one only when its option token begins `-c` and
-  its heredoc operator is preceded by whitespace, so `bash -lc`, `sh -ec`,
-  `bash --login -c`, `bash -o pipefail -c` and `bash<<EOF` are at no wrapper
-  position for any boundary hook.
-- from: #175, found by the review of PR #172
-- kind: defect-permitting
-- status: gap → #175
-- note: #134 gave the anchor one spelling of WHERE a command position is. WHICH
-  word is a wrapper is a second question and is still answered narrowly, in the
-  anchor's tail. `cs_split` does not rescue these: `bash` is not a prefix word,
-  so the payload stays quoted and no rule sees the command inside it. Not a
-  regression from #134 -- the tail is byte-identical at `origin/dev-05` 33f7129
-  -- and not the family `NAMED AND NOT CLOSED` covers, which names words this
-  library cannot reach at all; this is the anchor's own word with an option
-  spelling it declines to admit. `bash -cx` is refused, but only because `-cx`
-  begins with `-c`, which is the measurement that says the rule tests a prefix
-  and not a token. Left at the measured verdict because the widening has a cost
-  in the refusing direction that has to be measured first -- the anchor reads
-  raw text, so a wider option class falls on prose too -- and that measurement
-  is the fix, not this entry.
-
-### GH-107.1
-- text: `check-hooks.sh` judges the hooks in `$CHECK_HOOKS_DIR` when that names a
-  directory, and the ones beside itself when it does not. What moves with it is
-  what is judged — the hooks run as processes, the library they source, the text
-  of both, and `requirements.md`. What does not move is what they are judged
-  against: `settings.json`, `CLAUDE.md`, `CONTEXT.md`, the two skills, the working
-  directory a hook is run in, and the suite itself. An override naming no
-  directory, or one missing a file that sits beside the suite, stops the run and
-  says which. A relative override is resolved against the directory the caller
-  stood in, not against `.claude/hooks/`. Every check that reads a hook's text
-  reads it out of `$CHECK_HOOKS_DIR` too: a file argument spelled as a bare name
-  resolves against the suite's own working directory, so such a check judges this
-  repository whatever the override says, and the suite holds every one of them to
-  a variable.
-- from: #107
-- kind: doc-claim
-- status: active
-- direction: static: the two checks that can be made here read the guard's exit
-  status and its message, which is no hook's verdict. The permitting direction is
-  a whole run of this suite against a copy, which this suite cannot ask of
-  itself; it is mutate-hooks.sh's baseline run, and every caught mutation depends
-  on it
-- note: the guard is checked by running this suite again with an override it must
-  refuse, three times: a directory that is not there, one missing a file that sits
-  beside the suite, and a relative name that exists beside the suite but not
-  beside the caller. The inner run is marked so that a guard which failed to
-  refuse cannot recurse, and each check asserts the refusal's message rather than
-  only a non-zero exit — an inner run that went the whole way would exit 1 for its
-  own uncovered requirement and say nothing about a directory. The rule about
-  bare file arguments is checked by derivation over this suite's own text rather
-  than by a list: sixty-nine checks were spelled that way when this requirement
-  first landed, among them every pin that says a hook does not source the library
-  unguarded, and a copy with the guard deleted printed ok for all of them. Found
-  by Bertan's review of PR #142; `library-loaded-unguarded` in the harness's
-  registry is the mutation that now asks it.
-
-### GH-107.2
-- text: `mutate-hooks.sh` re-runs the mutation claims this suite makes. Each
-  registered mutation names a file in the hooks directory, a `sed` expression, the
-  requirement IDs whose checks must go red, and what the harness must report; a
-  mutation is caught only when every ID it names has at least one failing check.
-  An edit that leaves its target byte-identical is a failure, not a pass. The
-  harness never edits this repository's hooks, refuses to run if its working copy
-  is them, requires an unmutated copy to be green before it believes any
-  mutation, and checks that `.claude/hooks/` is byte-identical afterwards. Two
-  rows of the registry are its self-tests: one whose edit matches nothing, and one
-  registered against a requirement its edit cannot reach.
-- from: #107
-- kind: doc-claim
-- status: active
-- direction: static: what this suite can ask of the harness is what its text says
-  and whether its registry names files and requirements that are active. Whether
-  the harness is right is a run of the harness, which takes about an hour and is
-  nobody's check
-- note: the registry's size is what `bash .claude/hooks/mutate-hooks.sh --list`
-  prints, and this file does not restate it — the first version did, in four
-  documents, and was wrong in all four, which Bertan's review of PR #142 measured.
-  What is worth recording is the shape: one row per rule rather than one per
-  requirement, so a requirement with a row is one some mutation reaches and not
-  one whose every check has been exercised. One mutation per FR is the backlog
-  item docs/todo.md carries from #103 Q8, and #108 and #109 register theirs when
-  they land. Two kinds of rule cannot be registered at all, which is GH-107.1's
-  split seen from the other side: one that lives in the tooling beside the hooks —
-  `check-hooks.sh` and `mutate-hooks.sh` themselves, so #106's six self-guards and
-  #104's coverage machinery — because both run from this repository whatever the
-  override says; and a claim about a file outside `.claude/hooks/`, because only
-  the hooks directory is copied. The first of those two is narrower than it reads,
-  and #141 is the case that shows where the line falls: a rule whose code is in
-  the tooling is reachable after all when what that code READS is a file the
-  override moves. GH-141's rule is code in `check-hooks.sh` and reads
-  `requirements.md`, so the registry mutates the entry rather than the rule and
-  the suite goes red on the copy. The test is whether the run reads the copy, not
-  whose file the rule sits in — and #106's own self-guards fail it, because what
-  they read is the seed table, which is in the suite.
-  A row may name only an active requirement: a
-  retired or superseded one has no covering check, so a row naming it would report
-  `survived` for ever and read as a defect in the hooks rather than in the row.
-
-### GH-137.1
-- text: The `state` reader in `no-pr-decisions.sh` recognises every spelling of the
-  quoting round its own field — `state=closed` and `state=open` with the value
-  bare, double-quoted or single-quoted, and with a quote round the whole field
-  between the flag and the name — and does so at both of its call sites, the
-  `WRAPTEXT` arm and the `gh api` write block. The pattern is written once and
-  both read it. Quoting INSIDE the name or the value (`st"ate"=closed`,
-  `state=clo"sed"`, `state\=closed`) is not this requirement's, and is #163.
-- from: #137, found while grilling the fix design for #130
-- kind: defect-permitting
-- status: active
-- variants: seed
-- note: the reader stays keyed on the FIELD and not on the endpoint, for the reason
-  its own comment gives — the same PATCH is how `gh pr edit` retitles a pull
-  request, which stays allowed — and stays unanchored where `rest_bases` anchors
-  on the field flag. The two rules are triggered oppositely and that decides it:
-  this one refuses on presence and has to reach a graphql `state:CLOSED` and a
-  bare `state=closed` in a wrapped line, neither carrying a flag at all. What the
-  widening costs is CLAUDE.md's left-open item 2, one spelling wider: `state='open'`
-  written as prose on a line that already reaches these rules is refused, as
-  `state="open"` already was.
-
-### GH-137.2
-- text: The `base` reader `rest_bases` recognises `base=<value>` however the field is
-  spelled between its flag and its name — any separator `gh` accepts (nothing,
-  whitespace or `=`) and a quote round the whole field as well as round the value
-  — and reads the value out of it. `-f "base=dev-05"`, `-f 'base=dev-05'`,
-  `--field "base=dev-05"`, `--field=base=dev-05` and `-f=base=dev-05` are the
-  permitted create that `-f base=dev-05` is, and the same spellings naming `main`
-  are refused with the message that names the branch.
-- from: #137, found while grilling the fix design for #130; the separator half
-  found by Bertan's review of PR #153, in the change that closed the quote half
-- kind: defect-refusing
-- status: active
-- variants: seed
-- note: the fourth answer to "where does the field begin", after the bare word, the
-  flag with the name immediately after it, and the flag with a quote admitted
-  between; `rest_bases`' comment records all four. The separator class is the
-  closure rather than another guess — pflag accepts exactly nothing, whitespace or
-  `=` between a flag and its value — and the anchor that keeps `rebase` and
-  `database` ordinary words and keeps a base out of `-f title="base: dev-05"` is
-  untouched, since after any separator the next character is still the wrong one.
-  Not only a refusing defect, in either half: the no-base arm it falls into is
-  keyed on the collection endpoint, so an unread base on `PATCH /pulls/N` — a
-  retarget — is matched by nothing and permitted. The issue's table names neither
-  the retarget nor the separator. The closure is of the separator and not of the
-  field: quoting inside the name or the value (`-f ba"se"=main`, `-f base\=main`)
-  is still unread and on a retarget still permitted, found by the follow-up review
-  of PR #153 and carried by #163.
-
-### GH-143.4
-- text: CONTEXT.md's *reserved act* names moving the active dev branch's remote ref
-  any way other than advancing it, and deleting that ref, says that nothing refuses
-  either, names the REST merge that advances the same ref under no rule at all, and
-  states no count of the acts neither a hook nor the server covers.
-- from: #143
-- kind: doc-claim
-- status: active
-- direction: static: a claim about what CONTEXT.md says
-- note: the entry already reserved *advancing* that ref and *moving a local* `main`
-  or `dev-NN`, and a remote force-move or deletion is named by neither clause —
-  which is where #143's worst rows sit, refused by no hook and reached by no
-  ruleset, the `main-branch-protection` one targeting `~DEFAULT_BRANCH`. The rule
-  that refuses them is GH-143.1 to GH-143.3 and is not written yet, so this entry is
-  the document half alone, landing first deliberately: an act nothing refuses is
-  only reserved in a document a reader can find, which is the reasoning GH-99.1
-  records for the clause beside it. The general form is
-  `docs/adr/0002-boundary-stated-in-effects.md`.
-  The last two clauses of the text were added by review of the commit that filed
-  this entry, which measured a spelling the paragraph had not: `POST /repos/O/R/merges`,
-  the REST *merge a branch* endpoint, named by no hook anywhere and advancing
-  `dev-NN` whenever `dev-NN` is its base. The wording it replaces said "those two
-  are the only acts", and was already false two sentences further down its own
-  paragraph, which named a third. A count is the part that goes stale, so the entry
-  states none and the `unarmed` holds it to that. That `unarmed` also replaces one
-  that pinned the clause's *placement* — the terminating period the enumeration
-  used to end on — which went red on a correct document and added nothing against a
-  revert, since the `written` checks catch that between them.
-
-### GH-143.5
-- text: CLAUDE.md's *Domain docs* section names `docs/adr/` as where the ADRs are,
-  and states no count of them.
-- from: #143
-- kind: doc-claim
-- status: active
-- direction: static: a claim about what CLAUDE.md says
-- note: the section said "`docs/adr/` holds one ADR", which
-  `docs/adr/0002-boundary-stated-in-effects.md` made false in the commit that added
-  it. Review found the claim unpinned — a grep for `docs/adr` across check-hooks.sh
-  returned nothing — in the one sentence that warns a reader off a stale
-  enumeration two clauses later, "the sentence that did named two terms of five and
-  went stale without saying so". So the count is gone rather than corrected, for
-  the reason that sentence gives about the glossary, and the `written`/`unarmed`
-  pairing is GH-97.2's with a narrower claim in place of a narrower rule.
-### GH-108.1
-- text: No hook reads `tool_name`. Which tool calls reach which hook is decided by
-  the matcher in `settings.json` and nowhere else, so a payload carrying any other
-  `tool_name`, or none at all, reaches the same verdict as the same field under the
-  matching one.
-- from: #108
-- kind: doc-claim
-- status: active
-- note: the row #108's audit wrote as "hooks ignore it; the `settings.json` matcher
-  filters". It is pinned rather than changed: a hook that read `tool_name` would
-  have a second place for the registration to disagree with, and #95's reader
-  already refuses a payload it cannot read the field out of. What the checks hold
-  is that the verdict does not move, in both directions, so a `tool_name` test
-  added to a hook turns them red.
-
-### GH-108.2
-- text: With `git` off PATH, or run where there is no repository, every push is
-  refused by `no-git-push.sh` and a push naming main by `no-commit-to-main.sh`;
-  `no-work-on-stale-branch.sh` abstains, and a `git commit` that names no reserved
-  branch and no other repository is permitted. Every spelling that reaches another
-  repository -- `git -C`, `git --git-dir`, a `cd` or a `git checkout main` before
-  the commit -- is refused in these environments as it is in a working one.
-- from: #108
-- kind: doc-claim
-- status: active
-- note: the permitting half is the one worth stating. A commit permitted here is
-  not a hole: the environments that produce it are the ones where the command
-  cannot run either, and the refusals that matter are read off the command's text
-  rather than off the environment, which is what the last sentence pins. #108
-  measured the whole table for a case where the hook's read fails while the
-  command still reaches a repository, and found none -- every such spelling is
-  refused by text. That is the finding, and it is what makes the abstentions
-  above safe to write down as intended rather than as tolerated.
-
-### GH-108.3
-- text: On a detached HEAD every push is refused, and a `git commit` is permitted.
-- from: #108
-- kind: doc-claim
-- status: active
-- note: the design is stated in `no-work-on-stale-branch.sh`, at `CURRENT` -- "a
-  detached HEAD has no branch, so neither detector has anything to read" -- and it
-  is the same fact `no-commit-to-main.sh` rests on: that file exists to keep a
-  commit off main, and a commit made on a detached HEAD lands on no branch at all.
-  So this is the one row of #108's table whose permit is the answer the boundary
-  wants rather than the answer a failed read leaves behind.
-
-### GH-108.4
-- text: In a repository with no remote named `origin`, every push is refused --
-  the first bare argument of a push has to be a remote of this repository, and
-  there is none -- and `no-work-on-stale-branch.sh` abstains.
-- from: #108
-- kind: doc-claim
-- status: active
-- note: removing a remote removes its remote-tracking refs with it, so the
-  abstention has two causes at once and the fixture keeps them together on
-  purpose: there is no state in which `origin` is absent and `refs/remotes/origin/`
-  still holds a dev branch.
-
-### GH-108.5
-- text: With no `origin/dev-NN` ref at all, `no-work-on-stale-branch.sh`'s fallback
-  detector abstains while its `[gone]` detector still refuses; with two, the
-  highest by `sort -V` is the active dev branch. `no-pr-decisions.sh` with no such
-  ref accepts any base matching `dev-NN` and refuses one that does not, the shape
-  being the whole of its base rule where no branch can be read.
-- from: #108
-- kind: doc-claim
-- status: active
-- note: the last clause was a gap, filed as #144 and closed by it; GH-144.1 to
-  GH-144.4 carry the rule that replaced it and GH-144.2 the half this entry now
-  states. What stood here was the measured verdict rather than the correct one --
-  a base of `dev-05` permitted while `dev-06` was the active dev branch, which
-  CLAUDE.md's "into the active dev branch" refuses -- and the row was written that
-  way so that the fix would turn it red and find the issue, which is how #144
-  reached this entry. #108's reason for not fixing it was that a hook whose
-  verdict depends on an environment read fails open when the read fails; what
-  landed does not: the narrowing is asked only of a base that has already passed
-  the shape question, so a failed read costs the narrowing and no refusal. This
-  entry keeps the no-ref case, which is that degraded verdict and is still this
-  section's business.
-
-### GH-108.6
-- text: No hook runs `gh`, so `gh` being off PATH changes no verdict: every `gh`
-  command is judged on the text of the line, and every refusal
-  `no-pr-decisions.sh` makes is reached in every environment #108 builds.
-- from: #108
-- kind: doc-claim
-- status: active
-- note: the second clause is the wider claim and is checked as one -- the same
-  payloads under every fixture of this section, not only under the one without
-  `gh`. It said "reaches the same verdict in every environment", which GH-144.1
-  made false: that rule refuses `--base dev-05` in the two-ref fixture and permits
-  it in every other environment here, which is the lookup narrowing and is the
-  point of it. Narrowing the claim to the refusals keeps what #108 was protecting
-  -- an environment this hook cannot read must never turn a refusal into a permit
-  -- and GH-144.2 is the same property said from the other side. The permitting
-  half of the pair is asked of `gh issue list`, a command with no pull request in
-  it, because every permit the base rule gives names a `dev-NN` base and so is the
-  environment's business by design. That hook still runs no `gh`; what it starts,
-  since #144, is one `git for-each-ref`, and only once a base has been named.
-
-### GH-108.7
-- text: A NUL, a non-ASCII byte, an invalid UTF-8 sequence or a CRLF line ending in
-  the command leaves every verdict where it was. A NUL or a non-breaking space
-  standing before a command word hides it and the command is permitted, which is
-  accepted: neither byte is a word separator to the shell, so what is hidden is
-  not a command the shell would have run.
-- from: #108
-- kind: doc-claim
-- status: active
-- note: the accepted half is one claim about two bytes that get there differently.
-  A NUL cannot survive a shell's own argument handling, and a non-breaking space
-  survives everything and is simply not whitespace -- `git<NBSP>push` is one word,
-  and there is no executable of that name. The check writes the verdict and the
-  reason together, because the verdict alone reads as a hole.
-
-### GH-108.8
-- text: No hook exits with a status other than 0 or 2, in any environment or on
-  any input of this section.
-- from: #108
-- kind: doc-claim
-- status: active
-- direction: static: it reads a status and not a verdict -- 0 and 2 are what
-  ALLOW and BLOCK are read off, so a check that asserts the status is one of the
-  two has asserted no verdict at all
-- note: #98 made every helper read a third status as FAIL rather than as ALLOW, so
-  a crash is no longer a silent pass. This asks the other half of that: not what
-  the suite does with a third status, but that no case here produces one. It is
-  driven per hook across every fixture and payload of this section rather than
-  written as one check, because the claim is about the cross product.
-
-### GH-108.9
-- text: `report-stale-branches.sh` never exits without saying why. The heading is
-  printed before the first thing that can fail, and each of the three ways it can
-  have nothing to report -- a root it cannot reach, `git` off PATH, a tree that is
-  not a repository -- prints a `branches: NOT READ` line naming its cause and the
-  consequence, that neither detector in `no-work-on-stale-branch.sh` is armed.
-  Which hooks that consequence reaches is GH-144.8's, this entry claiming only
-  that the cause and a consequence are named. The exit status stays 0.
-- from: #108
-- kind: doc-claim
-- status: active
-- direction: static: it reads the report's text, and the report is not a verdict
-- note: this is the row #108 left to the pull request to decide, and it was decided
-  the way every other unread thing in that file already reads -- the fetch, the
-  merge settings, the pull requests and the main ancestry all say so in as many
-  words, and these two paths were the exception. Two of the three causes are
-  reachable from outside and are driven against a copy of the file; the third, a
-  root that cannot be reached, is not, because a directory unsearchable enough to
-  fail that `cd` is one the file cannot be read out of either. Its branch is held
-  to the file's text rather than to a run, and that is the whole of what is
-  claimed for it.
-
-### GH-108.10
-- text: With the fetch failing and `gh` off PATH, `report-stale-branches.sh` exits
-  0 and reports every read it could not make: `fetch: FAILED or timed out`,
-  `merge settings: NOT READ`, `pull requests: NOT READ`, and an active dev branch
-  of `none`. The session starts.
-- from: #108
-- kind: doc-claim
-- status: active
-- direction: static: it reads the report's text and its exit status, neither of
-  which is a hook's verdict
-- note: the row #108's audit wrote as "fetch reports FAILED; settings report NOT
-  READ; exit 0". It was already pinned, but only as text -- GH-100 asserts that
-  the file CONTAINS each of those phrases, which a file that never reaches them
-  contains just as well. This drives it, in a repository whose origin is a path
-  that is not there and under the `gh`-less PATH of GH-108.6, so the degraded
-  report is produced rather than described. It costs no wall clock: a fetch of a
-  local path that does not exist fails at once, and with `gh` absent the two reads
-  behind it are skipped by the rule in that file's header. That is why this one
-  can be a run and why a genuinely offline network cannot.
-
-### GH-128
-- text: A heredoc body begins where bash begins it, so a command written after the
-  terminator is read as a command. A line ending in an ODD run of trailing
-  backslashes continues and the body waits for it; an EVEN run does not continue,
-  and the body begins on the next line. Every spelling of the opener reaches that
-  verdict — `<<-E` with a tab-indented terminator, `<<'E'`, `<<"E"`, `<< E`, an
-  opener continued more than once, and a redirect in front of it — and a heredoc
-  body is still dropped whether or not its lines end in a backslash.
-  `cs_normalise` emits no line longer than the longest line `cs_within_cap`
-  measured of the same command.
-- from: #128, found by Bertan's review of PR #123
-- kind: defect-permitting
-- status: active
-- variants: transformation: heredoc-cont heredoc-cont-dash heredoc-cont-squote
-  heredoc-cont-dquote heredoc-cont-space heredoc-cont-twice
-  heredoc-cont-redirect
-- note: the fifth answer to where a heredoc body begins and the fourth wrong one,
-  and the first about the opener's own line rather than about the terminator. Two
-  rules carry it. `cs_normalise`'s first pass ends the logical line by bash's
-  parity rule rather than by the looser one `cs_join` uses, and it takes the
-  trailing run off the line a body starts after — which under the parity rule is
-  always an even run, the one case where `cs_join` joins and bash does not, and
-  the one line onto which `cs_join` could otherwise glue the first line past the
-  terminator. Each rule has a row in `mutate-hooks.sh`, and a third breaks both,
-  because on an odd run either one alone holds the case the issue was filed for.
-  The first version of this fix used `cs_join`'s rule in the drop and argued that
-  looser than bash was the safe side, because a line held open too long "only
-  exposes more lines as commands" — and this entry said so for one revision. It
-  is false: holding the line open moves the terminator search forward, so a
-  delimiter line bash took as the terminator of an empty body is scanned past and
-  the body runs to the next delimiter, dropping what lies between.
-  `cat <<E \\` / `E` / `echo after` / a push / `E` was permitted at exit 0 where
-  `dev-05` refused it, found by review of PR #151. What IS safe is ending a body
-  early, which is why bash's joining inside an unquoted body and an opener split
-  by its own continuation (`cat <<\` / `E`) are still not modelled. The second
-  consequence was a claim about the cap: forty 15,011-byte groups within the cap
-  made `cs_normalise` emit one 600,400-byte line, and THE LINE CAP in
-  `lib/command-scan.sh` said so until this fix. #127 is the half of that claim
-  which is still open.
-
-### GH-156
-- text: Every verb `append-only-docs.sh` names — `rm`, `mv`, `cp`, `truncate`,
-  `tee`, `sed -i`, `perl -i` — and a truncating redirect are refused with a
-  backslash line continuation anywhere between the verb and the path, as they are
-  on one line. `>>` behind a continuation stays permitted, and so does a
-  revisable directory.
-- from: #156, found by #106's invariance families on the first run of the
-  `continuation` transformation against an `append-only-docs.sh` seed, which is a
-  seed only because #141 brought the hook into their scope
-- kind: defect-permitting
-- status: gap → #156
-- note: the hook matches paths where they stand, with `grep -E`, and `grep`
-  matches within a line; the command never passes through `cs_join`, so a
-  continuation between the verb and the path hides the path from a rule that
-  requires both on one line. Measured: `rm`, `mv`, `tee`, `truncate` and `>` are
-  all permitted behind one backslash. `sed -i` survives by accident, its rule
-  being two greps rather than one — the verb on a line and the path anywhere —
-  which is the shape of the fix, arrived at unintentionally in one rule of four.
-  It is #84's shape again: `no-pr-decisions.sh` calls `cs_join` for this exact
-  reason and the comment above `cs_join` states the defect in the present tense,
-  one file away from the hook that has it. #106's families pin the one
-  transformation they generate, `docs-truncate + continuation`; the other
-  spellings are in the issue.
-
-### GH-171
-- text: `append-only-docs.sh` refuses a verb it names however its command word is
-  spelled: `/bin/rm`, `./truncate`, `"rm"`, `'truncate'` and `\mv` on an
-  append-only path are refused as `rm`, `truncate` and `mv` are.
-- from: #171, found by #106's invariance families when #141's `docs-truncate`
-  seed first met #117's `word-*` transformations, on the merge of dev-05 into
-  PR #160
-- kind: defect-permitting
-- status: gap → #171
-- note: the verb test is the hook's own `grep -E`, which wants the bare name
-  after a start, separator or space, and reads the raw command text; #117
-  reduced a command word to the name it spells in `cs_split`, and this hook takes
-  only `cs_tool_input` and `cs_within_cap` from the library, so the reduction
-  never reaches it. Measured on dev-05's own copy by feeding each command on
-  stdin: the bare spellings and `command rm`/`env rm` are refused, the five
-  spellings above permitted. #106's families pin the five they generate as
-  `docs-truncate + word-*` gap rows, which go red when this is fixed.
-
-### GH-141
-- text: Which `GH-` requirements #106's invariance families seed is a stated rule
-  and not a list. Every entry in their scope — behavioural, `active`, and neither
-  `static` nor seamless — declares in a `variants` field whether the families seed
-  it, name a transformation of it, or reach it not at all with a reason; a seed is
-  tagged on a row of `INV_SEEDS`, a named transformation is in `INV_TRANSFORMS`,
-  and the in-scope set with each entry's answer is held as a literal in the suite
-  as well as here.
-- from: #141, raised in Bertan's review of #140
-- kind: defect-permitting
-- status: active
-- direction: static: it reads this file, the seed table and the transformation
-  list against each other. The variants a seeded entry gains are refusing and
-  permitting checks tagged with that entry, not with this one; what is left here
-  is that the rule and the tables agree, which is read off them
-- note: the family the FR derivation could not see was the one written from
-  defects — 95 `GH-` entries against 49 FRs (measured 2026-09-17), and #140's
-  four findings were all on FR-seeded commands, which is evidence that the FR
-  set is a reasonable start and none at all that it is a sufficient one. Four
-  of #141's additions are transformations rather than seeds, because an entry
-  naming a rewriting of a command is not a command and seeding it would be a
-  category error. What this rule cannot do, and what the literal in
-  `check-hooks.sh` does and does not close, are argued under *The trade, taken
-  knowingly* and are not restated here — that trade was written out in three
-  places on this branch before review counted them.
-### GH-155.1
-- text: The `gh`-less PATH fixture of GH-108.6 is the symlink farm minus exactly
-  one name on every machine. The farm holds a `gh` whatever the host's PATH held:
-  the host's where there is one, and otherwise a stub the suite synthesises, which
-  refuses and names itself if anything ever runs it. `git` is never stubbed --
-  the suite runs `git` throughout, so a farm with no `git` is a machine this suite
-  cannot run on rather than a gap to synthesise over. Nothing in this suite ever
-  runs the farm's `gh`: report-stale-branches.sh is the only hook that calls `gh`
-  at all, and of the four PATHs it is driven under, none both carries a `gh` of
-  the farm's and reaches the call -- the farm minus `git` carries one and stops at
-  the `command -v git` guard standing above the first.
-- from: #155
-- kind: doc-claim
-- status: active
-- direction: static: it reads the fixtures the suite builds and the stub's own
-  text, and no hook's verdict
-- note: the fixture guard used to tolerate a farm that never held the name, so
-  that the suite would run on a machine with no `gh` at all -- and that tolerance
-  made the `gh`-less environment identical to the ordinary one on exactly those
-  machines, where the GH-108.6 checks then asserted their verdicts twice and were
-  evidence about `gh` on none of them. The property is asked of this machine and
-  of the machine this is not: a farm with `gh` taken out stands in for a host that
-  never had one, the same synthesis is run against it, and the one-name difference
-  is asserted there too. That is PR #150's manual reproduction written as a check.
-  It is the fixture rule and not a hook rule, so `mutate-hooks.sh` cannot register
-  it -- that harness refuses `check-hooks.sh` as a target by name, because an edit
-  to the copy would be executed by nothing. What the harness can hold is the hook
-  rule the fixture exists to establish, and #155 registered that: a
-  `no-pr-decisions.sh` that read `gh`'s presence out of the environment, which
-  GH-108.6 must catch. THAT ROW IS NOT EVIDENCE ABOUT WHAT #155 CHANGED, and
-  saying so is the point of writing it down: GH-108.6's `gh`-less fixture held no
-  `gh` on either kind of host, so the row would have been caught before this
-  change as well. It is a mutation GH-108.6 had none of, and it is the nearest
-  the harness can come to the fixture rule. What it does hold of this entry is
-  the second half: the ordering the stub rests on, registered answering the
-  review of PR #161. `report-reads-gh-before-git` puts a `gh` call above
-  report-stale-branches.sh's `command -v git` guard, and the check that reads a
-  marker FILE rather than a message -- that file's own `gh api` redirects stderr
-  away, so a stub announcing itself would be silenced by the line being caught --
-  goes red. That row IS evidence about what #155 changed: nothing was watching
-  the ordering before it, and the comment which asserted the farm's `gh` was
-  never run gave the wrong reason and was found wrong by review rather than by a
-  check. The fixture rule itself is hand-mutated -- four cases, three caught and
-  one a recorded survivor -- in the commit that added it.
-
-  A second round of that review found two more, both of the same shape as the
-  first: a guard weaker than the prose beside it. The derivation asserting that
-  no run of the report is driven under the farm read only calls at column 0,
-  while every environment sweep in that section is an indented loop body and the
-  suite already held an indented call, so the one thing it exists to catch was
-  invisible to it; it now skips leading whitespace, and is driven over a fixture
-  whose only run is indented. And the question "does the farm hold a `gh`" was
-  asked as `command -v`, which resolves a shell function ahead of PATH -- so a
-  host exporting a `gh` wrapper got no stub and the unconditional guard aborted
-  the whole suite, which is this entry's own failure arriving by a rarer route.
-  Both the synthesis and the guard now ask the directory, and a farm built under
-  a shell that defines `gh` is a fixture here.
-
-  A third round found the fix for the first of those carrying the same defect:
-  the heading said the derivation read a call anywhere on a line while the
-  pattern read a line start with indentation allowed, and the comment cited as
-  its evidence `drive_helper`'s `case` arm -- the one call in this suite that is
-  not a statement of its own, and the one line that pattern could not read. The
-  derivation now reads a call at a named position: a line start, after `;`, `&`,
-  `|` or `)`, or after `then`, `do` or `else`. Whitespace is deliberately not a
-  separator, so payload inside a quoted string is out of reach, and the fixtures
-  are written through a variable holding the helper's name so that this file
-  carries none of their calls in any position. What it still cannot read is a
-  call whose command word is a variable, which is stated beside it rather than
-  left to be found. A comment IS read at a separator position -- the new comment's
-  own example is one of the twelve lines matched -- and that is accepted and
-  pinned rather than filtered, because a comment can only add a PATH and never
-  hide a call, while stripping comments would cut at the first `#` and could hide
-  one.
-### GH-109.1
-- text: Each Bash hook finishes a 200-line heredoc whose every body line holds
-  several separators, followed by a command it refuses, in under 1 s, fastest of
-  three, whether the opener is quoted or not.
-- from: #109, and #103 Q28
-- kind: defect-permitting
-- status: active
-- direction: static: a bound on time, not a verdict
-- note: measured at 9 to 33 ms, because a heredoc body is dropped before any pass
-  reads it. The same 200 lines as live commands take up to 3.1 s, which is #127's
-  per-fragment cost and is not bounded here.
-
-### GH-109.2
-- text: Every refusal arm of `no-git-push.sh` and `no-pr-decisions.sh` says the rule
-  it applies, or the spelling that is permitted instead, in a sentence read whole;
-  and each file has as many refusal arms as the suite reads.
-- from: #109, and #103 Q3
-- kind: doc-claim
-- status: active
-- direction: refuse-only: a message is written only on a refusal
-- note: "as many refusal arms as the suite reads" is counted as redirections to
-  fd 2, occurrences rather than lines, continuations folded first, whatever
-  writes through them; an arm is a line, so a literal written on two arms needs
-  a row per line and not per sentence. What no count of the text can say is how
-  often a function holding a write is called, so three things are pinned beside
-  it: the functions each hook defines and which of them write, the call count of
-  each that does, and that neither hook defines a function anywhere but column 1,
-  which those derivations rest on. What the count still cannot reach is listed
-  where the count is, and deliberately not counted here -- this note said "two
-  shapes" and then listed three, in the entry whose own subject is a count in
-  prose, in the file #148 is filed about. The list is the count: a trailing
-  comment inflates it, a redirected group counts once for several arms, a heredoc
-  body is read as code (#182), an indirect call hides the arms it holds (#181),
-  and a write through a duplicated descriptor escapes every derivation at once,
-  so that shape is refused rather than counted (#185).
-  "Read whole" means every shared opening on every arm that carries it --
-  `$REFUSE` on sixteen arms, `$DECIDE` on seven, `$BASE` on seven -- which the
-  second review of PR #169 found true of one of the three, and the load guards
-  of neither until its fifth. `$REFUSE` is also read as an opening rather than
-  as a fragment anywhere in the message, which is what its rows claim and what
-  the third review found them not asking. These are arm counts, not row counts:
-  the suite drives eight commands at `$DECIDE`'s seven arms, because
-  `gh pr close` and `gh pr reopen` reach the same one.
-
-### GH-109.3
-- text: `settings.json` registers exactly the seven Bash hooks under `Bash`, in a
-  fixed order, `append-only-docs-edit.sh` under `Edit|Write`, and the report under
-  `SessionStart`, each at its `.claude/hooks/` path; every `PreToolUse` timeout is
-  5 and the report's is 50.
-- from: #109
-- kind: defect-permitting
-- status: active
-- direction: static: configuration the harness reads
-
-### GH-109.4
-- text: Every hook `settings.json` registers, on any event and matcher, is run by at
-  least one tagged check that names it, and returns that check a verdict status.
-- from: #109
-- kind: defect-permitting
-- status: active
-- direction: static: a property of the suite's run
-- note: the record is written after the status is read, and only for 0 or 2.
-  Review of PR #169 found it written at path resolution instead, where a hook
-  that was deleted or not executable is indistinguishable from one that is: it
-  counted as run, and this was the one row that would have said so. "Names it"
-  is the third review of the same pull request: `every_hook` runs whatever is
-  registered under `Bash`, so while its runs counted, this requirement could
-  not fail for any of the seven Bash hooks -- it was satisfied by the
-  registration it is about. It no longer records.
-
-### GH-109.5
-- text: Every permitted spelling named in CLAUDE.md's boundary section or in a
-  refusal message is permitted by all seven Bash hooks, run in their registered
-  order from the context where it is meant to be permitted, each exiting exactly 0.
-- from: #109, and #103 Q20 and Q21
-- kind: defect-refusing
-- status: active
-- direction: permit-only: the claim is that nothing refuses these; what refuses
-  anything else is every other requirement's
-- variants: none: its subject is not a spelling but how many hooks have to agree
-  on one. A seed names one hook, so a variant of one of these spellings is a
-  claim about that hook and is some other entry's; the conjunction over seven,
-  which is the whole of what this requires, has no seed shape. The spellings
-  themselves are ordinary and the transformations would generate from them
-  happily -- which is why this says `none` with a reason rather than being left
-  out of scope. A seed table row naming every hook rather than one would make
-  this a `seed`, and that is a change to #106's machinery and not to this entry:
-  #179 owns it
-- note: the 41 spellings are a hand-written literal and are not derived off
-  CLAUDE.md's boundary section, so one added there or named in a new refusal
-  message is outside this requirement until someone adds it. Deriving them was
-  measured and declined -- the section's command spans are mostly bare tool
-  names and spellings it refuses, and a derivation wrong in the permitting
-  direction would answer falsely where a short list only leaves a spelling
-  unasked. The argument is in `check-hooks.sh` beside the list; #180 owns the
-  gap it leaves
-
-### GH-164
-- text: No refusal message tells an agent to use a spelling that another hook
-  refuses. `no-commit-to-main.sh`'s push refusal says "Push your dev-NN branch and
-  open a PR instead", and `no-git-push.sh` refuses that push from every checkout an
-  agent could stand in.
-- from: #164, found by #109's cross-hook checks
-- kind: doc-claim
-- status: gap → #164
-- note: the verdicts are right (US-2), so the defect is in the message, and the
-  gap row reads the message: it asserts the sentence is still there and turns red
-  when #164 removes it.
-### GH-144.1
-- text: `no-pr-decisions.sh` asks two questions of a base: the shape, off the text
-  of the command, and then -- of a base that is already `dev-NN` -- whether it is
-  the branch `origin` holds highest. A base that is not the active dev branch is
-  refused in all four spellings, whether it is a dev branch already rotated past
-  or one origin does not have yet, and the active dev branch is derived as the
-  highest `refs/remotes/origin/dev-[0-9]+` by `sort -V`, so `origin/dev-foo` and
-  `origin/dev-05-backup` are not dev branches and `dev-10` is higher than
-  `dev-09`.
-- from: #144
-- kind: defect-permitting
-- status: active
-- variants: none: the shape half of it is the spelling of a base and is varied by
-  the seeds above, but what this entry adds is the comparison against the refs
-  `origin` holds, and no fixture a seed may name holds a dev ref -- which the
-  GH-144.4 checks pin rather than leave to be noticed. A variant rewrites a
-  command's text, and every rewriting of `--base dev-04` still names dev-04; what
-  decides it is the ref state beside it
-- note: the gap GH-108.5 pinned at its measured verdict. The base rule was a
-  pattern, so every `dev-NN` string was accepted whatever refs origin held, while
-  `no-work-on-stale-branch.sh` in the same repository derived the active dev
-  branch from those refs and refused a commit measured against it -- two
-  definitions of one term, disagreeing exactly during a rotation, which is when
-  both refs exist and when a worktree pull request would land on the branch on
-  its way out. The two lines that derive the branch now stand in three files and
-  the suite holds all three equal, which is the same arrangement, and the same
-  argument, that already held the other two.
-
-### GH-144.2
-- text: The lookup only narrows. When the read for the active dev branch comes
-  back empty -- no `origin/dev-NN` ref, `git` off PATH, a directory that is no
-  repository -- the shape question is the whole base rule, so every `dev-NN`
-  base is accepted as it was before GH-144.1 and every refusal made on the text
-  of the line is still made: a base of main, a base that is not `dev-NN`, and a
-  create or REST write naming no base at all.
-- from: #144
-- kind: defect-refusing
-- status: active
-- variants: seed
-- note: this is what made the lookup admissible at all, and #108 is the reason it
-  has to be written down as a requirement rather than as a comment. That issue
-  declined to close the gap because a hook whose verdict depends on an
-  environment read fails open when the read fails, and an abstaining pull-request
-  hook is one that permits `--base main` whenever refs cannot be read. The
-  narrowing is asked only of a base that has already passed the shape question,
-  so the set this hook accepts is a subset of `dev-NN` under every ref state
-  there is: a failed read costs the narrowing and no refusal. The sharpest check
-  is the `git`-off-PATH one, which runs in the fixture holding both refs, so the
-  same command refused under GH-144.1 is permitted there and the only difference
-  is whether the read could be made.
-
-### GH-144.3
-- text: A refusal for the branch question names the branch it expected -- "dev-05
-  ... is not dev-06, the active dev branch here" -- in all four spellings, and the
-  name is read from the refs rather than written into the message. A base that
-  fails the shape question is not told which branch was expected, and a `dev-NN`
-  base is never told it is not a `dev-NN` branch.
-- from: #144
-- kind: defect-permitting
-- status: active
-- direction: refuse-only: every claim here is about the wording of a refusal, and
-  a permit has no message to read
-- variants: none: its subject is the words of a refusal, which no rewriting of the
-  refused command's spelling reaches -- GH-133's reason, one issue on
-- note: #133's complaint about a sibling message, answered for the rule this issue
-  adds rather than for that one. One constant carries both answers, which is what
-  FR-23 asks for and also what makes the wrong answer one edit away, so the two
-  `says_not` rows are the load-bearing half: a dev branch told it is "not a dev-NN
-  branch" is a refusal an agent cannot act on, and main told which dev branch was
-  expected reads as an invitation to retarget a pull request that should not
-  exist. Message content is #109's; what is claimed here is that the branch is
-  named at all and that the two answers do not cross.
-  WHAT IS DEFERRED, so that it reads as a decision and not an oversight: the
-  refusal's first half still says "Write: gh pr create --base dev-NN" although the
-  hook now knows the name, which is the same complaint one sentence earlier in the
-  same message. Two reasons it is not changed here. FR-23's claim is that ONE
-  constant serves all four refusals and five checks pin its text, so rewording it
-  is that requirement's business rather than this one's; and the constant is
-  assigned before any command is judged, so interpolating the branch would make
-  the read happen for every refusal including the one where no base is named,
-  which GH-144.5 says it does not. The branch is named in the clause that follows,
-  so the correction is in the message either way, and #109 owns which sentence it
-  belongs in.
-
-### GH-144.4
-- text: Every check in `check-hooks.sh` whose payload names a `dev-NN` base names
-  the directory it is judged in -- `$ON_DEV` for the shape question, a ref fixture
-  for the branch question -- and none is judged in the directory the suite was
-  started from.
-- from: #144
-- kind: doc-claim
-- status: active
-- direction: static: it reads which directory this suite's own rows were judged
-  in, and no verdict at all
-- note: a rule about the checks rather than about the hook, and the one thing
-  GH-144.1 costs this suite. `check` runs the hook where this file stands, which
-  is inside this repository, so a `dev-05` payload read there is evidence only
-  until the next rotation makes `dev-06` the active branch -- it would then go red
-  blaming a hook that was right, which is the failure this entry exists to stop.
-  Rows moved to `$ON_DEV` when GH-144.1 landed, and the dev-05 merge moved more.
-  HOW MANY IS NOT CLAIMED, because what has to hold is that no bare row exists
-  and not how many scoped ones do, and the derivation is what holds it. The
-  sentence that stood here claimed one in the same breath as denying it --
-  thirty-five, which was also pre-merge. The third review of PR #158 counted the
-  head and got a figure matching neither that number nor the one it derived from
-  the diff, and that disagreement is the argument for carrying no number here
-  rather than a corrected one.
-
-  HOW THIS IS ESTABLISHED CHANGED IN THE FIFTH REVIEW OF PR #158, and the change
-  is the point of this paragraph. It was three derivations over this file's text,
-  strengthened twice and got past twice: the fourth review found a row spelled
-  `check_in "$SUITE_DIR"` that satisfied a rule reading the harness word and not
-  the directory, and the fifth found three more shapes -- a payload in a `for`
-  list, a payload behind a continuation, a loop variable read after its loop --
-  and reached the fourth review's own defect through the first of them. Each fix
-  was an instance patch. The class is a guard narrower than the prose beside it,
-  and a rule about shell source enforced by grepping shell source has another
-  spelling every time: #128, #137, #139 and #155 are the same wall lower down.
-  There is a second class in it, quieter: a derivation that matches nothing
-  returns nothing, and nothing holds no offender, so a row no pattern reaches
-  reads exactly like a row that passed.
-
-  So the claim is read off the RUN instead. Every harness that runs a hook
-  records the directory it actually entered, the script and the payload as the
-  shell expanded it; none of the five shapes survives expansion, because a
-  variable arrives expanded, a loop arrives once per iteration and a continuation
-  is joined before the parser is done. What remains assumed is that every harness
-  records, which is one claim about twelve function bodies and is itself derived:
-  the set of functions calling `hook_path` is compared with the set calling
-  `judged`, so a harness added later that does not record is red. That check
-  found two on its first run.
-
-  THE THREE TEXT DERIVATIONS ARE KEPT AS THE CHEAP ONES, with the three shapes
-  they still miss written beside them rather than patched, and `feed`/`feed_says`
-  removed from the directory alternation -- their first argument is a PATH, so a
-  row through either would have been a false red.
-
-  AND THE REAL CHECK IS NEITHER, which this entry says so that a later reader
-  does not over-trust the derivations. Both read something ABOUT the suite. The
-  five-state rotation experiment runs the suite under `dev-05` alone, `dev-05`
-  beside `dev-06`, `dev-06` alone, no dev ref, and `dev-09` beside `dev-10`, and
-  a row that has rotted turns red there whatever its spelling and whether or not
-  any derivation can see it. It is in PR #158 and in the session 6 dev-log. It is
-  not a check in this file because it needs ref states this suite's fixtures do
-  not have, so it is run by hand at the end of work that touches the base rule --
-  which is a cost, and is the reason the cheap ones are kept.
-
-### GH-144.5
-- text: `no-pr-decisions.sh` reads `refs/remotes/origin/dev-*` once per run, however
-  many bases the line names, and not at all where no base is named.
-- from: #144
-- kind: defect-refusing
-- status: active
-- variants: none: its subject is how many times the hook reads refs, which is a
-  count taken off a git shim and not a verdict a variant could carry
-- note: the claim GH-144.1 costs, and it was false when it was first written. Every
-  caller said `DEV=$(read_active_dev)`; a command substitution is a subshell, so
-  the variable recording the read was set in a process that then exited and the
-  memo was a no-op -- one `git for-each-ref` per base tested, while the comment
-  beside it said once per run. Verdicts were identical either way, the read being
-  idempotent, so no verdict check in the suite could have shown it and none did:
-  it was found by review of the commit that added it. What shows it is a count, so
-  a count is what the suite now reads, off a git shim that logs every
-  `for-each-ref` and passes every other call to the real git -- the fixture kind
-  #111 introduced here. Both payloads name two bases, because a line naming one
-  cannot tell a read made once from a read made per base.
-
-### GH-144.6
-- text: The active dev branch is read in the directory the hook process runs in, which
-  no command moves, so a base aimed at another repository -- by `-R other/repo`, by
-  `GH_REPO=`, or by a `cd` earlier on the line -- is judged against this
-  repository's active dev branch: the branch active here is permitted for another
-  repository, and one this repository has rotated past is refused there too.
-  Accepted, not fixed.
-- from: #144
-- kind: defect-refusing
-- status: active
-- variants: none: its subject is which directory the refs are read in, a state of
-  the tree that the command's text does not move -- that being the whole of what
-  the entry says
-- note: the corner GH-144.1 leaves, written as verdicts rather than as a sentence in
-  a header, because a fix that gives up a case has to say so where a reader will be
-  looking -- the rule this repository took from #50.3. IT IS A NEW REFUSAL, and
-  this note argued the opposite until the second review of PR #158: that a
-  narrower accept set is a subset of what was accepted before and therefore no
-  regression. A narrower accept set is exactly a new refusal.
-  `gh pr create -R other/repo --base dev-04` passed before #144 and is refused
-  now, naming this repository's `dev-05`, and no base a caller can write both
-  passes here and names the other repository's real active branch -- the only
-  way through is `--web`. So the refusing row is a refusal that did not exist
-  before, the permitting row is the one that says which bases still get through,
-  and the reason this is accepted rather than fixed is the stopping rule alone,
-  which is sufficient without the subset claim. It
-  stays open under the stopping rule in `no-pr-decisions.sh`'s header, opening a
-  pull request into another repository being no shape an agent working here writes
-  by accident, and it is filed as no issue for the same reason. The `cd` spelling
-  is the one this entry first missed: review of PR #158 read the header's "the
-  repository the command runs in" and pointed out that a `cd other-repo &&` prefix
-  moves the command and not the hook, so the sentence named the wrong directory in
-  the one case where the two differ. The verdicts were right and only the account
-  of them was wrong, which is why the correction is a wording change and two more
-  rows rather than a fix.
-
-### GH-144.7
-- text: A refusal for the branch question also names the read its verdict rests
-  on: it says to run `git fetch` and try again if the dev branch has rotated
-  since this session last fetched. The sentence is on all four spellings, and on
-  none of the refusals read off the text of the command alone -- a base of main,
-  a base that is not `dev-NN`, and a create naming no base at all.
-- from: #144, found by the second review of PR #158
-- kind: defect-permitting
-- status: active
-- direction: refuse-only: every claim here is about the wording of a refusal, and
-  a permit has no message to read
-- variants: none: its subject is the words of a refusal, which no rewriting of
-  the refused command's spelling reaches -- GH-133's reason, and GH-144.3's
-- note: the second-order cost of reading refs at all, and the review measured it
-  as a defect rather than a wording preference. Rotate and push `origin/dev-06`
-  mid-session: the agent's refs were last fetched at SessionStart, so
-  `ACTIVE_DEV` is still `dev-05` and `gh pr create --base dev-06` -- the correct
-  base -- is refused. GH-144.1's header named `git fetch` as the remedy and the
-  message did not, so the one remedy an agent could read off the refusal was to
-  retarget to `dev-05`, which this hook then permits, landing the pull request
-  on the branch on its way out. That is what #144 was filed to stop,
-  reintroduced through the message. A stale read is wrong in both directions and
-  not only the refusing one -- after the rotation to `dev-06` a stale session
-  refuses `dev-06` and PERMITS `dev-05`, measured in a fixture holding only the
-  superseded ref -- so the refusal is the one place an agent can be told that
-  the read is what to fix. The framing this note carried until the third review
-  of PR #158, that the cost is a refusal rather than a permit, was the same
-  subset reasoning GH-144.6 struck, surviving one entry over. The converse rows
-  are the load-bearing half:
-  a base of main told to fetch would be a remedy that cannot work, the shape
-  question having nothing to do with refs.
-
-### GH-144.8
-- text: Every line of `report-stale-branches.sh` that says a read was not made,
-  or was made against refs no fetch refreshed, names BOTH hooks that read those
-  refs -- `no-work-on-stale-branch.sh`, whose detectors go unarmed, and
-  `no-pr-decisions.sh`, whose base rule accepts any `dev-NN` for want of a ref
-  or judges against whatever branch stale refs still call active. All six lines
-  in that file say so: the three `branches: NOT READ` causes, the skipped fetch,
-  the failed fetch, and `active dev branch: none`. Four are driven and two are
-  held to the file as text -- the unreachable root, which no run can reach, and
-  the skipped fetch, which would need a second report fixture; the split and its
-  reasons are beside the checks.
-- from: #144, found by the third review of PR #158
-- kind: doc-claim
-- status: active
-- direction: static: it reads the text of a report that makes no verdict
-- note: GH-108.9 claims that each cause names a cause and a consequence; this
-  claims WHICH hooks the consequence reaches, which #144 changed from one to two
-  and which nothing updated. The report is the only place an agent is told at
-  session start that the refs under a verdict were not read, so a report naming
-  one hook leaves the other's wrong answer unexplained -- and by GH-144.7 that
-  wrong answer is a wrong permit as well as a wrong refusal. `CLAUDE.md` was
-  corrected for the same fact by the second review of PR #158 and this file was
-  not, which is the shape the third review named: a correction applied where the
-  finding pointed rather than everywhere the claim lives. It is split from
-  GH-108.9 rather than folded into it because the two fail apart -- a report
-  could name both hooks and stop printing a cause, or name a cause and one hook.
+The `GH-` entries, one file each under `requirements/`, named by ID (#200). See
+*The families*. This heading stays so that an entry appended here the old way is
+read and refused rather than read as part of some other section.
 
 ## Provenance: the acceptance criteria of #37–#41
 
@@ -3010,14 +1154,24 @@ it has no entry above (Q16).
 - #163: the in-word half of the quoting GH-137.1 and GH-137.2 read round a field,
   found by the follow-up review of #153; it adds its requirements in the pull
   request that fixes it, after #130, rather than pinning today's verdicts
+- #198: `no-pr-decisions.sh` refuses an unreadable base and permits an unreadable
+  endpoint, and says so nowhere. Raised as Class 2 of rev-agent-130's round-1
+  review of #196 and filed rather than fixed there: the four transitions that
+  review measured were the line-wide read finding an assignment's text, which is
+  #130's own defect, and what is left over is a policy #130's scope does not
+  reach. Cited in the accepted-verdict rows that pin today's answer
+- #196: a pull request, for #130; rev-agent-130's review rounds are cited where
+  each thing they found stands
+- #138: no field rule reads a JSON request body supplied by `--input`; the last of
+  the three the grilling of #130 split out, after #137 and #130 themselves. Cited
+  in the `gh api` heredoc row #130 rewrote, to say what that row is NOT about:
+  reading an ENDPOINT out of a request body is not a thing, `gh api` taking the
+  endpoint as its one positional argument, and reading a FIELD out of one is
+  #138's. It adds its requirements in the pull request that fixes it
 - #141: has an entry above, GH-141, and is listed here only because this file
   cited it before it landed, as the issue that owned deciding which non-FR
   requirements the invariance families seed. It decided that, and the rule is
   *What the invariance families seed*
-- #158: a pull request, for #144; its review found no defect in a verdict and one
-  in the account of them, and GH-144.6 is where the correction stands — the suite
-  cites the number beside the three rows that review asked for, because a claim
-  about which directory is read is worth saying who last got it wrong
 - #107: has entries above, GH-107.1 and GH-107.2, and is listed here only because
   #106's section cited it before it landed — that section writes out three
   mutations of its own and says they are run by hand until the harness exists.
@@ -3074,12 +1228,15 @@ it has no entry above (Q16).
   holds, which resolves a `gh` shell function ahead of PATH and would have aborted
   the suite on a host that exports one. Its third correction is a measurement in
   `mutate-hooks.sh`, whose exclusivity was that host's, and is recorded there
-- #148: mutate-hooks.sh restating in prose the four counts `--list` derives,
-  which is open. Cited where the second review of PR #169 took one of them out:
-  the heading said ABOUT AN HOUR for a registry the paragraph under it put at
-  ninety minutes, and this suite pinned the hour. A rate does not move when a
-  row is registered and a total does, so the heading is a rate now and the pin
-  reads it. That is one of the four, not the issue
+- #148: has an entry above, GH-148, and is listed here only because #109's
+  section cited it before it landed. What that citation records is worth
+  keeping, because it is the issue found independently and from the other side:
+  the second review of PR #169 found the heading saying ABOUT AN HOUR for a
+  registry the paragraph under it put at ninety minutes, with this suite pinning
+  the hour. A rate does not move when a row is registered and a total does, so
+  #169 made the heading a rate. #148 finished it — every count about the
+  registry is derived by `--list`, the heading states no magnitude at all, and
+  the rate is measured, dated, and checked against the suite's growth
 - #154: the order of `$BASE`'s two imperatives on a retarget, which #109 left
   untouched. Cited where `says_first` says why an opening is a different question
   from a fragment: ordering is already a live concern at one of these constants,
@@ -3122,3 +1279,95 @@ it has no entry above (Q16).
   remedy tail survived green. `$REFUSE` was closed with it, on the same
   reasoning and without waiting for a round that measures it. It also found the
   `ABOUT AN HOUR` heading this file records under #148
+- #193: the issue that owns making `--list` apply each row's edit, so the run
+  count is exact rather than an upper bound and a rotted anchor surfaces without
+  a whole-registry pass. Cited beside the three pass-two cases `--list` cannot
+  see, so that the limit names what would lift it. It has no entry above on
+  purpose: the requirement that would carry it is the change, and GH-148 states
+  today's behaviour as the upper bound it is
+- #183: the pull request for #148; Bertan's review of it is cited where each of
+  the seven things it corrected stands. Two were the issue's own thesis failing
+  on the number the branch had just made load-bearing: the harness's runtime was
+  wrong by about a factor of two, and the pin classified as the safe kind of
+  literal asserted only that a string was present and so could never go red as
+  the registry grew. The rest are a count in `CLAUDE.md` that misdescribed which
+  numbers live in two places, two readers of `requirements.md` that were not
+  section-aware, a run count that included rows a pass refuses, and a suppressed
+  stderr. It is not counted here, for the reason #142's entry gives
+- #210: the pull request for #200; rev-agent-200's review of it is cited where
+  what it found stands -- `split-requirements.sh` refusing what the reader would
+  refuse in a file it writes, and the fixtures that tell the split set's `*`
+  from a narrower glob, in the suite and in the harness
+- #158: the pull request for #144, open across the split; it and #184 are the
+  merges `split-requirements.sh` was measured on, and the reason it compares
+  three ways on a merge (rev-agent-200's round 4 of #210). Its review of the
+  cross-repository corner found no defect in a verdict and one in the account of
+  them, and GH-144.6 is where the correction stands — the suite cites the number
+  beside the three rows that review asked for, because a claim about which
+  directory is read is worth saying who last got it wrong
+- #184: the pull request for #118, open across the split; cited beside #158,
+  for the same measurement
+- #216: the pull request for #204's first step; rev-agent-204's review of it is
+  cited where what it found stands -- a helper missing from the library running
+  as `command not found` with the run green, a helper redefined in a later
+  section replacing it silently, and `checks/.+` taking `checks/../<hook>.sh`
+  as the tooling
+- #212: the issue that owns a tag reaching into the checks after it, or missing
+  an arm of an `if`, within one file. Cited where `source_checks` clears `REQ` at
+  every file boundary, which closes that class at the boundary and nowhere
+  else; it has no entry above because the general fix is #212's to choose
+- #220: the pull request for #204's second step; rev-agent-204's review of it is
+  cited where what it found stands -- an end marker written before a file's
+  last line and followed by a `return`, which the record read as a whole run
+  until the marker carried the line it was written from
+- #211: the issue that found every new `GH-` entry still appending a token to
+  `REQUIREMENT_SHAPE` and `INV_SCOPE` after the split; #205 decided it, and the
+  decision is GH-205.3, so it has no entry of its own
+- #222: the pull request for #205; rev-agent-205's review of it is cited where
+  what it found stands -- a generator that read nothing and reported a pass,
+  and a stage path `awk -v` could mangle, which the generator now refuses and
+  reads whole
+- #223: the issue holding what review of #222 filed rather than gated; it is
+  cited where a rule is held for the legacy entries and not yet for a
+  generated one -- an ID deleted outright, with its declaration, its pin and
+  its file, which nothing disagrees with afterwards
+- #159: the issue filed as "append-only-docs-edit.sh is inoperative in every
+  linked worktree". What it measured is narrower than its title, and review
+  of #234 measured the other half: the guard permits an Edit or a Write of an
+  entry in another checkout of this repository than the session's project
+  directory -- a linked worktree's entry when the project directory is the
+  main checkout, and the main checkout's when it is the worktree. Cited in
+  #157's issue file, which pins the dev-log README saying so, so that the
+  README gives the append rule as an instruction rather than as something the
+  guard holds, and which feeds the guard both directions at today's verdict
+  (GH-157.3), against a real linked worktree. Each of the two remedies the
+  issue proposes was measured turning a check there red. It adds its
+  requirements in the pull request that fixes it
+- #176: the heredoc append `append-only-docs.sh` refuses because a `>` in the
+  heredoc's prose, with a guarded path after it, reads as a truncating
+  redirect. Cited in #157's issue file, where the dev-log README routes
+  around it -- a scratch file, appended with `cat <file> >> <entry>` -- and
+  GH-157.3 feeds the guard the README's `>` example at today's verdict;
+  taking the `>` rule out of the guard was measured turning that check red.
+  Whether it is fixed or accepted is its own decision, so it has no entry
+  above
+- #237: the same refusal from the guard's other two rules, a `sed -i` or an
+  `rm`, `mv`, `cp`, `truncate` or `tee` read out of a heredoc's prose, which
+  #176's proposed remedy does not reach. Filed from review of #234 (round 3),
+  when the dev-log README was found citing #176 for all four of its
+  examples. Cited in #157's issue file beside the `sed -i`, `rm` and `mv`
+  rows; taking the `sed -i` rule, or `mv`, out of the guard was measured
+  turning the row it decides red. Fix or accept is its own decision, so it
+  has no entry above
+- #234: the pull request for #157; rev-agent-157's review of it is cited where
+  what it found stands -- a README sentence about a guard, pinned as text,
+  that the guard did not bear out, which is why GH-157.3 feeds the guards the
+  README's own examples, against a fixture the proposed fixes of #159 read;
+  an absence asked of one spelling of the numbered name, then of one case of
+  its stem; and a bullet pinned a sentence at a time, then ending on a ` - `
+  a nested sub-bullet supplies, then chained by pins that were each a
+  substring match anywhere, which is why the span is one literal
+- #235: the issue that owns the #102 header audit comparing basenames. Cited
+  in #157's issue file, which spells the dev-log README's path so that the
+  audit asks for it, and which says the audit is satisfied by any file named
+  `README.md`
