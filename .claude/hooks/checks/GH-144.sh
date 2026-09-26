@@ -500,9 +500,9 @@ for env in "no dev ref:$ENV_DEV_NONE:$PATH" "no repository:$ENV_NOREPO:$PATH" \
 done
 # The git-off-PATH row is the sharpest of the three, and it is worth saying why
 # separately: the fixture it runs in HOLDS dev-05 and dev-06, so the same
-# command that is refused in the rule block above is permitted here. What differs is
-# only whether the read could be made. That is the trade #144 took, written as a
-# verdict rather than as a sentence.
+# command that is refused in the rule block above is permitted here. What
+# differs is only whether the read could be made. That is the trade #144 took,
+# written as a verdict rather than as a sentence.
 req GH-144.2
 env_says "$ENV_DEV_TWO" "$ENV_NO_GIT_BIN" no-pr-decisions.sh 'not a dev-NN branch' \
   'git off PATH: the refusal that remains is the shape one' \
@@ -687,8 +687,8 @@ lacks 'and none of those is judged wherever the suite was started from' \
 # WHAT THIS DERIVATION IS FOR, since PR #158's fifth review, and it is no longer
 # the answer to GH-144.4. It reads the suite's text, and four review rounds found
 # five shapes it cannot see. Three are still open and are named here rather than
-# patched, because the run-reading derivation at the head of the end-of-run file sees all
-# of them and a sixth strengthening would be the same losing bet:
+# patched, because the run-reading derivation at the head of the end-of-run file
+# sees all of them and a sixth strengthening would be the same losing bet:
 #
 #   - a payload in a `for` list judged by `check_in ... "$c" "$c"`: the payload
 #     line does not name the hook and the judging line holds no literal dev-NN,
@@ -734,7 +734,9 @@ lacks 'nor does any fixture list feeding those loops name it' \
      | grep -E 'ENV_|PR_ONE|ON_DEV' | tr '\n' ' ')" '$SUITE_DIR'
 # A PAYLOAD HELD IN A VARIABLE, which is the third route and the one that reads
 # past the first derivation: `PR_JUDGED` matches a literal `dev-[0-9]` on the
-# line, so a payload the line does not spell is invisible to it.
+# line, so a payload the line does not spell is invisible to it. A rule stood
+# here for it, and the next two paragraphs are its history; the one after them
+# says why it is gone.
 #
 # The rule here used to require the `"$` in the LABEL position, which catches the
 # `for c in ...; do check ... "$c" "$c"` shape and nothing else. A row written
@@ -749,10 +751,11 @@ lacks 'nor does any fixture list feeding those loops name it' \
 # so a rule that refuses the SHAPE would refuse them, and a count of permitted
 # ones is a number that goes stale the next time someone writes a third. What
 # has to hold is that no such payload hides a dev-NN base from the derivation
-# above, and the variable is in scope here, so its value is read rather than its
-# name argued about. The `holds` is the non-vacuity guard `lacks` would give:
-# a derivation that stopped matching would otherwise report an empty set of
-# offenders and pass.
+# above, and the variable was in scope here, so its value was read rather than
+# its name argued about, with a `holds` beside it as the non-vacuity guard
+# `lacks` would give: a derivation that stopped matching would otherwise have
+# reported an empty set of offenders and passed.
+#
 # THE VARIABLE-PAYLOAD RULE IS GONE, and its removal is the honest end of a
 # thread rather than a simplification. It asked whether any payload held in a
 # variable hid a dev-NN base from the derivations above, and it read that value
@@ -763,11 +766,11 @@ lacks 'nor does any fixture list feeding those loops name it' \
 # this block one step further in: a check whose subject is narrower than the
 # claim beside it, here narrowed by WHEN it reads rather than by what it matches.
 #
-# It is deleted instead of repaired because the pair at the head of the end-of-run file
-# reads every payload as the shell expanded it, once per row, so a variable
-# payload is not a special case there and needs no rule of its own. Repairing
-# this one would have left two answers to one question, and the weaker one is
-# the one a reader meets first.
+# It is deleted instead of repaired because the pair at the head of the
+# end-of-run file reads every payload as the shell expanded it, once per row, so
+# a variable payload is not a special case there and needs no rule of its own.
+# Repairing this one would have left two answers to one question, and the weaker
+# one is the one a reader meets first.
 PR_DEV_SEED_DIRS=$(grep -E '^[a-z-]+\|no-pr-decisions\.sh\|' "$SUITE_TEXT" \
   | grep -E 'dev-[0-9]' | cut -d'|' -f1 | sort -u | tr '\n' ' ')
 holds 'every #106 seed naming a dev-NN base runs in a fixture with no dev ref' \
