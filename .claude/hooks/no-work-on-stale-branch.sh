@@ -106,9 +106,12 @@
 # remote-tracking ref: so the ahead/behind test below, given `$DEV...`, measured
 # the shadow, and a shadow left at an older commit made a stale branch look
 # clear and its commit silently permitted. Every use of DEV as a revision --
-# here, in the report's own ahead/behind test, and in the remedy the refusal
-# prints -- is written `refs/remotes/$DEV`; the uses that compare it as a string
-# or print it keep the short form, which is what an agent reads.
+# here, in the report's own ahead/behind test, and in every remedy a refusal
+# prints, the merge to catch up, the worktree to start afresh from and the
+# fast-forward a refused merge falls short of -- is written `refs/remotes/$DEV`;
+# the last two were round 4's, one round after the first was fixed. The uses
+# that compare it as a string, or print it as a label, keep the short form,
+# which is what an agent reads.
 #
 # report-stale-branches.sh and, since #144, no-pr-decisions.sh derive the same
 # branch from the same two lines and do not re-argue any of this: one argument,
@@ -316,7 +319,7 @@ fi
 # opinion. That is most sessions, and it costs four git reads.
 [ "$STATE" = "CLEAR" ] && exit 0
 
-GONE_REFUSE="Blocked: this worktree branch has been merged. Its branch on the remote is gone, which is what delete_branch_on_merge does when a pull request lands, so work added here now sits on a branch nothing will merge again. Make a new worktree from ${DEV:-the active dev branch} and move the work there."
+GONE_REFUSE="Blocked: this worktree branch has been merged. Its branch on the remote is gone, which is what delete_branch_on_merge does when a pull request lands, so work added here now sits on a branch nothing will merge again. Make a new worktree from ${DEV:+refs/remotes/}${DEV:-the active dev branch} and move the work there."
 STALE_REFUSE="Blocked: this worktree branch has no work of its own and ${DEV:-the active dev branch} is $BEHIND commit(s) ahead of it. A commit here would be the first thing on a branch the active dev branch has already moved past. Catch up first -- git merge ${DEV:+refs/remotes/}${DEV:-the active dev branch} is permitted from here -- or make a new worktree."
 
 refuse() {
@@ -482,7 +485,7 @@ while IFS= read -r CMD; do
       if [ -n "$CARVE" ] && is_catch_up "$ARGS"; then
         continue
       fi
-      refuse "(A $VERB naming $DEV would be a fast-forward and is permitted; this one is not that.)"
+      refuse "(A $VERB naming refs/remotes/$DEV would be a fast-forward and is permitted; this one is not that.)"
     fi
 
     refuse "(Refused command: git $VERB.)"

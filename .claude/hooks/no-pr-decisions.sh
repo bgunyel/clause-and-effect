@@ -48,6 +48,15 @@
 # would be one that permits `--base main` whenever refs cannot be read. This one
 # abstains from the narrowing and keeps the rule.
 #
+# THAT IS A READ THAT FAILS, AND NOT ONE THAT HANGS. The ref read runs in the
+# base loop, ahead of the gh api rules, so a `git for-each-ref` that stalls holds
+# every refusal after it: round 4 of PR #158's review after the merge across the
+# split measured a merge refused in 39 ms alone taking 7056 ms behind a create
+# naming a base, with a git that slept 7 s. Past the harness's timeout a killed
+# hook is taken as a permit, which is #240's account and was not measured here.
+# The other boundary hooks make unbounded local git reads too, so #240 is filed
+# across the boundary and not answered in this file.
+#
 # "An agent can make a branch" was the objection this file used to rest on, and
 # it is answered by the same asymmetry rather than by trust. Forging a
 # remote-tracking ref -- `git update-ref refs/remotes/origin/dev-99`, which no

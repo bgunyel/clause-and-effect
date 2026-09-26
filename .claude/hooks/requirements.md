@@ -1367,6 +1367,14 @@ it has no entry above (Q16).
   `no-pr-decisions.sh`'s header, where the refusing half is answered by the
   message and this half is not. It needs a network read to close, so fix or
   accept is its own decision, and it has no entry above
+- #240: a git read that hangs rather than fails, holding a boundary hook past
+  the harness's timeout. In `no-pr-decisions.sh` the ref read runs ahead of the
+  gh api rules, so a stalled read holds a merge refusal behind a create that
+  names a base. Filed from round 4 of rev-agent-pr-158's review of PR #158,
+  across the boundary, since the other hooks' local git reads are unbounded too.
+  Cited in GH-144.2's note, GH-108.5's and the #144 issue file, where "a failed
+  read costs the narrowing and no refusal" is qualified to a read that fails. It
+  concerns every hook that reads git, so it has no entry above
 - #234: the pull request for #157; rev-agent-157's review of it is cited where
   what it found stands -- a README sentence about a guard, pinned as text,
   that the guard did not bear out, which is why GH-157.3 feeds the guards the

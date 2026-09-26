@@ -85,7 +85,9 @@ requirement GH-144.2 <<'REQ'
   hook is one that permits `--base main` whenever refs cannot be read. The
   narrowing is asked only of a base that has already passed the shape question,
   so the set this hook accepts is a subset of `dev-NN` under every ref state
-  there is: a failed read costs the narrowing and no refusal. The sharpest check
+  there is: a failed read costs the narrowing and no refusal. A read that hangs
+  rather than fails is not covered by that: it holds the refusals after it, and
+  #240 is the account of what a hook killed at the timeout does. The sharpest check
   is the `git`-off-PATH one, which runs in the fixture holding both refs, so the
   same command refused under GH-144.1 is permitted there and the only difference
   is whether the read could be made.
@@ -517,6 +519,21 @@ env_cmd "$PR_SHADOW_BRANCH/wt-stale" "$PATH" no-work-on-stale-branch.sh ALLOW \
 env_cmd "$PR_SHADOW_BRANCH/wt-stale" "$PATH" no-work-on-stale-branch.sh BLOCK \
   'while the short name, which is the older local branch there, is refused' \
   'git merge origin/dev-06'
+# AND THE OTHER TWO THINGS THE GUARD TELLS AN AGENT TO DO WITH THE BRANCH, which
+# round 4 of the review found printed short one round after the first was
+# qualified: the merged-branch refusal's worktree to start afresh from -- short,
+# `git worktree add ... origin/dev-06` cuts from the older local branch, the
+# stale base the guard exists to stop -- and the refused merge's note on which
+# merge would have been a fast-forward, which short named the very command it
+# had just refused.
+req GH-44.1 US-7
+env_says "$PR_SHADOW_BRANCH/wt-gone" "$PATH" no-work-on-stale-branch.sh 'Make a new worktree from refs/remotes/origin/dev-06' \
+  'the merged-branch refusal names a worktree base that resolves to the ref' \
+  'git commit -m "wip"'
+req GH-44.3 US-7
+env_says "$PR_SHADOW_BRANCH/wt-stale" "$PATH" no-work-on-stale-branch.sh 'A merge naming refs/remotes/origin/dev-06 would be a fast-forward' \
+  'and a refused merge is told which merge would have been permitted, by a name that is not the one it just used' \
+  'git merge origin/dev-06'
 
 # THE REFUSAL NAMES THE BRANCH IT EXPECTED, which is what makes it one edit from
 # correct -- #133's complaint about the retarget message, answered here for the
@@ -614,7 +631,8 @@ env_says "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh 'This names dev-05, which is 
 # THE DEGRADED CASE: a read that comes back empty. This is the half #108
 # declined to trade away, and it is why the lookup could be made at all -- the
 # narrowing is asked only of a base that has already passed the shape question,
-# so an environment this hook cannot read costs the narrowing and no refusal. No
+# so an environment this hook cannot read costs the narrowing and no refusal --
+# where the read fails; a read that hangs is #240's, and not asked here. No
 # dev ref, git off PATH, and a directory that is no repository: in each, every
 # dev-NN base is accepted as it was before #144 and every refusal made on the
 # text of the line is still made.

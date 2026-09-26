@@ -71,10 +71,10 @@ report stops there.
 That fetch is also what arms `.claude/hooks/no-work-on-stale-branch.sh`, which
 refuses a commit on a branch whose work is over, and — since #144 —
 `.claude/hooks/no-pr-decisions.sh`, which judges a pull request's base against
-the active dev branch it derives from those same refs. All of them are exactly
-as fresh as that fetch; when the report says the fetch failed, neither detector
-is armed for that session, and a base is judged against whatever branch the
-stale refs still call active.
+the active dev branch it derives from those same refs. Both hooks are exactly as
+fresh as that fetch; when the report says the fetch failed, neither of the stale
+guard's two detectors is armed for that session, and a base is judged against
+whatever branch the stale refs still call active.
 
 ```bash
 git fetch --prune
