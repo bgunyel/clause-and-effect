@@ -4,7 +4,8 @@
 # is complete.
 #
 # Why: gh resolves a subcommand path at the first non-flag argument, and cobra
-# hands a shorthand it does not know the next word as its value, so
+# hands an option it does not know, longhand or shorthand, the next word as its
+# value, so
 # `gh pr -t view merge 5` merges while every rule in no-pr-decisions.sh read it
 # as a view. git has no such shape -- it rejects an unknown global option itself
 # -- but cs_git_args lacked --config-env and --attr-source, so their value was
@@ -44,15 +45,17 @@ section "=== issue #118: an option before a gh subcommand, and git's global list
 # CREATED A REAL RELEASE on this repository. The defect is not a hypothetical
 # about what gh would do.
 #
-# The spelling matters and the issue's own table got it wrong: cobra treats an
-# unknown LONGHAND as a boolean, so `gh pr --squash view 5` returns
-# `unknown flag: --squash` and eats nothing. It is an unknown or value-taking
-# SHORTHAND that consumes the next word. The rule below is wider than that
-# reading and deliberately so -- it refuses the shape rather than modelling
-# which options gh gives a value to, because that model is gh's flag definitions
-# per group, the list #97 decided against keeping and one a gh release moves.
-# So the longhand rows are refused here too, on the shape, and what they pin is
-# the rule rather than cobra.
+# The longhand eats too. This paragraph said it did not -- that cobra treats an
+# unknown LONGHAND as a boolean, `gh pr --squash view 5` returning `unknown
+# flag: --squash` -- and round 6 of the review showed the message proves
+# nothing either way: `gh pr --squash view --help` prints `gh pr`'s usage on gh
+# 2.45.0, so `view` was eaten, and cobra's stripFlags gives the next word to any
+# option it cannot look up. What differs between spellings is whether the
+# resolved subcommand then RUNS, which its own flags decide: `pr merge` defines
+# `-t`, so `gh pr -t view merge 5` merges. The rule refuses the shape rather
+# than modelling that, because the model is gh's flag definitions per group, the
+# list #97 decided against keeping and one a gh release moves. So the longhand
+# rows pin a word gh really eats.
 #
 # THE RULE IS STATED ONCE, as THE UNREADABLE GH SHAPE in lib/command-scan.sh,
 # and every consumer of cs_gh_args inherits it from there. Nothing in a hook
@@ -592,6 +595,13 @@ holds 'and the refused read of a group no rule guards' \
   "$R118_LEFT_OPEN" '`gh --paginate issue list` is refused although'
 holds 'and the one edit that corrects both' \
   "$R118_LEFT_OPEN" '`gh pr view 5 --json title`'
+# And the mechanism, since it is the sentence a narrowing of the rule would cite.
+# It said "a shorthand it does not know" until round 6 of the review, the reading
+# that an unknown longhand eats nothing, which gh 2.45.0 and cobra's stripFlags
+# both contradict; the longhand flips above pin the verdicts, and this the
+# document's account of them.
+holds 'and says a longhand eats the next word as a shorthand does' \
+  "$R118_LEFT_OPEN" 'longhand or shorthand, or one taking a value, eats the next word'
 
 # THE GIT HALF, which is a different defect wearing the same shape. git rejects
 # an unknown global option itself -- `git --bogus push origin main` exits with

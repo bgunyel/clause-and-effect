@@ -10483,11 +10483,14 @@ inv_global_gitdir() {  # inv_global_gitdir <command>
 # runs.
 #
 # `-t`, a SHORTHAND, and not #118's own `--squash`. That spelling was written
-# here first, straight out of the issue, and it is a command gh rejects: cobra
-# treats an unknown longhand as a boolean, so `gh pr --squash view 5` returns
-# `unknown flag: --squash` and no verb is eaten. Measured on gh 2.45.0. An
-# unknown or value-taking SHORTHAND does consume the next word, and `-t`
-# (`--template`) is one at each of the three group levels: `gh pr -t view view 5`
+# here first, straight out of the issue, and it is a command gh rejects, with
+# `unknown flag: --squash`. This comment said the rejection meant no verb was
+# eaten, and it did not: cobra's path resolution gives the next word to an
+# unknown longhand too, and `gh pr --squash view --help` prints `gh pr`'s usage
+# on gh 2.45.0 (round 6 of the review of #184). What the rejection means is that
+# the resolved command never runs, so the eaten word is visible only as that
+# usage. `-t` is kept because its evidence says more: `-t` (`--template`)
+# takes a value at each of the three group levels, and `gh pr -t view view 5`
 # runs `gh pr view 5`, which then complains that `--template` needs `--json` --
 # the complaint is the evidence, since it proves the second `view` became the
 # subcommand.

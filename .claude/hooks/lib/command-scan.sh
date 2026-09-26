@@ -1800,11 +1800,28 @@ cs_git_args() {
 # judging a gh path inherits one answer and none re-derives it. Issue #118.
 #
 # gh resolves a subcommand path at the first non-flag argument, and cobra gives
-# a value to an option it does not know as a boolean. Measured on gh 2.45.0: an
-# unknown LONGHAND is treated as a boolean and eats nothing -- `gh pr --squash
-# view 5` returns `unknown flag: --squash` -- while a SHORTHAND that is unknown
-# or takes a value consumes the next word. `-t` (`--template`) is value-taking
-# at every group level, so `gh pr -t view merge 5` runs the merge, `gh pr -t
+# the next word as a value to every option it cannot show is a boolean -- one it
+# does not know, LONGHAND OR SHORTHAND, as well as one that takes a value. That
+# is cobra's stripFlags: `hasNoOptDefVal` answers false for a flag it cannot look
+# up, so the word after it is dropped from the path. Which subcommand is RESOLVED
+# is decided there; whether it then RUNS is decided by the option parse after
+# it, against the resolved subcommand's own flags. So `gh pr --squash view 5`
+# resolves `gh pr` itself, `view` eaten, and prints `unknown flag: --squash`
+# with `gh pr`'s usage.
+#
+# This paragraph said the opposite until round 6 of the review of PR #184: that
+# an unknown longhand "is treated as a boolean and eats nothing", measured on gh
+# 2.45.0 from `unknown flag: --squash`. That message is printed whichever way
+# the word goes, so it could not tell the two readings apart; the usage block
+# after it can, and it is `gh pr`'s. The review ran `gh pr --squash view --help`
+# on gh 2.45.0 and got `gh pr`'s usage, as `gh pr -t view --help` does. The
+# answer to that round read the same in stripFlags -- cobra v1.8.1, from a local
+# module cache and not gh's own build -- and did not run gh: no-pr-decisions.sh
+# refuses that command, and no route round the refusal was taken. No verdict
+# moved, the rule refusing the shape in both spellings.
+#
+# `-t` (`--template`) is value-taking at every group level, so
+# `gh pr -t view merge 5` runs the merge, `gh pr -t
 # view view 5` runs a view that then complains `--template` needs `--json`, and
 # `gh release -t list create v1` runs the create. That last one is not a
 # hypothetical: verifying the issue, an agent ran it and it created a real
@@ -1865,10 +1882,16 @@ cs_git_args() {
 #
 # A bare `-` is not an option here and is not this rule's: it is one character,
 # so the walk stops on it and reads it as a subcommand that matches nothing,
-# leaving `gh pr - merge 5` permitted. gh does not run a merge there either --
-# `gh pr -` is no subcommand and gh says so -- and the behaviour predates #118,
-# the same length test having always ended the skip. Named so that the next
-# reader finds it written down rather than by trying it.
+# leaving `gh pr - merge 5` permitted. gh does NOT stop on it. stripFlags
+# collects a path word only when it does not open with `-`, and treats a word
+# as an option only at two characters or more, so a lone `-` is neither and is
+# skipped: `gh pr - merge` resolves `merge`, which the review of PR #184 ran as
+# `gh pr - merge --help` on gh 2.45.0 and got merge's usage. What then stops
+# `gh pr - merge 5`, if anything does, is after resolution and has not been
+# measured. That is #241's class, a token gh never sees counted as a position,
+# and #241 carries it. This paragraph said "`gh pr -` is no subcommand and gh
+# says so" until round 6 of that review. The walk's behaviour predates #118, the
+# same length test having always ended the skip.
 CS_GH_OPAQUE_REFUSAL="Blocked: this gh command writes an option before its subcommand, and gh gives an option it does not know as a boolean the next word as a value -- so the subcommand a hook reads here is not the one gh would run. Refusing rather than guessing it. Move the option after the subcommand: gh pr merge 5 --squash, gh pr view 5 --json title. Only -R, --repo and --hostname may stand in front of a subcommand."
 
 # THE ONE WALK, shared by cs_gh_args and cs_gh_opaque. They ask two questions of

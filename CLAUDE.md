@@ -492,9 +492,10 @@ part that went stale last time.
 
 9. **An option written in front of a `gh` subcommand makes the command
    unreadable, and it is refused, reads included.** gh resolves a subcommand
-   at the first word that is not an option, and a shorthand it does not know,
-   or one taking a value, eats the next word as that value — so the verb a hook
-   reads is not the verb gh runs, and `gh pr -t view merge 5` is a merge. Since
+   at the first word that is not an option, and an option it does not know,
+   longhand or shorthand, or one taking a value, eats the next word as that
+   value — so the verb a hook reads is not the verb gh runs, and
+   `gh pr -t view merge 5` is a merge. Since
    #118, `no-pr-decisions.sh` refuses any option but `-R`, `--repo` and
    `--hostname` in front of a word of a guarded path, which refuses
    `gh pr --json title view 5` although the paragraph above grants reading a
