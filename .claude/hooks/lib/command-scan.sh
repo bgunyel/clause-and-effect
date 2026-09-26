@@ -1892,7 +1892,7 @@ cs_git_args() {
 # and #241 carries it. This paragraph said "`gh pr -` is no subcommand and gh
 # says so" until round 6 of that review. The walk's behaviour predates #118, the
 # same length test having always ended the skip.
-CS_GH_OPAQUE_REFUSAL="Blocked: this gh command writes an option before its subcommand, and gh gives an option it does not know as a boolean the next word as a value -- so the subcommand a hook reads here is not the one gh would run. Refusing rather than guessing it. Move the option after the subcommand: gh pr merge 5 --squash, gh pr view 5 --json title. Only -R, --repo and --hostname may stand in front of a subcommand."
+CS_GH_OPAQUE_REFUSAL="Blocked: this gh command writes an option before its subcommand, and gh gives an option it does not know as a boolean the next word as a value -- so the subcommand a hook reads here is not the one gh would run. Refusing rather than guessing it. Move the option after the subcommand: gh pr view 5 --json title, gh release list --limit 5. Only -R, --repo and --hostname may stand in front of a subcommand."
 
 # THE ONE WALK, shared by cs_gh_args and cs_gh_opaque. They ask two questions of
 # the same walk, and round 1 of Bertan review of #118 found what happens when
@@ -1971,14 +1971,25 @@ CS_GH_AWK='
   # tracked. These two are the ROOT flag set, which `gh help` prints in two
   # lines and which has not changed: gh 2.45.0 defines --help and --version
   # there and nothing else. Both print and exit, so recognising them cannot hide
-  # a verb behind a value they never take. Everything else at the root stays
-  # unreadable, -h included, because cobra registering it is a thing to measure
-  # and not a thing to assume.
+  # a verb behind a value they never take -- AT THE ROOT, which is the half
+  # this said without saying. --help is a persistent flag, known at every level;
+  # --version is the root own, so below the root it is an option gh cannot look
+  # up, and by THE UNREADABLE GH SHAPE it eats the next word. Round 7 of the
+  # review of PR #184 measured it on gh 2.45.0: `gh release --version view
+  # --help` prints release usage with `unknown flag: --version`, view eaten,
+  # while `gh release --help view --help` prints view help. So
+  # `gh release --version view delete v1` resolves `release delete` and was
+  # permitted here as a read. gh then rejects the flag and nothing runs, but
+  # that second step is the one this rule does not model. So --version is
+  # recognised in front of the group only, `atroot`, and --help everywhere.
+  # Everything else at the root stays unreadable, -h included, because cobra
+  # registering it is a thing to measure and not a thing to assume; round 7
+  # measured it below the root, where it eats as --version does.
   function ghopt(t) {
     t = ghreduce(t)
     if (length(t) < 2 || substr(t, 1, 1) != "-") return 0
     if (t == "-R" || t == "--repo" || t == "--hostname") return 1
-    if (t == "--version" || t == "--help") return 2
+    if (t == "--help" || (t == "--version" && atroot)) return 2
     if (t ~ /^--repo=/ || t ~ /^--hostname=/ || t ~ /^-R./) return 2
     return 3
   }
@@ -2008,6 +2019,7 @@ CS_GH_AWK='
     opaque = 0
     matched = 1
     for (i = 1; i <= nparts; i++) {
+      atroot = (i == 1)
       n = length(line)
       p = 1
       while (p <= n) {

@@ -529,6 +529,40 @@ req GH-118 US-13
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh --version, still permitted' 'gh --version'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh --help, still permitted' 'gh --help'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh pr --help, still permitted' 'gh pr --help'
+# ROUND 7: `--version` IS THE ROOT'S AND NOT A GROUP'S. The comment above says
+# `gh pr --help` is "the same flag one level in", and that is true of --help,
+# which gh makes persistent, and was read as true of --version, which is not:
+# cobra adds it to the root's own flags, so below the root it is an option gh
+# cannot look up, and it eats the next word. Measured by the review on gh
+# 2.45.0 -- `gh release --version view --help` prints release usage with
+# `unknown flag: --version`, where `gh release --help view --help` prints view's
+# -- and read in cobra v1.8.1's InitDefaultVersionFlag, which uses c.Flags() and
+# not PersistentFlags(). Each of these was PERMITTED at 9cbeda2 and at dev-05,
+# the first granted as a release read. gh rejects the flag in its second step,
+# so none runs today; that step is the one the rule does not model.
+req GH-118 FR-48 US-15
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK '--version below the root eats the read verb, then a release delete' \
+  'gh release --version view delete v1 --yes'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK '--version below the root, then a release create' \
+  'gh release --version list create v1'
+req GH-118 US-15
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK '--version below the root, then a merge' \
+  'gh pr --version view merge 5'
+# THE TRADE, in the refusing direction: `gh pr --version` is refused as
+# unreadable, where it was permitted. gh rejects it too.
+req GH-118 US-13
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'THE TRADE: --version below the root, alone' \
+  'gh pr --version'
+# And what does not move: --version at the root, and --help at any level.
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW '--version at the root, before a read' \
+  'gh --version pr view 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW '--help below the root takes no word, so the read after it is read' \
+  'gh release --help view v1'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW '--help before an eaten-looking verb resolves the view, not the merge' \
+  'gh pr --help view merge 5'
+req GH-118 US-15
+check_in "$SUITE_DIR" no-pr-decisions.sh BLOCK '--version at the root, and the merge behind it is read' \
+  'gh --version pr merge 5'
 
 # THE ONE LIST, derived off the library and held to a literal. Round 1 of the
 # review found this section asserting that the classification was written once
@@ -565,9 +599,33 @@ req GH-118 US-7
 says "$SUITE_DIR" no-pr-decisions.sh 'option before its subcommand' \
   'the refusal names the cause, not a pull request decision' \
   'gh pr -t view merge 5'
-says "$SUITE_DIR" no-pr-decisions.sh 'gh pr merge 5 --squash' \
+says "$SUITE_DIR" no-pr-decisions.sh 'gh pr view 5 --json title, gh release list --limit 5' \
   'and names where the option goes instead' \
   'gh release -t list create v1'
+# AND EVERY SPELLING IT NAMES IS ONE THAT PASSES, which the first version of
+# the message broke: its first example was `gh pr merge 5 --squash`, a merge,
+# so an agent that followed it was refused again, by the merge rule. Both
+# refusals were true, and US-7 asks for a spelling that passes (round 7 of the
+# review). So the examples are read out of the refusal as the hook prints it,
+# and each is fed to the hook and must be permitted -- a wrong example added
+# later is red here, where a `says` on the text would stay green.
+req GH-118 US-7
+R118_ADVICE=$(jq -n --arg c 'gh release -t list create v1' '{tool_name:"Bash",tool_input:{command:$c}}' \
+  | (cd "$SUITE_DIR" && bash "$HOOKS/no-pr-decisions.sh" 2>&1 >/dev/null) \
+  | sed -n 's/.*Move the option after the subcommand: \([^.]*\)\..*/\1/p')
+# An empty read is a FAILING CHECK here and not a stopped run, which the first
+# version of this was: under a mutant that stops a command being unreadable,
+# the refusal is another rule's, nothing is read, and an `exit 1` turned the
+# whole run into one the harness cannot count -- `gh-option-never-unreadable`
+# reported did-not-complete instead of caught. The count below is 0 then, and
+# red, which is the answer; the loop after it runs no check.
+tok 'the unreadable refusal names two corrected spellings' \
+    '2' "$(printf '%s\n' "$R118_ADVICE" | tr ',' '\n' | grep -c .)"
+while IFS= read -r r118_example; do
+  r118_example=${r118_example# }
+  check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW "the refusal's corrected spelling passes: $r118_example" \
+    "$r118_example"
+done < <(printf '%s\n' "$R118_ADVICE" | tr ',' '\n')
 says "$SUITE_DIR" no-pr-decisions.sh 'option before its subcommand' \
   'and reaches a group no rule here guards, where the decision message would lie' \
   'gh --squash view issue list'
@@ -587,8 +645,18 @@ says_not "$SUITE_DIR" no-pr-decisions.sh 'deciding a pull request' \
 req GH-118 US-13
 flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an unreadable option before an unguarded group, the one CLAUDE.md names' \
   'gh --paginate issue list'
+# READ AS A REFLOW, NOT AS LINES. `holds` is a substring match, and the section
+# as written holds each pinned phrase on one line only by where the wrap fell:
+# round 7 of the review rewrapped item 9, changing no word, and the longhand pin
+# went red. So the section goes through comment_reflow, #157's reader for the
+# dev-log README, which joins the lines and squeezes the blanks. Its one
+# difference from a plain join is that it takes a `#` off a line OPENING with
+# one, and item 9 has a line holding `#118,` -- indented three spaces as a list
+# continuation, so the `^#` it strips never matches there; a `#` pushed to
+# column 0 would lose its mark and turn a pin red, never green. The same raw
+# shape in the other pins over CLAUDE.md is #192's class, and is on #192.
 R118_LEFT_OPEN=$(awk '/^\*\*Deliberately left open\.\*\*/ { f = 1 } f && /^## / { exit } f' \
-  "$SUITE_DIR/../../CLAUDE.md")
+  "$SUITE_DIR/../../CLAUDE.md" | comment_reflow)
 holds 'CLAUDE.md names the refused pull request read as a left-open consequence' \
   "$R118_LEFT_OPEN" '`gh pr --json title view 5` although the paragraph above grants'
 holds 'and the refused read of a group no rule guards' \

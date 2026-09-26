@@ -1420,3 +1420,11 @@ it has no entry above (Q16).
   of #184 found the withdrawal called the one state a `command -v` guard cannot
   see when it is the harmless one of two. It concerns every awk program the
   library carries, so it has no entry above
+- #192: `written` and `unarmed` grep a file's lines, so a phrase that wraps
+  reads as absent -- a false green for an absence pin and a false red for a
+  presence pin. Cited in #118's issue file, where the four pins over CLAUDE.md's
+  ninth left-open consequence read the section through `comment_reflow` after
+  round 7 of the review of #184 rewrapped the item and turned one red. The same
+  raw shape in the GH-99.1 and GH-117.1 pins over CLAUDE.md, and in
+  `prose_count`, was added to #192 then, as that issue's class. It adds its
+  requirements in the pull request that fixes it
