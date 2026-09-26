@@ -1216,11 +1216,6 @@ it has no entry above (Q16).
   at all -- which is GH-134.1 and the corrected pin under GH-134. It has no
   entry of its own, for the reason #142 has none: a count of what a review
   corrected is the kind of number this file has already had to fix once
-- #144: the permitting gap #108 found and did not fix — a pull request based on a
-  dev branch that is not the active one. It has no entry above on purpose: the
-  requirement that would carry it is the fix, and GH-108.5 pins the verdict as it
-  stands and names it a gap. An entry here would read as a requirement the hooks
-  meet
 - #173: the pull request for #139; Bertan's review of it found the two holes
   GH-139's note records -- `$'...'` escapes left undecoded, a quote open at the
   end of a line read as a word with no whitespace, a NUL decoded as a
@@ -1305,7 +1300,11 @@ it has no entry above (Q16).
   from a narrower glob, in the suite and in the harness
 - #158: the pull request for #144, open across the split; it and #184 are the
   merges `split-requirements.sh` was measured on, and the reason it compares
-  three ways on a merge (rev-agent-200's round 4 of #210)
+  three ways on a merge (rev-agent-200's round 4 of #210). Its review of the
+  cross-repository corner found no defect in a verdict and one in the account of
+  them, and GH-144.6 is where the correction stands — the suite cites the number
+  beside the three rows that review asked for, because a claim about which
+  directory is read is worth saying who last got it wrong
 - #184: the pull request for #118, open across the split; cited beside #158,
   for the same measurement
 - #216: the pull request for #204's first step; rev-agent-204's review of it is
@@ -1360,6 +1359,22 @@ it has no entry above (Q16).
   rows; taking the `sed -i` rule, or `mv`, out of the guard was measured
   turning the row it decides red. Fix or accept is its own decision, so it
   has no entry above
+- #238: the permitting half of a stale read, which #144 leaves: a session that
+  fetched before a dev branch rotated reads the outgoing branch as active, so
+  `--base dev-05` is permitted without a word, and no refusal exists to name
+  the remedy in. Filed from round 1 of rev-agent-pr-158's review of PR #158,
+  after the merge across the split. Cited in GH-144.7's note and in
+  `no-pr-decisions.sh`'s header, where the refusing half is answered by the
+  message and this half is not. It needs a network read to close, so fix or
+  accept is its own decision, and it has no entry above
+- #240: a git read that hangs rather than fails, holding a boundary hook past
+  the harness's timeout. In `no-pr-decisions.sh` the ref read runs ahead of the
+  gh api rules, so a stalled read holds a merge refusal behind a create that
+  names a base. Filed from round 4 of rev-agent-pr-158's review of PR #158,
+  across the boundary, since the other hooks' local git reads are unbounded too.
+  Cited in GH-144.2's note, GH-108.5's and the #144 issue file, where "a failed
+  read costs the narrowing and no refusal" is qualified to a read that fails. It
+  concerns every hook that reads git, so it has no entry above
 - #234: the pull request for #157; rev-agent-157's review of it is cited where
   what it found stands -- a README sentence about a guard, pinned as text,
   that the guard did not bear out, which is why GH-157.3 feeds the guards the

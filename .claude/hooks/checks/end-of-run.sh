@@ -1,7 +1,8 @@
 #!/bin/bash
 # THE END-OF-RUN FILE of the hook check suite: the checks that read the whole
-# record every check before them wrote -- every requirement covered, every check
-# tagged and given a direction, #148's count chain, #205's generated entries --
+# record every check before them wrote -- what every hook run was judged against
+# (#144), every requirement covered, every check tagged and given a direction,
+# #148's count chain, #205's generated entries --
 # and the shape they are held to with them: REQUIREMENT_SHAPE, which holds the
 # legacy entries, and the issue files' shape pins beside it, handed over
 # together as REQUIREMENT_SHAPE_HELD. check-hooks.sh sources it last, whatever
@@ -11,6 +12,109 @@
 # "below", "this file" and "this suite" in a comment here mean the suite as one
 # text, its files in the order the driver sources them -- which is the order
 # they stood in when they were one file.
+
+section "=== issue #144: what was judged where, read off the run and not off the suite's text ==="
+# WHY THIS IS HERE AND NOT IN THE #144 ISSUE FILE, which holds the rest of
+# GH-144.4. It reads $JUDGED, the record every run of no-pr-decisions.sh wrote,
+# and asks that no dev-NN payload was judged against this repository's refs;
+# asked from an issue file, it would read only the runs of the files sourced
+# before that one, and an issue file listed after it could judge a bare dev-NN
+# row unseen. This file is sourced after every other, which is the reason the
+# #205 checks that read every issue file's declarations stand here too. It is
+# first here so that its rows are in the ledger the #104 findings below are read
+# from.
+#
+# THE DERIVATIONS IN THE #144 ISSUE FILE READ THE SUITE'S TEXT; THIS READS THE
+# RUN, and that is the whole difference. GH-144.4's three source derivations
+# were strengthened twice and got past twice: PR #158's fourth review found a
+# row spelled `check_in "$SUITE_DIR"`, which satisfied a rule that read the
+# harness word and not the directory, and its fifth found three more shapes --
+# a payload in a `for` list, a payload behind a `\` continuation, and a loop
+# variable read once after the loop rather than once per row. A rule about shell
+# source enforced by grepping shell source will always have another spelling:
+# #128's heredoc opener, #137's quote spellings, #139's quoted `=` and #155's
+# two guards are the same wall lower down.
+#
+# AND THE RECORD IS WRITTEN BY THE HOOK'S PROCESS, which is the second time
+# that lesson was needed. Until round 1 of PR #158's review after the merge
+# across the split, each helper called a `judged` function, and a derivation
+# held the helpers calling `hook_path` equal to the ones calling `judged` --
+# the rule over shell source again, one level up, where it had moved from row
+# spellings to helper definitions. That review measured it past three ways: a
+# hook run at a file's top level, outside any function, which neither list saw;
+# a helper whose name holds a digit, which its opener did not match; and the
+# opener broken in both copies, which left two empty lists equal and the row
+# green. It also found what the reader then did with the record: it refused the
+# one string $SUITE_DIR, so a row judged in $REPO_ROOT passed, and it read a
+# payload line by line, so a newline moved `--base dev-05` onto a line with no
+# script beside it. So BASH_ENV writes the record from inside the hook's process
+# (see the driver's prelude), whatever route started it, with the directory the
+# process is really in and a payload that is one line; and the reader below
+# resolves each directory to the repository whose refs a hook run there reads.
+#
+# WHAT THE READER ASKS. Of every recorded run of a file named no-pr-decisions.sh
+# whose stdin names `dev-` and a digit anywhere -- wider than a base, on purpose:
+# a false red names a row to look at, a false green names nothing -- the
+# directory is resolved with git to its common directory, and none may be this
+# repository's. Asked with git and not by path, because a linked worktree and the
+# main checkout it hangs off share one set of refs from two unrelated paths. A
+# directory that no longer exists when this runs is named too, having left
+# nothing to resolve. WHAT IT DOES NOT SEE: a hook run under GIT_DIR, which reads
+# the refs that names rather than its directory's; no check here sets one for
+# no-pr-decisions.sh.
+#
+# `judged_here` is a function so that the fixture after it can be handed a record
+# written for it, which the repository's own record -- clean when the suite is --
+# never could be.
+req GH-144.4
+# `judged_dev_dirs` is the one filter both rows below read the record through,
+# so that the `holds` certifies the set `judged_here` resolves: two copies of it
+# were one widening away from certifying a set the reader did not read (round 3
+# of PR #158's review after the merge across the split).
+judged_dev_dirs() {  # judged_dev_dirs <record> -- the directory of each run of no-pr-decisions.sh whose stdin names dev-NN
+  awk -F'\t' '$2 ~ /(^|\/)no-pr-decisions\.sh$/ && $3 ~ /dev-[0-9]/ { print $1 }' "$1" | LC_ALL=C sort -u
+}
+judged_here() {  # judged_here <record> <common dir> -- each dev-NN run's directory that reads <common dir>'s refs
+  local dir common
+  judged_dev_dirs "$1" \
+    | while IFS= read -r dir; do
+        if ! [ -d "$dir" ]; then
+          printf '%s (gone, so nothing says whose refs it read)\n' "$dir"
+          continue
+        fi
+        common=$(cd -- "$dir" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || continue
+        [ "$common" = "$2" ] && printf '%s\n' "$dir"
+      done
+}
+THIS_COMMON=$(cd -- "$REPO_ROOT" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+[ -n "$THIS_COMMON" ] \
+  || fail static 'this repository has no git common directory to compare with, so the checks below prove nothing'
+ON_DEV_P=$(cd -- "$ON_DEV" && pwd -P)
+REPO_ROOT_P=$(cd -- "$REPO_ROOT" && pwd -P)
+LIB_P=$(cd -- "$SUITE_DIR/lib" && pwd -P)
+# The reader, handed a record: a dev-NN run in the repository's root and one in
+# a subdirectory of it are named, and neither is $SUITE_DIR -- the one string the
+# first reader refused. A run in $ON_DEV is not, nor is a run in the repository
+# whose payload names no dev branch. The last line is a run whose base the first
+# reader could not see, a newline having put it on a line of its own.
+printf '%s\t%s\t%s\n' \
+  "$REPO_ROOT_P" "$HOOKS/no-pr-decisions.sh" '{"tool_name":"Bash","tool_input":{"command":"gh pr create --base dev-05"}}' \
+  "$LIB_P" /x/no-pr-decisions.sh 'gh pr edit 5 --base dev-06' \
+  "$ON_DEV_P" "$HOOKS/no-pr-decisions.sh" 'gh pr create --base dev-05' \
+  "$REPO_ROOT_P" "$HOOKS/no-pr-decisions.sh" 'gh pr create --base main' \
+  "$REPO_ROOT_P" "$HOOKS/no-git-push.sh" 'git push origin dev-05' > "$FIXTURES/judged-fixture"
+tok 'the reader names a dev-NN run in any directory of this repository, and no other run' \
+  "$(printf '%s\n' "$REPO_ROOT_P" "$LIB_P" | LC_ALL=C sort)" \
+  "$(judged_here "$FIXTURES/judged-fixture" "$THIS_COMMON")"
+# And the repository's own record. The `holds` is the half that makes the
+# `tok` after it a finding and not an absence: $ON_DEV is where the #40 rows
+# judge a dev-NN base, so a record that holds no run there is a record that was
+# not written, and a reader that matched nothing would otherwise report no
+# offender and pass.
+holds 'the run recorded dev-NN payloads judged in $ON_DEV, so the absence below is one that was looked for' \
+  "$(judged_dev_dirs "$JUDGED")" "$ON_DEV_P"
+tok 'and not one dev-NN payload was judged in a directory that reads this repository'"'"'s refs' \
+  '' "$(judged_here "$JUDGED" "$THIS_COMMON")"
 
 section "=== issue #104: every requirement is covered, and every check says which ==="
 # The suite reads the requirements -- requirements.md, and the `GH-` entries
@@ -1730,12 +1834,12 @@ exit 0" "$(bash "$HOOKS/generate-requirements.sh" --check "$R205_VIEW" 2>&1; pri
 # entry's tokens are pinned in its issue file. The shape pins are compared with
 # the entries in the #104 findings below, handed over as REQUIREMENT_SHAPE_HELD;
 # the variants pins are compared here, with the scope the #141 section derived,
-# whose own comparison holds INV_SCOPE to the legacy entries alone. Both sides
-# of the last check are empty today, because no generated entry is in the
-# families' scope yet: what it would compare is the split `legacy_tokens` makes,
-# which the #205 issue file asks of a fixture, and the pins, which it asks of
-# `variants_pin`; what it asks of this repository is nothing until such an entry
-# is written.
+# whose own comparison holds INV_SCOPE to the legacy entries alone. The #144
+# issue file's six entries are the first generated ones in the families' scope,
+# so since the merge of dev-05 into PR #158 the last check compares something in
+# this repository: the split `legacy_tokens` makes of the derived scope, which
+# the #205 issue file asks of a fixture, and the pins #144's file wrote. Until
+# then both sides were empty, and the check asked this repository nothing.
 req GH-205.3
 tok 'REQUIREMENT_SHAPE and INV_SCOPE hold legacy entries only, and each generated entry is pinned once, in the issue file that declares it' \
   '' "$(pins_bad "$DECLARED" "$PINNED" "$REQUIREMENT_SHAPE" "$INV_SCOPE" "$REQUIREMENTS_LEGACY")"

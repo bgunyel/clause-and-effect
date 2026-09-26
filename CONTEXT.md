@@ -22,6 +22,17 @@ with commits nobody has pushed. A worktree branch is therefore never cut from
 it. Bringing it up to date is not an agent's to do either — moving it is a
 reserved act, below — so the tip an agent reads is the remote-tracking ref, which
 the SessionStart fetch in `.claude/hooks/report-stale-branches.sh` refreshes.
+
+*Which* `dev-NN` is active is read the same way everywhere: the highest
+`refs/remotes/origin/dev-[0-9]+` by version sort. Three files derive it from that
+one pipeline — the report above, `no-work-on-stale-branch.sh`, and since #144
+`no-pr-decisions.sh`, which judges a pull request's base against it. So a session
+that has not fetched since a rotation reads the superseded branch as active, and
+that costs a wrong verdict in BOTH directions: `--base dev-05` is permitted after
+the rotation to `dev-06`, which lands a pull request on the branch on its way out
+and is the defect #144 exists to close, and `--base dev-06` — the correct base —
+is refused. Measured in a fixture holding only the superseded ref. Only where no
+`dev-NN` ref can be read at all does the rule fall back to accepting any of them.
 _Avoid_: development branch, current branch
 
 **Check**:

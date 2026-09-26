@@ -13,14 +13,8 @@
 section "=== issue #205: an entry written after it is declared in its issue file, and its file is generated ==="
 
 # `requirement`, the declaration, and `shape_pin` are in the library since
-# #215's issue file became their second caller; their comments moved with them.
-# `variants_pin` is `shape_pin`'s twin for the variants keyword, and stays here
-# while this file is its one caller.
-variants_pin() {  # variants_pin '<ID>:<keyword>...' -- the variants of entries this issue file declares
-  local -
-  set -f
-  printf 'variants\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$PINNED"
-}
+# #215's issue file became their second caller, and `variants_pin` since #144's
+# became its; their comments moved with them.
 
 requirement GH-205.1 <<'REQ'
 - text: A `GH-` entry outside the legacy set is generated. Its file under
@@ -136,12 +130,12 @@ tok 'shape_pin and variants_pin record the kind, the issue file and the tokens, 
   "$(printf 'shape\tchecks/GH-205.sh\tGH-9.1:static GH-9.2 \nvariants\tchecks/GH-205.sh\tGH-9.2:none \n')" \
   "$(cat "$R205/pins")"
 # And the file named is the CALLER's, not the file defining the three. The
-# calls above are all in this file. Since #215, `requirement` and `shape_pin`
-# are defined in the library, so for those two the index of BASH_SOURCE is
-# already asked above; `variants_pin` is still defined here, so for it the two
-# are one path and it is not. A file sourced from a fixture asks it of all
-# three, and that file is outside .claude/hooks/, so it is named by its whole
-# path. Its declaration is written with an `@` taken off as the file is made,
+# calls above are all in this file, and all three are defined in the library --
+# `requirement` and `shape_pin` since #215, `variants_pin` since #144 -- so the
+# index of BASH_SOURCE is already asked above. It was not asked of
+# `variants_pin` while this file defined it, the two paths being one. A file
+# sourced from a fixture asks it of all three, and that file is outside
+# .claude/hooks/, so it is named by its whole path. Its declaration is written with an `@` taken off as the file is made,
 # as the fixtures below are.
 sed 's/@requirement/requirement/' > "$R205/caller.sh" <<'FIX'
 @requirement GH-9.3 <<'REQ'

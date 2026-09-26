@@ -1639,7 +1639,7 @@ req GH-47.1 US-13
 check no-pr-decisions.sh ALLOW 'gh -R o/r pr view 5'           'gh -R o/r pr view 5'
 check no-pr-decisions.sh ALLOW 'gh -R o/r pr list'             'gh -R o/r pr list'
 req GH-47.1 FR-16
-check no-pr-decisions.sh ALLOW 'gh -R o/r pr create, based' 'gh -R o/r pr create --base dev-05 --fill'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'gh -R o/r pr create, based' 'gh -R o/r pr create --base dev-05 --fill'
 # The baseless spelling made this point until #40 gave a create a base to
 # name. It is refused now, and for the base rather than for the flag, which
 # is what the line above still has to show.
@@ -2079,7 +2079,11 @@ flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'a wrapped commit on main, bash
 # is entitled to run, written in one of the five spellings.
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh pr view as an absolute path' \
   '/usr/bin/gh pr view 5'
-check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh pr create --base dev-05 as an absolute path' \
+# In $ON_DEV and not $SUITE_DIR, alone among the rows around it: what this row
+# tests is the absolute-path spelling of the command word, and since #144 a
+# dev-NN base makes the verdict depend on refs as well. Judged here it passed
+# only while dev-05 is the active branch. GH-144.4, found by the fourth review.
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'gh pr create --base dev-05 as an absolute path' \
   '/usr/bin/gh pr create --base dev-05 --title x'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'gh issue list, the name double quoted' \
   '"gh" issue list'
@@ -2410,13 +2414,33 @@ says "$ON_DEV" no-pr-decisions.sh 'Reading one is permitted' \
 says_not "$ON_DEV" no-pr-decisions.sh 'publishing or deleting' \
   'gh api refusal: a PATCH is not described as publishing or deleting' 'gh api -X PATCH repos/o/r/releases/1'
 
-section "=== issue #40, a pull request must name an active dev branch as its base ==="
+section "=== issue #40, a pull request must name a dev-NN branch as its base, in every spelling ==="
 # The quietest of the four spellings names nothing at all: with no base given,
 # gh sends the pull request to the repository's default branch, which is main.
 # Nothing in the command mentions main, so a denylist over the text could not
 # have seen it -- the same shape as the bare push, which is answered the same
 # way. The four spellings are checked together because closing one and leaving
 # the others is the defect this ticket was filed against.
+#
+# WHY THE dev-NN ROWS BELOW NAME A DIRECTORY AND THE main ROWS DO NOT, which is
+# #144's mark on this section. Since #144 the base rule asks two questions: the
+# shape, off the text, and then -- of a base that is already dev-NN -- whether it
+# is the dev branch origin holds highest. So a payload naming a dev-NN base has
+# a verdict that depends on the refs of the repository the hook runs in, and
+# `check` runs in the directory the suite was started from, which is this
+# repository. Read there, every row below saying `dev-05` would be evidence only
+# until the next rotation makes `dev-06` the active branch, and a check that goes
+# red on a correct hook because the calendar moved is worse than no check.
+#
+# They run in $ON_DEV instead, which has no remote and so no dev ref, where the
+# lookup abstains and the shape question is the whole rule -- what this section
+# measured before the lookup existed, and what it is still about: every spelling
+# a base can be written in. The lookup itself is measured in the #144 section
+# below, in fixtures whose refs are a literal. A payload naming main, master or
+# no base at all is refused on the text under every ref state there is, so those
+# rows are left where they were and say so by staying there. The rule is
+# mechanical -- a dev-NN base in the payload means a named directory -- and the
+# #144 section holds this file to it.
 req FR-16 FR-15 US-8
 check no-pr-decisions.sh BLOCK 'create into main'                'gh pr create --base main --title x'
 check no-pr-decisions.sh BLOCK 'create into main, --base='       'gh pr create --base=main --title x'
@@ -2432,14 +2456,14 @@ check no-pr-decisions.sh BLOCK 'a base flag whose value never came' 'gh pr creat
 req FR-15 FR-16 US-8
 check no-pr-decisions.sh BLOCK 'create into master'              'gh pr create --base master --title x'
 check no-pr-decisions.sh BLOCK 'create into a worktree branch'   'gh pr create --base worktree-issue-40-pr-base'
-check no-pr-decisions.sh BLOCK 'create into dev-05-ish, not dev-NN' 'gh pr create --base dev-05-old'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'create into dev-05-ish, not dev-NN' 'gh pr create --base dev-05-old'
 # A flag may sit in front of the verb, which is what cs_gh_args is for; and the
 # check is of every create on the line rather than the first, which is what
 # obliges the loop to hand it one command at a time.
 req FR-14 GH-47.1
 check no-pr-decisions.sh BLOCK 'flag before the verb, no base'   'gh pr --repo o/r create --title x'
 req FR-15 GH-47.2
-check no-pr-decisions.sh BLOCK 'a good create, then one into main' 'gh pr create --base dev-05 --title x && gh pr create --base main --title y'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a good create, then one into main' 'gh pr create --base dev-05 --title x && gh pr create --base main --title y'
 # Retargeting is choosing the destination a second time.
 req FR-17 FR-15 US-10
 check no-pr-decisions.sh BLOCK 'retarget to main'                'gh pr edit 35 --base main'
@@ -2464,23 +2488,23 @@ check no-pr-decisions.sh BLOCK 'graphql create naming no base'   'gh api graphql
 # find and nothing to read. Refused outright, as a wrapped push and a wrapped
 # read of a pull request already are.
 req FR-4 GH-51.2
-check no-pr-decisions.sh BLOCK 'a good create inside bash -c'    "bash -c 'gh pr create --base dev-05 --title x'"
-check no-pr-decisions.sh BLOCK 'a REST create inside bash -c'    "bash -c 'gh api -X POST repos/o/r/pulls -f base=dev-05'"
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a good create inside bash -c'    "bash -c 'gh pr create --base dev-05 --title x'"
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a REST create inside bash -c'    "bash -c 'gh api -X POST repos/o/r/pulls -f base=dev-05'"
 # The accepted false positive, recorded rather than worked around: cs_split cuts
 # on the parens of a command substitution, so a base written after one lands in
 # a later fragment and the create no longer names one. Put the base first.
 req FR-14
-check no-pr-decisions.sh BLOCK 'base written after a substitution' 'gh pr create --title x --body "$(cat b.md)" --base dev-05'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'base written after a substitution' 'gh pr create --title x --body "$(cat b.md)" --base dev-05'
 
 section "=== issue #40, a base naming a dev branch is permitted in every spelling ==="
 req FR-14 FR-15 FR-16 US-8 US-9
-check no-pr-decisions.sh ALLOW 'create into the dev branch'      'gh pr create --base dev-05 --title x --body y'
-check no-pr-decisions.sh ALLOW 'create into dev, --base='        'gh pr create --base=dev-05 --title x'
-check no-pr-decisions.sh ALLOW 'create into dev, -B'             'gh pr create -B dev-05 --title x'
-check no-pr-decisions.sh ALLOW 'create into dev, -B attached'    'gh pr create -Bdev-05 --title x'
-check no-pr-decisions.sh ALLOW 'create into an older dev-NN'     'gh pr create --base dev-04 --title x'
-check no-pr-decisions.sh ALLOW 'flag before the verb, good base' 'gh pr --repo o/r create --base dev-05 --title x'
-check no-pr-decisions.sh ALLOW 'base first, then a substitution' 'gh pr create --base dev-05 --body "$(cat b.md)"'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'create into the dev branch'      'gh pr create --base dev-05 --title x --body y'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'create into dev, --base='        'gh pr create --base=dev-05 --title x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'create into dev, -B'             'gh pr create -B dev-05 --title x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'create into dev, -B attached'    'gh pr create -Bdev-05 --title x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'create into another dev-NN, no ref saying which is active' 'gh pr create --base dev-04 --title x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'flag before the verb, good base' 'gh pr --repo o/r create --base dev-05 --title x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'base first, then a substitution' 'gh pr create --base dev-05 --body "$(cat b.md)"'
 # The browser hand-off creates nothing: a person on the prefilled page chooses
 # the base and confirms. That exempts a missing base and nothing else.
 req FR-21 US-12
@@ -2488,13 +2512,13 @@ check no-pr-decisions.sh ALLOW 'browser hand-off, --web'         'gh pr create -
 check no-pr-decisions.sh ALLOW 'browser hand-off, -w'            'gh pr create -w'
 check no-pr-decisions.sh BLOCK '--web does not launder a base'   'gh pr create --web --base main'
 req FR-17 US-10 FR-15
-check no-pr-decisions.sh ALLOW 'retarget to the dev branch'      'gh pr edit 35 --base dev-05'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'retarget to the dev branch'      'gh pr edit 35 --base dev-05'
 req US-13 FR-17
 check no-pr-decisions.sh ALLOW 'edit without touching the base'  'gh pr edit 35 --add-label bug'
 req FR-18 US-11 FR-15
-check no-pr-decisions.sh ALLOW 'REST create into dev'            'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'REST create into dev'            'gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x'
 req FR-19 US-11 FR-15
-check no-pr-decisions.sh ALLOW 'graphql create into dev'         "gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}'"
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'graphql create into dev'         "gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}'"
 # Reads name no destination and are not asked for one, which is what keeps the
 # write test doing this work rather than the endpoint.
 req FR-20 US-13
@@ -2518,9 +2542,9 @@ section "=== REGRESSION: review of be0e3c7, the base rule's own permitting holes
 # Every base must now be dev-NN, which does not depend on knowing gh's
 # precedence.
 req FR-15 FR-16
-check no-pr-decisions.sh BLOCK 'good base, then a bad one'   'gh pr create --base dev-05 -B main'
-check no-pr-decisions.sh BLOCK 'bad base, then a good one'   'gh pr create -B main --base dev-05'
-check no-pr-decisions.sh BLOCK 'two long bases disagreeing'  'gh pr create --base dev-05 --base main'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'good base, then a bad one'   'gh pr create --base dev-05 -B main'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'bad base, then a good one'   'gh pr create -B main --base dev-05'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'two long bases disagreeing'  'gh pr create --base dev-05 --base main'
 # 2. The web exemption read any single-dash token holding a w, and read it out of
 # quoted prose. Both halves mattered: a label value, and a title naming a flag --
 # a title a session working on this very file would write.
@@ -2550,21 +2574,21 @@ check no-pr-decisions.sh BLOCK 'a title naming -B main'      'gh pr create --tit
 # written. base_args drops a quoted span whole and unquotes only a base flag own
 # value.
 req FR-14
-check no-pr-decisions.sh BLOCK 'a base named only in a body'      'gh pr create --title t --body "--base dev-05"'
-check no-pr-decisions.sh BLOCK 'a base named only in a title'     'gh pr create --title "--base dev-05" --body b'
-check no-pr-decisions.sh BLOCK 'a body quoting the command'       'gh pr create --title x --body "Write: gh pr create --base dev-05 --title ..."'
-check no-pr-decisions.sh BLOCK 'a shorthand base in a body'       'gh pr create --title t --body "-B dev-05"'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a base named only in a body'      'gh pr create --title t --body "--base dev-05"'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a base named only in a title'     'gh pr create --title "--base dev-05" --body b'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a body quoting the command'       'gh pr create --title x --body "Write: gh pr create --base dev-05 --title ..."'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a shorthand base in a body'       'gh pr create --title t --body "-B dev-05"'
 # The other direction, which the same defect caused: prose naming the flag made
 # a correct create refuse.
 req FR-14 FR-15
-check no-pr-decisions.sh ALLOW 'a body naming the base flag'      'gh pr create --base dev-05 --title t --body "the --base flag"'
-check no-pr-decisions.sh ALLOW 'a body naming a main retarget'    'gh pr create --base dev-05 --title t --body "use -B main to retarget"'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'a body naming the base flag'      'gh pr create --base dev-05 --title t --body "the --base flag"'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'a body naming a main retarget'    'gh pr create --base dev-05 --title t --body "use -B main to retarget"'
 check no-pr-decisions.sh ALLOW 'an edit titled after the flag'    'gh pr edit 5 --title "--base main"'
 # A base flag own value is the one quoted span that is kept, in either quote,
 # because gh takes either. Dropping it would refuse a correctly based create.
 req FR-15
-check no-pr-decisions.sh ALLOW 'a double-quoted base value'       'gh pr create --base "dev-05" --title t'
-check no-pr-decisions.sh ALLOW 'a single-quoted base value'       "gh pr create --base 'dev-05' --title t"
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'a double-quoted base value'       'gh pr create --base "dev-05" --title t'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'a single-quoted base value'       "gh pr create --base 'dev-05' --title t"
 check no-pr-decisions.sh BLOCK 'a quoted base naming main'        'gh pr create --base "main" --title t'
 check no-pr-decisions.sh BLOCK 'a quoted retarget to main'        'gh pr edit 5 --base "main"'
 # 6. A graphql string value is quoted, and the shell quoting around the query
@@ -2572,25 +2596,25 @@ check no-pr-decisions.sh BLOCK 'a quoted retarget to main'        'gh pr edit 5 
 # and refused a dev-NN base for not being one. Refusing direction, so it sat
 # behind the two spellings that did work, both of which are pinned above.
 req FR-19 FR-15
-check no-pr-decisions.sh ALLOW 'graphql into dev, escaped'        'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}"'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'graphql into dev, escaped'        'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"dev-05\"})}"'
 check no-pr-decisions.sh BLOCK 'graphql into main, escaped'       'gh api graphql -f query="mutation{createPullRequest(input:{baseRefName:\"main\"})}"'
 # 3. The gh api base was read from the whole line, so a neighbouring command
 # answered for this one -- in both directions. This is the first of the five
 # defects lib/command-scan.sh exists to end, reintroduced for gh api after being
 # fixed for gh pr.
 req FR-18 GH-47.2 FR-14
-check no-pr-decisions.sh BLOCK 'a base on a neighbour'       'echo base=dev-05 && gh api -X POST repos/o/r/pulls -f head=x'
-check no-pr-decisions.sh BLOCK 'good create, then one to main' 'gh api -X POST repos/o/r/pulls -f base=dev-05 && gh api -X POST repos/o/r/pulls -f base=main'
-check no-pr-decisions.sh BLOCK 'a dev base hidden in a title' 'gh api -X POST repos/o/r/pulls -f base=main -f title="retarget of base=dev-05"'
-check no-pr-decisions.sh BLOCK 'a title standing in for a base' 'gh api -X POST repos/o/r/pulls -f head=x -f title="base: dev-05"'
-check no-pr-decisions.sh BLOCK 'two REST bases disagreeing'  'gh api -X POST repos/o/r/pulls -f base=dev-05 -f base=main'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a base on a neighbour'       'echo base=dev-05 && gh api -X POST repos/o/r/pulls -f head=x'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'good create, then one to main' 'gh api -X POST repos/o/r/pulls -f base=dev-05 && gh api -X POST repos/o/r/pulls -f base=main'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a dev base hidden in a title' 'gh api -X POST repos/o/r/pulls -f base=main -f title="retarget of base=dev-05"'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a title standing in for a base' 'gh api -X POST repos/o/r/pulls -f head=x -f title="base: dev-05"'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'two REST bases disagreeing'  'gh api -X POST repos/o/r/pulls -f base=dev-05 -f base=main'
 # This one is what makes the scoping load-bearing rather than merely tidy. The
 # base belongs to the issue write; the create beside it names none of its own,
 # and a rule reading the line would let that base answer for both. Anchoring on
 # the field flag and requiring every base to be dev-NN fixes the other leaks
 # whatever the scope, so without this case the scope could be widened again and
 # the suite would not notice -- which is exactly what a mutation run showed.
-check no-pr-decisions.sh BLOCK 'a base belonging to another write' 'gh api -X POST repos/o/r/issues -f base=dev-05 && gh api -X POST repos/o/r/pulls -f head=x'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a base belonging to another write' 'gh api -X POST repos/o/r/issues -f base=dev-05 && gh api -X POST repos/o/r/pulls -f head=x'
 # ... and an unrelated write must not be refused by a neighbour either.
 req FR-20 US-14
 check no-pr-decisions.sh ALLOW 'an issue write beside prose' 'gh api -X POST repos/o/r/issues -f title=x && echo "base=main"'
@@ -2609,7 +2633,7 @@ req GH-51.2 FR-4
 check no-pr-decisions.sh BLOCK 'a wrapped listing'           "bash -c 'gh api repos/o/r/pulls'"
 check no-pr-decisions.sh BLOCK 'a wrapped label edit'        "bash -c 'gh pr edit 35 --add-label bug'"
 check no-pr-decisions.sh BLOCK 'a wrapped retarget'          "bash -c 'gh pr edit 35 --base main'"
-check no-pr-decisions.sh BLOCK 'a wrapped REST create'       "bash -c 'gh api -X POST repos/o/r/pulls -f base=dev-05'"
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a wrapped REST create'       "bash -c 'gh api -X POST repos/o/r/pulls -f base=dev-05'"
 # What #40's own wrapper rule used to refuse, still refused, by #51 naming the
 # surface rather than by anything reading a base out of quoted text.
 check no-pr-decisions.sh BLOCK 'a wrapped create into main'  'bash -c "gh pr create --base main"'
@@ -2743,13 +2767,13 @@ check no-pr-decisions.sh ALLOW 'a quoted state that is neither'     "gh api -X P
 # value-quoted pair the old pattern already read, kept as the contrast that says
 # where the hole was.
 req FR-18 FR-15 US-11 GH-137.2
-check no-pr-decisions.sh ALLOW 'REST create, whole field double-quoted' 'gh api -X POST repos/o/r/pulls -f "base=dev-05" -f head=x'
-check no-pr-decisions.sh ALLOW 'REST create, whole field single-quoted' "gh api -X POST repos/o/r/pulls -f 'base=dev-05' -f head=x"
-check no-pr-decisions.sh ALLOW '--field, whole field double-quoted'     'gh api -X POST repos/o/r/pulls --field "base=dev-05" -f head=x'
-check no-pr-decisions.sh ALLOW 'REST create, value double-quoted'       'gh api -X POST repos/o/r/pulls -f base="dev-05" -f head=x'
-check no-pr-decisions.sh ALLOW 'REST create, value single-quoted'       "gh api -X POST repos/o/r/pulls -f base='dev-05' -f head=x"
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'REST create, whole field double-quoted' 'gh api -X POST repos/o/r/pulls -f "base=dev-05" -f head=x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'REST create, whole field single-quoted' "gh api -X POST repos/o/r/pulls -f 'base=dev-05' -f head=x"
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW '--field, whole field double-quoted'     'gh api -X POST repos/o/r/pulls --field "base=dev-05" -f head=x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'REST create, value double-quoted'       'gh api -X POST repos/o/r/pulls -f base="dev-05" -f head=x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'REST create, value single-quoted'       "gh api -X POST repos/o/r/pulls -f base='dev-05' -f head=x"
 req FR-17 US-10 FR-15 GH-137.2
-check no-pr-decisions.sh ALLOW 'REST retarget to dev, field quoted'     'gh api -X PATCH repos/o/r/pulls/35 -f "base=dev-05"'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'REST retarget to dev, field quoted' 'gh api -X PATCH repos/o/r/pulls/35 -f "base=dev-05"'
 # The other direction of the same read, and the one that makes this a hole in
 # both: a base the reader cannot see is not only a permitted create refused, it
 # is a BAD base unseen. The POST was refused before this fix and the PATCH was
@@ -2771,7 +2795,7 @@ check no-pr-decisions.sh BLOCK 'REST retarget to main, single-quoted'  "gh api -
 # above are kept apart for. Both go red on revert, and they are the only rows
 # that see this half of the defect: the verdict was right throughout.
 req US-7 FR-23 GH-137.2
-says "$ON_DEV" no-pr-decisions.sh 'This names main;' \
+says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch;' \
   'a quoted base into main says which branch it named' \
   'gh api -X POST repos/o/r/pulls -f "base=main" -f head=x'
 says_not "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
@@ -2783,8 +2807,8 @@ says_not "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
 # and the name leaves all of that where it was. PROPERTY rows, green on revert:
 # what they assert is what must not have changed.
 req FR-14 GH-137.2
-check no-pr-decisions.sh BLOCK 'a quoted title is still not a base'    'gh api -X POST repos/o/r/pulls -f head=x -f title="base: dev-05"'
-check no-pr-decisions.sh BLOCK 'a quoted title naming the flag'        'gh api -X POST repos/o/r/pulls -f head=x -f "title=base=dev-05"'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a quoted title is still not a base' 'gh api -X POST repos/o/r/pulls -f head=x -f title="base: dev-05"'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a quoted title naming the flag'     'gh api -X POST repos/o/r/pulls -f head=x -f "title=base=dev-05"'
 req FR-20 US-14 GH-137.2
 check no-pr-decisions.sh ALLOW 'a quoted database field on an issue'   'gh api -X POST repos/o/r/issues -f "database=main"'
 check no-pr-decisions.sh ALLOW 'a quoted rebase field on an issue'     'gh api -X POST repos/o/r/issues -f "rebase=main"'
@@ -2803,9 +2827,9 @@ req FR-18 FR-15 US-11 GH-137.2
 check no-pr-decisions.sh BLOCK 'attached flag, quoted field, main'     'gh api -X POST repos/o/r/pulls -f"base=main" -f head=x'
 check no-pr-decisions.sh BLOCK '-F, quoted field, main'               'gh api -X POST repos/o/r/pulls -F "base=main" -f head=x'
 check no-pr-decisions.sh BLOCK '--raw-field, quoted field, main'      'gh api -X POST repos/o/r/pulls --raw-field "base=main" -f head=x'
-check no-pr-decisions.sh ALLOW 'attached flag, quoted field, dev'      'gh api -X POST repos/o/r/pulls -f"base=dev-05" -f head=x'
-check no-pr-decisions.sh ALLOW '-F, quoted field, dev'                'gh api -X POST repos/o/r/pulls -F "base=dev-05" -f head=x'
-check no-pr-decisions.sh ALLOW '--raw-field, quoted field, dev'       'gh api -X POST repos/o/r/pulls --raw-field "base=dev-05" -f head=x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'attached flag, quoted field, dev' 'gh api -X POST repos/o/r/pulls -f"base=dev-05" -f head=x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW '-F, quoted field, dev'            'gh api -X POST repos/o/r/pulls -F "base=dev-05" -f head=x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW '--raw-field, quoted field, dev'   'gh api -X POST repos/o/r/pulls --raw-field "base=dev-05" -f head=x'
 # And the anchor still holds for the two flags it had never been asked about.
 req FR-20 US-14 GH-137.2
 check no-pr-decisions.sh ALLOW '-F on a database field'               'gh api -X POST repos/o/r/issues -F "database=main"'
@@ -2848,8 +2872,8 @@ check no-pr-decisions.sh BLOCK "retarget to main, = then a ' quote" "gh api -X P
 # no base rather than a good one, and `create into main` refused before for
 # naming none rather than for naming main. Right verdict, wrong reason, both.
 req FR-18 FR-15 US-11 GH-137.2
-check no-pr-decisions.sh ALLOW 'create into dev, --field='         'gh api -X POST repos/o/r/pulls --field=base=dev-05 -f head=x'
-check no-pr-decisions.sh ALLOW 'retarget to dev, --field='         'gh api -X PATCH repos/o/r/pulls/35 --field=base=dev-05'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'create into dev, --field=' 'gh api -X POST repos/o/r/pulls --field=base=dev-05 -f head=x'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'retarget to dev, --field=' 'gh api -X PATCH repos/o/r/pulls/35 --field=base=dev-05'
 check no-pr-decisions.sh BLOCK 'create into main, --field='        'gh api -X POST repos/o/r/pulls --field=base=main -f head=x'
 # And the anchor survives the widened separator, which is the whole question a
 # separator class raises: `[[:space:]=]*` must not let the flag reach a word
@@ -2859,7 +2883,7 @@ req FR-20 US-14 GH-137.2
 check no-pr-decisions.sh ALLOW '--field= on a database field'      'gh api -X POST repos/o/r/issues --field=database=main'
 check no-pr-decisions.sh ALLOW '--field= on a rebase field'        'gh api -X POST repos/o/r/issues --field=rebase=main'
 req FR-14 GH-137.2
-check no-pr-decisions.sh BLOCK 'a title reached through =, no base' 'gh api -X POST repos/o/r/pulls -f head=x -f=title=base=dev-05'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a title reached through =, no base' 'gh api -X POST repos/o/r/pulls -f head=x -f=title=base=dev-05'
 # The state reader is unanchored, so the separator is nothing to it either. The
 # contrast row for the separator, as the -F row above is for the flag.
 req US-15 GH-137.1
@@ -2911,7 +2935,7 @@ check no-pr-decisions.sh BLOCK "retarget, \\x00 and text after it"      "gh pr e
 check no-pr-decisions.sh BLOCK "retarget, \\c@ is a NUL"                "gh pr edit 35 \$'--base\\c@x' main"
 check no-pr-decisions.sh BLOCK "retarget, NUL span then the rest"      "gh pr edit 35 \$'--ba\\0'se main"
 check no-pr-decisions.sh BLOCK "web create, \\u0000 in the flag"        "gh pr create --web \$'--base\\u0000' main"
-check no-pr-decisions.sh BLOCK "dev base, then a NUL-cut second base"  "gh pr create --base dev-05 --title x --body y \$'--base\\x00' main"
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK "dev base, then a NUL-cut second base" "gh pr create --base dev-05 --title x --body y \$'--base\\x00' main"
 # A cut span still open at the end of the line. The newline is inside the span
 # after the NUL, so bash drops it with the rest -- the argument is `--base`, not
 # prose holding a newline. Found while answering that review, not by it.
@@ -2928,7 +2952,7 @@ check no-pr-decisions.sh BLOCK "a NUL-cut span open past the line end" $'gh pr e
 check no-pr-decisions.sh BLOCK "\\c before the closing quote"          "gh pr edit 35 \$'x\\c' \$'--base' main"
 check no-pr-decisions.sh BLOCK "web create, \\c before the quote"      "gh pr create --web \$'x\\c' \$'--base' main"
 check no-pr-decisions.sh BLOCK "\\c before a backslash pair"           "gh pr edit 35 \$'x\\c\\\\' \$'--base' main"
-check no-pr-decisions.sh BLOCK "dev base, \\c\\\\ then a quoted second" "gh pr create --base dev-05 --title x --body y \$'z\\c\\\\' '--base' main"
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK "dev base, \\c\\\\ then a quoted second" "gh pr create --base dev-05 --title x --body y \$'z\\c\\\\' '--base' main"
 check no-pr-decisions.sh BLOCK "\\c on a byte that masks to NUL"       "gh pr edit 35 \$'--base\\cअ' main"
 check no-pr-decisions.sh BLOCK "a cut span closing on the next line"  $'gh pr edit 35 $\'--ba\\0\n\'se main'
 # THE TRADE, pinned: `\cA` is byte 0x01 and no NUL, so bash passes `--base` and
@@ -2965,12 +2989,12 @@ check no-pr-decisions.sh BLOCK "an = as \\x3d"                          "gh pr e
 check no-pr-decisions.sh BLOCK "an = as \\075"                          "gh pr edit 5 --base\$'\\075'main"
 check no-pr-decisions.sh BLOCK 'a backslash-escaped ='                  'gh pr edit 5 --base\=main'
 check no-pr-decisions.sh BLOCK "web create, an = in \$'...'"            "gh pr create --web --base\$'=main'"
-check no-pr-decisions.sh BLOCK "dev base, then an = in \$'...'"         "gh pr create --base dev-05 --title x --body y --base\$'=main'"
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK "dev base, then an = in \$'...'" "gh pr create --base dev-05 --title x --body y --base\$'=main'"
 # THE TRADE, and it moves a row: `--base"=dev-05"` was pinned ALLOW here as a
 # quoted value holding the =. Its = is quoted too, so it is refused with the
 # rest -- a spelling nobody writes for a base that could be written plainly.
 # The = OUTSIDE the quote is still a quoted value, `--base="dev-05"`, above.
-check no-pr-decisions.sh BLOCK 'a quoted = before a dev value'          'gh pr edit 5 --base"=dev-05"'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'a quoted = before a dev value' 'gh pr edit 5 --base"=dev-05"'
 # The line-end rule refused every cut span open at a line's end, and a body is
 # the ordinary thing to write across lines. A word the next line can only
 # extend can become a flag only if it is empty or begins with a dash and holds
@@ -2987,8 +3011,8 @@ check no-pr-decisions.sh ALLOW "\\^@ is not an escape in bash"          "gh pr e
 # none -- but beside an unquoted dev base it is a SECOND base, the unquoted one
 # satisfied the rule, and gh takes the last. Found while writing this fix.
 req FR-15 FR-16 GH-139
-check no-pr-decisions.sh BLOCK 'dev base, then a quoted main'       'gh pr create --base dev-05 "--base" main --title x'
-check no-pr-decisions.sh BLOCK 'dev base, then a quoted shorthand'  'gh pr create --base dev-05 --title x "-B" main'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'dev base, then a quoted main'      'gh pr create --base dev-05 "--base" main --title x'
+check_in "$ON_DEV" no-pr-decisions.sh BLOCK 'dev base, then a quoted shorthand' 'gh pr create --base dev-05 --title x "-B" main'
 # The refusal names what it refused, and not the missing base it used to report
 # for a quoted flag standing alone on a create.
 req US-7 FR-23 GH-139
@@ -3005,18 +3029,18 @@ says_not "$ON_DEV" no-pr-decisions.sh 'No base is named here' \
 # begins with the flag is prose and stays permitted. CONTRAST rows: every one is
 # green with the fix reverted, and says the fix did not widen past the name.
 req FR-17 FR-15 US-10 US-13 GH-139
-check no-pr-decisions.sh ALLOW 'retarget to dev, unquoted'          'gh pr edit 35 --base dev-05'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'retarget to dev, unquoted' 'gh pr edit 35 --base dev-05'
 check no-pr-decisions.sh ALLOW 'an edit naming no base'             'gh pr edit 35 --add-label bug'
-check no-pr-decisions.sh ALLOW 'retarget to dev, value quoted'      'gh pr edit 35 --base "dev-05"'
-check no-pr-decisions.sh ALLOW 'retarget to dev, = then a quote'    'gh pr edit 35 --base="dev-05"'
-check no-pr-decisions.sh ALLOW 'retarget to dev, -B then a quote'   'gh pr edit 35 -B"dev-05"'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'retarget to dev, value quoted'    'gh pr edit 35 --base "dev-05"'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'retarget to dev, = then a quote'  'gh pr edit 35 --base="dev-05"'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'retarget to dev, -B then a quote' 'gh pr edit 35 -B"dev-05"'
 check no-pr-decisions.sh ALLOW 'an edit titled -B and a branch'     'gh pr edit 35 --title "-B main"'
-check no-pr-decisions.sh ALLOW 'an edit whose body opens --base'    'gh pr edit 35 --body "--base dev-05 is the base"'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'an edit whose body opens --base' 'gh pr edit 35 --body "--base dev-05 is the base"'
 # The same prose split by a newline instead of a space. The hook reads one line
 # of a command at a time, so the quote is still open where the line ends -- and
 # the argument bash builds holds that newline, so it is prose as the space made
 # it. Refused by the first version of the fix. Bertan's review of PR #173.
-check no-pr-decisions.sh ALLOW 'an edit whose body opens --base, then a newline' $'gh pr edit 35 --base dev-05 --body "--base\nmore text"'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'an edit whose body opens --base, then a newline' $'gh pr edit 35 --base dev-05 --body "--base\nmore text"'
 # And a decoded \n inside $'...' is whitespace in the argument too. Green before
 # the escape decoding above existed, when `\n` was two characters; it is here so
 # that decoding one spelling of prose into a flag would go red.
@@ -3024,7 +3048,7 @@ check no-pr-decisions.sh ALLOW "a \$'...' body opening --base, then \\n" "gh pr 
 req FR-21 US-12 GH-139
 check no-pr-decisions.sh ALLOW 'the web form, no base'              'gh pr create --web'
 req FR-14 FR-15 GH-139
-check no-pr-decisions.sh ALLOW 'a body naming the flag, dev base'   'gh pr create --base dev-05 --title t --body "the --base flag"'
+check_in "$ON_DEV" no-pr-decisions.sh ALLOW 'a body naming the flag, dev base' 'gh pr create --base dev-05 --title t --body "the --base flag"'
 
 section "=== issue #130, gh api read an endpoint out of an issue body ==="
 # Six rules in no-pr-decisions.sh's `gh api` write block asked their question of
@@ -4210,7 +4234,7 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch
 # that clause, so the question of whether this row can fail is re-runnable rather
 # than argued.
 req FR-23
-says "$ON_DEV" no-pr-decisions.sh 'Retargeting to main chooses that destination just as creating it there would' \
+says "$ON_DEV" no-pr-decisions.sh 'Retargeting to main, which is not a dev-NN branch, chooses that destination just as creating it there would' \
   'a retarget says which branch it named, and that naming it is the same choice' \
   'gh pr edit 5 --base main'
 # The second is #133's fix, and the one row in this section that reads US-7 for a
@@ -4288,7 +4312,7 @@ for c in 'gh pr merge 5' \
          'gh api https://api.github.com/repos/bgunyel/clause-and-effect/pulls/5/merge -X PUT' \
          'gh api graphql -f query="mutation { mergePullRequest(input:{x:1}) }"' \
          'gh api graphql -f query="mutation { addPullRequestReview(input:{event:APPROVE}) }"'
-do check no-pr-decisions.sh BLOCK "$c" "$c"; done
+do check_in "$ON_DEV" no-pr-decisions.sh BLOCK "$c" "$c"; done
 
 section "=== no-pr-decisions.sh : must ALLOW ==="
 for c in 'gh pr create --base dev-05 --title x --body y' \
@@ -4318,7 +4342,7 @@ do
     'gh pr '*)        req US-13 ;;
     *)                req FR-3 ;;
   esac
-  check no-pr-decisions.sh ALLOW "$c" "$c"
+  check_in "$ON_DEV" no-pr-decisions.sh ALLOW "$c" "$c"
 done
 
 section "=== issue #105: every gh issue subcommand stays available ==="
@@ -4365,7 +4389,7 @@ for c in 'gh issue list' \
          'gh issue pin 27' \
          'gh issue unpin 27' \
          'gh issue develop --list 27'
-do check no-pr-decisions.sh ALLOW "$c" "$c"; done
+do check_in "$ON_DEV" no-pr-decisions.sh ALLOW "$c" "$c"; done
 # THE ONE VERB THIS SECTION DOES NOT PIN, and why the absence is written down
 # rather than left as a gap in a list. `gh issue develop 27` creates a linked
 # branch ON THE REMOTE: an issue subcommand by name, a ref-creating write by
@@ -5290,7 +5314,7 @@ says_not "$WT_STALE" no-work-on-stale-branch.sh 'merged' \
 # The deadlock the carve-out exists to avoid is named in the refusal that would
 # otherwise cause it.
 req GH-44.3 US-7
-says "$WT_STALE" no-work-on-stale-branch.sh 'git merge origin/dev-05 is permitted' \
+says "$WT_STALE" no-work-on-stale-branch.sh 'git merge refs/remotes/origin/dev-05 is permitted' \
   'the fallback refusal says how to get out' 'git commit -m "wip"'
 
 # The nolib and halflib checks for this hook, including the scoping that makes a
@@ -5622,12 +5646,6 @@ check append-only-docs.sh ALLOW 'the append that is documented is still permitte
 # anchors to. A new seam in this suite, named as one.
 REPO_ROOT=$(cd "$SUITE_DIR/../.." && pwd)
 
-env_cmd() {  # env_cmd <dir> <PATH> <script|/absolute/hook> <ALLOW|BLOCK> <label> <command>
-  local dir="$1" path="$2" script="$3" want="$4" label="$5" cmd="$6"
-  env_feed "$dir" "$path" "$script" "$want" "$label" \
-    "$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}')"
-}
-
 # An ALLOW that came from the path simply not being there would say nothing
 # about docs/research/, and a BLOCK-expecting case needs its file present for
 # the same reason. Both are asserted rather than assumed.
@@ -5801,15 +5819,29 @@ unarmed 'the report force-deletes no branch' \
 unarmed 'the report deletes nothing on the remote' \
   "$HOOKS/report-stale-branches.sh" 'push origin --delete'
 
-# The active dev branch is derived in both files, and the copies are identical
-# by hand. lib/command-scan.sh's own header names this failure mode -- the same
-# question answered differently in a different place -- and the library is right
-# there, so the duplication is a decision and not an oversight: the guard must
-# read its state before it may depend on lib/ at all. That is what lets it fail
-# closed only on a branch it has an opinion about, rather than refusing every
-# command in every worktree whenever a library is missing. The cost of that
-# ordering is two copies, so the copies are pinned instead of shared. A
-# divergence here silently unarms the guard or misreports the branch.
+# The active dev branch is derived in three files since #144, and the copies are
+# identical by hand. lib/command-scan.sh's own header names this failure mode --
+# the same question answered differently in a different place -- and the library
+# is right there, so the duplication is a decision and not an oversight: the
+# guard must read its state before it may depend on lib/ at all. That is what
+# lets it fail closed only on a branch it has an opinion about, rather than
+# refusing every command in every worktree whenever a library is missing. The
+# cost of that ordering is a copy that cannot be shared, so the copies are pinned
+# instead. A divergence here silently unarms the guard or misreports the branch.
+#
+# THAT ARGUMENT DOES NOT COVER THE THIRD FILE, and saying it does would be the
+# stale-rationale defect this block exists to prevent. no-pr-decisions.sh sources
+# lib/command-scan.sh before it reads anything, so a shared reader IS available
+# to it. Two reasons it still holds a copy. The library is the tokeniser -- it
+# answers what a command says, and a git-ref reader is not that question, so
+# putting one there widens what every consumer has to guard: THE LOAD CONTRACT
+# makes each consumer require the functions it calls, and #69 and #84 are both
+# what happens when that list and the call set drift apart. And the guard cannot
+# use a shared reader whatever the library holds, so sharing would leave two
+# copies anyway -- one in lib/ and one in the guard -- which is this same
+# duplication with an indirection added and a third place for the two to
+# disagree. What holds the three together is this block, which is the same answer
+# #62 gave for two.
 #
 # Issue #62: that pin used to be `armed` against the tail of the pipeline,
 # "| grep -E ... | sort -V | tail -1)". Everything left of the first pipe -- the
@@ -5824,40 +5856,54 @@ unarmed 'the report deletes nothing on the remote' \
 # grep -qF, and grep reads a pattern containing a newline as two patterns, so a
 # two-line fixed string is satisfied by a file holding either line alone --
 # measured on a two-line fixture, not assumed. The derivations are extracted and
-# compared as strings instead, three ways: each file holds exactly one, the two
-# are equal to each other, and each is the derivation as pinned here. The counts
-# ask a question `armed` cannot ask at all -- it wants a constant somewhere in a
-# file, so a second derivation added to either file would have been satisfied by
-# the first -- and they are what closes the case, because two files that both
-# extract to nothing are equal to each other and to nothing else.
+# compared as strings instead, three ways per file: each file holds exactly one,
+# each is equal to the guard's, and each is the derivation as pinned here. The
+# counts ask a question `armed` cannot ask at all -- it wants a constant somewhere
+# in a file, so a second derivation added to any of the three would have been
+# satisfied by the first -- and they are what closes the case, because two files
+# that both extract to nothing are equal to each other and to nothing else.
 #
-# Be exact about which of the three carry the weight: with both files pinned to
-# the literal, the guard-equals-report check follows by transitivity and proves
-# nothing the pins do not. It is kept as the one line that states the property
-# the duplication actually needs, and because it is the check that still holds
-# the two together the day someone re-pins the literal on purpose -- a
-# coordinated change turns both pins red and leaves it green, which is the pair
-# of answers that says what happened. Each of the five was mutated to confirm it
-# fails for its own reason, and the two counts were mutated to confirm they fail
-# for theirs.
+# Be exact about which of them carry the weight: with every file pinned to the
+# literal, the equality checks follow by transitivity and prove nothing the pins
+# do not. They are kept as the lines that state the property the duplication
+# actually needs, and because they are the checks that still hold the copies
+# together the day someone re-pins the literal on purpose -- a coordinated change
+# turns every pin red and leaves them green, which is the pair of answers that
+# says what happened. Each check of the #62 pair was mutated to confirm it fails
+# for its own reason, and the counts were mutated to confirm they fail for theirs;
+# #144's third copy joined the arrangement rather than changing it, and carries
+# the three checks the other two do.
 DEV_DERIVATION=$(cat <<'DERIVATION'
-DEV=$(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/dev-*' 2>/dev/null \
+DEV=$(git for-each-ref --format='%(refname:lstrip=2)' 'refs/remotes/origin/dev-*' 2>/dev/null \
       | grep -E '^origin/dev-[0-9]+$' | sort -V | tail -1)
 DERIVATION
 )
 GUARD_DERIVATION=$(dev_derivation "$HOOKS/no-work-on-stale-branch.sh")
 REPORT_DERIVATION=$(dev_derivation "$HOOKS/report-stale-branches.sh")
+# THREE FILES SINCE #144, not two. no-pr-decisions.sh derives the same branch to
+# judge a pull request's base, and it is the same argument one file wider: the
+# copies are pinned because they cannot be shared, and a divergence in the third
+# one refuses a correct base or permits a stale one. Its copy is written at
+# column 0 inside a function so that these comparisons can stay string
+# comparisons, and the comment above it says so.
+PR_DERIVATION=$(dev_derivation "$HOOKS/no-pr-decisions.sh")
 req GH-62
 tok 'the guard reads the dev refs in exactly one place' \
     '1' "$(dev_read_count "$HOOKS/no-work-on-stale-branch.sh")"
 tok 'and the report reads them in exactly one place' \
     '1' "$(dev_read_count "$HOOKS/report-stale-branches.sh")"
+tok 'and the pull request hook reads them in exactly one place' \
+    '1' "$(dev_read_count "$HOOKS/no-pr-decisions.sh")"
 tok 'the guard and the report derive the active dev branch identically' \
     "$GUARD_DERIVATION" "$REPORT_DERIVATION"
+tok 'and so does the pull request hook' \
+    "$GUARD_DERIVATION" "$PR_DERIVATION"
 tok 'the guard derives it as pinned here, glob and --format included' \
     "$DEV_DERIVATION" "$GUARD_DERIVATION"
 tok 'and the report derives it as pinned here too' \
     "$DEV_DERIVATION" "$REPORT_DERIVATION"
+tok 'and the pull request hook as well' \
+    "$DEV_DERIVATION" "$PR_DERIVATION"
 
 # The filter and the version sort were argued twice, in different words, at the
 # head of each file, and nothing held those two to each other either: correct
@@ -5867,11 +5913,13 @@ tok 'and the report derives it as pinned here too' \
 # pointer to the pairing in place of its own copy of the reasoning. The pointer
 # is one line because grep is: a literal spanning a line break would match
 # neither file.
-PAIRING='check-hooks.sh holds the two equal, so a change here is a change there'
+PAIRING='check-hooks.sh holds the three equal, so a change here is a change there'
 beside 'the guard names the pairing beside its derivation' \
   "$HOOKS/no-work-on-stale-branch.sh" "$PAIRING"
 beside 'and the report names it identically' \
   "$HOOKS/report-stale-branches.sh" "$PAIRING"
+beside 'and so does the pull request hook' \
+  "$HOOKS/no-pr-decisions.sh" "$PAIRING"
 # A pointer to an argument is worth what the argument is worth, and the report's
 # now points at prose in another file. Two ways that goes wrong, and the second
 # is the one this branch would otherwise have left open.
@@ -5893,6 +5941,8 @@ tok 'the argument the report points at is made in the guard, once' \
     '1' "$(prose_count "$HOOKS/no-work-on-stale-branch.sh" "$ARGUMENT")"
 tok 'and the report does not argue it a second time' \
     '0' "$(prose_count "$HOOKS/report-stale-branches.sh" "$ARGUMENT")"
+tok 'nor does the pull request hook, which points at it too' \
+    '0' "$(prose_count "$HOOKS/no-pr-decisions.sh" "$ARGUMENT")"
 # And the sentence that does the pointing: without it the report holds a bare
 # pairing pointer and no trace of where its reasoning went. `beside` rather than
 # `written`, because a pointer that is not beside the derivation is not doing
@@ -5901,6 +5951,8 @@ tok 'and the report does not argue it a second time' \
 POINTER="no-work-on-stale-branch.sh's header, rather than twice here in different words"
 beside 'the report says where the argument was moved to' \
   "$HOOKS/report-stale-branches.sh" "$POINTER"
+beside 'and the pull request hook says where to find it as well' \
+  "$HOOKS/no-pr-decisions.sh" "$POINTER"
 
 # The carve-out's identity test, pinned as three lines rather than driven as a
 # process. Two of them are driven, by the diverged and no-local fixtures above;
@@ -6611,6 +6663,7 @@ CLAIMED_WORD=$(printf '%s\n' "$LEFT_OPEN" \
 case "$CLAIMED_WORD" in
   Two) CLAIMED=2 ;;  Three) CLAIMED=3 ;;  Four) CLAIMED=4 ;;
   Five) CLAIMED=5 ;; Six) CLAIMED=6 ;;    Seven) CLAIMED=7 ;;
+  Eight) CLAIMED=8 ;; Nine) CLAIMED=9 ;;  Ten) CLAIMED=10 ;;
   *) CLAIMED="no count read from the list head" ;;
 esac
 # Top-level items only: the second consequence carries an indented continuation
@@ -10225,17 +10278,17 @@ hooks|no-pr-decisions.sh|BLOCK|FR-21 FR-15|pr-web-main|gh pr create --web --base
 hooks|no-pr-decisions.sh|BLOCK|FR-18 FR-20 FR-15 US-11|api-rest-main|gh api -X POST repos/o/r/pulls -f base=main -f head=x
 hooks|no-pr-decisions.sh|BLOCK|FR-19 FR-15 US-11 GH-130.5|api-graphql-main|gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:main})}'
 hooks|no-pr-decisions.sh|BLOCK|FR-48 US-15 GH-97.1|release-create|gh release create v1
-hooks|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8|pr-base-dev|gh pr create --base dev-05 --title x
-hooks|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8|pr-base-dev-eq|gh pr create --base=dev-05 --body y
-hooks|no-pr-decisions.sh|ALLOW|FR-17 FR-15 US-10|pr-retarget-dev|gh pr edit 35 --base dev-05
+on-dev|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8 GH-144.2|pr-base-dev|gh pr create --base dev-05 --title x
+on-dev|no-pr-decisions.sh|ALLOW|FR-14 FR-15 FR-16 US-8 GH-144.2|pr-base-dev-eq|gh pr create --base=dev-05 --body y
+on-dev|no-pr-decisions.sh|ALLOW|FR-17 FR-15 US-10 GH-144.2|pr-retarget-dev|gh pr edit 35 --base dev-05
 hooks|no-pr-decisions.sh|ALLOW|US-13|pr-view|gh pr view 5
 hooks|no-pr-decisions.sh|ALLOW|FR-21 US-12|pr-web|gh pr create --web
 hooks|no-pr-decisions.sh|ALLOW|FR-20 US-13|api-read|gh api repos/o/r/pulls/35
-hooks|no-pr-decisions.sh|ALLOW|FR-18 FR-15 US-11|api-rest-dev|gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x
-hooks|no-pr-decisions.sh|ALLOW|FR-19 FR-15 US-11|api-graphql-dev|gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:"dev-05"})}'
+on-dev|no-pr-decisions.sh|ALLOW|FR-18 FR-15 US-11 GH-144.2|api-rest-dev|gh api -X POST repos/o/r/pulls -f base=dev-05 -f head=x
+on-dev|no-pr-decisions.sh|ALLOW|FR-19 FR-15 US-11 GH-144.2|api-graphql-dev|gh api graphql -f query='mutation{createPullRequest(input:{baseRefName:"dev-05"})}'
 hooks|no-pr-decisions.sh|BLOCK|GH-137.1|api-state-quoted|gh api -X PATCH repos/o/r/pulls/5 -f "state=closed"
 hooks|no-pr-decisions.sh|BLOCK|GH-137.2|api-base-quoted-main|gh api -X POST repos/o/r/pulls -f "base=main" -f head=x
-hooks|no-pr-decisions.sh|ALLOW|GH-137.2|api-base-quoted-dev|gh api -X POST repos/o/r/pulls -f "base=dev-05" -f head=x
+on-dev|no-pr-decisions.sh|ALLOW|GH-137.2 GH-144.2|api-base-quoted-dev|gh api -X POST repos/o/r/pulls -f "base=dev-05" -f head=x
 hooks|no-pr-decisions.sh|ALLOW|FR-48 GH-97.1|release-view|gh release view v1
 hooks|no-pr-decisions.sh|ALLOW|US-14|issue-list|gh issue list
 hooks|no-pr-decisions.sh|ALLOW|FR-4|wrap-benign|bash -c "gh issue list"
@@ -11057,10 +11110,16 @@ tok 'every GH- entry declaring variants: seed is tagged on a seed, and every GH-
 # GH-117's open gap, which the class rows above already assert, and GH-130.5
 # BLOCK alone because the gate's permitting half is an issue body naming a
 # mutation, which the #130 section pins directly and which no rewriting of a
-# graphql seed can produce.
+# graphql seed can produce. GH-144.2 is seeded ALLOW alone because a seed's
+# fixture is its state: its six ALLOW seeds run in `on-dev`, which holds no dev
+# ref and so is the degraded read the entry is about, while the refusals of main
+# it also claims are seeded under FR-15 and FR-16 in `hooks`, this repository,
+# where a dev ref is read -- tagging those would claim the degraded state for
+# rows that do not run in it. Its refusing half is driven in the #144 issue file
+# instead, in the three fixtures where the read comes back empty.
 req GH-141
 tok 'the GH- seeds are tagged in the directions the table holds' \
-  'GH-130.5 BLOCK;GH-137.1 BLOCK;GH-137.2 ALLOW BLOCK;GH-43.1 ALLOW;GH-43.3 BLOCK;GH-43.4 BLOCK;GH-51.1 BLOCK;GH-51.2 BLOCK;GH-68.1 ALLOW;GH-69.1 ALLOW BLOCK;GH-69.2 ALLOW BLOCK;GH-72 ALLOW;GH-94.1 ALLOW BLOCK;GH-97.1 ALLOW BLOCK;' \
+  'GH-130.5 BLOCK;GH-137.1 BLOCK;GH-137.2 ALLOW BLOCK;GH-144.2 ALLOW;GH-43.1 ALLOW;GH-43.3 BLOCK;GH-43.4 BLOCK;GH-51.1 BLOCK;GH-51.2 BLOCK;GH-68.1 ALLOW;GH-69.1 ALLOW BLOCK;GH-69.2 ALLOW BLOCK;GH-72 ALLOW;GH-94.1 ALLOW BLOCK;GH-97.1 ALLOW BLOCK;' \
   "$(printf '%s\n' "$INV_SEEDS" \
      | awk -F'|' 'NF >= 6 { n = split($4, t, " "); for (i = 1; i <= n; i++) if (t[i] ~ /^GH-/) print t[i], $3 }' \
      | LC_ALL=C sort -u \
@@ -11623,7 +11682,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '85' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '104' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11749,7 +11808,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '83' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '102' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
@@ -12002,6 +12061,21 @@ section "=== issue #108: what every hook decides when its environment is broken 
 # tolerated. They are pinned all the same: a hook that starts reading the
 # environment for one of those decisions turns them red, which is the point.
 #
+# ONE HOOK HAS SINCE DONE EXACTLY THAT, and the paragraph above is left as the
+# argument it was rather than rewritten as though it had always allowed for it.
+# #144 gave no-pr-decisions.sh a second question about a base -- whether it
+# names the branch origin holds highest -- and that question is answered off the
+# environment. So the cross-repository spellings are no longer all refused off
+# the text alone: `gh pr create -R other/repo --base dev-04` and
+# `cd ../other-repo && gh pr create --base dev-04` are refused by THIS
+# directory's refs, and the same two with `--base dev-05` are permitted by them.
+# That is the corner GH-144.6 accepts and the rows under it pin. The rows this
+# turned red were rewritten to say which directory decides them rather than
+# deleted, which is what "turns them red, which is the point" was asking for.
+# GH-108.5 and GH-108.6 were rewritten with them; this preamble, which is the
+# argument those entries rest on, was not, and the second review of PR #158 caught
+# that it had become a counterexample to itself.
+#
 # The fail direction is #103's Q19 and #95's, and one row needed it applied
 # rather than recorded: report-stale-branches.sh exited 0 with no output at all
 # when git was off PATH or it stood outside a repository. It now says why, and
@@ -12233,32 +12307,8 @@ git -C "$ENV_NO_ORIGIN" $GE commit -q --allow-empty -m base
 # against dev-05 it is level and clear. A refusal there is evidence that the
 # HIGHEST was taken, and the message names which. A fixture with both refs at the
 # tip would refuse whichever was chosen and would be evidence about neither.
-env_lifecycle() {  # env_lifecycle <dir> <ref at base>... -- with <ref at tip> last
-  local dir="$1" base tip r
-  git init -q -b main "$dir"
-  git -C "$dir" remote add origin "$FIXTURES/unreachable-remote.git"
-  git -C "$dir" $GE commit -q --allow-empty -m base
-  base=$(git -C "$dir" rev-parse HEAD)
-  git -C "$dir" $GE commit -q --allow-empty -m advance
-  tip=$(git -C "$dir" rev-parse HEAD)
-  shift
-  for r in "$@"; do
-    case "$r" in
-      *:tip) git -C "$dir" update-ref "refs/remotes/origin/${r%:tip}" "$tip" ;;
-      *) git -C "$dir" update-ref "refs/remotes/origin/${r%:base}" "$base" ;;
-    esac
-  done
-  # ahead == 0, behind == 1 against any ref at the tip: the fallback detector's case.
-  git -C "$dir" branch stale-branch "$base"
-  git -C "$dir" worktree add -q "$dir/wt-stale" stale-branch
-  # upstream configured, remote-tracking ref absent: the gone detector's case,
-  # placed at the tip so the fallback cannot fire here and a refusal is the gone
-  # detector's alone.
-  git -C "$dir" branch gone-branch "$tip"
-  git -C "$dir" config -f "$dir/.git/config" branch.gone-branch.remote origin
-  git -C "$dir" config -f "$dir/.git/config" branch.gone-branch.merge refs/heads/gone-branch
-  git -C "$dir" worktree add -q "$dir/wt-gone" gone-branch
-}
+# env_lifecycle, which builds each of them, is in the library since the #144
+# issue file built a third with it.
 ENV_DEV_NONE="$ENV_REPOS/no-dev-ref"
 ENV_DEV_TWO="$ENV_REPOS/two-dev-refs"
 env_lifecycle "$ENV_DEV_NONE"
@@ -12422,30 +12472,55 @@ env_says "$ENV_DEV_TWO/wt-stale" "$PATH" no-work-on-stale-branch.sh 'origin/dev-
   'git commit -m "wip"'
 env_cmd "$ENV_DEV_TWO/wt-gone" "$PATH" no-work-on-stale-branch.sh BLOCK 'two dev refs: the gone detector is unaffected' \
   'git commit -m "wip"'
-# no-pr-decisions.sh reads no git at all, so the base rule is a pattern and not a
-# lookup: a dev-NN base is accepted whatever refs origin holds, and a base that
-# is not dev-NN is refused for the same reason.
+# no-pr-decisions.sh with no dev ref to read: the shape question is the whole
+# base rule, which is the verdict it gave everywhere before #144 -- a dev-NN base
+# accepted, a base that is not dev-NN refused, and neither answer touching git.
+# That is the degraded half of the rule and it is this section's business; the
+# narrowing the lookup does when a ref IS there is #144's section below.
 env_cmd "$ENV_DEV_NONE" "$PATH" no-pr-decisions.sh BLOCK 'a base of main is refused where origin holds no dev ref' \
   'gh pr create --base main --title t --body b'
 env_cmd "$ENV_DEV_NONE" "$PATH" no-pr-decisions.sh ALLOW 'a dev-NN base is accepted where origin holds no dev ref' \
   'gh pr create --base dev-05 --title t --body b'
-# THE GAP, at its measured verdict and named as one. dev-06 is the active dev
-# branch in this fixture -- the check above reads the refusal that says so -- and
-# a pull request based on dev-05 is permitted all the same. CLAUDE.md says "into
-# the active dev branch", so this permits something the boundary refuses, and it
-# is filed as #144, a sub-issue of #36, rather than fixed here: the fix is to have
-# this one hook read refs, and a hook that reads refs fails open when it cannot,
-# which is the failure mode this whole section exists to pin. The window is a
-# rotation. The verdict below is the measured one and not the correct one, which
-# is the one place this section departs from #103's Q18 -- so the fix turns this
-# check red, and the check names the issue that owns it.
-env_cmd "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh ALLOW 'ACCEPTED GAP: a base of dev-05 while dev-06 is the active dev branch' \
+# WHERE THE GAP WAS. This row stood at ALLOW and said ACCEPTED GAP, the one place
+# this section departed from #103's Q18 by writing the measured verdict rather
+# than the correct one: dev-06 is the active dev branch in this fixture -- the
+# stale guard's refusal two checks up names it -- and a pull request based on
+# dev-05 was permitted all the same, which CLAUDE.md's "into the active dev
+# branch" refuses. #144 fixed it, and the row turning red is how the fix found
+# this check, which is what it was written at the measured verdict for.
+#
+# What #108 argued against is not what landed. The objection was that a hook
+# reading refs fails open when it cannot read them; the lookup answers only of a
+# base that has already passed the shape question, so a failed read costs the
+# narrowing and no refusal -- the two rows above are that, and the git-off-PATH
+# rows in #144's section drive it.
+#
+# TAGGED GH-144.1 AND NOT GH-108.5, which is where it stood while it was the gap.
+# GH-108.5's text now claims the no-ref verdict and no longer claims this one, so a
+# row left under that tag would be this suite reporting a requirement as covered by
+# a check that establishes something the requirement does not say. It stays in this
+# section because this is where the gap was recorded, and a reader following #108
+# has to be able to find what became of it.
+req GH-144.1
+env_cmd "$ENV_DEV_TWO" "$PATH" no-pr-decisions.sh BLOCK 'a base of dev-05 while dev-06 is the active dev branch' \
   'gh pr create --base dev-05 --title t --body b'
 
-echo "--- gh off PATH, and every other environment: the pull request hook starts no process ---"
-# It runs no git and no gh, so its verdict is a function of the command's text
-# alone. That is checked as the property rather than as one absence: the same two
-# payloads under every environment of this section.
+echo "--- gh off PATH, and every other environment: every refusal the pull request hook makes on the text ---"
+# It runs no gh, and the one git read it makes since #144 can only narrow which
+# dev-NN base it accepts, so every REFUSAL it makes is a function of the
+# command's text alone. That is what is checked as a property rather than as one
+# absence: four payloads under every environment of this section, three refused
+# and one permitted, none of them naming a dev-NN base.
+#
+# The claim this replaces was wider and is no longer true -- "reaches the same
+# verdict in every environment" -- and the row that made it false is the #144 row
+# above, which refuses `--base dev-05` in the two-ref fixture and permits it in
+# every other environment here. Narrowing that claim to the refusals rather than
+# deleting it keeps what #108 was protecting: an environment this hook cannot
+# read must never turn a refusal into a permit. The permitting half is asked of
+# `gh issue list`, a command with no pull request in it at all, because every
+# permit the base rule gives names a dev-NN base and so is the environment's
+# business by design.
 #
 # THE FARM IS THE ROW THAT MAKES THE GH-LESS ROW EVIDENCE, and `plain` cannot be
 # it. `plain` is the invoker's PATH, so on a host with no `gh` it is itself a
@@ -12455,6 +12530,15 @@ echo "--- gh off PATH, and every other environment: the pull request hook starts
 # between the two is therefore a genuine one-name contrast on every machine.
 # `plain` stays, because what it asks is the other question: that the invoker's
 # own PATH, whatever is on it, moves no verdict either.
+#
+# THE TWO ARGUMENTS ARE ONE SECTION'S and were written on two branches at once:
+# #144 narrowed WHAT is claimed of every environment, and #155 fixed WHICH
+# environments make the claim evidence. They met in the merge of dev-05 into
+# #144, in a conflict on this comment, and neither stands without the other -- a
+# narrowed claim asked of two environments that are the same environment is
+# still not evidence, and a genuine one-name contrast asserting a claim that has
+# stopped being true is worse than none. The heading is #144's because #155's,
+# "the pull request hook starts no process", is the sentence #144 made false.
 req GH-108.6
 for env in "plain:$ENV_PLAIN:$PATH" "the farm, gh on PATH:$ENV_PLAIN:$WITH_JQ_BIN" \
            "gh off PATH:$ENV_PLAIN:$ENV_NO_GH_BIN" \
@@ -12464,6 +12548,10 @@ for env in "plain:$ENV_PLAIN:$PATH" "the farm, gh on PATH:$ENV_PLAIN:$WITH_JQ_BI
   name=${env%%:*}; rest=${env#*:}; dir=${rest%%:*}; path=${rest#*:}
   env_cmd "$dir" "$path" no-pr-decisions.sh BLOCK "$name: gh pr merge is refused" \
     'gh pr merge 5'
+  env_cmd "$dir" "$path" no-pr-decisions.sh BLOCK "$name: a create into main is refused" \
+    'gh pr create --base main --title t --body b'
+  env_cmd "$dir" "$path" no-pr-decisions.sh BLOCK "$name: a create naming no base is refused" \
+    'gh pr create --title t --body b'
   env_cmd "$dir" "$path" no-pr-decisions.sh ALLOW "$name: gh issue list is permitted" \
     'gh issue list'
 done
@@ -12671,7 +12759,7 @@ report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
   '== branch lifecycle ==' \
   'outside a repository it still prints its heading first'
 report_says "$PATH" "$ENV_REPORT_COPY/report-stale-branches.sh" \
-  'no-work-on-stale-branch.sh is armed for this session.' \
+  'no-work-on-stale-branch.sh is armed for this session,' \
   'outside a repository it names what is not armed'
 report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
   'branches: NOT READ -- git is not on PATH' \
@@ -12880,7 +12968,7 @@ report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
   'fetch: FAILED or timed out after 15s' \
   'a failed fetch is reported, and the session still starts'
 report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
-  'is not armed for this session.' \
+  'is not armed for this session, and no-pr-decisions.sh judges a pull' \
   'and it says what that leaves unarmed'
 report_says "$ENV_NO_GH_BIN" "$ENV_OFFLINE_REPORT" \
   'merge settings: NOT READ -- no gh on PATH' \
@@ -13160,7 +13248,7 @@ says "$ON_DEV" no-pr-decisions.sh 'A base flag is written with a quote or a back
   'a quoted base flag on a retarget says the same, and names the retarget' \
   'gh pr edit 5 --base"=dev-05"'
 req US-7 GH-109.2
-says "$ON_DEV" no-pr-decisions.sh 'This names main; reaching it through gh api makes it the same destination under another spelling.' \
+says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch; reaching it through gh api makes it the same destination under another spelling.' \
   'the gh api arm says naming the base there is the same destination' \
   'gh api -X POST repos/o/r/pulls -f base=main -f head=x'
 # MEASURED, and the two halves are separate rows because they fail apart.
@@ -13584,7 +13672,7 @@ check_push writes
 names_this_branch silent' "$(fn_writes "$HOOKS/no-git-push.sh")"
 tok 'no-pr-decisions.sh defines these, and none of them writes one' \
     'base_args silent
-bases_all_dev silent
+bases_all_proposable silent
 endpoint_args silent
 endpoint_seen silent
 gh_api_is_write silent
@@ -13592,10 +13680,11 @@ gh_pr_bases silent
 gh_pr_web silent
 gh_rule silent
 gql_bases silent
-is_dev_base silent
 line_was_cut silent
+may_propose_into silent
 names_graphql silent
 quoted_base_flag silent
+read_active_dev silent
 release_is_read silent
 rest_bases silent' "$(fn_writes "$HOOKS/no-pr-decisions.sh")"
 tok 'check_push has one call site, so each write inside it is one arm and one line' \

@@ -400,6 +400,36 @@
 # weaker here. `caught` says some check tagged with that requirement went red; it
 # does not say the RIGHT check went red, and nothing here can say that.
 #
+# TWO ROWS FOR ONE CLAIM, #144's, and it is #128's overlap one rule out. Until
+# #144 the dev-NN pattern was the whole of the base rule, so
+# `base-pattern-admits-main` -- admitting main to that pattern -- permitted a
+# pull request into main and turned every check of that refusal red. #144 put a
+# second question behind it, and MEASURED against the merged tree that row
+# SURVIVED: with the pattern admitting main, `gh pr create --base main` is still
+# refused here, because main is not the branch origin holds highest. Driven by
+# hand in both states to be sure it was the mechanism and not the fixture: exit
+# 2 in this repository, exit 0 in a fixture with no dev ref, where the pattern
+# is the whole rule again.
+#
+# So the row no longer establishes what its requirement list claimed. It is
+# narrowed to what it does establish -- the refusals that change their WORDING
+# here, and GH-144.2, whose no-dev-ref rows are exactly where the pattern is
+# still load-bearing -- and `base-admits-main-outright` carries the full list by
+# breaking the thing that now decides, main accepted before either question is
+# asked. Neither row alone reproduces "a pull request into main is permitted"
+# in a repository with a dev ref, which is the state this one is in.
+#
+# WORTH SAYING PLAINLY, because it is a consequence of #144 nobody wrote down:
+# the dev-NN shape test is no longer load-bearing for main wherever a dev ref
+# can be read. That is defence in depth and the verdict is unchanged, but it
+# means the evidence those five requirements rested on had quietly moved, and
+# only a mutation run says so. Found by re-running #144's rows against the
+# merged tree rather than carrying their pre-merge verdicts forward.
+#
+# Written here and not beside #128's paragraph, which is inside the run log #215
+# froze: the account of when these rows were run is in the dev-logs of PR #158's
+# sessions, and this paragraph keeps only the rule.
+#
 # WHAT IS REGISTERED, counted rather than characterised, because the sentence
 # that characterised it ("the rules that gained checks under #103") claimed the
 # whole of two issues and named eight rows -- and the count that replaced it was
@@ -662,7 +692,8 @@ pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'p
 base-refusal-drops-the-spelling%no-pr-decisions.sh%/^BASE=/s/Write: gh pr create --base dev-NN/Name a base/%US-7 FR-23%caught
 retarget-refusal-drops-the-retarget-spelling%no-pr-decisions.sh%s/ Retarget to the active dev branch instead: gh pr edit <n> --base dev-NN\.//%US-7 FR-23 GH-133%caught
 retarget-refusal-drops-the-create-comparison%no-pr-decisions.sh%s/ just as creating it there would//%FR-23%caught
-base-pattern-admits-main%no-pr-decisions.sh%/^is_dev_base()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
+base-pattern-admits-main%no-pr-decisions.sh%/^may_propose_into()/,/^}/s/\^dev-\[0-9\]+\$/^(dev-[0-9]+|main)$/%FR-15 FR-16 FR-18 GH-144.2%caught
+base-admits-main-outright%no-pr-decisions.sh%s/^may_propose_into() {$/may_propose_into() {\n  case "$1" in main) return 0 ;; esac/%FR-15 FR-16 FR-17 FR-18 FR-19 US-8 US-10 US-11%caught
 pr-create-base-not-read%no-pr-decisions.sh%s/if RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/if false \&\& RAW=$(cs_gh_args 'pr create' <<<"$CMD"); then/%FR-14 FR-16 US-9%caught
 web-handoff-refused%no-pr-decisions.sh%/^gh_pr_web()/,/^}/s/--web|-w) return 0 ;;/--web|-w) return 1 ;;/%FR-21 US-12%caught
 quoted-base-flag-permitted%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/END { exit found ? 0 : 1 }/END { exit 1 }/%GH-139%caught
@@ -689,6 +720,24 @@ merged-branch-not-gone%no-work-on-stale-branch.sh%s/= "\[gone\]"/= "never-this-s
 bare-pytest-permitted%pytest-via-uv-group.sh%s/grep -qE '\^(pytest|/grep -qE '^(no-such-tool-at-all|/%GH-69.1%caught
 unresolved-git-dir-permits%no-git-push.sh%/could not be resolved, so whether this runs/,+1s/exit 2/exit 0/%GH-108.2%caught
 dev-branch-not-version-sorted%no-work-on-stale-branch.sh%s/| sort -V | tail -1)/| sort | head -1)/%GH-108.5%caught
+base-lookup-never-finds-a-branch%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/origin\/dev-\*/origin\/no-such-ref-\*/%GH-144.1 GH-144.3%caught
+base-lookup-not-version-sorted%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/| sort -V | tail -1)/| sort | head -1)/%GH-144.1 GH-144.3%caught
+base-lookup-admits-any-dev-ref%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/| grep -E '\^origin\/dev-\[0-9\]+\$' //%GH-144.1%caught
+base-lookup-refuses-when-it-cannot-read%no-pr-decisions.sh%/^may_propose_into()/,/^}/s/\[ -n "$ACTIVE_DEV" \]/[ -n "no such branch" \]/%GH-144.2 GH-108.5%caught
+report-omits-the-base-hook-where-no-ref-is-read%report-stale-branches.sh%/no-pr-decisions.sh accepts any dev-NN base/d%GH-144.8%caught
+report-omits-the-skipped-fetch-clause%report-stale-branches.sh%/staleness detector in no-work-on-stale-branch.sh is armed, and/,+1{/no-pr-decisions.sh accepts any dev-NN base/d}%GH-144.8%caught
+report-omits-the-base-hook-on-a-failed-fetch%report-stale-branches.sh%/request's base against whatever branch those refs still call active/d%GH-144.8%caught
+base-refusal-drops-the-fetch-remedy%no-pr-decisions.sh%s/ If the dev branch has rotated since this session last fetched, run git fetch --prune on its own, then run this again: the refs are read before anything on this line runs\.//%GH-144.7%caught
+base-lookup-read-once-per-base%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/\[ -z "$ACTIVE_DEV_READ" \] || return 0/:/%GH-144.5%caught
+base-lookup-reads-the-short-name%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/refname:lstrip=2/refname:short/%GH-144.1%caught
+dev-branch-read-by-short-name%no-work-on-stale-branch.sh%s/refname:lstrip=2)' 'refs/refname:short)' 'refs/%GH-108.5%caught
+base-remedy-offered-to-main%no-pr-decisions.sh%/^may_propose_into()/,/^}/{/^    BAD_BASE_FETCH=$/d}%GH-144.7%caught
+base-reason-reset-by-a-passing-base%no-pr-decisions.sh%/^bases_all_proposable()/,/^}/s/^  BAD_BASE=$/  BAD_BASE=\n  BAD_BASE_WHY='is not a dev-NN branch'\n  BAD_BASE_FETCH=/%GH-144.3 GH-144.7%caught
+dev-branch-measured-by-short-name%no-work-on-stale-branch.sh%s/rev-list --left-right --count "refs\/remotes\/$DEV\.\.\./rev-list --left-right --count "$DEV.../%GH-108.5%caught
+report-measures-by-short-name%report-stale-branches.sh%s/rev-list --left-right --count "refs\/remotes\/$DEV\.\.\./rev-list --left-right --count "$DEV.../%GH-62%caught
+stale-remedy-names-the-short-name%no-work-on-stale-branch.sh%s/git merge ${DEV:+refs\/remotes\/}/git merge /%GH-44.3%caught
+gone-remedy-names-the-short-name%no-work-on-stale-branch.sh%s/Make a new worktree from ${DEV:+refs\/remotes\/}/Make a new worktree from /%GH-44.1%caught
+fast-forward-hint-names-the-short-name%no-work-on-stale-branch.sh%s/naming refs\/remotes\/$DEV would be a fast-forward/naming $DEV would be a fast-forward/%GH-44.3%caught
 tool-name-must-be-bash%lib/command-scan.sh%s/if length == 1 and/if length == 1 and (.[0].tool_name == "Bash") and/%GH-108.1%caught
 hook-exits-a-third-status%pytest-via-uv-group.sh%s/^exit 0$/exit 3/%GH-108.8%caught
 report-exits-without-saying-why%report-stale-branches.sh%/^  echo "branches: NOT READ -- git is not on PATH/d%GH-108.9%caught

@@ -230,11 +230,8 @@
 #     token of it goes into REQUIREMENT_SHAPE or INV_SCOPE, which hold the
 #     entries written before #205 (#205). `requirement` and `shape_pin` are
 #     in the library, moved there by #215, whose issue file was their second
-#     caller. `variants_pin` is defined in checks/GH-205.sh while that is its
-#     one caller, and moves into the library once another file calls it, and
-#     not before: the library-membership check asks it of each function by
-#     itself. Until it moves, an issue file that calls it is listed after
-#     GH-205.sh.
+#     caller, and `variants_pin` is there too, moved by #144 for the same
+#     reason.
 #
 # Run: bash .claude/hooks/check-hooks.sh
 #      bash .claude/hooks/check-hooks.sh --matrix   the requirements matrix, issue #104
@@ -362,6 +359,7 @@ FAILED=0
 LEDGER=
 REQ=
 RAN=
+JUDGED=
 # THE HELPER LIBRARY, checks/library.sh: every function this suite calls from
 # more than one of its files, and nothing else. Its header states the rule.
 #
@@ -385,7 +383,7 @@ RAN=
 # every check below a `command not found`, which prints no FAIL and sets no
 # FAILED -- a green run having asked nothing -- so it stops the run instead.
 SUITE_LIBRARY=library.sh
-SUITE_CHECKS="unsplit.sh GH-205.sh GH-215.sh GH-157.sh"
+SUITE_CHECKS="unsplit.sh GH-205.sh GH-215.sh GH-157.sh GH-144.sh"
 SUITE_LAST=end-of-run.sh
 SUITE_SOURCED=
 for f in $SUITE_LIBRARY $SUITE_CHECKS $SUITE_LAST; do
@@ -475,6 +473,45 @@ LEDGER="$FIXTURES/ledger"
 : > "$LEDGER"
 RAN="$FIXTURES/ran"
 : > "$RAN"
+# WHAT no-pr-decisions.sh WAS ASKED, AND WHERE, written by the hook's own
+# process rather than by the helper that ran it (#144). Every run of a file named
+# no-pr-decisions.sh this suite starts appends one line to $JUDGED: the directory
+# the process is in, resolved with `pwd -P`; the path it was started by; and its
+# stdin, with newlines, tabs and NULs made spaces so that one run is one line.
+# GH-144.4 reads it at the head of the end-of-run file.
+#
+# THROUGH BASH_ENV, which bash sources before the script whenever it starts one
+# non-interactively, so the record does not depend on the route a check takes to
+# the hook: a helper, a loop at a file's top level, `bash <hook>`, or a copy of
+# the hook in a fixture all start a bash that reads it. It was a `judged` call in
+# each helper, and a derivation holding the helpers that call `hook_path` equal
+# to the ones that call `judged`. Review of PR #158's round 1 measured that
+# route past it three ways -- a hook run outside any function, a helper whose
+# name holds a digit, and both lists matching nothing -- and a derivation over
+# source text will always have another spelling, which is the reason this record
+# was built to replace the text derivations in the first place.
+#
+# WHAT IT DOES TO THE HOOK: it reads stdin into a file, records it, and hands the
+# hook that file as its stdin, byte for byte; the file is unlinked once opened.
+# Every tool is an absolute path, resolved here, because many checks run the hook
+# under a PATH that holds none of them. It touches no other script, and unsets
+# the one variable it sets. What it cannot see, named: a process started with
+# BASH_ENV cleared (`env -i`, which this suite uses only to load its own library
+# in a child), and a hook that is not bash.
+JUDGED="$FIXTURES/judged"
+: > "$JUDGED"
+JUDGED_ENV="$FIXTURES/judged-env.sh"
+{
+  printf 'case ${0##*/} in\n  no-pr-decisions.sh)\n'
+  printf '    if __judged_in=$(%q %q); then\n' "$(command -v mktemp)" "$FIXTURES/judged-stdin.XXXXXX"
+  printf '      %q > "$__judged_in"\n' "$(command -v cat)"
+  printf '      printf %q "$(pwd -P)" "$0" "$(%q %q %q < "$__judged_in")" >> %q\n' \
+    '%s\t%s\t%s\n' "$(command -v tr)" '\n\t\0' '   ' "$JUDGED"
+  printf '      exec 0< "$__judged_in"\n'
+  printf '      %q -f -- "$__judged_in"\n' "$(command -v rm)"
+  printf '    fi\n    unset __judged_in ;;\nesac\n'
+} > "$JUDGED_ENV"
+export BASH_ENV="$JUDGED_ENV"
 # Every section heading, with the number of rows the ledger held when it was
 # printed; see `heading_mark` in the library.
 HEADINGS="$FIXTURES/headings"
@@ -754,7 +791,7 @@ GH-44.4:883040912:413 GH-44.5:2792005444:377 GH-44.6:2286241849:333
 GH-44.7:2281562543:294 GH-47.1:3798972667:325 GH-47.2:3262982810:416
 GH-50.1:963858542:304 GH-50.2:2971482831:527 GH-50.3:3158273160:290
 GH-51.1:716105133:249 GH-51.2:3449319844:309 GH-58.1:2879788571:473
-GH-58.2:4131600584:347 GH-61:1785465042:435 GH-62:2642290802:294
+GH-58.2:4131600584:347 GH-61:1785465042:435 GH-62:3682903026:528
 GH-63:977837279:276 GH-68.1:2776987324:213 GH-68.2:3577127727:364
 GH-68.3:2786679676:404 GH-69.1:3360809505:349 GH-69.2:1687396498:282
 GH-69.3:2307590211:365 GH-70.1:2457716069:251 GH-70.2:553276152:312
@@ -771,9 +808,9 @@ GH-101:3549404229:283 GH-102:4072209571:222 GH-104.1:673865969:159
 GH-104.2:3422979425:190 GH-104.3:275267075:273 GH-104.4:1322410782:241
 GH-104.5:3422391122:300 GH-106:3704976515:1535 GH-107.1:3959444618:2375
 GH-107.2:2755331717:3017 GH-108.1:1735229711:765 GH-108.2:2104747290:1161
-GH-108.3:3492012368:611 GH-108.4:272803982:544 GH-108.5:1162982285:1240
-GH-108.6:1295126848:567 GH-108.7:132764282:816 GH-108.8:32710089:758
-GH-108.9:1920560325:1237 GH-108.10:1327094914:1146 GH-109.1:722393216:550
+GH-108.3:3492012368:611 GH-108.4:272803982:544 GH-108.5:450734685:1460
+GH-108.6:4185336533:1248 GH-108.7:132764282:816 GH-108.8:32710089:758
+GH-108.9:1889065276:1360 GH-108.10:1327094914:1146 GH-109.1:722393216:550
 GH-109.2:3501734001:2130 GH-109.3:655958765:398 GH-109.4:2245848118:874
 GH-109.5:1126951843:1652 GH-117:149840679:3224 GH-117.1:2522200149:1957
 GH-118:4142000930:1501 GH-124:95512510:244 GH-127:705289083:213
