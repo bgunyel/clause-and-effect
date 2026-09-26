@@ -186,14 +186,35 @@
 # What it cost in this file, and why the required list below is its own and
 # not a list shared with its siblings. Issue #84 found this line bare here too,
 # and this hook's set is the one that makes a shared list wrong: it calls
-# cs_gh_args and cs_join, and no cs_git_args at all. Every rule in this file reads
-# its arguments through cs_gh_args, so renaming that one permitted `gh pr merge`
-# and `gh pr create --base main` alike.
+# cs_gh_args, cs_gh_opaque and cs_join, and no cs_git_args at all. Every rule in
+# this file reads its arguments through cs_gh_args, so renaming that one
+# permitted `gh pr merge` and `gh pr create --base main` alike.
+#
+# cs_gh_opaque is #118's and is required here for a reason of its own. It is the
+# one function this file calls whose SUCCESS is a refusal, so a call to a name
+# that is not there fails and the rule it carries simply does not fire: the
+# unreadable pass below would find nothing, and release_is_read would grant the
+# read it exists to withhold. Neither is loud, and neither is reached by any
+# verdict in the check suite, which is why the name is required here and why
+# release_is_read reads its status rather than its success.
+#
+# The two share one awk program, CS_GH_AWK in the library, so in practice they
+# arrive and leave together -- and the library withdraws both if that program is
+# empty, which turns one state a `command -v` guard cannot see into one it can.
+# It is the harmless one of two. An empty program is valid awk and refuses every
+# gh rule on its own; a program that does not COMPILE is the other state, and it
+# fails open -- measured, one extra `{` in it and `gh pr merge 5` is permitted.
+# Nothing here or in the library guards that one; #242 owns it, for every awk
+# program the library carries. Round 5 of the review of PR #184 found this
+# sentence calling the covered state "the one". The withdrawal is the library
+# answering for itself and not a reason to require fewer names here: #84 is the
+# issue about a guard that named a subset.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
 if ! command -v cs_normalise >/dev/null 2>&1 \
    || ! command -v cs_split >/dev/null 2>&1 \
    || ! command -v cs_gh_args >/dev/null 2>&1 \
+   || ! command -v cs_gh_opaque >/dev/null 2>&1 \
    || ! command -v cs_join >/dev/null 2>&1 \
    || ! command -v cs_tool_input >/dev/null 2>&1 \
    || ! command -v cs_within_cap >/dev/null 2>&1; then
@@ -1287,6 +1308,75 @@ if echo "$WRAPTEXT" | grep -qE "$CS_WRAPPER_RE"; then
   fi
 fi
 
+# THE UNREADABLE PASS, #118, and the one rule in this file that refuses without
+# naming a verb. An option written before a gh subcommand takes the next word as
+# its value unless gh knows it as a boolean, so the verb a rule below would read
+# is not the verb gh runs: `gh pr -t view merge 5` is a merge and
+# `gh release -t list create v1` is a create, which is how a review of #118 came
+# to create a real release on this repository. THE UNREADABLE GH SHAPE in
+# lib/command-scan.sh is the whole of the rule and its trade; nothing is
+# re-derived here, and this loop only says which paths this file judges.
+#
+# It stands after the wrapper block so that a wrapped command keeps the wrapper's
+# refusal -- both say the same thing, that a payload which cannot be read is not
+# guessed at -- and before every rule that names a verb, so that none of them
+# reads one that was never there. Not before everything: the heredoc
+# re-admission above asks `gh_rule api` earlier still, and an unreadable command
+# carrying `<<` now satisfies it and has its raw text re-split. That is harmless
+# -- re-admission only adds text for the rules below to see, and this loop
+# refuses before any of them reads it -- and it is named because "before every
+# rule below" is the sentence a reader would otherwise carry away.
+#
+# WHAT IT IS AND IS NOT LOAD-BEARING FOR, measured rather than assumed, because
+# the first draft of this comment claimed the refusal and the refusal is not
+# its. cs_gh_args signals "cannot tell" as success with no arguments, so an
+# unreadable command already matches `gh_rule 'pr merge'` below and is refused
+# there -- with this loop disabled, every command the #118 section of
+# check-hooks.sh names is still BLOCK. What this loop adds is WHICH refusal.
+# Without it `gh --squash view issue list` is refused by the merge rule and told
+# that deciding a pull request is Bertan's call, which is not true of it and
+# names no correction it can act on. The message is the whole of what is here,
+# so the message is what `says` pins below it.
+#
+# ONE PATH PER GUARDED POSITION, not one per rule and not one per surface.
+# cs_gh_opaque decides the position before a verb without reading the verb, so
+# `pr merge` answers for `pr review`, `pr close`, `pr reopen`, `pr create` and
+# `pr edit` alike, and `release view` for the four other release reads and every
+# release write.
+#
+# `api` IS NOT IN THE LIST, and the first version of this had it. It takes no
+# verb, so the only position it has is the one before the group -- and that
+# position is walked before any path word is compared, so both rows below ask
+# about it already. Keeping it cost a fork of awk per gh command to restate
+# something neither of its neighbours can fail to catch. The first version kept
+# it for the reader, which is what this sentence is for instead: `gh api` is
+# covered, by the only position it has. Bertan review of PR #184 measured the
+# cost and named the redundancy this file had already conceded in prose.
+#
+# THE NON-gh FAST PATH is the `case` below, and it is a cost fix rather than a
+# rule. cs_gh_opaque forks awk, and this loop would fork it once per path for
+# every command on the line -- including the `make test` and `uv run` that most
+# lines are. Its first act is `if (line !~ /^gh(…)/) next`, so asking the same
+# question in the shell first is the same answer for nothing. Measured on a
+# three-command line with no gh in it: 167 ms to 71 ms, against 63 ms at
+# dev-05. Bertan review of PR #184 measured the cost and named this fix.
+#
+# It is not a second copy of a rule: what it duplicates is `does this command
+# start with gh`, which is a precondition of the question and not the question.
+# A command this skips is one cs_gh_opaque would have returned "readable" for.
+GH_OPAQUE_PATHS=('pr merge' 'release view')
+while IFS= read -r CMD; do
+  case "$CMD" in gh|gh[[:space:]]*) ;; *) continue ;; esac
+  for GHPATH in "${GH_OPAQUE_PATHS[@]}"; do
+    if cs_gh_opaque "$GHPATH" <<<"$CMD"; then
+      echo "$CS_GH_OPAQUE_REFUSAL" >&2
+      exit 2
+    fi
+  done
+done <<CMDLIST
+$CMDS
+CMDLIST
+
 if gh_rule 'pr merge'; then
   echo "$DECIDE Leave the PR open and say it is ready to merge." >&2
   exit 2
@@ -1355,6 +1445,26 @@ RELEASE="Blocked: $RELEASE_WRITE, and this repository is public, so a release is
 # the option-position question stays answered in the library and nowhere here.
 release_is_read() {  # release_is_read <one command>
   local VERB
+  # THE ONE CALLER WHOSE SUCCESS MEANS PERMIT, which is why #118's third outcome
+  # is asked about here and nowhere else in this file. cs_gh_args signals
+  # "cannot tell" as success with no arguments, so that a caller reading only
+  # its status refuses -- and every other caller here does refuse on a match.
+  # This one grants a read on one, so spelled that way it would grant the read
+  # to `gh release -t list view v1`, whose verb gh never sees. The unreadable
+  # pass above has already refused that command; this asks again rather than
+  # rest on the order of two rules, since the question here is not "did some
+  # earlier loop run" but "is this a read", and an unreadable command is not.
+  #
+  # ONLY A 1 LETS THE READ PROCEED, and the status is read that way rather than
+  # with `&& return 1` because this is the one place where a call that does not
+  # run at all is the permitting answer. cs_gh_opaque exits 0 for unreadable and
+  # 1 for readable; a missing function exits 127, and `&& return 1` reads that
+  # as readable and grants the read -- #84's shape, in the file that requires
+  # the name at the top precisely so this cannot happen. Requiring it there is
+  # still the guard; this is the arm that must not depend on that guard being
+  # right, because it is the arm where being wrong permits.
+  cs_gh_opaque 'release view' <<<"$1"
+  case $? in 1) ;; *) return 1 ;; esac
   for VERB in $RELEASE_READ_VERBS; do
     cs_gh_args "release $VERB" <<<"$1" >/dev/null && return 0
   done

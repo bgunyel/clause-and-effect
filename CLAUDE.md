@@ -355,7 +355,7 @@ active dev branch — which the SessionStart report reads every session, as its
 `main ancestry` line, and argues beside that read.
 
 **Deliberately left open.** These stop mistakes, not adversaries: they read the
-text of a command, so a caller that means to evade them can. Eight consequences
+text of a command, so a caller that means to evade them can. Nine consequences
 are accepted rather than fixed, and they are numbered because the count is the
 part that went stale last time.
 
@@ -489,6 +489,25 @@ part that went stale last time.
    under the stopping rule, because opening a pull request into another
    repository is not a shape an agent working here writes by accident.
    GH-144.6 pins it as verdicts.
+
+9. **An option written in front of a `gh` subcommand makes the command
+   unreadable, and it is refused, reads included.** gh resolves a subcommand
+   at the first word that is not an option, and an option it does not know,
+   longhand or shorthand, or one taking a value, eats the next word as that
+   value — so the verb a hook reads is not the verb gh runs, and
+   `gh pr -t view merge 5` is a merge. Since
+   #118, `no-pr-decisions.sh` refuses any option but `-R`, `--repo`,
+   `--hostname` and `--help` in front of a word of a guarded path, and
+   `--version` too in front of the group, which refuses
+   `gh pr --json title view 5` although the paragraph above grants reading a
+   pull request through `gh pr view`. In front of the group itself it refuses
+   whatever group follows, since with the group eaten which group it was is
+   what cannot be read: `gh --paginate issue list` is refused although
+   consequence 2 names only the `pr|release|api` group. The correction is one
+   edit, the option after the subcommand — `gh pr view 5 --json title` — and
+   `gh --version` and `gh --help` stay permitted. `lib/command-scan.sh` states
+   the rule once, as THE UNREADABLE GH SHAPE, with the search behind the trade,
+   and GH-118's checks pin each of these as a verdict.
 
 ## Agent skills
 

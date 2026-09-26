@@ -520,3 +520,22 @@ thing in the record.
   boundary hooks is read to the end of its sentence, and the whole registration
   is pinned. A 200-line heredoc takes 12–57 ms; the same lines as live commands
   take up to 3.1 s, which is #127.
+- [2026-09-20 · session clause-and-effect-37](devlog_2026-09-20_clause-and-effect-37.md)
+  — #118: an option written in front of a gh subcommand eats the next word, so
+  the verb every rule in `no-pr-decisions.sh` read was not the verb gh runs —
+  `gh pr -t view merge 5` is a merge, and verifying the issue an agent ran
+  `gh release -t list create v1` and created a real release on this repository.
+  The rule refuses the shape rather than modelling gh's flag definitions:
+  `cs_gh_opaque` states it once, and `cs_gh_args` gains a third outcome spelled
+  so that a caller ignoring it refuses. Its other half is git's list of globals
+  taking a separate value, which was two short. Review moved five things, four
+  of them comments or checks claiming more than the code does; the mutation
+  harness then rejected one of the session's own registry rows as a requirement
+  too wide.
+  **Seven entries still have no row here**, derived rather than described:
+  `devlog_2026-09-17_session-7`, `_session-8`, `_session-issue-155`,
+  `devlog_2026-09-18_session-issue-155`, and the three
+  `devlog_2026-09-20_session-*`. This row was added because the entry above it
+  was the last one indexed, not because the gap was filled. The merge of
+  `dev-05` at 7bea85f closed two of the nine that stood when this was first
+  written.

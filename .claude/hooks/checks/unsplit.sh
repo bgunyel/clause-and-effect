@@ -4801,6 +4801,20 @@ check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'revert' \
   'git revert HEAD'
 check_in "$WT_STALE" no-work-on-stale-branch.sh BLOCK 'am' \
   'git am /tmp/patch.mbox'
+# #118'S TWO GLOBALS, ASKED OF THE THIRD CONSUMER OF cs_git_args. The issue's
+# criterion says these are "refused by the same hooks that refuse `git push
+# origin main`", which named two; this file is the third that reads a verb
+# through that function, and a rule shared by three hooks checked in two is a
+# rule checked where it was convenient. Both were PERMITTED here before the two
+# entries were added, the option's value being read as the verb.
+req GH-118 FR-38
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'git --config-env hid a commit on a stale branch' \
+  'git --config-env x.y=HOME commit -m "wip"'
+flip "$WT_STALE" no-work-on-stale-branch.sh ALLOW BLOCK 'git --attr-source hid a cherry-pick on a stale branch' \
+  'git --attr-source HEAD cherry-pick 1234abc'
+# And the read behind the same option, which this hook must go on permitting.
+check_in "$WT_STALE" no-work-on-stale-branch.sh ALLOW 'git --attr-source HEAD status, on a stale branch' \
+  'git --attr-source HEAD status'
 # ahead == 0 means this branch is a strict ancestor of the dev branch, so this
 # is a fast-forward: it creates no commit and masks nothing. Refusing it would
 # deadlock the branch -- no commit, no catch-up, and removing a worktree is a
@@ -8631,8 +8645,13 @@ GUARD_TRIGGERS=$(sed -n '/^if \[ -z/,/; then$/p' "$HOOKS/lib/command-scan.sh" \
   echo "no emptiness triggers were read out of the load guard; the checks below prove nothing" >&2
   exit 1
 }
+# The derivation reads every `if [ -z` guard in the library and not only
+# cs_split's, and since #118 there are two: CS_GH_AWK withdraws cs_gh_args and
+# cs_gh_opaque. It is in the literal because the question asked of it is this
+# one -- does its withdrawal say which variable it was -- and the first time it
+# was asked, on #118's merge of dev-05 at 5d95c8a, the answer was no.
 tok 'the load guard withdraws on the lists this suite expects' \
-    'CS_CONTROL_WORDS CS_SEPARATORS CS_WRAP_OPERAND_WORDS CS_WRAP_OPTION_WORDS' \
+    'CS_CONTROL_WORDS CS_GH_AWK CS_SEPARATORS CS_WRAP_OPERAND_WORDS CS_WRAP_OPTION_WORDS' \
     "$(printf '%s' "$GUARD_TRIGGERS" | tr '\n' ' ' | sed 's/ $//')"
 GUARD_UNNAMED=
 for guard_list in $GUARD_TRIGGERS; do
@@ -9671,27 +9690,52 @@ PIPED_GIT_LONG=$(printf 'git --work-tree|--namespace push origin main\n' \
 PIPED_GH_R=$(printf 'gh -R|--repo pr merge 5\n' \
   | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_gh_args 'pr merge'" 2>/dev/null)
 PIPED_GH_LONG=$(printf 'gh --repo|--hostname pr merge 5\n' \
-  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_gh_args 'pr merge'" 2>/dev/null)
+  | bash -c ". '$HOOKS/lib/command-scan.sh' && cs_gh_args 'pr merge'; printf 'rc=%s' \$?" 2>/dev/null)
 tok 'cs_git_args reads -c|-C as one option taking no value, as before #96' \
     'origin main' "$PIPED_GIT_C"
 tok 'and --work-tree|--namespace' 'origin main' "$PIPED_GIT_LONG"
 tok 'cs_gh_args reads -R|--repo as one option taking no value, as before #96' \
     '5' "$PIPED_GH_R"
-tok 'and --repo|--hostname' '5' "$PIPED_GH_LONG"
+# #118 MOVED THE FOURTH OF THESE AND LEFT THE OTHER THREE, which is the whole
+# reason this one now reads a status as well as a value. THE UNREADABLE GH SHAPE
+# recognises exactly -R, --repo and --hostname, in the bare form and the three
+# that carry a value; `--repo|--hostname` is none of the six, so the command is
+# unreadable and cs_gh_args gives its third outcome -- success with no arguments
+# -- where before it printed `5`. `-R|--repo` above is unmoved because it IS one
+# of the six, the attached shorthand `-R` carrying the value `|--repo`.
+#
+# Neither moves a verdict. `gh --repo|--hostname pr merge 5` was refused as a
+# merge and is refused as unreadable, and gh runs neither: through cs_split a
+# token holding `|` stands only inside quotes, and cobra rejects the longhand
+# outright. The status is asserted beside the value because the value alone no
+# longer separates "cannot tell" from "not this path" -- both print nothing, and
+# only the status says which, which is the property the third outcome was
+# spelled for.
+req GH-96.3 GH-118
+tok 'and --repo|--hostname, which #118 made unreadable' 'rc=0' "$PIPED_GH_LONG"
 
-# The linear passes carry copies of two awk helpers -- tokend and skipblank in
-# three programs, skipopts in two -- because an awk program cannot source
-# another. A rule written twice is answered twice, which is the sentence
-# lib/command-scan.sh opens with, so the copies are held to each other here:
-# every definition of each is extracted off the file and all must be identical.
-# Derived rather than counted, so a fourth copy is compared with the rest.
+# The linear passes carry copies of two awk helpers -- tokend and skipblank --
+# because an awk program cannot source another. A rule written twice is answered
+# twice, which is the sentence lib/command-scan.sh opens with, so the copies are
+# held to each other here: every definition of each is extracted off the file
+# and all must be identical. Derived rather than counted, so a further copy is
+# compared with the rest.
+#
+# skipopts IS NOT IN THE LIST ANY MORE, and the one line below is why it is
+# named here rather than silently dropped. It had two copies, one per argument
+# reader, and #118 left one: the gh reader and the gh unreadable-shape question
+# became one awk program, so the gh copy is gone and only cs_git_args has one.
+# A single definition cannot disagree with itself, so this loop would have had
+# nothing to compare and said so -- correctly, and as a failure. The claim it is
+# replaced by is the count, held to a literal, so a SECOND skipopts reappearing
+# puts it back in the comparison rather than arriving unnoticed.
 awk_copies() {  # awk_copies <function> -- each definition, one per line, newlines as |
   awk -v fn="$1" '
     $0 ~ "^[[:space:]]*function " fn "\\(" { body = ""; grab = 1; indent = match($0, /[^[:space:]]/) }
     grab { body = body substr($0, indent) "|"; if ($0 ~ /}[[:space:]]*$/ && (match($0, /[^[:space:]]/) == indent)) { print body; grab = 0 } }
   ' "$HOOKS/lib/command-scan.sh"
 }
-for fn in tokend skipblank skipopts; do
+for fn in tokend skipblank; do
   total=$(awk_copies "$fn" | wc -l | tr -d ' ')
   distinct=$(awk_copies "$fn" | sort -u | wc -l | tr -d ' ')
   if [ "$total" -lt 2 ]; then
@@ -9702,6 +9746,9 @@ for fn in tokend skipblank skipopts; do
     fail static 'the %s copies of the awk helper %s have drifted apart into %s versions' "$total" "$fn" "$distinct"
   fi
 done
+req GH-118
+tok 'and skipopts has one definition left, cs_git_args own, since the gh pair became one program' \
+    '1' "$(awk_copies skipopts | wc -l | tr -d ' ')"
 
 # Where the argument is written. Prose, so `written`: the header that states the
 # cap is where someone raising it will look for what it gives up.
@@ -10436,11 +10483,14 @@ inv_global_gitdir() {  # inv_global_gitdir <command>
 # runs.
 #
 # `-t`, a SHORTHAND, and not #118's own `--squash`. That spelling was written
-# here first, straight out of the issue, and it is a command gh rejects: cobra
-# treats an unknown longhand as a boolean, so `gh pr --squash view 5` returns
-# `unknown flag: --squash` and no verb is eaten. Measured on gh 2.45.0. An
-# unknown or value-taking SHORTHAND does consume the next word, and `-t`
-# (`--template`) is one at each of the three group levels: `gh pr -t view view 5`
+# here first, straight out of the issue, and it is a command gh rejects, with
+# `unknown flag: --squash`. This comment said the rejection meant no verb was
+# eaten, and it did not: cobra's path resolution gives the next word to an
+# unknown longhand too, and `gh pr --squash view --help` prints `gh pr`'s usage
+# on gh 2.45.0 (round 6 of the review of #184). What the rejection means is that
+# the resolved command never runs, so the eaten word is visible only as that
+# usage. `-t` is kept because its evidence says more: `-t` (`--template`)
+# takes a value at each of the three group levels, and `gh pr -t view view 5`
 # runs `gh pr view 5`, which then complains that `--template` needs `--json` --
 # the complaint is the evidence, since it proves the second `view` became the
 # subcommand.
@@ -10634,11 +10684,11 @@ inv_show() {  # inv_show <variant>
 # A SEVENTH FIELD carries the right verdict where it is not the seed's, and this
 # is the case the first version of this table could not say at all. A gap was
 # "wrong today, and the seed's verdict is the right one", because `gap` was
-# handed `$swant`. #118's triage decision is not of that shape: on a guarded
+# handed `$swant`. #118's triage decision was not of that shape: on a guarded
 # group, ANY option before a subcommand word makes the command unreadable and
 # must be refused, so the right verdict is BLOCK for a permitted seed as much as
-# for a refused one. `gh pr -t view view 5` is a read of a pull request that the
-# hook must refuse once #118 lands, and its seed `gh pr view 5` is ALLOW.
+# for a refused one. `gh pr -t view view 5` is a read of a pull request, and its
+# seed `gh pr view 5` is ALLOW.
 #
 # Without the field those six rows carried no departure at all, so they asserted
 # ALLOW as the invariant and would have gone red on #118's fix looking like
@@ -10647,6 +10697,13 @@ inv_show() {  # inv_show <variant>
 # can only express one of the two directions hides the other. Found by Bertan's
 # review of PR #140; the check's own definition of a gap was narrower than the
 # defects it was finding.
+#
+# NO ROW USES IT TODAY, #118 having landed: those six are a design row now, at
+# the verdict the field used to hold. The field is kept because what it says is
+# a property of the tables rather than of that issue -- a transformation can
+# move a verdict in either direction, and the next gap of that shape would
+# otherwise be written as the half of itself this table can express. The
+# `option-eats-verb` row below is where to look for what it read like in use.
 #
 # The first field is either a space-separated list of seed keys, or a verdict
 # class -- `BLOCK:*` or `ALLOW:*` -- which declares the departure for every seed
@@ -10678,8 +10735,7 @@ pr-retarget-dev|quote-double-5|BLOCK|design|FR-17 GH-139|a base flag with a quot
 pr-retarget-dev|quote-single-5|BLOCK|design|FR-17 GH-139|a base flag with a quote in its name is refused rather than read, on the retarget arm as on the creating ones, even where the base it names is dev-NN
 release-view|quote-double-3|BLOCK|gap|GH-135|the release verb in double quotes, refused by the allowlist that cannot read it
 release-view|quote-single-3|BLOCK|gap|GH-135|the release verb in single quotes, refused by the allowlist that cannot read it
-BLOCK:*|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand eats the read verb after it
-pr-view pr-base-dev pr-base-dev-eq pr-retarget-dev pr-web release-view|option-eats-verb|ALLOW|gap|GH-118|an option before the subcommand makes a guarded path unreadable, and the right verdict is a refusal whatever the seed's is|BLOCK
+pr-view pr-base-dev pr-base-dev-eq pr-retarget-dev pr-web release-view|option-eats-verb|BLOCK|design|GH-118|an option before a guarded subcommand makes the command unreadable, and an unreadable command is refused whatever its bare spelling reaches; the refused seeds need no row of their own, their variants reaching the seed's own BLOCK
 push-all push-main push-force push-from-main-checkout commit-main commit-push-all commit-stale api-rest-main release-create pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-double-2|ALLOW|gap|GH-135|the group word in double quotes
 push-all push-main push-force push-from-main-checkout commit-main commit-push-all commit-stale api-rest-main release-create pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-single-2|ALLOW|gap|GH-135|the group word in single quotes
 pr-merge pr-base-main pr-base-main-eq pr-bundled pr-short-flags pr-no-base pr-retarget pr-web-main|quote-double-3|ALLOW|gap|GH-135|the subcommand verb in double quotes
@@ -10911,7 +10967,7 @@ GH-51.2:seed GH-58.1:none GH-68.1:seed GH-68.2:none GH-68.3:none GH-69.1:seed
 GH-69.2:seed GH-69.3:none GH-72:seed GH-79.1:transformation GH-79.2:none
 GH-79.3:none GH-79.4:none GH-84.1:none GH-94.1:seed GH-94.2:none GH-94.4:none
 GH-95.1:none GH-95.2:none GH-96.1:none GH-97.1:seed GH-128:transformation
-GH-117:transformation GH-133:none GH-134:transformation GH-137.1:seed
+GH-117:transformation GH-118:transformation GH-133:none GH-134:transformation GH-137.1:seed
 GH-137.2:seed GH-139:transformation GH-109.5:none GH-130.1:none GH-130.2:none
 GH-130.3:none GH-130.4:none GH-130.5:seed GH-130.6:none
 '
@@ -11510,7 +11566,7 @@ req GH-107.1
 TEXT_CHECK_ARGS=$(text_check_faults "${SUITE_FILES[@]}")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '318' "${TEXT_CHECK_ARGS##*COUNT }"
+    '319' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -11682,7 +11738,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '104' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '114' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11808,7 +11864,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '102' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '112' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
@@ -13692,8 +13748,14 @@ tok 'check_push has one call site, so each write inside it is one arm and one li
 
 tok 'no-git-push.sh refuses in as many places as this suite reads' '19' \
     "$(arms "$HOOKS/no-git-push.sh")"
-tok 'no-pr-decisions.sh refuses in as many places as this suite reads' '19' \
+tok 'no-pr-decisions.sh refuses in as many places as this suite reads' '20' \
     "$(arms "$HOOKS/no-pr-decisions.sh")"
+# 20 on #118's merge of dev-05 at 5d95c8a, where both sides said 19: one
+# counted #118's unreadable pass and not the arm dev-05 had added since, the
+# other the reverse, so the line merged clean and stale -- the second time for
+# this literal, which went 18 to 19 the same way on #118's merge at 7bea85f. The arm's own sentence is read: three says
+# and says_not checks in checks/GH-118.sh drive it, which is what the count is a
+# proxy for and does not itself assert.
 # Two registry rows add a real arm and require this count to move, because the
 # two ways of adding one are caught by different halves of the counter.
 # `a-new-refusal-arm-nothing-reads` writes it on its own line, in the shape
@@ -13825,7 +13887,7 @@ echo "--- all seven Bash hooks at once: a permitted spelling is permitted by eve
 #
 # So a derivation would have to read grant from refusal out of the prose around
 # each span, and that section is written to be full of near-misses: its whole
-# second half is six numbered consequences whose subject is spellings that read
+# second half is numbered consequences whose subject is spellings that read
 # as permitted and are not, or read as evasions and are permitted. A derivation
 # that got one wrong in the permitting direction would put an `ALLOW by all` row
 # here for a command CLAUDE.md refuses, which is this suite asserting the

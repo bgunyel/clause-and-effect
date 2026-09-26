@@ -1306,7 +1306,11 @@ it has no entry above (Q16).
   beside the three rows that review asked for, because a claim about which
   directory is read is worth saying who last got it wrong
 - #184: the pull request for #118, open across the split; cited beside #158,
-  for the same measurement
+  for the same measurement. Bertan's three reviews of it are cited where
+  each thing they corrected stands. The largest were two spellings of the
+  refused command still permitted — an option made last by a backtick, and a
+  quoted one — and then the same shape twice more, in the guard written for the
+  first of them and in the guard written for that
 - #216: the pull request for #204's first step; rev-agent-204's review of it is
   cited where what it found stands -- a helper missing from the library running
   as `command not found` with the run green, a helper redefined in a later
@@ -1387,3 +1391,48 @@ it has no entry above (Q16).
   in #157's issue file, which spells the dev-log README's path so that the
   audit asks for it, and which says the audit is satisfied by any file named
   `README.md`
+- #191: the two classes `cs_git_args` carries and `CS_GH_AWK` does not, found by
+  the class sweep in that review's round 2. It has no entry above on purpose:
+  pre-existing and measured identical at `dev-05`, so the requirement that would
+  carry it is the fix. GH-118's note names both classes and points here
+- #194: a quoted gh option value holding whitespace, several tokens to a walk
+  that cuts on whitespace. No entry above for the same reason as #191, and for
+  one more: it is third-order, none of the three recognised options taking a
+  value that may contain whitespace, so there is no decision behind it to
+  require. A check pins the permitted verdict and its label names the issue
+- #197: a command substitution cutting inside an option value, which leaves no
+  stump, and the same cut inside a path word, which defeats the rule outright.
+  Found by the class sweep in that review's round 4. No entry above for #191's
+  reason, and the two are one issue on purpose — the second is easier to write
+  than the first and is unreachable by option-value work, so a fix that closed
+  only the first would re-create the asymmetry it was meant to remove. Three
+  checks pin the permitted verdicts and a fourth pins the contrast that says the
+  first is a gap in the rule rather than the rule working
+- #166: `$'…'` and `$"…"` quoting, not read as quoting at any position. Cited
+  in #118's issue file, where `gh pr $'-t' view merge 5`, its locale spelling
+  and an ANSI-C option in front of the group are pinned as permitted boundary
+  rows: `ghreduce` takes the quotes out and leaves the `$`, so the token does
+  not open with a dash and the walk stops on it. Found by round 5 of the
+  review of #184. It adds its requirements in the pull request that fixes it
+- #242: no load-time compile check for the library's awk programs, so one
+  that does not compile fails open. Cited beside the `CS_GH_AWK` withdrawal in
+  `lib/command-scan.sh` and in `no-pr-decisions.sh`, where round 5 of the review
+  of #184 found the withdrawal called the one state a `command -v` guard cannot
+  see when it is the harmless one of two. It concerns every awk program the
+  library carries, so it has no entry above
+- #192: `written` and `unarmed` grep a file's lines, so a phrase that wraps
+  reads as absent -- a false green for an absence pin and a false red for a
+  presence pin. Cited in #118's issue file, where the four pins over CLAUDE.md's
+  ninth left-open consequence read the section through `comment_reflow` after
+  round 7 of the review of #184 rewrapped the item and turned one red. The same
+  raw shape in the GH-99.1 and GH-117.1 pins over CLAUDE.md, and in
+  `prose_count`, was added to #192 then, as that issue's class. It adds its
+  requirements in the pull request that fixes it
+- #241: a word in the gh path position that gh never receives as written --
+  an empty argument, a lone `-`, and the `$` stump a `$(` cut leaves -- read by
+  the walk as a path word, so a merge is read as not this path. Cited in
+  #118's issue file, where `gh pr $(echo -t) view merge 5` and
+  `gh pr $(echo merge) 5` are pinned as permitted boundary rows and the bare
+  `-` paragraph in `lib/command-scan.sh` points here. Filed from round 5 of the
+  review of #184 and widened in rounds 6 and 8. It adds its requirements in the
+  pull request that fixes it
