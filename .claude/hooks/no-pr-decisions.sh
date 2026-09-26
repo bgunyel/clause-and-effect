@@ -1446,11 +1446,15 @@ RELEASE="Blocked: $RELEASE_WRITE, and this repository is public, so a release is
 release_is_read() {  # release_is_read <one command>
   local VERB
   # THE ONE CALLER WHOSE SUCCESS MEANS PERMIT, which is why #118's third outcome
-  # is asked about here and nowhere else in this file. cs_gh_args signals
-  # "cannot tell" as success with no arguments, so that a caller reading only
-  # its status refuses -- and every other caller here does refuse on a match.
-  # This one grants a read on one, so spelled that way it would grant the read
-  # to `gh release -t list view v1`, whose verb gh never sees. The unreadable
+  # is asked about here, and in the unreadable pass above, and nowhere else in
+  # this file. cs_gh_args signals "cannot tell" as success with no arguments, so
+  # that a caller reading only its status refuses. Not every other caller here
+  # reads only its status: the two that ask a question of the arguments,
+  # `gh_rule 'pr review'` with its verdict pattern and the `pr edit` arm, read no
+  # arguments as no decision, and THE CALLERS THIS IS NOT ENOUGH FOR in
+  # lib/command-scan.sh says what covers them (round 9 of the review of PR
+  # #184). This one grants a read on a match, so spelled that way it would grant
+  # the read to `gh release -t list view v1`, whose verb gh never sees. The unreadable
   # pass above has already refused that command; this asks again rather than
   # rest on the order of two rules, since the question here is not "did some
   # earlier loop run" but "is this a read", and an unreadable command is not.

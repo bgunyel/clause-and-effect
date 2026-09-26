@@ -203,3 +203,69 @@ These correct `devlog_2026-09-20_clause-and-effect-37.md`, which is append-only.
   including two false greens), #197 (backtick cut with no stump, and
   `line_was_cut` as a starting point).
 - **Still open from before:** #166, #191, #194.
+
+
+---
+
+# 2026-09-27 01:16 +03 · session `dev-agent-pr-184` — addendum: review round 9
+
+**Branch** `worktree-issue-118-gh-preoption`. This round adds one commit after
+16f0d25, the commit that carries this addendum, and the branch ends **11
+commits ahead of `origin/dev-05` at 5d95c8a, 0 behind**. **Check suite: 6072
+results, all passing**, unchanged from the entry above. No verdict moved and no
+check was added.
+
+The reviewer, rev-agent-pr-184, verified round 8 by rerunning it. That included
+restoring the old first-dot cut on the planted dotted example and watching the
+derived check pass again, which shows the new cut is what catches it. Nothing
+gated. Two text corrections were asked for, both to text this branch wrote. The
+assistant verified each before changing anything.
+
+## The dev-log README's "Seven entries" row
+
+In round 0, the assistant carried over the merge a row appended to
+`docs/dev-log/README.md` by the branch at the 7bea85f merge: "**Seven entries
+still have no row here**", with the seven named. Round 0's recount of every
+figure the merge made stale missed it. The 5d95c8a merge had brought in every
+entry dev-05 wrote since, none of them indexed.
+
+The assistant re-derived the count independently at 16f0d25, grepping each
+`devlog_*.md` basename against the README: 21 named nowhere, and 2 named only in
+that row. That is 23, as the reviewer and its `/code-review` pass had found.
+
+The row was rewritten count-free and no longer lists the entries. It gives the
+derivation instead: an entry is unindexed when its basename is not in the
+README. The round-5 answer to GH-118's residual list is the precedent. The
+README is not an entry and is exempt from the append-only Edit guard
+(`append-only-docs-edit.sh`, at its README test), and the row was the branch's
+own unmerged text, so it was corrected in place. This session's entry was added
+to the index in the same change. With it indexed, and the two only-in-row names
+gone from the row, the derivation gives 22.
+
+## "THE ONE CALLER THIS IS NOT ENOUGH FOR" was three
+
+The library named `release_is_read` as the single caller reading #118's "cannot
+tell" (success, no arguments) as a permit. Two more read it that way:
+- `gh_rule 'pr review' "$VERDICT"`, whose pattern is grepped over no arguments
+  and fails;
+- the `pr edit` arm, where `bases_all_proposable ""` succeeds.
+
+What covers them was measured, not argued. In a copy of the hooks, the
+unreadable pass, `gh_rule 'pr merge'`, and `gh_rule 'pr close'`/`'pr reopen'`
+were all disabled. `gh pr -t view review --approve 5` and
+`gh pr -t view edit 5 --base main` were still refused, by the `pr create` arm's
+missing base, and an unreadable `gh api` merge was still refused, by the release
+loop. "Cannot tell" is success for every path, so every rule whose match alone
+refuses fires on it.
+
+The paragraph now names the three callers and what covers the last two. The
+same sweep found `release_is_read`'s own comment saying "every other caller here
+does refuse on a match", and that the third outcome "is asked about here and
+nowhere else in this file", though the unreadable pass asks `cs_gh_opaque`
+too. Both were corrected. How the gh api arm reads "cannot tell" in isolation
+was not measured, and the paragraph says so.
+
+## Open
+
+Unchanged from the entry above. The reviewer said it will verify this round and
+then report to Bertan.

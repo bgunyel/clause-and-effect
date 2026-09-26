@@ -2178,12 +2178,29 @@ cs_gh_opaque() {  # cs_gh_opaque <subcommand path> -- stdin: one command
 # something `|| continue` collapses into "is not", and "is not" permits. That is
 # the direction every defect in the list at the top of this file went.
 #
-# THE ONE CALLER THIS IS NOT ENOUGH FOR, named rather than left to be found.
-# release_is_read() in no-pr-decisions.sh is the single place where SUCCESS
-# means permit -- it asks whether a command is one of five reads -- so there
-# "cannot tell" spelled as success would grant the read. That caller asks
-# cs_gh_opaque itself, first, and says so. A caller of that shape is the shape
-# to look for when adding one.
+# THE CALLERS THIS IS NOT ENOUGH FOR, named rather than left to be found. This
+# said there was one, and round 9 of the review of PR #184 found three in
+# no-pr-decisions.sh that read "cannot tell" -- success, no arguments -- as
+# permit:
+#   - release_is_read, where SUCCESS means permit: it asks whether a command is
+#     one of five reads, so cannot-tell would grant the read. It asks
+#     cs_gh_opaque itself, first, and reads its status as 1-or-nothing.
+#   - gh_rule with an argument pattern, `gh_rule 'pr review' "$VERDICT"`: the
+#     pattern is grepped over no arguments, fails, and the rule does not fire.
+#   - the `pr edit` arm, where no arguments means no base, and
+#     `bases_all_proposable ""` succeeds.
+# What covers the last two is not this function. First the unreadable pass,
+# which refuses every unreadable command on a path the file judges before any
+# rule runs. Then, because cannot-tell is success for EVERY path, every rule
+# whose match alone refuses: `gh_rule 'pr merge'`, `'pr close'`, `'pr reopen'`,
+# the `pr create` arm's missing base, and the release loop through
+# release_is_read. Measured: with the pass, `pr merge`, `pr close` and
+# `pr reopen` all disabled in a copy, `gh pr -t view review --approve 5` and
+# `gh pr -t view edit 5 --base main` are still refused, by the create arm's
+# missing base. So a permit needs every such rule gone, not a reordering. How
+# the gh api arm reads cannot-tell was not isolated; an unreadable api command
+# is refused by the same layers. A caller that grants on success, or that asks
+# a question of the arguments, is the shape to look for when adding one.
 #
 # IT AND cs_gh_opaque ARE ONE PROGRAM, CS_GH_AWK above, asked two questions
 # through `mode`. The first version of #118 had them as two, with cs_gh_args

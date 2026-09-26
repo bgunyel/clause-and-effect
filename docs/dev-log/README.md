@@ -532,10 +532,19 @@ thing in the record.
   of them comments or checks claiming more than the code does; the mutation
   harness then rejected one of the session's own registry rows as a requirement
   too wide.
-  **Seven entries still have no row here**, derived rather than described:
-  `devlog_2026-09-17_session-7`, `_session-8`, `_session-issue-155`,
-  `devlog_2026-09-18_session-issue-155`, and the three
-  `devlog_2026-09-20_session-*`. This row was added because the entry above it
-  was the last one indexed, not because the gap was filled. The merge of
-  `dev-05` at 7bea85f closed two of the nine that stood when this was first
-  written.
+  **Entries with no row here are neither counted nor listed in this row.** It
+  said seven and named them, and the next merge of `dev-05` made it wrong by
+  bringing in every entry written there since: 23 at 16f0d25, 21 of them named
+  nowhere in this file and two only in this row, derived by grepping each
+  `devlog_*.md` basename against this file (round 9 of the review of #184). An
+  entry is unindexed when its basename is not in this file, and that is the
+  derivation to run; a number written here goes stale at every merge.
+- [2026-09-27 · session dev-agent-pr-184](devlog_2026-09-27_dev-agent-pr-184.md)
+  — #184 merged across the check-suite split (#204, #205), then review rounds
+  5–9 of it. The stump rule asked of an option's attached value as well as its
+  separate one; `--version` recognised in front of the group only; the
+  refusal's examples fed back to the hook; CLAUDE.md's ninth left-open
+  consequence for the refused reads. A claim that an unknown longhand eats
+  nothing, stated as measured in six places, was corrected from cobra's source
+  and the reviewer's gh runs. Carries three corrections to the
+  clause-and-effect-37 entry.
