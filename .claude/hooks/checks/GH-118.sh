@@ -465,10 +465,15 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a valued option with its value, 
 #     the reducer that would read `"pr"` as `pr` is cw_reduce, which also takes
 #     a path to its basename and would read `--repo=o/r` as `r`. `gh "pr" merge
 #     5` is permitted at dev-05 too and is GH-135.
-#   - an option inside a command substitution. cs_split cuts there, so the
-#     option is in a fragment of its own and no walk sees it at all. That is
-#     CLAUDE.md deliberately-left-open consequence 4 and 6, and closing it means
-#     resolving a substitution from text, which cannot be done.
+#   - an option inside a command substitution in BACKTICKS. cs_split cuts
+#     there, so the option is in a fragment of its own and no walk sees it at
+#     all. That is CLAUDE.md deliberately-left-open consequence 4 and 6, and
+#     closing it means resolving a substitution from text, which cannot be done.
+#   - the same written as `$(`, which is not the same case: the cut leaves a `$`
+#     stump in the PATH position, the walk reaches it and compares it as a path
+#     word, and the path does not match. #241's -- a word in the path position
+#     gh never receives as written -- where `unfinished` asked at the path
+#     position would close it with the `""` rows. Round 8 of the review.
 #   - a BACKTICK cutting an option VALUE, which leaves no stump to test.
 #     `gh pr -R foo` + backtick + `echo bar` + backtick + ` merge 5` arrives as
 #     the fragment `gh pr -R foo`, and `foo` is a finished word, so the round-3
@@ -502,6 +507,10 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: a quoted group word, w
   'gh "pr" merge 5'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the option itself inside a substitution; CLAUDE.md consequences 4 and 6' \
   'gh pr `echo -t` view merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the option inside a $( ) substitution, a stump in the path position; #241' \
+  'gh pr $(echo -t) view merge 5'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the verb itself inside a $( ) substitution; #241' \
+  'gh pr $(echo merge) 5'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: a backtick cutting an option value, leaving no stump; #197' \
   'gh pr -R foo`echo bar` merge 5'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the same cut in an attached value, which leaves none either; #197' \
@@ -608,11 +617,15 @@ says "$SUITE_DIR" no-pr-decisions.sh 'gh pr view 5 --json title, gh release list
 # refusals were true, and US-7 asks for a spelling that passes (round 7 of the
 # review). So the examples are read out of the refusal as the hook prints it,
 # and each is fed to the hook and must be permitted -- a wrong example added
-# later is red here, where a `says` on the text would stay green.
+# later is red here, where a `says` on the text would stay green. The list is
+# cut at the literal sentence after it, `. Only -R`, and not at the first dot:
+# round 8 of the review planted `gh -R o/site.github.io pr merge 5` and the
+# first-dot cut fed the hook `gh -R o/site`, which passes, while the example
+# itself is refused.
 req GH-118 US-7
 R118_ADVICE=$(jq -n --arg c 'gh release -t list create v1' '{tool_name:"Bash",tool_input:{command:$c}}' \
   | (cd "$SUITE_DIR" && bash "$HOOKS/no-pr-decisions.sh" 2>&1 >/dev/null) \
-  | sed -n 's/.*Move the option after the subcommand: \([^.]*\)\..*/\1/p')
+  | sed -n 's/.*Move the option after the subcommand: \(.*\)\. Only -R.*/\1/p')
 # An empty read is a FAILING CHECK here and not a stopped run, which the first
 # version of this was: under a mutant that stops a command being unreadable,
 # the refusal is another rule's, nothing is read, and an `exit 1` turned the

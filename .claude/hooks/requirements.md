@@ -1428,3 +1428,11 @@ it has no entry above (Q16).
   raw shape in the GH-99.1 and GH-117.1 pins over CLAUDE.md, and in
   `prose_count`, was added to #192 then, as that issue's class. It adds its
   requirements in the pull request that fixes it
+- #241: a word in the gh path position that gh never receives as written --
+  an empty argument, a lone `-`, and the `$` stump a `$(` cut leaves -- read by
+  the walk as a path word, so a merge is read as not this path. Cited in
+  #118's issue file, where `gh pr $(echo -t) view merge 5` and
+  `gh pr $(echo merge) 5` are pinned as permitted boundary rows and the bare
+  `-` paragraph in `lib/command-scan.sh` points here. Filed from round 5 of the
+  review of #184 and widened in rounds 6 and 8. It adds its requirements in the
+  pull request that fixes it

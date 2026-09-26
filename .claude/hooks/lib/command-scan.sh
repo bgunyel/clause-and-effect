@@ -1832,15 +1832,22 @@ cs_git_args() {
 # for each group, a list #97 decided against keeping and one that a new gh
 # release moves. The answer is to refuse the shape: an option standing before a
 # word of a guarded subcommand path, other than the three that name where the
-# command acts rather than what it does, makes the command unreadable, and an
+# command acts rather than what it does and the two root flags gh prints, makes
+# the command unreadable, and an
 # unreadable command is refused the way a wrapped one is. The hook does not
 # guess the verb.
 #
 # The three exceptions are -R, --repo and --hostname, in every spelling: the
 # bare form taking its value as the next word, and the forms carrying it --
-# `--repo=o/r`, `--hostname=h`, `-R=o/r`, `-Ro/r`. Nothing else is recognised,
-# `--` and an unknown longhand included, because the point is not to be right
-# about cobra but to stop reading where being right stops being possible.
+# `--repo=o/r`, `--hostname=h`, `-R=o/r`, `-Ro/r`. Beside them the walk
+# recognises the two root flags and nothing else: --help at every level, and
+# --version in front of the group only, for the reasons written at ghopt. So
+# the whole set is those five, one of them at one position; every statement of
+# it -- the refusal below, GH-118's text, CLAUDE.md's ninth consequence -- names
+# all five, which round 8 of the review of PR #184 found the first three did
+# not. Nothing else is recognised, `--` and an unknown longhand included,
+# because the point is not to be right about cobra but to stop reading where
+# being right stops being possible.
 #
 # THE TRADE, TAKEN KNOWINGLY. This refuses harmless reads too: `gh pr --json
 # title view 5` is a view, and it is refused. Before the decision, 37,597 past
@@ -1892,7 +1899,7 @@ cs_git_args() {
 # and #241 carries it. This paragraph said "`gh pr -` is no subcommand and gh
 # says so" until round 6 of that review. The walk's behaviour predates #118, the
 # same length test having always ended the skip.
-CS_GH_OPAQUE_REFUSAL="Blocked: this gh command writes an option before its subcommand, and gh gives an option it does not know as a boolean the next word as a value -- so the subcommand a hook reads here is not the one gh would run. Refusing rather than guessing it. Move the option after the subcommand: gh pr view 5 --json title, gh release list --limit 5. Only -R, --repo and --hostname may stand in front of a subcommand."
+CS_GH_OPAQUE_REFUSAL="Blocked: this gh command writes an option before its subcommand, and gh gives an option it does not know as a boolean the next word as a value -- so the subcommand a hook reads here is not the one gh would run. Refusing rather than guessing it. Move the option after the subcommand: gh pr view 5 --json title, gh release list --limit 5. Only -R, --repo, --hostname and --help may stand in front of a subcommand, and --version in front of the group."
 
 # THE ONE WALK, shared by cs_gh_args and cs_gh_opaque. They ask two questions of
 # the same walk, and round 1 of Bertan review of #118 found what happens when

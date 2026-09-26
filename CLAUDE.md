@@ -496,8 +496,9 @@ part that went stale last time.
    longhand or shorthand, or one taking a value, eats the next word as that
    value — so the verb a hook reads is not the verb gh runs, and
    `gh pr -t view merge 5` is a merge. Since
-   #118, `no-pr-decisions.sh` refuses any option but `-R`, `--repo` and
-   `--hostname` in front of a word of a guarded path, which refuses
+   #118, `no-pr-decisions.sh` refuses any option but `-R`, `--repo`,
+   `--hostname` and `--help` in front of a word of a guarded path, and
+   `--version` too in front of the group, which refuses
    `gh pr --json title view 5` although the paragraph above grants reading a
    pull request through `gh pr view`. In front of the group itself it refuses
    whatever group follows, since with the group eaten which group it was is
