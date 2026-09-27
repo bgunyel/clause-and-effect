@@ -1429,6 +1429,11 @@ it has no entry above (Q16).
   entry's "one reader" was wider than the code, and that the tail offer's quote
   test had not followed the reader; cited where each correction stands, and in
   #266's issue file, which that round found
+- #284: `cs_git_args` cuts a quoted global-option value at its blank, so
+  `git -c "user.name=a b" push origin main` is permitted by both push hooks.
+  Cited in GH-166.1's note and at the head of `lib/command-scan.sh`. Found by
+  the class sweep in round 2 of the review of #260, pre-existing at abba1d0; it
+  adds its requirements in the pull request that fixes it
 - #265: a prefix word's own options recognised by their raw first character, so
   `sudo "-u" root git push origin main` is permitted. Cited in GH-166's note and
   at the head of `lib/command-scan.sh`. Pre-existing, found by the review of

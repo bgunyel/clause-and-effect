@@ -190,7 +190,9 @@
 # the arguments no-commit-to-main.sh, no-git-push.sh and
 # no-work-on-stale-branch.sh unquote by deleting quote characters, which leaves
 # the `$`, and base_args in no-pr-decisions.sh, which knows two quotes (#267);
-# cs_git_args skipping git's global options on raw text (#191); the REST base
+# cs_git_args skipping git's global options on raw text (#191) and cutting a
+# quoted option value at its blank (#284), the gh walk doing the same (#194);
+# the REST base
 # (#225); and the separator walk in cs_split, which pairs `$'` as `'` (#252).
 
 # THE LOAD CONTRACT, which is about this file's absence rather than its

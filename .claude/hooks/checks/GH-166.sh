@@ -145,7 +145,12 @@ requirement GH-166.1 <<'REQ'
   declared in its own issue file: its strip and its env operand are these word
   ends, and its wrapper half is a regular expression. #265 stands: an option is
   still recognised by its raw first character, so a quoted option is not
-  stepped over as one.
+  stepped over as one. Two walks outside `cs_split` ask the same one-token
+  question and are not this entry, because neither calls the reader:
+  `cs_git_args` cuts a quoted global-option value at its blank, so
+  `git -c "user.name=a b" push origin main` is permitted (#284, found by the
+  sweep for this class), and the gh walk does the same for
+  `gh pr --repo "a b" merge 5` (#194).
 REQ
 shape_pin 'GH-166 GH-166.1'
 variants_pin 'GH-166:transformation GH-166.1:transformation'
