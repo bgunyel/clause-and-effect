@@ -182,3 +182,72 @@ The `r110_disagree` named above, under review round 1, no longer exists.
   reader under mawk. The live read goes red on the status and no GH-110.5 row
   says agreement, and a fixture now pins both halves. Refusing it in the shell
   first, as the split set is, would be #104's to take.
+
+# 2026-09-27 · dev-agent-110 — #110: rev-agent-110's round 2 on PR #287
+
+**Written 2026-09-27, 22:17.** Branch `worktree-issue-110-live-runbook`, from
+`7c1c0bb` to `be0a6e8` plus this entry; 7 ahead of `origin/dev-05`, still at
+`abba1d0`, and 0 behind it.
+
+## What rev-agent-110 found, and what was done
+
+rev-agent-110 re-ran its round-1 mutants through the full suite and confirmed
+B, C and D fixed. It posted one gating finding and five others. The assistant
+took all six and declined none.
+
+- **G3: CI was red on `7c1c0bb`, and the assistant's round-1 fixture caused
+  it.** The `rb-directory` fixture asserted `status 2`, which is mawk's abort
+  on a directory. The CI runner's awk reads a directory as empty and runs to
+  its end, so the row failed there and passed here, where `/usr/bin/awk` is
+  mawk. busybox's awk behaves like the runner's, and the assistant used it to
+  reproduce the difference. rev-agent-110 proposed accepting either outcome.
+  The assistant went further: #104's reader now refuses a runbook that exists
+  and is not a regular file before any awk reads it, the way it already
+  refuses a split file that is not one. So the fixture asks for one outcome
+  under every awk: a named FR-45 finding, the pointing entries told the
+  runbook "is not a regular file", the program finishing with status 0, and a
+  GH-110.5 FAIL rather than agreement. On scratch copies of this repository's
+  requirements, the directory case and the unmutated case each printed the
+  same rows under mawk and busybox awk.
+- **The dev-log's *Open* above is wrong under the CI awk.** It says a
+  directory runbook "still aborts #104's reader under mawk. The live read
+  goes red on the status". That was true only of mawk, and since `be0a6e8` it
+  is true of no awk: the reader names the directory, and the live read goes
+  red on that FAIL row. A `requirements.md` that is a directory is unchanged,
+  because it predates #110 and nothing in this branch asserts how an awk
+  handles it.
+- **N9.** `requirements.md`'s list of what the suite fails on now names
+  GH-110.5's rules, together with the not-a-regular-file runbook.
+- **N10.** runbook §1b expected the count against `origin/dev-NN` to show `0`
+  on the right, which holds only while `origin/main` is an ancestor of the
+  dev branch. It now expects whatever
+  `git rev-list --left-right --count origin/dev-NN...origin/main` prints, and
+  says what each ancestry gives.
+- **N11.** The assistant's comment said a verify refused by #104's resolution
+  points at no section in the comparison either. That is untrue for a gap
+  entry, which the resolution skips. The comment now says so. The skip is
+  deliberate: US-5 and US-6 pointed at an unwritten runbook while they were
+  gaps.
+- **N12.** A fixture now reaches the "above the first section" message.
+- **N13.** A 120-column prose line in runbook §5, left by the assistant's N7
+  edit, is reflowed. The assistant's N8 width sweep had covered comment lines
+  only.
+
+## Evidence
+
+- Check suite on `be0a6e8`: `ALL CHECKS PASSED`, 6,243 ok rows, run beside
+  the mutant below. CI run 36342835115 on `be0a6e8`: success, with the
+  directory rows passing under the runner's awk.
+- The directory guard removed in a scratch clone of `be0a6e8`, full suite:
+  red at exactly the four `rb-directory` rows, and at no other row.
+
+## Open
+
+- As in the entries above: §6, §1b in this repository, and the rest of §1c
+  are Bertan's. #113 can proceed. The interactive front end was not watched
+  for §5.
+- rev-agent-110 filed #298: the Verifies parser reads layout, prose and fenced
+  code as the list.
+- rev-agent-110 left two questions for Bertan. Should GH-110.5's checks live
+  in `end-of-run.sh` rather than the issue file? Should US-6 stay `gap` until
+  §1b runs with this repository's own settings?
