@@ -13922,9 +13922,16 @@ echo "--- all seven Bash hooks at once: a permitted spelling is permitted by eve
 # with "Push your dev-NN branch and open a PR instead", and no-git-push.sh
 # refuses that push from every checkout an agent could stand in -- rightly, by
 # US-2. The message is what is wrong, so the right verdict is not ALLOW and
-# `gap` cannot express it. It is recorded as a row on the message instead,
-# marked a gap: it asserts the sentence is still there, and #164's fix turns it
-# red by removing it, which is the outcome `gap` describes. Every other spelling
+# `gap` cannot express it. It was recorded as a row on the message instead,
+# marked a gap, asserting the sentence was still there, and #164's fix turned it
+# red by removing it. #164 took the remedy out rather than replacing it with
+# another push: the message is one string, read from the main checkout, a
+# worktree on dev-NN and a worktree branch, and only the last permits any push.
+# So the gap row is two ordinary checks now. What this section asks of every
+# spelling here -- does each one a message names pass all seven hooks, from where
+# it is shown -- is vacuous for this message, which names none, so the rows
+# assert that instead: the old sentence is gone, and no `git push` took its
+# place. checks/GH-164.sh pins the rest, and what that gave up. Every other spelling
 # below was permitted by all seven on the first run, and so were the three that
 # review of this section added: the two gh api creates and the plain commit.
 XH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command' "$SETTINGS" 2>/dev/null \
@@ -14024,10 +14031,15 @@ every_hook "$WT_STALE" 'route 2: git reset --hard origin/dev-NN, first act in a 
   'git reset --hard origin/dev-05'
 every_hook "$WT_STALE" 'the stale guard names git merge <dev branch> as permitted from here' \
   'git merge origin/dev-05'
-# #164, the one this section found. See above for why it is a row on the message.
+# #164, the one this section found. See above for why it is a row on the message,
+# and for why that row is no longer a gap: the question it asks of every other
+# spelling here is vacuous for this message, which names none.
 req GH-164
-says "$ON_MAIN" no-commit-to-main.sh 'Push your dev-NN branch and open a PR instead.' \
-  'the push-to-main refusal names a push no-git-push.sh refuses [gap: #164 removes this sentence; today it is there]' \
+says_not "$ON_MAIN" no-commit-to-main.sh 'Push your dev-NN branch' \
+  'the push-to-main refusal no longer names the push no-git-push.sh refuses' \
+  'git push origin main'
+says_not "$ON_MAIN" no-commit-to-main.sh 'git push' \
+  'and says no git push, so this section has no spelling of it to run through the seven hooks' \
   'git push origin main'
 
 echo "--- every hook settings.json registers is run by a tagged check ---"

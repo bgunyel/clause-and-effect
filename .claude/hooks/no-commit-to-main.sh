@@ -97,7 +97,22 @@ SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)
 CMDS=$(printf '%s\n' "$SCAN" | cs_split)
 
 COMMIT_REFUSE="Blocked: committing to main. CLAUDE.md requires sequential dev-NN branches, merged into main by PR only. Create or switch to a dev-NN branch first."
-PUSH_REFUSE="Blocked: pushing to main. CLAUDE.md requires that main is only ever updated by pull request. Push your dev-NN branch and open a PR instead."
+# PUSH_REFUSE NAMES NO PUSH, and that is a trade (#164). It said "Push your
+# dev-NN branch and open a PR instead", and no-git-push.sh refuses that push
+# from every checkout an agent can stand in, so an agent that did what it said
+# was refused a second time. The string backs every arm below that refuses a
+# push naming main, and is read from three contexts -- the main checkout, a
+# linked worktree on dev-NN, and a linked worktree on a worktree branch -- and
+# only the third permits any push at all,
+# `git push origin <that branch>`. Naming that spelling here would name, in the
+# other two, a push the sibling hook refuses, which is #164 moved rather than
+# fixed; naming it only where it holds would mean re-deriving no-git-push.sh's
+# worktree detection in this file, a second copy of a boundary decision for one
+# sentence. So the worktree-branch context loses guidance it could have had, and
+# loses it knowingly: checks/GH-164.sh pins that as behaviour, holding the
+# message whole from that context, so any change to the remedy -- a push named
+# here again among them -- turns it red.
+PUSH_REFUSE="Blocked: pushing to main. CLAUDE.md requires that main is only ever updated by pull request. Leave the commits on the branch and say what is ready to push."
 ELSEWHERE_REFUSE="Blocked: this command moves git somewhere else before committing or pushing, so whether it lands on main cannot be judged from here. CLAUDE.md closes main to everything but a pull request. Run it plainly, from the branch it belongs on."
 
 # A commit or a push inside a wrapper is refused outright, as in both siblings.
