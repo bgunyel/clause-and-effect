@@ -147,7 +147,9 @@ requirement GH-177.1 <<'REQ'
 - status: active
 - note: The permitted rows are #246's gap and not this requirement's: this is what
   the documents say, and they say those spellings are permitted today, so ALLOW
-  is its right verdict, for the reason GH-157.3 gives for #159's rows. When #246
+  is its right verdict: a doc-claim's right verdict is the one its document
+  states, which is why checks/GH-157.sh's header says #159's rows were not
+  `gap` rows while the README said the Edit guard permitted them. When #246
   closes them the rows go red, and the documents are what changes with them. ADR
   0003 is not read, because this suite's header names every document the suite
   reads and does not name it; its sentence is held by review. The documents

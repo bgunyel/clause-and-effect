@@ -72,8 +72,17 @@ fi
 # path's own segments -- permits the same paths. Two halves of one rule have to
 # agree about which paths are append-only, and checks/GH-159.sh holds them to one
 # path set, so this side is bounded the way that side is: `docs` opens the path
-# or follows a character that cannot continue a name, a `/` among them. That
-# permits what this hook refused, which is the direction a boundary fix goes.
+# or follows a character that is not a letter, a digit, `_`, `.` or `-`, a `/`
+# among them. That permits what this hook refused, which is the direction a
+# boundary fix goes.
+#
+# The class is not "a character that cannot continue a name": `+ @ , : = ~` and
+# a quoted space can, and they are boundaries here because in shell text they
+# also end an option or a host in front of a path -- `--target-directory=docs/`,
+# `host:docs/`. So the halves agree on GH-159.2's path set and disagree just
+# outside it, in the refusing direction: `rm -rf a+docs/dev-log` is refused here
+# while the Edit half, which needs a `/` before `docs`, permits an Edit of
+# `a+docs/dev-log/<entry>`. checks/GH-159.sh pins both as the trade.
 #
 # It is written into the rules below rather than only here, because a boundary
 # is a character and the rules below had already consumed the one in front of
@@ -91,7 +100,9 @@ fi
 # (review of #159's branch). So after the boundary, a `-` and letters may stand
 # in front of `docs` -- an option whose value is the path. A hyphen inside a name
 # still opens nothing, because the `-` has to follow the boundary itself:
-# `x-notdocs/dev-log` stays another directory.
+# `x-notdocs/dev-log` stays another directory. The trade: a directory whose name
+# is a `-`, letters and then `docs`, `./-xdocs/dev-log`, reads as that option
+# and is refused; `-docs` itself, with no letters, is another directory.
 APPEND_ONLY_DIR='docs/+(\./+)*(dev-log|lessons-learned|eval-reports)(/|[^A-Za-z0-9_.-]|$)'
 APPEND_ONLY='(^|[^A-Za-z0-9_.-])(-[A-Za-z]+)?'"$APPEND_ONLY_DIR"
 

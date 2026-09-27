@@ -66,7 +66,9 @@ thing in the record.
   with `cat <file> >> <entry>`.
   `append-only-docs-edit.sh` refuses an Edit or a Write of an entry that
   exists in the main checkout and in a linked worktree alike, whichever of the
-  two is the session's project directory (#159).
+  two is the session's project directory (#159). An entry exists from its
+  first write, so a draft not yet merged is refused too, in a worktree as in
+  the main checkout (#190).
 - Written for technical readers who know the codebase. Prefer measured numbers
   and commit SHAs over recollection — and say which figures were measured versus
   recalled.

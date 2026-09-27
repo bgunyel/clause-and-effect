@@ -141,7 +141,9 @@ requirement GH-157.2 <<'REQ'
   to a scratch file and appended with `cat <file> >> <entry>`; and that
   `append-only-docs-edit.sh` refuses an Edit or a Write of an entry that
   exists in the main checkout and in a linked worktree alike, whichever of
-  the two is the session's project directory (#159). It does not carry the
+  the two is the session's project directory (#159), and that an entry
+  exists from its first write, so a draft not yet merged is refused too, in a
+  worktree as in the main checkout (#190). It does not carry the
   phrase `does not yet refuse`, the wording of the sentence #159 replaced,
   nor `are refused on an entry that already exists`, the first triage
   brief's wording, which named no checkout. These bullets are read as part
@@ -165,8 +167,9 @@ requirement GH-157.3 <<'REQ'
   text only names such a path, one whose `rm` has its path on the next
   line, and `cat <file> >> <entry>`. `append-only-docs-edit.sh`, given a
   repository with a linked worktree in it and an existing entry in each,
-  refuses an Edit and a Write of either checkout's entry whichever of the two
-  is the project directory (#159).
+  committed on no branch and so a draft (#190), refuses an Edit and a Write
+  of either checkout's entry whichever of the two is the project directory
+  (#159).
 - from: review of #234, rounds 1 to 3
 - kind: doc-claim
 - status: active
@@ -223,7 +226,7 @@ R157_SPAN=$(paste -sd' ' <<'SPAN'
 - If the agent does not know its session name, or it is in doubt, it should call the `ListAgents` function to see its session name.
 - A dev-log entry should start with date and time of the entry. Open with branch, commit range, and how far ahead of its root branch the current branch ended up.
 - If the dev-log file that the agent is trying to write already exists, the agent should append a new dev-log entry to the file with a date and time.
-- An append is made with `>>` from Bash, and an entry that exists is never edited with the Edit or Write tool, except to correct the session segment of its heading onto its file name, which ADR 0003 permits (#177). `append-only-docs.sh` reads a heredoc's text as part of the command, so a heredoc append whose prose reads as a command that rewrites an entry can be refused: a `sed -i` anywhere in the text, for example, or an `rm` or an `mv` followed on its line by a path under this directory (#237), or a `>` followed on its line by such a path (#176). Write the text to a scratch file with the Write tool first, and append it with `cat <file> >> <entry>`. `append-only-docs-edit.sh` refuses an Edit or a Write of an entry that exists in the main checkout and in a linked worktree alike, whichever of the two is the session's project directory (#159).
+- An append is made with `>>` from Bash, and an entry that exists is never edited with the Edit or Write tool, except to correct the session segment of its heading onto its file name, which ADR 0003 permits (#177). `append-only-docs.sh` reads a heredoc's text as part of the command, so a heredoc append whose prose reads as a command that rewrites an entry can be refused: a `sed -i` anywhere in the text, for example, or an `rm` or an `mv` followed on its line by a path under this directory (#237), or a `>` followed on its line by such a path (#176). Write the text to a scratch file with the Write tool first, and append it with `cat <file> >> <entry>`. `append-only-docs-edit.sh` refuses an Edit or a Write of an entry that exists in the main checkout and in a linked worktree alike, whichever of the two is the session's project directory (#159). An entry exists from its first write, so a draft not yet merged is refused too, in a worktree as in the main checkout (#190).
 SPAN
 )
 
@@ -264,7 +267,9 @@ check append-only-docs.sh ALLOW 'cat <file> >> <entry>, the route the README giv
   'cat /tmp/entry.md >> docs/dev-log/devlog_2026-01-01_x.md'
 
 # A repository with a linked worktree inside it, where agents' stand, and an
-# existing entry in each. One commit, because `git worktree add` needs one.
+# existing entry in each. One commit, because `git worktree add` needs one; the
+# entries are never committed, so each is a draft, which the README says is
+# refused too (#190).
 R157_MAIN="$FIXTURES/r157-main"
 R157_WT="$R157_MAIN/.claude/worktrees/r157"
 git init -q -b feature-157 "$R157_MAIN"

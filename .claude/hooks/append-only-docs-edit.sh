@@ -430,6 +430,17 @@ ABS=$(norm_path "$ABS")
 # git which repository a path belongs to was the other route #159 offered, and
 # was not taken: it would have fixed the worktree and left the two halves
 # disagreeing about every other checkout.
+#
+# The pattern matches anywhere in the path, so the trade is wider than "another
+# repository" in two more ways, both refusing, both pinned in checks/GH-159.sh:
+#   - A project directory that itself stands under a `docs/dev-log/` (or either
+#     sibling) ancestor has every existing file in it refused, `src/main.py`
+#     included, since the ancestor's segments are the path's own.
+#   - A draft -- an entry not yet merged, which CONTEXT.md says is corrected as
+#     the ordinary case -- is refused in a linked worktree from its first write,
+#     because the test below is existence on disk and not the merge base (#190).
+#     That was already so where the worktree was the project directory; #159
+#     carries it to the session whose project directory is the main checkout.
 GUARDED_RE='/docs/(dev-log|lessons-learned|eval-reports)/'
 
 # The path a reader can act on: relative to the project root when it is under
