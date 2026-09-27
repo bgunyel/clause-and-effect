@@ -224,8 +224,8 @@ FAILING_LOG = """\
 === the tokeniser itself ===
   ok   ALLOW 'a plain push'
   FAIL BLOCK 'a forced push' (got ALLOW)
-    hook stderr: nothing
-    exit status: 0
+           hook stderr: nothing
+           exit status: 0
   ok   BLOCK 'a mirror push'
 --- this repository ---
   FAIL the requirements program printed no finding at all
@@ -355,7 +355,7 @@ def test_report_refuses_a_pass_the_log_does_not_support(tmp_path, log_text, exit
 def test_report_fences_a_failing_row_that_carries_backticks(tmp_path):
     """Hook stderr can quote a command in markdown backticks; a row holding a
     triple backtick must not close the summary's code block early."""
-    log = "  FAIL BLOCK 'fenced' (got ALLOW)\n    stderr: ```git push```\n\nSOME CHECKS FAILED\n"
+    log = "  FAIL BLOCK 'fenced' (got ALLOW)\n           stderr: ```git push```\n\nSOME CHECKS FAILED\n"
     result, paths = report(tmp_path, log, 1)
 
     assert result.returncode == 0, result.stdout + result.stderr
@@ -390,7 +390,7 @@ def test_report_bounds_the_summary_by_bytes_and_says_what_it_left_out(tmp_path):
     300 KiB each: two fit under the 512 KiB budget only if the budget is in
     bytes and not rows -- here the first alone fits, the second would pass it.
     """
-    detail = "    " + "x" * (300 * 1024)
+    detail = "       " + "x" * (300 * 1024)
     log = "".join(f"  FAIL row {i}\n{detail}\n" for i in range(3)) + "\nSOME CHECKS FAILED\n"
     result, paths = report(tmp_path, log, 1)
 
@@ -404,7 +404,7 @@ def test_report_bounds_the_summary_by_bytes_and_says_what_it_left_out(tmp_path):
 
 
 def test_report_says_every_row_was_left_out_when_the_first_is_over_budget(tmp_path):
-    detail = "    " + "x" * (600 * 1024)
+    detail = "       " + "x" * (600 * 1024)
     log = f"  FAIL huge\n{detail}\n\nSOME CHECKS FAILED\n"
     result, paths = report(tmp_path, log, 1)
 
@@ -420,7 +420,7 @@ def test_report_skips_a_row_over_budget_and_shows_the_rows_after_it(tmp_path):
     left to the uploaded log and counted; the two small rows after it fit, so
     they are shown, and the count names only the row that is not.
     """
-    detail = "    " + "x" * (600 * 1024)
+    detail = "       " + "x" * (600 * 1024)
     log = f"  FAIL big\n{detail}\n  FAIL small-1\n  FAIL small-2\n\nSOME CHECKS FAILED\n"
     result, paths = report(tmp_path, log, 1)
 
@@ -441,8 +441,8 @@ def test_report_counts_the_fence_against_the_row_budget(tmp_path):
     make is 1.1 MiB -- past GitHub's cap, and lost.
     """
     log = (
-        "  FAIL a\n    " + "`" * (300 * 1024) + "\n"
-        "  FAIL b\n    " + "x" * (200 * 1024) + "\n"
+        "  FAIL a\n           " + "`" * (300 * 1024) + "\n"
+        "  FAIL b\n           " + "x" * (200 * 1024) + "\n"
         "\nSOME CHECKS FAILED\n"
     )
     result, paths = report(tmp_path, log, 1)
@@ -463,8 +463,8 @@ def test_report_counts_a_shown_rows_fence_against_the_rows_after_it(tmp_path):
     with plain fences would be 409,640 and fit. Row c, nine bytes, still fits.
     """
     log = (
-        "  FAIL a\n    " + "`" * 102400 + "\n"
-        "  FAIL b\n    " + "x" * 307200 + "\n"
+        "  FAIL a\n           " + "`" * 102400 + "\n"
+        "  FAIL b\n           " + "x" * 307200 + "\n"
         "  FAIL c\n"
         "\nSOME CHECKS FAILED\n"
     )
@@ -553,12 +553,13 @@ def test_report_does_not_say_a_short_tail_was_cut(tmp_path):
 @pytest.mark.parametrize("heading", ["=== the next section ===", "--- this repository ---"],
                          ids=["equals", "dashes"])
 def test_report_ends_a_failing_row_at_a_section_heading(tmp_path, heading):
-    """A heading closes a failing row's detail, so what follows it -- here a
-    library's stderr, printed before the row it belongs to -- is not shown as
-    the failing row's."""
+    """A heading is printed at column 0, so it closes a failing row's detail,
+    and what follows it -- here a library's stderr, printed before the row it
+    belongs to -- is not shown as the failing row's. Since #224 it is the
+    column that closes it, not the heading's `===` or `---`."""
     log = (
         "  FAIL a row\n"
-        "    its detail\n"
+        "           its detail\n"
         f"{heading}\n"
         "lib/command-scan.sh: a stray line of stderr\n"
         "  ok   a later row\n"
@@ -568,6 +569,197 @@ def test_report_ends_a_failing_row_at_a_section_heading(tmp_path, heading):
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "```text\n  FAIL a row\n    its detail\n```\n" in paths["summary.md"].read_text()
+
+
+# --------------------------------------------------------------------------- #
+# report: which lines are a failing row's (#224)
+# --------------------------------------------------------------------------- #
+
+LIBRARY = Path(__file__).resolve().parent.parent / ".claude" / "hooks" / "checks" / "library.sh"
+
+
+def summary_text(paths):
+    """The summary as written, a carriage return included: `read_text` would
+    turn one into a newline, which is the thing one test here is about."""
+    return paths["summary.md"].read_bytes().decode("utf-8")
+
+
+def test_report_takes_the_detail_the_check_librarys_own_fail_marks(tmp_path):
+    """
+    The tie between the two halves of #224. The indent is spelled twice, once in
+    `fail` and once in the parser, and nothing but this test holds the two
+    together, so `fail` is the library's own, sourced and run, and never a copy
+    of its text. The stderr it embeds holds what the old rule stopped at or
+    took in: a line at column 0, a blank line, and lines opening `---` and
+    `===`, as a diff's do. Each comes through with one indent removed, and the
+    row after the message ends it. An indent changed in one place alone turns
+    this red: the parser then either stops at the first continuation line or
+    leaves spaces in front of every one.
+    """
+    stderr = "first line\ncolumn zero\n\n--- a/diff\n+++ b/diff\n===\n   three spaces"
+    printed = subprocess.run(
+        ["bash", "-c",
+         'source "$1"; fail static "%s\\n         stderr |%s|" "$2" "$3"; '
+         'pass static "%s" "the next row"',
+         "bash", str(LIBRARY), "a failing row", stderr],
+        env={**os.environ, "LEDGER": ""}, capture_output=True, text=True,
+    )
+    assert printed.returncode == 0 and printed.stderr == "", printed.stderr
+
+    result, paths = report(tmp_path, printed.stdout + "\nSOME CHECKS FAILED\n", 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    data = json.loads(paths["result.json"].read_text())
+    assert (data["passed"], data["failed"]) == (1, 1)
+    assert (
+        "```text\n"
+        "  FAIL a failing row\n"
+        "         stderr |first line\n"
+        "column zero\n"
+        "\n"
+        "--- a/diff\n"
+        "+++ b/diff\n"
+        "===\n"
+        "   three spaces|\n"
+        "```\n"
+    ) in summary_text(paths)
+
+
+def test_report_does_not_take_a_column_0_line_as_a_failing_rows_detail(tmp_path):
+    """
+    The defect #224 was filed for, and one that can happen today: a library's
+    stderr is printed at column 0, before the row it belongs to, and so right
+    after the row above it (run 35836366963's log, lines 2026-2032). A line at
+    column 0 is never detail, whatever the row above it is. Nor is a blank line
+    that holds no indent.
+    """
+    log = (
+        "  FAIL row A\n"
+        "lib/command-scan.sh: stray stderr of row B\n"
+        "  ok   row B\n"
+        "  FAIL row C\n"
+        "\n"
+        "       not row C's, after a blank line with no indent\n"
+        "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "```text\n  FAIL row A\n  FAIL row C\n```\n" in summary_text(paths)
+
+
+def test_report_does_not_end_a_detail_at_a_blank_line_or_a_heading_shaped_one(tmp_path):
+    """
+    `fail` writes a blank line of its message as the indent alone, and a line
+    opening `---` or `===` as the indent and then that. None of them ends the
+    detail, which the old rule's blank-line and heading boundaries did: it
+    returned `stderr |line one` alone for the first of these rows, and lost the
+    rest (#224's triage).
+    """
+    log = (
+        "  FAIL row C\n"
+        "                stderr |line one\n"
+        "       \n"
+        "       line three\n"
+        "       --- a/hook.sh\n"
+        "       === not a section\n"
+        "       line six|\n"
+        "  ok   row D\n"
+        "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        "```text\n"
+        "  FAIL row C\n"
+        "         stderr |line one\n"
+        "\n"
+        "line three\n"
+        "--- a/hook.sh\n"
+        "=== not a section\n"
+        "line six|\n"
+        "```\n"
+    ) in summary_text(paths)
+
+
+def test_report_shows_a_detail_with_exactly_one_indent_removed(tmp_path):
+    """The summary removes the indent `fail` added and nothing else, so a line
+    the hook itself indented keeps its own spaces, and a diff or a nested list
+    in its stderr reads as the hook wrote it."""
+    log = (
+        "  FAIL row E\n"
+        "       at the indent\n"
+        "          three more\n"
+        "                 ten more\n"
+        "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        "```text\n"
+        "  FAIL row E\n"
+        "at the indent\n"
+        "   three more\n"
+        "          ten more\n"
+        "```\n"
+    ) in summary_text(paths)
+
+
+def test_report_takes_a_stray_line_that_opens_with_the_indent_as_detail(tmp_path):
+    """
+    A RECORDED TRADE, NOT A WANTED PROPERTY. A line `fail` did not print but
+    that opens with its indent is read as detail of the failing row above it,
+    because nothing in the log tells it from a continuation line (#224). This
+    pins the behaviour so that a change to it is seen; it does not say the
+    line belongs to row F.
+    """
+    log = (
+        "  FAIL row F\n"
+        "       a stray line that happens to open with the indent\n"
+        "  ok   row G\n"
+        "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        "```text\n"
+        "  FAIL row F\n"
+        "a stray line that happens to open with the indent\n"
+        "```\n"
+    ) in summary_text(paths)
+
+
+def test_report_cuts_a_detail_into_lines_only_at_a_newline(tmp_path):
+    """
+    `fail` indents after a newline and nowhere else, so a line is cut there
+    and nowhere else. `str.splitlines` also cuts at a carriage return, a form
+    feed and a file separator, and reading the log with universal newlines
+    turns a carriage return into a newline: either way the rest of such a line
+    stood at column 0 and ended the detail. A stderr holding one keeps it, and
+    no piece of it is counted as a row.
+    """
+    log = (
+        "  FAIL row H\n"
+        "                stderr |before\rafter\x0cand\x1c  ok   not a row\n"
+        "       and the line after|\n"
+        "  ok   row I\n"
+        "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    data = json.loads(paths["result.json"].read_text())
+    assert (data["passed"], data["failed"]) == (1, 1)
+    assert (
+        "```text\n"
+        "  FAIL row H\n"
+        "         stderr |before\rafter\x0cand\x1c  ok   not a row\n"
+        "and the line after|\n"
+        "```\n"
+    ) in summary_text(paths)
 
 
 def test_verify_merge_reads_parents_from_the_header_and_not_the_message(tmp_path, merge_repo):

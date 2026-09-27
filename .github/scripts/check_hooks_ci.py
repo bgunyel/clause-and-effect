@@ -34,9 +34,30 @@ Two subcommands, one per thing a green run has to be true about:
 
     A row is a line opening with ``"  ok   "`` or ``"  FAIL "``, which
     `check-hooks.sh` guarantees is printed only by its `pass` and `fail`. A
-    failing row's detail is the lines after it up to the next row, section
-    heading (``===`` or ``---``) or blank line; a `fail` message may span
-    lines, and the hook's stderr is the part a reviewer needs.
+    `fail` message may span lines, and the hook's stderr it embeds is the part
+    a reviewer needs, so `fail` marks every line of its message after the
+    first with `DETAIL_INDENT`, a blank line included, whatever the line
+    already starts with (#224). A failing row's detail is the unbroken run of
+    lines right after it that open with that indent, and the summary shows
+    each with exactly one indent removed, so the stderr reads as the hook
+    wrote it. A line is what `fail` calls one, cut at a newline and nowhere
+    else: `str.splitlines` also cuts at a carriage return, a form feed and
+    five more, and a stderr holding one would have lost the rest of its
+    detail at a line `fail` never indented.
+
+    Until #224 the log did not say which lines were a row's, and the detail
+    was guessed: the lines up to the next row, section heading (``===`` or
+    ``---``) or blank line. That took a library's stderr printed at column 0
+    before the next row as the failing row's detail, which run 35836366963's
+    log can produce, and it cut a stderr short at its first blank line or
+    line opening ``---``, a diff's. A column-0 line is now never detail, and a
+    blank or ``---`` line inside a message is.
+
+    THE OPEN CASE, recorded and not fixed: a stray line that `fail` did not
+    print but that happens to open with the indent is read as detail of the
+    failing row above it. The log cannot tell it from a continuation line.
+    Nothing in the suite prints one today that anyone found, and a test pins
+    the behaviour as accepted, not as wanted.
 
     The summary stays under GitHub's 1 MiB cap for any log, on either path
     that writes its one code block (#207). A failing row is shown if it fits
@@ -79,6 +100,13 @@ logger = logging.getLogger(__name__)
 
 OK_PREFIX = "  ok   "
 FAIL_PREFIX = "  FAIL "
+# What `fail` in .claude/hooks/checks/library.sh puts in front of every line of
+# its message after the first (#224). Seven spaces, the width of FAIL_PREFIX, so
+# a continuation line stands under the message's first character. It has to be
+# three or more, or a row line would open with it. The library spells it too,
+# and tests/test_check_hooks_ci.py runs the library's `fail` into this parser,
+# so the two cannot drift apart with the tests green.
+DETAIL_INDENT = "       "
 PASSED_LINE = "ALL CHECKS PASSED"
 FAILED_LINE = "SOME CHECKS FAILED"
 # GitHub refuses a step summary over 1 MiB, and the whole summary is lost with
@@ -184,13 +212,13 @@ def verify_merge(head_sha, base_ref, remote, output):
 # report
 # --------------------------------------------------------------------------- #
 
-def is_boundary(line):
-    return (not line.strip() or line.startswith((OK_PREFIX, FAIL_PREFIX, "===", "---")))
-
-
 def parse_log(text):
-    """Return (passed, failing rows each with their detail lines, verdict line or None)."""
-    lines = text.splitlines()
+    """
+    Return (passed, failing rows, verdict line or None). A failing row is its
+    row line and then its detail lines, each with one `DETAIL_INDENT` removed.
+    """
+    # A trailing newline ends the last line; it does not open another.
+    lines = text.removesuffix("\n").split("\n") if text else []
     passed = 0
     failing = []
     for i, line in enumerate(lines):
@@ -198,10 +226,15 @@ def parse_log(text):
             passed += 1
         elif line.startswith(FAIL_PREFIX):
             block = [line]
+            # The indent is the whole rule: a blank line of a message is an
+            # indent-only line, and so is detail, and a column-0 line never is.
+            # The open case the module docstring records is here too -- a stray
+            # line opening with the indent is taken, because nothing on it says
+            # it is not `fail`'s.
             for detail in lines[i + 1:]:
-                if is_boundary(detail):
+                if not detail.startswith(DETAIL_INDENT):
                     break
-                block.append(detail)
+                block.append(detail[len(DETAIL_INDENT):])
             failing.append(block)
     non_empty = [line for line in lines if line.strip()]
     last = non_empty[-1] if non_empty else None
@@ -293,7 +326,9 @@ def how_it_ended(exit_status, suite_outcome, started):
 
 def report(log_path, exit_status, suite_outcome, seconds, tested_commit, json_path,
            summary_path, output):
-    with open(log_path, encoding="utf-8", errors="replace") as fh:
+    # newline="" keeps a carriage return inside a hook's stderr as it is,
+    # where the default would make it a line break `fail` never indented.
+    with open(log_path, encoding="utf-8", errors="replace", newline="") as fh:
         text = fh.read()
     passed, failing, verdict = parse_log(text)
     failed = len(failing)

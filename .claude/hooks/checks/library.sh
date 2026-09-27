@@ -65,11 +65,24 @@ pass() {  # pass <refuse|permit|static> <format> [arguments...] -- an ok line, r
   printf '  ok   %s\n' "$line"
   record "$dir" ok "${line%%$'\n'*}"
 }
+# A FAIL LINE MARKS ITS OWN DETAIL (#224). Every line of the message after the
+# first is printed with seven spaces in front of it, the width of `  FAIL `,
+# whatever the line already starts with: a line at column 0 gets them, one that
+# opens with spaces gets them added to its own, and a blank line is printed as
+# the seven spaces alone. A message embeds a hook's stderr verbatim, and before
+# #224 a line of it stood wherever the hook put it, so the log did not say which
+# lines were a row's. The `check-hooks` job summary guessed, and took a
+# library's stray stderr at column 0 as the detail of the failing row above it,
+# and cut a stderr short at a blank line or at one opening `---`.
+# .github/scripts/check_hooks_ci.py takes a failing row's detail by these seven
+# spaces, as DETAIL_INDENT, and tests/test_check_hooks_ci.py runs this function
+# into that parser, so the two spellings cannot drift apart with the tests
+# green. The ledger records the first line, which the indent never reaches.
 fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, recorded
   local dir="$1" fmt="$2" line
   shift 2
   printf -v line "$fmt" "$@"
-  printf '  FAIL %s\n' "$line"
+  printf '  FAIL %s\n' "${line//$'\n'/$'\n'       }"
   FAILED=1
   record "$dir" FAIL "${line%%$'\n'*}"
 }
