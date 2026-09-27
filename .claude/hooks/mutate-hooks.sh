@@ -563,7 +563,20 @@ TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[
 # 200 check results, so the rate was taken again the same way against the merged
 # tree: 274 s, 250 s, 266 s. The slowest is under the reading above, so the
 # constant does not move -- the suite grew without the run getting slower.
-MEASURED_SECONDS_PER_RUN=275
+# RE-MEASURED 2026-09-27 on PR #260 (#166, #266, #273), whose rows took the
+# suite past a quarter over the size below and turned the staleness check red.
+# Three runs the same way, at 9d809aa: 1118 s, 908 s, 1272 s. NOT ON AN IDLE
+# MACHINE: other sessions were running this suite beside it, and the load
+# average at the start of each run was 33.7, 14.2 and 17.8. The slowest is
+# carried, as above, so the figure can only overstate what a pass costs here;
+# a quiet machine will print a budget that is too long, never one that is too
+# short. Re-take it on an idle machine to get the smaller number.
+MEASURED_SECONDS_PER_RUN=1272
+# The day it was taken, printed by --list beside it. It stood as a literal inside
+# that printf until the re-measurement above, which moved the rate and left the
+# printed date saying 2026-09-20 -- a second copy of one fact, which went stale
+# the first time the fact moved. So it is a constant here, moved with the rate.
+MEASURED_ON=2026-09-27
 # The suite's size when the rate was last CONFIRMED, as the number of check
 # results its OWN matrix line reports -- which is a little under the total it
 # prints, because the last findings are appended after the record is copied for
@@ -578,7 +591,7 @@ MEASURED_SECONDS_PER_RUN=275
 # shape as correcting a stale count in prose rather than deriving it. It moves
 # here because the rate above was actually re-taken at this size, not because
 # the tree grew.
-MEASURED_AT_RESULTS=5296
+MEASURED_AT_RESULTS=6779
 
 # WHAT MAKES A ROW RUNNABLE, asked in one place because two callers need the
 # same answer and gave different ones. Pass one below refuses a row for each
@@ -938,9 +951,9 @@ if [ -n "$LIST" ]; then
   # the half-minute added before the divide so the minutes round rather than
   # truncate -- a budget that is short is the one that costs somebody an
   # afternoon, and truncation is always short.
-  printf 'about %s minutes for that pass, at the %s s a run measured on 2026-09-20; re-measure it, it is not derived\n' \
+  printf 'about %s minutes for that pass, at the %s s a run measured on %s; re-measure it, it is not derived\n' \
     "$(( (RUNS_NEEDED * MEASURED_SECONDS_PER_RUN + 30) / 60 ))" \
-    "$MEASURED_SECONDS_PER_RUN"
+    "$MEASURED_SECONDS_PER_RUN" "$MEASURED_ON"
   exit 0
 fi
 
