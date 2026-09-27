@@ -329,3 +329,77 @@ The assistant took four and declined one.
 - For Bertan, from rev-agent-110: whether GH-110.5's checks may live in
   `end-of-run.sh`, given that the driver's header conventions and CLAUDE.md
   both place an issue's checks in its issue file; and US-6's status.
+
+# 2026-09-27 · dev-agent-110 — #110: rev-agent-110's round 4 on PR #287
+
+**Written 2026-09-27, 23:45.** Branch `worktree-issue-110-live-runbook`, from
+`912686a` to `74e9eed` plus this entry; 12 ahead of `origin/dev-05`, still at
+`abba1d0`, and 0 behind it.
+
+## What rev-agent-110 found, and what was done
+
+rev-agent-110 re-ran the round-3 fixes and confirmed them. It posted no
+gating finding and six others. The assistant took all six.
+
+- **N18: two claims were wider than the evidence the assistant gathered.**
+  §5 watched one `PreToolUse` hook on the Bash tool under `claude -p`.
+  `append-only-docs-edit.sh`, an Edit or Write hook, cited §5 as having
+  watched the kill, and GH-110.3's text covered every hook and every front
+  end. The assistant scoped the matcher and kept the front end:
+  - GH-110.3 is now about a hook on the Bash tool, which is what #96's line
+    cap and #240 are about.
+  - GH-110.3 still claims the interactive front end. §5 now says an
+    interactive run is what the section still owes it.
+  - The Edit or Write hook's comment says the kill is presumed there, not
+    watched.
+  - GH-110.2 had the same width: "a hook's exit 2" also covers
+    `append-only-docs-edit.sh`, which §4 did not watch. rev-agent-110 read it
+    as clean. The assistant scoped it to the Bash tool as well, and §4 says
+    so.
+  - Both requirement files were regenerated with `generate-requirements.sh`.
+- **N19: the record's §1d and §3 had been run under the procedure round 3
+  replaced.** The assistant re-ran both at 23:28:39 under the current one.
+  Both match, and the result is appended to the record. §3 told the reader
+  to run the report "as §1d runs it" but gave no command, so the command is
+  now written out. The record says the command it ran is that one.
+- **N20: the unreadable-runbook fixture failed under root, permanently.**
+  Under root, mode 000 reads, so there is no unreadable runbook to name. That
+  branch now asks the opposite: `runbook_state` says nothing of the file, and
+  the runbook is read and agrees. No run here was made as root, so that
+  branch is written and not yet run.
+- **N21: gap entries demanded a runbook.** An unwritten runbook with only gap
+  entries pointing into it, the state before #110, failed GH-110.5, although
+  #104's resolution calls it legitimate. Gap entries now count toward the
+  comparison with sections that exist, and never toward a demand that the
+  runbook exist. A runbook that is not a regular file, or cannot be read, now
+  fails GH-110.5 whatever points into it. Before, a directory runbook with no
+  non-gap pointers printed `ok`, next to an FR-45 FAIL. There are fixtures
+  for both.
+- **N22.** §1d said the hand-run report "removes nothing", and its fetch
+  prunes. It now says what the report deletes and what it does not.
+- **N23.** `rb_mutant` was a second copy of `req_mutant`. `req_mutant` now
+  takes a source fixture as an optional fourth argument. The state fixtures
+  now filter the findings they already hold rather than running the program
+  twice.
+- **One more of the assistant's.** Its round-3 edit to the runbook's header
+  left an 82-column line, which its round-3 width sweep missed. Reflowed.
+
+## Evidence
+
+- Check suite on `74e9eed`: `ALL CHECKS PASSED`, 6,251 ok rows, run beside
+  the two mutants below. CI run 36348356699 on `74e9eed`: success.
+- Scratch clones of `74e9eed`, full suite:
+  - Gap entries counted as demanding a runbook again: red at six rows, the
+    gap-only row, the gap-only directory row, and the four state rows whose
+    count of non-gap pointers they change.
+  - The not-a-regular-file clause dropped: red at exactly the gap-only
+    directory row.
+- §1d and §3, live, at 23:28:39: both match. The record has them.
+
+## Open
+
+- As before: §6, §1b in this repository, and the rest of §1c are Bertan's.
+  #113 can proceed.
+- §5 owes GH-110.3 a run in an interactive session.
+- The root branch of the unreadable fixture has not run anywhere.
+- Bertan's: where GH-110.5's checks live, and US-6's status.
