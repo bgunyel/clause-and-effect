@@ -61,7 +61,10 @@ four stale counts in a pushed entry. The append-only rule is also stated by
 this effect rather than by the commands that could cause it: a history entry
 of which the merge base's copy is no longer a byte prefix has been rewritten,
 whichever tool did it. A pure append leaves that prefix intact, so it is not a
-rewrite.
+rewrite. Nor is the one exception below: an entry whose only difference from
+that copy is its first line's session segment, corrected onto the file name, has
+been relabelled and not rewritten, and a check built from this sentence has to
+allow for it (#177).
 
 One part of one line of a history entry is the entry's *label* rather than its
 history, and may be corrected in place: the session segment of a `docs/dev-log/`

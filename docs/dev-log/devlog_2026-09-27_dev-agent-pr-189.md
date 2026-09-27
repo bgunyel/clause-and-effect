@@ -202,3 +202,65 @@ The breakdown is 51 against the fixture root, 67 against the real directory and
 from the total and forgetting to take GH-177.1's away too; the round-3 reply's
 48, plus this round's three, is 51. The 6205 and 133 were measured at this
 commit and stand.
+
+---
+
+# 2026-09-27 10:54 +03 · session `dev-agent-pr-189` — review round 5: the date bounded by its shape, and what the Write test does not close
+
+**Check suite: 6205 at 4ed530d → 6212 at the commit carrying this append, all
+passing.** `checks/GH-177.sh` has 140 rows. The reviewer reproduced 6205, 133
+and 29/20/9 at 4ed530d before posting round 5.
+
+**Round 4's date bound closed one spelling.** It refused a date holding an em
+dash. That closed `# <date> — <summary>`, but an en dash, `--` or a colon after
+the date still let the summary's ` · naming — ` parse as a session. The reviewer
+measured those three (K1). The date must now *be* a date, in one of the three
+shapes every real heading's date has: `YYYY-MM-DD`, then optionally ` HH:MM`,
+then optionally ` +ZZ` (30, 2 and 4 of 36 when the reviewer counted). The three
+spellings are rows, each red against 4ed530d. The `+ZZ` shape got an ALLOW row,
+because no row isolated it. An empty date now fails the shape, so the closing
+test's empty-date half was removed. **28 conditions, 19 isolated, 9 backed**,
+the same nine as before. The real-directory loop applies the same shape, so no
+row says "relabelled" of a heading the parser refuses.
+
+**The Write test is narrower than GH-177 said (K2), and the assistant narrowed
+the text rather than close it.** A call carrying a `content` string is refused.
+A Write whose `content` is null, a number or absent, with the Edit's two
+strings beside it, is judged as that Edit. Only the tool's name tells them
+apart, and reading it needs a second `jq` or a new library reader. The first is
+barred by GH-95.2. The second would change `lib/command-scan.sh`, whose load
+contract every consumer is checked against. A Write's schema requires a string
+`content`, so the harness is not expected to send the other shapes. That was
+not measured by either session. The three shapes are pinned as ALLOW at today's
+verdict, with labels saying so. The `content` test now runs before the scan for
+a NUL escape, which reads the whole payload. The reviewer measured a refused
+10 MB Write at 1.67 s against the 5 s timeout.
+
+**The rule stated by effect contradicted the exception (K3).** CONTEXT.md and
+ADR 0003's opening say a history entry whose merge-base copy is no longer a byte
+prefix "has been rewritten". This branch's own one-line correction fails that
+test. Both now state the exception where the rule is stated. The same ADR
+paragraph also said the Edit companion "refuses a history entry whole", which
+this PR made false. It now says "but for that one correction".
+
+**A stale rationale (K4).** The hook said the exception's dependency was
+`grep`. It has not used `grep` since round 1, and it reads the entry with `cat`.
+The hook comment now says so. The comments on the name shape now say what is
+checked (`devlog_<x>_<session>.md`, at any depth under `docs/dev-log/`, the date
+part not checked), and the buffer's comment states the jq version its argument
+rests on. jq 1.7 rejects a raw control character in a string, measured here and
+by the reviewer. jq 1.6 is said to accept one, which is not measured.
+
+**The triage-agent-177 entry has an index row now**, so the corrections in this
+entry can be reached from the entry they correct.
+
+**A correction to the section above.** *Errors of the assistant's* includes
+the sentence "Its round-2 claim that widening agreement refused only more was
+the reviewer's, and the assistant corrected it." It sits in the wrong list: the
+claim was the reviewer's error, not the assistant's, and the assistant only
+corrected it. The reviewer pointed this out in round 5.
+
+**Open, added:** #247, filed by the reviewer: `mutate-hooks.sh` has no registry
+row for either append-only hook, so the 28/19/9 split is re-derived only by a
+hand sweep. The scratch harness this session used (`sweep.sh`) is not
+committed.

@@ -11,15 +11,19 @@ entry may not.
 The rule is also stated by its effect, following ADR 0002, which was written
 for the agent boundary and is applied here to a convention hook for the same
 reason: a history entry of which the merge base's copy is no longer a byte
-prefix has been rewritten, whichever tool did it. A pure append leaves the
+prefix has been rewritten, whichever tool did it — with the one exception the
+section on metadata below decides, an entry whose only difference from that copy
+is its first line's session segment corrected onto its file name, which has been
+relabelled and not rewritten (#177). A pure append leaves the
 recorded bytes as they were, so it is not a rewrite, and that is why the
 text-level rule that stands in for the effect in a Bash command can be an
 allowlist of reads and `>>` appends with a default-deny rather than a list of
 the editors that can overwrite a file. Appending to a history entry is still
 not how a correction is made — CLAUDE.md puts corrections in the newest entry,
 and that convention is left to the author, not to a hook. The Edit companion
-refuses a history entry whole, an append included: it decides by the file, not
-by what the payload would do to it, and `>>` is the route for an append.
+refuses a history entry whole, an append included, but for that one correction:
+it decides by the file, and by what the payload would do to it only there, and
+`>>` is the route for an append.
 
 ## The one line of an entry that is metadata, not history (#177)
 
@@ -137,10 +141,11 @@ narrow on purpose rather than by oversight. **Nor is a heading of any other
 shape** than `# <date> · <session> — <rest>`: one with no rest, or one opening
 `# Devlog — …`, has no session segment the guard can find, and 31 of the 66
 entries in `docs/dev-log/` were of those shapes when #189's review counted them.
-Nor is one whose date segment holds a ` — `, or whose session segment holds a
-` · `: each field is cut at a separator's first occurrence, so a separator inside
-one would move another field's boundary, and the guard refuses those rather than
-guess where the fields end.
+Nor is one whose date segment is not a date — `YYYY-MM-DD`, then optionally
+` HH:MM`, then optionally ` +ZZ`, the three shapes every real heading's date has —
+or whose session segment holds a ` · `: each field is cut at a separator's first
+occurrence, so text in one could move another field's boundary, and the guard
+refuses those rather than guess where the fields end.
 And **the guard permits the correction whether or not the heading is actually
 wrong in the way #177 found**, provided the new segment is one of the spellings
 the file name gives and the old segment's key differs from the file's: it

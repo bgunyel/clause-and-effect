@@ -34,14 +34,17 @@ section "=== #177: the session segment of a dev-log heading, corrected onto its 
 
 requirement GH-177 <<'REQ'
 - text: `append-only-docs-edit.sh` permits exactly one edit to a history entry, and
-  refuses every other one as it did. The permitted edit is an `Edit` -- a call
-  carrying no `content`, which every `Write` carries -- of a
-  `docs/dev-log/` entry named `devlog_<date>_<session>.md`, whose `old_string` is
+  refuses every other one as it did. The permitted edit is a call carrying no
+  `content` string -- which every `Write` the harness sends carries -- of a file
+  at any depth under `docs/dev-log/` named `devlog_<x>_<session>.md`, `<x>`
+  anything without an underscore and not checked for a date, whose `old_string` is
   the file's current first line and occurs in the file exactly once, counted as the
   Edit tool matches it -- a substring anywhere, overlapping, so `replace_all` has
   nothing to widen -- whose `new_string` is a single line, which parse as
-  `# <date> · <session> — <rest>` with a date and a session that are not empty and
-  are byte-identical in date and rest, and whose new session segment is one of
+  `# <date> · <session> — <rest>` with a date of one of three shapes --
+  `YYYY-MM-DD`, then optionally ` HH:MM`, then optionally ` +ZZ` -- and a
+  session that is not empty and holds no ` · `, and are byte-identical in date
+  and rest, and whose new session segment is one of
   the three spellings the file name gives where the old segment does not already
   name that session. Both strings
   are compared exactly as the tool call carries them, trailing newlines included,
@@ -54,8 +57,12 @@ requirement GH-177 <<'REQ'
   `session <n>` or `session` and `<n>` quoted as code, with `<n>` the file's
   session less a leading `session-`, so a lone backtick or a name in hyphens is
   never written. Every real entry's heading, relabelled onto `session <n>`, is
-  refused. A
-  `Write` of an existing entry is refused, whatever else it carries; so is a body edit, a rest
+  refused. A `Write` carrying a `content` string is refused whatever else it
+  carries; one whose `content` is null, a number or absent, beside the Edit's
+  two strings, is judged as that Edit, since only the tool's name tells them
+  apart and the hook does not read it -- a Write's schema is not expected to let
+  the harness send one, which is not measured. Refused as before are a body
+  edit, a rest
   or date that moves with the session, a new segment agreeing with nothing, an
   `old_string` that is not the whole first line, a trailing newline on either
   string, a second line smuggled into `new_string`, a heading that already agrees,
@@ -82,20 +89,20 @@ requirement GH-177 <<'REQ'
   backticks and a leading `session` word (review of #189, round 2).
   WHAT THE SECTION IS EVIDENCE ABOUT, MEASURED RATHER THAN ASSUMED. The
   exception was swept a clause at a time, in review of #189's first and second
-  rounds and after it: each of its 29 refusing conditions -- 27 `return 1`
+  rounds and after it: each of its 28 refusing conditions -- 27 `return 1`
   clauses across `heading_correction`, `parse_heading` and `canonical_session`,
-  and the two halves of `parse_heading`'s closing test -- removed on a copy, and
-  every row of this section re-judged against the result. Twenty have a row
-  that turns red when they are removed, and so do the call site, each step of
-  the old side's key, each of the new side's three spellings, and the pinned
-  sentence of the refusal: the directory, the `.md` suffix, the `devlog_`
-  prefix, the empty-session-name test, the NUL refusal, the `Write` exclusion,
-  the whole-first-line test, the count, `canonical_session`'s refusal, the two
-  field bounds of `parse_heading`, the parse of `old_string`, the `#` and ` — `
-  tests, the empty date and the empty session, date-unchanged, rest-unchanged,
-  new-session-agrees and old-session-differs. Nine turn nothing red, and each is
-  backed by a named clause rather than dead: the ` · ` test by the date bound
-  and the ` — ` test together; the `_` in the name by the empty-session-name
+  and `parse_heading`'s closing test -- removed on a copy, and every row of this
+  section re-judged against the result. Nineteen have a row that turns red when
+  they are removed, and so do the call site, each of the date's three shapes,
+  each step of the old side's key, each of the new side's three spellings, and
+  the pinned sentence of the refusal: the directory, the `.md` suffix, the
+  `devlog_` prefix, the empty-session-name test, the NUL refusal, the `Write`
+  exclusion, the whole-first-line test, the count, `canonical_session`'s
+  refusal, the date's shape, the session's ` · ` bound, the parse of
+  `old_string`, the `#` and ` — ` tests, the empty session, date-unchanged,
+  rest-unchanged, new-session-agrees and old-session-differs. Nine turn nothing
+  red, and each is backed by a named clause rather than dead: the ` · ` test by
+  the date's shape and the ` — ` test together; the `_` in the name by the empty-session-name
   test; the `old_string`
   read by the whole-first-line test, and the `new_string` read by the parse of
   `new_string`, which is backed in turn by new-session-agrees and
@@ -108,7 +115,9 @@ requirement GH-177 <<'REQ'
   new-session-agrees because a session that is not empty never normalised to
   empty; round 3's exact new side broke that without a row noticing, since for a
   file named `devlog_<date>_.md` the word `session` alone is a spelling the name
-  gives. It has its row now.
+  gives. It has its row now. Round 5 made the date a shape instead of a date
+  without an em dash, which also refuses an empty date, so the closing test asks
+  only for a session and the count fell from 29 to 28.
   WHAT THE FIRST SWEEP GOT WRONG. The branch's first sweep counted 16 conditions
   and seven that flip, and called the directory, `.md` and `devlog_` clauses
   defence in depth. Each was the only thing refusing a payload no row drove, and
@@ -419,6 +428,24 @@ REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a date-and-su
 REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a time between two · separators is not taken for part of the session and deleted' \
   "$(head_edit "$HEAD_FIX/docs/dev-log/devlog_time_dev-issue-141.md" '# 2026-09-25 · 21:53 · dev-issue-141 — R' '# 2026-09-25 · dev-issue-141 — R')"
 
+# CLASS H AGAIN, IN ROUND 4's FIX FOR IT (review of #189, round 5). Round 4
+# refused a date holding the em dash, which closed that spelling of the
+# date-and-summary heading and no other: an en dash, a `--` and a colon after the
+# date each let the summary's ` · naming — ` parse as a session. The date is now
+# bounded by its shape, and these three are refused by it, as the em dash row
+# above now is. The ALLOW row is the third shape, a date with a time and an
+# offset, which the newest headings use and no other row isolates.
+for r177_sep in ' –' ' --' ':'; do
+  r177_h="# 2026-09-25 21:16 +03$r177_sep #157: rules · naming — pinned"
+  printf '%s\n\nBody.\n' "$r177_h" > "$HEAD_FIX/docs/dev-log/devlog_sep_dev-agent-157.md"
+  REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK "a date-and-summary heading written with '$r177_sep' is not rewritten inside the summary" \
+    "$(head_edit "$HEAD_FIX/docs/dev-log/devlog_sep_dev-agent-157.md" "$r177_h" "${r177_h/naming/dev-agent-157}")"
+done
+printf '%s\n\nBody.\n' '# 2026-09-27 10:07 +03 · session `dev-agent-2` — R' \
+  > "$HEAD_FIX/docs/dev-log/devlog_offset_dev-agent-7.md"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh ALLOW 'the correction on a heading whose date carries a time and an offset' \
+  "$(head_edit "$HEAD_FIX/docs/dev-log/devlog_offset_dev-agent-7.md" '# 2026-09-27 10:07 +03 · session `dev-agent-2` — R' '# 2026-09-27 10:07 +03 · session `dev-agent-7` — R')"
+
 # A FILE NAME THAT CARRIES NO SESSION. Its session is empty, so the three
 # spellings it gives are the empty string, the word `session` alone, and the
 # word before an empty code span; the empty-session-name test is all that stands
@@ -450,14 +477,26 @@ for r177_entry in "$REPO_ROOT"/docs/dev-log/devlog_*.md; do
   r177_stem=${r177_name%.md}; r177_stem=${r177_stem#devlog_}
   IFS= read -r r177_first < "$r177_entry"
   r177_sess=${r177_stem#*_}
+  # The correctable shape, as the hook bounds it: a date of one of its three
+  # shapes, then ` · `, a session holding no ` · `, then ` — `. Anything else is
+  # offered unchanged under its own label, so that no row says "relabelled" of a
+  # heading the date or session bound refuses (review of #189, round 5).
+  r177_new=$r177_first
+  r177_label="a real entry, $r177_name, whose first line is not of the correctable shape, offered unchanged"
   case "$r177_first" in
     '# '*' · '*' — '*)
+      r177_date=${r177_first#'# '}; r177_date=${r177_date%%' · '*}
       r177_after=${r177_first#*' · '}
-      r177_new="${r177_first%%' · '*} · session ${r177_sess#session-} — ${r177_after#*' — '}"
-      r177_label="a real entry, $r177_name, relabelled onto its own file's session name" ;;
-    *)
-      r177_new=$r177_first
-      r177_label="a real entry, $r177_name, whose first line is not of the correctable shape, offered unchanged" ;;
+      case "$r177_date" in
+        [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] \
+        | [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' '[0-9][0-9]:[0-9][0-9] \
+        | [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' '[0-9][0-9]:[0-9][0-9]' '[+-][0-9][0-9])
+          case "${r177_after%%' — '*}" in
+            *' · '*) ;;
+            *) r177_new="# $r177_date · session ${r177_sess#session-} — ${r177_after#*' — '}"
+               r177_label="a real entry, $r177_name, relabelled onto its own file's session name" ;;
+          esac ;;
+      esac ;;
   esac
   feed "$PATH" append-only-docs-edit.sh BLOCK "$r177_label" \
     "$(head_edit "$r177_entry" "$r177_first" "$r177_new")"
@@ -468,6 +507,19 @@ done
 REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a Write carrying old_string and new_string of the plain correction' \
   "$(jq -cn --arg p "$E_WRONG" --arg o "$H_WRONG" --arg n "$H_RIGHT" \
        '{tool_name:"Write",tool_input:{file_path:$p,content:"x",old_string:$o,new_string:$n}}')"
+# What that does not close, pinned at today's verdict (review of #189, round 5):
+# a Write whose `content` is not a string, or is absent, beside the Edit's two
+# strings. Only the tool's name tells it from the Edit, and the hook does not
+# read it (GH-95.2). A Write's schema requires a string `content`, so the harness
+# is not expected to send these; that is not measured. GH-177 says only a call
+# carrying a `content` string is refused, so ALLOW is its verdict here.
+for r177_content in null 5 absent; do
+  REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh ALLOW \
+    "a Write whose content is $r177_content, beside the plain correction's strings (unmeasured whether the harness sends one)" \
+    "$(jq -cn --arg p "$E_WRONG" --arg o "$H_WRONG" --arg n "$H_RIGHT" --arg c "$r177_content" \
+         '{tool_name:"Write",tool_input:({file_path:$p,old_string:$o,new_string:$n}
+           + (if $c == "absent" then {} else {content:($c | fromjson)} end))}')"
+done
 
 # A RAW NUL ON THE STREAM (GH-95.1's malformed input), which a bash string cannot
 # carry, so no row fed through one could ever have asked. The fixture is a hook

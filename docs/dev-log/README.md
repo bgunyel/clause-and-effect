@@ -553,11 +553,17 @@ thing in the record.
   nothing, stated as measured in six places, was corrected from cobra's source
   and the reviewer's gh runs. Carries three corrections to the
   clause-and-effect-37 entry.
+- [2026-09-20 · session triage-agent-177](devlog_2026-09-20_triage-agent-177.md)
+  — #177, on Bertan's decision: the session segment of a dev-log heading is the
+  entry's label and not its history, so a heading that contradicts its own file
+  name is corrected in place. ADR 0003 amended, `CONTEXT.md` and CLAUDE.md with
+  it, and `append-only-docs-edit.sh` permitting that one Edit. Five of its
+  figures and claims are corrected in the dev-agent-pr-189 entry below.
 - [2026-09-27 · session dev-agent-pr-189](devlog_2026-09-27_dev-agent-pr-189.md)
-  — #189 (#177) merged across the check-suite split, then review rounds 1–4 of
+  — #189 (#177) merged across the check-suite split, then review rounds 1–5 of
   it. The heading exception compared strings the tool never acts on, counted in
   lines where the tool matches substrings, let one normalisation serve two tests
   that err in opposite directions, and cut fields at a separator's first
   occurrence with no bound; the documents said the Bash half refuses every
-  spelling. 29 conditions, 20 isolated by a row, 9 backed by a named clause.
-  Carries five corrections to the triage-agent-177 entry.
+  spelling. 28 conditions after round 5, 19 isolated by a row, 9 backed by a
+  named clause. Carries five corrections to the triage-agent-177 entry.

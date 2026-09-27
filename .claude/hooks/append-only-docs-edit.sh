@@ -64,7 +64,11 @@ fi
 # neither byte raw, and on every other stream it swaps one byte jq rejects for
 # another it rejects wherever it stands -- outside a string it is no token, and
 # inside one it is an unescaped control character -- so jq's verdict is the one
-# it gave the raw stream. No #95 row went red when the NUL started being dropped,
+# it gave the raw stream. That rests on jq rejecting a raw control character in a
+# string, which jq 1.7 does (measured, exit 5; the CI runner's Ubuntu 24.04 ships
+# 1.7.1). jq 1.6 is said to accept one, which is not measured: there a NUL inside
+# a string would read as \001, the path or string would name nothing real, and
+# the row that feeds one would go red -- a false red, and no worse than before. No #95 row went red when the NUL started being dropped,
 # and none could have: each is fed through a bash string, which cannot carry one.
 # `tr` is coreutils, like the `cat` beside it; a `tr` that is not there leaves
 # the buffer empty, and an empty buffer is refused by the reader.
@@ -135,9 +139,11 @@ norm_path() {  # norm_path <absolute path>
 # of that exception, written as a conjunction so each clause reads against the
 # ADR's sentence:
 #
-#   the file is a docs/dev-log/ entry named devlog_<date>_<session>.md;
-#   the tool call is an Edit -- it carries no `content`, which every Write does --
-#   and carries both strings an Edit swaps, neither holding a NUL;
+#   the file is under docs/dev-log/, at any depth, named devlog_<x>_<session>.md,
+#   where <x> is anything without an underscore -- the date the README names is
+#   not checked, since the label is moved only onto the name the file carries;
+#   the tool call carries no `content` string, which every Write the harness
+#   sends does, and carries both strings an Edit swaps, neither holding a NUL;
 #   old_string is the file's current first line, and occurs in the file
 #   exactly once as the Edit tool matches it -- as a substring, not a line;
 #   new_string is one line;
@@ -187,11 +193,13 @@ norm_path() {  # norm_path <absolute path>
 # the date segment does not MOVE, which is what keeps this exception to one part
 # of one line.
 #
-# No external tool is added for the exception. `grep` is already this hook's
-# dependency; the session tests are written in bash builtins for the reason `norm_path`
-# is, so that a hook whose answer to a missing tool is to refuse every edit in the
-# repository does not gain a second tool that can be missing. The `tr` on the
-# buffer above is the input's, not the exception's, and is argued there.
+# The exception adds no tool. It reads the entry with `read` and with `cat`,
+# which the buffer above already runs, and the rest is bash builtins, for the
+# reason `norm_path` is: a hook whose answer to a missing tool is to refuse every
+# edit in the repository should not gain a second tool that can be missing. The
+# `tr` on the buffer is the input's, not the exception's, and is argued there.
+# This said the exception's dependency was `grep` until review of #189, round 5,
+# found it had not used `grep` since round 1 replaced the line count.
 session_key() {  # session_key <session as written> -- lowercased letters and digits, less a leading `session`
   local s=${1,,}
   s=${s//[^[:alnum:]]/}
@@ -210,33 +218,42 @@ canonical_session() {  # canonical_session <file's session> <segment> -- 0 if th
 # written with, ` · ` and ` — `, and each is required to be present rather than
 # defaulted, so a line that is not a heading cannot parse as one with empty parts.
 #
-# EACH FIELD IS BOUNDED BY THE SEPARATOR ON ITS OTHER SIDE, because both are cut
-# at a separator's first occurrence and nothing else says where a field ends
-# (review of #189, round 4). The date runs to the first ` · ` and so cannot hold
-# one, but it could hold a ` — `: `# <date> — <summary>`, the shape the newest
-# entries open with, parsed with a ` · x — ` inside its summary as a date that
-# ran into the summary and a session made of summary text, and the correction
-# rewrote that text. The session runs to the first ` — ` and so cannot hold one,
-# but it could hold a ` · `: `# <date> · 21:53 · <name> — …` parsed with the time
-# inside the session, and the correction deleted it. So a date holding ` — `, or
-# a session holding ` · `, is not a heading of this shape. The rest is the
-# remainder, and bounds nothing after it. The date bound also backs the test
-# that a ` · ` is there at all: without one, the whole body is the date, which
-# the bound refuses if it holds a ` — ` and the ` — ` test refuses if it does not.
-# That test stays because it states the shape, as the single-line tests do.
+# EACH FIELD IS BOUNDED, because both are cut at a separator's first occurrence
+# and nothing else says where a field ends. The session runs to the first ` — `
+# and so cannot hold one, but it could hold a ` · `: `# <date> · 21:53 · <name>
+# — …` parsed with the time inside the session, and the correction deleted it. So
+# a session holding ` · ` is not a heading of this shape (review of #189, round
+# 4). The date runs to the first ` · `, and it is bounded by being a date: one of
+# the three shapes every real heading's date segment has -- `YYYY-MM-DD`,
+# `YYYY-MM-DD HH:MM` and `YYYY-MM-DD HH:MM +ZZ`, 30, 2 and 4 of the 36 that parse
+# when review counted them. Round 4 bounded it by refusing a ` — ` in it, which
+# closed the em dash of `# <date> — <summary>`, the shape the newest entries
+# open with, and nothing else: an en dash, a `--` or a colon after the date still
+# let a ` · x — ` inside the summary parse as a session made of summary text,
+# and the correction rewrote it (round 5). A shape closes every such spelling at
+# once. An empty date fails it too, so the closing test asks only that the
+# session is not empty. The test that a ` · ` is there at all is backed by the
+# shape and the ` — ` test together -- without one the whole body is the date --
+# and stays because it states the shape, as the single-line tests do. The rest
+# is the remainder, and bounds nothing after it.
 parse_heading() {  # parse_heading <line>
   local line="$1" body after
   case "$line" in '# '*) ;; *) return 1 ;; esac
   body=${line#\# }
   case "$body" in *" · "*) ;; *) return 1 ;; esac
   PH_DATE=${body%%" · "*}
-  case "$PH_DATE" in *" — "*) return 1 ;; esac
+  case "$PH_DATE" in
+    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' '[0-9][0-9]:[0-9][0-9]) ;;
+    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' '[0-9][0-9]:[0-9][0-9]' '[+-][0-9][0-9]) ;;
+    *) return 1 ;;
+  esac
   after=${body#*" · "}
   case "$after" in *" — "*) ;; *) return 1 ;; esac
   PH_SESS=${after%%" — "*}
   case "$PH_SESS" in *" · "*) return 1 ;; esac
   PH_REST=${after#*" — "}
-  [ -n "$PH_DATE" ] && [ -n "$PH_SESS" ]
+  [ -n "$PH_SESS" ]
 }
 
 # Sets <var> to tool_input.<field> exactly as the tool call carries it, trailing
@@ -269,6 +286,20 @@ heading_correction() {  # heading_correction <abs> <rel> -- 0 if this edit is th
   case "$stem" in *_*) fsession=${stem#*_} ;; *) return 1 ;; esac
   [ -n "$fsession" ] || return 1
 
+  # A CALL CARRYING A `content` STRING IS NEVER THE EXCEPTION. That is every Write
+  # the harness sends, since a Write's schema requires one, and an Edit never
+  # carries one. The Write was told apart by lacking an old_string until review of
+  # #189, round 2, found a Write that also carried old_string and new_string
+  # judged as the Edit they describe; this closes that. What it does NOT close,
+  # measured in round 5: a Write whose `content` is null, a number or absent, with
+  # the Edit's two strings beside it, is still judged as that Edit, because only
+  # the tool's name tells it apart then, and the tool's name is not read -- the
+  # one reader reads tool_input only, and GH-95.2 holds that no hook calls jq
+  # itself. Whether the harness can deliver such a Write is not measured; its
+  # schema says it cannot. This test runs before the scan for a NUL escape below
+  # because that scan reads the whole payload, which for a Write is the whole
+  # file: a refused 10 MB Write took 1.67 s against the 5 s timeout (round 5).
+  field_exact written content 2>/dev/null && return 1
   # A NUL is the one byte a bash string cannot hold: jq -r writes a `\u0000` out
   # as a NUL and the substitution drops it, so a new_string ending in one read
   # here as the corrected heading and the tool wrote the NUL into the entry. The
@@ -278,16 +309,6 @@ heading_correction() {  # heading_correction <abs> <rel> -- 0 if this edit is th
   # and never a permission (review of #189, round 1, measured with the sweep of
   # that round's class A).
   case "$PAYLOAD" in *'\u0000'*) return 1 ;; esac
-  # A WRITE IS NEVER THE EXCEPTION, whatever else it carries. It was told apart
-  # by lacking an old_string, which is the tool inferred from the payload's shape:
-  # a Write that also carried old_string and new_string was judged as the Edit
-  # they describe and permitted, and would have replaced the whole entry (review
-  # of #189, round 2, which did not measure whether the harness can deliver one).
-  # The tool's name is not read, because the one reader reads tool_input only and
-  # GH-95.2 holds that no hook calls jq itself. So it is told apart by the field
-  # a Write cannot be sent without: a call carrying a `content` string is refused
-  # here, which is every Write, and an Edit never carries one.
-  field_exact written content 2>/dev/null && return 1
   # A Write carries no old_string either, and an Edit without one is not the
   # exception.
   field_exact old old_string 2>/dev/null || return 1
