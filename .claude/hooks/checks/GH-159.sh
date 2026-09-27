@@ -174,9 +174,10 @@ variants_pin 'GH-159.1:none GH-159.2:none'
 # name: it runs no shell, reads no file, and no row here can feed it. A `command`
 # hook whose `command` is not a string is `<no-command>`, and a jq that fails
 # for any other reason adds `<jq-failed>`; neither names a file, so both are
-# reached and red.
+# reached and red. The status is `jq_status` and not `rc`, because #98's
+# derivation reads `rc=$?` as a hook's exit status, and this runs no hook.
 r159_registered() {  # r159_registered <settings.json> -- <event> TAB <matcher> TAB <hook file name>, a line each
-  local out rc
+  local out jq_status
   out=$(jq -r '.hooks | to_entries[] | .key as $e | .value[]?
          | (if (.matcher // "") == "" then "*" else .matcher end) as $m
          | .hooks[]? | select((.type // "command") == "command")
@@ -184,9 +185,9 @@ r159_registered() {  # r159_registered <settings.json> -- <event> TAB <matcher> 
             then .command | gsub("\""; "") | sub("^\\s+"; "") | sub("\\s.*$"; "") | sub(".*/"; "")
             else "<no-command>" end) as $h
          | "\($e)\t\($m)\t\($h)"' "$1" 2>/dev/null)
-  rc=$?
+  jq_status=$?
   [ -n "$out" ] && printf '%s\n' "$out"
-  [ "$rc" = 0 ] || printf 'jq\t*\t<jq-failed>\n'
+  [ "$jq_status" = 0 ] || printf 'jq\t*\t<jq-failed>\n'
 }
 r159_reaches_edit() {  # r159_reaches_edit <matcher> -- 0 if it hands the hook an Edit, Write or MultiEdit
   local t
