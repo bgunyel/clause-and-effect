@@ -728,6 +728,9 @@ own-branch-push-refused%no-git-push.sh%/^names_this_branch()/,/^}/s/") return 0 
 library-loaded-unguarded%no-git-push.sh%$a. "$(dirname "$0")/lib/command-scan.sh"%GH-84.2%caught
 merged-branch-not-gone%no-work-on-stale-branch.sh%s/= "\[gone\]"/= "never-this-string"/%FR-38%caught
 bare-pytest-permitted%pytest-via-uv-group.sh%s/grep -qE '\^(pytest|/grep -qE '^(no-such-tool-at-all|/%GH-69.1%caught
+edit-guard-anchored-to-the-root%append-only-docs-edit.sh%s@^if echo "$ABS" | grep -qE "$GUARDED_RE"; then$@if echo "${ABS#"$ROOT"/}" | grep -qE "^${GUARDED_RE#/}"; then@%GH-159.1 GH-159.2 GH-157.3%caught
+bash-guard-unbounded-on-the-left%append-only-docs.sh%s/^APPEND_ONLY='(^|\[^A-Za-z0-9_.-\])'"\$APPEND_ONLY_DIR"$/APPEND_ONLY="$APPEND_ONLY_DIR"/%GH-159.2%caught
+redirect-boundary-admits-a-redirect%append-only-docs.sh%s/\[^>|&A-Za-z0-9_.-\])?\$APPEND_ONLY_DIR/[^A-Za-z0-9_.-])?$APPEND_ONLY_DIR/%GH-159.2%caught
 unresolved-git-dir-permits%no-git-push.sh%/could not be resolved, so whether this runs/,+1s/exit 2/exit 0/%GH-108.2%caught
 dev-branch-not-version-sorted%no-work-on-stale-branch.sh%s/| sort -V | tail -1)/| sort | head -1)/%GH-108.5%caught
 base-lookup-never-finds-a-branch%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/origin\/dev-\*/origin\/no-such-ref-\*/%GH-144.1 GH-144.3%caught

@@ -29,6 +29,12 @@
 # it is an ordinary way to write a relative path, which is the shape of the
 # ordinary mistake this hook exists to stop.
 #
+# Issue #159: #69 normalised both sides and kept the anchor, so the comparison
+# was between paths but still against one root, the main checkout's -- and an
+# entry in a linked worktree, where every agent works, was permitted. Whether a
+# path is guarded is read off its own segments now; see GUARDED_RE below, and
+# the trade it takes.
+#
 # Issue #95: the path was read with `jq -r '.tool_input.file_path // empty'`, so
 # jq missing, stdin that was not JSON, and a file_path that was null, false or
 # absent all became "no file" and were permitted before any path was compared.
@@ -285,8 +291,8 @@ field_exact() {  # field_exact <var> <field>
   printf -v "$1" '%s' "${_raw%$'\n'}"
 }
 
-heading_correction() {  # heading_correction <abs> <rel> -- 0 if this edit is the permitted one
-  local abs="$1" rel="$2" stem fsession old new first content written
+heading_correction() {  # heading_correction <abs> -- 0 if this edit is the permitted one
+  local abs="$1" stem fsession old new first content written
   local o_date o_sess o_rest n_date n_sess n_rest
 
   # A CORRECTION IS SMALL, AND A HOOK PAST ITS TIMEOUT REFUSES NOTHING. The tests
@@ -297,7 +303,9 @@ heading_correction() {  # heading_correction <abs> <rel> -- 0 if this edit is th
   # correction's payload is a path and two headings, a few hundred characters, so
   # anything over 4096 is not it and is refused before any field is read.
   [ "${#PAYLOAD}" -le 4096 ] || return 1
-  case "$rel" in docs/dev-log/*) ;; *) return 1 ;; esac
+  # Under a docs/dev-log/ by the same segments the guard reads (#159), so the
+  # correction is made in a linked worktree as in the main checkout.
+  case "$abs" in */docs/dev-log/*) ;; *) return 1 ;; esac
 
   stem=${abs##*/}
   case "$stem" in *.md) stem=${stem%.md} ;; *) return 1 ;; esac
@@ -388,26 +396,65 @@ esac
 ROOT=$(norm_path "$ROOT")
 ABS=$(norm_path "$ABS")
 
-# Anchor to the project root so an identically-named path in another checkout
-# is not caught by a bare substring match. Both sides are normalised first, so
-# what is compared is the path rather than the way it was typed.
-REL="${ABS#"$ROOT"/}"
+# WHETHER A PATH IS GUARDED IS READ OFF THE PATH'S OWN SEGMENTS, and never off
+# where the project root is (#159). A `docs/` segment followed by one of the
+# three directory names and then a `/`, anywhere in the normalised absolute path,
+# is the whole test. The project root is still where a relative path is resolved
+# from, and where the refusal below measures the path it names from; it decides
+# nothing else.
+#
+# It was anchored to the project root: the root stripped off by string prefix and
+# the remainder matched at `^docs/`, "so an identically-named path in another
+# checkout is not caught by a bare substring match". CLAUDE_PROJECT_DIR is the
+# main checkout, so in a linked worktree the remainder began with the worktree's
+# own path and the anchor matched nothing -- an existing entry there was
+# permitted, and a linked worktree is where CLAUDE.md sends every agent to work.
+# The guard covered the checkout nobody edits in and not the one everybody does.
+#
+# What that comment asked for is kept: this is no bare substring match. The pair
+# is bounded by a `/` on both sides, so `docs/dev-log.bak/`, `docs/dev-logbook/`
+# and `notdocs/dev-log/` are other directories and stay permitted, and the
+# normalisation above still runs first, so `.`, `..` and doubled slashes reach the
+# same answer. A relative path is resolved against the project directory first,
+# so every path compared is absolute and opens with the `/` the pattern asks for.
+#
+# THE TRADE, TAKEN KNOWINGLY: an identically-named path in a repository that is
+# NOT this one is now refused as well -- an existing `docs/dev-log/<entry>` in
+# any checkout of anything. The comment above declined that, and it is taken now
+# because a refusal is visible and one edit away from being routed around, while
+# a silently permitted rewrite of history is neither; CLAUDE.md's consequence 3
+# accepts a refused comment on the same reasoning. It is also where the Bash half,
+# append-only-docs.sh, already stood: it matches path spellings in a command and
+# resolves them against no root at all, so the two halves now agree about which
+# paths are append-only, and checks/GH-159.sh holds them to one path set. Asking
+# git which repository a path belongs to was the other route #159 offered, and
+# was not taken: it would have fixed the worktree and left the two halves
+# disagreeing about every other checkout.
+GUARDED_RE='/docs/(dev-log|lessons-learned|eval-reports)/'
 
-if echo "$REL" | grep -qE '^docs/(dev-log|lessons-learned|eval-reports)/'; then
+# The path a reader can act on: relative to the project root when it is under
+# it, and whole when it is not, since a worktree's entry has no spelling
+# relative to the main checkout.
+case "$ABS" in
+  "$ROOT"/*) SHOWN="${ABS#"$ROOT"/}" ;;
+  *)         SHOWN="$ABS" ;;
+esac
+
+if echo "$ABS" | grep -qE "$GUARDED_RE"; then
   # A README describes its directory rather than recording a session, a failure
   # or a measurement. CLAUDE.md's rule is about entries — "old entries are
   # history" — so the directory's own description stays revisable in place,
   # exactly as docs/design/README.md is.
-  if basename "$REL" | grep -qE '^README\.md$'; then
+  if basename "$ABS" | grep -qE '^README\.md$'; then
     exit 0
   fi
   if [ -e "$ABS" ]; then
     # ADR 0003 (#177). The one part of one line that is the entry's label rather
     # than its history, corrected only onto the name the file already carries.
-    if heading_correction "$ABS" "$REL"; then
+    if heading_correction "$ABS"; then
       exit 0
     fi
-    echo "Blocked: editing an existing file under an append-only docs directory ($REL). CLAUDE.md treats docs/dev-log/, docs/lessons-learned/ and docs/eval-reports/ as history; corrections go in the newest entry, never backwards. Writing a new entry file is allowed. The one exception (ADR 0003, #177) is an Edit that changes only the session segment of a docs/dev-log/ entry's first-line heading, to agree with the session the file is named for." >&2
+    echo "Blocked: editing an existing file under an append-only docs directory ($SHOWN). CLAUDE.md treats docs/dev-log/, docs/lessons-learned/ and docs/eval-reports/ as history; corrections go in the newest entry, never backwards. Writing a new entry file is allowed. The one exception (ADR 0003, #177) is an Edit that changes only the session segment of a docs/dev-log/ entry's first-line heading, to agree with the session the file is named for." >&2
     exit 2
   fi
 fi

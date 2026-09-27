@@ -64,7 +64,28 @@ fi
 # actually writes are matched where they stand. That is a narrower answer than
 # the companion's and it is named as one: `docs/foo/../dev-log` is still
 # permitted, and closing that would mean parsing paths out of shell text.
-APPEND_ONLY='docs/+(\./+)*(dev-log|lessons-learned|eval-reports)(/|[^A-Za-z0-9_.-]|$)'
+#
+# THE LEFT BOUNDARY is #159's, and it is the right one's class on the other side.
+# There was none: `rm -rf notdocs/dev-log` and `rm -rf x.docs/dev-log` were
+# refused, measured, though `notdocs` and `x.docs` are other directories, while
+# the Edit companion -- once #159 moved it off the project root and onto the
+# path's own segments -- permits the same paths. Two halves of one rule have to
+# agree about which paths are append-only, and checks/GH-159.sh holds them to one
+# path set, so this side is bounded the way that side is: `docs` opens the path
+# or follows a character that cannot continue a name, a `/` among them. That
+# permits what this hook refused, which is the direction a boundary fix goes.
+#
+# It is written into the rules below rather than only here, because a boundary
+# is a character and the rules below had already consumed the one in front of
+# the path -- the space after `rm`, the `>` of a redirect. So each rule's own
+# stretch before the path ends, when it is not empty, in a boundary character
+# its stretch may hold, and APPEND_ONLY_DIR is the path with no boundary in
+# front. The stretch's boundary excludes what the stretch excludes: allowing a
+# `>` there let the second `>` of `>>docs/dev-log/<entry>`, an append written
+# with no space, read as the boundary of a truncation, and the append was
+# refused -- found while writing this, and pinned there.
+APPEND_ONLY_DIR='docs/+(\./+)*(dev-log|lessons-learned|eval-reports)(/|[^A-Za-z0-9_.-]|$)'
+APPEND_ONLY='(^|[^A-Za-z0-9_.-])'"$APPEND_ONLY_DIR"
 
 if echo "$COMMAND" | grep -qE "$APPEND_ONLY"; then
   # rm / mv / cp over an existing entry, or over the directory itself.
@@ -80,7 +101,7 @@ if echo "$COMMAND" | grep -qE "$APPEND_ONLY"; then
   # spelling because the verb is read and its options are not. `>>` is the
   # documented way to append and stays permitted; the check suite pins the
   # refusal so that it is a decision rather than a surprise.
-  if echo "$COMMAND" | grep -qE "(^|[;&|]|\s)(rm|mv|cp|truncate|tee)\s+[^;&|]*$APPEND_ONLY"; then
+  if echo "$COMMAND" | grep -qE "(^|[;&|]|\s)(rm|mv|cp|truncate|tee)\s+([^;&|]*[^;&|A-Za-z0-9_.-])?$APPEND_ONLY_DIR"; then
     echo "Blocked: removing or overwriting an append-only docs directory, or a file under one. CLAUDE.md treats docs/dev-log/, docs/lessons-learned/ and docs/eval-reports/ as history; corrections belong in a new entry." >&2
     exit 2
   fi
@@ -90,7 +111,7 @@ if echo "$COMMAND" | grep -qE "$APPEND_ONLY"; then
     exit 2
   fi
   # truncating redirect (single >), but not an >> append
-  if echo "$COMMAND" | grep -qE "[^>]>\s*[^>|&]*$APPEND_ONLY"; then
+  if echo "$COMMAND" | grep -qE "[^>]>\s*([^>|&]*[^>|&A-Za-z0-9_.-])?$APPEND_ONLY_DIR"; then
     echo "Blocked: truncating redirect into an append-only docs file. Use >> to append, or write a new entry. CLAUDE.md treats these directories as history." >&2
     exit 2
   fi
