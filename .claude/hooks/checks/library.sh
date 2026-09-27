@@ -1360,7 +1360,7 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
   # shows bash's diagnostic; review of #182's pull request found the first
   # version dropping all of it.
   bash -c ". '$dir/lib/command-scan.sh' && command -v cs_renamed_away >/dev/null 2>&1" \
-    2> >(grep -v '^lib/command-scan.sh: .*is withdrawn' >&2) || {
+    2> >(grep -vF 'cs_drop_heredocs is not defined, and cs_normalise calls it' >&2) || {
     echo "the half-library for $hook does not load at all; the check using it proves nothing" >&2
     exit 1
   }
@@ -1389,22 +1389,23 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
 # naming `<<END` open a body. checks/GH-182.sh drives both, and holds each
 # counter to reading the hook through this and nothing else.
 #
-# WHAT THE DROP TAKES IS ALSO A QUESTION, and `hook_dropped` in checks/GH-182.sh
-# answers it. The
-# drop is the tokeniser's, and the tokeniser does not read quotes: a `<<` inside
-# a string or a trailing comment opens a body, and when a line that terminates
-# it does arrive -- the real delimiter further down, or for `'<<'`, whose
-# delimiter is empty once its quotes are gone, the first blank line -- the real
-# code in between is dropped as a body and its arms are never counted. Only a
-# body whose terminator never arrives is given back. #289 owns that in the
-# tokeniser; review of #182's pull request found it hiding five lines of
-# no-pr-decisions.sh here, and GH-182.3 holds what is dropped from each counted
-# hook to a heredoc's shape. So the first two stages are helpers of their own,
-# and `hook_dropped` diffs one against the other: the text `hook_text` folds is
-# `hook_bodiless`'s, exactly, and not a second copy of the pipeline that a
-# counter-side filter or a route round #289 added to one of them would leave
-# behind. It was a copy in the commit that added it, and review of #182's pull
-# request found it.
+# WHAT THE DROP TAKES IS ALSO A QUESTION, and `hook_dropped` in
+# checks/GH-182.sh answers it. The drop is the tokeniser's, and the tokeniser
+# does not read quotes: a `<<` inside a string or a trailing comment opens a
+# body, and when a line that terminates it does arrive -- the real delimiter
+# further down, or for `'<<'`, whose delimiter is empty once its quotes are
+# gone, the first blank line -- the real code in between is dropped as a body
+# and its arms are never counted. Only a body whose terminator never arrives is
+# given back. #289 owns that in the tokeniser; review of #182's pull request
+# found it hiding five lines of no-pr-decisions.sh here, and GH-182.3 holds
+# what is dropped from each counted hook to a heredoc's shape. So the first two
+# stages are helpers of their own, and `hook_dropped` diffs one against the
+# other: the text `hook_text` folds is `hook_bodiless`'s, exactly, and not a
+# second copy of the pipeline that a counter-side filter or a route round #289
+# added to one of them would leave behind. It was a copy in the commit that
+# added it, and review of #182's pull request found it. The fold is the only
+# stage after it, and GH-182.3 pins `hook_text` as written, so a stage added
+# there is a red run and not text the counters read that no row judges.
 hook_uncommented() {  # hook_uncommented <file> -- its whole-line comments blanked
   sed 's/^[[:space:]]*#.*$//' "$1"
 }

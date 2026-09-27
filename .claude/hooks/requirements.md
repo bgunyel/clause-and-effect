@@ -1244,13 +1244,12 @@ it has no entry above (Q16).
 - #181: `fn_calls` cannot see an indirect call, so a wrapper around a function
   that writes a refusal hides arms from the count. Cited beside that helper,
   which names what it can and cannot see
-- #182: has entries, generated from its issue file, and
-  is listed here only because #109's section cited it before it landed, as
-  `arms` and `fn_writes` not knowing where a heredoc body starts. Of the three
-  shapes it was filed on, the permitting one was closed by #169 counting
-  occurrences; #182 closed the two inflating ones, and a `}` body line that
-  made `fn_writes` call a writer silent, by dropping bodies with the
-  tokeniser's own pass
+- #182: has entries, generated from its issue file, and is listed here only
+  because #109's section cited it before it landed, as `arms` and `fn_writes`
+  not knowing where a heredoc body starts. Of the three shapes it was filed
+  on, the permitting one was closed by #169 counting occurrences; #182 closed
+  the two inflating ones, and a `}` body line that made `fn_writes` call a
+  writer silent, by dropping bodies with the tokeniser's own pass
 - #185: `dup_stderr` does not reach `/dev/stderr` named on an `exec`, nor a
   two-digit fd. Cited where that guard is, because a guard narrower than the
   prose beside it reads as coverage -- the shape the fifth review of PR #169
@@ -1470,6 +1469,6 @@ it has no entry above (Q16).
   counters, which reuse the pass since #182, it leaves an arm uncounted. Filed
   from round 1 of the review of #182's pull request. Cited in #182's issue
   file, where GH-182.3 holds the one instance in `no-pr-decisions.sh` verbatim
-  and two fixtures pin the counters' half at today's count, and beside
+  and fixtures pin the counters' half at today's count, and beside
   `hook_text` and in the unsplit file's #109 section. It adds its requirements
   in the pull request that fixes it

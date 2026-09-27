@@ -110,14 +110,15 @@ requirement GH-182.3 <<'REQ'
 - text: Every line `hook_text` drops from a hook the refusal-arm counters read
   is a bare parameter, such as `$CMDS` or `$1`, or a word in capitals -- the
   two lines a one-parameter heredoc body and its delimiter are made of -- and
-  a line the drop rewrites rather than removes, an opener ending in an even run
-  of backslashes, reads as a red. The one exception is the five lines that
-  no-pr-decisions.sh's `grep -q '<<'` drops, whose quoted opener has an empty
-  delimiter that the next blank line ends: they are held verbatim until #289
-  stops the tokeniser dropping them. So an arm or a
-  call hidden by an opener the tokeniser misreads is a red run that names the
-  line, and not a count that stays green or turns red on a plausible wrong
-  number.
+  a line the drop rewrites rather than removes, the line ending an opener's
+  logical line when it ends in an even run of backslashes, reads as a red. The
+  one exception is the block that no-pr-decisions.sh's `grep -q '<<'` drops,
+  whose quoted opener has an empty delimiter that the next blank line ends: it
+  is held verbatim until #289 stops the tokeniser dropping it. `hook_text` is
+  that drop and then the fold, pinned as written, so no stage the counters
+  read escapes the question. So an arm or a call hidden by an opener the
+  tokeniser misreads is a red run that names the line, and not a count that
+  stays green or turns red on a plausible wrong number.
 - from: #182
 - kind: defect-permitting
 - status: active
@@ -220,17 +221,26 @@ while read -r x; do :; done <<LIST
 $X
 LIST
 R182_EOF
-# The one line the drop rewrites rather than removes: an opener ending in an
-# even run of backslashes, which is text and not a continuation, loses the run.
+# The one line the drop rewrites rather than removes: the line that ends an
+# opener's logical line, when it ends in an even run of backslashes -- text,
+# not a continuation -- loses the run and the blanks in front of it. That is
+# the opener's own line, or a continuation line after it.
 cat > "$R182/opener-ends-in-an-even-backslash-run.sh" <<'R182_EOF'
 cat <<EOF \\
+$X
+EOF
+R182_EOF
+cat > "$R182/opener-continued-onto-an-even-backslash-run.sh" <<'R182_EOF'
+cat <<EOF \
+  x \\
 $X
 EOF
 R182_EOF
 for f in body-carries-a-write stderr-heredoc-body-carries-a-write body-closes-a-function \
          body-names-a-function body-line-ends-in-a-backslash comment-names-an-opener \
          quoted-opener-never-closed quoted-opener-a-blank-line-ends \
-         trailing-comment-opener-a-delimiter-ends opener-ends-in-an-even-backslash-run; do
+         trailing-comment-opener-a-delimiter-ends opener-ends-in-an-even-backslash-run \
+         opener-continued-onto-an-even-backslash-run; do
   [ -s "$R182/$f.sh" ] || {
     echo "the #182 fixture $f.sh was not written; the checks against it prove nothing" >&2
     exit 1
@@ -346,6 +356,21 @@ for hook in $LIB_CONSUMERS; do
 done
 written 'the library says cs_normalise answers for cs_drop_heredocs' \
   "$HOOKS/lib/command-scan.sh" 'CS_NORMALISE ANSWERS FOR CS_DROP_HEREDOCS'
+# And who calls it, which GH-182.2's text names: every function defined when
+# this runs, the library's and the suite's, whose body calls it, read off the
+# bodies as bash holds them. A call is the name in a command position -- a
+# line's start, or after a `|`, `;`, `&` or `(` -- and not merely the name: the
+# first version counted `mk_halflib`, whose stderr filter quotes the library's
+# message naming it. A call written at the top level of a file, outside any
+# function, is not read; there is none.
+R182_CALLERS=$(declare -F | awk '{ print $3 }' | while read -r fn; do
+  [ "$fn" = cs_drop_heredocs ] && continue
+  declare -f "$fn" | tail -n +2 \
+    | grep -qE '(^|[|;&(])[[:space:]]*cs_drop_heredocs([[:space:];)]|$)' \
+    && printf '%s ' "$fn"
+done)
+tok 'cs_drop_heredocs is called by cs_normalise and by the suite through hook_bodiless, and by nothing else' \
+    'cs_normalise hook_bodiless ' "$R182_CALLERS"
 
 # WHAT THE DROP TAKES FROM THE HOOKS THE COUNTERS READ. Which hooks those are is
 # read off the suite, every `arms`, `fn_writes` or `fn_calls` written with a
@@ -354,22 +379,27 @@ written 'the library says cs_normalise answers for cs_drop_heredocs' \
 # names its hook through another variable is not read; every call that reads
 # a hook of this directory names it that way today.
 req GH-182.3
-R182_COUNTED=$(grep -oE '(arms|fn_writes|fn_calls) "\$HOOKS/[A-Za-z0-9_.-]+"' "$SUITE_TEXT" \
+# Whole-line comments blanked by the counters' own first stage, and the name
+# bounded on the left, so a comment or a `farms "$HOOKS/x.sh"` adds no hook.
+R182_COUNTED=$(hook_uncommented "$SUITE_TEXT" \
+  | grep -oE '(^|[^A-Za-z0-9_])(arms|fn_writes|fn_calls) "\$HOOKS/[A-Za-z0-9_.-]+"' \
   | sed 's|.*/||; s|"$||' | LC_ALL=C sort -u | tr '\n' ' ')
 tok 'the counters read two hooks of this directory' \
     'no-git-push.sh no-pr-decisions.sh ' "$R182_COUNTED"
 # Every line the drop in `hook_text` removed, `-` in front: the library's two
 # stages, `hook_uncommented` and `hook_bodiless`, diffed, so the text judged is
 # the text `hook_text` folds. The drop adds no line, but it rewrites one kind --
-# an opener ending in an even run of backslashes loses the run -- and diff shows
-# that as a `-` and a `+`. Both are printed rather than assumed away, and read
-# as a red below; neither hook has one today.
+# the line ending an opener's logical line loses a trailing even run of
+# backslashes -- and diff shows that as a `-` and a `+`. Both are printed
+# rather than assumed away, and read as a red below; neither hook has one
+# today.
 hook_dropped() {  # hook_dropped <file> -- "-<line>" per line removed, "+<line>" per line rewritten
   diff --old-line-format='-%L' --new-line-format='+%L' --unchanged-line-format='' \
     <(hook_uncommented "$1") <(hook_bodiless "$1")
 }
-# A line the drop takes that is neither a bare parameter nor a word in
-# capitals, and any it adds. It asks the shape of each line and not whether the
+# Of what `hook_dropped` prints, on stdin: a line the drop takes that is
+# neither a bare parameter nor a word in capitals, and a line it rewrote, as
+# the pair diff shows. It asks the shape of each line and not whether the
 # two alternate, since which copy of a repeated line diff calls dropped is
 # diff's choice, and the lines dropped are the same whichever it makes.
 #
@@ -379,12 +409,12 @@ hook_dropped() {  # hook_dropped <file> -- "-<line>" per line removed, "+<line>"
 # and is red; so is #289 closing, which leaves the literal naming lines nothing
 # drops, and it goes when #289 does. The cost, taken knowingly: an edit to that
 # block that changes no verdict -- a line reworded, a variable renamed -- is red
-# here too, which is the refusing direction. Respelling line 701 so the
-# tokeniser cannot see its `<<` would end that, and is declined: it is a guard
+# here too, which is the refusing direction. Respelling the `grep -q '<<'` so
+# the tokeniser cannot see its `<<` would end that, and is declined: it is a guard
 # edit made for a counter's sake, and it would hide #289's one instance rather
 # than hold it.
-r182_unshaped() {  # r182_unshaped <file> -- what hook_text drops that is no heredoc of this shape
-  hook_dropped "$1" | grep -vE '^-(\$([A-Za-z_][A-Za-z0-9_]*|[0-9])|[A-Z][A-Z0-9_]*)$'
+r182_unshaped() {  # r182_unshaped -- stdin: hook_dropped's lines; stdout: those no heredoc of this shape explains
+  grep -vE '^-(\$([A-Za-z_][A-Za-z0-9_]*|[0-9])|[A-Z][A-Z0-9_]*)$'
 }
 R182_FALSE_OPENER=$(cat <<'R182_EOF'
 -  SCAN="$SCAN
@@ -396,27 +426,45 @@ R182_EOF
 )
 # The empty row below asks something only if the diff ran: with no GNU diff to
 # read --old-line-format, or a process substitution that failed, it would pass
-# on nothing. no-git-push.sh has two heredoc loops, so its drop is never empty.
-if [ -n "$(hook_dropped "$HOOKS/no-git-push.sh")" ]; then
+# on nothing. no-git-push.sh reads its commands through heredoc loops, so its
+# drop is never empty. Read once, so the guard and the row judge one output.
+R182_PUSH_DROPPED=$(hook_dropped "$HOOKS/no-git-push.sh")
+if [ -n "$R182_PUSH_DROPPED" ]; then
   pass static 'hook_dropped reads a drop out of no-git-push.sh, so the empty row after it asked something'
 else
-  fail static 'hook_dropped reads no drop out of no-git-push.sh, which has two heredoc loops; the empty row after it proves nothing'
+  fail static 'hook_dropped reads no drop out of no-git-push.sh, which reads its commands through heredoc loops; the empty row after it proves nothing'
 fi
 tok 'hook_text drops nothing from no-git-push.sh but one-parameter heredoc bodies and their delimiters' \
-    '' "$(r182_unshaped "$HOOKS/no-git-push.sh")"
+    '' "$(printf '%s\n' "$R182_PUSH_DROPPED" | r182_unshaped)"
 tok 'and from no-pr-decisions.sh those and the block under its quoted <<, verbatim, which #289 owns' \
-    "$R182_FALSE_OPENER" "$(r182_unshaped "$HOOKS/no-pr-decisions.sh")"
+    "$R182_FALSE_OPENER" "$(hook_dropped "$HOOKS/no-pr-decisions.sh" | r182_unshaped)"
+# What makes those two rows about the text the counters read: `hook_text` is
+# `hook_bodiless` and then the fold, and nothing between, pinned as bash holds
+# it. A stage added after the drop -- a filter, a route round #289 -- would be
+# text the counters read and no row above judges, so it is red here instead.
+R182_HOOK_TEXT=$(cat <<'R182_EOF'
+hook_text ()
+{
+    hook_bodiless "$1" | sed ':a;/\\$/{N;s/\\\n//;ba}'
+}
+R182_EOF
+)
+tok 'hook_text is the drop and then the fold, with no stage between' \
+    "$R182_HOOK_TEXT" "$(declare -f hook_text | sed 's/[[:space:]]*$//')"
 # Driven, not only asserted: the two trade fixtures above each hide an arm, and
 # this is what names it.
 tok 'r182_unshaped names the arm a quoted << hides, and the lines with it' \
     '-  echo "refused" >&2
 -fi
--' "$(r182_unshaped "$R182/quoted-opener-a-blank-line-ends.sh")"
+-' "$(hook_dropped "$R182/quoted-opener-a-blank-line-ends.sh" | r182_unshaped)"
 tok 'and the arm a trailing comment naming <<LIST hides, with the real opener' \
     '-echo "refused" >&2
--while read -r x; do :; done <<LIST' "$(r182_unshaped "$R182/trailing-comment-opener-a-delimiter-ends.sh")"
+-while read -r x; do :; done <<LIST' "$(hook_dropped "$R182/trailing-comment-opener-a-delimiter-ends.sh" | r182_unshaped)"
 tok 'and an opener the drop rewrites, as the line it was and the line it became' \
     '-cat <<EOF \\
-+cat <<EOF' "$(r182_unshaped "$R182/opener-ends-in-an-even-backslash-run.sh")"
++cat <<EOF' "$(hook_dropped "$R182/opener-ends-in-an-even-backslash-run.sh" | r182_unshaped)"
+tok 'and a continuation line the drop rewrites, where the logical line it ends began on the opener' \
+    '-  x \\
++  x' "$(hook_dropped "$R182/opener-continued-onto-an-even-backslash-run.sh" | r182_unshaped)"
 
 sourced_to_end

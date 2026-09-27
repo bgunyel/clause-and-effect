@@ -310,10 +310,12 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 }
 
 # Drop heredoc bodies: lines on stdin, the same lines out with every heredoc
-# body taken away, and one line rewritten rather than kept -- an opener whose
-# line ends in an even run of backslashes loses the run, for the reason the
-# last step of the program gives. It is the first pass of cs_normalise, below,
-# which calls it.
+# body taken away, and one line rewritten rather than kept -- the physical line
+# that ends an opener's logical line, which may be a continuation line after
+# the opener's own, loses a trailing even run of backslashes and the blanks in
+# front of it. Why is argued at the step that takes the run off, "Take the run
+# off rather than hope they agree". It is the first pass of cs_normalise,
+# below, which calls it.
 #
 # Extracted rather than copied, as cs_join was before it, and for #182. The
 # check suite counts the refusal arms in each boundary hook -- `arms`,
