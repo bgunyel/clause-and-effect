@@ -629,18 +629,22 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
 # The failure line names every hook that did not exit 0, each with its status and
 # its stderr in the spelling `verdict` uses, since the case it exists for is a
 # second hook refusing what the first permits and the name is the whole finding.
-# ON AN EMPTY LIST IT PASSES, which is #186. The loop body would not run,
-# `refused` would stay empty, and this would print `ok ALLOW by all` for a
-# command no hook had judged -- recording permit-direction coverage for six
-# requirements on nothing. The guard that answers it today is an external one
-# beside the derivation that reads settings.json, so it covers that producer and
-# not this consumer, and `drive_helper` and `every_hook_of` already set
-# `XH_HOOKS` from elsewhere. That is the first review of PR #169's finding at a
-# second call site, and the sixth's: the guard belongs in here, as a failing
-# verdict rather than an abort.
+# IT FAILS WHEN IT RUNS NO HOOK, which is #186. Without that, a list the loop
+# consumed nothing from would leave `refused` empty and print `ok ALLOW by all`
+# for a command no hook had judged -- recording permit-direction coverage for
+# six requirements on nothing. The count is of hooks the loop ran and not a test
+# of the string, because a list of blanks is not empty and runs no hook all the
+# same, which #186's triage measured. It is a failing verdict and not an abort:
+# one caller's empty list is that check's defect, not the run's. And it is in
+# here, the consumer, because the guard that first answered it stood beside one
+# producer, the derivation that reads settings.json, while `drive_helper` and
+# `every_hook_of` set `XH_HOOKS` from elsewhere -- the first review of PR #169's
+# finding at a second call site, filed by the sixth. That guard stays, naming
+# its own cause.
 every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every Bash hook
-  local dir="$1" label="$2" cmd="$3" hook rc err refused=
+  local dir="$1" label="$2" cmd="$3" hook rc err refused= runs=0
   for hook in $XH_HOOKS; do
+    runs=$((runs + 1))
     err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
           | ( cd "$dir" && CLAUDE_PROJECT_DIR="$dir" "$(hook_path "$hook")" ) 2>&1 >/dev/null)
     rc=$?
@@ -657,7 +661,9 @@ every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every Bash hook
     [ "$rc" = 0 ] || refused="$refused
          ${hook##*/} exit=$rc stderr |$err|"
   done
-  if [ -z "$refused" ]; then
+  if [ "$runs" = 0 ]; then
+    fail permit '%s\n         no hooks to run it through' "$label"
+  elif [ -z "$refused" ]; then
     pass permit 'ALLOW by all  %s' "$label"
   else
     fail permit '%s\n         wanted every Bash hook to exit 0; these did not:%s' "$label" "$refused"
