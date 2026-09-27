@@ -304,8 +304,13 @@ heading_correction() {  # heading_correction <abs> -- 0 if this edit is the perm
   # anything over 4096 is not it and is refused before any field is read.
   [ "${#PAYLOAD}" -le 4096 ] || return 1
   # Under a docs/dev-log/ by the same segments the guard reads (#159), so the
-  # correction is made in a linked worktree as in the main checkout.
-  case "$abs" in */docs/dev-log/*) ;; *) return 1 ;; esac
+  # correction is made in a linked worktree as in the main checkout -- and by the
+  # LAST guarded pair in the path, the one that decides which directory the file
+  # is in. Asking for a `/docs/dev-log/` anywhere let a project under a
+  # docs/dev-log/ ancestor take this dev-log-only exception for an entry of
+  # docs/lessons-learned/ or docs/eval-reports/, which dev-05 refused (review of
+  # #159's branch, round 2). The greedy `.*` is what makes the match the last.
+  [[ $abs =~ ^.*$GUARDED_RE ]] && [ "${BASH_REMATCH[1]}" = dev-log ] || return 1
 
   stem=${abs##*/}
   case "$stem" in *.md) stem=${stem%.md} ;; *) return 1 ;; esac
@@ -435,7 +440,11 @@ ABS=$(norm_path "$ABS")
 # repository" in two more ways, both refusing, both pinned in checks/GH-159.sh:
 #   - A project directory that itself stands under a `docs/dev-log/` (or either
 #     sibling) ancestor has every existing file in it refused, `src/main.py`
-#     included, since the ancestor's segments are the path's own.
+#     included, since the ancestor's segments are the path's own -- every file
+#     but a README, which the exemption below permits wherever the guard fires.
+#     ADR 0003's correction is not widened with it: heading_correction asks the
+#     last guarded pair, so under that ancestor it reaches a dev-log entry and
+#     not one of the other two directories.
 #   - A draft -- an entry not yet merged, which CONTEXT.md says is corrected as
 #     the ordinary case -- is refused in a linked worktree from its first write,
 #     because the test below is existence on disk and not the merge base (#190).

@@ -73,8 +73,11 @@ requirement GH-159.1 <<'REQ'
   guarded name under a `notdocs/` parent, and `docs/design/` and
   `docs/research/`. The one heading correction ADR 0003 permits is permitted
   on a worktree's entry as on the main checkout's, whichever is the project
-  directory. An identically-named existing entry in a repository that is not
-  this one is refused too, and so is every existing file of a project
+  directory, and only where the last guarded directory in the path is
+  `docs/dev-log/`, so a project under a `docs/dev-log/` ancestor does not
+  extend it to `docs/lessons-learned/` or `docs/eval-reports/`. An
+  identically-named existing entry in a repository that is not this one is
+  refused too, and so is every existing file but a README of a project
   directory that stands under a guarded ancestor, and a draft entry in a
   worktree, on no branch, with the main checkout as the project directory
   (#190): the accepted trade, since a refusal is visible and one edit away and
@@ -106,7 +109,9 @@ requirement GH-159.2 <<'REQ'
   trade: the Bash half refuses a guarded name under a parent ending in `+`,
   `@`, `,` or `~`, which the Edit half permits, because the same class ends
   `--target-directory=` and `host:` before a path; and it refuses a directory
-  named `-xdocs` as the option `-x` with the path its value.
+  named `-xdocs` in its verb list and its in-place rule, as the option `-x`
+  with the path its value, while the redirect, which takes no option, permits
+  it.
 - from: #159, and review of its branch
 - kind: defect-refusing
 - status: active
@@ -125,7 +130,10 @@ requirement GH-159.3 <<'REQ'
   empty or an absent matcher -- and every registered hook whose code, with
   whole-line `#` comments stripped, reads `CLAUDE_PROJECT_DIR`. A hook is the
   file its registration's first word names, arguments after it ignored, and a
-  registered hook that names no readable file is reached and is a failing row.
+  registered hook that names no readable file is reached and is a failing row
+  -- a `command` hook whose `command` is not a string among them, and a
+  settings file jq cannot read. A hook whose `type` is not `command` runs no
+  shell and is not a registration here.
   Each is asked its cases from the main checkout, a linked worktree and
   another repository, with each of the first two as the project directory,
   and a derived hook with no table of cases is a failing row. The derivation,
@@ -157,12 +165,28 @@ variants_pin 'GH-159.1:none GH-159.2:none'
 # what cannot be read cannot be shown not to read the root, and its row is red.
 # Only a comment that is its whole line is prose: a ` #` after code may be inside
 # a quoted string, and cutting there dropped a read of the root standing after it.
+#
+# NOTHING IS DROPPED FOR BEING UNREADABLE, the round-2 review's finding: the
+# first version of the resolution called `gsub` on every hook's `command`, and a
+# hook with none -- how a `prompt`, `agent` or `http` hook is written -- made jq
+# exit 5 part-way through the file, with every registration after it gone and
+# the status discarded. So a hook whose `type` is not `command` is skipped by
+# name: it runs no shell, reads no file, and no row here can feed it. A `command`
+# hook whose `command` is not a string is `<no-command>`, and a jq that fails
+# for any other reason adds `<jq-failed>`; neither names a file, so both are
+# reached and red.
 r159_registered() {  # r159_registered <settings.json> -- <event> TAB <matcher> TAB <hook file name>, a line each
-  jq -r '.hooks | to_entries[] | .key as $e | .value[]?
+  local out rc
+  out=$(jq -r '.hooks | to_entries[] | .key as $e | .value[]?
          | (if (.matcher // "") == "" then "*" else .matcher end) as $m
-         | .hooks[]?
-         | (.command | gsub("\""; "") | sub("^\\s+"; "") | sub("\\s.*$"; "") | sub(".*/"; "")) as $h
-         | "\($e)\t\($m)\t\($h)"' "$1" 2>/dev/null
+         | .hooks[]? | select((.type // "command") == "command")
+         | (if (.command | type) == "string"
+            then .command | gsub("\""; "") | sub("^\\s+"; "") | sub("\\s.*$"; "") | sub(".*/"; "")
+            else "<no-command>" end) as $h
+         | "\($e)\t\($m)\t\($h)"' "$1" 2>/dev/null)
+  rc=$?
+  [ -n "$out" ] && printf '%s\n' "$out"
+  [ "$rc" = 0 ] || printf 'jq\t*\t<jq-failed>\n'
 }
 r159_reaches_edit() {  # r159_reaches_edit <matcher> -- 0 if it hands the hook an Edit, Write or MultiEdit
   local t
@@ -221,10 +245,14 @@ r159_cases() {  # r159_cases <hook>
 # `*`, one under no matcher, one under `MultiEdit`, a Bash hook whose code reads
 # the root, one that reads it after a `${#`, one registered with an argument
 # after its path, one that reads it after a quoted ` #`, one that names it only
-# in a trailing comment -- the accepted trade -- and one whose file is missing.
-# Not reached: a Bash hook naming it only in whole-line comments, one not naming
-# it, and a SessionStart hook with no matcher, which is handed no tool at all.
-# None of them has a table, and only the missing one has no file.
+# in a trailing comment -- the accepted trade -- one whose file is missing, and
+# a `command` hook whose `command` is a number, `<no-command>`. Not reached: a
+# Bash hook naming it only in whole-line comments, one not naming it, a
+# SessionStart hook with no matcher, which is handed no tool at all, and a
+# `prompt` hook under Bash and one under `Write|Edit`, which run no shell. The
+# prompt hook and the number stand FIRST, where round 1's jq aborted and took
+# every registration after them. None of the reached has a table, and only the
+# missing one and `<no-command>` name no file.
 R159_DERIVE="$FIXTURES/r159-derive"
 mkdir -p "$R159_DERIVE/hooks"
 for r159_h in x-edit x-star x-bare x-multi x-plain x-session; do
@@ -242,6 +270,8 @@ r159_hook_json() {  # r159_hook_json <name> [arguments] -- a registration of it,
 }
 cat > "$R159_DERIVE/settings.json" <<JSON
 {"hooks":{"PreToolUse":[
+  {"matcher":"Bash","hooks":[{"type":"prompt","prompt":"Is this safe?"},{"type":"command","command":5}]},
+  {"matcher":"Write|Edit","hooks":[{"type":"prompt","prompt":"Is this an entry?"}]},
   {"matcher":"Bash","hooks":[$(r159_hook_json x-root),$(r159_hook_json x-length),$(r159_hook_json x-prose),$(r159_hook_json x-plain)]},
   {"matcher":"Bash","hooks":[$(r159_hook_json x-args --strict),$(r159_hook_json x-hash),$(r159_hook_json x-trailing),$(r159_hook_json x-missing)]},
   {"matcher":"Write|Edit","hooks":[$(r159_hook_json x-edit)]},
@@ -252,14 +282,21 @@ cat > "$R159_DERIVE/settings.json" <<JSON
 JSON
 req GH-159.3
 R159_DERIVED=$(r159_rooted "$R159_DERIVE/settings.json" "$R159_DERIVE/hooks")
-tok 'the checkout question reaches every hook an edit tool is handed to, every hook whose code reads the root -- registered with an argument, or read after a quoted hash -- and every hook it cannot read, and none that names the root only in whole-line comments' \
-    "$(printf '%s\n' x-args.sh x-bare.sh x-edit.sh x-hash.sh x-length.sh x-missing.sh x-multi.sh x-root.sh x-star.sh x-trailing.sh)" \
+tok 'the checkout question reaches every hook an edit tool is handed to, every hook whose code reads the root -- registered with an argument, or read after a quoted hash -- and every hook it cannot read, a command that is not a string among them, and none that names the root only in whole-line comments or runs no shell' \
+    "$(printf '%s\n' '<no-command>' x-args.sh x-bare.sh x-edit.sh x-hash.sh x-length.sh x-missing.sh x-multi.sh x-root.sh x-star.sh x-trailing.sh)" \
     "$R159_DERIVED"
 tok 'a derived hook with no table of cases is found, every one of the fixture'"'"'s being one' \
-    "$(printf '%s\n' x-args.sh x-bare.sh x-edit.sh x-hash.sh x-length.sh x-missing.sh x-multi.sh x-root.sh x-star.sh x-trailing.sh)" \
+    "$(printf '%s\n' '<no-command>' x-args.sh x-bare.sh x-edit.sh x-hash.sh x-length.sh x-missing.sh x-multi.sh x-root.sh x-star.sh x-trailing.sh)" \
     "$(r159_untabled $R159_DERIVED)"
 tok 'and a derived hook that names no readable file is found' \
-    'x-missing.sh' "$(r159_unreadable "$R159_DERIVE/hooks" $R159_DERIVED)"
+    "$(printf '%s\n' '<no-command>' x-missing.sh)" "$(r159_unreadable "$R159_DERIVE/hooks" $R159_DERIVED)"
+printf '%s\n' '{"hooks":{"PreToolUse":[{"matcher":"Write|Edit","hooks":[{"type":"prompt","prompt":"p"},{"type":"http","url":"u"}]}]}}' \
+  > "$R159_DERIVE/prompt.json"
+tok 'a prompt or an http hook is no registration at all, where a command hook with no command would be <no-command>' \
+    '' "$(r159_registered "$R159_DERIVE/prompt.json")"
+printf '%s\n' '{"hooks":' > "$R159_DERIVE/broken.json"
+tok 'and a settings file jq cannot read is a reached hook that names no file, not an empty derivation' \
+    '<jq-failed>' "$(r159_rooted "$R159_DERIVE/broken.json" "$R159_DERIVE/hooks")"
 
 R159_HOOKS=$(r159_rooted "$SETTINGS" "$HOOKS")
 [ -n "$R159_HOOKS" ] || {
@@ -391,21 +428,41 @@ done
 
 # THE TRADE, WIDER THAN "ANOTHER REPOSITORY" (review of #159's branch, round 1).
 # The guard reads the path's own segments, so a project directory standing under
-# a guarded ancestor has every existing file refused, and an entry is refused
-# from its first write whatever branch it is on -- a draft in a worktree, not yet
-# merged, which CONTEXT.md calls corrected as the ordinary case, is refused with
-# the main checkout as the project directory now too (#190 owns existence
-# against the merge base). Both refusing; both stated in the hook.
+# a guarded ancestor has every existing file but a README refused, and an entry
+# is refused from its first write whatever branch it is on -- a draft in a
+# worktree, not yet merged, which CONTEXT.md calls corrected as the ordinary
+# case, is refused with the main checkout as the project directory now too (#190
+# owns existence against the merge base). Both refusing; both stated in the hook.
 R159_ANC="$FIXTURES/r159-anc/docs/dev-log/proj"
 mkdir -p "$R159_ANC/src"
 printf 'x\n' > "$R159_ANC/src/main.py"
+printf 'x\n' > "$R159_ANC/src/README.md"
 REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh BLOCK \
   'ACCEPTED TRADE, not a defect: an Edit of src/main.py in a project directory under a docs/dev-log/ ancestor' \
   "$(r159_call Edit src/main.py)"
+REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh ALLOW \
+  'and a README there is permitted, as a README under a guarded directory is: the trade reaches every file but one' \
+  "$(r159_call Edit src/README.md)"
+# ADR 0003'S EXCEPTION IS THE DEV-LOG'S, decided by the last guarded pair in the
+# path (review of #159's branch, round 2). Asking for a `/docs/dev-log/`
+# anywhere gave it, under that ancestor, to an entry of the other two
+# directories, which dev-05 refused. The dev-log entry beside them is the
+# control: the exception still reaches one under the ancestor.
+for r159_d in lessons-learned eval-reports dev-log; do
+  mkdir -p "$R159_ANC/docs/$r159_d"
+  printf '%s\n\nBody.\n' '# 2026-01-01 · session 2 — R' > "$R159_ANC/docs/$r159_d/devlog_2026-01-01_session-5.md"
+  r159_want=BLOCK
+  [ "$r159_d" = dev-log ] && r159_want=ALLOW
+  REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh "$r159_want" \
+    "the heading correction on an entry of docs/$r159_d/, the project directory under a docs/dev-log/ ancestor" \
+    "$(r159_edit "$R159_ANC/docs/$r159_d/devlog_2026-01-01_session-5.md" '# 2026-01-01 · session 2 — R' '# 2026-01-01 · session 5 — R')"
+done
 R159_DRAFT=docs/dev-log/devlog_2026-01-01_draft-190.md
 printf 'draft\n' > "$R159_WT/$R159_DRAFT"
-[ -z "$(git -C "$R159_WT" ls-files -- "$R159_DRAFT")" ] || {
-  echo "the #159 draft is tracked, so it is not a draft; the row below would prove nothing" >&2
+# Asked as git naming it untracked, and not as git naming nothing: a failed
+# read names nothing too.
+[ "$(git -C "$R159_WT" ls-files --others -- "$R159_DRAFT")" = "$R159_DRAFT" ] || {
+  echo "git does not name the #159 draft untracked, so it may not be a draft; the row below would prove nothing" >&2
   exit 1
 }
 REPO_ROOT="$R159_MAIN" feed "$PATH" append-only-docs-edit.sh BLOCK \
@@ -495,6 +552,14 @@ check append-only-docs.sh ALLOW 'a directory named -docs is another directory' \
   'rm -rf ./-docs/dev-log'
 check append-only-docs.sh BLOCK 'ACCEPTED TRADE, not a defect: a directory named -xdocs reads as an option -x with the guarded directory its value' \
   'rm -rf ./-xdocs/dev-log'
+check append-only-docs.sh BLOCK 'ACCEPTED TRADE, not a defect: and so it does to the in-place rule' \
+  'sed -i s/a/b/ ./-xdocs/dev-log/e.md'
+# A redirect takes no option, so its rule has no option group and -xdocs is
+# the other directory it is: the right verdict, pinned beside the trade.
+check append-only-docs.sh ALLOW 'a redirect into a directory named -xdocs, which a redirect cannot read as an option' \
+  'echo x > ./-xdocs/dev-log/e.md'
+check append-only-docs.sh ALLOW 'and written with no space' \
+  'echo x >./-xdocs/dev-log/e.md'
 # Just outside GH-159.2's path set the halves disagree, in the refusing
 # direction. The Bash half's boundary class admits `+ @ , : = ~` and a quoted
 # space, because in shell text they end an option or a host before a path; the

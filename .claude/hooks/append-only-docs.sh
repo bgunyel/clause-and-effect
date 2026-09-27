@@ -102,7 +102,10 @@ fi
 # still opens nothing, because the `-` has to follow the boundary itself:
 # `x-notdocs/dev-log` stays another directory. The trade: a directory whose name
 # is a `-`, letters and then `docs`, `./-xdocs/dev-log`, reads as that option
-# and is refused; `-docs` itself, with no letters, is another directory.
+# and is refused by the verb list and the in-place rule, which read it through
+# APPEND_ONLY; `-docs` itself, with no letters, is another directory. The
+# redirect rule has no option group, because a redirect takes no option, so
+# `> ./-xdocs/dev-log/<entry>` is the other directory it is and is permitted.
 APPEND_ONLY_DIR='docs/+(\./+)*(dev-log|lessons-learned|eval-reports)(/|[^A-Za-z0-9_.-]|$)'
 APPEND_ONLY='(^|[^A-Za-z0-9_.-])(-[A-Za-z]+)?'"$APPEND_ONLY_DIR"
 

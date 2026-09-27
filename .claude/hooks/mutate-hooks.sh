@@ -740,7 +740,8 @@ redirect-boundary-admits-a-redirect%append-only-docs.sh%s/\[^>|&A-Za-z0-9_.-\])?
 verb-rule-unbounded-on-the-left%append-only-docs.sh%s/\\s+(\[^;&|\]\*\[^;&|A-Za-z0-9_.-\])?(-\[A-Za-z\]+)?\$APPEND_ONLY_DIR/\\s+[^;\&|]*$APPEND_ONLY_DIR/%GH-159.2%caught
 option-letters-not-a-boundary%append-only-docs.sh%s/(-\[A-Za-z\]+)?\$APPEND_ONLY_DIR/$APPEND_ONLY_DIR/%GH-159.2%caught
 redirect-rule-unbounded-on-the-left%append-only-docs.sh%s/>\\s\*(\[^>|&\]\*\[^>|&A-Za-z0-9_.-\])?\$APPEND_ONLY_DIR/>\\s*[^>|\&]*$APPEND_ONLY_DIR/%GH-159.2%caught
-heading-correction-read-off-the-root%append-only-docs-edit.sh%s@case "$abs" in \*/docs/dev-log/\*) ;; \*) return 1 ;; esac@case "${abs#"$ROOT"/}" in docs/dev-log/*) ;; *) return 1 ;; esac@%GH-159.1%caught
+heading-correction-read-off-the-root%append-only-docs-edit.sh%s@^  \[\[ \$abs =~ \^\.\*\$GUARDED_RE \]\] && \[ "\${BASH_REMATCH\[1\]}" = dev-log \] || return 1$@  case "${abs#"$ROOT"/}" in docs/dev-log/*) ;; *) return 1 ;; esac@%GH-159.1%caught
+heading-correction-any-dev-log-pair%append-only-docs-edit.sh%s@^  \[\[ \$abs =~ \^\.\*\$GUARDED_RE \]\] && \[ "\${BASH_REMATCH\[1\]}" = dev-log \] || return 1$@  case "$abs" in */docs/dev-log/*) ;; *) return 1 ;; esac@%GH-159.1%caught
 unresolved-git-dir-permits%no-git-push.sh%/could not be resolved, so whether this runs/,+1s/exit 2/exit 0/%GH-108.2%caught
 dev-branch-not-version-sorted%no-work-on-stale-branch.sh%s/| sort -V | tail -1)/| sort | head -1)/%GH-108.5%caught
 base-lookup-never-finds-a-branch%no-pr-decisions.sh%/^read_active_dev()/,/^}/s/origin\/dev-\*/origin\/no-such-ref-\*/%GH-144.1 GH-144.3%caught
