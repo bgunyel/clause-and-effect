@@ -127,9 +127,22 @@ R224_LONG_GOT="$FIXTURES/r224-long-got"
   tail -n +2 "$R224_LONG_IN" | sed "s/^/$R224_IND/"
 } > "$R224_LONG_WANT"
 ( fail static '%s' "$(< "$R224_LONG_IN")" ) > "$R224_LONG_GOT"
-tok 'a fail over a message of 2,001 lines prints all 2,000 after the first, each with the indent in front, byte for byte as sed puts it there' \
-    'identical' \
-    "$(cmp "$R224_LONG_WANT" "$R224_LONG_GOT" 2>&1 && echo identical)"
+# THE INPUT IS ASKED FIRST (review of PR #285, round 5). Were the generator
+# above to break -- an edit, or an awk that reads it otherwise -- the input
+# would be one line or none, `sed` and `fail` would agree over it, and this
+# row would pass having driven nothing: measured, with the awk program given
+# one `{` too many and `fail` keeping twenty lines, it printed ok. So the row
+# fails unless its input holds what its label says, written as literals and
+# not read back from the generator: 2,001 lines and 22,128 bytes, 20 of the
+# lines blank and 282 opening with three spaces.
+R224_LONG_LABEL='a fail over a message of 2,001 lines prints all 2,000 after the first, each with the indent in front, byte for byte as sed puts it there'
+R224_LONG_HOLDS="$(( $(wc -l < "$R224_LONG_IN") )) lines, $(( $(wc -c < "$R224_LONG_IN") )) bytes, $(grep -c '^$' "$R224_LONG_IN") blank, $(grep -c '^   ' "$R224_LONG_IN") indented"
+if [ "$R224_LONG_HOLDS" != '2001 lines, 22128 bytes, 20 blank, 282 indented' ]; then
+  fail static '%s\n         its input holds %s, not 2001 lines, 22128 bytes, 20 blank, 282 indented, so a comparison over it asks nothing' \
+    "$R224_LONG_LABEL" "$R224_LONG_HOLDS"
+else
+  tok "$R224_LONG_LABEL" 'identical' "$(cmp "$R224_LONG_WANT" "$R224_LONG_GOT" 2>&1 && echo identical)"
+fi
 
 # The ledger, from a child bash with a ledger of its own. What it records for
 # the message above is its first line, which is what it recorded before #224:

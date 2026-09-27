@@ -132,28 +132,52 @@ r293_fail_ms() {  # r293_fail_ms <message file> -- "<CPU ms> <exit>", the fastes
   # Every status but 0 returned above, so the one printed here is 0.
   printf '%s 0\n' "$best"
 }
-r293_scales() {  # r293_scales <shape> <small file> <small size> <large file> <large size>
-  local small large floored
+# THE INPUTS ARE ASKED FIRST (review of PR #285, round 5). Were a generator
+# above to break, its file would be empty or one line, `fail` would take no
+# time at either size, and the ratio of two floored nothings would pass --
+# measured, with the awk program given one `{` too many, `head -c 0` for the
+# long first lines and the quadratic substitution as `fail`, both rows printed
+# ok at 0 ms and 0 ms. So each file is held to what the row's label says it
+# is, written as literals and not read back from the generators, and a file
+# that is not fails the row before anything is timed.
+r293_holds() {  # r293_holds <file> -- "<lines> lines, <bytes> bytes, first line <bytes>"
+  printf '%s lines, %s bytes, first line %s' "$(( $(wc -l < "$1") ))" "$(( $(wc -c < "$1") ))" \
+    "$(( $(head -n 1 "$1" | wc -c) ))"
+}
+r293_scales() {  # r293_scales <shape> <small file> <small size> <small holds> <large file> <large size> <large holds>
+  local small large floored holds file size want
+  for holds in "$2|$3|$4" "$5|$6|$7"; do
+    IFS='|' read -r file size want <<< "$holds"
+    if [ "$(r293_holds "$file" 2> /dev/null)" != "$want" ]; then
+      fail static '%s\n         the input at %s holds %s, not %s, so no time over it is the time this row names' \
+        "fail over $1" "$size" "$(r293_holds "$file" 2>&1)" "$want"
+      return
+    fi
+  done
   small=$(r293_fail_ms "$2")
-  large=$(r293_fail_ms "$4")
+  large=$(r293_fail_ms "$5")
   if [ "${small#* }" != 0 ] || [ "${large#* }" != 0 ]; then
     fail static '%s\n         the child bash exited %s at %s and %s at %s (124 is the 20 s cut-off), so no time here is the time of fail' \
-      "fail over $1" "${small#* }" "$3" "${large#* }" "$5"
+      "fail over $1" "${small#* }" "$3" "${large#* }" "$6"
     return
   fi
   small=${small% *} large=${large% *}
   floored=$small
   [ "$floored" -ge 10 ] || floored=10
   if [ $(( large * 10 / floored )) -lt 80 ]; then
-    pass static 'scaled fail over %s: %s ms of CPU at %s, %s ms at %s' "$1" "$small" "$3" "$large" "$5"
+    pass static 'scaled fail over %s: %s ms of CPU at %s, %s ms at %s' "$1" "$small" "$3" "$large" "$6"
   else
     fail static '%s\n         %s ms of CPU at %s, %s ms at %s; four times the size may cost at most eight times' \
-      "fail is not linear in $1" "$small" "$3" "$large" "$5"
+      "fail is not linear in $1" "$small" "$3" "$large" "$6"
   fi
 }
 
 req GH-293
-r293_scales 'many lines' "$R293_SMALL" '2,500 lines' "$R293_LARGE" '10,000 lines'
-r293_scales 'one long first line' "$R293_FIRST_SMALL" 'a 40,000-byte first line' "$R293_FIRST_LARGE" 'a 160,000-byte first line'
+r293_scales 'many lines' \
+  "$R293_SMALL" '2,500 lines' '2500 lines, 145000 bytes, first line 58' \
+  "$R293_LARGE" '10,000 lines' '10000 lines, 580000 bytes, first line 58'
+r293_scales 'one long first line' \
+  "$R293_FIRST_SMALL" 'a 40,000-byte first line' '2 lines, 40008 bytes, first line 40001' \
+  "$R293_FIRST_LARGE" 'a 160,000-byte first line' '2 lines, 160008 bytes, first line 160001'
 
 sourced_to_end
