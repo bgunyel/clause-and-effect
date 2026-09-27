@@ -686,12 +686,15 @@ def test_report_does_not_end_a_detail_at_a_blank_line_or_a_heading_shaped_one(tm
 def test_report_shows_a_detail_with_exactly_one_indent_removed(tmp_path):
     """The summary removes the indent `fail` added and nothing else, so a line
     the hook itself indented keeps its own spaces, and a diff or a nested list
-    in its stderr reads as the hook wrote it."""
+    in its stderr reads as the hook wrote it, down to the spaces a line ends
+    with: a detail stripped at its end passed every other test here (review of
+    #224, round 1, mutation P10)."""
     log = (
         "  FAIL row E\n"
         "       at the indent\n"
         "          three more\n"
         "                 ten more\n"
+        "       two trailing  \n"
         "\nSOME CHECKS FAILED\n"
     )
     result, paths = report(tmp_path, log, 1)
@@ -703,6 +706,7 @@ def test_report_shows_a_detail_with_exactly_one_indent_removed(tmp_path):
         "at the indent\n"
         "   three more\n"
         "          ten more\n"
+        "two trailing  \n"
         "```\n"
     ) in summary_text(paths)
 
