@@ -1335,16 +1335,6 @@ it has no entry above (Q16).
   cited where a rule is held for the legacy entries and not yet for a
   generated one -- an ID deleted outright, with its declaration, its pin and
   its file, which nothing disagrees with afterwards
-- #159: the issue filed as "append-only-docs-edit.sh is inoperative in every
-  linked worktree". What it measured is narrower than its title, and review
-  of #234 measured the other half: the guard permitted an Edit or a Write of
-  an entry in another checkout of this repository than the session's project
-  directory -- a linked worktree's entry when the project directory was the
-  main checkout, and the main checkout's when it was the worktree. Its
-  requirements are GH-159.1 to GH-159.3, and the guard now reads the path's
-  own segments. Cited in #157's issue file, whose GH-157.3 rows asserted the
-  permitted verdict while the dev-log README said so, and assert the refusal
-  now that the README says the guard holds the rule in both checkouts
 - #176: the heredoc append `append-only-docs.sh` refuses because a `>` in the
   heredoc's prose, with a guarded path after it, reads as a truncating
   redirect. Cited in #157's issue file, where the dev-log README routes

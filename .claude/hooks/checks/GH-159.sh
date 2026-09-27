@@ -75,7 +75,10 @@ requirement GH-159.1 <<'REQ'
   on a worktree's entry as on the main checkout's, whichever is the project
   directory, and only where the last guarded directory in the path is
   `docs/dev-log/`, so a project under a `docs/dev-log/` ancestor does not
-  extend it to `docs/lessons-learned/` or `docs/eval-reports/`. An
+  extend it to `docs/lessons-learned/` or `docs/eval-reports/`. Under that
+  ancestor it does reach a `devlog_*`-named file in no guarded directory of
+  its own, whose last guarded pair is the ancestor's: the accepted trade,
+  since the whole project is guarded there, and pinned as one. An
   identically-named existing entry in a repository that is not this one is
   refused too, and so is every existing file but a README of a project
   directory that stands under a guarded ancestor, and a draft entry in a
@@ -132,8 +135,10 @@ requirement GH-159.3 <<'REQ'
   file its registration's first word names, arguments after it ignored, and a
   registered hook that names no readable file is reached and is a failing row
   -- a `command` hook whose `command` is not a string among them, and a
-  settings file jq cannot read. A hook whose `type` is not `command` runs no
-  shell and is not a registration here.
+  settings file jq cannot read. A matcher bash cannot compile as an extended
+  regular expression reaches its hook, for the same reason, and so does a
+  hook whose code the derivation's grep fails to read. A hook whose
+  `type` is not `command` runs no shell and is not a registration here.
   Each is asked its cases from the main checkout, a linked worktree and
   another repository, with each of the first two as the project directory,
   and a derived hook with no table of cases is a failing row. The derivation,
@@ -189,11 +194,18 @@ r159_registered() {  # r159_registered <settings.json> -- <event> TAB <matcher> 
   [ -n "$out" ] && printf '%s\n' "$out"
   [ "$jq_status" = 0 ] || printf 'jq\t*\t<jq-failed>\n'
 }
+# A matcher bash cannot compile -- `Edit|(`, or an inline flag such as `(?i)`
+# that is not POSIX ERE -- makes the test return 2, not 1. It is reached, by the
+# rule this derivation keeps everywhere else: what cannot be read cannot be shown
+# not to hand the hook an edit (review of #159's branch, round 4). The status is
+# `match_status` and not `rc`, for #98's derivation, as `jq_status` is.
 r159_reaches_edit() {  # r159_reaches_edit <matcher> -- 0 if it hands the hook an Edit, Write or MultiEdit
-  local t
+  local t match_status
   [ "$1" = '*' ] && return 0
   for t in Edit Write MultiEdit; do
-    [[ $t =~ ^($1)$ ]] && return 0
+    [[ $t =~ ^($1)$ ]]
+    match_status=$?
+    [ "$match_status" = 1 ] || return 0
   done
   return 1
 }
@@ -202,7 +214,14 @@ r159_rooted() {  # r159_rooted <settings.json> <hooks dir> -- the hooks the chec
   while IFS=$'\t' read -r e m h; do
     case "$e" in *ToolUse*) r159_reaches_edit "$m" && { printf '%s\n' "$h"; continue; } ;; esac
     [ -f "$2/$h" ] && [ -r "$2/$h" ] || { printf '%s\n' "$h"; continue; }
-    grep -v '^[[:space:]]*#' "$2/$h" | grep -q 'CLAUDE_PROJECT_DIR' && printf '%s\n' "$h"
+    # Not reached only when the read itself succeeded and found no root: the
+    # last grep said 1 and the first read the file. A grep that failed, or is
+    # not on PATH (#282), is a read that did not happen, and the hook is reached.
+    grep -v '^[[:space:]]*#' "$2/$h" | grep -q 'CLAUDE_PROJECT_DIR'
+    case "${PIPESTATUS[*]}" in
+      '0 1'|'1 1') ;;
+      *) printf '%s\n' "$h" ;;
+    esac
   done < <(r159_registered "$1") | LC_ALL=C sort -u
 }
 r159_unreadable() {  # r159_unreadable <hooks dir> <hook>... -- the ones that name no readable file
@@ -247,7 +266,8 @@ r159_cases() {  # r159_cases <hook>
 # the root, one that reads it after a `${#`, one registered with an argument
 # after its path, one that reads it after a quoted ` #`, one that names it only
 # in a trailing comment -- the accepted trade -- one whose file is missing, and
-# a `command` hook whose `command` is a number, `<no-command>`. Not reached: a
+# a `command` hook whose `command` is a number, `<no-command>`, and a hook under
+# each of two matchers bash cannot compile, `Edit|(` and `(?i)edit`. Not reached: a
 # Bash hook naming it only in whole-line comments, one not naming it, a
 # SessionStart hook with no matcher, which is handed no tool at all, and a
 # `prompt` hook under Bash and one under `Write|Edit`, which run no shell. The
@@ -256,7 +276,7 @@ r159_cases() {  # r159_cases <hook>
 # missing one and `<no-command>` name no file.
 R159_DERIVE="$FIXTURES/r159-derive"
 mkdir -p "$R159_DERIVE/hooks"
-for r159_h in x-edit x-star x-bare x-multi x-plain x-session; do
+for r159_h in x-edit x-star x-bare x-multi x-plain x-session x-badre x-flags; do
   printf '%s\n' '#!/bin/bash' 'exit 0' > "$R159_DERIVE/hooks/$r159_h.sh"
 done
 printf '%s\n' '#!/bin/bash' 'ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"' > "$R159_DERIVE/hooks/x-root.sh"
@@ -278,16 +298,18 @@ cat > "$R159_DERIVE/settings.json" <<JSON
   {"matcher":"Write|Edit","hooks":[$(r159_hook_json x-edit)]},
   {"matcher":"*","hooks":[$(r159_hook_json x-star)]},
   {"hooks":[$(r159_hook_json x-bare)]},
-  {"matcher":"MultiEdit","hooks":[$(r159_hook_json x-multi)]}],
+  {"matcher":"MultiEdit","hooks":[$(r159_hook_json x-multi)]},
+  {"matcher":"Edit|(","hooks":[$(r159_hook_json x-badre)]},
+  {"matcher":"(?i)edit","hooks":[$(r159_hook_json x-flags)]}],
  "SessionStart":[{"hooks":[$(r159_hook_json x-session)]}]}}
 JSON
 req GH-159.3
 R159_DERIVED=$(r159_rooted "$R159_DERIVE/settings.json" "$R159_DERIVE/hooks")
-tok 'the checkout question reaches every hook an edit tool is handed to, every hook whose code reads the root -- registered with an argument, or read after a quoted hash -- and every hook it cannot read, a command that is not a string among them, and none that names the root only in whole-line comments or runs no shell' \
-    "$(printf '%s\n' '<no-command>' x-args.sh x-bare.sh x-edit.sh x-hash.sh x-length.sh x-missing.sh x-multi.sh x-root.sh x-star.sh x-trailing.sh)" \
+tok 'the checkout question reaches every hook an edit tool is handed to, every hook whose code reads the root -- registered with an argument, or read after a quoted hash -- and every hook it cannot read, a command that is not a string among them, every hook under a matcher bash cannot compile, and none that names the root only in whole-line comments or runs no shell' \
+    "$(printf '%s\n' '<no-command>' x-args.sh x-badre.sh x-bare.sh x-edit.sh x-flags.sh x-hash.sh x-length.sh x-missing.sh x-multi.sh x-root.sh x-star.sh x-trailing.sh)" \
     "$R159_DERIVED"
 tok 'a derived hook with no table of cases is found, every one of the fixture'"'"'s being one' \
-    "$(printf '%s\n' '<no-command>' x-args.sh x-bare.sh x-edit.sh x-hash.sh x-length.sh x-missing.sh x-multi.sh x-root.sh x-star.sh x-trailing.sh)" \
+    "$(printf '%s\n' '<no-command>' x-args.sh x-badre.sh x-bare.sh x-edit.sh x-flags.sh x-hash.sh x-length.sh x-missing.sh x-multi.sh x-root.sh x-star.sh x-trailing.sh)" \
     "$(r159_untabled $R159_DERIVED)"
 tok 'and a derived hook that names no readable file is found' \
     "$(printf '%s\n' '<no-command>' x-missing.sh)" "$(r159_unreadable "$R159_DERIVE/hooks" $R159_DERIVED)"
@@ -295,6 +317,18 @@ printf '%s\n' '{"hooks":{"PreToolUse":[{"matcher":"Write|Edit","hooks":[{"type":
   > "$R159_DERIVE/prompt.json"
 tok 'a prompt or an http hook is no registration at all, where a command hook with no command would be <no-command>' \
     '' "$(r159_registered "$R159_DERIVE/prompt.json")"
+# And with no grep to read the hooks with, every registered hook is reached and
+# none drops out as "does not read the root": the Bash hooks that name it only in
+# prose or not at all, and the SessionStart hook, join the list. PATH holds jq
+# and sort alone. Its "grep: command not found" lines are the condition set up,
+# so they are discarded; the verdict is read off PIPESTATUS, not off stderr.
+mkdir -p "$R159_DERIVE/bin"
+for r159_tool in jq sort; do
+  ln -sf "$(command -v "$r159_tool")" "$R159_DERIVE/bin/$r159_tool"
+done
+tok 'and with no grep on PATH, a hook whose code cannot be read is reached, not dropped' \
+    "$(printf '%s\n' '<no-command>' x-args.sh x-badre.sh x-bare.sh x-edit.sh x-flags.sh x-hash.sh x-length.sh x-missing.sh x-multi.sh x-plain.sh x-prose.sh x-root.sh x-session.sh x-star.sh x-trailing.sh)" \
+    "$(PATH="$R159_DERIVE/bin"; r159_rooted "$R159_DERIVE/settings.json" "$R159_DERIVE/hooks" 2>/dev/null)"
 printf '%s\n' '{"hooks":' > "$R159_DERIVE/broken.json"
 tok 'and a settings file jq cannot read is a reached hook that names no file, not an empty derivation' \
     '<jq-failed>' "$(r159_rooted "$R159_DERIVE/broken.json" "$R159_DERIVE/hooks")"
@@ -458,6 +492,17 @@ for r159_d in lessons-learned eval-reports dev-log; do
     "the heading correction on an entry of docs/$r159_d/, the project directory under a docs/dev-log/ ancestor" \
     "$(r159_edit "$R159_ANC/docs/$r159_d/devlog_2026-01-01_session-5.md" '# 2026-01-01 · session 2 — R' '# 2026-01-01 · session 5 — R')"
 done
+# And a devlog_-named file in no guarded directory of its own: the ancestor's
+# pair is its last, so the exception reaches it (review of #159's branch, round
+# 4). The same trade that refuses src/main.py, in its permitting half; the body
+# edit is the control.
+printf '%s\n\nBody.\n' '# 2026-01-01 · session 2 — R' > "$R159_ANC/src/devlog_2026-01-01_session-5.md"
+REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh ALLOW \
+  'ACCEPTED TRADE, not a defect: the heading correction on a devlog_-named file under src/, the project directory under a docs/dev-log/ ancestor' \
+  "$(r159_edit "$R159_ANC/src/devlog_2026-01-01_session-5.md" '# 2026-01-01 · session 2 — R' '# 2026-01-01 · session 5 — R')"
+REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh BLOCK \
+  'and a body edit of the same file' \
+  "$(r159_edit "$R159_ANC/src/devlog_2026-01-01_session-5.md" 'Body.' 'Other.')"
 R159_DRAFT=docs/dev-log/devlog_2026-01-01_draft-190.md
 printf 'draft\n' > "$R159_WT/$R159_DRAFT"
 # Asked as git naming it untracked, and not as git naming nothing: a failed

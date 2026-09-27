@@ -444,7 +444,10 @@ ABS=$(norm_path "$ABS")
 #     but a README, which the exemption below permits wherever the guard fires.
 #     ADR 0003's correction is not widened with it: heading_correction asks the
 #     last guarded pair, so under that ancestor it reaches a dev-log entry and
-#     not one of the other two directories.
+#     not one of the other two directories. It does reach a `devlog_*`-named
+#     file in no guarded directory of its own, `src/devlog_<date>_<session>.md`,
+#     whose last guarded pair is the ancestor's: the trade's permitting half,
+#     since the whole project is guarded there, and pinned in checks/GH-159.sh.
 #   - A draft -- an entry not yet merged, which CONTEXT.md says is corrected as
 #     the ordinary case -- is refused in a linked worktree from its first write,
 #     because the test below is existence on disk and not the merge base (#190).
