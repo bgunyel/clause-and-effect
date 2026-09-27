@@ -1459,3 +1459,9 @@ it has no entry above (Q16).
   file, where the three shapes are pinned at today's permitted verdict and
   GH-177's text says what is refused. It adds its requirements in the pull
   request that fixes it
+- #259: `append-only-docs.sh`'s truncating-redirect rule reads its stretch
+  across a `;`, so a redirect anywhere on a line is read as one into a
+  guarded path written after it in another command, and the line is refused.
+  Filed from #159's branch, whose issue file pins the redirect's left boundary
+  with the guarded entry in front of the `>` for that reason. It adds its
+  requirements in the pull request that fixes it
