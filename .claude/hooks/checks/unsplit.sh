@@ -10403,6 +10403,7 @@ SEEDS
 #                                     pre-nice-opt-ansi pre-nice-opt-locale (#166)
 #  16 a quoted span holding a blank in front of the command word
 #     (#166, #273)                    pre-sudo-spaced pre-assign-spaced
+#                                     pre-sudo-escaped pre-assign-escaped
 #
 # The thirteenth is seven spellings where the others are one or two, and that is
 # #128 rather than thoroughness for its own sake: the spellings of the heredoc
@@ -10440,7 +10441,9 @@ SEEDS
 # a bare one: it stopped at a token opening with a quote, so `nice -n 5 "git"
 # push --all origin` was permitted while transformations 4 and 11 each passed on
 # their own. #266. So the composition is a family of its own, one spelling per
-# quoting form the tail offer has to tell apart from prose, all four of them;
+# quoting form that opens a span the tail offer has to tell apart from prose,
+# the four that do -- the fifth, the backslash, opens none, and a backslashed
+# command word behind `nice -n 5` was refused at abba1d0 already;
 # the ANSI-C and locale ones are #166's, whose reader made those forms quotes,
 # and the ANSI-C one is the row that holds the offer from stopping on the
 # dollar -- a mutation that did survived a whole green run. The locale one was
@@ -10450,9 +10453,11 @@ SEEDS
 # whose answer is a property of the line. A spaced option value, `sudo -D` and
 # a directory with a blank in it, and a spaced assignment, the documented
 # `GIT_SSH_COMMAND="ssh -i k"`, each left a walk half-way through a word, and
-# the command behind it unread. One spelling of each: the option value is
-# GH-166.1's and the assignment #273's, whose wrapper half -- a regular
-# expression -- the wrapped seeds under it are what ask.
+# the command behind it unread. Two spellings of each, the double-quoted one
+# and the backslash one, which round 3 of that review found the wrapper anchor
+# still could not read: the option value is GH-166.1's and the assignment
+# #273's, whose wrapper half -- a regular expression -- the wrapped seeds under
+# them are what ask.
 #
 # A transformation that cannot apply to a seed -- no value-taking long flag, no
 # second short flag to bundle with, no subcommand to put a global flag before --
@@ -10484,7 +10489,7 @@ INV_TRANSFORMS='
   heredoc-cont-space heredoc-cont-twice heredoc-cont-redirect
   pre-sudo-path pre-env-path pre-timeout-quoted pre-sudo-ansi
   pre-nice-opt-dquoted pre-nice-opt-squoted pre-nice-opt-ansi pre-nice-opt-locale
-  pre-sudo-spaced pre-assign-spaced
+  pre-sudo-spaced pre-assign-spaced pre-sudo-escaped pre-assign-escaped
 '
 
 # A rewrite that prints nothing when it changed nothing, which is how a
@@ -10698,6 +10703,8 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     pre-nice-opt-locale)  inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" '$"' '"')" ;;
     pre-sudo-spaced)      printf 'sudo -D "/srv/my repo" %s' "$2" ;;
     pre-assign-spaced)    printf 'GIT_SSH_COMMAND="ssh -i k" %s' "$2" ;;
+    pre-sudo-escaped)     printf 'sudo -D /srv/my\\ repo %s' "$2" ;;
+    pre-assign-escaped)   printf 'A=b\\ c %s' "$2" ;;
     word-path)        inv_cmdword "$2" '/usr/bin/' '' ;;
     word-dot)         inv_cmdword "$2" './' '' ;;
     word-dquoted)     inv_cmdword "$2" '"' '"' ;;
@@ -11804,7 +11811,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '127' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '130' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11930,7 +11937,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '125' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '128' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.

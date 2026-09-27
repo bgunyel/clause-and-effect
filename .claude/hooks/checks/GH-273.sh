@@ -32,7 +32,8 @@ requirement GH-273 <<'REQ'
   quoted blank in any quoting form, is stripped whole, and the command behind it
   reaches the verdict its bare spelling reaches:
   `GIT_SSH_COMMAND="ssh -i k" git push origin main`, `A='b c' git push origin main`,
-  `A=$'b c' git push origin main` and `A="b c" gh pr merge 5` are refused, and so
+  `A=$'b c' git push origin main`, `A=b\ c git push origin main` and
+  `A="b c" gh pr merge 5` are refused, and so
   is the same assignment as an env operand,
   `env "GIT_SSH_COMMAND=ssh -i k" git push origin main`. In front of a wrapper
   the wrapper refusal is reached: `A="b c" bash -c "git push origin main"` is
@@ -41,7 +42,7 @@ requirement GH-273 <<'REQ'
 - from: #273, found by the review of PR #260 (#166), round 2
 - kind: defect-permitting
 - status: active
-- variants: transformation: pre-assign-spaced
+- variants: transformation: pre-assign-spaced pre-assign-escaped
 - note: the strip and the env operand read the assignment through the word
   reader, which is GH-166.1; the wrapper anchor reads raw text and admits a
   quoted span as part of the value. Its trade is pinned as a boundary: a double
@@ -62,15 +63,21 @@ flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'an assignment prefix holding a singl
   "A='b c' git push origin main"
 flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'an assignment prefix holding an ANSI-C blank' \
   "A=\$'b c' git push origin main"
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'an assignment prefix holding a backslash-escaped blank, the fifth quoting form' \
+  'A=b\ c git push origin main'
 flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'two assignment prefixes, each holding a blank' \
   'A="b c" B="d e" git push origin main'
 flip "$ON_DEV" no-commit-to-main.sh ALLOW BLOCK 'an assignment prefix holding a blank, a push naming main on a dev branch' \
   'A="b c" git push origin main'
+flip "$ON_DEV" no-commit-to-main.sh ALLOW BLOCK 'an assignment prefix holding an escaped blank, a push naming main on a dev branch' \
+  'A=b\ c git push origin main'
 flip "$ON_MAIN" no-commit-to-main.sh ALLOW BLOCK 'an assignment prefix holding a blank, a commit on main' \
   'A="b c" git commit -m x'
 req GH-273 US-15
 flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an assignment prefix holding a blank, a merge' \
   'A="b c" gh pr merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an assignment prefix holding an escaped blank, a merge' \
+  'A=b\ c gh pr merge 5'
 
 # THE ENV OPERAND: the same assignment quoted whole, behind env.
 req GH-273 US-1
@@ -85,6 +92,8 @@ flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'an assignment holding a single-quote
   "A='b c' bash -c \"git push origin main\""
 flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'an assignment holding an ANSI-C blank in front of a wrapper' \
   "A=\$'b c' bash -c \"git push origin main\""
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'an assignment holding an escaped blank in front of a wrapper, which the anchor reads since round 3' \
+  'A=b\ c bash -c "git push origin main"'
 flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'two assignments with blanks in front of a prefix word and a wrapper' \
   'A="b c" B='"'d e'"' sudo bash -c "git push origin main"'
 flip "$ON_DEV" no-commit-to-main.sh ALLOW BLOCK 'an assignment holding a blank in front of a wrapper, on a dev branch' \
@@ -98,6 +107,8 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'an assignment prefix holding a blank i
   'A="b c" git status'
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'an assignment in front of a wrapper running nothing guarded' \
   'A="b c" bash -c "make test"'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'an escaped assignment in front of a wrapper running nothing guarded' \
+  'A=b\ c bash -c "make test"'
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'the same assignment and wrapper as prose, beside a git status' \
   'echo "A=\"b c\" bash -c x" && git status'
 req GH-273 US-3

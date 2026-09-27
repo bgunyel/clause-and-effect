@@ -120,15 +120,19 @@ requirement GH-166.1 <<'REQ'
   quote is never offered as a command word, so
   `sudo echo --text="run 'git' push origin main"` is prose. The tail offer
   reads three words after the head and no fourth. The wrapper anchor, a
-  regular expression, counts a quoted span holding a blank as one token too, so
-  `sudo -g "domain users" -u root bash -c "git push origin main"` is refused.
+  regular expression, counts a quoted or backslash-escaped span holding a blank
+  as one token too, and steps over an option the same way, so
+  `sudo -g "domain users" -u root bash -c "git push origin main"`,
+  `sudo -g domain\ users -u root bash -c "git push origin main"` and
+  `sudo --prompt="a b" -u root -g grp bash -c "git push origin main"` are
+  refused.
   The same word ends strip an assignment prefix holding a blank, which is
   GH-273's.
 - from: #166, the review of PR #260, round 2, which named the class: a
   question about one token whose answer is a property of the line
 - kind: defect-permitting
 - status: active
-- variants: transformation: pre-sudo-spaced
+- variants: transformation: pre-sudo-spaced pre-sudo-escaped
 - note: round 1 of that review closed #266 with a test asked of each token
   alone, whether it left a quote open, and that test got both halves wrong: it
   stopped at `$'A=b c'` behind env, permitting four pushes and a merge that
@@ -139,7 +143,9 @@ requirement GH-166.1 <<'REQ'
   refused, as `sudo echo a git push origin main` already was. In the
   permitting direction, a head word is the whole quoted string, so
   `'git push origin main'` and `sudo 'git push origin main'` -- a program of
-  that whole name to bash -- are no longer read as git. The bound is pinned at
+  that whole name to bash -- are no longer read as git, and nor are
+  `sudo echo a\ git push origin main` and `sudo -u root a\ git push origin main`,
+  whose escaped blank makes the word `a git`. The bound is pinned at
   the third word and past it: `sudo -u root -g grp -E gh pr merge 5` is
   permitted. #273, an assignment holding a blank, is closed beside this and
   declared in its own issue file: its strip and its env operand are these word
@@ -150,7 +156,12 @@ requirement GH-166.1 <<'REQ'
   `cs_git_args` cuts a quoted global-option value at its blank, so
   `git -c "user.name=a b" push origin main` is permitted (#284, found by the
   sweep for this class), and the gh walk does the same for
-  `gh pr --repo "a b" merge 5` (#194).
+  `gh pr --repo "a b" merge 5` (#194). And the bound is one prefix word's:
+  prefix words nested behind a valued option are not stripped from the tail,
+  so `sudo -u deploy nice -n 10 git push --all origin` is permitted, as `exec`
+  in front of a push is (#304). Nor does a word read through the reader reach
+  a command substitution in double quotes as a value, where the separator walk
+  cuts first: `GH_TOKEN="$(cat t)" gh pr merge 5` is permitted (#303).
 REQ
 shape_pin 'GH-166 GH-166.1'
 variants_pin 'GH-166:transformation GH-166.1:transformation'
@@ -294,6 +305,15 @@ flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a spaced group value and a user in f
   'sudo -g "domain users" -u root bash -c "git push origin main"'
 flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a directory with three blanks in front of a wrapper, one token' \
   'sudo -D "/srv/a b c d" bash -c "git push origin main"'
+# Round 3 of that review found the anchor still missing two of the same: the
+# fifth quoting form, an escaped blank, and its option skip, which was blank-cut
+# while cs_split steps over an option by words. Both permitted at abba1d0.
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a backslash-escaped group value and a user in front of a wrapper' \
+  'sudo -g domain\ users -u root bash -c "git push origin main"'
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'an attached option value holding a blank, skipped as one option in front of a wrapper' \
+  'sudo --prompt="a b" -u root -g grp bash -c "git push origin main"'
+check_in "$PUSH_WT" no-git-push.sh BLOCK 'its control: the same option with no blank in it' \
+  'sudo --prompt=ab -u root -g grp bash -c "git push origin main"'
 req GH-166.1
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'its control: the same prefix in front of a wrapper running nothing guarded' \
   'sudo -D "/srv/a b c d" bash -c "make test"'
@@ -321,6 +341,10 @@ flip "$PUSH_WT" no-git-push.sh BLOCK ALLOW 'THE TRADE: a single-quoted push as t
   "'git push origin main'"
 flip "$PUSH_WT" no-git-push.sh BLOCK ALLOW 'THE TRADE: the same behind sudo' \
   "sudo 'git push origin main'"
+flip "$PUSH_WT" no-git-push.sh BLOCK ALLOW 'THE TRADE: an escaped blank joins a word behind sudo echo, so git is not a word of its own' \
+  'sudo echo a\ git push origin main'
+flip "$PUSH_WT" no-git-push.sh BLOCK ALLOW 'THE TRADE: the same behind sudo -u root, whose command word is a program named a git' \
+  'sudo -u root a\ git push origin main'
 # THE BOUND: three words after the head, and no fourth. At the bound the merge
 # is read; one word past it, it is not, which is the bound and not a claim that
 # nothing longer is written.
@@ -461,7 +485,9 @@ fi
 # "reads its word through the shared reader", which is more than a substring
 # can show; review of PR #260, round 1. What this still cannot see is a call
 # that is dead, or a second walk beside it -- that is review's.
-for consumer in cw_reduce ghreduce wordend printhead; do
+# word_end is the reader's consumer for where a word ends; wordend and printhead
+# call it, and are not walks of their own since round 3 of the review of #260.
+for consumer in cw_reduce ghreduce word_end; do
   body=$(sed -n "/function $consumer(/,/^    }\$\|^  }\$/p" "$HOOKS/lib/command-scan.sh" \
     | grep -v '^[[:space:]]*#')
   case "$body" in

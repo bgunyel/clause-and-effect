@@ -930,8 +930,14 @@ CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|s
 # ...` and `sudo -D "/srv/a b c d" bash -c ...` escaped the wrapper refusal
 # while the same values unspaced were refused. cs_split reads its words through
 # the word reader now; a regular expression cannot call it, so a token here is
-# a run of unquoted characters, double-quoted spans and single-quoted spans --
-# a quoted blank inside one, and the token goes on. A LONE QUOTE is still a
+# a run of unquoted characters, backslash-escaped characters, double-quoted
+# spans and single-quoted spans -- a quoted or escaped blank inside one, and the
+# token goes on. The escape was missing until round 3 of that review: bash has
+# five quoting forms and this read four, so `A=b\ c bash -c ...` and
+# `sudo -g domain\ users -u root bash -c ...` still escaped the wrapper while
+# cs_split read both. The option skip in front of the tokens reuses this token
+# too: it was `-` and a run of non-blanks, so `--prompt="a b"` spent a token
+# slot that cs_split, stepping by words, never spends. A LONE QUOTE is still a
 # character of it, so every token this matched before it still matches and the
 # widening only refuses more; without that alternative an unpaired quote would
 # have ended the match, the other way. What it cannot do is read an escape: a
@@ -972,7 +978,7 @@ CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|s
 # `sudo "x" sh -c 'git push --all origin'` was refused here while cs_split
 # offered no candidate for it. The tail reads whole words now and offers the
 # wrapper too; the verdict, refused, is unchanged and still pinned.
-CS_WRAP_TOKEN="([^[:space:]\"']|\"[^\"]*\"|'[^']*'|[\"'])+[[:space:]]+"
+CS_WRAP_TOKEN="([^[:space:]\"']|\\\\.|\"[^\"]*\"|'[^']*'|[\"'])+[[:space:]]+"
 
 # THE WRAPPER'S OWN COMMAND WORD, issue #117. The spellings cs_split normalises
 # for every other rule cannot be normalised here, because this expression reads
@@ -1038,7 +1044,7 @@ CS_WORD_SPELLING="([\$]?[\"']|[\\\\]|[^[:space:]$CS_SEPARATORS\"']*/)*"
 # quoted token is here serves both. It pairs quotes without reading escapes, so
 # a double quote escaped inside a double-quoted value ends the value, and that
 # wrapper is not refused: the trade recorded for `b"a"sh`, pinned in #273's file.
-CS_WRAPPER_RE="(^[[:space:]]*|[$CS_SEPARATORS][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=($CS_WRAP_TOKEN|[[:space:]]+)|($CS_CONTROL_WORDS)[[:space:]]+|$CS_WORD_SPELLING($CS_WRAP_WORDS)[\\\\\"']*[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
+CS_WRAPPER_RE="(^[[:space:]]*|[$CS_SEPARATORS][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=($CS_WRAP_TOKEN|[[:space:]]+)|($CS_CONTROL_WORDS)[[:space:]]+|$CS_WORD_SPELLING($CS_WRAP_WORDS)[\\\\\"']*[[:space:]]+(-($CS_WRAP_TOKEN|[[:space:]]+))*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
 
 # THE WORD READER, issue #166: what bash makes of one word's quoting, answered
 # once for every consumer below. It is a string of awk function definitions,
@@ -1527,11 +1533,19 @@ cs_split() {
     # it reports only outside a quote. Those blanks are the space and the tab,
     # as they are to bash; a quote never closed runs to the end of the line,
     # which is one word, and reads as prose rather than as commands.
-    function wordend(i,   q, t) {
-      q = tokend(i)
-      t = substr(line, i, q - i)
+    #
+    # ONE FUNCTION, over any string: word_end(s, i) is where the word starting
+    # at the i-th character of s ends, and wordend(i) asks it of the line.
+    # printhead asked the same question of the candidate it prints with a loop
+    # of its own until round 3 of the review of PR #260, which named two
+    # answers to it in one program -- the class this file opens by naming.
+    function word_end(s, i,   m, q, t) {
+      m = length(s)
+      q = i
+      while (q <= m && index(" \t\n\v\f\r", substr(s, q, 1)) == 0) q++
+      t = substr(s, i, q - i)
       if (index(t, "\042") == 0 && index(t, "\047") == 0 && index(t, "\\") == 0) return q
-      wd_start(line, i)
+      wd_start(s, i)
       while (wd_i <= wd_n) {
         q = wd_i
         wd_next()
@@ -1539,6 +1553,7 @@ cs_split() {
       }
       return wd_n + 1
     }
+    function wordend(i) { return word_end(line, i) }
     # The start of the word after the one at r, or 0 where there is none before e.
     function nextword(r, e,   q) {
       q = wordend(r)
@@ -1546,17 +1561,14 @@ cs_split() {
       return skipblank(q)
     }
     function printhead(s,   i, w, k) {
-      i = 1
-      while (i <= length(s) && index(" \t\n\v\f\r", substr(s, i, 1)) == 0) i++
+      # The word bash reads, which a quote carries past a blank: a program
+      # named by a whole quoted string holding a push is not the program its
+      # first token spells, and names no git. See word_end, whose fast path is
+      # the blank-cut token wherever no quote or backslash could move the end.
+      i = word_end(s, 1)
       w = substr(s, 1, i - 1)
       if (index(w, "/") == 0 && index(w, "\042") == 0 \
           && index(w, "\047") == 0 && index(w, "\\") == 0) { print s; return }
-      # The word bash reads, which a quote carries past a blank: a program
-      # named by a whole quoted string holding a push is not the program its
-      # first token spells, and names no git. See wordend.
-      wd_start(s)
-      while (wd_i <= wd_n) { i = wd_i; wd_next(); if (wd_ev == "blank") break; i = wd_i }
-      w = substr(s, 1, i - 1)
       if (cw_reduce(w) == 0) { print s; return }
       for (k = 1; k <= cw_n; k++) printf "%s", cw[k]
       printf "%s\n", substr(s, i)
@@ -1651,9 +1663,15 @@ cs_split() {
       # opening a quote, then at one leaving a quote open, and each got one of
       # those two wrong; see wordend.
       #
-      # Three words, counted after the head: past the longest real leftover,
-      # `sudo -u root -g grp cmd`, whose third word is the command. A fourth is
-      # not offered, and check-hooks.sh pins the bound and the word past it.
+      # Three words, counted after the head: past the longest leftover ONE
+      # prefix word leaves, `sudo -u root -g grp cmd`, whose third word is the
+      # command. A fourth is not offered, and check-hooks.sh pins the bound and
+      # the word past it. Prefix words NESTED behind a valued option are not
+      # reached at all -- `sudo -u deploy nice -n 10 git push --all origin`
+      # leaves `nice` as a tail word and never strips it -- and neither is
+      # `exec`, which is on no list; that is #304, measured permitted at
+      # abba1d0 by the review of PR #260. This sentence claimed the bound was
+      # past every real leftover until round 3 of that review.
       if (wrapped && e >= p) {
         r = p
         for (k = 0; k < 3; k++) {

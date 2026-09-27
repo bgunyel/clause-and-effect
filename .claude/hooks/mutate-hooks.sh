@@ -563,7 +563,8 @@ TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[
 # 200 check results, so the rate was taken again the same way against the merged
 # tree: 274 s, 250 s, 266 s. The slowest is under the reading above, so the
 # constant does not move -- the suite grew without the run getting slower.
-# RE-MEASURED 2026-09-27 on PR #260 (#166, #266, #273), whose rows took the
+# RE-MEASURED on the day MEASURED_ON names, on PR #260 (#166, #266, #273) --
+# the date stands there and not here, once -- whose rows took the
 # suite past a quarter over the size below and turned the staleness check red.
 # Three runs the same way, at 9d809aa: 1118 s, 908 s, 1272 s. NOT ON AN IDLE
 # MACHINE: other sessions were running this suite beside it, and the load
@@ -726,12 +727,15 @@ locale-quote-not-read-as-quoting%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (
 wrapper-anchor-admits-no-dollar%lib/command-scan.sh%/^CS_WORD_SPELLING=/s/(\[\\\$\]?/(/%GH-166%caught
 option-read-without-the-reader%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^    while (wd_next()) if (wd_ev == "text") o = o wd_ch$/    o = t/%GH-166%caught
 word-reader-not-withdrawn%lib/command-scan.sh%s/^if \[ -z "\$CS_WORD_AWK" \]; then$/if false; then/%GH-166%caught
-word-end-cuts-at-every-blank%lib/command-scan.sh%/    function wordend(/,/^    }$/s/^      wd_start(line, i)$/      return q/%GH-166.1%caught
+word-end-cuts-at-every-blank%lib/command-scan.sh%/    function word_end(/,/^    }$/s/^      wd_start(s, i)$/      return q/%GH-166.1%caught
+word-end-fast-path-ignores-the-backslash%lib/command-scan.sh%/    function word_end(/,/^    }$/s/ \&\& index(t, "\\\\") == 0) return q/) return q/%GH-166.1 GH-273%caught
 strip-walk-cuts-at-every-blank%lib/command-scan.sh%/^      wrapped = 0$/,/Walked back rather than matched/s/wordend(/tokend(/g%GH-166.1%caught
 tail-offer-reads-blank-cut-tokens%lib/command-scan.sh%/    function nextword(/,/^    }$/s/q = wordend(r)/q = tokend(r)/%GH-166.1%caught
-head-word-cut-at-its-first-blank%lib/command-scan.sh%/    function printhead(/,/^    }$/s/^      while (wd_i <= wd_n) { i = wd_i; wd_next(); if (wd_ev == "blank") break; i = wd_i }$//%GH-166.1%caught
+head-word-cut-at-its-first-blank%lib/command-scan.sh%/    function printhead(/,/^    }$/s/^      i = word_end(s, 1)$/      i = index(s " ", " ")/%GH-166.1%caught
 tail-offer-bound-two-words%lib/command-scan.sh%s/^        for (k = 0; k < 3; k++) {$/        for (k = 0; k < 2; k++) {/%GH-166.1%caught
 wrapper-assignment-value-stops-at-a-blank%lib/command-scan.sh%/^CS_WRAPPER_RE=/s/=(\$CS_WRAP_TOKEN|\[\[:space:\]\]+)/=[^[:space:]]*[[:space:]]+/%GH-273%caught
+wrapper-token-reads-no-escape%lib/command-scan.sh%/^CS_WRAP_TOKEN=/s/|\\\\\\\\\.|/|/%GH-166.1 GH-273%caught
+wrapper-option-skip-cuts-at-every-blank%lib/command-scan.sh%/^CS_WRAPPER_RE=/s/(-(\$CS_WRAP_TOKEN|\[\[:space:\]\]+))\*/(-[^[:space:]]*[[:space:]]+)*/%GH-166.1%caught
 wrapper-token-stops-at-a-quoted-blank%lib/command-scan.sh%s/^CS_WRAP_TOKEN=.*/CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"/%GH-166.1%caught
 tail-offer-bound-four-words%lib/command-scan.sh%s/^        for (k = 0; k < 3; k++) {$/        for (k = 0; k < 4; k++) {/%GH-166.1%caught
 api-read-taken-for-a-write%no-pr-decisions.sh%/^gh_api_is_write()/,/^}/s/^  return 1$/  return 0/%FR-20%caught

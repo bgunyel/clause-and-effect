@@ -1431,6 +1431,17 @@ it has no entry above (Q16).
   Cited in GH-166.1's note and at the head of `lib/command-scan.sh`. Found by
   the class sweep in round 2 of the review of #260, pre-existing at abba1d0; it
   adds its requirements in the pull request that fixes it
+- #303: a command substitution in double quotes, as an assignment or option
+  value, hides the command behind it: `GH_TOKEN="$(cat t)" gh pr merge 5` is
+  permitted. Cited in the GH-166 issue file among what a word read through the
+  reader does not reach. Pre-existing, found by the review of #260, round 3;
+  it adds its requirements in the pull request that fixes it
+- #304: nested prefix words behind a valued option, and `exec`, on no prefix
+  list: `sudo -u deploy nice -n 10 git push --all origin` and
+  `exec git push --all origin` are permitted. Cited in GH-166.1's note and
+  beside the tail offer's bound in `lib/command-scan.sh`. Pre-existing, found
+  by the review of #260, round 3; it adds its requirements in the pull request
+  that fixes it
 - #265: a prefix word's own options recognised by their raw first character, so
   `sudo "-u" root git push origin main` is permitted. Cited in GH-166's note and
   at the head of `lib/command-scan.sh`. Pre-existing, found by the review of

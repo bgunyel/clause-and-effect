@@ -89,6 +89,8 @@ check_in "$PUSH_WT" no-git-push.sh ALLOW 'a single-quoted prose string behind su
   "sudo echo 'git push origin main'"
 check_in "$PUSH_WT" no-git-push.sh ALLOW 'a double-quoted prose string behind sudo echo' \
   'sudo echo "git push origin main"'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a backslash-escaped prose word behind sudo echo, the fifth quoting form' \
+  'sudo echo git\ push\ origin\ main'
 req GH-266 US-13
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a double-quoted command word behind sudo -u root, gh pr view' \
   'sudo -u root "gh" pr view 5'
