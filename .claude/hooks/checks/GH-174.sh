@@ -76,7 +76,9 @@ requirement GH-174.1 <<'REQ'
   questions turned five rows red: both `holds`, the `lacks`, the row that
   evaluates the guard under a `jq` function, and GH-174.2's row over the
   suite. The guard's range evaluated as `:` turned three red: both `holds`
-  and the control that must fail. Neither turned the other rows red.
+  and the control that must fail. Neither turned the other rows red. Both
+  were run again in review round 2, against the rows as they stand, with
+  the same five and the same three.
   The text's `nothing` is held by the row under a `jq` function and not by
   the `lacks`, which names one spelling: `command -v`, `type`, `hash` and
   `compgen -c` all answer for a function under the jq-less PATH, as a probe
@@ -146,7 +148,8 @@ requirement GH-174.2 <<'REQ'
   the row over the suite, on the fixture's own `hash` line; review's two
   shapes inserted into `checks/unsplit.sh` -- a question opening a payload
   quoted for `bash -c`, and `command -p -v` -- turned the row over the
-  suite red, where the first expression left them green.
+  suite red, where the first expression left them green. Deleting the guard
+  against no file named turned that row red, and it alone.
 REQ
 shape_pin 'GH-174.1:static GH-174.2:static'
 
