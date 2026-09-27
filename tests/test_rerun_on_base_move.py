@@ -627,8 +627,16 @@ def four_slow_prs(fake):
         fake.serve(RUNS.replace(HEAD, h),
                    {"workflow_runs": [run("in_progress", id=40 + pr, title=f"#{pr} slow")]})
         fake.serve(f"repos/{REPO}/actions/runs/{40 + pr}", {"status": "in_progress"})
-    return [f"POST repos/{REPO}/actions/runs/{id}/{verb}"
-            for verb in ("cancel", "rerun") for id in (47, 48, 49, 50)]
+    return [
+        f"POST repos/{REPO}/actions/runs/47/cancel",
+        f"POST repos/{REPO}/actions/runs/48/cancel",
+        f"POST repos/{REPO}/actions/runs/49/cancel",
+        f"POST repos/{REPO}/actions/runs/50/cancel",
+        f"POST repos/{REPO}/actions/runs/47/rerun",
+        f"POST repos/{REPO}/actions/runs/48/rerun",
+        f"POST repos/{REPO}/actions/runs/49/rerun",
+        f"POST repos/{REPO}/actions/runs/50/rerun",
+    ]
 
 
 def test_slow_pull_requests_stay_within_the_deadline_and_every_one_is_rerun(fake):

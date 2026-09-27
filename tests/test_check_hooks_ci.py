@@ -235,14 +235,16 @@ SOME CHECKS FAILED
 
 
 def report(tmp_path, log_text, exit_status, seconds="204", outcome="success"):
-    """`exit_status=None` is a suite step that wrote none: it was stopped."""
+    """`exit_status=None` is a suite step that wrote none: it was stopped.
+    `seconds=None` is one that never wrote `started`: the suite never began."""
     log = tmp_path / "check-hooks.log"
     log.write_text(log_text)
     paths = {name: tmp_path / name for name in ("result.json", "summary.md", "github_output")}
     status_args = [] if exit_status is None else ["--exit-status", str(exit_status)]
+    seconds_args = [] if seconds is None else ["--seconds", seconds]
     result = run_script(
         "report", "--log", str(log), *status_args, "--suite-outcome", outcome,
-        "--seconds", seconds, "--tested-commit", "abc123",
+        *seconds_args, "--tested-commit", "abc123",
         "--json", str(paths["result.json"]), "--summary", str(paths["summary.md"]),
         "--output", str(paths["github_output"]),
     )
@@ -654,3 +656,16 @@ def test_report_says_a_cancelled_suite_did_not_exit_above_its_failing_rows(tmp_p
     lines = paths["summary.md"].read_text().splitlines()
     assert lines.index("The suite did not exit: the run was cancelled while it ran.") \
         < lines.index("### Failing rows (2)")
+
+
+def test_report_does_not_call_a_step_that_failed_before_the_suite_a_timeout(tmp_path):
+    """Outcome `failure` is a timeout only once the suite has started: a step
+    that failed before writing `started` never ran it, and nothing timed out."""
+    result, paths = report(tmp_path, "", None, seconds=None, outcome="failure")
+
+    assert result.returncode == 1
+    assert ("::error::the suite step wrote no exit status and its outcome is 'failure', "
+            "which is neither a cancel nor a timeout") in result.stdout.splitlines()
+    data = json.loads(paths["result.json"].read_text())
+    assert (data["exit_status"], data["ended"], data["seconds"]) == (None, "unknown", None)
+    assert "seconds=" in paths["github_output"].read_text().splitlines()

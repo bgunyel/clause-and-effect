@@ -52,11 +52,13 @@ Two subcommands, one per thing a green run has to be true about:
     ``cancelled`` or ``timed-out`` by what the step's outcome reads for each
     (observed on real runs, cited in check-hooks.yml's header), else
     ``unknown``, which fails this. ``exit_status`` is null unless the suite
-    exited. Before #208 a missing status was written as 124, so a routine
-    cancel -- 21 of 60 runs -- read as a 20-minute hang.
+    exited, and ``seconds`` unless it started. Before #208 a missing status was
+    written as 124, so a routine cancel -- 21 of the last 60 runs when #208 was
+    triaged on 2026-09-25 -- read as a 20-minute hang.
 
     The job's colour comes from the suite's exit status, not from here. This
-    exits 1 only when that status claims a pass the log does not support -- an
+    exits 1 when the step's ending is ``unknown``, and otherwise only when that
+    status claims a pass the log does not support -- an
     exit 0 with a failing row, with a log whose last non-empty line is not
     ``ALL CHECKS PASSED``, or with no row at all -- because a green job there
     would be the lie.
@@ -268,20 +270,23 @@ def clip_from_end(lines, budget):
     return kept, sum(map(line_bytes, lines)) - sum(map(line_bytes, kept))
 
 
-def how_it_ended(exit_status, suite_outcome):
+def how_it_ended(exit_status, suite_outcome, started):
     """
     "exited", "cancelled", "timed-out" or "unknown" (#208). The suite step
     writes the suite's exit status whatever it is, so a status present means
     the suite exited, even under a cancel that landed after it. A status absent
-    means the step was stopped from outside, and its outcome says by what:
-    OUTCOME_CANCELLED and OUTCOME_TIMED_OUT are what GitHub was observed to
-    report for each, on the runs the workflow's header cites.
+    means the step was stopped, and its outcome says by what: OUTCOME_CANCELLED
+    and OUTCOME_TIMED_OUT are what GitHub was observed to report for each, on
+    the runs the workflow's header cites. A failed step is a timeout only once
+    the suite had `started`: from there to the exit status nothing but the
+    suite runs, under `set +e`, so only a timeout fails it. Before that, a
+    failed command fails it too, and that is not a timeout.
     """
     if exit_status is not None:
         return "exited"
     if suite_outcome == OUTCOME_CANCELLED:
         return "cancelled"
-    if suite_outcome == OUTCOME_TIMED_OUT:
+    if suite_outcome == OUTCOME_TIMED_OUT and started:
         return "timed-out"
     return "unknown"
 
@@ -293,7 +298,7 @@ def report(log_path, exit_status, suite_outcome, seconds, tested_commit, json_pa
     passed, failing, verdict = parse_log(text)
     failed = len(failing)
     results = passed + failed
-    ended = how_it_ended(exit_status, suite_outcome)
+    ended = how_it_ended(exit_status, suite_outcome, started=seconds is not None)
 
     problems = []
     if ended == "unknown":
@@ -324,7 +329,7 @@ def report(log_path, exit_status, suite_outcome, seconds, tested_commit, json_pa
         json.dump(data, fh, indent=2)
         fh.write("\n")
     append_output(output, [("results", results), ("passed", passed), ("failed", failed),
-                           ("seconds", seconds),
+                           ("seconds", "" if seconds is None else seconds),
                            ("exit_status", "" if exit_status is None else exit_status),
                            ("ended", ended)])
 
@@ -333,7 +338,7 @@ def report(log_path, exit_status, suite_outcome, seconds, tested_commit, json_pa
         "\n",
         "| results | passed | failed | seconds | exit status | ended | tested commit |\n",
         "|---|---|---|---|---|---|---|\n",
-        f"| {results} | {passed} | {failed} | {seconds} | "
+        f"| {results} | {passed} | {failed} | {'–' if seconds is None else seconds} | "
         f"{'–' if exit_status is None else exit_status} | {ended} | `{tested_commit}` |\n",
         "\n",
     ]
@@ -402,7 +407,8 @@ def main(argv=None):
                    help="the suite's; omitted when the suite step wrote none")
     r.add_argument("--suite-outcome", required=True,
                    help="steps.<suite>.outcome, which says what stopped a step that wrote none")
-    r.add_argument("--seconds", type=int, required=True)
+    r.add_argument("--seconds", type=int,
+                   help="since the suite started; omitted when it never did")
     r.add_argument("--tested-commit", required=True)
     r.add_argument("--json", required=True)
     r.add_argument("--summary", required=True, help="$GITHUB_STEP_SUMMARY")

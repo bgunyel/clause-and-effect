@@ -47,7 +47,10 @@
 # stamps the number into the run's title (`run-name: '#N <title>'`), which the
 # record carries as `display_title`, and a run is this pull request's when its
 # title opens with `#N `. A run started before the stamp existed has none; it
-# is taken only when its `pull_requests` is exactly this one pull request.
+# is taken only when its `pull_requests` is exactly this one pull request --
+# which a closed pull request's run on the same head also satisfies, since the
+# field lists open ones only. That run is re-run on the shared head, likely red
+# against the closed one's base; the case arises only in the transition.
 #
 # THE TRADE, for those unstamped runs only. GitHub leaves `pull_requests` empty
 # on a run for a pull request from a fork, so an unstamped fork run matches
@@ -73,16 +76,19 @@
 # mergeability computation for all of them -- and the ones not yet rebuilt are
 # then polled together, round by round, as the cancelled runs are later. So a
 # slow pull request costs the others nothing. Each pull request is read at most
-# WAIT_TRIES times in each wait, and no wait sleeps past DEADLINE_SECONDS after
-# the job started. The default 600 is half the job's 20-minute timeout: the two
-# waits at their default tries take 2 x 36 x 5 = 360 s of sleep, and what the
-# deadline leaves is for the requests, a handful per pull request, which it does
-# not bound. A pull request still unresolved when a wait ends is re-run anyway,
-# with a warning that says which bound ended it.
+# WAIT_TRIES times in each wait, and no wait goes on past DEADLINE_SECONDS after
+# this script started: the deadline is read off the clock, so it counts the
+# waits' own requests as well as their sleeps, and the last sleep is cut to it.
+# The default 600 is half the job's 20-minute timeout. The two waits at their
+# default tries sleep at most 2 x 35 x 5 = 350 s, and what the deadline leaves
+# is for the requests after the waits, a handful per pull request, which nothing
+# bounds but the job's timeout. A pull request still unresolved when a wait
+# ends is re-run anyway, with a warning that says which bound ended it.
 #
 # A RUN ALREADY PROVEN CURRENT IS LEFT ALONE (#208, item 4), to save the
-# runner-time of repeating it -- 308 s for run 35836366963. The proof has to be
-# positive, because a wrong skip is a stale green: the run completed with
+# runner-time of repeating it -- 308 s for run 35836366963 (#206,
+# 2026-09-23). The proof has to be positive, because a wrong skip is a stale
+# green: the run completed with
 # success or failure, so the suite ran to its end, and the commit it tested is
 # the pull request's merge commit as it stands, whose first parent is TIP and
 # whose second is the head the pull request has now. The tested commit is not
