@@ -644,3 +644,13 @@ def test_report_refuses_a_missing_exit_status_it_cannot_explain(tmp_path, outcom
     ) in result.stdout.splitlines()
     data = json.loads(paths["result.json"].read_text())
     assert (data["exit_status"], data["ended"]) == (None, "unknown")
+
+
+def test_report_says_a_cancelled_suite_did_not_exit_above_its_failing_rows(tmp_path):
+    result, paths = report(tmp_path, FAILING_LOG.replace("SOME CHECKS FAILED", ""), None,
+                           outcome="cancelled")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    lines = paths["summary.md"].read_text().splitlines()
+    assert lines.index("The suite did not exit: the run was cancelled while it ran.") \
+        < lines.index("### Failing rows (2)")

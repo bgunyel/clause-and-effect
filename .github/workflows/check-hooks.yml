@@ -72,7 +72,7 @@
 #     run 36320798357, with the step's timeout set to 1 minute for the purpose;
 #   - a workflow cancel: outcome `cancelled`, the job cancelled -- run
 #     36304585775 (the step's conclusion, read from the jobs API) and
-#     run CANCEL_RUN_ID (the value the report step logged).
+#     run 36321111965 (the value the report step logged).
 # A missing status with any other outcome is `unknown` and fails the report.
 #
 # #203 will add `merge_group`. For that event `github.sha` is the merge-queue
