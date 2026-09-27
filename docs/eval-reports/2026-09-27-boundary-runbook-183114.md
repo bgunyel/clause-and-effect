@@ -247,3 +247,31 @@ above.
 - **The name's `183114`** is the start of §5's `timeout/` run, 18:31:14. §1b's
   `EnterWorktree` run was at 18:37:32 and §1c's `WorktreeCreate` run at
   18:38:05; the runbook now says the time only keeps two runs on one day apart.
+
+## Addendum, 2026-09-27, §2 re-run after rev-agent-110's round 1 on PR #287
+
+**§2's match above is evidence of less than GH-110.1 says.** The third call's
+filter read neither the ruleset's `target` nor `.conditions.ref_name.exclude`.
+rev-agent-110 measured three rulesets that GH-110.1 would call broken, each
+printing the literal above byte for byte: one excluding `refs/heads/main`, one
+excluding `~ALL`, and one switched to target tags. The assistant wrote that
+filter, and the "Matches" above is true of it and says nothing of the two
+fields. The runbook's §2 now reads both, and the assistant re-ran the section
+at 20:26:52, Claude Code 2.1.283, against the runbook as committed with this
+addendum:
+
+```
+$ gh api repos/bgunyel/clause-and-effect --jq .default_branch
+main
+$ gh api repos/bgunyel/clause-and-effect/rulesets --jq '.[] | select(.name == "main-branch-protection") | .id'
+22380642
+$ gh api repos/bgunyel/clause-and-effect/rulesets/22380642 --jq '{target, enforcement, include: .conditions.ref_name.include, exclude: .conditions.ref_name.exclude, bypass_actors, requires_pull_request: ([.rules[].type] | index("pull_request") != null)}'
+{"bypass_actors":[],"enforcement":"active","exclude":[],"include":["~DEFAULT_BRANCH"],"requires_pull_request":true,"target":"branch"}
+```
+
+Matches the new expected literal. The assistant then ran the new filter with
+local `jq -S` over the same ruleset's JSON, saved and mutated one field at a
+time, never over the live ruleset: the unmutated JSON matched the literal, and
+each of six mutants differed from it — `exclude` set to `["refs/heads/main"]`
+and to `["~ALL"]`, `target` set to `tag`, `enforcement` set to `evaluate`, a
+bypass actor added, and the `pull_request` rule removed.

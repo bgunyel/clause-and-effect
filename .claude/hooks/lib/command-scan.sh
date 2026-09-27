@@ -1600,8 +1600,9 @@ fi
 # refuses never wrote the log line after its sleep, so it was killed; the
 # `touch` it would have refused ran, 2.24 s after the hook started; and the
 # agent was shown `(Bash completed with no output)`, not an error, with no word
-# of the hook. The same hook refusing at once blocked the same call. So the kill permits, and it is silent: nothing tells the agent, or the
-# person reading its transcript, that a guard did not decide. The record is
+# of the hook. The same hook refusing at once blocked the same call. So the
+# kill permits, and it is silent: nothing tells the agent, or the person
+# reading its transcript, that a guard did not decide. The record is
 # docs/eval-reports/2026-09-27-boundary-runbook-183114.md; the interactive
 # front end was not watched.
 #

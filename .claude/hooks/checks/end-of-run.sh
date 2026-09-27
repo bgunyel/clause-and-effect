@@ -351,10 +351,28 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
     nother = split(ENVIRON["REQ_SPLIT_OTHER"], splitother, "\n")
     for (sp = 1; sp <= nother; sp++)
       if (splitother[sp] != "") problem[++nproblem] = "requirements/" splitother[sp] ": not a regular file, where each entry is a file of its own"
-    runbook_read = 0
+    # The runbook: its `## §<n>` sections, and the **Verifies** line each
+    # opens with (#110). A `## ` heading of any other shape ends the section
+    # before it, as it ends an entry in requirements.md, so a Verifies line
+    # under `## Appendix` is not §6's second one; it is kept as a line of no
+    # section.
+    runbook_read = 0; rbin = ""; rbhead = ""
     while ((getline line < runbook) > 0) {
       runbook_read = 1
-      if (line ~ /^## §[0-9]+( |$)/) { s = line; sub(/^## §/, "", s); sub(/[^0-9].*$/, "", s); rbsec[s] = 1 }
+      if (line ~ /^## §[0-9]+( |$)/) {
+        s = line; sub(/^## §/, "", s); sub(/[^0-9].*$/, "", s)
+        if (!(s in rbsec)) rbsecorder[++nrbsec] = s
+        rbsec[s] = 1; rbin = s
+      } else if (line ~ /^## /) { rbin = ""; rbhead = substr(line, 4) }
+      else if (line ~ /^\*\*Verifies:\*\*/) {
+        if (rbin == "") { rbstray[++nrbstray] = (rbhead == "" ? "above the first section" : "under \"" rbhead "\""); continue }
+        rbnverifies[rbin]++
+        rest = line
+        while (match(rest, /(US|FR|GH)-[1-9][0-9]*(\.[1-9][0-9]*)?/)) {
+          vid = substr(rest, RSTART, RLENGTH); rest = substr(rest, RSTART + RLENGTH)
+          if (!((rbin, vid) in rbnames)) { rbnames[rbin, vid] = 1; rbnameorder[++nrbname] = rbin SUBSEP vid }
+        }
+      }
     }
     close(runbook)
 
@@ -531,6 +549,46 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
       emit("FAIL", "GH-104.3", "the suite cites " H n ", which has no entry and no reason")
     }
     if (nbad == 0) emit("ok", "GH-104.3", "every issue the suite cites has an entry or a reason")
+
+    # --- the runbook's Verifies lines (#110) ---------------------------------
+    # An entry points at a section by its verify field as take() read it,
+    # trimmed and joined across continuation lines, and whatever its status:
+    # a Verifies line says what points at its section, and a gap entry's
+    # verify points as much as an active one's. Its grammar is the one the
+    # resolution above accepts, so a verify that check refuses points at no
+    # section here either.
+    nrbwant = 0; nrbbad = 0; nrbhere = 0
+    for (i = 1; i <= nreq; i++) {
+      v = get(order[i], "verify")
+      if (v ~ /^runbook §[0-9]+$/) { s = v; sub(/^runbook §/, "", s); pointsat[order[i]] = s; nrbwant++ }
+    }
+    # Nothing unread agrees. A runbook that was not read, or that holds no
+    # section, compares nothing, and an empty comparison is not an agreement.
+    if (nreq == 0) rbbad[++nrbbad] = "nothing was read out of requirements.md and requirements/, so the runbook's Verifies lines were compared with nothing"
+    if (!runbook_read) {
+      if (nrbwant > 0) rbbad[++nrbbad] = "the runbook was not read, so no Verifies line was compared with the " nrbwant " entries whose verify names a section of it"
+    } else if (nrbsec == 0) rbbad[++nrbbad] = "the runbook holds no ## §<n> heading, so no Verifies line was compared with anything"
+    for (j = 1; j <= nrbstray; j++) rbbad[++nrbbad] = "a Verifies line " rbstray[j] ", which is no ## §<n> section of the runbook"
+    for (j = 1; j <= nrbsec; j++) {
+      s = rbsecorder[j]
+      if (!(s in rbnverifies)) rbbad[++nrbbad] = "§" s ": no Verifies line, where it has one"
+      else if (rbnverifies[s] > 1) rbbad[++nrbbad] = "§" s ": " rbnverifies[s] " Verifies lines, where it has one"
+      for (i = 1; i <= nreq; i++)
+        if ((order[i] in pointsat) && pointsat[order[i]] == s) {
+          nrbhere++
+          if (!((s, order[i]) in rbnames)) rbbad[++nrbbad] = "§" s ": " order[i] " points here, and the Verifies line does not name it"
+        }
+    }
+    for (j = 1; j <= nrbname; j++) {
+      split(rbnameorder[j], p, SUBSEP)
+      if (!((p[2] in pointsat) && pointsat[p[2]] == p[1]))
+        rbbad[++nrbbad] = "§" p[1] ": the Verifies line names " p[2] ", whose verify is not runbook §" p[1]
+    }
+    for (j = 1; j <= nrbbad; j++) emit("FAIL", "GH-110.5", rbbad[j])
+    if (nrbbad == 0)
+      emit("ok", "GH-110.5", runbook_read \
+        ? "each of the runbook's " nrbsec " sections has one Verifies line, naming exactly the entries whose verify is that section, " nrbhere " in all" \
+        : "no entry's verify names a section of the runbook, and no runbook was read")
   }
 AWK
 )
@@ -662,7 +720,8 @@ ok${TAB}GH-104.1${TAB}every check carries a tag and a direction
 ok${TAB}FR-46 FR-33${TAB}every active requirement is covered
 ok${TAB}FR-45 FR-46${TAB}requirements.md and requirements/ have the shape this suite holds: 7 entries by ID, 6 of them off the both-directions rule
 ok${TAB}FR-47${TAB}every stage-ticket criterion is carried or dropped, and each ticket has all of its criteria
-ok${TAB}GH-104.3${TAB}every issue the suite cites has an entry or a reason" \
+ok${TAB}GH-104.3${TAB}every issue the suite cites has an entry or a reason
+ok${TAB}GH-110.5${TAB}no entry's verify names a section of the runbook, and no runbook was read" \
   "$(req_fixture "$REQ_FIX/clean")"
 
 # The four mutations #104 names, each one edit to one file of the fixture.
@@ -882,6 +941,117 @@ holds 'and does not say it of a gap no check can reach' \
   "$(requirements_read matrix "$REQ_FIX/seam-gap/requirements.md" "$REQ_FIX/clean/ledger" \
        "$REQ_FIX/clean/suite" "$REQ_FIX/clean/root" "$REQ_FIX/clean/runbook.md" '37:2' "$FIX_SHAPE")" \
   "FR-2  gap → ${H}7  not asked (0 refusing, 0 permitting, 0 static, seam: none, verify: tests/present.py)"
+
+echo "--- #110: every runbook section names the requirements that point at it ---"
+# WHY THESE ARE HERE AND NOT IN THE #110 ISSUE FILE, which declares GH-110.5.
+# The comparison is a part of the program above, which is sourced after every
+# issue file, and it is there so that an entry's verify is read with the one
+# grammar that resolves it: trimmed, joined across continuation lines, and
+# scoped by `##` headings. The first version, in the pull request that closed
+# #110, was a second copy in the issue file, and its review measured the copy
+# missing a verify written with a trailing blank and one wrapped onto a
+# continuation line, both of which #104 resolves, so a runbook that dropped
+# the entry passed with the suite green.
+#
+# The fixture is the clean one with a runbook, and with three entries pointing
+# into it in the spellings the copy missed: FR-2's verify with a trailing blank,
+# GH-5.2's wrapped, and FR-3's on a gap entry, which points as much as an active
+# one does. Only the GH-110.5 rows are compared; the rest of the findings are
+# the fixture's changed shape, which the checks above are about.
+RB_FIX="$REQ_FIX/runbook"
+cp -r "$REQ_FIX/clean" "$RB_FIX"
+sed -i -e 's|^- verify: tests/present.py$|- verify: runbook §1 |' \
+       -e "s|^- status: gap → ${H}7\$|&\\n- seam: none\\n- verify: runbook §2|" "$RB_FIX/requirements.md"
+printf '%s\n' '### GH-5.2' '- text: an entry whose verify is wrapped' '- from: the fixture' \
+  '- kind: doc-claim' '- status: active' '- seam: none' '- verify: runbook' '  §1' > "$RB_FIX/requirements/GH-5.2.md"
+printf '%s\n' '# a runbook' '## How to run it' 'prose' '## §1 one' '**Verifies:** FR-2, GH-5.2.' 'text' \
+  '### §1a a sub-section' '## §2 two' '**Verifies:** FR-3.' 'text' > "$RB_FIX/runbook.md"
+grep -qx -- '- verify: runbook §1 ' "$RB_FIX/requirements.md" && grep -qx -- '- verify: runbook §2' "$RB_FIX/requirements.md" || {
+  echo "the #110 runbook fixture was not created; the checks against it prove nothing" >&2
+  exit 1
+}
+rb_findings() {  # rb_findings <dir> -- the GH-110.5 rows of the findings for the fixture in <dir>
+  req_fixture "$1" | awk -F'\t' '$2 == "GH-110.5"'
+}
+rb_mutant() {  # rb_mutant <name> <file> <sed script> -- req_mutant, from the runbook fixture
+  local dir="$REQ_FIX/$1"
+  cp -r "$RB_FIX" "$dir"
+  sed -i -e "$3" "$dir/$2"
+  if cmp -s "$RB_FIX/$2" "$dir/$2"; then
+    echo "the runbook mutant $1 did not change $2; the checks against it prove nothing" >&2
+    exit 1
+  fi
+}
+
+req GH-110.5
+tok 'a runbook whose Verifies lines name what points at each section agrees, however the verify is spelled' \
+  "ok${TAB}GH-110.5${TAB}each of the runbook's 2 sections has one Verifies line, naming exactly the entries whose verify is that section, 3 in all" \
+  "$(rb_findings "$RB_FIX")"
+rb_mutant rb-dropped-wrapped runbook.md 's/^\*\*Verifies:\*\* FR-2, GH-5.2\.$/**Verifies:** FR-2./'
+tok 'one that leaves out an entry whose verify is wrapped onto a second line does not' \
+  "FAIL${TAB}GH-110.5${TAB}§1: GH-5.2 points here, and the Verifies line does not name it" \
+  "$(rb_findings "$REQ_FIX/rb-dropped-wrapped")"
+rb_mutant rb-dropped-blank runbook.md 's/^\*\*Verifies:\*\* FR-2, GH-5.2\.$/**Verifies:** GH-5.2./'
+tok 'nor one that leaves out an entry whose verify ends in a blank' \
+  "FAIL${TAB}GH-110.5${TAB}§1: FR-2 points here, and the Verifies line does not name it" \
+  "$(rb_findings "$REQ_FIX/rb-dropped-blank")"
+rb_mutant rb-dropped-gap runbook.md 's/^\*\*Verifies:\*\* FR-3\.$/**Verifies:** nothing./'
+tok 'nor one that leaves out a gap entry pointing at its section' \
+  "FAIL${TAB}GH-110.5${TAB}§2: FR-3 points here, and the Verifies line does not name it" \
+  "$(rb_findings "$REQ_FIX/rb-dropped-gap")"
+rb_mutant rb-extra runbook.md 's/^\*\*Verifies:\*\* FR-2, GH-5.2\.$/**Verifies:** FR-2, GH-5.2, FR-1./'
+tok 'nor one naming an entry whose verify is no runbook section' \
+  "FAIL${TAB}GH-110.5${TAB}§1: the Verifies line names FR-1, whose verify is not runbook §1" \
+  "$(rb_findings "$REQ_FIX/rb-extra")"
+rb_mutant rb-moved runbook.md 's/^\*\*Verifies:\*\* FR-3\.$/**Verifies:** FR-3, GH-5.2./'
+tok 'nor one naming, from under requirements/, an entry that points at another section' \
+  "FAIL${TAB}GH-110.5${TAB}§2: the Verifies line names GH-5.2, whose verify is not runbook §2" \
+  "$(rb_findings "$REQ_FIX/rb-moved")"
+rb_mutant rb-none runbook.md '/^\*\*Verifies:\*\* FR-3\.$/d'
+tok 'nor a section with no Verifies line, whose entries it also names as missing' \
+  "FAIL${TAB}GH-110.5${TAB}§2: no Verifies line, where it has one
+FAIL${TAB}GH-110.5${TAB}§2: FR-3 points here, and the Verifies line does not name it" \
+  "$(rb_findings "$REQ_FIX/rb-none")"
+rb_mutant rb-twice runbook.md 's/^\*\*Verifies:\*\* FR-3\.$/&\n&/'
+tok 'nor a section with a second Verifies line, which a reader would take for a correction' \
+  "FAIL${TAB}GH-110.5${TAB}§2: 2 Verifies lines, where it has one" \
+  "$(rb_findings "$REQ_FIX/rb-twice")"
+rb_mutant rb-appendix runbook.md '$s/$/\n## Appendix\n**Verifies:** FR-3./'
+tok 'a heading of another shape ends a section, so a Verifies line under it is no section'"'"'s second one' \
+  "FAIL${TAB}GH-110.5${TAB}a Verifies line under \"Appendix\", which is no ## §<n> section of the runbook" \
+  "$(rb_findings "$REQ_FIX/rb-appendix")"
+rb_mutant rb-renamed runbook.md 's/^## §\([0-9]\)/## Section \1/'
+tok 'a runbook whose headings are no longer ## §<n> compares nothing, and says so' \
+  "FAIL${TAB}GH-110.5${TAB}the runbook holds no ## §<n> heading, so no Verifies line was compared with anything
+FAIL${TAB}GH-110.5${TAB}a Verifies line under \"Section 1 one\", which is no ## §<n> section of the runbook
+FAIL${TAB}GH-110.5${TAB}a Verifies line under \"Section 2 two\", which is no ## §<n> section of the runbook" \
+  "$(rb_findings "$REQ_FIX/rb-renamed")"
+cp -r "$RB_FIX" "$REQ_FIX/rb-absent"
+rm "$REQ_FIX/rb-absent/runbook.md"
+tok 'a runbook that is not there is read as not read, never as agreeing' \
+  "FAIL${TAB}GH-110.5${TAB}the runbook was not read, so no Verifies line was compared with the 3 entries whose verify names a section of it" \
+  "$(rb_findings "$REQ_FIX/rb-absent")"
+cp -r "$RB_FIX" "$REQ_FIX/rb-no-requirements"
+rm "$REQ_FIX/rb-no-requirements/requirements.md"
+tok 'a requirements.md that is not there leaves what it held named by no entry' \
+  "FAIL${TAB}GH-110.5${TAB}§1: the Verifies line names FR-2, whose verify is not runbook §1
+FAIL${TAB}GH-110.5${TAB}§2: the Verifies line names FR-3, whose verify is not runbook §2" \
+  "$(rb_findings "$REQ_FIX/rb-no-requirements")"
+mkdir -p "$REQ_FIX/rb-empty"
+: > "$REQ_FIX/rb-empty/requirements.md"
+printf '%s\n' '## §1 one' '**Verifies:** nothing.' > "$REQ_FIX/rb-empty/runbook.md"
+tok 'a runbook compared with no entry at all is not called in agreement, though nothing it names is wrong' \
+  "FAIL${TAB}GH-110.5${TAB}nothing was read out of requirements.md and requirements/, so the runbook's Verifies lines were compared with nothing" \
+  "$(rb_findings "$REQ_FIX/rb-empty")"
+# A runbook that is a directory aborts the program under mawk, as a
+# requirements.md that is one does; the live read below fails on the status, and
+# what this asks is that no agreement is printed before the abort.
+cp -r "$RB_FIX" "$REQ_FIX/rb-directory"
+rm "$REQ_FIX/rb-directory/runbook.md"
+mkdir "$REQ_FIX/rb-directory/runbook.md"
+OUT=$(req_fixture "$REQ_FIX/rb-directory" 2>/dev/null; echo "status $?")
+holds 'a runbook that is a directory stops the program, which the live read fails on' "$OUT" 'status 2'
+lacks 'and nothing is said to agree before it stops' "$OUT" "ok${TAB}GH-110.5"
 
 echo "--- #200: every GH- entry is a file of its own, beside requirements.md ---"
 # The `GH-` entries were one section of requirements.md, appended to by every

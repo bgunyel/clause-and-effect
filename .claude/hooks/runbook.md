@@ -171,10 +171,13 @@ git fetch origin
 git merge-base --is-ancestor origin/main origin/dev-NN; echo $?
 ```
 
-Expected: `0`, and the SessionStart report's line reads
-`main ancestry: origin/main is an ancestor of origin/dev-NN`. `1` and the line
-reading `main ancestry: origin/main is NOT an ancestor of origin/dev-NN` agree
-as well; what differs is the two disagreeing.
+Expected: `0`, and the SessionStart report's line opens
+`main ancestry: origin/main is an ancestor of origin/dev-NN`. `1` and a line
+opening `main ancestry: origin/main is NOT an ancestor of origin/dev-NN -- a branch cut`
+agree as well; what differs is the two disagreeing. Each literal is the line's
+opening and not the whole of it: the `NOT` line goes on for two more lines, and
+either ends in ` (read against refs the failed fetch left behind)` when the
+report's own fetch failed, which is §6's case.
 
 **When it differs:** a sub-issue of #36, as *When an observation differs* says.
 A `0	0` that is not, or an upstream that is set, is the #99 defect back.
@@ -193,13 +196,13 @@ gh api repos/bgunyel/clause-and-effect --jq .default_branch
 gh api repos/bgunyel/clause-and-effect/rulesets \
   --jq '.[] | select(.name == "main-branch-protection") | .id'
 gh api repos/bgunyel/clause-and-effect/rulesets/<id> \
-  --jq '{enforcement, include: .conditions.ref_name.include, bypass_actors, requires_pull_request: ([.rules[].type] | index("pull_request") != null)}'
+  --jq '{target, enforcement, include: .conditions.ref_name.include, exclude: .conditions.ref_name.exclude, bypass_actors, requires_pull_request: ([.rules[].type] | index("pull_request") != null)}'
 ```
 
 Expected: `main`; one id; and
 
 ```
-{"bypass_actors":[],"enforcement":"active","include":["~DEFAULT_BRANCH"],"requires_pull_request":true}
+{"bypass_actors":[],"enforcement":"active","exclude":[],"include":["~DEFAULT_BRANCH"],"requires_pull_request":true,"target":"branch"}
 ```
 
 `gh --jq` prints an object's keys sorted, whatever order the filter builds
@@ -207,7 +210,11 @@ them in.
 
 The ruleset names the default branch rather than `main`, which is why the
 first call is part of the section: the rule protects `main` only while `main`
-is the default branch.
+is the default branch. And it protects the branch it includes only while that
+branch is not also excluded and the ruleset targets branches at all, which is
+why `exclude` and `target` are read: without them, a ruleset excluding `main`,
+or switched to target tags, printed the expected line byte for byte (review
+round 1 of PR #287, measured against the live ruleset's JSON mutated locally).
 
 **When it differs:** a sub-issue of #36, as *When an observation differs* says.
 A rule that is gone, or a bypass actor that is not, is a hole in US-1 no hook
@@ -271,11 +278,12 @@ messages unread.
 ## §5 A hook that outlasts its timeout
 
 **Verifies:** GH-110.3.
-**Also observes:** GH-96.1 and #240, which both rest on it.
+**Also observes:** GH-96.1, whose checks hold the line cap and cannot see
+the harness's kill that is the reason for it.
 
 #96's line cap argues that a hook the harness kills at its timeout permits the
-command, and that is why no hook may be slow. This section turns that premise
-into an observation. An agent may run it: everything it writes is in a scratch
+command, and that is why no hook may be slow; #240 argues the same of a slow
+git read. This section turns that premise into an observation. An agent may run it: everything it writes is in a scratch
 directory, and the session it starts is a second, headless one whose only
 project settings are the scratch copy.
 
@@ -324,7 +332,8 @@ but it would make #96's reasoning wrong, and the difference is filed like any
 other.
 
 **When it differs:** a sub-issue of #36, as *When an observation differs* says,
-with the one exception given above: a timed-out hook that refused.
+a timed-out hook that refused included: it opens no hole, and it still shows a
+premise of #96's to be false.
 
 ## §6 An offline SessionStart
 
@@ -338,7 +347,9 @@ down, start `claude` in this repository, read the SessionStart report, quit,
 and bring the network back.
 
 Expected: the session starts, within the report hook's 50-second timeout, and
-the report reads, among its other lines,
+the report holds, among its other lines, four that open as below. Each is the
+first line of what the report prints for that read, and the first three go on
+past it:
 
 ```
 fetch: FAILED or timed out after 15s -- remote-tracking refs are
