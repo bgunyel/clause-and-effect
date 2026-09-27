@@ -32,13 +32,19 @@
 # which was measured by reverting the pipeline by hand and is not a check here,
 # since the counters are the suite's own code and mutate-hooks.sh judges only
 # the hooks directory.
+#
+# WHAT IT TAKES FROM THE UNSPLIT FILE, which builds and owns it: the fixtures
+# $PUSH_WT, $ON_DEV and $WT_STALE, the list $LIB_CONSUMERS, and $STDERR_WRITE,
+# which the counters read. A fixture used by two files belongs in the prelude,
+# and moves there only when the file owning it moves, so each stays where it is.
 
 section "=== issue #182: the refusal-arm counters drop heredoc bodies ==="
 
 requirement GH-182.1 <<'REQ'
-- text: `arms`, `fn_writes` and `fn_calls` read a hook with whole-line comments
-  stripped, then heredoc bodies dropped by `cs_drop_heredocs`, then backslash
-  continuations folded, in that order. So a heredoc body line carrying `>&2` is
+- text: `arms`, `fn_writes` and `fn_calls` read a hook through one helper,
+  `hook_text`, and through nothing else, and it strips whole-line comments,
+  then drops heredoc bodies with `cs_drop_heredocs`, then folds backslash
+  continuations, in that order. So a heredoc body line carrying `>&2` is
   not an arm; `cat >&2 <<EOF` is one arm whatever its body says; a body line
   that is just `}` does not close the function around it, and a write after it
   is that function's; a body line naming a function is not a call to it. A
@@ -48,11 +54,13 @@ requirement GH-182.1 <<'REQ'
 - kind: defect-refusing
 - status: active
 - direction: static: a property of the suite's helpers
-- note: The two inflating shapes were false reds and the `}` shape a misleading
-  one, and none of them could hide an arm. The two order rows are what could:
-  with the drop run after the fold, or before the comment strip, a body starts
-  or ends in the wrong place and a real arm between two heredocs is dropped,
-  which is the permitting direction for these counters.
+- note: The kind is the defect's: the two inflating shapes were false reds and
+  the `}` shape a misleading one, and none of them could hide an arm. The two
+  order rows guard the fix rather than a defect that stood, and they guard the
+  permitting direction: with the drop run after the fold, or before the comment
+  strip, a body starts or ends in the wrong place and a real arm between two
+  heredocs is dropped. One helper holds the order so that the order rows,
+  driven through `arms`, are evidence about all three.
 REQ
 requirement GH-182.2 <<'REQ'
 - text: A library in which `cs_drop_heredocs` is not defined withdraws
@@ -70,7 +78,12 @@ requirement GH-182.2 <<'REQ'
   `git push --force origin main`, `gh pr merge 5`, `pytest tests/` and
   `alembic upgrade head` were each permitted by the hook that guards it. This is
   GH-84.1 for a function the extraction added: GH-84.1 asks each consumer to
-  require what it calls, and a consumer does not call this.
+  require what it calls, and a consumer does not call this. #182's triage asked
+  that it be answered for as `cs_join` is, and it cannot be: `cs_join` is
+  answered by `cs_within_cap`, which every Bash hook calls and which fails when
+  `cs_join` does, and no hook calls anything that calls `cs_drop_heredocs` but
+  `cs_normalise`, whose failure no consumer reads. Withdrawal is the answer the
+  library already gives an incomplete word list.
 REQ
 shape_pin 'GH-182.1:static GH-182.2'
 variants_pin 'GH-182.2:none'
@@ -169,13 +182,19 @@ tok 'and fn_writes reads them in their place' \
 speaks writes' "$(fn_writes "$R182/quoted-opener-never-closed.sh")"
 # All three counters, and not the one the issue named first: `fn_writes` and
 # `fn_calls` ran the same pipeline, and a fix to one of three is the shape the
-# unsplit file's section records three times. Read off their definitions, so
-# a fourth helper added to that section on the old pipeline is not counted in.
-R182_ON_PIPELINE=$(for fn in arms fn_writes fn_calls; do
-  declare -f "$fn" | grep -q 'cs_drop_heredocs' && printf '%s ' "$fn"
+# unsplit file's section records three times. So each reads the hook through
+# `hook_text` and nothing else -- no `sed` and no drop of its own -- which is
+# what makes the order rows above, driven through `arms`, evidence about all
+# three. Read off their definitions as bash holds them. Review of #182's first
+# commit found the order pinned for `arms` alone, while GH-182.1 claimed it of
+# all three.
+R182_THROUGH=$(for fn in arms fn_writes fn_calls; do
+  body=$(declare -f "$fn")
+  [[ $body == *'hook_text "$1"'* && $body != *cs_drop_heredocs* && $body != *'sed '* ]] \
+    && printf '%s ' "$fn"
 done)
-tok 'arms, fn_writes and fn_calls each run cs_drop_heredocs' \
-    'arms fn_writes fn_calls ' "$R182_ON_PIPELINE"
+tok 'arms, fn_writes and fn_calls each read the hook through hook_text, and through nothing else' \
+    'arms fn_writes fn_calls ' "$R182_THROUGH"
 
 # THE WITHDRAWAL. Every file that requires cs_normalise, read off the guards --
 # the list the extraction put at risk -- and then as a literal, so a seventh

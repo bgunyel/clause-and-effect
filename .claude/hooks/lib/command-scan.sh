@@ -200,7 +200,11 @@
 #     (#96); append-only-docs.sh calls those two and nothing else, and
 #     append-only-docs-edit.sh only cs_tool_input. cs_within_cap calls cs_join,
 #     which no required list names: it answers for that itself, by failing when
-#     any part of its pipeline does. A required list narrower than the set is
+#     any part of its pipeline does. cs_normalise calls cs_drop_heredocs and
+#     cs_join, which no required list names either (#182): cs_join is answered
+#     by cs_within_cap, as above, and cs_drop_heredocs by the library
+#     withdrawing cs_normalise when it is missing -- CS_NORMALISE ANSWERS FOR
+#     CS_DROP_HEREDOCS, below cs_normalise. A required list narrower than the set is
 #     the #84 defect exactly, and #69 found the same thing in the last two from
 #     the other end -- cs_split required, cs_normalise not. The enumeration here
 #     is a convenience and goes stale; check-hooks.sh derives both sides off the
@@ -314,9 +318,10 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # `fn_writes` and `fn_calls` in check-hooks.sh -- by reading the hook's own
 # text, and a body line carrying `>&2` or a column-1 `}` read to them as code.
 # They need the drop without the join and the redirect pass, and writing a
-# second one for them would be a sixth answer to the question the paragraphs
-# below record being answered wrongly five times. What a library missing this
-# function does is THE LOAD CONTRACT's, and is answered below cs_normalise.
+# second one for them would answer again, in a second place, the question the
+# paragraphs below record being answered wrongly, one answer after another.
+# What a library missing this function does is THE LOAD CONTRACT's, and is
+# answered below cs_normalise.
 #
 # A heredoc body is data, not commands. This repository writes dev-log entries
 # and commit messages through a quoted heredoc, and those texts name the very

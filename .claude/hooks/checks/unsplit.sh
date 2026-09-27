@@ -7966,7 +7966,7 @@ section "=== issue #84: every hook refuses when lib/command-scan.sh does not loa
 # a deviation rather than left to be read as one. One fixture with every name
 # renamed is the weaker test, for the reason just given; thirteen fixtures each
 # missing one name is the stronger, and the assertion the issue did ask for (that
-# the rename took) is made on both directions in mk_halflib below.
+# the rename took) is made on both directions in mk_halflib, in checks/library.sh.
 #
 # `ls` is the driving command for the three hooks whose guard is unconditional,
 # and it is deliberately a command none of them has any opinion about: a BLOCK on
@@ -8014,7 +8014,7 @@ CAP_CONSUMERS=$(for hook in $LIB_CONSUMERS; do
 #
 # Every copy is guarded, not one of them, and at the path the checks will drive.
 # The first version of this asked `[ -f ]` about no-git-push.sh alone, which is the
-# mistake mk_halflib records below with the consequence measured: a hook that is
+# mistake mk_halflib records in checks/library.sh with the consequence measured: a hook that is
 # not there makes `( cd "$dir" && "$hook" )` exit 127, which check_in read as
 # ALLOW before #98 (see `verdict`). So a missing copy turned every BLOCK here red
 # -- visible -- but let `no lib/, on a branch carrying work` pass vacuously. The
@@ -13384,8 +13384,9 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch
 # its lines back, in their place, since nothing after the opener was printed
 # while they were held. For these counters a line given back wrongly can only
 # add a write or a call, which is the false red; a line hidden wrongly is the
-# permitting direction, and the drop is built against it. #182's checks drive
-# each shape in checks/GH-182.sh, against these three helpers as they stand.
+# permitting direction, and the drop is built against it. The order is written
+# once, in `hook_text` in checks/library.sh, which all three read the hook
+# through; #182's checks drive each shape, and each order, in checks/GH-182.sh.
 STDERR_WRITE='>&[[:space:]]*2|>[[:space:]]*/dev/stderr'
 # `arms` is defined in checks/library.sh since #182, whose issue file became
 # its second caller. What it reads and why stands here, beside the fixtures
@@ -13498,7 +13499,7 @@ tok 'arms counts a trailing comment, which is the false red this trade accepts' 
 #
 # The test asks for `;` then `}` at the end of the line instead, which is what
 # bash requires of a body closed on its own line and what a comment does not
-# have. The `sed` above strips whole-line comments only, so a trailing one
+# have. `hook_text` strips whole-line comments only, so a trailing one
 # reaches awk intact and this is the only thing standing between it and the
 # table. Fourth spelling of the class this whole section is about.
 # `fn_writes` is defined in checks/library.sh since #182, whose issue file became
@@ -13535,9 +13536,8 @@ tok 'arms counts a trailing comment, which is the false red this trade accepts' 
 # call and #182's heredoc, which is closed: a function defined inside another
 # one. The patterns are anchored at column 1 -- which is this file's convention
 # and what the closing `}` relies on too -- so a nested definition is never
-# entered, its
-# writes are attributed to the function around it, which already writes, and
-# nothing moves. It is asserted here as the behaviour it is, and refused
+# entered, its writes are attributed to the function around it, which already
+# writes, and nothing moves. It is asserted here as the behaviour it is, and refused
 # outright below, because the honest fix for a convention a derivation depends on
 # is to hold the file to it rather than to widen the pattern and hope.
 FN_FIXTURES="$FIXTURES/fns"
