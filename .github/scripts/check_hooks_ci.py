@@ -88,6 +88,16 @@ SUMMARY_BLOCK_BYTES = 512 * 1024
 # -- so the tail is also cut to SUMMARY_BLOCK_BYTES, from its start, keeping
 # the end where the message is, and the summary says how much was cut.
 TAIL_LINES = 40
+# What `steps.<id>.outcome` reads for a suite step that was stopped before it
+# could write the suite's exit status. Observed, not taken from documentation:
+# the runs are cited in check-hooks.yml's header (#208).
+OUTCOME_CANCELLED = "cancelled"
+OUTCOME_TIMED_OUT = "failure"
+STOPPED_BY = {
+    "cancelled": "the run was cancelled while it ran",
+    "timed-out": "its step ran out of time",
+    "unknown": "its step stopped before writing its exit status, and nothing recorded why",
+}
 
 
 def git(*args):
@@ -250,14 +260,37 @@ def clip_from_end(lines, budget):
     return kept, sum(map(line_bytes, lines)) - sum(map(line_bytes, kept))
 
 
-def report(log_path, exit_status, seconds, tested_commit, json_path, summary_path, output):
+def how_it_ended(exit_status, suite_outcome):
+    """
+    "exited", "cancelled", "timed-out" or "unknown" (#208). The suite step
+    writes the suite's exit status whatever it is, so a status present means
+    the suite exited, even under a cancel that landed after it. A status absent
+    means the step was stopped from outside, and its outcome says by what:
+    OUTCOME_CANCELLED and OUTCOME_TIMED_OUT are what GitHub was observed to
+    report for each, on the runs the workflow's header cites.
+    """
+    if exit_status is not None:
+        return "exited"
+    if suite_outcome == OUTCOME_CANCELLED:
+        return "cancelled"
+    if suite_outcome == OUTCOME_TIMED_OUT:
+        return "timed-out"
+    return "unknown"
+
+
+def report(log_path, exit_status, suite_outcome, seconds, tested_commit, json_path,
+           summary_path, output):
     with open(log_path, encoding="utf-8", errors="replace") as fh:
         text = fh.read()
     passed, failing, verdict = parse_log(text)
     failed = len(failing)
     results = passed + failed
+    ended = how_it_ended(exit_status, suite_outcome)
 
     problems = []
+    if ended == "unknown":
+        problems.append(f"the suite step wrote no exit status and its outcome is "
+                        f"'{suite_outcome}', which is neither a cancel nor a timeout")
     if exit_status == 0:
         if failed:
             problems.append(f"the suite exited 0 but its log holds {failed} failing row(s)")
@@ -275,6 +308,7 @@ def report(log_path, exit_status, seconds, tested_commit, json_path, summary_pat
         "failed": failed,
         "seconds": seconds,
         "exit_status": exit_status,
+        "ended": ended,
         "verdict": verdict,
         "tested_commit": tested_commit,
     }
@@ -282,19 +316,25 @@ def report(log_path, exit_status, seconds, tested_commit, json_path, summary_pat
         json.dump(data, fh, indent=2)
         fh.write("\n")
     append_output(output, [("results", results), ("passed", passed), ("failed", failed),
-                           ("seconds", seconds), ("exit_status", exit_status)])
+                           ("seconds", seconds),
+                           ("exit_status", "" if exit_status is None else exit_status),
+                           ("ended", ended)])
 
     parts = [
         f"## check-hooks: {'passed' if green else 'FAILED'}\n",
         "\n",
-        "| results | passed | failed | seconds | exit status | tested commit |\n",
-        "|---|---|---|---|---|---|\n",
-        f"| {results} | {passed} | {failed} | {seconds} | {exit_status} | `{tested_commit}` |\n",
+        "| results | passed | failed | seconds | exit status | ended | tested commit |\n",
+        "|---|---|---|---|---|---|---|\n",
+        f"| {results} | {passed} | {failed} | {seconds} | "
+        f"{'–' if exit_status is None else exit_status} | {ended} | `{tested_commit}` |\n",
         "\n",
     ]
     for problem in problems:
         parts.append(f"**{problem}**\n\n")
+    stopped = f"The suite did not exit: {STOPPED_BY[ended]}." if exit_status is None else None
     if failing:
+        if stopped:
+            parts.append(f"{stopped}\n\n")
         parts.append(f"### Failing rows ({failed})\n\n")
         # A row that does not fit is skipped, and the loop goes on, so a row
         # over the budget no longer hides the rows after it (#207). A row that
@@ -322,8 +362,8 @@ def report(log_path, exit_status, seconds, tested_commit, json_path, summary_pat
             parts.append(f"\n{failed - rows_shown} more failing row(s) are in the "
                          "uploaded log.\n")
     elif exit_status != 0:
-        parts.append(f"The suite exited {exit_status} without printing a failing row. "
-                     "The end of its log:\n\n")
+        lead = stopped or f"The suite exited {exit_status} without printing a failing row."
+        parts.append(f"{lead} The end of its log:\n\n")
         tail, cut = clip_from_end(text.splitlines()[-TAIL_LINES:], SUMMARY_BLOCK_BYTES)
         parts.append(fenced(tail))
         if cut:
@@ -350,7 +390,10 @@ def main(argv=None):
 
     r = sub.add_parser("report", help="summarise the suite's log")
     r.add_argument("--log", required=True)
-    r.add_argument("--exit-status", type=int, required=True)
+    r.add_argument("--exit-status", type=int,
+                   help="the suite's; omitted when the suite step wrote none")
+    r.add_argument("--suite-outcome", required=True,
+                   help="steps.<suite>.outcome, which says what stopped a step that wrote none")
     r.add_argument("--seconds", type=int, required=True)
     r.add_argument("--tested-commit", required=True)
     r.add_argument("--json", required=True)
@@ -360,8 +403,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == "verify-merge":
         return verify_merge(args.head_sha, args.base_ref, args.remote, args.output)
-    return report(args.log, args.exit_status, args.seconds, args.tested_commit,
-                  args.json, args.summary, args.output)
+    return report(args.log, args.exit_status, args.suite_outcome, args.seconds,
+                  args.tested_commit, args.json, args.summary, args.output)
 
 
 if __name__ == "__main__":

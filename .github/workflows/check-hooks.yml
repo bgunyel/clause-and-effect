@@ -57,6 +57,9 @@
 # commit, which is what the checkout falls back to, and verify-merge is scoped
 # to pull_request because a merge-queue commit is a different shape.
 name: hook checks
+# The pull request's number opens every run's title, because a run's REST record
+# names the pull request that started it nowhere else (#208).
+run-name: '#${{ github.event.pull_request.number }} ${{ github.event.pull_request.title }}'
 
 on:
   pull_request:
@@ -83,6 +86,7 @@ jobs:
       failed: ${{ steps.report.outputs.failed }}
       seconds: ${{ steps.report.outputs.seconds }}
       exit_status: ${{ steps.report.outputs.exit_status }}
+      ended: ${{ steps.report.outputs.ended }}
       tested_commit: ${{ steps.verify.outputs.tested_commit }}
     steps:
       - name: check out the merge result
@@ -130,9 +134,11 @@ jobs:
         run: |
           out="$RUNNER_TEMP/check-hooks"
           mkdir -p "$out"
-          date +%s > "$out/started"
           git --version
           echo "tested commit: $(git rev-parse HEAD)"
+          # Nothing between here and the exit status can fail but the suite, so
+          # a step that wrote `started` and no exit status was stopped (#208).
+          date +%s > "$out/started"
           set +e
           # The outer shell expands $(id -un), $HOME and $PATH before sudo runs,
           # so the suite gets the runner's user and paths and nothing else.
@@ -146,14 +152,22 @@ jobs:
       - name: report
         id: report
         if: always() && steps.suite.outcome != 'skipped'
+        env:
+          SUITE_OUTCOME: ${{ steps.suite.outcome }}
         run: |
           out="$RUNNER_TEMP/check-hooks"
-          # No exit status means the step timed out or was cancelled mid-run.
-          status=$(cat "$out/exit_status" 2>/dev/null || echo 124)
+          echo "the suite step's outcome: $SUITE_OUTCOME"
+          # No exit status means the step was stopped mid-run, and its outcome
+          # says whether by a cancel or by its timeout; report tells them apart.
+          status_args=()
+          if [ -e "$out/exit_status" ]; then
+            status_args=(--exit-status "$(cat "$out/exit_status")")
+          fi
           seconds=$(( $(date +%s) - $(cat "$out/started") ))
           touch "$out/check-hooks.log"
           python3 .github/scripts/check_hooks_ci.py report \
-            --log "$out/check-hooks.log" --exit-status "$status" --seconds "$seconds" \
+            --log "$out/check-hooks.log" "${status_args[@]}" --suite-outcome "$SUITE_OUTCOME" \
+            --seconds "$seconds" \
             --tested-commit "$(git rev-parse HEAD)" --json "$out/check-hooks.json" \
             --summary "$GITHUB_STEP_SUMMARY" --output "$GITHUB_OUTPUT"
 
@@ -169,6 +183,11 @@ jobs:
 
       - name: the suite's verdict
         run: |
-          status=$(cat "$RUNNER_TEMP/check-hooks/exit_status" 2>/dev/null || echo 124)
+          # Reached only when the suite step succeeded, which it does only
+          # after writing the status; its absence here is a defect, not a timeout.
+          status=$(cat "$RUNNER_TEMP/check-hooks/exit_status") || {
+            echo "::error::the suite step succeeded but wrote no exit status"
+            exit 1
+          }
           echo "check-hooks.sh exited $status"
           exit "$status"
