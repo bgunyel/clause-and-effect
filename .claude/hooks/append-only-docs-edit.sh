@@ -167,7 +167,10 @@ norm_path() {  # norm_path <absolute path>
 # differs from the name only in case, punctuation, spacing or that word agrees --
 # `session 5` with `session-5`, session `dev-agent-pr-184` with
 # `dev-agent-pr-184`. However loose, it can only refuse more; it could make two
-# different names agree only where they differ in nothing but those.
+# different names agree only where they differ in nothing but those. It is
+# equality of keys and not containment, so an old segment that names the session
+# and says more -- `session 3 (continued)` -- has a different key, and the
+# correction would erase the rest; that case is #245's (review of #189, round 4).
 #
 # The NEW segment is what the exception writes, so it is asked strictly: it must
 # be byte-equal to one of the three spellings the file name gives, with <n> the
@@ -206,15 +209,32 @@ canonical_session() {  # canonical_session <file's session> <segment> -- 0 if th
 # is not one. The separators are the ones the entries and the README's index are
 # written with, ` · ` and ` — `, and each is required to be present rather than
 # defaulted, so a line that is not a heading cannot parse as one with empty parts.
+#
+# EACH FIELD IS BOUNDED BY THE SEPARATOR ON ITS OTHER SIDE, because both are cut
+# at a separator's first occurrence and nothing else says where a field ends
+# (review of #189, round 4). The date runs to the first ` · ` and so cannot hold
+# one, but it could hold a ` — `: `# <date> — <summary>`, the shape the newest
+# entries open with, parsed with a ` · x — ` inside its summary as a date that
+# ran into the summary and a session made of summary text, and the correction
+# rewrote that text. The session runs to the first ` — ` and so cannot hold one,
+# but it could hold a ` · `: `# <date> · 21:53 · <name> — …` parsed with the time
+# inside the session, and the correction deleted it. So a date holding ` — `, or
+# a session holding ` · `, is not a heading of this shape. The rest is the
+# remainder, and bounds nothing after it. The date bound also backs the test
+# that a ` · ` is there at all: without one, the whole body is the date, which
+# the bound refuses if it holds a ` — ` and the ` — ` test refuses if it does not.
+# That test stays because it states the shape, as the single-line tests do.
 parse_heading() {  # parse_heading <line>
   local line="$1" body after
   case "$line" in '# '*) ;; *) return 1 ;; esac
   body=${line#\# }
   case "$body" in *" · "*) ;; *) return 1 ;; esac
   PH_DATE=${body%%" · "*}
+  case "$PH_DATE" in *" — "*) return 1 ;; esac
   after=${body#*" · "}
   case "$after" in *" — "*) ;; *) return 1 ;; esac
   PH_SESS=${after%%" — "*}
+  case "$PH_SESS" in *" · "*) return 1 ;; esac
   PH_REST=${after#*" — "}
   [ -n "$PH_DATE" ] && [ -n "$PH_SESS" ]
 }

@@ -51,11 +51,15 @@ The narrowness is not left to the author. `append-only-docs-edit.sh` permits the
 correction only when the edit's `old_string` is the file's current first line and
 occurs in it exactly once — anywhere, as the Edit tool matches it, and not only as
 a whole line — its `new_string` is a single line, both strings are compared byte
-for byte as the tool will act on them, the two differ in
-the session segment alone, and the new segment is one of the three spellings the
-file name gives — `<n>`, `session <n>`, or `session` and `<n>` quoted as code —
-where the old one does not already name that session in any spelling. Everything else about a history entry is refused exactly as
-it was. Stating the exception in the rule and then in the guard, rather than
+for byte as the tool will act on them, the two differ in the session segment
+alone, and the new segment is one of the three spellings the file name gives —
+`<n>`, `session <n>`, or `session` and `<n>` quoted as code — where the old
+segment's key differs from the file's: each lowercased, reduced to its letters
+and digits, and less a leading `session`. That is equality of keys, not
+containment: an old segment that names the session and says more, such as
+`session 3 (continued)` on a file named for `session-3`, has a different key,
+and the correction would erase what it says beyond the name. #245 owns that
+case. Everything else about a history entry is refused exactly as it was. Stating the exception in the rule and then in the guard, rather than
 making it once by hand, is ADR 0002's shape: the boundary is what the hook
 computes, not what a document asks an author to remember.
 
@@ -133,8 +137,12 @@ narrow on purpose rather than by oversight. **Nor is a heading of any other
 shape** than `# <date> · <session> — <rest>`: one with no rest, or one opening
 `# Devlog — …`, has no session segment the guard can find, and 31 of the 66
 entries in `docs/dev-log/` were of those shapes when #189's review counted them.
+Nor is one whose date segment holds a ` — `, or whose session segment holds a
+` · `: each field is cut at a separator's first occurrence, so a separator inside
+one would move another field's boundary, and the guard refuses those rather than
+guess where the fields end.
 And **the guard permits the correction whether or not the heading is actually
 wrong in the way #177 found**, provided the new segment is one of the spellings
-the file name gives and the old one does not already name that session: it
+the file name gives and the old segment's key differs from the file's: it
 judges agreement with the name, which is the property the decision is about, and
 not the history of how the disagreement arose.

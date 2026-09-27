@@ -82,19 +82,21 @@ requirement GH-177 <<'REQ'
   backticks and a leading `session` word (review of #189, round 2).
   WHAT THE SECTION IS EVIDENCE ABOUT, MEASURED RATHER THAN ASSUMED. The
   exception was swept a clause at a time, in review of #189's first and second
-  rounds: each of its 26 refusing conditions -- 24 `return 1` clauses across
-  `heading_correction` and `parse_heading`, and the two halves of the latter's
-  closing test -- removed on a copy, and every row of this section re-judged
-  against the result. Seventeen have a row that turns red when they are
-  removed, and so does the call site, each step of the old side's key, each of
-  the new side's three spellings, and the pinned sentence of the refusal: the directory, the `.md`
-  suffix, the `devlog_` prefix, the NUL refusal, the `Write` exclusion, the
-  whole-first-line test, the count, the parse of
-  `old_string`, the three separator tests, the empty date and the empty session,
-  date-unchanged, rest-unchanged, new-session-agrees and old-session-differs. Nine
-  turn nothing red, and each is backed by a named clause rather than dead: the
-  `_` in the name by the empty-session-name test, and that by new-session-agrees,
-  since a session that is not empty never normalises to empty; the `old_string`
+  rounds and after it: each of its 29 refusing conditions -- 27 `return 1`
+  clauses across `heading_correction`, `parse_heading` and `canonical_session`,
+  and the two halves of `parse_heading`'s closing test -- removed on a copy, and
+  every row of this section re-judged against the result. Twenty have a row
+  that turns red when they are removed, and so do the call site, each step of
+  the old side's key, each of the new side's three spellings, and the pinned
+  sentence of the refusal: the directory, the `.md` suffix, the `devlog_`
+  prefix, the empty-session-name test, the NUL refusal, the `Write` exclusion,
+  the whole-first-line test, the count, `canonical_session`'s refusal, the two
+  field bounds of `parse_heading`, the parse of `old_string`, the `#` and ` — `
+  tests, the empty date and the empty session, date-unchanged, rest-unchanged,
+  new-session-agrees and old-session-differs. Nine turn nothing red, and each is
+  backed by a named clause rather than dead: the ` · ` test by the date bound
+  and the ` — ` test together; the `_` in the name by the empty-session-name
+  test; the `old_string`
   read by the whole-first-line test, and the `new_string` read by the parse of
   `new_string`, which is backed in turn by new-session-agrees and
   old-session-differs, because a parse that fails leaves `old_string`'s session in
@@ -102,6 +104,11 @@ requirement GH-177 <<'REQ'
   by the first-line and date, rest and session tests, as the hook says beside
   them; the empty-first-line test by the whole-first-line test; and the file's
   read, by nothing but the race of a file readable by `read` and not by `cat`.
+  The empty-session-name test was on that list until round 4, backed by
+  new-session-agrees because a session that is not empty never normalised to
+  empty; round 3's exact new side broke that without a row noticing, since for a
+  file named `devlog_<date>_.md` the word `session` alone is a spelling the name
+  gives. It has its row now.
   WHAT THE FIRST SWEEP GOT WRONG. The branch's first sweep counted 16 conditions
   and seven that flip, and called the directory, `.md` and `devlog_` clauses
   defence in depth. Each was the only thing refusing a payload no row drove, and
@@ -133,7 +140,7 @@ requirement GH-177.1 <<'REQ'
   closes them the rows go red, and the documents are what changes with them. ADR
   0003 is not read, because this suite's header names every document the suite
   reads and does not name it; its sentence is held by review. The documents
-  first said "every Bash spelling", which review measured false on six
+  first said "every Bash spelling", which review measured false on five
   spellings: the #84 shape, in prose about a sibling guard.
 REQ
 shape_pin 'GH-177 GH-177.1'
@@ -200,7 +207,11 @@ done
 # each file named for session-5 so that the session test would pass. Found by
 # the author's sweep of the same round, which removed each clause of
 # `parse_heading` and of its two call sites in turn: every one flipped no row
-# above, and each has a payload that only it refuses.
+# above, and each had a payload that only it refused. One no longer does: since
+# round 4 bounds the date, a first line with no ` · ` parses its whole body as
+# the date, which the date bound refuses when it holds a ` — ` and the session
+# test refuses when it does not. The `nodot` row below is refused by both, and
+# the ` · ` test is backed rather than isolated.
 printf '%s\n\nBody.\n' '2026-09-17 · session 2 — R' \
   > "$HEAD_FIX/docs/dev-log/devlog_nohash_session-5.md"
 printf '%s\n\nBody.\n' '# 2026-09-17 — R' \
@@ -391,6 +402,33 @@ REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a new segment
 REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh ALLOW 'the correction to the bare name, the third spelling the name gives' \
   "$(head_edit "$E_WRONG" "$H_WRONG" "${H_WRONG/session 2/5}")"
 
+# CLASS H OF #189's FOURTH ROUND: a field cut at a separator's first occurrence
+# holds whatever lies before it, so a separator inside one field moved another
+# field's boundary. A heading of the `# <date> — <summary>` shape the newest
+# entries open with, whose summary holds a ` · x — `, parsed as a date running
+# into the summary and a session of summary text; and a time written between two
+# ` · ` parsed as part of the session. No real heading had either shape when
+# review swept all 66, and the real-directory rows below cannot see it, since
+# their own shape test offers such a heading unchanged.
+printf '%s\n\nBody.\n' '# 2026-09-25 21:16 +03 — #157: rules · naming — pinned' \
+  > "$HEAD_FIX/docs/dev-log/devlog_summary_dev-agent-157.md"
+printf '%s\n\nBody.\n' '# 2026-09-25 · 21:53 · dev-issue-141 — R' \
+  > "$HEAD_FIX/docs/dev-log/devlog_time_dev-issue-141.md"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a date-and-summary heading whose summary holds a · x — is not rewritten inside the summary' \
+  "$(head_edit "$HEAD_FIX/docs/dev-log/devlog_summary_dev-agent-157.md" '# 2026-09-25 21:16 +03 — #157: rules · naming — pinned' '# 2026-09-25 21:16 +03 — #157: rules · dev-agent-157 — pinned')"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a time between two · separators is not taken for part of the session and deleted' \
+  "$(head_edit "$HEAD_FIX/docs/dev-log/devlog_time_dev-issue-141.md" '# 2026-09-25 · 21:53 · dev-issue-141 — R' '# 2026-09-25 · dev-issue-141 — R')"
+
+# A FILE NAME THAT CARRIES NO SESSION. Its session is empty, so the three
+# spellings it gives are the empty string, the word `session` alone, and the
+# word before an empty code span; the empty-session-name test is all that stands
+# between that file and a heading relabelled onto the word alone. It was counted
+# backed until round 4's sweep, which found round 3's exact new side had made it
+# the only refusal.
+printf '%s\n\nBody.\n' "$H_WRONG" > "$HEAD_FIX/docs/dev-log/devlog_2026-09-17_.md"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a file whose name carries no session, relabelled onto the word session alone' \
+  "$(head_edit "$HEAD_FIX/docs/dev-log/devlog_2026-09-17_.md" "$H_WRONG" "${H_WRONG/session 2/session }")"
+
 # AND THE REAL DIRECTORY, every entry of it: the relabel of its heading onto its
 # own file's session name is refused, because no entry here contradicts its name
 # once this branch has corrected the one that did. The payload is derived from
@@ -452,10 +490,11 @@ REPO_ROOT="$HEAD_FIX" feed "$PATH" "$R177_NUL" BLOCK 'the plain correction with 
 
 # CLASS G OF #189's THIRD ROUND: prose about a sibling guard is held to that
 # guard. CLAUDE.md, CONTEXT.md and ADR 0003 said the Bash half refuses the
-# correction "in every Bash spelling"; it is a list of seven, and review measured
-# six spellings past it. So every spelling the documents now name is fed to the
-# guard at the verdict they state, as GH-157.3 feeds the dev-log README's, and
-# the two documents the suite already reads are held to naming the list.
+# correction "in every Bash spelling"; it is a list of seven, review measured
+# five spellings past it, and the author a sixth, `dd`. So every spelling the
+# documents now name is fed to the guard at the verdict they state, as GH-157.3
+# feeds the dev-log README's, and the two documents the suite already reads are
+# held to naming the list.
 req GH-177.1
 R177_E=docs/dev-log/devlog_2026-09-17_session-5.md
 check append-only-docs.sh BLOCK 'the documents name sed -i as refused on an entry' "sed -i 's/session 2/session 5/' $R177_E"
