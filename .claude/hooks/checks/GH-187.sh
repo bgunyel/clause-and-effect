@@ -38,10 +38,10 @@
 # mutated copy of the hooks and never a mutated suite. The evidence is a
 # recorded run instead, as GH-144.4's is.
 #
-# MEASURED, 2026-09-28, round 3 of the review: eleven whole runs of the suite,
-# each in its own scratch clone of the branch with one edit applied there, so
-# no backup of this checkout was needed. Each run's record was copied out just
-# before end-of-run.sh reads it.
+# MEASURED, 2026-09-28, in answer to round 2 of its review: eleven whole runs
+# of the suite, each in its own scratch clone of the branch with one edit
+# applied there, so no backup of this checkout was needed. Each run's record
+# was copied out just before end-of-run.sh reads it.
 #
 #   the edit                                     exit  FAIL rows          runs
 #   the base, cd67c8e, which has no GH-187       0     none of 6226       10
@@ -62,6 +62,11 @@
 #                                                      guard stopped the
 #                                                      run, at 6075 rows
 #   the renamed copy given the report's name     1     as the line above   -
+#
+# In answer to round 3, two more, so that each clause of the fixture guard has
+# been broken on its own: a line appended to the byte copy, and one appended to
+# the renamed copy. Each exited 1 with no FAIL row, the guard having stopped
+# the run at 6075 rows, as above.
 #
 # `runs` is what GH-109.4 derived, `report-stale-branches.sh was run N times
 # under a tag`. The base's record and this fix's, sorted, are identical, all
@@ -96,10 +101,12 @@ requirement GH-187 <<'REQ'
 - text: `report_says <PATH> <script> <literal> <label>` records a run of
   `report-stale-branches.sh` for a script which `cmp -s` finds byte-identical
   to `$HOOKS/report-stale-branches.sh`, whatever it is named, and for no other
-  script. A modified copy is not recorded, even one keeping the name, since it
-  is not the registered report; an unmodified copy is recorded, against the
-  tag in force, and so is a byte copy under another name, since its bytes are
-  the registered report's. The verdict the helper prints is unchanged.
+  script. It records it as `ran` records any run: only for an exit of 0 or 2,
+  under a tag. A modified copy is not recorded, even one keeping the name,
+  since it is not the registered report; an unmodified copy is recorded,
+  against the tag in force, and so is a byte copy under another name, since
+  its bytes are the registered report's. The verdict the helper prints is
+  unchanged.
 - from: #187, the sixth review of PR #169
 - kind: defect-permitting
 - status: active

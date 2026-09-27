@@ -596,8 +596,8 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
   local path="$1" script="$2" want="$3" label="$4" out rc
   out=$( cd "$(dirname "$script")" && PATH="$path" bash "$script" 2>&1 )
   rc=$?
-  # Recorded after the run, and under the registered name rather than through
-  # `hook_path`, which never sees a copy. See `ran`.
+  # Recorded after the run, and under the registered name, since this helper
+  # runs the script itself and does not call `hook_path`. See `ran`.
   #
   # THE BYTES ARE THE TEST, and not the name (#187). `ran` refuses an absolute
   # path because a fixture copy is not the registered hook; this steps around
