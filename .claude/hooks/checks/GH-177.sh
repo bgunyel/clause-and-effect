@@ -8,15 +8,19 @@
 # when it contradicts the session the file is named for. The hook permits that
 # one correction and refuses everything else about an existing entry, as before.
 #
-# These drive a project root of their own. The reason is the branch that adds
-# them: after it, docs/dev-log/ holds no entry whose heading contradicts its file
-# name -- that is what the branch fixes -- so there is nothing here to ask the
-# permitting question of, and the refusing cases that bound it would have no
-# subject either. A fixture root also reaches the shapes this repository will
-# never hold: a heading corrected to a third session, a whole entry rewritten by
-# Write, a second line smuggled into the replacement. The refusing cases against
-# real files stay in the unsplit file, under GH-69.3, so the hook is still asked
-# about this repository as well as about the fixture.
+# Most of these drive a project root of their own. The reason is the branch that
+# adds them: after it, docs/dev-log/ holds no entry whose heading contradicts its
+# file name -- that is what the branch fixes -- so there is nothing here to ask
+# the permitting question of. A fixture root also reaches the shapes this
+# repository will never hold: a heading corrected to a third session, a whole
+# entry rewritten by Write, a second line smuggled into the replacement.
+# The branch first went further and said the REFUSING cases would have no
+# subject here either, so no row asked the real directory anything. That was
+# false by the hook's own test: two real headings, naming their session as code,
+# read as contradicting their names and were relabel-able (review of #189, round
+# 2). So the real directory is asked too, every entry of it, in the refusing
+# direction, below. The refusing cases against real files under GH-69.3 stay in
+# the unsplit file.
 #
 # Each row runs through `feed`, with REPO_ROOT assigned for that call alone so
 # the hook reads the fixture root as its project directory -- the idiom
@@ -30,7 +34,8 @@ section "=== #177: the session segment of a dev-log heading, corrected onto its 
 
 requirement GH-177 <<'REQ'
 - text: `append-only-docs-edit.sh` permits exactly one edit to a history entry, and
-  refuses every other one as it did. The permitted edit is an `Edit` of a
+  refuses every other one as it did. The permitted edit is an `Edit` -- a call
+  carrying no `content`, which every `Write` carries -- of a
   `docs/dev-log/` entry named `devlog_<date>_<session>.md`, whose `old_string` is
   the file's current first line and occurs in the file exactly once, counted as the
   Edit tool matches it -- a substring anywhere, overlapping, so `replace_all` has
@@ -40,9 +45,12 @@ requirement GH-177 <<'REQ'
   the session the file is named for where the old segment does not. Both strings
   are compared exactly as the tool call carries them, trailing newlines included,
   and a tool call spelling a NUL (`\u0000`) is refused, since a bash string cannot
-  hold one. Agreement collapses runs of spaces and hyphens on both sides, so
-  `session-5` agrees with `session 5` and contradicts `session 2`. A `Write` of an
-  existing entry carries no `old_string` and is refused; so is a body edit, a rest
+  hold one. Agreement drops backticks, collapses runs of spaces and hyphens, and
+  takes a leading `session` word off, on both sides, so `session-5` agrees with
+  `session 5` and contradicts `session 2`, and a file named for
+  `clause-and-effect-37` agrees with ``session `clause-and-effect-37` ``. Every
+  real entry's heading, relabelled onto its own file's session, is refused. A
+  `Write` of an existing entry is refused, whatever else it carries; so is a body edit, a rest
   or date that moves with the session, a new segment agreeing with nothing, an
   `old_string` that is not the whole first line, a trailing newline on either
   string, a second line smuggled into `new_string`, a heading that already agrees,
@@ -59,18 +67,24 @@ requirement GH-177 <<'REQ'
   that segment carries a time the file name has no room for, and requiring equality
   would refuse the correction on exactly those entries. What is required is that the
   segment does not move, which is what holds the exception to one part of one line.
-  The checks drive a fixture root rather than this repository, for the reason the
-  section says: after this branch `docs/dev-log/` holds no entry whose heading
-  contradicts its name, which is the branch's point, so the permitting direction has
-  no subject here and the refusing cases it is bounded by have none either.
+  The permitting checks drive a fixture root rather than this repository, for the
+  reason the section says: after this branch `docs/dev-log/` holds no entry whose
+  heading contradicts its name, which is the branch's point, so the permitting
+  direction has no subject here. The refusing direction does, and every real entry
+  is asked it: its heading relabelled onto its own file's session is refused. The
+  branch first said that direction had no subject either, and two real headings,
+  which name their session as code, were relabel-able until agreement dropped
+  backticks and a leading `session` word (review of #189, round 2).
   WHAT THE SECTION IS EVIDENCE ABOUT, MEASURED RATHER THAN ASSUMED. The
-  exception was swept a clause at a time, in review of #189's first round: each
-  of its 25 refusing conditions -- 23 `return 1` clauses across
+  exception was swept a clause at a time, in review of #189's first and second
+  rounds: each of its 26 refusing conditions -- 24 `return 1` clauses across
   `heading_correction` and `parse_heading`, and the two halves of the latter's
   closing test -- removed on a copy, and every row of this section re-judged
-  against the result. Sixteen have a row that turns red when they are removed,
-  and so does the call site: the directory, the `.md` suffix, the `devlog_`
-  prefix, the NUL refusal, the whole-first-line test, the count, the parse of
+  against the result. Seventeen have a row that turns red when they are
+  removed, and so does the call site, each of the two normalisations of
+  agreement, and the pinned sentence of the refusal: the directory, the `.md`
+  suffix, the `devlog_` prefix, the NUL refusal, the `Write` exclusion, the
+  whole-first-line test, the count, the parse of
   `old_string`, the three separator tests, the empty date and the empty session,
   date-unchanged, rest-unchanged, new-session-agrees and old-session-differs. Nine
   turn nothing red, and each is backed by a named clause rather than dead: the
@@ -291,5 +305,86 @@ REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh ALLOW 'control: the 
   "$(head_edit "$HEAD_FIX/docs/dev-log/README.md" 'index' 'the index')"
 REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh ALLOW 'control: an entry that is not there yet is still writable' \
   "$(head_write "$HEAD_FIX/docs/dev-log/devlog_2026-09-21_session-1.md" '# 2026-09-21 · session 1 — new')"
+
+# THE REFUSAL NAMES THE EXCEPTION, pinned whole. Every row above reads a
+# verdict, so deleting the sentence that tells an agent what IS permitted left
+# the suite green (review of #189, round 2). The whole sentence and not a
+# fragment of it, because a prefix keeps matching after the rest is deleted.
+REPO_ROOT="$HEAD_FIX" feed_says "$PATH" append-only-docs-edit.sh \
+  "The one exception (ADR 0003, #177) is an Edit that changes only the session segment of a docs/dev-log/ entry's first-line heading, to agree with the session the file is named for." \
+  'and the refusal of a body edit names the one exception, whole' \
+  "$(head_edit "$E_WRONG" 'Body line one.' 'Body line ONE.')"
+
+# CLASS E OF #189's SECOND ROUND: agreement as narrow as the prose's notion of it.
+# Two spellings of a session the real directory holds, each on a file named for
+# that session, so the heading already agrees and there is nothing to correct:
+# the session quoted as code, which the newest entries write, and the word
+# `session` in front of a name the file carries without it. Each isolates one of
+# the two normalisations, and the third row is the correction written in the
+# newest style, which the widening must permit.
+printf '%s\n\nBody.\n' '# 2026-09-20 · `clause-and-effect-37` — R' \
+  > "$HEAD_FIX/docs/dev-log/devlog_backtick_clause-and-effect-37.md"
+printf '%s\n\nBody.\n' '# 2026-09-20 · session clause-and-effect-37 — R' \
+  > "$HEAD_FIX/docs/dev-log/devlog_word_clause-and-effect-37.md"
+printf '%s\n\nBody.\n' '# 2026-09-27 · session `dev-agent-2` — R' \
+  > "$HEAD_FIX/docs/dev-log/devlog_newstyle_dev-agent-7.md"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a heading naming its session as code already agrees, so relabelling it is refused' \
+  "$(head_edit "$HEAD_FIX/docs/dev-log/devlog_backtick_clause-and-effect-37.md" '# 2026-09-20 · `clause-and-effect-37` — R' '# 2026-09-20 · clause-and-effect-37 — R')"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a heading naming its session after the word session already agrees, so relabelling it is refused' \
+  "$(head_edit "$HEAD_FIX/docs/dev-log/devlog_word_clause-and-effect-37.md" '# 2026-09-20 · session clause-and-effect-37 — R' '# 2026-09-20 · clause-and-effect-37 — R')"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh ALLOW 'the correction written as code, as the newest entries write it' \
+  "$(head_edit "$HEAD_FIX/docs/dev-log/devlog_newstyle_dev-agent-7.md" '# 2026-09-27 · session `dev-agent-2` — R' '# 2026-09-27 · session `dev-agent-7` — R')"
+
+# AND THE REAL DIRECTORY, every entry of it: the relabel of its heading onto its
+# own file's session name is refused, because no entry here contradicts its name
+# once this branch has corrected the one that did. The payload is derived from
+# the entry -- its first line, and that line with the session segment replaced
+# by the name the file carries -- and the verdict is the literal. A line that
+# does not parse as a heading is offered unchanged, which is refused too.
+# WHAT A RED ROW HERE MEANS: that entry's heading reads, to the hook, as
+# contradicting its file name. Either it does, and ADR 0003 says to correct it,
+# which this exception permits; or it names its session in a spelling the
+# agreement test does not know, and the test is what needs widening. Two
+# entries were the second case when review of #189 swept the directory in its
+# second round, and no row asked, because the section's premise was that the
+# directory held nothing to ask about.
+for r177_entry in "$REPO_ROOT"/docs/dev-log/devlog_*.md; do
+  r177_name=${r177_entry##*/}
+  r177_stem=${r177_name%.md}; r177_stem=${r177_stem#devlog_}
+  IFS= read -r r177_first < "$r177_entry"
+  r177_new=$r177_first
+  case "$r177_first" in
+    '# '*' · '*' — '*)
+      r177_after=${r177_first#*' · '}
+      r177_new="${r177_first%%' · '*} · ${r177_stem#*_} — ${r177_after#*' — '}" ;;
+  esac
+  feed "$PATH" append-only-docs-edit.sh BLOCK "a real entry, $r177_name, relabelled onto its own file's session name" \
+    "$(head_edit "$r177_entry" "$r177_first" "$r177_new")"
+done
+
+# CLASS F OF THE SAME ROUND: the tool is not inferred from the payload's shape. A
+# Write that also carries the two strings of the plain correction.
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a Write carrying old_string and new_string of the plain correction' \
+  "$(jq -cn --arg p "$E_WRONG" --arg o "$H_WRONG" --arg n "$H_RIGHT" \
+       '{tool_name:"Write",tool_input:{file_path:$p,content:"x",old_string:$o,new_string:$n}}')"
+
+# A RAW NUL ON THE STREAM (GH-95.1's malformed input), which a bash string cannot
+# carry, so no row fed through one could ever have asked. The fixture is a hook
+# in front of the hook: it turns each \001 on its stdin into a NUL and runs the
+# real hook -- the one under judgment, mutated copy included -- on the result.
+# The control says the fixture delivers a correction the hook permits; each
+# refusing row is that correction with a NUL added, and was measured ALLOW
+# against the buffer that dropped NULs.
+R177_NUL="$FIXTURES/r177-nul-hook.sh"
+printf '#!/bin/bash\ntr '"'"'\\001'"'"' '"'"'\\000'"'"' | exec %q\n' "$(hook_path append-only-docs-edit.sh)" > "$R177_NUL"
+chmod +x "$R177_NUL"
+R177_FIX=$(head_edit "$E_WRONG" "$H_WRONG" "$H_RIGHT")
+REPO_ROOT="$HEAD_FIX" feed "$PATH" "$R177_NUL" ALLOW 'control: the NUL fixture passes the plain correction through, and it is permitted' \
+  "$R177_FIX"
+req GH-95.1
+REPO_ROOT="$HEAD_FIX" feed "$PATH" "$R177_NUL" BLOCK 'the plain correction followed by a raw NUL on the stream' \
+  "$R177_FIX"$'\001'
+REPO_ROOT="$HEAD_FIX" feed "$PATH" "$R177_NUL" BLOCK 'the plain correction with a raw NUL inside the file_path string' \
+  "${R177_FIX/"$E_WRONG"/"$E_WRONG"$'\001'}"
 
 sourced_to_end

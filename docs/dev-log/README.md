@@ -55,7 +55,9 @@ thing in the record.
 - If the dev-log file that the agent is trying to write already exists,
   the agent should append a new dev-log entry to the file with a date and time.
 - An append is made with `>>` from Bash, and an entry that exists is never
-  edited with the Edit or Write tool. `append-only-docs.sh` reads a heredoc's
+  edited with the Edit or Write tool, except to correct the session segment of
+  its heading onto its file name, which ADR 0003 permits (#177).
+  `append-only-docs.sh` reads a heredoc's
   text as part of the command, so a heredoc append whose prose reads as a
   command that rewrites an entry can be refused: a `sed -i` anywhere in the
   text, for example, or an `rm` or an `mv` followed on its line by a path under

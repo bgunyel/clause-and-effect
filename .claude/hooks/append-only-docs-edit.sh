@@ -52,13 +52,31 @@ fi
 # ONE reader, which is #95's finding: a second copy of the read is a second
 # answer to it, and #95 found eight. Every refusal this hook already made on
 # malformed input is made here unchanged, because what jq is handed is the same
-# bytes -- the command substitution strips trailing newlines, which JSON does
-# not carry meaning in, and a JSON document cannot hold a raw NUL.
+# document -- the command substitution strips trailing newlines, which JSON does
+# not carry meaning in.
+#
+# AND IT DROPS EVERY NUL, which is a different matter: a JSON document cannot
+# hold a raw NUL, but the STREAM can, and a stream holding one is exactly the
+# malformed input jq refused before this buffer existed. With a bare `$(cat)` a
+# valid document followed by a NUL, or a NUL inside the file_path string, reached
+# jq with the NUL gone and parsed (review of #189, round 2). So each NUL becomes a
+# \001 on the way in. That is the identity on every valid document, which holds
+# neither byte raw, and on every other stream it swaps one byte jq rejects for
+# another it rejects wherever it stands -- outside a string it is no token, and
+# inside one it is an unescaped control character -- so jq's verdict is the one
+# it gave the raw stream. No #95 row went red when the NUL started being dropped,
+# and none could have: each is fed through a bash string, which cannot carry one.
+# `tr` is coreutils, like the `cat` beside it; a `tr` that is not there leaves
+# the buffer empty, and an empty buffer is refused by the reader.
+# `read -d ''` would have kept the NULs without a second tool, and was measured
+# and rejected: bash reads a pipe one byte at a time, 0.4 s a megabyte, and a
+# large Write would meet this hook's 5-second timeout, and a hook that times out
+# has refused nothing.
 #
 # That argument is about the DOCUMENT and not about the strings inside it, which
 # is why the two strings #177 compares are not read the way the path is: see
 # `field_exact` below.
-PAYLOAD=$(cat)
+PAYLOAD=$(cat | tr '\000' '\001')
 FILE=$(printf '%s' "$PAYLOAD" | cs_tool_input file_path) || exit 2
 
 # An empty file_path string is read and permitted, as it was. #95 names the
@@ -118,8 +136,8 @@ norm_path() {  # norm_path <absolute path>
 # ADR's sentence:
 #
 #   the file is a docs/dev-log/ entry named devlog_<date>_<session>.md;
-#   the tool call carries both strings an Edit swaps (a Write carries neither),
-#   and neither holds a NUL;
+#   the tool call is an Edit -- it carries no `content`, which every Write does --
+#   and carries both strings an Edit swaps, neither holding a NUL;
 #   old_string is the file's current first line, and occurs in the file
 #   exactly once as the Edit tool matches it -- as a substring, not a line;
 #   new_string is one line;
@@ -140,6 +158,22 @@ norm_path() {  # norm_path <absolute path>
 # `session-5` against `session 2` a contradiction and `session-5` against
 # `session 5` agreement, which is the distinction the decision rests on.
 #
+# TWO MORE SPELLINGS OF ONE NAME, found on this repository's own entries (review
+# of #189, round 2). The newest headings quote the session as code --
+# session `dev-agent-pr-184` in a file named devlog_<date>_dev-agent-pr-184.md
+# -- and older files carry the word in the name, `session-5`, where the newest do
+# not. With neither handled, those two real headings read as contradicting their
+# own file names, and the exception permitted rewriting a heading that was right.
+# So backticks are dropped, and a leading `session` word is taken off whatever
+# follows it, on both sides, before they are compared. That widens both tests,
+# not only the refusing one: an old segment that names the file's session in
+# either spelling now agrees and is refused, and a NEW segment may be written in
+# either spelling and agree -- session `5`, or a bare `5`, onto `session-5`. Each
+# names the session the file is named for, which is the whole of what the
+# decision asks of the new segment. The check suite asks this of every entry in
+# the real directory, so a spelling this misses turns a row red there rather
+# than waiting for a review to find it.
+#
 # The heading's date is NOT required to equal the file's. An entry may open
 # `# 2026-09-17 21:53 · dev-issue-141 — …`, where the segment before the
 # separator carries a time the file name has no room for. Requiring equality
@@ -147,19 +181,22 @@ norm_path() {  # norm_path <absolute path>
 # the date segment does not MOVE, which is what keeps this exception to one part
 # of one line.
 #
-# No external tool is added. `grep` is already this hook's dependency two lines
-# below; the normalisation is written out in bash for the reason `norm_path` is,
-# so that a hook whose answer to a missing tool is to refuse every edit in the
-# repository does not gain a second tool that can be missing.
+# No external tool is added for the exception. `grep` is already this hook's
+# dependency; the normalisation is written out in bash for the reason `norm_path`
+# is, so that a hook whose answer to a missing tool is to refuse every edit in the
+# repository does not gain a second tool that can be missing. The `tr` on the
+# buffer above is the input's, not the exception's, and is argued there.
 norm_session() {  # norm_session <session as written> -- its comparable form
   local s="$1" out="" c prev=""
   while [ -n "$s" ]; do
     c=${s:0:1}; s=${s:1}
     case "$c" in
+      '`')   ;;
       ' '|-) [ "$prev" = '-' ] || out="$out-"; prev='-' ;;
       *)     out="$out$c"; prev="$c" ;;
     esac
   done
+  case "$out" in session-?*) out=${out#session-} ;; esac
   printf '%s' "$out"
 }
 
@@ -199,7 +236,7 @@ field_exact() {  # field_exact <var> <field>
 }
 
 heading_correction() {  # heading_correction <abs> <rel> -- 0 if this edit is the permitted one
-  local abs="$1" rel="$2" stem fsession old new first content
+  local abs="$1" rel="$2" stem fsession old new first content written
   local o_date o_sess o_rest n_date n_sess n_rest
 
   case "$rel" in docs/dev-log/*) ;; *) return 1 ;; esac
@@ -219,8 +256,18 @@ heading_correction() {  # heading_correction <abs> <rel> -- 0 if this edit is th
   # and never a permission (review of #189, round 1, measured with the sweep of
   # that round's class A).
   case "$PAYLOAD" in *'\u0000'*) return 1 ;; esac
-  # A Write carries no old_string, so this is where a Write of an existing entry
-  # leaves the exception and goes back to being refused.
+  # A WRITE IS NEVER THE EXCEPTION, whatever else it carries. It was told apart
+  # by lacking an old_string, which is the tool inferred from the payload's shape:
+  # a Write that also carried old_string and new_string was judged as the Edit
+  # they describe and permitted, and would have replaced the whole entry (review
+  # of #189, round 2, which did not measure whether the harness can deliver one).
+  # The tool's name is not read, because the one reader reads tool_input only and
+  # GH-95.2 holds that no hook calls jq itself. So it is told apart by the field
+  # a Write cannot be sent without: a call carrying a `content` string is refused
+  # here, which is every Write, and an Edit never carries one.
+  field_exact written content 2>/dev/null && return 1
+  # A Write carries no old_string either, and an Edit without one is not the
+  # exception.
   field_exact old old_string 2>/dev/null || return 1
   field_exact new new_string 2>/dev/null || return 1
   # REDUNDANT, AND KEPT KNOWINGLY. A newline in `new` moves the rest of the
