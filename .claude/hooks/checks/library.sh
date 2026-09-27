@@ -79,24 +79,32 @@ pass() {  # pass <refuse|permit|static> <format> [arguments...] -- an ok line, r
 # into that parser, so the two spellings cannot drift apart with the tests
 # green. The ledger records the first line, which the indent never reaches.
 #
-# LINEAR IN THE MESSAGE, AND WHY IT IS NOT ONE SUBSTITUTION (#293). The indent
-# was first written as `${line//$'\n'/$'\n'$indent}`, and under a UTF-8 locale
-# bash's substitution grows with the square of the message: one `fail` over a
-# 10,000-line message of 580 KB took 6.8 s, against 0.06 s before #224 and
-# 0.14 s in the form below, which took 0.03 s at 2,000 lines and 0.72 s at
-# 50,000. The rest of the message is read into an array by `mapfile` and each
-# element given the indent, which is linear. The here-string adds one newline
-# and `mapfile -t` takes one off, so a message ending in a newline still ends
-# in an indent-only line, as the substitution printed it.
+# LINEAR IN THE MESSAGE, AND WHY NO LINE OF IT IS CUT BY A PATTERN (#293). The
+# indent was first written as `${line//$'\n'/$'\n'$indent}`, and under a UTF-8
+# locale bash's substitution grows with the square of the message: one `fail`
+# over a 10,000-line message of 580 KB took 6.8 s, against 0.06 s before #224.
+# The second form cut the first line off with `${line%%$'\n'*}` and the rest
+# with `${line#*$'\n'}`, and both strips grow with the square of the FIRST
+# line, however few lines follow it: 887 ms of CPU for a 40,000-byte first
+# line, against 55 ms at 10,000 (review of PR #285, round 3). So the whole
+# message is read into an array by `mapfile`, element 0 is the first line and
+# the rest are given the indent, which is linear in both shapes: 13 ms for a
+# 40,000-byte first line and 15 ms at 160,000; 70 ms for 10,000 lines of 58
+# bytes and 299 ms for 40,000. The here-string adds one newline and
+# `mapfile -t` takes one off, so a message ending in a newline still ends in an
+# indent-only line, and an empty message is one empty element, printed as
+# `  FAIL ` alone, as the substitution printed both. `record`'s own tab
+# substitution is #300's.
 fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, recorded
   local dir="$1" fmt="$2" line first indent='       '
   local -a rest
   shift 2
   printf -v line "$fmt" "$@"
-  first=${line%%$'\n'*}
+  mapfile -t rest <<< "$line"
+  first=${rest[0]}
+  unset 'rest[0]'
   printf '  FAIL %s\n' "$first"
-  if [[ $first != "$line" ]]; then
-    mapfile -t rest <<< "${line#*$'\n'}"
+  if (( ${#rest[@]} )); then
     printf '%s\n' "${rest[@]/#/$indent}"
   fi
   FAILED=1

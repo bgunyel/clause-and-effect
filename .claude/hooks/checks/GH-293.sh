@@ -50,21 +50,51 @@
 # run cut off at 20 s of wall clock, or one that exits non-zero, fails the
 # row, so a `fail` that is not there fails it too, and one slow enough to be
 # cut off fails it in the refusing direction, as the defect does.
+#
+# TWO SHAPES, because a size can be in many lines or in one. The form this
+# file first pinned, `${line%%$'\n'*}` for the first line and `${line#*$'\n'}`
+# for the rest, is linear in the number of lines and grows with the square of
+# the FIRST line: 55 ms of CPU for a 10,000-byte first line and 887 ms at
+# 40,000, measured by rev-agent-224 in round 3 of the review of PR #285 at
+# 2.9 s and 51.9 s of wall clock for 40 KB and 160 KB. The many-lines shape
+# never sees it, because each of its lines is 58 bytes. So the second shape is
+# a first line of 40,000 bytes against one of 160,000, each followed by one
+# short line. Not 10,000 against 40,000: a linear `fail` takes 3 or 4 ms at
+# 10,000, under the 10 ms floor, and the floor then hides a `%%` strip alone,
+# 3 ms and 38 ms reading as 3.8 times. Measured on this row at a load
+# average of 24, fastest of three: the linear `fail` 13 and 16 ms, ok; the
+# `fail` before #224, whose `%%` strip this shape exists for, 41 and 855 ms,
+# FAIL; the linear `fail` with its first line taken by `%%` again, 48 and
+# 887 ms, FAIL; and the second form cut off at 20 s at 160,000 bytes, FAIL.
+# The many-lines shape passes all three of those, which is why it is not
+# enough alone.
+#
+# THE TIME PRINTED IS THE TIME MEASURED. The floor enters the ratio and
+# nothing else, so a small time under 10 ms is printed as it was read (review
+# of PR #285, round 3).
+#
+# `record` IS NOT TIMED HERE. LEDGER is empty, so `record` returns before its
+# own `${3//$'\t'/ }`, which is a many-match substitution of #293's kind over
+# the first line and is #300's, with `pass`'s `%%` strip.
 
 section "=== issue #293: fail costs time linear in its message ==="
 
 requirement GH-293 <<'REQ'
-- text: `fail` prints and records a message in time linear in its size:
-  under C.UTF-8, one `fail` over a message of 10,000 lines, 580 KB, costs at
-  most eight times the CPU time of one over the first 2,500 of those lines,
-  each the fastest of three.
+- text: `fail` prints a message, and hands `record` its first line, in time
+  linear in the message's size, whether that size is in many lines or in one
+  long first line. Under C.UTF-8, each the fastest of three: one `fail` over
+  10,000 lines of 58 bytes costs at most eight times the CPU time of one over
+  the first 2,500 of them; and one over a 160,000-byte first line and a short
+  second line costs at most eight times the CPU time of one over a
+  40,000-byte first line and the same second line.
 - from: #293
 - kind: defect-refusing
 - status: active
 - direction: static: a property of the suite's helpers
 - note: What `fail` prints is #224's, pinned by GH-224.1, and a linear `fail`
   prints it byte for byte as the substitution did; this entry is about the
-  time alone.
+  time alone. `record`'s own time is not in it: the check runs with an empty
+  LEDGER, and `record`'s tab substitution is #300's.
 REQ
 shape_pin 'GH-293:static'
 
@@ -72,6 +102,10 @@ R293_LARGE="$FIXTURES/r293-large"
 R293_SMALL="$FIXTURES/r293-small"
 awk 'BEGIN { for (i = 0; i < 10000; i++) printf "line %05d of a captured output, padded to about 57 bytes\n", i }' > "$R293_LARGE"
 head -n 2500 "$R293_LARGE" > "$R293_SMALL"
+R293_FIRST_LARGE="$FIXTURES/r293-first-large"
+R293_FIRST_SMALL="$FIXTURES/r293-first-small"
+{ head -c 160000 /dev/zero | tr '\0' a; printf '\nsecond\n'; } > "$R293_FIRST_LARGE"
+{ head -c 40000 /dev/zero | tr '\0' a; printf '\nsecond\n'; } > "$R293_FIRST_SMALL"
 # The child's status is `child_status` and not `rc`, as `unarmed` names grep's
 # `grep_status`: the #98 self-test derives every helper that reads `rc=$?` as
 # one that runs a hook, and this one runs none.
@@ -91,22 +125,28 @@ r293_fail_ms() {  # r293_fail_ms <message file> -- "<CPU ms> <exit>", the fastes
   done
   printf '%s %s\n' "$best" "$best_status"
 }
-R293_S=$(r293_fail_ms "$R293_SMALL")
-R293_L=$(r293_fail_ms "$R293_LARGE")
+r293_scales() {  # r293_scales <shape> <small file> <small size> <large file> <large size>
+  local small large floored
+  small=$(r293_fail_ms "$2")
+  large=$(r293_fail_ms "$4")
+  if [ "${small#* }" != 0 ] || [ "${large#* }" != 0 ]; then
+    fail static '%s\n         the child bash exited %s at %s and %s at %s (124 is the 20 s cut-off), so no time here is the time of fail' \
+      "fail over $1" "${small#* }" "$3" "${large#* }" "$5"
+    return
+  fi
+  small=${small% *} large=${large% *}
+  floored=$small
+  [ "$floored" -ge 10 ] || floored=10
+  if [ $(( large * 10 / floored )) -lt 80 ]; then
+    pass static 'scaled fail over %s: %s ms of CPU at %s, %s ms at %s' "$1" "$small" "$3" "$large" "$5"
+  else
+    fail static '%s\n         %s ms of CPU at %s, %s ms at %s; four times the size may cost at most eight times' \
+      "fail is not linear in $1" "$small" "$3" "$large" "$5"
+  fi
+}
 
 req GH-293
-if [ "${R293_S#* }" != 0 ] || [ "${R293_L#* }" != 0 ]; then
-  fail static '%s\n         the child bash exited %s at 2,500 lines and %s at 10,000, so no time here is the time of fail' \
-    'fail over 2,500 and 10,000 lines' "${R293_S#* }" "${R293_L#* }"
-else
-  R293_S=${R293_S% *} R293_L=${R293_L% *}
-  [ "$R293_S" -ge 10 ] || R293_S=10
-  if [ $(( R293_L * 10 / R293_S )) -lt 80 ]; then
-    pass static 'scaled fail over 2,500 and 10,000 lines: %s ms and %s ms of CPU' "$R293_S" "$R293_L"
-  else
-    fail static '%s\n         %s ms of CPU at 2,500 lines, %s ms at 10,000; four times the lines may cost at most eight times' \
-      'fail is not linear in its message' "$R293_S" "$R293_L"
-  fi
-fi
+r293_scales 'many lines' "$R293_SMALL" '2,500 lines' "$R293_LARGE" '10,000 lines'
+r293_scales 'one long first line' "$R293_FIRST_SMALL" 'a 40,000-byte first line' "$R293_FIRST_LARGE" 'a 160,000-byte first line'
 
 sourced_to_end

@@ -1460,6 +1460,12 @@ it has no entry above (Q16).
   GH-177's text says what is refused. It adds its requirements in the pull
   request that fixes it
 - #285: the pull request for #224; rev-agent-224's review of it is cited where
-  what it found stands -- a quadratic `fail`, fixed there as #293, and a
-  requirement's text wider than the check that drives it, narrowed in
-  GH-224.2
+  what it found stands -- a quadratic `fail`, fixed there as #293, then the
+  fix's own quadratic in a long first line, and a requirement's text wider
+  than the check that drives it, narrowed in GH-224.2
+- #300: `pass`'s first-line strip and `record`'s tab substitution, each
+  quadratic in the first line of a message, found by dev-agent's sweep in
+  round 3 of the review of #285 and left there because neither is in its
+  diff. Cited in #293's issue file and beside `fail`, where each says the time
+  it measures is not `record`'s. It adds its requirements in the pull request
+  that fixes it
