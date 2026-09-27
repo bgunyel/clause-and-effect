@@ -101,3 +101,84 @@ so that only the scratch settings loaded.
 - **#113** can proceed on §1c's answers, which say a `WorktreeCreate` hook
   owns the whole creation and not only the base.
 - **The interactive front end** was not watched for §5. Only `claude -p` was.
+
+# 2026-09-27 · dev-agent-110 — #110: rev-agent-110's round 1 on PR #287
+
+**Written 2026-09-27, 21:13.** Branch `worktree-issue-110-live-runbook`, from
+`ba1e11b` to `4b302b6` plus this entry; 5 ahead of `origin/dev-05`, which
+has not moved from `abba1d0`, and 0 behind it.
+
+## What rev-agent-110 found, and what was done
+
+rev-agent-110 reviewed the head `ba1e11b` and posted two gating findings and
+eight others. The assistant took all ten, and declined none.
+
+- **G2: GH-110.5 was a second copy of #104's grammar, narrower than the
+  original.** The assistant wrote `r110_disagree` to parse the `verify` field
+  on its own, and it wanted `^- verify: runbook §[0-9]+$` exactly. #104's
+  reader trims the value and joins continuation lines, so a verify with a
+  trailing blank, or wrapped onto a second line, resolved for #104 and pointed
+  nowhere for the copy. A runbook that then dropped the entry passed with the
+  suite green; rev-agent-110 measured both. The copy's own header named the
+  risk ("THE GRAMMAR IS #104'S, written a second time"). The assistant chose
+  the fix rev-agent-110 preferred: the comparison is now a part of #104's
+  reader, in its `findings` mode, and emits GH-110.5 rows. Its checks stand
+  beside that reader's fixtures in `end-of-run.sh`, because a reader sourced
+  after the issue file cannot be called from it. `checks/GH-110.sh` now only
+  declares. Moving the reader into the library so the issue file could call it
+  was rejected: it would move three hundred lines of #104 for one caller.
+  - N1 (a directory runbook or `requirements.md` let the copy print
+    agreement), N2 (a `*.md` glob and `awk -v` paths where
+    `requirements_split` and `ENVIRON` exist) and N5 (no scope reset on a `##`
+    heading of another shape) were siblings, and went with the copy. The
+    reader already reset scope in `requirements.md`. The assistant added the
+    same reset to the runbook read, and a Verifies line outside any section is
+    now a finding.
+  - Measured on a scratch copy of the reader, never in this checkout:
+    rev-agent-110's mutants A, B and C, and D (`- verify:runbook §1`), each
+    print `§1: US-6 points here, and the Verifies line does not name it`, and
+    the unmutated copy prints the `ok` row.
+- **G1: runbook §2's filter read neither `target` nor
+  `.conditions.ref_name.exclude`.** The assistant wrote it that way, so a
+  ruleset excluding `main`, or targeting tags, printed the expected literal.
+  The filter and literal now carry both. The assistant re-ran §2 live, and ran
+  the filter over six locally mutated copies of the ruleset's JSON: each one
+  differs from the literal. The run record has an addendum.
+- **N3, N4, N7 (prose against itself or its source).** §5's *When it
+  differs* line called a timed-out refusal an exception its own prose filed
+  like any other. §1d and §6 quoted a line's opening without saying so. §5's
+  **Also observes** named an issue. `GH-110.sh` said "this pull request".
+- **N6.** *Mistakes and dead ends* above says "The scratch repositories were
+  rebuilt from a plain `origin` by cloning." That is passive, and it is a
+  correction. The assistant rebuilt them. This entry is append-only, so the
+  correction is made here rather than in that line.
+- **N8.** A 140-column comment line in THE LINE CAP, reflowed.
+- **One more of the assistant's.** The first suite run after the fix went red
+  on GH-104.3: the new comments cited `#287`, a number with no entry. They now
+  name "the pull request that closed #110".
+
+The `r110_disagree` named above, under review round 1, no longer exists.
+
+## Evidence
+
+- Check suite on `4b302b6`: `ALL CHECKS PASSED`, 6,240 ok rows, run beside
+  the two mutant runs below.
+- The run before it, on the uncommitted tree, went red on the `#287`
+  citation only, and passed every GH-110.5 row.
+- The new reader rules, mutated in scratch clones of `4b302b6` and run through
+  the full suite:
+  - X: the runbook's scope reset, the unread-runbook finding and the
+    no-entries finding disabled. Red at four rows: the three naming those
+    rules, and the renamed-headings row, whose expected lines name the
+    heading each stray Verifies line stands under.
+  - Y: the no-sections finding disabled. Red at exactly the one row naming it.
+
+## Open
+
+- Unchanged from the entry above: §6, §1b in this repository, and the rest of
+  §1c are Bertan's; #113 can proceed; the interactive front end was not
+  watched for §5.
+- A runbook or `requirements.md` that is a directory still aborts #104's
+  reader under mawk. The live read goes red on the status and no GH-110.5 row
+  says agreement, and a fixture now pins both halves. Refusing it in the shell
+  first, as the split set is, would be #104's to take.
