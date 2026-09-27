@@ -1113,7 +1113,15 @@ echo "  running check-hooks.sh against $WORK ..."
 # a mutation that left one looping would hang this harness rather than report
 # anything. A run killed at the bound prints no matrix, which is read below as
 # did-not-complete -- never as caught.
-RUN_BOUND=600
+#
+# DERIVED FROM THE RATE, because it was a second copy of it. It stood here as
+# 600 s beside a rate of 275, and when PR #260 re-measured the rate at 1272 s
+# the sentence above became false and the baseline itself was killed at the
+# bound -- exit 124, read as "the unmutated copy is not green", with nothing
+# wrong in the tree. Three times the rate keeps the sentence true whatever the
+# rate is re-measured to. The cost is the other job of a bound: a mutation that
+# loops is now given about an hour before it is called did-not-complete.
+RUN_BOUND=$(( MEASURED_SECONDS_PER_RUN * 3 ))
 timeout "$RUN_BOUND" env CHECK_HOOKS_DIR="$WORK" bash "$SUITE" --matrix > "$RUN_OUT" 2>"$WORK_ROOT/baseline.err"
 BASELINE_STATUS=$?
 RUNS=$((RUNS + 1))
