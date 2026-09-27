@@ -41,12 +41,18 @@
 #     outlier a small run whose fastest of three caught a quiet moment. The
 #     noisy term is the wall clock, not the step.
 #
-# Measured by CPU time at a load average of 26, fastest of three at each size:
-# the linear `fail` 4.2 to 4.4 times over eight runs (22 or 23 ms and 97 to
-# 101 ms), the `fail` before #224 3.9 to 4.2 over six (10 or 11 ms and 42 to
-# 46 ms), and the substitution 15.4 and 15.5 over two (227 ms and 3,535 ms,
-# 231 ms and 3,576 ms). So the bound of eight stands 1.8 times above the one
-# and 1.9 times below the other, against a spread of about five per cent. A
+# Measured by CPU time at a load average of 26, fastest of three at each size,
+# when the linear `fail` was the second form described below: that form 4.2
+# to 4.4 times over eight runs (22 or 23 ms and 97 to 101 ms), the `fail`
+# before #224 3.9 to 4.2 over six (10 or 11 ms and 42 to 46 ms), and the
+# substitution 15.4 and 15.5 over two (227 ms and 3,535 ms, 231 ms and 3,576
+# ms). The form `fail` has now, reading the whole message with `mapfile`,
+# measured 15 or 16 ms and 69 to 73 ms, 4.3 to 4.7 times, in four runs of
+# this row at a load average of 18 to 25, two of them rev-agent-224's (review
+# of PR #285, round 4); beside `fail` the library quotes one of them, 70 ms at
+# 10,000 lines. So the bound of eight stands about 1.7 times above the linear
+# form and 1.9 times below the substitution, against a spread of about five
+# per cent. A
 # run cut off at 20 s of wall clock, or one that exits non-zero, fails the
 # row, so a `fail` that is not there fails it too, and one slow enough to be
 # cut off fails it in the refusing direction, as the defect does.
@@ -110,7 +116,7 @@ R293_FIRST_SMALL="$FIXTURES/r293-first-small"
 # `grep_status`: the #98 self-test derives every helper that reads `rc=$?` as
 # one that runs a hook, and this one runs none.
 r293_fail_ms() {  # r293_fail_ms <message file> -- "<CPU ms> <exit>", the fastest of three
-  local i ms child_status best= best_status=
+  local i ms child_status best=
   for i in 1 2 3; do
     ms=$(LC_ALL=C.UTF-8 LEDGER= REQ=GH-0 timeout 20 bash -c '
       source "$1" || exit 90
@@ -121,9 +127,10 @@ r293_fail_ms() {  # r293_fail_ms <message file> -- "<CPU ms> <exit>", the fastes
       echo $(( 10#${user/./} + 10#${sys/./} ))' bash "$SUITE_DIR/checks/library.sh" "$1" 2> /dev/null)
     child_status=$?
     [ "$child_status" = 0 ] || { printf '%s %s\n' - "$child_status"; return; }
-    if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms best_status=$child_status; fi
+    if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms; fi
   done
-  printf '%s %s\n' "$best" "$best_status"
+  # Every status but 0 returned above, so the one printed here is 0.
+  printf '%s 0\n' "$best"
 }
 r293_scales() {  # r293_scales <shape> <small file> <small size> <large file> <large size>
   local small large floored

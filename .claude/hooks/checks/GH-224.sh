@@ -102,6 +102,35 @@ ${R224_IND}after two
 ${R224_IND}" \
     "$(fail static 'r224 blanks\n\n\nafter two\n')"
 
+# EVERY LINE OF A LONG MESSAGE, and not only of a short one (review of PR
+# #285, round 4). The rows above drive messages of seven lines at most, and
+# GH-293 drives long ones with their output thrown away, so a `fail` that kept
+# its first twenty continuation lines and dropped the rest silently passed the
+# whole suite and the Python tests. This row drives 2,000 continuation lines --
+# blank ones, ones the message indented itself and ones at column 0 among them
+# -- and compares what `fail` prints with a text built without it: the row
+# line, then every line after the first with the indent put in front by `sed`.
+# A difference is reported as `cmp` gives it, the first byte and line that
+# differ, rather than as two texts of two thousand lines.
+R224_LONG_IN="$FIXTURES/r224-long-in"
+R224_LONG_WANT="$FIXTURES/r224-long-want"
+R224_LONG_GOT="$FIXTURES/r224-long-got"
+{
+  printf 'r224 a long message\n'
+  awk 'BEGIN { for (i = 1; i <= 2000; i++) {
+                 if (i % 100 == 50) print ""
+                 else if (i % 7 == 0) print "   indented line " i
+                 else print "line " i } }'
+} > "$R224_LONG_IN"
+{
+  printf '%sFAIL %s\n' "$R224_ROW" 'r224 a long message'
+  tail -n +2 "$R224_LONG_IN" | sed "s/^/$R224_IND/"
+} > "$R224_LONG_WANT"
+( fail static '%s' "$(< "$R224_LONG_IN")" ) > "$R224_LONG_GOT"
+tok 'a fail over a message of 2,001 lines prints all 2,000 after the first, each with the indent in front, byte for byte as sed puts it there' \
+    'identical' \
+    "$(cmp "$R224_LONG_WANT" "$R224_LONG_GOT" 2>&1 && echo identical)"
+
 # The ledger, from a child bash with a ledger of its own. What it records for
 # the message above is its first line, which is what it recorded before #224:
 # measured, not assumed, against the library as #224 found it -- see the pull
