@@ -1263,9 +1263,6 @@ it has no entry above (Q16).
   two-digit fd. Cited where that guard is, because a guard narrower than the
   prose beside it reads as coverage -- the shape the fifth review of PR #169
   found in `nested_defs` and the sixth found here
-- #186: `every_hook` passes on an empty hook list, and the guard answering it
-  sits at one of its producers rather than in the consumer. Cited in the helper.
-  It is the first review of PR #169's finding at a second call site
 - #187: `report_says` records the report by basename, so a modified fixture
   keeping that name would satisfy GH-109.4 for a hook nothing ran. Cited where
   the exception is taken. The invariant it rests on is written in a comment and
