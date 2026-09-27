@@ -632,15 +632,17 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
 # IT FAILS WHEN IT RUNS NO HOOK, which is #186. Without that, a list the loop
 # consumed nothing from would leave `refused` empty and print `ok ALLOW by all`
 # for a command no hook had judged -- recording permit-direction coverage for
-# six requirements on nothing. The count is of hooks the loop ran and not a test
-# of the string, because a list of blanks is not empty and runs no hook all the
-# same, which #186's triage measured. It is a failing verdict and not an abort:
-# one caller's empty list is that check's defect, not the run's. And it is in
-# here, the consumer, because the guard that first answered it stood beside one
-# producer, the derivation that reads settings.json, while `drive_helper` and
-# `every_hook_of` set `XH_HOOKS` from elsewhere -- the first review of PR #169's
-# finding at a second call site, filed by the sixth. That guard stays, naming
-# its own cause.
+# six requirements on nothing. The count is of the names the loop consumed and
+# not a test of the string, because a list of blanks, whether spaces, tabs or
+# newlines, is not empty and gives the loop no name all the same, which #186's
+# triage measured. A name that is no hook is counted, and fails on its exit
+# status instead, 127 for a path that is not there. It is a failing verdict and
+# not an abort: one caller's empty list is that check's defect, not the run's.
+# And it is in here, the consumer, because the guard that first answered it
+# stood beside one producer, the derivation that reads settings.json, while
+# `drive_helper` and `every_hook_of` set `XH_HOOKS` from elsewhere -- the first
+# review of PR #169's finding at a second call site, filed by the sixth. That
+# guard stays, naming its own cause.
 every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every Bash hook
   local dir="$1" label="$2" cmd="$3" hook rc err refused= runs=0
   for hook in $XH_HOOKS; do

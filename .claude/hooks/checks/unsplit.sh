@@ -13935,8 +13935,10 @@ XH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].co
 # a list it ran no hook from, so every spelling below printed `ok ALLOW by all`.
 # It fails that row itself now, so an empty list would print a FAIL for each,
 # naming only its own label. This guard stays because it names the cause --
-# nothing was read out of settings.json -- and stops the run before those rows
-# print. Unreachable today, since the two earlier guards read the same file.
+# nothing was read out of settings.json -- and stops the run on an empty
+# derivation before those rows print. It is a string test, so a derivation of
+# blanks passes it and reaches that failure row by row instead. Unreachable
+# today, since the two earlier guards read the same file.
 [ -n "$XH_HOOKS" ] || {
   echo "no Bash hooks were read out of settings.json; the cross-hook checks below prove nothing" >&2
   exit 1
