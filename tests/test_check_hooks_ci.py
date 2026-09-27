@@ -711,6 +711,36 @@ def test_report_shows_a_detail_with_exactly_one_indent_removed(tmp_path):
     ) in summary_text(paths)
 
 
+def test_report_takes_every_line_of_a_long_detail(tmp_path):
+    """
+    The rule is the whole unbroken run of indented lines, however long, and
+    every other test here gives a detail of seven lines at most or one long
+    line: a parser that kept the first twenty lines of a detail and dropped the
+    rest passed all of them (review of #224, round 4, the parser's half of the
+    same finding in `fail`). Two thousand lines -- blank ones, ones the hook
+    indented itself and ones at column 0 once the indent is removed -- come
+    through whole, and the row after them ends the detail.
+    """
+    detail = [
+        "" if i % 100 == 50 else f"   indented line {i}" if i % 7 == 0 else f"line {i}"
+        for i in range(1, 2001)
+    ]
+    log = (
+        "  FAIL row L\n"
+        + "".join(f"       {line}\n" for line in detail)
+        + "  ok   row M\n"
+        + "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    data = json.loads(paths["result.json"].read_text())
+    assert (data["passed"], data["failed"]) == (1, 1)
+    assert (
+        "```text\n  FAIL row L\n" + "".join(f"{line}\n" for line in detail) + "```\n"
+    ) in summary_text(paths)
+
+
 def test_report_takes_a_stray_line_that_opens_with_the_indent_as_detail(tmp_path):
     """
     A RECORDED TRADE, NOT A WANTED PROPERTY. A line `fail` did not print but
