@@ -234,13 +234,17 @@ SOME CHECKS FAILED
 """
 
 
-def report(tmp_path, log_text, exit_status, seconds="204"):
+def report(tmp_path, log_text, exit_status, seconds="204", outcome="success"):
+    """`exit_status=None` is a suite step that wrote none: it was stopped.
+    `seconds=None` is one that never wrote `started`: the suite never began."""
     log = tmp_path / "check-hooks.log"
     log.write_text(log_text)
     paths = {name: tmp_path / name for name in ("result.json", "summary.md", "github_output")}
+    status_args = [] if exit_status is None else ["--exit-status", str(exit_status)]
+    seconds_args = [] if seconds is None else ["--seconds", seconds]
     result = run_script(
-        "report", "--log", str(log), "--exit-status", str(exit_status),
-        "--seconds", seconds, "--tested-commit", "abc123",
+        "report", "--log", str(log), *status_args, "--suite-outcome", outcome,
+        *seconds_args, "--tested-commit", "abc123",
         "--json", str(paths["result.json"]), "--summary", str(paths["summary.md"]),
         "--output", str(paths["github_output"]),
     )
@@ -257,6 +261,7 @@ def test_report_counts_a_passing_run(tmp_path):
         "failed": 0,
         "seconds": 204,
         "exit_status": 0,
+        "ended": "exited",
         "verdict": "ALL CHECKS PASSED",
         "tested_commit": "abc123",
     }
@@ -266,10 +271,13 @@ def test_report_counts_a_passing_run(tmp_path):
         "failed=0",
         "seconds=204",
         "exit_status=0",
+        "ended=exited",
     ]
     summary = paths["summary.md"].read_text()
     assert summary.startswith("## check-hooks: passed\n")
-    assert "| 3 | 3 | 0 | 204 | 0 | `abc123` |" in summary.splitlines()
+    assert "| results | passed | failed | seconds | exit status | ended | tested commit |" \
+        in summary.splitlines()
+    assert "| 3 | 3 | 0 | 204 | 0 | exited | `abc123` |" in summary.splitlines()
     assert "Failing rows" not in summary
 
 
@@ -581,3 +589,83 @@ def test_verify_merge_reads_parents_from_the_header_and_not_the_message(tmp_path
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"  second parent (head): {head}" in result.stdout.splitlines()
+
+
+# --------------------------------------------------------------------------- #
+# report: how the suite step ended (#208)
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.parametrize(
+    ("outcome", "ended", "said"),
+    [
+        ("cancelled", "cancelled",
+         "The suite did not exit: the run was cancelled while it ran. The end of its log:"),
+        ("failure", "timed-out",
+         "The suite did not exit: its step ran out of time. The end of its log:"),
+    ],
+)
+def test_report_tells_a_cancel_from_a_timeout(tmp_path, outcome, ended, said):
+    """A suite step that wrote no exit status was stopped from outside it. Both
+    ways used to read as exit status 124, a timeout, and 21 of 60 runs were
+    cancels (#208). Neither is given a status the suite never had."""
+    result, paths = report(tmp_path, PASSING_LOG.replace("ALL CHECKS PASSED", ""), None,
+                           outcome=outcome)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    data = json.loads(paths["result.json"].read_text())
+    assert (data["exit_status"], data["ended"]) == (None, ended)
+    assert paths["github_output"].read_text().splitlines()[-2:] == [
+        "exit_status=", f"ended={ended}"]
+    summary = paths["summary.md"].read_text()
+    assert summary.startswith("## check-hooks: FAILED\n")
+    assert f"| 3 | 3 | 0 | 204 | – | {ended} | `abc123` |" in summary.splitlines()
+    assert said in summary.splitlines()
+
+
+def test_report_calls_an_exit_status_an_exit_even_under_a_cancel(tmp_path):
+    """The cancel landed after the suite had exited and its status was written:
+    the suite finished, and what it said is the record."""
+    result, paths = report(tmp_path, PASSING_LOG, 0, outcome="cancelled")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    data = json.loads(paths["result.json"].read_text())
+    assert (data["exit_status"], data["ended"]) == (0, "exited")
+
+
+@pytest.mark.parametrize("outcome", ["success", "skipped", ""])
+def test_report_refuses_a_missing_exit_status_it_cannot_explain(tmp_path, outcome):
+    """The suite step writes its status unless it is stopped, and only a cancel
+    or a timeout stops it. Anything else is recorded as unknown, never as either
+    of those, and fails the report."""
+    result, paths = report(tmp_path, PASSING_LOG, None, outcome=outcome)
+
+    assert result.returncode == 1
+    assert (
+        f"::error::the suite step wrote no exit status and its outcome is '{outcome}', "
+        "which is neither a cancel nor a timeout"
+    ) in result.stdout.splitlines()
+    data = json.loads(paths["result.json"].read_text())
+    assert (data["exit_status"], data["ended"]) == (None, "unknown")
+
+
+def test_report_says_a_cancelled_suite_did_not_exit_above_its_failing_rows(tmp_path):
+    result, paths = report(tmp_path, FAILING_LOG.replace("SOME CHECKS FAILED", ""), None,
+                           outcome="cancelled")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    lines = paths["summary.md"].read_text().splitlines()
+    assert lines.index("The suite did not exit: the run was cancelled while it ran.") \
+        < lines.index("### Failing rows (2)")
+
+
+def test_report_does_not_call_a_step_that_failed_before_the_suite_a_timeout(tmp_path):
+    """Outcome `failure` is a timeout only once the suite has started: a step
+    that failed before writing `started` never ran it, and nothing timed out."""
+    result, paths = report(tmp_path, "", None, seconds=None, outcome="failure")
+
+    assert result.returncode == 1
+    assert ("::error::the suite step wrote no exit status and its outcome is 'failure', "
+            "which is neither a cancel nor a timeout") in result.stdout.splitlines()
+    data = json.loads(paths["result.json"].read_text())
+    assert (data["exit_status"], data["ended"], data["seconds"]) == (None, "unknown", None)
+    assert "seconds=" in paths["github_output"].read_text().splitlines()
