@@ -218,7 +218,7 @@ GH-95.2 GH-96.1 GH-96.2:static GH-96.3:static GH-97.1 GH-97.2:refuse-only
 GH-98:static GH-99.1:static GH-99.2:static GH-99.3:static GH-100:static
 GH-101:static GH-102:static GH-104.1:static GH-104.2:static GH-104.3:static
 GH-104.4:static GH-104.5:review GH-106:static GH-117 GH-117.1:permit-only
-GH-118:gap
+GH-118
 GH-124:static GH-127:gap GH-130:superseded-by GH-131:gap GH-133:refuse-only
 GH-134 GH-134.1:static GH-135:gap GH-136:gap GH-139 GH-167:gap GH-175:gap
 GH-130.1 GH-130.2 GH-130.3 GH-130.4 GH-130.5 GH-130.6
