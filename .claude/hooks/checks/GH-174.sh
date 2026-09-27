@@ -72,34 +72,48 @@ REQ
 requirement GH-174.2 <<'REQ'
 - text: No line of the suite -- the driver and every file it sources -- sets
   PATH and then, later on the same line, asks the calling shell what a name
-  is, with `command` and an option cluster holding `v` or `V`, or with
-  `type`. PATH is set by `PATH=` or `PATH+=` standing as a word of its own,
-  `export PATH=` included; the question is a word of its own after a blank,
-  `;`, `&`, `|`, `(`, `!` or a backquote, so it is read after `&&` and `||`,
-  after `if`, `!`, `$(` or `[`, after a command standing in between, and as
-  the command a PATH assignment stands in front of. A question about what a
-  PATH holds is asked of its directory, so a function in the invoker's
-  environment cannot answer it. A line that is a comment is not read; a file
-  that fails to be read fails the check rather than reading as clean.
+  is, with `command` and an option word holding `v` or `V`, after any other
+  option words, or with `type`. PATH is set by `PATH=` or `PATH+=` standing
+  as a word of its own, `export PATH=`, `declare PATH=` and `local PATH=`
+  included; the question is a word of its own after a blank, `;`, `&`, `|`,
+  `(`, `!`, a backquote, a quote or a backslash, so it is read after `&&` and
+  `||`, after `if`, `!`, `$(` or `[`, after a command standing in between, as
+  the command a PATH assignment stands in front of, as the first word of a
+  payload quoted for a child shell, and written `\command` or `\type`. A
+  question about what a PATH holds is asked of its directory, so a function
+  in the invoker's environment cannot answer it. A line that is a comment is
+  not read; a file that fails to be read fails the check rather than reading
+  as clean.
 - from: #174
 - kind: defect-refusing
 - status: active
 - direction: static: it reads the suite's own text
-- note: What the derivation cannot read is stated rather than left to be
-  found: PATH set on one line and asked about on a later one, PATH set
-  through a variable holding its name or through `declare` or `read`, and
-  any other builtin that resolves a function -- `hash` among them. It reads
-  within quotes as readily as outside them, so a question in a payload
-  handed to a child shell is read too, and so is prose on a line that sets
-  PATH and then says one of the asking words: both are the refusing
-  direction, and accepted, because telling code from quoted text is the
-  thing a line-wide read cannot do. A trailing comment is read for the same
-  reason; stripping one cuts at the first `#` and could hide a question.
-  Review of the pull request for #174 found the first expression narrower
-  than this text: it read the question only straight after the first
-  separator, so `&&`, `||`, `if`, `!`, `$(`, a command between, `PATH+=` and
-  `command -pv` all went unread, and the note named `export PATH=` as unread
-  though it was read. Each is now a row of the fixture.
+- note: What the derivation cannot read is a fixture of its own, every line
+  of it expected unread, so the list is checked and not written from memory:
+  PATH set on one line and asked about on the next; PATH set through `read`,
+  `printf -v` or a name held in a variable; `hash` and `compgen -c`, which a
+  function answers as well; `command` reached through a variable; and a
+  question word in quotes of its own. Review of the pull request for #174
+  found the list written by hand wrong twice, `export PATH=` in the first
+  round and `declare` and `local` in the second, each named unread and each
+  read, which is why it is a fixture now. `type -P` is read, though it alone
+  of these spellings ignores a function: the rule is that what a PATH holds
+  is asked of its directory, the correction is one edit to `farm_has`, and a
+  false red is the refusing direction. `type -p` is no such exception, since
+  it answers nothing for a name that is a function even where the PATH holds
+  that name. It reads within quotes as readily as outside them, so prose on
+  a line that sets PATH and then says one of the asking words is read too:
+  the refusing direction, and accepted, because telling code from quoted
+  text is the thing a line-wide read cannot do. A trailing comment is read
+  for the same reason; stripping one cuts at the first `#` and could hide a
+  question.
+  Review found the expression narrower than this text in both of its first
+  two rounds. In the first it read the question only straight after the
+  first separator, so `&&`, `||`, `if`, `!`, `$(`, a command between,
+  `PATH+=` and `command -pv` went unread. In the second it did not read a
+  question opening a quoted payload -- where a child shell imports an
+  exported function -- nor `\command -v`, nor `command -p -v`, whose `v` is
+  in the second option word. Each is now a row of the fixture.
   Hand-mutated like GH-174.1, for the same reason, each case a full run:
   `type` taken out of the expression; the blank taken out of the boundary
   class; `(` taken out of it; `+=` no longer read as setting PATH; the
@@ -133,41 +147,59 @@ lacks 'and asks the calling shell nothing, which would resolve a function ahead 
 # The function is defined inside each $( ), so the guard's own subshells
 # inherit it, and it is gone when the $( ) ends: a `jq` left standing here
 # would be run by every later check that feeds a hook, in place of the program.
-tok 'under a shell that defines a jq function, the shell has a jq whatever PATH says' \
-    'function' "$( jq() { echo 'a wrapper in the invoker environment'; }; type -t jq )"
-tok 'and there the jq fixture guard passes, having asked the farm and not the function' \
-    'passed' "$( jq() { echo 'a wrapper in the invoker environment'; }; r174_guard )"
+#
+# What the calling shell calls `jq` under the jq-less PATH is asked in the same
+# $( ) the guard is evaluated in, and printed beside its `passed`, so the row
+# fails if no function stands in the guard's way there: a `passed` alone says
+# nothing about a function that was never defined. r174_shadowed keeps PATH on
+# one line and the question on the next, which is a shape GH-174.2 states it
+# does not read, and it is the one question in the suite meant to be answered
+# by a function.
+r174_shadowed() {  # r174_shadowed -- what the calling shell calls `jq` under the jq-less PATH
+  local PATH=$NO_JQ_BIN
+  type -t jq
+}
+tok 'under a shell whose jq is a function under the jq-less PATH too, the jq fixture guard passes, having asked the farm' \
+    'function passed' "$( jq() { echo 'a wrapper in the invoker environment'; }; echo "$(r174_shadowed) $(r174_guard)" )"
 tok 'under a shell with no jq function, it passes too' \
     'passed' "$( unset -f jq; r174_guard )"
 tok 'and pointed at a jq-less copy that still holds jq, it fails and says why' \
     "$R174_GUARD_SAYS" "$( unset -f jq; NO_JQ_BIN=$WITH_JQ_BIN; r174_guard )"
 
 # THE DERIVATION. A line that sets PATH, as a word of its own, and later on it
-# asks `command -v` -- any option cluster holding `v` or `V` -- or `type`, as a
-# word of its own after a blank or one of `;&|(!` and a backquote. A line whose
-# first word is `#` is not read. awk and not grep, for the file and line it
-# names; `-v` would eat a backslash, and the expression has none.
-R174_RE='(^|[^A-Za-z0-9_])PATH[+]?=.*[;&|(![:space:]`](command[[:space:]]+-[A-Za-z]*[vV][A-Za-z]*|type)([[:space:]]|$)'
+# asks `command -v` -- an option word holding `v` or `V`, after any other option
+# words -- or `type`, as a word of its own after a blank, one of `;&|(!`, a
+# backquote, a quote or a backslash. A line whose first word is `#` is not
+# read. awk and not grep, for the file and line it names; the expression goes
+# in through ENVIRON and not `-v`, which would take the backslash that stands
+# for a backslash in the class as an escape.
+R174_RE='(^|[^A-Za-z0-9_])PATH[+]?=.*[;&|(![:space:]`"'"'"'\\](command([[:space:]]+-[A-Za-z]+)*[[:space:]]+-[A-Za-z]*[vV][A-Za-z]*|type)([[:space:]]|$)'
 path_lines_asking_shell() {  # path_lines_asking_shell <file>... -- <file>:<line> of each such line, space-separated
   local out awk_status
   # With no file awk would read stdin, and an empty answer would read as clean.
   [ "$#" -gt 0 ] || { echo 'unread: no file was named'; return; }
-  out=$(awk -v re="$R174_RE" '
+  out=$(R174_RE=$R174_RE awk '
+    BEGIN { re = ENVIRON["R174_RE"] }
     /^[[:space:]]*#/ { next }
     $0 ~ re { printf "%s%s:%d", sep, FILENAME, FNR; sep = " " }' "$@" 2>/dev/null)
   awk_status=$?
   if [ "$awk_status" = 0 ]; then printf '%s' "$out"; else echo "unread: awk exited $awk_status"; fi
 }
 
-# The fixture: each shape the derivation reads, lines 1 to 14, and the near
-# misses it must not, lines 15 to 22. The asking words are held in variables
-# so that no line of this file is a line the derivation reads over the suite
-# below.
+# The fixtures. r174-shapes.sh holds each shape the derivation reads, lines 1
+# to 23, and the near misses it must not, lines 24 to 34. Line 23 is `type -P`,
+# read by the trade GH-174.2's note states. r174-gaps.sh holds what that note
+# says the derivation cannot read, every line of it, so the note's list is a
+# check: a derivation widened to read one turns its row red, and the note has
+# to say so. The asking words are held in variables so that no line of this
+# file is a line the derivation reads over the suite below.
 R174_ASK_V='command -v'
 R174_ASK_UPPER_V='command -V'
 R174_ASK_PV='command -pv'
+R174_ASK_P_V='command -p -v'
 R174_ASK_TYPE='type'
 R174_SHAPES="$FIXTURES/r174-shapes.sh"
+R174_GAPS="$FIXTURES/r174-gaps.sh"
 R174_GONE="$FIXTURES/r174-no-such-file"
 printf '%s\n' \
   '[ -n "$( PATH="$WITH_JQ_BIN"; '"$R174_ASK_V"' jq )" ] \' \
@@ -184,6 +216,15 @@ printf '%s\n' \
   'PATH="$F"; '"$R174_ASK_PV"' jq' \
   'export PATH="$F"; '"$R174_ASK_V"' gh' \
   'PATH="$F"; x=`'"$R174_ASK_V"' jq`' \
+  'PATH="$F" bash -c "'"$R174_ASK_V"' jq"' \
+  'PATH="$F" bash -c '\'''"$R174_ASK_TYPE"' -t jq'\''' \
+  'x=$(PATH="$FARM" bash -c '\'''"$R174_ASK_V"' gh'\'' 2>/dev/null)' \
+  'PATH="$F"; '"$R174_ASK_P_V"' jq' \
+  'PATH=$F \'"$R174_ASK_V"' jq' \
+  'PATH=$F \'"$R174_ASK_TYPE"' jq' \
+  'declare PATH="$F"; '"$R174_ASK_V"' jq' \
+  'local PATH="$F"; '"$R174_ASK_V"' jq' \
+  'PATH="$F"; '"$R174_ASK_TYPE"' -P jq' \
   '  # PATH=<farm>; '"$R174_ASK_V"' gh, a comment' \
   'REAL_GIT=$('"$R174_ASK_V"' git)' \
   '( PATH="$FARM"; gh --version )' \
@@ -192,20 +233,36 @@ printf '%s\n' \
   'PATH="$F"; command jq' \
   'PATH="$F"; my'"$R174_ASK_TYPE"' x' \
   'PATH="$F"; command -p jq' \
+  'PATH="$F"; find . -'"$R174_ASK_TYPE"' f' \
+  'PATH="$F"; echo "$'"$R174_ASK_TYPE"'"' \
+  'PATH="$F"; command -p -- -v' \
   > "$R174_SHAPES"
+printf '%s\n' \
+  'PATH="$F"' \
+  "$R174_ASK_V"' jq' \
+  'read -r PATH <<< "$F"; '"$R174_ASK_V"' jq' \
+  'printf -v PATH %s "$F"; '"$R174_ASK_V"' jq' \
+  'declare "$P=$F"; '"$R174_ASK_V"' jq' \
+  'PATH="$F"; hash jq' \
+  'PATH="$F"; compgen -c jq' \
+  'PATH="$F"; c=command; $c -v jq' \
+  'PATH="$F"; "'"$R174_ASK_TYPE"'" jq' \
+  > "$R174_GAPS"
 rm -f "$R174_GONE"
-[ "$(wc -l < "$R174_SHAPES")" = 22 ] && [ ! -e "$R174_GONE" ] || {
+[ "$(wc -l < "$R174_SHAPES")" = 34 ] && [ "$(wc -l < "$R174_GAPS")" = 9 ] && [ ! -e "$R174_GONE" ] || {
   echo "the #174 fixtures were not created; the checks against them prove nothing" >&2
   exit 1
 }
 R174_READ=
-for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do
+for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23; do
   R174_READ="$R174_READ${R174_READ:+ }$R174_SHAPES:$n"
 done
 
 req GH-174.2
-tok 'the derivation reads every shape of asking the shell under a PATH it set, lines 1 to 14, and no near miss' \
+tok 'the derivation reads every shape of asking the shell under a PATH it set, lines 1 to 23, and no near miss' \
     "$R174_READ" "$(path_lines_asking_shell "$R174_SHAPES")"
+tok 'and reads none of the shapes its note states it cannot read' \
+    '' "$(path_lines_asking_shell "$R174_GAPS")"
 tok 'a file it could not read is not clean, and says why' \
     'unread: awk exited 2' "$(path_lines_asking_shell "$R174_SHAPES" "$R174_GONE")"
 tok 'and no file at all is not clean either' \
