@@ -15,21 +15,34 @@
 # before #224 merged.
 #
 # WHAT IS DRIVEN is the library's own `fail`, in a child bash that sources it
-# with an empty LEDGER, fastest of three runs as the library's other timings
-# are, and under C.UTF-8, the locale all three measurements above were taken
-# in. The message is written to a fixture once and read by each run, so the
-# time is `fail`'s and not the loop that made it. Timed this way, the linear
-# `fail` took 195 ms over this file and the substitution 6,622 ms, so the
-# bound of 1000 ms stands about five times above the one and seven times
-# below the other. The exit status is printed beside the time, as `lib_run`'s
-# is, because a `fail` that is not there fails fast at every size.
+# with an empty LEDGER and times the one `fail` call, and nothing else, with
+# $EPOCHREALTIME, under C.UTF-8, the locale all three measurements above were
+# taken in. The messages are written to fixtures once, so the time is `fail`'s
+# and not the loop that made it or the file read.
+#
+# A RATIO, NOT A BOUND, in the form of #96's `scales_linearly`: four times the
+# lines may cost at most eight times the time, each size's fastest of three,
+# the smaller floored at 10 ms. The first form of this check was the library's
+# `under_a_second` over 10,000 lines, and its first two full runs measured
+# 266 ms and 521 ms; the second was taken at a load average of 36, where
+# `fail` alone took 0.5 s. A bound of a second over a time that doubles with
+# the machine's load is the row that flaked in round 1 of the review of PR
+# #285 (`cs_normalise over one 512 KB line`), and a ratio of two times taken
+# back to back under the same load is not moved by it. Measured at that load,
+# fastest of three: the linear `fail` took 105 ms at 2,500 lines and 532 ms at
+# 10,000, 5.1 times; the substitution 1,139 ms and 18,217 ms, 16.0 times. So
+# the bound of eight stands 1.6 times above the one and twice below the
+# other. A run cut off at 20 s, or one that exits non-zero, fails the row, so
+# a `fail` that is not there fails it too, and one slow enough to be cut off
+# fails it in the refusing direction, as the defect does.
 
 section "=== issue #293: fail costs time linear in its message ==="
 
 requirement GH-293 <<'REQ'
-- text: `fail` prints and records a message in time linear in its size. One
-  `fail` over a message of 10,000 lines, 580 KB, under C.UTF-8, finishes in
-  under a second, fastest of three.
+- text: `fail` prints and records a message in time linear in its size:
+  under C.UTF-8, one `fail` over a message of 10,000 lines, 580 KB, costs at
+  most eight times what one over the first 2,500 of those lines costs, each
+  the fastest of three.
 - from: #293
 - kind: defect-refusing
 - status: active
@@ -40,28 +53,42 @@ requirement GH-293 <<'REQ'
 REQ
 shape_pin 'GH-293:static'
 
-R293_MSG="$FIXTURES/r293-message"
-awk 'BEGIN { for (i = 0; i < 10000; i++) printf "line %05d of a captured output, padded to about 57 bytes\n", i }' > "$R293_MSG"
-R293_BEST=
-R293_RC=
-for R293_I in 1 2 3; do
-  R293_S=$(date +%s%N)
-  LC_ALL=C.UTF-8 LEDGER= REQ=GH-0 timeout 20 bash -c 'source "$1"; fail static "%s" "$(< "$2")"' \
-    bash "$SUITE_DIR/checks/library.sh" "$R293_MSG" > /dev/null 2>&1
-  R293_STATUS=$?
-  R293_E=$(date +%s%N)
-  R293_MS=$(( (R293_E - R293_S) / 1000000 ))
-  if [ -z "$R293_BEST" ] || [ "$R293_MS" -lt "$R293_BEST" ]; then
-    R293_BEST=$R293_MS R293_RC=$R293_STATUS
-  fi
-done
+R293_LARGE="$FIXTURES/r293-large"
+R293_SMALL="$FIXTURES/r293-small"
+awk 'BEGIN { for (i = 0; i < 10000; i++) printf "line %05d of a captured output, padded to about 57 bytes\n", i }' > "$R293_LARGE"
+head -n 2500 "$R293_LARGE" > "$R293_SMALL"
+r293_fail_ms() {  # r293_fail_ms <message file> -- "<ms> <exit>", the fastest of three
+  local i ms rc best= bestrc=
+  for i in 1 2 3; do
+    ms=$(LC_ALL=C.UTF-8 LEDGER= REQ=GH-0 timeout 20 bash -c '
+      source "$1" || exit 90
+      m=$(< "$2")
+      t=$EPOCHREALTIME
+      fail static "%s" "$m" > /dev/null || exit 91
+      u=$EPOCHREALTIME
+      echo $(( (${u/./} - ${t/./}) / 1000 ))' bash "$SUITE_DIR/checks/library.sh" "$1" 2> /dev/null)
+    rc=$?
+    [ "$rc" = 0 ] || { printf '%s %s\n' - "$rc"; return; }
+    if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms bestrc=$rc; fi
+  done
+  printf '%s %s\n' "$best" "$bestrc"
+}
+R293_S=$(r293_fail_ms "$R293_SMALL")
+R293_L=$(r293_fail_ms "$R293_LARGE")
 
 req GH-293
-if [ "$R293_RC" != 0 ]; then
-  fail static '%s\n         the child bash exited %s, so its time is not the time of fail' \
-    'fail over a 10,000-line message' "$R293_RC"
+if [ "${R293_S#* }" != 0 ] || [ "${R293_L#* }" != 0 ]; then
+  fail static '%s\n         the child bash exited %s at 2,500 lines and %s at 10,000, so no time here is the time of fail' \
+    'fail over 2,500 and 10,000 lines' "${R293_S#* }" "${R293_L#* }"
 else
-  under_a_second 'fail over a 10,000-line message' "$R293_BEST"
+  R293_S=${R293_S% *} R293_L=${R293_L% *}
+  [ "$R293_S" -ge 10 ] || R293_S=10
+  if [ $(( R293_L * 10 / R293_S )) -lt 80 ]; then
+    pass static 'scaled fail over 2,500 and 10,000 lines: %s ms and %s ms' "$R293_S" "$R293_L"
+  else
+    fail static '%s\n         %s ms at 2,500 lines, %s ms at 10,000; four times the lines may cost at most eight times' \
+      'fail is not linear in its message' "$R293_S" "$R293_L"
+  fi
 fi
 
 sourced_to_end
