@@ -1459,3 +1459,7 @@ it has no entry above (Q16).
   file, where the three shapes are pinned at today's permitted verdict and
   GH-177's text says what is refused. It adds its requirements in the pull
   request that fixes it
+- #285: the pull request for #224; rev-agent-224's review of it is cited where
+  what it found stands -- a quadratic `fail`, fixed there as #293, and a
+  requirement's text wider than the check that drives it, narrowed in
+  GH-224.2
