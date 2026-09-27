@@ -599,10 +599,141 @@ def test_unstamped_runs_listing_two_pull_requests_are_each_rerun_once(fake):
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert fake.requests() == [RERUN, f"POST repos/{REPO}/actions/runs/43/rerun"]
-    assert (f"#8: {URL} is unstamped and lists #7 too, which took it; it is re-run once"
-            in result.stdout.splitlines())
+    assert SHARED_42 in result.stdout.splitlines()
+    assert "#7 and #8: re-ran " + URL in result.stdout.splitlines()
     assert (f"#7: no run of its head is stamped as its own, and {URL} is unstamped and "
             "lists it, so it may be its own; it is taken") in result.stdout.splitlines()
+
+
+SHARED_42 = (f"#8: {URL} is unstamped and #7 took it too; it is handled once for every pull "
+             "request that took it, and left alone only if all their heads have moved or it is "
+             "proven current")
+
+
+def shared_unstamped_runs(fake, status):
+    fake.serve(RUNS, {"workflow_runs": [
+        run(status, id=43, title="another title", prs=(7, 8)),
+        run(status, id=42, title="a pull request", prs=(7, 8)),
+    ]})
+
+
+def test_a_shared_run_is_rerun_when_only_the_first_taker_moved(fake):
+    """Either run may be #8's own, and #8 has not moved, so both are re-run
+    although #7, which took them first, has (review round 2, G5)."""
+    two_prs_sharing_a_head(fake)
+    rebuilt(fake, NEW)
+    shared_unstamped_runs(fake, "completed")
+
+    result = fake.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert fake.requests() == [RERUN, f"POST repos/{REPO}/actions/runs/43/rerun"]
+    assert (MOVED.removesuffix(", and the ") + "; #8 took it too and still has that head, so "
+            "the run is still handled for it") in result.stdout.splitlines()
+
+
+def test_a_shared_run_in_progress_is_cancelled_when_only_the_first_taker_moved(fake):
+    two_prs_sharing_a_head(fake)
+    fake.serve(PR, pull(True, MERGE, NEW))
+    shared_unstamped_runs(fake, "in_progress")
+    fake.serve(f"repos/{REPO}/actions/runs/42", {"status": "completed"})
+    fake.serve(f"repos/{REPO}/actions/runs/43", {"status": "completed"})
+
+    result = fake.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert fake.requests() == [
+        f"POST repos/{REPO}/actions/runs/42/cancel", f"POST repos/{REPO}/actions/runs/43/cancel",
+        RERUN, f"POST repos/{REPO}/actions/runs/43/rerun",
+    ]
+
+
+def test_a_shared_run_is_rerun_when_the_other_takers_head_is_unreadable(fake):
+    """#7 moved and #8's head cannot be read: the re-run goes ahead, since #8
+    is not known to have moved, and the job fails on the unread head."""
+    two_prs_sharing_a_head(fake)
+    rebuilt(fake, NEW)
+    fake.serve(f"repos/{REPO}/pulls/8", pull(True, MERGE), FAIL)
+    fake.serve(RUNS, {"workflow_runs": [run("completed", title="a pull request", prs=(7, 8))]})
+
+    result = fake.run()
+
+    assert result.returncode == 1
+    assert fake.requests() == [RERUN]
+    assert (MOVED.removesuffix(", and the ") + "; whether #8, which took it too, still has that "
+            "head is unknown, so the run is still handled for it") in result.stdout.splitlines()
+    assert (f"::error::#8: could not re-read its head, so whether {HEAD} is still it is unknown; "
+            "the re-run goes ahead") in result.stdout.splitlines()
+
+
+def test_a_shared_run_proven_current_is_left_alone_for_the_taker_that_did_not_move(fake):
+    """#7 moved and #8 did not, and the run already tested the merge of the
+    head both were listed with on TIP. #7's line must not say the re-run goes
+    ahead, since none does."""
+    two_prs_sharing_a_head(fake)
+    rebuilt(fake, NEW)
+    fake.serve(RUNS, {"workflow_runs": [
+        run("completed", title="a pull request", prs=(7, 8), conclusion="success", attempt=2)]})
+    fake.serve(ARTIFACTS, {"artifacts": [{"id": 900, "expired": False}]})
+    fake.serve_raw(ZIP, artifact_zip({"exit_status": 0, "ended": "exited", "tested_commit": MERGE}))
+
+    result = fake.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert fake.requests() == []
+    assert (MOVED.removesuffix(", and the ") + "; #8 took it too and still has that head, so "
+            "the run is still handled for it") in result.stdout.splitlines()
+    assert "goes ahead" not in result.stdout
+
+
+def test_a_shared_run_is_left_alone_when_every_taker_moved(fake):
+    two_prs_sharing_a_head(fake)
+    rebuilt(fake, NEW)
+    fake.serve(f"repos/{REPO}/pulls/8", pull(True, MERGE), pull(True, MERGE, NEW))
+    shared_unstamped_runs(fake, "completed")
+
+    result = fake.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert fake.requests() == []
+    assert MOVED + "re-run is not asked for" in result.stdout.splitlines()
+    assert (f"#8: its head moved from {HEAD} to {NEW} after it was listed, so {URL} is not its "
+            f"check any more; its new head's own run tests the merge on {TIP}, and the re-run is "
+            "not asked for") in result.stdout.splitlines()
+
+
+def test_every_pull_request_that_took_a_run_is_waited_on(fake):
+    """The shared run may be #8's, and its re-run fetches #8's merge ref, so
+    #8's is waited on too: 3 reads at WAIT_TRIES=3. #7 is found unmoved first,
+    so #8's head is not read again."""
+    two_prs_sharing_a_head(fake)
+    fake.serve(f"repos/{REPO}/pulls/8", pull(None, None))
+    fake.serve(RUNS, {"workflow_runs": [run("completed", title="a pull request", prs=(7, 8))]})
+
+    result = fake.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert fake.gets().count(f"GET repos/{REPO}/pulls/8") == 3
+    assert (f"::warning::#8: GitHub did not rebuild the merge ref on {TIP} within the wait; "
+            "the re-run will fail if it still has not") in result.stdout.splitlines()
+    assert fake.requests() == [RERUN]
+
+
+def test_only_the_newest_stamped_run_is_taken(fake):
+    """An older run of #7 -- an `edited` event, say -- is not re-run: its
+    re-run would replay that event, and in #7's concurrency group cancel the
+    newest's (review round 2, N3)."""
+    one_open_pr(fake)
+    rebuilt(fake)
+    fake.serve(RUNS, {"workflow_runs": [
+        run("completed", id=42, title="#7 a pull request"),
+        run("completed", id=41, title="#7 its old title"),
+    ]})
+
+    result = fake.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert fake.requests() == [RERUN]
 
 
 def test_unstamped_runs_are_rerun_oldest_first(fake):

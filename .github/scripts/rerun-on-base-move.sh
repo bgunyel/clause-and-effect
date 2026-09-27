@@ -53,18 +53,26 @@
 # unstamped run that lists it in `pull_requests` is taken, since any of them
 # may be its own: of two pull requests sharing a head, the newest unstamped run
 # can be the other's, and leaving the rest would leave this one's check green
-# on the old merge. A run two pull requests take is re-run once. They are
-# re-run oldest first, because a pull request's runs share its concurrency
-# group, where each re-run queued cancels the one before it; the newest run's
-# event is the one left standing. What that costs, all of it red or cancelled
-# and none of it a stale green, and all of it gone once each pull request has
-# pushed a stamped run: an older run's re-run is started and cancelled; a
-# closed pull request's run on the same head also lists this one, since the
-# field names open ones only, and is re-run red against the closed one's base;
-# a run whose pull request has since moved its head is re-run, cancelling that
-# pull request's newer run, and fails its verify-merge; and a run past GitHub's
-# 30 days is refused, which fails this job. A run stamped as another pull
-# request's is never taken, even when it lists only this one.
+# on the old merge. A run two pull requests take is handled once, and judged
+# for all of them: it is left alone only when every one has moved its head, or
+# when it is proven current (review round 2, G5). They are re-run oldest
+# first, because a pull request's runs share its concurrency group, where each
+# re-run queued cancels the one before it; the newest run's event is the one
+# left standing. A run stamped as another pull request's is never taken, even
+# when it lists only this one.
+#
+# What that costs, all of it gone once each pull request has pushed a stamped
+# run. Red or cancelled: an older run's re-run is started and cancelled; a run
+# taken by a pull request that has since moved its head is still re-run while
+# another that took it has not, and if it was the moved one's, it cancels that
+# one's newer run and fails its verify-merge; and a run past GitHub's 30 days
+# is refused, which fails this job. Not established, and possibly a stale
+# green (#269): a closed pull request's run on the same head lists this one --
+# the field names open ones only -- and is re-run as the closed one's. It is
+# red if its merge ref is gone or its base has moved; otherwise it may go green
+# on this pull request's head commit under the same check name, and which of
+# the two check runs this pull request then shows was not observed. The case
+# predates #208: the newest run for the head was re-run whatever it was.
 #
 # THE TRADE, for those unstamped runs only. GitHub leaves `pull_requests` empty
 # on a run for a pull request from a fork, so an unstamped fork run matches
@@ -81,12 +89,13 @@
 # base, so that one is re-run at once, and its red check is the report.
 #
 # A run still in progress may already have fetched the old merge, so it is
-# cancelled as soon as it is found, before any wait, and the re-run is asked
+# cancelled once every pull request's runs are listed -- so that a run two of
+# them took is judged for both -- and before any wait, and the re-run is asked
 # for once it has stopped, or once the wait runs out. GitHub refuses to re-run
 # a run that has not stopped, and that refusal fails this job like any other.
 #
-# ONE WAIT, SHARED, AND BOUNDED IN TOTAL (#208, item 3). Every pull request with
-# a run to re-run is read before any is waited on -- the first reads are what
+# ONE WAIT, SHARED, AND BOUNDED IN TOTAL (#208, item 3). Every pull request that
+# took a run to re-run is read before any is waited on -- the first reads are what
 # start GitHub's mergeability computation for all of them -- and each round of
 # the one wait then reads every merge ref not yet rebuilt and every cancelled
 # run not yet stopped. So a slow pull request delays the others' re-runs by at
@@ -125,7 +134,8 @@
 # its own run after TIP was pushed -- this job runs on that push, and the list
 # was read after it -- and that run's verify-merge refuses any merge not built
 # on the base's tip at the time it checks. The window between the read and the
-# write is one request wide, and is not closed.
+# write is one request wide, and is not closed. An unstamped run that several
+# pull requests took is left alone only when every one of them has moved.
 #
 # Every API failure is loud. A read that fails is an error for that pull
 # request and fails the job, and never reads as a routine answer: an empty list
@@ -169,7 +179,9 @@ status=0 ended_by= head_read= tested=
 order=() runs=() stopping=()
 declare -A head rebuilt merge merged_head
 # Keyed by run id: the pull request it was found for, and its listed state.
-declare -A found_for run_status conclusion attempt run_url
+# `takers` lists every pull request that took the run, the first of them
+# being `found_for`: more than one only for an unstamped run.
+declare -A found_for takers run_status conclusion attempt run_url
 while read -r pr sha; do
   order+=("$pr")
   head[$pr]=$sha
@@ -186,20 +198,39 @@ next_round() {  # round
   sleep $(( left < POLL_SECONDS ? left : POLL_SECONDS ))
 }
 
-# Whether the pull request's head is still the one listed, read just before a
-# write to one of its runs. Returns 1 when it moved, and the write must not
-# happen. Sets head_read to ok, or to failed when the read failed and the write
+# Whether a pull request that took run `id` still has the head it was listed
+# with, read just before a write to the run. An unstamped run that two pull
+# requests took may be either one's own, so the write is dropped only when
+# every one of them has moved (review round 2, G5); the first one found
+# unmoved is enough to write. A moved taker's line says only that the run is
+# still handled, because the caller may yet leave it alone as proven current,
+# and the line after it says which. Returns 1 when all moved. Sets head_read to ok
+# when a head was read unmoved, or to failed when a read failed and the write
 # goes ahead unproven.
-head_still() {  # pr id what
-  local pr=$1 id=$2 now
-  if ! now=$(gh api "repos/$REPO/pulls/$pr" --jq .head.sha); then
-    echo "::error::#$pr: could not re-read its head, so whether ${head[$pr]} is still it is unknown; the $3 goes ahead"
-    status=1 head_read=failed
-    return 0
-  fi
-  head_read=ok
-  [ "$now" = "${head[$pr]}" ] && return 0
-  echo "#$pr: its head moved from ${head[$pr]} to $now after it was listed, so ${run_url[$id]} is not its check any more; its new head's own run tests the merge on $TIP, and the $3 is not asked for"
+taker_still() {  # id what
+  local id=$1 pr now line
+  local -a moved=()
+  for pr in ${takers[$id]}; do
+    if ! now=$(gh api "repos/$REPO/pulls/$pr" --jq .head.sha); then
+      for line in "${moved[@]}"; do
+        echo "$line; whether #$pr, which took it too, still has that head is unknown, so the run is still handled for it"
+      done
+      echo "::error::#$pr: could not re-read its head, so whether ${head[$pr]} is still it is unknown; the $2 goes ahead"
+      status=1 head_read=failed
+      return 0
+    fi
+    if [ "$now" = "${head[$pr]}" ]; then
+      for line in "${moved[@]}"; do
+        echo "$line; #$pr took it too and still has that head, so the run is still handled for it"
+      done
+      head_read=ok
+      return 0
+    fi
+    moved+=("#$pr: its head moved from ${head[$pr]} to $now after it was listed, so ${run_url[$id]} is not its check any more; its new head's own run tests the merge on $TIP")
+  done
+  for line in "${moved[@]}"; do
+    echo "$line, and the $2 is not asked for"
+  done
   return 1
 }
 
@@ -266,35 +297,47 @@ for pr in "${order[@]}"; do
   fi
   while read -r id st concl att kind; do
     if [ -n "${found_for[$id]:-}" ]; then
-      echo "#$pr: ${run_url[$id]} is unstamped and lists #${found_for[$id]} too, which took it; it is re-run once"
+      takers[$id]+=" $pr"
+      echo "#$pr: ${run_url[$id]} is unstamped and #${found_for[$id]} took it too; it is handled once for every pull request that took it, and left alone only if all their heads have moved or it is proven current"
       continue
     fi
-    found_for[$id]=$pr run_status[$id]=$st conclusion[$id]=$concl attempt[$id]=$att
+    found_for[$id]=$pr takers[$id]=$pr
+    run_status[$id]=$st conclusion[$id]=$concl attempt[$id]=$att
     run_url[$id]="https://github.com/$REPO/actions/runs/$id"
     [ "$kind" = unstamped ] \
       && echo "#$pr: no run of its head is stamped as its own, and ${run_url[$id]} is unstamped and lists it, so it may be its own; it is taken"
-    if [ "$st" != completed ]; then
-      head_still "$pr" "$id" cancel || continue
-      echo "#$pr: ${run_url[$id]} is $st and may have fetched the old merge; cancelling it"
-      gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null \
-        || echo "::warning::#$pr: the cancel of ${run_url[$id]} was refused; it may have finished meanwhile"
-      stopping+=("$id")
-    fi
     runs+=("$id")
   done <<< "$found"
 done
 echo "::endgroup::"
 
+# The cancels wait until every pull request's runs are listed, so that a run
+# two of them took is judged by both.
+kept=()
+for id in "${runs[@]}"; do
+  if [ "${run_status[$id]}" != completed ]; then
+    taker_still "$id" cancel || continue
+    echo "#${takers[$id]// / and #}: ${run_url[$id]} is ${run_status[$id]} and may have fetched the old merge; cancelling it"
+    gh api -X POST "repos/$REPO/actions/runs/$id/cancel" >/dev/null \
+      || echo "::warning::#${takers[$id]// / and #}: the cancel of ${run_url[$id]} was refused; it may have finished meanwhile"
+    stopping+=("$id")
+  fi
+  kept+=("$id")
+done
+runs=("${kept[@]}")
+
 # One wait for both things a re-run waits on, so that neither can spend the
 # other's time: a pull request's merge ref, rebuilt on TIP, and a cancelled run,
-# stopped. Only a pull request with a run to re-run is waited on.
+# stopped. Only a pull request that took a run to re-run is waited on, and
+# every one that took it, since the run may be any of theirs.
 declare -A waited
 pending=()
 for id in "${runs[@]}"; do
-  pr=${found_for[$id]}
-  [ -n "${waited[$pr]:-}" ] && continue
-  waited[$pr]=1
-  pending+=("$pr")
+  for pr in ${takers[$id]}; do
+    [ -n "${waited[$pr]:-}" ] && continue
+    waited[$pr]=1
+    pending+=("$pr")
+  done
 done
 echo "::group::waiting for GitHub to rebuild each merge ref on $TIP, and for each cancelled run to stop"
 for ((round = 0; ; round++)); do
@@ -330,7 +373,7 @@ for ((round = 0; ; round++)); do
   still=()
   for id in "${stopping[@]}"; do
     if ! now=$(gh api "repos/$REPO/actions/runs/$id" --jq .status); then
-      echo "::error::#${found_for[$id]}: could not read the status of ${run_url[$id]}, so whether it has stopped is unknown; asking for its re-run anyway"
+      echo "::error::#${takers[$id]// / and #}: could not read the status of ${run_url[$id]}, so whether it has stopped is unknown; asking for its re-run anyway"
       status=1
       continue
     fi
@@ -349,9 +392,9 @@ for pr in "${pending[@]}"; do
 done
 for id in "${stopping[@]}"; do
   if [ "$ended_by" = deadline ]; then
-    echo "::warning::#${found_for[$id]}: the job's ${DEADLINE_SECONDS} s of waiting ran out before ${run_url[$id]} stopped, and GitHub refuses to re-run a run that has not stopped"
+    echo "::warning::#${takers[$id]// / and #}: the job's ${DEADLINE_SECONDS} s of waiting ran out before ${run_url[$id]} stopped, and GitHub refuses to re-run a run that has not stopped"
   else
-    echo "::warning::#${found_for[$id]}: ${run_url[$id]} did not stop within the wait, and GitHub refuses to re-run a run that has not stopped"
+    echo "::warning::#${takers[$id]// / and #}: ${run_url[$id]} did not stop within the wait, and GitHub refuses to re-run a run that has not stopped"
   fi
 done
 echo "::endgroup::"
@@ -367,18 +410,18 @@ for id in "${runs[@]}"; do
       echo "#$pr: ${run_url[$id]} tested $tested, not ${merge[$pr]}, its merge on $TIP; re-running it"
     elif [ "${merged_head[$pr]}" != "${head[$pr]}" ]; then
       echo "#$pr: its merge ${merge[$pr]} merges ${merged_head[$pr]}, not its head ${head[$pr]}; re-running it"
-    elif ! head_still "$pr" "$id" re-run; then
+    elif ! taker_still "$id" re-run; then
       continue
     elif [ "$head_read" = ok ]; then
       echo "#$pr: ${run_url[$id]} already tested ${merge[$pr]}, the merge of its head ${head[$pr]} on $TIP, so it is not re-run"
       continue
     fi
   fi
-  head_still "$pr" "$id" re-run || continue
+  taker_still "$id" re-run || continue
   if gh api -X POST "repos/$REPO/actions/runs/$id/rerun" >/dev/null; then
-    echo "#$pr: re-ran ${run_url[$id]}"
+    echo "#${takers[$id]// / and #}: re-ran ${run_url[$id]}"
   else
-    echo "::error::#$pr: the re-run of ${run_url[$id]} was refused, so its check still stands on the old merge; a push to its branch starts a new run"
+    echo "::error::#${takers[$id]// / and #}: the re-run of ${run_url[$id]} was refused, so its check still stands on the old merge; a push to its branch starts a new run"
     status=1
   fi
 done
