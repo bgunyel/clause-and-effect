@@ -31,8 +31,9 @@ section "=== issue #110: every runbook section names the requirements that point
 requirement GH-110.1 <<'REQ'
 - text: `main` is protected server-side by the `main-branch-protection`
   ruleset: its enforcement is active, it targets the default branch, which is
-  `main`, it requires a pull request, and its bypass list is empty, as CLAUDE.md
-  says.
+  `main`, it requires a pull request, and its bypass list is empty. CLAUDE.md
+  states the ruleset and the pull request; the target and the empty bypass list
+  are what that statement needs in order to hold of `main` and of Bertan.
 - from: #110
 - kind: doc-claim
 - status: active
@@ -85,34 +86,56 @@ shape_pin 'GH-110.1:runbook GH-110.2:runbook GH-110.3:runbook GH-110.4:runbook G
 # disagreement between the runbook's Verifies lines and the entries' verify
 # fields, sorted, and nothing when they agree. An ID is anything of the three
 # families' grammar on a Verifies line; the entry that owns a verify line is the
-# last `### ` heading above it. A requirements file that cannot be read, or a
-# runbook that cannot, is itself a line, so an unread input never agrees.
+# last `### ` heading above it.
+#
+# NOTHING UNREAD AGREES (#219's class, found by review of this file). An input
+# that could not be read is a line of its own: a requirements file getline
+# fails on, a runbook that is missing or empty, and a name under requirements/
+# that is not a regular file, which is caught here in the shell because mawk
+# aborts on a directory before printing anything and a pipe loses its status.
+# A runbook holding no `## §<n>` heading at all is a line too, since against
+# it every Verifies line would vanish and the output would be empty.
+#
+# THE GRAMMAR IS #104'S, written a second time. The heading and the verify
+# field are parsed as end-of-run.sh's requirements reader parses them, and that
+# reader is one awk program over the whole record, with nothing in it to call.
+# A change to either grammar is made in both; if it is made in #104's alone,
+# #104's own check goes red on every `verify: runbook` the runbook stops
+# resolving, and the fixtures here keep this copy's half honest.
 r110_disagree() {
-  local reqmd=$1 reqdir=$2 runbook=$3 f files=
-  for f in "$reqdir"/*.md; do [ -e "$f" ] && files="$files$f"$'\n'; done
-  awk -v reqmd="$reqmd" -v files="$files" -v runbook="$runbook" '
+  local reqmd=$1 reqdir=$2 runbook=$3 f files= notfile=
+  for f in "$reqdir"/*.md; do
+    if [ -f "$f" ]; then files="$files$f"$'\n'
+    elif [ -e "$f" ]; then notfile="$notfile$f"$'\n'
+    fi
+  done
+  awk -v reqmd="$reqmd" -v files="$files" -v notfile="$notfile" -v runbook="$runbook" '
     function readreq(path,    line, id, s, rs) {
       id = ""
       while ((rs = (getline line < path)) > 0) {
         if (line ~ /^### /) { id = line; sub(/^### /, "", id); sub(/[ \t].*$/, "", id) }
         else if (line ~ /^- verify: runbook §[0-9]+$/ && id != "") {
-          s = line; sub(/^- verify: runbook §/, "", s); want[s, id] = 1; wsec[s] = 1
+          s = line; sub(/^- verify: runbook §/, "", s); want[s, id] = 1
         }
       }
       if (rs < 0) print "unread: " path
       close(path)
     }
     BEGIN {
+      n = split(notfile, list, "\n")
+      for (i = 1; i <= n; i++) if (list[i] != "") print "unread: " list[i] " is not a regular file"
       readreq(reqmd)
       n = split(files, list, "\n")
       for (i = 1; i <= n; i++) if (list[i] != "") readreq(list[i])
-      sec = ""; rbread = 0
+      sec = ""; rbread = 0; nsections = 0
       while ((rs = (getline line < runbook)) > 0) {
         rbread = 1
         if (line ~ /^## §[0-9]+( |$)/) {
-          sec = line; sub(/^## §/, "", sec); sub(/[^0-9].*$/, "", sec); sections[sec] = 1
+          sec = line; sub(/^## §/, "", sec); sub(/[^0-9].*$/, "", sec)
+          if (!(sec in sections)) nsections++
+          sections[sec] = 1
         } else if (line ~ /^\*\*Verifies:\*\*/ && sec != "") {
-          nv[sec]++
+          nverifies[sec]++
           rest = line
           while (match(rest, /(US|FR|GH)-[1-9][0-9]*(\.[1-9][0-9]*)?/)) {
             have[sec, substr(rest, RSTART, RLENGTH)] = 1
@@ -122,9 +145,10 @@ r110_disagree() {
       }
       if (rs < 0 || !rbread) { print "unread: " runbook; exit }
       close(runbook)
+      if (nsections == 0) { print "no section: " runbook " holds no ## §<n> heading"; exit }
       for (s in sections)
-        if (!(s in nv)) print "§" s ": no Verifies line, where it has one"
-        else if (nv[s] > 1) print "§" s ": " nv[s] " Verifies lines, where it has one"
+        if (!(s in nverifies)) print "§" s ": no Verifies line, where it has one"
+        else if (nverifies[s] > 1) print "§" s ": " nverifies[s] " Verifies lines, where it has one"
       for (k in want) {
         split(k, p, SUBSEP)
         if ((p[1] in sections) && !(k in have)) print "§" p[1] ": " p[2] " points here, and the Verifies line does not name it"
@@ -154,7 +178,13 @@ r110_runbook moved '**Verifies:** US-5, US-6, GH-9.1.' '**Verifies:** GH-9.1.'
 r110_runbook none '**Verifies:** US-5, US-6.' 'no such line'
 printf '%s\n' '## §1 one' '**Verifies:** US-5, US-6.' '**Verifies:** US-5, US-6.' '## §2 two' \
   '**Verifies:** GH-9.1.' > "$R110/twice.md"
-[ -r "$R110/requirements.md" ] && [ -r "$R110/requirements/GH-9.1.md" ] && [ -r "$R110/none.md" ] && [ -r "$R110/twice.md" ] || {
+printf '%s\n' '## Section 1 one' '**Verifies:** US-5, US-6.' > "$R110/renamed.md"
+# A second requirements/ directory, holding the same entry and a directory named
+# as an entry would be: mawk aborts on the directory, so the shell must see it.
+mkdir -p "$R110/withdir/GH-9.2.md"
+cp "$R110/requirements/GH-9.1.md" "$R110/withdir/"
+[ -r "$R110/requirements.md" ] && [ -r "$R110/requirements/GH-9.1.md" ] && [ -r "$R110/none.md" ] && [ -r "$R110/twice.md" ] \
+  && [ -r "$R110/renamed.md" ] && [ -d "$R110/withdir/GH-9.2.md" ] || {
   echo "the #110 fixtures were not created; the checks against them prove nothing" >&2
   exit 1
 }
@@ -181,6 +211,17 @@ tok 'nor a section with a second Verifies line, which a reader would take for a 
 tok 'and a runbook that is not there is read as not read, never as agreeing' \
     "unread: $R110/no-such-runbook.md" \
     "$(r110_disagree "$R110/requirements.md" "$R110/requirements" "$R110/no-such-runbook.md")"
+tok 'nor a runbook whose headings are no longer ## §<n>, against which no Verifies line counts' \
+    "no section: $R110/renamed.md holds no ## §<n> heading" \
+    "$(r110_disagree "$R110/requirements.md" "$R110/requirements" "$R110/renamed.md")"
+tok 'a requirements.md that is not there is read as not read, and what it held is then missing' \
+    "unread: $R110/no-such-requirements.md
+§1: the Verifies line names US-5, whose verify is not runbook §1
+§1: the Verifies line names US-6, whose verify is not runbook §1" \
+    "$(r110_disagree "$R110/no-such-requirements.md" "$R110/requirements" "$R110/agree.md")"
+tok 'and a directory under requirements/ named as an entry is named, not skipped and not aborted on' \
+    "unread: $R110/withdir/GH-9.2.md is not a regular file" \
+    "$(r110_disagree "$R110/requirements.md" "$R110/withdir" "$R110/agree.md")"
 tok 'the runbook beside the judged hooks names, in each section, what points at it' \
     '' "$(r110_disagree "$HOOKS/requirements.md" "$HOOKS/requirements" "$HOOKS/runbook.md")"
 

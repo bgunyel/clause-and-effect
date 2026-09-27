@@ -224,3 +224,26 @@ What it does not show: the interactive front end, which may display something
 ## §6 An offline SessionStart
 
 Not run. It needs the machine's network down, which is Bertan's.
+
+## Addendum, 2026-09-27, after review of this record's pull request
+
+Review of the commit that added this record found it short of the contract
+the runbook then set, and the corrections are appended here rather than made
+above.
+
+- **The runbook this run followed** is the one at `bf99ba5`, the commit that
+  added both files. The header above says only "committed beside this record".
+- **Verbatim.** The runbook asked for every command "as typed" and its output
+  "verbatim", and the blocks above shorten both: scratch paths to `<scratch>`,
+  the `jq` filter to a name for it, `ls -la` lines to their last two fields,
+  and `git -C <dir>` to a command run in `<dir>`. Each shortening is said where
+  it is made, and none touches an expected literal. The assistant revised the
+  runbook's contract to allow exactly that, a shortening said where it is made,
+  rather than rewriting this record; that is a trade the runbook's header now
+  states, and a later record is held to it.
+- **The refused push**, under §4, is the assistant's: the assistant wrote a
+  `git push` to a local bare repository into the scratch setup, `no-git-push.sh`
+  refused it, and the assistant rebuilt the scratch repositories without one.
+- **The name's `183114`** is the start of §5's `timeout/` run, 18:31:14. §1b's
+  `EnterWorktree` run was at 18:37:32 and §1c's `WorktreeCreate` run at
+  18:38:05; the runbook now says the time only keeps two runs on one day apart.

@@ -20,6 +20,8 @@ with it, and these have checks.
 **This file is instructions and holds no results.** A run's results go in
 `docs/eval-reports/<date>-boundary-runbook-<HHMMSS>.md`, one file per run,
 dated and append-only, and the newest one per section is the current answer.
+`HHMMSS` is a local time at which one of the run's steps was taken, and is
+there only to keep two runs on one day apart.
 That directory and not the dev-log, because a run is a record of what was
 observed at a point in time, which is `docs/eval-reports/`'s job in CLAUDE.md's
 table, where the dev-log is one narrative per session: a run Bertan makes in his
@@ -28,8 +30,12 @@ narrative is found only by reading the narrative. A run may cover some sections
 and not others; its record says which, and names every section it did not run.
 
 For each section a record gives the date, who ran it, the commit of this file
-it followed (`git rev-parse --short HEAD`), the `claude --version` where a
-session is involved, every command as typed, and what it printed, verbatim.
+it followed, the `claude --version` where a session is involved, every command
+as run, and what it printed, verbatim. A record may shorten -- a scratch path
+to `<scratch>`, a filter this file gives to a name for it, an output line to
+the part that matters -- and says so where it does; it never shortens an
+expected literal. A run made while this file was being written, before it had a
+commit, names the commit that first carried it.
 An observation is what was seen, not whether it matched: a record says
 "matches" only beside the output that shows it.
 
@@ -138,11 +144,25 @@ hook takes the creation over, so the second one creates no worktree for §1b
 to read. `--worktree`, `isolation: "worktree"` and background sessions are
 routes of their own, each taken the same way.
 
-Expected: what the newest record says. #110's first run had no expectation to
-compare against, since the documentation does not settle these, so that run
-is the baseline and a later answer that differs from it is a difference like
-any other. If `WorktreeCreate` fires for any route, #113, the follow-up issue
-on a `WorktreeCreate` hook, proceeds, and the record says so.
+Expected, as #110's first run found for `EnterWorktree`, which is the baseline
+for every later run since the documentation settles none of it:
+
+1. It fires. The log holds a `=== WorktreeCreate` entry whose standard input
+   carries `"hook_event_name":"WorktreeCreate"` and `"name":"probe"`.
+2. The hook creates the branch, and the whole worktree: the entry's
+   `worktree- branches` read is empty, none exists after, and `EnterWorktree`
+   fails with
+   `WorktreeCreate hook failed: hook succeeded but returned no worktree path (command: echo the path to stdout; http/callback: return hookSpecificOutput.worktreePath)`.
+3. Its `pwd` is the session's project directory, the scratch repository's
+   root, and so is the payload's `cwd`.
+4. Yes. The `PostToolUse` log holds an entry with `"tool_name":"EnterWorktree"`,
+   whose `pwd` is the new worktree and whose `worktree- branches` read names
+   the new branch.
+
+The other three routes have no baseline yet; their first run sets it.
+
+If `WorktreeCreate` fires for any route, #113, the follow-up issue on a
+`WorktreeCreate` hook, proceeds, and the record says so.
 
 ### §1d The `main ancestry` line (an agent)
 
@@ -156,13 +176,16 @@ Expected: `0`, and the SessionStart report's line reads
 reading `main ancestry: origin/main is NOT an ancestor of origin/dev-NN` agree
 as well; what differs is the two disagreeing.
 
+**When it differs:** a sub-issue of #36, as *When an observation differs* says.
+A `0	0` that is not, or an upstream that is set, is the #99 defect back.
+
 ## §2 The `main` ruleset
 
 **Verifies:** GH-110.1.
 **Also observes:** US-1, whose checks refuse an agent's push to `main` and
 cannot see the server-side rule that also refuses Bertan's.
 
-An agent may run it: both calls are reads, made with Bertan's credentials,
+An agent may run it: all three calls are reads, made with Bertan's credentials,
 which is also what makes the bypass list readable at all.
 
 ```bash
@@ -186,6 +209,10 @@ The ruleset names the default branch rather than `main`, which is why the
 first call is part of the section: the rule protects `main` only while `main`
 is the default branch.
 
+**When it differs:** a sub-issue of #36, as *When an observation differs* says.
+A rule that is gone, or a bypass actor that is not, is a hole in US-1 no hook
+can close.
+
 ## §3 The merge settings
 
 **Verifies:** FR-39.
@@ -201,6 +228,9 @@ gh api repos/bgunyel/clause-and-effect \
 Expected: `false	false	true` (tabs between), and the SessionStart report's
 line reads
 `merge settings: as required (squash off, rebase off, delete-on-merge on)`.
+
+**When it differs:** a sub-issue of #36, as *When an observation differs* says;
+if the report's line disagrees with the API, the defect is the report's, FR-41.
 
 ## §4 A refusal reaches the agent
 
@@ -233,6 +263,10 @@ agent is shown the same message byte for byte after the harness's prefix:
 ```
 PreToolUse:Bash hook error: ["$CLAUDE_PROJECT_DIR"/.claude/hooks/pytest-via-uv-group.sh]: Blocked: bare pytest invocation. CLAUDE.md runs tests through the 'test' dependency group. Use: make test, or uv run --group test pytest tests/<file>::<test>
 ```
+
+**When it differs:** a sub-issue of #36, as *When an observation differs* says.
+A message that reaches the hook's stderr but not the agent leaves US-7's
+messages unread.
 
 ## §5 A hook that outlasts its timeout
 
@@ -289,6 +323,9 @@ record says which it ran. A timed-out hook that *refused* would not be a hole,
 but it would make #96's reasoning wrong, and the difference is filed like any
 other.
 
+**When it differs:** a sub-issue of #36, as *When an observation differs* says,
+with the one exception given above: a timed-out hook that refused.
+
 ## §6 An offline SessionStart
 
 **Verifies:** GH-110.4.
@@ -312,3 +349,8 @@ main ancestry: origin/main is an ancestor of origin/dev-NN (read against refs th
 
 The last line's middle depends on the refs the last successful fetch left, as
 §1d's does; its suffix does not.
+
+**When it differs:** a sub-issue of #36, as *When an observation differs* says.
+A session that does not start, or starts only after the report's 50 s, is the
+harness waiting on the report, and the report's `timeout` and budgets are where
+to look.

@@ -1592,14 +1592,15 @@ fi
 # be slow, and a bound on what the passes are handed is what keeps them fast
 # whatever a later edit to one costs.
 #
-# OBSERVED, AND NOT ONLY ARGUED (#110, runbook.md §5). That a killed hook
-# permits was reasoning when #96 wrote the paragraph above. The runbook's first
-# run watched it, on 2026-09-27 at Claude Code 2.1.283 under `claude -p`: a
-# PreToolUse hook sleeping 10 s under a 2 s timeout was killed at about 2.2 s,
-# its log holding nothing after the sleep; the `touch` it would have refused
-# ran; and the agent was shown `(Bash completed with no output)`, not an error,
-# with no word of the hook. The same hook refusing at once blocked the same
-# call. So the kill permits, and it is silent: nothing tells the agent, or the
+# OBSERVED, AND NOT ONLY ARGUED (#110, runbook.md §5). What #96 measured above
+# was each hook's running time, alone and outside the harness; that the harness
+# then permits the command was reasoning from the timeout. The runbook's first
+# run watched the harness do it, on 2026-09-27 at Claude Code 2.1.283 under
+# `claude -p`: a PreToolUse hook that sleeps 10 s under a 2 s timeout and then
+# refuses never wrote the log line after its sleep, so it was killed; the
+# `touch` it would have refused ran, 2.24 s after the hook started; and the
+# agent was shown `(Bash completed with no output)`, not an error, with no word
+# of the hook. The same hook refusing at once blocked the same call. So the kill permits, and it is silent: nothing tells the agent, or the
 # person reading its transcript, that a guard did not decide. The record is
 # docs/eval-reports/2026-09-27-boundary-runbook-183114.md; the interactive
 # front end was not watched.
