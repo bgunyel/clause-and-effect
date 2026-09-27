@@ -65,8 +65,8 @@ requirement GH-174.1 <<'REQ'
   want of jq. Round 1 gave only the first figure and did not say which
   wrapper it was. That is a different defect with a different fix, and #283
   owns it.
-  Most rows define the function in the shell that evaluates the guard. One
-  takes the host's route instead: the function exported, with `farm_has`
+  One row defines the function in the shell that evaluates the guard, and
+  one takes the host's route instead: the function exported, with `farm_has`
   and the farms' names, and the guard evaluated in a child bash that
   imports it from `BASH_FUNC_jq%%`. Until review round 3 only this note
   argued that the two routes are the same thing, and no row showed it.
@@ -80,7 +80,9 @@ requirement GH-174.1 <<'REQ'
   suite. The guard's range evaluated as `:` turned three red: both `holds`
   and the control that must fail. Neither turned the other rows red. Both
   were run again in review round 2, against the rows as they stand, with
-  the same five and the same three.
+  the same five and the same three. In round 3 the guard back on
+  `command -v` turned six: those five and the row through the import, and
+  taking `export -f` off `jq` in that row turned it red, and it alone.
   The text's `nothing` is held by the row under a `jq` function and not by
   the `lacks`, which names one spelling: `command -v`, `type`, `hash` and
   `compgen -c` all answer for a function under the jq-less PATH, as a probe
@@ -147,7 +149,9 @@ requirement GH-174.2 <<'REQ'
   option words in front of the one holding `v` no longer read, each turned
   the fixture row red and no other row of this issue; `hash` read as a
   question turned the row over what the note says it cannot read red, and
-  the row over the suite, on the fixture's own `hash` line; review's two
+  the row over the suite, on the fixture's own `hash` line -- in round 3,
+  with `hash` and `compgen -c` held in variables like every asking word, it
+  turned the first alone; review's two
   shapes inserted into `checks/unsplit.sh` -- a question opening a payload
   quoted for `bash -c`, and `command -p -v` -- turned the row over the
   suite red, where the first expression left them green. Deleting the guard

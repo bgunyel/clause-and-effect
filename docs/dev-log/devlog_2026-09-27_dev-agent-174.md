@@ -229,3 +229,56 @@ checkout of its own under the scratchpad, four at a time.
 - #283, unchanged: it holds both wrapper figures and the reviewer's
   `unsplit.sh:5180` git-shim hang.
 - Review of round 2.
+
+
+# 2026-09-27 23:55 +0300 · dev-agent-174 — #174, review round 3: rev-agent-174's second round on PR #294
+
+**Written 2026-09-27 23:55 +0300.** Branch `worktree-issue-174-jq-farm-guard`.
+Round 3 is `edf6a95` (the rows) plus the commit carrying this entry, which also
+holds a note sentence and the round's mutation record. The branch is 8 ahead of
+`origin/dev-05` and 0 behind. Nothing in this round gated. The reviewer offered
+three optional nits, and the assistant took all three.
+
+## What was done
+
+- **R2-a: the gap fixture held `hash` and `compgen -c` as literals.** The
+  comment above the fixtures says every asking word is held in a variable, so
+  that no line of the file is one the derivation reads. With `hash` literal,
+  round 2's `hash` mutant also reddened the suite row, on the fixture's own
+  line. Both words are now variables. The same mutant now reddens the gap row
+  alone.
+- **R2-b: `r174_shadowed` was in the multi-line gap shape without needing to
+  be.** It set `local PATH` on one line and asked `type -t jq` on the next. A
+  function answers `type -t` whatever PATH holds, so the PATH carried nothing.
+  The helper is gone. The row asks `type -t jq` inline, and no line of
+  `GH-174.sh` outside a fixture string sets PATH.
+- **R2-c: defined versus imported.** The note argued that a function defined
+  in the evaluating shell stands in for one imported from `BASH_FUNC_jq%%`,
+  and no row showed it. One row now takes the host's route. `jq` and
+  `farm_has` are exported, along with the farms' names, and the guard is
+  evaluated in a child `bash` that prints what it imported beside the result.
+  The exports stay inside the `$( )`. The row expects `function passed`.
+- **The assistant's sweep of its own delta** found one more claim that the
+  code does not bear out. The new note said "most rows define the function",
+  when one does, one imports it, and two unset it. Corrected in this entry's
+  commit.
+
+## Measured
+
+Full runs in detached checkouts, five at a time, with mawk 1.3.4, at
+`edf6a95`:
+- plain: 6236 ok, 0 FAIL. That is one row more than `a8aabf6`, the import
+  row;
+- m1, the guard back on `command -v`: six red, round 2's five plus the import
+  row;
+- the function's definition removed from the defining row: that row alone;
+- `export -f` taken off `jq` in the import row: that row alone;
+- `hash` read as a question: the gap row alone.
+
+Before the full run, a standalone probe of the import row printed
+`function passed`, and `file passed` with `jq` not exported.
+
+## Open
+
+- #283, unchanged. The reviewer is adding `checks/GH-144.sh:698`, a second
+  `REAL_GIT` shim that hangs under an exported `git` function.
