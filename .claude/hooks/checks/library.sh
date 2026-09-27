@@ -620,9 +620,10 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
 }
 
 # every_hook: issue #109. One command through every hook named in $XH_HOOKS, in
-# that order -- the Bash hooks settings.json registers, read in #109's section --
-# and a pass only if every one exits exactly 0, which is how the harness decides
-# whether a command runs at all. Every helper above runs one hook; this is the
+# that order -- in #109's section the Bash hooks settings.json registers, and in
+# the self-tests of #98 and #186 their fixtures -- and a pass only if the list
+# names at least one and every one exits exactly 0, which is how the harness
+# decides whether a command runs at all. Every helper above runs one hook; this is the
 # one question none of them can ask. The #98 self-test drives it, and runs before
 # #109's section does, which is why it was defined with the others.
 #
@@ -643,7 +644,7 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
 # `drive_helper` and `every_hook_of` set `XH_HOOKS` from elsewhere -- the first
 # review of PR #169's finding at a second call site, filed by the sixth. That
 # guard stays, naming its own cause.
-every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every Bash hook
+every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every hook in $XH_HOOKS, of at least one
   local dir="$1" label="$2" cmd="$3" hook rc err refused= runs=0
   for hook in $XH_HOOKS; do
     runs=$((runs + 1))

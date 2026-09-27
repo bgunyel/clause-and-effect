@@ -4,8 +4,8 @@
 # Why: `every_hook` looped over $XH_HOOKS and passed whenever no hook in the
 # loop refused, so a list the loop consumed nothing from printed
 # `ok ALLOW by all` for a command no hook had judged. The guard that answered
-# the first review of PR #169 stood beside the one derivation that reads
-# settings.json, and `drive_helper` and `every_hook_of` already set $XH_HOOKS
+# the first review of PR #169 stood beside the one setting of $XH_HOOKS that
+# reads settings.json, and `drive_helper` and `every_hook_of` already set it
 # from elsewhere, so the helper's other callers reached it unguarded. The sixth
 # review of the same pull request filed it; #186's triage measured the second
 # shape, a list of blanks, which is not empty as a string and runs no hook all
