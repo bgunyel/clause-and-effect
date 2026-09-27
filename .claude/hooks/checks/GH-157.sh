@@ -124,7 +124,9 @@ requirement GH-157.2 <<'REQ'
 - text: The Conventions section of `docs/dev-log/README.md` says that when
   the entry an agent would write already exists, it appends a new entry to
   it with a date and time; that the append is made with `>>` from Bash, and
-  an entry that exists is never edited with the Edit or Write tool; that a
+  an entry that exists is never edited with the Edit or Write tool, except to
+  correct the session segment of its heading onto its file name, which ADR
+  0003 permits (#177); that a
   heredoc append whose prose reads as a command that rewrites an entry can
   be refused -- a `sed -i` anywhere in the text, for example, or an `rm` or
   an `mv` followed on its line by a path under the directory (#237), or a
@@ -215,7 +217,7 @@ R157_SPAN=$(paste -sd' ' <<'SPAN'
 - If the agent does not know its session name, or it is in doubt, it should call the `ListAgents` function to see its session name.
 - A dev-log entry should start with date and time of the entry. Open with branch, commit range, and how far ahead of its root branch the current branch ended up.
 - If the dev-log file that the agent is trying to write already exists, the agent should append a new dev-log entry to the file with a date and time.
-- An append is made with `>>` from Bash, and an entry that exists is never edited with the Edit or Write tool. `append-only-docs.sh` reads a heredoc's text as part of the command, so a heredoc append whose prose reads as a command that rewrites an entry can be refused: a `sed -i` anywhere in the text, for example, or an `rm` or an `mv` followed on its line by a path under this directory (#237), or a `>` followed on its line by such a path (#176). Write the text to a scratch file with the Write tool first, and append it with `cat <file> >> <entry>`. `append-only-docs-edit.sh` does not yet refuse Edit or Write on an entry outside the session's project directory, in another checkout of this repository: a linked worktree's entry when the project directory is the main checkout, or the main checkout's when it is the worktree (#159). There this rule is held by the agent and not by a guard.
+- An append is made with `>>` from Bash, and an entry that exists is never edited with the Edit or Write tool, except to correct the session segment of its heading onto its file name, which ADR 0003 permits (#177). `append-only-docs.sh` reads a heredoc's text as part of the command, so a heredoc append whose prose reads as a command that rewrites an entry can be refused: a `sed -i` anywhere in the text, for example, or an `rm` or an `mv` followed on its line by a path under this directory (#237), or a `>` followed on its line by such a path (#176). Write the text to a scratch file with the Write tool first, and append it with `cat <file> >> <entry>`. `append-only-docs-edit.sh` does not yet refuse Edit or Write on an entry outside the session's project directory, in another checkout of this repository: a linked worktree's entry when the project directory is the main checkout, or the main checkout's when it is the worktree (#159). There this rule is held by the agent and not by a guard.
 SPAN
 )
 

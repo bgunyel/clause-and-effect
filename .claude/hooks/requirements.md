@@ -1436,3 +1436,26 @@ it has no entry above (Q16).
   `-` paragraph in `lib/command-scan.sh` points here. Filed from round 5 of the
   review of #184 and widened in rounds 6 and 8. It adds its requirements in the
   pull request that fixes it
+- #189: the pull request for #177; rev-agent-pr-189's review of it is cited
+  where what it found stands in `append-only-docs-edit.sh` and #177's issue
+  file -- the exception's strings compared after a command substitution had
+  stripped their trailing newlines, an occurrence counted in lines where the
+  tool matches substrings under `replace_all`, and three file-name clauses
+  called defence in depth that were each the only refusal of a payload no row
+  drove. Its first round is also where the author's sweep found the `\u0000`
+  a bash string drops and the parse clauses with no rows
+- #246: `append-only-docs.sh` is a list of refused spellings and not a
+  boundary: `perl -pi`, `python3 -c`, `ex`, `awk -i inplace`, `git checkout` and
+  `dd` each rewrite an entry unrefused. Filed from round 3 of the review of #189,
+  which found CLAUDE.md, CONTEXT.md and ADR 0003 saying the correction #177
+  permits is refused "in every Bash spelling". Cited in #177's issue file, where
+  GH-177.1 feeds the guard the spellings those documents name, the open ones at
+  today's permitted verdict. It adds its requirements in the pull request that
+  fixes it
+- #248: a `Write` whose `content` is null, a number or absent, beside an Edit's
+  `old_string` and `new_string`, is judged by `append-only-docs-edit.sh` as that
+  Edit, because only the tool's name tells them apart and the hook does not read
+  it (GH-95.2). Filed from round 5 of the review of #189. Cited in #177's issue
+  file, where the three shapes are pinned at today's permitted verdict and
+  GH-177's text says what is refused. It adds its requirements in the pull
+  request that fixes it
