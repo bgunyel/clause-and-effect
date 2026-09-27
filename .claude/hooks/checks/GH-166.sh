@@ -17,9 +17,12 @@
 # no-pr-decisions.sh decoded `$'...'` over five rounds of Bertan's review of
 # PR #173, for one flag in one hook. #166 lifts it into the library as
 # CS_WORD_AWK, and cw_reduce, ghreduce and quoted_base_flag all read words
-# through it. The dequoting question had two answers, and the disagreement was
-# the ALLOW column; it has one now, and the check at the foot of this file holds
-# it to one.
+# through it, and the tail offer behind a prefix word asks it where a quote
+# ends. Those two answers disagreed, and the disagreement was the ALLOW column;
+# they are one now, and the checks at the foot of this file hold the decoder to
+# one file and each of those consumers to a call. That is not every place the
+# hooks read quoting: the ones that still do it privately are named in the
+# entry's note below, each with its issue.
 #
 # WHAT IS NOT HERE. The group and the verb -- `git $'push'`, `gh $'pr'`,
 # `gh $'api'` -- are #135's, whose fix site is cs_git_args and cs_gh_args'
@@ -27,8 +30,9 @@
 # the reader this lifts rather than grow a fourth answer. Plain expansion and
 # command substitution in a command position are CLAUDE.md's consequence 6.
 # #118's three boundary rows for an option in these quotes are flips now, and
-# stay in #118's issue file with this issue's tag: a check lives in the file of
-# the issue whose work wrote it, and #166 changed their verdict, not their text.
+# were moved here from #118's issue file: a check lives in the file of the
+# issue whose work wrote it, and the flip -- verdict, label and tag -- is this
+# issue's writing. A pointer stands where they were.
 # no-work-on-stale-branch.sh is reached through the invariance families, whose
 # commit-stale seed runs in a fixture the unsplit file owns; `word-ansi`,
 # `word-locale` and `pre-sudo-ansi` are this issue's three transformations.
@@ -45,8 +49,13 @@ requirement GH-166 <<'REQ'
   inside `$'...'` are decoded as bash decodes them -- `$'\x67it'` and
   `$'\147\150'` are `git` and `gh` -- a NUL cuts the rest of its span, so
   `$'git\x00junk'` is `git`, and every `\c` is taken as a possible NUL and cuts
-  the span without being decoded. One reader answers this, `CS_WORD_AWK` in
-  `lib/command-scan.sh`, and no hook keeps a private decoder. Permitted as
+  the span without being decoded. The decoder is one, `CS_WORD_AWK` in
+  `lib/command-scan.sh`: the command word, the prefix words, a gh option and
+  the name of the base flag read through it, and the tail offer behind a prefix
+  word asks it whether a token leaves a quote open, so
+  `sudo -u root $'git' push origin main` is refused and
+  `sudo echo $'git push origin main'` is prose, as its single-quoted spelling
+  is. Permitted as
   before: `$'git' status`, `$'gh' issue list`, an empty span in front of a
   command (`$'' git push origin main`, `$"" git push origin main`,
   `$'' bash -c "git push origin main"`), and an ANSI-C argument holding escaped
@@ -54,7 +63,7 @@ requirement GH-166 <<'REQ'
 - from: #166, found while implementing #135
 - kind: defect-permitting
 - status: active
-- variants: transformation: word-ansi word-locale pre-sudo-ansi
+- variants: transformation: word-ansi word-locale pre-sudo-ansi pre-nice-opt-ansi
 - note: the group and the verb, `git $'push'` and `gh $'pr'`, are NOT this entry:
   they are #135's fix site and stay permitted until it lands, a trade the triage
   of #166 took with its eyes open. The empty span is permitted on `cw_reduce`'s
@@ -83,7 +92,19 @@ requirement GH-166 <<'REQ'
   which is the convention since #205. The
   separator walk in `cs_split` still pairs `$'...'` as `'...'`, so an escaped
   quote ends the span early and can hide a command after it; that is pre-existing,
-  identical at a109c2f, is not a word read by name, and is #252.
+  identical at a109c2f, is not a word read by name, and is #252. It is not the
+  only place quoting is still read privately, and this entry claims none of
+  them: a prefix word's own options are recognised by their raw first
+  character, so `sudo $'-u' root git push origin main` is permitted (#265);
+  arguments are unquoted by deleting quote characters and leaving the dollar --
+  push arguments in no-commit-to-main.sh, where `git push origin $'main'` is
+  permitted, and in no-git-push.sh, which reads them failing closed, and merge
+  and rebase arguments in no-work-on-stale-branch.sh, whose catch-up test is an
+  exact list of names and so fails closed too -- and `base_args` unquotes a base
+  value in `"` or `'` only, refusing `--base $'dev-05'` (#267); `cs_git_args`
+  skips git's global options on raw text (#191); and the REST base is read by
+  its own patterns (#225). The review of PR #260, round 1, measured all but the
+  stale-branch site, which the sweep that answered it found and read.
 REQ
 shape_pin 'GH-166'
 variants_pin 'GH-166:transformation'
@@ -144,6 +165,45 @@ flip "$ON_DEV" no-commit-to-main.sh ALLOW BLOCK 'an ANSI-C quoted sudo in front 
 req GH-166 US-15
 flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a locale quoted timeout in front of a merge' \
   '$"timeout" 30 gh pr merge 5'
+
+# THE GH OPTION in front of a subcommand, which #118 refuses as unreadable in
+# its bare spelling. These three stood in #118's issue file as permitted
+# boundaries until ghreduce read through the reader; `$'-t'` is `-t` now.
+req GH-166 US-15
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option in ANSI-C quotes, read as the option it spells' \
+  "gh pr \$'-t' view merge 5"
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option in locale quotes, read as the option it spells' \
+  'gh pr $"-t" view merge 5'
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option in ANSI-C quotes before the group' \
+  "gh \$'--squash' view pr merge 5"
+
+# THE TAIL OFFER, behind a prefix word whose option takes a separate value. It
+# stopped at a token opening with a double or a single quote and not at one
+# opening with the dollar of these two forms, so the first commit of this
+# branch refused prose in ANSI-C quotes that it permitted in single quotes, and
+# refused `sudo -u root $'git' push` only by that accident. The review of PR
+# #260 measured the natural fix -- the dollar added to the old test -- survive a
+# whole green run while it reopened that push. So both directions are pinned:
+# the offer asks the reader whether a token leaves a quote open, and a token
+# that opens and shuts one is a word. The double- and single-quoted halves are
+# #266's, in its own issue file. Every refused row here was permitted at
+# 2303e9b; every permitted one was refused at this branch's 03c6f66.
+req GH-166 US-1
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'an ANSI-C quoted command word behind sudo -u root, a push to main' \
+  "sudo -u root \$'git' push origin main"
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a locale quoted command word behind sudo -u root, a push to main' \
+  'sudo -u root $"git" push origin main'
+flip "$ON_DEV" no-commit-to-main.sh ALLOW BLOCK 'an ANSI-C quoted command word behind sudo -u root, a push naming main' \
+  "sudo -u root \$'git' push origin main"
+req GH-166
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'an ANSI-C prose string behind sudo echo is text, as its single-quoted spelling is' \
+  "sudo echo \$'git push origin main'"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'an ANSI-C prose string behind timeout and its operand is text' \
+  "timeout 5 echo \$'git push origin main'"
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'a locale prose string behind sudo echo is text' \
+  'sudo echo $"git push origin main"'
+check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'an ANSI-C prose string behind sudo printf, holding a merge and an escaped newline' \
+  "sudo printf \$'gh pr merge 5\\n'"
 
 # THE WRAPPER WORD, which CS_WRAPPER_RE reads in raw text and so has to admit
 # the spelling itself. Its run of quote characters in front of the name had no
@@ -269,17 +329,24 @@ if [ "$DECODERS" = "lib/command-scan.sh " ]; then
 else
   fail static 'the hex escape dispatch or digit table is spelled in |%s|, where it belongs in lib/command-scan.sh alone' "$DECODERS"
 fi
-for consumer in cw_reduce ghreduce; do
-  body=$(sed -n "/function $consumer(/,/^    }\$\|^  }\$/p" "$HOOKS/lib/command-scan.sh")
+# A CALL, and not a mention: each body is read with its comment lines taken
+# out, and has to hold both wd_start( and wd_next(. The first version passed on
+# wd_next anywhere in the body, a comment included, and said the consumer
+# "reads its word through the shared reader", which is more than a substring
+# can show; review of PR #260, round 1. What this still cannot see is a call
+# that is dead, or a second walk beside it -- that is review's.
+for consumer in cw_reduce ghreduce quotedtext; do
+  body=$(sed -n "/function $consumer(/,/^    }\$\|^  }\$/p" "$HOOKS/lib/command-scan.sh" \
+    | grep -v '^[[:space:]]*#')
   case "$body" in
-    *wd_next*) pass static '%s reads its word through the shared reader' "$consumer" ;;
-    *) fail static '%s does not call wd_next, so it answers the dequoting question itself' "$consumer" ;;
+    *'wd_start('*'wd_next()'*) pass static '%s calls wd_start and wd_next outside a comment' "$consumer" ;;
+    *) fail static '%s does not call both wd_start and wd_next outside a comment' "$consumer" ;;
   esac
 done
-body=$(sed -n '/^quoted_base_flag()/,/^}/p' "$HOOKS/no-pr-decisions.sh")
+body=$(sed -n '/^quoted_base_flag()/,/^}/p' "$HOOKS/no-pr-decisions.sh" | grep -v '^[[:space:]]*#')
 case "$body" in
-  *'$CS_WORD_AWK'*wd_next*) pass static 'quoted_base_flag reads its words through the shared reader' ;;
-  *) fail static 'quoted_base_flag does not interpolate CS_WORD_AWK and call wd_next, so it keeps a private reader' ;;
+  *'$CS_WORD_AWK'*'wd_start('*'wd_next()'*) pass static 'quoted_base_flag interpolates CS_WORD_AWK and calls wd_start and wd_next outside a comment' ;;
+  *) fail static 'quoted_base_flag does not interpolate CS_WORD_AWK and call wd_start and wd_next outside a comment' ;;
 esac
 
 # THE READER IS PART OF THE LOAD. Emptied in the file, the library withdraws

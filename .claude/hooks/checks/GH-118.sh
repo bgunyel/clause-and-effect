@@ -495,7 +495,7 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a valued option with its value, 
 #     #166 rather than reduce it here alone, which would have been a third
 #     reducer beside cw_reduce and ghreduce. #166 answered it with one reader,
 #     CS_WORD_AWK in the library, which ghreduce now calls, and its three rows
-#     below are flips.
+#     are flips in #166's issue file.
 #
 # WHY THE THIRD IS LEFT OPEN, since it is the one this branch could have closed.
 # The fourth is strictly EASIER to write than the third and is unreachable by
@@ -516,18 +516,10 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: a backtick cutting an 
   'gh pr -R foo`echo bar` merge 5'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the same cut in an attached value, which leaves none either; #197' \
   'gh pr --repo=foo`echo bar` merge 5'
-# #166 closed the three rows that stood here as permitted boundaries: ghreduce
-# reads an option through the library's word reader now, so `$'-t'` is `-t`
-# and the command is unreadable as its bare spelling is. They are flips, and
-# carry #166's tag because its work moved them.
-req GH-166 US-15
-flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option in ANSI-C quotes, read as the option it spells' \
-  "gh pr \$'-t' view merge 5"
-flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option in locale quotes, read as the option it spells' \
-  'gh pr $"-t" view merge 5'
-flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option in ANSI-C quotes before the group' \
-  "gh \$'--squash' view pr merge 5"
-req GH-118 US-13
+# Three rows stood here as permitted boundaries for an option in ANSI-C or
+# locale quotes until #166 closed them. They are flips now, and live in #166's
+# issue file: a check lives in the file of the issue whose work wrote it, and
+# the flip -- its verdict, its label and its tag -- is #166's writing.
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the same cut inside a path word; #197' \
   'gh pr mer`echo ge` 5'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the same cut inside the group word; #197' \

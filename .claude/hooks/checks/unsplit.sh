@@ -10384,6 +10384,9 @@ SEEDS
 #                                     heredoc-cont-redirect
 #  14 a prefix word spelled otherwise (#117)  pre-sudo-path pre-env-path
 #                                     pre-timeout-quoted pre-sudo-ansi (#166)
+#  15 a quoted command word behind a prefix word's separated option value
+#     (#266)                          pre-nice-opt-dquoted pre-nice-opt-squoted
+#                                     pre-nice-opt-ansi (#166)
 #
 # The thirteenth is seven spellings where the others are one or two, and that is
 # #128 rather than thoroughness for its own sake: the spellings of the heredoc
@@ -10415,6 +10418,17 @@ SEEDS
 # its command word, so transformation 11 already rewrites it, and adding a
 # fifteenth would be the same question asked twice.
 #
+# The fifteenth is that sentence's limit, found by the review of PR #260. The
+# families rewrite one axis at a time, and the tail offer that finds a command
+# word behind `sudo -u root` asked a different question of a quoted token from
+# a bare one: it stopped at a token opening with a quote, so `nice -n 5 "git"
+# push --all origin` was permitted while transformations 4 and 11 each passed on
+# their own. #266. So the composition is a family of its own, one spelling per
+# quoting form the tail offer has to tell apart from prose; the ANSI-C one is
+# #166's, whose reader made that form a quote, and it is the row that holds the
+# offer from stopping on the dollar -- a mutation that did survived a whole
+# green run.
+#
 # A transformation that cannot apply to a seed -- no value-taking long flag, no
 # second short flag to bundle with, no subcommand to put a global flag before --
 # emits nothing, and that skip is counted. A transformation that applies to NO
@@ -10444,6 +10458,7 @@ INV_TRANSFORMS='
   heredoc-cont heredoc-cont-dash heredoc-cont-squote heredoc-cont-dquote
   heredoc-cont-space heredoc-cont-twice heredoc-cont-redirect
   pre-sudo-path pre-env-path pre-timeout-quoted pre-sudo-ansi
+  pre-nice-opt-dquoted pre-nice-opt-squoted pre-nice-opt-ansi
 '
 
 # A rewrite that prints nothing when it changed nothing, which is how a
@@ -10591,6 +10606,13 @@ inv_cmdword() {  # inv_cmdword <command> <prefix> <suffix>
 # body: the tab of the `<<-` spelling and the backslash of every one of them are
 # the characters under test, and a builder that dropped one would leave seven
 # variants passing that are not the seven named.
+# A prefix in front of a rewritten command, and nothing where the rewrite made
+# nothing: inv_cmdword skips a seed whose command word it cannot quote, and a
+# prefix printed in front of that empty string would be a variant of no seed.
+inv_prefixed() {  # inv_prefixed <prefix> <rewritten command, or nothing>
+  [ -n "$2" ] && printf '%s%s' "$1" "$2"
+  return 0
+}
 inv_heredoc() {  # inv_heredoc <command> <heredoc, terminator included>
   printf '%s\n%s' "$2" "$1"
 }
@@ -10644,6 +10666,9 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     pre-env-path)     printf '/usr/bin/env X=1 %s' "$2" ;;
     pre-timeout-quoted) printf '"timeout" 30 %s' "$2" ;;
     pre-sudo-ansi)    printf "\$'sudo' %s" "$2" ;;
+    pre-nice-opt-dquoted) inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" '"' '"')" ;;
+    pre-nice-opt-squoted) inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" "'" "'")" ;;
+    pre-nice-opt-ansi)    inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" "\$'" "'")" ;;
     word-path)        inv_cmdword "$2" '/usr/bin/' '' ;;
     word-dot)         inv_cmdword "$2" './' '' ;;
     word-dquoted)     inv_cmdword "$2" '"' '"' ;;
@@ -10759,6 +10784,9 @@ docs-truncate|word-squoted|ALLOW|gap|GH-171|a single-quoted command word, which 
 docs-truncate|word-escaped|ALLOW|gap|GH-171|a backslash-escaped command word, which this hook's verb grep does not reduce to the name it spells
 docs-truncate|word-ansi|ALLOW|gap|GH-171|an ANSI-C quoted command word, which this hook's verb grep does not reduce to the name it spells
 docs-truncate|word-locale|ALLOW|gap|GH-171|a locale quoted command word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|pre-nice-opt-dquoted|ALLOW|gap|GH-171|a double-quoted command word behind a prefix word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|pre-nice-opt-squoted|ALLOW|gap|GH-171|a single-quoted command word behind a prefix word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|pre-nice-opt-ansi|ALLOW|gap|GH-171|an ANSI-C quoted command word behind a prefix word, which this hook's verb grep does not reduce to the name it spells
 EX
 )
 
@@ -11746,7 +11774,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '119' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '122' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11872,7 +11900,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '117' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '120' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.

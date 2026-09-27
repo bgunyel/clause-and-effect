@@ -1420,6 +1420,24 @@ it has no entry above (Q16).
   this walk. Found by the spec review of #166's implementation, pre-existing and
   identical at a109c2f. It adds its requirements in the pull request that fixes
   it
+- #225: `rest_bases` in no-pr-decisions.sh reads a REST `base` field by its own
+  patterns and not through the word reader, so `-f $'base=main'` is not read as
+  a base. Cited in GH-166's note and at the head of `lib/command-scan.sh`, among
+  the places quoting is still read privately. It adds its requirements in the
+  pull request that fixes it
+- #260: the pull request for #166. Its review's first round measured that the
+  entry's "one reader" was wider than the code, and that the tail offer's quote
+  test had not followed the reader; cited where each correction stands, and in
+  #266's issue file, which that round found
+- #265: a prefix word's own options recognised by their raw first character, so
+  `sudo "-u" root git push origin main` is permitted. Cited in GH-166's note and
+  at the head of `lib/command-scan.sh`. Pre-existing, found by the review of
+  #260; it adds its requirements in the pull request that fixes it
+- #267: the quote removers left in the hooks -- `tr -d` over push, merge and
+  rebase arguments, which leaves the dollar of `$'...'`, and `base_args`, which
+  knows two quotes. Cited in GH-166's note and at the head of
+  `lib/command-scan.sh`. Pre-existing, found by the review of #260; it adds its
+  requirements in the pull request that fixes it
 - #192: `written` and `unarmed` grep a file's lines, so a phrase that wraps
   reads as absent -- a false green for an absence pin and a false red for a
   presence pin. Cited in #118's issue file, where the four pins over CLAUDE.md's

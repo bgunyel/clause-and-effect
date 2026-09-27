@@ -173,10 +173,22 @@
 # `$'bash' -c "git push origin main"` were permitted by every boundary hook
 # while `--base` in the same quotes was refused. Measured at origin/dev-05
 # a109c2f. The reader moved here, as CS_WORD_AWK, and the command word, the
-# prefix words, the gh options and the base flag all read through it; the
-# wrapper anchor, which reads raw text and cannot call it, admits the `$` and
-# says what it still cannot reach. It is #79's shape and #134's again, and the
-# first time the second answer lived in a hook rather than in this file.
+# prefix words, a gh option in front of a subcommand and the name of the base
+# flag read through it, and the tail offer behind a prefix word asks it where a
+# quote ends; the wrapper anchor, which reads raw text and cannot call it,
+# admits the `$` and says what it still cannot reach. It is #79's shape and
+# #134's again, and the first time the second answer lived in a hook rather
+# than in this file.
+#
+# NOT EVERY PLACE THE HOOKS READ QUOTING, and the first draft of this paragraph
+# said so by omission; review of PR #260 measured the rest. What still reads a
+# quote privately or by its first character, each pre-existing and each with
+# its issue: a prefix word's own options, by their raw first character (#265);
+# the arguments no-commit-to-main.sh, no-git-push.sh and
+# no-work-on-stale-branch.sh unquote by deleting quote characters, which leaves
+# the `$`, and base_args in no-pr-decisions.sh, which knows two quotes (#267);
+# cs_git_args skipping git's global options on raw text (#191); the REST base
+# (#225); and the separator walk in cs_split, which pairs `$'` as `'` (#252).
 
 # THE LOAD CONTRACT, which is about this file's absence rather than its
 # contents, and is written here because a rename made here is what breaks it.
@@ -1005,11 +1017,13 @@ CS_WORD_SPELLING="([\$]?[\"']|[\\\\]|[^[:space:]$CS_SEPARATORS\"']*/)*"
 CS_WRAPPER_RE="(^[[:space:]]*|[$CS_SEPARATORS][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_CONTROL_WORDS)[[:space:]]+|$CS_WORD_SPELLING($CS_WRAP_WORDS)[\\\\\"']*[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
 
 # THE WORD READER, issue #166: what bash makes of one word's quoting, answered
-# once for every consumer that reads a word by name. It is a string of awk
-# function definitions, interpolated in front of each program that calls it --
-# cs_split for the command word and the prefix words, CS_GH_AWK for a gh option,
-# and quoted_base_flag in no-pr-decisions.sh for a base flag -- the way CS_GH_AWK
-# is shared by the two gh functions, because awk has no include.
+# once for every consumer below. It is a string of awk function definitions,
+# interpolated in front of each program that calls it -- cs_split for the
+# command word, the prefix words and the tail offer's quote test, CS_GH_AWK for
+# a gh option, and quoted_base_flag in no-pr-decisions.sh for a base flag --
+# the way CS_GH_AWK is shared by the two gh functions, because awk has no
+# include. Those are its consumers and not every place a word is read: the ones
+# still read privately are listed at the head of this file.
 #
 # WHY IT EXISTS. Bash has five quoting forms and the library read three.
 # ANSI-C quoting, `$'...'`, and locale quoting, `$"..."`, carry their `$` with
@@ -1026,15 +1040,16 @@ CS_WRAPPER_RE="(^[[:space:]]*|[$CS_SEPARATORS][[:space:]]*)([A-Za-z_][A-Za-z0-9_
 # hundred lines apart, cw_reduce's and that one, and they disagreed; the
 # disagreement was the ALLOW column above. That is the defect class the header
 # of this file opens by naming, and the answer is the one it always is: the
-# reader moved here, and the three consumers call it.
+# reader moved here, and those consumers call it.
 #
 # THE INTERFACE IS A STREAM, because the consumers ask different things of the
 # same walk. cw_reduce and ghreduce want the characters of one word. quoted_base_flag
 # wants a line split into words, and for each word where its first quoted
 # character landed, whether a span yielded nothing, and whether a span a NUL cut
-# is still open where the line ends. So the reader hands back one unit at a time
-# and says what it was, and each consumer keeps only the bookkeeping that is its
-# own question:
+# is still open where the line ends. quotedtext wants one thing of one token:
+# whether any quote is still open where it ends. So the reader hands back one
+# unit at a time and says what it was, and each consumer keeps only the
+# bookkeeping that is its own question:
 #
 #   wd_start(s)  begin reading s, outside any quote
 #   wd_next()    read one unit; 0 at the end of s. Sets wd_ev to what it was:
@@ -1463,6 +1478,40 @@ cs_split() {
           && index(w, "\047") == 0 && index(w, "\\") == 0) return w
       return cw_name(w)
     }
+    # Whether the token at r opens a quote that is still open where the token
+    # ends: the text of an argument, which the tail offer stops at. Asked of
+    # the WORD READER, and asked of what it reads rather than of the first
+    # character, and each half of that is a defect the review of PR #260 found.
+    #
+    # The first character was the test until then, a double or a single quote,
+    # and #166 made ANSI-C and locale quoting quotes everywhere but here: the
+    # offer walked on past `$\047`, so `sudo echo` in front of an ANSI-C string
+    # holding a push read the push as a command, refused where the same string
+    # in single quotes was permitted. Adding the dollar to the test fixed that
+    # and stopped the offer at `sudo -u root` in front of git in ANSI-C quotes,
+    # a real push, which the first-character test had refused by accident --
+    # and the review measured that mutation survive a whole green run.
+    #
+    # So the question is the one the break is for. A quote opened and shut
+    # inside the token is a word spelled in quotes, the command word as often
+    # as not, and the offer reads it; a quote still open at the blank is prose
+    # running on into the next token, and it stops. That is one answer for all
+    # four quoting forms, and it closed #266 with it: git in double or single
+    # quotes behind `sudo -u root` stopped the offer before the push it named,
+    # which the first-character test permitted since before #166.
+    #
+    # tokend cuts on blanks without knowing a quote, which is what makes the
+    # open quote at its end the prose test. A token opening no quote is left to
+    # the offer as it was, one opening a quote mid-word included: stopping there
+    # too would move verdicts toward permitting that no finding asked about.
+    function quotedtext(r,   c) {
+      c = substr(line, r, 1)
+      if (c != "\042" && c != "\047" && c != "$") return 0
+      wd_start(substr(line, r, tokend(r) - r))
+      if (!wd_next() || wd_ev != "open") return 0
+      while (wd_next()) ;
+      return wd_st != 0
+    }
     function printhead(s,   i, w, k) {
       i = 1
       while (i <= length(s) && index(" \t\n\v\f\r", substr(s, i, 1)) == 0) i++
@@ -1553,19 +1602,19 @@ cs_split() {
       # command word cannot be found by looking.
       #
       # Three is past the longest real leftover: `timeout -s KILL 30 cmd`
-      # leaves two. A token opening a quote ends it, because what follows is
-      # the text of an argument, and reading text as a command is the mistake
-      # cs_normalise has already made three times.
+      # leaves two. A token that opens a quote still open where the token ends
+      # ends it, because what follows is the text of an argument, and reading
+      # text as a command is the mistake cs_normalise has already made three
+      # times. See quotedtext for why the test is that and not the character
+      # a token opens with.
       if (wrapped && e >= p) {
         r = p
         for (k = 0; k < 3; k++) {
-          c = substr(line, r, 1)
-          if (c == "\042" || c == "\047") break
+          if (quotedtext(r)) break
           q = tokend(r)
           if (q > e) break
           r = skipblank(q)
-          c = substr(line, r, 1)
-          if (c == "\042" || c == "\047") break
+          if (quotedtext(r)) break
           # Every candidate, not only the first. A prefix word stands in front
           # of the command word, so at the point the strip runs the word is
           # still behind it and `sudo /usr/bin/git push` would be normalised
