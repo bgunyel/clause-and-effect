@@ -18,21 +18,25 @@
 # guard whose failure is `exit 1` cannot be driven from inside the run it would
 # end -- but it can be driven from a subshell of that run, where `exit` ends
 # the subshell. So the guard's own lines are taken from the suite text and
-# evaluated inside $( ) against the fixtures the #95 section built, under a
-# shell that defines `jq` and under one that does not, and what each printed
-# is compared with a literal. A control points the jq-less name at the with-jq
-# farm, so the same evaluation is seen to fail on a broken fixture and a
-# `passed` is evidence rather than an evaluation that ran nothing.
+# evaluated inside $( ) against the fixtures the #95 section built -- under a
+# shell that defines `jq`, in a child bash that imports `jq` exported to it,
+# which is the host's route, and under a shell with no `jq` function -- and
+# what each printed is compared with a literal. A control points the jq-less
+# name at the with-jq farm, so the same evaluation is seen to fail on a broken
+# fixture and a `passed` is evidence rather than an evaluation that ran
+# nothing.
 #
 # AND THE RULE IS DERIVED, NOT WRITTEN AGAIN BY HAND (GH-174.2). #174 asked
 # whether every future fixture guard should be held to the same reading by
 # derivation, and it is: #155 put the rule in one guard with a `lacks`, this
 # issue would have put it in a second, and the next guard is the one no `lacks`
-# names -- #84's shape one level out. So the whole suite's text is read, and a
-# line that sets PATH and then, on that line, asks the calling shell what a name
-# is fails the run in whichever file it stands. The shapes it reads and the ones
-# it cannot are GH-174.2's text and note, each a fixture row below. Written here
-# and not in the library, because this file is its only caller.
+# names -- #84's shape one level out. So the text of the driver and of every
+# file under `checks/` it sources is read, and a line that sets PATH and then,
+# on that line, asks the calling shell what a name is fails the run in
+# whichever of those files it stands. `lib/command-scan.sh`, sourced too, is
+# hook code and not read. The shapes it reads and the ones it cannot are
+# GH-174.2's text and note, each a fixture row below. Written here and not in
+# the library, because this file is its only caller.
 
 section "=== issue #174: a fixture guard asks the farm, not the calling shell, what it holds ==="
 
@@ -94,8 +98,8 @@ requirement GH-174.1 <<'REQ'
   measured as a full run like the rest.
 REQ
 requirement GH-174.2 <<'REQ'
-- text: No line of the suite -- the driver and every file it sources -- sets
-  PATH and then, later on the same line, asks the calling shell what a name
+- text: No line of the suite's own files -- the driver and the files under
+  `checks/` it sources -- sets PATH and then, later on the same line, asks the calling shell what a name
   is, with `command` and an option word holding `v` or `V`, after any other
   option words, or with `type`. PATH is set by `PATH=` or `PATH+=` standing
   as a word of its own, `export PATH=`, `declare PATH=` and `local PATH=`
@@ -130,7 +134,16 @@ requirement GH-174.2 <<'REQ'
   the refusing direction, and accepted, because telling code from quoted
   text is the thing a line-wide read cannot do. A trailing comment is read
   for the same reason; stripping one cuts at the first `#` and could hide a
-  question.
+  question. So is a question asked before PATH changes, inside the command
+  substitution that computes its new value -- the directory of what
+  `command -v jq` finds, put in front of PATH -- because the line sets PATH
+  and then says the asking words: the refusing direction again, and fixture
+  line 24, so the trade is a row.
+  `lib/command-scan.sh`, which the driver also sources into the suite's
+  shell, is not read. It is hook code, and what it asks the shell about `jq`
+  is #283's. Review round 4 found the text saying "every file it sources"
+  while the row read the driver and `checks/` alone, and a question appended
+  to that file ran green, so the text was narrowed to what is read.
   Review found the expression narrower than this text in both of its first
   two rounds. In the first it read the question only straight after the
   first separator, so `&&`, `||`, `if`, `!`, `$(`, a command between,
@@ -226,8 +239,9 @@ path_lines_asking_shell() {  # path_lines_asking_shell <file>... -- <file>:<line
 }
 
 # The fixtures. r174-shapes.sh holds each shape the derivation reads, lines 1
-# to 23, and the near misses it must not, lines 24 to 34. Line 23 is `type -P`,
-# read by the trade GH-174.2's note states. r174-gaps.sh holds what that note
+# to 24, and the near misses it must not, lines 25 to 35. Lines 23 and 24,
+# `type -P` and a question inside the value that sets PATH, are read by the
+# trades GH-174.2's note states. r174-gaps.sh holds what that note
 # says the derivation cannot read, every line of it, so the note's list is a
 # check: a derivation widened to read one turns its row red, and the note has
 # to say so. The asking words are held in variables so that no line of this
@@ -266,6 +280,7 @@ printf '%s\n' \
   'declare PATH="$F"; '"$R174_ASK_V"' jq' \
   'local PATH="$F"; '"$R174_ASK_V"' jq' \
   'PATH="$F"; '"$R174_ASK_TYPE"' -P jq' \
+  'PATH="$(dirname "$('"$R174_ASK_V"' jq)"):$PATH"' \
   '  # PATH=<farm>; '"$R174_ASK_V"' gh, a comment' \
   'REAL_GIT=$('"$R174_ASK_V"' git)' \
   '( PATH="$FARM"; gh --version )' \
@@ -290,17 +305,17 @@ printf '%s\n' \
   'PATH="$F"; "'"$R174_ASK_TYPE"'" jq' \
   > "$R174_GAPS"
 rm -f "$R174_GONE"
-[ "$(wc -l < "$R174_SHAPES")" = 34 ] && [ "$(wc -l < "$R174_GAPS")" = 9 ] && [ ! -e "$R174_GONE" ] || {
+[ "$(wc -l < "$R174_SHAPES")" -eq 35 ] && [ "$(wc -l < "$R174_GAPS")" -eq 9 ] && [ ! -e "$R174_GONE" ] || {
   echo "the #174 fixtures were not created; the checks against them prove nothing" >&2
   exit 1
 }
 R174_READ=
-for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23; do
+for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
   R174_READ="$R174_READ${R174_READ:+ }$R174_SHAPES:$n"
 done
 
 req GH-174.2
-tok 'the derivation reads every shape of asking the shell under a PATH it set, lines 1 to 23, and no near miss' \
+tok 'the derivation reads every shape of asking the shell under a PATH it set, lines 1 to 24, and no near miss' \
     "$R174_READ" "$(path_lines_asking_shell "$R174_SHAPES")"
 tok 'and reads none of the shapes its note states it cannot read' \
     '' "$(path_lines_asking_shell "$R174_GAPS")"
@@ -308,7 +323,7 @@ tok 'a file it could not read is not clean, and says why' \
     'unread: awk exited 2' "$(path_lines_asking_shell "$R174_SHAPES" "$R174_GONE")"
 tok 'and no file at all is not clean either' \
     'unread: no file was named' "$(path_lines_asking_shell)"
-tok 'no line of the suite asks the calling shell what a name is under a PATH it set' \
+tok 'no line of the driver or of checks/ asks the calling shell what a name is under a PATH it set' \
     '' "$(path_lines_asking_shell "${SUITE_FILES[@]}")"
 
 sourced_to_end
