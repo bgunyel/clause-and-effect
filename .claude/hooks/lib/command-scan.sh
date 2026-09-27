@@ -309,9 +309,11 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
   }
 }
 
-# Drop heredoc bodies, and nothing else: lines on stdin, the same lines out
-# with every heredoc body taken away. It is the first pass of cs_normalise,
-# below, which calls it.
+# Drop heredoc bodies: lines on stdin, the same lines out with every heredoc
+# body taken away, and one line rewritten rather than kept -- an opener whose
+# line ends in an even run of backslashes loses the run, for the reason the
+# last step of the program gives. It is the first pass of cs_normalise, below,
+# which calls it.
 #
 # Extracted rather than copied, as cs_join was before it, and for #182. The
 # check suite counts the refusal arms in each boundary hook -- `arms`,

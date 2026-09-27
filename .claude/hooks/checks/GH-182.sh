@@ -24,9 +24,9 @@
 # succeeded, and no-git-push.sh permitted `git push --force origin main`. No
 # consumer calls the new function, so no load guard requires it; the library
 # withdraws cs_normalise instead, which every consumer of it does require. The
-# second half of this file drives that, per consumer.
+# second of this file's three parts drives that, per consumer.
 #
-# WHAT IS DRIVEN in the first half is each counter, against a fixture per
+# WHAT IS DRIVEN in the first part is each counter, against a fixture per
 # shape, in the manner of the unsplit file's `arms` and `fns` fixtures. Each
 # expected value is the one the fix gives; the old pipeline gives the other,
 # which was measured by reverting the pipeline by hand and is not a check here.
@@ -39,7 +39,7 @@
 # AND THE REUSE CARRIED THE TOKENISER'S BLIND SPOT INTO THE COUNTERS, found by
 # review of this file's pull request: a `<<` the tokeniser misreads, in quotes
 # or in a trailing comment, drops real code whenever a line that ends the body
-# it did not open arrives, and no-pr-decisions.sh has one today. The last part
+# it did not open arrives, and no-pr-decisions.sh has one today. The third part
 # of this file holds what the drop takes from each hook the counters read.
 #
 # WHAT IT TAKES FROM ELSEWHERE: $PUSH_WT and $ON_DEV from check-hooks.sh's
@@ -81,8 +81,8 @@ requirement GH-182.2 <<'REQ'
   `cs_normalise`, and says so on stderr naming both, so every consumer that
   requires `cs_normalise` refuses by its load guard; the intact library prints
   nothing on loading. No hook calls `cs_drop_heredocs` but through
-  `cs_normalise` -- its one other caller is the check suite's `hook_text` --
-  and no guard names it.
+  `cs_normalise` -- its one other caller is the check suite's `hook_bodiless`,
+  which `hook_text` and GH-182.3 read through -- and no guard names it.
 - from: #182
 - kind: defect-permitting
 - status: active
@@ -110,7 +110,8 @@ requirement GH-182.3 <<'REQ'
 - text: Every line `hook_text` drops from a hook the refusal-arm counters read
   is a bare parameter, such as `$CMDS` or `$1`, or a word in capitals -- the
   two lines a one-parameter heredoc body and its delimiter are made of -- and
-  the drop adds no line. The one exception is the five lines that
+  a line the drop rewrites rather than removes, an opener ending in an even run
+  of backslashes, reads as a red. The one exception is the five lines that
   no-pr-decisions.sh's `grep -q '<<'` drops, whose quoted opener has an empty
   delimiter that the next blank line ends: they are held verbatim until #289
   stops the tokeniser dropping them. So an arm or a
@@ -219,10 +220,17 @@ while read -r x; do :; done <<LIST
 $X
 LIST
 R182_EOF
+# The one line the drop rewrites rather than removes: an opener ending in an
+# even run of backslashes, which is text and not a continuation, loses the run.
+cat > "$R182/opener-ends-in-an-even-backslash-run.sh" <<'R182_EOF'
+cat <<EOF \\
+$X
+EOF
+R182_EOF
 for f in body-carries-a-write stderr-heredoc-body-carries-a-write body-closes-a-function \
          body-names-a-function body-line-ends-in-a-backslash comment-names-an-opener \
          quoted-opener-never-closed quoted-opener-a-blank-line-ends \
-         trailing-comment-opener-a-delimiter-ends; do
+         trailing-comment-opener-a-delimiter-ends opener-ends-in-an-even-backslash-run; do
   [ -s "$R182/$f.sh" ] || {
     echo "the #182 fixture $f.sh was not written; the checks against it prove nothing" >&2
     exit 1
@@ -261,15 +269,16 @@ tok 'arms loses the arm after a trailing comment naming <<LIST, which the real L
 # all three.
 #
 # "Nothing else" is asked of the file argument, since a counter can read a hook
-# only by its name: with the one `hook_text "$1"` taken out, no `$1`, `${1`,
-# `$@` or `$*` is left, and no drop or `sed` of its own. The first version asked
-# only the second half, so a counter piping `cat "$1"` beside `hook_text` passed;
-# review of #182's pull request found it.
+# only by its name: with the one `hook_text "$1"` taken out, no `$1`, `$@` or
+# `$*` is left, braced or not, and no drop or `sed` of its own. The first
+# version asked only the second half, so a counter piping `cat "$1"` beside
+# `hook_text` passed; the second let the brace reach `1` alone, so `${@}` and
+# `${*}` passed. Review of #182's pull request found each.
 R182_THROUGH=$(for fn in arms fn_writes fn_calls; do
   body=$(declare -f "$fn")
   rest=${body//'hook_text "$1"'/}
   [[ $body == *'hook_text "$1"'* && $rest != *cs_drop_heredocs* && $rest != *'sed '* ]] \
-    && ! [[ $rest =~ \$(\{?1|[@*]) ]] \
+    && ! [[ $rest =~ \$\{?(1|[@*]) ]] \
     && printf '%s ' "$fn"
 done)
 tok 'arms, fn_writes and fn_calls each read the hook through hook_text, and name it nowhere else' \
@@ -345,17 +354,19 @@ written 'the library says cs_normalise answers for cs_drop_heredocs' \
 # names its hook through another variable is not read; every call that reads
 # a hook of this directory names it that way today.
 req GH-182.3
-R182_COUNTED=$(grep -ohE '(arms|fn_writes|fn_calls) "\$HOOKS/[A-Za-z0-9_.-]+"' -- "${SUITE_FILES[@]}" \
+R182_COUNTED=$(grep -oE '(arms|fn_writes|fn_calls) "\$HOOKS/[A-Za-z0-9_.-]+"' "$SUITE_TEXT" \
   | sed 's|.*/||; s|"$||' | LC_ALL=C sort -u | tr '\n' ' ')
 tok 'the counters read two hooks of this directory' \
     'no-git-push.sh no-pr-decisions.sh ' "$R182_COUNTED"
-# Every line the drop in `hook_text` removed, `-` in front, read through the
-# library's `hook_uncommented`, the stage `hook_text` reads it through. A `+`
-# line would be one the drop added, which cs_drop_heredocs never does, and is
-# printed rather than assumed away.
-hook_dropped() {  # hook_dropped <file> -- "-<line>" per line the drop removed
+# Every line the drop in `hook_text` removed, `-` in front: the library's two
+# stages, `hook_uncommented` and `hook_bodiless`, diffed, so the text judged is
+# the text `hook_text` folds. The drop adds no line, but it rewrites one kind --
+# an opener ending in an even run of backslashes loses the run -- and diff shows
+# that as a `-` and a `+`. Both are printed rather than assumed away, and read
+# as a red below; neither hook has one today.
+hook_dropped() {  # hook_dropped <file> -- "-<line>" per line removed, "+<line>" per line rewritten
   diff --old-line-format='-%L' --new-line-format='+%L' --unchanged-line-format='' \
-    <(hook_uncommented "$1") <(hook_uncommented "$1" | cs_drop_heredocs)
+    <(hook_uncommented "$1") <(hook_bodiless "$1")
 }
 # A line the drop takes that is neither a bare parameter nor a word in
 # capitals, and any it adds. It asks the shape of each line and not whether the
@@ -366,7 +377,12 @@ hook_dropped() {  # hook_dropped <file> -- "-<line>" per line the drop removed
 # no-pr-decisions.sh the block under its `grep -q '<<'`, verbatim, blank
 # terminator included. An arm or a call added to that block changes the text
 # and is red; so is #289 closing, which leaves the literal naming lines nothing
-# drops, and it goes when #289 does.
+# drops, and it goes when #289 does. The cost, taken knowingly: an edit to that
+# block that changes no verdict -- a line reworded, a variable renamed -- is red
+# here too, which is the refusing direction. Respelling line 701 so the
+# tokeniser cannot see its `<<` would end that, and is declined: it is a guard
+# edit made for a counter's sake, and it would hide #289's one instance rather
+# than hold it.
 r182_unshaped() {  # r182_unshaped <file> -- what hook_text drops that is no heredoc of this shape
   hook_dropped "$1" | grep -vE '^-(\$([A-Za-z_][A-Za-z0-9_]*|[0-9])|[A-Z][A-Z0-9_]*)$'
 }
@@ -378,6 +394,14 @@ R182_FALSE_OPENER=$(cat <<'R182_EOF'
 -
 R182_EOF
 )
+# The empty row below asks something only if the diff ran: with no GNU diff to
+# read --old-line-format, or a process substitution that failed, it would pass
+# on nothing. no-git-push.sh has two heredoc loops, so its drop is never empty.
+if [ -n "$(hook_dropped "$HOOKS/no-git-push.sh")" ]; then
+  pass static 'hook_dropped reads a drop out of no-git-push.sh, so the empty row after it asked something'
+else
+  fail static 'hook_dropped reads no drop out of no-git-push.sh, which has two heredoc loops; the empty row after it proves nothing'
+fi
 tok 'hook_text drops nothing from no-git-push.sh but one-parameter heredoc bodies and their delimiters' \
     '' "$(r182_unshaped "$HOOKS/no-git-push.sh")"
 tok 'and from no-pr-decisions.sh those and the block under its quoted <<, verbatim, which #289 owns' \
@@ -391,5 +415,8 @@ tok 'r182_unshaped names the arm a quoted << hides, and the lines with it' \
 tok 'and the arm a trailing comment naming <<LIST hides, with the real opener' \
     '-echo "refused" >&2
 -while read -r x; do :; done <<LIST' "$(r182_unshaped "$R182/trailing-comment-opener-a-delimiter-ends.sh")"
+tok 'and an opener the drop rewrites, as the line it was and the line it became' \
+    '-cat <<EOF \\
++cat <<EOF' "$(r182_unshaped "$R182/opener-ends-in-an-even-backslash-run.sh")"
 
 sourced_to_end

@@ -1244,7 +1244,7 @@ it has no entry above (Q16).
 - #181: `fn_calls` cannot see an indirect call, so a wrapper around a function
   that writes a refusal hides arms from the count. Cited beside that helper,
   which names what it can and cannot see
-- #182: has entries, GH-182.1 and GH-182.2, generated from its issue file, and
+- #182: has entries, generated from its issue file, and
   is listed here only because #109's section cited it before it landed, as
   `arms` and `fn_writes` not knowing where a heredoc body starts. Of the three
   shapes it was filed on, the permitting one was closed by #169 counting

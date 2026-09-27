@@ -1353,10 +1353,14 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
   # And that what is left still loads. A fixture broken some other way would
   # refuse for a reason this section does not name, and would read as evidence
   # for the guard.
-  # Its stderr is dropped because a library missing a function it withdraws
-  # for says so on loading (#182), and in a green log that reads as a failure;
-  # the exit status is the answer here.
-  bash -c ". '$dir/lib/command-scan.sh' && command -v cs_renamed_away >/dev/null 2>&1" 2>/dev/null || {
+  # The one line filtered out of its stderr is the library's own report of a
+  # withdrawal (#182's, for a library missing cs_drop_heredocs), which is the
+  # fixture working and in a green log reads as a failure. Anything else it
+  # says is kept, so a fixture that fails to load for a reason of its own still
+  # shows bash's diagnostic; review of #182's pull request found the first
+  # version dropping all of it.
+  bash -c ". '$dir/lib/command-scan.sh' && command -v cs_renamed_away >/dev/null 2>&1" \
+    2> >(grep -v '^lib/command-scan.sh: .*is withdrawn' >&2) || {
     echo "the half-library for $hook does not load at all; the check using it proves nothing" >&2
     exit 1
   }
@@ -1395,16 +1399,20 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
 # body whose terminator never arrives is given back. #289 owns that in the
 # tokeniser; review of #182's pull request found it hiding five lines of
 # no-pr-decisions.sh here, and GH-182.3 holds what is dropped from each counted
-# hook to a heredoc's shape. The comment strip is its own stage so that the
-# two read the same text: a second copy of it in `hook_dropped` could drift
-# from this one, and the question would then be asked of text no counter
-# reads.
+# hook to a heredoc's shape. So the first two stages are helpers of their own,
+# and `hook_dropped` diffs one against the other: the text `hook_text` folds is
+# `hook_bodiless`'s, exactly, and not a second copy of the pipeline that a
+# counter-side filter or a route round #289 added to one of them would leave
+# behind. It was a copy in the commit that added it, and review of #182's pull
+# request found it.
 hook_uncommented() {  # hook_uncommented <file> -- its whole-line comments blanked
   sed 's/^[[:space:]]*#.*$//' "$1"
 }
+hook_bodiless() {  # hook_bodiless <file> -- that, with heredoc bodies dropped
+  hook_uncommented "$1" | cs_drop_heredocs
+}
 hook_text() {  # hook_text <file> -- a hook's text as the refusal-arm counters read it
-  hook_uncommented "$1" \
-    | cs_drop_heredocs \
+  hook_bodiless "$1" \
     | sed ':a;/\\$/{N;s/\\\n//;ba}'
 }
 arms() {  # arms <file> -- in how many places it writes a refusal to stderr
