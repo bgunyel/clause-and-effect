@@ -10075,8 +10075,9 @@ tok 'every_hook: two permitting hooks pass' 'ok' "$(every_hook_of allow-0 allow-
 # `awk_status`, rather than `rc`, and the issue file that owns it drives it over
 # the inputs that status reports on. Spelled `rc=$?`, such a function turns this
 # red and asks for a crashing-hook fixture it has no use for. Which functions do
-# this is not listed here, because nothing would read the list: the last one
-# written went stale in the pull request that added the third.
+# this is not listed here, because nothing would read the list: the count this
+# comment once gave was left stale by the pull request that added a third, and
+# review found it, not the suite.
 STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$SUITE_TEXT" \
   | awk '/^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
            fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)

@@ -29,9 +29,10 @@
 # derivation, and it is: #155 put the rule in one guard with a `lacks`, this
 # issue would have put it in a second, and the next guard is the one no `lacks`
 # names -- #84's shape one level out. So the whole suite's text is read, and a
-# line that sets PATH and then asks the calling shell what a name is fails the
-# run wherever it stands. Written here and not in the library, because this
-# file is its only caller.
+# line that sets PATH and then, on that line, asks the calling shell what a name
+# is fails the run in whichever file it stands. The shapes it reads and the ones
+# it cannot are GH-174.2's text and note, each a fixture row below. Written here
+# and not in the library, because this file is its only caller.
 
 section "=== issue #174: a fixture guard asks the farm, not the calling shell, what it holds ==="
 
@@ -51,10 +52,18 @@ requirement GH-174.1 <<'REQ'
   checks establish. With a `jq` wrapper exported into its environment the
   suite stopped at this guard after 2036 results before the fix. After it,
   the run went to the end and printed as many results as a run without the
-  wrapper, but not the same results: nine rows that pass without the wrapper
-  failed with it, because the function also reaches every hook and child
-  shell the suite starts, and the library's own jq guard asks `command -v`.
-  That is a different defect with a different fix, and #283 owns it.
+  wrapper, but not the same results, and how many differ depends on what the
+  wrapper does, because the function also reaches every hook and child shell
+  the suite starts, and the library's own jq guard asks `command -v`. Under
+  `jq() { command jq "$@"; }` nine rows that pass without it failed: the
+  eight #95 rows saying the refusal names its cause, and the row of
+  `tokeniser_collisions`, whose child shell imports the function.
+  Under `jq() { /usr/bin/jq "$@"; }`, which keeps jq working under the
+  jq-less PATH, nineteen failed: those nine, and ten whose hook read its
+  input through the function and permitted where it should have refused for
+  want of jq. Round 1 gave only the first figure and did not say which
+  wrapper it was. That is a different defect with a different fix, and #283
+  owns it.
   The checks define the function in the shell that evaluates the guard, and
   do not import it from `BASH_FUNC_jq%%`. For `command -v` the two are the
   same thing -- an imported function is a defined one by the time the script
@@ -68,6 +77,15 @@ requirement GH-174.1 <<'REQ'
   evaluates the guard under a `jq` function, and GH-174.2's row over the
   suite. The guard's range evaluated as `:` turned three red: both `holds`
   and the control that must fail. Neither turned the other rows red.
+  The text's `nothing` is held by the row under a `jq` function and not by
+  the `lacks`, which names one spelling: `command -v`, `type`, `hash` and
+  `compgen -c` all answer for a function under the jq-less PATH, as a probe
+  of each showed in review round 2, so a guard asking any of them reads a
+  `jq` the copy does not hold, and fails. That row prints what the shell
+  calls `jq` beside the guard's result since the same round, because review
+  found it vouched for by a separate row that no mutation reached; taking
+  the function's definition out of it turns that row red, and it alone,
+  measured as a full run like the rest.
 REQ
 requirement GH-174.2 <<'REQ'
 - text: No line of the suite -- the driver and every file it sources -- sets
@@ -120,7 +138,15 @@ requirement GH-174.2 <<'REQ'
   option cluster narrowed to `-v` or `-V` alone; and comment lines read.
   Each turned the fixture row red, and reading comments turned the row over
   the suite red as well. awk's status ignored turned the unreadable-file row
-  red.
+  red. In the second round, against the widened expression: a quote of
+  either kind, or the backslash, taken out of the boundary class, and the
+  option words in front of the one holding `v` no longer read, each turned
+  the fixture row red and no other row of this issue; `hash` read as a
+  question turned the row over what the note says it cannot read red, and
+  the row over the suite, on the fixture's own `hash` line; review's two
+  shapes inserted into `checks/unsplit.sh` -- a question opening a payload
+  quoted for `bash -c`, and `command -p -v` -- turned the row over the
+  suite red, where the first expression left them green.
 REQ
 shape_pin 'GH-174.1:static GH-174.2:static'
 
@@ -142,8 +168,8 @@ holds 'the jq fixture guard asks the with-jq farm, as a directory, whether it ho
       "$R174_GUARD" 'farm_has "$WITH_JQ_BIN" jq'
 holds 'and asks the jq-less copy the same way' \
       "$R174_GUARD" '! farm_has "$NO_JQ_BIN" jq'
-lacks 'and asks the calling shell nothing, which would resolve a function ahead of PATH' \
-      "$R174_GUARD" 'command -v'
+lacks 'and asks the calling shell no `command -` question, which would resolve a function ahead of PATH' \
+      "$R174_GUARD" 'command -'
 # The function is defined inside each $( ), so the guard's own subshells
 # inherit it, and it is gone when the $( ) ends: a `jq` left standing here
 # would be run by every later check that feeds a hook, in place of the program.
@@ -153,8 +179,8 @@ lacks 'and asks the calling shell nothing, which would resolve a function ahead 
 # fails if no function stands in the guard's way there: a `passed` alone says
 # nothing about a function that was never defined. r174_shadowed keeps PATH on
 # one line and the question on the next, which is a shape GH-174.2 states it
-# does not read, and it is the one question in the suite meant to be answered
-# by a function.
+# does not read: it is the one question in this file meant to be answered by a
+# function.
 r174_shadowed() {  # r174_shadowed -- what the calling shell calls `jq` under the jq-less PATH
   local PATH=$NO_JQ_BIN
   type -t jq
