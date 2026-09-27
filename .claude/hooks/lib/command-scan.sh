@@ -1592,6 +1592,18 @@ fi
 # be slow, and a bound on what the passes are handed is what keeps them fast
 # whatever a later edit to one costs.
 #
+# OBSERVED, AND NOT ONLY ARGUED (#110, runbook.md §5). That a killed hook
+# permits was reasoning when #96 wrote the paragraph above. The runbook's first
+# run watched it, on 2026-09-27 at Claude Code 2.1.283 under `claude -p`: a
+# PreToolUse hook sleeping 10 s under a 2 s timeout was killed at about 2.2 s,
+# its log holding nothing after the sleep; the `touch` it would have refused
+# ran; and the agent was shown `(Bash completed with no output)`, not an error,
+# with no word of the hook. The same hook refusing at once blocked the same
+# call. So the kill permits, and it is silent: nothing tells the agent, or the
+# person reading its transcript, that a guard did not decide. The record is
+# docs/eval-reports/2026-09-27-boundary-runbook-183114.md; the interactive
+# front end was not watched.
+#
 # WHAT THIS CAP DOES NOT BOUND, which #96 first claimed it did: a hook's running
 # time. It bounds the length of a line and nothing else. A hook starts an awk
 # or more per fragment cs_split emits, so its time grows with the number of

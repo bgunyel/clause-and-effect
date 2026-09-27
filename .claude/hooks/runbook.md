@@ -1,0 +1,314 @@
+# The live acceptance runbook
+
+What the check suite cannot reach, and how to verify it by hand. Some of the
+boundary's requirements live in configuration the harness reads, in settings
+GitHub holds, or in behaviour that only exists in a live session, and a check
+that runs a hook as a process sees none of them. #103 decided (Q3, Q17) that
+these are a runbook and not checks, and #110 wrote it.
+
+A requirement verified here is written in `requirements.md`, or under
+`requirements/`, with `seam: none` and `verify: runbook §<n>`, and `§<n>` is a
+`## §<n>` heading below. `check-hooks.sh` fails on a `verify: runbook §<n>` that
+names no such heading (#104), and on a section whose **Verifies** line does not
+name exactly the requirements that point at it (#110). **Also observes** names
+requirements a section reads the live half of while checks cover the rest; they
+point at no section, because an entry with `seam: none` has no check tagged
+with it, and these have checks.
+
+## How to run it, and where the results go
+
+**This file is instructions and holds no results.** A run's results go in
+`docs/eval-reports/<date>-boundary-runbook-<HHMMSS>.md`, one file per run,
+dated and append-only, and the newest one per section is the current answer.
+That directory and not the dev-log, because a run is a record of what was
+observed at a point in time, which is `docs/eval-reports/`'s job in CLAUDE.md's
+table, where the dev-log is one narrative per session: a run Bertan makes in his
+own terminal has no session to put it in, and a result filed inside a session's
+narrative is found only by reading the narrative. A run may cover some sections
+and not others; its record says which, and names every section it did not run.
+
+For each section a record gives the date, who ran it, the commit of this file
+it followed (`git rev-parse --short HEAD`), the `claude --version` where a
+session is involved, every command as typed, and what it printed, verbatim.
+An observation is what was seen, not whether it matched: a record says
+"matches" only beside the output that shows it.
+
+**Who runs it.** Each section says. *An agent* means any session working in
+this repository, and the steps are reads, or writes confined to a scratch
+directory outside it. *Bertan* means a step that changes something an agent
+must not: the machine's network, or a worktree whose removal is a reserved act.
+
+**When an observation differs from the expected one** (Q18): file a bug and
+link it under #36 as a sub-issue (`docs/agents/issue-tracker.md` says how),
+titled `runbook §<n>: <what differed>`, with the record's command and output
+quoted. Do not edit the expectation here to match what was seen; the issue
+decides whether the requirement or the expectation was wrong, and a change here
+lands with it.
+
+## §1 The worktree fork point
+
+**Verifies:** US-5, US-6.
+**Also observes:** GH-99.2, whose check reads that `worktree.baseRef` is
+`fresh` and cannot show the harness honours it; GH-99.3, the SessionStart
+report's `main ancestry` line.
+
+"0 behind" alone passes a branch that starts *ahead* of the active dev branch,
+which is #99's defect, so every expectation below is 0 behind **and** 0 ahead:
+the fork point is `origin/dev-NN` itself. Replace `dev-NN` below with the
+`active dev branch:` the SessionStart report printed, and `<branch>` with the
+new branch's name.
+
+### §1a `git worktree add` (an agent)
+
+The route CLAUDE.md gives first. An agent runs it at the start of its own work,
+so the worktree it creates is the one it works in, and the steps after it are
+reads. Run them before the first commit.
+
+```bash
+git fetch origin
+git worktree add --no-track -b <branch> <path> origin/dev-NN
+git rev-list --left-right --count origin/dev-NN...<branch>
+git for-each-ref --format='%(upstream)' refs/heads/<branch>
+```
+
+Expected: the count prints `0	0` (a tab between), and the upstream read prints
+an empty line.
+
+### §1b `EnterWorktree`, then a reset (Bertan, or an agent entering its own worktree)
+
+`EnterWorktree` creates a worktree whose fork point `worktree.baseRef` decides,
+and CLAUDE.md's second route resets it onto `origin/dev-NN` as the first act.
+Record the fork point **before** the reset, which is what `baseRef` gave, and
+again after.
+
+```bash
+# in the session: call EnterWorktree, then, as the first act in the new worktree:
+git fetch origin
+B=$(git branch --show-current); echo "$B"
+git rev-list --left-right --count origin/dev-NN..."$B"
+git rev-list --left-right --count origin/main..."$B"
+git for-each-ref --format='%(upstream)' "refs/heads/$B"
+git reset --hard origin/dev-NN
+git rev-list --left-right --count origin/dev-NN..."$B"
+git for-each-ref --format='%(upstream)' "refs/heads/$B"
+```
+
+Expected before the reset, with `baseRef` `fresh` and no
+`.claude/settings.local.json` overriding it: the count against `origin/main`
+prints `0	0`, and the count against `origin/dev-NN` prints its number of commits
+ahead of `origin/main` on the left and `0` on the right. Expected after:
+`0	0`. The upstream read prints an empty line both times. #110 left the
+upstream to be observed rather than expected, and its first run found none
+set; had it found one, #99's rule would have gained
+`git branch --unset-upstream`, and a run that finds one now is a difference
+like any other.
+
+A worktree made here is not removed here: removing one is a reserved act, and
+Bertan's sweep does it. The harness's half of this section -- what `fresh`
+gives and whether an upstream is set -- can also be observed by an agent in a
+scratch repository, as §1c is, with a local `origin` holding `main` and a
+`dev-NN` ahead of it and the scratch `.claude/settings.json` setting
+`"worktree": {"baseRef": "fresh"}`. That run cannot see this repository's
+`settings.local.json`, and a record says which of the two it made.
+
+### §1c What the harness documentation does not settle (an agent, in a scratch project)
+
+#99 Q8's four questions. Each answer is recorded with how it was seen. They are
+asked in a scratch git repository outside this one, whose own
+`.claude/settings.json` carries a logging hook, and never in this repository's
+settings.
+
+1. Does a `WorktreeCreate` hook fire for `EnterWorktree`, as well as for
+   `--worktree`, `isolation: "worktree"` and background sessions, which the
+   documentation names?
+2. Does the harness or the hook create the `worktree-` branch?
+3. What working directory does the hook run in?
+4. Can a `PostToolUse` matcher match `EnterWorktree`?
+
+The hook, one script for both events, appends to a log file its label, its
+standard input, `pwd`, and `git -C "$CLAUDE_PROJECT_DIR" branch --list
+'worktree-*'` at the moment it runs, exits 0, and prints and changes nothing
+else. Two sessions, each started in a scratch repository of its own with
+`claude -p`, `--setting-sources project` and `--allowedTools EnterWorktree`,
+and each asked to call `EnterWorktree` once: the first with only the
+`PostToolUse` hook, matcher `EnterWorktree`, which answers question 4 and is
+where §1b's harness half is read; the second with a `WorktreeCreate` hook as
+well, which answers 1 to 3. They are two sessions because a `WorktreeCreate`
+hook takes the creation over, so the second one creates no worktree for §1b
+to read. `--worktree`, `isolation: "worktree"` and background sessions are
+routes of their own, each taken the same way.
+
+Expected: what the newest record says. #110's first run had no expectation to
+compare against, since the documentation does not settle these, so that run
+is the baseline and a later answer that differs from it is a difference like
+any other. If `WorktreeCreate` fires for any route, #113, the follow-up issue
+on a `WorktreeCreate` hook, proceeds, and the record says so.
+
+### §1d The `main ancestry` line (an agent)
+
+```bash
+git fetch origin
+git merge-base --is-ancestor origin/main origin/dev-NN; echo $?
+```
+
+Expected: `0`, and the SessionStart report's line reads
+`main ancestry: origin/main is an ancestor of origin/dev-NN`. `1` and the line
+reading `main ancestry: origin/main is NOT an ancestor of origin/dev-NN` agree
+as well; what differs is the two disagreeing.
+
+## §2 The `main` ruleset
+
+**Verifies:** GH-110.1.
+**Also observes:** US-1, whose checks refuse an agent's push to `main` and
+cannot see the server-side rule that also refuses Bertan's.
+
+An agent may run it: both calls are reads, made with Bertan's credentials,
+which is also what makes the bypass list readable at all.
+
+```bash
+gh api repos/bgunyel/clause-and-effect --jq .default_branch
+gh api repos/bgunyel/clause-and-effect/rulesets \
+  --jq '.[] | select(.name == "main-branch-protection") | .id'
+gh api repos/bgunyel/clause-and-effect/rulesets/<id> \
+  --jq '{enforcement, include: .conditions.ref_name.include, bypass_actors, requires_pull_request: ([.rules[].type] | index("pull_request") != null)}'
+```
+
+Expected: `main`; one id; and
+
+```
+{"bypass_actors":[],"enforcement":"active","include":["~DEFAULT_BRANCH"],"requires_pull_request":true}
+```
+
+`gh --jq` prints an object's keys sorted, whatever order the filter builds
+them in.
+
+The ruleset names the default branch rather than `main`, which is why the
+first call is part of the section: the rule protects `main` only while `main`
+is the default branch.
+
+## §3 The merge settings
+
+**Verifies:** FR-39.
+**Also observes:** FR-41, the SessionStart report's `merge settings` line.
+
+An agent may run it: the call is a read.
+
+```bash
+gh api repos/bgunyel/clause-and-effect \
+  --jq '[.allow_squash_merge, .allow_rebase_merge, .delete_branch_on_merge] | map(tostring) | @tsv'
+```
+
+Expected: `false	false	true` (tabs between), and the SessionStart report's
+line reads
+`merge settings: as required (squash off, rebase off, delete-on-merge on)`.
+
+## §4 A refusal reaches the agent
+
+**Verifies:** GH-110.2.
+**Also observes:** US-7, whose checks read a refusal's message off the hook's
+standard error and cannot see what the harness passes on.
+
+An agent runs it, in a live session, because the observation is what the
+agent is shown. The command is `pytest --version`, chosen because this
+section is about delivery and not the verdict: were the hook to permit it,
+running it changes nothing. The verdict is learned first by feeding the hook,
+never by running a command whose effect matters.
+
+```bash
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"pytest --version"}}' \
+  | bash .claude/hooks/pytest-via-uv-group.sh; echo "rc=$?"
+# then, as a Bash tool call of its own:
+pytest --version
+```
+
+Expected from the feed: exit `2` and, on standard error,
+
+```
+Blocked: bare pytest invocation. CLAUDE.md runs tests through the 'test' dependency group. Use: make test, or uv run --group test pytest tests/<file>::<test>
+```
+
+Expected from the tool call: it is refused, the command does not run, and the
+agent is shown the same message byte for byte after the harness's prefix:
+
+```
+PreToolUse:Bash hook error: ["$CLAUDE_PROJECT_DIR"/.claude/hooks/pytest-via-uv-group.sh]: Blocked: bare pytest invocation. CLAUDE.md runs tests through the 'test' dependency group. Use: make test, or uv run --group test pytest tests/<file>::<test>
+```
+
+## §5 A hook that outlasts its timeout
+
+**Verifies:** GH-110.3.
+**Also observes:** GH-96.1 and #240, which both rest on it.
+
+#96's line cap argues that a hook the harness kills at its timeout permits the
+command, and that is why no hook may be slow. This section turns that premise
+into an observation. An agent may run it: everything it writes is in a scratch
+directory, and the session it starts is a second, headless one whose only
+project settings are the scratch copy.
+
+In a scratch directory `$S`, two git repositories, `timeout/` and `control/`,
+each with a `.claude/settings.json` holding one `PreToolUse` hook on `Bash`
+with `"timeout": 2`. The hook is `$S/hook.sh <seconds> <log>`:
+
+```bash
+#!/bin/bash
+echo "start $(date +%s.%N)" >> "$2"
+sleep "$1"
+echo "finished $(date +%s.%N)" >> "$2"
+echo "refused by the scratch hook" >&2
+exit 2
+```
+
+`timeout/` passes `10` seconds, past the timeout, and `control/` passes `0`.
+From inside each repository:
+
+```bash
+claude -p "Use the Bash tool exactly once to run this command and nothing else: touch $PWD/marker . Then reply with the tool result text verbatim and stop." \
+  --setting-sources project --strict-mcp-config --model claude-haiku-4-5-20251001 \
+  --allowedTools "Bash(touch:*)" --output-format stream-json --verbose > stream.jsonl
+sleep 12; ls marker; cat hook.log
+jq -c 'select(.type=="user") | .message.content[]? | select(.type=="tool_result") | {is_error, content}' stream.jsonl
+```
+
+Expected in `control/`: no `marker`, a log of `start` and `finished`, and
+
+```
+{"is_error":true,"content":"PreToolUse:Bash hook error: [<the hook's command>]: refused by the scratch hook\n"}
+```
+
+Expected in `timeout/`, which is #96's premise: `marker` exists, the log holds
+`start` and no `finished` twelve seconds later, because the hook was killed,
+and the agent is told nothing:
+
+```
+{"is_error":false,"content":"(Bash completed with no output)"}
+```
+
+`--setting-sources project` keeps the user's own hooks out of the scratch
+session; `claude -p` is the harness without its interactive front end, and a
+record says which it ran. A timed-out hook that *refused* would not be a hole,
+but it would make #96's reasoning wrong, and the difference is filed like any
+other.
+
+## §6 An offline SessionStart
+
+**Verifies:** GH-110.4.
+**Also observes:** FR-42, whose checks read the report's text and output and
+cannot see whether the harness starts a session around it.
+
+Bertan runs it: it needs the machine's network down, which an agent cannot
+arrange from inside a session that needs the network to run. Take the network
+down, start `claude` in this repository, read the SessionStart report, quit,
+and bring the network back.
+
+Expected: the session starts, within the report hook's 50-second timeout, and
+the report reads, among its other lines,
+
+```
+fetch: FAILED or timed out after 15s -- remote-tracking refs are
+merge settings: NOT READ -- gh api failed or timed out after 10s, so whether either detector in
+pull requests: NOT READ -- gh api failed or timed out after 10s, so branches are
+main ancestry: origin/main is an ancestor of origin/dev-NN (read against refs the failed fetch left behind)
+```
+
+The last line's middle depends on the refs the last successful fetch left, as
+§1d's does; its suffix does not.

@@ -193,8 +193,8 @@ PROVENANCE_COUNTS='37:8 38:6 39:6 40:13 41:8'
 # go red on a generated entry written here and on a pin that is not once, in
 # the issue file that declares its entry.
 REQUIREMENT_SHAPE='
-US-1:refuse-only US-2:refuse-only US-3 US-4:permit-only US-5:gap,runbook
-US-6:gap,runbook US-7:refuse-only US-8 US-9 US-10 US-11 US-12
+US-1:refuse-only US-2:refuse-only US-3 US-4:permit-only US-5:runbook
+US-6:runbook US-7:refuse-only US-8 US-9 US-10 US-11 US-12
 US-13:permit-only US-14:permit-only US-15 US-16:static US-17:review
 US-18:review US-19:static US-20:static US-21:review US-22:static
 US-23:static US-24:static US-25 US-26:static US-27:static US-28:static
@@ -205,7 +205,7 @@ FR-13:review FR-14 FR-15 FR-16 FR-17 FR-18 FR-19 FR-20 FR-21 FR-22:static
 FR-23:refuse-only FR-24:static FR-25:static FR-26:static
 FR-27:static FR-28:static FR-29:static FR-30:review FR-31:drifted
 FR-32:review FR-33:static FR-34:superseded-by FR-35:static FR-36:review
-FR-37:static FR-38 FR-39:gap,runbook FR-40:static FR-41:static FR-42:static
+FR-37:static FR-38 FR-39:runbook FR-40:static FR-41:static FR-42:static
 FR-43:static FR-44:static FR-45:static FR-46:static FR-47:static FR-48 FR-49
 GH-43.1 GH-43.2 GH-43.3 GH-43.4 GH-43.5:refuse-only GH-43.6 GH-44.1 GH-44.2
 GH-44.3 GH-44.4 GH-44.5 GH-44.6 GH-44.7:static GH-47.1 GH-47.2:refuse-only

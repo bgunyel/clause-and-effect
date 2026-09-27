@@ -53,7 +53,9 @@
 # every refusal after it: round 4 of PR #158's review after the merge across the
 # split measured a merge refused in 39 ms alone taking 7056 ms behind a create
 # naming a base, with a git that slept 7 s. Past the harness's timeout a killed
-# hook is taken as a permit, which is #240's account and was not measured here.
+# hook is taken as a permit, which is #240's account and was not measured here;
+# runbook.md §5 has since watched a killed hook permit (#110, and THE LINE CAP
+# in the library).
 # The other boundary hooks make unbounded local git reads too, so #240 is filed
 # across the boundary and not answered in this file.
 #
