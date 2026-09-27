@@ -8946,9 +8946,13 @@ else
   fail static 'the files that load the library are not the four this section checks\n         load it: |%s|\n         checked: |%s|' \
     "$SOURCERS" "$CLAIMED"
 fi
-# One property of this suite's own helpers, because nothing else here drives them
-# and `unarmed` reporting ok for a file it never read would make four pins below
-# vacuous. Run in a subshell so its FAILED cannot reach ours.
+# One property of this suite's own helpers: `unarmed` reporting ok for a file it
+# never read would make every `unarmed` pin below vacuous. #219's issue file
+# drives the text it prints, against a missing file and a directory, by comparing
+# the output of `$( )`; this is the other half, whether it set FAILED, which no
+# comparison of the output can see. Both unread cases take one arm of `unarmed`,
+# so the missing file asks it of the directory too. Run in a subshell so its
+# FAILED cannot reach ours.
 if ( FAILED=0; unarmed 'self-check' "$FIXTURES/no-such-file" 'anything'; exit $FAILED ) >/dev/null 2>&1
 then
   fail static 'unarmed reports ok for a file that is not there, so every pin below is vacuous'
@@ -10059,6 +10063,12 @@ tok 'every_hook: two permitting hooks pass' 'ok' "$(every_hook_of allow-0 allow-
 # line to end it. Both are the permitting direction. It does find names with
 # capitals or digits, and the `function` keyword with or without parens. Comments
 # are stripped first, as cs_calls strips them.
+#
+# Two functions keep out of it on purpose, by that first gap: `unarmed` and
+# `prose_count` read grep's status and run no hook, so they name it
+# `grep_status` rather than `rc`, and #219's issue file drives them against a
+# directory, a missing file and a readable one instead. Spelled `rc=$?`, either
+# turns this red and asks for a crashing-hook fixture it has no use for.
 STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$SUITE_TEXT" \
   | awk '/^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
            fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)

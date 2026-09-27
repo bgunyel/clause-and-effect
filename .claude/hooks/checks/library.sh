@@ -379,8 +379,21 @@ need_worktree() {  # need_worktree <dir> <fixture name>
 # line rather than a trailing remark. Routed through `armed`, such a pin cannot
 # pass: measured, not reasoned, on the boundary-section check that dev-05 is
 # red on today. This reads the file as written, and the name says which.
+#
+# A COUNT ONLY FROM A FILE THAT WAS READ, for the reason `unarmed` gives below
+# (#219). On a directory grep prints `0` and exits 2, so a `tok ... '0'` over
+# this read an unread directory as a phrase said nowhere. So grep's status is
+# asked: 0 and 1 are counts -- `grep -c` exits 1 when the count is zero, and
+# that `0` is a real one -- and any other status prints a line naming it and
+# the file, which no count equals.
 prose_count() {  # prose_count <file> <literal> -- how many lines say it
-  grep -cF -- "$2" "$1" 2>/dev/null
+  local n grep_status
+  n=$(grep -cF -- "$2" "$1" 2>/dev/null)
+  grep_status=$?
+  case $grep_status in
+    0|1) printf '%s\n' "$n" ;;
+    *) printf 'unread: grep exited %s on %s\n' "$grep_status" "$1" ;;
+  esac
 }
 
 written() {  # written <label> <file> <literal> -- the file as written, # and all
@@ -392,21 +405,39 @@ written() {  # written <label> <file> <literal> -- the file as written, # and al
   fi
 }
 
-# The absence has to be an absence IN a file that was read. `grep -qF` on a file
-# that is not there exits 2, which fell into the else arm and reported ok -- so
-# every pin below would have passed for a file renamed or deleted away, which is
-# the permitting direction and the same shape as the #84 defect these were added
-# for. Found by review of that change, not by this suite.
+# The absence has to be an absence IN a file that was read, so grep's exit
+# status is what decides: 0 is the literal found, 1 is the file read and the
+# literal not in it, and anything else is a file grep could not read, which
+# fails and names the status and the file. Only 1 passes.
+#
+# It was an `else` after the grep, and that is the defect twice over. First a
+# file that is not there: grep exits 2, which fell into the else arm and
+# reported ok -- so every pin below would have passed for a file renamed or
+# deleted away, which is the permitting direction and the same shape as the
+# #84 defect these were added for. Found by review of that change, not by this
+# suite. Its fix was a `[ ! -r ]` arm in front of the grep, and `[ -r ]` is
+# true of a directory: grep exits 2 on one, `Is a directory`, the else arm
+# read that as absent too, and a pin aimed at `$HOOKS/lib`, or at a directory
+# spelled with a trailing `/`, printed ok having read nothing (#219, found by
+# review of PR #216). So there is no readability test in front of the grep now:
+# a test is a guess at what grep will manage, and the status is what it did.
+#
+# THE STATUS IS grep_status AND NOT rc, here and in `prose_count`, because the
+# #98 self-test derives its list of hook-status readers from `rc=$?` and would
+# then ask to drive these two against hooks that crash. They run no hook; what
+# they read is grep's status, and #219's issue file drives them against a
+# directory, a file that is not there and a readable file instead.
 unarmed() {  # unarmed <label> <file> <literal>
   absolute_or_fail "$1" "$2" || return
-  if [ ! -r "$2" ]; then
-    fail static '%s\n         %s cannot be read, so the absence of |%s| is evidence of nothing' \
-      "$1" "$2" "$3"
-  elif grep -qF -- "$3" "$2" 2>/dev/null; then
-    fail static '%s\n         %s must not contain |%s|' "$1" "$2" "$3"
-  else
-    pass static 'armed %s' "$1"
-  fi
+  local grep_status
+  grep -qF -- "$3" "$2" 2>/dev/null
+  grep_status=$?
+  case $grep_status in
+    0) fail static '%s\n         %s must not contain |%s|' "$1" "$2" "$3" ;;
+    1) pass static 'armed %s' "$1" ;;
+    *) fail static '%s\n         grep exited %s on %s, so it was not read and the absence of |%s| is evidence of nothing' \
+         "$1" "$grep_status" "$2" "$3" ;;
+  esac
 }
 
 tok() {  # tok <label> <expected> <actual>
