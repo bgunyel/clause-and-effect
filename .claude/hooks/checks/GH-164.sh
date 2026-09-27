@@ -13,7 +13,9 @@
 #
 # WHICH ARMS. PUSH_REFUSE backs the arm that refuses a push naming main, and the
 # four that refuse a push which may land on main without naming it: `--all` and
-# `--mirror`, an unreadable continuation, a wildcard refspec, and `-c`. The bare
+# `--mirror`, an unreadable continuation, a wildcard refspec, and `-c`. That
+# list is NCM164_ARMS below, held to the hook by a count of its PUSH_REFUSE
+# expansions, since review added a sixth arm and nothing went red. The bare
 # push on main has a sentence of its own, which names the command it refuses
 # and gives no remedy; #164 left it alone and nothing here reads it.
 #
@@ -64,6 +66,34 @@ git push --all origin| That form pushes every branch, main among them.
 git push origin \\ | The arguments continue past where this check can read them.
 git push origin 'refs/heads/*:refs/heads/*'| A wildcard refspec does not rule main out.
 git -c push.default=matching push| This command sets git configuration for itself, which decides where a push lands."
+
+# THE LIST IS HELD TO THE HOOK. The rows below ask each line of NCM164_ARMS, and
+# GH-164's text says "every arm", so an arm added to the hook and not to the list
+# is unasked -- and review of PR #291 added one, whose tail named
+# `git push origin <branch>`, with the suite green. So the expansions of
+# PUSH_REFUSE in the hook under judgment are counted, and the count has to be
+# the list's length: a sixth arm is red here until it is a sixth line there,
+# where every context runs it through `says_exactly`. Only the count is derived.
+# The tails stay literals, since reading them off the hook would have the hook
+# attest to itself (#84's shape: derive the population, not the verdict).
+#
+# Whole-line comments are dropped and nothing else, so a trailing comment that
+# names `$PUSH_REFUSE` over-counts -- red, and one edit away -- where cutting at
+# every `#` would under-count a site written after a `#` in a string. What this
+# does not see, named: a new trigger routed into an existing site, which gives
+# that site's pinned text; and an echo added after a site under a condition
+# none of the five contexts meets.
+req GH-164
+NCM164_HOOK="$HOOKS/no-commit-to-main.sh"
+if absolute_or_fail 'the PUSH_REFUSE count reads the hook under judgment' "$NCM164_HOOK"; then
+  if [ -f "$NCM164_HOOK" ] && [ -r "$NCM164_HOOK" ]; then
+    tok 'no-commit-to-main.sh expands PUSH_REFUSE as many times as NCM164_ARMS has arms, so an arm added to either is red until it is in the other' \
+      "$(printf '%s\n' "$NCM164_ARMS" | grep -c .)" \
+      "$(grep -v '^[[:space:]]*#' "$NCM164_HOOK" | grep -oE '\$\{?PUSH_REFUSE([^A-Za-z0-9_]|$)' | wc -l | tr -d ' ')"
+  else
+    fail static 'the PUSH_REFUSE count: %s was not read, so no count of it is evidence' "$NCM164_HOOK"
+  fi
+fi
 
 # Every arm PUSH_REFUSE backs, from one directory: the kept opening, the new
 # remedy, and the arm's own tail unchanged, and nothing else.

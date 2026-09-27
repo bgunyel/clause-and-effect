@@ -1467,4 +1467,6 @@ it has no entry above (Q16).
   on it with a space after, and called whole, which a second `echo >&2` after
   the arm's own passed with a push remedy in it, in prose and as
   `git -C . push`. That is why `says_exactly` is in the library, driven by the
-  #98 self-test against a fixture that says a second line
+  #98 self-test against a fixture that says a second line. Its second round
+  added a sixth `PUSH_REFUSE` arm past the hand-written list of arms, green,
+  which is why #164's issue file holds that list to a count off the hook
