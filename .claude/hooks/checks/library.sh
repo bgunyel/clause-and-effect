@@ -78,13 +78,29 @@ pass() {  # pass <refuse|permit|static> <format> [arguments...] -- an ok line, r
 # spaces, as DETAIL_INDENT, and tests/test_check_hooks_ci.py runs this function
 # into that parser, so the two spellings cannot drift apart with the tests
 # green. The ledger records the first line, which the indent never reaches.
+#
+# LINEAR IN THE MESSAGE, AND WHY IT IS NOT ONE SUBSTITUTION (#293). The indent
+# was first written as `${line//$'\n'/$'\n'$indent}`, and under a UTF-8 locale
+# bash's substitution grows with the square of the message: one `fail` over a
+# 10,000-line message of 580 KB took 6.8 s, against 0.06 s before #224 and
+# 0.14 s in the form below, which took 0.03 s at 2,000 lines and 0.72 s at
+# 50,000. The rest of the message is read into an array by `mapfile` and each
+# element given the indent, which is linear. The here-string adds one newline
+# and `mapfile -t` takes one off, so a message ending in a newline still ends
+# in an indent-only line, as the substitution printed it.
 fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, recorded
-  local dir="$1" fmt="$2" line indent='       '
+  local dir="$1" fmt="$2" line first indent='       '
+  local -a rest
   shift 2
   printf -v line "$fmt" "$@"
-  printf '  FAIL %s\n' "${line//$'\n'/$'\n'$indent}"
+  first=${line%%$'\n'*}
+  printf '  FAIL %s\n' "$first"
+  if [[ $first != "$line" ]]; then
+    mapfile -t rest <<< "${line#*$'\n'}"
+    printf '%s\n' "${rest[@]/#/$indent}"
+  fi
   FAILED=1
-  record "$dir" FAIL "${line%%$'\n'*}"
+  record "$dir" FAIL "$first"
 }
 req() {  # req <ID>... -- the requirements the checks after this establish
   REQ="$*"

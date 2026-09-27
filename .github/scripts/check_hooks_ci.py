@@ -59,8 +59,18 @@ Two subcommands, one per thing a green run has to be true about:
     THE OPEN CASE, recorded and not fixed: a stray line that `fail` did not
     print but that happens to open with the indent is read as detail of the
     failing row above it. The log cannot tell it from a continuation line.
-    Nothing in the suite prints one today that anyone found, and a test pins
-    the behaviour as accepted, not as wanted.
+    One printer of such lines reaches the log: when `mutate-hooks.sh --list`
+    fails, `checks/unsplit.sh` copies its stderr to the log with the indent in
+    front, `sed 's/^/       /'`. It cannot be taken as detail, because the
+    line right before it is that check's own message at column 0, and the
+    suite exits right after it; no run measured so far has taken that path.
+    Two sweeps found no other, and each is evidence only of what it read: one
+    over the text of `.claude/hooks/` for `echo`, `printf`, `awk` and
+    `sed 's/^/…/'` printers and heredocs, whose every other hit writes into a
+    `fail` message or into output a check captures, and one over the logs of
+    four full runs of the suite, none of which took that path either (review
+    of PR #285, rounds 1 and 2). A test pins the behaviour as accepted, not as
+    wanted.
 
     The summary stays under GitHub's 1 MiB cap for any log, on either path
     that writes its one code block (#207). A failing row is shown if it fits

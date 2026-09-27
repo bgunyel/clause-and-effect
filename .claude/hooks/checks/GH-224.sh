@@ -50,13 +50,17 @@ requirement GH-224.1 <<'REQ'
 REQ
 requirement GH-224.2 <<'REQ'
 - text: The ledger line `fail` records for a message of several lines is its
-  first line only, as it was before #224: the indent goes on what `fail`
-  prints and never on what it records, so the ledger `mutate-hooks.sh` reads
-  is byte-identical for every `fail` call.
+  first line only, byte for byte, as it was before #224.
 - from: #224
 - kind: defect-permitting
 - status: active
 - direction: static: a property of the suite's helpers
+- note: That the ledger `mutate-hooks.sh` reads is unchanged by #224 for every
+  `fail` call follows from this and is not checked here: it was measured over
+  a set of messages in PR #285, and the check below drives one. That the
+  indent never reaches the ledger cannot be driven at all, because the first
+  line is the one line the indent is never put on (review of PR #285, round
+  2).
 REQ
 shape_pin 'GH-224.1:static GH-224.2:static'
 
