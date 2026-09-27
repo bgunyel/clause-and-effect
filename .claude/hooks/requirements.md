@@ -1442,6 +1442,12 @@ it has no entry above (Q16).
   beside the tail offer's bound in `lib/command-scan.sh`. Pre-existing, found
   by the review of #260, round 3; it adds its requirements in the pull request
   that fixes it
+- #309: three hooks match the wrapper anchor on the command as it came, where
+  `cs_split` joins continuations, so `bash \` and a newline before `-c` hides the
+  wrapper from no-git-push.sh and no-commit-to-main.sh. Cited in GH-166.1's note
+  and in the wrapper token's rationale in `lib/command-scan.sh`. Pre-existing,
+  found by the review of #260, round 4; it adds its requirements in the pull
+  request that fixes it
 - #265: a prefix word's own options recognised by their raw first character, so
   `sudo "-u" root git push origin main` is permitted. Cited in GH-166's note and
   at the head of `lib/command-scan.sh`. Pre-existing, found by the review of

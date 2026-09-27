@@ -156,10 +156,14 @@ requirement GH-166.1 <<'REQ'
   `cs_git_args` cuts a quoted global-option value at its blank, so
   `git -c "user.name=a b" push origin main` is permitted (#284, found by the
   sweep for this class), and the gh walk does the same for
-  `gh pr --repo "a b" merge 5` (#194). And the bound is one prefix word's:
-  prefix words nested behind a valued option are not stripped from the tail,
-  so `sudo -u deploy nice -n 10 git push --all origin` is permitted, as `exec`
-  in front of a push is (#304). Nor does a word read through the reader reach
+  `gh pr --repo "a b" merge 5` (#194). And a command word past the third
+  word after the head is not reached, however it got there: one prefix word
+  with enough valued options, `sudo -u root -g grp -D /srv git push origin main`,
+  prefix words nested behind a valued option,
+  `sudo -u deploy nice -n 10 git push --all origin`, and `exec`, which is on no
+  list, are all permitted (#304). The wrapper anchor is matched on the command
+  as it came, not joined, in three hooks, so a continuation between a wrapper
+  word and its `-c` hides it from two of them (#309). Nor does a word read through the reader reach
   a command substitution in double quotes as a value, where the separator walk
   cuts first: `GH_TOKEN="$(cat t)" gh pr merge 5` is permitted (#303).
 REQ
@@ -493,6 +497,17 @@ for consumer in cw_reduce ghreduce word_end; do
   case "$body" in
     *'wd_start('*'wd_next()'*) pass static '%s calls wd_start and wd_next outside a comment' "$consumer" ;;
     *) fail static '%s does not call both wd_start and wd_next outside a comment' "$consumer" ;;
+  esac
+done
+# And the two that ask word_end, held to asking it: the comment above says they
+# are not walks of their own, which only a call can show. A one-line function
+# is read as its line. Review of PR #260, round 4.
+for caller in wordend printhead; do
+  body=$(sed -n "/function $caller(/{/}\$/{p;q};:a;n;p;/^    }\$/q;ba}" "$HOOKS/lib/command-scan.sh" \
+    | grep -v '^[[:space:]]*#')
+  case "$body" in
+    *'word_end('*) pass static '%s calls word_end outside a comment' "$caller" ;;
+    *) fail static '%s does not call word_end outside a comment, so it answers where a word ends itself' "$caller" ;;
   esac
 done
 body=$(sed -n '/^quoted_base_flag()/,/^}/p' "$HOOKS/no-pr-decisions.sh" | grep -v '^[[:space:]]*#')

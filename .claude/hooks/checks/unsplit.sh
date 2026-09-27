@@ -10459,6 +10459,16 @@ SEEDS
 # #273's, whose wrapper half -- a regular expression -- the wrapped seeds under
 # them are what ask.
 #
+# WHERE THE VALUE STANDS DECIDES WHETHER THE FAMILY CAN FAIL. The option-value
+# spellings first put one spaced value behind `sudo -D`, and round 4 of the
+# review of PR #260 drove them with the mutants that cut that value at its
+# blank: nothing went red. A value cut in two spends two of the tail offer's
+# three words where it should spend one, and behind `-D` alone the seed was
+# still within reach. So the value stands in front of `-u root`, and the seed's
+# command word is the third word after the head: read whole, it is reached;
+# cut, it is the fourth, and the variant goes red. The same placement spends the
+# wrapper anchor's three tokens, so the wrapped seeds ask the anchor's token too.
+#
 # A transformation that cannot apply to a seed -- no value-taking long flag, no
 # second short flag to bundle with, no subcommand to put a global flag before --
 # emits nothing, and that skip is counted. A transformation that applies to NO
@@ -10701,9 +10711,9 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     pre-nice-opt-squoted) inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" "'" "'")" ;;
     pre-nice-opt-ansi)    inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" "\$'" "'")" ;;
     pre-nice-opt-locale)  inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" '$"' '"')" ;;
-    pre-sudo-spaced)      printf 'sudo -D "/srv/my repo" %s' "$2" ;;
+    pre-sudo-spaced)      printf 'sudo -g "domain users" -u root %s' "$2" ;;
     pre-assign-spaced)    printf 'GIT_SSH_COMMAND="ssh -i k" %s' "$2" ;;
-    pre-sudo-escaped)     printf 'sudo -D /srv/my\\ repo %s' "$2" ;;
+    pre-sudo-escaped)     printf 'sudo -g domain\\ users -u root %s' "$2" ;;
     pre-assign-escaped)   printf 'A=b\\ c %s' "$2" ;;
     word-path)        inv_cmdword "$2" '/usr/bin/' '' ;;
     word-dot)         inv_cmdword "$2" './' '' ;;

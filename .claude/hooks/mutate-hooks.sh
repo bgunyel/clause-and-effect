@@ -572,6 +572,9 @@ TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[
 # was taken again on a quieter machine, the same way, against the tree at
 # c2bd412: 430 s, 388 s, 325 s, at load averages of 3.9, 8.7 and 3.7. The
 # slowest is carried, as above; the day is MEASURED_ON's, and stands only there.
+# WHICH WAY IT IS WRONG: this is a quiet machine's figure, so under the load
+# the first set was taken at -- peer sessions running this suite beside it --
+# the budget --list prints understates a pass by two to three times.
 MEASURED_SECONDS_PER_RUN=430
 # The day it was taken, printed by --list beside it. It stood as a literal inside
 # that printf until the re-measurement above, which moved the rate and left the

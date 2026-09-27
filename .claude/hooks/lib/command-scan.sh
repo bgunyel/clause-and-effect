@@ -940,8 +940,8 @@ CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|s
 # slot that cs_split, stepping by words, never spends. A LONE QUOTE is still a
 # character of it, so every token this matched before it still matches and the
 # widening only refuses more; without that alternative an unpaired quote would
-# have ended the match, the other way. What it cannot do is read an escape: a
-# double quote escaped inside a double-quoted span ends the span here. That is
+# have ended the match, the other way. What it cannot do is read an escape
+# INSIDE a double-quoted span: a double quote escaped there ends the span. That is
 # the trade this anchor records for `b"a"sh`. The assignment branch in front of
 # the prefix word reuses this token as its value, for #273.
 #
@@ -970,10 +970,16 @@ CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|s
 # respect while they differed in two is the shape this file exists to stop,
 # arriving in the change whose subject it is. All three shapes are checks now.
 #
-# ONE DIFFERENCE REMAINS, and it is in what a quote is rather than in the loop.
-# cs_split reads a word through the word reader, escapes and ANSI-C quoting
-# included; this reads raw text, so a quoted span here is paired without
-# escapes. Until round 2 of the review of PR #260 there was a second difference:
+# TWO DIFFERENCES REMAIN. The first is in what a quote is: cs_split reads a word
+# through the word reader, escapes and ANSI-C quoting included; this reads raw
+# text, so a quoted span here is paired without escapes inside it. The second
+# is in what the text is: no-git-push.sh, no-commit-to-main.sh and
+# no-work-on-stale-branch.sh match this anchor on the command as it came, where
+# cs_split reads it with its continuations joined, so a wrapper word separated
+# from its `-c` by a backslash-newline is refused by no-pr-decisions.sh, which
+# matches the joined text, and permitted by the other two push and commit hooks
+# (#309, measured at cd67c8e by the review of PR #260; this paragraph said ONE
+# difference until round 4 of that review). Until round 2 there was a third:
 # cs_split's tail stopped at a token opening a quote, and this did not, so
 # `sudo "x" sh -c 'git push --all origin'` was refused here while cs_split
 # offered no candidate for it. The tail reads whole words now and offers the
@@ -1383,7 +1389,11 @@ cs_split() {
     # characters, and each rule reads the one at p and asks what the expression
     # it replaced asked of the head of the line -- including whether blanks
     # follow it, which is what separates `sudo git` from a line ending in sudo.
-    function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
+    # Where a token ends if every blank ends it, in any string. word_end asks it
+    # first and tokend asks it of the line, so the blank-cut scan is written
+    # once in this program; round 4 of the review of PR #260 counted three.
+    function tok_end(s, i,   m) { m = length(s); while (i <= m && index(" \t\n\v\f\r", substr(s, i, 1)) == 0) i++; return i }
+    function tokend(i) { return tok_end(line, i) }
     function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
     # THE COMMAND WORD ITSELF. Issue #117: every rule in every hook recognises a
     # command by the bare name at the head of what this function emits, and bash
@@ -1539,10 +1549,8 @@ cs_split() {
     # printhead asked the same question of the candidate it prints with a loop
     # of its own until round 3 of the review of PR #260, which named two
     # answers to it in one program -- the class this file opens by naming.
-    function word_end(s, i,   m, q, t) {
-      m = length(s)
-      q = i
-      while (q <= m && index(" \t\n\v\f\r", substr(s, q, 1)) == 0) q++
+    function word_end(s, i,   q, t) {
+      q = tok_end(s, i)
       t = substr(s, i, q - i)
       if (index(t, "\042") == 0 && index(t, "\047") == 0 && index(t, "\\") == 0) return q
       wd_start(s, i)
@@ -1663,15 +1671,17 @@ cs_split() {
       # opening a quote, then at one leaving a quote open, and each got one of
       # those two wrong; see wordend.
       #
-      # Three words, counted after the head: past the longest leftover ONE
-      # prefix word leaves, `sudo -u root -g grp cmd`, whose third word is the
-      # command. A fourth is not offered, and check-hooks.sh pins the bound and
-      # the word past it. Prefix words NESTED behind a valued option are not
-      # reached at all -- `sudo -u deploy nice -n 10 git push --all origin`
-      # leaves `nice` as a tail word and never strips it -- and neither is
-      # `exec`, which is on no list; that is #304, measured permitted at
-      # abba1d0 by the review of PR #260. This sentence claimed the bound was
-      # past every real leftover until round 3 of that review.
+      # Three words, counted after the head, and no fourth: a command word
+      # further along is not reached, however it got there. One prefix word
+      # with enough valued options puts it there -- `sudo -u root -g grp -D
+      # /srv git push origin main` -- and so do prefix words NESTED behind a
+      # valued option, `sudo -u deploy nice -n 10 git push --all origin`,
+      # whose `nice` is a tail word and is never stripped; `exec` is on no list
+      # at all. All three are permitted, measured at cd67c8e, and are #304.
+      # check-hooks.sh pins the bound and the word past it. This sentence
+      # called three past every real leftover until round 3 of the review of
+      # PR #260, and past every leftover of one prefix word until round 4; the
+      # pinned word past the bound was one prefix word leaving four.
       if (wrapped && e >= p) {
         r = p
         for (k = 0; k < 3; k++) {
