@@ -488,13 +488,14 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'a valued option with its value, 
 #     [pr] [merge] [5]. This is GH-135's family in its split spelling where the
 #     entry has the quoted one, and no amount of option-value work reaches it.
 #     #197.
-#   - an option in ANSI-C or locale quotes, `$'-t'` or `$"-t"`. ghreduce takes
-#     the quotes out and leaves the `$`, so the token opens with `$` rather than
-#     a dash, the walk stops and reads it as a path word, and the path does not
-#     match. gh receives [-t] and runs the merge. #166 owns these quotes at
-#     every position -- the command word, the group, the verb, an option -- and
-#     reducing them here alone would be a third reducer beside cw_reduce and
-#     ghreduce answering one question. Round 5 of the review.
+#   - an option in ANSI-C or locale quotes, `$'-t'` or `$"-t"`, stood on this
+#     list until #166. ghreduce took the quotes out and left the `$`, so the token
+#     opened with `$` rather than a dash and the walk read it as a path word;
+#     gh received [-t] and ran the merge. Round 5 of the review assigned it to
+#     #166 rather than reduce it here alone, which would have been a third
+#     reducer beside cw_reduce and ghreduce. #166 answered it with one reader,
+#     CS_WORD_AWK in the library, which ghreduce now calls, and its three rows
+#     below are flips.
 #
 # WHY THE THIRD IS LEFT OPEN, since it is the one this branch could have closed.
 # The fourth is strictly EASIER to write than the third and is unreachable by
@@ -515,12 +516,18 @@ check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: a backtick cutting an 
   'gh pr -R foo`echo bar` merge 5'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the same cut in an attached value, which leaves none either; #197' \
   'gh pr --repo=foo`echo bar` merge 5'
-check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: an option in ANSI-C quotes; #166' \
+# #166 closed the three rows that stood here as permitted boundaries: ghreduce
+# reads an option through the library's word reader now, so `$'-t'` is `-t`
+# and the command is unreadable as its bare spelling is. They are flips, and
+# carry #166's tag because its work moved them.
+req GH-166 US-15
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option in ANSI-C quotes, read as the option it spells' \
   "gh pr \$'-t' view merge 5"
-check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: an option in locale quotes; #166' \
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option in locale quotes, read as the option it spells' \
   'gh pr $"-t" view merge 5'
-check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: an option in ANSI-C quotes before the group; #166' \
+flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an option in ANSI-C quotes before the group' \
   "gh \$'--squash' view pr merge 5"
+req GH-118 US-13
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the same cut inside a path word; #197' \
   'gh pr mer`echo ge` 5'
 check_in "$SUITE_DIR" no-pr-decisions.sh ALLOW 'BOUNDARY: the same cut inside the group word; #197' \

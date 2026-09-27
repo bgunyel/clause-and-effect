@@ -700,13 +700,18 @@ quoted-base-flag-permitted%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/END { 
 quoted-base-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ \&\& q <= length("--base") + (w ~ \/^--base=\/))/)/%GH-139%caught
 quoted-equals-read-as-value%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ + (w ~ \/^--base=\/))/)/%GH-139%caught
 quoted-shorthand-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if ((q \&\& q <= b)/if ((q/%GH-139%caught
-ansi-hex-escape-not-decoded%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "x") {/if (0) {/%GH-139%caught
-open-quote-holds-no-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (st) w = w "\\n"; //%GH-139%caught
-nul-decoded-as-a-character%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (v == 0) { if (!cut) { cut = 1; cutw = w } } else w = w chr(v)/w = w chr(v)/%GH-139%caught
-nul-cut-span-keeps-its-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (cut) { if (/if (0) { if (/%GH-139%caught
+ansi-hex-escape-not-decoded%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (e == "x") {/if (0) {/%GH-139 GH-166%caught
+open-quote-holds-no-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (wd_st) w = w "\\n"; //%GH-139%caught
+nul-decoded-as-a-character%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (v == 0) { wd_cut = 1; wd_ev = "cut" } else wd_ch = wd_chr(v)/wd_ch = wd_chr(v)/%GH-139 GH-166%caught
+nul-cut-span-keeps-its-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (wd_st == 3 \&\& wd_cut) { if (/if (0) { if (/%GH-139%caught
 empty-span-read-as-value%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ || (qe \&\& qe <= length("--base") + 1)//%GH-139%caught
 cut-span-at-line-end-always-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (w == "" || (w ~ \/^-\/ \&\& w !~ \/\[\[:space:\]\]\/))/if (1)/%GH-139%caught
-c-escape-takes-the-next-character%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "c") { put(0); return }/if (e == "c") { if (i < n) i++; w = w "?"; return }/%GH-139%caught
+c-escape-takes-the-next-character%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (e == "c") { wd_put(0); return }/if (e == "c") { if (wd_i <= wd_n) wd_i++; wd_ch = "?"; return }/%GH-139 GH-166%caught
+ansi-quote-not-read-as-quoting%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (c == "\$" \&\& d == "\\047")/if (0)/%GH-166%caught
+locale-quote-not-read-as-quoting%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (c == "\$" \&\& d == "\\042")/if (0)/%GH-166%caught
+wrapper-anchor-admits-no-dollar%lib/command-scan.sh%/^CS_WORD_SPELLING=/s/(\[\\\$\]?/(/%GH-166%caught
+option-read-without-the-reader%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^    while (wd_next()) if (wd_ev == "text") o = o wd_ch$/    o = t/%GH-166%caught
+word-reader-not-withdrawn%lib/command-scan.sh%s/^if \[ -z "\$CS_WORD_AWK" \]; then$/if false; then/%GH-166%caught
 api-read-taken-for-a-write%no-pr-decisions.sh%/^gh_api_is_write()/,/^}/s/^  return 1$/  return 0/%FR-20%caught
 release-allowlist-admits-a-write%no-pr-decisions.sh%/^RELEASE_READ_VERBS=/s/verify-asset"/verify-asset create edit delete"/%FR-48%caught
 gh-option-never-unreadable%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^    return 3$/    return 2/%GH-118 US-15%caught
