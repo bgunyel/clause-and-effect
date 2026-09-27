@@ -81,8 +81,9 @@ requirement GH-182.2 <<'REQ'
   `cs_normalise`, and says so on stderr naming both, so every consumer that
   requires `cs_normalise` refuses by its load guard; the intact library prints
   nothing on loading. No hook calls `cs_drop_heredocs` but through
-  `cs_normalise` -- its one other caller is the check suite's `hook_bodiless`,
-  which `hook_text` and GH-182.3 read through -- and no guard names it.
+  `cs_normalise`; in the check suite only `hook_bodiless` does, which
+  `hook_text` and GH-182.3 read through, beside a fixture of this issue's that
+  is defined to be found and never run; and no guard names it.
 - from: #182
 - kind: defect-permitting
 - status: active
@@ -356,21 +357,6 @@ for hook in $LIB_CONSUMERS; do
 done
 written 'the library says cs_normalise answers for cs_drop_heredocs' \
   "$HOOKS/lib/command-scan.sh" 'CS_NORMALISE ANSWERS FOR CS_DROP_HEREDOCS'
-# And who calls it, which GH-182.2's text names: every function defined when
-# this runs, the library's and the suite's, whose body calls it, read off the
-# bodies as bash holds them. A call is the name in a command position -- a
-# line's start, or after a `|`, `;`, `&` or `(` -- and not merely the name: the
-# first version counted `mk_halflib`, whose stderr filter quotes the library's
-# message naming it. A call written at the top level of a file, outside any
-# function, is not read; there is none.
-R182_CALLERS=$(declare -F | awk '{ print $3 }' | while read -r fn; do
-  [ "$fn" = cs_drop_heredocs ] && continue
-  declare -f "$fn" | tail -n +2 \
-    | grep -qE '(^|[|;&(])[[:space:]]*cs_drop_heredocs([[:space:];)]|$)' \
-    && printf '%s ' "$fn"
-done)
-tok 'cs_drop_heredocs is called by cs_normalise and by the suite through hook_bodiless, and by nothing else' \
-    'cs_normalise hook_bodiless ' "$R182_CALLERS"
 
 # WHAT THE DROP TAKES FROM THE HOOKS THE COUNTERS READ. Which hooks those are is
 # read off the suite, every `arms`, `fn_writes` or `fn_calls` written with a
@@ -415,6 +401,13 @@ hook_dropped() {  # hook_dropped <file> -- "-<line>" per line removed, "+<line>"
 # than hold it.
 r182_unshaped() {  # r182_unshaped -- stdin: hook_dropped's lines; stdout: those no heredoc of this shape explains
   grep -vE '^-(\$([A-Za-z_][A-Za-z0-9_]*|[0-9])|[A-Z][A-Z0-9_]*)$'
+}
+# A caller of cs_drop_heredocs, never run, defined here for the derivation at
+# the foot of this file to find: it stands below where that derivation first
+# stood, so moving it back above this point is a red run and not a caller
+# silently unread. See R182_CALLERS.
+r182_a_late_caller() {  # r182_a_late_caller -- never called; a fixture for R182_CALLERS
+  cs_drop_heredocs < /dev/null
 }
 R182_FALSE_OPENER=$(cat <<'R182_EOF'
 -  SCAN="$SCAN
@@ -466,5 +459,31 @@ tok 'and an opener the drop rewrites, as the line it was and the line it became'
 tok 'and a continuation line the drop rewrites, where the logical line it ends began on the opener' \
     '-  x \\
 +  x' "$(hook_dropped "$R182/opener-continued-onto-an-even-backslash-run.sh" | r182_unshaped)"
+
+# WHO CALLS cs_drop_heredocs, which GH-182.2's text names: every function
+# defined when this runs, the library's and the suite's, whose body calls it,
+# read off the bodies as bash holds them. It runs here, at the foot of the
+# file, because `declare -F` sees only what is defined so far: it first ran
+# among GH-182.2's checks, above `hook_dropped`, so `hook_dropped` reverted to
+# a call of its own was read by nothing and the run stayed green -- #302's
+# second shape, found by review of #182's pull request. `r182_a_late_caller`,
+# above, is the fixture that makes a move back red. A function defined in a
+# file sourced after this one is not read.
+#
+# A call is the name in a command position -- a line's start, or after a `|`,
+# `;`, `&` or `(` -- and not merely the name: the first version counted
+# `mk_halflib`, whose stderr filter quotes the library's message naming it. A
+# call after a control word or a prefix word -- `if`, `while`, `!`, `command`
+# -- is not read, which is #302's first shape and stays with it. A call written
+# at the top level of a file, outside any function, is not read; there is none.
+req GH-182.2
+R182_CALLERS=$(declare -F | awk '{ print $3 }' | while read -r fn; do
+  [ "$fn" = cs_drop_heredocs ] && continue
+  declare -f "$fn" | tail -n +2 \
+    | grep -qE '(^|[|;&(])[[:space:]]*cs_drop_heredocs([[:space:];)]|$)' \
+    && printf '%s ' "$fn"
+done)
+tok 'cs_drop_heredocs is called by cs_normalise, by the suite through hook_bodiless, and by nothing else but the late fixture' \
+    'cs_normalise hook_bodiless r182_a_late_caller ' "$R182_CALLERS"
 
 sourced_to_end

@@ -1469,3 +1469,10 @@ it has no entry above (Q16).
   and fixtures pin the counters' half at today's count, and beside
   `hook_text` and in the unsplit file's #109 section. It adds its requirements
   in the pull request that fixes it
+- #302: `R182_CALLERS`, which holds GH-182.2's claim of who calls
+  `cs_drop_heredocs`, does not read a call written after a control word or a
+  prefix word -- `if`, `while`, `!`, `command`. Filed from round 4 of the
+  review of #182's pull request, with a second shape, a caller defined after
+  the derivation ran, which that pull request closed by moving it to the foot
+  of #182's issue file. Cited there, beside the derivation. It adds its
+  requirements in the pull request that fixes it
