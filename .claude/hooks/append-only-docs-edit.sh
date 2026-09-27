@@ -143,36 +143,39 @@ norm_path() {  # norm_path <absolute path>
 #   new_string is one line;
 #   both parse as `# <date> · <session> — <rest>`;
 #   the date and the rest are byte-identical between them;
-#   the new session agrees with the file's, and the old one does not.
+#   the new session is a spelling the file's name gives, and the old one does
+#   not already name that session.
 #
 # Everything else about a history entry is refused exactly as it was. The last
 # clause is what keeps this from being a licence: an edit is permitted only
 # towards the name the file already has, so the guard can move the label onto
 # the file and can move nothing else anywhere.
 #
-# Agreement is deliberately not string equality. A file's session name is
-# hyphenated throughout and a heading's is not uniformly so -- `session-5` is
-# written `session 5`, `session-dev-issue-117` is written `session dev-issue-117`
-# and `dev-issue-141` keeps its hyphens -- so both sides collapse every run of
-# spaces and hyphens to a single hyphen before being compared. That makes
-# `session-5` against `session 2` a contradiction and `session-5` against
-# `session 5` agreement, which is the distinction the decision rests on.
+# AGREEMENT IS ASKED TWO WAYS, because its two tests err in opposite directions
+# (review of #189, round 3). Round 2 had one normalisation serve both, so every
+# spelling added to let the OLD segment agree was also a spelling the NEW segment
+# could be written in; and every spelling it missed on the old side read as a
+# contradiction and permitted rewriting a heading that was right. Review measured
+# both at once: `Session 5`, a tab, `session: <name>` and `*<name>*` each still
+# read as contradicting their file's name, and a lone backtick was a label the
+# exception would write -- one that pairs with a backtick in the rest and renders
+# a code span across the separator, with every byte of the rest unchanged.
 #
-# TWO MORE SPELLINGS OF ONE NAME, found on this repository's own entries (review
-# of #189, round 2). The newest headings quote the session as code --
-# session `dev-agent-pr-184` in a file named devlog_<date>_dev-agent-pr-184.md
-# -- and older files carry the word in the name, `session-5`, where the newest do
-# not. With neither handled, those two real headings read as contradicting their
-# own file names, and the exception permitted rewriting a heading that was right.
-# So backticks are dropped, and a leading `session` word is taken off whatever
-# follows it, on both sides, before they are compared. That widens both tests,
-# not only the refusing one: an old segment that names the file's session in
-# either spelling now agrees and is refused, and a NEW segment may be written in
-# either spelling and agree -- session `5`, or a bare `5`, onto `session-5`. Each
-# names the session the file is named for, which is the whole of what the
-# decision asks of the new segment. The check suite asks this of every entry in
-# the real directory, so a spelling this misses turns a row red there rather
-# than waiting for a review to find it.
+# The OLD segment is asked whether it already names the file's session, and a
+# yes refuses, so it is asked loosely: `session_key` lowercases both sides, keeps
+# only letters and digits, and takes a leading `session` off. Any spelling that
+# differs from the name only in case, punctuation, spacing or that word agrees --
+# `session 5` with `session-5`, session `dev-agent-pr-184` with
+# `dev-agent-pr-184`. However loose, it can only refuse more; it could make two
+# different names agree only where they differ in nothing but those.
+#
+# The NEW segment is what the exception writes, so it is asked strictly: it must
+# be byte-equal to one of the three spellings the file name gives, with <n> the
+# file's session less a leading `session-` -- `<n>`, `session <n>`, or `session`
+# and <n> quoted as code. `session-5` accepts `5`, `session 5` and the quoted 5;
+# `dev-issue-141` accepts `dev-issue-141` and the two with the word. They are the
+# three the real headings are written in, and nothing else can be written, so a
+# spelling the old side comes to know later widens nothing the exception permits.
 #
 # The heading's date is NOT required to equal the file's. An entry may open
 # `# 2026-09-17 21:53 · dev-issue-141 — …`, where the segment before the
@@ -182,22 +185,21 @@ norm_path() {  # norm_path <absolute path>
 # of one line.
 #
 # No external tool is added for the exception. `grep` is already this hook's
-# dependency; the normalisation is written out in bash for the reason `norm_path`
+# dependency; the session tests are written in bash builtins for the reason `norm_path`
 # is, so that a hook whose answer to a missing tool is to refuse every edit in the
 # repository does not gain a second tool that can be missing. The `tr` on the
 # buffer above is the input's, not the exception's, and is argued there.
-norm_session() {  # norm_session <session as written> -- its comparable form
-  local s="$1" out="" c prev=""
-  while [ -n "$s" ]; do
-    c=${s:0:1}; s=${s:1}
-    case "$c" in
-      '`')   ;;
-      ' '|-) [ "$prev" = '-' ] || out="$out-"; prev='-' ;;
-      *)     out="$out$c"; prev="$c" ;;
-    esac
-  done
-  case "$out" in session-?*) out=${out#session-} ;; esac
-  printf '%s' "$out"
+session_key() {  # session_key <session as written> -- lowercased letters and digits, less a leading `session`
+  local s=${1,,}
+  s=${s//[^[:alnum:]]/}
+  case "$s" in session?*) s=${s#session} ;; esac
+  printf '%s' "$s"
+}
+canonical_session() {  # canonical_session <file's session> <segment> -- 0 if the segment is a spelling the name gives
+  local n="$1"
+  case "$n" in session-?*) n=${n#session-} ;; esac
+  case "$2" in "$n"|"session $n"|"session \`$n\`") return 0 ;; esac
+  return 1
 }
 
 # Sets PH_DATE, PH_SESS and PH_REST from an entry heading; non-zero if the line
@@ -314,9 +316,8 @@ heading_correction() {  # heading_correction <abs> <rel> -- 0 if this edit is th
   [ "$o_date" = "$n_date" ] || return 1
   [ "$o_rest" = "$n_rest" ] || return 1
 
-  fsession=$(norm_session "$fsession")
-  [ "$(norm_session "$n_sess")" = "$fsession" ] || return 1
-  [ "$(norm_session "$o_sess")" != "$fsession" ] || return 1
+  canonical_session "$fsession" "$n_sess" || return 1
+  [ "$(session_key "$o_sess")" != "$(session_key "$fsession")" ] || return 1
 }
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"

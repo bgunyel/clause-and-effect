@@ -52,8 +52,9 @@ correction only when the edit's `old_string` is the file's current first line an
 occurs in it exactly once — anywhere, as the Edit tool matches it, and not only as
 a whole line — its `new_string` is a single line, both strings are compared byte
 for byte as the tool will act on them, the two differ in
-the session segment alone, and the new segment agrees with the file name where
-the old one does not. Everything else about a history entry is refused exactly as
+the session segment alone, and the new segment is one of the three spellings the
+file name gives — `<n>`, `session <n>`, or `session` and `<n>` quoted as code —
+where the old one does not already name that session in any spelling. Everything else about a history entry is refused exactly as
 it was. Stating the exception in the rule and then in the guard, rather than
 making it once by hand, is ADR 0002's shape: the boundary is what the hook
 computes, not what a document asks an author to remember.
@@ -117,16 +118,23 @@ tell a draft from history without parsing paths out of shell text, which ADR
 The heading exception is the Edit companion's alone, and the asymmetry is the
 one above rather than a new one. `append-only-docs.sh` reads a command's text,
 so it cannot see that a command would change one line of a heading and nothing
-else; it keeps its allowlist unchanged and refuses the correction in every Bash
-spelling. The correction is made through `Edit`, where the payload says what it
-would do. A reader who finds the Bash half refusing what the Edit half permits
+else; it keeps its rules unchanged, and the spellings it refuses on an entry —
+`sed -i`, `rm`, `mv`, `cp`, `tee`, `truncate` and a `>` — it refuses for the
+correction too. That is a list and not a boundary: *The Bash half guarded
+spellings* above names what passes it, `perl -pi` and `python3 -c` among them,
+and they pass for the correction as for anything else; #246 owns closing that.
+The correction is made through `Edit`, where the payload says what it would do. A reader who finds the Bash half refusing what the Edit half permits
 is looking at that asymmetry and not at a defect.
 
-Two consequences of the exception, both accepted. **A heading whose *date*
+Three consequences of the exception, all accepted. **A heading whose *date*
 contradicts the file name is still not correctable** — the exception moves the
 session segment only, so that case goes back to correcting forward, and it is
-narrow on purpose rather than by oversight. And **the guard permits the
-correction whether or not the heading is actually wrong in the way #177 found**,
-provided the new segment agrees with the file name and the old one does not: it
+narrow on purpose rather than by oversight. **Nor is a heading of any other
+shape** than `# <date> · <session> — <rest>`: one with no rest, or one opening
+`# Devlog — …`, has no session segment the guard can find, and 31 of the 66
+entries in `docs/dev-log/` were of those shapes when #189's review counted them.
+And **the guard permits the correction whether or not the heading is actually
+wrong in the way #177 found**, provided the new segment is one of the spellings
+the file name gives and the old one does not already name that session: it
 judges agreement with the name, which is the property the decision is about, and
 not the history of how the disagreement arose.

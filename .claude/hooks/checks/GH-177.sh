@@ -41,15 +41,20 @@ requirement GH-177 <<'REQ'
   Edit tool matches it -- a substring anywhere, overlapping, so `replace_all` has
   nothing to widen -- whose `new_string` is a single line, which parse as
   `# <date> · <session> — <rest>` with a date and a session that are not empty and
-  are byte-identical in date and rest, and whose new session segment agrees with
-  the session the file is named for where the old segment does not. Both strings
+  are byte-identical in date and rest, and whose new session segment is one of
+  the three spellings the file name gives where the old segment does not already
+  name that session. Both strings
   are compared exactly as the tool call carries them, trailing newlines included,
   and a tool call spelling a NUL (`\u0000`) is refused, since a bash string cannot
-  hold one. Agreement drops backticks, collapses runs of spaces and hyphens, and
-  takes a leading `session` word off, on both sides, so `session-5` agrees with
-  `session 5` and contradicts `session 2`, and a file named for
-  `clause-and-effect-37` agrees with ``session `clause-and-effect-37` ``. Every
-  real entry's heading, relabelled onto its own file's session, is refused. A
+  hold one. The two session tests are asked differently. The old segment names
+  the file's session when their keys match -- each lowercased, reduced to its
+  letters and digits, and less a leading `session` -- so `Session 5`,
+  `session: 5` and `*5*` all name `session-5`, and ``session `clause-and-effect-37` ``
+  names `clause-and-effect-37`. The new segment must be byte-equal to `<n>`,
+  `session <n>` or `session` and `<n>` quoted as code, with `<n>` the file's
+  session less a leading `session-`, so a lone backtick or a name in hyphens is
+  never written. Every real entry's heading, relabelled onto `session <n>`, is
+  refused. A
   `Write` of an existing entry is refused, whatever else it carries; so is a body edit, a rest
   or date that moves with the session, a new segment agreeing with nothing, an
   `old_string` that is not the whole first line, a trailing newline on either
@@ -81,8 +86,8 @@ requirement GH-177 <<'REQ'
   `heading_correction` and `parse_heading`, and the two halves of the latter's
   closing test -- removed on a copy, and every row of this section re-judged
   against the result. Seventeen have a row that turns red when they are
-  removed, and so does the call site, each of the two normalisations of
-  agreement, and the pinned sentence of the refusal: the directory, the `.md`
+  removed, and so does the call site, each step of the old side's key, each of
+  the new side's three spellings, and the pinned sentence of the refusal: the directory, the `.md`
   suffix, the `devlog_` prefix, the NUL refusal, the `Write` exclusion, the
   whole-first-line test, the count, the parse of
   `old_string`, the three separator tests, the empty date and the empty session,
@@ -109,7 +114,29 @@ requirement GH-177 <<'REQ'
   about, one level in: the check existed, was green, and asked a narrower
   question than its own label.
 REQ
-shape_pin 'GH-177'
+requirement GH-177.1 <<'REQ'
+- text: `CLAUDE.md`, `CONTEXT.md` and ADR 0003 say which Bash spellings
+  `append-only-docs.sh` refuses on an existing entry, and so refuses for the
+  heading correction too -- `sed -i`, `rm`, `mv`, `cp`, `tee`, `truncate` and a
+  `>` -- and that an interpreter or another in-place editor, `perl -pi` or
+  `python3 -c` among them, is not refused at all, naming #246; and not that the
+  correction is refused in every Bash spelling. Every spelling they name is fed
+  to the guard at the verdict they state. `CLAUDE.md`'s paragraph and
+  `CONTEXT.md` are read as a reflow and hold the list and the pointer to #246,
+  and lack the claim.
+- from: #177, and review of #189, round 3
+- kind: doc-claim
+- status: active
+- note: The permitted rows are #246's gap and not this requirement's: this is what
+  the documents say, and they say those spellings are permitted today, so ALLOW
+  is its right verdict, for the reason GH-157.3 gives for #159's rows. When #246
+  closes them the rows go red, and the documents are what changes with them. ADR
+  0003 is not read, because this suite's header names every document the suite
+  reads and does not name it; its sentence is held by review. The documents
+  first said "every Bash spelling", which review measured false on six
+  spellings: the #84 shape, in prose about a sibling guard.
+REQ
+shape_pin 'GH-177 GH-177.1'
 variants_pin 'GH-177:none'
 
 HEAD_FIX="$FIXTURES/heading-fixture"
@@ -319,9 +346,9 @@ REPO_ROOT="$HEAD_FIX" feed_says "$PATH" append-only-docs-edit.sh \
 # Two spellings of a session the real directory holds, each on a file named for
 # that session, so the heading already agrees and there is nothing to correct:
 # the session quoted as code, which the newest entries write, and the word
-# `session` in front of a name the file carries without it. Each isolates one of
-# the two normalisations, and the third row is the correction written in the
-# newest style, which the widening must permit.
+# `session` in front of a name the file carries without it. Each isolates one
+# step of the old side's key, and the third row is the correction written in the
+# newest style, one of the three spellings the new side accepts.
 printf '%s\n\nBody.\n' '# 2026-09-20 · `clause-and-effect-37` — R' \
   > "$HEAD_FIX/docs/dev-log/devlog_backtick_clause-and-effect-37.md"
 printf '%s\n\nBody.\n' '# 2026-09-20 · session clause-and-effect-37 — R' \
@@ -335,12 +362,44 @@ REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a heading nam
 REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh ALLOW 'the correction written as code, as the newest entries write it' \
   "$(head_edit "$HEAD_FIX/docs/dev-log/devlog_newstyle_dev-agent-7.md" '# 2026-09-27 · session `dev-agent-2` — R' '# 2026-09-27 · session `dev-agent-7` — R')"
 
+# CLASS E AGAIN, IN ROUND 2's FIX FOR IT (review of #189, round 3). One
+# normalisation served both tests, so what it missed on the old side permitted
+# rewriting a right heading, and what it accepted on the new side was a label the
+# exception would write. The old side now compares keys -- lowercased letters and
+# digits, less a leading `session` -- and the new side must be one of three exact
+# spellings. The four old spellings review measured as contradictions: each
+# isolates the case fold or the reduction to letters and digits. The two new
+# labels it measured: a lone backtick, which pairs with the one in the rest and
+# renders a code span across the separator, and a bare name wrapped in hyphens.
+r177_old() {  # r177_old <file session> <old segment> -- a fixture entry, and the relabel of it onto the file's name
+  local f="$HEAD_FIX/docs/dev-log/devlog_old_$1.md"
+  printf '# 2026-09-27 · %s — #155: a `gh` rest\n\nBody.\n' "$2" > "$f"
+  head_edit "$f" "# 2026-09-27 · $2 — #155: a \`gh\` rest" "# 2026-09-27 · session ${1#session-} — #155: a \`gh\` rest"
+}
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'an old segment that names the session in capitals already agrees' \
+  "$(r177_old session-5 'Session 5')"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'an old segment with a tab for its space already agrees' \
+  "$(r177_old session-6 $'session\t6')"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'an old segment with a colon after the word session already agrees' \
+  "$(r177_old dev-agent-9 'session: dev-agent-9')"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'an old segment naming the session in emphasis already agrees' \
+  "$(r177_old dev-agent-10 '*dev-agent-10*')"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a new segment of a lone backtick and the name, which is no spelling the name gives' \
+  "$(head_edit "$E_WRONG" "$H_WRONG" "${H_WRONG/session 2/\`5}")"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a new segment of the bare name wrapped in hyphens' \
+  "$(head_edit "$E_WRONG" "$H_WRONG" "${H_WRONG/session 2/-5-}")"
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh ALLOW 'the correction to the bare name, the third spelling the name gives' \
+  "$(head_edit "$E_WRONG" "$H_WRONG" "${H_WRONG/session 2/5}")"
+
 # AND THE REAL DIRECTORY, every entry of it: the relabel of its heading onto its
 # own file's session name is refused, because no entry here contradicts its name
 # once this branch has corrected the one that did. The payload is derived from
 # the entry -- its first line, and that line with the session segment replaced
-# by the name the file carries -- and the verdict is the literal. A line that
-# does not parse as a heading is offered unchanged, which is refused too.
+# by `session <n>`, a spelling the new side accepts, so that what refuses it is
+# the old side's agreement and not the new side's strictness -- and the verdict
+# is the literal. A first line not of the correctable shape is offered unchanged
+# and refused, under a label that says so: 31 of 66 entries when review of #189
+# counted them in its third round.
 # WHAT A RED ROW HERE MEANS: that entry's heading reads, to the hook, as
 # contradicting its file name. Either it does, and ADR 0003 says to correct it,
 # which this exception permits; or it names its session in a spelling the
@@ -352,13 +411,17 @@ for r177_entry in "$REPO_ROOT"/docs/dev-log/devlog_*.md; do
   r177_name=${r177_entry##*/}
   r177_stem=${r177_name%.md}; r177_stem=${r177_stem#devlog_}
   IFS= read -r r177_first < "$r177_entry"
-  r177_new=$r177_first
+  r177_sess=${r177_stem#*_}
   case "$r177_first" in
     '# '*' · '*' — '*)
       r177_after=${r177_first#*' · '}
-      r177_new="${r177_first%%' · '*} · ${r177_stem#*_} — ${r177_after#*' — '}" ;;
+      r177_new="${r177_first%%' · '*} · session ${r177_sess#session-} — ${r177_after#*' — '}"
+      r177_label="a real entry, $r177_name, relabelled onto its own file's session name" ;;
+    *)
+      r177_new=$r177_first
+      r177_label="a real entry, $r177_name, whose first line is not of the correctable shape, offered unchanged" ;;
   esac
-  feed "$PATH" append-only-docs-edit.sh BLOCK "a real entry, $r177_name, relabelled onto its own file's session name" \
+  feed "$PATH" append-only-docs-edit.sh BLOCK "$r177_label" \
     "$(head_edit "$r177_entry" "$r177_first" "$r177_new")"
 done
 
@@ -386,5 +449,37 @@ REPO_ROOT="$HEAD_FIX" feed "$PATH" "$R177_NUL" BLOCK 'the plain correction follo
   "$R177_FIX"$'\001'
 REPO_ROOT="$HEAD_FIX" feed "$PATH" "$R177_NUL" BLOCK 'the plain correction with a raw NUL inside the file_path string' \
   "${R177_FIX/"$E_WRONG"/"$E_WRONG"$'\001'}"
+
+# CLASS G OF #189's THIRD ROUND: prose about a sibling guard is held to that
+# guard. CLAUDE.md, CONTEXT.md and ADR 0003 said the Bash half refuses the
+# correction "in every Bash spelling"; it is a list of seven, and review measured
+# six spellings past it. So every spelling the documents now name is fed to the
+# guard at the verdict they state, as GH-157.3 feeds the dev-log README's, and
+# the two documents the suite already reads are held to naming the list.
+req GH-177.1
+R177_E=docs/dev-log/devlog_2026-09-17_session-5.md
+check append-only-docs.sh BLOCK 'the documents name sed -i as refused on an entry' "sed -i 's/session 2/session 5/' $R177_E"
+check append-only-docs.sh BLOCK 'and rm' "rm $R177_E"
+check append-only-docs.sh BLOCK 'and mv' "mv $R177_E x"
+check append-only-docs.sh BLOCK 'and cp' "cp x $R177_E"
+check append-only-docs.sh BLOCK 'and tee' "echo x | tee $R177_E"
+check append-only-docs.sh BLOCK 'and truncate' "truncate -s0 $R177_E"
+check append-only-docs.sh BLOCK 'and a >' "echo x > $R177_E"
+check append-only-docs.sh ALLOW 'and perl -pi as not refused (#246 decides this verdict)' "perl -pi -e 's/2/5/' $R177_E"
+check append-only-docs.sh ALLOW 'and python3 -c as not refused (#246 decides this verdict)' \
+  "python3 -c \"import pathlib; pathlib.Path('$R177_E').write_text('x')\""
+R177_CLAUDE=$(awk '/^One exception, and it is one part of one line\./ { f = 1 } f && /^`ls docs\/`/ { exit } f' \
+  "$SUITE_DIR/../../CLAUDE.md" | comment_reflow)
+holds 'CLAUDE.md names the spellings the Bash half refuses' \
+  "$R177_CLAUDE" 'the Bash spellings it refuses on an entry — `sed -i`, `rm`, `mv`, `cp`, `tee`, `truncate` and a `>` — it refuses for the correction too.'
+holds 'and says the rest are open, and whose to close' \
+  "$R177_CLAUDE" 'is not refused at all, which is #246'"'"'s to close.'
+lacks 'and does not say the correction is refused in every Bash spelling' "$R177_CLAUDE" 'every Bash spelling'
+R177_CONTEXT=$(comment_reflow < "$SUITE_DIR/../../CONTEXT.md")
+holds 'CONTEXT.md names the spellings the Bash half refuses' \
+  "$R177_CONTEXT" 'the spellings it refuses on an entry — `sed -i`, `rm`, `mv`, `cp`, `tee`, `truncate` and a `>` — it refuses for the correction too,'
+holds 'and says the rest are open, and whose to close' \
+  "$R177_CONTEXT" 'which it does not refuse at all, is #246'"'"'s to close.'
+lacks 'and does not say the correction is refused in every spelling' "$R177_CONTEXT" 'refuses the correction in every spelling'
 
 sourced_to_end

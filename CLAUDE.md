@@ -261,8 +261,12 @@ that disagrees with its own file name misfiles the record rather than recording
 anything. ADR 0003 decides it (#177), `CONTEXT.md`'s *history entry* carries the
 term, and `append-only-docs-edit.sh` computes it — so the narrowness is checked
 rather than remembered. Nothing else about an existing entry moves, a `Write` of
-one included, and `append-only-docs.sh` refuses the correction in every Bash
-spelling, because a command's text cannot show what it would leave unchanged.
+one included. `append-only-docs.sh` makes no exception for it, because a
+command's text cannot show what it would leave unchanged: the Bash spellings it
+refuses on an entry — `sed -i`, `rm`, `mv`, `cp`, `tee`, `truncate` and a `>` —
+it refuses for the correction too. That is a list and not a boundary: an
+interpreter or another in-place editor, `perl -pi` or `python3 -c` among them,
+is not refused at all, which is #246's to close.
 
 `ls docs/` returns seven directories, not six. `docs/agents/` is the seventh and
 is deliberately not in the table: it holds agent configuration — the issue

@@ -71,9 +71,11 @@ contradicts its own file name states nothing a reader relies on — it misfiles
 the record. The date, the rest of the heading and every byte of the body remain
 history and are refused as before, and a correction to anything the entry *says*
 still goes in the newest entry. ADR 0003 decides this (#177) and
-`append-only-docs-edit.sh` computes it; the Bash half refuses the correction in
-every spelling, because a command's text cannot show what it would leave
-unchanged.
+`append-only-docs-edit.sh` computes it. The Bash half makes no exception for it,
+because a command's text cannot show what it would leave unchanged: the
+spellings it refuses on an entry — `sed -i`, `rm`, `mv`, `cp`, `tee`, `truncate`
+and a `>` — it refuses for the correction too, and an interpreter or another
+in-place editor, which it does not refuse at all, is #246's to close.
 _Avoid_: frozen entry, published entry, old entry
 
 **Issue file**:

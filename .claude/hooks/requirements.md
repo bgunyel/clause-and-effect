@@ -1444,3 +1444,11 @@ it has no entry above (Q16).
   called defence in depth that were each the only refusal of a payload no row
   drove. Its first round is also where the author's sweep found the `\u0000`
   a bash string drops and the parse clauses with no rows
+- #246: `append-only-docs.sh` is a list of refused spellings and not a
+  boundary: `perl -pi`, `python3 -c`, `ex`, `awk -i inplace`, `git checkout` and
+  `dd` each rewrite an entry unrefused. Filed from round 3 of the review of #189,
+  which found CLAUDE.md, CONTEXT.md and ADR 0003 saying the correction #177
+  permits is refused "in every Bash spelling". Cited in #177's issue file, where
+  GH-177.1 feeds the guard the spellings those documents name, the open ones at
+  today's permitted verdict. It adds its requirements in the pull request that
+  fixes it
