@@ -418,9 +418,12 @@ part that went stale last time.
 4. **A base written after a command substitution is not seen as that
    command's**, because the tokeniser cuts on its parens; name the base first.
 
-5. **Nothing in this repository guards `.claude/`**: the only `Edit|Write` hook
-   covers three `docs/` directories, so the hook files and `settings.json` that
-   carry this boundary are not themselves covered by the boundary. Whether an
+5. **Nothing in this repository guards the hook files or `settings.json`**: the
+   only `Edit|Write` hook guards three directory names — `docs/dev-log/`,
+   `docs/lessons-learned/` and `docs/eval-reports/` — wherever they stand in a
+   path, a linked worktree's under `.claude/worktrees/` among them, and nothing
+   else under `.claude/`. So the hook files and `settings.json` that carry this
+   boundary are not themselves covered by the boundary. Whether an
    edit to them prompts at all is left to the harness's own permission
    settings, which are configuration rather than a rule of this repository.
    That gap is open by the same standard that decides the rest — an agent does

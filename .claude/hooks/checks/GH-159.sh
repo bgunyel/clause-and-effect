@@ -265,6 +265,18 @@ r159_cases() {  # r159_cases <hook>
   esac
 }
 
+# The agreement rows' paths, <path in a checkout> <verdict> <what>: the three
+# directory names and the three near-misses of each.
+r159_paths() {
+  local d
+  for d in $R159_DIRS; do
+    printf '%s\n' "docs/$d/e.md BLOCK a guarded entry" \
+      "docs/$d.bak/e.md ALLOW a .bak sibling" \
+      "docs/${d}book/e.md ALLOW a sibling whose name only begins with the directory's" \
+      "notdocs/$d/e.md ALLOW the directory's name under a notdocs/ parent"
+  done
+}
+
 # Driven first, against a fixture. Reached: a hook under `Write|Edit`, one under
 # `*`, one under no matcher, one under `MultiEdit`, a Bash hook whose code reads
 # the root, one that reads it after a `${#`, one registered with an argument
@@ -278,6 +290,18 @@ r159_cases() {  # r159_cases <hook>
 # prompt hook and the number stand FIRST, where round 1's jq aborted and took
 # every registration after them. None of the reached has a table, and only the
 # missing one and `<no-command>` name no file.
+# An ALLOW asked of a file the fixture made just before it proves nothing if
+# the file was not made, and every such row below calls this first.
+r159_present() {  # r159_present <file>... -- stop the run unless each is a file
+  local f
+  for f in "$@"; do
+    [ -f "$f" ] || {
+      echo "the #159 fixture file $f is missing, so an ALLOW asked of it would prove nothing" >&2
+      exit 1
+    }
+  done
+}
+
 R159_DERIVE="$FIXTURES/r159-derive"
 mkdir -p "$R159_DERIVE/hooks"
 for r159_h in x-edit x-star x-bare x-multi x-plain x-session x-badre x-flags; do
@@ -372,15 +396,32 @@ for r159_root in "$R159_MAIN" "$R159_WT" "$R159_OTHER"; do
     printf 'x\n' > "$r159_root/$r159_f"
   done
 done
-# Every file a BLOCK or a near-miss ALLOW asks about is there, and the new entry
-# is not: an ALLOW from a missing file says nothing about the path.
-for r159_root in "$R159_MAIN" "$R159_WT" "$R159_OTHER"; do
-  [ -f "$r159_root/notdocs/eval-reports/e.md" ] && [ -f "$r159_root/docs/dev-log/e.md" ] \
-    && [ ! -e "$r159_root/docs/dev-log/new.md" ] || {
-    echo "the #159 fixture under $r159_root is not the tree its checks name; they would prove nothing" >&2
-    exit 1
-  }
-done
+# Every file a row below asks about is there, and every new entry a Write asks
+# about is not: an ALLOW from a missing file says nothing about the path, and
+# the Edit half's near-miss rows are all ALLOW. The list is read off the rows'
+# own tables -- the checkout cases and the agreement paths -- and not off the
+# loop that builds the tree, so a case added to a table without its file is
+# red too. It named two files until review of #159's branch (round 6) left the
+# `.bak` siblings out of the build: the suite stayed green, and 57 rows could no
+# longer fail.
+r159_fixture_gaps() {  # r159_fixture_gaps -- a line per file the rows need and the tree does not match
+  local r t rel w what n=0
+  for r in "$R159_MAIN" "$R159_WT" "$R159_OTHER"; do
+    while read -r t rel w what; do
+      n=$((n + 1))
+      case "$t:$w" in
+        Write:ALLOW) [ ! -e "$r/$rel" ] || printf '%s exists, so a Write of it is no new entry\n' "$r/$rel" ;;
+        *)           [ -f "$r/$rel" ]   || printf '%s is missing\n' "$r/$rel" ;;
+      esac
+    done < <(r159_cases append-only-docs-edit.sh; r159_paths | sed 's/^/Edit /')
+  done
+  [ "$n" -gt 0 ] || printf 'no row named a file, so nothing was asked of the tree\n'
+}
+R159_GAPS=$(r159_fixture_gaps)
+[ -z "$R159_GAPS" ] || {
+  printf 'the #159 fixture is not the tree its checks name; they would prove nothing:\n%s\n' "$R159_GAPS" >&2
+  exit 1
+}
 
 # The checkout a path is in, the directory it is under, and how it is reached
 # relatively from each project directory -- literals, one per pair.
@@ -458,6 +499,7 @@ r159_says "$R159_WT" "($R159_MAIN/docs/dev-log/e.md)" \
 # branch asked. The body edit beside it is the control: the entry is guarded.
 R159_HEAD=docs/dev-log/devlog_2026-01-01_session-5.md
 printf '%s\n\nBody.\n' '# 2026-01-01 · session 2 — R' > "$R159_WT/$R159_HEAD"
+r159_present "$R159_WT/$R159_HEAD"
 r159_edit() {  # r159_edit <file> <old> <new> -- an Edit tool call
   jq -cn --arg p "$1" --arg o "$2" --arg n "$3" \
     '{tool_name:"Edit",tool_input:{file_path:$p,old_string:$o,new_string:$n}}'
@@ -482,6 +524,7 @@ R159_ANC="$FIXTURES/r159-anc/docs/dev-log/proj"
 mkdir -p "$R159_ANC/src"
 printf 'x\n' > "$R159_ANC/src/main.py"
 printf 'x\n' > "$R159_ANC/src/README.md"
+r159_present "$R159_ANC/src/main.py" "$R159_ANC/src/README.md"
 REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh BLOCK \
   'ACCEPTED TRADE, not a defect: an Edit of src/main.py in a project directory under a docs/dev-log/ ancestor' \
   "$(r159_call Edit src/main.py)"
@@ -496,6 +539,7 @@ REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh ALLOW \
 for r159_d in lessons-learned eval-reports dev-log; do
   mkdir -p "$R159_ANC/docs/$r159_d"
   printf '%s\n\nBody.\n' '# 2026-01-01 · session 2 — R' > "$R159_ANC/docs/$r159_d/devlog_2026-01-01_session-5.md"
+  r159_present "$R159_ANC/docs/$r159_d/devlog_2026-01-01_session-5.md"
   r159_want=BLOCK
   [ "$r159_d" = dev-log ] && r159_want=ALLOW
   REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh "$r159_want" \
@@ -507,6 +551,7 @@ done
 # round 4). The same trade that refuses src/main.py, in its permitting half;
 # the body edit is the control.
 printf '%s\n\nBody.\n' '# 2026-01-01 · session 2 — R' > "$R159_ANC/src/devlog_2026-01-01_session-5.md"
+r159_present "$R159_ANC/src/devlog_2026-01-01_session-5.md"
 REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh ALLOW \
   'ACCEPTED TRADE, not a defect: the heading correction on a devlog_-named file under src/, the project directory under a docs/dev-log/ ancestor' \
   "$(r159_edit "$R159_ANC/src/devlog_2026-01-01_session-5.md" '# 2026-01-01 · session 2 — R' '# 2026-01-01 · session 5 — R')"
@@ -526,6 +571,7 @@ R159_NEST="$FIXTURES/r159-nest"
 r159_nest() {  # r159_nest <project dir> <relative dir> <want> <label> -- the correction on an entry there
   mkdir -p "$1/$2"
   printf '%s\n\nBody.\n' '# 2026-01-01 · session 2 — R' > "$1/$2/devlog_2026-01-01_session-5.md"
+  r159_present "$1/$2/devlog_2026-01-01_session-5.md"
   REPO_ROOT="$1" feed "$PATH" append-only-docs-edit.sh "$3" "$4" \
     "$(r159_edit "$1/$2/devlog_2026-01-01_session-5.md" '# 2026-01-01 · session 2 — R' '# 2026-01-01 · session 5 — R')"
 }
@@ -563,22 +609,12 @@ REPO_ROOT="$R159_MAIN" feed "$PATH" append-only-docs-edit.sh BLOCK \
   'ACCEPTED TRADE, not a defect (#190): an Edit of a draft entry in a worktree, on no branch, the project directory the main checkout' \
   "$(r159_call Edit "$R159_WT/$R159_DRAFT")"
 
-# THE TWO HALVES, HELD TO ONE PATH SET. <path in a checkout> <verdict> <what>:
-# the three directory names and the three near-misses of each. The Edit half is
-# handed an Edit of the file, which exists in every checkout; the Bash half a
-# command of each rule's shape over it -- its verb list, its `sed -i`, and its
-# redirect with and without a space. Both are asked of the absolute path in
-# each checkout, and the Bash half of the relative spelling too, which reads the
-# same whatever the checkout.
-r159_paths() {
-  local d
-  for d in $R159_DIRS; do
-    printf '%s\n' "docs/$d/e.md BLOCK a guarded entry" \
-      "docs/$d.bak/e.md ALLOW a .bak sibling" \
-      "docs/${d}book/e.md ALLOW a sibling whose name only begins with the directory's" \
-      "notdocs/$d/e.md ALLOW the directory's name under a notdocs/ parent"
-  done
-}
+# THE TWO HALVES, HELD TO ONE PATH SET: r159_paths, above, which the fixture's
+# precondition reads too. The Edit half is handed an Edit of the file, which
+# exists in every checkout; the Bash half a command of each rule's shape over it
+# -- its verb list, its `sed -i`, and its redirect with and without a space.
+# Both are asked of the absolute path in each checkout, and the Bash half of the
+# relative spelling too, which reads the same whatever the checkout.
 r159_forms() {  # r159_forms <path> -- <rule> TAB <command>, one per Bash rule the path meets
   printf '%s\t%s\n' 'the verb list, truncate' "truncate -s 0 $1" 'the verb list, rm' "rm $1" \
     'the in-place rule' "sed -i s/a/b/ $1" 'the redirect, spaced' ": > $1" 'the redirect, unspaced' ":>$1"
@@ -669,6 +705,7 @@ for r159_c in + @ , '~'; do
 done
 mkdir -p "$R159_MAIN/a+docs/dev-log"
 printf 'x\n' > "$R159_MAIN/a+docs/dev-log/e.md"
+r159_present "$R159_MAIN/a+docs/dev-log/e.md"
 REPO_ROOT="$R159_MAIN" feed "$PATH" append-only-docs-edit.sh ALLOW \
   'ACCEPTED TRADE, the other half of it: an Edit of an existing a+docs/dev-log/e.md, which the Bash half refuses' \
   "$(r159_call Edit "$R159_MAIN/a+docs/dev-log/e.md")"
