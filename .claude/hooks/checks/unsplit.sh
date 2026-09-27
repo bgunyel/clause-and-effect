@@ -10064,11 +10064,14 @@ tok 'every_hook: two permitting hooks pass' 'ok' "$(every_hook_of allow-0 allow-
 # capitals or digits, and the `function` keyword with or without parens. Comments
 # are stripped first, as cs_calls strips them.
 #
-# Two functions keep out of it on purpose, by that first gap: `unarmed` and
+# Three functions keep out of it on purpose, by that first gap: `unarmed` and
 # `prose_count` read grep's status and run no hook, so they name it
 # `grep_status` rather than `rc`, and #219's issue file drives them against a
 # directory, a missing file and a readable one instead. Spelled `rc=$?`, either
 # turns this red and asks for a crashing-hook fixture it has no use for.
+# `r293_fail_ms`, in #293's issue file, reads the status of a child bash that
+# times `fail` and runs no hook either, so it names it `child_status`; spelled
+# `rc=$?`, its first full run turned this red.
 STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$SUITE_TEXT" \
   | awk '/^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
            fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)

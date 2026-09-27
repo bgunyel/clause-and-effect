@@ -57,8 +57,11 @@ R293_LARGE="$FIXTURES/r293-large"
 R293_SMALL="$FIXTURES/r293-small"
 awk 'BEGIN { for (i = 0; i < 10000; i++) printf "line %05d of a captured output, padded to about 57 bytes\n", i }' > "$R293_LARGE"
 head -n 2500 "$R293_LARGE" > "$R293_SMALL"
+# The child's status is `child_status` and not `rc`, as `unarmed` names grep's
+# `grep_status`: the #98 self-test derives every helper that reads `rc=$?` as
+# one that runs a hook, and this one runs none.
 r293_fail_ms() {  # r293_fail_ms <message file> -- "<ms> <exit>", the fastest of three
-  local i ms rc best= bestrc=
+  local i ms child_status best= best_status=
   for i in 1 2 3; do
     ms=$(LC_ALL=C.UTF-8 LEDGER= REQ=GH-0 timeout 20 bash -c '
       source "$1" || exit 90
@@ -67,11 +70,11 @@ r293_fail_ms() {  # r293_fail_ms <message file> -- "<ms> <exit>", the fastest of
       fail static "%s" "$m" > /dev/null || exit 91
       u=$EPOCHREALTIME
       echo $(( (${u/./} - ${t/./}) / 1000 ))' bash "$SUITE_DIR/checks/library.sh" "$1" 2> /dev/null)
-    rc=$?
-    [ "$rc" = 0 ] || { printf '%s %s\n' - "$rc"; return; }
-    if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms bestrc=$rc; fi
+    child_status=$?
+    [ "$child_status" = 0 ] || { printf '%s %s\n' - "$child_status"; return; }
+    if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms best_status=$child_status; fi
   done
-  printf '%s %s\n' "$best" "$bestrc"
+  printf '%s %s\n' "$best" "$best_status"
 }
 R293_S=$(r293_fail_ms "$R293_SMALL")
 R293_L=$(r293_fail_ms "$R293_LARGE")
