@@ -8040,60 +8040,9 @@ done
   exit 1
 }
 
-# The library present and loading, with exactly one function renamed away. Built
-# by a call at the top level and named by convention, rather than returned from a
-# substitution: an `exit 1` inside `$( )` kills the subshell and leaves the suite
-# running, so a fixture guard written that way would report and then be ignored.
-#
-# Where the fixture goes, derived once. The builder below takes its directory
-# from this rather than composing the same path a second time, and that is not
-# tidiness: the first version of mk_halflib wrote
-# `local hook="$1" fn="$2" dir="$FIXTURES/halflib-$fn-$hook"`, and `local`
-# expands all of its arguments before it assigns any of them, so $fn and $hook
-# were still empty and every fixture was built in one directory named
-# `halflib--`. All four fixture guards passed -- they were asked about the
-# directory that had been built, not about the one the checks would drive -- and
-# thirteen checks reported ALLOW against a hook that was not there, which
-# check_in read as permitted because it was not exit 2 (see `verdict`, where
-# those thirteen would each FAIL today). A fixture guard that
-# derives its own path proves nothing about the check beside it.
-halflib_path() {  # halflib_path <hook> <cs_function> -- where that fixture sits
-  printf '%s\n' "$FIXTURES/halflib-$1-$2/$1"
-}
-mk_halflib() {  # mk_halflib <hook> <cs_function>
-  local hook="$1"
-  local fn="$2"
-  local target dir
-  target=$(halflib_path "$hook" "$fn")
-  dir=$(dirname "$target")
-  mkdir -p "$dir/lib"
-  cp "$HOOKS/$hook" "$dir/"
-  sed "s/^$fn()/cs_renamed_away()/" "$HOOKS/lib/command-scan.sh" > "$dir/lib/command-scan.sh"
-  # Both directions on the rename, because a sed that matched nothing leaves a
-  # complete library behind and the check using it would pass with no guard at
-  # all -- which is how these hooks reached dev-05 in the first place.
-  grep -q '^cs_renamed_away()' "$dir/lib/command-scan.sh" || {
-    echo "the half-library for $hook did not rename $fn away; the check using it proves nothing" >&2
-    exit 1
-  }
-  ! grep -q "^$fn()" "$dir/lib/command-scan.sh" || {
-    echo "the half-library for $hook still defines $fn; the check using it proves nothing" >&2
-    exit 1
-  }
-  # And that what is left still loads. A fixture broken some other way would
-  # refuse for a reason this section does not name, and would read as evidence
-  # for the guard.
-  bash -c ". '$dir/lib/command-scan.sh' && command -v cs_renamed_away >/dev/null 2>&1" || {
-    echo "the half-library for $hook does not load at all; the check using it proves nothing" >&2
-    exit 1
-  }
-  # The last guard asks about the path the checks will actually drive, which is
-  # the one the `halflib--` bug got wrong.
-  [ -x "$target" ] || {
-    echo "the half-library fixture for $hook is not at $target, or is not executable; the check using it proves nothing" >&2
-    exit 1
-  }
-}
+# `halflib_path` and `mk_halflib`, which build the library present and loading
+# with exactly one function renamed away, are in checks/library.sh since #182,
+# whose issue file became their second caller; their argument moved with them.
 # One call per pair the contract names, which is the required list of each hook. The
 # sets differ, and that difference is the reason the guards cannot share a list:
 # four want cs_git_args, no-pr-decisions.sh wants cs_gh_args and cs_join instead,
@@ -11576,7 +11525,7 @@ req GH-107.1
 TEXT_CHECK_ARGS=$(text_check_faults "${SUITE_FILES[@]}")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '319' "${TEXT_CHECK_ARGS##*COUNT }"
+    '321' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -11748,7 +11697,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '114' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '115' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11874,7 +11823,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '112' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '113' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
@@ -13370,8 +13319,9 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch
 # ending in a backslash was swallowed by the continuation fold, so two real arms
 # read as one LINE and the count did not move. Counting occurrences, they are two
 # whatever line they end up on -- and the same closes the fold case with no
-# heredoc in it at all, which review found beside this one. What is left of #182
-# is its two inflating shapes, both false red.
+# heredoc in it at all, which review found beside this one. What was left of
+# #182 was its two inflating shapes, both false red, and #182 closed those too;
+# see A HEREDOC BODY WAS THE SECOND, below.
 #
 # TWO TRADES, taken knowingly, and neither is the permitting direction.
 #
@@ -13400,30 +13350,46 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch
 # duplicating a descriptor, and a two-digit fd, which the leading `[^0-9]` cannot
 # match into. Both are the permitting direction, and neither hook writes either.
 #
-# A HEREDOC BODY IS THE SECOND, and "one shape remains" stood here until the
-# third review of PR #169 counted them. This pipeline strips whole-line comments
-# and folds continuations; it does not know where a heredoc body begins. Both
-# hooks use heredocs today -- `done <<BASELIST`, `done <<CMDLIST` -- with bodies
-# that are a bare variable, so nothing is miscounted now, and it is one edit away
-# rather than hypothetical. Two shapes survive counting occurrences, and both
-# inflate:
+# A HEREDOC BODY WAS THE SECOND, and "one shape remains" stood here until the
+# third review of PR #169 counted them. This pipeline stripped whole-line
+# comments and folded continuations, and did not know where a heredoc body
+# begins. Both hooks use heredocs -- `done <<BASELIST`, `done <<CMDLIST` -- with
+# bodies that are a bare variable, so nothing was miscounted, and it was one
+# edit away rather than hypothetical. Two shapes survived counting occurrences,
+# and both inflated:
 #
-#   a body line carrying `>&2`                counts as an arm      (false red)
-#   `cat >&2 <<EOF` whose body carries one    counts twice for one  (false red)
+#   a body line carrying `>&2`                counted as an arm      (false red)
+#   `cat >&2 <<EOF` whose body carries one    counted twice for one  (false red)
 #
 # There was a third, and it was the permitting one -- a body line ending in a
 # backslash swallowed the line after it, so two arms read as one. Counting
-# occurrences rather than lines closed it; see above. #182 records that, and
-# what is left of it is a false red, which by the standard CLAUDE.md's
-# consequence 3 sets would not on its own have been worth a parser.
+# occurrences rather than lines closed it; see above.
 #
-# `fn_writes` runs the same pipeline and inherits both.
+# #182 CLOSED THE OTHER TWO, and one its triage found beside them, by dropping
+# heredoc bodies with the tokeniser's own pass, cs_drop_heredocs, rather than
+# with a second answer to what a heredoc is. The third shape was `fn_writes`'s,
+# since it ran the same pipeline: a body line that is just `}` in column 1 -- a
+# JSON body, say -- closed the function around it, so a write after it was
+# attributed to nothing and the function read `silent`. That is the
+# misleading-red class WHAT THAT COSTS IS NOT A GREEN RUN names below for a
+# one-liner: the table moves and the run goes red, but the row it shows is
+# wrong, and reconciling to it takes `fn_calls` out of the loop for a writer.
+# `fn_calls` counted a body line naming a function as a call, which inflates.
+#
+# THE ORDER IS PART OF THE FIX: comments stripped, then bodies dropped, then
+# continuations folded. The fold ran first, and bash does not continue a line
+# inside a quoted body, so a body line ending in a backslash took the line after
+# it with it. The drop keeps its fail-safe here too: a heredoc whose terminator
+# never arrives -- an opener matched inside quotes, `<<` in a message -- gives
+# its lines back, in their place, since nothing after the opener was printed
+# while they were held. For these counters a line given back wrongly can only
+# add a write or a call, which is the false red; a line hidden wrongly is the
+# permitting direction, and the drop is built against it. #182's checks drive
+# each shape in checks/GH-182.sh, against these three helpers as they stand.
 STDERR_WRITE='>&[[:space:]]*2|>[[:space:]]*/dev/stderr'
-arms() {  # arms <file> -- in how many places it writes a refusal to stderr
-  sed 's/^[[:space:]]*#.*$//' "$1" \
-    | sed ':a;/\\$/{N;s/\\\n//;ba}' \
-    | grep -oE "$STDERR_WRITE" | wc -l | tr -d ' '
-}
+# `arms` is defined in checks/library.sh since #182, whose issue file became
+# its second caller. What it reads and why stands here, beside the fixtures
+# and pins it is argued with.
 # WHAT `arms` COUNTS, driven against files written for it. Neither hook can show
 # this: both are clean of every shape the two widenings added, so the pair of
 # literals below is the same either way, and what the count would miss is
@@ -13535,21 +13501,9 @@ tok 'arms counts a trailing comment, which is the false red this trade accepts' 
 # have. The `sed` above strips whole-line comments only, so a trailing one
 # reaches awk intact and this is the only thing standing between it and the
 # table. Fourth spelling of the class this whole section is about.
-fn_writes() {  # fn_writes <file> -- "<function> writes|silent" a line, sorted
-  sed 's/^[[:space:]]*#.*$//' "$1" \
-    | sed ':a;/\\$/{N;s/\\\n//;ba}' \
-    | awk -v W="$STDERR_WRITE" '
-        /^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
-          fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
-          seen[fn] = 1
-          if ($0 ~ /;[[:space:]]*\}[[:space:]]*$/) { if ($0 ~ W) w[fn] = 1; fn = ""; next }
-          next
-        }
-        /^\}/ { fn = ""; next }
-        fn != "" && $0 ~ W { w[fn] = 1 }
-        END { for (f in seen) print f, (f in w ? "writes" : "silent") }' \
-    | LC_ALL=C sort
-}
+# `fn_writes` is defined in checks/library.sh since #182, whose issue file became
+# its second caller. What it reads and why stands here, beside the fixtures
+# and pins it is argued with.
 # Occurrences, not lines, and tokens rather than matches. `grep -c` counted
 # matching lines, so `check_push a; check_push b` read as one call and ten writes
 # would have become twenty arms with both rows green -- the hole the third review
@@ -13567,13 +13521,9 @@ fn_writes() {  # fn_writes <file> -- "<function> writes|silent" a line, sorted
 # pattern, and #181 owns it; what keeps it from mattering today is the row above,
 # which pins the whole function table of both hooks, so the second function has
 # to be declared before it can hide anything.
-fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a call
-  sed 's/^[[:space:]]*#.*$//' "$1" \
-    | sed ':a;/\\$/{N;s/\\\n//;ba}' \
-    | grep -vE "^(function[[:space:]]+)?$2[[:space:]]*\(\)" \
-    | tr -c 'A-Za-z0-9_$-' '\n' \
-    | grep -cxF -- "$2"
-}
+# `fn_calls` is defined in checks/library.sh since #182, whose issue file became
+# its second caller. What it reads and why stands here, beside the fixtures
+# and pins it is argued with.
 # DRIVEN, NOT ONLY ASSERTED, which is the rule the fixtures above are built on
 # and the fourth review of PR #169 found these two helpers exempted from. Both
 # were pinned against the two real hooks alone, and on those `check_push` appears
@@ -13582,9 +13532,10 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # same either way is not evidence about which one is running.
 #
 # The last fixture is the third shape of the helper hole, after #181's indirect
-# call and #182's heredoc: a function defined inside another one. The patterns
-# are anchored at column 1 -- which is this file's convention and what the
-# closing `}` relies on too -- so a nested definition is never entered, its
+# call and #182's heredoc, which is closed: a function defined inside another
+# one. The patterns are anchored at column 1 -- which is this file's convention
+# and what the closing `}` relies on too -- so a nested definition is never
+# entered, its
 # writes are attributed to the function around it, which already writes, and
 # nothing moves. It is asserted here as the behaviour it is, and refused
 # outright below, because the honest fix for a convention a derivation depends on

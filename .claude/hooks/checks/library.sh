@@ -19,9 +19,9 @@
 #
 # WHAT IT DOES: it defines functions and nothing else. Sourcing it runs no
 # check, prints nothing and records nothing; the variables its functions read
-# -- $LEDGER, $REQ, $RAN, $HOOKS, $FIXTURES, $SUITE_DIR, $DECLARED, $PINNED and
-# the fixtures' own -- are set by check-hooks.sh, before the call that reads
-# them.
+# -- $LEDGER, $REQ, $RAN, $HOOKS, $FIXTURES, $SUITE_DIR, $DECLARED, $PINNED,
+# $STDERR_WRITE and the fixtures' own -- are set by check-hooks.sh, before the
+# call that reads them.
 #
 # THE COMMENTS MOVED HERE WITH THEIR FUNCTIONS, and they kept the positional
 # words they were written with. "Above", "below", "the foot of this suite" and
@@ -1307,4 +1307,98 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
   sed -e 's/^#[ \t]\{0,3\}//' \
     | sed -e ':a' -e '/[[:alnum:]]-[ \t]*$/{N;s/-[ \t]*\n[ \t]*/-/;ba' -e '}' \
     | tr '\n' ' ' | tr -s ' '
+}
+
+# The library present and loading, with exactly one function renamed away. Built
+# by a call at the top level and named by convention, rather than returned from a
+# substitution: an `exit 1` inside `$( )` kills the subshell and leaves the suite
+# running, so a fixture guard written that way would report and then be ignored.
+#
+# Where the fixture goes, derived once. The builder below takes its directory
+# from this rather than composing the same path a second time, and that is not
+# tidiness: the first version of mk_halflib wrote
+# `local hook="$1" fn="$2" dir="$FIXTURES/halflib-$fn-$hook"`, and `local`
+# expands all of its arguments before it assigns any of them, so $fn and $hook
+# were still empty and every fixture was built in one directory named
+# `halflib--`. All four fixture guards passed -- they were asked about the
+# directory that had been built, not about the one the checks would drive -- and
+# thirteen checks reported ALLOW against a hook that was not there, which
+# check_in read as permitted because it was not exit 2 (see `verdict`, where
+# those thirteen would each FAIL today). A fixture guard that
+# derives its own path proves nothing about the check beside it.
+halflib_path() {  # halflib_path <hook> <cs_function> -- where that fixture sits
+  printf '%s\n' "$FIXTURES/halflib-$1-$2/$1"
+}
+mk_halflib() {  # mk_halflib <hook> <cs_function>
+  local hook="$1"
+  local fn="$2"
+  local target dir
+  target=$(halflib_path "$hook" "$fn")
+  dir=$(dirname "$target")
+  mkdir -p "$dir/lib"
+  cp "$HOOKS/$hook" "$dir/"
+  sed "s/^$fn()/cs_renamed_away()/" "$HOOKS/lib/command-scan.sh" > "$dir/lib/command-scan.sh"
+  # Both directions on the rename, because a sed that matched nothing leaves a
+  # complete library behind and the check using it would pass with no guard at
+  # all -- which is how these hooks reached dev-05 in the first place.
+  grep -q '^cs_renamed_away()' "$dir/lib/command-scan.sh" || {
+    echo "the half-library for $hook did not rename $fn away; the check using it proves nothing" >&2
+    exit 1
+  }
+  ! grep -q "^$fn()" "$dir/lib/command-scan.sh" || {
+    echo "the half-library for $hook still defines $fn; the check using it proves nothing" >&2
+    exit 1
+  }
+  # And that what is left still loads. A fixture broken some other way would
+  # refuse for a reason this section does not name, and would read as evidence
+  # for the guard.
+  bash -c ". '$dir/lib/command-scan.sh' && command -v cs_renamed_away >/dev/null 2>&1" || {
+    echo "the half-library for $hook does not load at all; the check using it proves nothing" >&2
+    exit 1
+  }
+  # The last guard asks about the path the checks will actually drive, which is
+  # the one the `halflib--` bug got wrong.
+  [ -x "$target" ] || {
+    echo "the half-library fixture for $hook is not at $target, or is not executable; the check using it proves nothing" >&2
+    exit 1
+  }
+}
+
+# THE REFUSAL-ARM COUNTERS: `arms`, `fn_writes` and `fn_calls`, here since
+# #182, whose issue file became their second caller after the #109 section in
+# the unsplit file. Their argument -- what each counts, the shapes it cannot
+# reach, and why they read a hook as whole-line comments stripped, then heredoc
+# bodies dropped by the tokeniser's own `cs_drop_heredocs`, then continuations
+# folded, in that order -- stayed in that section, above `STDERR_WRITE`, which
+# it sets and `arms` and `fn_writes` read; it is written beside the fixtures and
+# pins it is argued with, and moving it would cut it from them.
+arms() {  # arms <file> -- in how many places it writes a refusal to stderr
+  sed 's/^[[:space:]]*#.*$//' "$1" \
+    | cs_drop_heredocs \
+    | sed ':a;/\\$/{N;s/\\\n//;ba}' \
+    | grep -oE "$STDERR_WRITE" | wc -l | tr -d ' '
+}
+fn_writes() {  # fn_writes <file> -- "<function> writes|silent" a line, sorted
+  sed 's/^[[:space:]]*#.*$//' "$1" \
+    | cs_drop_heredocs \
+    | sed ':a;/\\$/{N;s/\\\n//;ba}' \
+    | awk -v W="$STDERR_WRITE" '
+        /^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
+          fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
+          seen[fn] = 1
+          if ($0 ~ /;[[:space:]]*\}[[:space:]]*$/) { if ($0 ~ W) w[fn] = 1; fn = ""; next }
+          next
+        }
+        /^\}/ { fn = ""; next }
+        fn != "" && $0 ~ W { w[fn] = 1 }
+        END { for (f in seen) print f, (f in w ? "writes" : "silent") }' \
+    | LC_ALL=C sort
+}
+fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a call
+  sed 's/^[[:space:]]*#.*$//' "$1" \
+    | cs_drop_heredocs \
+    | sed ':a;/\\$/{N;s/\\\n//;ba}' \
+    | grep -vE "^(function[[:space:]]+)?$2[[:space:]]*\(\)" \
+    | tr -c 'A-Za-z0-9_$-' '\n' \
+    | grep -cxF -- "$2"
 }

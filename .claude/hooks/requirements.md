@@ -1244,9 +1244,13 @@ it has no entry above (Q16).
 - #181: `fn_calls` cannot see an indirect call, so a wrapper around a function
   that writes a refusal hides arms from the count. Cited beside that helper,
   which names what it can and cannot see
-- #182: `arms` and `fn_writes` do not know where a heredoc body starts. Cited
-  where the count names the shapes it cannot reach; one of the three is the
-  permitting direction, which is why it is filed rather than only named
+- #182: has entries, GH-182.1 and GH-182.2, generated from its issue file, and
+  is listed here only because #109's section cited it before it landed, as
+  `arms` and `fn_writes` not knowing where a heredoc body starts. Of the three
+  shapes it was filed on, the permitting one was closed by #169 counting
+  occurrences; #182 closed the two inflating ones, and a `}` body line that
+  made `fn_writes` call a writer silent, by dropping bodies with the
+  tokeniser's own pass
 - #185: `dup_stderr` does not reach `/dev/stderr` named on an `exec`, nor a
   two-digit fd. Cited where that guard is, because a guard narrower than the
   prose beside it reads as coverage -- the shape the fifth review of PR #169

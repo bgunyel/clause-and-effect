@@ -305,13 +305,18 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
   }
 }
 
-# Reduce a raw command to lines that can be scanned: heredoc bodies dropped,
-# line continuations joined, redirections dropped -- in that order, so that
-# every caller gets a command whose remaining words are its arguments. Where a
-# command's arguments end is the question this file exists to answer once, and
-# a redirect answered it in no-git-push.sh by accident: nothing removed one, so
-# `git push origin <branch> 2>/dev/null` was refused for naming 2>/dev/null as
-# its refspec. See the third pass.
+# Drop heredoc bodies, and nothing else: lines on stdin, the same lines out
+# with every heredoc body taken away. It is the first pass of cs_normalise,
+# below, which calls it.
+#
+# Extracted rather than copied, as cs_join was before it, and for #182. The
+# check suite counts the refusal arms in each boundary hook -- `arms`,
+# `fn_writes` and `fn_calls` in check-hooks.sh -- by reading the hook's own
+# text, and a body line carrying `>&2` or a column-1 `}` read to them as code.
+# They need the drop without the join and the redirect pass, and writing a
+# second one for them would be a sixth answer to the question the paragraphs
+# below record being answered wrongly five times. What a library missing this
+# function does is THE LOAD CONTRACT's, and is answered below cs_normalise.
 #
 # A heredoc body is data, not commands. This repository writes dev-log entries
 # and commit messages through a quoted heredoc, and those texts name the very
@@ -450,7 +455,7 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # bash begins it. Raised on review of the pull request for #128 and kept, on
 # the grounds the whole file keeps everywhere else: a
 # refusal is visible and one edit away, and a permitted push is neither.
-cs_normalise() {
+cs_drop_heredocs() {
   awk '
     ind {
       line = $0
@@ -510,7 +515,21 @@ cs_normalise() {
     }
     # The terminator never arrived, so this was not a heredoc and the lines were
     # dropped in error. Give them back.
-    END { for (i = 1; i <= nheld; i++) print held[i] }' \
+    END { for (i = 1; i <= nheld; i++) print held[i] }'
+}
+
+# Reduce a raw command to lines that can be scanned: heredoc bodies dropped,
+# line continuations joined, redirections dropped -- in that order, so that
+# every caller gets a command whose remaining words are its arguments. Where a
+# command's arguments end is the question this file exists to answer once, and
+# a redirect answered it in no-git-push.sh by accident: nothing removed one, so
+# `git push origin <branch> 2>/dev/null` was refused for naming 2>/dev/null as
+# its refspec. See the third pass.
+#
+# The first pass is cs_drop_heredocs, above, and the second cs_join, below;
+# the third is written here, because nothing else asks for it on its own.
+cs_normalise() {
+  cs_drop_heredocs \
   | cs_join \
   | awk '
     # A redirection is not an argument. Nothing removed one, so its operator or
@@ -646,6 +665,34 @@ cs_normalise() {
       printf "\n"
     }'
 }
+
+# CS_NORMALISE ANSWERS FOR CS_DROP_HEREDOCS, which no consumer calls and so no
+# load guard requires. With it missing, the first stage of cs_normalise's
+# pipeline is a command not found, the passes after it read no input, and
+# cs_normalise prints nothing and succeeds: every consumer then reads a command
+# with no command in it. Measured on the branch for #182 before this was
+# written, with the function renamed away and nothing else changed:
+# no-git-push.sh permitted `git push --force origin main`, no-pr-decisions.sh
+# `gh pr merge 5`, and the two convention hooks a bare `pytest tests/` and
+# `alembic upgrade head` -- every one of them exit 0.
+#
+# So a library missing it withdraws cs_normalise, which is THE WORD LIST IS
+# PART OF THE LOAD's move, below cs_split: the state is reduced to a missing
+# function every consumer that could be misled by it already requires. No
+# guard learns the new name, which is what keeps the required lists equal to
+# the call sets check-hooks.sh derives them against.
+#
+# cs_join, which cs_normalise calls as well, is not withdrawn for, because
+# cs_within_cap already answers for it: every Bash hook calls that, and it
+# fails when cs_join does. cs_drop_heredocs has no such second caller in a hook.
+#
+# It must stand after both definitions, for the reason the cs_split withdrawal
+# gives, and check-hooks.sh drives every consumer of cs_normalise against a
+# library missing only this function.
+if ! declare -F cs_drop_heredocs >/dev/null 2>&1; then
+  echo "lib/command-scan.sh: cs_drop_heredocs is not defined, and cs_normalise calls it. cs_normalise is withdrawn, so every consumer that requires it refuses." >&2
+  unset -f cs_normalise
+fi
 
 # Join backslash line continuations, and nothing else.
 #
