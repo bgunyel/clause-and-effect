@@ -10396,7 +10396,9 @@ SEEDS
 #                                     pre-timeout-quoted pre-sudo-ansi (#166)
 #  15 a quoted command word behind a prefix word's separated option value
 #     (#266)                          pre-nice-opt-dquoted pre-nice-opt-squoted
-#                                     pre-nice-opt-ansi (#166)
+#                                     pre-nice-opt-ansi pre-nice-opt-locale (#166)
+#  16 a quoted span holding a blank in front of the command word (#166)
+#                                     pre-sudo-spaced pre-assign-spaced
 #
 # The thirteenth is seven spellings where the others are one or two, and that is
 # #128 rather than thoroughness for its own sake: the spellings of the heredoc
@@ -10434,10 +10436,18 @@ SEEDS
 # a bare one: it stopped at a token opening with a quote, so `nice -n 5 "git"
 # push --all origin` was permitted while transformations 4 and 11 each passed on
 # their own. #266. So the composition is a family of its own, one spelling per
-# quoting form the tail offer has to tell apart from prose; the ANSI-C one is
-# #166's, whose reader made that form a quote, and it is the row that holds the
-# offer from stopping on the dollar -- a mutation that did survived a whole
-# green run.
+# quoting form the tail offer has to tell apart from prose, all four of them;
+# the ANSI-C and locale ones are #166's, whose reader made those forms quotes,
+# and the ANSI-C one is the row that holds the offer from stopping on the
+# dollar -- a mutation that did survived a whole green run. The locale one was
+# missing until round 2 of that review counted three where this said four.
+#
+# The sixteenth is round 2's class: a question asked of one blank-cut token
+# whose answer is a property of the line. A spaced option value, `sudo -D` and
+# a directory with a blank in it, and a spaced assignment, the documented
+# `GIT_SSH_COMMAND="ssh -i k"`, each left a walk half-way through a word, and
+# the command behind it unread. One spelling of each; the wrapped seeds depart
+# under the assignment, which is #273's third part and a regular expression.
 #
 # A transformation that cannot apply to a seed -- no value-taking long flag, no
 # second short flag to bundle with, no subcommand to put a global flag before --
@@ -10468,7 +10478,8 @@ INV_TRANSFORMS='
   heredoc-cont heredoc-cont-dash heredoc-cont-squote heredoc-cont-dquote
   heredoc-cont-space heredoc-cont-twice heredoc-cont-redirect
   pre-sudo-path pre-env-path pre-timeout-quoted pre-sudo-ansi
-  pre-nice-opt-dquoted pre-nice-opt-squoted pre-nice-opt-ansi
+  pre-nice-opt-dquoted pre-nice-opt-squoted pre-nice-opt-ansi pre-nice-opt-locale
+  pre-sudo-spaced pre-assign-spaced
 '
 
 # A rewrite that prints nothing when it changed nothing, which is how a
@@ -10679,6 +10690,9 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     pre-nice-opt-dquoted) inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" '"' '"')" ;;
     pre-nice-opt-squoted) inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" "'" "'")" ;;
     pre-nice-opt-ansi)    inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" "\$'" "'")" ;;
+    pre-nice-opt-locale)  inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" '$"' '"')" ;;
+    pre-sudo-spaced)      printf 'sudo -D "/srv/my repo" %s' "$2" ;;
+    pre-assign-spaced)    printf 'GIT_SSH_COMMAND="ssh -i k" %s' "$2" ;;
     word-path)        inv_cmdword "$2" '/usr/bin/' '' ;;
     word-dot)         inv_cmdword "$2" './' '' ;;
     word-dquoted)     inv_cmdword "$2" '"' '"' ;;
@@ -10797,6 +10811,7 @@ docs-truncate|word-locale|ALLOW|gap|GH-171|a locale quoted command word, which t
 docs-truncate|pre-nice-opt-dquoted|ALLOW|gap|GH-171|a double-quoted command word behind a prefix word, which this hook's verb grep does not reduce to the name it spells
 docs-truncate|pre-nice-opt-squoted|ALLOW|gap|GH-171|a single-quoted command word behind a prefix word, which this hook's verb grep does not reduce to the name it spells
 docs-truncate|pre-nice-opt-ansi|ALLOW|gap|GH-171|an ANSI-C quoted command word behind a prefix word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|pre-nice-opt-locale|ALLOW|gap|GH-171|a locale quoted command word behind a prefix word, which this hook's verb grep does not reduce to the name it spells
 EX
 )
 
@@ -11784,7 +11799,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '122' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '125' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11910,7 +11925,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '120' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '123' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.

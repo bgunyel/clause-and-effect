@@ -16,16 +16,19 @@
 # but in this test, and the review measured that the natural fix for the prose
 # it then misread -- adding the dollar -- survived a whole green run while
 # reopening the same push in ANSI-C quotes. The two are one line and one
-# question, so they closed together: the offer now asks the word reader whether
-# the token LEAVES a quote open, not whether it opens one. quotedtext in
-# lib/command-scan.sh argues it. #166's issue file holds the ANSI-C half.
+# question, so they closed together. Round 1 made the offer ask whether a token
+# LEFT a quote open, and round 2 of the same review measured that wrong both
+# ways; the offer now reads words from the word reader, so a quoted word is a
+# word and a quoted span holding a blank is stepped over whole. That is
+# GH-166.1, in #166's issue file, beside the ANSI-C half.
 #
-# WHAT IS NOT HERE. A quoted option VALUE holding a blank, `sudo -u "ro ot" git
-# push origin main`, still stops the offer: the value is a token left open at
-# its blank, which is exactly what prose looks like, and telling the two apart
-# is the parser the stopping rule refuses to write. It is pinned permitted
-# below as a boundary. No user name or signal holds a blank, which is why it is
-# left.
+# A BOUNDARY STOOD HERE AND ITS REASON WAS FALSE. Round 1 pinned a quoted option
+# value holding a blank, `sudo -u "ro ot" git push origin main`, as permitted,
+# on the premise that no user name, signal or priority holds one. Round 2 of the
+# review measured six shapes of it -- a directory behind `env -C` and `sudo -D`,
+# a prompt behind `sudo -p`, a lock file behind flock, a group behind `sudo -g`
+# -- none exotic. The row is a flip now, and the premise is withdrawn here, in
+# the entry and in its generated file.
 section "=== issue #266: a quoted command word behind a prefix word's option value ==="
 
 requirement GH-266 <<'REQ'
@@ -33,9 +36,10 @@ requirement GH-266 <<'REQ'
   double or single quotes is the command word it spells:
   `sudo -u root "git" push origin main`, `sudo -u root 'git' push origin main`,
   `nice -n 10 "git" push --all origin` and `sudo -u root "gh" pr merge 5` reach
-  the verdicts their bare spellings reach. The tail offer in `cs_split` stops at
-  a token that leaves a quote open where the token ends, which is the text of an
-  argument, and not at a token that merely opens one. Permitted as before:
+  the verdicts their bare spellings reach. The tail offer in `cs_split` offers
+  the words after the head as the word reader reports them (GH-166.1): a quoted
+  word is a word like a bare one, and text inside a quote is never offered.
+  Permitted as before:
   `sudo -u root 'git push origin main'`, which runs a program of that whole
   name, and a prose string in any quoting form behind a prefix word,
   `sudo echo 'git push origin main'`.
@@ -47,10 +51,12 @@ requirement GH-266 <<'REQ'
   behind a prefix word that is NOT the command word is now offered as one, so
   `sudo echo "git" push origin main` is refused, as its unquoted spelling
   `sudo echo git push origin main` already was. A quoted option value holding a
-  blank, `sudo -u "ro ot" git push origin main`, still stops the offer and is
-  permitted: it is shaped exactly as prose is, and no user name, signal or
-  priority holds a blank. The ANSI-C spelling of the same shape is GH-166's,
-  and `pre-nice-opt-ansi` is declared there.
+  blank, `sudo -u "ro ot" git push origin main`, was pinned permitted in round
+  1 on the premise that no user name, signal or priority holds a blank; round 2
+  measured directories, prompts, lock files and group names that do, and it is
+  refused since GH-166.1. The ANSI-C and locale spellings of the same shape are
+  GH-166's, and `pre-nice-opt-ansi` and `pre-nice-opt-locale` are declared
+  there.
 REQ
 shape_pin 'GH-266'
 variants_pin 'GH-266:transformation'
@@ -97,10 +103,10 @@ flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'THE TRADE: a double-quoted word behi
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'its control: the same words unquoted, refused before #266' \
   'sudo echo git push origin main'
 
-# THE BOUNDARY: a quoted option value holding a blank stops the offer, since it
-# is shaped as prose is, and the push behind it is not reached.
-req GH-266
-check_in "$PUSH_WT" no-git-push.sh ALLOW 'BOUNDARY: a quoted option value holding a blank stops the offer before the push' \
+# WHAT WAS A BOUNDARY: a quoted option value holding a blank. Pinned permitted
+# in round 1 on a premise round 2 measured false; reached since GH-166.1.
+req GH-266 GH-166.1 US-1
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a quoted option value holding a blank is one word, and the push behind it is read' \
   'sudo -u "ro ot" git push origin main'
 
 sourced_to_end

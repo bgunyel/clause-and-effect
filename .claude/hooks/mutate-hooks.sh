@@ -712,9 +712,12 @@ locale-quote-not-read-as-quoting%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (
 wrapper-anchor-admits-no-dollar%lib/command-scan.sh%/^CS_WORD_SPELLING=/s/(\[\\\$\]?/(/%GH-166%caught
 option-read-without-the-reader%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^    while (wd_next()) if (wd_ev == "text") o = o wd_ch$/    o = t/%GH-166%caught
 word-reader-not-withdrawn%lib/command-scan.sh%s/^if \[ -z "\$CS_WORD_AWK" \]; then$/if false; then/%GH-166%caught
-quotedtext-ignores-the-dollar%lib/command-scan.sh%/function quotedtext(/,/^    }$/s/ \&\& c != "\$") return 0/) return 0/%GH-166%caught
-quotedtext-stops-at-every-opened-quote%lib/command-scan.sh%/function quotedtext(/,/^    }$/s/return wd_st != 0$/return 1/%GH-166 GH-266%caught
-quotedtext-stops-at-the-dollar%lib/command-scan.sh%/function quotedtext(/,/^    }$/s/return wd_st != 0$/return wd_st != 0 || c == "$"/%GH-166%caught
+word-end-cuts-at-every-blank%lib/command-scan.sh%/    function wordend(/,/^    }$/s/^      wd_start(line, i)$/      return q/%GH-166.1%caught
+strip-walk-cuts-at-every-blank%lib/command-scan.sh%/^      wrapped = 0$/,/Walked back rather than matched/s/wordend(/tokend(/g%GH-166.1%caught
+tail-offer-reads-blank-cut-tokens%lib/command-scan.sh%/    function nextword(/,/^    }$/s/q = wordend(r)/q = tokend(r)/%GH-166.1%caught
+head-word-cut-at-its-first-blank%lib/command-scan.sh%/    function printhead(/,/^    }$/s/^      while (wd_i <= wd_n) { i = wd_i; wd_next(); if (wd_ev == "blank") break; i = wd_i }$//%GH-166.1%caught
+tail-offer-bound-two-words%lib/command-scan.sh%s/^        for (k = 0; k < 3; k++) {$/        for (k = 0; k < 2; k++) {/%GH-166.1%caught
+tail-offer-bound-four-words%lib/command-scan.sh%s/^        for (k = 0; k < 3; k++) {$/        for (k = 0; k < 4; k++) {/%GH-166.1%caught
 api-read-taken-for-a-write%no-pr-decisions.sh%/^gh_api_is_write()/,/^}/s/^  return 1$/  return 0/%FR-20%caught
 release-allowlist-admits-a-write%no-pr-decisions.sh%/^RELEASE_READ_VERBS=/s/verify-asset"/verify-asset create edit delete"/%FR-48%caught
 gh-option-never-unreadable%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^    return 3$/    return 2/%GH-118 US-15%caught
