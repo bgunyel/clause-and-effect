@@ -12,12 +12,13 @@
 # cross-hook checks, whose row on the message was a gap until this file.
 #
 # WHICH ARMS. PUSH_REFUSE backs the arm that refuses a push naming main, and the
-# four that refuse a push which may land on main without naming it: `--all` and
-# `--mirror`, an unreadable continuation, a wildcard refspec, and `-c`. That
-# list is NCM164_ARMS below, held to the hook by a count of its PUSH_REFUSE
-# expansions, since review added a sixth arm and nothing went red. The bare
-# push on main has a sentence of its own, which names the command it refuses
-# and gives no remedy; #164 left it alone and nothing here reads it.
+# arms that refuse a push which may land on main without naming it: today
+# `--all` and `--mirror`, an unreadable continuation, a wildcard refspec, and
+# `-c`. How many is NCM164_ARMS's to say, not this paragraph's: that list is held
+# to the hook by a count of its PUSH_REFUSE expansions, since review added an
+# arm and nothing went red. The bare push on main has a sentence of its own,
+# which names the command it refuses and gives no remedy; #164 left it alone and
+# nothing here reads it.
 #
 # THE TRADE, which the comment above PUSH_REFUSE argues and this file pins as
 # behaviour. The message is shown in four contexts: the main checkout, a linked

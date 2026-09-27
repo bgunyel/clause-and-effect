@@ -101,7 +101,7 @@ COMMIT_REFUSE="Blocked: committing to main. CLAUDE.md requires sequential dev-NN
 # dev-NN branch and open a PR instead", and no-git-push.sh refuses that push
 # from every checkout an agent can stand in, so an agent that did what it said
 # was refused a second time. The string backs the arm below that refuses a push
-# naming main and the four that refuse one which may land there unnamed -- the
+# naming main and the arms that refuse one which may land there unnamed -- the
 # bare push on main has its own sentence -- and is read from four contexts: the
 # main checkout, and a linked worktree on main, on dev-NN or on a worktree
 # branch. Only the last permits any push at all, `git push origin <that
