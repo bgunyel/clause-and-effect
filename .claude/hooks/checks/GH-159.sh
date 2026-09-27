@@ -29,9 +29,10 @@
 # same path. It is bounded on the left now by the class it was already bounded
 # by on the right, so `notdocs/` and `x.docs/` parents are other directories on
 # both sides. That permits what the Bash half refused, which is the direction a
-# boundary fix goes; it is pinned below with the append it must not have eaten,
-# `>>docs/...` written with no space, which the first draft of that boundary did
-# refuse.
+# boundary fix goes; it is pinned below with what it must not have eaten: the
+# append `>>docs/...` written with no space, which the first draft of that
+# boundary refused, and `cp -tdocs/dev-log`, an option with its value attached,
+# which the second permitted until review of the branch found it.
 #
 # THE FIXTURE is a repository this file builds, with a linked worktree inside it
 # where agents' stand, and a second repository beside it that is not this one:
@@ -41,9 +42,12 @@
 # creates.
 #
 # DERIVED RATHER THAN LISTED. Which hooks are asked the checkout question is read
-# off settings.json and the hooks' text: every hook registered under a matcher
-# naming Edit or Write, which is handed a path, and every registered hook whose
-# code reads CLAUDE_PROJECT_DIR, which is how a hook resolves one against a root.
+# off settings.json and the hooks' text: every hook registered where an edit
+# tool reaches it, which is handed a path, and every registered hook whose code
+# reads CLAUDE_PROJECT_DIR, which is how a hook resolves one against a root. The
+# first version asked only for a matcher naming Edit or Write, and review of the
+# branch named what that missed: `*`, an empty matcher and `MultiEdit`, and a
+# `${#` read as a comment.
 # Each is asked every case of its table from each checkout, with each checkout as
 # the project directory; one with no table is red, so the next such hook gets a
 # failing row and not silence. The table is a literal per hook, because the
@@ -62,17 +66,19 @@ requirement GH-159.1 <<'REQ'
   entry and an Edit of a directory's README stay permitted in both, and so do
   a `.bak` sibling, a sibling whose name only begins with a guarded one, a
   guarded name under a `notdocs/` parent, and `docs/design/` and
-  `docs/research/`. An identically-named existing entry in a repository that
-  is not this one is refused too: the accepted trade, since a refusal is
-  visible and one edit away and a permitted rewrite of history is neither.
-- from: #159
+  `docs/research/`. The one heading correction ADR 0003 permits is permitted
+  on a worktree's entry as on the main checkout's, whichever is the project
+  directory. An identically-named existing entry in a repository that is not
+  this one is refused too: the accepted trade, since a refusal is visible and
+  one edit away and a permitted rewrite of history is neither.
+- from: #159, and review of its branch
 - kind: defect-permitting
 - status: active
 - variants: none: its subject is which checkout a path lives in and which is
   the project directory, which is a state of the tree rather than a spelling
 - note: the trade is written in the hook's comment, in the commit that took
-  it and in the label of every row asserting it. Symlinks are not resolved on
-  either side, as before.
+  it and in the label of every row asserting it, here and in GH-159.2.
+  Symlinks are not resolved on either side, as before.
 REQ
 requirement GH-159.2 <<'REQ'
 - text: The two halves of the append-only rule classify one path set alike:
@@ -85,13 +91,15 @@ requirement GH-159.2 <<'REQ'
   with and without a space, each of the absolute path and of its relative
   spelling, and both reach the one literal verdict the path has. The Bash half
   bounds the directory on the left by the class that bounds it on the right,
-  so `rm -rf notdocs/dev-log` is permitted, and an append written
+  or by an option's letters after that class, so `rm -rf notdocs/dev-log` is
+  permitted, `cp -tdocs/dev-log x` stays refused, and an append written
   `>>docs/dev-log/<entry>` with no space stays permitted.
-- from: #159
+- from: #159, and review of its branch
 - kind: defect-refusing
 - status: active
-- variants: none: its subject is which file paths are guarded, one set fed to
-  both halves, and not a spelling of the command around a path
+- variants: none: its subject is which file paths the two halves guard, one
+  set fed to both, and a path is not a command; the spellings of the command
+  around a guarded path are GH-69.2's, whose seeds the families vary
 - note: what must agree is the path set and not the verdict for every act --
   the Edit half tests the filesystem for existence and the Bash half the
   command for a verb, and the Bash half's narrower answer on a `..` inside
@@ -99,55 +107,85 @@ requirement GH-159.2 <<'REQ'
 REQ
 requirement GH-159.3 <<'REQ'
 - text: Which hooks are asked the checkout question is derived: every hook
-  `settings.json` registers under a matcher naming `Edit` or `Write`, and every
-  registered hook whose code, comments stripped, reads `CLAUDE_PROJECT_DIR`.
-  Each is asked its cases from the main checkout, a linked worktree and
-  another repository, with each of the first two as the project directory, and
-  a derived hook with no table of cases is a failing row. The derivation is
-  driven against a fixture first.
-- from: #159
+  `settings.json` registers on a tool event under a matcher that reaches
+  `Edit`, `Write` or `MultiEdit` -- by name, by a pattern, or by `*`, an
+  empty or an absent matcher -- and every registered hook whose code, with
+  `#` comments stripped, reads `CLAUDE_PROJECT_DIR`. Each is asked its cases
+  from the main checkout, a linked worktree and another repository, with each
+  of the first two as the project directory, and a derived hook with no table
+  of cases is a failing row. The derivation is driven against a fixture first.
+- from: #159, and review of its branch
 - kind: defect-permitting
 - status: active
 - direction: static: it reads settings.json and the hooks' text, and derives
   which hooks the checkout cases must reach
+- note: a hook that resolves a path against a root it finds some other way --
+  `$(pwd)` alone, or `git rev-parse --show-toplevel` -- and is not registered
+  for an edit tool is not reached; reading its code for every such spelling
+  is the text derivation #144 abandoned for a record.
 REQ
 shape_pin 'GH-159.1 GH-159.2 GH-159.3:static'
 variants_pin 'GH-159.1:none GH-159.2:none'
 
-# THE DERIVATION. settings.json's registrations, as <matcher> TAB <hook> lines;
-# then the hooks named under a matcher naming Edit or Write, and the hooks whose
-# code reads the project directory, read with every `#` comment stripped so that
-# a hook which only mentions it in prose is not one.
-r159_registered() {  # r159_registered <settings.json> -- <matcher> TAB <hook basename>, a line each
-  jq -r '.hooks[][]? | (.matcher // "-") as $m | .hooks[]? | "\($m)\t\(.command)"' "$1" 2>/dev/null \
-    | sed 's|\t.*/|\t|; s|"$||'
+# THE DERIVATION. settings.json's registrations, as <event> TAB <matcher> TAB
+# <hook> lines, a missing or empty matcher written `*`, which is what the harness
+# reads it as; then the hooks on a tool event whose matcher reaches an edit tool,
+# and the hooks whose code reads the project directory. A matcher is a tool name
+# or a pattern, so it is asked as an anchored pattern of each edit tool's name.
+# Comments are stripped where a `#` opens the line or follows a blank, so that a
+# hook which only names the variable in prose is not one while `${#...}` is code.
+r159_registered() {  # r159_registered <settings.json> -- <event> TAB <matcher> TAB <hook basename>, a line each
+  jq -r '.hooks | to_entries[] | .key as $e | .value[]?
+         | (if (.matcher // "") == "" then "*" else .matcher end) as $m
+         | .hooks[]? | "\($e)\t\($m)\t\(.command)"' "$1" 2>/dev/null \
+    | sed 's|\t[^\t]*/\([^/\t]*\)$|\t\1|; s|"$||'
+}
+r159_reaches_edit() {  # r159_reaches_edit <matcher> -- 0 if it hands the hook an Edit, Write or MultiEdit
+  local t
+  [ "$1" = '*' ] && return 0
+  for t in Edit Write MultiEdit; do
+    [[ $t =~ ^($1)$ ]] && return 0
+  done
+  return 1
 }
 r159_rooted() {  # r159_rooted <settings.json> <hooks dir> -- the hooks the checkout question reaches, sorted
-  local m h
-  while IFS=$'\t' read -r m h; do
-    case "|$m|" in *'|Edit|'*|*'|Write|'*) printf '%s\n' "$h"; continue ;; esac
-    sed 's/[[:space:]]*#.*$//' "$2/$h" 2>/dev/null | grep -q 'CLAUDE_PROJECT_DIR' && printf '%s\n' "$h"
+  local e m h
+  while IFS=$'\t' read -r e m h; do
+    case "$e" in *ToolUse*) r159_reaches_edit "$m" && { printf '%s\n' "$h"; continue; } ;; esac
+    sed 's/\(^\|[[:space:]]\)#.*$//' "$2/$h" 2>/dev/null | grep -q 'CLAUDE_PROJECT_DIR' && printf '%s\n' "$h"
   done < <(r159_registered "$1") | LC_ALL=C sort -u
 }
 
-# Driven first, against a fixture: one hook under Edit|Write, one Bash hook whose
-# code reads the root, one that names it only in a comment and one that does not
-# name it at all. The two it must find are the first two.
+# Driven first, against a fixture. Reached: a hook under `Write|Edit`, one under
+# `*`, one under no matcher, one under `MultiEdit`, a Bash hook whose code reads
+# the root, and one that reads it after a `${#`. Not reached: a Bash hook naming
+# it only in a comment, one not naming it, and a SessionStart hook with no
+# matcher, which is handed no tool at all.
 R159_DERIVE="$FIXTURES/r159-derive"
 mkdir -p "$R159_DERIVE/hooks"
-printf '%s\n' '#!/bin/bash' 'exit 0' > "$R159_DERIVE/hooks/x-edit.sh"
+for r159_h in x-edit x-star x-bare x-multi x-plain x-session; do
+  printf '%s\n' '#!/bin/bash' 'exit 0' > "$R159_DERIVE/hooks/$r159_h.sh"
+done
 printf '%s\n' '#!/bin/bash' 'ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"' > "$R159_DERIVE/hooks/x-root.sh"
-printf '%s\n' '#!/bin/bash' '# reads CLAUDE_PROJECT_DIR only in prose' 'exit 0' > "$R159_DERIVE/hooks/x-prose.sh"
-printf '%s\n' '#!/bin/bash' 'exit 0' > "$R159_DERIVE/hooks/x-plain.sh"
-jq -n '{hooks:{PreToolUse:[
-  {matcher:"Bash",hooks:[{type:"command",command:"\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/x-root.sh"},
-                         {type:"command",command:"\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/x-prose.sh"},
-                         {type:"command",command:"\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/x-plain.sh"}]},
-  {matcher:"Write|Edit",hooks:[{type:"command",command:"\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/x-edit.sh"}]}]}}' \
-  > "$R159_DERIVE/settings.json"
+printf '%s\n' '#!/bin/bash' 'n=${#CLAUDE_PROJECT_DIR}' > "$R159_DERIVE/hooks/x-length.sh"
+printf '%s\n' '#!/bin/bash' '# reads CLAUDE_PROJECT_DIR only in prose' 'exit 0  # CLAUDE_PROJECT_DIR' \
+  > "$R159_DERIVE/hooks/x-prose.sh"
+r159_hook_json() {  # r159_hook_json <name> -- a registration of it, as settings.json writes one
+  printf '{"type":"command","command":"\\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/%s.sh"}' "$1"
+}
+cat > "$R159_DERIVE/settings.json" <<JSON
+{"hooks":{"PreToolUse":[
+  {"matcher":"Bash","hooks":[$(r159_hook_json x-root),$(r159_hook_json x-length),$(r159_hook_json x-prose),$(r159_hook_json x-plain)]},
+  {"matcher":"Write|Edit","hooks":[$(r159_hook_json x-edit)]},
+  {"matcher":"*","hooks":[$(r159_hook_json x-star)]},
+  {"hooks":[$(r159_hook_json x-bare)]},
+  {"matcher":"MultiEdit","hooks":[$(r159_hook_json x-multi)]}],
+ "SessionStart":[{"hooks":[$(r159_hook_json x-session)]}]}}
+JSON
 req GH-159.3
-tok 'the checkout question reaches an Edit|Write hook and a hook whose code reads the root, and not one naming it in a comment' \
-    "$(printf '%s\n' x-edit.sh x-root.sh)" "$(r159_rooted "$R159_DERIVE/settings.json" "$R159_DERIVE/hooks")"
+tok 'the checkout question reaches every hook an edit tool is handed to and every hook whose code reads the root, and none that names it only in prose' \
+    "$(printf '%s\n' x-bare.sh x-edit.sh x-length.sh x-multi.sh x-root.sh x-star.sh)" \
+    "$(r159_rooted "$R159_DERIVE/settings.json" "$R159_DERIVE/hooks")"
 
 R159_HOOKS=$(r159_rooted "$SETTINGS" "$HOOKS")
 [ -n "$R159_HOOKS" ] || {
@@ -285,6 +323,27 @@ r159_says "$R159_WT" "($R159_MAIN/docs/dev-log/e.md)" \
   'and the whole path of an entry outside the project directory' \
   "$(r159_call Edit "$R159_MAIN/docs/dev-log/e.md")"
 
+# THE ONE CORRECTION ADR 0003 PERMITS, on a worktree's entry. `heading_correction`
+# asked whether the path was under docs/dev-log/ relative to the project root, so
+# once the guard fired in a worktree, the correction there was refused whenever
+# the main checkout was the project directory; it reads the path's own segments
+# now, as the guard does. No check reached that line until review of #159's
+# branch asked. The body edit beside it is the control: the entry is guarded.
+R159_HEAD=docs/dev-log/devlog_2026-01-01_session-5.md
+printf '%s\n\nBody.\n' '# 2026-01-01 · session 2 — R' > "$R159_WT/$R159_HEAD"
+r159_edit() {  # r159_edit <file> <old> <new> -- an Edit tool call
+  jq -cn --arg p "$1" --arg o "$2" --arg n "$3" \
+    '{tool_name:"Edit",tool_input:{file_path:$p,old_string:$o,new_string:$n}}'
+}
+for r159_proj in main worktree; do
+  REPO_ROOT="$(r159_dir "$r159_proj")" feed "$PATH" append-only-docs-edit.sh ALLOW \
+    "the heading correction on a worktree's entry, the project directory the $r159_proj" \
+    "$(r159_edit "$R159_WT/$R159_HEAD" '# 2026-01-01 · session 2 — R' '# 2026-01-01 · session 5 — R')"
+  REPO_ROOT="$(r159_dir "$r159_proj")" feed "$PATH" append-only-docs-edit.sh BLOCK \
+    "and a body edit of the same entry, the project directory the $r159_proj" \
+    "$(r159_edit "$R159_WT/$R159_HEAD" 'Body.' 'Other.')"
+done
+
 # THE TWO HALVES, HELD TO ONE PATH SET. <path in a checkout> <verdict> <what>:
 # the three directory names and the three near-misses of each. The Edit half is
 # handed an Edit of the file, which exists in every checkout; the Bash half a
@@ -309,12 +368,14 @@ req GH-159.2
 while read -r r159_rel r159_want r159_what; do
   for r159_kind in main worktree other; do
     r159_abs="$(r159_dir "$r159_kind")/$r159_rel"
+    r159_trade=
+    [ "$r159_kind" = other ] && [ "$r159_want" = BLOCK ] && r159_trade='ACCEPTED TRADE, not a defect: '
     REPO_ROOT="$R159_MAIN" feed "$PATH" append-only-docs-edit.sh "$r159_want" \
-      "agreement, the Edit half: $r159_what, $r159_rel, in the $r159_kind checkout" \
+      "${r159_trade}agreement, the Edit half: $r159_what, $r159_rel, in the $r159_kind checkout" \
       "$(r159_call Edit "$r159_abs")"
     while IFS=$'\t' read -r r159_rule r159_cmd; do
       REPO_ROOT="$R159_MAIN" feed "$PATH" append-only-docs.sh "$r159_want" \
-        "agreement, the Bash half, $r159_rule: $r159_what, $r159_rel, in the $r159_kind checkout" \
+        "${r159_trade}agreement, the Bash half, $r159_rule: $r159_what, $r159_rel, in the $r159_kind checkout" \
         "$(r159_bash "$r159_cmd")"
     done < <(r159_forms "$r159_abs")
   done
@@ -343,5 +404,27 @@ check append-only-docs.sh BLOCK 'a truncation with no space before the path' \
   'echo x>docs/dev-log/e.md'
 check append-only-docs.sh ALLOW 'a verb and a guarded path in two commands of one line are not one command' \
   'rm x.md; cat docs/dev-log/e.md'
+# Where each rule's own boundary decides. The outer test opens every rule, so a
+# near-miss alone never reaches one; a near-miss on a line that also names a
+# guarded entry does, and there the rule's stretch has to hold the boundary
+# itself. The redirect's is asked with the guarded entry in front of the `>`,
+# because its stretch runs on across a `;` and would reach one written after
+# (#259, filed from here).
+check append-only-docs.sh ALLOW 'rm of a notdocs/ near-miss, beside a read of a guarded entry' \
+  'rm notdocs/dev-log/e.md; cat docs/dev-log/e.md'
+check append-only-docs.sh ALLOW 'a guarded entry copied by a redirect into a notdocs/ near-miss' \
+  'cat docs/dev-log/e.md > notdocs/dev-log/e.md'
+# An option's letters with the path as its value. The boundary's first version
+# took the `t` of `-t` for a name that goes on into `docs`, and permitted what
+# had been refused; found by review of #159's branch. A hyphen inside a name is
+# not an option, and a directory named `-docs` is another directory.
+check append-only-docs.sh BLOCK 'cp -t with the guarded directory attached as its value' \
+  'cp -tdocs/dev-log x.md'
+check append-only-docs.sh BLOCK 'mv -t with the guarded directory attached, after another argument' \
+  'mv x.md -tdocs/lessons-learned'
+check append-only-docs.sh ALLOW 'a guarded name after a hyphen inside a name is another directory' \
+  'rm x-notdocs/dev-log/e.md'
+check append-only-docs.sh ALLOW 'a directory named -docs is another directory' \
+  'rm -rf ./-docs/dev-log'
 
 sourced_to_end

@@ -406,8 +406,8 @@ ABS=$(norm_path "$ABS")
 # It was anchored to the project root: the root stripped off by string prefix and
 # the remainder matched at `^docs/`, "so an identically-named path in another
 # checkout is not caught by a bare substring match". CLAUDE_PROJECT_DIR is the
-# main checkout, so in a linked worktree the remainder began with the worktree's
-# own path and the anchor matched nothing -- an existing entry there was
+# main checkout in a session started there, so in a linked worktree the
+# remainder began with the worktree's own path and the anchor matched nothing -- an existing entry there was
 # permitted, and a linked worktree is where CLAUDE.md sends every agent to work.
 # The guard covered the checkout nobody edits in and not the one everybody does.
 #

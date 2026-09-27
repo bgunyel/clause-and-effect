@@ -72,9 +72,9 @@
 # permitted (review of #234, round 1). So every example the bullet gives is
 # also fed to its guard, with the verdict the bullet states, and the Edit guard
 # is fed both tools the bullet names, in both directions it names. The
-# sentences rested on three open issues: #176 for a `>` read out of a heredoc,
-# #237 for a `sed -i`, an `rm` or an `mv` read out of one, and #159 for the
-# Edit guard. Each is cited on the rows it owns, in the label, so a search for
+# sentences rest on two open issues, #176 for a `>` read out of a heredoc and
+# #237 for a `sed -i`, an `rm` or an `mv` read out of one, and rested on a
+# third, #159, for the Edit guard, until it closed. Each is cited on the rows it owns, in the label, so a search for
 # the issue's number finds them. What was measured is that each remedy #159
 # proposed turned its rows red -- resolving the enclosing repository with git,
 # and matching the directory's trailing segments -- and that taking the `>`
@@ -152,9 +152,9 @@ requirement GH-157.2 <<'REQ'
 - direction: static: it reads the README's text against literals
 - note: Until #159 the last sentence was an instruction to hold the rule by
   hand where the guard did not, because the claim was false there. Whether
-  the guards behave as the bullet says is GH-157.3's. The `lacks` is one phrase, and reads the whole section: the
-  same claim in other words after the span is not seen, which is the limit
-  #145 owns.
+  the guards behave as the bullet says is GH-157.3's. The `lacks` are one
+  phrase each, and read the whole section: the same claim in other words
+  after the span is not seen, which is the limit #145 owns.
 REQ
 requirement GH-157.3 <<'REQ'
 - text: What the Conventions section of `docs/dev-log/README.md` says the two
@@ -178,9 +178,9 @@ requirement GH-157.3 <<'REQ'
   header says so at length. Four Edit rows were permitted until #159 closed
   them, and are refused now. Measured: taking out the rule that decides each
   heredoc refusal turns a check here red, and so does putting the Edit guard
-  back on the project root, which `mutate-hooks.sh` registers. Not in the invariance families'
-  scope: it is a `doc-claim`, about what a document says of the guards, and
-  the examples are the document's own.
+  back on the project root, which `mutate-hooks.sh` registers. Not in the
+  invariance families' scope: it is a `doc-claim`, about what a document says
+  of the guards, and the examples are the document's own.
 REQ
 shape_pin 'GH-157.1:static GH-157.2:static GH-157.3'
 

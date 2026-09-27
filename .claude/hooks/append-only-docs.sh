@@ -84,8 +84,16 @@ fi
 # `>` there let the second `>` of `>>docs/dev-log/<entry>`, an append written
 # with no space, read as the boundary of a truncation, and the append was
 # refused -- found while writing this, and pinned there.
+#
+# AN OPTION'S LETTERS STAND BEFORE A PATH TOO, which the boundary's first version
+# missed: `cp -tdocs/dev-log x`, GNU's `-t` with its value attached, was refused
+# before the boundary existed and permitted by it, because `t` continues a name
+# (review of #159's branch). So after the boundary, a `-` and letters may stand
+# in front of `docs` -- an option whose value is the path. A hyphen inside a name
+# still opens nothing, because the `-` has to follow the boundary itself:
+# `x-notdocs/dev-log` stays another directory.
 APPEND_ONLY_DIR='docs/+(\./+)*(dev-log|lessons-learned|eval-reports)(/|[^A-Za-z0-9_.-]|$)'
-APPEND_ONLY='(^|[^A-Za-z0-9_.-])'"$APPEND_ONLY_DIR"
+APPEND_ONLY='(^|[^A-Za-z0-9_.-])(-[A-Za-z]+)?'"$APPEND_ONLY_DIR"
 
 if echo "$COMMAND" | grep -qE "$APPEND_ONLY"; then
   # rm / mv / cp over an existing entry, or over the directory itself.
@@ -101,7 +109,7 @@ if echo "$COMMAND" | grep -qE "$APPEND_ONLY"; then
   # spelling because the verb is read and its options are not. `>>` is the
   # documented way to append and stays permitted; the check suite pins the
   # refusal so that it is a decision rather than a surprise.
-  if echo "$COMMAND" | grep -qE "(^|[;&|]|\s)(rm|mv|cp|truncate|tee)\s+([^;&|]*[^;&|A-Za-z0-9_.-])?$APPEND_ONLY_DIR"; then
+  if echo "$COMMAND" | grep -qE "(^|[;&|]|\s)(rm|mv|cp|truncate|tee)\s+([^;&|]*[^;&|A-Za-z0-9_.-])?(-[A-Za-z]+)?$APPEND_ONLY_DIR"; then
     echo "Blocked: removing or overwriting an append-only docs directory, or a file under one. CLAUDE.md treats docs/dev-log/, docs/lessons-learned/ and docs/eval-reports/ as history; corrections belong in a new entry." >&2
     exit 2
   fi
