@@ -739,6 +739,7 @@ bash-guard-unbounded-on-the-left%append-only-docs.sh%s/^APPEND_ONLY='(^|\[^A-Za-
 redirect-boundary-admits-a-redirect%append-only-docs.sh%s/\[^>|&A-Za-z0-9_.-\])?\$APPEND_ONLY_DIR/[^A-Za-z0-9_.-])?$APPEND_ONLY_DIR/%GH-159.2%caught
 verb-rule-unbounded-on-the-left%append-only-docs.sh%s/\\s+(\[^;&|\]\*\[^;&|A-Za-z0-9_.-\])?(-\[A-Za-z\]+)?\$APPEND_ONLY_DIR/\\s+[^;\&|]*$APPEND_ONLY_DIR/%GH-159.2%caught
 option-letters-not-a-boundary%append-only-docs.sh%s/(-\[A-Za-z\]+)?\$APPEND_ONLY_DIR/$APPEND_ONLY_DIR/%GH-159.2%caught
+gate-option-letters-not-a-boundary%append-only-docs.sh%s/^APPEND_ONLY='(^|\[^A-Za-z0-9_.-\])(-\[A-Za-z\]+)?'"\$APPEND_ONLY_DIR"$/APPEND_ONLY='(^|[^A-Za-z0-9_.-])'"$APPEND_ONLY_DIR"/%GH-159.2%caught
 redirect-rule-unbounded-on-the-left%append-only-docs.sh%s/>\\s\*(\[^>|&\]\*\[^>|&A-Za-z0-9_.-\])?\$APPEND_ONLY_DIR/>\\s*[^>|\&]*$APPEND_ONLY_DIR/%GH-159.2%caught
 heading-correction-read-off-the-root%append-only-docs-edit.sh%s@^  \[\[ \$abs =~ \^\.\*\$GUARDED_RE \]\] && \[ "\${BASH_REMATCH\[1\]}" = dev-log \] || return 1$@  case "${abs#"$ROOT"/}" in docs/dev-log/*) ;; *) return 1 ;; esac@%GH-159.1%caught
 heading-correction-any-dev-log-pair%append-only-docs-edit.sh%s@^  \[\[ \$abs =~ \^\.\*\$GUARDED_RE \]\] && \[ "\${BASH_REMATCH\[1\]}" = dev-log \] || return 1$@  case "$abs" in */docs/dev-log/*) ;; *) return 1 ;; esac@%GH-159.1%caught

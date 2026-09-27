@@ -111,14 +111,14 @@ FILE=$(printf '%s' "$PAYLOAD" | cs_tool_input file_path) || exit 2
 # which is a trade taken once and named; a second tool would take it twice, on
 # a tool the reader does not need.
 #
-# Lexical, not physical: no symlink is resolved. That is deliberate as well as
-# cheap. Resolving the file and not the root, or either through a root that is
-# itself reached by a symlink, is how the two sides stop being comparable --
-# which is the defect above in a second spelling. Both sides go through the same
-# function here and neither touches the filesystem, so they cannot disagree.
-# A guarded file reached through a symlink is therefore still permitted; that is
-# a smaller hole than the one being closed, and it is not a spelling anyone
-# writes by accident.
+# Lexical, not physical: no symlink is resolved, and nothing here touches the
+# filesystem. A guarded file reached through a symlink whose own path carries no
+# guarded segment is therefore permitted; that is a smaller hole than the one
+# being closed, and it is not a spelling anyone writes by accident. (This
+# paragraph also argued that resolving the file and not the root would leave the
+# two sides incomparable. Since #159 the root is compared with nothing for the
+# verdict -- it only resolves a relative path and shortens the one the refusal
+# names -- so that reason no longer applies, and the one above stands alone.)
 #
 # It carries no cs_ prefix on purpose. That namespace belongs to
 # lib/command-scan.sh, which this hook sources for its input reader alone and
@@ -453,8 +453,9 @@ ABS=$(norm_path "$ABS")
 GUARDED_RE='/docs/(dev-log|lessons-learned|eval-reports)/'
 
 # The path a reader can act on: relative to the project root when it is under
-# it, and whole when it is not, since a worktree's entry has no spelling
-# relative to the main checkout.
+# it -- a worktree's entry seen from the main checkout, which it stands inside,
+# is `.claude/worktrees/<name>/docs/...` -- and whole when it is not, since the
+# main checkout's entry seen from a worktree has no spelling under the worktree.
 case "$ABS" in
   "$ROOT"/*) SHOWN="${ABS#"$ROOT"/}" ;;
   *)         SHOWN="$ABS" ;;
