@@ -13,8 +13,8 @@
 # a run of the registered report, and GH-109.4 would have gone green for a hook
 # no check ran. The sixth review of PR #169 filed it; nothing was a false green
 # when it was filed, since every copy that reached `report_says` was a `cp`.
-# The condition is now `cmp -s` against `$HOOKS/report-stale-branches.sh`, so
-# the invariant is the test itself. Under an override $HOOKS is the mutated
+# The condition is now the name and `cmp -s` against
+# `$HOOKS/report-stale-branches.sh` both, so the invariant is the test itself. Under an override $HOOKS is the mutated
 # copy, and every fixture copies from $HOOKS, so a copy of a mutated report
 # still matches and is still recorded.
 #
@@ -56,9 +56,9 @@ section "=== issue #187: report_says records the session report only for a byte 
 
 requirement GH-187 <<'REQ'
 - text: `report_says <PATH> <script> <literal> <label>` records a run of
-  `report-stale-branches.sh` only when `cmp -s` finds the script it ran
-  byte-identical to `$HOOKS/report-stale-branches.sh`. A modified copy is not
-  recorded, whatever its name, since it is not the registered report; an
+  `report-stale-branches.sh` only for a script of that name which `cmp -s`
+  finds byte-identical to `$HOOKS/report-stale-branches.sh`. A modified copy
+  keeping the name is not recorded, since it is not the registered report; an
   unmodified copy is recorded, against the tag in force. The verdict the
   helper prints is unchanged either way.
 - from: #187, the sixth review of PR #169
@@ -92,7 +92,7 @@ cp "$HOOKS/report-stale-branches.sh" "$R187_COPY"
 cp "$HOOKS/report-stale-branches.sh" "$R187_MODIFIED"
 printf '# a line #187 appended, so that this is not the registered report\n' >> "$R187_MODIFIED"
 cmp -s "$R187_COPY" "$HOOKS/report-stale-branches.sh" \
-  && [ -s "$R187_MODIFIED" ] && ! cmp -s "$R187_MODIFIED" "$HOOKS/report-stale-branches.sh" || {
+  && ! cmp -s "$R187_MODIFIED" "$HOOKS/report-stale-branches.sh" || {
   echo "the #187 report copies were not made as a byte copy and a modified one; the checks against them prove nothing" >&2
   exit 1
 }

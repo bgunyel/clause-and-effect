@@ -129,9 +129,10 @@ hook_path() {  # hook_path <script|/absolute/hook>
 # one built to crash -- and is not the registered hook, so it is not recorded.
 # The one exception is the session report, which reads the repository it sits in
 # and so is only ever run as a copy placed in a fixture repository:
-# `report_says` records that copy as the report when it is byte-identical to
-# $HOOKS/report-stale-branches.sh, and a modified one is not recorded whatever
-# its name (#187; until then the name was the whole test). `anc_report` runs a
+# `report_says` records a copy carrying the report's name as the report only
+# when it is byte-identical to $HOOKS/report-stale-branches.sh, so a modified
+# one keeping the name is not recorded (#187; until then the name was the whole
+# test). `anc_report` runs a
 # copy too and records nothing; see there for why.
 #
 # Written from a subshell as often as not -- `cap_timed` is called inside $( ),
@@ -604,8 +605,10 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
   #
   # THE BYTES ARE THE TEST, and not the name (#187). `ran` refuses an absolute
   # path because a fixture copy is not the registered hook; this steps around
-  # that rule only for a copy `cmp -s` finds byte-identical to
-  # $HOOKS/report-stale-branches.sh. The name alone was the test until #187,
+  # that rule only for a copy carrying the name that `cmp -s` also finds
+  # byte-identical to $HOOKS/report-stale-branches.sh. The name test is kept
+  # from before and now decides only a byte copy under another name, which no
+  # fixture makes and nothing checks. The name alone was the test until #187,
   # resting on an invariant -- every fixture carrying this name is a byte copy
   # -- that this comment stated and nothing enforced, while `nolib_path` and
   # `halflib_path` build modified copies of other hooks a few hundred lines
