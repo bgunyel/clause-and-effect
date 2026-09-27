@@ -130,7 +130,7 @@ jobs:
 
       - name: run the check suite
         id: suite
-        timeout-minutes: 1  # TEMPORARY: observe a step timeout (#208)
+        timeout-minutes: 20
         run: |
           out="$RUNNER_TEMP/check-hooks"
           mkdir -p "$out"
