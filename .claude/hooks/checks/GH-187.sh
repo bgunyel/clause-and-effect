@@ -13,10 +13,16 @@
 # a run of the registered report, and GH-109.4 would have gone green for a hook
 # no check ran. The sixth review of PR #169 filed it; nothing was a false green
 # when it was filed, since every copy that reached `report_says` was a `cp`.
-# The condition is now the name and `cmp -s` against
-# `$HOOKS/report-stale-branches.sh` both, so the invariant is the test itself. Under an override $HOOKS is the mutated
+# The condition is now `cmp -s` against `$HOOKS/report-stale-branches.sh`, so
+# the invariant is the test itself. Under an override $HOOKS is the mutated
 # copy, and every fixture copies from $HOOKS, so a copy of a mutated report
 # still matches and is still recorded.
+#
+# NO NAME TEST beside the bytes. The first version of this fix kept one, and
+# round 1 of its review measured that deleting it left every check
+# green: it could refuse only a byte copy under another name, and that is the
+# registered report's bytes, so a run of it. A clause no check can fail is not
+# carried here.
 #
 # WHAT IS DRIVEN is the helper, run inside a subshell against a private run
 # record, which prints what the helper printed on either stream and the FAILED
@@ -31,11 +37,29 @@
 # mutated copy of the hooks and never a mutated suite. The evidence is a
 # recorded run instead, as GH-144.4's is.
 #
-# MEASURED, 2026-09-28, three whole runs of the suite, each scratch edit made
-# on a copy of the library backed up first and restored from that backup, its
-# sha256 checked. Before the fix, and again with the fix's `cmp -s` guard taken
-# out and the name test left, the run failed one row of 6228, the first below,
-# and printed the same failure both times:
+# MEASURED, 2026-09-28, round 2 of the review: nine whole runs of the suite,
+# each in its own scratch clone of the branch with one edit applied there, so
+# no backup of this checkout was needed. Each run's record was copied out just
+# before end-of-run.sh reads it.
+#
+#   the edit                                     exit  FAIL rows          runs
+#   the base, cd67c8e, which has no GH-187       0     none of 6226       10
+#   none, this fix                               0     none of 6228       10
+#   the base's name-only test put back           1     the first row      10
+#   `cmp -s` deleted, `ran` unconditional        1     the first row      13
+#   the recording line deleted                   1     the second row,     -
+#                                                      and GH-109.4's
+#   `cmp -s` against no-git-push.sh instead      1     as the line above   -
+#   `ran` given REQ=GH-109.4 for the report      1     the second row     10
+#   R187_TAB set to a blank                      1     the second row     10
+#   the fixture's appended line not written      1     none; the fixture   -
+#                                                      guard stopped the
+#                                                      run, at 6075 rows
+#
+# `runs` is what GH-109.4 derived, `report-stale-branches.sh was run N times
+# under a tag`. The base's record and this fix's, sorted, are identical, all
+# 16 lines, so the fix gives up no case. With the name test put back, the first
+# row printed this, the TAB written <TAB> here:
 #
 #     FAIL report_says records nothing for a copy that keeps the report's name and not its bytes
 #          want |  ok   report r187 driven check
@@ -43,23 +67,26 @@
 #     record |||
 #          got  |  ok   report r187 driven check
 #     FAILED=0
-#     record |GH-187	report-stale-branches.sh||
+#     record |GH-187<TAB>report-stale-branches.sh||
 #
-# The second row's label was held to what it claims the same way: with the
-# whole recording line deleted from `report_says`, it went red, `record |||`
-# where it wanted the tagged name, and the first row stayed green -- so the
-# second row is what stops the fix passing by recording nothing. That run failed
-# one more row, GH-109.4's `settings.json registers report-stale-branches.sh,
-# and no tagged check ran it`, which is the record doing its job.
+# The 13 is the #98 self-test's crashing fixtures, recorded three times as the
+# report under `GH-98 GH-124`: with no `cmp -s`, nothing keeps any script out
+# of the record, and nothing but the first row goes red. The name test would
+# keep those three out too, since they carry other names, but `cmp -s` already
+# does, so it is not what holds them. GH-109.4's row is `settings.json
+# registers report-stale-branches.sh, and no tagged check ran it`, which is the
+# record doing its job. The second row going red on its own, with the right
+# tool recorded under the wrong tag, is what holds the "against the tag in
+# force" half of its label.
 
 section "=== issue #187: report_says records the session report only for a byte copy of it ==="
 
 requirement GH-187 <<'REQ'
 - text: `report_says <PATH> <script> <literal> <label>` records a run of
-  `report-stale-branches.sh` only for a script of that name which `cmp -s`
-  finds byte-identical to `$HOOKS/report-stale-branches.sh`. A modified copy
-  keeping the name is not recorded, since it is not the registered report; an
-  unmodified copy is recorded, against the tag in force. The verdict the
+  `report-stale-branches.sh` only for a script which `cmp -s` finds
+  byte-identical to `$HOOKS/report-stale-branches.sh`. A modified copy is not
+  recorded, even one keeping the name, since it is not the registered report;
+  an unmodified copy is recorded, against the tag in force. The verdict the
   helper prints is unchanged either way.
 - from: #187, the sixth review of PR #169
 - kind: defect-permitting
@@ -69,8 +96,10 @@ requirement GH-187 <<'REQ'
   every fixture carrying the name is a byte copy -- that a comment stated and
   nothing enforced. Byte equality makes that invariant the condition. The
   alternative, builders registering their copies in a list, was rejected: a
-  builder could register a modified copy as easily as it makes one. The fix
-  gives up no case: every copy the suite runs today is a `cp` of the file.
+  builder could register a modified copy as easily as it makes one. The name
+  test was dropped with it: it could only refuse a byte copy under another
+  name, which is the registered report's bytes. The fix gives up no case:
+  every copy the suite runs today is a `cp` of the file.
 REQ
 shape_pin 'GH-187:static'
 
@@ -78,6 +107,9 @@ shape_pin 'GH-187:static'
 # quoted string here opens with a result's prefix: #104's audit at the foot of
 # the suite reads every such string as a result printed around pass and fail.
 R187_INDENT='  '
+# The record's two fields are TAB-separated; written as $'\t' so that no editor
+# or reflow can turn the expectation into spaces.
+R187_TAB=$'\t'
 # THE FIXTURES, two copies of the report outside any repository, where it says
 # the branches were not read and exits 0: one a byte copy, and one with a
 # comment line appended, which changes nothing it does and keeps its name. Each
@@ -114,7 +146,7 @@ record ||" \
 tok 'and records a byte copy as the report, against the tag in force' \
 "${R187_INDENT}ok   report r187 driven check
 FAILED=0
-record |GH-187	report-stale-branches.sh|" \
+record |GH-187${R187_TAB}report-stale-branches.sh|" \
     "$(r187_report "$R187_COPY")"
 
 sourced_to_end
