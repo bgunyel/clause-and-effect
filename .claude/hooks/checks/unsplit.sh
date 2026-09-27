@@ -10070,13 +10070,14 @@ tok 'every_hook: two permitting hooks pass' 'ok' "$(every_hook_of allow-0 allow-
 # capitals or digits, and the `function` keyword with or without parens. Comments
 # are stripped first, as cs_calls strips them.
 #
-# Three functions keep out of it on purpose, by that first gap: `unarmed` and
-# `prose_count` read grep's status and run no hook, so they name it
+# Some functions keep out of it on purpose, by that first gap, because they read
+# a status and run no hook. `unarmed` and `prose_count` read grep's, name it
 # `grep_status` rather than `rc`, and #219's issue file drives them against a
 # directory, a missing file and a readable one instead. #174's
-# `farm_asked_of_shell` reads awk's, names it `awk_status`, and is driven by its
-# own issue file over a missing file and over none. Spelled `rc=$?`, any of the
-# three turns this red and asks for a crashing-hook fixture it has no use for.
+# `path_lines_asking_shell` reads awk's, names it `awk_status`, and is driven
+# by its own issue file over a missing file and over none. Spelled `rc=$?`, any
+# such function turns this red and asks for a crashing-hook fixture it has no
+# use for.
 STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$SUITE_TEXT" \
   | awk '/^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
            fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
