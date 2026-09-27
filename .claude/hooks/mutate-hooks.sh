@@ -563,22 +563,22 @@ TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[
 # 200 check results, so the rate was taken again the same way against the merged
 # tree: 274 s, 250 s, 266 s. The slowest is under the reading above, so the
 # constant does not move -- the suite grew without the run getting slower.
-# RE-MEASURED on the day MEASURED_ON names, on PR #260 (#166, #266, #273) --
-# the date stands there and not here, once -- whose rows took the
-# suite past a quarter over the size below and turned the staleness check red.
-# Three runs the same way, at 9d809aa: 1118 s, 908 s, 1272 s. NOT ON AN IDLE
-# MACHINE: other sessions were running this suite beside it, and the load
-# average at the start of each run was 33.7, 14.2 and 17.8. The slowest is
-# carried, as above, so the figure can only overstate what a pass costs here;
-# a quiet machine will print a budget that is too long, never one that is too
-# short. Re-take it on an idle machine to get the smaller number.
-MEASURED_SECONDS_PER_RUN=1272
+# RE-MEASURED on PR #260 (#166, #266, #273), whose rows took the suite past a
+# quarter over the size below and turned the staleness check red. Twice. The
+# first three runs were taken while other sessions ran this suite beside them,
+# at load averages of 33.7, 14.2 and 17.8: 1118 s, 908 s, 1272 s, and 1272 was
+# carried with the load written beside it. Round 3 of that review timed a run
+# at load 10 in 390 s and called the figure about three times too high, so it
+# was taken again on a quieter machine, the same way, against the tree at
+# c2bd412: 430 s, 388 s, 325 s, at load averages of 3.9, 8.7 and 3.7. The
+# slowest is carried, as above; the day is MEASURED_ON's, and stands only there.
+MEASURED_SECONDS_PER_RUN=430
 # The day it was taken, printed by --list beside it. It stood as a literal inside
 # that printf until the re-measurement above, which moved the rate and left the
 # printed date naming the previous measurement -- a second copy of one fact,
 # which went stale the first time the fact moved. So it is a constant here,
 # moved with the rate.
-MEASURED_ON=2026-09-27
+MEASURED_ON=2026-09-28
 # The suite's size when the rate was last CONFIRMED, as the number of check
 # results its OWN matrix line reports -- which is a little under the total it
 # prints, because the last findings are appended after the record is copied for
@@ -593,7 +593,7 @@ MEASURED_ON=2026-09-27
 # shape as correcting a stale count in prose rather than deriving it. It moves
 # here because the rate above was actually re-taken at this size, not because
 # the tree grew.
-MEASURED_AT_RESULTS=6779
+MEASURED_AT_RESULTS=6892
 
 # WHAT MAKES A ROW RUNNABLE, asked in one place because two callers need the
 # same answer and gave different ones. Pass one below refuses a row for each
