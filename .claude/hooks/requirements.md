@@ -1460,3 +1460,8 @@ it has no entry above (Q16).
   project directory, the accepted trade, and in #157's, whose fixture entries
   are drafts the README says are refused. It adds its requirements in the
   pull request that fixes it
+- #282: with `grep` absent from `PATH`, both append-only hooks exit 0, a
+  fail-open for a missing tool that predates #159. Cited in #159's issue
+  file, where the derivation of which hooks the checkout question reaches
+  reads a failed grep as a hook it could not read, and reaches it. It adds its
+  requirements in the pull request that fixes it

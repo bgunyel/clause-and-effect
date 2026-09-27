@@ -320,15 +320,21 @@ tok 'a prompt or an http hook is no registration at all, where a command hook wi
 # And with no grep to read the hooks with, every registered hook is reached and
 # none drops out as "does not read the root": the Bash hooks that name it only in
 # prose or not at all, and the SessionStart hook, join the list. PATH holds jq
-# and sort alone. Its "grep: command not found" lines are the condition set up,
-# so they are discarded; the verdict is read off PIPESTATUS, not off stderr.
+# and sort alone. Its "grep: command not found" lines are the condition set up:
+# stderr is discarded, and the suite's command_not_found_handle writes to a
+# record of this fixture's own instead of the run's -- the run's record fails
+# the suite on any line, and this miss is deliberate. The record is then asked
+# to name grep and nothing else, so the condition is shown to have held.
 mkdir -p "$R159_DERIVE/bin"
 for r159_tool in jq sort; do
   ln -sf "$(command -v "$r159_tool")" "$R159_DERIVE/bin/$r159_tool"
 done
 tok 'and with no grep on PATH, a hook whose code cannot be read is reached, not dropped' \
     "$(printf '%s\n' '<no-command>' x-args.sh x-badre.sh x-bare.sh x-edit.sh x-flags.sh x-hash.sh x-length.sh x-missing.sh x-multi.sh x-plain.sh x-prose.sh x-root.sh x-session.sh x-star.sh x-trailing.sh)" \
-    "$(PATH="$R159_DERIVE/bin"; r159_rooted "$R159_DERIVE/settings.json" "$R159_DERIVE/hooks" 2>/dev/null)"
+    "$(PATH="$R159_DERIVE/bin"; NOT_FOUND="$R159_DERIVE/not-found"
+       r159_rooted "$R159_DERIVE/settings.json" "$R159_DERIVE/hooks" 2>/dev/null)"
+tok 'and what was missing in that run was grep, and nothing else' \
+    'grep' "$(sed 's/.*: \([^:]*\): command not found$/\1/' "$R159_DERIVE/not-found" 2>&1 | sort -u)"
 printf '%s\n' '{"hooks":' > "$R159_DERIVE/broken.json"
 tok 'and a settings file jq cannot read is a reached hook that names no file, not an empty derivation' \
     '<jq-failed>' "$(r159_rooted "$R159_DERIVE/broken.json" "$R159_DERIVE/hooks")"
