@@ -9039,8 +9039,14 @@ farm_stub_gh "$WITH_JQ_BIN" || {
 
 cp -a "$WITH_JQ_BIN" "$NO_JQ_BIN"
 rm -f "$NO_JQ_BIN/jq"
-[ -n "$( PATH="$WITH_JQ_BIN"; command -v jq )" ] \
-  && [ -z "$( PATH="$NO_JQ_BIN"; command -v jq )" ] \
+# Whether each farm holds a `jq` is asked of the directory, through `farm_has`,
+# and never of the calling shell, for the reason GH IN THE FARM gives: a `jq`
+# function exported by the invoker's profile resolves ahead of PATH, under the
+# jq-less PATH too, and this guard read it as a `jq` the copy still held and
+# aborted the whole run on that host (#174). The issue file of #174 drives this
+# guard's text under a shell that defines `jq`.
+farm_has "$WITH_JQ_BIN" jq \
+  && ! farm_has "$NO_JQ_BIN" jq \
   && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$NO_JQ_BIN") | grep -c '^[<>]')" = 1 ] \
   && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$NO_JQ_BIN") | grep '^[<>]')" = '< jq' ] || {
   echo "the jq-less PATH fixture is not the with-jq one minus jq; the checks using it prove nothing" >&2
@@ -10064,11 +10070,13 @@ tok 'every_hook: two permitting hooks pass' 'ok' "$(every_hook_of allow-0 allow-
 # capitals or digits, and the `function` keyword with or without parens. Comments
 # are stripped first, as cs_calls strips them.
 #
-# Two functions keep out of it on purpose, by that first gap: `unarmed` and
+# Three functions keep out of it on purpose, by that first gap: `unarmed` and
 # `prose_count` read grep's status and run no hook, so they name it
 # `grep_status` rather than `rc`, and #219's issue file drives them against a
-# directory, a missing file and a readable one instead. Spelled `rc=$?`, either
-# turns this red and asks for a crashing-hook fixture it has no use for.
+# directory, a missing file and a readable one instead. #174's
+# `farm_asked_of_shell` reads awk's, names it `awk_status`, and is driven by its
+# own issue file over a missing file and over none. Spelled `rc=$?`, any of the
+# three turns this red and asks for a crashing-hook fixture it has no use for.
 STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$SUITE_TEXT" \
   | awk '/^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
            fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
