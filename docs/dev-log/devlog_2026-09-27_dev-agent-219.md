@@ -1,9 +1,9 @@
 # 2026-09-27 · dev-agent-219 — #219: an absence helper fails when grep could not read its file
 
 **Written 2026-09-27.** Branch `worktree-issue-219-unarmed-exit-status`, cut
-with `--no-track` from `origin/dev-05` at `2303e9b`. The work is `668837d` and
-`92a7332`; this entry and the review rounds on PR #254 follow them. This is
-lane 6 (suite helpers, `checks/library.sh`) of wave 1.
+with `--no-track` from `origin/dev-05` at `2303e9b`. It has two commits
+(`668837d`, `92a7332`) plus this entry, and is 3 ahead of `origin/dev-05` and 0
+behind it. This is lane 6 (suite helpers, `checks/library.sh`) of wave 1.
 
 ## What was done
 
@@ -35,11 +35,7 @@ lane 6 (suite helpers, `checks/library.sh`) of wave 1.
   the missing-file rows, red only because the message text changed.
   - `668837d`'s message counted all five as evidence of the defect.
   - The spec review caught that, and `92a7332`'s message corrects it.
-- **Fixed tree at `92a7332`:** 6222 ok, 0 FAIL.
-- **At `698981a`:** 6223 ok, 0 FAIL. This entry adds one row, because
-  GH-177's relabel loop drives one row per dev-log entry. The assistant
-  first restated 6222 for the head in the PR body, and `rev-agent-219`'s round
-  1 caught it. The assistant then re-measured 6223 in a child bash.
+- **Fixed tree:** 6222 ok, 0 FAIL. It was measured after both commits.
 - **Six mutations** of the fixed helpers were run in a child-bash harness in
   the session scratchpad, not in `mutate-hooks.sh`. `checks/` is tooling, so
   it is not a mutation target. Each mutation turned a named row red:
@@ -50,8 +46,8 @@ lane 6 (suite helpers, `checks/library.sh`) of wave 1.
   - M5: `prose_count` treats 1 as unread.
   - M6: the old shape, a `-r` guard and then any non-0 status read as absent.
   - The assistant's first spellings of M1 and M6 were malformed: one was a
-    syntax error, and the other matched twice. The assistant corrected both
-    and reran them. The malformed runs are not counted.
+    syntax error, and the other matched twice. Both were rerun corrected. The
+    malformed runs are not counted.
 
 ## Dead ends, attributed
 
@@ -77,4 +73,4 @@ lane 6 (suite helpers, `checks/library.sh`) of wave 1.
 
 - #192 and #145 also edit `unarmed`. Whichever lands second merges by hand.
   This change was kept to the helper bodies and their comments.
-- The pull request into `dev-05` is #254, and it is under review in rounds.
+- The pull request into `dev-05` is not opened yet.
