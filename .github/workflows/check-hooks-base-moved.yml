@@ -8,7 +8,10 @@
 # re-run and not a dispatch, and why it waits.
 #
 # ITS ONE WRITE SCOPE, AND WHY. `actions: write` is what cancelling and
-# re-running a workflow run needs. It is confined to this job, which runs only
+# re-running a workflow run needs; it also covers reading a run's artifact,
+# which is how the script learns what commit a run tested and leaves alone a
+# run that already tested the merge on the new tip (#208). No scope was added
+# for that. It is confined to this job, which runs only
 # on a push to dev-* -- Bertan's pushes and pull request merges, never a fork --
 # and executes nothing but that script from the commit just pushed. The suite
 # never runs here; check-hooks.yml runs it with a read-only token.
@@ -33,6 +36,9 @@ jobs:
   rerun:
     name: re-run check-hooks on open pull requests
     runs-on: ubuntu-24.04
+    # The script's DEADLINE_SECONDS (600 by default) bounds its waiting in
+    # total, so a slow pull request cannot run this out before the ones after
+    # it are re-run (#208).
     timeout-minutes: 20
     permissions:
       actions: write        # cancel and re-run a pull request's check-hooks run

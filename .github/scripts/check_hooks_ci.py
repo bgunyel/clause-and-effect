@@ -47,6 +47,14 @@ Two subcommands, one per thing a green run has to be true about:
     same budget, and the summary says how many bytes were cut. An exit 0
     shows no tail, even when the log does not support it (#228).
 
+    How the suite step ended is recorded beside the counts, as ``ended``
+    (#208): ``exited`` when the step wrote the suite's exit status, else
+    ``cancelled`` or ``timed-out`` by what the step's outcome reads for each
+    (observed on real runs, cited in check-hooks.yml's header), else
+    ``unknown``, which fails this. ``exit_status`` is null unless the suite
+    exited. Before #208 a missing status was written as 124, so a routine
+    cancel -- 21 of 60 runs -- read as a 20-minute hang.
+
     The job's colour comes from the suite's exit status, not from here. This
     exits 1 only when that status claims a pass the log does not support -- an
     exit 0 with a failing row, with a log whose last non-empty line is not

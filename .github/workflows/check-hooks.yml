@@ -53,6 +53,28 @@
 # invocation has been seen spinning for 11 hours (#199) and #127 records the 5 s
 # per-call timeout exceeded; the job timeout bounds the rest.
 #
+# EVERY RUN'S TITLE OPENS WITH ITS PULL REQUEST'S NUMBER (`run-name`), because
+# nothing else on a run's REST record says which pull request started it: its
+# `pull_requests` lists every open pull request whose head matches, so two pull
+# requests sharing a head each see both runs. rerun-on-base-move.sh reads the
+# number from `display_title` to re-run a pull request's own run (#208). The
+# workflow, job and check names are unchanged.
+#
+# HOW THE SUITE ENDED IS RECORDED, NOT INFERRED FROM A MISSING STATUS (#208).
+# The suite step writes the suite's exit status unless something stops it.
+# Before #208 a missing status read as 124, a timeout, and 21 of 60 runs were
+# cancels. `report` now records `ended` -- exited, cancelled, timed-out, or
+# unknown -- beside an exit status that is null unless the suite exited, and
+# tells a cancel from a timeout by `steps.suite.outcome`. What that reads was
+# observed, not taken from documentation, on this workflow's own runs on
+# 2026-09-27:
+#   - a step `timeout-minutes` expiry: outcome `failure`, the job red --
+#     run 36320798357, with the step's timeout set to 1 minute for the purpose;
+#   - a workflow cancel: outcome `cancelled`, the job cancelled -- run
+#     36304585775 (the step's conclusion, read from the jobs API) and
+#     run CANCEL_RUN_ID (the value the report step logged).
+# A missing status with any other outcome is `unknown` and fails the report.
+#
 # #203 will add `merge_group`. For that event `github.sha` is the merge-queue
 # commit, which is what the checkout falls back to, and verify-merge is scoped
 # to pull_request because a merge-queue commit is a different shape.
