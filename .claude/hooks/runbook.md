@@ -8,9 +8,10 @@ these are a runbook and not checks, and #110 wrote it.
 
 A requirement verified here is written in `requirements.md`, or under
 `requirements/`, with `seam: none` and `verify: runbook §<n>`, and `§<n>` is a
-`## §<n>` heading below. `check-hooks.sh` fails on a `verify: runbook §<n>` that
-names no such heading (#104), and on a section whose **Verifies** line does not
-name exactly the requirements that point at it (#110). **Also observes** names
+`## §<n>` heading below, and the only one numbered `<n>`. `check-hooks.sh`
+fails on a `verify: runbook §<n>` that names no such heading (#104), on a
+number that heads two sections, and on a section whose **Verifies** line does
+not name exactly the requirements that point at it (#110). **Also observes** names
 requirements a section reads the live half of while checks cover the rest; they
 point at no section, because an entry with `seam: none` has no check tagged
 with it, and these have checks.
@@ -88,12 +89,15 @@ Record the fork point **before** the reset, which is what `baseRef` gave, and
 again after.
 
 ```bash
-# in the session: call EnterWorktree, then, as the first act in the new worktree:
-git fetch origin
+# in the session: call EnterWorktree, then, in the new worktree, read before
+# any fetch, so the counts are against the refs the harness forked from:
 B=$(git branch --show-current); echo "$B"
 git rev-list --left-right --count origin/dev-NN..."$B"
 git rev-list --left-right --count origin/main..."$B"
+git rev-list --left-right --count origin/dev-NN...origin/main
 git for-each-ref --format='%(upstream)' "refs/heads/$B"
+# and only then the reset, CLAUDE.md's first act, against a fresh dev branch:
+git fetch origin
 git reset --hard origin/dev-NN
 git rev-list --left-right --count origin/dev-NN..."$B"
 git for-each-ref --format='%(upstream)' "refs/heads/$B"
@@ -101,9 +105,13 @@ git for-each-ref --format='%(upstream)' "refs/heads/$B"
 
 Expected before the reset, with `baseRef` `fresh` and no
 `.claude/settings.local.json` overriding it: the count against `origin/main`
-prints `0	0`, and the count against `origin/dev-NN` prints what
-`git rev-list --left-right --count origin/dev-NN...origin/main` prints, since
-the branch is `origin/main`. While `origin/main` is an ancestor of
+prints `0	0`, and the count against `origin/dev-NN` prints what the third
+count, `origin/dev-NN...origin/main`, prints, since the branch is
+`origin/main`. All three are read before the fetch: a fetch between the fork
+and the reads moves `origin/main` past the branch whenever `main` has moved
+since the harness's own read, and the count then reads `1	0` for a fork that
+was right (review round 3 of the pull request that closed #110). While
+`origin/main` is an ancestor of
 `origin/dev-NN`, which §1d reads, that is the dev branch's commits ahead of
 `main` on the left and `0` on the right; while it is not, the right is the
 commits `main` has that the dev branch lacks, and neither is a difference.
@@ -172,17 +180,27 @@ If `WorktreeCreate` fires for any route, #113, the follow-up issue on a
 ### §1d The `main ancestry` line (an agent)
 
 ```bash
-git fetch origin
+bash .claude/hooks/report-stale-branches.sh </dev/null \
+  | awk '/^main ancestry:/ { p = 1; print; next } p && /^       / { print; next } p { exit }'
 git merge-base --is-ancestor origin/main origin/dev-NN; echo $?
 ```
 
-Expected: `0`, and the SessionStart report's line opens
+The report is run here, rather than read off the session's start, and this
+run fetches nothing between it and the second command, so both read the refs
+the report's own fetch left, unless another session on this machine fetches in
+the second between them. Compared with a report from the session's start, a
+fetch since then can move either ref and make two right answers disagree. The
+report fetches and reads, and removes nothing; it is the SessionStart hook,
+run by hand.
+
+Expected: `0`, and the report's line opens
 `main ancestry: origin/main is an ancestor of origin/dev-NN`. `1` and a line
 opening `main ancestry: origin/main is NOT an ancestor of origin/dev-NN -- a branch cut`
-agree as well; what differs is the two disagreeing. Each literal is the line's
-opening and not the whole of it: the `NOT` line goes on for two more lines, and
-either ends in ` (read against refs the failed fetch left behind)` when the
-report's own fetch failed, which is §6's case.
+agree as well; what differs is the two disagreeing. Each literal is the
+message's opening and not the whole of it: the `NOT` message goes on for two
+more lines, and when the report's own fetch failed, which is §6's case, the
+message's last line ends in ` (read against refs the failed fetch left behind)`
+-- its first line in the ancestor case, its third in the `NOT` case.
 
 **When it differs:** a sub-issue of #36, as *When an observation differs* says.
 A `0	0` that is not, or an upstream that is set, is the #99 defect back.
@@ -237,9 +255,10 @@ gh api repos/bgunyel/clause-and-effect \
   --jq '[.allow_squash_merge, .allow_rebase_merge, .delete_branch_on_merge] | map(tostring) | @tsv'
 ```
 
-Expected: `false	false	true` (tabs between), and the SessionStart report's
-line reads
+Expected: `false	false	true` (tabs between), and the `merge settings` line
+of the report, run by hand right after as §1d runs it, reads
 `merge settings: as required (squash off, rebase off, delete-on-merge on)`.
+A report from the session's start read the settings at another time.
 
 **When it differs:** a sub-issue of #36, as *When an observation differs* says;
 if the report's line disagrees with the API, the defect is the report's, FR-41.
@@ -364,8 +383,13 @@ pull requests: NOT READ -- gh api failed or timed out after 10s, so branches are
 main ancestry: origin/main is an ancestor of origin/dev-NN (read against refs the failed fetch left behind)
 ```
 
-The last line's middle depends on the refs the last successful fetch left, as
-§1d's does; its suffix does not.
+The fourth is the ancestor case, which is one line. Which case it is depends
+on the refs the last successful fetch left, as §1d's does, and the `NOT` case
+is as right: its message opens as §1d's `NOT` literal and runs to three lines.
+What does not depend on them is the suffix, which ends the message's last line
+in either case -- its first line here, its third in the `NOT` case (review
+round 3 of the pull request that closed #110; the source is the `main
+ancestry` block of `report-stale-branches.sh`).
 
 **When it differs:** a sub-issue of #36, as *When an observation differs* says.
 A session that does not start, or starts only after the report's 50 s, is the

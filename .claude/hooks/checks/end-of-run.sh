@@ -361,17 +361,30 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
     # getline, for the reason a split file is not: mawk aborts on a directory
     # and busybox's awk, like the CI runner's, reads it as empty and goes on,
     # so what the findings said depended on the awk (review round 2 of the pull
-    # request that closed #110). The shell says so through the environment,
-    # and it is a finding here under either.
+    # request that closed #110). The shell classifies the path and says so
+    # through the environment -- absent, not a regular file, unreadable, empty,
+    # or none of those -- and each is named in its own words below, because
+    # "not read" said the same of four states (review round 3). The two that
+    # are defects whatever points at the runbook are findings here too.
+    #
+    # A number heading two sections is counted, not merged: a set keyed by the
+    # number folded a second `## §3` into the first, so the second could hold
+    # no Verifies line and nothing said so, and `runbook §3` named one of two
+    # sections without saying which (review round 3, measured surviving green).
     runbook_read = 0; rbin = ""; rbhead = ""
-    rbnotfile = (ENVIRON["REQ_RUNBOOK_NOTFILE"] != "")
-    if (rbnotfile) problem[++nproblem] = "the runbook, " runbook ", is not a regular file, so no section of it was read"
-    while (!rbnotfile && (getline line < runbook) > 0) {
+    rbstate = ENVIRON["REQ_RUNBOOK_STATE"]
+    rbwhy = (rbstate == "absent") ? "is not written" \
+          : (rbstate == "notfile") ? "is not a regular file" \
+          : (rbstate == "unreadable") ? "cannot be read" \
+          : (rbstate == "empty") ? "is empty" : "was not read"
+    if (rbstate == "notfile" || rbstate == "unreadable")
+      problem[++nproblem] = "the runbook, " runbook ", " rbwhy ", so no section of it was read"
+    while (rbstate != "notfile" && rbstate != "unreadable" && (getline line < runbook) > 0) {
       runbook_read = 1
       if (line ~ /^## §[0-9]+( |$)/) {
         s = line; sub(/^## §/, "", s); sub(/[^0-9].*$/, "", s)
         if (!(s in rbsec)) rbsecorder[++nrbsec] = s
-        rbsec[s] = 1; rbin = s
+        rbsec[s] = 1; rbheads[s]++; rbin = s
       } else if (line ~ /^## /) { rbin = ""; rbhead = substr(line, 4) }
       else if (line ~ /^\*\*Verifies:\*\*/) {
         if (rbin == "") { rbstray[++nrbstray] = (rbhead == "" ? "above the first section" : "under \"" rbhead "\""); continue }
@@ -412,7 +425,7 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
         v = get(id, "verify")
         if (v == "review") { }
         else if (v ~ /^tests\/[A-Za-z0-9_.-]+\.py$/) { vf = root "/" v; if ((getline x < vf) < 0) problem[++nproblem] = id ": verify names " v ", which is not there"; close(vf) }
-        else if (v ~ /^runbook §[0-9]+$/) { s = v; sub(/^runbook §/, "", s); if (!(s in rbsec)) problem[++nproblem] = id ": verify names runbook §" s ", which " (runbook_read ? "has no such section" : (rbnotfile ? "is not a regular file" : "is not written")) }
+        else if (v ~ /^runbook §[0-9]+$/) { s = v; sub(/^runbook §/, "", s); if (!(s in rbsec)) problem[++nproblem] = id ": verify names runbook §" s ", which " (runbook_read ? "has no such section" : rbwhy); else if (rbheads[s] > 1) problem[++nproblem] = id ": verify names runbook §" s ", which heads " rbheads[s] " sections" }
         else problem[++nproblem] = id ": verify is " v ", which is none of review, tests/<file>.py and runbook §<n>"
       }
     }
@@ -578,11 +591,12 @@ REQUIREMENTS_AWK=$(cat <<'AWK'
     # section, compares nothing, and an empty comparison is not an agreement.
     if (nreq == 0) rbbad[++nrbbad] = "nothing was read out of requirements.md and requirements/, so the runbook's Verifies lines were compared with nothing"
     if (!runbook_read) {
-      if (nrbwant > 0) rbbad[++nrbbad] = "the runbook was not read, so no Verifies line was compared with the " nrbwant " entries whose verify names a section of it"
+      if (nrbwant > 0) rbbad[++nrbbad] = "the runbook " rbwhy ", so no Verifies line was compared with the " nrbwant " entries whose verify names a section of it"
     } else if (nrbsec == 0) rbbad[++nrbbad] = "the runbook holds no ## §<n> heading, so no Verifies line was compared with anything"
     for (j = 1; j <= nrbstray; j++) rbbad[++nrbbad] = "a Verifies line " rbstray[j] ", which is no ## §<n> section of the runbook"
     for (j = 1; j <= nrbsec; j++) {
       s = rbsecorder[j]
+      if (rbheads[s] > 1) rbbad[++nrbbad] = "§" s ": heads " rbheads[s] " sections, where a number heads one"
       if (!(s in rbnverifies)) rbbad[++nrbbad] = "§" s ": no Verifies line, where it has one"
       else if (rbnverifies[s] > 1) rbbad[++nrbbad] = "§" s ": " rbnverifies[s] " Verifies lines, where it has one"
       for (i = 1; i <= nreq; i++)
@@ -607,10 +621,17 @@ AWK
 # <requirements> is requirements.md, and the split set is read from beside it
 # by requirements_split -- so every caller reads the union, and none can pass
 # one half without the other.
+runbook_state() {  # runbook_state <path> -- absent, notfile, unreadable, empty, or nothing
+  if [ ! -e "$1" ]; then echo absent
+  elif [ ! -f "$1" ]; then echo notfile
+  elif [ ! -r "$1" ]; then echo unreadable
+  elif [ ! -s "$1" ]; then echo empty
+  fi
+}
 requirements_read() {  # requirements_read <findings|matrix> <requirements> <ledger> <suite> <root> <runbook> <counts> <shape>
   REQ_SPLIT_LIST=$(requirements_split "$2") \
   REQ_SPLIT_OTHER=$(requirements_split_other "$2") \
-  REQ_RUNBOOK_NOTFILE=$( [ -e "$6" ] && [ ! -f "$6" ] && echo 1 ) \
+  REQ_RUNBOOK_STATE=$(runbook_state "$6") \
   awk -v mode="$1" -v reqs="$2" -v ledger="$3" -v suite="$4" -v root="$5" \
       -v runbook="$6" -v counts_literal="$7" -v shape_literal="$8" \
       "$REQ_FIELD_AWK$REQUIREMENTS_AWK" </dev/null
@@ -1045,8 +1066,8 @@ FAIL${TAB}GH-110.5${TAB}a Verifies line under \"Section 2 two\", which is no ## 
   "$(rb_findings "$REQ_FIX/rb-renamed")"
 cp -r "$RB_FIX" "$REQ_FIX/rb-absent"
 rm "$REQ_FIX/rb-absent/runbook.md"
-tok 'a runbook that is not there is read as not read, never as agreeing' \
-  "FAIL${TAB}GH-110.5${TAB}the runbook was not read, so no Verifies line was compared with the 3 entries whose verify names a section of it" \
+tok 'a runbook that is not there is read as not written, never as agreeing' \
+  "FAIL${TAB}GH-110.5${TAB}the runbook is not written, so no Verifies line was compared with the 3 entries whose verify names a section of it" \
   "$(rb_findings "$REQ_FIX/rb-absent")"
 cp -r "$RB_FIX" "$REQ_FIX/rb-no-requirements"
 rm "$REQ_FIX/rb-no-requirements/requirements.md"
@@ -1076,8 +1097,40 @@ holds 'an entry pointing into it is told what the runbook is, not that it is unw
   "FAIL${TAB}FR-45${TAB}GH-5.2: verify names runbook §1, which is not a regular file"
 holds 'and the program runs to its end, whichever awk runs it' "$OUT" 'status 0'
 tok 'and the Verifies lines are compared with nothing, which is not called agreement' \
-  "FAIL${TAB}GH-110.5${TAB}the runbook was not read, so no Verifies line was compared with the 3 entries whose verify names a section of it" \
+  "FAIL${TAB}GH-110.5${TAB}the runbook is not a regular file, so no Verifies line was compared with the 3 entries whose verify names a section of it" \
   "$(rb_findings "$REQ_FIX/rb-directory")"
+
+# An empty runbook and an unreadable one are each named for what they are.
+cp -r "$RB_FIX" "$REQ_FIX/rb-emptyfile"
+: > "$REQ_FIX/rb-emptyfile/runbook.md"
+OUT=$(req_fixture "$REQ_FIX/rb-emptyfile")
+holds 'an entry pointing into an empty runbook is told it is empty' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}GH-5.2: verify names runbook §1, which is empty"
+tok 'and the Verifies lines are compared with nothing, and the runbook is said to be empty' \
+  "FAIL${TAB}GH-110.5${TAB}the runbook is empty, so no Verifies line was compared with the 3 entries whose verify names a section of it" \
+  "$(rb_findings "$REQ_FIX/rb-emptyfile")"
+cp -r "$RB_FIX" "$REQ_FIX/rb-unreadable"
+chmod 000 "$REQ_FIX/rb-unreadable/runbook.md"
+if [ -r "$REQ_FIX/rb-unreadable/runbook.md" ]; then
+  fail static 'the unreadable runbook fixture can be read here, as root can read anything, so the checks against it prove nothing'
+else
+  OUT=$(req_fixture "$REQ_FIX/rb-unreadable")
+  holds 'a runbook that cannot be read is named as such' "$OUT" \
+    "FAIL${TAB}FR-45${TAB}the runbook, $REQ_FIX/rb-unreadable/runbook.md, cannot be read, so no section of it was read"
+  tok 'and the Verifies lines are compared with nothing, and the runbook is said to be unreadable' \
+    "FAIL${TAB}GH-110.5${TAB}the runbook cannot be read, so no Verifies line was compared with the 3 entries whose verify names a section of it" \
+    "$(rb_findings "$REQ_FIX/rb-unreadable")"
+fi
+chmod 644 "$REQ_FIX/rb-unreadable/runbook.md"
+# A number heading two sections: the second, with no Verifies line, is the
+# shape review round 3 measured surviving green.
+rb_mutant rb-duplicate runbook.md 's/^## §2 two$/## §1 again\ntext\n&/'
+OUT=$(req_fixture "$REQ_FIX/rb-duplicate")
+holds 'an entry whose verify names a number heading two sections is told so' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}FR-2: verify names runbook §1, which heads 2 sections"
+tok 'and the runbook is not called in agreement: the number is a finding of its own' \
+  "FAIL${TAB}GH-110.5${TAB}§1: heads 2 sections, where a number heads one" \
+  "$(rb_findings "$REQ_FIX/rb-duplicate")"
 
 echo "--- #200: every GH- entry is a file of its own, beside requirements.md ---"
 # The `GH-` entries were one section of requirements.md, appended to by every

@@ -153,7 +153,8 @@ An `active` requirement is **covered** (Q15) when it has
 
 A requirement with `seam: none` needs no check, and has none tagged with it; its
 `verify` must resolve: `tests/<file>.py` to a file that exists, and
-`runbook §<n>` to a heading `## §<n>` in `.claude/hooks/runbook.md`.
+`runbook §<n>` to a heading `## §<n>` in `.claude/hooks/runbook.md`, and to
+one only (#110).
 
 The suite fails on each of these, and `--matrix` shows the rest:
 
@@ -165,13 +166,14 @@ The suite fails on each of these, and `--matrix` shows the rest:
   a `superseded-by` naming no entry, a `direction` with no reason, `seam: none`
   with a `verify` that does not resolve, and `seam: none` with checks tagged with
   it after all;
-- a runbook that is there and is not a regular file, and a section of it whose
+- a runbook that is there and is not a regular file or cannot be read, a
+  number that heads two of its sections, and a section of it whose
   **Verifies** line does not name exactly the entries whose `verify` is that
   section: a section with no such line or with two, a line naming an entry
   that points elsewhere or nowhere, and an entry pointing at the section that
   the line leaves out, gap entries included (#110). So is a Verifies line in no
-  `## §<n>` section, a runbook holding no such section, and one not read while
-  entries point into it;
+  `## §<n>` section, a runbook holding no such section, and one absent or empty
+  while entries point into it;
 - a `GH-` entry out of place: one left in this file, a file under
   `requirements/` whose name is not the ID it holds, one holding a second entry
   or none, one with text before its heading, a `##` heading in it, or a line
