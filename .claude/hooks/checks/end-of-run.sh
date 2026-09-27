@@ -1081,6 +1081,11 @@ req_mutant rb-gap-only requirements.md "s|^- status: gap → ${H}7\$|&\\n- seam:
 tok 'an unwritten runbook with only gap entries pointing into it is the state before #110, and no finding' \
   "ok${TAB}GH-110.5${TAB}no runbook was read, and only gap entries point into it, 1 of them, which may name a section not yet written" \
   "$(rb_findings "$REQ_FIX/rb-gap-only")"
+cp -r "$REQ_FIX/rb-gap-only" "$REQ_FIX/rb-gap-directory"
+mkdir "$REQ_FIX/rb-gap-directory/runbook.md"
+tok 'but a runbook that is not a regular file is a finding, whatever points into it' \
+  "FAIL${TAB}GH-110.5${TAB}the runbook is not a regular file, so no Verifies line was compared with anything, and 0 entries that are no gap point into it" \
+  "$(rb_findings "$REQ_FIX/rb-gap-directory")"
 cp -r "$RB_FIX" "$REQ_FIX/rb-no-requirements"
 rm "$REQ_FIX/rb-no-requirements/requirements.md"
 tok 'a requirements.md that is not there leaves what it held named by no entry' \
