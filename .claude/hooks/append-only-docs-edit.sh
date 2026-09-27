@@ -10,7 +10,10 @@
 # The distinction that matters is existence, not tool: writing a NEW entry file
 # is the normal way to record a session, so a Write to a path that does not yet
 # exist is allowed. Touching a file that is already there is what rewrites
-# history, and that is blocked for both tools.
+# history, and that is blocked for both tools -- with one exception, an Edit of
+# the session segment of a docs/dev-log/ entry's heading onto the name the file
+# already carries, which ADR 0003 decides is the entry's label and not its
+# history (#177). Its section below states the whole of it.
 #
 # docs/design/ and docs/research/ are deliberately absent from the guarded set —
 # CLAUDE.md's own table marks both "revised in place". For research/ the
@@ -50,7 +53,11 @@ fi
 # answer to it, and #95 found eight. Every refusal this hook already made on
 # malformed input is made here unchanged, because what jq is handed is the same
 # bytes -- the command substitution strips trailing newlines, which JSON does
-# not carry meaning in, and a JSON document cannot hold a NUL.
+# not carry meaning in, and a JSON document cannot hold a raw NUL.
+#
+# That argument is about the DOCUMENT and not about the strings inside it, which
+# is why the two strings #177 compares are not read the way the path is: see
+# `field_exact` below.
 PAYLOAD=$(cat)
 FILE=$(printf '%s' "$PAYLOAD" | cs_tool_input file_path) || exit 2
 
@@ -111,8 +118,10 @@ norm_path() {  # norm_path <absolute path>
 # ADR's sentence:
 #
 #   the file is a docs/dev-log/ entry named devlog_<date>_<session>.md;
-#   the tool call carries both strings an Edit swaps (a Write carries neither);
-#   old_string is the file's current first line, and occurs in it exactly once;
+#   the tool call carries both strings an Edit swaps (a Write carries neither),
+#   and neither holds a NUL;
+#   old_string is the file's current first line, and occurs in the file
+#   exactly once as the Edit tool matches it -- as a substring, not a line;
 #   new_string is one line;
 #   both parse as `# <date> · <session> — <rest>`;
 #   the date and the rest are byte-identical between them;
@@ -171,8 +180,26 @@ parse_heading() {  # parse_heading <line>
   [ -n "$PH_DATE" ] && [ -n "$PH_SESS" ]
 }
 
+# Sets <var> to tool_input.<field> exactly as the tool call carries it, trailing
+# newlines included; non-zero, having refused as cs_tool_input refuses, if the
+# field cannot be read. THE STRINGS ARE COMPARED AS THE TOOL WILL ACT ON THEM.
+# A command substitution strips every trailing newline, so `old=$(... old_string)`
+# handed this function's tests a copy the Edit tool never sees: an old_string of
+# the heading and its newline equalled the first line, passed every test below,
+# and the tool then joined the first body line onto the heading. An old_string
+# ending in a newline is what an agent writes when it copies a whole line, so
+# that was an ordinary shape and not a contrived one (review of #189, round 1).
+# jq -r ends its output with exactly one newline of its own; the `x` holds every
+# newline before it through the substitution, and the one jq added is taken off.
+field_exact() {  # field_exact <var> <field>
+  local _raw
+  _raw=$(printf '%s' "$PAYLOAD" | cs_tool_input "$2" && printf x) || return 2
+  _raw=${_raw%x}
+  printf -v "$1" '%s' "${_raw%$'\n'}"
+}
+
 heading_correction() {  # heading_correction <abs> <rel> -- 0 if this edit is the permitted one
-  local abs="$1" rel="$2" stem fsession old new first
+  local abs="$1" rel="$2" stem fsession old new first content
   local o_date o_sess o_rest n_date n_sess n_rest
 
   case "$rel" in docs/dev-log/*) ;; *) return 1 ;; esac
@@ -183,28 +210,54 @@ heading_correction() {  # heading_correction <abs> <rel> -- 0 if this edit is th
   case "$stem" in *_*) fsession=${stem#*_} ;; *) return 1 ;; esac
   [ -n "$fsession" ] || return 1
 
+  # A NUL is the one byte a bash string cannot hold: jq -r writes a `\u0000` out
+  # as a NUL and the substitution drops it, so a new_string ending in one read
+  # here as the corrected heading and the tool wrote the NUL into the entry. The
+  # escape is the only way a JSON document spells a NUL, so it is refused where
+  # it is spelled, before any string is read. Refusing the escape anywhere in the
+  # document also refuses a `\\u0000` that is only text, which costs a refusal
+  # and never a permission (review of #189, round 1, measured with the sweep of
+  # that round's class A).
+  case "$PAYLOAD" in *'\u0000'*) return 1 ;; esac
   # A Write carries no old_string, so this is where a Write of an existing entry
   # leaves the exception and goes back to being refused.
-  old=$(printf '%s' "$PAYLOAD" | cs_tool_input old_string 2>/dev/null) || return 1
-  new=$(printf '%s' "$PAYLOAD" | cs_tool_input new_string 2>/dev/null) || return 1
-  # REDUNDANT, AND KEPT KNOWINGLY. Hand-mutation of this hook found that deleting
-  # both lines flips no payload the suite drives: a newline in `new` moves the
-  # rest of the heading, which the rest-unchanged test below refuses, and a
-  # newline in `old` stops it equalling the file's first line, which that test
-  # refuses. So no check fails without them, which by CLAUDE.md's standard is a
+  field_exact old old_string 2>/dev/null || return 1
+  field_exact new new_string 2>/dev/null || return 1
+  # REDUNDANT, AND KEPT KNOWINGLY. A newline in `new` moves the rest of the
+  # heading, which the rest-unchanged test below refuses, and a newline in `old`
+  # stops it equalling the file's first line, which that test refuses. So no
+  # payload flips when both lines are deleted, which by CLAUDE.md's standard is a
   # reason to look hard at a clause. They stay because they say the shape the
   # exception is about -- one line swapped for one line -- where the tests that
-  # currently cover them say something else and cover this only as a side effect.
-  # A reader who later reorders those tests should find this stated rather than
-  # discover it. Recorded because an unexercised clause read as evidence is
-  # exactly what this repository keeps finding.
+  # cover them say something else and cover this only as a side effect.
+  # WHAT THEY DID NOT DO BEFORE #189's FIRST ROUND: the strings were read through
+  # a command substitution, which strips trailing newlines, so the one newline an
+  # agent actually writes -- at the end -- never reached these tests or the ones
+  # that back them, and an old_string of the heading and its newline was
+  # permitted. The tests were right and were asked of the wrong string; the fix
+  # was the read, `field_exact`, and not these lines.
   case "$new" in *$'\n'*) return 1 ;; esac
   case "$old" in *$'\n'*) return 1 ;; esac
 
   IFS= read -r first < "$abs" 2>/dev/null
   [ -n "$first" ] || return 1
   [ "$old" = "$first" ] || return 1
-  [ "$(grep -cxF -- "$old" "$abs" 2>/dev/null)" = 1 ] || return 1
+  # OCCURS EXACTLY ONCE, COUNTED IN THE TOOL'S UNIT. The Edit tool matches
+  # old_string as a substring anywhere in the file, and with `replace_all` it
+  # replaces every match. This was `grep -cxF`, which counts whole LINES, so an
+  # entry quoting its own heading inside a body line -- in backticks, or behind a
+  # `> ` -- counted once, and `replace_all` then rewrote the quotation too
+  # (review of #189, round 1). Counted here as a substring, and overlapping: old
+  # is the first line, so its first match starts at the file's first character,
+  # and the file from its second character on must not hold another. That is at
+  # least the tool's count however the tool counts, so `replace_all` has nothing
+  # left to widen and is not read. The file is read with the same `x` as
+  # `field_exact`, so its trailing newlines are its own; a NUL in the file is
+  # dropped, here as by `read` above, which can only join text into a further
+  # match, and so can only refuse.
+  content=$(cat -- "$abs" 2>/dev/null && printf x) || return 1
+  content=${content%x}
+  case "${content:1}" in *"$old"*) return 1 ;; esac
 
   parse_heading "$old" || return 1
   o_date=$PH_DATE o_sess=$PH_SESS o_rest=$PH_REST

@@ -49,7 +49,9 @@ an entry *says* still goes in the newest entry, and that is unchanged.
 
 The narrowness is not left to the author. `append-only-docs-edit.sh` permits the
 correction only when the edit's `old_string` is the file's current first line and
-occurs in it exactly once, its `new_string` is a single line, the two differ in
+occurs in it exactly once — anywhere, as the Edit tool matches it, and not only as
+a whole line — its `new_string` is a single line, both strings are compared byte
+for byte as the tool will act on them, the two differ in
 the session segment alone, and the new segment agrees with the file name where
 the old one does not. Everything else about a history entry is refused exactly as
 it was. Stating the exception in the rule and then in the guard, rather than

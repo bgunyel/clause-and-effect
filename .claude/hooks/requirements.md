@@ -1436,3 +1436,11 @@ it has no entry above (Q16).
   `-` paragraph in `lib/command-scan.sh` points here. Filed from round 5 of the
   review of #184 and widened in rounds 6 and 8. It adds its requirements in the
   pull request that fixes it
+- #189: the pull request for #177; rev-agent-pr-189's review of it is cited
+  where what it found stands in `append-only-docs-edit.sh` and #177's issue
+  file -- the exception's strings compared after a command substitution had
+  stripped their trailing newlines, an occurrence counted in lines where the
+  tool matches substrings under `replace_all`, and three file-name clauses
+  called defence in depth that were each the only refusal of a payload no row
+  drove. Its first round is also where the author's sweep found the `\u0000`
+  a bash string drops and the parse clauses with no rows
