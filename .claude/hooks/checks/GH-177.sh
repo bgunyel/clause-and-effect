@@ -66,7 +66,8 @@ requirement GH-177 <<'REQ'
   or date that moves with the session, a new segment agreeing with nothing, an
   `old_string` that is not the whole first line, a trailing newline on either
   string, a second line smuggled into `new_string`, a heading that already agrees,
-  a heading quoted again anywhere in the entry, and the same shape under
+  a heading quoted again anywhere in the entry, a payload over 4096 characters,
+  and the same shape under
   `docs/lessons-learned/` or `docs/eval-reports/`, on a file that is not `.md`, or
   on one not named `devlog_`.
 - from: #177, deciding what ADR 0003 left open, and ADR 0003 as amended
@@ -89,13 +90,14 @@ requirement GH-177 <<'REQ'
   backticks and a leading `session` word (review of #189, round 2).
   WHAT THE SECTION IS EVIDENCE ABOUT, MEASURED RATHER THAN ASSUMED. The
   exception was swept a clause at a time, in review of #189's first and second
-  rounds and after it: each of its 28 refusing conditions -- 27 `return 1`
+  rounds and after it: each of its 29 refusing conditions -- 27 `return 1`
   clauses across `heading_correction`, `parse_heading` and `canonical_session`,
-  and `parse_heading`'s closing test -- removed on a copy, and every row of this
-  section re-judged against the result. Nineteen have a row that turns red when
+  and `parse_heading`'s closing test, and the size bound -- removed on a copy, and
+  every row of this section re-judged against the result. Twenty have a row that
+  turns red when
   they are removed, and so do the call site, each of the date's three shapes,
   each step of the old side's key, each of the new side's three spellings, and
-  the pinned sentence of the refusal: the directory, the `.md` suffix, the
+  the pinned sentence of the refusal: the size bound, the directory, the `.md` suffix, the
   `devlog_` prefix, the empty-session-name test, the NUL refusal, the `Write`
   exclusion, the whole-first-line test, the count, `canonical_session`'s
   refusal, the date's shape, the session's ` · ` bound, the parse of
@@ -480,7 +482,11 @@ for r177_entry in "$REPO_ROOT"/docs/dev-log/devlog_*.md; do
   # The correctable shape, as the hook bounds it: a date of one of its three
   # shapes, then ` · `, a session holding no ` · `, then ` — `. Anything else is
   # offered unchanged under its own label, so that no row says "relabelled" of a
-  # heading the date or session bound refuses (review of #189, round 5).
+  # heading the date or session bound refuses (review of #189, round 5). The
+  # three date patterns are a copy of `parse_heading`'s in
+  # append-only-docs-edit.sh, which names this loop beside them: a shape added
+  # there and not here is offered unchanged, under the not-correctable label,
+  # and stays green, so the two are edited together.
   r177_new=$r177_first
   r177_label="a real entry, $r177_name, whose first line is not of the correctable shape, offered unchanged"
   case "$r177_first" in
@@ -507,7 +513,8 @@ done
 REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'a Write carrying old_string and new_string of the plain correction' \
   "$(jq -cn --arg p "$E_WRONG" --arg o "$H_WRONG" --arg n "$H_RIGHT" \
        '{tool_name:"Write",tool_input:{file_path:$p,content:"x",old_string:$o,new_string:$n}}')"
-# What that does not close, pinned at today's verdict (review of #189, round 5):
+# What that does not close, pinned at today's verdict (review of #189, round 5;
+# filed as #248):
 # a Write whose `content` is not a string, or is absent, beside the Edit's two
 # strings. Only the tool's name tells it from the Edit, and the hook does not
 # read it (GH-95.2). A Write's schema requires a string `content`, so the harness
@@ -520,6 +527,18 @@ for r177_content in null 5 absent; do
          '{tool_name:"Write",tool_input:({file_path:$p,old_string:$o,new_string:$n}
            + (if $c == "absent" then {} else {content:($c | fromjson)} end))}')"
 done
+
+# CLASS I OF #189's SIXTH ROUND: a correction is a few hundred characters, and
+# the exception's tests read whole fields and the whole entry, so a large payload
+# ran the hook past its 5-second timeout -- 7.9 s for a 50 MB Write, 9.6 s for a
+# 30 MB new_string -- where a hook that times out refuses nothing. A payload over
+# 4096 characters is refused before any field is read. The row pads the plain
+# correction with a field the hook does not read, so that the bound is the only
+# thing refusing it; timing is not asserted here, and the reply to round 6
+# records it (1.9 s and 1.2 s with the bound).
+REPO_ROOT="$HEAD_FIX" feed "$PATH" append-only-docs-edit.sh BLOCK 'the plain correction padded past 4096 characters is refused before any field is read' \
+  "$(jq -cn --arg p "$E_WRONG" --arg o "$H_WRONG" --arg n "$H_RIGHT" \
+       '{tool_name:"Edit",tool_input:{file_path:$p,old_string:$o,new_string:$n,pad:("x" * 5000)}}')"
 
 # A RAW NUL ON THE STREAM (GH-95.1's malformed input), which a bash string cannot
 # carry, so no row fed through one could ever have asked. The fixture is a hook

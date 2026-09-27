@@ -264,3 +264,50 @@ corrected it. The reviewer pointed this out in round 5.
 row for either append-only hook, so the 28/19/9 split is re-derived only by a
 hand sweep. The scratch harness this session used (`sweep.sh`) is not
 committed.
+
+---
+
+# 2026-09-27 11:34 +03 · session `dev-agent-pr-189` — review round 6: a size bound, and a residual cost recorded
+
+**Check suite: 6212 at 6a1c83f → 6213 at the commit carrying this append, all
+passing.** `checks/GH-177.sh` has 141 rows. The reviewer reproduced 6212 and
+28/19/9 at 6a1c83f.
+
+**The exception's cost grew with the payload (class I, L1).** The reviewer
+measured a 50 MB Write of an existing entry at 7.9 s, and a 30 MB `new_string`
+Edit at 9.6 s. The hook's timeout is 5 s, and a hook that runs past its
+timeout refuses nothing. The base refused both in under half a second. The
+assistant reproduced them at 7.1 s and 9.2 s. A payload over 4096 characters is
+now refused before any field is read, which brings those two cases down to
+1.9 s and 1.2 s. The bound has a row: the plain correction padded with a field
+the hook does not read. It was red against 6a1c83f and nowhere else, and it is
+isolated. **29 conditions, 20 isolated, 9 backed.**
+
+**What the bound does not close, measured and left.** The assistant profiled
+the remaining cost. It is the buffer, not the exception: emitting a large bash
+string into a pipe runs at about 23 ms per MB, whether by `printf`, `echo` or a
+here-string. Every call that reads a field pays that once more than the base
+did. A 30 MB Write to an unguarded path takes 1.1 s against 0.23 s. A Write of
+an existing entry reaches the 5 s timeout at about 130 MB (4.9 s measured),
+against roughly 600 MB on the base (1.1 s at 130 MB). Closing that would mean
+buffering to a temporary file, which adds `mktemp`, a cleanup trap and a
+writable directory to a guard hook, for a payload size no agent writes by
+accident. So the assistant recorded it at the buffer and did not close it. The
+reviewer may file it.
+
+**The flat Write claims (L2).** CLAUDE.md said "a `Write` of one included" and
+ADR 0003 said "everything else … is refused exactly as it was". Round 5 had
+narrowed GH-177 and the hook comment but not these two. Both now say that a
+Write carrying a `content` string is refused, and that the other shapes are
+#248's. The reviewer filed #248 from round 5's K2, and it has a citation reason
+in `requirements.md`.
+
+**Non-gating, done:** the triage-agent-177 index row is moved into date order.
+The real-directory loop's copy of `parse_heading`'s date shapes and the hook's
+original now name each other.
+
+**An error of the assistant's this round:** it ran `sed -i` on the dev-log
+README from Bash, and `append-only-docs.sh` refused it. That guard does not
+exempt a README, as the Edit guard does. It was the same refusal as round 5's,
+so the assistant repeated a mistake it had already been refused for. The edit
+was made with the Edit tool.

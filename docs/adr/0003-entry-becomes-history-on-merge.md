@@ -63,7 +63,12 @@ and digits, and less a leading `session`. That is equality of keys, not
 containment: an old segment that names the session and says more, such as
 `session 3 (continued)` on a file named for `session-3`, has a different key,
 and the correction would erase what it says beyond the name. #245 owns that
-case. Everything else about a history entry is refused exactly as it was. Stating the exception in the rule and then in the guard, rather than
+case. Everything else about a history entry is refused exactly as it was, but
+for one shape the guard cannot tell from the correction: a `Write` whose
+`content` is null, a number or absent, beside the Edit's two strings, is judged
+as that Edit, since only the tool's name tells them apart and the guard does not
+read it. A Write the harness sends carries a `content` string and is refused;
+#248 owns the rest. Stating the exception in the rule and then in the guard, rather than
 making it once by hand, is ADR 0002's shape: the boundary is what the hook
 computes, not what a document asks an author to remember.
 

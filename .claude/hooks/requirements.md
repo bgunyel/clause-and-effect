@@ -1452,3 +1452,10 @@ it has no entry above (Q16).
   GH-177.1 feeds the guard the spellings those documents name, the open ones at
   today's permitted verdict. It adds its requirements in the pull request that
   fixes it
+- #248: a `Write` whose `content` is null, a number or absent, beside an Edit's
+  `old_string` and `new_string`, is judged by `append-only-docs-edit.sh` as that
+  Edit, because only the tool's name tells them apart and the hook does not read
+  it (GH-95.2). Filed from round 5 of the review of #189. Cited in #177's issue
+  file, where the three shapes are pinned at today's permitted verdict and
+  GH-177's text says what is refused. It adds its requirements in the pull
+  request that fixes it

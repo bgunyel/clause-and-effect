@@ -72,6 +72,15 @@ fi
 # and none could have: each is fed through a bash string, which cannot carry one.
 # `tr` is coreutils, like the `cat` beside it; a `tr` that is not there leaves
 # the buffer empty, and an empty buffer is refused by the reader.
+# THE BUFFER'S OWN COST, measured and left (review of #189, round 6). Emitting a
+# large bash string into a pipe runs at about 23 ms a megabyte, whether by
+# `printf`, `echo` or a here-string, so every call reading a field pays it once
+# more than the base did: a 30 MB Write to an unguarded path takes 1.1 s against
+# 0.23 s, and a Write of an existing entry meets the 5-second timeout at about
+# 130 MB against about 600 MB. Closing it means buffering to a temporary file,
+# which adds `mktemp`, a cleanup trap and a writable directory to what a guard
+# needs, for a payload size no agent writes by accident; so it is recorded
+# rather than closed, the stopping rule this repository's hooks are held to.
 # `read -d ''` would have kept the NULs without a second tool, and was measured
 # and rejected: bash reads a pipe one byte at a time, 0.4 s a megabyte, and a
 # large Write would meet this hook's 5-second timeout, and a hook that times out
@@ -242,6 +251,8 @@ parse_heading() {  # parse_heading <line>
   body=${line#\# }
   case "$body" in *" · "*) ;; *) return 1 ;; esac
   PH_DATE=${body%%" · "*}
+  # These three patterns are copied into the real-directory loop of
+  # checks/GH-177.sh, which cannot call this function; add a shape to both.
   case "$PH_DATE" in
     [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
     [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' '[0-9][0-9]:[0-9][0-9]) ;;
@@ -278,6 +289,14 @@ heading_correction() {  # heading_correction <abs> <rel> -- 0 if this edit is th
   local abs="$1" rel="$2" stem fsession old new first content written
   local o_date o_sess o_rest n_date n_sess n_rest
 
+  # A CORRECTION IS SMALL, AND A HOOK PAST ITS TIMEOUT REFUSES NOTHING. The tests
+  # below read whole fields, scan the whole payload and read the whole entry, so
+  # their cost grew with the payload: a 50 MB Write of an existing entry took 7.9
+  # s and a 30 MB new_string Edit 9.6 s against this hook's 5 s timeout, where
+  # the base refused both in under half a second (review of #189, round 6). The
+  # correction's payload is a path and two headings, a few hundred characters, so
+  # anything over 4096 is not it and is refused before any field is read.
+  [ "${#PAYLOAD}" -le 4096 ] || return 1
   case "$rel" in docs/dev-log/*) ;; *) return 1 ;; esac
 
   stem=${abs##*/}
@@ -296,7 +315,7 @@ heading_correction() {  # heading_correction <abs> <rel> -- 0 if this edit is th
   # the tool's name tells it apart then, and the tool's name is not read -- the
   # one reader reads tool_input only, and GH-95.2 holds that no hook calls jq
   # itself. Whether the harness can deliver such a Write is not measured; its
-  # schema says it cannot. This test runs before the scan for a NUL escape below
+  # schema says it cannot. Filed as #248. This test runs before the scan for a NUL escape below
   # because that scan reads the whole payload, which for a Write is the whole
   # file: a refused 10 MB Write took 1.67 s against the 5 s timeout (round 5).
   field_exact written content 2>/dev/null && return 1

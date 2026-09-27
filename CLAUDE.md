@@ -260,8 +260,11 @@ in place when it contradicts the session the file is named for, because a label
 that disagrees with its own file name misfiles the record rather than recording
 anything. ADR 0003 decides it (#177), `CONTEXT.md`'s *history entry* carries the
 term, and `append-only-docs-edit.sh` computes it — so the narrowness is checked
-rather than remembered. Nothing else about an existing entry moves, a `Write` of
-one included. `append-only-docs.sh` makes no exception for it, because a
+rather than remembered. Nothing else about an existing entry moves. A `Write` of
+one is refused when it carries a `content` string, which is every Write the
+harness sends; one whose `content` is not a string is judged as the Edit its
+other fields describe, which #248 owns. `append-only-docs.sh` makes no exception
+for it, because a
 command's text cannot show what it would leave unchanged: the Bash spellings it
 refuses on an entry — `sed -i`, `rm`, `mv`, `cp`, `tee`, `truncate` and a `>` —
 it refuses for the correction too. That is a list and not a boundary: an
