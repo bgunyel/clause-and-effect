@@ -8946,9 +8946,13 @@ else
   fail static 'the files that load the library are not the four this section checks\n         load it: |%s|\n         checked: |%s|' \
     "$SOURCERS" "$CLAIMED"
 fi
-# One property of this suite's own helpers, because nothing else here drives them
-# and `unarmed` reporting ok for a file it never read would make four pins below
-# vacuous. Run in a subshell so its FAILED cannot reach ours.
+# One property of this suite's own helpers: `unarmed` reporting ok for a file it
+# never read would make every `unarmed` pin below vacuous. #219's issue file
+# drives the text it prints, against a missing file and a directory, by comparing
+# the output of `$( )`; this is the other half, whether it set FAILED, which no
+# comparison of the output can see. Both unread cases take one arm of `unarmed`,
+# so the missing file asks it of the directory too. Run in a subshell so its
+# FAILED cannot reach ours.
 if ( FAILED=0; unarmed 'self-check' "$FIXTURES/no-such-file" 'anything'; exit $FAILED ) >/dev/null 2>&1
 then
   fail static 'unarmed reports ok for a file that is not there, so every pin below is vacuous'
