@@ -13936,9 +13936,15 @@ XH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].co
 # It fails that row itself now, so an empty list would print a FAIL for each,
 # naming only its own label. This guard stays because it names the cause --
 # nothing was read out of settings.json -- and stops the run on an empty
-# derivation before those rows print. It is a string test, so a derivation of
-# blanks passes it and reaches that failure row by row instead. Unreachable
-# today, since the two earlier guards read the same file.
+# derivation before those rows print. A derivation is empty when no Bash
+# command is registered, which BASH_HOOKS's guard stops first, or when every
+# one ends in a `/`, which that guard does not stop: `$(...)` drops the empty
+# lines here, and BASH_HOOKS turns them into blanks. It is a string test, so a
+# derivation of blanks passes it, as it does when every command ends in a `/`
+# and one has a blank after it. Then the `tok` below fails first, the seven
+# names wanted and blanks got, and each `every_hook` row after it fails on its
+# own. None of this is reachable today, since every registered Bash command
+# ends in a hook's name.
 [ -n "$XH_HOOKS" ] || {
   echo "no Bash hooks were read out of settings.json; the cross-hook checks below prove nothing" >&2
   exit 1

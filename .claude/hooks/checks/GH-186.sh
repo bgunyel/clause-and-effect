@@ -12,12 +12,13 @@
 # the same, so `[ -n "$XH_HOOKS" ]` in the helper would not have closed it.
 #
 # WHAT IS DRIVEN is the helper, run inside a subshell over a list this file
-# writes, which prints what the helper printed and then the FAILED it left, and
-# then whether the fixture below ran. Inside the subshell the helper's `pass` or
-# `fail` is not recorded and its FAILED does not reach this shell, so a helper
-# that fails here, as it should, is this file's evidence and not a red row. What
-# each row asserts is the whole of that, as a literal: the message, that the
-# failure was a failure, and whether a hook was run at all.
+# writes, which prints what the helper printed on either stream and then the
+# FAILED it left, and then whether the fixture below ran. Inside the subshell
+# the helper's `pass` or `fail` is not recorded and its FAILED does not reach
+# this shell, so a helper that fails here, as it should, is this file's evidence
+# and not a red row. What each row asserts is the whole of that, as a literal:
+# the message and nothing else on stderr, that the failure was a failure, and
+# whether a hook was run at all.
 
 section "=== issue #186: every_hook fails when it runs no hook ==="
 
@@ -36,8 +37,9 @@ requirement GH-186 <<'REQ'
   is a failing verdict rather than an abort, since one caller's empty list is
   that check's defect and not the run's. The abort beside the settings.json
   derivation in #109's section stays, naming the other cause. It is a string
-  test, so it stops the run on an empty derivation; one of blanks passes it and
-  is failed here instead, row by row.
+  test, so it stops the run on an empty derivation; one of blanks passes it,
+  fails the GH-109.5 row that wants the seven names, and then each cross-hook
+  row fails on the helper's zero count.
 REQ
 shape_pin 'GH-186:static'
 
@@ -70,7 +72,7 @@ r186_every_hook() {  # r186_every_hook <list> -- what every_hook printed over <l
   rm -f "$R186_RAN"
   ( FAILED=0
     XH_HOOKS="$1" every_hook "$R186_DIR" 'r186 driven check' 'true'
-    printf 'FAILED=%s\n' "$FAILED" )
+    printf 'FAILED=%s\n' "$FAILED" ) 2>&1
   if [ -e "$R186_RAN" ]; then echo 'fixture ran: yes'; else echo 'fixture ran: no'; fi
 }
 
