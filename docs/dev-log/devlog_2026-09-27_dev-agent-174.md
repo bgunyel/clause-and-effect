@@ -282,3 +282,65 @@ Before the full run, a standalone probe of the import row printed
 
 - #283, unchanged. The reviewer is adding `checks/GH-144.sh:698`, a second
   `REAL_GIT` shim that hangs under an exported `git` function.
+
+
+# 2026-09-28 00:43 +0300 · dev-agent-174 — #174, review round 4: rev-agent-174's third round on PR #294, and the base moved
+
+**Written 2026-09-28 00:43 +0300.** Branch `worktree-issue-174-jq-farm-guard`.
+`origin/dev-05` moved from `abba1d0` to `cd67c8e` (#186). This round is the
+merge `7f87cc8`, then `ddc1a5e`, plus the commit carrying this entry. The branch
+is 0 behind `origin/dev-05`.
+
+## What was done
+
+- **The merge.** It had one conflict, `SUITE_CHECKS` in `check-hooks.sh`,
+  where both sides appended an issue file. The assistant resolved it to
+  `… GH-219.sh GH-186.sh GH-174.sh`, the resolution the reviewer had verified.
+  The assistant grepped for other lists of issue files that could merge clean
+  and stay stale, and found none. It also checked that the derivation reads
+  no line of the incoming `GH-186.sh`.
+- **G2, gating: GH-174.2 was wider in its text than in its read.** This is
+  the third time for this requirement. The text said "the driver and every
+  file it sources". But the row reads `SUITE_FILES`, which is the driver and
+  `checks/`. The driver also sources `lib/command-scan.sh`, and the reviewer's
+  mutant, a question appended to that file, ran green. The assistant narrowed
+  the text rather than widening the read. That file is hook code, and what it
+  asks about `jq` is #283's. The note says so.
+  The assistant then swept this class over the whole diff and found two more
+  claims of the same scope: the header ("the whole suite's text is read … in
+  whichever file it stands") and the suite row's label ("no line of the
+  suite"). Both now name the driver and `checks/`.
+- **R3-a.** The header's *WHAT IS DRIVEN* paragraph now names the import
+  row, and the PR body says "four ways".
+- **R3-b.** A question inside the command substitution that computes PATH's
+  new value is read, although it runs before PATH changes. It is now a
+  stated trade in the note and fixture line 24, so there are 24 read lines
+  and 11 near misses. The count guard compares with `-eq`, as the reviewer
+  suggested for that line.
+- **R3-c, a correction to the round-2 entry.** That entry said "Round 1 did
+  not record the wrapper's body". That is passive about an error. It was the
+  assistant that ran the round-1 wrapper measurement and did not write the
+  wrapper down.
+
+## Dead end, attributed
+
+The assistant first wrote R3-b's note sentence with the shape quoted
+literally. That made the requirement heredoc itself a line the derivation
+reads. A standalone run of the derivation over the suite named
+`GH-174.sh:136` before any full run. The sentence now describes the shape,
+and the literal lives only in the fixture.
+
+## Measured
+
+Full runs in detached checkouts, with mawk 1.3.4, at `ddc1a5e`:
+- plain: 6239 ok, 0 FAIL. That equals the reviewer's figure for `b738942`
+  merged into `cd67c8e`, and it is the base's 6226 + 13. The round-4 edits
+  changed no row count: line 24 went into an existing row's fixture, and the
+  label change is a relabel;
+- m1, the guard back on `command -v`: the same six rows as round 3, the
+  relabelled suite row among them.
+
+## Open
+
+- #283. It now also carries the reviewer's `checks/GH-144.sh:698`, the
+  second `REAL_GIT` shim.
