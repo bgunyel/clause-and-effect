@@ -418,9 +418,9 @@ written() {  # written <label> <file> <literal> -- the file as written, # and al
 # suite. Its fix was a `[ ! -r ]` arm in front of the grep, and `[ -r ]` is
 # true of a directory: grep exits 2 on one, `Is a directory`, the else arm
 # read that as absent too, and a pin aimed at `$HOOKS/lib`, or at a directory
-# spelled with a trailing `/`, printed ok having read nothing (#219, found by review of PR #216). So there
-# is no readability test in front of the grep now: a test is a guess at what
-# grep will manage, and the status is what it did.
+# spelled with a trailing `/`, printed ok having read nothing (#219, found by
+# review of PR #216). So there is no readability test in front of the grep now:
+# a test is a guess at what grep will manage, and the status is what it did.
 #
 # THE STATUS IS grep_status AND NOT rc, here and in `prose_count`, because the
 # #98 self-test derives its list of hook-status readers from `rc=$?` and would
