@@ -251,3 +251,81 @@ took all six and declined none.
 - rev-agent-110 left two questions for Bertan. Should GH-110.5's checks live
   in `end-of-run.sh` rather than the issue file? Should US-6 stay `gap` until
   §1b runs with this repository's own settings?
+
+# 2026-09-27 · dev-agent-110 — #110: rev-agent-110's round 3 on PR #287
+
+**Written 2026-09-27, 23:06.** Branch `worktree-issue-110-live-runbook`, from
+`fdbcf32` to `6b1ff56` plus this entry; 9 ahead of `origin/dev-05`, still at
+`abba1d0`, and 0 behind it.
+
+## What rev-agent-110 found, and what was done
+
+rev-agent-110 re-ran the round-2 fixes through the full suite, busybox awk
+included, and confirmed them. It posted one gating finding and four others.
+The assistant took four and declined one.
+
+- **G4: a section number used twice merged silently.** The assistant keyed
+  the runbook's sections by number, and `if (!(s in rbsec))` skipped the
+  second `## §3`. A second §3 with no Verifies line therefore passed green,
+  and the `ok` row counted six sections over seven headings. rev-agent-110
+  measured this with a full suite. The reader now counts headings per number.
+  A number heading two sections is a GH-110.5 finding, and for each entry
+  pointing at it an FR-45 one, since `runbook §3` then names one of two.
+  Running rev-agent-110's mutant H through the new reader under mawk and
+  under busybox awk printed both findings, identically.
+- **N16: "not read" described four states.** It was used for an absent, an
+  empty, an unreadable and a not-regular runbook alike. The shell now
+  classifies the path, and each state is named in its own words. An
+  unreadable runbook, like a directory, is never handed to `getline` and is a
+  finding of its own. New fixtures cover the empty and unreadable cases. The
+  unreadable one fails loudly if it runs as root, where mode 000 reads.
+- **N14: runbook §6's fourth literal had a second shape the assistant missed
+  in both earlier sweeps.** In the `NOT` case the message runs to three lines,
+  and the stale-refs suffix ends the third. §6 and §1d now both say so.
+- **N15: two procedures raced their own reads.** §1b fetched before reading
+  the fork point, so a moved `main` read `1	0` for a correct fork. It now
+  reads first and fetches only before the reset. §1d fetched after the
+  SessionStart report had read the ancestry, so the two could disagree about
+  refs that moved in between. It now runs the report by hand and reads the
+  ancestry straight after, with no fetch of its own between. §3 had the same
+  shape against the `merge settings` line, and the assistant gave it the same
+  change.
+- **N17, declined.** The `#110` row under citations that are not
+  requirements is redundant now that GH-110.1 to .5 exist, and it says so
+  itself. `#107`'s row is the precedent: kept as history of why the number
+  was cited before its entries existed.
+- **A mistake of the assistant's during the fix.** It reflowed the runbook's
+  over-wide paragraphs with Python's `textwrap`. That expanded the literal
+  tabs in the expected `0	0` counts to spaces, and flattened §1c's
+  numbered list into one paragraph. It saw this in the diff before
+  committing, restored the file from HEAD (it held only this round's edits,
+  which a script re-applied), and reflowed the two paragraphs by hand. The
+  tab count went from 5 to 6, the one added being §1b's new `1	0`.
+
+## Evidence
+
+- Check suite on `6b1ff56`: `ALL CHECKS PASSED`, 6,249 ok rows, run beside
+  the two mutants below. CI run 36346183579 on `6b1ff56`: success, the
+  unreadable-runbook fixture having run there as a user mode 000 stops.
+- Scratch clones of `6b1ff56`, full suite:
+  - The duplicate-number findings disabled: red at exactly the two
+    `rb-duplicate` rows.
+  - `runbook_state` made to print nothing: red at the ten rows that name a
+    runbook's state, #104's own "which is not written" fixture among them,
+    and at no other.
+- Five runbook states on scratch copies of this repository's requirements,
+  under mawk and under busybox awk: identical rows for each, status 0.
+
+## Open
+
+- As before: §6, §1b in this repository, and the rest of §1c are Bertan's.
+  #113 can proceed. The interactive front end was not watched for §5.
+- #298 (rev-agent-110's) now also holds the ID scan's missing word boundary,
+  `FR-3.1` read as one ID, and a `## ` comment inside a bash block ending a
+  section.
+- The record's §1d and §3 were run under the earlier procedure, which
+  fetched before reading. Their observations agreed, and the record names
+  the runbook commit it followed, so nothing in it is corrected.
+- For Bertan, from rev-agent-110: whether GH-110.5's checks may live in
+  `end-of-run.sh`, given that the driver's header conventions and CLAUDE.md
+  both place an issue's checks in its issue file; and US-6's status.
