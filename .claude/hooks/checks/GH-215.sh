@@ -312,8 +312,10 @@ tok 'a date broken across a line of the header is counted, and one inside the lo
 R215_REST=$(r215_header "$R215_MUT")
 holds 'outside the log, the header is read to its last paragraph' "$R215_REST" \
   'the documents it is judged against stay this repository'
-tok 'and outside the log the harness carries six ISO dates, as at #215 (a re-measure of the rate that adds a date moves this literal)' \
-    '6' "$(r215_dates "$R215_MUT")"
+# Six at #215. Seven since #166's re-measure of the rate on PR #260, which took
+# the date out of --list's printf into MEASURED_ON and added the day it measured.
+tok 'and outside the log the harness carries seven ISO dates, as at #166 (a re-measure of the rate that adds a date moves this literal)' \
+    '7' "$(r215_dates "$R215_MUT")"
 # Case folded, so a record opening `Selection of` or written in capitals is read
 # as one written in lower case.
 R215_REST=${R215_REST,,}

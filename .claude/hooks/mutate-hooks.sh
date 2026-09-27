@@ -574,8 +574,9 @@ TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[
 MEASURED_SECONDS_PER_RUN=1272
 # The day it was taken, printed by --list beside it. It stood as a literal inside
 # that printf until the re-measurement above, which moved the rate and left the
-# printed date saying 2026-09-20 -- a second copy of one fact, which went stale
-# the first time the fact moved. So it is a constant here, moved with the rate.
+# printed date naming the previous measurement -- a second copy of one fact,
+# which went stale the first time the fact moved. So it is a constant here,
+# moved with the rate.
 MEASURED_ON=2026-09-27
 # The suite's size when the rate was last CONFIRMED, as the number of check
 # results its OWN matrix line reports -- which is a little under the total it
