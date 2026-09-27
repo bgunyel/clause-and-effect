@@ -1,0 +1,117 @@
+# 2026-09-27 · dev-agent-174 — #174: the jq fixture guard asks the farm, not the calling shell
+
+**Written 2026-09-27 20:00 +0300.** Branch `worktree-issue-174-jq-farm-guard`,
+cut with `--no-track` from `origin/dev-05` at `abba1d0`. The work is `28b48d0`
+and `366147f` (review round 1), plus this entry. The branch is 3 ahead of
+`origin/dev-05` and 0 behind it.
+
+## What was done
+
+- **The defect.** The #95 section's jq fixture guard asked
+  `$( PATH=<farm>; command -v jq )`.
+  - `command -v` resolves a shell function ahead of PATH, and bash imports an
+    exported one into the suite.
+  - So under an exported `jq` wrapper, the jq-less copy seemed to hold a
+    `jq`, and the guard's `exit 1` ended the run.
+  - Reproduced at `abba1d0`: the run stopped at the guard after 2036 results.
+- **The fix, in `checks/unsplit.sh`.** The guard asks the two directories
+  through `farm_has`, which is #155's helper. The two `diff` clauses are
+  unchanged.
+- **GH-174.1, in `checks/GH-174.sh`.** The guard's own lines are taken from
+  the suite text and evaluated in a subshell, where `exit` ends only the
+  subshell. They run in three cases:
+  - under a `jq` function;
+  - with no function;
+  - with the jq-less name pointed at the with-jq farm, a control that must
+    fail.
+
+  A `holds`/`lacks` pair also pins the text, which is the shape the issue
+  asked for. The issue said a guard like this cannot be driven from inside
+  the run it would end. In a subshell it can be.
+- **GH-174.2.** The issue asked whether every future fixture guard should get
+  this reading by derivation. The assistant decided yes. The suite's whole
+  text is read, and a line that sets PATH and then asks `command -v`/`-V`
+  (any option cluster with `v`) or `type` fails the run.
+- **#283, filed, not fixed.** Under the wrapper, the fixed run completes with
+  as many results as a plain run, but nine rows differ:
+  - Eight are the #95 section's "the refusal names the cause" rows. The
+    function reaches the hooks, and `lib/command-scan.sh:288` asks
+    `command -v jq`.
+  - One is `tokeniser_collisions`, whose child `bash` imports the function.
+
+  The assistant kept this out of #174's scope, following #155's precedent
+  for #174 itself. It is listed under the citations that are not
+  requirements in `requirements.md`. The spec review found a further site,
+  `check-hooks.sh:506-511`, which was added to #283 as a comment.
+
+## Measured
+
+- **Base `abba1d0`, pristine detached checkout:** 6223 ok, 0 FAIL.
+- **`366147f`, run alone:** 6234 ok, 0 FAIL, ALL CHECKS PASSED. That is the
+  base plus 11 GH-174 rows. This entry adds one row more, because GH-177's
+  relabel loop drives one row per dev-log entry.
+- **Under an exported `jq` wrapper:** before the fix, the run aborted after
+  2036 results. After `28b48d0` it completed with 6235 results, the same
+  number as the plain run of that tree. The 10 FAILs were:
+  - the nine #283 rows;
+  - the #98 row, described under Dead ends.
+- **Hand-mutations.** `mutate-hooks.sh` refuses `checks/` as a target. So
+  each mutation was a full run in a detached checkout of its own, made with
+  `git worktree add --detach` in the scratchpad and removed afterwards. Ten
+  runs ran in parallel against `366147f`:
+  - M1, the guard back on `command -v`: 5 red. These were both `holds`, the
+    `lacks`, the row under a `jq` function, and GH-174.2's row over the suite.
+  - M6, the guard range evaluated as `:`: 3 red. These were both `holds` and
+    the control.
+  - M2 (no `type`), M3 (no blank in the boundary class), M7 (no `(`), M8 (no
+    `+=`) and M9 (option exactly `-v`/`-V`): each turned the fixture row red.
+  - M4 (comment lines read): the fixture row and the row over the suite.
+  - M5 (awk's status ignored): the unreadable-file row.
+  - Nine of the ten parallel runs also failed `cs_normalise over one 512 KB
+    line`, the unmutated control among them. That is a timing check. The
+    tree run alone passes it, so load caused it, not the change.
+
+## Dead ends, attributed
+
+- **The assistant edited files under a running suite.** The first baseline
+  run was started from this worktree. The assistant then edited `unsplit.sh`
+  and `check-hooks.sh` while it ran. The run reported `unsplit.sh did not
+  run to its last line`, among other FAILs. It was discarded as evidence and
+  re-run in a pristine detached checkout at `abba1d0`. That a run edited
+  under it is not evidence was already a known lesson of these sessions. The
+  assistant broke it anyway, by starting the baseline from the tree it was
+  about to edit.
+- **The #98 derivation.** The assistant first named the new helper's status
+  variable `rc`. The #98 self-test reads any function with `rc=$?` as a
+  hook-status reader, so it went red. The variable is now `awk_status`, and
+  that section's comment names the helper.
+- **Generated entries take no blank lines.** The assistant's round-1 notes
+  had paragraph breaks. `generate-requirements.sh` refused them, and the
+  breaks were removed.
+
+## Review, round 1 (standards and spec, in parallel)
+
+Both axes found the same defect: GH-174.2's first expression was narrower
+than its text. It read the question only straight after the first separator,
+so these went unread:
+- `&&` and `||`
+- `if`, `!`, `$(` and `[`
+- a command in between
+- `PATH+=`
+- `command -pv`
+
+The note also called `export PATH=` unread, though it was read. The
+assistant had written the text wider than the code. That is the recurring
+class `CLAUDE.md` describes: a guard narrower than its prose, with the suite
+green. The expression was widened, and the fixture now has fourteen shapes
+and eight near misses. The other findings were all fixed in `366147f`:
+- mutation cases deferred to this entry, now in each note;
+- "establishes" claimed of a hand measurement;
+- a count in the #98 comment;
+- the helper name `farm_asked_of_shell`, now `path_lines_asking_shell`.
+
+## Open
+
+- #283: whether the hooks, or only the suite, should stop trusting
+  `command -v` for `jq`. Fixing the suite alone would hide the hook half.
+- The pull request into `dev-05` is not opened by this session unless asked.
