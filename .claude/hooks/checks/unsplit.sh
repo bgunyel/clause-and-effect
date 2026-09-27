@@ -9836,8 +9836,14 @@ printf '#!/bin/bash\n: > "$(dirname "$0")/ran-speak-0"\necho "speak-0 reports so
 # filed. This one refuses saying the fragment somewhere other than the front, so
 # `says` passes it and `says_first` must not.
 printf '#!/bin/bash\n: > "$(dirname "$0")/ran-prefix-2"\necho "something else first, then prefix-2 refuses" >&2\nexit 2\n' > "$EXITS/prefix-2.sh"
+# A seventh, for `says_exactly` against the pair PR #291 first wrote in its
+# place: it refuses with a line and then a second line, which is a second
+# `echo >&2` after an arm's own. `says_first` on the first line passes it, and so
+# does `says_not` on that line with a space after, since a newline and not a
+# space joins them; `says_exactly` must not.
+printf '#!/bin/bash\n: > "$(dirname "$0")/ran-tail-2"\necho "tail-2 refuses" >&2\necho "and says more" >&2\nexit 2\n' > "$EXITS/tail-2.sh"
 chmod +x "$EXITS"/*.sh
-for f in allow-0 block-2 crash-1 crash-127 speak-0 prefix-2; do
+for f in allow-0 block-2 crash-1 crash-127 speak-0 prefix-2 tail-2; do
   [ -x "$EXITS/$f.sh" ] || {
     echo "the exit-status fixture $f.sh was not created; the self-test using it proves nothing" >&2
     exit 1
@@ -9860,11 +9866,24 @@ EXITS_OUTPUT="$EXITS/output"
 # fragment where the others take a verdict: the fixture's own name, which is in
 # everything a fixture says, so `says` and `feed_says` have something to find --
 # a crashed fixture included, which is what makes their crash cases evidence --
-# and `says_not` is given something it never sees. `cap_timed` and `lib_run` are
+# and `says_not` is given something it never sees. `says_exactly` takes the
+# whole message rather than a fragment, and the body says where it comes from.
+# `cap_timed` and `lib_run` are
 # driven through the helper that reads what they return, under_a_second and
 # library_under_a_second, since neither reads a verdict of its own.
 drive_helper() {  # drive_helper <helper> <fixture> <want>
-  local helper="$1" fixture="$2" want="$3" result
+  local helper="$1" fixture="$2" want="$3" result exactly=
+  # `says_exactly` is given the whole of what the fixture says, so that a crash
+  # case fails on its status alone, as the fragment helpers' do: read here by
+  # running the fixture once, before its marker is cleared. A <want> other than
+  # `-` is the message instead, for the rows that give it a different one.
+  if [ "$helper" = says_exactly ]; then
+    if [ "$want" = - ]; then
+      exactly=$( cd "$EXITS" && "$EXITS/$fixture.sh" 2>&1 >/dev/null </dev/null )
+    else
+      exactly=$want
+    fi
+  fi
   rm -f "$EXITS/ran-$fixture"
   if ( FAILED=0
        cd "$EXITS" || exit 3
@@ -9880,6 +9899,7 @@ drive_helper() {  # drive_helper <helper> <fixture> <want>
          says)       says "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
          says_first) says_first "$EXITS" "$EXITS/$fixture.sh" "$fixture" 'self-test' 'true' ;;
          says_not)   says_not "$EXITS" "$EXITS/$fixture.sh" 'never-said' 'self-test' 'true' ;;
+         says_exactly) says_exactly "$EXITS" "$EXITS/$fixture.sh" "$exactly" 'self-test' 'true' ;;
          feed)       feed "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
          feed_says)  feed_says "$PATH" "$EXITS/$fixture.sh" "$fixture" 'self-test' '{}' ;;
          env_feed)   env_feed "$EXITS" "$PATH" "$EXITS/$fixture.sh" "$want" 'self-test' '{}' ;;
@@ -9910,7 +9930,7 @@ failure_line_says() {  # failure_line_says <label> <status> <stderr literal>
 # and the derivation at the end of this section is asserted against both. A
 # helper added to neither is red there; one added to a list is driven.
 DRIVEN_VERDICT='check check_in flip gap check_file feed check_rawfile_in env_feed'
-DRIVEN_MESSAGE='says says_first says_not feed_says env_says'
+DRIVEN_MESSAGE='says says_first says_not says_exactly feed_says env_says'
 DRIVEN_TIMED='cap_timed lib_run'
 # report_says is the fourth list because it is the only helper that asks for a
 # status and a sentence at once, so neither loop above states its cases. #108.
@@ -9966,6 +9986,22 @@ tok 'says: a refusal carrying the fragment anywhere passes, which is what contai
     'ok' "$(drive_helper says prefix-2 -)"
 tok 'says_first: the same refusal fails, which is the whole of the difference' \
     'FAIL' "$(drive_helper says_first prefix-2 -)"
+
+# And what separates `says_exactly` from the two it replaced in PR #291, which
+# is what the loop above cannot state either: every fixture there says one line,
+# and its passing case is handed that line whole. A refusal that says more after
+# the message -- on the same line, or on the next -- fails it and passes the
+# pair. The pair's row is `says_first` alone, since `says_not` on the message
+# with a space after is passed by any refusal that has no such space.
+req GH-98 GH-124
+tok 'says_first: a refusal opening with the message and then a second line passes' \
+    'ok' "$(drive_helper says_first tail-2 -)"
+tok 'says_exactly: the same refusal fails, which is the gap PR #291 review found' \
+    'FAIL' "$(drive_helper says_exactly tail-2 'tail-2 refuses')"
+tok 'says_exactly: a refusal saying the message and more on the same line fails' \
+    'FAIL' "$(drive_helper says_exactly block-2 'block-2')"
+tok 'says_exactly: that refusal given whole passes, so the row above fails on its second line and not on the fixture' \
+    'ok' "$(drive_helper says_exactly tail-2 "$(printf 'tail-2 refuses\nand says more')")"
 
 # The timed helpers, from #96. Each times one outcome and hands any other back as
 # the status it saw: cap_timed times only a refusal, lib_run only a function that
@@ -13925,8 +13961,9 @@ echo "--- all seven Bash hooks at once: a permitted spelling is permitted by eve
 # `gap` cannot express it. It was recorded as a row on the message instead,
 # marked a gap, asserting the sentence was still there, and #164's fix turned it
 # red by removing it. #164 took the remedy out rather than replacing it with
-# another push: the message is one string, read from the main checkout, a
-# worktree on dev-NN and a worktree branch, and only the last permits any push.
+# another push: the message is one string, read from the main checkout and from
+# worktrees on main, on dev-NN and on a worktree branch, and only the last
+# permits any push.
 # So the gap row is two ordinary checks now. What this section asks of every
 # spelling here -- does each one a message names pass all seven hooks, from where
 # it is shown -- is vacuous for this message, which names none, so the rows

@@ -146,8 +146,9 @@ ran() {
 }
 # What a hook's exit status means, answered once for every helper that runs a
 # hook and reads one: exit 0 is ALLOW, exit 2 is BLOCK, and anything else FAILs
-# the check whatever it expected. `says`, `says_not` and `feed_says` ask only for
-# 2, because every one of their claims is about a refusal.
+# the check whatever it expected. The helpers that read a message -- `says` and
+# the three beside it, `feed_says` and `env_says` -- ask only for 2, because
+# every one of their claims is about a refusal.
 #
 # Until #98 each helper read the status as one bit -- 2 was BLOCK and everything
 # else ALLOW -- and `says_not` did not read it at all. So a hook that did not run
@@ -315,6 +316,34 @@ says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
     *"$unwanted"*) fail refuse '%s\n         the refusal must not say |%s|\n         it said |%s|' \
          "$label" "$unwanted" "$err" ;;
     *) pass refuse 'says  %s' "$label" ;;
+  esac
+}
+# The fourth: a refusal that is <message> and nothing else, compared for
+# equality. The three above ask about a fragment, and no pair of them can say
+# "nothing else": #164's first version pinned a message as `says_first` on it
+# plus `says_not` on it with a space after, and a second `echo >&2` after the
+# arm's own -- a newline, not a space -- passed both, carrying a push remedy
+# back into the message those rows called whole. Found by review of PR #291,
+# with that mutant. Hook stderr captured through $( ) loses its trailing
+# newlines and nothing else, so equality needs no allowance.
+says_exactly() {  # says_exactly <dir> <script|/absolute/hook> <message> <label> <cmd>
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err rc hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+        | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  ran "$script" "$rc"
+  if [ "$rc" != 2 ]; then
+    fail refuse '%s\n         wanted a refusal saying exactly |%s|, got exit=%s\n         stderr |%s|' \
+      "$label" "$want" "$rc" "$err"
+    return
+  fi
+  case "$err" in
+    "$want") pass refuse 'says  %s' "$label" ;;
+    "$want"*) fail refuse '%s\n         the refusal says |%s| and then more\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
+    *) fail refuse '%s\n         wanted the refusal to say exactly |%s|\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
   esac
 }
 
