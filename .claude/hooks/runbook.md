@@ -101,8 +101,13 @@ git for-each-ref --format='%(upstream)' "refs/heads/$B"
 
 Expected before the reset, with `baseRef` `fresh` and no
 `.claude/settings.local.json` overriding it: the count against `origin/main`
-prints `0	0`, and the count against `origin/dev-NN` prints its number of commits
-ahead of `origin/main` on the left and `0` on the right. Expected after:
+prints `0	0`, and the count against `origin/dev-NN` prints what
+`git rev-list --left-right --count origin/dev-NN...origin/main` prints, since
+the branch is `origin/main`. While `origin/main` is an ancestor of
+`origin/dev-NN`, which §1d reads, that is the dev branch's commits ahead of
+`main` on the left and `0` on the right; while it is not, the right is the
+commits `main` has that the dev branch lacks, and neither is a difference.
+Expected after:
 `0	0`. The upstream read prints an empty line both times. #110 left the
 upstream to be observed rather than expected, and its first run found none
 set; had it found one, #99's rule would have gained
@@ -283,9 +288,10 @@ the harness's kill that is the reason for it.
 
 #96's line cap argues that a hook the harness kills at its timeout permits the
 command, and that is why no hook may be slow; #240 argues the same of a slow
-git read. This section turns that premise into an observation. An agent may run it: everything it writes is in a scratch
-directory, and the session it starts is a second, headless one whose only
-project settings are the scratch copy.
+git read. This section turns that premise into an observation. An agent may
+run it: everything it writes is in a scratch directory, and the session it
+starts is a second, headless one whose only project settings are the scratch
+copy.
 
 In a scratch directory `$S`, two git repositories, `timeout/` and `control/`,
 each with a `.claude/settings.json` holding one `PreToolUse` hook on `Bash`
