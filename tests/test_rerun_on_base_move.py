@@ -163,7 +163,11 @@ def fake(tmp_path):
             # BASH_ENV would add to them, and the runner has neither.
             for name in ("SHELLOPTS", "BASHOPTS", "BASH_ENV", "ENV"):
                 env.pop(name, None)
-            return subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True)
+            # The fake clock stands still at POLL_SECONDS=0, so WAIT_TRIES is
+            # the only bound on a wait there: without it a run never ends. The
+            # timeout turns that into a failure instead of a hung suite.
+            return subprocess.run(["bash", str(SCRIPT)], env=env, capture_output=True, text=True,
+                                  timeout=30)
 
     return Fake()
 
@@ -299,15 +303,18 @@ def test_a_merge_ref_that_is_never_rebuilt_is_rerun_after_the_wait(fake):
 
 
 def test_a_pull_request_with_no_run_is_reported_and_nothing_is_written(fake):
-    """A pull request opened before the workflow existed has no run to re-run."""
+    """A pull request opened before the workflow existed has no run to re-run,
+    so its merge ref is not waited on either."""
     one_open_pr(fake)
-    rebuilt(fake)
+    fake.serve(PR, pull(None, None))
     fake.serve(RUNS, {"workflow_runs": []})
 
-    result = fake.run()
+    result = fake.run(POLL_SECONDS="7")
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert no_own_run(7, HEAD) in result.stdout.splitlines()
+    assert fake.gets().count(f"GET {PR}") == 0
+    assert fake.clock() == 0
     assert fake.requests() == []
 
 
@@ -501,8 +508,10 @@ def test_a_head_that_moved_before_the_rerun_leaves_the_old_heads_run_alone(fake)
 
 
 def test_a_head_that_moved_before_the_cancel_leaves_the_old_heads_run_alone(fake):
+    """The cancel comes before the wait, so the first read of #7 is the one
+    before it, and it already shows the new head."""
     one_open_pr(fake)
-    rebuilt(fake, NEW)
+    fake.serve(PR, pull(True, MERGE, NEW))
     fake.serve(RUNS, {"workflow_runs": [run("in_progress")]})
 
     result = fake.run()
@@ -574,16 +583,73 @@ def test_an_unstamped_run_is_taken_when_it_lists_only_this_pull_request(fake):
     assert fake.requests() == [RERUN]
 
 
-def test_an_unstamped_run_listing_two_pull_requests_is_nobodys(fake):
+def test_unstamped_runs_listing_two_pull_requests_are_each_rerun_once(fake):
+    """Both runs list both pull requests, and nothing says which started which,
+    so each may be #7's own and each may be #8's. Re-running both re-runs each
+    pull request's own run whichever it is; leaving both would leave both
+    checks green on the old merge (review round 1, G2). Each run is re-run
+    once, though both pull requests take it, and the older first."""
     two_prs_sharing_a_head(fake)
-    fake.serve(RUNS, {"workflow_runs": [run("completed", title="a pull request", prs=(7, 8))]})
+    fake.serve(RUNS, {"workflow_runs": [
+        run("completed", id=43, title="another title", prs=(7, 8)),
+        run("completed", id=42, title="a pull request", prs=(7, 8)),
+    ]})
 
     result = fake.run()
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert fake.requests() == [RERUN, f"POST repos/{REPO}/actions/runs/43/rerun"]
+    assert (f"#8: {URL} is unstamped and lists #7 too, which took it; it is re-run once"
+            in result.stdout.splitlines())
+    assert (f"#7: no run of its head is stamped as its own, and {URL} is unstamped and "
+            "lists it, so it may be its own; it is taken") in result.stdout.splitlines()
+
+
+def test_unstamped_runs_are_rerun_oldest_first(fake):
+    """Two runs of one pull request share its concurrency group, and a re-run
+    queued there cancels the one before it -- so the newest is asked for last,
+    and it is the newest run's event that is replayed and left standing."""
+    one_open_pr(fake)
+    rebuilt(fake)
+    fake.serve(RUNS, {"workflow_runs": [
+        run("completed", id=42, title="edited title", prs=(7,)),
+        run("completed", id=41, title="a pull request", prs=(7,)),
+    ]})
+
+    result = fake.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert fake.requests() == [f"POST repos/{REPO}/actions/runs/41/rerun", RERUN]
+
+
+def test_an_unstamped_run_that_does_not_list_this_pull_request_is_not_taken(fake):
+    """#8, into another base, shares #7's head; its unstamped run lists only #8."""
+    one_open_pr(fake)
+    rebuilt(fake)
+    fake.serve(RUNS, {"workflow_runs": [run("completed", title="another", prs=(8,))]})
+
+    result = fake.run()
+
     assert no_own_run(7, HEAD) in result.stdout.splitlines()
-    assert no_own_run(8, HEAD) in result.stdout.splitlines()
     assert fake.requests() == []
+
+
+def test_a_stamped_run_of_another_pull_request_is_not_taken_as_unstamped(fake):
+    """#8 is closed and shared #7's head, so its stamped run lists #7 alone --
+    `pull_requests` names open pull requests only. It is #8's, by its stamp,
+    and re-running it would replay #8's event; #7's own unstamped run is the
+    one taken (review round 1, G3)."""
+    one_open_pr(fake)
+    rebuilt(fake)
+    fake.serve(RUNS, {"workflow_runs": [
+        run("completed", id=43, title="#8 closed since", prs=(7,)),
+        run("completed", id=42, title="a pull request", prs=(7,)),
+    ]})
+
+    result = fake.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert fake.requests() == [RERUN]
 
 
 def test_a_stamped_run_from_a_fork_is_rerun(fake):
@@ -614,7 +680,7 @@ def test_an_unstamped_run_from_a_fork_is_not_rerun_which_is_the_trade(fake):
 
 
 # --------------------------------------------------------------------------- #
-# item 3: the waits are shared and bounded in total
+# item 3: one wait, shared, and bounded in total
 # --------------------------------------------------------------------------- #
 
 def four_slow_prs(fake):
@@ -640,9 +706,13 @@ def four_slow_prs(fake):
 
 
 def test_slow_pull_requests_stay_within_the_deadline_and_every_one_is_rerun(fake):
-    """At 36 tries of 10 s each wait could sleep 350 s, and the two waits 700 s;
-    the deadline holds the whole job's sleeping to 60 s, and every pull request
-    is still cancelled and re-run."""
+    """At 36 tries of 10 s the wait could sleep 350 s; the deadline holds the
+    whole job's sleeping to 60 s, and every pull request's re-run is still
+    asked for. These runs never stop, so GitHub would refuse each re-run: what
+    is pinned is that the deadline skips no pull request, not that the re-runs
+    succeed. That a run which does stop is re-run stopped, however long another
+    pull request holds the wait, is
+    test_a_slow_merge_ref_does_not_spend_another_pull_requests_wait_for_its_run_to_stop."""
     writes = four_slow_prs(fake)
 
     result = fake.run(POLL_SECONDS="10", WAIT_TRIES="36", DEADLINE_SECONDS="60")
@@ -660,15 +730,41 @@ def test_slow_pull_requests_stay_within_the_deadline_and_every_one_is_rerun(fake
 
 def test_slow_pull_requests_are_waited_on_together(fake):
     """With no deadline in reach, four slow pull requests cost one wait, not
-    four: each of the two waits sleeps between its 3 rounds, 2 x 10 s."""
+    four, and their merge refs and their cancelled runs share it: 3 rounds,
+    with 2 sleeps of 10 s between them."""
     writes = four_slow_prs(fake)
 
     result = fake.run(POLL_SECONDS="10", WAIT_TRIES="3", DEADLINE_SECONDS="600")
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert fake.clock() == 40
+    assert fake.clock() == 20
     assert fake.gets().count(f"GET repos/{REPO}/pulls/9") == 3 + 2
     assert fake.requests() == writes
+
+
+def test_a_slow_merge_ref_does_not_spend_another_pull_requests_wait_for_its_run_to_stop(fake):
+    """#7's merge ref is never rebuilt, and holds the wait to its deadline. #8
+    is rebuilt at once and its cancelled run stops at the second read of it.
+    #8's run is read until it has stopped, so its re-run is asked of a stopped
+    run and it gets no warning (review round 1, N2)."""
+    head8, merge8 = "g" * 40, "k" * 40
+    fake.serve(PULLS, [{"number": 7, "head": {"sha": HEAD}}, {"number": 8, "head": {"sha": head8}}])
+    fake.serve(PR, pull(None, None))
+    fake.serve(RUNS, {"workflow_runs": [run("completed")]})
+    fake.serve(f"repos/{REPO}/pulls/8", pull(True, merge8, head8))
+    fake.serve(f"repos/{REPO}/commits/{merge8}", {"parents": [{"sha": TIP}, {"sha": head8}]})
+    fake.serve(RUNS.replace(HEAD, head8),
+               {"workflow_runs": [run("in_progress", id=43, title="#8 another")]})
+    fake.serve(f"repos/{REPO}/actions/runs/43", {"status": "in_progress"}, {"status": "completed"})
+
+    result = fake.run(POLL_SECONDS="10", WAIT_TRIES="36", DEADLINE_SECONDS="60")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert fake.clock() == 60
+    assert fake.gets().count(f"GET repos/{REPO}/actions/runs/43") == 2
+    assert [line for line in result.stdout.splitlines() if line.startswith("::warning::#8")] == []
+    assert fake.requests() == [f"POST repos/{REPO}/actions/runs/43/cancel", RERUN,
+                               f"POST repos/{REPO}/actions/runs/43/rerun"]
 
 
 def test_the_last_sleep_is_cut_to_the_deadline(fake):
@@ -701,12 +797,13 @@ def proven_current(fake, conclusion="success"):
     rebuilt(fake)
     fake.serve(RUNS, {"workflow_runs": [run("completed", conclusion=conclusion, attempt=2)]})
     fake.serve(ARTIFACTS, {"artifacts": [{"id": 900, "expired": False}]})
-    fake.serve_raw(ZIP, artifact_zip({"exit_status": 0, "tested_commit": MERGE}))
+    fake.serve_raw(ZIP, artifact_zip({"exit_status": 0, "ended": "exited", "tested_commit": MERGE}))
 
 
 @pytest.mark.parametrize("conclusion", ["success", "failure"])
 def test_a_run_that_already_tested_the_merge_on_the_tip_is_not_rerun(fake, conclusion):
-    """A red run that tested this merge stays red on a re-run; so does a green."""
+    """A run whose suite exited on this merge gives the same verdict on a
+    re-run, red or green."""
     proven_current(fake, conclusion)
 
     result = fake.run()
@@ -734,8 +831,18 @@ def unproven(label):
         {
             "cancelled": lambda: fake.serve(RUNS, {"workflow_runs": [
                 run("completed", conclusion="cancelled", attempt=2)]}),
-            "timed-out": lambda: fake.serve(RUNS, {"workflow_runs": [
+            "timed_out-conclusion": lambda: fake.serve(RUNS, {"workflow_runs": [
                 run("completed", conclusion="timed_out", attempt=2)]}),
+            # What a step timeout was observed to leave (run 36320798357): the
+            # run's conclusion `failure`, and the suite recorded as timed-out.
+            "step-timed-out": lambda: (
+                fake.serve(RUNS, {"workflow_runs": [
+                    run("completed", conclusion="failure", attempt=2)]}),
+                fake.serve_raw(ZIP, artifact_zip(
+                    {"exit_status": None, "ended": "timed-out", "tested_commit": MERGE}))),
+            # A record from before #208 has no `ended`.
+            "no-ending": lambda: fake.serve_raw(ZIP, artifact_zip(
+                {"exit_status": 0, "tested_commit": MERGE})),
             "no-conclusion": lambda: fake.serve(RUNS, {"workflow_runs": [
                 run("completed", attempt=2)]}),
             "no-artifact": lambda: fake.serve(ARTIFACTS, {"artifacts": []}),
@@ -743,8 +850,10 @@ def unproven(label):
                 {"id": 900, "expired": False}, {"id": 901, "expired": False}]}),
             "expired": lambda: fake.serve(ARTIFACTS, {"artifacts": [
                 {"id": 900, "expired": True}]}),
-            "no-tested-commit": lambda: fake.serve_raw(ZIP, artifact_zip({"exit_status": 0})),
-            "other-commit": lambda: fake.serve_raw(ZIP, artifact_zip({"tested_commit": OTHER})),
+            "no-tested-commit": lambda: fake.serve_raw(ZIP, artifact_zip(
+                {"exit_status": 0, "ended": "exited"})),
+            "other-commit": lambda: fake.serve_raw(ZIP, artifact_zip(
+                {"ended": "exited", "tested_commit": OTHER})),
             "merge-of-another-head": lambda: fake.serve(
                 f"repos/{REPO}/commits/{MERGE}", {"parents": [{"sha": TIP}, {"sha": OTHER}]}),
             "conflicting": lambda: fake.serve(PR, pull(False, MERGE)),
@@ -754,7 +863,11 @@ def unproven(label):
 
 @pytest.mark.parametrize(("label", "said"), [
     ("cancelled", None),
-    ("timed-out", None),
+    ("timed_out-conclusion", None),
+    ("step-timed-out", f"#7: check-hooks.json of {URL} records that its suite ended timed-out, "
+                       "not exited; re-running it"),
+    ("no-ending", f"#7: check-hooks.json of {URL} records no ending, so whether its suite ran "
+                  "to its end is unknown; re-running it"),
     ("no-conclusion", None),
     ("no-artifact", f"#7: {URL} has 0 unexpired check-hooks-attempt-2 artifacts, not one, "
                     "so what it tested is unknown; re-running it"),

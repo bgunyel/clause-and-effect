@@ -36,9 +36,9 @@ jobs:
   rerun:
     name: re-run check-hooks on open pull requests
     runs-on: ubuntu-24.04
-    # The script's DEADLINE_SECONDS (600 by default) bounds its waiting in
-    # total, so a slow pull request cannot run this out before the ones after
-    # it are re-run (#208).
+    # The script's DEADLINE_SECONDS (600 by default) bounds its one wait, so
+    # waiting on a slow pull request cannot run this out before the others are
+    # re-run; it delays their re-runs by at most that wait (#208).
     timeout-minutes: 20
     permissions:
       actions: write        # cancel and re-run a pull request's check-hooks run
