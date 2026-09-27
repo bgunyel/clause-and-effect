@@ -93,3 +93,14 @@ library and have every consumer call it. The group and the verb (`git $'push'`,
 - `$'\x62ash' -c …` is permitted: the wrapper anchor reads raw text and cannot
   decode. Pinned as a boundary, the same gap as `b"a"sh`.
 - No pull request was opened; that is Bertan's call after review.
+
+## Addendum, after the commit
+
+The first `git commit` was refused by `no-work-on-stale-branch.sh`:
+`origin/dev-05` had moved again, to 2303e9b (a `CLAUDE.md` rule that an agent
+commits and pushes before waiting on a long run). The branch was fast-forwarded
+onto it with the work staged -- neither upstream commit touches this change's
+files -- and committed as 8782f85, one commit ahead of `origin/dev-05`. The
+mutation selection above ran on the tree before that fast-forward; the suite
+was re-run on 8782f85 itself, which carries the new `CLAUDE.md` line the suite
+reads: ALL CHECKS PASSED, 6,414 results.
