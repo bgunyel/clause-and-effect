@@ -40,9 +40,10 @@ requirement GH-174.1 <<'REQ'
 - text: The fixture guard of the #95 section asks whether the symlink farm
   holds a `jq`, and whether its jq-less copy holds none, of the directories,
   through `farm_has`, and asks the calling shell nothing. So under a shell
-  that defines a `jq` function -- which `command -v` resolves ahead of PATH,
-  under the jq-less PATH too -- the guard passes against the same fixtures,
-  where it used to fail and abort the run.
+  that defines a `jq` function, or imports one its invoker exported -- which
+  `command -v` resolves ahead of PATH, under the jq-less PATH too -- the
+  guard passes against the same fixtures, where it used to fail and abort
+  the run.
 - from: #174
 - kind: defect-refusing
 - status: active
@@ -64,10 +65,11 @@ requirement GH-174.1 <<'REQ'
   want of jq. Round 1 gave only the first figure and did not say which
   wrapper it was. That is a different defect with a different fix, and #283
   owns it.
-  The checks define the function in the shell that evaluates the guard, and
-  do not import it from `BASH_FUNC_jq%%`. For `command -v` the two are the
-  same thing -- an imported function is a defined one by the time the script
-  runs -- which is why a defined one stands in for the host here.
+  Most rows define the function in the shell that evaluates the guard. One
+  takes the host's route instead: the function exported, with `farm_has`
+  and the farms' names, and the guard evaluated in a child bash that
+  imports it from `BASH_FUNC_jq%%`. Until review round 3 only this note
+  argued that the two routes are the same thing, and no row showed it.
   The rule is in the suite and not in a hook, so `mutate-hooks.sh` cannot
   register it: that harness refuses `check-hooks.sh` and every file under
   `checks/` as a target, because an edit to the copy would be executed by
@@ -177,19 +179,23 @@ lacks 'and asks the calling shell no `command -` question, which would resolve a
 # inherit it, and it is gone when the $( ) ends: a `jq` left standing here
 # would be run by every later check that feeds a hook, in place of the program.
 #
-# What the calling shell calls `jq` under the jq-less PATH is asked in the same
-# $( ) the guard is evaluated in, and printed beside its `passed`, so the row
-# fails if no function stands in the guard's way there: a `passed` alone says
-# nothing about a function that was never defined. r174_shadowed keeps PATH on
-# one line and the question on the next, which is a shape GH-174.2 states it
-# does not read: it is the one question in this file meant to be answered by a
-# function.
-r174_shadowed() {  # r174_shadowed -- what the calling shell calls `jq` under the jq-less PATH
-  local PATH=$NO_JQ_BIN
-  type -t jq
-}
-tok 'under a shell whose jq is a function under the jq-less PATH too, the jq fixture guard passes, having asked the farm' \
-    'function passed' "$( jq() { echo 'a wrapper in the invoker environment'; }; echo "$(r174_shadowed) $(r174_guard)" )"
+# What the calling shell calls `jq` is asked in the same $( ) the guard is
+# evaluated in, and printed beside its `passed`, so the row fails if no function
+# stands in the guard's way there: a `passed` alone says nothing about a
+# function that was never defined. It is asked under no PATH of its own, since
+# a function answers `type -t` whatever PATH holds (review round 3).
+tok 'under a shell whose jq is a function, the jq fixture guard passes, having asked the farm' \
+    'function passed' "$( jq() { echo 'a wrapper in the invoker environment'; }; echo "$(type -t jq) $(r174_guard)" )"
+# AND THROUGH THE IMPORT ITSELF. The host's route is not a defined function but
+# an exported one, `BASH_FUNC_jq%%` in the environment of a new bash, so one row
+# takes that route: the function and `farm_has` exported, the farms' names
+# exported, and the guard evaluated in a child bash, which prints what it
+# imported as `jq` beside the guard's result. The exports are made inside the
+# $( ), so they end with it and reach no later check.
+tok 'and in a child bash that imported jq as an exported function, the guard passes too' \
+    'function passed' "$( jq() { echo 'a wrapper in the invoker environment'; }
+                          export -f jq farm_has; export WITH_JQ_BIN NO_JQ_BIN
+                          bash -c 'printf "%s " "$(type -t jq)"; ( eval "$1" ) 2>&1 && echo passed' _ "$R174_GUARD" )"
 tok 'under a shell with no jq function, it passes too' \
     'passed' "$( unset -f jq; r174_guard )"
 tok 'and pointed at a jq-less copy that still holds jq, it fails and says why' \
@@ -227,6 +233,8 @@ R174_ASK_UPPER_V='command -V'
 R174_ASK_PV='command -pv'
 R174_ASK_P_V='command -p -v'
 R174_ASK_TYPE='type'
+R174_ASK_HASH='hash'
+R174_ASK_COMPGEN='compgen -c'
 R174_SHAPES="$FIXTURES/r174-shapes.sh"
 R174_GAPS="$FIXTURES/r174-gaps.sh"
 R174_GONE="$FIXTURES/r174-no-such-file"
@@ -272,8 +280,8 @@ printf '%s\n' \
   'read -r PATH <<< "$F"; '"$R174_ASK_V"' jq' \
   'printf -v PATH %s "$F"; '"$R174_ASK_V"' jq' \
   'declare "$P=$F"; '"$R174_ASK_V"' jq' \
-  'PATH="$F"; hash jq' \
-  'PATH="$F"; compgen -c jq' \
+  'PATH="$F"; '"$R174_ASK_HASH"' jq' \
+  'PATH="$F"; '"$R174_ASK_COMPGEN"' jq' \
   'PATH="$F"; c=command; $c -v jq' \
   'PATH="$F"; "'"$R174_ASK_TYPE"'" jq' \
   > "$R174_GAPS"
