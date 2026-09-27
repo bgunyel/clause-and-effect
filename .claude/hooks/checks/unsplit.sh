@@ -13974,15 +13974,21 @@ echo "--- all seven Bash hooks at once: a permitted spelling is permitted by eve
 XH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].command' "$SETTINGS" 2>/dev/null \
              | sed 's|.*/||; s|"$||')
 # The guard BASH_HOOKS and REGISTRATION both carry, and the one derivation in
-# this section that was without it until review of PR #169. It fails green where
-# the other two fail red: `every_hook` loops over this list, so an empty one runs
-# no hook, leaves `refused` empty, and prints `ok ALLOW by all` for all 41
-# spellings -- recording permit-direction coverage for GH-109.5, US-4, US-8,
-# US-13, US-14 and FR-48 without a hook having started. The `tok` below would
-# turn the run red, so the suite as a whole still catches it; the 41 rows would
-# say the opposite anyway, and a row that says the opposite is the thing this
-# suite is for. Unreachable today, since the two earlier guards read the same
-# file.
+# this section that was without it until review of PR #169. Before #186 an
+# empty list failed green here where the other two fail red: `every_hook` passed
+# a list it ran no hook from, so every spelling below printed `ok ALLOW by all`.
+# It fails that row itself now, so an empty list would print a FAIL for each,
+# naming only its own label. This guard stays because it names the cause --
+# nothing was read out of settings.json -- and stops the run on an empty
+# derivation before those rows print. A derivation is empty when no Bash
+# command is registered, which BASH_HOOKS's guard stops first, or when every
+# one ends in a `/`, which that guard does not stop: `$(...)` drops the empty
+# lines here, and BASH_HOOKS turns them into blanks. It is a string test, so a
+# derivation of blanks passes it, as it does when every command ends in a `/`
+# and one has a blank after it. Then the `tok` below fails first, the seven
+# names wanted and blanks got, and each `every_hook` row after it fails on its
+# own. None of this is reachable today, since every registered Bash command
+# ends in a hook's name.
 [ -n "$XH_HOOKS" ] || {
   echo "no Bash hooks were read out of settings.json; the cross-hook checks below prove nothing" >&2
   exit 1
