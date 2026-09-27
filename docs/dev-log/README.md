@@ -40,15 +40,33 @@ thing in the record.
 
 ## Conventions
 
-- File name: `devlog_YYYY-MM-DD_SESSION-NAME.md`, where `SESSION-NAME` is the session 
-  name of the agent writing the dev-log. 
-- If the agent does not know its session name, or it is in doubt, it should call 
+- File name: `devlog_YYYY-MM-DD_SESSION-NAME.md`, where `SESSION-NAME` is the
+  session name of the agent writing the dev-log.
+- The name is never a number counted from the entries that already exist. A
+  worktree branch sees only the dev branch and itself, so two branches writing
+  on the same day count to the same number, and an entry cannot be renamed
+  once it exists (#157). Entries named under the earlier numbered convention
+  keep their names: they are history.
+- If the agent does not know its session name, or it is in doubt, it should call
   the `ListAgents` function to see its session name.
-- A dev-log entry should start with date and time of the entry. Open with 
-  branch, commit range, and how far ahead of its root branch the current branch 
+- A dev-log entry should start with date and time of the entry. Open with
+  branch, commit range, and how far ahead of its root branch the current branch
   ended up.
-- If the dev-log file that the agent is trying to write already exists, 
-  the agent should  append a new dev-log entry to the file with a date and time. 
+- If the dev-log file that the agent is trying to write already exists,
+  the agent should append a new dev-log entry to the file with a date and time.
+- An append is made with `>>` from Bash, and an entry that exists is never
+  edited with the Edit or Write tool. `append-only-docs.sh` reads a heredoc's
+  text as part of the command, so a heredoc append whose prose reads as a
+  command that rewrites an entry can be refused: a `sed -i` anywhere in the
+  text, for example, or an `rm` or an `mv` followed on its line by a path under
+  this directory (#237), or a `>` followed on its line by such a path (#176).
+  Write the text to a scratch file with the Write tool first, and append it
+  with `cat <file> >> <entry>`.
+  `append-only-docs-edit.sh` does not yet refuse Edit or Write on an entry
+  outside the session's project directory, in another checkout of this
+  repository: a linked worktree's entry when the project directory is the main
+  checkout, or the main checkout's when it is the worktree (#159). There this
+  rule is held by the agent and not by a guard.
 - Written for technical readers who know the codebase. Prefer measured numbers
   and commit SHAs over recollection — and say which figures were measured versus
   recalled.
@@ -505,3 +523,31 @@ thing in the record.
   boundary hooks is read to the end of its sentence, and the whole registration
   is pinned. A 200-line heredoc takes 12–57 ms; the same lines as live commands
   take up to 3.1 s, which is #127.
+- [2026-09-20 · session clause-and-effect-37](devlog_2026-09-20_clause-and-effect-37.md)
+  — #118: an option written in front of a gh subcommand eats the next word, so
+  the verb every rule in `no-pr-decisions.sh` read was not the verb gh runs —
+  `gh pr -t view merge 5` is a merge, and verifying the issue an agent ran
+  `gh release -t list create v1` and created a real release on this repository.
+  The rule refuses the shape rather than modelling gh's flag definitions:
+  `cs_gh_opaque` states it once, and `cs_gh_args` gains a third outcome spelled
+  so that a caller ignoring it refuses. Its other half is git's list of globals
+  taking a separate value, which was two short. Review moved five things, four
+  of them comments or checks claiming more than the code does; the mutation
+  harness then rejected one of the session's own registry rows as a requirement
+  too wide.
+  **Entries with no row here are neither counted nor listed in this row.** It
+  said seven and named them, and the next merge of `dev-05` made it wrong by
+  bringing in every entry written there since: 23 at 16f0d25, 21 of them named
+  nowhere in this file and two only in this row, derived by grepping each
+  `devlog_*.md` basename against this file (round 9 of the review of #184). An
+  entry is unindexed when its basename is not in this file, and that is the
+  derivation to run; a number written here goes stale at every merge.
+- [2026-09-27 · session dev-agent-pr-184](devlog_2026-09-27_dev-agent-pr-184.md)
+  — #184 merged across the check-suite split (#204, #205), then review rounds
+  5–9 of it. The stump rule asked of an option's attached value as well as its
+  separate one; `--version` recognised in front of the group only; the
+  refusal's examples fed back to the hook; CLAUDE.md's ninth left-open
+  consequence for the refused reads. A claim that an unknown longhand eats
+  nothing, stated as measured in six places, was corrected from cobra's source
+  and the reviewer's gh runs. Carries three corrections to the
+  clause-and-effect-37 entry.

@@ -1302,14 +1302,16 @@ per the priority order above.
   `.claude/hooks/check-hooks.sh --matrix` says which checks each requirement has;
   it cannot say whether any of them would go red if the rule they name were
   broken, and several suites in this repository have been green for the wrong
-  reasons. #107 built the harness — `bash .claude/hooks/mutate-hooks.sh`, about
-  an hour — and Bertan's review of PR #142 grew its registry from
-  eight real mutations to twenty-one. How many requirement IDs those name is
-  `--list`'s last line, deliberately not restated here: the first version of this
-  item restated it and was wrong, along with three other documents. This item is
-  what remains, and the shape of the gap rather than its size is the part worth
-  writing down: a row per rule reaches a requirement, it does not exercise every
-  check that requirement has, and 157 requirements are active. #108 registered
+  reasons. #107 built the harness — `bash .claude/hooks/mutate-hooks.sh`, slow
+  enough that nothing runs it for you — and Bertan's review of PR #142 grew its
+  registry from eight real mutations to twenty-one. How many requirement IDs
+  those name is on `--list`'s summary, deliberately not restated here: the first
+  version of this item restated it and was wrong, along with three other
+  documents. #148 took the rest of those counts out of the harness's header for
+  the same reason, and how many requirements are active is on that summary too.
+  This item is what remains, and the shape of the gap rather than its size is
+  the part worth writing down: a row per rule reaches a requirement, it does not
+  exercise every check that requirement has. #108 registered
   six rows with its ten requirements, reaching six of them; #128 registered three
   for the two rules of one fix; #109's arrive with it. That #108 reached six of
   ten is the shape again in miniature — the four it

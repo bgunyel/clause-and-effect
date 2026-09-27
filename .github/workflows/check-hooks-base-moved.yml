@@ -1,0 +1,53 @@
+# When a dev branch moves, re-run check-hooks on every open pull request into it
+# (#199, requirement 4, option (b)). A pull_request run is not re-triggered by a
+# push to its base, so without this a green check stands on a merge that no
+# longer exists -- the 51-minute stale base of PR #196.
+#
+# It reports and does not block: nothing here can stop a merge, which is what
+# keeps it clear of ADR 0001. rerun-on-base-move.sh holds why the mechanism is a
+# re-run and not a dispatch, and why it waits.
+#
+# ITS ONE WRITE SCOPE, AND WHY. `actions: write` is what cancelling and
+# re-running a workflow run needs. It is confined to this job, which runs only
+# on a push to dev-* -- Bertan's pushes and pull request merges, never a fork --
+# and executes nothing but that script from the commit just pushed. The suite
+# never runs here; check-hooks.yml runs it with a read-only token.
+#
+# A run started with GITHUB_TOKEN does not start new workflow runs, except
+# workflow_dispatch and repository_dispatch. A re-run is a new attempt of an
+# existing run rather than a new run, which is why this is expected to work --
+# and #199 asks for that to be shown by an observed run, not assumed.
+name: hook checks, base moved
+
+on:
+  push:
+    branches: ['dev-*']
+
+permissions: {}
+
+concurrency:
+  group: check-hooks-base-moved-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rerun:
+    name: re-run check-hooks on open pull requests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      actions: write        # cancel and re-run a pull request's check-hooks run
+      pull-requests: read   # list the open pull requests into this branch; read mergeability
+      contents: read        # check out this script; read a merge commit's parents
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: re-run check-hooks where the base moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.ref_name }}
+          TIP: ${{ github.sha }}
+        run: bash .github/scripts/rerun-on-base-move.sh
