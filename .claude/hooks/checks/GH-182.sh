@@ -29,14 +29,24 @@
 # WHAT IS DRIVEN in the first half is each counter, against a fixture per
 # shape, in the manner of the unsplit file's `arms` and `fns` fixtures. Each
 # expected value is the one the fix gives; the old pipeline gives the other,
-# which was measured by reverting the pipeline by hand and is not a check here,
-# since the counters are the suite's own code and mutate-hooks.sh judges only
-# the hooks directory.
+# which was measured by reverting the pipeline by hand and is not a check here.
+# That half of the change is out of mutate-hooks.sh's reach, since `hook_text`
+# and the counters are the suite's own code and it judges only the hooks
+# directory; the other half is not, because the pass `hook_text` runs in the
+# middle is lib/command-scan.sh's, which it does mutate, and a mutated drop
+# moves the counts the unsplit file pins.
 #
-# WHAT IT TAKES FROM THE UNSPLIT FILE, which builds and owns it: the fixtures
-# $PUSH_WT, $ON_DEV and $WT_STALE, the list $LIB_CONSUMERS, and $STDERR_WRITE,
-# which the counters read. A fixture used by two files belongs in the prelude,
-# and moves there only when the file owning it moves, so each stays where it is.
+# AND THE REUSE CARRIED THE TOKENISER'S BLIND SPOT INTO THE COUNTERS, found by
+# review of this file's pull request: a `<<` the tokeniser misreads, in quotes
+# or in a trailing comment, drops real code whenever a line that ends the body
+# it did not open arrives, and no-pr-decisions.sh has one today. The last part
+# of this file holds what the drop takes from each hook the counters read.
+#
+# WHAT IT TAKES FROM ELSEWHERE: $PUSH_WT and $ON_DEV from check-hooks.sh's
+# prelude; from the unsplit file, which builds and owns them, the fixture
+# $WT_STALE, the list $LIB_CONSUMERS, and $STDERR_WRITE, which the counters
+# read. A fixture used by two files belongs in the prelude, and moves there only
+# when the file owning it moves, so each stays where it is.
 
 section "=== issue #182: the refusal-arm counters drop heredoc bodies ==="
 
@@ -48,8 +58,12 @@ requirement GH-182.1 <<'REQ'
   not an arm; `cat >&2 <<EOF` is one arm whatever its body says; a body line
   that is just `}` does not close the function around it, and a write after it
   is that function's; a body line naming a function is not a call to it. A
-  comment naming an opener starts no body, and a body line ending in a
-  backslash does not carry its terminator away into the line after it.
+  whole-line comment naming an opener starts no body, and a body line ending
+  in a backslash does not carry its terminator away into the line after it.
+  An opener the tokeniser misreads -- a `<<` inside quotes or in a trailing
+  comment -- gives its lines back when no line ends its body, and when one does
+  it drops the code before it: that is #289's, asserted here as the behaviour
+  it is, and GH-182.3 holds the hooks the counters read against it.
 - from: #182
 - kind: defect-refusing
 - status: active
@@ -66,8 +80,9 @@ requirement GH-182.2 <<'REQ'
 - text: A library in which `cs_drop_heredocs` is not defined withdraws
   `cs_normalise`, and says so on stderr naming both, so every consumer that
   requires `cs_normalise` refuses by its load guard; the intact library prints
-  nothing on loading. `cs_drop_heredocs` is called by `cs_normalise` alone, and
-  no guard names it.
+  nothing on loading. No hook calls `cs_drop_heredocs` but through
+  `cs_normalise` -- its one other caller is the check suite's `hook_text` --
+  and no guard names it.
 - from: #182
 - kind: defect-permitting
 - status: active
@@ -83,9 +98,41 @@ requirement GH-182.2 <<'REQ'
   answered by `cs_within_cap`, which every Bash hook calls and which fails when
   `cs_join` does, and no hook calls anything that calls `cs_drop_heredocs` but
   `cs_normalise`, whose failure no consumer reads. Withdrawal is the answer the
-  library already gives an incomplete word list.
+  library already gives an incomplete word list. It answers a missing function
+  and nothing wider: a pass that is defined but does not compile -- an awk
+  program with a syntax error -- leaves `cs_normalise` printing nothing and
+  succeeding by the same route, since the pipeline's status is its last
+  stage's. That predates #182, every tokeniser check goes red on such an edit,
+  and it is #242's, which owns a load-time compile check for every awk program
+  the library carries.
 REQ
-shape_pin 'GH-182.1:static GH-182.2'
+requirement GH-182.3 <<'REQ'
+- text: Every line `hook_text` drops from a hook the refusal-arm counters read
+  is a bare parameter, such as `$CMDS` or `$1`, or a word in capitals -- the
+  two lines a one-parameter heredoc body and its delimiter are made of -- and
+  the drop adds no line. The one exception is the five lines that
+  no-pr-decisions.sh's `grep -q '<<'` drops, whose quoted opener has an empty
+  delimiter that the next blank line ends: they are held verbatim until #289
+  stops the tokeniser dropping them. So an arm or a
+  call hidden by an opener the tokeniser misreads is a red run that names the
+  line, and not a count that stays green or turns red on a plausible wrong
+  number.
+- from: #182
+- kind: defect-permitting
+- status: active
+- direction: static: a property of the suite's helpers over the counted hooks
+- note: Found by review of #182's pull request, not filed, and the regression
+  is that pull request's own: `cs_drop_heredocs` gives lines back only when no
+  terminator arrives. Measured on the branch before this was written, an arm
+  added inside no-pr-decisions.sh's `grep -q '<<'` block left `arms` at the
+  pinned 20 and the suite green, where dev-05 counted 21 and went red. A
+  trailing comment naming `<<CMDLIST` in no-git-push.sh took its wrapper arm
+  out of the count, a red on 18 that reconciling the pin would have made
+  permanent. Held to a shape and not to a list of lines, so a new
+  `done <<CMDLIST` loop needs no edit here. The false opener in the hooks'
+  own verdicts is #289's and outside #182.
+REQ
+shape_pin 'GH-182.1:static GH-182.2 GH-182.3:static'
 variants_pin 'GH-182.2:none'
 
 # THE COUNTER FIXTURES, one shape each, named after it.
@@ -153,9 +200,29 @@ speaks() {
 }
 speaks
 R182_EOF
+# The half of the fail-safe that does not hold, asserted as the trade it is and
+# owned by #289: an opener the tokeniser misreads, whose body a line then ends.
+# A quoted `'<<'` has an empty delimiter once its quotes are gone, so a blank
+# line ends it -- the shape no-pr-decisions.sh carries -- and a trailing comment
+# naming `<<LIST` is ended by the real `LIST` further down.
+cat > "$R182/quoted-opener-a-blank-line-ends.sh" <<'R182_EOF'
+if echo "$C" | grep -q '<<'; then
+  echo "refused" >&2
+fi
+
+echo "refused" >&2
+R182_EOF
+cat > "$R182/trailing-comment-opener-a-delimiter-ends.sh" <<'R182_EOF'
+echo "refused" >&2  # read below as done <<LIST
+echo "refused" >&2
+while read -r x; do :; done <<LIST
+$X
+LIST
+R182_EOF
 for f in body-carries-a-write stderr-heredoc-body-carries-a-write body-closes-a-function \
          body-names-a-function body-line-ends-in-a-backslash comment-names-an-opener \
-         quoted-opener-never-closed; do
+         quoted-opener-never-closed quoted-opener-a-blank-line-ends \
+         trailing-comment-opener-a-delimiter-ends; do
   [ -s "$R182/$f.sh" ] || {
     echo "the #182 fixture $f.sh was not written; the checks against it prove nothing" >&2
     exit 1
@@ -173,13 +240,17 @@ tok 'fn_calls does not count a body line naming a function as a call' \
     '1' "$(fn_calls "$R182/body-names-a-function.sh" speaks)"
 tok 'arms drops a body before folding, so a backslash does not carry the terminator away' \
     '1' "$(arms "$R182/body-line-ends-in-a-backslash.sh")"
-tok 'arms strips comments before dropping, so a comment naming an opener starts no body' \
+tok 'arms strips comments before dropping, so a whole-line comment naming an opener starts no body' \
     '1' "$(arms "$R182/comment-names-an-opener.sh")"
 tok 'arms gives back the lines of an opener whose terminator never arrives' \
     '2' "$(arms "$R182/quoted-opener-never-closed.sh")"
 tok 'and fn_writes reads them in their place' \
     'hint writes
 speaks writes' "$(fn_writes "$R182/quoted-opener-never-closed.sh")"
+tok 'arms loses the arm under a quoted <<, whose empty delimiter a blank line ends: the trade #289 owns' \
+    '1' "$(arms "$R182/quoted-opener-a-blank-line-ends.sh")"
+tok 'arms loses the arm after a trailing comment naming <<LIST, which the real LIST ends: the same trade' \
+    '1' "$(arms "$R182/trailing-comment-opener-a-delimiter-ends.sh")"
 # All three counters, and not the one the issue named first: `fn_writes` and
 # `fn_calls` ran the same pipeline, and a fix to one of three is the shape the
 # unsplit file's section records three times. So each reads the hook through
@@ -188,12 +259,20 @@ speaks writes' "$(fn_writes "$R182/quoted-opener-never-closed.sh")"
 # three. Read off their definitions as bash holds them. Review of #182's first
 # commit found the order pinned for `arms` alone, while GH-182.1 claimed it of
 # all three.
+#
+# "Nothing else" is asked of the file argument, since a counter can read a hook
+# only by its name: with the one `hook_text "$1"` taken out, no `$1`, `${1`,
+# `$@` or `$*` is left, and no drop or `sed` of its own. The first version asked
+# only the second half, so a counter piping `cat "$1"` beside `hook_text` passed;
+# review of #182's pull request found it.
 R182_THROUGH=$(for fn in arms fn_writes fn_calls; do
   body=$(declare -f "$fn")
-  [[ $body == *'hook_text "$1"'* && $body != *cs_drop_heredocs* && $body != *'sed '* ]] \
+  rest=${body//'hook_text "$1"'/}
+  [[ $body == *'hook_text "$1"'* && $rest != *cs_drop_heredocs* && $rest != *'sed '* ]] \
+    && ! [[ $rest =~ \$(\{?1|[@*]) ]] \
     && printf '%s ' "$fn"
 done)
-tok 'arms, fn_writes and fn_calls each read the hook through hook_text, and through nothing else' \
+tok 'arms, fn_writes and fn_calls each read the hook through hook_text, and name it nowhere else' \
     'arms fn_writes fn_calls ' "$R182_THROUGH"
 
 # THE WITHDRAWAL. Every file that requires cs_normalise, read off the guards --
@@ -258,5 +337,59 @@ for hook in $LIB_CONSUMERS; do
 done
 written 'the library says cs_normalise answers for cs_drop_heredocs' \
   "$HOOKS/lib/command-scan.sh" 'CS_NORMALISE ANSWERS FOR CS_DROP_HEREDOCS'
+
+# WHAT THE DROP TAKES FROM THE HOOKS THE COUNTERS READ. Which hooks those are is
+# read off the suite, every `arms`, `fn_writes` or `fn_calls` written with a
+# `"$HOOKS/<name>"` argument, and then pinned as a literal, so a third is a red
+# run and not a hook read with nothing holding what its drop takes. A call that
+# names its hook through another variable is not read; every call that reads
+# a hook of this directory names it that way today.
+req GH-182.3
+R182_COUNTED=$(grep -ohE '(arms|fn_writes|fn_calls) "\$HOOKS/[A-Za-z0-9_.-]+"' -- "${SUITE_FILES[@]}" \
+  | sed 's|.*/||; s|"$||' | LC_ALL=C sort -u | tr '\n' ' ')
+tok 'the counters read two hooks of this directory' \
+    'no-git-push.sh no-pr-decisions.sh ' "$R182_COUNTED"
+# Every line the drop in `hook_text` removed, `-` in front, read through the
+# library's `hook_uncommented`, the stage `hook_text` reads it through. A `+`
+# line would be one the drop added, which cs_drop_heredocs never does, and is
+# printed rather than assumed away.
+hook_dropped() {  # hook_dropped <file> -- "-<line>" per line the drop removed
+  diff --old-line-format='-%L' --new-line-format='+%L' --unchanged-line-format='' \
+    <(hook_uncommented "$1") <(hook_uncommented "$1" | cs_drop_heredocs)
+}
+# A line the drop takes that is neither a bare parameter nor a word in
+# capitals, and any it adds. It asks the shape of each line and not whether the
+# two alternate, since which copy of a repeated line diff calls dropped is
+# diff's choice, and the lines dropped are the same whichever it makes.
+#
+# Each hook's answer is a literal: none for no-git-push.sh, and for
+# no-pr-decisions.sh the block under its `grep -q '<<'`, verbatim, blank
+# terminator included. An arm or a call added to that block changes the text
+# and is red; so is #289 closing, which leaves the literal naming lines nothing
+# drops, and it goes when #289 does.
+r182_unshaped() {  # r182_unshaped <file> -- what hook_text drops that is no heredoc of this shape
+  hook_dropped "$1" | grep -vE '^-(\$([A-Za-z_][A-Za-z0-9_]*|[0-9])|[A-Z][A-Z0-9_]*)$'
+}
+R182_FALSE_OPENER=$(cat <<'R182_EOF'
+-  SCAN="$SCAN
+-$COMMAND"
+-  CMDS=$(printf '%s\n' "$SCAN" | cs_split)
+-fi
+-
+R182_EOF
+)
+tok 'hook_text drops nothing from no-git-push.sh but one-parameter heredoc bodies and their delimiters' \
+    '' "$(r182_unshaped "$HOOKS/no-git-push.sh")"
+tok 'and from no-pr-decisions.sh those and the block under its quoted <<, verbatim, which #289 owns' \
+    "$R182_FALSE_OPENER" "$(r182_unshaped "$HOOKS/no-pr-decisions.sh")"
+# Driven, not only asserted: the two trade fixtures above each hide an arm, and
+# this is what names it.
+tok 'r182_unshaped names the arm a quoted << hides, and the lines with it' \
+    '-  echo "refused" >&2
+-fi
+-' "$(r182_unshaped "$R182/quoted-opener-a-blank-line-ends.sh")"
+tok 'and the arm a trailing comment naming <<LIST hides, with the real opener' \
+    '-echo "refused" >&2
+-while read -r x; do :; done <<LIST' "$(r182_unshaped "$R182/trailing-comment-opener-a-delimiter-ends.sh")"
 
 sourced_to_end

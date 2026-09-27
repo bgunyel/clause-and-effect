@@ -11697,7 +11697,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '115' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '116' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11823,7 +11823,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '113' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '114' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
@@ -13379,14 +13379,21 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch
 # THE ORDER IS PART OF THE FIX: comments stripped, then bodies dropped, then
 # continuations folded. The fold ran first, and bash does not continue a line
 # inside a quoted body, so a body line ending in a backslash took the line after
-# it with it. The drop keeps its fail-safe here too: a heredoc whose terminator
-# never arrives -- an opener matched inside quotes, `<<` in a message -- gives
-# its lines back, in their place, since nothing after the opener was printed
-# while they were held. For these counters a line given back wrongly can only
-# add a write or a call, which is the false red; a line hidden wrongly is the
-# permitting direction, and the drop is built against it. The order is written
-# once, in `hook_text` in checks/library.sh, which all three read the hook
-# through; #182's checks drive each shape, and each order, in checks/GH-182.sh.
+# it with it. The drop keeps its fail-safe here too, and it is half of one: a
+# heredoc whose terminator never arrives -- an opener matched inside quotes,
+# `<<` in a message -- gives its lines back, in their place, since nothing after
+# the opener was printed while they were held. For these counters a line given
+# back wrongly can only add a write or a call, which is the false red. A line
+# hidden wrongly is the permitting direction, and the drop is NOT built against
+# it: when a false opener's terminator does arrive -- the real delimiter further
+# down, or the first blank line for a quoted `'<<'`, whose delimiter is empty --
+# the code in between is dropped as a body. no-pr-decisions.sh carries one, and
+# review of #182's pull request measured an arm added under it survive green.
+# #289 owns the opener; GH-182.3 holds every line the drop takes from the hooks
+# these counters read to a heredoc's shape, so an arm hidden that way is a red
+# run naming it. The order is written once, in `hook_text` in checks/library.sh,
+# which all three read the hook through; #182's checks drive each shape, each
+# order and the half that does not hold, in checks/GH-182.sh.
 STDERR_WRITE='>&[[:space:]]*2|>[[:space:]]*/dev/stderr'
 # `arms` is defined in checks/library.sh since #182, whose issue file became
 # its second caller. What it reads and why stands here, beside the fixtures

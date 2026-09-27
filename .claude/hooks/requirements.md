@@ -1463,3 +1463,13 @@ it has no entry above (Q16).
   file, where the three shapes are pinned at today's permitted verdict and
   GH-177's text says what is refused. It adds its requirements in the pull
   request that fixes it
+- #289: a `<<` the tokeniser misreads -- inside quotes, where `'<<'` leaves an
+  empty delimiter the next blank line ends, or in a trailing comment -- opens a
+  heredoc, and when a line ends it the code in between is dropped. In the
+  hooks' verdicts that permits a push or a merge; in the suite's refusal-arm
+  counters, which reuse the pass since #182, it leaves an arm uncounted. Filed
+  from round 1 of the review of #182's pull request. Cited in #182's issue
+  file, where GH-182.3 holds the one instance in `no-pr-decisions.sh` verbatim
+  and two fixtures pin the counters' half at today's count, and beside
+  `hook_text` and in the unsplit file's #109 section. It adds its requirements
+  in the pull request that fixes it
