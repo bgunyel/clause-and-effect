@@ -15,34 +15,49 @@
 # before #224 merged.
 #
 # WHAT IS DRIVEN is the library's own `fail`, in a child bash that sources it
-# with an empty LEDGER and times the one `fail` call, and nothing else, with
-# $EPOCHREALTIME, under C.UTF-8, the locale all three measurements above were
-# taken in. The messages are written to fixtures once, so the time is `fail`'s
-# and not the loop that made it or the file read.
+# with an empty LEDGER and times the one `fail` call, and nothing else, under
+# C.UTF-8, the locale all three measurements above were taken in. The
+# messages are written to fixtures once, so the time is `fail`'s and not the
+# loop that made it or the file read.
 #
-# A RATIO, NOT A BOUND, in the form of #96's `scales_linearly`: four times the
+# A RATIO OF CPU TIMES, in the form of #96's `scales_linearly`: four times the
 # lines may cost at most eight times the time, each size's fastest of three,
-# the smaller floored at 10 ms. The first form of this check was the library's
-# `under_a_second` over 10,000 lines, and its first two full runs measured
-# 266 ms and 521 ms; the second was taken at a load average of 36, where
-# `fail` alone took 0.5 s. A bound of a second over a time that doubles with
-# the machine's load is the row that flaked in round 1 of the review of PR
-# #285 (`cs_normalise over one 512 KB line`), and a ratio of two times taken
-# back to back under the same load is not moved by it. Measured at that load,
-# fastest of three: the linear `fail` took 105 ms at 2,500 lines and 532 ms at
-# 10,000, 5.1 times; the substitution 1,139 ms and 18,217 ms, 16.0 times. So
-# the bound of eight stands 1.6 times above the one and twice below the
-# other. A run cut off at 20 s, or one that exits non-zero, fails the row, so
-# a `fail` that is not there fails it too, and one slow enough to be cut off
-# fails it in the refusing direction, as the defect does.
+# the smaller floored at 10 ms. The time is the child's user and system time
+# over the `fail` call, read with bash's `time` and TIMEFORMAT, and not the
+# wall clock, because the wall clock on a loaded machine is what made two
+# earlier forms of this row unreliable:
+#
+#   - `under_a_second` over 10,000 lines measured 266 ms and then 521 ms in two
+#     full runs, the second at a load average of 36. That is the shape of the
+#     row that flaked in round 1 of the review of PR #285, `cs_normalise over
+#     one 512 KB line`.
+#   - The same ratio as below over $EPOCHREALTIME, in round 3 of that review,
+#     at a load average of about 38 on 6 cores: rev-agent-224 drove this
+#     file's code and measured the linear `fail` failing in 1 run of 27, with
+#     ratios from 3.0 to 7.2, and the plain `printf` of the `fail` before #224,
+#     also linear, failing in 5 of 30, one of them 27 ms and 251 ms, 9.3
+#     times. Widening the step to eight times was measured too, by
+#     dev-agent at a load average of 25: 8.0 to 21.2 over eight runs, each
+#     outlier a small run whose fastest of three caught a quiet moment. The
+#     noisy term is the wall clock, not the step.
+#
+# Measured by CPU time at a load average of 26, fastest of three at each size:
+# the linear `fail` 4.2 to 4.4 times over eight runs (22 or 23 ms and 97 to
+# 101 ms), the `fail` before #224 3.9 to 4.2 over six (10 or 11 ms and 42 to
+# 46 ms), and the substitution 15.4 and 15.5 over two (227 ms and 3,535 ms,
+# 231 ms and 3,576 ms). So the bound of eight stands 1.8 times above the one
+# and 1.9 times below the other, against a spread of about five per cent. A
+# run cut off at 20 s of wall clock, or one that exits non-zero, fails the
+# row, so a `fail` that is not there fails it too, and one slow enough to be
+# cut off fails it in the refusing direction, as the defect does.
 
 section "=== issue #293: fail costs time linear in its message ==="
 
 requirement GH-293 <<'REQ'
 - text: `fail` prints and records a message in time linear in its size:
   under C.UTF-8, one `fail` over a message of 10,000 lines, 580 KB, costs at
-  most eight times what one over the first 2,500 of those lines costs, each
-  the fastest of three.
+  most eight times the CPU time of one over the first 2,500 of those lines,
+  each the fastest of three.
 - from: #293
 - kind: defect-refusing
 - status: active
@@ -60,16 +75,16 @@ head -n 2500 "$R293_LARGE" > "$R293_SMALL"
 # The child's status is `child_status` and not `rc`, as `unarmed` names grep's
 # `grep_status`: the #98 self-test derives every helper that reads `rc=$?` as
 # one that runs a hook, and this one runs none.
-r293_fail_ms() {  # r293_fail_ms <message file> -- "<ms> <exit>", the fastest of three
+r293_fail_ms() {  # r293_fail_ms <message file> -- "<CPU ms> <exit>", the fastest of three
   local i ms child_status best= best_status=
   for i in 1 2 3; do
     ms=$(LC_ALL=C.UTF-8 LEDGER= REQ=GH-0 timeout 20 bash -c '
       source "$1" || exit 90
       m=$(< "$2")
-      t=$EPOCHREALTIME
-      fail static "%s" "$m" > /dev/null || exit 91
-      u=$EPOCHREALTIME
-      echo $(( (${u/./} - ${t/./}) / 1000 ))' bash "$SUITE_DIR/checks/library.sh" "$1" 2> /dev/null)
+      TIMEFORMAT="%3U %3S"
+      cpu=$( { time fail static "%s" "$m" > /dev/null; } 2>&1 ) || exit 91
+      user=${cpu% *} sys=${cpu#* }
+      echo $(( 10#${user/./} + 10#${sys/./} ))' bash "$SUITE_DIR/checks/library.sh" "$1" 2> /dev/null)
     child_status=$?
     [ "$child_status" = 0 ] || { printf '%s %s\n' - "$child_status"; return; }
     if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms best_status=$child_status; fi
@@ -87,9 +102,9 @@ else
   R293_S=${R293_S% *} R293_L=${R293_L% *}
   [ "$R293_S" -ge 10 ] || R293_S=10
   if [ $(( R293_L * 10 / R293_S )) -lt 80 ]; then
-    pass static 'scaled fail over 2,500 and 10,000 lines: %s ms and %s ms' "$R293_S" "$R293_L"
+    pass static 'scaled fail over 2,500 and 10,000 lines: %s ms and %s ms of CPU' "$R293_S" "$R293_L"
   else
-    fail static '%s\n         %s ms at 2,500 lines, %s ms at 10,000; four times the lines may cost at most eight times' \
+    fail static '%s\n         %s ms of CPU at 2,500 lines, %s ms at 10,000; four times the lines may cost at most eight times' \
       'fail is not linear in its message' "$R293_S" "$R293_L"
   fi
 fi
