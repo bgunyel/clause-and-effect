@@ -86,7 +86,7 @@ requirement GH-159.1 <<'REQ'
   identically-named existing entry in a repository that is not this one is
   refused too, and so is every existing file but a README of a project
   directory that stands under a guarded ancestor, and a draft entry in a
-  worktree, on no branch, with the main checkout as the project directory
+  worktree, untracked, with the main checkout as the project directory
   (#190): the accepted trade, since a refusal is visible and one edit away and
   a permitted rewrite of history is neither.
 - from: #159, and review of its branch
@@ -606,7 +606,7 @@ printf 'draft\n' > "$R159_WT/$R159_DRAFT"
   exit 1
 }
 REPO_ROOT="$R159_MAIN" feed "$PATH" append-only-docs-edit.sh BLOCK \
-  'ACCEPTED TRADE, not a defect (#190): an Edit of a draft entry in a worktree, on no branch, the project directory the main checkout' \
+  'ACCEPTED TRADE, not a defect (#190): an Edit of a draft entry in a worktree, untracked, the project directory the main checkout' \
   "$(r159_call Edit "$R159_WT/$R159_DRAFT")"
 
 # THE TWO HALVES, HELD TO ONE PATH SET: r159_paths, above, which the fixture's

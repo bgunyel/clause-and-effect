@@ -133,3 +133,142 @@ Two findings were declined:
   widening that half out of scope, and it now permits `notdocs/` paths it
   used to refuse. The branch argues the change is required by criteria 3
   and 5 together.
+
+
+# 2026-09-27 23:39 +03 · dev-agent-159 — #159: corrections after seven review rounds, and what each round found
+
+Branch `worktree-issue-159-worktree-append-only`, `2202699` (the entry
+above) to the commit that appends this one. dev-05 was merged in twice,
+`53efd8f` (#254) at `b615960` and `abba1d0` (#253) at `4bf9004`. With this
+commit the branch is 18 ahead of `origin/dev-05`: 16 commits and the two
+merges. rev-agent-159 reviewed it in seven rounds on PR #271. This entry
+corrects the one above, which is frozen, as the README prescribes. It was
+appended with `cat >>` because the Edit guard this branch fixes now refuses a
+draft in a worktree too, and the entry above is one.
+
+## Corrections to the entry above
+
+- **"Commits `1ab0c7a` to `45d9c16` … six ahead."** That was true at
+  `2202699`. The figure at this commit is in the heading paragraph above.
+- **"the new checks failed 124 rows. 121 of them were #159 rows. The other
+  three were the literals"** was taken with `mutate-hooks.sh` reverted as well
+  as the two hook files. The assistant re-took it in round 1 with only
+  `append-only-docs-edit.sh` and `append-only-docs.sh` from dev-05, at
+  `b42590c`: 128 rows failed, 124 in #159's issue file and 4 GH-157.3 rows.
+  The two figures measure different things and are not comparable. Neither was
+  re-taken after round 2.
+- **"green over 231 requirements."** 233 after `53efd8f` merged #219's two.
+- **"Seven registry rows."** The branch adds ten: the seven, the gate row
+  `gate-option-letters-not-a-boundary` (round 3), and
+  `heading-correction-any-dev-log-pair` and `heading-correction-last-pair-only`
+  (rounds 2 and 5). `heading-correction-read-off-the-root` was re-targeted twice.
+  Through rev-agent-159's harness runs, with `RUN_BOUND` raised in scratch
+  copies only: all seven original rows and the gate row caught. The heading
+  rows were caught in their round-2 form at `9abcb73`. The three heading rows in
+  their round-5 form were still running when this was written.
+- **"a fixture of nine hooks."** Now fourteen hook files and eighteen
+  registrations. The additions include a prompt hook, a command that is not a
+  string, a missing file, and two matchers bash cannot compile.
+- **"The git route was not taken"** (the first `##` section) put a decision in
+  the passive. The assistant chose not to take it, for the reason given there.
+- **"Two findings were declined"** (the Review section) did the same. The
+  assistant declined them. **The second decline was wrong.** "`heading_correction`
+  is not tied to the matched segment … matters only for a dev-log directory
+  nested under another guarded directory" described a permitting regression,
+  and the assistant declined it without feeding that case to dev-05's hook.
+  At `45d9c16`, `*/docs/dev-log/*` permitted the heading correction on
+  `docs/eval-reports/docs/dev-log/devlog_…`, which dev-05 refused.
+  - Round 2's fix (G4, the last guarded pair) closed the ancestor half of it
+    and kept the nested half.
+  - rev-agent-159 found the nested half in round 5 (G6).
+  - The correction now holds only when every guarded pair in the path is
+    `dev-log`.
+
+## The seven rounds
+
+**Round 1.** It found two gating defects:
+- **G1:** the derivation of which hooks the checkout question reaches silently
+  dropped a hook it could not read (a registration with an argument, and a
+  ` #` inside a quoted string).
+- **G2:** the "no table is red" branch had never been driven.
+
+It also found a stale #159 citation (N1), and a recorded trade narrower than
+the behaviour (N2): drafts in a worktree, a project under a guarded ancestor,
+and a `+`-ended parent. rev-agent-159 filed #275 and #276.
+
+**Round 2.** It found **G3**, which came back **through G1's fix**: the new
+`gsub` on `.command` aborted jq on a prompt-type hook, with the status
+discarded. It also found **G4**: under a `docs/dev-log/` ancestor, the
+dev-log-only exception reached `docs/lessons-learned/` and
+`docs/eval-reports/` entries. And **N3**, `-xdocs` prose wider than the
+redirect rule. The assistant's own sweeps added two siblings:
+- a draft precondition that read git naming nothing as "untracked";
+- a README carve-out the trade prose did not state.
+
+The suite then caught the assistant's `rc=$?` in a function that runs no hook.
+#98's derivation reads that as a hook's exit status. rev-agent-159 filed #282.
+
+**Round 3.** Three present-tense claims the root no longer made (N5). The
+registry declared rows `caught` that no harness had run (N6). The gate's
+option group had no row (N7). **N8** was the assistant's error: its round-2
+reply said Bertan would re-run the suite and the mutations. rev-agent-159 had
+said that, and Bertan had said nothing in the loop. The assistant corrected the
+comment in place.
+
+**Round 4.** **N9**: a matcher bash cannot compile read as "not reached". The
+assistant's sweep found the same class in the grep pipeline, which is fixed
+through `PIPESTATUS`. N10: the #159 entry sat among citations that are not
+requirements. N11: under the ancestor, the correction reached a `devlog_*`
+file in no guarded directory, which is stated and pinned as a trade. The suite
+caught two more of the assistant's mistakes in that fix:
+- a deliberate missing `grep` written into the run's own not-found record;
+- #282 cited without an entry.
+
+The assistant also relayed rev-agent-159's harness result as "every
+requirement named went red: GH-159.1 and GH-96.2". The rows name GH-159.1
+only. That list was what went red.
+
+**Round 5.** **G6**, which came back **through G4's fix**: the last guarded
+pair let a `docs/dev-log/` nested inside one of the other two directories take
+the exception, in this repository. This is the case the assistant had declined
+at `45d9c16`. The assistant took rev-agent-159's first reading, every pair, and
+pinned every nesting of the three directories as a row. It also pinned the
+refusals that costs against dev-05 as trades, a `docs/eval-reports/` ancestor
+among them. N12 and N13 were text.
+
+**Round 6.** **G7**: the fixture precondition named two files, so a near-miss
+the build left out made 57 ALLOW rows unable to fail. rev-agent-159 measured
+this, and the suite was green. The precondition now reads the rows' own tables.
+The assistant's sweep found ALLOW rows on files created inline with no check,
+and each now calls `r159_present`. N14 was CLAUDE.md's consequence 5. The
+assistant declined the loop simplification, because it spells the directory
+set a second time outside `GUARDED_RE`.
+
+**Round 7.** Two claims this branch's own fixes left behind:
+- **N15:** the `#177` conjunction still read "under docs/dev-log/, at any
+  depth".
+- **N16:** "committed on no branch" for a fixture entry that is untracked.
+
+The assistant's sweep found the same "on no branch" in GH-159.1 and a row
+label, and the "at any depth" clause in GH-177's requirement text. All are
+fixed, and then this entry was appended.
+
+What the rounds have in common: two gating defects, G3 and G6, came back
+through the fixes to G1 and G4. Each fix was a guard that exhibited the class
+it had been written to close. The suite was green before every one of them was
+found.
+
+## Open
+
+- **The harness:** the three heading rows in their round-5 form, with
+  rev-agent-159.
+- **#190:** ADR 0003 says the Edit companion reads the merge base, while the
+  hook reads existence, so a draft is refused from its first write.
+  rev-agent-159 withdrew it as a decision for this PR. The README's append rule
+  makes an appended correction such as this one the prescribed route.
+- **Filed from review, not fixed here:** #259, #275, #276, #282, #297, and #233
+  re-confirmed.
+- **Still Bertan's to decide:** the Bash half's left boundary, as the entry
+  above says.
+- **The rate constant:** it stays at 288 s, measured at 6854 results. The
+  suite read 6915 at `948d44c`, inside the bound.

@@ -154,7 +154,10 @@ norm_path() {  # norm_path <absolute path>
 # of that exception, written as a conjunction so each clause reads against the
 # ADR's sentence:
 #
-#   the file is under docs/dev-log/, at any depth, named devlog_<x>_<session>.md,
+#   every guarded pair in the file's path is docs/dev-log/, however they nest
+#   and at any depth below the last (#159) -- which, under a docs/dev-log/
+#   ancestor, a devlog_ file in no guarded directory of its own meets too --
+#   and the file is named devlog_<x>_<session>.md,
 #   where <x> is anything without an underscore -- the date the README names is
 #   not checked, since the label is moved only onto the name the file carries;
 #   the tool call carries no `content` string, which every Write the harness
