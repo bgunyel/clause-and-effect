@@ -552,7 +552,7 @@ def test_report_does_not_say_a_short_tail_was_cut(tmp_path):
 
 @pytest.mark.parametrize("heading", ["=== the next section ===", "--- this repository ---"],
                          ids=["equals", "dashes"])
-def test_report_ends_a_failing_row_at_a_section_heading(tmp_path, heading):
+def test_report_ends_a_failing_row_at_a_heading_at_column_0(tmp_path, heading):
     """A heading is printed at column 0, so it closes a failing row's detail,
     and what follows it -- here a library's stderr, printed before the row it
     belongs to -- is not shown as the failing row's. Since #224 it is the

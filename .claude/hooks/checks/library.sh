@@ -66,7 +66,7 @@ pass() {  # pass <refuse|permit|static> <format> [arguments...] -- an ok line, r
   record "$dir" ok "${line%%$'\n'*}"
 }
 # A FAIL LINE MARKS ITS OWN DETAIL (#224). Every line of the message after the
-# first is printed with seven spaces in front of it, the width of `  FAIL `,
+# first is printed with `indent`, seven spaces, the width of `  FAIL `,
 # whatever the line already starts with: a line at column 0 gets them, one that
 # opens with spaces gets them added to its own, and a blank line is printed as
 # the seven spaces alone. A message embeds a hook's stderr verbatim, and before
@@ -79,10 +79,10 @@ pass() {  # pass <refuse|permit|static> <format> [arguments...] -- an ok line, r
 # into that parser, so the two spellings cannot drift apart with the tests
 # green. The ledger records the first line, which the indent never reaches.
 fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, recorded
-  local dir="$1" fmt="$2" line
+  local dir="$1" fmt="$2" line indent='       '
   shift 2
   printf -v line "$fmt" "$@"
-  printf '  FAIL %s\n' "${line//$'\n'/$'\n'       }"
+  printf '  FAIL %s\n' "${line//$'\n'/$'\n'$indent}"
   FAILED=1
   record "$dir" FAIL "${line%%$'\n'*}"
 }

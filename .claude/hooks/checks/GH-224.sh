@@ -9,7 +9,8 @@
 # the failing row above it, which run 35836366963's log can produce; and it
 # cut a hook's stderr short at its first blank line or line opening `---`.
 # `fail` embeds that stderr verbatim, so a line of it started wherever the
-# hook started it, column 0 included. Split from #207 by its triage.
+# hook started it, column 0 included. Split off by the triage of the issue
+# that bounds the summary's size, which #224's own text names.
 #
 # The indent is seven spaces, the width of the `  FAIL ` a row opens with, so
 # a continuation line stands under the message's first character. It is added

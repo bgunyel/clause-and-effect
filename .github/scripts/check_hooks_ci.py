@@ -42,8 +42,11 @@ Two subcommands, one per thing a green run has to be true about:
     each with exactly one indent removed, so the stderr reads as the hook
     wrote it. A line is what `fail` calls one, cut at a newline and nowhere
     else: `str.splitlines` also cuts at a carriage return, a form feed and
-    five more, and a stderr holding one would have lost the rest of its
-    detail at a line `fail` never indented.
+    seven more, and a stderr holding one would have lost the rest of its
+    detail at a line `fail` never indented. The trade: a log written with
+    CRLF endings would keep a carriage return on every line, so its last line
+    would not read as ``ALL CHECKS PASSED`` and an exit 0 would be refused.
+    That fails closed, and the log is written by `tee` on a Linux runner.
 
     Until #224 the log did not say which lines were a row's, and the detail
     was guessed: the lines up to the next row, section heading (``===`` or

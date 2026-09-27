@@ -1862,7 +1862,7 @@ echo "--- every result goes through pass and fail ---"
 req GH-104.1
 tok 'the only lines that print a check result are the two in pass and fail' \
 "  printf '  o"'k'"   %s\n' \"\$line\"
-  printf '  F"'AIL'" %s\n' \"\$line\"" \
+  printf '  F"'AIL'" %s\n' \"\${line//\$'\\n'/\$'\\n'\$indent}\"" \
   "$(sed 's/[[:space:]]*#.*$//' "$SUITE_TEXT" | grep -E "['\"]  (ok   |FAI""L )")"
 
 echo "--- this repository ---"
