@@ -115,17 +115,20 @@ requirement GH-166.1 <<'REQ'
   is reached (`sudo -D "/srv/my repo" git push --all origin`,
   `sudo -p "Password: " git push origin main`,
   `flock -w 5 "/tmp/my lock" git push --all origin`,
-  `sudo -u root -g "domain users" gh pr merge 5`); an assignment holding one is
-  stripped whole (`GIT_SSH_COMMAND="ssh -i k" git push origin main`,
-  `A=$'b c' git push origin main`); an env operand holding one is stepped over
-  (`env $'A=b c' git push origin main`); and text inside a quote is never
-  offered as a command word, so `sudo echo --text="run 'git' push origin main"`
-  is prose. The tail offer reads three words after the head and no fourth.
+  `sudo -u root -g "domain users" gh pr merge 5`); an env operand holding one
+  is stepped over (`env $'A=b c' git push origin main`); and text inside a
+  quote is never offered as a command word, so
+  `sudo echo --text="run 'git' push origin main"` is prose. The tail offer
+  reads three words after the head and no fourth. The wrapper anchor, a
+  regular expression, counts a quoted span holding a blank as one token too, so
+  `sudo -g "domain users" -u root bash -c "git push origin main"` is refused.
+  The same word ends strip an assignment prefix holding a blank, which is
+  GH-273's.
 - from: #166, the review of PR #260, round 2, which named the class: a
   question about one token whose answer is a property of the line
 - kind: defect-permitting
 - status: active
-- variants: transformation: pre-sudo-spaced pre-assign-spaced
+- variants: transformation: pre-sudo-spaced
 - note: round 1 of that review closed #266 with a test asked of each token
   alone, whether it left a quote open, and that test got both halves wrong: it
   stopped at `$'A=b c'` behind env, permitting four pushes and a merge that
@@ -138,12 +141,11 @@ requirement GH-166.1 <<'REQ'
   `'git push origin main'` and `sudo 'git push origin main'` -- a program of
   that whole name to bash -- are no longer read as git. The bound is pinned at
   the third word and past it: `sudo -u root -g grp -E gh pr merge 5` is
-  permitted. What this does not reach is #273's third part: the wrapper
-  anchor's assignment branch is a regular expression over raw text, so
-  `A="b c" bash -c "git push origin main"` still escapes the wrapper refusal;
-  its first two parts, the assignment strip and the env operand, are this
-  entry. And #265 stands: an option is still recognised by its raw first
-  character, so a quoted option is not stepped over as one.
+  permitted. #273, an assignment holding a blank, is closed beside this and
+  declared in its own issue file: its strip and its env operand are these word
+  ends, and its wrapper half is a regular expression. #265 stands: an option is
+  still recognised by its raw first character, so a quoted option is not
+  stepped over as one.
 REQ
 shape_pin 'GH-166 GH-166.1'
 variants_pin 'GH-166:transformation GH-166.1:transformation'
@@ -272,31 +274,24 @@ flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a prompt with a blank behind a long 
   'sudo -u root --prompt "pw: " git push --all origin'
 flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a lock file with a blank as the operand of flock' \
   'flock -w 5 "/tmp/my lock" git push --all origin'
-flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a quoted env operand holding a blank, the documented GIT_SSH_COMMAND' \
-  'env "GIT_SSH_COMMAND=ssh -i k" git push origin main'
 check_in "$PUSH_WT" no-git-push.sh BLOCK 'its control: an attached option value holding a blank, refused before this too' \
   'sudo --prompt="a b" git push origin main'
 req GH-166.1 US-15
 flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'a group name with a blank behind sudo -g, the merge behind it at the third word' \
   'sudo -u root -g "domain users" gh pr merge 5'
-# An assignment holding a blank, in front of the command itself. #273's first
-# part: the strip removed half the assignment and left the other half as the
-# command word. Its third part, the wrapper anchor, is not this.
-req GH-166.1 US-1
-flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'an assignment prefix holding a double-quoted blank, the documented GIT_SSH_COMMAND' \
-  'GIT_SSH_COMMAND="ssh -i k" git push origin main'
-flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'an assignment prefix holding a single-quoted blank' \
-  "A='b c' git push origin main"
-flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'an assignment prefix holding an ANSI-C blank' \
-  "A=\$'b c' git push origin main"
-flip "$ON_DEV" no-commit-to-main.sh ALLOW BLOCK 'an assignment prefix holding a blank, a push naming main on a dev branch' \
-  'A="b c" git push origin main'
-req GH-166.1 US-15
-flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an assignment prefix holding a blank, a merge' \
-  'A="b c" gh pr merge 5'
+# The wrapper anchor counts the tokens between a prefix word and the wrapper
+# word, three at most, and counted a spaced value as two of them: both of these
+# were permitted at abba1d0 while the same values unspaced were refused. A
+# regular expression cannot call the reader, so its token pairs quoted spans --
+# CS_WRAP_TOKEN in lib/command-scan.sh.
+req GH-166.1 FR-4
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a spaced group value and a user in front of a wrapper, three tokens as words' \
+  'sudo -g "domain users" -u root bash -c "git push origin main"'
+flip "$PUSH_WT" no-git-push.sh ALLOW BLOCK 'a directory with three blanks in front of a wrapper, one token' \
+  'sudo -D "/srv/a b c d" bash -c "git push origin main"'
 req GH-166.1
-check_in "$PUSH_WT" no-git-push.sh ALLOW 'BOUNDARY: an assignment holding a blank in front of a wrapper escapes the wrapper anchor, #273' \
-  'A="b c" bash -c "git push origin main"'
+check_in "$PUSH_WT" no-git-push.sh ALLOW 'its control: the same prefix in front of a wrapper running nothing guarded' \
+  'sudo -D "/srv/a b c d" bash -c "make test"'
 # Text inside a quote is never offered. Both were permitted at abba1d0 and
 # refused at acbb150, where a quoted git inside a double-quoted argument was
 # read as a word of its own.

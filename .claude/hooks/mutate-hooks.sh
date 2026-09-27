@@ -717,6 +717,8 @@ strip-walk-cuts-at-every-blank%lib/command-scan.sh%/^      wrapped = 0$/,/Walked
 tail-offer-reads-blank-cut-tokens%lib/command-scan.sh%/    function nextword(/,/^    }$/s/q = wordend(r)/q = tokend(r)/%GH-166.1%caught
 head-word-cut-at-its-first-blank%lib/command-scan.sh%/    function printhead(/,/^    }$/s/^      while (wd_i <= wd_n) { i = wd_i; wd_next(); if (wd_ev == "blank") break; i = wd_i }$//%GH-166.1%caught
 tail-offer-bound-two-words%lib/command-scan.sh%s/^        for (k = 0; k < 3; k++) {$/        for (k = 0; k < 2; k++) {/%GH-166.1%caught
+wrapper-assignment-value-stops-at-a-blank%lib/command-scan.sh%/^CS_WRAPPER_RE=/s/=(\$CS_WRAP_TOKEN|\[\[:space:\]\]+)/=[^[:space:]]*[[:space:]]+/%GH-273%caught
+wrapper-token-stops-at-a-quoted-blank%lib/command-scan.sh%s/^CS_WRAP_TOKEN=.*/CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"/%GH-166.1%caught
 tail-offer-bound-four-words%lib/command-scan.sh%s/^        for (k = 0; k < 3; k++) {$/        for (k = 0; k < 4; k++) {/%GH-166.1%caught
 api-read-taken-for-a-write%no-pr-decisions.sh%/^gh_api_is_write()/,/^}/s/^  return 1$/  return 0/%FR-20%caught
 release-allowlist-admits-a-write%no-pr-decisions.sh%/^RELEASE_READ_VERBS=/s/verify-asset"/verify-asset create edit delete"/%FR-48%caught

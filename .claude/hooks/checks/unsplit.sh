@@ -108,12 +108,16 @@ git push --all origin
 push --all origin
 --all origin' \
     "$(printf 'sudo -u root git push --all origin\n' | cs_split)"
-# The tail stops at a token opening a quote: what follows is the text of an
-# argument, and a commit message naming a push is not a push.
-tok 'the tail stops where a quoted argument starts' \
+# A quoted argument in the tail is ONE word, read by the word reader, and its
+# blanks reduce to `?`, so it names one program and no rule reads a push in it:
+# a commit message naming a push is not a push. Until round 2 of the review of
+# PR #260 the tail stopped in front of it instead, and that stop -- asked of
+# one blank-cut token -- is what left a spaced option value a wall; GH-166.1.
+tok 'a quoted argument in the tail is one word, reduced to one name' \
     'git commit -m "git push --all origin"
 commit -m "git push --all origin"
--m "git push --all origin"' \
+-m "git push --all origin"
+git?push?--all?origin' \
     "$(printf 'sudo git commit -m "git push --all origin"\n' | cs_split)"
 tok 'continuation joined before anything else' \
     'git push   --all origin' \
@@ -10397,8 +10401,8 @@ SEEDS
 #  15 a quoted command word behind a prefix word's separated option value
 #     (#266)                          pre-nice-opt-dquoted pre-nice-opt-squoted
 #                                     pre-nice-opt-ansi pre-nice-opt-locale (#166)
-#  16 a quoted span holding a blank in front of the command word (#166)
-#                                     pre-sudo-spaced pre-assign-spaced
+#  16 a quoted span holding a blank in front of the command word
+#     (#166, #273)                    pre-sudo-spaced pre-assign-spaced
 #
 # The thirteenth is seven spellings where the others are one or two, and that is
 # #128 rather than thoroughness for its own sake: the spellings of the heredoc
@@ -10446,8 +10450,9 @@ SEEDS
 # whose answer is a property of the line. A spaced option value, `sudo -D` and
 # a directory with a blank in it, and a spaced assignment, the documented
 # `GIT_SSH_COMMAND="ssh -i k"`, each left a walk half-way through a word, and
-# the command behind it unread. One spelling of each; the wrapped seeds depart
-# under the assignment, which is #273's third part and a regular expression.
+# the command behind it unread. One spelling of each: the option value is
+# GH-166.1's and the assignment #273's, whose wrapper half -- a regular
+# expression -- the wrapped seeds under it are what ask.
 #
 # A transformation that cannot apply to a seed -- no value-taking long flag, no
 # second short flag to bundle with, no subcommand to put a global flag before --
@@ -11799,7 +11804,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '125' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '127' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11925,7 +11930,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '123' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '125' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.

@@ -191,10 +191,7 @@
 # no-work-on-stale-branch.sh unquote by deleting quote characters, which leaves
 # the `$`, and base_args in no-pr-decisions.sh, which knows two quotes (#267);
 # cs_git_args skipping git's global options on raw text (#191); the REST base
-# (#225); the separator walk in cs_split, which pairs `$'` as `'` (#252); and
-# the assignment branch of the wrapper anchor, a regular expression that cannot
-# step over a quoted blank, so an assignment holding one in front of a wrapper
-# escapes the wrapper refusal (#273).
+# (#225); and the separator walk in cs_split, which pairs `$'` as `'` (#252).
 
 # THE LOAD CONTRACT, which is about this file's absence rather than its
 # contents, and is written here because a rename made here is what breaks it.
@@ -925,9 +922,20 @@ CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|s
 # y; fi"`. The same cost, in the same direction, and each is a check.
 #
 # A token that may stand between the prefix word and the wrapper word: any word
-# at all, which is cs_split's tail token exactly -- `^[^[:space:]]+[[:space:]]+`
-# there, the same class here. Both the class and the bound of three are shared,
-# and that is the whole claim.
+# at all, which is cs_split's tail word -- and the bound of three is shared.
+# Until round 2 of the review of PR #260 both were blank-cut tokens, so a spaced
+# option value spent two of the three: `sudo -g "domain users" -u root bash -c
+# ...` and `sudo -D "/srv/a b c d" bash -c ...` escaped the wrapper refusal
+# while the same values unspaced were refused. cs_split reads its words through
+# the word reader now; a regular expression cannot call it, so a token here is
+# a run of unquoted characters, double-quoted spans and single-quoted spans --
+# a quoted blank inside one, and the token goes on. A LONE QUOTE is still a
+# character of it, so every token this matched before it still matches and the
+# widening only refuses more; without that alternative an unpaired quote would
+# have ended the match, the other way. What it cannot do is read an escape: a
+# double quote escaped inside a double-quoted span ends the span here. That is
+# the trade this anchor records for `b"a"sh`. The assignment branch in front of
+# the prefix word reuses this token as its value, for #273.
 #
 # IT EXCLUDED A LEADING DASH UNTIL REVIEW OF THIS BRANCH, and that was #79
 # reproduced inside its own fix, one option deeper and in the permitting
@@ -954,16 +962,15 @@ CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|s
 # respect while they differed in two is the shape this file exists to stop,
 # arriving in the change whose subject it is. All three shapes are checks now.
 #
-# ONE DIFFERENCE REMAINS, and it is in the loop rather than the class.
-# cs_split's tail also breaks at a token that OPENS A QUOTE, because it is
-# offering candidates to read as commands and what follows a quote is the text
-# of an argument -- the mistake cs_normalise has made three times. Nothing here
-# reads a token as a command: these are skipped, on the way to a wrapper word
-# that must still appear after them. So the reason to stop does not transfer,
-# and `sudo "x" sh -c 'git push --all origin'` is refused here while cs_split
-# offers no candidate for it. That asymmetry is in the refusing direction and
-# is pinned as a check.
-CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"
+# ONE DIFFERENCE REMAINS, and it is in what a quote is rather than in the loop.
+# cs_split reads a word through the word reader, escapes and ANSI-C quoting
+# included; this reads raw text, so a quoted span here is paired without
+# escapes. Until round 2 of the review of PR #260 there was a second difference:
+# cs_split's tail stopped at a token opening a quote, and this did not, so
+# `sudo "x" sh -c 'git push --all origin'` was refused here while cs_split
+# offered no candidate for it. The tail reads whole words now and offers the
+# wrapper too; the verdict, refused, is unchanged and still pinned.
+CS_WRAP_TOKEN="([^[:space:]\"']|\"[^\"]*\"|'[^']*'|[\"'])+[[:space:]]+"
 
 # THE WRAPPER'S OWN COMMAND WORD, issue #117. The spellings cs_split normalises
 # for every other rule cannot be normalised here, because this expression reads
@@ -1020,7 +1027,16 @@ CS_WORD_SPELLING="([\$]?[\"']|[\\\\]|[^[:space:]$CS_SEPARATORS\"']*/)*"
 # not decided here: it is decided once, after cs_split, where the list's one
 # reader is withdrawn so that every consumer's load guard refuses. See
 # THE WORD LIST IS PART OF THE LOAD, below cs_split.
-CS_WRAPPER_RE="(^[[:space:]]*|[$CS_SEPARATORS][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_CONTROL_WORDS)[[:space:]]+|$CS_WORD_SPELLING($CS_WRAP_WORDS)[\\\\\"']*[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
+# AN ASSIGNMENT'S VALUE MAY HOLD A QUOTED BLANK (#273). The branch that steps
+# over an assignment in front of the wrapper word read `NAME=` and a run of
+# non-blanks, so `A="b c" bash -c ...` stopped at the blank and the wrapper was
+# never reached, where cs_split, which reads the assignment through the word
+# reader, stripped it whole. The value is now CS_WRAP_TOKEN, whose quoted spans
+# carry a blank -- or nothing, for `A= cmd` -- so the one answer to what a
+# quoted token is here serves both. It pairs quotes without reading escapes, so
+# a double quote escaped inside a double-quoted value ends the value, and that
+# wrapper is not refused: the trade recorded for `b"a"sh`, pinned in #273's file.
+CS_WRAPPER_RE="(^[[:space:]]*|[$CS_SEPARATORS][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=($CS_WRAP_TOKEN|[[:space:]]+)|($CS_CONTROL_WORDS)[[:space:]]+|$CS_WORD_SPELLING($CS_WRAP_WORDS)[\\\\\"']*[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
 
 # THE WORD READER, issue #166: what bash makes of one word's quoting, answered
 # once for every consumer below. It is a string of awk function definitions,
