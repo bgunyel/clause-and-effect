@@ -73,12 +73,16 @@ requirement GH-159.1 <<'REQ'
   guarded name under a `notdocs/` parent, and `docs/design/` and
   `docs/research/`. The one heading correction ADR 0003 permits is permitted
   on a worktree's entry as on the main checkout's, whichever is the project
-  directory, and only where the last guarded directory in the path is
-  `docs/dev-log/`, so a project under a `docs/dev-log/` ancestor does not
-  extend it to `docs/lessons-learned/` or `docs/eval-reports/`. Under that
-  ancestor it does reach a `devlog_*`-named file in no guarded directory of
-  its own, whose last guarded pair is the ancestor's: the accepted trade,
-  since the whole project is guarded there, and pinned as one. An
+  directory, and only where every guarded directory in the path is
+  `docs/dev-log/`, however they nest: a project under a `docs/dev-log/`
+  ancestor does not extend it to `docs/lessons-learned/` or
+  `docs/eval-reports/`, a `docs/dev-log/` nested inside either of those does
+  not either, and a dev-log file with either of those above it is refused it,
+  a refusal dev-05 did not make. Under a `docs/dev-log/` ancestor it does
+  reach a `devlog_*`-named file in no guarded directory of its own, whose one
+  guarded pair is the ancestor's: the accepted trade, since the whole project
+  is guarded there, and pinned as one. Every nesting of two guarded
+  directories inside one another is a row. An
   identically-named existing entry in a repository that is not this one is
   refused too, and so is every existing file but a README of a project
   directory that stands under a guarded ancestor, and a draft entry in a
@@ -266,10 +270,10 @@ r159_cases() {  # r159_cases <hook>
 # the root, one that reads it after a `${#`, one registered with an argument
 # after its path, one that reads it after a quoted ` #`, one that names it only
 # in a trailing comment -- the accepted trade -- one whose file is missing, and
-# a `command` hook whose `command` is a number, `<no-command>`, and a hook under
-# each of two matchers bash cannot compile, `Edit|(` and `(?i)edit`. Not reached: a
-# Bash hook naming it only in whole-line comments, one not naming it, a
-# SessionStart hook with no matcher, which is handed no tool at all, and a
+# a `command` hook whose `command` is a number, `<no-command>`, and a hook
+# under each of two matchers bash cannot compile, `Edit|(` and `(?i)edit`. Not
+# reached: a Bash hook naming it only in whole-line comments, one not naming
+# it, a SessionStart hook with no matcher, which is handed no tool at all, and a
 # `prompt` hook under Bash and one under `Write|Edit`, which run no shell. The
 # prompt hook and the number stand FIRST, where round 1's jq aborted and took
 # every registration after them. None of the reached has a table, and only the
@@ -484,11 +488,11 @@ REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh BLOCK \
 REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh ALLOW \
   'and a README there is permitted, as a README under a guarded directory is: the trade reaches every file but one' \
   "$(r159_call Edit src/README.md)"
-# ADR 0003'S EXCEPTION IS THE DEV-LOG'S, decided by the last guarded pair in the
-# path (review of #159's branch, round 2). Asking for a `/docs/dev-log/`
-# anywhere gave it, under that ancestor, to an entry of the other two
-# directories, which dev-05 refused. The dev-log entry beside them is the
-# control: the exception still reaches one under the ancestor.
+# ADR 0003'S EXCEPTION IS THE DEV-LOG'S, and only where every guarded pair in
+# the path is a dev-log one (review of #159's branch, rounds 2 and 5). Asking
+# for a `/docs/dev-log/` anywhere gave it, under that ancestor, to an entry of
+# the other two directories, which dev-05 refused. The dev-log entry beside them
+# is the control: the exception still reaches one under the ancestor.
 for r159_d in lessons-learned eval-reports dev-log; do
   mkdir -p "$R159_ANC/docs/$r159_d"
   printf '%s\n\nBody.\n' '# 2026-01-01 · session 2 — R' > "$R159_ANC/docs/$r159_d/devlog_2026-01-01_session-5.md"
@@ -499,9 +503,9 @@ for r159_d in lessons-learned eval-reports dev-log; do
     "$(r159_edit "$R159_ANC/docs/$r159_d/devlog_2026-01-01_session-5.md" '# 2026-01-01 · session 2 — R' '# 2026-01-01 · session 5 — R')"
 done
 # And a devlog_-named file in no guarded directory of its own: the ancestor's
-# pair is its last, so the exception reaches it (review of #159's branch, round
-# 4). The same trade that refuses src/main.py, in its permitting half; the body
-# edit is the control.
+# pair is its only one, so the exception reaches it (review of #159's branch,
+# round 4). The same trade that refuses src/main.py, in its permitting half;
+# the body edit is the control.
 printf '%s\n\nBody.\n' '# 2026-01-01 · session 2 — R' > "$R159_ANC/src/devlog_2026-01-01_session-5.md"
 REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh ALLOW \
   'ACCEPTED TRADE, not a defect: the heading correction on a devlog_-named file under src/, the project directory under a docs/dev-log/ ancestor' \
@@ -509,6 +513,44 @@ REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh ALLOW \
 REPO_ROOT="$R159_ANC" feed "$PATH" append-only-docs-edit.sh BLOCK \
   'and a body edit of the same file' \
   "$(r159_edit "$R159_ANC/src/devlog_2026-01-01_session-5.md" 'Body.' 'Other.')"
+# EVERY NESTING, inside one project with no guarded ancestor (review of #159's
+# branch, round 5). Asking for the LAST guarded pair gave the exception to a
+# docs/dev-log/ nested inside docs/eval-reports/ or docs/lessons-learned/ --
+# files dev-05 refused -- and no row nested that way. So each guarded directory
+# is asked alone, each inside each, and one three deep: the exception holds
+# only when every pair is dev-log. A dev-log file with another guarded pair
+# above it is refused where dev-05 permitted it, the refusal that test costs,
+# and those rows say so; a dev-log entry of a project under a
+# docs/eval-reports/ ancestor is that same case, and is asked too.
+R159_NEST="$FIXTURES/r159-nest"
+r159_nest() {  # r159_nest <project dir> <relative dir> <want> <label> -- the correction on an entry there
+  mkdir -p "$1/$2"
+  printf '%s\n\nBody.\n' '# 2026-01-01 · session 2 — R' > "$1/$2/devlog_2026-01-01_session-5.md"
+  REPO_ROOT="$1" feed "$PATH" append-only-docs-edit.sh "$3" "$4" \
+    "$(r159_edit "$1/$2/devlog_2026-01-01_session-5.md" '# 2026-01-01 · session 2 — R' '# 2026-01-01 · session 5 — R')"
+}
+for r159_o in dev-log lessons-learned eval-reports; do
+  r159_want=BLOCK
+  [ "$r159_o" = dev-log ] && r159_want=ALLOW
+  r159_nest "$R159_NEST" "docs/$r159_o" "$r159_want" "the heading correction on an entry of docs/$r159_o/ alone"
+  for r159_i in dev-log lessons-learned eval-reports; do
+    r159_want=BLOCK
+    r159_label="the heading correction on an entry of docs/$r159_o/docs/$r159_i/"
+    if [ "$r159_o:$r159_i" = dev-log:dev-log ]; then
+      r159_want=ALLOW
+    elif [ "$r159_i" = dev-log ]; then
+      r159_label="$r159_label, a dev-log inside another guarded directory, which the last-pair test permitted"
+    elif [ "$r159_o" = dev-log ]; then
+      r159_label="ACCEPTED TRADE, not a defect (dev-05 permitted it): $r159_label, another guarded directory inside a dev-log"
+    fi
+    r159_nest "$R159_NEST" "docs/$r159_o/docs/$r159_i" "$r159_want" "$r159_label"
+  done
+done
+r159_nest "$R159_NEST" docs/dev-log/docs/lessons-learned/docs/dev-log BLOCK \
+  'ACCEPTED TRADE, not a defect (dev-05 permitted it): the heading correction three deep, dev-log inside lessons-learned inside dev-log -- the last pair is dev-log, and not every pair is'
+r159_nest "$FIXTURES/r159-anc-er/docs/eval-reports/proj" docs/dev-log BLOCK \
+  'ACCEPTED TRADE, not a defect (dev-05 permitted it): the heading correction on a dev-log entry, the project directory under a docs/eval-reports/ ancestor'
+
 R159_DRAFT=docs/dev-log/devlog_2026-01-01_draft-190.md
 printf 'draft\n' > "$R159_WT/$R159_DRAFT"
 # Asked as git naming it untracked, and not as git naming nothing: a failed

@@ -304,13 +304,28 @@ heading_correction() {  # heading_correction <abs> -- 0 if this edit is the perm
   # anything over 4096 is not it and is refused before any field is read.
   [ "${#PAYLOAD}" -le 4096 ] || return 1
   # Under a docs/dev-log/ by the same segments the guard reads (#159), so the
-  # correction is made in a linked worktree as in the main checkout -- and by the
-  # LAST guarded pair in the path, the one that decides which directory the file
-  # is in. Asking for a `/docs/dev-log/` anywhere let a project under a
+  # correction is made in a linked worktree as in the main checkout -- and only
+  # when EVERY guarded pair in the path is a dev-log one, whichever way they
+  # nest. Two narrower tests came first, each found permitting by review of
+  # #159's branch. A `/docs/dev-log/` anywhere (round 2) let a project under a
   # docs/dev-log/ ancestor take this dev-log-only exception for an entry of
-  # docs/lessons-learned/ or docs/eval-reports/, which dev-05 refused (review of
-  # #159's branch, round 2). The greedy `.*` is what makes the match the last.
-  [[ $abs =~ ^.*$GUARDED_RE ]] && [ "${BASH_REMATCH[1]}" = dev-log ] || return 1
+  # docs/lessons-learned/ or docs/eval-reports/. The LAST pair (round 5) let a
+  # docs/dev-log/ nested inside one of those two take it, in this repository,
+  # for a file dev-05 refused. Every pair is one test in both directions and
+  # needs no root. It costs one refusal: a dev-log file with a guarded pair of
+  # the other two above it -- docs/dev-log/docs/eval-reports/<entry>, or an
+  # entry of a project under a docs/eval-reports/ ancestor -- loses the
+  # correction dev-05 gave it. Each pair is cut off in turn, and the `/` it
+  # ended on put back, because the next pair opens with that `/`.
+  local rest="$abs" dev=
+  while [[ $rest =~ $GUARDED_RE ]]; do
+    case "${BASH_REMATCH[1]}" in
+      dev-log) dev=1 ;;
+      *) return 1 ;;
+    esac
+    rest="/${rest#*"${BASH_REMATCH[0]}"}"
+  done
+  [ -n "$dev" ] || return 1
 
   stem=${abs##*/}
   case "$stem" in *.md) stem=${stem%.md} ;; *) return 1 ;; esac
@@ -412,8 +427,9 @@ ABS=$(norm_path "$ABS")
 # the remainder matched at `^docs/`, "so an identically-named path in another
 # checkout is not caught by a bare substring match". CLAUDE_PROJECT_DIR is the
 # main checkout in a session started there, so in a linked worktree the
-# remainder began with the worktree's own path and the anchor matched nothing -- an existing entry there was
-# permitted, and a linked worktree is where CLAUDE.md sends every agent to work.
+# remainder began with the worktree's own path and the anchor matched nothing
+# -- an existing entry there was permitted, and a linked worktree is where
+# CLAUDE.md sends every agent to work.
 # The guard covered the checkout nobody edits in and not the one everybody does.
 #
 # What that comment asked for is kept: this is no bare substring match. The pair
@@ -442,12 +458,13 @@ ABS=$(norm_path "$ABS")
 #     sibling) ancestor has every existing file in it refused, `src/main.py`
 #     included, since the ancestor's segments are the path's own -- every file
 #     but a README, which the exemption below permits wherever the guard fires.
-#     ADR 0003's correction is not widened with it: heading_correction asks the
-#     last guarded pair, so under that ancestor it reaches a dev-log entry and
-#     not one of the other two directories. It does reach a `devlog_*`-named
-#     file in no guarded directory of its own, `src/devlog_<date>_<session>.md`,
-#     whose last guarded pair is the ancestor's: the trade's permitting half,
-#     since the whole project is guarded there, and pinned in checks/GH-159.sh.
+#     ADR 0003's correction is not widened with it: heading_correction asks
+#     that every guarded pair in the path be a dev-log one, so under that
+#     ancestor it reaches a dev-log entry and not one of the other two
+#     directories. It does reach a `devlog_*`-named file in no guarded
+#     directory of its own, `src/devlog_<date>_<session>.md`, whose one
+#     guarded pair is the ancestor's: the trade's permitting half, since the
+#     whole project is guarded there, and pinned in checks/GH-159.sh.
 #   - A draft -- an entry not yet merged, which CONTEXT.md says is corrected as
 #     the ordinary case -- is refused in a linked worktree from its first write,
 #     because the test below is existence on disk and not the merge base (#190).

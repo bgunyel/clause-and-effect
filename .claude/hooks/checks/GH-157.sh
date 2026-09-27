@@ -72,13 +72,15 @@
 # permitted (review of #234, round 1). So every example the bullet gives is
 # also fed to its guard, with the verdict the bullet states, and the Edit guard
 # is fed both tools the bullet names, in both directions it names. The
-# sentences rest on two open issues, #176 for a `>` read out of a heredoc and
-# #237 for a `sed -i`, an `rm` or an `mv` read out of one, and rested on a
-# third, #159, for the Edit guard, until it closed. Each is cited on the rows it owns, in the label, so a search for
-# the issue's number finds them. What was measured is that each remedy #159
-# proposed turned its rows red -- resolving the enclosing repository with git,
-# and matching the directory's trailing segments -- and that taking the `>`
-# rule, the `sed -i` rule or `mv` out of the Bash guard turns the row it
+# sentences rest on three open issues: #176 for a `>` read out of a heredoc,
+# #237 for a `sed -i`, an `rm` or an `mv` read out of one, and #190 for a draft
+# refused from its first write, since the guard reads existence and not the
+# merge base ADR 0003 names. They rested on a fourth, #159, for the Edit guard,
+# until it closed. Each is cited on the rows it owns, in the label, so a
+# search for the issue's number finds them. What was measured is that each
+# remedy #159 proposed turned its rows red -- resolving the enclosing repository
+# with git, and matching the directory's trailing segments -- and that taking
+# the `>` rule, the `sed -i` rule or `mv` out of the Bash guard turns the row it
 # decides red. The Edit fixture is a real repository with a linked worktree
 # inside it, as agents' stand, because #159's first remedy asks git where the
 # file is: against a plain directory it left the suite green (review of #234,
