@@ -49,10 +49,11 @@ requirement GH-110.1 <<'REQ'
 - verify: runbook §2
 REQ
 requirement GH-110.2 <<'REQ'
-- text: A hook's refusal reaches the agent: on a hook's exit 2 the harness
-  refuses the tool call, the command does not run, and the agent is shown the
-  hook's standard error byte for byte after a prefix naming the event and the
-  hook. US-7's message is only worth writing if this holds.
+- text: A Bash hook's refusal reaches the agent: on the exit 2 of a
+  `PreToolUse` hook on the Bash tool, the harness refuses the tool call, the
+  command does not run, and the agent is shown the hook's standard error byte
+  for byte after a prefix naming the event and the hook. US-7's message is
+  only worth writing if this holds.
 - from: #110
 - kind: doc-claim
 - status: active
@@ -60,9 +61,9 @@ requirement GH-110.2 <<'REQ'
 - verify: runbook §4
 REQ
 requirement GH-110.3 <<'REQ'
-- text: A `PreToolUse` hook the harness kills at its timeout permits the tool
-  call, and the agent is told nothing: the premise of #96's line cap, stated in
-  THE LINE CAP in lib/command-scan.sh, and of #240.
+- text: A `PreToolUse` hook on the Bash tool that the harness kills at its
+  timeout permits the tool call, and the agent is told nothing: the premise of
+  #96's line cap, stated in THE LINE CAP in lib/command-scan.sh, and of #240.
 - from: #110, section 5 of #110's decisions
 - kind: doc-claim
 - status: active

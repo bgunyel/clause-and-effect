@@ -11,10 +11,10 @@ A requirement verified here is written in `requirements.md`, or under
 `## §<n>` heading below, and the only one numbered `<n>`. `check-hooks.sh`
 fails on a `verify: runbook §<n>` that names no such heading (#104), on a
 number that heads two sections, and on a section whose **Verifies** line does
-not name exactly the requirements that point at it (#110). **Also observes** names
-requirements a section reads the live half of while checks cover the rest; they
-point at no section, because an entry with `seam: none` has no check tagged
-with it, and these have checks.
+not name exactly the requirements that point at it (#110). **Also observes**
+names requirements a section reads the live half of while checks cover the
+rest; they point at no section, because an entry with `seam: none` has no
+check tagged with it, and these have checks.
 
 ## How to run it, and where the results go
 
@@ -190,8 +190,9 @@ run fetches nothing between it and the second command, so both read the refs
 the report's own fetch left, unless another session on this machine fetches in
 the second between them. Compared with a report from the session's start, a
 fetch since then can move either ref and make two right answers disagree. The
-report fetches and reads, and removes nothing; it is the SessionStart hook,
-run by hand.
+report is the SessionStart hook, run by hand: it deletes no branch and no
+worktree, and its fetch prunes remote-tracking refs, as every session's start
+does.
 
 Expected: `0`, and the report's line opens
 `main ancestry: origin/main is an ancestor of origin/dev-NN`. `1` and a line
@@ -253,10 +254,12 @@ An agent may run it: the call is a read.
 ```bash
 gh api repos/bgunyel/clause-and-effect \
   --jq '[.allow_squash_merge, .allow_rebase_merge, .delete_branch_on_merge] | map(tostring) | @tsv'
+bash .claude/hooks/report-stale-branches.sh </dev/null \
+  | awk '/^merge settings:/ { p = 1; print; next } p && /^       / { print; next } p { exit }'
 ```
 
 Expected: `false	false	true` (tabs between), and the `merge settings` line
-of the report, run by hand right after as §1d runs it, reads
+of the report, run by hand right after the API as §1d runs it, reads
 `merge settings: as required (squash off, rebase off, delete-on-merge on)`.
 A report from the session's start read the settings at another time.
 
@@ -268,6 +271,10 @@ if the report's line disagrees with the API, the defect is the report's, FR-41.
 **Verifies:** GH-110.2.
 **Also observes:** US-7, whose checks read a refusal's message off the hook's
 standard error and cannot see what the harness passes on.
+
+What it watches is a hook on the Bash tool, in an interactive session, and
+GH-110.2 claims no more than that. An Edit or Write hook's refusal, which
+`append-only-docs-edit.sh` makes, is not watched here.
 
 An agent runs it, in a live session, because the observation is what the
 agent is shown. The command is `pytest --version`, chosen because this
@@ -304,6 +311,12 @@ messages unread.
 **Verifies:** GH-110.3.
 **Also observes:** GH-96.1, whose checks hold the line cap and cannot see
 the harness's kill that is the reason for it.
+
+What the first run watched is a hook on the Bash tool under `claude -p`.
+GH-110.3 is a claim about the harness, the interactive front end included,
+and a run of the same two repositories in an interactive session is what this
+section still owes it. An Edit or Write hook is outside GH-110.3, and the kill
+is presumed of one, not watched.
 
 #96's line cap argues that a hook the harness kills at its timeout permits the
 command, and that is why no hook may be slow; #240 argues the same of a slow

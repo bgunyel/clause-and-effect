@@ -84,8 +84,9 @@ fi
 # `read -d ''` would have kept the NULs without a second tool, and was measured
 # and rejected: bash reads a pipe one byte at a time, 0.4 s a megabyte, and a
 # large Write would meet this hook's 5-second timeout, and a hook that times out
-# has refused nothing -- which runbook.md §5 has watched the harness act on
-# (#110, and THE LINE CAP in lib/command-scan.sh).
+# has refused nothing -- which runbook.md §5 has watched the harness act on for
+# a Bash hook, and which is presumed and not yet watched for an Edit or Write
+# hook such as this one (#110, and THE LINE CAP in lib/command-scan.sh).
 #
 # That argument is about the DOCUMENT and not about the strings inside it, which
 # is why the two strings #177 compares are not read the way the path is: see

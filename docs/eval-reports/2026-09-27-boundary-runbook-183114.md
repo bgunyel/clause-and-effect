@@ -275,3 +275,42 @@ time, never over the live ruleset: the unmutated JSON matched the literal, and
 each of six mutants differed from it — `exclude` set to `["refs/heads/main"]`
 and to `["~ALL"]`, `target` set to `tag`, `enforcement` set to `evaluate`, a
 bypass actor added, and the `pull_request` rule removed.
+
+## Addendum, 2026-09-27, §1d and §3 re-run after rev-agent-110's round 4 on PR #287
+
+**§1d and §3 above were run under a procedure the runbook no longer gives.**
+Each compared a read made at run time with the `main ancestry` or
+`merge settings` line of this session's SessionStart report, which was read at
+the session's start. Round 3 found that the two can disagree about refs or
+settings that moved in between. The runbook now runs the report by hand
+beside the read it is compared with, and says the newest record for a section
+is its current answer. The assistant re-ran both sections at 23:28:39, Claude
+Code 2.1.283, following runbook.md as of `6b1ff56`. The one exception is
+§3's report command, which the runbook named only as "as §1d runs it" and
+which the commit carrying this addendum writes out. The command below is the
+one written out. `dev-NN` is `dev-05`.
+
+### §1d
+
+```
+$ bash .claude/hooks/report-stale-branches.sh </dev/null \
+    | awk '/^main ancestry:/ { p = 1; print; next } p && /^       / { print; next } p { exit }'
+main ancestry: origin/main is an ancestor of origin/dev-05
+$ git merge-base --is-ancestor origin/main origin/dev-05; echo $?
+0
+```
+
+They agree, on the refs the report's own fetch left.
+
+### §3
+
+```
+$ gh api repos/bgunyel/clause-and-effect --jq '[.allow_squash_merge, .allow_rebase_merge, .delete_branch_on_merge] | map(tostring) | @tsv'
+false	false	true
+$ bash .claude/hooks/report-stale-branches.sh </dev/null \
+    | awk '/^merge settings:/ { p = 1; print; next } p && /^       / { print; next } p { exit }'
+merge settings: as required (squash off, rebase off, delete-on-merge on)
+```
+
+Matches, and the report agrees with the API. Both were read between 23:28:44
+and 23:28:49.
