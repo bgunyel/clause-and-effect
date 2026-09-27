@@ -128,10 +128,11 @@ hook_path() {  # hook_path <script|/absolute/hook>
 # An absolute path is a fixture copy -- a hook with its library taken away, or
 # one built to crash -- and is not the registered hook, so it is not recorded.
 # The one exception is the session report, which reads the repository it sits in
-# and so is only ever run as a byte copy placed in a fixture repository:
-# `report_says` records that copy as the report, by name, and nothing here
-# records a modified one. `anc_report` runs a copy too and records nothing; see
-# there for why.
+# and so is only ever run as a copy placed in a fixture repository:
+# `report_says` records that copy as the report when it is byte-identical to
+# $HOOKS/report-stale-branches.sh, and a modified one is not recorded whatever
+# its name (#187; until then the name was the whole test). `anc_report` runs a
+# copy too and records nothing; see there for why.
 #
 # Written from a subshell as often as not -- `cap_timed` is called inside $( ),
 # and the #98 self-test runs every helper in one -- so it appends to a file
@@ -597,18 +598,23 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
   rc=$?
   # A copy of the registered report, placed in a fixture repository because the
   # report reads the repository it sits in; the #98 self-test's crashing
-  # fixtures carry other names. Recorded after the run, and by name rather than
-  # through `hook_path`, which never sees this one. See `ran`.
+  # fixtures carry other names. Recorded after the run, and under the
+  # registered name rather than through `hook_path`, which never sees this one.
+  # See `ran`.
   #
-  # THE NAME IS THE WHOLE TEST, and #187 owns what that costs. `ran` refuses an
-  # absolute path because a fixture copy is not the registered hook; this steps
-  # around that rule on the strength of an invariant -- every fixture carrying
-  # this name is a byte copy -- which is written here and enforced nowhere, while
-  # `nolib_path` and `halflib_path` build modified copies of other hooks a few
-  # hundred lines down. A modified copy keeping the name would make GH-109.4
-  # green for a hook no check ran, which is what the first review of PR #169 had
-  # this record rewritten to stop.
-  [ "${script##*/}" = report-stale-branches.sh ] && ran report-stale-branches.sh "$rc"
+  # THE BYTES ARE THE TEST, and not the name (#187). `ran` refuses an absolute
+  # path because a fixture copy is not the registered hook; this steps around
+  # that rule only for a copy `cmp -s` finds byte-identical to
+  # $HOOKS/report-stale-branches.sh. The name alone was the test until #187,
+  # resting on an invariant -- every fixture carrying this name is a byte copy
+  # -- that this comment stated and nothing enforced, while `nolib_path` and
+  # `halflib_path` build modified copies of other hooks a few hundred lines
+  # down; a modified copy keeping the name would have made GH-109.4 green for a
+  # hook no check ran. Now that invariant is the condition, so a modified copy
+  # is simply not recorded. Under an override $HOOKS is the mutated copy and
+  # every fixture copies from it, so the copies still match.
+  [ "${script##*/}" = report-stale-branches.sh ] && cmp -s "$script" "$HOOKS/report-stale-branches.sh" \
+    && ran report-stale-branches.sh "$rc"
   if [ "$rc" != 0 ]; then
     fail static '%s\n         a SessionStart report must exit=%s, got exit=%s\n         output |%s|' \
       "$label" 0 "$rc" "$out"

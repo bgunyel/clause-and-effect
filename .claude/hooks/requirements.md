@@ -1251,10 +1251,12 @@ it has no entry above (Q16).
   two-digit fd. Cited where that guard is, because a guard narrower than the
   prose beside it reads as coverage -- the shape the fifth review of PR #169
   found in `nested_defs` and the sixth found here
-- #187: `report_says` records the report by basename, so a modified fixture
-  keeping that name would satisfy GH-109.4 for a hook nothing ran. Cited where
-  the exception is taken. The invariant it rests on is written in a comment and
-  held by nothing
+- #187: has an entry of its own, GH-187, declared in its issue file, and is
+  listed here because the library cites it where the exception is taken.
+  `report_says` recorded the report by basename, so a modified fixture keeping
+  that name would have satisfied GH-109.4 for a hook nothing ran, on an
+  invariant written in a comment and held by nothing. It records a byte copy
+  of the registered report and nothing else now
 - #179: the invariance families cannot seed a requirement whose subject is
   agreement across hooks, which is the reason GH-109.5 declares `variants:
   none`. Filed out of the second review of PR #169 so that the reason is a
