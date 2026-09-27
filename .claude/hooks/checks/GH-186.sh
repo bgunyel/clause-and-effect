@@ -35,7 +35,7 @@ requirement GH-186 <<'REQ'
   is a failing verdict rather than an abort, since one caller's empty list is
   that check's defect and not the run's. The abort beside the settings.json
   derivation in #109's section stays, naming the other cause, and stops the run
-  before its 41 rows print.
+  before the cross-hook rows print.
 REQ
 shape_pin 'GH-186:static'
 

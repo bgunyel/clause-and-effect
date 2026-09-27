@@ -13932,8 +13932,8 @@ XH_HOOKS=$(jq -r '.hooks.PreToolUse[] | select(.matcher == "Bash") | .hooks[].co
 # The guard BASH_HOOKS and REGISTRATION both carry, and the one derivation in
 # this section that was without it until review of PR #169. Before #186 an
 # empty list failed green here where the other two fail red: `every_hook` passed
-# a list it ran no hook from, so all 41 spellings printed `ok ALLOW by all`. It
-# fails that row itself now, so an empty list would print 41 FAIL rows, each
+# a list it ran no hook from, so every spelling below printed `ok ALLOW by all`.
+# It fails that row itself now, so an empty list would print a FAIL for each,
 # naming only its own label. This guard stays because it names the cause --
 # nothing was read out of settings.json -- and stops the run before those rows
 # print. Unreachable today, since the two earlier guards read the same file.
