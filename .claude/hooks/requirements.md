@@ -1463,3 +1463,10 @@ it has no entry above (Q16).
   Filed from #159's branch, whose issue file pins the redirect's left boundary
   with the guarded entry in front of the `>` for that reason. It adds its
   requirements in the pull request that fixes it
+- #190: ADR 0003 says the Edit companion reads the merge base, and
+  `append-only-docs-edit.sh` reads existence on disk, so a draft -- an entry
+  not yet merged -- is refused from its first write. Cited in #159's issue
+  file, where a draft in a worktree is refused with the main checkout as the
+  project directory, the accepted trade, and in #157's, whose fixture entries
+  are drafts the README says are refused. It adds its requirements in the
+  pull request that fixes it
