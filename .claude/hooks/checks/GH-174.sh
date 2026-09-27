@@ -99,9 +99,9 @@ requirement GH-174.1 <<'REQ'
 REQ
 requirement GH-174.2 <<'REQ'
 - text: No line of the suite's own files -- the driver and the files under
-  `checks/` it sources -- sets PATH and then, later on the same line, asks the calling shell what a name
-  is, with `command` and an option word holding `v` or `V`, after any other
-  option words, or with `type`. PATH is set by `PATH=` or `PATH+=` standing
+  `checks/` it sources -- sets PATH and then, later on the same line, asks
+  the calling shell what a name is, with `command` and an option word
+  holding `v` or `V`, after any other option words, or with `type`. PATH is set by `PATH=` or `PATH+=` standing
   as a word of its own, `export PATH=`, `declare PATH=` and `local PATH=`
   included; the question is a word of its own after a blank, `;`, `&`, `|`,
   `(`, `!`, a backquote, a quote or a backslash, so it is read after `&&` and
@@ -207,12 +207,14 @@ tok 'under a shell whose jq is a function, the jq fixture guard passes, having a
 # an exported one, `BASH_FUNC_jq%%` in the environment of a new bash, so one row
 # takes that route: the function and `farm_has` exported, the farms' names
 # exported, and the guard evaluated in a child bash, which prints what it
-# imported as `jq` beside the guard's result. The exports are made inside the
-# $( ), so they end with it and reach no later check.
+# imported as `jq` beside the guard's result. The child is `"$BASH"`, the
+# suite's own interpreter, as `record_of` starts its child, and not whatever
+# `bash` PATH finds first. The exports are made inside the $( ), so they end
+# with it and reach no later check.
 tok 'and in a child bash that imported jq as an exported function, the guard passes too' \
     'function passed' "$( jq() { echo 'a wrapper in the invoker environment'; }
                           export -f jq farm_has; export WITH_JQ_BIN NO_JQ_BIN
-                          bash -c 'printf "%s " "$(type -t jq)"; ( eval "$1" ) 2>&1 && echo passed' _ "$R174_GUARD" )"
+                          "$BASH" -c 'printf "%s " "$(type -t jq)"; ( eval "$1" ) 2>&1 && echo passed' _ "$R174_GUARD" )"
 tok 'under a shell with no jq function, it passes too' \
     'passed' "$( unset -f jq; r174_guard )"
 tok 'and pointed at a jq-less copy that still holds jq, it fails and says why' \

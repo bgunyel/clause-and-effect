@@ -1464,5 +1464,7 @@ it has no entry above (Q16).
   pass in a plain run fail -- nine under `jq() { command jq "$@"; }` and
   nineteen under `jq() { /usr/bin/jq "$@"; }`, which keeps jq working under the
   jq-less PATH. Cited in GH-174.1's note, which records both measurements and
-  names this issue as its remainder. Whether the hooks or only
-  the suite should change is its own decision, so it has no entry above
+  names this issue as its remainder, and in GH-174.2's, which leaves
+  `lib/command-scan.sh` unread as hook code and this issue's. Whether the
+  hooks or only the suite should change is its own decision, so it has no
+  entry above
