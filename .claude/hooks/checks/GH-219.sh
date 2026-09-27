@@ -62,7 +62,7 @@ shape_pin 'GH-219.1:static GH-219.2:static'
 # What a helper prints opens with two blanks, held in a variable so that no
 # quoted string here opens with a result's prefix: #104's audit at the foot of
 # the suite reads every such string as a result printed around pass and fail.
-R219_IN='  '
+R219_INDENT='  '
 # THE FIXTURES. The directory holds a file that says the literal, so a grep that
 # recursed into it would find it; none of the rows below passes on that either.
 R219_DIR="$FIXTURES/r219-dir"
@@ -72,36 +72,36 @@ mkdir -p "$R219_DIR"
 printf '%s\n' 'R219_LITERAL' > "$R219_DIR/inside.txt"
 printf '%s\n' 'R219_LITERAL once' 'nothing here' 'R219_LITERAL twice' > "$R219_FILE"
 rm -f "$R219_GONE"
-[ -d "$R219_DIR" ] && [ -r "$R219_FILE" ] || {
+[ -d "$R219_DIR" ] && [ -r "$R219_FILE" ] && [ ! -e "$R219_GONE" ] || {
   echo "the #219 fixtures were not created; the checks against them prove nothing" >&2
   exit 1
 }
 
 req GH-219.1
 tok 'unarmed aimed at a directory fails, and says grep exited 2 on that directory' \
-"${R219_IN}FAIL r219 probe
+"${R219_INDENT}FAIL r219 driven check
          grep exited 2 on $R219_DIR, so it was not read and the absence of |R219_LITERAL| is evidence of nothing" \
-    "$(unarmed 'r219 probe' "$R219_DIR" 'R219_LITERAL')"
+    "$(unarmed 'r219 driven check' "$R219_DIR" 'R219_LITERAL')"
 tok 'and aimed at a file that is not there, it fails the same way' \
-"${R219_IN}FAIL r219 probe
+"${R219_INDENT}FAIL r219 driven check
          grep exited 2 on $R219_GONE, so it was not read and the absence of |R219_LITERAL| is evidence of nothing" \
-    "$(unarmed 'r219 probe' "$R219_GONE" 'R219_LITERAL')"
+    "$(unarmed 'r219 driven check' "$R219_GONE" 'R219_LITERAL')"
 tok 'aimed at a readable file that lacks the literal, it passes' \
-    "${R219_IN}ok   armed r219 probe" \
-    "$(unarmed 'r219 probe' "$R219_FILE" 'R219_ABSENT')"
+    "${R219_INDENT}ok   armed r219 driven check" \
+    "$(unarmed 'r219 driven check' "$R219_FILE" 'R219_ABSENT')"
 tok 'and aimed at one that says it, it fails' \
-"${R219_IN}FAIL r219 probe
+"${R219_INDENT}FAIL r219 driven check
          $R219_FILE must not contain |R219_LITERAL|" \
-    "$(unarmed 'r219 probe' "$R219_FILE" 'R219_LITERAL')"
+    "$(unarmed 'r219 driven check' "$R219_FILE" 'R219_LITERAL')"
 
 req GH-219.2
 tok 'prose_count on a directory prints no count, and says grep exited 2 on it' \
     "unread: grep exited 2 on $R219_DIR" "$(prose_count "$R219_DIR" 'R219_LITERAL')"
 tok "so a check that the directory says it nowhere, tok '0' over prose_count, fails" \
-"${R219_IN}FAIL r219 probe
+"${R219_INDENT}FAIL r219 driven check
          want |0|
          got  |unread: grep exited 2 on $R219_DIR|" \
-    "$(tok 'r219 probe' '0' "$(prose_count "$R219_DIR" 'R219_ABSENT')")"
+    "$(tok 'r219 driven check' '0' "$(prose_count "$R219_DIR" 'R219_ABSENT')")"
 tok 'and on a file that is not there, it says the same and prints no count' \
     "unread: grep exited 2 on $R219_GONE" "$(prose_count "$R219_GONE" 'R219_LITERAL')"
 tok 'on a readable file with no matching line, grep exits 1 and the count is 0' \
