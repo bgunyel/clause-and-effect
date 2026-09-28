@@ -1608,33 +1608,35 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # and `>1<&2` is a syntax error. A TARGET that is fd 2, leading zeros allowed,
 # after `>&` or `<&`; or, after `>`, `>>`, `>|`, `<` or `<>`, a path whose last
 # component is `stderr` or whose last two are `fd/2` -- which reaches
-# `/dev/stderr`, `/dev/fd/2` and every `/proc/.../fd/2` without listing them --
-# or, after any of those but `<`, which opens it read-only, a process
-# substitution, `>(`, whatever the command in it writes to. Blanks allowed in
-# front of the target.
+# `/dev/stderr`, `/dev/fd/2` and every `/proc/.../fd/2` naming this process
+# without listing them, and reports `/proc/$PPID/fd/2` too, the parent's, a
+# trade GH-185's note lists -- or, after any of those but `<`, which opens it
+# read-only, a process substitution, `>(`, whatever the command in it writes to.
+# Blanks allowed in front of the target.
 #
-# WHERE A WORD ENDS is `end`, one set that every part reads: a blank, which is
-# a space or a tab as bash's blanks are, one of `;&|()<>`, and a backtick. It
-# read `[:space:]` until the sixth review of #185's pull request, which let a
-# form feed end a word, so `x=<FF>1<&2`, fd 0 to bash, read as fd 1; every
-# blank in the pattern is `[:blank:]` now. That set is where bash ends a word
-# in the text alone, and not everywhere: a substitution's closing `)` or
-# backtick ends no word, so `$(:)1` is one word, an escaped blank joins one, so
-# `a\ 1` is one; which a character is depends on the state bash is in when it
-# reads it, which the text does not carry. GH-185's note names that class and
-# pins its representatives, and the fifth review set the line there: named, not
-# reached, since reaching it is a lexer. It was three copies until the second
-# review found two of them without the backtick, so a path closing a
-# substitution was never bounded. It is the tokeniser's BOUND in
-# lib/command-scan.sh, and is not read from there: that is a string inside an
-# awk program there, not a value to import, and a guard asked of the hooks that
-# shares their tokeniser's text shares its defects. The second reading's target
-# word stops at a backtick too, and round 2 of that review said this could not
-# be observed; round 3 observed it: without the stop, ``x=`: >a`$'3'>&2`` has
-# `$'3'` taken out of the quotes of a word that is not a target, and reads as
-# fd 3, where bash reads fd 1. Whether that word matches an empty run or fails
-# to match one cannot be observed, since awk's `substr` gives the same word and
-# the same rest either way.
+# WHERE A WORD ENDS is `end`, one set that every part reads: a blank, which is a
+# space or a tab as bash's blanks are, one of `;&|()<>`, and a backtick. It read
+# `[:space:]` until the sixth review of #185's pull request, which let a form
+# feed end a word, so `x=<FF>1<&2`, fd 0 to bash, read as fd 1; every blank in
+# the pattern is `[:blank:]` now. That set is where bash ends a word in the text
+# alone, and not everywhere: a substitution's closing `)` or backtick ends no
+# word, so `$(:)1` is one word, an escaped blank joins one, so `a\ 1` is one,
+# and an extglob pattern's close ends none, so `!(x)1` is one; an alias is
+# expanded as bash reads the line, into text this one never sees; which a
+# character is depends on the state bash is in when it reads it, which the text
+# does not carry. GH-185's note names that class and pins its representatives,
+# and the fifth review set the line there: named, not reached, since reaching it
+# is a lexer. It was three copies until the second review found two of them
+# without the backtick, so a path closing a substitution was never bounded. It
+# is the tokeniser's BOUND in lib/command-scan.sh, and is not read from there:
+# that is a string inside an awk program there, not a value to import, and a
+# guard asked of the hooks that shares their tokeniser's text shares its
+# defects. The second reading's target word stops at a backtick too, and round 2
+# of that review said this could not be observed; round 3 observed it: without
+# the stop, ``x=`: >a`$'3'>&2`` has `$'3'` taken out of the quotes of a word
+# that is not a target, and reads as fd 3, where bash reads fd 1. Whether that
+# word matches an empty run or fails to match one cannot be observed, since
+# awk's `substr` gives the same word and the same rest either way.
 #
 # The implicit fd on an output operator is 1, which is an ordinary refusal and
 # is never reported however it is spelled; `<<` and `<<<` are not input
@@ -1677,11 +1679,18 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # in an EM SPACE; and awk took a file named `x=1.sh` as an assignment and one
 # named `-` as stdin, and read stdin instead. The same file was red on one
 # machine and green on another. So the whole pipeline runs under `LC_ALL=C`,
-# exported to its tools and local to the call; grep reads with `-a`; and awk
-# reads the file on stdin, never as an operand. The class is the tools'
-# semantics, where every earlier class was the pattern's, and checks/GH-185.sh
-# pins a row for each member, called under `C.UTF-8`, the locale CI gives the
-# suite, so each tells the fix from its absence wherever it runs.
+# exported to its tools and local to the call, and awk reads the file on stdin,
+# never as an operand. The class is the tools' semantics, where every earlier
+# class was the pattern's, and checks/GH-185.sh pins a row for each member,
+# called under `C.UTF-8`, the locale CI gives the suite, so each tells the fix
+# from its absence wherever it runs. The eighth review found one more, in bash
+# rather than the tools: bash drops every NUL from the text it reads, so
+# `exec 3>&<NUL>2` is `exec 3>&2` to it, and the pipeline read it with the NUL
+# kept. `tr` takes each NUL out first, which leaves every line's number as it
+# was. grep read with `-a` until then, for a file holding a NUL; under
+# `LC_ALL=C` a file with none is never binary to it, so `-a` went, since no
+# row could tell it from its absence, and the NUL rows go red without the
+# `tr`, since grep then reads the file as binary.
 #
 # A FILE IT CANNOT READ is reported as `UNREADABLE`, with the reason on stderr,
 # and never as the empty string a clean file gives: every row that asks a real
@@ -1728,7 +1737,8 @@ dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplic
   path="[[:blank:]]*[^${end}]*/(stderr|fd/2)([${end}]|\$)"
   proc='[[:blank:]]*>[(]'
   sep=$(printf ';\001;')
-  awk -v sep="$sep" -v word="^[^${end}]*" '
+  tr -d '\000' < "$1" \
+    | awk -v sep="$sep" -v word="^[^${end}]*" '
         function unquoted(s,   out, w) {
           out = ""
           while (match(s, /[<>][&|]?[[:blank:]]*/)) {
@@ -1750,7 +1760,7 @@ dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplic
           n = 0
         }
         { run[++n] = $0; if ($0 ~ /\\$/) next; flush() }
-        END { flush() }' < "$1" \
-    | grep -anE "${src}([<>]${fd}|(>|>>|<|<>|>[|])${path}|(>|>>|<>|>[|])${proc})|${imp}(<${fd}|(<|<>)${path}|<>${proc})" \
+        END { flush() }' \
+    | grep -nE "${src}([<>]${fd}|(>|>>|<|<>|>[|])${path}|(>|>>|<>|>[|])${proc})|${imp}(<${fd}|(<|<>)${path}|<>${proc})" \
     | sed "s/${sep}.*//" | tr '\n' ' ' | sed 's/ $//'
 }

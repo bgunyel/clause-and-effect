@@ -13,30 +13,29 @@
 # `exec 3>>/dev/stderr`, `exec 3>/dev/fd/2` and `exec 3</dev/fd/2`. Every one
 # is the permitting direction, and neither hook writes any of them today.
 #
-# WHAT IS DRIVEN is `dup_stderr`, in the library since this issue made this
-# file its second caller, against one fixture per shape, each written below
-# with the shape from its second line on: one line for most, and more for a
-# continuation, a heredoc and a shape spread over two lines. A reported shape
-# is asserted as `<line>:<shape>`, the output the guard prints; a clean one as
-# the empty string. Each must-flag row was run against the old pattern, and
-# each failed there -- every one empty but two: the continuation, which
+# WHAT IS DRIVEN is `dup_stderr`, in the library since this issue made this file
+# its second caller, against one fixture per shape, each written below with the
+# shape from its second line on: one line for most, and more for a continuation,
+# a heredoc, a shape spread over lines and one a `shopt` sets up. A reported
+# shape is asserted as `<line>:<shape>`, the output the guard prints; a clean
+# one as the empty string. Each must-flag row was run against the old pattern,
+# and each failed there -- every one empty but two: the continuation, which
 # printed only its line 4, and a file ending inside a continuation, which it
 # printed with the backslash on, having read each line alone -- but those the
-# old pattern reached too, each here for a clause of the new one:
-# `exec 3>& 2`, a blank after `>&`, and a tab there and before a source, which
-# the old one's `[[:space:]]*` and `[^0-9]` took in too; a source at the start
-# of a line and right after a backtick, `(`, `)` or `|`, which pin where the
-# new one reads a word start and which the old one read after any non-digit;
-# `3>&2 exec` after a comment ending in a backslash, which the old one read
-# line by line and this pull request's fold had hidden; `eval "3>&2 exec"`, a
-# source behind a quote, which the old one read after any non-digit and this
-# pull request's word-start rule had hidden until the sixth review; and a file
-# named `x=1.sh`, which the old one read with sed, which takes no assignment
-# operand. That run is recorded in the pull request, since a check that
-# restores the old pattern would be a check of a function nobody calls. A
-# shape the guard does not reach is asserted as the empty string too, beside
-# the clean ones, and says so in its row; a trade is asserted as what the
-# guard prints, and its row says it is a trade.
+# old pattern reached too, each here for a clause of the new one: `exec 3>& 2`,
+# a blank after `>&`, and a tab there and before a source, which the old one's
+# `[[:space:]]*` and `[^0-9]` took in too; a source at the start of a line and
+# right after a backtick, `(`, `)` or `|`, which pin where the new one reads a
+# word start and which the old one read after any non-digit; `3>&2 exec` after a
+# comment ending in a backslash, which the old one read line by line and this
+# pull request's fold had hidden; `eval "3>&2 exec"`, a source behind a quote,
+# which the old one read after any non-digit and this pull request's word-start
+# rule had hidden until the sixth review; and a file named `x=1.sh`, which the
+# old one read with sed, which takes no assignment operand. That run is recorded
+# in the pull request, since a check that restores the old pattern would be a
+# check of a function nobody calls. A shape the guard does not reach is asserted
+# as the empty string too, beside the clean ones, and says so in its row; a
+# trade is asserted as what the guard prints, and its row says it is a trade.
 #
 # WHAT IS NOT HERE is `exec 3>&2`, the triage's first row, which the unsplit
 # file's #109 section already drives against its own fixture, and which moved
@@ -58,31 +57,32 @@ requirement GH-185 <<'REQ'
   reads as that target, so `>&1<&2` is fd 0. The target is fd 2, leading zeros
   allowed, after `>&` or `<&`; or, after `>`, `>>`, `>|`, `<` or `<>`, a path
   whose last component is `stderr` or whose last two are `fd/2`, which reaches
-  `/dev/stderr`, `/dev/fd/2` and every `/proc/.../fd/2`; or, after any of
+  `/dev/stderr`, `/dev/fd/2` and every `/proc/.../fd/2` naming this process,
+  and reports one naming another, a trade the note lists; or, after any of
   those but `<`, a process substitution `>(`. Blanks, which are spaces and
   tabs, are allowed before the target. A word is taken to end at a blank, at
   one of `;&|()<>` or at a backtick, which is where bash ends one outside
-  quote, substitution, escape and `eval` state; the note names where the two
-  differ. Each line is read twice, as written and with the quotes, the
-  backslashes and the repeated `/` and `./` segments taken out of every
+  quote, substitution, escape, `eval`, alias and extglob state; the note names
+  where the two differ. Each line is read twice, as written and with the quotes,
+  the backslashes and the repeated `/` and `./` segments taken out of every
   redirection's target word, and a line either reading matches is reported. A
   run of continued lines is read joined from every line of it to its end, each
   join under its own first line's number, and a join whose first non-blank is
   `#` is a comment and is blanked. It reports nothing for fd 1, implicit or
   explicit, `01` included -- `>&2`, `1>&2`, `>/dev/stderr`, `1>/dev/stderr`,
   `>>`, `>|` and `&>` -- nor for `2>&1`, `>/dev/null 2>&1` or a here-string
-  naming `/dev/stderr`, nor for digits or a `{name}` that are not a whole
-  word, `a3>&2`, `$sha256>&2` and `${msg}>&2` among them, nor for a `1` after
-  a backtick, which opens a command and so is its fd -- except for the
+  naming `/dev/stderr`, nor for digits or a `{name}` that are not a whole word,
+  `a3>&2`, `$sha256>&2` and `${msg}>&2` among them, nor for a `1` after a
+  backtick, which opens a command and so is its fd -- except for the
   refusing-direction trades the note lists, each of which reports a line bash
-  does not point at stderr. It reads the file as bytes under `LC_ALL=C`,
-  whatever the caller's locale, so a NUL, a byte that is not UTF-8 and a
-  character outside ASCII are data and a blank is a space or a tab, and a
-  file's name is never an operand to awk. A path that is not a readable
-  regular file, a directory included, is reported as `UNREADABLE` with status
-  1 and the reason on stderr, and never as the empty string a clean file
-  gives. `no-git-push.sh`, `no-pr-decisions.sh` and `lib/command-scan.sh`,
-  which both source, report nothing.
+  does not point at stderr. It drops every NUL, as bash does, and reads the rest
+  as bytes under `LC_ALL=C`, whatever the caller's locale, so a byte that is not
+  UTF-8 and a character outside ASCII are data and a blank is a space or a tab,
+  and a file's name is never an operand to awk. A path that is not a readable
+  regular file, a directory included, is reported as `UNREADABLE` with status 1
+  and the reason on stderr, and never as the empty string a clean file gives.
+  `no-git-push.sh`, `no-pr-decisions.sh` and `lib/command-scan.sh`, which both
+  source, report nothing.
 - from: #185, the sixth review of PR #169, #185's triage, and review of
   #185's pull request
 - kind: defect-permitting
@@ -113,14 +113,17 @@ requirement GH-185 <<'REQ'
   nested twice in a `{name}`, `exec {a[b[c[1]]]}>&2`, since a pattern matches
   brackets to a fixed depth and this one matches one level of nesting. And a
   class, named rather than reached: a word, a comment or an operator whose
-  boundary depends on quote, substitution, escape or `eval` state, which the
-  text alone does not carry -- a substitution's close ends no word, so `f
-  $(:)1<&2` and ``f `:`1<&2`` are fd 0; an escaped blank joins a word, so `f
-  a\ 1<&2` is fd 0; a `#` inside a multi-line string, `x="` and then `#"; exec
-  3>&2`, is no comment; and an operator escaped for `eval`, `eval exec
-  3\>\&2`, is one only when `eval` reads it again. Each round of review found
+  boundary depends on quote, substitution, escape, `eval`, alias or extglob
+  state, which the text alone does not carry -- a substitution's close ends no
+  word, so `f $(:)1<&2` and ``f `:`1<&2`` are fd 0; an escaped blank joins a
+  word, so `f a\ 1<&2` is fd 0; a `#` inside a multi-line string, `x="` and
+  then `#"; exec 3>&2`, is no comment; an operator escaped for `eval`, `eval
+  exec 3\>\&2`, is one only when `eval` reads it again; an alias expands as
+  bash reads it, so under `shopt -s expand_aliases`, `alias E='exec 3>&'` and
+  then `E 2` is `exec 3>&2`; and an extglob pattern's close ends no word, so
+  under `shopt -s extglob`, `f !(x)1<&2` is fd 0. Each round of review found
   members of it, and reaching them is a lexer, which is #317's question; these
-  five are its pinned representatives. Every one of them writes to stderr,
+  seven are its pinned representatives. Every one of them writes to stderr,
   measured. The implicit fd of an input operator departs from the triage's
   wording, which has the guard report nothing for the implicit fd: that fd is
   0, `exec <&2` and then `>&0` writes to stderr -- measured -- and the
@@ -142,34 +145,36 @@ requirement GH-185 <<'REQ'
   target is not bounded on its right, so `exec 3>&20` is reported; a path
   whose last component is `stderr` is reported in any directory, so a log
   file, `exec 2>"$dir/stderr"` or `exec 3>/tmp/stderr`, is, and so is `exec
-  3>/stderr`, a file at the root; a process substitution is reported whatever
-  the command in it writes to, `exec 3> >(cat >/dev/null)` among them, and
-  with no blank after `>>`, `exec 3>>(cat >&2)`, which is a syntax error to
-  bash; the second reading takes out quotes without reading which quote holds
-  which, so `exec 3>\&2`, a file named `&2`, `exec 3>'/dev/std\err'`, whose
-  quotes keep the backslash, and `exec 3>/dev/std\$'err'` are reported; quotes
-  are read only in a target word, so a shape inside quoted text, `echo "use
-  exec 3>&2 here"`, or in a heredoc body, which is not dropped, is a red, and
-  so is one in a trailing comment, `echo hi # exec 3>&2`, or in a comment
-  after blanks inside a joined line, `: x\` and then ` #y; exec 3>&2`; a quote
-  is a word start to the source, since one that opens a string may hide a
-  redirection `eval` or `sh -c` runs, so one that closes a string, `exec
-  "$x"3>&2` or `exec 'a'3>&2`, one word and fd 1 to bash, is reported, and a
-  quote is a word character to the implicit fd, since `"$x"1<&2` is fd 0 to
-  bash, so `eval "1<&2 cat"`, fd 1 once `eval` reads it, is reported as fd 0;
-  a substitution's close is a word start to the source, so `echo X $(:)3>&2`,
-  one word and fd 1 to bash, is reported; an escaped `;` is an end to the
-  path, so `exec 3>/dev/stderr\;x`, a file, is reported; fd 2 duplicated onto
-  itself, `exec 2>&2`, is reported as `2>/dev/stderr` is; and a run of
-  continued lines is read joined from every line of it, so a join bash does
-  not make is reported: `echo x\` and then `3>&2`, one word `x3` to bash,
+  3>/stderr`, a file at the root; a `/proc/<pid>/fd/2` is reported whatever
+  process the pid names, so `exec 3>/proc/$PPID/fd/2`, the parent's stderr, is
+  reported though a write through it does not reach the script's -- measured; a
+  process substitution is reported whatever the command in it writes to, `exec
+  3> >(cat >/dev/null)` among them, and with no blank after `>>`, `exec
+  3>>(cat >&2)`, which is a syntax error to bash; the second reading takes out
+  quotes without reading which quote holds which, so `exec 3>\&2`, a file named
+  `&2`, `exec 3>'/dev/std\err'`, whose quotes keep the backslash, and `exec
+  3>/dev/std\$'err'` are reported; quotes are read only in a target word, so a
+  shape inside quoted text, `echo "use exec 3>&2 here"`, or in a heredoc body,
+  which is not dropped, is a red, and so is one in a trailing comment, `echo
+  hi # exec 3>&2`, or in a comment after blanks inside a joined line, `: x\` and
+  then ` #y; exec 3>&2`; a quote is a word start to the source, since one that
+  opens a string may hide a redirection `eval` or `sh -c` runs, so one that
+  closes a string, `exec "$x"3>&2` or `exec 'a'3>&2`, one word and fd 1 to bash,
+  is reported, and a quote is a word character to the implicit fd, since
+  `"$x"1<&2` is fd 0 to bash, so `eval "1<&2 cat"`, fd 1 once `eval` reads it,
+  is reported as fd 0; a substitution's close is a word start to the source, so
+  `echo X $(:)3>&2`, one word and fd 1 to bash, is reported; an escaped `;` is
+  an end to the path, so `exec 3>/dev/stderr\;x`, a file, is reported; fd 2
+  duplicated onto itself, `exec 2>&2`, is reported as `2>/dev/stderr` is; and a
+  run of continued lines is read joined from every line of it, so a join bash
+  does not make is reported: `echo x\` and then `3>&2`, one word `x3` to bash,
   reports `3>&2`, and a joined line is reported beside the one bash runs --
   after a comment ending in a backslash, `: # c\` and then `exec 3>&2`, and
-  across an escaped backslash, `echo a\\` and then `exec 3>&2`, which is
-  #315's. Each was measured to hide no write to stderr. The path target is
-  bounded on its right, so `/dev/stderr2` and `2>/tmp/stderr.log` are not
-  reported. fd 1 by `/dev/fd/2` is a plain refusal that `arms` does not count,
-  which is #263's and not this guard's.
+  across an escaped backslash, `echo a\\` and then `exec 3>&2`, which is #315's.
+  Each was measured to hide no write to stderr. The path target is bounded on
+  its right, so `/dev/stderr2` and `2>/tmp/stderr.log` are not reported. fd 1 by
+  `/dev/fd/2` is a plain refusal that `arms` does not count, which is #263's and
+  not this guard's.
 REQ
 # Only a shape pin. GH-185 is not in the invariance families' scope: those
 # rewrite a command a hook judges, and this is a static check on hook source,
@@ -181,17 +186,20 @@ shape_pin 'GH-185:static'
 # inside a continuation, is written without the `exit 0` and held to its own
 # line count. A fixture that failed to be written would read
 # as clean, and the clean rows would pass on nothing, so each is held to its
-# line count before any row reads it.
+# line count before any row reads it, and one holding a NUL to its bytes too.
 R185_DIR="$FIXTURES/r185"
 mkdir -p "$R185_DIR"
+r185_held() {  # r185_held <file> <lines> [<bytes>] -- exit unless the fixture holds that many lines, and bytes if given
+  [ "$(wc -l < "$1" | tr -d ' ')" = "$2" ] && { [ -z "${3:-}" ] || [ "$(wc -c < "$1" | tr -d ' ')" = "$3" ]; } || {
+    echo "the #185 fixture ${1#"$R185_DIR"/} was not written; the checks against it prove nothing" >&2
+    exit 1
+  }
+}
 r185_fixture() {  # r185_fixture <name> <line>... -- $R185_DIR/<name>.sh, those lines between a shebang and exit 0
   local name="$1"
   shift
   printf '%s\n' '#!/bin/bash' "$@" 'exit 0' > "$R185_DIR/$name.sh"
-  [ "$(wc -l < "$R185_DIR/$name.sh" | tr -d ' ')" = "$(( $# + 2 ))" ] || {
-    echo "the #185 fixture $name.sh was not written; the checks against it prove nothing" >&2
-    exit 1
-  }
+  r185_held "$R185_DIR/$name.sh" "$(( $# + 2 ))"
 }
 
 req GH-185
@@ -652,6 +660,12 @@ tok 'and >>( with no blank, a syntax error to bash: a trade' \
 r185_fixture trade-root-stderr 'exec 3>/stderr'
 tok 'and /stderr, a file at the root whose last component is stderr: a trade' \
     '2:exec 3>/stderr' "$(dup_stderr "$R185_DIR/trade-root-stderr.sh")"
+# From the eighth review: a `/proc` path is read by its end whatever process
+# its pid names, and a write through the parent's stderr does not land on the
+# script's -- measured.
+r185_fixture trade-parent-proc 'exec 3>/proc/$PPID/fd/2'
+tok 'and /proc/$PPID/fd/2, the parent'"'"'s stderr and not the script'"'"'s: a trade' \
+    '2:exec 3>/proc/$PPID/fd/2' "$(dup_stderr "$R185_DIR/trade-parent-proc.sh")"
 r185_fixture trade-closing-double-quote 'exec "$x"3>&2'
 r185_fixture trade-closing-single-quote "exec 'a'3>&2"
 tok 'and "$x"3>&2, one word to bash, since a quote is a word start to the source: a trade' \
@@ -669,10 +683,7 @@ tok 'and eval "1<&2 cat", fd 1 to bash, read as fd 0 after a word: a trade, sinc
 # fd 10 written `010`, which writes to stderr, measured; and the blanks in
 # front of a comment's `#`, which make an indented comment one.
 printf '%s\n' '#!/bin/bash' 'exec 3>&2\' > "$R185_DIR/ends-continued.sh"
-[ "$(wc -l < "$R185_DIR/ends-continued.sh" | tr -d ' ')" = 2 ] || {
-  echo "the #185 fixture ends-continued.sh was not written; the checks against it prove nothing" >&2
-  exit 1
-}
+r185_held "$R185_DIR/ends-continued.sh" 2
 r185_fixture zero-padded-wide-source 'exec 010>&2'
 r185_fixture indented-comment '  # exec 3>&2'
 tok 'dup_stderr reports a file that ends inside a continuation, which a sourced library runs' \
@@ -808,18 +819,16 @@ tok 'and a {name} behind a single one' \
 # THE TOOLS READ THE FILE, NOT THE TEXT: the class the seventh review of this
 # file's pull request named. Under a UTF-8 locale GNU grep takes a file with a
 # NUL, or a line with a byte that is not UTF-8, as binary and prints nothing;
-# `[:blank:]` takes in an EM SPACE, which bash's blanks do not; and awk reads
-# an operand `x=1.sh` as an assignment and then stdin. Each fixture below
-# writes to stderr in bash -- measured -- and read nothing then, and whether
-# it did depended on the machine's locale. The pipeline now runs under
-# `LC_ALL=C`, grep reads with `-a`, and awk reads the file on stdin. Each row
-# calls under `C.UTF-8`, the locale CI gives the suite, so that it tells the
-# fix from its absence wherever the suite runs.
+# `[:blank:]` takes in an EM SPACE, which bash's blanks do not; and awk reads an
+# operand `x=1.sh` as an assignment and then stdin. Each fixture below writes to
+# stderr in bash -- measured -- and read nothing then, and whether it did
+# depended on the machine's locale. The pipeline now runs under `LC_ALL=C`, and
+# awk reads the file on stdin; grep read with `-a` until the eighth review,
+# whose NUL rows below replace it. Each row calls under `C.UTF-8`, the locale CI
+# gives the suite, so that it tells the fix from its absence wherever the suite
+# runs.
 printf '#!/bin/bash\nexec 3>&2\necho hi >&3\n: a\0b\nexit 0\n' > "$R185_DIR/nul-byte.sh"
-[ "$(wc -l < "$R185_DIR/nul-byte.sh" | tr -d ' ')" = 5 ] || {
-  echo "the #185 fixture nul-byte.sh was not written; the checks against it prove nothing" >&2
-  exit 1
-}
+r185_held "$R185_DIR/nul-byte.sh" 5 47
 r185_fixture latin1-comment $'exec 3>&2 # caf\xe9'
 r185_fixture em-space-in-word $'f x\xe2\x80\x831<&2'
 r185_fixture 'x=1' 'exec 3>&2'
@@ -835,12 +844,36 @@ tok 'and a file named x=1.sh, asked by a relative path, which awk would take as 
 # question asked of every tool in the pipeline before this round was pushed.
 mkdir -p "$R185_DIR/dash"
 printf '#!/bin/bash\nexec 3>&2\nexit 0\n' > "$R185_DIR/dash/-"
-[ "$(wc -l < "$R185_DIR/dash/-" | tr -d ' ')" = 3 ] || {
-  echo "the #185 fixture dash/- was not written; the checks against it prove nothing" >&2
-  exit 1
-}
+r185_held "$R185_DIR/dash/-" 3
 tok 'and a file named -, which awk would take as stdin' \
     '2:exec 3>&2' "$(cd "$R185_DIR/dash" && dup_stderr - </dev/null)"
+
+# AND A NUL INSIDE THE SHAPE, which the eighth review found: bash drops every
+# NUL from the text it reads, where the tools kept it, so `exec 3>&<NUL>2` runs
+# as `exec 3>&2` past a script's first line, which is all bash samples for a
+# binary file, and on any line of a sourced one, which it does not sample at
+# all -- measured, run and sourced, for each fixture below -- and read as
+# nothing. `tr` now takes every NUL out before awk reads a line, which leaves
+# each line's number as it was, and grep no longer reads with `-a`, since
+# under `LC_ALL=C` a file with no NUL is never binary to it. Each fixture is
+# held to its bytes as well as its lines: one written without its NUL is the
+# plain shape, and its row would pass on that.
+printf '#!/bin/bash\nexec 3>&\0002\nexit 0\n' > "$R185_DIR/nul-in-fd.sh"
+r185_held "$R185_DIR/nul-in-fd.sh" 3 30
+printf '#!/bin/bash\nexec 3>/dev/std\000err\nexit 0\n' > "$R185_DIR/nul-in-path.sh"
+r185_held "$R185_DIR/nul-in-path.sh" 3 39
+printf '#!/bin/bash\nexec 3>&\\\n\0002\nexit 0\n' > "$R185_DIR/nul-in-continued.sh"
+r185_held "$R185_DIR/nul-in-continued.sh" 4 32
+printf '#!/bin/bash\nexec 3\000>&2\nexit 0\n' > "$R185_DIR/nul-in-source.sh"
+r185_held "$R185_DIR/nul-in-source.sh" 3 30
+tok 'dup_stderr reports a NUL inside the fd target, which bash drops' \
+    '2:exec 3>&2' "$(LC_ALL=C.UTF-8 dup_stderr "$R185_DIR/nul-in-fd.sh")"
+tok 'and a NUL inside a path' \
+    '2:exec 3>/dev/stderr' "$(LC_ALL=C.UTF-8 dup_stderr "$R185_DIR/nul-in-path.sh")"
+tok 'and a NUL opening the line a continuation joins' \
+    '2:exec 3>&2' "$(LC_ALL=C.UTF-8 dup_stderr "$R185_DIR/nul-in-continued.sh")"
+tok 'and a NUL between the source and its operator' \
+    '2:exec 3>&2' "$(LC_ALL=C.UTF-8 dup_stderr "$R185_DIR/nul-in-source.sh")"
 
 # A TAB IS A BLANK, found by the seventh review: with every `[:blank:]` a
 # space alone the suite stayed green, since the sweep drops a class's members
@@ -1017,8 +1050,11 @@ tok 'nor a subscript nested twice in a {name}' \
 
 # AND THE CLASS THE FIFTH REVIEW NAMED, with its representatives: a word, a
 # comment or an operator whose boundary depends on quote, substitution,
-# escape or `eval` state, which a pattern over the text cannot carry. Reaching
-# it is a lexer, which is #317's question. Each writes to stderr -- measured.
+# escape, `eval`, alias or extglob state, which a pattern over the text cannot
+# carry. The eighth review found the alias; the extglob pattern was found by
+# asking the same of every lexer state bash has before that round was pushed.
+# Reaching it is a lexer, which is #317's question. Each writes to stderr --
+# measured.
 r185_fixture lexer-substitution-close 'f $(:)1<&2'
 r185_fixture lexer-backtick-close 'f `:`1<&2'
 r185_fixture lexer-escaped-blank 'f a\ 1<&2'
@@ -1034,6 +1070,12 @@ tok 'nor a line inside a multi-line string, whose # is not a comment' \
     '' "$(dup_stderr "$R185_DIR/lexer-string-comment.sh")"
 tok 'nor an operator escaped for eval to read' \
     '' "$(dup_stderr "$R185_DIR/lexer-eval.sh")"
+r185_fixture lexer-alias 'shopt -s expand_aliases' "alias E='exec 3>&'" 'E 2'
+r185_fixture lexer-extglob 'shopt -s extglob' 'f !(x)1<&2'
+tok 'nor an alias that expands to the front of a redirection' \
+    '' "$(dup_stderr "$R185_DIR/lexer-alias.sh")"
+tok 'nor fd 0 after an extglob pattern'"'"'s close, which ends no word' \
+    '' "$(dup_stderr "$R185_DIR/lexer-extglob.sh")"
 
 # THE LIBRARY BOTH HOOKS SOURCE, which the unsplit file's two rows do not ask:
 # a descriptor it opened is open in the hook that sourced it.
