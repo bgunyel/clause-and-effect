@@ -1509,7 +1509,10 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
 # are handed the fixture's path, which is always absolute, so the refusal has
 # to be made here. A relative source touches nothing and writes nothing, and
 # the path printed for it is one nothing writes: under $FIXTURES/prose-refused,
-# with each `/` of the name spelled `%2F`, so no `..` in it climbs anywhere.
+# the name after `relative:` with each `/` spelled `%2F`, so it is one path
+# component and never `.` or `..` -- `prose ..` without the prefix printed
+# `prose-refused/..`, which stayed unresolved only while nothing had made that
+# directory (review of #192's branch, round 5).
 # Two earlier shapes were each wrong. The first ran `mkdir` and `rm -f` on the
 # mirrored path before asking whether the source was absolute, so `prose
 # ../suite-text`, from any directory, deleted $SUITE_TEXT (review of #192's
@@ -1529,7 +1532,7 @@ prose() {  # prose <file> -- the path of <file> as prose_reflow reads it, writte
           prose_reflow < "$1" > "$out"
           grep -q '[^[:space:]]' "$out" 2>/dev/null || rm -f -- "$out"
         fi ;;
-    *) out="$FIXTURES/prose-refused/${1//\//%2F}" ;;
+    *) out="$FIXTURES/prose-refused/relative:${1//\//%2F}" ;;
   esac
   printf '%s\n' "$out"
 }

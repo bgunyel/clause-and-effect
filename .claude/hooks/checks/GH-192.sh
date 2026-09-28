@@ -41,9 +41,10 @@ requirement GH-192.1 <<'REQ'
   name it writes nothing, so `unarmed` over the path it prints fails naming
   grep's status 2, and `written` over it fails as it does for a literal not
   found. A relative name it also removes nothing for, and the path it prints
-  for one is under `$FIXTURES/prose-refused`, each `/` spelled `%2F`, which
-  nothing writes: not the mirrored path, where an earlier absolute source may
-  have left a reflow. `beside` reads the comment block it is
+  for one is under `$FIXTURES/prose-refused`, the name after `relative:` with
+  each `/` spelled `%2F`, one path component that is never `.` or `..` and
+  that nothing writes: not the mirrored path, where an earlier absolute source
+  may have left a reflow. `beside` reads the comment block it is
   given through `prose_reflow`.
 - from: #192
 - kind: defect-permitting
@@ -215,7 +216,7 @@ tok 'and from a file of blank lines, which comment_reflow would turn into a blan
 # and not a missing file that is refused.
 tok 'and from a relative name, though it names a file in the directory it runs in' \
 "${R192_INDENT}FAIL r192 driven check
-                grep exited 2 on $FIXTURES/prose-refused/r192-skill.txt, so it was not read and the absence of |four acts| is evidence of nothing" \
+                grep exited 2 on $FIXTURES/prose-refused/relative:r192-skill.txt, so it was not read and the absence of |four acts| is evidence of nothing" \
     "$(cd "$FIXTURES" && unarmed 'r192 driven check' "$(prose r192-skill.txt)" 'four acts')"
 # A relative name removes nothing. The first `prose` ran `rm -f` on the path
 # it mirrored before asking whether the source was absolute, so a `..` in a
@@ -240,8 +241,18 @@ R192_MD_REL="${R192_MD#/}"
 }
 tok 'and a relative name spelling a source an absolute call reflowed does not read that reflow' \
 "${R192_INDENT}FAIL r192 driven check
-                expected $FIXTURES/prose-refused/${R192_MD_REL//\//%2F} to still say |four acts|" \
+                expected $FIXTURES/prose-refused/relative:${R192_MD_REL//\//%2F} to still say |four acts|" \
     "$(cd / && written 'r192 driven check' "$(prose "$R192_MD_REL")" 'four acts')"
+# Nor is a bare `..` or `.` a name that resolves, even with the refused
+# directory standing: made here for the row and removed after it, since
+# nothing else makes it.
+mkdir "$FIXTURES/prose-refused" || {
+  echo "the #192 refused directory could not be made for the bare-name check; the check proves nothing" >&2
+  exit 1
+}
+tok 'and a bare .. or . names nothing, with the refused directory standing' \
+    'absent absent' "$(for n in .. .; do [ -e "$(prose "$n")" ] && printf 'present ' || printf 'absent '; done | sed 's/ $//')"
+rmdir "$FIXTURES/prose-refused"
 tok 'and from a directory, though one inside it says the literal' \
 "${R192_INDENT}FAIL r192 driven check
                 grep exited 2 on $R192_DIR_PROSE, so it was not read and the absence of |four acts| is evidence of nothing" \
@@ -323,7 +334,7 @@ r192_raw_prose_pins() {  # r192_raw_prose_pins <text file> <variable names> -- e
       sub(/^[ \t]+/, "", rest)
       q = substr(rest, 1, 1)
       if (q != "\047" && q != "\"") return
-      if (!pin && before !~ /prose_count $/) return
+      if (!pin && before !~ /prose_count[ \t]+$/) return
       lit = ""
       while (q == "\047" || q == "\"") {
         rest = substr(rest, 2)
@@ -351,7 +362,7 @@ r192_raw_prose_pins() {  # r192_raw_prose_pins <text file> <variable names> -- e
       line = $0
       while (line ~ /\\$/ && (getline nxt) > 0)
         line = substr(line, 1, length(line) - 1) " " nxt
-      pin = (line ~ /(^[ \t]*|[;&|{][ \t]*|[ \t](then|do)[ \t]+)(written|unarmed|holds|lacks) /)
+      pin = (line ~ /(^[ \t]*|[;&|{][ \t]*|[ \t](then|do)[ \t]+)(written|unarmed|holds|lacks)[ \t]/)
       for (i = 1; i <= n; i++) {
         scan(line, "\"$" v[i] "\"", v[i])
         scan(line, "\"${" v[i] "}\"", v[i])
@@ -393,12 +404,15 @@ printf '%s\n' \
   "[ -n \"\$R192_V\" ] && unarmed 'after and' \"\$R192_V\" 'twelve acts'" \
   "( FAILED=0; lacks 'in a subshell' \"\$R192_V\" 'thirteen acts' )" \
   "if true; then written 'after then' \"\$R192_V\" 'fourteen acts'; fi" \
-  "x=\$(unarmed 'inside a substitution' \"\$R192_V\" 'fifteen acts')" > "$R192_AUDIT_FIX"
-[ "$(wc -l < "$R192_AUDIT_FIX")" = 22 ] || {
-  echo "the #192 audit fixture was not written as twenty-two lines; the check against it proves nothing" >&2
+  "x=\$(unarmed 'inside a substitution' \"\$R192_V\" 'fifteen acts')" \
+  "tok 'a count, continued' '0' \"\$(prose_count \\" \
+  "  \"\$R192_V\" 'sixteen acts')\"" \
+  "written$(printf '\t')'a tab after the helper' \"\$R192_V\" 'seventeen acts'" > "$R192_AUDIT_FIX"
+[ "$(wc -l < "$R192_AUDIT_FIX")" = 25 ] && [ "$(tr -cd '\t' < "$R192_AUDIT_FIX" | wc -c)" = 1 ] || {
+  echo "the #192 audit fixture was not written as twenty-five lines with one tab; the check against it proves nothing" >&2
   exit 1
 }
-tok 'the audit reports a raw prose pin on one line, continued, with its literal on the next line, holding a # inside, counted, double-quoted, braced, on a path written in, twice on an indented line, in quoted pieces, and after &&, ; and then, and nothing else' \
+tok 'the audit reports a raw prose pin on one line, continued, with its literal on the next line, holding a # inside, counted, double-quoted, braced, on a path written in, twice on an indented line, in quoted pieces, after &&, ; and then, counted across a continuation, and with a tab after the helper, and nothing else' \
 'R192_V |four acts|
 R192_V |five acts|
 R192_V |six acts|
@@ -412,7 +426,9 @@ R192_V |ten acts|
 R192_V |eleven acts|
 R192_V |twelve acts|
 R192_V |thirteen acts|
-R192_V |fourteen acts|' \
+R192_V |fourteen acts|
+R192_V |sixteen acts|
+R192_V |seventeen acts|' \
     "$(r192_raw_prose_pins "$R192_AUDIT_FIX" 'R192_V')"
 
 # THE PROSE VARIABLES. Every one assigned a Markdown path is derived off the
