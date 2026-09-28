@@ -1579,9 +1579,10 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # It is the tokeniser's BOUND in lib/command-scan.sh, and is not read from
 # there: that is a string inside an awk program there, not a value to import,
 # and a guard asked of the hooks that shares their tokeniser's text shares its
-# defects. Whether the target word, the second reading's, stops at a backtick
-# cannot be observed, because the path and the fd target stop there first; the
-# mutation that takes it out stays green, and that is why.
+# defects. The second reading's target word stops at a backtick too, and
+# round 2 of that review said this could not be observed; round 3 observed it:
+# without the stop, ``x=`: >a`$'3'>&2`` has `$'3'` taken out of the quotes
+# of a word that is not a target, and reads as fd 3, where bash reads fd 1.
 #
 # The implicit fd on an output operator is 1, which is an ordinary refusal and
 # is never reported however it is spelled; `<<` and `<<<` are not input
@@ -1592,7 +1593,14 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # word, so `>&\2`, `>&''2`, `>&$'2'` and `>"/dev/"stderr` read as the bare
 # spellings they are. The two readings are joined on one line, split by a `;`
 # that ends every part of the pattern, and a line either one matches is
-# reported as written. Both are needed: a quote taken out can leave a word of
+# reported as written. That `;` is also the second reading's start of line,
+# which is why no part of the pattern has a `^`: the two readings agree on
+# everything in front of a line's first target word, so a source or an
+# implicit fd at the start of a line is read after the `;`, and a `^` could
+# never be the reason a line matched (round 3 of review found it dead). The
+# second reading finds an operator as `<` or `>` and then an `&` or `|` if one
+# follows; `>>` and `<>` are two operators to it, and the word after the second
+# is the one it reads, so a `>` in that class could not be observed either. Both are needed: a quote taken out can leave a word of
 # digits alone in front of the next operator, so `>"1"<&2`, fd 0 onto stderr,
 # reads as fd 1 without its quotes. What an escape or an expansion in a target
 # stands for is not read; GH-185's note names what that leaves.
@@ -1608,7 +1616,9 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 #
 # A FILE IT CANNOT READ is reported as `UNREADABLE`, with the reason on stderr,
 # and never as the empty string a clean file gives: every row that asks a real
-# file would pass on an absent one otherwise.
+# file would pass on an absent one otherwise. A directory is not a regular
+# file, and a row drives that half. The readable half has no row: a file of
+# mode 000 is readable by root, so the row would pass or fail by who runs it.
 #
 # Comments are blanked whole-line only and continuations folded first. The
 # fold is its own and not `hook_text`'s, for two reasons: `hook_text` drops
@@ -1627,8 +1637,8 @@ dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplic
     return 1
   }
   end='[:space:];&|()<>`'
-  src='((^|[^0-9$])(0+|0*[2-9]|0*[1-9][0-9]+)|(^|[^$])[{][A-Za-z_][A-Za-z0-9_]*([[][^]]*[]])?[}])'
-  imp="(^|[^0-9<]|[^${end}0-9][0-9]+|[<>]&[[:space:]]*[0-9]+)"
+  src='([^0-9$](0+|0*[2-9]|0*[1-9][0-9]+)|[^$][{][A-Za-z_][A-Za-z0-9_]*([[][^]]*[]])?[}])'
+  imp="([^0-9<]|[^${end}0-9][0-9]+|[<>]&[[:space:]]*[0-9]+)"
   fd='&[[:space:]]*0*2'
   path="[[:space:]]*[^${end}]*/(stderr|fd/2)([${end}]|\$)"
   proc='[[:space:]]*>[(]'
@@ -1637,7 +1647,7 @@ dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplic
     | awk -v sep="$sep" -v word="^[^${end}]*" '
         function unquoted(s,   out, w) {
           out = ""
-          while (match(s, /[<>][&|>]?[ \t]*/)) {
+          while (match(s, /[<>][&|]?[ \t]*/)) {
             out = out substr(s, 1, RSTART + RLENGTH - 1); s = substr(s, RSTART + RLENGTH)
             match(s, word); w = substr(s, 1, RLENGTH); s = substr(s, RLENGTH + 1)
             gsub(/\$["\047]|["\047\\]/, "", w); gsub(/\/+/, "/", w)

@@ -13440,17 +13440,12 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch
 # backslash, a /proc path of another depth, a subscripted name and a process
 # substitution -- and #185 closed those too. The library states the whole
 # grammar beside the function, and checks/GH-185.sh drives each part.
-# What it still does not reach is what the text cannot say without being run.
-# DATAFLOW, which is the reason the shape is refused rather than counted in
-# the first place: a target or a source held in a variable (`exec 3>"$dest"`,
-# `exec 3>&$err`) or computed by an expansion or an escape, a descriptor
-# inherited from the process that runs the hook, and fd 1 duplicated while it
-# points at stderr, whose entry is fd 1 pointed there -- #310's for a whole
-# process, and a group redirected once, above, for a group. THE FILESYSTEM: a
-# symlink, a named pipe, a path relative to the working directory. And A GLOB,
-# which bash expands in a redirection's target. GH-185's note argues each, and
-# checks/GH-185.sh pins as reporting nothing each the text can spell; an
-# inherited descriptor has no spelling in the hook. #185 asks
+# What it still does not reach is what the text cannot say without being run:
+# dataflow, which is the reason the shape is refused rather than counted in
+# the first place, the filesystem, and a glob. GH-185's note is the one list of
+# them, and checks/GH-185.sh pins each spelling it names; this paragraph does
+# not list them again, because the review of #185's pull request found three
+# copies of that list disagreeing. #185 asks
 # lib/command-scan.sh too, which both hooks source, so a descriptor opened
 # there is not in that list.
 #

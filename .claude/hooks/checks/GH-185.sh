@@ -54,9 +54,10 @@ requirement GH-185 <<'REQ'
   `1>/dev/stderr`, `>>`, `>|` and `&>` -- nor for `2>&1`,
   `>/dev/null 2>&1` or a here-string naming `/dev/stderr`, nor for digits
   or a `{` after a `$`, which are a parameter and not a descriptor, nor for
-  a `1` after a backtick, which opens a command and so is its fd. A file it
-  cannot read is reported as `UNREADABLE`, and never as the empty string a
-  clean file gives. `no-git-push.sh`, `no-pr-decisions.sh` and
+  a `1` after a backtick, which opens a command and so is its fd. A path
+  that is not a readable regular file, a directory included, is reported as
+  `UNREADABLE`, and never as the empty string a clean file gives.
+  `no-git-push.sh`, `no-pr-decisions.sh` and
   `lib/command-scan.sh`, which both source, report nothing.
 - from: #185, the sixth review of PR #169, #185's triage, and review of
   #185's pull request
@@ -64,12 +65,16 @@ requirement GH-185 <<'REQ'
 - status: active
 - direction: static: a property of the suite's helpers
 - note: What it does not reach is what the text cannot say without being
-  run, and each of those the text can spell is pinned below by a row that
-  reports nothing. Dataflow, which is why the shape is refused rather than
-  counted: a target or a source held in a variable, `exec 3>"$dest"` or
-  `exec 3>&$err`; a target computed by an expansion or an escape,
-  `exec 3>&$((1+1))` or `exec 3>&$'\x32'`; a coprocess's descriptor, held
-  in `COPROC`; fd 1 duplicated while it points at stderr --
+  run. This list is the one place that names it, and each spelling written
+  in it is pinned below by a row that reports nothing. Dataflow, which is
+  why the shape is refused rather than counted: a target or a source held in
+  a variable, `exec 3>"$dest"` or `exec 3>&$err`; a target computed by an
+  expansion or an escape -- arithmetic, `exec 3>&$((1+1))`; an escape,
+  `exec 3>&$'\x32'`; a parameter's default, `exec 3>${x:-/dev/stderr}`; a
+  command substitution, `exec 3>$(echo /dev/stderr)` or
+  `exec 3>&$(echo 2)`; and a brace expansion, `exec 3>/dev/std{e..e}rr`; a
+  coprocess's descriptor, held in `COPROC`, `exec 4>&${COPROC[1]}`; fd 1
+  duplicated while it points at stderr --
   `exec 1>&2 3>&1`, `exec >&2` and then `exec 3>&1`, and
   `{ exec 3>&1; } >&2` -- whose entry is fd 1 pointed at stderr, which is
   #310's for a whole process and the #109 section's group redirected once
@@ -77,10 +82,12 @@ requirement GH-185 <<'REQ'
   pointed at stdout, the `3>&1 1>&2 2>&3` swap among them; and a descriptor
   inherited from the process that runs the hook, which has no spelling in
   the hook to pin. The filesystem: a symlink or a named pipe to stderr,
-  which in the text is an ordinary path, and a relative path, `exec
-  3>stderr` run from `/dev`. And a glob, which bash expands in a
-  redirection's target, so `exec 3>/dev/stde?r` opens stderr -- measured --
-  and reaching it would mean matching a pattern against a path. The
+  which in the text is an ordinary path, `exec 3>/tmp/err`, and a relative
+  path, `exec 3>stderr` run from `/dev`. And a glob, which bash expands in a
+  redirection's target, so `exec 3>/dev/stde?r`, `exec 3>/dev/stde[r]r` and
+  `exec 3>/dev/stder*` open stderr -- measured -- and reaching one would
+  mean matching a pattern against a path. Every one of them writes to
+  stderr, measured. The
   implicit fd of an input operator departs from the triage's wording, which
   has the guard report nothing for the implicit fd: that fd is 0,
   `exec <&2` and then `>&0` writes to stderr -- measured -- and the contract
@@ -284,6 +291,31 @@ tok 'dup_stderr reports /dev/fd//2, which the doubled / reaches' \
 tok 'and /dev/fd/./2' \
     '2:exec 3>/dev/fd/./2' "$(dup_stderr "$R185_DIR/dot-segment.sh")"
 
+# TWO MORE CLAUSES NO ROW TOLD FROM THEIR NEGATION, found by the third review:
+# the second reading finds `>|` as an operator, so the word after it is taken
+# out of its quotes, and it takes out every `./`, not the first alone. Both
+# write to stderr -- measured.
+r185_fixture clobber-quoted-path 'exec 3>|"/dev/stderr"'
+r185_fixture dot-segments 'exec 3>/dev/fd/././2'
+tok 'dup_stderr reports a quoted path after >|' \
+    '2:exec 3>|"/dev/stderr"' "$(dup_stderr "$R185_DIR/clobber-quoted-path.sh")"
+tok 'and /dev/fd/././2, a ./ repeated' \
+    '2:exec 3>/dev/fd/././2' "$(dup_stderr "$R185_DIR/dot-segments.sh")"
+
+# THE START OF A LINE. No part of the pattern has a `^`: the second reading
+# follows the `;` that splits the two, and that is its start. These rows are
+# the ones a line's start decides, so dropping the second reading turns them
+# red where no `^` is left to catch them. Each writes to stderr -- measured.
+r185_fixture line-start-source '3>&2 exec'
+r185_fixture line-start-implicit '<&2 exec'
+r185_fixture line-start-name '{fd}>&2 exec'
+tok 'dup_stderr reports a source at the start of a line' \
+    '2:3>&2 exec' "$(dup_stderr "$R185_DIR/line-start-source.sh")"
+tok 'and fd 0 left implicit there' \
+    '2:<&2 exec' "$(dup_stderr "$R185_DIR/line-start-implicit.sh")"
+tok 'and a named fd there' \
+    '2:{fd}>&2 exec' "$(dup_stderr "$R185_DIR/line-start-name.sh")"
+
 # THE LINE AS WRITTEN IS STILL READ. A quote taken out of a target can leave a
 # word of digits alone in front of the next operator, which bash did not read
 # as its fd: `>"1"<&2` sends fd 1 to a file named 1 and duplicates stderr onto
@@ -293,6 +325,13 @@ tok 'and /dev/fd/./2' \
 r185_fixture quoted-word-before-input 'echo X >"1"<&2'
 tok 'dup_stderr reports fd 0 after a quoted word of digits, which only the line as written shows' \
     '2:echo X >"1"<&2' "$(dup_stderr "$R185_DIR/quoted-word-before-input.sh")"
+# And at the end of the line, where the path's right bound is the `;` that
+# splits the two readings, so a line only the first reading matches is
+# reported through it; found by mutating that `;` away before round 3 was
+# pushed. Writes to stderr through fd 0 -- measured.
+r185_fixture quoted-word-before-path 'exec >"1"<>/dev/stderr'
+tok 'and fd 0 opened by <> by path after one, the path ending the line' \
+    '2:exec >"1"<>/dev/stderr' "$(dup_stderr "$R185_DIR/quoted-word-before-path.sh")"
 
 # MORE PATHS TO STDERR, and a subscripted name: the path is now any whose last
 # component is `stderr` or whose last two are `fd/2`, so a /proc path of any
@@ -333,6 +372,19 @@ tok 'but not the read end of one, <(...)' \
     '' "$(dup_stderr "$R185_DIR/read-process-substitution.sh")"
 tok 'nor one opened with <, which is read-only' \
     '' "$(dup_stderr "$R185_DIR/read-only-process-substitution.sh")"
+
+# EVERY OPERATOR THAT OPENS ONE FOR WRITING, which the third review of this
+# file's pull request found undriven: with `>>`, `>|` or `<>` dropped from the
+# operators, the whole suite stayed green. Each writes to stderr -- measured.
+r185_fixture append-process-substitution 'exec 3>> >(cat >&2)'
+r185_fixture clobber-process-substitution 'exec 3>| >(cat >&2)'
+r185_fixture read-write-process-substitution 'exec 3<> >(cat >&2)'
+tok 'dup_stderr reports an fd opened on a process substitution with >>' \
+    '2:exec 3>> >(cat >&2)' "$(dup_stderr "$R185_DIR/append-process-substitution.sh")"
+tok 'and with >|' \
+    '2:exec 3>| >(cat >&2)' "$(dup_stderr "$R185_DIR/clobber-process-substitution.sh")"
+tok 'and with <>' \
+    '2:exec 3<> >(cat >&2)' "$(dup_stderr "$R185_DIR/read-write-process-substitution.sh")"
 
 # A PATH WHOSE LAST COMPONENT IS `stderr`, IN ANY DIRECTORY, the refusing-
 # direction trade of reading the path by its end: a log file is reported.
@@ -379,12 +431,17 @@ tok 'but not after a plain >, where bash reads the 1 as the fd of the <&' \
     '' "$(dup_stderr "$R185_DIR/after-plain-output.sh")"
 tok 'nor a path a backtick has ended, where the text after it continues an assignment' \
     '' "$(dup_stderr "$R185_DIR/past-backtick.sh")"
+r185_fixture past-backtick-quoted "x=\`: >a\`\$'3'>&2"
+tok "nor quotes past the backtick that ends a target word, which bash reads as the assignment's and not as fd 3" \
+    '' "$(dup_stderr "$R185_DIR/past-backtick-quoted.sh")"
 
 # A FILE IT CANNOT READ, which would print nothing and read as clean: every
 # row that asks a real file would pass on an absent one. Also from the second
 # review. It is reported instead, and the reason goes to stderr.
 tok 'dup_stderr reports a file it cannot read as UNREADABLE, never as the clean empty string' \
     'UNREADABLE' "$(dup_stderr "$R185_DIR/no-such-fixture.sh" 2>/dev/null)"
+tok 'and a directory, which is not a file' \
+    'UNREADABLE' "$(dup_stderr "$R185_DIR" 2>/dev/null)"
 
 # WHAT STAYS CLEAN: fd 1, written or implicit, in every spelling, and the
 # ordinary shapes the hooks carry. fd 1 by /dev/fd/2 is a refusal `arms` does
@@ -497,6 +554,29 @@ tok 'nor fd 1 duplicated inside a group redirected to stderr' \
     '' "$(dup_stderr "$R185_DIR/fd-one-group.sh")"
 tok 'nor an ordinary path, which a symlink or a named pipe to stderr is in the text' \
     '' "$(dup_stderr "$R185_DIR/ordinary-path.sh")"
+
+# AND THE EXPANSIONS THE THIRD REVIEW FOUND WITH NO ROW, with the rest of
+# their kinds from its sweep: a brace expansion, the other globs, a parameter's
+# default, and a command substitution, as a path and as an fd. Each writes to
+# stderr -- measured.
+r185_fixture brace-expansion 'exec 3>/dev/std{e..e}rr'
+r185_fixture bracket-glob 'exec 3>/dev/stde[r]r'
+r185_fixture star-glob 'exec 3>/dev/stder*'
+r185_fixture parameter-default 'exec 3>${x:-/dev/stderr}'
+r185_fixture command-substitution-path 'exec 3>$(echo /dev/stderr)'
+r185_fixture command-substitution-fd 'exec 3>&$(echo 2)'
+tok 'nor a brace expansion that bash expands to /dev/stderr' \
+    '' "$(dup_stderr "$R185_DIR/brace-expansion.sh")"
+tok 'nor a bracket glob' \
+    '' "$(dup_stderr "$R185_DIR/bracket-glob.sh")"
+tok 'nor a * glob' \
+    '' "$(dup_stderr "$R185_DIR/star-glob.sh")"
+tok "nor a parameter's default" \
+    '' "$(dup_stderr "$R185_DIR/parameter-default.sh")"
+tok 'nor a path a command substitution prints' \
+    '' "$(dup_stderr "$R185_DIR/command-substitution-path.sh")"
+tok 'nor an fd one prints' \
+    '' "$(dup_stderr "$R185_DIR/command-substitution-fd.sh")"
 
 # THE LIBRARY BOTH HOOKS SOURCE, which the unsplit file's two rows do not ask:
 # a descriptor it opened is open in the hook that sourced it.

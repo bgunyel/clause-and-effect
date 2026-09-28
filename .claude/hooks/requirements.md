@@ -1269,10 +1269,8 @@ it has no entry above (Q16).
   coverage -- the shape the fifth review of PR #169 found in `nested_defs` and
   the sixth found here. #185 widened it to every spelling of the text that
   points an fd other than 1 at stderr; what it still does not reach is what
-  the text cannot say without being run -- a target in a variable or computed
-  by an expansion, a descriptor inherited from the process that runs the
-  hook, fd 1 duplicated while it points at stderr, a symlink, a relative path
-  and a glob -- and GH-185's note names each
+  the text cannot say without being run, and GH-185's note is the one list
+  of it, with a row pinning each spelling it names
 - #187: has an entry, GH-187, generated from its issue file, and is listed
   here only because the library cited it before it landed, where
   `report_says` took the exception by basename
@@ -1575,6 +1573,6 @@ it has no entry above (Q16).
   refusal-arm count reads it as one arm and every later write as none. Filed
   from #185, whose guard reports any fd but 1 and so leaves fd 1 pointed at
   stderr to it -- the entry of every duplication of fd 1 that reaches stderr.
-  Cited in #185's issue file and in the #109 section of the unsplit file,
-  where each names what `dup_stderr` does not reach. It adds its
+  Cited in #185's issue file, in GH-185's note, which is the one list of what
+  `dup_stderr` does not reach, and beside the rows that pin it. It adds its
   requirements in the pull request that fixes it
