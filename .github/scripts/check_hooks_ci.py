@@ -157,20 +157,25 @@ SUMMARY_BLOCK_BYTES = 512 * 1024
 # runs whose log could still be downloaded when #227 was built, and holds the
 # 2,000-line detail of 22,121 bytes the parser's tests pass through whole.
 # Fifteen rows at the cap fit the block, fences included, and a sixteenth does
-# not. And the first row is always shown, for any log: a row that is one run
-# of backticks is fenced at three times its text, 3 * 32,768 + 8 = 98,312 bytes
-# at most, a fifth of the block. The trade: the cap is flat, so a lone row over
-# it is cut even when the block has room for it whole. #227's triage asked for
-# a fixed number of bytes, and a share of the block that grew as fewer rows
-# failed was not built: what a row showed would then depend on how many rows
-# came after it.
+# not. And the first row is always shown, for any log: the widest a row at the
+# cap can be fenced is 3 * 32,768 - 8 = 98,296 bytes, a fifth of the block,
+# when it is `  FAIL ` and one run of backticks, the run 8 bytes short of the
+# row and the fence 7 (measured). The check below rounds that up to
+# 3 * ROW_BYTES + 8. The trade: the cap is flat, so a lone row over it is cut
+# even when the block has room for it whole. #227's triage asked for a fixed
+# number of bytes, and a share of the block that grew as fewer rows failed was
+# not built: what a row showed would then depend on how many rows came after
+# it.
 ROW_BYTES = 32 * 1024
 # `report` has no guard for a rows block with nothing in it, because the first
 # row always fits. That holds only while the widest a capped row can be fenced
 # fits the block, so a change to either constant that breaks it stops here,
 # with the reason, rather than in a test's literal (review of #227, round 2).
-assert 3 * ROW_BYTES + 8 <= SUMMARY_BLOCK_BYTES, \
-    "a capped row of backticks no longer fits the rows block: the first row can be left out"
+# A raise and not an assert, which `python -O` would drop (round 3). At import,
+# so it stops `verify-merge` too: a bad constant is a defect in this file.
+if 3 * ROW_BYTES + 8 > SUMMARY_BLOCK_BYTES:
+    raise SystemExit("a capped row of backticks no longer fits the rows block: "
+                     "the first row can be left out")
 # How a cut row says so, as the last line of what is shown of it. The number is
 # what the log holds and the summary does not show, counted in the log's bytes:
 # each detail line left out counts its DETAIL_INDENT, which the summary
@@ -199,14 +204,18 @@ NAME_BYTES = 512
 # names the first in log order and counts the rest.
 NAMES_BLOCK_BYTES = 256 * 1024
 # The two blocks and the text outside them, 868 bytes at most as measured
-# beside SUMMARY_BLOCK_BYTES, under GitHub's 1 MiB. One KiB stands for that text.
-assert SUMMARY_BLOCK_BYTES + NAMES_BLOCK_BYTES + 1024 <= 1024 * 1024, \
-    "the two blocks and the text outside them can pass GitHub's 1 MiB summary limit"
+# beside SUMMARY_BLOCK_BYTES, under GitHub's 1 MiB. One KiB stands for that
+# text.
+if SUMMARY_BLOCK_BYTES + NAMES_BLOCK_BYTES + 1024 > 1024 * 1024:
+    raise SystemExit("the two blocks and the text outside them can pass GitHub's "
+                     "1 MiB summary limit")
 # And the first name always fits its block, which the summary's wording counts
 # on: a name fenced is at most 3 * NAME_BYTES - 5 bytes, when all of it after
-# its `  FAIL ` is one run of backticks.
-assert 3 * NAME_BYTES <= NAMES_BLOCK_BYTES, \
-    "a name cut to NAME_BYTES no longer fits the names block: none may be named"
+# its `  FAIL ` is one run of backticks. The check rounds that up to
+# 3 * NAME_BYTES.
+if 3 * NAME_BYTES > NAMES_BLOCK_BYTES:
+    raise SystemExit("a name cut to NAME_BYTES no longer fits the names block: "
+                     "none may be named")
 # A suite that exits non-zero with no failing row stopped in a guard, and a
 # guard's message is its last few lines. Forty covers a message and the
 # section headings before it, and is enough to say where the suite stopped.

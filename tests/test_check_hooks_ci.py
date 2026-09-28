@@ -50,11 +50,11 @@ GIT_ENV = {
 }
 
 
-def run_script(*args, cwd=None):
+def run_script(*args, cwd=None, script=SCRIPT, env=GIT_ENV):
     assert RUNNER_PYTHON, "python3.12, the runner's python3, is needed to run check_hooks_ci.py as CI does"
     return subprocess.run(
-        [RUNNER_PYTHON, str(SCRIPT), *args],
-        cwd=cwd, env=GIT_ENV, capture_output=True, text=True,
+        [RUNNER_PYTHON, str(script), *args],
+        cwd=cwd, env=env, capture_output=True, text=True,
     )
 
 
@@ -542,7 +542,7 @@ def test_report_shows_whole_a_row_at_the_cap_and_a_block_filled_to_the_byte(tmp_
          "  [row cut here: its last 581711 bytes are in the uploaded log]\n"
          "  FAIL second\n```\n"),
         # The fence grows with the backticks the row keeps, and the row is
-        # still shown: capped at 32,768 bytes, it is fenced at 98,312 at most,
+        # still shown: capped at 32,768 bytes, it is fenced at 98,296 at most,
         # so the first row fits the 512 KiB block for any log.
         ("first", "`" * 614400,
          "`" * 32691 + "text\n  FAIL first\n" + "`" * 32690 + "\n"
@@ -715,29 +715,34 @@ def test_script_refuses_to_load_with_budgets_that_break_what_the_summary_counts_
     Three things the summary counts on hold only for some values of its
     budgets: the first row fits the rows block, the first name fits the names
     block, and the two blocks leave room under 1 MiB for the text outside
-    them. Each is asserted where the constants are, so a change that breaks
+    them. Each is checked where the constants are, so a change that breaks
     one stops the script with the reason. Every other test goes red too, but
     only on a literal, which says nothing about why (review of #227, round 2).
     A copy of the script with one constant changed is run, and the change is
     checked to apply exactly once, so a renamed constant cannot pass this
-    unedited. Each change is one past the bound: a row of 174,761 backticks
-    fences at 524,291, and 174,760 at 524,288, which fits; 523,265 of names
-    and 512 KiB of rows leave 1,023 bytes under 1 MiB for the text outside;
-    and a 1,535-byte names block is one short of 3 * 512. At each bound
-    itself the script loads, so each bound is the one the comment states.
+    unedited. Each change is one past the bound its check states: 3 * 174,761
+    + 8 is 524,291, and 3 * 174,760 + 8 is 524,288, the rows block exactly;
+    523,265 of names and 512 KiB of rows leave 1,023 bytes under 1 MiB for the
+    text outside; and a 1,535-byte names block is one short of 3 * 512. At
+    each bound itself the script loads, so each bound is the one the check
+    states. Those bounds round the widest fenced row and name up, by 16 bytes
+    and 5, so a check is refusing a little early and never late.
+
+    The copy runs under PYTHONOPTIMIZE, which drops every `assert`: written as
+    asserts, the checks let a copy with any budget load (review of #227,
+    round 3).
     """
     source = SCRIPT.read_text()
     assert source.count(constant) == 1
     copy = tmp_path / "check_hooks_ci.py"
     copy.write_text(source.replace(constant, changed))
-    result = subprocess.run([RUNNER_PYTHON, str(copy), "--help"],
-                            env=GIT_ENV, capture_output=True, text=True)
+    result = run_script("--help", script=copy, env={**GIT_ENV, "PYTHONOPTIMIZE": "1"})
 
     if message is None:
         assert result.returncode == 0, result.stderr
     else:
         assert result.returncode == 1
-        assert result.stderr.splitlines()[-1] == f"AssertionError: {message}"
+        assert result.stderr == message + "\n"
 
 
 def plain_names(first, last):
