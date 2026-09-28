@@ -663,37 +663,57 @@ CMDLIST
 # it as TEXT, and a mutation sent through a quoted heredoc -- piped, on stdin,
 # or staged in a file that a later `-f query=@file` reads -- is exactly what they
 # are for. CMDS is split from CMDTEXT instead, which gets the raw command with
-# its quoted bodies taken out by cs_drop_quoted_heredocs, the library's answer
-# to where a body begins and what quoting is, and not one written here. An
-# unquoted body is kept and re-read exactly as before, because bash runs the
-# `$( )` and the backticks in it. line_was_cut and the state field's fallback
-# read CMDTEXT too, so a backtick or a `state=closed` in a quoted body no longer
-# marks the line cut; and the graphql gate is asked of CMDS, so a quoted body
-# line reading `gh api graphql` no longer opens it.
+# some of its quoted bodies taken out by cs_drop_quoted_heredocs -- the
+# library's answer to where a body begins, what quoting is, which opener bash
+# sees and what reads a body, and not one written here. It drops a body only
+# where the drop is proven harmless: a quoted delimiter, an opener its quote
+# state vouches for, and `cat` into a file or a `gh` command reading it. Every
+# other body is kept and re-read exactly as before -- an unquoted one because
+# bash runs the `$( )` and the backticks in it, and a quoted one fed to
+# anything else because that reader may run it. line_was_cut and the state
+# field's fallback read CMDTEXT too, so a backtick or a `state=closed` in a
+# dropped body no longer marks the line cut; and the graphql gate is asked of
+# CMDS, so a dropped body line reading `gh api graphql` no longer opens it.
+#
+# THE DROP DOES NOT DECIDE ON A MISREAD OPENER, and the first version of this
+# change did. The re-read of the whole raw command used to cover for every
+# `<<` the heredoc pass took for an opener and bash did not -- the class #289
+# names -- so narrowing the re-read put the pass's opener in charge of a permit
+# on exactly the lines it used to cover. `-f body="heredocs use <<EOF"`, then
+# `gh pr merge 5`, then a real heredoc ending at `EOF`, was refused before #202
+# and permitted by that version: the merge was dropped as a body. Found by
+# review, with more shapes -- the `<<` inside single or double quotes, after a
+# `#`, behind a backslash, inside `$'...'` -- and each is a row in GH-202.1
+# now. Why the library's answer can only fail towards the re-read is DOUBT IS
+# STICKY, in lib/command-scan.sh above the heredoc pass.
 #
 # A FAILED CALL FALLS BACK ON THE RAW COMMAND, which is the reading before #202:
 # it refuses more and never less. When the call can fail is said beside
 # cs_drop_quoted_heredocs.
 #
-# THE TRADE, taken knowingly, and the one thing #202 leaves: $SCAN still holds a
-# quoted body's text, so prose in one naming a mutation or a baseRefName is
-# refused when a real `gh api graphql` call stands on the same line. That is
-# item 1 of TWO BLEEDS THE GATE LEAVES, below, arriving through a heredoc. It
-# costs refusals and never permissions -- beside a REST write the gate stays
-# shut and the same prose is permitted -- and GH-202.2 pins both rows. Taking
-# the quoted bodies out of $SCAN as well would close it and open the
-# file-staged mutation, which is a decision.
+# THREE TRADES, taken knowingly, and what #202 leaves. One costs refusals:
+# $SCAN still holds a quoted body's text, so prose in one naming a mutation or
+# a baseRefName is refused when a real `gh api graphql` call stands on the same
+# line. That is item 1 of TWO BLEEDS THE GATE LEAVES, below, arriving through a
+# heredoc -- beside a REST write the gate stays shut and the same prose is
+# permitted -- and GH-202.2 pins both rows. Taking the quoted bodies out of
+# $SCAN as well would close it and open the file-staged mutation, which is a
+# decision.
 #
-# AND A SECOND TRADE, the other way, found by review of this branch: a quoted
-# body is not run by the shell that reads the heredoc, but it is run by a shell
-# the heredoc FEEDS -- `sh -s <<'EOF'`, `bash -s <<'EOF'`,
-# `source /dev/stdin <<'EOF'`. No hook recognises those as wrappers, so they
-# were permitted with no gh api call on the line before this change and are
-# after it; beside a gh api call the old re-read refused them by accident, and
-# now permits them. A refusal lost, in the permitting direction, taken because
-# the answer is the wrapper anchor's for every hook and not a re-read here for
-# lines that happen to carry a gh api call. #311 owns it; GH-202.1 pins the two
-# rows, and the flagless `sh <<'EOF'`, which the anchor does know, as refused.
+# One costs the fix itself on one idiom: `-f body="$(cat <<'MD' ...)"` puts its
+# opener inside `"$(`, whose nested quoting the library's quote state does not
+# follow, so it is doubt, the body is kept, and a body naming a merge is
+# refused as it was before #202. 2 of 372 gh api heredoc commands measured.
+#
+# And one costs a refusal, in the permitting direction: a quoted body written
+# to a file by `cat > s.sh <<'EOF'` and run by a LATER command -- `sh s.sh` --
+# is dropped, since `cat` into a file is a data consumer and the pass cannot
+# see what reads the file next. Beside a gh api call the old re-read refused
+# it by accident; with none on the line it was permitted in every hook before
+# #202. It belongs with the shells that run their stdin, `sh -s <<'EOF'` and
+# the rest, which the old re-read also refused by accident and this change
+# still refuses by keeping the body -- all of them #311's, for every hook.
+# GH-202.1 pins the staged script as permitted, and those as refused.
 if gh_rule api && echo "$COMMAND" | grep -q '<<'; then
   BODIES=$(printf '%s\n' "$COMMAND" | cs_drop_quoted_heredocs) || BODIES=$COMMAND
   SCAN="$SCAN
@@ -1729,8 +1749,12 @@ while IFS= read -r CMD; do
   # endpoint and nothing else, so a cut either leaves the endpoint readable or
   # removes it and the arm refuses.
   #
-  # The line is CMDTEXT and not $SCAN, which holds a quoted heredoc's body: a
-  # backtick in one cut nothing, and a `state=closed` in one is prose. #202.
+  # The line is CMDTEXT and not $SCAN, which holds every quoted heredoc's body:
+  # a backtick in a dropped body cut nothing, and a `state=closed` in one is not
+  # an argument of this command. #202. It can be the request itself, though --
+  # a body sent with `--input -` or `-F field=@-` is the payload, and
+  # `{"state":"closed"}` there closes the pull request. That was permitted
+  # before #202, the fallback reading only a cut line, and is #138's.
   if printf '%s\n' "$ENDPOINT" | grep -qiE '/pulls/'; then
     if printf '%s\n' "$CMD" | grep -qiE "$STATE_FIELD_RE"; then
       API_STATE=1

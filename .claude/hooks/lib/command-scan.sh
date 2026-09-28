@@ -683,6 +683,11 @@ cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout
             if (nxt != "||") nxt = substr(nxt, 1, 1)
             if (substr(scan, RSTART + RLENGTH) ~ /<</) seen = 0
             if (q != "" || $0 ~ /\\$/) seen = 0
+            # Doubt raised on this very line -- a `$( )` in double quotes in
+            # front of the opener, say -- is about this opener too, and not
+            # only the ones after it. The first version of this line was
+            # missing, and `echo "$(x "a")" && cat > F <<'EOF'` dropped.
+            if (doubt) seen = 0
             if (!seen) { doubt = 1; print; next }
             cont = 0
             # Rule 2: a quoted body that no known data consumer reads is kept.
@@ -917,19 +922,22 @@ if ! declare -F cs_drop_heredocs >/dev/null 2>&1; then
   unset -f cs_normalise
 fi
 
-# Drop QUOTED heredoc bodies and nothing else: lines on stdin, the same lines
-# out, with the body of every heredoc whose delimiter is quoted taken away and
-# every unquoted body kept where it stands. cs_drop_heredocs in its
-# keep-unquoted mode, which says what "quoted" is and why; this is the name a
-# hook calls it by, so that THE LOAD CONTRACT has a function to require rather
-# than an argument to trust.
+# Drop the quoted heredoc bodies that are proven to be data, and nothing else:
+# lines on stdin, the same lines out, with the body of a heredoc taken away only
+# when its delimiter is quoted, its opener is one bash sees and what reads it is
+# `cat` into a file or a `gh` command -- and every other body kept where it
+# stands. cs_drop_heredocs in its keep-unquoted mode, whose paragraph says each
+# of the three and why; this is the name a hook calls it by, so that THE LOAD
+# CONTRACT has a function to require rather than an argument to trust. The name
+# says less than the function does: it was given when the first of the three
+# was the whole rule, and review of #202's pull request added the other two.
 #
 # no-pr-decisions.sh is its caller, for #202. That hook re-reads a command's
 # heredoc bodies as commands once a gh api call is on the line, because a
 # mutation sent through a heredoc is a decision hidden in text cs_normalise
 # dropped. It re-read the quoted ones too, where bash expands nothing, so a
 # pull request body quoting `gh api -X POST .../releases` in backticks was that
-# release write. It asks this function which bodies can hold a command.
+# release write. It asks this function which bodies cannot hold a command.
 #
 # NOT WITHDRAWN when cs_drop_heredocs is missing, unlike cs_normalise above,
 # because its failure is loud: the call it makes answers 127 and this returns

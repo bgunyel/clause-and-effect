@@ -814,6 +814,16 @@ normalise-swallows-a-missing-heredoc-pass%lib/command-scan.sh%/^  unset -f cs_no
 heredoc-quoting-inverted%lib/command-scan.sh%s|d !~ /|d ~ /|%GH-202.1%caught
 readmission-splits-the-raw-command%no-pr-decisions.sh%s/^\$BODIES"$/$COMMAND"/%GH-202.1%caught
 readmission-drops-the-fallback%no-pr-decisions.sh%s/ || BODIES=\$COMMAND$//%GH-202.3%caught
+heredoc-opener-in-quotes-seen%lib/command-scan.sh%s/^            if (q != "" || cmt) seen = 0$/            if (cmt) seen = 0/%GH-202.1%caught
+heredoc-opener-in-comment-seen%lib/command-scan.sh%s/^            if (q != "" || cmt) seen = 0$/            if (q != "") seen = 0/%GH-202.1%caught
+heredoc-opener-escape-ignored%lib/command-scan.sh%s/lex(\$0, 1, RSTART) != RSTART)/lex($0, 1, RSTART) < 0)/%GH-202.1%caught
+heredoc-continued-segment-seen%lib/command-scan.sh%s/(cont || q0 != "")/(q0 != "")/%GH-202.1%caught
+heredoc-dq-substitution-not-doubted%lib/command-scan.sh%s/{ doubt = 1; continue }/{ continue }/%GH-202.1%caught
+heredoc-doubt-on-its-own-line-ignored%lib/command-scan.sh%/^            if (doubt) seen = 0$/d%GH-202.1%caught
+heredoc-doubt-not-sticky%lib/command-scan.sh%s/if (keep != "" && doubt) { print; next }/if (0) { print; next }/%GH-202.1%caught
+heredoc-any-reader-a-consumer%lib/command-scan.sh%/^            if (!consumer(pre, post, nxt)) kept = 1$/d%GH-202.1%caught
+heredoc-consumer-pipe-ignored%lib/command-scan.sh%s/if (nxt == "|") return 0/if (0) return 0/%GH-202.1%caught
+heredoc-consumer-dev-target%lib/command-scan.sh%s/^        return pre !~ .*$/        return 1/%GH-202.1%caught
 command-word-not-reduced%lib/command-scan.sh%s/^      w = substr(s, 1, i - 1)$/      w = "x"/%GH-117%caught
 wrapper-word-spelling-not-admitted%lib/command-scan.sh%s/SPELLING((ba|z|)sh/((ba|z|)sh/%GH-117%caught
 prefix-word-spelling-not-reduced%lib/command-scan.sh%s/return cw_name(w)/return w/%GH-117%caught
