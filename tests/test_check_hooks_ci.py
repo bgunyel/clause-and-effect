@@ -619,17 +619,31 @@ def test_report_counts_a_shown_rows_fence_against_the_rows_after_it_and_names_th
     assert "not named" not in summary
 
 
-def test_report_names_every_failing_row_when_none_can_be_shown_whole(tmp_path):
+@pytest.mark.parametrize(
+    ("rows", "lead"),
+    [
+        (20, "\n5 of the 20 failing rows are not shown above, to keep this summary under "
+             "GitHub's 1 MiB limit; the uploaded log holds them. Their `FAIL` lines, in log "
+             "order, each one longer than 512 bytes cut to at most 512:\n\n"),
+        (16, "\n1 of the 16 failing rows is not shown above, to keep this summary under "
+             "GitHub's 1 MiB limit; the uploaded log holds it. Its `FAIL` line, cut to at "
+             "most 512 bytes if it is longer:\n\n"),
+    ],
+    ids=["five-not-shown", "one-not-shown"],
+)
+def test_report_names_every_failing_row_when_none_can_be_shown_whole(tmp_path, rows, lead):
     """
-    #227's third case: twenty rows whose `FAIL` line alone is 600 KiB, so no
-    row is shown whole and no name on the page is either. Each shown row is its
+    #227's third case: rows whose `FAIL` line alone is 600 KiB, so no row is
+    shown whole and no name on the page is either. Each shown row is its
     `FAIL` line's first 32,703 bytes and a cut marker, 32,768 bytes together:
     fifteen fill the block to 491,532 bytes fenced, and a sixteenth would take
-    it to 524,300. The five left are each named by their `FAIL` line's first
-    512 bytes. Before the cap, no row name at all was on this page.
+    it to 524,300. The rows left are each named by their `FAIL` line's first
+    512 bytes. Before the cap, no row name at all was on this page. With
+    sixteen rows one is left, and the sentence naming it is singular (review
+    of #227, round 2: it said "1 of the 16 failing rows are").
     """
     log = (
-        "".join(f"  FAIL row-{i:02d} " + "y" * 614400 + "\n" for i in range(20))
+        "".join(f"  FAIL row-{i:02d} " + "y" * 614400 + "\n" for i in range(rows))
         + "\nSOME CHECKS FAILED\n"
     )
     result, paths = report(tmp_path, log, 1)
@@ -643,16 +657,87 @@ def test_report_names_every_failing_row_when_none_can_be_shown_whole(tmp_path):
                   "  [row cut here: its last 581712 bytes are in the uploaded log]\n"
                   for i in range(15))
         + "```\n"
-    ) in summary
-    assert (
-        "\n5 of the 20 failing rows are not shown above, to keep this summary under "
-        "GitHub's 1 MiB limit; the uploaded log holds them. Their `FAIL` lines, in log "
-        "order, each one longer than 512 bytes cut to at most 512:\n\n"
-        "```text\n"
-        + "".join(f"  FAIL row-{i:02d} " + "y" * 498 + "\n" for i in range(15, 20))
+        + lead
+        + "```text\n"
+        + "".join(f"  FAIL row-{i:02d} " + "y" * 498 + "\n" for i in range(15, rows))
         + "```\n"
     ) in summary
     assert "not named" not in summary
+
+
+def test_report_says_a_single_row_left_unnamed_in_the_singular(tmp_path):
+    """
+    772 rows of one 2,003-byte `FAIL` line each: 261 fill the rows block and
+    511 are not shown. 510 plain names are 261,642 bytes fenced and a 511th
+    would pass 256 KiB, so one row is left unnamed, and the sentence counting
+    it is singular (review of #227, round 2: it said "The last 1 of those 511
+    are").
+    """
+    log = (
+        "".join(f"  FAIL r{i:04d} " + "z" * 1990 + "\n" for i in range(772))
+        + "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert (
+        "\n511 of the 772 failing rows are not shown above, to keep this summary under "
+        "GitHub's 1 MiB limit; the uploaded log holds them. Their `FAIL` lines, in log "
+        "order, each one longer than 512 bytes cut to at most 512:\n\n"
+        "```text\n"
+        + "".join(f"  FAIL r{i:04d} " + "z" * 499 + "\n" for i in range(261, 771))
+        + "```\n"
+        "\nThe last of those 511 is not named here either, for the same reason.\n"
+    ) in summary
+    assert "  FAIL r0771" not in summary
+
+
+@pytest.mark.parametrize(
+    ("constant", "changed", "message"),
+    [
+        ("ROW_BYTES = 32 * 1024\n", "ROW_BYTES = 174761\n",
+         "a capped row of backticks no longer fits the rows block: the first row can be left out"),
+        ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 523265\n",
+         "the two blocks and the text outside them can pass GitHub's 1 MiB summary limit"),
+        ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 1535\n",
+         "a name cut to NAME_BYTES no longer fits the names block: none may be named"),
+        ("ROW_BYTES = 32 * 1024\n", "ROW_BYTES = 174760\n", None),
+        ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 523264\n", None),
+        ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 1536\n", None),
+    ],
+    ids=["first-row", "one-mebibyte", "first-name",
+         "first-row-at-the-bound", "one-mebibyte-at-the-bound", "first-name-at-the-bound"],
+)
+def test_script_refuses_to_load_with_budgets_that_break_what_the_summary_counts_on(
+        tmp_path, constant, changed, message):
+    """
+    Three things the summary counts on hold only for some values of its
+    budgets: the first row fits the rows block, the first name fits the names
+    block, and the two blocks leave room under 1 MiB for the text outside
+    them. Each is asserted where the constants are, so a change that breaks
+    one stops the script with the reason. Every other test goes red too, but
+    only on a literal, which says nothing about why (review of #227, round 2).
+    A copy of the script with one constant changed is run, and the change is
+    checked to apply exactly once, so a renamed constant cannot pass this
+    unedited. Each change is one past the bound: a row of 174,761 backticks
+    fences at 524,291, and 174,760 at 524,288, which fits; 523,265 of names
+    and 512 KiB of rows leave 1,023 bytes under 1 MiB for the text outside;
+    and a 1,535-byte names block is one short of 3 * 512. At each bound
+    itself the script loads, so each bound is the one the comment states.
+    """
+    source = SCRIPT.read_text()
+    assert source.count(constant) == 1
+    copy = tmp_path / "check_hooks_ci.py"
+    copy.write_text(source.replace(constant, changed))
+    result = subprocess.run([RUNNER_PYTHON, str(copy), "--help"],
+                            env=GIT_ENV, capture_output=True, text=True)
+
+    if message is None:
+        assert result.returncode == 0, result.stderr
+    else:
+        assert result.returncode == 1
+        assert result.stderr.splitlines()[-1] == f"AssertionError: {message}"
 
 
 def plain_names(first, last):

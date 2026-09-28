@@ -165,6 +165,12 @@ SUMMARY_BLOCK_BYTES = 512 * 1024
 # failed was not built: what a row showed would then depend on how many rows
 # came after it.
 ROW_BYTES = 32 * 1024
+# `report` has no guard for a rows block with nothing in it, because the first
+# row always fits. That holds only while the widest a capped row can be fenced
+# fits the block, so a change to either constant that breaks it stops here,
+# with the reason, rather than in a test's literal (review of #227, round 2).
+assert 3 * ROW_BYTES + 8 <= SUMMARY_BLOCK_BYTES, \
+    "a capped row of backticks no longer fits the rows block: the first row can be left out"
 # How a cut row says so, as the last line of what is shown of it. The number is
 # what the log holds and the summary does not show, counted in the log's bytes:
 # each detail line left out counts its DETAIL_INDENT, which the summary
@@ -192,6 +198,15 @@ NAME_BYTES = 512
 # median row line (75 bytes). A log with more failing rows not shown than that
 # names the first in log order and counts the rest.
 NAMES_BLOCK_BYTES = 256 * 1024
+# The two blocks and the text outside them, 868 bytes at most as measured
+# beside SUMMARY_BLOCK_BYTES, under GitHub's 1 MiB. One KiB stands for that text.
+assert SUMMARY_BLOCK_BYTES + NAMES_BLOCK_BYTES + 1024 <= 1024 * 1024, \
+    "the two blocks and the text outside them can pass GitHub's 1 MiB summary limit"
+# And the first name always fits its block, which the summary's wording counts
+# on: a name fenced is at most 3 * NAME_BYTES - 5 bytes, when all of it after
+# its `  FAIL ` is one run of backticks.
+assert 3 * NAME_BYTES <= NAMES_BLOCK_BYTES, \
+    "a name cut to NAME_BYTES no longer fits the names block: none may be named"
 # A suite that exits non-zero with no failing row stopped in a guard, and a
 # guard's message is its last few lines. Forty covers a message and the
 # section headings before it, and is enough to say where the suite stopped.
@@ -543,15 +558,30 @@ def report(log_path, exit_status, suite_outcome, seconds, tested_commit, json_pa
         parts.append(fenced(shown))
         if not_shown:
             names = names_that_fit(not_shown)
-            parts.append(f"\n{len(not_shown)} of the {failed} failing rows are not shown "
-                         "above, to keep this summary under GitHub's 1 MiB limit; the "
-                         "uploaded log holds them. Their `FAIL` lines, in log order, each one "
-                         f"longer than {NAME_BYTES} bytes cut to at most {NAME_BYTES}:\n\n")
+            # One row not shown, or one left unnamed, is said in the singular.
+            # The other counts printed here are 2 or more: the first row is
+            # shown, so `failed` is at least one more than the rows not shown,
+            # and the first name always fits, so a row left unnamed means two
+            # or more not shown.
+            if len(not_shown) == 1:
+                parts.append(f"\n1 of the {failed} failing rows is not shown above, to "
+                             "keep this summary under GitHub's 1 MiB limit; the uploaded "
+                             "log holds it. Its `FAIL` line, cut to at most "
+                             f"{NAME_BYTES} bytes if it is longer:\n\n")
+            else:
+                parts.append(f"\n{len(not_shown)} of the {failed} failing rows are not "
+                             "shown above, to keep this summary under GitHub's 1 MiB limit; "
+                             "the uploaded log holds them. Their `FAIL` lines, in log "
+                             f"order, each one longer than {NAME_BYTES} bytes cut to at "
+                             f"most {NAME_BYTES}:\n\n")
             parts.append(fenced(names))
-            if len(names) < len(not_shown):
-                parts.append(f"\nThe last {len(not_shown) - len(names)} of those "
-                             f"{len(not_shown)} are not named here either, for the "
-                             "same reason.\n")
+            unnamed = len(not_shown) - len(names)
+            if unnamed == 1:
+                parts.append(f"\nThe last of those {len(not_shown)} is not named here "
+                             "either, for the same reason.\n")
+            elif unnamed:
+                parts.append(f"\nThe last {unnamed} of those {len(not_shown)} are not "
+                             "named here either, for the same reason.\n")
     elif exit_status != 0:
         lead = stopped or f"The suite exited {exit_status} without printing a failing row."
         parts.append(f"{lead} The end of its log:\n\n")
