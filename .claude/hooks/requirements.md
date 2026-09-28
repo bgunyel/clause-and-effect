@@ -153,7 +153,8 @@ An `active` requirement is **covered** (Q15) when it has
 
 A requirement with `seam: none` needs no check, and has none tagged with it; its
 `verify` must resolve: `tests/<file>.py` to a file that exists, and
-`runbook §<n>` to a heading `## §<n>` in `.claude/hooks/runbook.md`.
+`runbook §<n>` to a heading `## §<n>` in `.claude/hooks/runbook.md`, and to
+one only (#110).
 
 The suite fails on each of these, and `--matrix` shows the rest:
 
@@ -165,6 +166,14 @@ The suite fails on each of these, and `--matrix` shows the rest:
   a `superseded-by` naming no entry, a `direction` with no reason, `seam: none`
   with a `verify` that does not resolve, and `seam: none` with checks tagged with
   it after all;
+- a runbook that is there and is not a regular file or cannot be read, a
+  number that heads two of its sections, and a section of it whose
+  **Verifies** line does not name exactly the entries whose `verify` is that
+  section: a section with no such line or with two, a line naming an entry
+  that points elsewhere or nowhere, and an entry pointing at the section that
+  the line leaves out, gap entries included (#110). So is a Verifies line in no
+  `## §<n>` section, a runbook holding no such section, and one absent or empty
+  while entries point into it;
 - a `GH-` entry out of place: one left in this file, a file under
   `requirements/` whose name is not the ID it holds, one holding a second entry
   or none, one with text before its heading, a `##` heading in it, or a line
@@ -313,7 +322,7 @@ and held to the same standard of saying only what it asks.
   branch, so that the pull request I open contains only my own work and not a
   reversion of everything merged into that branch since.
 - from: #36, User Stories, 5
-- status: gap → #110
+- status: active
 - seam: none
 - verify: runbook §1
 
@@ -322,7 +331,7 @@ and held to the same standard of saying only what it asks.
   base, so that which tool an agent reached for does not change what my review
   sees.
 - from: #36, User Stories, 6
-- status: gap → #110
+- status: active
 - seam: none
 - verify: runbook §1
 
@@ -830,7 +839,7 @@ and held to the same standard of saying only what it asks.
 - text: The repository has `delete_branch_on_merge` enabled and
   `allow_squash_merge` and `allow_rebase_merge` disabled.
 - from: #36, Amendment of 2026-09-09, and Amendment of 2026-09-11
-- status: gap → #110
+- status: active
 - seam: none
 - verify: runbook §3
 
@@ -1184,8 +1193,11 @@ it has no entry above (Q16).
   left and has taken all fifteen off; it adds checks, not requirements of its own,
   and the three defects found doing it are #130, #131 and #133, which have entries
   above
-- #110: the live acceptance runbook, not yet written; `verify: runbook §<n>` names
-  its sections
+- #110: has entries under requirements/, GH-110.1 to GH-110.5, declared in its
+  issue file, and is listed here only because this file cited it before it
+  landed, as the owner of the `runbook §<n>` sections that US-5, US-6 and FR-39
+  pointed at while they were `gap → #110`. It wrote `runbook.md` and took those
+  three gaps off
 - #111: a pull request, for #94
 - #116: a pull request, for #98
 - #119: a pull request, for #101
@@ -1257,10 +1269,9 @@ it has no entry above (Q16).
   two-digit fd. Cited where that guard is, because a guard narrower than the
   prose beside it reads as coverage -- the shape the fifth review of PR #169
   found in `nested_defs` and the sixth found here
-- #187: `report_says` records the report by basename, so a modified fixture
-  keeping that name would satisfy GH-109.4 for a hook nothing ran. Cited where
-  the exception is taken. The invariant it rests on is written in a comment and
-  held by nothing
+- #187: has an entry, GH-187, generated from its issue file, and is listed
+  here only because the library cited it before it landed, where
+  `report_says` took the exception by basename
 - #179: the invariance families cannot seed a requirement whose subject is
   agreement across hooks, which is the reason GH-109.5 declares `variants:
   none`. Filed out of the second review of PR #169 so that the reason is a
@@ -1338,18 +1349,6 @@ it has no entry above (Q16).
   cited where a rule is held for the legacy entries and not yet for a
   generated one -- an ID deleted outright, with its declaration, its pin and
   its file, which nothing disagrees with afterwards
-- #159: the issue filed as "append-only-docs-edit.sh is inoperative in every
-  linked worktree". What it measured is narrower than its title, and review
-  of #234 measured the other half: the guard permits an Edit or a Write of an
-  entry in another checkout of this repository than the session's project
-  directory -- a linked worktree's entry when the project directory is the
-  main checkout, and the main checkout's when it is the worktree. Cited in
-  #157's issue file, which pins the dev-log README saying so, so that the
-  README gives the append rule as an instruction rather than as something the
-  guard holds, and which feeds the guard both directions at today's verdict
-  (GH-157.3), against a real linked worktree. Each of the two remedies the
-  issue proposes was measured turning a check there red. It adds its
-  requirements in the pull request that fixes it
 - #176: the heredoc append `append-only-docs.sh` refuses because a `>` in the
   heredoc's prose, with a guarded path after it, reads as a truncating
   redirect. Cited in #157's issue file, where the dev-log README routes
@@ -1505,6 +1504,24 @@ it has no entry above (Q16).
   file, where the three shapes are pinned at today's permitted verdict and
   GH-177's text says what is refused. It adds its requirements in the pull
   request that fixes it
+- #259: `append-only-docs.sh`'s truncating-redirect rule reads its stretch
+  across a `;`, so a redirect anywhere on a line is read as one into a
+  guarded path written after it in another command, and the line is refused.
+  Filed from #159's branch, whose issue file pins the redirect's left boundary
+  with the guarded entry in front of the `>` for that reason. It adds its
+  requirements in the pull request that fixes it
+- #190: ADR 0003 says the Edit companion reads the merge base, and
+  `append-only-docs-edit.sh` reads existence on disk, so a draft -- an entry
+  not yet merged -- is refused from its first write. Cited in #159's issue
+  file, where a draft in a worktree is refused with the main checkout as the
+  project directory, the accepted trade, and in #157's, whose fixture entries
+  are drafts the README says are refused. It adds its requirements in the
+  pull request that fixes it
+- #282: with `grep` absent from `PATH`, both append-only hooks exit 0, a
+  fail-open for a missing tool that predates #159. Cited in #159's issue
+  file, where the derivation of which hooks the checkout question reaches
+  reads a failed grep as a hook it could not read, and reaches it. It adds its
+  requirements in the pull request that fixes it
 - #283: the invoker's exported shell functions reach every process this suite
   starts -- the hooks it feeds and the child shells its helpers run -- and the
   library's jq guard asks `command -v jq`, which answers for a function. Found
