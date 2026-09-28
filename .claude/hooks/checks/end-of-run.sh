@@ -228,7 +228,7 @@ GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static
 GH-128 GH-171:gap
 GH-155.1:static GH-148:static
 GH-109.1:static GH-109.2:refuse-only GH-109.3:static GH-109.4:static
-GH-109.5:permit-only GH-164:gap
+GH-109.5:permit-only GH-164
 GH-200.1:static GH-200.2:static GH-200.3:static GH-200.4:static GH-200.5:static
 GH-204.1:static GH-204.2:static GH-204.3:static GH-204.4:static GH-204.5:static
 GH-204.6:static GH-204.7:static GH-204.8:static
