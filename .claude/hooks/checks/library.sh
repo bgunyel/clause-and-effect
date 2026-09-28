@@ -19,8 +19,8 @@
 #
 # WHAT IT DOES: it defines functions and nothing else. Sourcing it runs no
 # check, prints nothing and records nothing; the variables its functions read
-# -- $LEDGER, $REQ, $RAN, $HOOKS, $FIXTURES, $SUITE_DIR, $DECLARED, $PINNED and
-# the fixtures' own -- are set by check-hooks.sh, before the call that reads
+# -- $LEDGER, $REQ, $RAN, $HOOKS, $FIXTURES, $SUITE_DIR, $SUITE_DECLARED,
+# $SUITE_PINNED and the fixtures' own -- are set by check-hooks.sh, before the call that reads
 # them; and $STDERR_WRITE, which `arms` and `fn_writes` read, by the unsplit
 # file's #109 section, which is sourced before any issue file that calls them.
 #
@@ -112,6 +112,9 @@ fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, 
   record "$dir" FAIL "$first"
 }
 req() {  # req <ID>... -- the requirements the checks after this establish
+  # Joined on a space whatever IFS the caller has: "$*" joins on its first
+  # character, and a tag list joined on a colon is one tag no entry has (#223).
+  local IFS=' '
   REQ="$*"
 }
 section() {  # section <heading> -- print it, and let no tag carry across it
@@ -709,7 +712,9 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
 # review of PR #169's finding at a second call site, filed by the sixth. That
 # guard stays, naming its own cause.
 every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every hook in $XH_HOOKS, of at least one
-  local dir="$1" label="$2" cmd="$3" hook rc err refused= runs=0
+  local - dir="$1" label="$2" cmd="$3" hook rc err refused= runs=0 IFS=$' \t\n'
+  # The list split on blanks, and not globbed, whatever the caller left (#223).
+  set -f
   for hook in $XH_HOOKS; do
     runs=$((runs + 1))
     err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
@@ -1236,9 +1241,9 @@ sections_without_rows() {  # sections_without_rows <headings record> <ledger> --
 # THE GENERATED ENTRIES (#205). A `GH-` entry outside the legacy set is declared
 # by `requirement` in an issue file, and its file under requirements/ is written
 # from that declaration by generate-requirements.sh. These two read the record
-# the run kept of what it declared and pinned -- $DECLARED, a record per
+# the run kept of what it declared and pinned -- $SUITE_DECLARED, a record per
 # `requirement` call, `<ID> TAB <issue file> TAB <body>` ended by a NUL, and
-# $PINNED, a line per `shape_pin` or `variants_pin` call, `<shape|variants> TAB
+# $SUITE_PINNED, a line per `shape_pin` or `variants_pin` call, `<shape|variants> TAB
 # <issue file> TAB <tokens>` -- and print what does not hold, a line each,
 # sorted, and nothing when all of it does. Each is driven against a fixture in
 # the #205 issue file, and against this repository at the end of the run.
@@ -1256,7 +1261,7 @@ generated_id() {  # generated_id <ID> -- true when it is GH-<n> or GH-<n>.<m>
   [[ $1 =~ $re ]]
 }
 generated_bad() {  # generated_bad <declared record> <requirements dir> <legacy literal>
-  local - rec id file body want seen=' ' legacy f n
+  local - rec id file body want seen=' ' legacy f n IFS=$' \t\n'
   set -f
   legacy=" $(printf '%s ' $3)"
   {
@@ -1267,6 +1272,12 @@ generated_bad() {  # generated_bad <declared record> <requirements dir> <legacy 
         printf '%s: declared in %s, and not an ID of the grammar GH-<n> or GH-<n>.<m>\n' "$id" "$file"; continue
       fi
       case "$seen" in *" $id "*) printf '%s: declared a second time, in %s\n' "$id" "$file"; continue ;; esac
+      # A body with no field is what `requirement` records when it is called
+      # with no heredoc, since the driver's stdin is /dev/null (#223); named as
+      # what it is, and not as a file that is not its declaration.
+      if [[ $'\n'$body != *$'\n- '* ]]; then
+        printf '%s: declared in %s with no fields\n' "$id" "$file"; seen="$seen$id "; continue
+      fi
       seen="$seen$id "
       case "$legacy" in *" $id "*) printf '%s: declared in %s, and a legacy entry, which stays hand-written\n' "$id" "$file"; continue ;; esac
       # An entry of #<n> is declared in #<n>'s issue file and in no other, which
@@ -1302,6 +1313,29 @@ generated_bad() {  # generated_bad <declared record> <requirements dir> <legacy 
     done
   } | LC_ALL=C sort
 }
+# THE CHECKSUM LITERALS (#200's, here since #223's issue file became its
+# second caller). Each token that the split set beside <dir> does not bear out,
+# as ` ID:absent` or ` ID:changed(now ID:<cksum>:<length>)`. A changed entry
+# says the token it has now, so that the red says how to move it (rev-agent-200,
+# round 4 of PR #210); whether the change was meant is the reviewer's to say,
+# not this line's. A function so that a fixture can ask it that, which a loop
+# over this repository's own entries -- none of them changed -- never could.
+# The literal is split on blanks and not globbed, whatever the caller left
+# (#223); it turned globbing back on at its end whatever it found until then.
+split_moved_bad() {  # split_moved_bad <requirements dir> <literal>
+  local - tok id now bad= IFS=$' \t\n'
+  set -f
+  for tok in $2; do
+    id=${tok%%:*}
+    if [ ! -f "$1/$id.md" ]; then
+      bad="$bad $id:absent"
+    else
+      now=$(cksum < "$1/$id.md" | awk '{ print $1 ":" $2 }')
+      [ "$now" = "${tok#*:}" ] || bad="$bad $id:changed(now $id:$now)"
+    fi
+  done
+  printf '%s' "$bad"
+}
 # What the pins get wrong: a generated entry in either shared literal, which is
 # the hunk every loop edited until the pins (#211); a pin naming an entry no
 # issue file declares, or one another issue file declares; an entry pinned twice
@@ -1309,7 +1343,7 @@ generated_bad() {  # generated_bad <declared record> <requirements dir> <legacy 
 # are what the entries say is the comparison each shared literal already had,
 # which the end of the run hands them to.
 pins_bad() {  # pins_bad <declared record> <pinned record> <shape literal> <scope literal> <legacy literal>
-  local - rec id file kind tok legacy
+  local - rec id file kind tok legacy IFS=$' \t\n'
   local -A declared=() pinned=()
   set -f
   legacy=" $(printf '%s ' $5)"
@@ -1362,7 +1396,7 @@ pins_bad() {  # pins_bad <declared record> <pinned record> <shape literal> <scop
 # legacy entries and the end of the run to the generated ones, since the
 # derivation reads both.
 legacy_tokens() {  # legacy_tokens <in|out> <legacy literal> <tokens>
-  local - tok legacy
+  local - tok legacy IFS=$' \t\n'
   set -f
   legacy=" $(printf '%s ' $2)"
   for tok in $3; do
@@ -1381,11 +1415,14 @@ legacy_tokens() {  # legacy_tokens <in|out> <legacy literal> <tokens>
 # $SUITE_DIR and never off the copy, and they are what this run sourced and
 # declared. Reading the copy's instead asks the copy for a checks/ directory
 # the override guard does not require, and a copy without one turned the
-# GH-205.2 row red for that reason alone (review of PR #222, round 3). Prints
-# the directory.
+# GH-205.2 row red for that reason alone (review of PR #222, round 3). And
+# check-hooks.sh from the suite's side too, since #223: the script reads the
+# legacy set out of it, and the driver is the tooling as the issue files are.
+# Prints the directory.
 generator_view() {  # generator_view <suite dir> <hooks dir> <into>
   rm -rf -- "$3" && mkdir -p -- "$3" \
-    && ln -s -- "$1/checks" "$3/checks" && ln -s -- "$2/requirements" "$3/requirements" \
+    && ln -s -- "$1/checks" "$3/checks" && ln -s -- "$1/check-hooks.sh" "$3/check-hooks.sh" \
+    && ln -s -- "$2/requirements" "$3/requirements" \
     && printf '%s' "$3"
 }
 # THE DECLARATION, as bash reads it (#205; here since #215's issue file became
@@ -1398,11 +1435,16 @@ generator_view() {  # generator_view <suite dir> <hooks dir> <into>
 # says so, with its tag, where a `fail` here would carry whatever tag stood
 # before the declaration.
 requirement() {  # requirement <ID> -- declare a generated GH- entry; its fields on stdin
-  local body=
-  # A call with no heredoc would read the terminal and wait; it records an
-  # empty body instead, which the end of the run reports as not its file.
+  local body= IFS=' '
+  # A call with no heredoc reads the stdin the call inherits. Under the driver
+  # that is /dev/null, which the driver makes it before any issue file is
+  # sourced (#223), so the call records an empty body and the end of the run
+  # names the entry as declared with no fields; before that it read whatever
+  # the suite was started with -- the rest of the registry, under
+  # mutate-hooks.sh -- or waited on a pipe that stayed open. A terminal is still
+  # not read, for a caller outside the driver.
   [ -t 0 ] || IFS= read -r -d '' body
-  printf '%s\t%s\t%s\0' "$*" "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$body" >> "$DECLARED"
+  printf '%s\t%s\t%s\0' "$*" "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$body" >> "$SUITE_DECLARED"
 }
 # THE PINS, #211's decision: the second copy of an entry's shape, and of its
 # variants keyword when it is in the invariance families' scope, written in the
@@ -1412,14 +1454,14 @@ requirement() {  # requirement <ID> -- declare a generated GH- entry; its fields
 # `variants_pin`, its twin for the variants keyword, came here from the #205
 # issue file when #144's issue file became its second caller.
 shape_pin() {  # shape_pin '<ID>[:<shape>]...' -- the shape of entries this issue file declares
-  local -
+  local - IFS=$' \t\n'
   set -f
-  printf 'shape\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$PINNED"
+  printf 'shape\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$SUITE_PINNED"
 }
 variants_pin() {  # variants_pin '<ID>:<keyword>...' -- the variants of entries this issue file declares
-  local -
+  local - IFS=$' \t\n'
   set -f
-  printf 'variants\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$PINNED"
+  printf 'variants\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$SUITE_PINNED"
 }
 # THE READER OF A HEADER'S PROSE (#183's, a function since #215's issue file
 # became its second caller). Comment lines on stdin, one line of prose out: the

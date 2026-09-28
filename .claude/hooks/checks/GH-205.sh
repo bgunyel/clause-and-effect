@@ -42,7 +42,8 @@ requirement GH-205.1 <<'REQ'
   generation can say; and a generated entry deleted outright, with its
   declaration, its pin and its file in one commit, which leaves nothing that
   disagrees. The rule that an ID is never deleted is held here for the legacy
-  set only (#223). A generated scope -- an entry's command shapes and
+  set only; GH-223.6 holds it for a generated sub-ID the registry still cites
+  (#223). A generated scope -- an entry's command shapes and
   verdicts written from the rows that test it -- is not built: it would be
   read off `req` tags, whose scope runs on to the next `req`, so it could
   claim more than the rows test until that is closed.
@@ -54,8 +55,10 @@ requirement GH-205.2 <<'REQ'
   by `GH-`, spelled other than `requirement <ID> <<'REQ'` at the start of the
   line; an ID outside the grammar; an ID declared twice; a
   declaration never closed; a body that is empty, holds a line that is no
-  field, or carries a `generated` field of its own; a declared ID whose file
-  is hand-written; and a generated file no issue file declares any more. With
+  field, or carries a `generated` field of its own; and what GH-223.4 and
+  GH-223.2 add, which since #223 stand where its refusals of a declared ID
+  whose file is hand-written and of a generated file no issue file declares
+  any more stood. With
   `--check` it writes nothing and exits 1 on a refusal, which it reports
   alone; with none, it names each file that is not what its declaration would
   write and exits 1. Against this repository it names the entries the suite
@@ -110,11 +113,11 @@ mkdir -p "$R205"
 
 # `requirement` records the fields as bash read them: continuation, a tab and a
 # `$` kept as written, the last newline kept, and the issue file named as the
-# path under .claude/hooks/. Driven with $DECLARED pointed at a fixture, as a
+# path under .claude/hooks/. Driven with $SUITE_DECLARED pointed at a fixture, as a
 # temporary assignment that ends with the call. The declaration is not at the
 # start of its line, so it is none of this file's own.
 : > "$R205/record"
-DECLARED="$R205/record" requirement GH-9.1 <<'FIX'
+SUITE_DECLARED="$R205/record" requirement GH-9.1 <<'FIX'
 - text: a field,
   continued	with a tab and $HOME
 FIX
@@ -122,9 +125,9 @@ tok 'requirement records the ID, the issue file and the fields as bash read them
   "$(printf 'GH-9.1\tchecks/GH-205.sh\t- text: a field,\n  continued\twith a tab and $HOME\n\0' | od -c)" \
   "$(od -c < "$R205/record")"
 : > "$R205/pins"
-PINNED="$R205/pins" shape_pin 'GH-9.1:static
+SUITE_PINNED="$R205/pins" shape_pin 'GH-9.1:static
   GH-9.2'
-PINNED="$R205/pins" variants_pin 'GH-9.2:none'
+SUITE_PINNED="$R205/pins" variants_pin 'GH-9.2:none'
 req GH-205.3
 tok 'shape_pin and variants_pin record the kind, the issue file and the tokens, whitespace folded' \
   "$(printf 'shape\tchecks/GH-205.sh\tGH-9.1:static GH-9.2 \nvariants\tchecks/GH-205.sh\tGH-9.2:none \n')" \
@@ -145,7 +148,7 @@ shape_pin 'GH-9.3:static'
 variants_pin 'GH-9.3:none'
 FIX
 : > "$R205/caller-record"; : > "$R205/caller-pins"
-(DECLARED="$R205/caller-record" PINNED="$R205/caller-pins"; source "$R205/caller.sh")
+(SUITE_DECLARED="$R205/caller-record" SUITE_PINNED="$R205/caller-pins"; source "$R205/caller.sh")
 req GH-205.1 GH-205.3
 tok 'each of the three names the file that called it, not the one that defines it' \
   "$(printf 'GH-9.3\t%s\t- text: from another file\n\0' "$R205/caller.sh" | od -c)
@@ -262,6 +265,9 @@ r205_gen() {  # r205_gen [--check] <dir> -- what the script printed, and its sta
 }
 mkdir -p "$R205/gen/requirements"
 printf '### GH-4\n- text: hand-written\n' > "$R205/gen/requirements/GH-4.md"
+# The legacy set the script reads, by name, out of the check-hooks.sh beside
+# checks/ (#223): GH-4 is the fixture's hand-written entry.
+printf "REQUIREMENTS_LEGACY='\nGH-4\n'\n" > "$R205/gen/check-hooks.sh"
 r205_issue "$R205/gen/checks/GH-5.sh" <<'FIX'
 section "a fixture"
 @requirement GH-5.1 <<'REQ'
@@ -379,11 +385,12 @@ REQ
 - generated: checks/GH-1.sh
 REQ
 FIX
+# The blank line at line 6 is not among them: since #223 a blank line is one
+# the suite's reader skips, and so does this (the #223 issue file drives it).
 tok 'a body that is empty, holds a line that is no field, or carries its own generated field is refused' \
 'generate-requirements.sh: refused, and nothing was written:
   checks/GH-6.sh: line 1: GH-6 is declared with no fields
   checks/GH-6.sh: line 4: GH-6.1: a line that is no field of the entry:   a continuation of no field
-  checks/GH-6.sh: line 6: GH-6.1: a blank line, where every line opens a field or continues one
   checks/GH-6.sh: line 10: GH-6.2 carries a generated field of its own, which is this script'"'"'s to write
 exit 1|GH-4.md GH-5.1.md GH-5.md' "$(r205_gen "$R205/body"; printf '|'; r205_after "$R205/body")"
 r205_refused hand
@@ -392,9 +399,13 @@ r205_issue "$R205/hand/checks/GH-6.sh" <<'FIX'
 - text: a declaration of an entry written by hand
 REQ
 FIX
-tok 'a declared ID whose file is hand-written is refused, and the file is left as it was' \
+# Whose file it is is the legacy set's to say since #223, and no longer the
+# file's: GH-4 is the fixture's legacy entry. A file outside the set that lacks
+# the generated field is the script's to replace, which the #223 issue file
+# drives.
+tok 'a declared legacy ID is refused, and its file is left as it was' \
 'generate-requirements.sh: refused, and nothing was written:
-  GH-4: declared in checks/GH-6.sh, and requirements/GH-4.md is hand-written, which this does not replace
+  GH-4: declared in checks/GH-6.sh, and a legacy entry, which stays hand-written
 exit 1|### GH-4
 - text: hand-written' "$(r205_gen "$R205/hand"; printf '|'; cat "$R205/hand/requirements/GH-4.md")"
 r205_refused orphan
@@ -405,7 +416,7 @@ REQ
 FIX
 tok 'a generated file no issue file declares any more is refused, and left where it is' \
 'generate-requirements.sh: refused, and nothing was written:
-  requirements/GH-5.1.md: generated from checks/GH-5.sh, which no longer declares GH-5.1
+  requirements/GH-5.1.md: outside the legacy set, and no issue file declares it
 exit 1|GH-4.md GH-5.1.md GH-5.md' "$(r205_gen "$R205/orphan"; printf '|'; r205_after "$R205/orphan")"
 # And a refused run writes nothing even where it would otherwise have written:
 # a fixture whose one file is stale and whose other declaration is broken.

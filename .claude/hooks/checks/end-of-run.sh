@@ -235,7 +235,7 @@ GH-204.6:static GH-204.7:static GH-204.8:static
 '
 # Every shape pin the issue files recorded, as tokens; see `shape_pin` in the
 # helper library.
-REQUIREMENT_SHAPE_PINNED=$(awk -F'\t' '$1 == "shape" { print $3 }' "$PINNED" | tr '\n' ' ')
+REQUIREMENT_SHAPE_PINNED=$(awk -F'\t' '$1 == "shape" { print $3 }' "$SUITE_PINNED" | tr '\n' ' ')
 REQUIREMENT_SHAPE_HELD="$REQUIREMENT_SHAPE $REQUIREMENT_SHAPE_PINNED"
 # `trim`, `keyword` and `after_colon` are not here: they are requirements.md's
 # field grammar, which the #106 section reads too, and they live in
@@ -1383,27 +1383,8 @@ fi
 req GH-200.4
 # SPLIT_MOVED is set in check-hooks.sh, which split-requirements.sh reads it
 # out of by name; see there.
-# Each token that the split set beside <dir> does not bear out, as ` ID:absent`
-# or ` ID:changed(now ID:<cksum>:<length>)`. A changed entry says the token it
-# has now, so that the red says how to move it (rev-agent-200, round 4 of PR
-# #210); whether the change was meant is the reviewer's to say, not this line's.
-# A function so that a fixture can ask it that, which a loop over this
-# repository's own entries -- none of them changed -- never could.
-split_moved_bad() {  # split_moved_bad <requirements dir> <literal>
-  local tok id now bad=
-  set -f
-  for tok in $2; do
-    id=${tok%%:*}
-    if [ ! -f "$1/$id.md" ]; then
-      bad="$bad $id:absent"
-    else
-      now=$(cksum < "$1/$id.md" | awk '{ print $1 ":" $2 }')
-      [ "$now" = "${tok#*:}" ] || bad="$bad $id:changed(now $id:$now)"
-    fi
-  done
-  set +f
-  printf '%s' "$bad"
-}
+# `split_moved_bad`, which reads the literal against the files, is in the
+# library since the #223 issue file became its second caller.
 set -f
 SPLIT_MOVED_N=$(printf '%s ' $SPLIT_MOVED | wc -w | tr -d ' ')
 set +f
@@ -2080,12 +2061,12 @@ echo "--- #205: every GH- entry outside the legacy set is generated from its dec
 # bash's and the generator's awk -- meet in the files, and a declaration one of
 # them reads and the other does not is red in one of the two checks below.
 req GH-205.1
-R205_DECLARED_IDS=$(while IFS= read -r -d '' R205_REC; do printf '%s\n' "${R205_REC%%$'\t'*}"; done < "$DECLARED" \
+R205_DECLARED_IDS=$(while IFS= read -r -d '' R205_REC; do printf '%s\n' "${R205_REC%%$'\t'*}"; done < "$SUITE_DECLARED" \
                       | LC_ALL=C sort -V | tr '\n' ' ' | sed 's/ $//')
 [ -n "$R205_DECLARED_IDS" ] \
   || fail static 'no issue file declared an entry, so the checks below ask about none'
 tok 'every GH- entry outside the legacy set is, byte for byte, its declaration as this run read it, in its own issue'"'"'s file, and every legacy entry is a hand-written file' \
-  '' "$(generated_bad "$DECLARED" "$HOOKS/requirements" "$REQUIREMENTS_LEGACY")"
+  '' "$(generated_bad "$SUITE_DECLARED" "$HOOKS/requirements" "$REQUIREMENTS_LEGACY")"
 # The script is the judged one, and it is run over the issue files this run
 # sourced and the judged requirements/, which `generator_view` puts in one
 # directory; the #205 issue file drives it against a judged side that has no
@@ -2114,11 +2095,50 @@ exit 0" "$(bash "$HOOKS/generate-requirements.sh" --check "$R205_VIEW" 2>&1; pri
 # then both sides were empty, and the check asked this repository nothing.
 req GH-205.3
 tok 'REQUIREMENT_SHAPE and INV_SCOPE hold legacy entries only, and each generated entry is pinned once, in the issue file that declares it' \
-  '' "$(pins_bad "$DECLARED" "$PINNED" "$REQUIREMENT_SHAPE" "$INV_SCOPE" "$REQUIREMENTS_LEGACY")"
+  '' "$(pins_bad "$SUITE_DECLARED" "$SUITE_PINNED" "$REQUIREMENT_SHAPE" "$INV_SCOPE" "$REQUIREMENTS_LEGACY")"
 tok 'the generated entries in the families scope are these, each with what it says the families do with it, as their issue files pin them' \
-  "$(awk -F'\t' '$1 == "variants" { n = split($3, t, " "); for (i = 1; i <= n; i++) print t[i] }' "$PINNED" \
+  "$(awk -F'\t' '$1 == "variants" { n = split($3, t, " "); for (i = 1; i <= n; i++) print t[i] }' "$SUITE_PINNED" \
        | LC_ALL=C sort | tr '\n' ' ')" \
   "$(legacy_tokens out "$REQUIREMENTS_LEGACY" "$INV_SCOPE_DERIVED")"
+
+echo "--- #223: the records are where the driver put them, and the reader agrees with the generator ---"
+# Asked here for the reason the #205 checks above are: what the records hold,
+# and where, is settled only once every issue file has run. And the reader is
+# `requirements_read`, defined in this file, which the #223 issue file,
+# sourced before it, cannot call.
+req GH-223.5
+tok 'the declared and pinned records are the files the driver set them to' \
+  "$SUITE_DECLARED_AT_HEAD $SUITE_PINNED_AT_HEAD" "$SUITE_DECLARED $SUITE_PINNED"
+# The generator's two verdicts the #223 issue file asks, asked of the reader:
+# the file the generator writes from a body with a blank line is well formed,
+# and a file giving one field twice is not. The clean fixture, with its GH-5.1
+# written by the generator from a declaration of the same fields and a blank
+# line, and then with a field given twice.
+req GH-223.2
+R223_AGREE="$FIXTURES/r223-agree"
+rm -rf -- "$R223_AGREE"; cp -r "$REQ_FIX/clean" "$R223_AGREE"
+mkdir -p "$R223_AGREE/checks"
+printf "REQUIREMENTS_LEGACY='\n'\n" > "$R223_AGREE/check-hooks.sh"
+sed 's/^@//' > "$R223_AGREE/checks/GH-5.sh" <<'FIX'
+@requirement GH-5.1 <<'REQ'
+- text: a sub-issue that is permit-only
+
+- from: the fixture
+- kind: defect-permitting
+- status: active
+- direction: permit-only: a reason
+REQ
+FIX
+rm -f -- "$R223_AGREE/requirements/GH-5.1.md"
+R223_AGREE_GEN=$(bash "$HOOKS/generate-requirements.sh" "$R223_AGREE" 2>&1; printf 'exit %s' "$?")
+OUT=$(req_fixture "$R223_AGREE")
+tok 'the generator writes a body with a blank line' 'wrote requirements/GH-5.1.md
+exit 0' "$R223_AGREE_GEN"
+holds 'and the reader takes the file it wrote as well formed' "$OUT" "ok${TAB}FR-45${TAB}every requirement entry is well formed"
+printf -- '- text: again\n' >> "$R223_AGREE/requirements/GH-5.1.md"
+OUT=$(req_fixture "$R223_AGREE")
+holds 'and refuses one that gives a field twice, as the generator refuses its declaration' "$OUT" \
+  "FAIL${TAB}FR-45${TAB}GH-5.1: the field text is given twice"
 
 echo "--- every result goes through pass and fail ---"
 # A result printed any other way is printed and not recorded, so it covers

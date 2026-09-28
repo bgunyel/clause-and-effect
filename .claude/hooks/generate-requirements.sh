@@ -26,10 +26,22 @@
 #     REQ
 #
 # The body is the entry's fields, in the grammar requirements.md states, and
-# nothing else: every line opens a field or continues one. Its file is the
-# heading, the body byte for byte, and a last field naming where it was
+# nothing else: every line opens a field, continues one, or is blank, which the
+# suite's reader of requirements/ skips and two legacy files hold. Its file is
+# the heading, the body byte for byte, and a last field naming where it was
 # declared -- `- generated: checks/GH-<n>.sh` -- which is what tells a reader
-# not to edit it, and what tells this script the file is its own to rewrite.
+# not to edit it.
+#
+# WHICH FILE IS ITS OWN is decided by the legacy set and never by the file
+# (#223). The set is REQUIREMENTS_LEGACY, read by name out of check-hooks.sh
+# beside checks/, as split-requirements.sh reads SPLIT_MOVED: a legacy entry's
+# file is never written, whatever it carries, and every other `GH-` file under
+# requirements/ is this script's to replace, whether or not it carries the
+# `generated` field. It decided by that field until #223, so a generated file
+# whose field was deleted by hand was refused as hand-written from then on, and
+# a legacy file that gained one was taken for its own and overwritten. These
+# are the rules the suite's `generated_bad` holds, and they are spelled here in
+# its words.
 #
 # WHAT IT REFUSES, before it writes anything: a line whose first word, after
 # any indentation, is `requirement` followed by `GH-`, spelled any other way --
@@ -38,11 +50,26 @@
 # because the suite runs the file and reads what
 # bash read, and a spelling this reads differently from bash is a second
 # parser that can disagree with the first; an ID outside the grammar; an ID
-# declared twice; a declaration never closed; a body that is empty, holds a
-# line that is no field, or carries a `generated` field of its own; a declared
-# ID whose file is there and is not generated, which is hand-written and not
-# this script's to replace; and a generated file whose ID no issue file
-# declares any more, which a declaration taken away has left behind.
+# declared twice; a declaration never closed; a body that opens no field,
+# holds a line that is no field, gives one field twice, or carries a
+# `generated` field of its own; an ID declared in an issue file that is not
+# its own issue's, `checks/GH-<n>.sh` for an entry of #<n>; a legacy ID
+# declared at all; a legacy file carrying a `generated` field; a file outside
+# the legacy set that no issue file declares, which a declaration taken away
+# has left behind; and a check-hooks.sh with no REQUIREMENTS_LEGACY literal to
+# read, since with no set to read every file would be this script's.
+#
+# THE GRAMMARS ARE COPIES, and the suite pins them. The ID grammar and the
+# field grammar below are spelled again in split-requirements.sh, in the
+# suite's reader of requirements/ and in its library, and each is a program of
+# its own, so no one definition can be read by all of them. The #223 issue
+# file counts every copy in every file, so a copy changed in one place is red.
+#
+# WRITES ARE ONE FILE AT A TIME, AND EACH IS WHOLE (#223): a file is written to
+# a temporary name in requirements/ and moved over its destination, so a
+# destination holds its old bytes or its new ones, never part of either. A
+# failure stops the run, names the file, and leaves no temporary file; the
+# files written before it are written, and a second run writes the rest.
 #
 # WHAT IT DOES NOT SEE, named: a call whose first word is not `requirement` --
 # `x=1 requirement GH-7 <<'REQ'` -- or whose ID is quoted or built by another
@@ -50,11 +77,12 @@
 # suite, which records what bash declared, finds the entry declared and not
 # written.
 #
-# WHAT IT DOES NOT DECIDE, named. Whether an entry outside the legacy set is
-# generated at all, and whether a legacy ID is declared -- the set is the
-# suite's, and the suite asks both. And whether bash reads a declaration the
-# way this does: the suite records every `requirement` call it runs and holds
-# each file to that record too, so the two readings meet in the files.
+# WHAT IT DOES NOT DECIDE, named. Whether the legacy set is the one it was --
+# the #205 issue file holds the literal to its count and checksum. Whether a
+# legacy entry has kept its file, which is the suite's. And whether bash reads
+# a declaration the way this does: the suite records every `requirement` call
+# it runs and holds each file to that record too, so the two readings meet in
+# the files.
 #
 # --check writes nothing. It prints what a run would refuse, and exits 1; a
 # refusal is reported alone, because the declarations a refused run would
@@ -94,8 +122,10 @@ DIR=$(CDPATH= cd -- "$GIVEN" 2>/dev/null && pwd) && [ -d "$DIR/checks" ] || {
 }
 SPLIT="$DIR/requirements"
 # Globbing off for every unquoted list below; the two listings that need a
-# glob turn it on in their own subshell.
+# glob turn it on in their own subshell. And the lists are split on blanks
+# whatever IFS this was started under.
 set -f
+IFS=$' \t\n'
 
 # The issue files, in version order on the issue number, so that what this
 # prints is in one order whatever the directory listing says.
@@ -124,23 +154,32 @@ STAGE="$STAGE" awk '
     if (open != "") problem(rel ": " openid " is declared at line " openline " and never closed by a line reading REQ")
     open = ""; rel = FILENAME; sub(/^.*\/checks\//, "checks/", rel)
   }
+  # A body line opens a field, continues the field before it, or is blank; the
+  # reader of requirements/ in the suite takes the same three, skips a blank
+  # line without ending the field before it, and refuses a field given twice,
+  # so a body this accepts is one that reader accepts (#223). The generator
+  # refused a blank line and wrote a field given twice until then.
   open != "" {
     if ($0 == "REQ") {
-      if (nbody == 0) problem(rel ": line " openline ": " openid " is declared with no fields")
+      if (nfield == 0) problem(rel ": line " openline ": " openid " is declared with no fields")
       else if (!(openid in seen)) { seen[openid] = rel; ids[++nids] = openid; doc[openid] = "### " openid "\n" body "- generated: " rel "\n" }
       else problem(openid ": declared twice, in " seen[openid] " and in " rel)
       open = ""; next
     }
     if ($0 ~ /^- generated:/) problem(rel ": line " FNR ": " openid " carries a generated field of its own, which is this script'"'"'s to write")
-    else if ($0 ~ /^[ \t]*$/) problem(rel ": line " FNR ": " openid ": a blank line, where every line opens a field or continues one")
-    else if ($0 !~ /^- [a-z-]+:/ && !(nbody > 0 && $0 ~ /^  [^ ]/)) problem(rel ": line " FNR ": " openid ": a line that is no field of the entry: " $0)
-    body = body $0 "\n"; nbody++; next
+    else if ($0 ~ /^- [a-z-]+:/) {
+      key = $0; sub(/^- /, "", key); sub(/:.*$/, "", key)
+      if (key in given) problem(rel ": line " FNR ": " openid ": the field " key " is given twice")
+      given[key] = 1; nfield++
+    }
+    else if ($0 !~ /^[ \t]*$/ && !(nfield > 0 && $0 ~ /^  [^ ]/)) problem(rel ": line " FNR ": " openid ": a line that is no field of the entry: " $0)
+    body = body $0 "\n"; next
   }
   /^[ \t]*requirement[ \t]+GH-/ {
     if ($0 !~ /^requirement GH-[^ \t]+ <<'"'"'REQ'"'"'$/) { problem(rel ": line " FNR ": a declaration spelled other than requirement <ID> <<'"'"'REQ'"'"': " $0); next }
     openid = $2
     if (openid !~ /^GH-[1-9][0-9]*(\.[1-9][0-9]*)?$/) { problem(rel ": line " FNR ": " openid " is not an ID of the grammar GH-<n> or GH-<n>.<m>"); openid = "(" openid ")" }
-    open = "y"; openline = FNR; body = ""; nbody = 0
+    open = "y"; openline = FNR; body = ""; nfield = 0; split("", given)
     next
   }
   END {
@@ -154,22 +193,57 @@ if [ "$AWK_STATUS" != 0 ]; then
   exit 1
 fi
 
+# THE LEGACY SET, read out of check-hooks.sh by name once the issue files are
+# read: from the line opening `REQUIREMENTS_LEGACY='` to the quote that closes
+# it. A literal that is not there, or never closes, is refused rather than read
+# as an empty set, which would make every legacy file this script's to
+# replace; and an awk that died here is a failed reading, as it is above.
+LEGACY=$(awk '
+  !on && /^REQUIREMENTS_LEGACY=\047/ { on = 1; found = 1; sub(/^REQUIREMENTS_LEGACY=\047/, "") }
+  on {
+    if (index($0, "\047")) { sub(/\047.*$/, ""); print; on = 0; exit }
+    print
+  }
+  END { if (!found || on) exit 3 }
+' "$DIR/check-hooks.sh" 2>/dev/null)
+LEGACY_STATUS=$?
+if [ "$LEGACY_STATUS" = 3 ] || [ ! -f "$DIR/check-hooks.sh" ]; then
+  echo "$NAME: refused, and nothing was written:"
+  echo "  $GIVEN/check-hooks.sh holds no REQUIREMENTS_LEGACY literal, so which entries stay hand-written cannot be read"
+  exit 1
+elif [ "$LEGACY_STATUS" != 0 ]; then
+  echo "$NAME: reading check-hooks.sh failed, awk exit $LEGACY_STATUS; nothing was written"
+  exit 1
+fi
+LEGACY=" $(printf '%s ' $LEGACY)"
+
 DECLARED=$( (set +f; cd -- "$STAGE" && for f in GH-*; do [ -f "$f" ] && printf '%s\n' "$f"; done) | LC_ALL=C sort -V)
 
-# A declared ID whose file is hand-written, and a generated file nothing
-# declares. A file is generated when a line of it opens the generated field.
+# WHOSE EACH FILE IS, by the legacy set, in `generated_bad`'s words: a legacy
+# ID declared, an ID declared outside its own issue's file, a legacy file
+# carrying the generated field, and a file outside the legacy set that nothing
+# declares. A declared ID whose file lacks the field is none of these: it is
+# stale, and a run writes it.
 for id in $DECLARED; do
-  f="$SPLIT/$id.md"
-  if [ -e "$f" ] && ! grep -q '^- generated:' -- "$f"; then
-    printf '%s\n' "$id: declared in $(sed -n 's/^- generated: //p' "$STAGE/$id"), and requirements/$id.md is hand-written, which this does not replace" >> "$STAGE/.problems"
-  fi
+  rel=$(sed -n '$s/^- generated: //p' "$STAGE/$id")
+  n=${id#GH-}; n=${n%%.*}
+  case "$LEGACY" in
+    *" $id "*) printf '%s\n' "$id: declared in $rel, and a legacy entry, which stays hand-written" >> "$STAGE/.problems"; continue ;;
+  esac
+  [ "$rel" = "checks/GH-$n.sh" ] \
+    || printf '%s\n' "$id: declared in $rel, where an entry of #$n is declared in checks/GH-$n.sh" >> "$STAGE/.problems"
 done
 if [ -d "$SPLIT" ]; then
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     id=${f%.md}
-    [ -f "$STAGE/$id" ] || printf '%s\n' "requirements/$f: generated from $(sed -n 's/^- generated: //p' "$SPLIT/$f" | head -n 1), which no longer declares $id" >> "$STAGE/.problems"
-  done < <( (set +f; cd -- "$SPLIT" && for f in GH-*.md; do [ -f "$f" ] && grep -q '^- generated:' -- "$f" && printf '%s\n' "$f"; done) | LC_ALL=C sort -V)
+    case "$LEGACY" in
+      *" $id "*) grep -q '^- generated:' -- "$SPLIT/$f" \
+                   && printf '%s\n' "requirements/$f: a legacy entry carrying a generated field, which only a declared entry's file carries" >> "$STAGE/.problems" ;;
+      *) [ -f "$STAGE/$id" ] \
+           || printf '%s\n' "requirements/$f: outside the legacy set, and no issue file declares it" >> "$STAGE/.problems" ;;
+    esac
+  done < <( (set +f; cd -- "$SPLIT" && for f in GH-*.md; do [ -f "$f" ] && printf '%s\n' "$f"; done) | LC_ALL=C sort -V)
 fi
 
 if [ -s "$STAGE/.problems" ]; then
@@ -190,9 +264,9 @@ if [ -n "$CHECK" ]; then
     echo "$NAME: not what the issue files declare:"
     for id in $STALE; do
       if [ -e "$SPLIT/$id.md" ]; then
-        printf '  requirements/%s.md differs from its declaration in %s\n' "$id" "$(sed -n 's/^- generated: //p' "$STAGE/$id")"
+        printf '  requirements/%s.md differs from its declaration in %s\n' "$id" "$(sed -n '$s/^- generated: //p' "$STAGE/$id")"
       else
-        printf '  requirements/%s.md is not written; %s declares it\n' "$id" "$(sed -n 's/^- generated: //p' "$STAGE/$id")"
+        printf '  requirements/%s.md is not written; %s declares it\n' "$id" "$(sed -n '$s/^- generated: //p' "$STAGE/$id")"
       fi
     done
     exit 1
@@ -210,8 +284,19 @@ if [ -z "$STALE" ]; then
   exit 0
 fi
 mkdir -p -- "$SPLIT" || exit 1
+# Each file through a temporary one beside it, moved into place: a rename in
+# one directory replaces the destination whole, where a `cp` over it -- what
+# this did until #223 -- leaves it truncated when it fails midway. The mode is
+# the one a `cp` would have given a new file, since mktemp's is 0600.
+MODE=$(printf '%o' "$(( 0666 & ~0$(umask) ))")
 for id in $STALE; do
-  cp -- "$STAGE/$id" "$SPLIT/$id.md" || exit 1
+  TMP=$(mktemp "$SPLIT/.$id.md.XXXXXX") \
+    && cp -- "$STAGE/$id" "$TMP" && chmod "$MODE" "$TMP" && mv -f -- "$TMP" "$SPLIT/$id.md" || {
+    [ -n "${TMP:-}" ] && rm -f -- "$TMP"
+    echo "$NAME: writing requirements/$id.md failed, and it holds what it held before; the files named above were written"
+    exit 1
+  }
+  TMP=
   printf 'wrote requirements/%s.md\n' "$id"
 done
 exit 0
