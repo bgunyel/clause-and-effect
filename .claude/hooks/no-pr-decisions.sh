@@ -365,33 +365,20 @@ base_args() {
 #     `--"base"`, `"--base"=main`, `\--base` and `"-B"` are all `--base` or
 #     `-B` by the time gh sees them. A span is read as part of the argument it
 #     sits in, not as a token of its own, which is what the drop above does not
-#     do and why `--"base" main` slipped past it as `-- main`. The `$` of
-#     bash's `$'...'` and `$"..."` goes with its quote, found by review of this
-#     fix: counted as a character, it hid `$'--base' main` as `$--base`. And
-#     the escapes `$'...'` interprets are decoded as bash decodes them -- \xHH,
-#     octal, \u and \U, \cX and the one-letter ones -- because each is a
-#     spelling of a character gh receives: `$'\x2d-base'` and `$'\055\055base'`
-#     are `--base`. The first version left them as written and called them a
-#     construction rather than a spelling; Bertan's review of PR #173 retargeted
-#     onto main with both. A character outside ASCII decodes to `?`, which is no
-#     character of any flag, so only its not being one is read. A NUL -- `\0`,
-#     `\x00`, `\u0000`, `\c@` -- is not a character at all: bash drops the rest
-#     of that `$'...'` span at it and joins what follows the closing quote, so
-#     `$'--base\0' main` is `--base main` and `$'--base\0'x` is `--basex`.
-#     Decoded to `?`, the first was permitted; Bertan's second review of #173.
-#     That review also named `\^@`, which bash 5.2 does not decode.
-#
-#     `\c` IS NOT DECODED BUT REFUSED, and that is the third review's answer.
-#     Copying bash one escape at a time opened a hole beside each one it
-#     closed: `\c` took the next character as its argument even where bash's
-#     parser had already paired it -- a closing quote, or the first half of
-#     `\\` -- so the span ran on past where bash ends it; and what `\c` makes
-#     is the next BYTE masked to five bits, so `\cअ` is a NUL while `\cA` is
-#     not. So every `\c` is taken as a possible NUL: it cuts the span, only
-#     the `c` is consumed, and what follows is paired by the ordinary rules.
-#     The word is judged as cut, which is the only reading that can be a flag
-#     -- a control character is not a flag character. The trade: `$'--base\cA'`
-#     names no base in bash and is refused here. A string nobody writes.
+#     do and why `--"base" main` slipped past it as `-- main`. HOW a word is
+#     dequoted is not answered here: it is the library's word reader,
+#     CS_WORD_AWK, which this function carried privately until #166 lifted it,
+#     and the reasons for its answers moved with it -- `$'...'` and `$"..."` as
+#     quoting (`$'--base' main` hid as `$--base` before this fix's first
+#     review), the escapes `$'...'` decodes (`$'\x2d-base'` and
+#     `$'\055\055base'` are `--base`; Bertan's review of PR #173), a NUL cutting
+#     the rest of its span and joining what follows (`$'--base\0' main` is
+#     `--base main`; the second review), and every `\c` taken as a possible NUL
+#     (the third). What stays here is what the reader hands back that only this
+#     question needs: where the first quoted character landed, whether a span
+#     yielded nothing, and whether a span a NUL cut is still open where the
+#     line ends. The trade the third review took is the reader's now:
+#     `$'--base\cA'` names no base in bash and is refused here.
 #   - the quote or backslash comes AT OR BEFORE the end of the flag's name. A
 #     quote after it is round the value, `--base="dev-05"` and `-B"dev-05"`,
 #     which base_args already reads and this must not refuse. What counts is
@@ -431,7 +418,7 @@ base_args() {
 # "--base"` and `--label "-Blocked"` are refused on every arm. A refusal is
 # visible and one edit away.
 quoted_base_flag() {
-  printf '%s\n' "$1" | awk '
+  printf '%s\n' "$1" | awk "$CS_WORD_AWK"'
     # q is where the first quote or escape that YIELDS a character opened, and
     # qe where the first span that yields none did. A span with a character in
     # it that opens past the name is round the value; an empty one cannot be,
@@ -441,73 +428,26 @@ quoted_base_flag() {
         if (w ~ /^--base(=|$)/ && ((q && q <= length("--base") + (w ~ /^--base=/)) || (qe && qe <= length("--base") + 1))) { print w; found = 1; exit }
         if (w ~ /^-[A-Za-z]*B/) { b = index(w, "B"); if ((q && q <= b) || (qe && qe <= b + 1)) { print w; found = 1; exit } }
       }
-      w = ""; q = 0; qe = 0; inw = 0; cut = 0
+      w = ""; q = 0; qe = 0; inw = 0
     }
-    function open(t) { st = t; op = length(w) + 1; emp = 1 }
-    function shut() { if (emp && !qe) qe = op; st = 0; cut = 0 }
-    # The value of up to MAX digits of BASE at s[i+1], consumed by advancing i.
-    function digits(base, max,   k, d, v) {
-      v = 0
-      for (k = 0; k < max && i < n; k++) {
-        d = index("0123456789abcdef", tolower(substr(s, i + 1, 1))) - 1
-        if (d < 0 || d >= base) break
-        v = v * base + d; i++
-      }
-      nd = k
-      return v
-    }
-    function chr(v) { return (v > 0 && v < 128) ? sprintf("%c", v) : "?" }
-    # Append the character V decodes to. A NUL is not a character bash can pass:
-    # it ends what the span contributes, and cut holds the word at that length
-    # until the closing quote.
-    function put(v) { if (v == 0) { if (!cut) { cut = 1; cutw = w } } else w = w chr(v) }
-    # One escape inside $'"'"'...'"'"', the backslash at s[i]. Appends what bash makes of it.
-    function ansi(   e, v) {
-      if (i >= n) { w = w "\\"; return }
-      e = substr(s, ++i, 1)
-      if (e == "x") { v = digits(16, 2); if (nd) put(v); else w = w "\\x"; return }
-      if (e == "u") { v = digits(16, 4); if (nd) put(v); else w = w "\\u"; return }
-      if (e == "U") { v = digits(16, 8); if (nd) put(v); else w = w "\\U"; return }
-      if (e ~ /[0-7]/) { i--; v = digits(8, 3); put(v % 256); return }
-      if (e == "c") { put(0); return }
-      if (e == "n") { w = w "\n"; return }
-      if (e == "t") { w = w "\t"; return }
-      if (e == "r") { w = w "\r"; return }
-      if (e == "v") { w = w "\v"; return }
-      if (e == "f") { w = w "\f"; return }
-      if (e ~ /[abeE]/) { w = w "?"; return }
-      if (e ~ /[\\"?\047]/) { w = w e; return }
-      w = w "\\" e
-    }
+    # The words, and what each character was written under, are the library
+    # reader: this keeps only where the first quoted character landed, whether
+    # a span yielded nothing, and the two questions asked where the line ends.
     {
-      s = $0; n = length(s); st = 0
-      for (i = 1; i <= n; i++) {
-        c = substr(s, i, 1)
-        if (st) {
-          len = length(w)
-          if (st == 1) { if (c == "\047") { shut(); continue } w = w c }
-          else if (st == 3) {
-            if (c == "\047") { shut(); continue }
-            if (c == "\\") ansi(); else w = w c
-            if (cut) w = cutw
-          } else {
-            if (c == "\"") { shut(); continue }
-            if (c == "\\" && i < n && substr(s, i + 1, 1) ~ /[\\"$`]/) { w = w substr(s, i + 1, 1); i++ } else w = w c
-          }
-          if (length(w) > len) { emp = 0; if (!q) q = op }
-          continue
-        }
-        if (c == " " || c == "\t") { if (inw) judge(); continue }
+      wd_start($0)
+      while (wd_next()) {
+        if (wd_ev == "blank") { if (inw) judge(); continue }
         inw = 1
-        if (c == "$" && i < n && substr(s, i + 1, 1) == "\047") { i++; open(3); continue }
-        if (c == "$" && i < n && substr(s, i + 1, 1) == "\"") continue
-        if (c == "\047" || c == "\"") { open(c == "\"" ? 2 : 1); continue }
-        if (c == "\\" && i < n) { if (!q) q = length(w) + 1; w = w substr(s, i + 1, 1); i++; continue }
-        w = w c
+        if (wd_ev == "open") { op = length(w) + 1; emp = 1; continue }
+        if (wd_ev == "shut") { if (emp && !qe) qe = op; continue }
+        if (wd_ch == "") continue
+        if (wd_st) { emp = 0; if (!q) q = op }
+        else if (wd_esc && !q) q = length(w) + 1
+        w = w wd_ch
       }
       if (inw) {
-        if (cut) { if (w == "" || (w ~ /^-/ && w !~ /[[:space:]]/)) { print (w == "" ? "a span cut to nothing" : w); found = 1; exit } }
-        else if (st) w = w "\n"; judge()
+        if (wd_st == 3 && wd_cut) { if (w == "" || (w ~ /^-/ && w !~ /[[:space:]]/)) { print (w == "" ? "a span cut to nothing" : w); found = 1; exit } }
+        else if (wd_st) w = w "\n"; judge()
       }
     }
     END { exit found ? 0 : 1 }'
@@ -960,11 +900,13 @@ gql_bases() {
 # for it was corrected before this was written: that half unquotes a flag's own
 # value and is anchored on the flag name, and a positional has no flag.
 #
-# `$'...'` IS TAKEN WITH ITS QUOTE AND NOT DECODED. quoted_base_flag, 500 lines
-# above, decodes the escapes bash decodes and needed three rounds of review to
-# get that right; this reader does not, because a decoded escape is a character
-# it has nowhere to put. What it does is stop the `$` hiding the span, which is
-# the half that was a regression. So `$'repos/o/r/pulls/5/merge'` is refused and
+# `$'...'` IS TAKEN WITH ITS QUOTE AND NOT DECODED. The library's word reader,
+# CS_WORD_AWK, decodes the escapes bash decodes -- it was quoted_base_flag's,
+# which needed three rounds of review to get that right, until #166 lifted it
+# -- and this does not call it, because a decoded escape is a character it has
+# nowhere to put: this rewrites spans in place and keeps the rest of the line as
+# written. What it does is stop the `$` hiding the span, which is the half that
+# was a regression. So `$'repos/o/r/pulls/5/merge'` is refused and
 # `$'\x2frepos\x2f...'` is not -- a gap this fix neither opened nor closed,
 # the old $SCAN-wide grep having never matched an escape spelling either.
 #

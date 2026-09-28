@@ -108,12 +108,16 @@ git push --all origin
 push --all origin
 --all origin' \
     "$(printf 'sudo -u root git push --all origin\n' | cs_split)"
-# The tail stops at a token opening a quote: what follows is the text of an
-# argument, and a commit message naming a push is not a push.
-tok 'the tail stops where a quoted argument starts' \
+# A quoted argument in the tail is ONE word, read by the word reader, and its
+# blanks reduce to `?`, so it names one program and no rule reads a push in it:
+# a commit message naming a push is not a push. Until round 2 of the review of
+# PR #260 the tail stopped in front of it instead, and that stop -- asked of
+# one blank-cut token -- is what left a spaced option value a wall; GH-166.1.
+tok 'a quoted argument in the tail is one word, reduced to one name' \
     'git commit -m "git push --all origin"
 commit -m "git push --all origin"
--m "git push --all origin"' \
+-m "git push --all origin"
+git?push?--all?origin' \
     "$(printf 'sudo git commit -m "git push --all origin"\n' | cs_split)"
 tok 'continuation joined before anything else' \
     'git push   --all origin' \
@@ -8649,9 +8653,10 @@ GUARD_TRIGGERS=$(sed -n '/^if \[ -z/,/; then$/p' "$HOOKS/lib/command-scan.sh" \
 # cs_split's, and since #118 there are two: CS_GH_AWK withdraws cs_gh_args and
 # cs_gh_opaque. It is in the literal because the question asked of it is this
 # one -- does its withdrawal say which variable it was -- and the first time it
-# was asked, on #118's merge of dev-05 at 5d95c8a, the answer was no.
+# was asked, on #118's merge of dev-05 at 5d95c8a, the answer was no. #166 made
+# three, CS_WORD_AWK withdrawing cs_split and both gh functions together.
 tok 'the load guard withdraws on the lists this suite expects' \
-    'CS_CONTROL_WORDS CS_GH_AWK CS_SEPARATORS CS_WRAP_OPERAND_WORDS CS_WRAP_OPTION_WORDS' \
+    'CS_CONTROL_WORDS CS_GH_AWK CS_SEPARATORS CS_WORD_AWK CS_WRAP_OPERAND_WORDS CS_WRAP_OPTION_WORDS' \
     "$(printf '%s' "$GUARD_TRIGGERS" | tr '\n' ' ' | sed 's/ $//')"
 GUARD_UNNAMED=
 for guard_list in $GUARD_TRIGGERS; do
@@ -10419,6 +10424,7 @@ SEEDS
 #                                     redirect-quoted
 #  11 the command word itself (#117)  word-path word-dot word-dquoted
 #                                     word-squoted word-escaped
+#                                     word-ansi word-locale (#166)
 #  12 an option before the subcommand that consumes the next word (#118)
 #                                     option-eats-verb
 #  13 a heredoc in front of it whose opener line is continued (#128)
@@ -10427,7 +10433,13 @@ SEEDS
 #                                     heredoc-cont-space heredoc-cont-twice
 #                                     heredoc-cont-redirect
 #  14 a prefix word spelled otherwise (#117)  pre-sudo-path pre-env-path
-#                                     pre-timeout-quoted
+#                                     pre-timeout-quoted pre-sudo-ansi (#166)
+#  15 a quoted command word behind a prefix word's separated option value
+#     (#266)                          pre-nice-opt-dquoted pre-nice-opt-squoted
+#                                     pre-nice-opt-ansi pre-nice-opt-locale (#166)
+#  16 a quoted span holding a blank in front of the command word
+#     (#166, #273)                    pre-sudo-spaced pre-assign-spaced
+#                                     pre-sudo-escaped pre-assign-escaped
 #
 # The thirteenth is seven spellings where the others are one or two, and that is
 # #128 rather than thoroughness for its own sake: the spellings of the heredoc
@@ -10459,6 +10471,40 @@ SEEDS
 # its command word, so transformation 11 already rewrites it, and adding a
 # fifteenth would be the same question asked twice.
 #
+# The fifteenth is that sentence's limit, found by the review of PR #260. The
+# families rewrite one axis at a time, and the tail offer that finds a command
+# word behind `sudo -u root` asked a different question of a quoted token from
+# a bare one: it stopped at a token opening with a quote, so `nice -n 5 "git"
+# push --all origin` was permitted while transformations 4 and 11 each passed on
+# their own. #266. So the composition is a family of its own, one spelling per
+# quoting form that opens a span the tail offer has to tell apart from prose,
+# the four that do -- the fifth, the backslash, opens none, and a backslashed
+# command word behind `nice -n 5` was refused at abba1d0 already;
+# the ANSI-C and locale ones are #166's, whose reader made those forms quotes,
+# and the ANSI-C one is the row that holds the offer from stopping on the
+# dollar -- a mutation that did survived a whole green run. The locale one was
+# missing until round 2 of that review counted three where this said four.
+#
+# The sixteenth is round 2's class: a question asked of one blank-cut token
+# whose answer is a property of the line. A spaced option value, `sudo -D` and
+# a directory with a blank in it, and a spaced assignment, the documented
+# `GIT_SSH_COMMAND="ssh -i k"`, each left a walk half-way through a word, and
+# the command behind it unread. Two spellings of each, the double-quoted one
+# and the backslash one, which round 3 of that review found the wrapper anchor
+# still could not read: the option value is GH-166.1's and the assignment
+# #273's, whose wrapper half -- a regular expression -- the wrapped seeds under
+# them are what ask.
+#
+# WHERE THE VALUE STANDS DECIDES WHETHER THE FAMILY CAN FAIL. The option-value
+# spellings first put one spaced value behind `sudo -D`, and round 4 of the
+# review of PR #260 drove them with the mutants that cut that value at its
+# blank: nothing went red. A value cut in two spends two of the tail offer's
+# three words where it should spend one, and behind `-D` alone the seed was
+# still within reach. So the value stands in front of `-u root`, and the seed's
+# command word is the third word after the head: read whole, it is reached;
+# cut, it is the fourth, and the variant goes red. The same placement spends the
+# wrapper anchor's three tokens, so the wrapped seeds ask the anchor's token too.
+#
 # A transformation that cannot apply to a seed -- no value-taking long flag, no
 # second short flag to bundle with, no subcommand to put a global flag before --
 # emits nothing, and that skip is counted. A transformation that applies to NO
@@ -10484,9 +10530,12 @@ INV_TRANSFORMS='
   continuation
   redirect-null redirect-dup redirect-quoted
   word-path word-dot word-dquoted word-squoted word-escaped
+  word-ansi word-locale
   heredoc-cont heredoc-cont-dash heredoc-cont-squote heredoc-cont-dquote
   heredoc-cont-space heredoc-cont-twice heredoc-cont-redirect
-  pre-sudo-path pre-env-path pre-timeout-quoted
+  pre-sudo-path pre-env-path pre-timeout-quoted pre-sudo-ansi
+  pre-nice-opt-dquoted pre-nice-opt-squoted pre-nice-opt-ansi pre-nice-opt-locale
+  pre-sudo-spaced pre-assign-spaced pre-sudo-escaped pre-assign-escaped
 '
 
 # A rewrite that prints nothing when it changed nothing, which is how a
@@ -10634,6 +10683,13 @@ inv_cmdword() {  # inv_cmdword <command> <prefix> <suffix>
 # body: the tab of the `<<-` spelling and the backslash of every one of them are
 # the characters under test, and a builder that dropped one would leave seven
 # variants passing that are not the seven named.
+# A prefix in front of a rewritten command, and nothing where the rewrite made
+# nothing: inv_cmdword skips a seed whose command word it cannot quote, and a
+# prefix printed in front of that empty string would be a variant of no seed.
+inv_prefixed() {  # inv_prefixed <prefix> <rewritten command, or nothing>
+  [ -n "$2" ] && printf '%s%s' "$1" "$2"
+  return 0
+}
 inv_heredoc() {  # inv_heredoc <command> <heredoc, terminator included>
   printf '%s\n%s' "$2" "$1"
 }
@@ -10686,11 +10742,22 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     pre-sudo-path)    printf '/usr/bin/sudo %s' "$2" ;;
     pre-env-path)     printf '/usr/bin/env X=1 %s' "$2" ;;
     pre-timeout-quoted) printf '"timeout" 30 %s' "$2" ;;
+    pre-sudo-ansi)    printf "\$'sudo' %s" "$2" ;;
+    pre-nice-opt-dquoted) inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" '"' '"')" ;;
+    pre-nice-opt-squoted) inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" "'" "'")" ;;
+    pre-nice-opt-ansi)    inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" "\$'" "'")" ;;
+    pre-nice-opt-locale)  inv_prefixed 'nice -n 5 ' "$(inv_cmdword "$2" '$"' '"')" ;;
+    pre-sudo-spaced)      printf 'sudo -g "domain users" -u root %s' "$2" ;;
+    pre-assign-spaced)    printf 'GIT_SSH_COMMAND="ssh -i k" %s' "$2" ;;
+    pre-sudo-escaped)     printf 'sudo -g domain\\ users -u root %s' "$2" ;;
+    pre-assign-escaped)   printf 'A=b\\ c %s' "$2" ;;
     word-path)        inv_cmdword "$2" '/usr/bin/' '' ;;
     word-dot)         inv_cmdword "$2" './' '' ;;
     word-dquoted)     inv_cmdword "$2" '"' '"' ;;
     word-squoted)     inv_cmdword "$2" "'" "'" ;;
     word-escaped)     inv_cmdword "$2" '\' '' ;;
+    word-ansi)        inv_cmdword "$2" "\$'" "'" ;;
+    word-locale)      inv_cmdword "$2" '$"' '"' ;;
     heredoc-cont)          inv_heredoc "$2" $'cat <<E \\\nx\nE' ;;
     heredoc-cont-dash)     inv_heredoc "$2" $'cat <<-E \\\n\tx\n\tE' ;;
     heredoc-cont-squote)   inv_heredoc "$2" $'cat <<\'E\' \\\nx\nE' ;;
@@ -10797,6 +10864,12 @@ docs-truncate|word-dot|ALLOW|gap|GH-171|a command word spelled with ./, which th
 docs-truncate|word-dquoted|ALLOW|gap|GH-171|a double-quoted command word, which this hook's verb grep does not reduce to the name it spells
 docs-truncate|word-squoted|ALLOW|gap|GH-171|a single-quoted command word, which this hook's verb grep does not reduce to the name it spells
 docs-truncate|word-escaped|ALLOW|gap|GH-171|a backslash-escaped command word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|word-ansi|ALLOW|gap|GH-171|an ANSI-C quoted command word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|word-locale|ALLOW|gap|GH-171|a locale quoted command word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|pre-nice-opt-dquoted|ALLOW|gap|GH-171|a double-quoted command word behind a prefix word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|pre-nice-opt-squoted|ALLOW|gap|GH-171|a single-quoted command word behind a prefix word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|pre-nice-opt-ansi|ALLOW|gap|GH-171|an ANSI-C quoted command word behind a prefix word, which this hook's verb grep does not reduce to the name it spells
+docs-truncate|pre-nice-opt-locale|ALLOW|gap|GH-171|a locale quoted command word behind a prefix word, which this hook's verb grep does not reduce to the name it spells
 EX
 )
 
@@ -11784,7 +11857,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '114' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '130' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11910,7 +11983,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '112' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '128' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
