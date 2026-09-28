@@ -1120,7 +1120,7 @@ record_loaded() {  # record_loaded <file> <out> -- record it into LOADED_BODY an
 verdict_tail_want() {  # verdict_tail_want <driver> -- "<tags> TAB <label>" of each row the ledger ends on, or a line for what has none
   local name code cond clauses
   printf 'GH-204.8\t%s\n' 'every heading section wrote down has at least one row under it'
-  for name in $(sed -n 's/^eval "\$\([A-Z_]*_VERDICT_CODE\)"$/\1/p' "$1"); do
+  for name in $(sed -n 's/^eval "\$\([A-Za-z0-9_]*_VERDICT_CODE\)"$/\1/p' "$1"); do
     code=${!name}
     clauses=$(grep -c 'FAILED=' <<< "$code")
     case $name in
@@ -1198,7 +1198,7 @@ verdict_evals_outside() {  # verdict_evals_outside <file>... -- <file>:<line> of
     FNR == 1 { inside = 0 }
     /^[[:space:]]*verdict_fixtures begin([[:space:]]|$)/ { inside = 1 }
     /^[[:space:]]*verdict_fixtures end([[:space:]]|$)/ { inside = 0 }
-    !inside && /eval "\$\{?[A-Z_]+_VERDICT_CODE\}?"/ { print FILENAME ":" FNR }' "$@" 2>/dev/null)
+    !inside && /eval "\$\{?[A-Za-z0-9_]+_VERDICT_CODE\}?"/ { print FILENAME ":" FNR }' "$@" 2>/dev/null)
   awk_status=$?
   if [ "$awk_status" = 0 ]; then printf '%s' "$out"; else echo "unread: awk exited $awk_status"; fi
 }

@@ -120,11 +120,15 @@ mkdir -p "$R279"
 # subshell with arrays of its own, so that nothing it records reaches the
 # suite's. Printed: what it wrote on either stream, its status, and each name it
 # recorded with the file it came from. The FAIL a fixture prints is its
-# subshell's, and not recorded.
+# subshell's, and not recorded; its prefix is rewritten `FAIL:`, because a
+# quoted string opening with a result's own prefix is read by the #104 audit
+# as a result printed outside `pass` and `fail`.
 r279_loaded() {  # r279_loaded <file> -- record_loaded's output, its status, and the names it recorded
   ( declare -A LOADED_BODY=() LOADED_FROM=()
-    record_loaded "$1" "$R279/record" 2>&1
-    echo "status $?"
+    record_loaded "$1" "$R279/record" > "$R279/said" 2>&1
+    loaded_status=$?
+    sed 's/^  FAIL /FAIL: /' "$R279/said"
+    echo "status $loaded_status"
     for k in "${!LOADED_FROM[@]}"; do
       printf 'recorded %s from %s\n' "$k" "${LOADED_FROM[$k]##*/}"
     done | LC_ALL=C sort )
@@ -145,16 +149,16 @@ tok 'a file that sources with status 0 and defines something is recorded, and no
 recorded $R279_V from whole.sh
 recorded r279_a from whole.sh' "$(r279_loaded "$R279/whole.sh")"
 tok 'a file that sources non-zero is a FAIL row naming it and its status, and what it defined is recorded all the same' \
-"  FAIL the record of $R279/nonzero.sh is not to be trusted whole: sourcing it returned 1; the names it holds are compared at the foot, and a name it lacks is not
+"FAIL: the record of $R279/nonzero.sh is not to be trusted whole: sourcing it returned 1; the names it holds are compared at the foot, and a name it lacks is not
 status 0
 recorded r279_a from nonzero.sh" "$(r279_loaded "$R279/nonzero.sh")"
 tok 'a child killed partway through its record is a FAIL row, though the record it left is not empty' \
-"  FAIL the record of $R279/killed.sh is not to be trusted whole: the child that records it exited 137; the names it holds are compared at the foot, and a name it lacks is not
+"FAIL: the record of $R279/killed.sh is not to be trusted whole: the child that records it exited 137; the names it holds are compared at the foot, and a name it lacks is not
 status 0
 recorded declare from killed.sh
 recorded r279_a from killed.sh" "$(r279_loaded "$R279/killed.sh")"
 tok 'and so is a file that ends the child before sourcing it returns' \
-"  FAIL the record of $R279/exits.sh is not to be trusted whole: the child that records it ended before sourcing it returned; the names it holds are compared at the foot, and a name it lacks is not
+"FAIL: the record of $R279/exits.sh is not to be trusted whole: the child that records it ended before sourcing it returned; the names it holds are compared at the foot, and a name it lacks is not
 status 0" "$(r279_loaded "$R279/exits.sh")"
 tok 'a file that defines nothing stops the run, and writes no row' \
 "sourcing $R279/nothing.sh alone defined nothing, so nothing of it can be compared at the foot; nothing was judged
@@ -189,7 +193,7 @@ tok 'the rows the ledger ends on, derived from this driver'"'"'s verdict code, a
     "$(verdict_tail_want "${SUITE_FILES[0]}")"
 # A driver of the verdict lines alone, copied from this one, and a ledger that
 # ends as the derivation says, after a row of something else.
-grep -E '^eval "\$[A-Z_]+_VERDICT_CODE"$' "${SUITE_FILES[0]}" > "$R279/driver"
+grep -E '^eval "\$[A-Za-z0-9_]+_VERDICT_CODE"$' "${SUITE_FILES[0]}" > "$R279/driver"
 printf '%s\t%s\t%s\t%s\n' \
   GH-1 static ok 'a row before them' \
   GH-204.8 static ok 'every heading section wrote down has at least one row under it' \
@@ -236,8 +240,9 @@ LEDGER_VERDICT_CODE sets FAILED in 2 places, and one clause is all it is known t
     "$( SOURCED_VERDICT_CODE+=$'\n[[ -e $R279_NONE ]] && FAILED=1'
         LEDGER_VERDICT_CODE+=$'\n[[ -e $R279_NONE ]] && FAILED=1'
         verdict_tail_want "$R279/driver" | grep -v '^GH-' )"
-# A verdict variable the table does not know, taken at the end of a driver.
-# Written through printf, so that this file's text holds no evaluation of a
+# A verdict variable the table does not know, taken at the end of a driver,
+# its name holding a digit, which the first reading of the driver's lines,
+# `[A-Z_]*`, did not see. Written through printf, so that this file's text holds no evaluation of a
 # verdict's code for GH-279.3's read to find.
 cp "$R279/driver" "$R279/driver-more"
 printf 'eval "$%s"\n' R279_EXTRA_VERDICT_CODE >> "$R279/driver-more"
@@ -290,8 +295,8 @@ tok 'this run marked the unsplit file'"'"'s two blocks of verdict fixtures, each
   printf '%s\n' 'verdict_fixtures end'
   printf '( eval "${%s}" )\n' SOURCED_VERDICT_CODE
 } > "$R279/evals.sh"
-printf 'eval "$%s"\n' LEDGER_VERDICT_CODE > "$R279/evals-second.sh"
-tok 'a check file that evaluates a verdict'"'"'s code outside a block is named, by file and line, and in every file' \
+printf 'eval "$%s"\n' R279_VERDICT_CODE > "$R279/evals-second.sh"
+tok 'a check file that evaluates a verdict'"'"'s code outside a block is named, by file and line, in every file, whatever the name' \
 "$R279/evals.sh:4
 $R279/evals-second.sh:1" "$(verdict_evals_outside "$R279/evals.sh" "$R279/evals-second.sh")"
 tok 'and one it cannot read is not taken for one with none' \
