@@ -800,6 +800,7 @@ variants-seed-disowned%requirements/GH-72.md%/^### GH-72$/,/^$/s/^- variants: se
 heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r > 0) sub/d%GH-128%caught
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
+normalise-swallows-a-missing-heredoc-pass%lib/command-scan.sh%/^  unset -f cs_normalise$/d%GH-182.2%caught
 command-word-not-reduced%lib/command-scan.sh%s/^      w = substr(s, 1, i - 1)$/      w = "x"/%GH-117%caught
 wrapper-word-spelling-not-admitted%lib/command-scan.sh%s/SPELLING((ba|z|)sh/((ba|z|)sh/%GH-117%caught
 prefix-word-spelling-not-reduced%lib/command-scan.sh%s/return cw_name(w)/return w/%GH-117%caught
@@ -813,6 +814,7 @@ base-refusal-drops-the-rule-sentence%no-pr-decisions.sh%/^BASE=/s/a pull request
 base-refusal-drops-the-remedy-spelling%no-pr-decisions.sh%/^BASE=/s/ --title \.\.\. --body \.\.\.//%US-7 FR-23 GH-109.2%caught
 push-refusal-stops-opening-with-the-rule%no-git-push.sh%s/echo "\$REFUSE That is a forced push/echo "That is a forced push/%US-7 GH-109.2%caught
 a-new-refusal-arm-nothing-reads%no-git-push.sh%/^CMDS=\$(printf/a >\&2 echo "Blocked: an arm with no says row above it."%GH-109.2%caught
+an-arm-a-false-heredoc-opener-hides%no-pr-decisions.sh%/^\$COMMAND"$/a >\&2 echo "Blocked: an arm under a quoted heredoc opener, which the counters drop."%GH-182.3%caught
 push-refusal-moves-the-rule-to-the-end%no-git-push.sh%s/"\$REFUSE That is a forced push, which rewrites history the open pull request is showing. Add a commit instead."/"That is a forced push, which rewrites history the open pull request is showing. Add a commit instead. \$REFUSE"/%US-7 GH-109.2%caught
 a-new-refusal-arm-sharing-a-line%no-git-push.sh%/A wildcard refspec does not name this branch/s/$/; echo "Blocked: a second arm sharing a line." >\&2/%GH-109.2%caught
 one-of-two-no-base-arms-loses-its-sentence%no-pr-decisions.sh%/This names \$BAD_BASE/,+6s/, so this would go to the repository.s default branch//%US-7 GH-109.2%caught

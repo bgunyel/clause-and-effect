@@ -1244,9 +1244,12 @@ it has no entry above (Q16).
 - #181: `fn_calls` cannot see an indirect call, so a wrapper around a function
   that writes a refusal hides arms from the count. Cited beside that helper,
   which names what it can and cannot see
-- #182: `arms` and `fn_writes` do not know where a heredoc body starts. Cited
-  where the count names the shapes it cannot reach; one of the three is the
-  permitting direction, which is why it is filed rather than only named
+- #182: has entries, generated from its issue file, and is listed here only
+  because #109's section cited it before it landed, as `arms` and `fn_writes`
+  not knowing where a heredoc body starts. Of the three shapes it was filed
+  on, the permitting one was closed by #169 counting occurrences; #182 closed
+  the two inflating ones, and a `}` body line that made `fn_writes` call a
+  writer silent, by dropping bodies with the tokeniser's own pass
 - #185: `dup_stderr` does not reach `/dev/stderr` named on an `exec`, nor a
   two-digit fd. Cited where that guard is, because a guard narrower than the
   prose beside it reads as coverage -- the shape the fifth review of PR #169
@@ -1498,3 +1501,32 @@ it has no entry above (Q16).
   file, where the three shapes are pinned at today's permitted verdict and
   GH-177's text says what is refused. It adds its requirements in the pull
   request that fixes it
+- #283: the invoker's exported shell functions reach every process this suite
+  starts -- the hooks it feeds and the child shells its helpers run -- and the
+  library's jq guard asks `command -v jq`, which answers for a function. Found
+  running the whole suite under an exported `jq` wrapper after #174's fix: the
+  run no longer aborts and prints as many results as a plain one, but rows that
+  pass in a plain run fail -- nine under `jq() { command jq "$@"; }` and
+  nineteen under `jq() { /usr/bin/jq "$@"; }`, which keeps jq working under the
+  jq-less PATH. Cited in GH-174.1's note, which records both measurements and
+  names this issue as its remainder, and in GH-174.2's, which leaves
+  `lib/command-scan.sh` unread as hook code and this issue's. Whether the
+  hooks or only the suite should change is its own decision, so it has no
+  entry above
+- #289: a `<<` the tokeniser misreads -- inside quotes, where `'<<'` leaves an
+  empty delimiter the next blank line ends, or in a trailing comment -- opens a
+  heredoc, and when a line ends it the code in between is dropped. In the
+  hooks' verdicts that permits a push or a merge; in the suite's refusal-arm
+  counters, which reuse the pass since #182, it leaves an arm uncounted. Filed
+  from round 1 of the review of #182's pull request. Cited in #182's issue
+  file, where GH-182.3 holds the one instance in `no-pr-decisions.sh` verbatim
+  and fixtures pin the counters' half at today's count, and beside
+  `hook_text` and in the unsplit file's #109 section. It adds its requirements
+  in the pull request that fixes it
+- #302: `R182_CALLERS`, which holds GH-182.2's claim of who calls
+  `cs_drop_heredocs`, does not read a call written after a control word or a
+  prefix word -- `if`, `while`, `!`, `command`. Filed from round 4 of the
+  review of #182's pull request, with a second shape, a caller defined after
+  the derivation ran, which that pull request closed by moving it to the foot
+  of #182's issue file. Cited there, beside the derivation. It adds its
+  requirements in the pull request that fixes it
