@@ -1584,3 +1584,11 @@ it has no entry above (Q16).
   there by folding before blanking and reading each continued line on its
   own. Cited in the library beside the fold. It adds its requirements in the
   pull request that fixes it
+- #317: refuse, in the hooks, any descriptor but 0, 1 and 2 on the write side,
+  and read redirections with bash's own parser, rather than widen
+  `dup_stderr`'s open-side pattern again. Filed from review of #185's pull
+  request, which named there the class that pattern cannot close -- a word,
+  comment or operator whose boundary depends on quote, substitution, escape
+  or `eval` state -- and pinned its representatives. Cited in GH-185's note
+  as that class's structural fix. It adds its requirements in the pull
+  request that fixes it
