@@ -313,6 +313,8 @@ a claim without a number is a claim to re-measure.
 * **If an agent finds out that a worktree already exists, it shall ask the user for permission to work in that worktree.**
 * **When an agent finishes its work in its worktree, it will commit and push to its corresponding worktree branch.**
 * **When an agent is going to wait for a long run of a test/check suite, a review or something else, it will commit and push to its corresponding worktree branch before it hands off its work.**
+* **Unless otherwise stated, an agent should NOT wait for human approval to commit or push to its dedicated worktree branch.** *
+* **Unless otherwise stated, an agent should NOT wait for human approval to post a comment on an issue related to the work it's working.** *
 
 An agent may push the branch of the linked worktree it is working in —
 non-forced, and naming that branch in the command, because a bare `git push`
