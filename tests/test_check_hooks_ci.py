@@ -387,10 +387,12 @@ def test_verify_merge_refuses_when_the_base_tip_cannot_be_read(tmp_path, merge_r
 def test_report_cuts_a_row_that_fits_the_budget_and_shows_every_row_after_it(tmp_path):
     """
     #227's first case. A row of 524,212 bytes fits the 512 KiB block, and
-    before the cap it was shown whole and left no room for the 20 rows after
-    it. Capped at 32,768 bytes, it keeps its `FAIL` line and 32,692 bytes of
-    detail, ends with a line saying the other 491,508 are in the uploaded log,
-    and every row after it is shown.
+    before the cap it was shown whole and left room for only 4 of the 20 rows
+    after it. Capped at 32,768 bytes, it keeps its `FAIL` line and 32,692
+    bytes of detail, and ends with a line saying the log's other 491,509 bytes
+    of it are in the uploaded log: the row is 524,219 bytes there, its detail
+    line indented, and the summary shows 32,710 of them, the indent included
+    and the cut line's newline not. Every row after it is shown.
     """
     log = (
         "  FAIL big\n       " + "x" * 524200 + "\n"
@@ -406,7 +408,7 @@ def test_report_cuts_a_row_that_fits_the_budget_and_shows_every_row_after_it(tmp
         "```text\n"
         "  FAIL big\n"
         + "x" * 32692 + "\n"
-        "  [row cut here: its last 491508 bytes are in the uploaded log]\n"
+        "  [row cut here: its last 491509 bytes are in the uploaded log]\n"
         + "".join(f"  FAIL small-{i}\n" for i in range(20))
         + "```\n"
     ) in summary
@@ -414,27 +416,53 @@ def test_report_cuts_a_row_that_fits_the_budget_and_shows_every_row_after_it(tmp
     assert json.loads(paths["result.json"].read_text())["failed"] == 21
 
 
+def test_report_counts_a_cut_rows_left_out_bytes_as_the_log_holds_them(tmp_path):
+    """
+    A cut row's note says how many of its bytes are in the uploaded log and
+    not on the page, and the log indents every detail line by seven spaces
+    that the summary removes. A row of 1,000 detail lines of 99 bytes is
+    107,012 bytes in the log. The summary shows its `FAIL` line, 326 whole
+    lines and 91 bytes of the 327th: 34,992 of the log's bytes, each line's
+    indent counted and the cut line's newline not. So 72,020 are left out.
+    Counted in the summary's own bytes the note said 67,308, seven short for
+    every line left out whole (review of #227's first commit).
+    """
+    log = "  FAIL many\n" + ("       " + "m" * 99 + "\n") * 1000 + "\nSOME CHECKS FAILED\n"
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        "```text\n"
+        "  FAIL many\n"
+        + ("m" * 99 + "\n") * 326
+        + "m" * 91 + "\n"
+        "  [row cut here: its last 72020 bytes are in the uploaded log]\n"
+        "```\n"
+    ) in paths["summary.md"].read_text()
+
+
 @pytest.mark.parametrize(
     ("name", "detail", "block"),
     [
         ("first", "x" * 614400,
          "```text\n  FAIL first\n" + "x" * 32690 + "\n"
-         "  [row cut here: its last 581710 bytes are in the uploaded log]\n"
+         "  [row cut here: its last 581711 bytes are in the uploaded log]\n"
          "  FAIL second\n```\n"),
         # The fence grows with the backticks the row keeps, and the row is
         # still shown: capped at 32,768 bytes, it is fenced at 98,312 at most,
         # so the first row fits the 512 KiB block for any log.
         ("first", "`" * 614400,
          "`" * 32691 + "text\n  FAIL first\n" + "`" * 32690 + "\n"
-         "  [row cut here: its last 581710 bytes are in the uploaded log]\n"
+         "  [row cut here: its last 581711 bytes are in the uploaded log]\n"
          "  FAIL second\n" + "`" * 32691 + "\n"),
         # Cut in bytes and never inside a character. The shorter name leaves
         # 32,691 bytes of room, odd, which hold 16,345 two-byte characters; the
         # odd byte is dropped, not shown as a three-byte U+FFFD, and counted
-        # as cut.
+        # as cut. With a name one byte shorter, the log holds one byte less of
+        # the row and the summary shows one byte less, so the count is the same.
         ("wide", "é" * 307200,
          "```text\n  FAIL wide\n" + "é" * 16345 + "\n"
-         "  [row cut here: its last 581710 bytes are in the uploaded log]\n"
+         "  [row cut here: its last 581711 bytes are in the uploaded log]\n"
          "  FAIL second\n```\n"),
     ],
     ids=["ascii", "backticks", "two-byte"],
@@ -481,9 +509,9 @@ def test_report_counts_a_shown_rows_fence_against_the_rows_after_it_and_names_th
     assert (
         "`" * 32696 + "text\n"
         "  FAIL a\n" + "`" * 32695 + "\n"
-        "  [row cut here: its last 27305 bytes are in the uploaded log]\n"
+        "  [row cut here: its last 27306 bytes are in the uploaded log]\n"
         + "".join(f"  FAIL x{i:02d}\n" + "x" * 32693 + "\n"
-                  "  [row cut here: its last 27307 bytes are in the uploaded log]\n"
+                  "  [row cut here: its last 27308 bytes are in the uploaded log]\n"
                   for i in range(1, 14))
         + "  FAIL c\n"
         + "`" * 32696 + "\n"
@@ -491,7 +519,7 @@ def test_report_counts_a_shown_rows_fence_against_the_rows_after_it_and_names_th
     assert (
         "\n2 of the 17 failing rows are not shown above, to keep this summary under "
         "GitHub's 1 MiB limit; the uploaded log holds them. Their `FAIL` lines, in log "
-        "order, each cut to its first 512 bytes:\n\n"
+        "order, each one longer than 512 bytes cut to its first 512:\n\n"
         "```text\n  FAIL x14\n  FAIL x15\n```\n"
     ) in summary
     assert "more failing row" not in summary
@@ -519,14 +547,14 @@ def test_report_names_every_failing_row_when_none_can_be_shown_whole(tmp_path):
     assert (
         "```text\n"
         + "".join(f"  FAIL row-{i:02d} " + "y" * 32689 + "\n"
-                  "  [row cut here: its last 581711 bytes are in the uploaded log]\n"
+                  "  [row cut here: its last 581712 bytes are in the uploaded log]\n"
                   for i in range(15))
         + "```\n"
     ) in summary
     assert (
         "\n5 of the 20 failing rows are not shown above, to keep this summary under "
         "GitHub's 1 MiB limit; the uploaded log holds them. Their `FAIL` lines, in log "
-        "order, each cut to its first 512 bytes:\n\n"
+        "order, each one longer than 512 bytes cut to its first 512:\n\n"
         "```text\n"
         + "".join(f"  FAIL row-{i:02d} " + "y" * 498 + "\n" for i in range(15, 20))
         + "```\n"
@@ -566,7 +594,7 @@ def test_report_names_what_fits_of_thousands_of_rows_and_counts_the_rest(tmp_pat
         + "```\n"
         "\n2739 of the 3000 failing rows are not shown above, to keep this summary under "
         "GitHub's 1 MiB limit; the uploaded log holds them. Their `FAIL` lines, in log "
-        "order, each cut to its first 512 bytes:\n\n"
+        "order, each one longer than 512 bytes cut to its first 512:\n\n"
         "```text\n"
         + "".join(f"  FAIL r{i:04d} " + "z" * 499 + "\n" for i in range(261, 770))
         + "```\n"
