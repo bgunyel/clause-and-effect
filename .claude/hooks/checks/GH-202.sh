@@ -14,7 +14,8 @@
 # line beginning with the command, a `$( )`, a `state=closed` read by
 # line_was_cut's fallback, each did it, and the trailing command could be a
 # gh api READ. Filed from the review of #196 (#130) and triaged at dev-05
-# 2c65f4d, where every row below marked "was BLOCK" was measured refused.
+# 2c65f4d, where every row of the triage's table below marked "was BLOCK" was
+# measured refused; the gate row is this branch's, measured refused at 1b01ceb.
 #
 # THE FIX IS TWO TEXTS. $SCAN keeps the raw command whole, for the graphql
 # rules, which read it as text and are how a mutation in a heredoc is caught.
@@ -24,12 +25,14 @@
 # unquoted bodies, since bash runs what is in those. line_was_cut and the state
 # fallback read CMDTEXT. The hook argues it above the re-admission.
 #
-# WHICH ROWS CAN FAIL, measured rather than argued: this file was run against a
-# copy of .claude/hooks/ holding the pre-fix no-pr-decisions.sh and
-# lib/command-scan.sh, through $CHECK_HOOKS_DIR, and every `flip` row went red
-# with got=BLOCK; every `check` row stayed green. This repository's hooks were
-# never edited to do it. The copy has no cs_drop_quoted_heredocs, so the load
-# rows of GH-202.3 were red there too, for that reason.
+# WHICH ROWS CAN FAIL, measured rather than argued: the whole suite was run
+# against a copy of .claude/hooks/ holding the pre-fix no-pr-decisions.sh, from
+# 1b01ceb, beside this branch's library, through $CHECK_HOOKS_DIR. All twelve
+# `flip` rows went red with got=BLOCK, and so did the three load rows of
+# GH-202.3, the pre-fix hook neither calling nor requiring the new function;
+# every `check` row stayed green. The one other red was GH-182.3's verbatim pin
+# of the re-admission block, whose text the fix changes. This repository's
+# hooks were never edited to do it.
 #
 # WHAT IT TAKES FROM ELSEWHERE: $SUITE_DIR and $FIXTURES from the driver's
 # prelude, and mk_halflib and halflib_path from the library.
