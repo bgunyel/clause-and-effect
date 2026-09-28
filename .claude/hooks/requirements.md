@@ -1576,3 +1576,11 @@ it has no entry above (Q16).
   Cited in #185's issue file, in GH-185's note, which is the one list of what
   `dup_stderr` does not reach, and beside the rows that pin it. It adds its
   requirements in the pull request that fixes it
+- #315: `dup_stderr`'s fold joins across an escaped trailing backslash,
+  which bash does not, and reports the joined line under the first line's
+  number beside the line bash runs. Filed from review of #185's pull request,
+  which found the fold permitting as well -- it blanked a comment-only line
+  before bash would join it, and continued a comment -- and closed those two
+  there by folding before blanking and reading each continued line on its
+  own. Cited in the library beside the fold. It adds its requirements in the
+  pull request that fixes it

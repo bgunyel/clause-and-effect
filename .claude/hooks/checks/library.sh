@@ -1556,21 +1556,29 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 #
 # WHAT IT REACHES, read off the text as three parts. A SOURCE fd written
 # explicitly -- a number whose value is not 1, leading zeros read as bash reads
-# them, so `02` is fd 2 and `01` is fd 1, or a `{name}`, subscript allowed --
-# or left implicit on an input operator, where it is 0. Digits or a `{` after a
-# `$` are a parameter and are not read as a source. Bash reads digits in front
-# of an operator as its fd only when the word is nothing but digits, so the
-# implicit fd is found after anything but `<` and a word of digits alone:
-# `}<&2` and `a1<&2` are fd 0, and ` 1<&2` and `` `1<&2 `` are fd 1. The
-# digits after `>&` or `<&` are the exception: bash reads them as that
-# operator's target and never as the next one's fd, so `>&1<&2` is fd 0; after
-# any other operator they are the fd, and `>1<&2` is a syntax error. A TARGET
-# that is fd 2, leading zeros allowed, after `>&` or `<&`; or, after `>`, `>>`,
-# `>|`, `<` or `<>`, a path whose last component is `stderr` or whose last two
-# are `fd/2` -- which reaches `/dev/stderr`, `/dev/fd/2` and every
-# `/proc/.../fd/2` without listing them -- or, after any of those but `<`,
-# which opens it read-only, a process substitution, `>(`, whatever the command
-# in it writes to. Blanks allowed in front of the target.
+# them, so `02` is fd 2 and `01` is fd 1, or a `{name}`, a subscript allowed
+# and one subscript nested in it -- or left implicit on an input operator,
+# where it is 0. Bash reads digits or a `{name}` in front of an operator as its
+# fd only when they are the whole word, so a written source is read only where
+# a word starts: after a character of `end`, below. `a3>&2`, `"$x"3>&2`,
+# `$sha256>&2` and `${msg}>&2` are fd 1, and are not reported; until the fourth
+# review of #185's pull request a source was read after anything but a digit or
+# a `$`, `a3>&2` and `"$x"3>&2` were recorded as refusing-direction trades, and
+# `$sha256>&2` was reported against the requirement's own word that fd 1 never
+# is. After `<` or `>` bash reads the digits as that operator's fd and stops on
+# a syntax error, so no line tells those two word starts apart; they are read
+# because the source reads `end` whole. For the same reason the implicit fd is
+# found after anything but `<` and a word of digits alone: `}<&2` and `a1<&2`
+# are fd 0, and ` 1<&2` and `` `1<&2 `` are fd 1. The digits after `>&` or `<&`
+# are the exception: bash reads them as that operator's target and never as the
+# next one's fd, so `>&1<&2` is fd 0; after any other operator they are the fd,
+# and `>1<&2` is a syntax error. A TARGET that is fd 2, leading zeros allowed,
+# after `>&` or `<&`; or, after `>`, `>>`, `>|`, `<` or `<>`, a path whose last
+# component is `stderr` or whose last two are `fd/2` -- which reaches
+# `/dev/stderr`, `/dev/fd/2` and every `/proc/.../fd/2` without listing them --
+# or, after any of those but `<`, which opens it read-only, a process
+# substitution, `>(`, whatever the command in it writes to. Blanks allowed in
+# front of the target.
 #
 # WHERE A WORD ENDS is `end`, one set that every part reads: a blank, one of
 # `;&|()<>`, and a backtick, which ends a command substitution. It was three
@@ -1593,23 +1601,27 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # word, so `>&\2`, `>&''2`, `>&$'2'` and `>"/dev/"stderr` read as the bare
 # spellings they are. The two readings are joined on one line, split by a `;`
 # that ends every part of the pattern, and a line either one matches is
-# reported as written. That `;` is also the second reading's start of line,
-# which is why no part of the pattern has a `^`: the two readings agree on
-# everything in front of a line's first target word, so a source or an
-# implicit fd at the start of a line is read after the `;`, and a `^` could
-# never be the reason a line matched (round 3 of review found it dead). The
-# second reading finds an operator as `<` or `>` and then an `&` or `|` if one
-# follows; `>>` and `<>` are two operators to it, and the word after the second
-# is the one it reads, so a `>` in that class could not be observed either. Both are needed: a quote taken out can leave a word of
-# digits alone in front of the next operator, so `>"1"<&2`, fd 0 onto stderr,
-# reads as fd 1 without its quotes. What an escape or an expansion in a target
-# stands for is not read; GH-185's note names what that leaves.
+# reported as written. Both readings are needed: a quote taken out can leave
+# a word of digits alone in front of the next operator, so `>"1"<&2`, fd 0
+# onto stderr, reads as fd 1 without its quotes. What an escape or an
+# expansion in a target stands for is not read; GH-185's note names what that
+# leaves.
 #
-# Where the ends are loose, they are loose in the refusing direction: an
-# explicit source is read after anything but a digit or a `$`, so `a3>&2`,
-# which bash reads as fd 1, is reported; the fd target is not bounded on its
-# right, so `>&20` is reported; and a path is read by its end in any
-# directory, so a log file named `stderr` is reported. A path is bounded on its
+# The `;` is also the second reading's start of line, which is why no part of
+# the pattern has a `^`: the two readings agree on everything in front of a
+# line's first target word, so a source or an implicit fd at the start of a
+# line is read after the `;`, and a `^` could never be the reason a line
+# matched (the third review found it dead). The second reading finds an
+# operator as `<` or `>` and then an `&` or `|` if one follows; `>>` and `<>`
+# are two operators to it, and the word after the second is the one it reads,
+# so a `>` in that class could not be observed either.
+#
+# Where the ends are loose, they are loose in the refusing direction: the
+# digits after `>&` are a word start to the source, so `>&13>&2`, a target of
+# 13 and then fd 1, is reported; the fd target is not bounded on its right, so
+# `>&20` is reported; and a path is read by its end in any directory, so a
+# log file named `stderr` is reported. GH-185's note lists every trade, and a
+# row pins each. A path is bounded on its
 # right, since read by its end it would otherwise reach `2>/tmp/stderr.log`.
 # The second reading takes quotes out without reading which quote holds which,
 # so `3>\&2`, a file named `&2`, is reported.
@@ -1620,15 +1632,24 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # file, and a row drives that half. The readable half has no row: a file of
 # mode 000 is readable by root, so the row would pass or fail by who runs it.
 #
-# Comments are blanked whole-line only and continuations folded first. The
-# fold is its own and not `hook_text`'s, for two reasons: `hook_text` drops
-# heredoc bodies with the tokeniser's pass, and #289's misread `<<` drops real
-# code with them, which is the permitting direction here; and its fold joins
-# lines, so the numbers `grep -n` prints stop being the file's. This one pads
-# a fold with blank lines, so a folded line is reported under its first line's
-# number and every line after it under its own. Heredoc bodies stay, so a body
-# line naming the shape is a red -- the refusing direction. checks/GH-185.sh
-# drives each part against a fixture and argues what it does not reach.
+# Continuations are folded first and whole-line comments blanked after, in
+# the order bash reads them: a comment-only line after a continuation is part
+# of the line above to bash, and its `#` inside a word. Each continued line is
+# also read on its own, beside the fold, so a line after a backslash bash does
+# not continue -- one ending a comment -- is still read: until the fourth
+# review of #185's pull request the fold blanked comments first and continued
+# a comment, and `: # price in $\` then `3>&2 exec` read as the parameter `$3`,
+# which the pattern before #185 had reported. Reading both can only add a
+# report. The fold is its own and not `hook_text`'s, for two reasons:
+# `hook_text` drops heredoc bodies with the tokeniser's pass, and #289's
+# misread `<<` drops real code with them, which is the permitting direction
+# here; and its fold joins lines, so the numbers `grep -n` prints stop being
+# the file's. A folded line is reported under its first line's number and
+# each continued line under its own. An escaped trailing backslash is folded
+# too, which reports a joined line bash does not join, beside the line it
+# does: #315's. Heredoc bodies stay, so a body line naming the shape is a
+# red -- the refusing direction. checks/GH-185.sh drives each part against a
+# fixture and argues what it does not reach.
 dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplication writes
   local end src imp fd path proc sep
   [ -f "$1" ] && [ -r "$1" ] || {
@@ -1637,14 +1658,13 @@ dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplic
     return 1
   }
   end='[:space:];&|()<>`'
-  src='([^0-9$](0+|0*[2-9]|0*[1-9][0-9]+)|[^$][{][A-Za-z_][A-Za-z0-9_]*([[][^]]*[]])?[}])'
+  src="[${end}]((0+|0*[2-9]|0*[1-9][0-9]+)|[{][A-Za-z_][A-Za-z0-9_]*([[]([^][]|[[][^][]*[]])*[]])?[}])"
   imp="([^0-9<]|[^${end}0-9][0-9]+|[<>]&[[:space:]]*[0-9]+)"
   fd='&[[:space:]]*0*2'
   path="[[:space:]]*[^${end}]*/(stderr|fd/2)([${end}]|\$)"
   proc='[[:space:]]*>[(]'
   sep=$(printf ';\001;')
-  hook_uncommented "$1" \
-    | awk -v sep="$sep" -v word="^[^${end}]*" '
+  awk -v sep="$sep" -v word="^[^${end}]*" '
         function unquoted(s,   out, w) {
           out = ""
           while (match(s, /[<>][&|]?[ \t]*/)) {
@@ -1656,10 +1676,12 @@ dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplic
           }
           return out s
         }
-        { if (cont) buf = buf $0; else { buf = $0; n = 0 }
-          if (buf ~ /\\$/) { sub(/\\$/, "", buf); cont = 1; n++; next }
-          cont = 0; print buf sep unquoted(buf); for (i = 0; i < n; i++) print "" }
-        END { if (cont) print buf sep unquoted(buf) }' \
+        function emit(l) { if (l ~ /^[[:space:]]*#/) l = ""; print l sep unquoted(l) }
+        function flush(   i) { emit(buf); for (i = 1; i <= n; i++) emit(alone[i]) }
+        { if (cont) { buf = buf $0; alone[++n] = $0 } else { buf = $0; n = 0 }
+          if (buf ~ /\\$/) { sub(/\\$/, "", buf); cont = 1; next }
+          cont = 0; flush() }
+        END { if (cont) flush() }' "$1" \
     | grep -nE "${src}([<>]${fd}|(>|>>|<|<>|>[|])${path}|(>|>>|<>|>[|])${proc})|${imp}(<${fd}|(<|<>)${path}|<>${proc})" \
     | sed "s/${sep}.*//" | tr '\n' ' ' | sed 's/ $//'
 }
