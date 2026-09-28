@@ -341,6 +341,9 @@ and held to the same standard of saying only what it asks.
 - from: #36, User Stories, 7
 - status: active
 - direction: refuse-only: a message is written only on a refusal
+- note: falls short, knowingly, in one context: `no-commit-to-main.sh`'s
+  push-to-main refusal names no push from a worktree branch, where one is
+  permitted. GH-164 records why.
 
 ### US-8
 - text: As Bertan, I want a pull request opened by an agent to target the active dev
@@ -1558,3 +1561,13 @@ it has no entry above (Q16).
   the derivation ran, which that pull request closed by moving it to the foot
   of #182's issue file. Cited there, beside the derivation. It adds its
   requirements in the pull request that fixes it
+- #291: the pull request for #164; rev-agent-164's review of it is cited where
+  what it found stands -- a message pinned as `says_first` on it and `says_not`
+  on it with a space after, and called whole, which a second `echo >&2` after
+  the arm's own passed with a push remedy in it, in prose and as
+  `git -C . push`. That is why `says_exactly` is in the library, driven by the
+  #98 self-test against a fixture that says a second line. Its second round
+  added a sixth `PUSH_REFUSE` arm past the hand-written list of arms, green,
+  which is why #164's issue file holds that list to a count off the hook. Its
+  fourth measured a heredoc arm counted by that row's raw read and dropped by
+  #182's `hook_text`, which is why the count does not read through it
