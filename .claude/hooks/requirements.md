@@ -1499,3 +1499,15 @@ it has no entry above (Q16).
   file, where the three shapes are pinned at today's permitted verdict and
   GH-177's text says what is refused. It adds its requirements in the pull
   request that fixes it
+- #283: the invoker's exported shell functions reach every process this suite
+  starts -- the hooks it feeds and the child shells its helpers run -- and the
+  library's jq guard asks `command -v jq`, which answers for a function. Found
+  running the whole suite under an exported `jq` wrapper after #174's fix: the
+  run no longer aborts and prints as many results as a plain one, but rows that
+  pass in a plain run fail -- nine under `jq() { command jq "$@"; }` and
+  nineteen under `jq() { /usr/bin/jq "$@"; }`, which keeps jq working under the
+  jq-less PATH. Cited in GH-174.1's note, which records both measurements and
+  names this issue as its remainder, and in GH-174.2's, which leaves
+  `lib/command-scan.sh` unread as hook code and this issue's. Whether the
+  hooks or only the suite should change is its own decision, so it has no
+  entry above
