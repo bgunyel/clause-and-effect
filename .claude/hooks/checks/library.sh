@@ -1490,8 +1490,9 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
 # the latter stood in the suite when this was written.
 #
 # THE FIXTURE IS WRITTEN ONLY WHEN ITS PROSE HOLDS A WORD, and otherwise
-# removed, so `written` and `unarmed` over it find no file and fail naming
-# grep's status 2. An extraction that found nothing, a file of blank lines, a
+# removed, so `written` and `unarmed` over it find no file: `unarmed` fails
+# naming grep's status 2, and `written` fails as it does for a literal not
+# found. An extraction that found nothing, a file of blank lines, a
 # directory and a path that is not there all reach that arm rather than a
 # reflow of blanks, over which `unarmed` would read ok -- the vacuity `unarmed`
 # and `lacks` each refuse. comment_reflow turns an empty line into one blank,

@@ -38,8 +38,9 @@ requirement GH-192.1 <<'REQ'
   inside it, is found there by `written` and makes `unarmed` fail, where over
   the file's lines `written` fails and `unarmed` reads ok. From a directory, a
   path that is not there, an empty file, a file of blank lines or a relative
-  name it writes nothing, so `written` and `unarmed` over the path it prints
-  both fail and name grep's status 2. `beside` reads the comment block it is
+  name it writes nothing, so `unarmed` over the path it prints fails naming
+  grep's status 2, and `written` over it fails as it does for a literal not
+  found. `beside` reads the comment block it is
   given through `prose_reflow`.
 - from: #192
 - kind: defect-permitting
@@ -70,28 +71,37 @@ requirement GH-192.3 <<'REQ'
   a comment after it or not, derived off the text; or one of the header
   extracts, the suite's own text and the left-open string named in this file.
   A pin is a `written`, `unarmed`, `holds` or `lacks` call, its continuation
-  lines joined, or a `prose_count`; one naming such a file directly, as
-  `"$NAME"`, `"${NAME}"` or the quoted path, rather than through `prose`,
-  fails the audit unless its literal opens with a `#`, the one a heading's pin
-  needs and `prose` would take off. And no file of the suite pipes text into
-  `comment_reflow` directly but the library's `prose_reflow`, GH-215's rows
-  that drive `comment_reflow` itself, and the direct readers #323 holds, each
-  file's count of such calls pinned as a literal.
+  lines joined, standing at a line's start or after `;`, `&`, `|`, `{`,
+  `then` or `do`; or a `prose_count` wherever it stands. One naming such a
+  file directly, as `"$NAME"`, `"${NAME}"` or the quoted path, rather than
+  through `prose`, fails the audit when its literal -- one or more quoted
+  pieces written together, read as the one word they make -- holds a blank
+  and does not open with a `#`, the one a heading's pin needs and `prose`
+  would take off. And no file of the suite pipes text into `comment_reflow`
+  directly but the library's `prose_reflow`, GH-215's rows that drive
+  `comment_reflow` itself, and the direct readers #323 holds: a call is the
+  name after a `|` or before a `<`, on a line that is not a comment, with a
+  line ending in `|` or `\` joined to the next first, and each file's count
+  of such calls is pinned as a literal.
 - from: #192
 - kind: defect-permitting
 - status: active
 - direction: static: a property of the suite's own text
-- note: The audit reads text, so it reaches the pins that name one of those
-  files in one of the three shapes above, followed by a quoted literal, and
-  nothing else, and only a quoted literal is judged: a pin whose literal is
-  itself a variable, `"$PHRASE"`, is not, since its value cannot be read off
-  the text. None of those read raw prose with a blank in the value when this
-  was written: `$HISTORY`, `$ARGUMENT` and `$CITATION` go through `prose`
-  (review of #192's branch, round 2). A variable with a lower-case name is not
-  derived: the suite's
-  are function locals, `f` and `hook` among them, reused for whatever file is
-  at hand, and one of them assigned a Markdown path would make every pin
-  naming it a finding. The pins on a hook file's comments are the other half
+- note: Both audits read text, and each reaches the shapes its `text:` names
+  and nothing else. The pin audit does not judge a pin inside `$( )` or
+  backticks, where its `pass` or `fail` is not recorded, which is how this
+  file drives the helpers; nor a literal that is a variable, `"$PHRASE"`, an
+  ANSI-C `$'...'` string or anything else whose value is not quoted text,
+  since the value cannot be read off the line. None of the suite's variable
+  literals read raw prose with a blank in the value when this was written:
+  `$HISTORY`, `$ARGUMENT` and `$CITATION` go through `prose` (review of
+  #192's branch, round 2). A variable with a lower-case name is not derived:
+  the suite's lower-case names are function locals, `f` and `hook` among them,
+  reused for whatever file is at hand, and one of them assigned a Markdown
+  path would make every pin naming it a finding. The direct-reader count
+  does not see `comment_reflow` reached through another name -- a wrapper
+  function, a variable, an `eval` -- nor one that reads its own arguments
+  rather than stdin, which it does not do. The pins on a hook file's comments are the other half
   of #192's sweep and are not audited: whether a literal there is prose or
   code is a judgement per pin, made in the sweep and written beside the pins
   that stayed on the lines.
@@ -265,13 +275,18 @@ req GH-192.3
 # |<literal>|`. The blanks may be a continuation's, the literal opening the
 # next line. A `#` inside a literal exempts nothing: an absence pin on one
 # would read ok wherever a wrap put the `#` at a line's start, since `prose`
-# takes it off there, and a presence pin on one would go red. A line whose
-# first word is not a pin is not one, so an extraction such as `entry
-# "$CONTEXT_MD" 'Worktree branch'` is not read as a pin; `prose_count` is asked
-# wherever it stands, since it sits inside a `tok`. A comment line is skipped
-# before joining. A pin called inside `$( )`, as this file's own rows call
-# them, is not a line's first word and is not audited: the suite's pins stand
-# at a line's start.
+# takes it off there, and a presence pin on one would go red. The literal is
+# read as the shell word it is, so quoted pieces written together, `'four''
+# acts'`, read as `four acts`; the suite writes a literal that way on purpose
+# where a pin must not match its own text. A pin stands at a line's start or
+# after `;`, `&`, `|`, `{`, `then` or `do`, so `[ -n "$X" ] && unarmed ...`
+# and `( FAILED=0; lacks ... )` are pins, and a line with no pin on it is not
+# one, so an extraction such as `entry "$CONTEXT_MD" 'Worktree branch'` is not
+# read as a pin; `prose_count` is asked wherever it stands, since it sits
+# inside a `tok`. A comment line is skipped before joining. A helper called
+# inside `$( )`, as this file's own rows call them, records neither its pass
+# nor its fail, so it is not a pin and is not audited (review of #192's
+# branch, round 3, measured all three shapes against the round-2 audit).
 r192_raw_prose_pins() {  # r192_raw_prose_pins <text file> <variable names> -- each pin that reads a prose file's lines
   awk -v vars="$2" '
     function judge(name, before, rest,    q, lit, e) {
@@ -280,9 +295,15 @@ r192_raw_prose_pins() {  # r192_raw_prose_pins <text file> <variable names> -- e
       q = substr(rest, 1, 1)
       if (q != "\047" && q != "\"") return
       if (!pin && before !~ /prose_count $/) return
-      lit = substr(rest, 2)
-      e = index(lit, q)
-      if (e) lit = substr(lit, 1, e - 1)
+      lit = ""
+      while (q == "\047" || q == "\"") {
+        rest = substr(rest, 2)
+        e = index(rest, q)
+        if (!e) { lit = lit rest; break }
+        lit = lit substr(rest, 1, e - 1)
+        rest = substr(rest, e + 1)
+        q = substr(rest, 1, 1)
+      }
       if (lit ~ /[ \t]/ && lit !~ /^#/) print name " |" lit "|"
     }
     function scan(line, pat, name,    rest, before, p) {
@@ -301,7 +322,7 @@ r192_raw_prose_pins() {  # r192_raw_prose_pins <text file> <variable names> -- e
       line = $0
       while (line ~ /\\$/ && (getline nxt) > 0)
         line = substr(line, 1, length(line) - 1) " " nxt
-      pin = (line ~ /^[ \t]*(written|unarmed|holds|lacks) /)
+      pin = (line ~ /(^[ \t]*|[;&|{][ \t]*|[ \t](then|do)[ \t]+)(written|unarmed|holds|lacks) /)
       for (i = 1; i <= n; i++) {
         scan(line, "\"$" v[i] "\"", v[i])
         scan(line, "\"${" v[i] "}\"", v[i])
@@ -334,26 +355,35 @@ printf '%s\n' \
   "written 'one word' \"\$R192_V\" 'acts'" \
   "tok 'a count' '0' \"\$(prose_count \"\$R192_V\" 'git branch -f')\"" \
   "entry \"\$R192_V\" 'Worktree branch' > out" \
-  "holds 'double quoted' \"\$R192_V\" \"three citations\"\" named below\"" \
+  "holds 'double quoted' \"\$R192_V\" \"dq one\"\" dq two\"" \
   "written 'braced' \"\${R192_V}\" 'seven acts'" \
   "unarmed 'a path written in' \"\$R192_DIR/notes.md\" 'eight acts'" \
   "unarmed 'a path through prose' \"\$(prose \"\$R192_DIR/notes.md\")\" 'eight acts'" \
-  "  written 'indented, twice' \"\$R192_V\" 'nine acts' && written 'again' \"\$R192_V\" 'ten acts'" > "$R192_AUDIT_FIX"
-[ "$(wc -l < "$R192_AUDIT_FIX")" = 17 ] || {
-  echo "the #192 audit fixture was not written as seventeen lines; the check against it proves nothing" >&2
+  "  written 'indented, twice' \"\$R192_V\" 'nine acts' && written 'again' \"\$R192_V\" 'ten acts'" \
+  "holds 'pieces' \"\$R192_V\" 'eleven'' acts'" \
+  "[ -n \"\$R192_V\" ] && unarmed 'after and' \"\$R192_V\" 'twelve acts'" \
+  "( FAILED=0; lacks 'in a subshell' \"\$R192_V\" 'thirteen acts' )" \
+  "if true; then written 'after then' \"\$R192_V\" 'fourteen acts'; fi" \
+  "x=\$(unarmed 'inside a substitution' \"\$R192_V\" 'fifteen acts')" > "$R192_AUDIT_FIX"
+[ "$(wc -l < "$R192_AUDIT_FIX")" = 22 ] || {
+  echo "the #192 audit fixture was not written as twenty-two lines; the check against it proves nothing" >&2
   exit 1
 }
-tok 'the audit reports a raw prose pin on one line, continued, with its literal on the next line, holding a # inside, counted, double-quoted, braced, on a path written in, and twice on an indented line, and nothing else' \
+tok 'the audit reports a raw prose pin on one line, continued, with its literal on the next line, holding a # inside, counted, double-quoted, braced, on a path written in, twice on an indented line, in quoted pieces, and after &&, ; and then, and nothing else' \
 'R192_V |four acts|
 R192_V |five acts|
 R192_V |six acts|
 R192_V |pull request #N|
 R192_V |git branch -f|
-R192_V |three citations|
+R192_V |dq one dq two|
 R192_V |seven acts|
 $R192_DIR/notes.md |eight acts|
 R192_V |nine acts|
-R192_V |ten acts|' \
+R192_V |ten acts|
+R192_V |eleven acts|
+R192_V |twelve acts|
+R192_V |thirteen acts|
+R192_V |fourteen acts|' \
     "$(r192_raw_prose_pins "$R192_AUDIT_FIX" 'R192_V')"
 
 # THE PROSE VARIABLES. Every one assigned a Markdown path is derived off the
@@ -407,7 +437,11 @@ tok 'no pin in the suite reads the lines of a prose file with a literal that hol
 # own sweep, and its `lacks` read ok with the phrase standing in CLAUDE.md a
 # tab apart (review of #192's branch, round 2). A call is `| comment_reflow` or
 # `comment_reflow <` on a line that is not a comment; a label or a comment
-# naming the function is not one. The counts are literals, so a new direct
+# naming the function is not one. A line ending in `|` or `\` is joined to the
+# next first: read line by line, a pipe that ends one line and a
+# comment_reflow that opens the next was not counted, which is #192's own
+# defect in the guard written against it (review of #192's branch, round 3,
+# measured). The counts are literals, so a new direct
 # reader turns this red, and so does #323 moving one of its own. The
 # function's name is held in a variable, and the pattern built from it, so
 # that neither this pattern nor the fixture below is a call in this file's own
@@ -416,7 +450,16 @@ R192_CR=comment_reflow
 r192_direct_reflows() {  # r192_direct_reflows <file>... -- each file calling comment_reflow directly, and how often
   local f n
   for f in "$@"; do
-    n=$(grep -vE '^[[:space:]]*#' -- "$f" | grep -cE "\\| *$R192_CR([^_[:alnum:]]|\$)|$R192_CR *<")
+    n=$(awk -v cr="$R192_CR" '
+      function call(l) { return l ~ ("\\|[ \t]*" cr "([^_[:alnum:]]|$)") || l ~ (cr "[ \t]*<") }
+      /^[ \t]*#/ { next }
+      {
+        buf = buf $0
+        if (buf ~ /[|\\][ \t]*$/) { sub(/\\[ \t]*$/, "", buf); buf = buf " "; next }
+        if (call(buf)) c++
+        buf = ""
+      }
+      END { if (buf != "" && call(buf)) c++; print c + 0 }' "$f")
     [ "$n" = 0 ] || printf '%s %s\n' "${f##*/}" "$n"
   done | sort
 }
@@ -429,13 +472,20 @@ printf '%s\n' \
   "# a comment: printf x | $R192_CR" \
   "tok '$R192_CR reads a blank' 'x' \"\$(printf x | prose_reflow)\"" \
   "${R192_CR}_more() { :; }" \
-  "C=\$(printf x | ${R192_CR}_more)" > "$R192_DIRECT_FIX"
-[ "$(wc -l < "$R192_DIRECT_FIX")" = 7 ] || {
-  echo "the #192 direct-reader fixture was not written as seven lines; the check against it proves nothing" >&2
+  "C=\$(printf x | ${R192_CR}_more)" \
+  "D=\$(printf x |" \
+  "  $R192_CR)" \
+  "printf x \\" \
+  "  | $R192_CR" \
+  "printf x |" \
+  "  # a comment between" \
+  "  $R192_CR" > "$R192_DIRECT_FIX"
+[ "$(wc -l < "$R192_DIRECT_FIX")" = 14 ] || {
+  echo "the #192 direct-reader fixture was not written as fourteen lines; the check against it proves nothing" >&2
   exit 1
 }
-tok 'the direct-reader count finds a pipe, a redirect and a pipe inside a pipeline, and no comment, label, other function or prose_reflow' \
-    'r192-direct.sh 3' "$(r192_direct_reflows "$R192_DIRECT_FIX")"
+tok 'the direct-reader count finds a pipe, a redirect, a pipe inside a pipeline, and a pipe wrapped after it, before it and across a comment, and no comment, label, other function or prose_reflow' \
+    'r192-direct.sh 6' "$(r192_direct_reflows "$R192_DIRECT_FIX")"
 tok 'no file of the suite calls comment_reflow directly but prose_reflow, GH-215'"'"'s driven rows and the readers #323 holds' \
 'GH-118.sh 1
 GH-157.sh 1
