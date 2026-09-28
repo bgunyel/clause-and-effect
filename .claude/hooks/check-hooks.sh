@@ -200,10 +200,13 @@
 # HOW A LOOP ADDS TO THE SUITE, which is the conventions and not the reasons:
 #   - A new issue's checks go in a new issue file, named by the issue, which
 #     opens with its own section heading, printed with `section`, ends with
-#     the line `sourced_to_end` and calls it nowhere else, and is added at the
-#     end of $SUITE_CHECKS below. `source_checks` fails the run on a file under
-#     checks/ that is on no list, and on one that does not end with that line;
-#     the record fails it on a second call. Every heading the file prints,
+#     the line `sourced_to_end` and calls it nowhere else. Its name is all it
+#     takes to be sourced: the driver derives $SUITE_CHECKS below from the
+#     directory, in ascending order of the issue number, and no line of this
+#     file is edited to add one (#295). `source_checks` fails the run on a file
+#     under checks/ that is on no list -- one whose name is not `GH-<n>.sh`,
+#     `unsplit.sh`, `end-of-run.sh` or the library -- and on one that does not
+#     end with that line; the record fails it on a second call. Every heading the file prints,
 #     its opening one and any after it, is printed with `section`. Nothing
 #     refuses one printed with `echo` or `printf`: it is not written down, so
 #     GH-204.8's check counts its rows for the heading before it; and past the
@@ -365,17 +368,27 @@ JUDGED=
 #
 # THE FILES THIS DRIVER SOURCES, all of them under checks/, in the order it
 # sources them: the library first, here, and then the checks, through
-# `source_checks` at the end of this prelude -- $SUITE_CHECKS in the order it is
-# written, the unsplit file first and then each issue file, and $SUITE_LAST
-# after them, whatever $SUITE_CHECKS says. A list and never a glob: the order is
-# load-bearing, since `says_first` and every check that reads what an earlier
-# one left behind depend on it, and a directory listing has no order anyone
-# chose. An issue file is added by writing its name at the end of
-# $SUITE_CHECKS; `source_checks` fails the run on a file under checks/ that is
-# on no list. That makes this line the one every loop that adds an issue file
-# edits, and two such loops conflict here: a trade taken knowingly, since the
-# order has to be written somewhere, and the conflict is one line whose
-# resolution is to keep both names. ADR 0004 records it. $SUITE_SOURCED is all of them, as paths under this directory.
+# `source_checks` at the end of this prelude -- $SUITE_CHECKS, the unsplit file
+# first and then each issue file in ascending order of its issue number, and
+# $SUITE_LAST after them, whatever $SUITE_CHECKS says.
+#
+# DERIVED, AND NOT A GLOB (#295). $SUITE_CHECKS was a line written here, and
+# every loop that added an issue file appended its name to it, so any two such
+# loops conflicted on it and each merge of one stopped the others' CI until the
+# line was resolved by hand. `suite_checks`, in the library, now reads it off
+# the directory: the unsplit file, then every `GH-<n>.sh` sorted by <n> as a
+# number. It is not a glob handed to the routine, which would source whatever
+# lay there: any other file under checks/ -- a merge's `.orig`, an editor's swap
+# file, `GH-12a.sh`, `notes.sh` -- is on no list, and `source_checks` fails the
+# run on it and never sources it. The order is load-bearing only for the
+# unsplit file, first, and the end-of-run file, last, which reads the record
+# every check before it wrote. Among the issue files it was measured not to
+# be: the whole suite ran with them in the old list's order, ascending and
+# descending, and the three agreed row for row. So the order among them is one
+# nobody chose, as ADR 0004 said a listing's would be, and it is fixed, so a
+# file that comes to depend on it is red on the pull request that adds it and
+# never a flake. ADR 0006 records the runs and supersedes 0004's trade.
+# $SUITE_SOURCED is all of them, as paths under this directory.
 #
 # Read off $SUITE_DIR and never off $HOOKS: they are the suite that runs, not
 # the hooks it judges, which is the reason given for this file in the
@@ -383,12 +396,7 @@ JUDGED=
 # every check below a `command not found`, which prints no FAIL and sets no
 # FAILED -- a green run having asked nothing -- so it stops the run instead.
 SUITE_LIBRARY=library.sh
-SUITE_CHECKS="unsplit.sh GH-205.sh GH-215.sh GH-157.sh GH-144.sh GH-118.sh GH-177.sh GH-219.sh GH-186.sh GH-166.sh GH-266.sh GH-273.sh GH-174.sh GH-182.sh GH-110.sh GH-187.sh GH-159.sh GH-224.sh GH-293.sh"
 SUITE_LAST=end-of-run.sh
-SUITE_SOURCED=
-for f in $SUITE_LIBRARY $SUITE_CHECKS $SUITE_LAST; do
-  SUITE_SOURCED="$SUITE_SOURCED${SUITE_SOURCED:+ }checks/$f"
-done
 . "$SUITE_DIR/checks/$SUITE_LIBRARY" || {
   echo "checks/$SUITE_LIBRARY did not load; nothing was judged" >&2
   exit 1
@@ -397,6 +405,19 @@ declare -F record pass fail req section >/dev/null || {
   echo "checks/$SUITE_LIBRARY loaded without the functions every check prints through; nothing was judged" >&2
   exit 1
 }
+# After the library, whose function derives it. One that could not list the
+# directory would leave the unsplit file alone on the list, and `source_checks`,
+# listing the same directory for strays, would find none to fail on -- a green
+# run without one issue file in it -- so that stops the run. A library without
+# `suite_checks` is a `command not found` here, whose status stops it too.
+SUITE_CHECKS=$(suite_checks "$SUITE_DIR/checks") || {
+  echo "checks/ could not be listed, so the files to source could not be derived; nothing was judged" >&2
+  exit 1
+}
+SUITE_SOURCED=
+for f in $SUITE_LIBRARY $SUITE_CHECKS $SUITE_LAST; do
+  SUITE_SOURCED="$SUITE_SOURCED${SUITE_SOURCED:+ }checks/$f"
+done
 # AND A LIBRARY THAT LOADED WITHOUT ONE OF ITS OTHER FUNCTIONS is the same
 # hazard one helper at a time, which the five names above do not ask about: with
 # `lacks` deleted from the library the run printed 35 `command not found` lines
@@ -855,9 +876,9 @@ GH-200.4 GH-200.5 GH-204.1 GH-204.2 GH-204.3 GH-204.4 GH-204.5 GH-204.6
 GH-204.7 GH-204.8
 '
 
-# THE CHECKS, sourced into this shell: $SUITE_CHECKS in the order it is written,
-# and the end-of-run file last, which reads the record every check before it
-# wrote. This is the one call of `source_checks`, and the #204 checks hold it to
+# THE CHECKS, sourced into this shell: $SUITE_CHECKS in the order it was
+# derived, the unsplit file first, and the end-of-run file last, which reads
+# the record every check before it wrote. This is the one call of `source_checks`, and the #204 checks hold it to
 # that.
 source_checks "$SUITE_DIR/checks" $SUITE_CHECKS "$SUITE_LAST"
 # AND WHAT IT SOURCED IS WHAT IT WAS GIVEN: every file started and ran to its
