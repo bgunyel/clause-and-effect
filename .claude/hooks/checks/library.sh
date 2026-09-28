@@ -1528,8 +1528,9 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # that is fd 2, leading zeros allowed, after `>&` or `<&`; or, after `>`, `>>`,
 # `>|`, `<` or `<>`, a path whose last component is `stderr` or whose last two
 # are `fd/2` -- which reaches `/dev/stderr`, `/dev/fd/2` and every
-# `/proc/.../fd/2` without listing them -- or a process substitution, `>(`,
-# whatever the command in it writes to. Blanks allowed in front of the target.
+# `/proc/.../fd/2` without listing them -- or, after any of those but `<`,
+# which opens it read-only, a process substitution, `>(`, whatever the command
+# in it writes to. Blanks allowed in front of the target.
 # The implicit fd on an output operator is 1, which is an ordinary refusal and
 # is never reported however it is spelled; `<<` and `<<<` are not input
 # operators and are stepped over.

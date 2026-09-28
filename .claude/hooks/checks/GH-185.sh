@@ -40,8 +40,8 @@ requirement GH-185 <<'REQ'
   `{ cat; }<&2` and `a1<&2` are fd 0. The target is fd 2, leading zeros
   allowed, after `>&` or `<&`; or, after `>`, `>>`, `>|`, `<` or `<>`, a path
   whose last component is `stderr` or whose last two are `fd/2`, which
-  reaches `/dev/stderr`, `/dev/fd/2` and every `/proc/.../fd/2`, or a process
-  substitution `>(`. Blanks are allowed before the target. Each line is read
+  reaches `/dev/stderr`, `/dev/fd/2` and every `/proc/.../fd/2`; or, after
+  any of those but `<`, a process substitution `>(`. Blanks are allowed before the target. Each line is read
   twice, as written and with the quotes, the backslashes and the repeated
   `/` and `./` segments taken out of every redirection's target word, and a
   line either reading matches is reported. Continuations are folded first
@@ -81,8 +81,9 @@ requirement GH-185 <<'REQ'
   reported. Trades taken in the refusing direction: `<` by path opens a
   read-only descriptor on Linux, so a write through one fails -- measured,
   for a source written and left implicit -- and it is reported anyway, as the
-  triage asked, and so is `<` onto a process substitution, while `<>` opens
-  one for writing and is a real duplication; fd 2 reopened onto itself,
+  triage asked, while `<>` opens one for writing and is a real duplication,
+  and `<` onto a process substitution, which the triage did not ask, is not
+  reported, since a write through it fails too -- measured; fd 2 reopened onto itself,
   `2>/dev/stderr`, is reported though it hides nothing, because the contract
   is any fd but 1; an explicit source is read after anything but a digit or
   a `$`, so `a3>&2`, which bash reads as fd 1, is reported; the fd target is
@@ -307,16 +308,20 @@ tok 'dup_stderr ends a path at a separator as well as at a blank' \
 # A PROCESS SUBSTITUTION, also found by that review: `exec 3> >(cat >&2)` hands
 # every later write through fd 3 to a command writing to stderr -- measured --
 # and the count reads the one `>&2` inside it once. Reported whatever the
-# command writes to; `< <(...)` is its read end, and a write to it fails.
+# command writes to. Opened with `<` it is read-only, and so is `<(...)`, its
+# read end: a write through either fails -- measured -- and neither is reported.
 r185_fixture process-substitution 'exec 3> >(cat >&2)'
 r185_fixture implicit-process-substitution 'exec <> >(cat >&2)'
 r185_fixture read-process-substitution 'exec 3< <(cat >&2)'
+r185_fixture read-only-process-substitution 'exec 3< >(cat >&2)'
 tok 'dup_stderr reports an fd opened on a process substitution' \
     '2:exec 3> >(cat >&2)' "$(dup_stderr "$R185_DIR/process-substitution.sh")"
 tok 'and fd 0 left implicit on <> onto one' \
     '2:exec <> >(cat >&2)' "$(dup_stderr "$R185_DIR/implicit-process-substitution.sh")"
 tok 'but not the read end of one, <(...)' \
     '' "$(dup_stderr "$R185_DIR/read-process-substitution.sh")"
+tok 'nor one opened with <, which is read-only' \
+    '' "$(dup_stderr "$R185_DIR/read-only-process-substitution.sh")"
 
 # A PATH WHOSE LAST COMPONENT IS `stderr`, IN ANY DIRECTORY, the refusing-
 # direction trade of reading the path by its end: a log file is reported.
