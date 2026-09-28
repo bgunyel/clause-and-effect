@@ -18,12 +18,15 @@
 # with the shape from its second line on: one line for most, and more for a
 # continuation, a heredoc and a shape spread over two lines. A reported shape
 # is asserted as `<line>:<shape>`, the output the guard prints; a clean one as
-# the empty string. Each must-flag row was run against the old pattern and
-# failed there -- every one empty but the continuation, which printed only
-# its line 4 -- but two, which the old pattern reached too: `exec 3>& 2`,
-# here for a clause of the new one that no row drove, and `3>&2 exec`, which
-# the old pattern's `^` reached and which pins the new one's start of line.
-# That run is recorded in the pull request, since a check that restores the
+# the empty string. Each must-flag row was run against the old pattern, and
+# each failed there -- every one empty but the continuation, which printed
+# only its line 4 -- but those the old pattern reached too, each here for a
+# clause of the new one: `exec 3>& 2`, a blank after `>&`; a source at the
+# start of a line and right after a backtick, `(`, `)` or `|`, which pin where
+# the new one reads a word start and which the old one read after any
+# non-digit; and `3>&2 exec` after a comment ending in a backslash, which the
+# old one read line by line and this pull request's fold had hidden. That run
+# is recorded in the pull request, since a check that restores the
 # old pattern would be a check of a function nobody calls. A shape the guard
 # does not reach is asserted as the empty string too, beside the clean ones,
 # and says so in its row; a trade is asserted as what the guard prints, and
