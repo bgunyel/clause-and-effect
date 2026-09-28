@@ -25,13 +25,16 @@
 # old pattern reached too, each here for a clause of the new one:
 # `exec 3>& 2`, a blank after `>&`; a source at the start of a line and right
 # after a backtick, `(`, `)` or `|`, which pin where the new one reads a word
-# start and which the old one read after any non-digit; and `3>&2 exec` after
-# a comment ending in a backslash, which the old one read line by line and
-# this pull request's fold had hidden. That run is recorded in the pull
-# request, since a check that restores the old pattern would be a check of a
-# function nobody calls. A shape the guard does not reach is asserted as the
-# empty string too, beside the clean ones, and says so in its row; a trade is
-# asserted as what the guard prints, and its row says it is a trade.
+# start and which the old one read after any non-digit; `3>&2 exec` after a
+# comment ending in a backslash, which the old one read line by line and this
+# pull request's fold had hidden; and `eval "3>&2 exec"`, a source behind a
+# quote, which the old one read after any non-digit and this pull request's
+# word-start rule had hidden until the sixth review. That run is recorded in
+# the pull request, since a check that restores the old pattern would be a
+# check of a function nobody calls. A shape the guard does not reach is
+# asserted as the empty string too, beside the clean ones, and says so in its
+# row; a trade is asserted as what the guard prints, and its row says it is a
+# trade.
 #
 # WHAT IS NOT HERE is `exec 3>&2`, the triage's first row, which the unsplit
 # file's #109 section already drives against its own fixture, and which moved
@@ -43,37 +46,37 @@ requirement GH-185 <<'REQ'
 - text: `dup_stderr <file>` reports, as `<line>:<text>` space-joined, every
   line that points a descriptor other than 1 at stderr. The source is a number
   whose value is not 1, leading zeros read as bash reads them, or a `{name}`,
-  a subscript allowed and one subscript nested in it, written where bash
-  starts a word -- after a blank, one of `;&|()<>`, a backtick or the start of
-  a line -- since bash reads it as the fd only when it is the whole word; or
-  it is left implicit on `<`, `<&` or `<>`, where it is 0 -- after anything
-  but `<` and a word of digits alone, so `{ cat; }<&2` and `a1<&2` are fd 0,
-  and after the target of a `>&` or `<&`, whose digits bash reads as that
-  target, so `>&1<&2` is fd 0. The target is fd 2, leading zeros allowed,
-  after `>&` or `<&`; or, after `>`, `>>`, `>|`, `<` or `<>`, a path whose
-  last component is `stderr` or whose last two are `fd/2`, which reaches
+  a subscript allowed and one subscript nested in it, each holding a character
+  or more, and read where a word starts -- after a blank, one of `;&|()<>`, a
+  backtick, a quote or the start of a line -- since bash reads it as the fd
+  only when it is the whole word, and a quote may open a string that `eval` or
+  `sh -c` runs; or it is left implicit on `<`, `<&` or `<>`, where it is 0 --
+  after anything but `<` and a word of digits alone, so `{ cat; }<&2` and
+  `a1<&2` are fd 0, and after the target of a `>&` or `<&`, whose digits bash
+  reads as that target, so `>&1<&2` is fd 0. The target is fd 2, leading zeros
+  allowed, after `>&` or `<&`; or, after `>`, `>>`, `>|`, `<` or `<>`, a path
+  whose last component is `stderr` or whose last two are `fd/2`, which reaches
   `/dev/stderr`, `/dev/fd/2` and every `/proc/.../fd/2`; or, after any of
-  those but `<`, a process substitution `>(`. Blanks are allowed before the
-  target. A word ends where bash ends one, at a blank or at one of `;&|()<>`,
-  and at a backtick. Each line is read twice, as written and with the quotes,
-  the backslashes and the repeated `/` and `./` segments taken out of every
-  redirection's target word, and a line either reading matches is reported.
-  Continuations are folded first and whole-line comments blanked after, as
-  bash reads them; a line that starts a logical line with `#` is a comment and
-  continues nothing; and each continued line is read on its own as well as
-  joined; a folded line is reported under its first line's number, and a
-  continued line under its own. It reports nothing for fd 1, whether written
-  or implicit, `01` included -- `>&2`, `1>&2`, `>/dev/stderr`,
-  `1>/dev/stderr`, `>>`, `>|` and `&>` -- nor for `2>&1`, `>/dev/null 2>&1` or
-  a here-string naming `/dev/stderr`, nor for digits or a `{name}` that are
-  not a whole word, `a3>&2`, `"$x"3>&2`, `$sha256>&2` and `${msg}>&2` among
-  them, nor for a `1` after a backtick, which opens a command and so is its fd
-  -- except for the refusing-direction trades the note lists, each of which
-  reports a line bash does not point at stderr. A path that is not a readable
-  regular file, a directory included, is reported as `UNREADABLE`, and never
-  as the empty string a clean file gives. `no-git-push.sh`,
-  `no-pr-decisions.sh` and `lib/command-scan.sh`, which both source, report
-  nothing.
+  those but `<`, a process substitution `>(`. Blanks, which are spaces and
+  tabs, are allowed before the target. A word is taken to end at a blank, at
+  one of `;&|()<>` or at a backtick, which is where bash ends one outside
+  quote, substitution, escape and `eval` state; the note names where the two
+  differ. Each line is read twice, as written and with the quotes, the
+  backslashes and the repeated `/` and `./` segments taken out of every
+  redirection's target word, and a line either reading matches is reported. A
+  run of continued lines is read joined from every line of it to its end, each
+  join under its own first line's number, and a join whose first non-blank is
+  `#` is a comment and is blanked. It reports nothing for fd 1, implicit or
+  explicit, `01` included -- `>&2`, `1>&2`, `>/dev/stderr`, `1>/dev/stderr`,
+  `>>`, `>|` and `&>` -- nor for `2>&1`, `>/dev/null 2>&1` or a here-string
+  naming `/dev/stderr`, nor for digits or a `{name}` that are not a whole
+  word, `a3>&2`, `$sha256>&2` and `${msg}>&2` among them, nor for a `1` after
+  a backtick, which opens a command and so is its fd -- except for the
+  refusing-direction trades the note lists, each of which reports a line bash
+  does not point at stderr. A path that is not a readable regular file, a
+  directory included, is reported as `UNREADABLE`, and never as the empty
+  string a clean file gives. `no-git-push.sh`, `no-pr-decisions.sh` and
+  `lib/command-scan.sh`, which both source, report nothing.
 - from: #185, the sixth review of PR #169, #185's triage, and review of
   #185's pull request
 - kind: defect-permitting
@@ -132,22 +135,27 @@ requirement GH-185 <<'REQ'
   3>&2`, where bash reads `a 3` as one word and fd 1, is reported; the fd
   target is not bounded on its right, so `exec 3>&20` is reported; a path
   whose last component is `stderr` is reported in any directory, so a log
-  file, `exec 2>"$dir/stderr"` or `exec 3>/tmp/stderr`, is; a process
-  substitution is reported whatever the command in it writes to, `exec 3>
-  >(cat >/dev/null)` among them; the second reading takes out quotes without
-  reading which quote holds which, so `exec 3>\&2`, a file named `&2`, `exec
-  3>'/dev/std\err'`, whose quotes keep the backslash, and `exec
-  3>/dev/std\$'err'` are reported; quotes are read only in a target word, so a
-  shape inside quoted text, `echo "use exec 3>&2 here"`, or in a heredoc body,
-  which is not dropped, is a red, and so is one in a trailing comment, `echo
-  hi # exec 3>&2`, or in a comment after blanks inside a joined line, `: x\`
-  and then `  #y; exec 3>&2`; a substitution's close is a word start to the
-  source, so `echo X $(:)3>&2`, one word and fd 1 to bash, is reported; an
-  escaped `;` is an end to the path, so `exec 3>/dev/stderr\;x`, a file, is
-  reported; fd 2 duplicated onto itself, `exec 2>&2`, is reported as
-  `2>/dev/stderr` is; and a continued line is read on its own as well as
-  joined, so `echo x\` and then `3>&2`, one word `x3` to bash, reports `3>&2`,
-  and a joined line bash does not join is reported beside the line it runs --
+  file, `exec 2>"$dir/stderr"` or `exec 3>/tmp/stderr`, is, and so is `exec
+  3>/stderr`, a file at the root; a process substitution is reported whatever
+  the command in it writes to, `exec 3> >(cat >/dev/null)` among them, and
+  with no blank after `>>`, `exec 3>>(cat >&2)`, which is a syntax error to
+  bash; the second reading takes out quotes without reading which quote holds
+  which, so `exec 3>\&2`, a file named `&2`, `exec 3>'/dev/std\err'`, whose
+  quotes keep the backslash, and `exec 3>/dev/std\$'err'` are reported; quotes
+  are read only in a target word, so a shape inside quoted text, `echo "use
+  exec 3>&2 here"`, or in a heredoc body, which is not dropped, is a red, and
+  so is one in a trailing comment, `echo hi # exec 3>&2`, or in a comment
+  after blanks inside a joined line, `: x\` and then ` #y; exec 3>&2`; a quote
+  is a word start to the source, since one that opens a string may hide a
+  redirection `eval` or `sh -c` runs, so one that closes a string, `exec
+  "$x"3>&2` or `exec 'a'3>&2`, one word and fd 1 to bash, is reported; a
+  substitution's close is a word start to the source, so `echo X $(:)3>&2`,
+  one word and fd 1 to bash, is reported; an escaped `;` is an end to the
+  path, so `exec 3>/dev/stderr\;x`, a file, is reported; fd 2 duplicated onto
+  itself, `exec 2>&2`, is reported as `2>/dev/stderr` is; and a run of
+  continued lines is read joined from every line of it, so a join bash does
+  not make is reported: `echo x\` and then `3>&2`, one word `x3` to bash,
+  reports `3>&2`, and a joined line is reported beside the one bash runs --
   after a comment ending in a backslash, `: # c\` and then `exec 3>&2`, and
   across an escaped backslash, `echo a\\` and then `exec 3>&2`, which is
   #315's. Each was measured to hide no write to stderr. The path target is
@@ -518,16 +526,15 @@ tok 'and a directory, which is not a file' \
 # `$sha256>&2` was reported against the requirement's own "nothing for fd 1".
 # Each is fd 1 in bash -- measured. And a `1` at the start of a line is fd 1,
 # which the separator between the readings has to leave a word start for.
+# `"$x"3>&2` was a clean row here until the sixth review; a quote is a word
+# start to the source again since, and it is a trade below.
 r185_fixture word-ending-in-digit 'exec a3>&2'
 r185_fixture parameter-ending-in-digits 'echo $sha256>&2'
-r185_fixture quoted-then-digit 'exec "$x"3>&2'
 r185_fixture line-start-one '1<&2 cat'
 tok 'dup_stderr does not report a3>&2, a word and then fd 1' \
     '' "$(dup_stderr "$R185_DIR/word-ending-in-digit.sh")"
 tok 'nor $sha256>&2, a parameter whose name ends in digits, and then fd 1' \
     '' "$(dup_stderr "$R185_DIR/parameter-ending-in-digits.sh")"
-tok 'nor "$x"3>&2, one word, and then fd 1' \
-    '' "$(dup_stderr "$R185_DIR/quoted-then-digit.sh")"
 tok 'nor 1<&2 at the start of a line, which is fd 1' \
     '' "$(dup_stderr "$R185_DIR/line-start-one.sh")"
 # Found by mutating this round's clauses before it was pushed: with the
@@ -624,6 +631,18 @@ tok 'and across an escaped backslash, #315'"'"'s, beside the line it runs: a tra
     '2:echo a\exec 3>&2 3:exec 3>&2' "$(dup_stderr "$R185_DIR/trade-escaped-backslash.sh")"
 tok 'and a comment after blanks inside a joined line: a trade' \
     '2:: x  #y; exec 3>&2' "$(dup_stderr "$R185_DIR/trade-indented-comment-joined.sh")"
+r185_fixture trade-process-substitution-syntax-error 'exec 3>>(cat >&2)'
+tok 'and >>( with no blank, a syntax error to bash: a trade' \
+    '2:exec 3>>(cat >&2)' "$(dup_stderr "$R185_DIR/trade-process-substitution-syntax-error.sh")"
+r185_fixture trade-root-stderr 'exec 3>/stderr'
+tok 'and /stderr, a file at the root whose last component is stderr: a trade' \
+    '2:exec 3>/stderr' "$(dup_stderr "$R185_DIR/trade-root-stderr.sh")"
+r185_fixture trade-closing-double-quote 'exec "$x"3>&2'
+r185_fixture trade-closing-single-quote "exec 'a'3>&2"
+tok 'and "$x"3>&2, one word to bash, since a quote is a word start to the source: a trade' \
+    '2:exec "$x"3>&2' "$(dup_stderr "$R185_DIR/trade-closing-double-quote.sh")"
+tok "and 'a'3>&2, the same after a single quote: a trade" \
+    "2:exec 'a'3>&2" "$(dup_stderr "$R185_DIR/trade-closing-single-quote.sh")"
 
 # THREE CLAUSES THE FIFTH REVIEW OF THIS FILE'S PULL REQUEST FOUND UNDRIVEN:
 # the fold's flush at the end of a file, which a sourced library ending inside
@@ -649,8 +668,10 @@ tok 'dup_stderr does not report an indented comment' \
 # a line after a comment ending in a backslash on its own, but bash continues
 # that line when it ends in one too: `# note \`, then `exec 3>\` and
 # `/dev/stderr`, is a comment and then `exec 3>/dev/stderr`, and writes to
-# stderr -- measured, and with `exec 3>&\` and `2`. A line whose first
-# non-blank is `#` is now blanked and starts nothing.
+# stderr -- measured, and with `exec 3>&\` and `2`. Round 5 made a line whose
+# first non-blank is `#` start nothing; round 6 replaced that with reading a
+# run joined from every line of it, which reaches these rows and the joins
+# the rule missed, after a trailing comment or an escaped backslash.
 r185_fixture comment-then-continued-path '# note \' 'exec 3>\' '/dev/stderr'
 r185_fixture comment-then-continued-fd '# note \' 'exec 3>&\' '2'
 tok 'dup_stderr reports a continuation that starts after a comment ending in a backslash' \
@@ -662,6 +683,109 @@ tok 'and with the fd target on the continued line' \
 r185_fixture indented-comment-then-continued '  # note \' 'exec 3>\' '/dev/stderr'
 tok 'and after an indented comment ending in a backslash' \
     '3:exec 3>/dev/stderr' "$(dup_stderr "$R185_DIR/indented-comment-then-continued.sh")"
+
+# FOUR CLAUSES THE SIXTH REVIEW OF THIS FILE'S PULL REQUEST FOUND UNDRIVEN,
+# each by a mutation its reviewer derived and the list before it did not
+# hold: the case and width of a {name}, fd 0 written 00, a process
+# substitution with no blank after its operator, and the digits a word
+# ending in them may not start with. The first three write to stderr --
+# measured -- and `cat 01<&2` is fd 1. `exec {ERR_FD}>&2` is also the
+# spelling a hook would most plausibly write.
+r185_fixture upper-case-name 'exec {ERR_FD}>&2'
+r185_fixture zero-written-twice 'exec 00<&2'
+r185_fixture unspaced-process-substitution 'exec 3>|>(cat >&2)'
+r185_fixture padded-one-input 'cat 01<&2'
+tok 'dup_stderr reports a {name} in capitals and underscores' \
+    '2:exec {ERR_FD}>&2' "$(dup_stderr "$R185_DIR/upper-case-name.sh")"
+tok 'dup_stderr reports fd 0 written 00' \
+    '2:exec 00<&2' "$(dup_stderr "$R185_DIR/zero-written-twice.sh")"
+tok 'dup_stderr reports a process substitution with no blank after >|' \
+    '2:exec 3>|>(cat >&2)' "$(dup_stderr "$R185_DIR/unspaced-process-substitution.sh")"
+tok 'dup_stderr does not report 01<&2, fd 1 written with a zero, as fd 0 after a word' \
+    '' "$(dup_stderr "$R185_DIR/padded-one-input.sh")"
+
+# A JOIN BASH STARTS LATER THAN THE FOLD DID, the family the sixth review
+# named: a line the fold joined that bash did not -- a trailing comment
+# ending in a backslash, or an escaped one -- followed by a real
+# continuation. Each writes to stderr -- measured. The fold now reads a run
+# of continued lines joined from every line of it to its end, each under its
+# own number, so bash's logical line is one of them whichever it is.
+r185_fixture late-join-comment-path ': # note\' '3>\' '/dev/stderr f'
+r185_fixture late-join-comment-fd ': # c\' '3>&\' '2 exec'
+r185_fixture late-join-escaped-backslash 'echo a\\' '3>&\' '2 exec'
+tok 'dup_stderr reports a continuation after a trailing comment ending in a backslash, joined from its own line' \
+    '3:3>/dev/stderr f' "$(dup_stderr "$R185_DIR/late-join-comment-path.sh")"
+tok 'and with the fd target on the continued line' \
+    '3:3>&2 exec' "$(dup_stderr "$R185_DIR/late-join-comment-fd.sh")"
+tok 'and after an escaped backslash, #315'"'"'s' \
+    '3:3>&2 exec' "$(dup_stderr "$R185_DIR/late-join-escaped-backslash.sh")"
+
+# A BLANK IS A SPACE OR A TAB, as bash's blanks are, from the sixth review:
+# `[:space:]` let a form feed end a word, so `x=<FF>1<&2 exec`, where bash
+# reads `x=<FF>1` as one word and fd 0 onto stderr -- measured -- read as fd 1.
+r185_fixture form-feed-in-word $'x=\f1<&2 exec'
+tok 'dup_stderr reports fd 0 after a word holding a form feed, which is no blank to bash' \
+    $'2:x=\f1<&2 exec' "$(dup_stderr "$R185_DIR/form-feed-in-word.sh")"
+
+# THE MECHANICAL SWEEP'S SURVIVORS. Round 6 derived the mutations of every
+# regex in `dup_stderr` from the regexes themselves -- each alternative
+# dropped, each quantifier weakened, each bracket member dropped -- rather
+# than listing them by hand, and these rows are what its survivors asked
+# for. Each must-flag shape writes to stderr -- measured: a source of three
+# digits; a {name} that starts with `_` and one holding a digit; a nested
+# subscript of two characters; a word ending in two digits before `<&2`; and
+# a quoted fd after `<&`, which only the second reading's `<` operator takes
+# out of its quotes. And the sweep found the subscript admitting nothing:
+# `{a[]}` is a command to bash and `{a[b[]]}` a bad subscript -- measured --
+# so a subscript now holds one character or more, and those are clean rows,
+# with `{a[1]]}`, which bash also runs as a command.
+r185_fixture three-digit-source 'exec 100>&2'
+r185_fixture underscore-name 'exec {_fd}>&2'
+r185_fixture digit-in-name 'exec {fd2}>&2'
+r185_fixture nested-subscript-wide 'exec {a[b[12]]}>&2'
+r185_fixture word-ending-in-digits-input 'f a12<&2'
+r185_fixture quoted-fd-after-input-dup 'exec 3<&"2"'
+r185_fixture empty-subscript 'exec {a[]}>&2'
+r185_fixture empty-nested-subscript 'exec {a[b[]]}>&2'
+r185_fixture unbalanced-close-subscript 'exec {a[1]]}>&2'
+tok 'dup_stderr reports a source of three digits' \
+    '2:exec 100>&2' "$(dup_stderr "$R185_DIR/three-digit-source.sh")"
+tok 'and a {name} starting with an underscore' \
+    '2:exec {_fd}>&2' "$(dup_stderr "$R185_DIR/underscore-name.sh")"
+tok 'and a {name} holding a digit' \
+    '2:exec {fd2}>&2' "$(dup_stderr "$R185_DIR/digit-in-name.sh")"
+tok 'and a nested subscript two characters wide' \
+    '2:exec {a[b[12]]}>&2' "$(dup_stderr "$R185_DIR/nested-subscript-wide.sh")"
+tok 'and fd 0 after a word ending in two digits' \
+    '2:f a12<&2' "$(dup_stderr "$R185_DIR/word-ending-in-digits-input.sh")"
+tok 'and a quoted fd after <&' \
+    '2:exec 3<&"2"' "$(dup_stderr "$R185_DIR/quoted-fd-after-input-dup.sh")"
+tok 'dup_stderr does not report an empty subscript, which bash runs as a command' \
+    '' "$(dup_stderr "$R185_DIR/empty-subscript.sh")"
+tok 'nor an empty nested one, a bad subscript to bash' \
+    '' "$(dup_stderr "$R185_DIR/empty-nested-subscript.sh")"
+tok 'nor a subscript closed twice' \
+    '' "$(dup_stderr "$R185_DIR/unbalanced-close-subscript.sh")"
+r185_fixture unbalanced-nested-close 'exec {a[b[1]x]]}>&2'
+r185_fixture unbalanced-nested-open 'exec {a[b[c[1]]}>&2'
+tok 'nor a nested subscript with a character after its close, which bash runs as a command' \
+    '' "$(dup_stderr "$R185_DIR/unbalanced-nested-close.sh")"
+tok 'nor one opened once more than it is closed' \
+    '' "$(dup_stderr "$R185_DIR/unbalanced-nested-open.sh")"
+
+# A QUOTE IS A WORD START TO THE SOURCE, since the sixth review. The pattern
+# before #185 reported `eval "3>&2 exec"`, which writes to stderr -- measured
+# -- and round 4's rule that a source follows a character of `end` hid it:
+# the reach this pull request took away, as its fold had in round 4. A quote
+# that opens a string hides a redirection eval or `sh -c` runs, and one that
+# closes a string leaves the digits in its word, and which it is the text
+# cannot say; the refusing reading is taken, and the closing quote is a trade.
+r185_fixture eval-double-quoted-source 'eval "3>&2 exec"'
+r185_fixture eval-single-quoted-name "eval '{fd}>&2 exec'"
+tok 'dup_stderr reports a source behind the double quote eval takes out' \
+    '2:eval "3>&2 exec"' "$(dup_stderr "$R185_DIR/eval-double-quoted-source.sh")"
+tok 'and a {name} behind a single one' \
+    "2:eval '{fd}>&2 exec'" "$(dup_stderr "$R185_DIR/eval-single-quoted-name.sh")"
 
 # WHAT STAYS CLEAN: fd 1, written or implicit, in every spelling, and the
 # ordinary shapes the hooks carry. fd 1 by /dev/fd/2 is a refusal `arms` does

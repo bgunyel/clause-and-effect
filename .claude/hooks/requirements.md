@@ -1593,10 +1593,11 @@ it has no entry above (Q16).
   which bash does not, and reports the joined line under the first line's
   number beside the line bash runs. Filed from review of #185's pull request,
   which found the fold permitting as well -- it blanked a comment-only line
-  before bash would join it, and continued a comment -- and closed those two
-  there by folding before blanking and reading each continued line on its
-  own. Cited in the library beside the fold. It adds its requirements in the
-  pull request that fixes it
+  before bash would join it, continued a comment, and started a join earlier
+  than bash does -- and closed that family there by reading a run of
+  continued lines joined from every line of it to its end. Cited in the
+  library beside the fold and in GH-185's note. It adds its requirements in
+  the pull request that fixes it
 - #317: refuse, in the hooks, any descriptor but 0, 1 and 2 on the write side,
   and read redirections with bash's own parser, rather than widen
   `dup_stderr`'s open-side pattern again. Filed from review of #185's pull

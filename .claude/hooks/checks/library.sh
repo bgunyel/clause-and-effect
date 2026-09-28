@@ -1586,20 +1586,24 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # WHAT IT REACHES, read off the text as three parts. A SOURCE fd written
 # explicitly -- a number whose value is not 1, leading zeros read as bash reads
 # them, so `02` is fd 2 and `01` is fd 1, or a `{name}`, a subscript allowed
-# and one subscript nested in it -- or left implicit on an input operator,
-# where it is 0. Bash reads digits or a `{name}` in front of an operator as its
-# fd only when they are the whole word, so a written source is read only where
-# a word starts: after a character of `end`, below. `a3>&2`, `"$x"3>&2`,
-# `$sha256>&2` and `${msg}>&2` are fd 1, and are not reported; until the fourth
-# review of #185's pull request a source was read after anything but a digit or
-# a `$`, `a3>&2` and `"$x"3>&2` were recorded as refusing-direction trades, and
-# `$sha256>&2` was reported against the requirement's own word that fd 1 never
-# is. After `<` or `>` bash reads the digits as that operator's fd and stops on
-# a syntax error, so no line tells those two word starts apart; they are read
-# because the source reads `end` whole. For the same reason the implicit fd is
-# found after anything but `<` and a word of digits alone: `}<&2` and `a1<&2`
-# are fd 0, and ` 1<&2` and `` `1<&2 `` are fd 1. The digits after `>&` or `<&`
-# are the exception: bash reads them as that operator's target and never as the
+# and one subscript nested in it, each holding a character or more, since bash
+# reads an empty one as no name -- or left implicit on an input operator, where
+# it is 0. Bash reads digits or a `{name}` in front of an operator as its fd
+# only when they are the whole word, so a written source is read only where a
+# word starts: after a character of `end`, below, or after a quote, which may
+# open a string `eval` or `sh -c` runs -- `eval "3>&2 exec"`, which the pattern
+# before #185 reported and round 4 of review hid until the sixth found it -- or
+# close one, `"$x"3>&2`, which is then a trade. `a3>&2`, `$sha256>&2` and
+# `${msg}>&2` are fd 1, and are not reported; until the fourth review of #185's
+# pull request a source was read after anything but a digit or a `$`, `a3>&2`
+# and `"$x"3>&2` were recorded as refusing-direction trades, and `$sha256>&2`
+# was reported against the requirement's own word that fd 1 never is. After `<`
+# or `>` bash reads the digits as that operator's fd and stops on a syntax
+# error, so no line tells those two word starts apart; they are read because
+# the source reads `end` whole. For the same reason the implicit fd is found
+# after anything but `<` and a word of digits alone: `}<&2` and `a1<&2` are fd
+# 0, and ` 1<&2` and `` `1<&2 `` are fd 1. The digits after `>&` or `<&` are
+# the exception: bash reads them as that operator's target and never as the
 # next one's fd, so `>&1<&2` is fd 0; after any other operator they are the fd,
 # and `>1<&2` is a syntax error. A TARGET that is fd 2, leading zeros allowed,
 # after `>&` or `<&`; or, after `>`, `>>`, `>|`, `<` or `<>`, a path whose last
@@ -1609,23 +1613,28 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # substitution, `>(`, whatever the command in it writes to. Blanks allowed in
 # front of the target.
 #
-# WHERE A WORD ENDS is `end`, one set that every part reads: a blank, one of
-# `;&|()<>`, and a backtick. That is where bash ends a word in the text alone,
-# and not everywhere: a substitution's closing `)` or backtick ends no word,
-# so `$(:)1` is one word, and an escaped blank joins one, so `a\ 1` is one;
-# which of the two a character is depends on the state bash is in when it
+# WHERE A WORD ENDS is `end`, one set that every part reads: a blank, which is
+# a space or a tab as bash's blanks are, one of `;&|()<>`, and a backtick. It
+# read `[:space:]` until the sixth review of #185's pull request, which let a
+# form feed end a word, so `x=<FF>1<&2`, fd 0 to bash, read as fd 1; every
+# blank in the pattern is `[:blank:]` now. That set is where bash ends a word
+# in the text alone, and not everywhere: a substitution's closing `)` or
+# backtick ends no word, so `$(:)1` is one word, an escaped blank joins one, so
+# `a\ 1` is one; which a character is depends on the state bash is in when it
 # reads it, which the text does not carry. GH-185's note names that class and
-# pins its representatives, and the fifth review of #185's pull request set
-# the line there: named, not reached, since reaching it is a lexer. It was three
-# copies until the second review of #185's pull request found two of them
-# without the backtick, so a path closing a substitution was never bounded.
-# It is the tokeniser's BOUND in lib/command-scan.sh, and is not read from
-# there: that is a string inside an awk program there, not a value to import,
-# and a guard asked of the hooks that shares their tokeniser's text shares its
-# defects. The second reading's target word stops at a backtick too, and
-# round 2 of that review said this could not be observed; round 3 observed it:
-# without the stop, ``x=`: >a`$'3'>&2`` has `$'3'` taken out of the quotes
-# of a word that is not a target, and reads as fd 3, where bash reads fd 1.
+# pins its representatives, and the fifth review set the line there: named, not
+# reached, since reaching it is a lexer. It was three copies until the second
+# review found two of them without the backtick, so a path closing a
+# substitution was never bounded. It is the tokeniser's BOUND in
+# lib/command-scan.sh, and is not read from there: that is a string inside an
+# awk program there, not a value to import, and a guard asked of the hooks that
+# shares their tokeniser's text shares its defects. The second reading's target
+# word stops at a backtick too, and round 2 of that review said this could not
+# be observed; round 3 observed it: without the stop, ``x=`: >a`$'3'>&2`` has
+# `$'3'` taken out of the quotes of a word that is not a target, and reads as
+# fd 3, where bash reads fd 1. Whether that word matches an empty run or fails
+# to match one cannot be observed, since awk's `substr` gives the same word and
+# the same rest either way.
 #
 # The implicit fd on an output operator is 1, which is an ordinary refusal and
 # is never reported however it is spelled; `<<` and `<<<` are not input
@@ -1667,28 +1676,30 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # file, and a row drives that half. The readable half has no row: a file of
 # mode 000 is readable by root, so the row would pass or fail by who runs it.
 #
-# Continuations are folded first and whole-line comments blanked after, in
-# the order bash reads them: a comment-only line after a continuation is part
-# of the line above to bash, and its `#` inside a word. A line that starts a
-# logical line with `#` is a comment, is blanked, and starts no continuation,
-# so the line after a comment ending in a backslash is read as bash reads it,
-# continued if it ends in one -- `# note \`, `exec 3>\`, `/dev/stderr` is
-# `exec 3>/dev/stderr` (the fifth review). Each continued line is
-# also read on its own, beside the fold, so a line after a backslash bash does
-# not continue -- one ending a comment -- is still read: until the fourth
-# review of #185's pull request the fold blanked comments first and continued
-# a comment, and `: # price in $\` then `3>&2 exec` read as the parameter `$3`,
-# which the pattern before #185 had reported. Reading both can only add a
-# report. The fold is its own and not `hook_text`'s, for two reasons:
-# `hook_text` drops heredoc bodies with the tokeniser's pass, and #289's
-# misread `<<` drops real code with them, which is the permitting direction
-# here; and its fold joins lines, so the numbers `grep -n` prints stop being
-# the file's. A folded line is reported under its first line's number and
-# each continued line under its own. An escaped trailing backslash is folded
-# too, which reports a joined line bash does not join, beside the line it
-# does: #315's. Heredoc bodies stay, so a body line naming the shape is a
-# red -- the refusing direction. checks/GH-185.sh drives each part against a
-# fixture and argues what it does not reach.
+# A RUN OF CONTINUED LINES -- each but its last ending in a backslash -- is
+# read joined from every line of it to its end, each join under its own first
+# line's number, and a join whose first non-blank is `#` is a comment and is
+# blanked. Which of those lines starts bash's logical line depends on whether a
+# backslash is escaped or inside a trailing comment, which is the state the
+# text does not carry, and one of the joins is bash's whichever it is: `: #
+# note\`, `3>\`, `/dev/stderr f` is the comment and then `3>/dev/stderr f`,
+# reported under its own line, and `: x\` then `#y; exec 3>&2` is one line to
+# bash, whose `#` is inside a word. That is the sixth review's fix for the
+# family of joins the fold started too early. It replaced three narrower ones:
+# until the fourth review the fold blanked comments before it joined and
+# continued a comment, and `: # price in $\` then `3>&2 exec` read as the
+# parameter `$3`, which the pattern before #185 had reported; the fourth added
+# a reading of each continued line alone, and the fifth a rule that a comment
+# at a logical line's start continues nothing, and each was one member of the
+# family. Reading more joins can only add a report, and the joins bash does not
+# make are the refusing-direction trades GH-185's note lists, #315's escaped
+# backslash among them. The fold is its own and not `hook_text`'s, for two
+# reasons: `hook_text` drops heredoc bodies with the tokeniser's pass, and
+# #289's misread `<<` drops real code with them, which is the permitting
+# direction here; and its fold joins lines, so the numbers `grep -n` prints
+# stop being the file's. Heredoc bodies stay, so a body line naming the shape
+# is a red -- the refusing direction. checks/GH-185.sh drives each part against
+# a fixture and argues what it does not reach.
 dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplication writes
   local end src imp fd path proc sep
   [ -f "$1" ] && [ -r "$1" ] || {
@@ -1696,17 +1707,17 @@ dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplic
     echo UNREADABLE
     return 1
   }
-  end='[:space:];&|()<>`'
-  src="[${end}]((0+|0*[2-9]|0*[1-9][0-9]+)|[{][A-Za-z_][A-Za-z0-9_]*([[]([^][]|[[][^][]*[]])*[]])?[}])"
-  imp="([^0-9<]|[^${end}0-9][0-9]+|[<>]&[[:space:]]*[0-9]+)"
-  fd='&[[:space:]]*0*2'
-  path="[[:space:]]*[^${end}]*/(stderr|fd/2)([${end}]|\$)"
-  proc='[[:space:]]*>[(]'
+  end='[:blank:];&|()<>`'
+  src="[${end}\"']((0+|0*[2-9]|0*[1-9][0-9]+)|[{][A-Za-z_][A-Za-z0-9_]*([[]([^][]|[[][^][]+[]])+[]])?[}])"
+  imp="([^0-9<]|[^${end}0-9][0-9]+|[<>]&[[:blank:]]*[0-9]+)"
+  fd='&[[:blank:]]*0*2'
+  path="[[:blank:]]*[^${end}]*/(stderr|fd/2)([${end}]|\$)"
+  proc='[[:blank:]]*>[(]'
   sep=$(printf ';\001;')
   awk -v sep="$sep" -v word="^[^${end}]*" '
         function unquoted(s,   out, w) {
           out = ""
-          while (match(s, /[<>][&|]?[ \t]*/)) {
+          while (match(s, /[<>][&|]?[[:blank:]]*/)) {
             out = out substr(s, 1, RSTART + RLENGTH - 1); s = substr(s, RSTART + RLENGTH)
             match(s, word); w = substr(s, 1, RLENGTH); s = substr(s, RLENGTH + 1)
             gsub(/\$["\047]|["\047\\]/, "", w); gsub(/\/+/, "/", w)
@@ -1715,14 +1726,17 @@ dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplic
           }
           return out s
         }
-        function emit(l) { if (l ~ /^[[:space:]]*#/) l = ""; print l sep unquoted(l) }
-        function flush(   i) { emit(buf); for (i = 1; i <= n; i++) emit(alone[i]) }
-        { if (cont) { buf = buf $0; alone[++n] = $0 }
-          else if ($0 ~ /^[[:space:]]*#/) { emit(""); next }
-          else { buf = $0; n = 0 }
-          if (buf ~ /\\$/) { sub(/\\$/, "", buf); cont = 1; next }
-          cont = 0; flush() }
-        END { if (cont) flush() }' "$1" \
+        function emit(l) { if (l ~ /^[[:blank:]]*#/) l = ""; print l sep unquoted(l) }
+        function flush(   k, i, t, l) {
+          for (k = 1; k <= n; k++) {
+            t = ""
+            for (i = k; i <= n; i++) { l = run[i]; sub(/\\$/, "", l); t = t l }
+            emit(t)
+          }
+          n = 0
+        }
+        { run[++n] = $0; if ($0 ~ /\\$/) next; flush() }
+        END { flush() }' "$1" \
     | grep -nE "${src}([<>]${fd}|(>|>>|<|<>|>[|])${path}|(>|>>|<>|>[|])${proc})|${imp}(<${fd}|(<|<>)${path}|<>${proc})" \
     | sed "s/${sep}.*//" | tr '\n' ' ' | sed 's/ $//'
 }
