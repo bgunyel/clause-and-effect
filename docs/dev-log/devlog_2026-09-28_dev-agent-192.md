@@ -225,3 +225,31 @@ The assistant's correction at 17:20 above gets the composition of the 134 wrong:
 
 - The *Open* bullet above that says an indented comment keeps its `#` no longer holds: G1 closed it.
 - #319 through #323 are open.
+
+
+## Review round 2, 2026-09-28 19:05 +0300
+
+rev-agent-192 reviewed `55051ad` and raised one gating finding (G4) and two non-gating asks (N4, N5). It filed #324 and #325, neither for this PR. The fixes are `e19e246` and `cde846f`. When this section was written, before it was committed, the branch was 6 commits ahead of `origin/dev-05` and 0 behind it.
+
+- **G4, and a false claim, both the assistant's.** `$LEFT_OPEN_PROSE`, a reader #192's own sweep added, piped into bare `comment_reflow`. So a tab inside `git reset --hard origin/dev-NN` split the phrase, and the `lacks` over it read ok with the phrase standing in CLAUDE.md (rev-agent-192 measured this). It now reads through `prose_reflow`.
+  - The round-1 reply and the section above both said this string "has presence pins only". That is false: `unsplit.sh:7168` is a `lacks`.
+  - The assistant's sweep missed it because it grepped single lines, and that `lacks` has its reader on a backslash-continued second line. The sweep was reading a pin on raw lines, which is #192's own class.
+  - The same miss undercounted #323's table. With continuations joined, the direct readers carry 14 absence pins, not 6: GH-157 4, GH-177 2, GH-215 1, `$LEFT_OPEN_PROSE` 1 (fixed here), and `$MUT_PROSE` 6.
+- **A standing check for G4's class.** GH-192.3 now pins each suite file's count of direct `comment_reflow` calls as a literal: GH-118 1, GH-157 1, GH-177 2, GH-215 5, library 1, unsplit 1. It is driven first against a fixture. The first run of that row went red on its own regex, which is itself a direct call in GH-192.sh's text. The pattern is now built from a variable.
+- **N4.** GH-118's and `unsplit.sh`'s comments said `prose` is bare `comment_reflow` over a file; both are corrected. The same sweep, run over the assistant's own file, found GH-192.sh's header saying the same thing and counting two helpers. It is corrected in `cde846f`.
+- **N5.** GH-192.3's note now says that a pin whose literal is a variable is not judged.
+- **Checked:** no absence pin through `prose` holds a `#` in its literal. The library says so, and a continuation-joined sweep found none, while its control over `written` found the two `#N` presence pins.
+
+### Measured
+
+Full runs on `e19e246`: the head in the worktree, and each mutation on a `git clone`, with the diffstat checked.
+
+| run | result |
+|---|---|
+| head | ALL CHECKS PASSED (372 s wall-clock, 212 s user, 172 s sys, with four other runs alongside) |
+| J: `git reset --hard<TAB>origin/dev-NN` on a continuation line of CLAUDE.md's left-open list | 1 FAIL, `and the unenforced rule is not one of its items` (rev-agent-192: ALL CHECKS PASSED at `55051ad`) |
+| J0: the same with a blank, as the control | 1 FAIL, same row |
+| U7: `$LEFT_OPEN_PROSE` back on `comment_reflow` | 1 FAIL, the direct-reader count |
+| U8: the direct-reader pattern without its `comment_reflow <` alternative | 2 FAIL, the driven row and the suite row |
+
+`cde846f` changes only a comment. It was run once more: ALL CHECKS PASSED.
