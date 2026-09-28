@@ -1389,11 +1389,7 @@ cs_split() {
     # characters, and each rule reads the one at p and asks what the expression
     # it replaced asked of the head of the line -- including whether blanks
     # follow it, which is what separates `sudo git` from a line ending in sudo.
-    # Where a token ends if every blank ends it, in any string. word_end asks it
-    # first and tokend asks it of the line, so the blank-cut scan is written
-    # once in this program; round 4 of the review of PR #260 counted three.
-    function tok_end(s, i,   m) { m = length(s); while (i <= m && index(" \t\n\v\f\r", substr(s, i, 1)) == 0) i++; return i }
-    function tokend(i) { return tok_end(line, i) }
+    function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
     function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
     # THE COMMAND WORD ITSELF. Issue #117: every rule in every hook recognises a
     # command by the bare name at the head of what this function emits, and bash
@@ -1549,8 +1545,17 @@ cs_split() {
     # printhead asked the same question of the candidate it prints with a loop
     # of its own until round 3 of the review of PR #260, which named two
     # answers to it in one program -- the class this file opens by naming.
-    function word_end(s, i,   q, t) {
-      q = tok_end(s, i)
+    #
+    # Its first loop is tokend over s rather than over the line, and stays a
+    # loop of its own on purpose. tokend is copied into three awk programs and
+    # check-hooks.sh holds every copy identical, so making this one call a
+    # shared helper split them into two versions, which that check caught in
+    # round 4 of the review of PR #260. One scan for all three is a lift of a
+    # shared helper string, as CS_WORD_AWK was, and is not this change.
+    function word_end(s, i,   m, q, t) {
+      m = length(s)
+      q = i
+      while (q <= m && index(" \t\n\v\f\r", substr(s, q, 1)) == 0) q++
       t = substr(s, i, q - i)
       if (index(t, "\042") == 0 && index(t, "\047") == 0 && index(t, "\\") == 0) return q
       wd_start(s, i)
