@@ -79,13 +79,13 @@ r186_every_hook() {  # r186_every_hook <list> -- what every_hook printed over <l
 req GH-186
 tok 'every_hook over an empty list fails, and says there were no hooks to run it through' \
 "${R186_INDENT}FAIL r186 driven check
-         no hooks to run it through
+                no hooks to run it through
 FAILED=1
 fixture ran: no" \
     "$(r186_every_hook '')"
 tok 'and over a list of spaces, tabs and newlines, which is not empty as a string, it fails the same way' \
 "${R186_INDENT}FAIL r186 driven check
-         no hooks to run it through
+                no hooks to run it through
 FAILED=1
 fixture ran: no" \
     "$(r186_every_hook "$R186_BLANKS")"

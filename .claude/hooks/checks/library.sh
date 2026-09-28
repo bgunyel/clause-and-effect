@@ -66,13 +66,50 @@ pass() {  # pass <refuse|permit|static> <format> [arguments...] -- an ok line, r
   printf '  ok   %s\n' "$line"
   record "$dir" ok "${line%%$'\n'*}"
 }
+# A FAIL LINE MARKS ITS OWN DETAIL (#224). Every line of the message after the
+# first is printed with `indent`, seven spaces, the width of `  FAIL `,
+# whatever the line already starts with: a line at column 0 gets them, one that
+# opens with spaces gets them added to its own, and a blank line is printed as
+# the seven spaces alone. A message embeds a hook's stderr verbatim, and before
+# #224 a line of it stood wherever the hook put it, so the log did not say which
+# lines were a row's. The `check-hooks` job summary guessed, and took a
+# library's stray stderr at column 0 as the detail of the failing row above it,
+# and cut a stderr short at a blank line or at one opening `---`.
+# .github/scripts/check_hooks_ci.py takes a failing row's detail by these seven
+# spaces, as DETAIL_INDENT, and tests/test_check_hooks_ci.py runs this function
+# into that parser, so the two spellings cannot drift apart with the tests
+# green. The ledger records the first line, which the indent never reaches.
+#
+# LINEAR IN THE MESSAGE, AND WHY NO LINE OF IT IS CUT BY A PATTERN (#293). The
+# indent was first written as `${line//$'\n'/$'\n'$indent}`, and under a UTF-8
+# locale bash's substitution grows with the square of the message: one `fail`
+# over a 10,000-line message of 580 KB took 6.8 s, against 0.06 s before #224.
+# The second form cut the first line off with `${line%%$'\n'*}` and the rest
+# with `${line#*$'\n'}`, and both strips grow with the square of the FIRST
+# line, however few lines follow it: 887 ms of CPU for a 40,000-byte first
+# line, against 55 ms at 10,000 (review of PR #285, round 3). So the whole
+# message is read into an array by `mapfile`, element 0 is the first line and
+# the rest are given the indent, which is linear in both shapes: 13 ms for a
+# 40,000-byte first line and 15 ms at 160,000; 70 ms for 10,000 lines of 58
+# bytes and 299 ms for 40,000. The here-string adds one newline and
+# `mapfile -t` takes one off, so a message ending in a newline still ends in an
+# indent-only line, and an empty message is one empty element, printed as
+# `  FAIL ` alone, as the substitution printed both. `record`'s own tab
+# substitution is #300's.
 fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, recorded
-  local dir="$1" fmt="$2" line
+  local dir="$1" fmt="$2" line first indent='       '
+  local -a rest
   shift 2
   printf -v line "$fmt" "$@"
-  printf '  FAIL %s\n' "$line"
+  mapfile -t rest <<< "$line"
+  first=${rest[0]}
+  unset 'rest[0]'
+  printf '  FAIL %s\n' "$first"
+  if (( ${#rest[@]} )); then
+    printf '%s\n' "${rest[@]/#/$indent}"
+  fi
   FAILED=1
-  record "$dir" FAIL "${line%%$'\n'*}"
+  record "$dir" FAIL "$first"
 }
 req() {  # req <ID>... -- the requirements the checks after this establish
   REQ="$*"
@@ -148,8 +185,9 @@ ran() {
 }
 # What a hook's exit status means, answered once for every helper that runs a
 # hook and reads one: exit 0 is ALLOW, exit 2 is BLOCK, and anything else FAILs
-# the check whatever it expected. `says`, `says_not` and `feed_says` ask only for
-# 2, because every one of their claims is about a refusal.
+# the check whatever it expected. The helpers that read a message -- `says` and
+# its siblings, `feed_says` and `env_says` -- ask only for 2, because
+# every one of their claims is about a refusal.
 #
 # Until #98 each helper read the status as one bit -- 2 was BLOCK and everything
 # else ALLOW -- and `says_not` did not read it at all. So a hook that did not run
@@ -317,6 +355,34 @@ says_not() {  # says_not <dir> <script|/absolute/hook> <fragment> <label> <cmd>
     *"$unwanted"*) fail refuse '%s\n         the refusal must not say |%s|\n         it said |%s|' \
          "$label" "$unwanted" "$err" ;;
     *) pass refuse 'says  %s' "$label" ;;
+  esac
+}
+# The fourth: a refusal that is <message> and nothing else, compared for
+# equality. `says`, `says_first` and `says_not` ask about a fragment, and no
+# pair of them can say "nothing else": #164's first version pinned a message as
+# `says_first` on it plus `says_not` on it with a space after, and a second
+# `echo >&2` after the arm's own -- a newline, not a space -- passed both,
+# carrying a push remedy back into the message those rows called whole. Found
+# by review of PR #291, with that mutant. Hook stderr captured through $( )
+# loses its trailing newlines and nothing else, so equality needs no allowance.
+says_exactly() {  # says_exactly <dir> <script|/absolute/hook> <message> <label> <cmd>
+  local dir="$1" script="$2" want="$3" label="$4" cmd="$5" err rc hook
+  hook=$(hook_path "$script")
+  err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+        | ( cd "$dir" && "$hook" ) 2>&1 >/dev/null)
+  rc=$?
+  ran "$script" "$rc"
+  if [ "$rc" != 2 ]; then
+    fail refuse '%s\n         wanted a refusal saying exactly |%s|, got exit=%s\n         stderr |%s|' \
+      "$label" "$want" "$rc" "$err"
+    return
+  fi
+  case "$err" in
+    "$want") pass refuse 'says  %s' "$label" ;;
+    "$want"*) fail refuse '%s\n         the refusal says |%s| and then more\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
+    *) fail refuse '%s\n         wanted the refusal to say exactly |%s|\n         it said |%s|' \
+         "$label" "$want" "$err" ;;
   esac
 }
 

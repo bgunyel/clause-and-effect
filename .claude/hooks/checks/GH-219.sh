@@ -80,18 +80,18 @@ rm -f "$R219_GONE"
 req GH-219.1
 tok 'unarmed aimed at a directory fails, and says grep exited 2 on that directory' \
 "${R219_INDENT}FAIL r219 driven check
-         grep exited 2 on $R219_DIR, so it was not read and the absence of |R219_LITERAL| is evidence of nothing" \
+                grep exited 2 on $R219_DIR, so it was not read and the absence of |R219_LITERAL| is evidence of nothing" \
     "$(unarmed 'r219 driven check' "$R219_DIR" 'R219_LITERAL')"
 tok 'and aimed at a file that is not there, it fails the same way' \
 "${R219_INDENT}FAIL r219 driven check
-         grep exited 2 on $R219_GONE, so it was not read and the absence of |R219_LITERAL| is evidence of nothing" \
+                grep exited 2 on $R219_GONE, so it was not read and the absence of |R219_LITERAL| is evidence of nothing" \
     "$(unarmed 'r219 driven check' "$R219_GONE" 'R219_LITERAL')"
 tok 'aimed at a readable file that lacks the literal, it passes' \
     "${R219_INDENT}ok   armed r219 driven check" \
     "$(unarmed 'r219 driven check' "$R219_FILE" 'R219_ABSENT')"
 tok 'and aimed at one that says it, it fails' \
 "${R219_INDENT}FAIL r219 driven check
-         $R219_FILE must not contain |R219_LITERAL|" \
+                $R219_FILE must not contain |R219_LITERAL|" \
     "$(unarmed 'r219 driven check' "$R219_FILE" 'R219_LITERAL')"
 
 req GH-219.2
@@ -99,8 +99,8 @@ tok 'prose_count on a directory prints no count, and says grep exited 2 on it' \
     "unread: grep exited 2 on $R219_DIR" "$(prose_count "$R219_DIR" 'R219_LITERAL')"
 tok "so a check that the directory says it nowhere, tok '0' over prose_count, fails" \
 "${R219_INDENT}FAIL r219 driven check
-         want |0|
-         got  |unread: grep exited 2 on $R219_DIR|" \
+                want |0|
+                got  |unread: grep exited 2 on $R219_DIR|" \
     "$(tok 'r219 driven check' '0' "$(prose_count "$R219_DIR" 'R219_ABSENT')")"
 tok 'and on a file that is not there, it says the same and prints no count' \
     "unread: grep exited 2 on $R219_GONE" "$(prose_count "$R219_GONE" 'R219_LITERAL')"
