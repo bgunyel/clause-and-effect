@@ -6073,7 +6073,7 @@ tok 'and it outlasts them by arithmetic, not by both literals happening to agree
 #
 # TWO LIMITS, named because this is a check on configuration and not on
 # behaviour. It cannot show the harness honours the value; the live runbook
-# does that (#110 section 1). And it cannot see .claude/settings.local.json,
+# does that, in its §1 (#110). And it cannot see .claude/settings.local.json,
 # which is gitignored and overrides this file on the one machine that has it.
 # #36 said changing baseRef "leaves the suite green", which was true of the
 # harness's behaviour and is false of this file now, which is the half this pins.
