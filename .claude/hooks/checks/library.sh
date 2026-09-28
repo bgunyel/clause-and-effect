@@ -128,10 +128,10 @@ hook_path() {  # hook_path <script|/absolute/hook>
 # An absolute path is a fixture copy -- a hook with its library taken away, or
 # one built to crash -- and is not the registered hook, so it is not recorded.
 # The one exception is the session report, which reads the repository it sits in
-# and so is only ever run as a copy placed in a fixture repository:
-# `report_says` records a copy as the report only when `cmp -s` finds it
-# byte-identical to $HOOKS/report-stale-branches.sh, so a modified copy is not
-# recorded, even one keeping the name (#187; until then the name was the whole
+# and so is only ever run as a copy placed in a fixture directory: `report_says`
+# records a copy as the report only when `cmp -s` finds it byte-identical to
+# $HOOKS/report-stale-branches.sh, so a modified copy is not recorded, under
+# the report's name or any other (#187; until then the name was the whole
 # test). `anc_report` runs a copy too and records nothing; see there for why.
 #
 # Written from a subshell as often as not -- `cap_timed` is called inside $( ),
