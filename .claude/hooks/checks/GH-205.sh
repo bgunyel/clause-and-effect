@@ -270,7 +270,7 @@ mkdir -p "$R205/gen/requirements"
 printf '### GH-4\n- text: hand-written\n' > "$R205/gen/requirements/GH-4.md"
 # The legacy set the script reads, by name, out of the check-hooks.sh beside
 # checks/ (#223): GH-4 is the fixture's hand-written entry.
-printf "REQUIREMENTS_LEGACY='\nGH-4\n'\n" > "$R205/gen/check-hooks.sh"
+legacy_fixture "$R205/gen" 'GH-4'
 issue_fixture "$R205/gen/checks/GH-5.sh" <<'FIX'
 section "a fixture"
 @requirement GH-5.1 <<'REQ'

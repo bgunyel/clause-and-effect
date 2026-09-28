@@ -131,10 +131,14 @@ requirement GH-223.6 <<'REQ'
   sub-ID of a family with no issue file is named as not written yet or is an
   example, so neither is asked. What it does not see, named: a deleted ID
   that nothing in the registry cites, a bare `GH-<n>` entry deleted, and a
-  citation anywhere else -- an issue file, a document, a commit. What the
-  read asked is held to a literal, the count of its citations and the
-  families they fall in, so a read that asked nothing is red rather than
-  clean; the literal moves whenever such a citation is added or removed.
+  citation anywhere else -- an issue file, a document, a commit -- and a
+  sub-ID cited only inside a range, whose two ends are the only IDs the read
+  takes: the three between the ends of requirements.md's `GH-110.1 to
+  GH-110.5` are cited nowhere else, so any of them deleted outright is not
+  seen, and naming them here would cite them. The read is held to two citations
+  that stand as long as this entry does, its own heading and requirements.md's
+  citation of it, so a read that asked nothing is red rather than clean; a
+  count of all it asked would have moved with every entry any lane added.
 REQ
 requirement GH-223.7 <<'REQ'
 - text: `generate-requirements.sh` writes each file through a temporary file
@@ -173,10 +177,11 @@ R223="$FIXTURES/r223"
 mkdir -p "$R223"
 r223_hooks() {  # r223_hooks <dir> <legacy IDs> -- a hooks directory: checks/, requirements/ and the literal
   rm -rf -- "$1"; mkdir -p -- "$1/checks" "$1/requirements"
-  printf "REQUIREMENTS_LEGACY='\n%s\n'\n" "$2" > "$1/check-hooks.sh"
+  legacy_fixture "$1" "$2"
 }
-# A fixture's issue file is written by the library's `issue_fixture`, and the
-# script run over it by `generator_run`, both shared with the #205 issue file.
+# A fixture's issue file is written by the library's `issue_fixture`, its
+# literal by `legacy_fixture`, and the script run over it by `generator_run`,
+# all shared with the #205 issue file and the end-of-run file.
 
 # ITEM 1. The literal, and the set it has to be.
 req GH-223.1
@@ -390,18 +395,19 @@ requirements.md: cites GH-5.2, which has no entry
 requirements/GH-5.1.md: cites GH-5.3, which has no entry' "$(r223_cited "$R223/cited" "$R223/cited/checks" | r223_cited_bad)"
 # The registry is read once, and both rows below ask that one read. The first
 # says only what failed, so a read of nothing -- no families, no registry --
-# passes it; the second holds what the read asked to a literal: the
-# citations, a line per file and ID, and the families they fall in. It moves
-# when a citation of a family with an issue file is added or removed, which is
-# a change a reviewer should see (review of PR #332).
+# passes it. The second asks the read for two citations that stand as long as
+# this check does: this entry's own heading, and requirements.md's citation of
+# it, one from each of the two places the read looks. A count of everything
+# the read asked was tried first and dropped, in review of PR #332: every
+# entry cites itself in its heading, so the count moved with every entry any
+# lane added, the shared literal ADR 0005 rejects.
 R223_CITED=$(r223_cited "$HOOKS" "$SUITE_DIR/checks")
 tok 'every GH-<n>.<m> the registry cites, of a family with an issue file, has its file under requirements/' \
   '' "$(printf '%s\n' "$R223_CITED" | r223_cited_bad)"
-tok 'and that read asked the registry'"'"'s citations of families with an issue file: these many, in these families' \
-  '88
-GH-110 GH-144 GH-157 GH-159 GH-166 GH-174 GH-177 GH-182 GH-205 GH-219 GH-223 GH-224' \
-  "$(printf '%s\n' "$R223_CITED" | grep -c .
-     printf '%s\n' "$R223_CITED" | sed -n 's/.*: cites GH-\([0-9]*\)\..*/GH-\1/p' | LC_ALL=C sort -u | tr '\n' ' ' | sed 's/ $//')"
+tok 'and that read asked requirements.md and requirements/ each: both cite GH-223.6, and it has its file' \
+'requirements.md: cites GH-223.6
+requirements/GH-223.6.md: cites GH-223.6' \
+  "$(printf '%s\n' "$R223_CITED" | grep -xF -e 'requirements.md: cites GH-223.6' -e 'requirements/GH-223.6.md: cites GH-223.6')"
 
 # ITEM 11. A `cp` first on PATH that writes part of its destination and fails
 # when that is GH-5.1's, and is the real one otherwise; the fixture has two

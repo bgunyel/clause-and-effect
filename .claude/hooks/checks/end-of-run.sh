@@ -2117,7 +2117,7 @@ tok 'the declared and pinned records are the files the driver set them to' \
 req GH-223.2
 R223_AGREE="$FIXTURES/r223-agree"
 rm -rf -- "$R223_AGREE"; cp -r "$REQ_FIX/clean" "$R223_AGREE"
-printf "REQUIREMENTS_LEGACY='\n'\n" > "$R223_AGREE/check-hooks.sh"
+legacy_fixture "$R223_AGREE" ''
 issue_fixture "$R223_AGREE/checks/GH-5.sh" <<'FIX'
 @requirement GH-5.1 <<'REQ'
 - text: a sub-issue that is permit-only

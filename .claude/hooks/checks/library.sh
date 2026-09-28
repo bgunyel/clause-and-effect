@@ -1438,6 +1438,12 @@ issue_fixture() {  # issue_fixture <file> -- stdin, with the @ taken off each @r
 generator_run() {  # generator_run [--check] <dir> -- what the script printed, and its status
   bash "$HOOKS/generate-requirements.sh" "$@" 2>&1; printf 'exit %s' "$?"
 }
+# The legacy set the script reads, by name, out of the check-hooks.sh beside
+# checks/ (#223), written the one way the driver writes it. A fixture that
+# means a malformed literal writes its own.
+legacy_fixture() {  # legacy_fixture <dir> <legacy IDs> -- <dir>/check-hooks.sh, holding only the literal
+  printf "REQUIREMENTS_LEGACY='\n%s\n'\n" "$2" > "$1/check-hooks.sh"
+}
 # THE DECLARATION, as bash reads it (#205; here since #215's issue file became
 # its second caller). The fields arrive on stdin from a quoted heredoc, so
 # nothing in them is expanded, and they are recorded with the issue file that
