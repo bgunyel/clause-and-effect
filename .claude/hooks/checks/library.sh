@@ -1037,13 +1037,170 @@ suite_range() {  # suite_range <variable> <sed address> <sed address> -- 1 on an
   return 1
 }
 # What sourcing <file> alone defines, with an empty environment, written to
-# <out> as NUL-separated name/definition pairs by the program in $LOADED_CHILD;
-# 1 if that is nothing. The head of check-hooks.sh records what it runs against
-# this way, and the #204 section drives it: an exported function kept out, a
-# file that defines nothing refused.
-record_of() {  # record_of <file> <out> -- 1 if sourcing <file> alone defined nothing
-  env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$1" > "$2"
+# <out> as NUL-separated name/definition pairs by the program in $LOADED_CHILD,
+# and the status sourcing returned to <out>.sourced. 1 if it defined nothing;
+# 2 if the child did not finish -- it exited non-zero, was killed, or ended
+# before sourcing returned, as a file that runs `exit` ends it -- whatever
+# <out> holds; 3 if sourcing returned non-zero and still defined something.
+# Why, in words, on stdout, for 2 and 3, and for 1 when sourcing returned
+# non-zero. The three are apart because the head treats them apart (#279): see
+# `record_loaded` below. The #204 section drives it with an exported function
+# kept out and a file that defines nothing refused, and #279's issue file with
+# each of the other outcomes.
+record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did not finish, 3 sourcing returned non-zero; why on stdout
+  local child_status
+  env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$1" > "$2" 3> "$2.sourced"
+  child_status=$?
+  if [ "$child_status" != 0 ]; then
+    printf 'the child that records it exited %s' "$child_status"
+    return 2
+  elif [ ! -s "$2.sourced" ]; then
+    printf 'the child that records it ended before sourcing it returned'
+    return 2
+  elif [ "$(< "$2.sourced")" != 0 ]; then
+    printf 'sourcing it returned %s' "$(< "$2.sourced")"
+    [ -s "$2" ] || return 1
+    return 3
+  fi
   [ -s "$2" ]
+}
+# THE HEAD'S RECORD OF ONE FILE (#279): `record_of`, and what the head does
+# with each outcome. A file whose sourcing defined nothing gives the foot
+# nothing to compare, so it stops the run, as `052cc89` decided, saying why --
+# the status too, when sourcing returned non-zero. Any other outcome is
+# recorded as it stands and the run goes on: a file that sourced non-zero, or
+# a child that did not finish, is a FAIL row here, under GH-279.1, naming the
+# file and why, and not an abort. A record the child did not finish can be
+# short of names, and a name it lacks is not compared at the foot; the row is
+# what says so, and it fails the run. Written to LOADED_BODY and LOADED_FROM,
+# which the driver declares. Called by the driver's prelude, and by #279's
+# issue file in a subshell of its own for each outcome.
+record_loaded() {  # record_loaded <file> <out> -- record it into LOADED_BODY and LOADED_FROM; 1 if it defined nothing
+  local why record_status k v
+  why=$(record_of "$1" "$2")
+  record_status=$?
+  case $record_status in
+    0) ;;
+    1) printf 'sourcing %s alone defined nothing%s, so nothing of it can be compared at the foot; nothing was judged\n' \
+         "$1" "${why:+ ($why)}" >&2
+       return 1 ;;
+    *) REQ=GH-279.1
+       fail static 'the record of %s is not to be trusted whole: %s; the names it holds are compared at the foot, and a name it lacks is not' \
+         "$1" "$why"
+       REQ= ;;
+  esac
+  while IFS= read -r -d '' k && IFS= read -r -d '' v; do
+    LOADED_BODY[$k]=$v
+    LOADED_FROM[$k]=$1
+  done < "$2"
+}
+
+# THE ROWS THAT END THE LEDGER (#279). The end-of-run file's last check before
+# the matrix asks that the ledger ends on the heading question's row and on a
+# row for each clause of the final verdict that writes one, each under its own
+# tags and its own label. That was `tail -n 4` and a literal of four tags with
+# one label, so a verdict row replaced by another of the same tag read green,
+# and so did a clause added to the verdict with no row. So the rows are derived
+# from the verdict code the driver ends on: every `eval "$<NAME>_VERDICT_CODE"`
+# line of the driver, in order, and for each the clauses of that code.
+#
+# WHICH CLAUSES WRITE A ROW is the one thing written here and not derived, and
+# it is written as the table below, keyed by the clause's condition as the
+# verdict code spells it. FOOT_VERDICT_CODE writes one row per clause, in
+# clause order: the end-of-run file asks the same condition just before, as a
+# row. SOURCED_VERDICT_CODE writes none to the tail: its row is the driver's,
+# after the last file, and it prints only when it fails, so a green run has no
+# such row at all. LEDGER_VERDICT_CODE writes none by design: it reads the
+# rows, and there is no question of its own a row could answer. Each of those
+# two is held to the one clause it has. A verdict variable the table does not
+# know, a clause it does not know, and a place FOOT_VERDICT_CODE sets FAILED
+# outside a clause of the `if <condition>; then` form are each a line in place
+# of a row, which no ledger ends on, so the check goes red until the table says
+# what the new clause writes.
+verdict_tail_want() {  # verdict_tail_want <driver> -- "<tags> TAB <label>" of each row the ledger ends on, or a line for what has none
+  local name code cond clauses
+  printf 'GH-204.8\t%s\n' 'every heading section wrote down has at least one row under it'
+  for name in $(sed -n 's/^eval "\$\([A-Z_]*_VERDICT_CODE\)"$/\1/p' "$1"); do
+    code=${!name}
+    clauses=$(grep -c 'FAILED=' <<< "$code")
+    case $name in
+      SOURCED_VERDICT_CODE|LEDGER_VERDICT_CODE)
+        [ "$clauses" = 1 ] \
+          || printf '%s sets FAILED in %s places, and one clause is all it is known to write no row for\n' "$name" "$clauses"
+        continue ;;
+      FOOT_VERDICT_CODE) ;;
+      *) printf '%s is taken at the end of the driver, and which rows it writes is not known\n' "$name"
+         continue ;;
+    esac
+    [ "$clauses" = "$(grep -c '^if .*; then$' <<< "$code")" ] \
+      || printf '%s sets FAILED in %s places, and not each in a clause of its own\n' "$name" "$clauses"
+    while IFS= read -r cond; do
+      case $cond in
+        '[[ -n $LOADED_CHANGED ]]')
+          printf 'GH-204.1\t%s\n' 'every function and tokeniser variable this run started with is the one it ended with' ;;
+        '[[ -s $NOT_FOUND ]]')
+          printf 'GH-204.5\t%s\n' 'no command this suite called was missing, in this shell or in any subshell of it' ;;
+        '[[ $NOT_FOUND != "$NOT_FOUND_AT_HEAD" ]]')
+          printf 'GH-204.5\t%s\n' 'the not-found record is where the head put it, so what the handler wrote is what the verdict reads' ;;
+        *) printf '%s has a clause with no row known for it: if %s\n' "$name" "$cond" ;;
+      esac
+    done < <(sed -n 's/^if \(.*\); then$/\1/p' <<< "$code")
+  done
+}
+verdict_tail_read() {  # verdict_tail_read <driver> <ledger> -- nothing when the ledger ends on the rows derived, else both
+  local want got
+  want=$(verdict_tail_want "$1")
+  got=$(tail -n "$(printf '%s\n' "$want" | wc -l)" "$2" | cut -f1,4)
+  [ "$want" = "$got" ] || printf 'derived:\n%s\nthe ledger ends:\n%s' "$want" "$got"
+}
+
+# THE VERDICT FIXTURES, ENUMERATED BY WHERE THEY STAND (#279). The rows that
+# drive the final verdict's code are read back from the ledger with their tags,
+# because a row under the wrong `req` covers the wrong requirement and nothing
+# else says so. The read chose them by label -- a label beginning `the final
+# verdict `, or `and says why on stderr` -- so a fixture row with any other
+# label was never read; and it ran before GH-204.7's fixtures, so theirs were
+# never read either. Now each block of them is opened with
+# `verdict_fixtures begin` and closed with `verdict_fixtures end`, which write
+# down how many rows the ledger held, and every row between the two is read,
+# whatever it says; the end-of-run file reads them once every block has run.
+# A mark written from a subshell is not written, as a row printed there is not
+# recorded. A fixture evaluated outside any block is what this cannot see by
+# itself, so `verdict_evals_outside` reads the check files for one.
+verdict_fixtures() {  # verdict_fixtures <begin|end> -- write down where a block of verdict fixtures begins or ends
+  [ -n "$VERDICT_MARKS" ] && [ -n "$LEDGER" ] && [ "$BASHPID" = "$$" ] || return 0
+  printf '%s\t%s\t%s\n' "$1" "$(wc -l < "$LEDGER")" "${BASH_SOURCE[1]#"$SUITE_DIR"/}" >> "$VERDICT_MARKS"
+}
+# Each row inside a block, as `<tags> | <label>`, and a line for a mark out of
+# place: an `end` with no `begin` open in its file, a `begin` inside a block,
+# and a block never ended.
+verdict_fixture_rows() {  # verdict_fixture_rows <marks> <ledger> -- each row inside a block, and a line for each mark out of place
+  awk -F'\t' '
+    FILENAME == ARGV[1] {
+      if ($1 == "begin" && open == "") { open = $3; from = $2 }
+      else if ($1 == "end" && open == $3) { for (i = from + 1; i <= $2; i++) row[i] = 1; open = "" }
+      else printf "a %s mark in %s out of place, after row %s\n", $1, $3, $2
+      next
+    }
+    FNR in row { print $1 " | " $4 }
+    END { if (open != "") printf "a block begun in %s after row %s and never ended\n", open, from }' "$1" "$2"
+}
+# Every line of the named files that evaluates a verdict's code -- `eval
+# "$<NAME>_VERDICT_CODE"`, braces or none -- outside a block, as <file>:<line>;
+# a block opens and closes at a `verdict_fixtures` call at the start of a line.
+# Read as text, so a spelling through another variable, or an `eval` of text
+# built some other way, is not seen; the fixtures written so far are all this
+# one spelling.
+verdict_evals_outside() {  # verdict_evals_outside <file>... -- <file>:<line> of each verdict evaluated outside a block
+  local out awk_status
+  [ "$#" -gt 0 ] || { echo 'unread: no file was named'; return; }
+  out=$(awk '
+    FNR == 1 { inside = 0 }
+    /^[[:space:]]*verdict_fixtures begin([[:space:]]|$)/ { inside = 1 }
+    /^[[:space:]]*verdict_fixtures end([[:space:]]|$)/ { inside = 0 }
+    !inside && /eval "\$\{?[A-Z_]+_VERDICT_CODE\}?"/ { print FILENAME ":" FNR }' "$@" 2>/dev/null)
+  awk_status=$?
+  if [ "$awk_status" = 0 ]; then printf '%s' "$out"; else echo "unread: awk exited $awk_status"; fi
 }
 
 # THE SOURCING ROUTINE (#204). check-hooks.sh sources every file of checks/ but

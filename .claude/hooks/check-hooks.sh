@@ -537,6 +537,10 @@ export BASH_ENV="$JUDGED_ENV"
 # printed; see `heading_mark` in the library.
 HEADINGS="$FIXTURES/headings"
 : > "$HEADINGS"
+# Where each block of verdict fixtures begins and ends, as the number of rows
+# the ledger held there (#279); see `verdict_fixtures` in the library.
+VERDICT_MARKS="$FIXTURES/verdict-marks"
+: > "$VERDICT_MARKS"
 # What the issue files declared and pinned (#205): a record per `requirement`
 # call and a line per `shape_pin` or `variants_pin` call, which the end of the
 # run holds the files under requirements/ and the shared literals to. See
@@ -712,26 +716,37 @@ done
 # section helper, not across the file boundary -- other than the handler; a
 # redefinition that puts the same body back; and a builtin the comparison uses,
 # `declare`, `printf` or `eval`, shadowed by a function of that name.
+#
+# AND THE CHILD SAYS HOW IT ENDED, apart from what it recorded (#279). It ran
+# `. "$1" || exit 1`, and the head asked only whether the record was empty, so
+# three different things were read as two. A copy that sourced with a non-zero
+# status left an empty record, and the run stopped before any section saying
+# the file "defined nothing", which it had not; under mutate-hooks.sh that row
+# came back did-not-complete instead of judged. And a child that died partway
+# through printing left a partial record that passed as a whole one. So the
+# child now records whatever sourcing defined, whatever status it returned,
+# and writes that status on fd 3 before it records anything; and `record_of`
+# reads the child's own exit status as well. A file that sourced non-zero, and
+# a child that did not finish, is a FAIL row at the head, and the run goes on
+# to its verdict with the record as it stands. A file whose sourcing defined
+# nothing still stops the run. See `record_loaded` in the library. Measured
+# before it was relied on: for the library and the tokeniser the record this
+# child writes is byte for byte the one the child before #279 wrote.
 LOADED_CHILD='bf=" $(compgen -A function | tr "\n" " ") "; bv=" $(compgen -v | tr "\n" " ") bf bv n v "
-. "$1" >/dev/null 2>&1 || exit 1
+. "$1" 3>&- >/dev/null 2>&1
+printf "%s" "$?" >&3 || exit 3
 for n in $(compgen -A function); do
   [[ $bf == *" $n "* ]] && continue
-  printf "%s\0%s\0" "$n" "$(declare -f "$n")"
+  printf "%s\0%s\0" "$n" "$(declare -f "$n")" || exit 3
 done
 for n in $(compgen -v); do
   [[ $bv == *" $n "* || $n == BASH_* || $n == _ ]] && continue
-  v=$(declare -p "$n"); printf "\$%s\0%s\0" "$n" "${v#declare -* }"
-done'
+  v=$(declare -p "$n"); printf "\$%s\0%s\0" "$n" "${v#declare -* }" || exit 3
+done
+exit 0'
 declare -A LOADED_FROM=()
 for f in "$SUITE_DIR/checks/$SUITE_LIBRARY" "$HOOKS/lib/command-scan.sh"; do
-  record_of "$f" "$FIXTURES/record" || {
-    echo "sourcing $f alone defined nothing, so nothing of it can be compared at the foot; nothing was judged" >&2
-    exit 1
-  }
-  while IFS= read -r -d '' k && IFS= read -r -d '' v; do
-    LOADED_BODY[$k]=$v
-    LOADED_FROM[$k]=$f
-  done < "$FIXTURES/record"
+  record_loaded "$f" "$FIXTURES/record" || exit 1
 done
 # The names sourcing the library defined, which the #204 section holds the
 # scanner that reads its text to.

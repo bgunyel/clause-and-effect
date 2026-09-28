@@ -11816,7 +11816,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '142' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '143' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11942,7 +11942,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '140' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '141' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
@@ -14559,6 +14559,10 @@ FV_NONE="$FIXTURES/verdict-none"
 FV_SOME="$FIXTURES/verdict-some"
 : > "$FV_NONE"
 printf '%s\n' 'x.sh: line 1: nf_x: command not found' > "$FV_SOME"
+# A BLOCK OF VERDICT FIXTURES, from here to its `end`: every row between the
+# two is read back from the ledger by the end-of-run file, with its tags,
+# whatever its label says (#279). See `verdict_fixtures` in the library.
+verdict_fixtures begin
 tok 'the final verdict fails on a recorded function redefined' \
     'redefined 1' \
     "$( FAILED=0; NOT_FOUND=$FV_NONE; NOT_FOUND_AT_HEAD=$FV_NONE; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>/dev/null; echo "redefined $FAILED" )"
@@ -14586,12 +14590,9 @@ x.sh: line 1: nf_x: command not found' \
     "$( ( NOT_FOUND=$FV_SOME; NOT_FOUND_AT_HEAD=$FV_SOME; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>&1 >/dev/null ) )"
 # AND THE TAGS ARE THE ONES WRITTEN ABOVE, read back from the ledger: a row under
 # the wrong `req` covers the wrong requirement, and nothing else would say so.
-tok 'the verdict rows are recorded under the requirement each establishes' \
-'GH-204.1 | the final verdict fails on a recorded function redefined
-GH-204.5 | the final verdict fails on a missing command and on a moved record
-GH-204.1 GH-204.5 | the final verdict keeps a failure it was given, through a helper that clears it too, and fails on nothing else
-GH-204.1 GH-204.5 | and says why on stderr' \
-    "$(awk -F'\t' '$4 ~ /^the final verdict / || $4 == "and says why on stderr" { print $1 " | " $4 }' "$LEDGER")"
+# The read stood here and chose its rows by label, so a fixture row with any
+# other label went unread, and so did every fixture after it (#279). It is in
+# the end-of-run file now, reading every row of every block once all have run.
 req GH-204.1
 # THE LEDGER'S VERDICT, driven: a ledger holding a FAIL row fails the run
 # whatever FAILED says, and one holding only ok rows leaves FAILED as it was.
@@ -14605,6 +14606,7 @@ all ok 0
 all ok, already failed 1' "$( ( FAILED=0; LEDGER=$LV_FAIL; eval "$LEDGER_VERDICT_CODE"; echo "with a fail $FAILED" )
      ( FAILED=0; LEDGER=$LV_OK; eval "$LEDGER_VERDICT_CODE"; echo "all ok $FAILED" )
      ( FAILED=1; LEDGER=$LV_OK; eval "$LEDGER_VERDICT_CODE"; echo "all ok, already failed $FAILED" ) )"
+verdict_fixtures end
 # AND IT IS WHAT THE DRIVER ENDS ON: the verdict is only final if nothing that
 # could clear FAILED runs after it, so its place is asserted, not only its text.
 # The driver's last five statements, comments and blank lines aside, as a
@@ -15007,6 +15009,8 @@ printf '%s\n' "start $SRC_FIX/whole/a.sh" > "$SRC_FIX/short.record"
 # only the whole-record comparison sees it.
 printf '%s\n' "start $SRC_FIX/whole/a.sh" "end $SRC_FIX/whole/a.sh 1" "end $SRC_FIX/whole/a.sh 3" \
     "start $SRC_FIX/whole/b.sh" "end $SRC_FIX/whole/b.sh 3" > "$SRC_FIX/long.record"
+# A block of verdict fixtures, read back by the end-of-run file (#279).
+verdict_fixtures begin
 tok 'the final verdict fails on a record that is short, empty or has a marker too many, keeps a failure it was given, and fails on nothing else' \
 'complete 0
 short 1
@@ -15022,6 +15026,7 @@ tok 'and says why on stderr' \
 "the files the driver sources did not each run from start to end, in order, in this shell; the sourcing record says:
 start $SRC_FIX/whole/a.sh" \
     "$( ( SOURCED="$SRC_FIX/short.record"; SOURCED_WANT=$SV_WANT; eval "$SOURCED_VERDICT_CODE" 2>&1 >/dev/null ) )"
+verdict_fixtures end
 # The EXIT trap, installed in a subshell as the driver installs it, over files
 # that run whole, one that exits 0 partway, and one that exits 3 partway. Each
 # is two lines long, so a file that ran whole ends its record at line 2. Its
@@ -15133,9 +15138,10 @@ tok 'and one with a row under it is not' 'B' \
 # front of it made a `:` (round 2 of the review of PR #220). A text pin shows it
 # is written and not that it runs -- a `||` ending the line before it keeps this
 # green (round 3) -- so the end-of-run file reads its row back from the ledger,
-# as the fourth row from the end, by its tag, GH-204.8, and by its label, so
-# that the row in that place is this question's and not another GH-204.8 row
-# (round 4).
+# as the first of the rows the ledger ends on, by its tag, GH-204.8, and by its
+# label, so that the row in that place is this question's and not another
+# GH-204.8 row (round 4). How many rows follow it is derived from the verdict
+# code since #279; see `verdict_tail_want` in the library.
 HEADINGS_ROW=$(cat <<'EOF'
 tok 'every heading section wrote down has at least one row under it' \
     '' "$(sections_without_rows "$HEADINGS" "$LEDGER")"
