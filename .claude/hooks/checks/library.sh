@@ -1445,3 +1445,37 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
     | tr -c 'A-Za-z0-9_$-' '\n' \
     | grep -cxF -- "$2"
 }
+# THE DUPLICATED DESCRIPTOR, which the three counters above cannot see through,
+# so the #109 section in the unsplit file refuses it in both hooks rather than
+# counting it; that section argues why. Here since #185, whose issue file became
+# its second caller, and widened by it: the pattern reached one spelling, a
+# single-digit fd written `N>&2`, of a contract that says any fd but 1.
+#
+# WHAT IT REACHES, read off the text as three parts. A SOURCE fd written
+# explicitly -- a single digit other than 1, any number of two digits or more,
+# or a `{name}` -- or left implicit on an input operator, where it is 0. A
+# TARGET that is fd 2, after `>&` or `<&`, or stderr by path -- `/dev/stderr`,
+# `/dev/fd/2` or `/proc/<anything>/fd/2` -- after `>`, `>>`, `>|`, `<` or
+# `<>`. Blanks, and one quote, allowed in front of the target. The implicit fd
+# on an output operator is 1, which is an ordinary refusal and is never
+# reported however it is spelled; `<<` and `<<<` are not input operators and
+# are stepped over. Comments are blanked whole-line only and continuations are
+# folded first, as `hook_text` does for the counters, and a folded line is
+# reported under the number of its first line; heredoc bodies are not dropped,
+# so a body line naming the shape is a red -- the refusing direction, and the
+# one #289 cannot move. checks/GH-185.sh drives each part against a fixture and
+# argues what it does not reach.
+dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplication writes
+  local q="[\"']?" src imp fd path
+  src='((^|[^0-9])(0|[2-9]|[0-9][0-9]+)|[{][A-Za-z_][A-Za-z0-9_]*[}])'
+  imp='(^|[^0-9}<])'
+  fd="&[[:space:]]*${q}2"
+  path="[[:space:]]*${q}(/dev/stderr|/dev/fd/2|/proc/[^/[:space:]]+/fd/2)"
+  hook_uncommented "$1" \
+    | awk '{ if (cont) buf = buf $0; else { buf = $0; n = 0 }
+             if (buf ~ /\\$/) { sub(/\\$/, "", buf); cont = 1; n++; next }
+             cont = 0; print buf; for (i = 0; i < n; i++) print "" }
+           END { if (cont) print buf }' \
+    | grep -nE "${src}([<>]${fd}|(>|>>|<|<>|>[|])${path})|${imp}(<${fd}|(<|<>)${path})" \
+    | tr '\n' ' ' | sed 's/ $//'
+}

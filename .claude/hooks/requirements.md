@@ -1262,10 +1262,15 @@ it has no entry above (Q16).
   on, the permitting one was closed by #169 counting occurrences; #182 closed
   the two inflating ones, and a `}` body line that made `fn_writes` call a
   writer silent, by dropping bodies with the tokeniser's own pass
-- #185: `dup_stderr` does not reach `/dev/stderr` named on an `exec`, nor a
-  two-digit fd. Cited where that guard is, because a guard narrower than the
-  prose beside it reads as coverage -- the shape the fifth review of PR #169
-  found in `nested_defs` and the sixth found here
+- #185: has an entry, GH-185, generated from its issue file, and is listed here
+  only because #109's section cited it before it landed, as `dup_stderr` not
+  reaching `/dev/stderr` named on an `exec`, nor a two-digit fd. Cited where
+  that guard is, because a guard narrower than the prose beside it reads as
+  coverage -- the shape the fifth review of PR #169 found in `nested_defs` and
+  the sixth found here. #185 widened it to every spelling of the text that
+  points an fd other than 1 at stderr; what it still does not reach is
+  dataflow -- a target in a variable, a descriptor inherited from the process
+  that runs the hook -- and GH-185's note names it
 - #187: has an entry, GH-187, generated from its issue file, and is listed
   here only because the library cited it before it landed, where
   `report_says` took the exception by basename
@@ -1542,3 +1547,9 @@ it has no entry above (Q16).
   the derivation ran, which that pull request closed by moving it to the foot
   of #182's issue file. Cited there, beside the derivation. It adds its
   requirements in the pull request that fixes it
+- #263: `arms` does not count a refusal written to `/dev/fd/2` or
+  `/proc/self/fd/2` by fd 1, since `STDERR_WRITE` names `>&2` and
+  `/dev/stderr` alone. Filed from #185's triage, which widened `dup_stderr` to
+  those paths for every fd but 1 and left fd 1 to `STDERR_WRITE`, whose gap
+  this is. Cited in #185's issue file, beside the rows that assert fd 1 is
+  never reported. It adds its requirements in the pull request that fixes it
