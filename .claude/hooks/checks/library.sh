@@ -1424,10 +1424,13 @@ variants_pin() {  # variants_pin '<ID>:<keyword>...' -- the variants of entries 
 # THE READER OF A HEADER'S PROSE (#183's, a function since #215's issue file
 # became its second caller). Comment lines on stdin, one line of prose out: the
 # `#` and up to three blanks after it taken off each line, the lines joined, and
-# every run of spaces squeezed to one. A pin on hand-wrapped prose reads this and
-# not the file, because a phrase crosses a line break wherever the wrap falls;
-# and it reads it through this one function, because a second copy of the
-# reader is a second rule of what rewrapping may do. #215's first reader took
+# every run of spaces squeezed to one. A pin on hand-wrapped prose reads a
+# reflow and not the file, because a phrase crosses a line break wherever the
+# wrap falls; and every reflow ends in this one function, because a second copy
+# of the reader is a second rule of what rewrapping may do. Since #192 a pin on
+# prose reads `prose_reflow` below, which normalises blanks and then calls this,
+# so what rewrapping may do is this function plus that one line; the readers
+# that still pipe into this directly are #323's. #215's first reader took
 # `# ?` off and squeezed nothing, so a trailing blank or a deeper indent turned
 # its pins red where $MUT_PROSE's stayed green; review of #215's pull request
 # measured both.
@@ -1504,19 +1507,29 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
 # name through `absolute_or_fail`, since one is read from this suite's own
 # directory and not from the hooks under judgment (#142); behind `prose` they
 # are handed the fixture's path, which is always absolute, so the refusal has
-# to be made here. A relative source writes nothing, and the pin fails.
+# to be made here. A relative source touches nothing and writes nothing, and
+# the path printed for it is one nothing writes: under $FIXTURES/prose-refused,
+# with each `/` of the name spelled `%2F`, so no `..` in it climbs anywhere.
+# Two earlier shapes were each wrong. The first ran `mkdir` and `rm -f` on the
+# mirrored path before asking whether the source was absolute, so `prose
+# ../suite-text`, from any directory, deleted $SUITE_TEXT (review of #192's
+# branch, round 4, measured). Moving the `rm` inside the absolute arm alone
+# would have left the mirrored path standing: a relative `tmp/x` names the
+# fixture an earlier `prose /tmp/x` wrote, and `written` would read that.
 prose_reflow() {  # prose_reflow -- prose on stdin, one line out: blanks normalised, then comment_reflow
   tr '\t\r\v\f' '    ' | sed -e 's/^ *//' | comment_reflow
 }
 prose() {  # prose <file> -- the path of <file> as prose_reflow reads it, written under $FIXTURES/prose
-  local out="$FIXTURES/prose/${1#/}"
-  mkdir -p -- "${out%/*}"
-  rm -f -- "$out"
+  local out
   case "$1" in
-    /*) if [ -f "$1" ]; then
+    /*) out="$FIXTURES/prose/${1#/}"
+        mkdir -p -- "${out%/*}"
+        rm -f -- "$out"
+        if [ -f "$1" ]; then
           prose_reflow < "$1" > "$out"
           grep -q '[^[:space:]]' "$out" 2>/dev/null || rm -f -- "$out"
         fi ;;
+    *) out="$FIXTURES/prose-refused/${1//\//%2F}" ;;
   esac
   printf '%s\n' "$out"
 }

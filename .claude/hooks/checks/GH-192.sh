@@ -40,7 +40,10 @@ requirement GH-192.1 <<'REQ'
   path that is not there, an empty file, a file of blank lines or a relative
   name it writes nothing, so `unarmed` over the path it prints fails naming
   grep's status 2, and `written` over it fails as it does for a literal not
-  found. `beside` reads the comment block it is
+  found. A relative name it also removes nothing for, and the path it prints
+  for one is under `$FIXTURES/prose-refused`, each `/` spelled `%2F`, which
+  nothing writes: not the mirrored path, where an earlier absolute source may
+  have left a reflow. `beside` reads the comment block it is
   given through `prose_reflow`.
 - from: #192
 - kind: defect-permitting
@@ -66,9 +69,10 @@ REQ
 requirement GH-192.3 <<'REQ'
 - text: No pin in the suite's text reads the lines of a prose file with a
   literal that holds a blank. A prose file here is a Markdown path written
-  into the pin itself; a variable with an upper-case name assigned one, at a
-  line's start or indented, after `local`, `export` or `readonly` or not, with
-  a comment after it or not, derived off the text; or one of the header
+  into the pin itself; a variable with an upper-case name assigned one, quoted
+  in either quote or unquoted, at a line's start or indented, after `local`,
+  `export` or `readonly` or not, with a comment after it or not, derived off
+  the text; or one of the header
   extracts, the suite's own text and the left-open string named in this file.
   A pin is a `written`, `unarmed`, `holds` or `lacks` call, its continuation
   lines joined, standing at a line's start or after `;`, `&`, `|`, `{`,
@@ -211,8 +215,33 @@ tok 'and from a file of blank lines, which comment_reflow would turn into a blan
 # and not a missing file that is refused.
 tok 'and from a relative name, though it names a file in the directory it runs in' \
 "${R192_INDENT}FAIL r192 driven check
-                grep exited 2 on $FIXTURES/prose/r192-skill.txt, so it was not read and the absence of |four acts| is evidence of nothing" \
+                grep exited 2 on $FIXTURES/prose-refused/r192-skill.txt, so it was not read and the absence of |four acts| is evidence of nothing" \
     "$(cd "$FIXTURES" && unarmed 'r192 driven check' "$(prose r192-skill.txt)" 'four acts')"
+# A relative name removes nothing. The first `prose` ran `rm -f` on the path
+# it mirrored before asking whether the source was absolute, so a `..` in a
+# relative name reached out of $FIXTURES/prose: `prose ../suite-text` deleted
+# $SUITE_TEXT (review of #192's branch, round 4, measured).
+R192_KEEP="$FIXTURES/r192-keep.txt"
+printf '%s\n' 'four acts' > "$R192_KEEP"
+[ -s "$R192_KEEP" ] || {
+  echo "the #192 file a relative name must not remove was not created; the check against it proves nothing" >&2
+  exit 1
+}
+prose ../r192-keep.txt > /dev/null
+tok 'and a relative name climbing out with .. removes nothing it names' \
+    'present' "$([ -s "$R192_KEEP" ] && echo present || echo absent)"
+# Nor does it read what an absolute source left: `${R192_MD#/}`, run from `/`,
+# is the relative spelling of the fixture's own source, and its mirrored path
+# is the reflow `prose "$R192_MD"` wrote above.
+R192_MD_REL="${R192_MD#/}"
+[ -s "$R192_MD_PROSE" ] || {
+  echo "the #192 reflow of the skill fixture was not written; the check that a relative name does not read it proves nothing" >&2
+  exit 1
+}
+tok 'and a relative name spelling a source an absolute call reflowed does not read that reflow' \
+"${R192_INDENT}FAIL r192 driven check
+                expected $FIXTURES/prose-refused/${R192_MD_REL//\//%2F} to still say |four acts|" \
+    "$(cd / && written 'r192 driven check' "$(prose "$R192_MD_REL")" 'four acts')"
 tok 'and from a directory, though one inside it says the literal' \
 "${R192_INDENT}FAIL r192 driven check
                 grep exited 2 on $R192_DIR_PROSE, so it was not read and the absence of |four acts| is evidence of nothing" \
@@ -394,7 +423,7 @@ R192_V |fourteen acts|' \
 # it is added to this list, which is the trade the derivation leaves.
 R192_NAMED='REPORT_HEADER SELF_PARAGRAPH SELF_WHOLE_HEADER SUITE_TEXT LEFT_OPEN'
 r192_prose_vars() {  # r192_prose_vars <text file> -- each upper-case variable assigned a Markdown path, once
-  sed -nE 's/^[[:space:]]*((local|export|readonly)[[:space:]]+)?([A-Z0-9_]+)=("[^"]*\.md"|'"'"'[^'"'"']*\.md'"'"')([[:space:]]+#.*)?[[:space:]]*$/\3/p' "$1" \
+  sed -nE 's/^[[:space:]]*((local|export|readonly)[[:space:]]+)?([A-Z0-9_]+)=("[^"]*\.md"|'"'"'[^'"'"']*\.md'"'"'|[^[:space:]'"'"'"]*\.md)([[:space:]]+#.*)?[[:space:]]*$/\3/p' "$1" \
     | sort -u | tr '\n' ' '
 }
 # Driven first, against a text of its own: each shape the requirement names,
@@ -409,13 +438,14 @@ printf '%s\n' \
   'R192_A="$X/again.md"' \
   '  local f="$X/f.md"' \
   'R192_G="$X/g.md.bak"' \
-  'R192_H="$X/h.txt"' > "$R192_VARS_FIX"
-[ "$(wc -l < "$R192_VARS_FIX")" = 9 ] || {
-  echo "the #192 prose-variable fixture was not written as nine lines; the check against it proves nothing" >&2
+  'R192_H="$X/h.txt"' \
+  'R192_I=$X/i.md' > "$R192_VARS_FIX"
+[ "$(wc -l < "$R192_VARS_FIX")" = 10 ] || {
+  echo "the #192 prose-variable fixture was not written as ten lines; the check against it proves nothing" >&2
   exit 1
 }
-tok 'the derivation finds a Markdown path assigned at a line'"'"'s start, indented, after local or export, with a comment after it, single-quoted, and each name once, and no lower-case name and no other path' \
-    'R192_A R192_B R192_C R192_D R192_E ' "$(r192_prose_vars "$R192_VARS_FIX")"
+tok 'the derivation finds a Markdown path assigned at a line'"'"'s start, indented, after local or export, with a comment after it, single-quoted, unquoted, and each name once, and no lower-case name and no other path' \
+    'R192_A R192_B R192_C R192_D R192_E R192_I ' "$(r192_prose_vars "$R192_VARS_FIX")"
 R192_DERIVED=$(r192_prose_vars "$SUITE_TEXT")
 # The derivation asked for what it has to have found, as literals, so that a
 # grep that matched nothing does not leave the audit asking about nothing.
@@ -437,7 +467,10 @@ tok 'no pin in the suite reads the lines of a prose file with a literal that hol
 # own sweep, and its `lacks` read ok with the phrase standing in CLAUDE.md a
 # tab apart (review of #192's branch, round 2). A call is `| comment_reflow` or
 # `comment_reflow <` on a line that is not a comment; a label or a comment
-# naming the function is not one. A line ending in `|` or `\` is joined to the
+# naming the function is not one, and two calls on one line are two: counted
+# by line, a second reader written beside an existing one left the literal as
+# it was (review of #192's branch, round 4, measured). A line ending in `|` or
+# `\` is joined to the
 # next first: read line by line, a pipe that ends one line and a
 # comment_reflow that opens the next was not counted, which is #192's own
 # defect in the guard written against it (review of #192's branch, round 3,
@@ -451,15 +484,15 @@ r192_direct_reflows() {  # r192_direct_reflows <file>... -- each file calling co
   local f n
   for f in "$@"; do
     n=$(awk -v cr="$R192_CR" '
-      function call(l) { return l ~ ("\\|[ \t]*" cr "([^_[:alnum:]]|$)") || l ~ (cr "[ \t]*<") }
+      function calls(l) { return gsub("\\|[ \t]*" cr "([^_[:alnum:]]|$)|" cr "[ \t]*<", "", l) }
       /^[ \t]*#/ { next }
       {
         buf = buf $0
         if (buf ~ /[|\\][ \t]*$/) { sub(/\\[ \t]*$/, "", buf); buf = buf " "; next }
-        if (call(buf)) c++
+        c += calls(buf)
         buf = ""
       }
-      END { if (buf != "" && call(buf)) c++; print c + 0 }' "$f")
+      END { c += calls(buf); print c + 0 }' "$f")
     [ "$n" = 0 ] || printf '%s %s\n' "${f##*/}" "$n"
   done | sort
 }
@@ -479,13 +512,14 @@ printf '%s\n' \
   "  | $R192_CR" \
   "printf x |" \
   "  # a comment between" \
-  "  $R192_CR" > "$R192_DIRECT_FIX"
-[ "$(wc -l < "$R192_DIRECT_FIX")" = 14 ] || {
-  echo "the #192 direct-reader fixture was not written as fourteen lines; the check against it proves nothing" >&2
+  "  $R192_CR" \
+  "E=\$(printf x | $R192_CR); F=\$(printf y | $R192_CR)" > "$R192_DIRECT_FIX"
+[ "$(wc -l < "$R192_DIRECT_FIX")" = 15 ] || {
+  echo "the #192 direct-reader fixture was not written as fifteen lines; the check against it proves nothing" >&2
   exit 1
 }
-tok 'the direct-reader count finds a pipe, a redirect, a pipe inside a pipeline, and a pipe wrapped after it, before it and across a comment, and no comment, label, other function or prose_reflow' \
-    'r192-direct.sh 6' "$(r192_direct_reflows "$R192_DIRECT_FIX")"
+tok 'the direct-reader count finds a pipe, a redirect, a pipe inside a pipeline, a pipe wrapped after it, before it and across a comment, and two on one line, and no comment, label, other function or prose_reflow' \
+    'r192-direct.sh 8' "$(r192_direct_reflows "$R192_DIRECT_FIX")"
 tok 'no file of the suite calls comment_reflow directly but prose_reflow, GH-215'"'"'s driven rows and the readers #323 holds' \
 'GH-118.sh 1
 GH-157.sh 1
