@@ -356,7 +356,7 @@ for hook in $LIB_CONSUMERS; do
   unarmed "$hook does not require cs_drop_heredocs itself" "$HOOKS/$hook" 'cs_drop_heredocs'
 done
 written 'the library says cs_normalise answers for cs_drop_heredocs' \
-  "$HOOKS/lib/command-scan.sh" 'CS_NORMALISE ANSWERS FOR CS_DROP_HEREDOCS'
+  "$(prose "$HOOKS/lib/command-scan.sh")" 'CS_NORMALISE ANSWERS FOR CS_DROP_HEREDOCS'
 
 # WHAT THE DROP TAKES FROM THE HOOKS THE COUNTERS READ. Which hooks those are is
 # read off the suite, every `arms`, `fn_writes` or `fn_calls` written with a
