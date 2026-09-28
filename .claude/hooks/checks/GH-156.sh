@@ -11,22 +11,28 @@
 # -- and even that fell to a continuation between `sed` and its `-i`. Found by
 # #106's invariance families, whose `docs-truncate + continuation` row was a
 # gap until this file; that row is gone, and the variant it generated is an
-# ordinary check of the seed's verdict now.
+# ordinary check of the seed's verdict now. It carries the seed's tag, GH-69.2,
+# as every undeclared variant does; the first row below is the same command,
+# tagged GH-156.
 #
 # The fix is cs_join over the command right after it is read, the function
 # no-pr-decisions.sh calls for this exact reason, and which cs_within_cap already
 # read through -- so the cap and the rules now read the same text. It is #84's
 # shape: one question answered in one consumer and never asked in another.
 #
-# ONE ROW PER SPELLING, not one representative, because the rules are four and
-# each carries its own stretch between verb and path.
+# ONE ROW PER SPELLING, not one representative, because the three rules that
+# read a verb each carry their own stretch after it -- to the path for the verb
+# list and the redirect, to the `-i` for the in-place rule, whose path may stand
+# anywhere.
 #
 # TWO TRADES, both pinned below as verdicts rather than left to a comment.
-#   - Quoted text. cs_join joins a trailing backslash wherever it stands, and
-#     inside single quotes a backslash-newline is two literal characters, not a
-#     continuation. So prose that ends a line in `rm \` and names an entry on
-#     the next is refused now where it was permitted. The refusing direction,
-#     and one edit away.
+#   - A backslash a shell reads literally. cs_join joins a trailing backslash
+#     wherever it stands, and inside single quotes, in a comment and in a
+#     quoted heredoc's body a backslash-newline is two characters, not a
+#     continuation. So prose there that ends a line in `rm \` and names an entry
+#     on the next is refused now where it was permitted. The refusing
+#     direction, and one edit away. Inside double quotes it is no trade: a
+#     shell joins a backslash-newline there too.
 #   - A continuation INSIDE a name. `docs/dev-log\`, a newline and `book` is the
 #     path `docs/dev-logbook` to a shell, which is another directory, and it is
 #     permitted now where it was refused: the backslash had stood where the
@@ -70,8 +76,8 @@ check append-only-docs.sh BLOCK 'a continuation inside the path, which the shell
 dev-log'
 
 # The in-place rule. The first row was refused before the fix, by the two-grep
-# accident; the second was not, since the verb and its -i stood on two lines,
-# and it is the one that asks the joined text.
+# accident, and is a pin; the other two were not, since the verb and its -i
+# stood on two lines, and they are the ones that ask the joined text.
 req GH-156
 check append-only-docs.sh BLOCK 'sed -i with a continuation before the entry' \
   "sed -i s/a/b/ \\
@@ -84,8 +90,12 @@ check append-only-docs.sh BLOCK 'perl with a continuation before its -i' \
   -i -pe s/a/b/ $AOD156_E"
 
 # THE BOUNDARY after joining. A path that ended a physical line is followed by
-# whatever the next line brings, which is a space or a separator here, and the
-# trailing group of APPEND_ONLY_DIR still has to see it end.
+# whatever the next line brings, and the trailing group of APPEND_ONLY_DIR has
+# to see the directory end there. The first two rows are pins: they were
+# refused before the fix too, the verb and the path sharing a line, and the
+# backslash standing where the group matched it. The third asks the joined
+# text, because only joining puts the verb before the path, and the directory
+# is then followed by the space the next line opens with.
 req GH-156
 check append-only-docs.sh BLOCK 'the directory ending a physical line, a continuation, then a separator' \
   'rm -rf docs/dev-log \
@@ -93,6 +103,10 @@ check append-only-docs.sh BLOCK 'the directory ending a physical line, a continu
 check append-only-docs.sh BLOCK 'an entry ending a physical line with the backslash against it' \
   "truncate -s 0 $AOD156_E\\
  && echo done"
+check append-only-docs.sh BLOCK 'the directory between two continuations, its end read off the joined space after it' \
+  'rm -rf \
+docs/dev-log\
+ && echo done'
 
 # What stays permitted: the append, and a revisable directory.
 req GH-156
@@ -108,9 +122,17 @@ check append-only-docs.sh ALLOW 'truncate of a revisable docs/design/ file behin
 
 # THE TWO TRADES, as verdicts.
 req GH-156
-check append-only-docs.sh BLOCK 'the trade: quoted prose ending a line in `rm \` and naming an entry next is refused, though a shell reads that backslash literally' \
+check append-only-docs.sh BLOCK 'the trade: single-quoted prose ending a line in `rm \` and naming an entry next is refused, though a shell reads that backslash literally' \
   "echo 'then rm \\
 $AOD156_E is history'"
+check append-only-docs.sh BLOCK 'the trade: a comment ending in `rm \` with an entry named on the next line is refused, though a comment continues nothing' \
+  "ls  # then rm \\
+  # $AOD156_E, never"
+check append-only-docs.sh BLOCK 'the trade: a quoted heredoc body ending a line in `rm \` and naming an entry next is refused, though that body is literal' \
+  "cat >> notes.md <<'X'
+then rm \\
+$AOD156_E
+X"
 check append-only-docs.sh ALLOW 'a continuation inside a name, docs/dev-log\ then book, is docs/dev-logbook to a shell and permitted' \
   'rm -rf docs/dev-log\
 book'

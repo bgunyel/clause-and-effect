@@ -1954,12 +1954,12 @@ if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ] \
    || [ -z "$CS_CONTROL_WORDS" ] || [ -z "$CS_SEPARATORS" ] \
    || [ "$CS_LISTS_VALID" -ne 1 ]; then
   # "every consumer that needs it", and not "every consumer". append-only-docs.sh
-  # and append-only-docs-edit.sh source this library for cs_tool_input,
-  # cs_within_cap and cs_join (#156) and never call cs_split, so their load
-  # guards do not require it and they go on permitting -- measured,
-  # append-only-docs-edit.sh exits 0 with a broken control-word list. The first
-  # version of this line claimed a refusal on the one path where there is none,
-  # printed on every Edit and Write. Review of PR #172.
+  # sources this library for cs_tool_input, cs_within_cap and cs_join (#156),
+  # and append-only-docs-edit.sh for cs_tool_input alone; neither calls
+  # cs_split, so their load guards do not require it and they go on permitting
+  # -- measured, append-only-docs-edit.sh exits 0 with a broken control-word
+  # list. The first version of this line claimed a refusal on the one path where
+  # there is none, printed on every Edit and Write. Review of PR #172.
   [ -z "$CS_INVALID_LIST" ] \
     || echo "lib/command-scan.sh: $CS_INVALID_LIST. cs_split is withdrawn, so every consumer that requires it refuses; the two document hooks need only cs_tool_input, cs_within_cap and cs_join and are unaffected." >&2
   unset -f cs_split

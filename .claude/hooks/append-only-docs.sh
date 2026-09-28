@@ -34,14 +34,16 @@
 # with its backslash continuations joined, by cs_join, the third function it
 # takes (#156). Every rule below is a grep, grep matches within a line, and each
 # destroying rule wants the verb and the path on one: `truncate -s 0 \`, a
-# newline and an entry was permitted, and so was every verb here and the
-# truncating `>`. no-pr-decisions.sh joins for the same reason, and cs_within_cap
-# already measured the joined text, so the cap and the rules read one text now.
-# The trade, taken knowingly: cs_join joins a trailing backslash inside quotes
-# too, where a shell reads it literally, so quoted prose ending a line in `rm \`
-# and naming an entry on the next is refused; checks/GH-156.sh pins it. The
-# library is tested for before it is sourced, and all three functions after,
-# for THE LOAD CONTRACT's reason.
+# newline and an entry was permitted, and so were rm, mv, cp, tee, the
+# truncating `>`, and sed or perl with a continuation before its `-i`.
+# no-pr-decisions.sh joins for the same reason, and cs_within_cap already
+# measured the joined text, so the cap and the rules read one text now.
+# The trade, taken knowingly: cs_join joins every trailing backslash, including
+# the ones a shell reads literally -- inside single quotes, in a comment, in a
+# quoted heredoc's body -- so prose there that ends a line in `rm \` and names
+# an entry on the next is refused. The refusing direction; checks/GH-156.sh
+# pins all three. The library is tested for before it is sourced, and all
+# three functions after, for THE LOAD CONTRACT's reason.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
 if ! command -v cs_tool_input >/dev/null 2>&1 \
