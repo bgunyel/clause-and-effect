@@ -1519,20 +1519,37 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 #
 # WHAT IT REACHES, read off the text as three parts. A SOURCE fd written
 # explicitly -- a number whose value is not 1, leading zeros read as bash reads
-# them, so `02` is fd 2 and `01` is fd 1, or a `{name}` -- or left implicit on
-# an input operator, where it is 0. Bash reads digits in front of an operator
-# as its fd only when the word is nothing but digits, so the implicit fd is
-# found after anything but `<` and a word of digits alone: `}<&2` and `a1<&2`
-# are fd 0, and ` 1<&2` is fd 1. A TARGET that is fd 2, leading zeros allowed,
-# after `>&` or `<&`, or stderr by path -- `/dev/stderr`, `/dev/fd/2` or
-# `/proc/<anything>/fd/2` -- after `>`, `>>`, `>|`, `<` or `<>`. Blanks, and
-# one quote, allowed in front of the target. The implicit fd on an output
-# operator is 1, which is an ordinary refusal and is never reported however it
-# is spelled; `<<` and `<<<` are not input operators and are stepped over.
-# Where the two ends are loose, they are loose in the refusing direction: an
-# explicit source is read after any non-digit, so `a3>&2`, which bash reads as
-# fd 1, is reported; and neither target is bounded on its right, so `>&20` and
-# `/dev/stderr2` are reported too.
+# them, so `02` is fd 2 and `01` is fd 1, or a `{name}`, subscript allowed --
+# or left implicit on an input operator, where it is 0. Digits or a `{` after a
+# `$` are a parameter and are not read as a source. Bash reads digits in front
+# of an operator as its fd only when the word is nothing but digits, so the
+# implicit fd is found after anything but `<` and a word of digits alone:
+# `}<&2` and `a1<&2` are fd 0, and ` 1<&2` and `` `1<&2 `` are fd 1. A TARGET
+# that is fd 2, leading zeros allowed, after `>&` or `<&`; or, after `>`, `>>`,
+# `>|`, `<` or `<>`, a path whose last component is `stderr` or whose last two
+# are `fd/2` -- which reaches `/dev/stderr`, `/dev/fd/2` and every
+# `/proc/.../fd/2` without listing them -- or a process substitution, `>(`,
+# whatever the command in it writes to. Blanks allowed in front of the target.
+# The implicit fd on an output operator is 1, which is an ordinary refusal and
+# is never reported however it is spelled; `<<` and `<<<` are not input
+# operators and are stepped over.
+#
+# EACH LINE IS READ TWICE: as written, and with the quotes, the backslashes and
+# the repeated `/` and `./` segments taken out of every redirection's target
+# word, so `>&\2`, `>&''2`, `>&$'2'` and `>"/dev/"stderr` read as the bare
+# spellings they are. The two readings are joined on one line, split by a `;`
+# that ends every part of the pattern, and a line either one matches is
+# reported as written. Both are needed: a quote taken out can leave a word of
+# digits alone in front of the next operator, so `>"1"<&2`, fd 0 onto stderr,
+# reads as fd 1 without its quotes. What an escape or an expansion in a target
+# stands for is not read; GH-185's note names what that leaves.
+#
+# Where the ends are loose, they are loose in the refusing direction: an
+# explicit source is read after anything but a digit or a `$`, so `a3>&2`,
+# which bash reads as fd 1, is reported; the fd target is not bounded on its
+# right, so `>&20` is reported; and a path is read by its end in any
+# directory, so a log file named `stderr` is reported. A path is bounded on its
+# right, since read by its end it would otherwise reach `2>/tmp/stderr.log`.
 #
 # Comments are blanked whole-line only and continuations folded first. The
 # fold is its own and not `hook_text`'s, for two reasons: `hook_text` drops
@@ -1544,16 +1561,30 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # line naming the shape is a red -- the refusing direction. checks/GH-185.sh
 # drives each part against a fixture and argues what it does not reach.
 dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplication writes
-  local q="[\"']?" src imp fd path
-  src='((^|[^0-9])(0+|0*[2-9]|0*[1-9][0-9]+)|[{][A-Za-z_][A-Za-z0-9_]*[}])'
-  imp='(^|[^0-9<]|[^[:space:];&|()<>0-9][0-9]+)'
-  fd="&[[:space:]]*${q}0*2"
-  path="[[:space:]]*${q}(/dev/stderr|/dev/fd/2|/proc/[^/[:space:]]+/fd/2)"
+  local src imp fd path proc sep
+  src='((^|[^0-9$])(0+|0*[2-9]|0*[1-9][0-9]+)|(^|[^$])[{][A-Za-z_][A-Za-z0-9_]*([[][^]]*[]])?[}])'
+  imp='(^|[^0-9<]|[^[:space:];&|()<>`0-9][0-9]+)'
+  fd='&[[:space:]]*0*2'
+  path='[[:space:]]*[^[:space:];&|()<>]*/(stderr|fd/2)([[:space:];&|()<>]|$)'
+  proc='[[:space:]]*>[(]'
+  sep=$(printf ';\001;')
   hook_uncommented "$1" \
-    | awk '{ if (cont) buf = buf $0; else { buf = $0; n = 0 }
-             if (buf ~ /\\$/) { sub(/\\$/, "", buf); cont = 1; n++; next }
-             cont = 0; print buf; for (i = 0; i < n; i++) print "" }
-           END { if (cont) print buf }' \
-    | grep -nE "${src}([<>]${fd}|(>|>>|<|<>|>[|])${path})|${imp}(<${fd}|(<|<>)${path})" \
-    | tr '\n' ' ' | sed 's/ $//'
+    | awk -v sep="$sep" '
+        function unquoted(s,   out, w) {
+          out = ""
+          while (match(s, /[<>][&|>]?[ \t]*/)) {
+            out = out substr(s, 1, RSTART + RLENGTH - 1); s = substr(s, RSTART + RLENGTH)
+            match(s, /^[^ \t;&|()<>]*/); w = substr(s, 1, RLENGTH); s = substr(s, RLENGTH + 1)
+            gsub(/\$["\047]|["\047\\]/, "", w); gsub(/\/+/, "/", w)
+            while (sub(/\/\.\//, "/", w)) ;
+            out = out w
+          }
+          return out s
+        }
+        { if (cont) buf = buf $0; else { buf = $0; n = 0 }
+          if (buf ~ /\\$/) { sub(/\\$/, "", buf); cont = 1; n++; next }
+          cont = 0; print buf sep unquoted(buf); for (i = 0; i < n; i++) print "" }
+        END { if (cont) print buf sep unquoted(buf) }' \
+    | grep -nE "${src}([<>]${fd}|(>|>>|<|<>|>[|])${path}|(>|>>|<>|>[|])${proc})|${imp}(<${fd}|(<|<>)${path}|<>${proc})" \
+    | sed "s/${sep}.*//" | tr '\n' ' ' | sed 's/ $//'
 }

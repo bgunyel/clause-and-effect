@@ -13435,14 +13435,23 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch
 # descriptor, and a two-digit fd, which the leading `[^0-9]` could not match
 # into. #185's triage found five more, and #185 closed all seven: any explicit
 # fd but 1, of any width or as a `{name}`; the input operators, whose implicit
-# fd is 0; and stderr by path as well as by number. The library states the
-# whole grammar beside the function, and checks/GH-185.sh drives each part.
-# What it still does not reach is DATAFLOW, which is the reason the shape is
-# refused rather than counted in the first place: a target or a source held in
-# a variable (`exec 3>"$dest"`, `exec 3>&$err`), a descriptor inherited from
-# the process that runs the hook, and a path that reaches stderr by another
-# spelling -- `//dev/stderr`, a symlink. #185 asks lib/command-scan.sh too,
-# which both hooks source, so a descriptor opened there is not in that list.
+# fd is 0; and stderr by path as well as by number. Review of #185's pull
+# request found more in the text -- a target word spelled with quotes or a
+# backslash, a /proc path of another depth, a subscripted name and a process
+# substitution -- and #185 closed those too. The library states the whole
+# grammar beside the function, and checks/GH-185.sh drives each part.
+# What it still does not reach is what the text cannot say without being run.
+# DATAFLOW, which is the reason the shape is refused rather than counted in
+# the first place: a target or a source held in a variable (`exec 3>"$dest"`,
+# `exec 3>&$err`) or computed by an expansion or an escape, a descriptor
+# inherited from the process that runs the hook, and fd 1 duplicated while it
+# points at stderr, whose entry is fd 1 pointed there -- #310's for a whole
+# process, and a group redirected once, above, for a group. THE FILESYSTEM: a
+# symlink, a named pipe, a path relative to the working directory. And A GLOB,
+# which bash expands in a redirection's target. GH-185's note argues each, and
+# checks/GH-185.sh pins each as reporting nothing. #185 asks
+# lib/command-scan.sh too, which both hooks source, so a descriptor opened
+# there is not in that list.
 #
 # A HEREDOC BODY WAS THE SECOND, and "one shape remains" stood here until the
 # third review of PR #169 counted them. This pipeline stripped whole-line

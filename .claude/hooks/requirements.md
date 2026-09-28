@@ -1268,9 +1268,11 @@ it has no entry above (Q16).
   that guard is, because a guard narrower than the prose beside it reads as
   coverage -- the shape the fifth review of PR #169 found in `nested_defs` and
   the sixth found here. #185 widened it to every spelling of the text that
-  points an fd other than 1 at stderr; what it still does not reach is
-  dataflow -- a target in a variable, a descriptor inherited from the process
-  that runs the hook -- and GH-185's note names it
+  points an fd other than 1 at stderr; what it still does not reach is what
+  the text cannot say without being run -- a target in a variable or computed
+  by an expansion, a descriptor inherited from the process that runs the
+  hook, fd 1 duplicated while it points at stderr, a symlink, a relative path
+  and a glob -- and GH-185's note names each
 - #187: has an entry, GH-187, generated from its issue file, and is listed
   here only because the library cited it before it landed, where
   `report_says` took the exception by basename
@@ -1559,3 +1561,10 @@ it has no entry above (Q16).
   those paths for every fd but 1 and left fd 1 to `STDERR_WRITE`, whose gap
   this is. Cited in #185's issue file, beside the rows that assert fd 1 is
   never reported. It adds its requirements in the pull request that fixes it
+- #310: `exec >&2` points fd 1 at stderr for the rest of the process, and the
+  refusal-arm count reads it as one arm and every later write as none. Filed
+  from #185, whose guard reports any fd but 1 and so leaves fd 1 pointed at
+  stderr to it -- the entry of every duplication of fd 1 that reaches stderr.
+  Cited in #185's issue file and in the #109 section of the unsplit file,
+  where each names what `dup_stderr` does not reach. It adds its
+  requirements in the pull request that fixes it
