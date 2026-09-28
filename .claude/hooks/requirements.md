@@ -1417,18 +1417,61 @@ it has no entry above (Q16).
   only the first would re-create the asymmetry it was meant to remove. Three
   checks pin the permitted verdicts and a fourth pins the contrast that says the
   first is a gap in the rule rather than the rule working
-- #166: `$'…'` and `$"…"` quoting, not read as quoting at any position. Cited
-  in #118's issue file, where `gh pr $'-t' view merge 5`, its locale spelling
-  and an ANSI-C option in front of the group are pinned as permitted boundary
-  rows: `ghreduce` takes the quotes out and leaves the `$`, so the token does
-  not open with a dash and the walk stops on it. Found by round 5 of the
-  review of #184. It adds its requirements in the pull request that fixes it
 - #242: no load-time compile check for the library's awk programs, so one
   that does not compile fails open. Cited beside the `CS_GH_AWK` withdrawal in
   `lib/command-scan.sh` and in `no-pr-decisions.sh`, where round 5 of the review
   of #184 found the withdrawal called the one state a `command -v` guard cannot
   see when it is the harmless one of two. It concerns every awk program the
   library carries, so it has no entry above
+- #252: the separator walk in `cs_split` pairs `$'...'` as `'...'`, so an
+  escaped quote inside one ends the span early and a command after it can be
+  hidden. Cited in GH-166's note, which closed the words read by name and not
+  this walk. Found by the spec review of #166's implementation, pre-existing and
+  identical at a109c2f. It adds its requirements in the pull request that fixes
+  it
+- #225: `rest_bases` in no-pr-decisions.sh reads a REST `base` field by its own
+  patterns and not through the word reader, so `-f $'base=main'` is not read as
+  a base. Cited in GH-166's note and at the head of `lib/command-scan.sh`, among
+  the places quoting is still read privately. It adds its requirements in the
+  pull request that fixes it
+- #260: the pull request for #166. Its review's first round measured that the
+  entry's "one reader" was wider than the code, and that the tail offer's quote
+  test had not followed the reader; cited where each correction stands, and in
+  #266's issue file, which that round found
+- #284: `cs_git_args` cuts a quoted global-option value at its blank, so
+  `git -c "user.name=a b" push origin main` is permitted by both push hooks.
+  Cited in GH-166.1's note and at the head of `lib/command-scan.sh`. Found by
+  the class sweep in round 2 of the review of #260, pre-existing at abba1d0; it
+  adds its requirements in the pull request that fixes it
+- #303: a command substitution in double quotes, as an assignment or option
+  value, hides the command behind it: `GH_TOKEN="$(cat t)" gh pr merge 5` is
+  permitted. Cited in the GH-166 issue file among what a word read through the
+  reader does not reach. Pre-existing, found by the review of #260, round 3;
+  it adds its requirements in the pull request that fixes it
+- #304: a command word past the tail offer's third word is not reached,
+  however it got there -- one prefix word with enough valued options,
+  `sudo -u root -g grp -D /srv git push origin main`; nested prefix words behind
+  a valued option, `sudo -u deploy nice -n 10 git push --all origin`; and
+  `exec`, on no prefix list, `exec git push --all origin` -- all permitted. Cited in GH-166.1's note and
+  beside the tail offer's bound in `lib/command-scan.sh`. Pre-existing, found
+  by the review of #260, round 3; it adds its requirements in the pull request
+  that fixes it
+- #309: three hooks match the wrapper anchor on the command as it came, where
+  `cs_split` joins continuations, so `bash \` and a newline before `-c` hides the
+  wrapper from no-git-push.sh, no-commit-to-main.sh and
+  no-work-on-stale-branch.sh. Cited in GH-166.1's note
+  and in the wrapper token's rationale in `lib/command-scan.sh`. Pre-existing,
+  found by the review of #260, round 4; it adds its requirements in the pull
+  request that fixes it
+- #265: a prefix word's own options recognised by their raw first character, so
+  `sudo "-u" root git push origin main` is permitted. Cited in GH-166's note and
+  at the head of `lib/command-scan.sh`. Pre-existing, found by the review of
+  #260; it adds its requirements in the pull request that fixes it
+- #267: the quote removers left in the hooks -- `tr -d` over push, merge and
+  rebase arguments, which leaves the dollar of `$'...'`, and `base_args`, which
+  knows two quotes. Cited in GH-166's note and at the head of
+  `lib/command-scan.sh`. Pre-existing, found by the review of #260; it adds its
+  requirements in the pull request that fixes it
 - #192: `written` and `unarmed` grep a file's lines, so a phrase that wraps
   reads as absent -- a false green for an absence pin and a false red for a
   presence pin. Cited in #118's issue file, where the four pins over CLAUDE.md's

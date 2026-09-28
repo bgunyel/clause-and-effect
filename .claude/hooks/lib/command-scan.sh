@@ -163,6 +163,37 @@
 # the unwrapped command and never asked of the wrapped one. The separators and
 # the control words are variables now, CS_SEPARATORS and CS_CONTROL_WORDS, read
 # by both halves.
+#
+# #166 found it once more, and this time the second answer was not in this file
+# at all. What a word spells under bash's quoting was answered by cw_reduce here
+# and by quoted_base_flag in no-pr-decisions.sh, and the two disagreed: the hook
+# knew that the `$` of `$'...'` and `$"..."` goes with its quote and decoded the
+# escapes, five review rounds of PR #173 having made it, and the library knew
+# neither. So `$'git' push origin main`, `$'sudo' git push origin main` and
+# `$'bash' -c "git push origin main"` were permitted by every boundary hook
+# while `--base` in the same quotes was refused. Measured at origin/dev-05
+# a109c2f. The reader moved here, as CS_WORD_AWK, and the command word, the
+# prefix words, a gh option in front of a subcommand and the name of the base
+# flag read through it, and cs_split asks it where each word it walks ends --
+# the assignments, the prefix words and their options, the command word and
+# the tail offer -- so a quoted span holding a blank is one word there as it is
+# to bash (review of PR #260, round 2); the wrapper anchor, which reads raw text
+# and cannot call it,
+# admits the `$` and says what it still cannot reach. It is #79's shape and
+# #134's again, and the first time the second answer lived in a hook rather
+# than in this file.
+#
+# NOT EVERY PLACE THE HOOKS READ QUOTING, and the first draft of this paragraph
+# said so by omission; review of PR #260 measured the rest. What still reads a
+# quote privately or by its first character, each pre-existing and each with
+# its issue: a prefix word's own options, by their raw first character (#265);
+# the arguments no-commit-to-main.sh, no-git-push.sh and
+# no-work-on-stale-branch.sh unquote by deleting quote characters, which leaves
+# the `$`, and base_args in no-pr-decisions.sh, which knows two quotes (#267);
+# cs_git_args skipping git's global options on raw text (#191) and cutting a
+# quoted option value at its blank (#284), the gh walk doing the same (#194);
+# the REST base
+# (#225); and the separator walk in cs_split, which pairs `$'` as `'` (#252).
 
 # THE LOAD CONTRACT, which is about this file's absence rather than its
 # contents, and is written here because a rename made here is what breaks it.
@@ -893,9 +924,26 @@ CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|s
 # y; fi"`. The same cost, in the same direction, and each is a check.
 #
 # A token that may stand between the prefix word and the wrapper word: any word
-# at all, which is cs_split's tail token exactly -- `^[^[:space:]]+[[:space:]]+`
-# there, the same class here. Both the class and the bound of three are shared,
-# and that is the whole claim.
+# at all, which is cs_split's tail word -- and the bound of three is shared.
+# Until round 2 of the review of PR #260 both were blank-cut tokens, so a spaced
+# option value spent two of the three: `sudo -g "domain users" -u root bash -c
+# ...` and `sudo -D "/srv/a b c d" bash -c ...` escaped the wrapper refusal
+# while the same values unspaced were refused. cs_split reads its words through
+# the word reader now; a regular expression cannot call it, so a token here is
+# a run of unquoted characters, backslash-escaped characters, double-quoted
+# spans and single-quoted spans -- a quoted or escaped blank inside one, and the
+# token goes on. The escape was missing until round 3 of that review: bash has
+# five quoting forms and this read four, so `A=b\ c bash -c ...` and
+# `sudo -g domain\ users -u root bash -c ...` still escaped the wrapper while
+# cs_split read both. The option skip in front of the tokens reuses this token
+# too: it was `-` and a run of non-blanks, so `--prompt="a b"` spent a token
+# slot that cs_split, stepping by words, never spends. A LONE QUOTE is still a
+# character of it, so every token this matched before it still matches and the
+# widening only refuses more; without that alternative an unpaired quote would
+# have ended the match, the other way. What it cannot do is read an escape
+# INSIDE a double-quoted span: a double quote escaped there ends the span. That is
+# the trade this anchor records for `b"a"sh`. The assignment branch in front of
+# the prefix word reuses this token as its value, for #273.
 #
 # IT EXCLUDED A LEADING DASH UNTIL REVIEW OF THIS BRANCH, and that was #79
 # reproduced inside its own fix, one option deeper and in the permitting
@@ -922,16 +970,23 @@ CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|s
 # respect while they differed in two is the shape this file exists to stop,
 # arriving in the change whose subject it is. All three shapes are checks now.
 #
-# ONE DIFFERENCE REMAINS, and it is in the loop rather than the class.
-# cs_split's tail also breaks at a token that OPENS A QUOTE, because it is
-# offering candidates to read as commands and what follows a quote is the text
-# of an argument -- the mistake cs_normalise has made three times. Nothing here
-# reads a token as a command: these are skipped, on the way to a wrapper word
-# that must still appear after them. So the reason to stop does not transfer,
-# and `sudo "x" sh -c 'git push --all origin'` is refused here while cs_split
-# offers no candidate for it. That asymmetry is in the refusing direction and
-# is pinned as a check.
-CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"
+# TWO DIFFERENCES REMAIN. The first is in what a quote is: cs_split reads a word
+# through the word reader, escapes and ANSI-C quoting included; this reads raw
+# text, so a quoted span here is paired without escapes inside it. The second
+# is in what the text is: no-git-push.sh, no-commit-to-main.sh and
+# no-work-on-stale-branch.sh match this anchor on the command as it came, where
+# cs_split reads it with its continuations joined, so a wrapper word separated
+# from its `-c` by a backslash-newline is refused by no-pr-decisions.sh, which
+# matches the joined text, and permitted by all three of those: a push by the
+# two push and commit hooks and a commit on a stale branch by the third (#309,
+# measured by the review of PR #260 and by its author on a rebuilt stale-branch
+# fixture; this paragraph said ONE difference until round 4 of that review,
+# and "the other two" until round 5). Until round 2 there was a third:
+# cs_split's tail stopped at a token opening a quote, and this did not, so
+# `sudo "x" sh -c 'git push --all origin'` was refused here while cs_split
+# offered no candidate for it. The tail reads whole words now and offers the
+# wrapper too; the verdict, refused, is unchanged and still pinned.
+CS_WRAP_TOKEN="([^[:space:]\"']|\\\\.|\"[^\"]*\"|'[^']*'|[\"'])+[[:space:]]+"
 
 # THE WRAPPER'S OWN COMMAND WORD, issue #117. The spellings cs_split normalises
 # for every other rule cannot be normalised here, because this expression reads
@@ -968,12 +1023,202 @@ CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"
 # dev-05 separately, and #117 wrote the characters out here as its own copy;
 # the merge of the two made it read the list, so the separators are still spelled
 # once.
-CS_WORD_SPELLING="([\\\\\"']|[^[:space:]$CS_SEPARATORS\"']*/)*"
+#
+# A DOLLAR MAY STAND IN FRONT OF A QUOTE, since #166, because bash writes two of
+# its quoting forms that way -- `$'bash'` and `$"bash"` are bash -- and the run
+# admitted neither, so `$'bash' -c "git push origin main"` reached no wrapper
+# rule in any hook while cs_split, reading the same word through the word
+# reader, saw bash. `[$]?` and not a `$` alternative of its own: a dollar in
+# front of a backslash is a dollar to bash, `$\bash` runs `$bash`, so only a
+# quote may follow it. What this cannot reach is the escape INSIDE such a span
+# -- `$'\x62ash'` is bash, and a regular expression cannot decode -- which is
+# the gap above one level further in, and is pinned as permitted under GH-166.
+# And the empty span stays out of reach on purpose: `$'' bash -c ...` puts a
+# blank between the span and the name, so there is no word here for the run to
+# be part of, and bash runs nothing for an empty command word. The cost runs
+# the other way too: a raw-text run cannot see that it is inside double quotes,
+# so `"$'bash'" -c ...`, text to bash, is refused. Pinned as a trade.
+CS_WORD_SPELLING="([\$]?[\"']|[\\\\]|[^[:space:]$CS_SEPARATORS\"']*/)*"
 # Built unconditionally. What happens when the list it interpolates is empty is
 # not decided here: it is decided once, after cs_split, where the list's one
 # reader is withdrawn so that every consumer's load guard refuses. See
 # THE WORD LIST IS PART OF THE LOAD, below cs_split.
-CS_WRAPPER_RE="(^[[:space:]]*|[$CS_SEPARATORS][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+|($CS_CONTROL_WORDS)[[:space:]]+|$CS_WORD_SPELLING($CS_WRAP_WORDS)[\\\\\"']*[[:space:]]+(-[^[:space:]]*[[:space:]]+)*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
+# AN ASSIGNMENT'S VALUE MAY HOLD A QUOTED BLANK (#273). The branch that steps
+# over an assignment in front of the wrapper word read `NAME=` and a run of
+# non-blanks, so `A="b c" bash -c ...` stopped at the blank and the wrapper was
+# never reached, where cs_split, which reads the assignment through the word
+# reader, stripped it whole. The value is now CS_WRAP_TOKEN, whose quoted spans
+# carry a blank -- or nothing, for `A= cmd` -- so the one answer to what a
+# quoted token is here serves both. It pairs quotes without reading escapes, so
+# a double quote escaped inside a double-quoted value ends the value, and that
+# wrapper is not refused: the trade recorded for `b"a"sh`, pinned in #273's file.
+CS_WRAPPER_RE="(^[[:space:]]*|[$CS_SEPARATORS][[:space:]]*)([A-Za-z_][A-Za-z0-9_]*=($CS_WRAP_TOKEN|[[:space:]]+)|($CS_CONTROL_WORDS)[[:space:]]+|$CS_WORD_SPELLING($CS_WRAP_WORDS)[\\\\\"']*[[:space:]]+(-($CS_WRAP_TOKEN|[[:space:]]+))*($CS_WRAP_TOKEN){0,3})*$CS_WORD_SPELLING((ba|z|)sh[\\\\\"']*[[:space:]]+(-c|<<)|eval([^-A-Za-z0-9_]|\$))"
+
+# THE WORD READER, issue #166: what bash makes of one word's quoting, answered
+# once for every consumer below. It is a string of awk function definitions,
+# interpolated in front of each program that calls it -- cs_split for the
+# command word, the prefix words and where every word it walks ends, CS_GH_AWK for
+# a gh option, and quoted_base_flag in no-pr-decisions.sh for a base flag --
+# the way CS_GH_AWK is shared by the two gh functions, because awk has no
+# include. Those are its consumers and not every place a word is read: the ones
+# still read privately are listed at the head of this file.
+#
+# WHY IT EXISTS. Bash has five quoting forms and the library read three.
+# ANSI-C quoting, `$'...'`, and locale quoting, `$"..."`, carry their `$` with
+# the quote, and cw_reduce counted it as a character: `$'git'` reduced to
+# `$git`, which names nothing, so `$'git' push origin main` was not a push to any
+# hook, `$'sudo' git push origin main` read the push as sudo's arguments, and
+# `$'gh' api ...` stepped past every endpoint rule at once. Measured at
+# origin/dev-05 a109c2f, all of them permitted by all four boundary hooks.
+#
+# IT WAS ALREADY WRITTEN, ONCE, IN THE WRONG PLACE. quoted_base_flag carried a
+# complete reader for exactly this -- `$'` and `$"` as quoting and every escape
+# `$'...'` decodes -- hardened over five rounds of Bertan's review of PR #173,
+# for one flag in one hook. So the dequoting question had two answers a few
+# hundred lines apart, cw_reduce's and that one, and they disagreed; the
+# disagreement was the ALLOW column above. That is the defect class the header
+# of this file opens by naming, and the answer is the one it always is: the
+# reader moved here, and those consumers call it.
+#
+# THE INTERFACE IS A STREAM, because the consumers ask different things of the
+# same walk. cw_reduce and ghreduce want the characters of one word. quoted_base_flag
+# wants a line split into words, and for each word where its first quoted
+# character landed, whether a span yielded nothing, and whether a span a NUL cut
+# is still open where the line ends. wordend and printhead want one position:
+# the first blank reached outside every quote, where the word ends. So the
+# reader hands back one unit at a time and says what it was, and each consumer
+# keeps only the bookkeeping that is its own question:
+#
+#   wd_start(s)  begin reading s, outside any quote; wd_start(s, i) begins at
+#                its i-th character, so a caller walking a line need not copy
+#                the rest of it to read one word
+#   wd_next()    read one unit; 0 at the end of s. Sets wd_ev to what it was:
+#                  "blank"  an unquoted space or tab, a word boundary
+#                  "open"   a quote opened; wd_st is 1 for '', 2 for "" and $"",
+#                           3 for $''
+#                  "shut"   the open quote closed; wd_st is 0 again
+#                  "cut"    a NUL in $'...'; the rest of that span yields nothing
+#                  "text"   wd_ch holds what the unit yields -- one character,
+#                           two for an escape bash leaves as written, or none in
+#                           a span already cut -- and wd_esc is 1 when it was an
+#                           unquoted backslash escape
+#                wd_st and wd_cut are readable between calls: the quote open
+#                after the unit, and whether the open $'...' span has been
+#                cut, which is what a caller asks where its input ends
+#
+# THE ANSWERS, which are bash's and are argued where each was taken. Inside
+# double quotes a backslash escapes only `\`, `"`, `$` and a backtick, and is
+# itself otherwise; cw_reduce took it to escape anything, which read `"\g"it` as
+# git where bash runs `\git`. A backslash ending the string is a backslash --
+# `bash -c 'printf %s a\'` prints `a\` on bash 5.2.21 -- where cw_reduce dropped
+# it. Both moved in the refusing-to-permitting direction only for words bash
+# would not run as the guarded name, which is the direction they should move.
+#
+# The escapes are quoted_base_flag's, moved rather than rewritten. \xHH, octal,
+# \u and \U are decoded; a character outside ASCII decodes to `?`, which is no
+# character of any name or flag this library reads, so only its not being one
+# is read; \a, \b, \e and \E decode to `?` for the same reason. A NUL -- `\0`,
+# `\x00`, `\u0000`, an octal that wraps to 0 -- is not a character bash can
+# pass: it drops the rest of that `$'...'` span, and what follows the closing
+# quote still joins the word, so `$'git\x00junk'` is `git` and `$'--base\0'x`
+# is `--basex`. Bertan's second review of #173, which also named `\^@`: bash
+# 5.2 does not decode it, so it is the three characters it is written as.
+#
+# `\c` IS NOT DECODED BUT CUTS, which is #173's third review and is not
+# re-derived here. Copying bash one escape at a time opened a hole beside each
+# one it closed: `\c` took the next character as its argument even where the
+# parser had already paired it -- a closing quote, or the first half of `\\` --
+# and what `\c` makes is the next BYTE masked to five bits, so `\cअ` is a NUL
+# while `\cA` is not. So every `\c` is taken as a possible NUL: it cuts the span,
+# only the `c` is consumed, and what follows is paired by the ordinary rules.
+# The trade: `$'--base\cA'`, which bash passes as `--base` and a control
+# character, is read as `--base`, and `$'git\cA'` as `git`. Strings nobody
+# writes, taken in the refusing direction.
+#
+# PER WORD, AND NEVER ACROSS THE LINE, which is the property a re-derivation
+# gets wrong. Each consumer hands this the word it is reading, or the argument
+# list it splits into words; nothing decodes a line and hands the result on. A
+# pass that did would turn the `\n` in `echo $'cat <<E\ngit commit -m wip'`
+# into a newline and manufacture a command position bash never had. The session
+# transcripts the triage of #166 measured hold eight ANSI-C spans in a command
+# position, every one of that shape, and check-hooks.sh pins three
+# representative seeds of it permitted.
+#
+# No apostrophe appears in this text: it is a single-quoted shell word, so one
+# would end it. The single quote is written \047 and the double quote \042.
+#
+# PART OF THE LOAD, as CS_GH_AWK is, and worse when it fails: a program that
+# calls wd_next with this empty does not compile, awk exits 2 without reading,
+# and every caller would read "not this command". So an empty reader withdraws
+# cs_split, cs_gh_args and cs_gh_opaque below, and names itself.
+CS_WORD_AWK='
+  function wd_start(s, from) { wd_s = s; wd_n = length(s); wd_i = from > 0 ? from : 1; wd_st = 0; wd_cut = 0 }
+  # The value of up to MAX digits of BASE from wd_i on, consumed.
+  function wd_digits(base, max,   k, d, v) {
+    v = 0
+    for (k = 0; k < max && wd_i <= wd_n; k++) {
+      d = index("0123456789abcdef", tolower(substr(wd_s, wd_i, 1))) - 1
+      if (d < 0 || d >= base) break
+      v = v * base + d; wd_i++
+    }
+    wd_nd = k
+    return v
+  }
+  function wd_chr(v) { return (v > 0 && v < 128) ? sprintf("%c", v) : "?" }
+  # What a decoded value yields. A NUL yields nothing and cuts the span.
+  function wd_put(v) { if (v == 0) { wd_cut = 1; wd_ev = "cut" } else wd_ch = wd_chr(v) }
+  # One escape inside an ANSI-C span, its backslash at wd_i.
+  function wd_ansi(   e, v) {
+    if (wd_i >= wd_n) { wd_ch = "\\"; wd_i++; return }
+    e = substr(wd_s, wd_i + 1, 1)
+    wd_i += 2
+    if (e == "x") { v = wd_digits(16, 2); if (wd_nd) wd_put(v); else wd_ch = "\\x"; return }
+    if (e == "u") { v = wd_digits(16, 4); if (wd_nd) wd_put(v); else wd_ch = "\\u"; return }
+    if (e == "U") { v = wd_digits(16, 8); if (wd_nd) wd_put(v); else wd_ch = "\\U"; return }
+    if (e ~ /[0-7]/) { wd_i--; v = wd_digits(8, 3); wd_put(v % 256); return }
+    if (e == "c") { wd_put(0); return }
+    if (e == "n") { wd_ch = "\n"; return }
+    if (e == "t") { wd_ch = "\t"; return }
+    if (e == "r") { wd_ch = "\r"; return }
+    if (e == "v") { wd_ch = "\v"; return }
+    if (e == "f") { wd_ch = "\f"; return }
+    if (e ~ /[abeE]/) { wd_ch = "?"; return }
+    if (e == "\\" || e == "\042" || e == "?" || e == "\047") { wd_ch = e; return }
+    wd_ch = "\\" e
+  }
+  function wd_next(   c, d) {
+    wd_ch = ""; wd_esc = 0; wd_ev = "text"
+    if (wd_i > wd_n) return 0
+    c = substr(wd_s, wd_i, 1)
+    if (wd_st == 1) {
+      wd_i++
+      if (c == "\047") { wd_st = 0; wd_ev = "shut" } else wd_ch = c
+      return 1
+    }
+    if (wd_st == 2) {
+      wd_i++
+      if (c == "\042") { wd_st = 0; wd_ev = "shut"; return 1 }
+      d = substr(wd_s, wd_i, 1)
+      if (c == "\\" && d != "" && index("\\\042$`", d) > 0) { wd_ch = d; wd_i++ } else wd_ch = c
+      return 1
+    }
+    if (wd_st == 3) {
+      if (c == "\047") { wd_i++; wd_st = 0; wd_cut = 0; wd_ev = "shut"; return 1 }
+      if (c == "\\") wd_ansi(); else { wd_ch = c; wd_i++ }
+      if (wd_cut) wd_ch = ""
+      return 1
+    }
+    if (c == " " || c == "\t") { wd_i++; wd_ev = "blank"; return 1 }
+    d = substr(wd_s, wd_i + 1, 1)
+    if (c == "$" && d == "\047") { wd_i += 2; wd_st = 3; wd_cut = 0; wd_ev = "open"; return 1 }
+    if (c == "$" && d == "\042") { wd_i += 2; wd_st = 2; wd_ev = "open"; return 1 }
+    if (c == "\047") { wd_i++; wd_st = 1; wd_ev = "open"; return 1 }
+    if (c == "\042") { wd_i++; wd_st = 2; wd_ev = "open"; return 1 }
+    wd_i++
+    if (c == "\\" && d != "") { wd_ch = d; wd_esc = 1; wd_i++ } else wd_ch = c
+    return 1
+  }
+'
 
 # Print one command per line, with anything that precedes the command word
 # removed, so a caller matches on ^ and never has to describe a command
@@ -1137,7 +1382,7 @@ cs_split() {
     }' \
   | awk -v wrapwords="$CS_WRAP_OPTION_WORDS" \
         -v operandwords="$CS_WRAP_OPERAND_WORDS" \
-        -v controlwords="$CS_CONTROL_WORDS" '
+        -v controlwords="$CS_CONTROL_WORDS" "$CS_WORD_AWK"'
     # Each strip below moves p past a token rather than cutting the line down to
     # what follows it. They were substr calls on the line, and every one copied
     # the rest of it, so a long run of prefixes was quadratic: 512 KB of sudo
@@ -1192,28 +1437,37 @@ cs_split() {
     # check rather than argued about: 416 ms and 5,310 ms, a ratio of 12.7 where
     # the check fails at 8, against 129 ms and 497 ms for the cells.
     #
-    # A backslash escape is read inside double quotes and not inside single
-    # quotes. That is the answer cs_normalise and the separator walk in this
-    # same function already give, and it is what bash does; giving it a third
-    # time differently is how the answers in this file came to disagree before.
-    function cw_reduce(w,   m, c, ch, q, len) {
+    # WHAT A CHARACTER IS, UNDER WHICH QUOTING, IS NOT ANSWERED HERE. It was,
+    # by a walk belonging to this function that knew the two quotes and a
+    # backslash and not the dollar bash writes in front of two of its five
+    # quoting forms, so git in ANSI-C quotes reduced to a dollar and git and
+    # named nothing. #166. The walk is the word reader above cs_split now,
+    # shared with ghreduce and quoted_base_flag, and what is left here is the
+    # part that is this question alone: a slash resets the name, and a blank the
+    # reader yields -- an ANSI-C word spelling git, a hex space and push is one
+    # word holding a space -- is kept as `?`, so the name stays one word and the
+    # line printhead writes stays one line. A decoded newline printed as itself
+    # would manufacture a command position bash never had.
+    #
+    # THE COST OF THE SHARED WALK, re-measured on this machine the day it moved,
+    # cs_split alone, LC_ALL=C, mawk 1.3.4, fastest of three, old against new:
+    # one quoted component of 16 KB 23 ms against 29 ms, a word of 5,460 path
+    # components 19 ms against 32 ms, and the inputs of the scaling check --
+    # 128 KB and 512 KB -- 172 and 635 ms against 231 and 972 ms, a ratio of 4.2
+    # where the check fails at 8. A function call per character, and still
+    # linear. The figures in the paragraph above were taken on another day and
+    # are not comparable with these; the ratio is the claim.
+    function cw_reduce(w,   k, ch) {
       cw_n = 0
-      q = ""
-      m = 1
-      len = length(w)
-      while (m <= len) {
-        c = substr(w, m, 1)
-        ch = ""
-        if (q != "") {
-          if (q == "\042" && c == "\\")      { ch = substr(w, m + 1, 1); m += 2 }
-          else if (c == q)                   { q = ""; m++ }
-          else                               { ch = c; m++ }
+      wd_start(w)
+      while (wd_next()) {
+        if (wd_ev != "text") continue
+        for (k = 1; k <= length(wd_ch); k++) {
+          ch = substr(wd_ch, k, 1)
+          if (ch == "/") cw_n = 0
+          else if (index(" \t\n\v\f\r", ch) > 0) cw[++cw_n] = "?"
+          else cw[++cw_n] = ch
         }
-        else if (c == "\\")                  { ch = substr(w, m + 1, 1); m += 2 }
-        else if (c == "\042" || c == "\047") { q = c; m++ }
-        else                                 { ch = c; m++ }
-        if (ch == "/") cw_n = 0
-        else if (ch != "") cw[++cw_n] = ch
       }
       return cw_n
     }
@@ -1228,10 +1482,11 @@ cs_split() {
     #     rewritten would put the first ARGUMENT where the command word goes and
     #     read as a push.
     #
-    # There is no third case for a word that reduces to itself, and there cannot
-    # be one: past the test above the word holds a slash, a quote or a backslash,
-    # every one of which this drops, so a reduction that changed nothing has an
-    # empty name and is already the second case.
+    # A word that reduces to itself is printed back as it came, which says
+    # nothing false. Before #166 there could be none -- the walk dropped every
+    # slash, quote and backslash -- and this paragraph said so. The shared
+    # reader keeps a backslash that bash keeps, one ending the word or one in
+    # double quotes before an ordinary character, so `git\` reduces to itself.
     # The reduced word as a STRING, for the comparisons that need one rather
     # than a printed line: the prefix-word list and the operand-word list. A
     # prefix word is matched BY NAME, so #117 reaches it exactly as it reaches
@@ -1263,9 +1518,74 @@ cs_split() {
           && index(w, "\047") == 0 && index(w, "\\") == 0) return w
       return cw_name(w)
     }
+    # WHERE A WORD ENDS, AS BASH READS IT: at the first blank outside every
+    # quote. tokend cuts at every blank, and each walk below that used it asked
+    # a question about ONE TOKEN whose answer is a property of the line -- which
+    # quote the token starts in -- and the review of PR #260 found three answers
+    # wrong in two rounds. A double-quoted option value holding a blank,
+    # `sudo -D "/srv/my repo" git push --all origin`, left the option strip
+    # half-way through the value; an assignment with one, the documented
+    # `GIT_SSH_COMMAND="ssh -i k" git push origin main`, left the assignment
+    # strip there (#273); and the tail offer, restarted at every token, could
+    # not tell a token opening a quote from one closing it, so round 1 of that
+    # review made it stop at an ANSI-C assignment holding a blank behind env and
+    # permit the push behind it, and read a quoted word from inside a
+    # double-quoted argument as a command. Every one of them was a word cut in
+    # the middle.
+    #
+    # So the words are those the reader reports, once, and every walk in this
+    # program steps by them. A token holding no quote and no backslash is a word as it
+    # stands -- no quoting state can start or end inside it -- and that test is
+    # what keeps the reader off every ordinary line; only a token that holds one
+    # is read, from where it starts to the first blank the reader reports, which
+    # it reports only outside a quote. Those blanks are the space and the tab,
+    # as they are to bash. The blank-cut scan in front of it, the fast path, also
+    # cuts at a newline, a vertical tab, a form feed and a carriage return, as
+    # tokend does, so a token holding one of those and no quote is cut there
+    # where bash would not cut it -- in the refusing direction, since it only
+    # offers more words (round 5 of the review of PR #260). A quote never closed
+    # runs to the end of the line,
+    # which is one word, and reads as prose rather than as commands.
+    #
+    # ONE FUNCTION, over any string: word_end(s, i) is where the word starting
+    # at the i-th character of s ends, and wordend(i) asks it of the line.
+    # printhead asked the same question of the candidate it prints with a loop
+    # of its own until round 3 of the review of PR #260, which named two
+    # answers to it in one program -- the class this file opens by naming.
+    #
+    # Its first loop is tokend over s rather than over the line, and stays a
+    # loop of its own on purpose. tokend is copied into three awk programs and
+    # check-hooks.sh holds every copy identical, so making this one call a
+    # shared helper split them into two versions, which that check caught in
+    # round 4 of the review of PR #260. One scan for all three is a lift of a
+    # shared helper string, as CS_WORD_AWK was, and is not this change.
+    function word_end(s, i,   m, q, t) {
+      m = length(s)
+      q = i
+      while (q <= m && index(" \t\n\v\f\r", substr(s, q, 1)) == 0) q++
+      t = substr(s, i, q - i)
+      if (index(t, "\042") == 0 && index(t, "\047") == 0 && index(t, "\\") == 0) return q
+      wd_start(s, i)
+      while (wd_i <= wd_n) {
+        q = wd_i
+        wd_next()
+        if (wd_ev == "blank") return q
+      }
+      return wd_n + 1
+    }
+    function wordend(i) { return word_end(line, i) }
+    # The start of the word after the one at r, or 0 where there is none before e.
+    function nextword(r, e,   q) {
+      q = wordend(r)
+      if (q > e) return 0
+      return skipblank(q)
+    }
     function printhead(s,   i, w, k) {
-      i = 1
-      while (i <= length(s) && index(" \t\n\v\f\r", substr(s, i, 1)) == 0) i++
+      # The word bash reads, which a quote carries past a blank: a program
+      # named by a whole quoted string holding a push is not the program its
+      # first token spells, and names no git. See word_end, whose fast path is
+      # the blank-cut token wherever no quote or backslash could move the end.
+      i = word_end(s, 1)
       w = substr(s, 1, i - 1)
       if (index(w, "/") == 0 && index(w, "\042") == 0 \
           && index(w, "\047") == 0 && index(w, "\\") == 0) { print s; return }
@@ -1281,7 +1601,7 @@ cs_split() {
       changed = 1
       while (changed) {
         changed = 0
-        q = tokend(p)
+        q = wordend(p)
         if (q <= n && substr(line, p, q - p) ~ /^[A-Za-z_][A-Za-z0-9_]*=/) {
           p = skipblank(q)
           changed = 1
@@ -1289,7 +1609,7 @@ cs_split() {
         # The control words arrive as a variable for the reason the prefix
         # words below do: the wrapper anchor admits the same list, and a second
         # copy of it there was #134. See CS_CONTROL_WORDS.
-        q = tokend(p)
+        q = wordend(p)
         if (substr(line, p, q - p) ~ ("^(" controlwords ")$")) {
           p = skipblank(q)
           changed = 1
@@ -1304,10 +1624,10 @@ cs_split() {
         # a program named `if` for `"if" true` and the strip is right to stop.
         # The two lists are matched by name and the reserved words are matched
         # as syntax, and that is the whole difference.
-        q = tokend(p)
+        q = wordend(p)
         if (q <= n && cw_spelled(substr(line, p, q - p)) ~ ("^(" wrapwords ")$")) {
           p = skipblank(q)
-          while ((q = tokend(p)) <= n && substr(line, p, 1) == "-") p = skipblank(q)
+          while ((q = wordend(p)) <= n && substr(line, p, 1) == "-") p = skipblank(q)
           wrapped = 1
           changed = 1
         }
@@ -1317,11 +1637,11 @@ cs_split() {
         # `timeout 30 git push --all origin` invisible to every hook. The
         # operand is stripped with the word, one token and only if it is not
         # itself an option.
-        q = tokend(p)
+        q = wordend(p)
         if (q <= n && cw_spelled(substr(line, p, q - p)) ~ ("^(" operandwords ")$")) {
           p = skipblank(q)
-          while ((q = tokend(p)) <= n && substr(line, p, 1) == "-") p = skipblank(q)
-          q = tokend(p)
+          while ((q = wordend(p)) <= n && substr(line, p, 1) == "-") p = skipblank(q)
+          q = wordend(p)
           if (q <= n && q > p && substr(line, p, 1) != "-") p = skipblank(q)
           wrapped = 1
           changed = 1
@@ -1352,20 +1672,32 @@ cs_split() {
       # more eagerly than a shell only ever refuses more -- applied where the
       # command word cannot be found by looking.
       #
-      # Three is past the longest real leftover: `timeout -s KILL 30 cmd`
-      # leaves two. A token opening a quote ends it, because what follows is
-      # the text of an argument, and reading text as a command is the mistake
-      # cs_normalise has already made three times.
+      # The candidates are WORDS, as wordend reads them, and each starts outside
+      # every quote: a quoted span holding a blank is stepped over whole, never
+      # stopped at and never read into. That is what the offer owes both ways.
+      # Text inside quotes is never offered, since reading text as a command is
+      # the mistake cs_normalise has already made three times -- so a quoted
+      # git inside a double-quoted argument behind sudo echo stays prose. And a
+      # spaced value is not a wall -- so `sudo -D "/srv/my repo" git push`
+      # reaches its push. Until the review of PR #260 this stopped at a token
+      # opening a quote, then at one leaving a quote open, and each got one of
+      # those two wrong; see wordend.
+      #
+      # Three words, counted after the head, and no fourth: a command word
+      # further along is not reached, however it got there. One prefix word
+      # with enough valued options puts it there -- `sudo -u root -g grp -D
+      # /srv git push origin main` -- and so do prefix words NESTED behind a
+      # valued option, `sudo -u deploy nice -n 10 git push --all origin`,
+      # whose `nice` is a tail word and is never stripped; `exec` is on no list
+      # at all. All three are permitted, measured at cd67c8e, and are #304.
+      # check-hooks.sh pins the bound and the word past it. This sentence
+      # called three past every real leftover until round 3 of the review of
+      # PR #260, and past every leftover of one prefix word until round 4; the
+      # pinned word past the bound was one prefix word leaving four.
       if (wrapped && e >= p) {
         r = p
         for (k = 0; k < 3; k++) {
-          c = substr(line, r, 1)
-          if (c == "\042" || c == "\047") break
-          q = tokend(r)
-          if (q > e) break
-          r = skipblank(q)
-          c = substr(line, r, 1)
-          if (c == "\042" || c == "\047") break
+          if (!(r = nextword(r, e))) break
           # Every candidate, not only the first. A prefix word stands in front
           # of the command word, so at the point the strip runs the word is
           # still behind it and `sudo /usr/bin/git push` would be normalised
@@ -1732,7 +2064,9 @@ cs_within_cap() {  # stdin: a command. Succeeds only if no joined line exceeds t
 # rules git out, and a reader who stops at it should not stop believing there is
 # nothing else to ask. cs_gh_opaque answers A with its k==1 guard and B with
 # ghreduce; when #191 lands, one of those answers has to serve both walks rather
-# than being written a second time here.
+# than being written a second time here. For B that answer exists since #166:
+# ghreduce is the word reader, CS_WORD_AWK, and this walk can call it as it
+# stands.
 #
 # The completeness question is real as well, and #118 found the list two short.
 #
@@ -1945,21 +2279,31 @@ CS_GH_AWK='
   function tokend(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) == 0) i++; return i }
   function skipblank(i) { while (i <= n && index(" \t\n\v\f\r", substr(line, i, 1)) > 0) i++; return i }
   # THE SPELLING OF AN OPTION, reduced before it is classified, and a narrower
-  # reducer than cw_reduce in cs_split on purpose. Review round 1 measured
+  # reduction than cw_reduce in cs_split on purpose. Review round 1 measured
   # `gh pr "-t" view merge 5`, its single-quoted spelling and `gh pr \-t view
   # merge 5` as permitted, and all three reach gh as `gh pr -t view merge 5`,
   # which is a merge: the walk tested the raw first character for a dash, so a
-  # quote in front of the option ended it. Quotes and backslashes come out of
-  # the token first. cw_reduce is not reused because it also reduces a path to
-  # its basename, which would read --repo=o/r as r. This reduces the OPTION
-  # spelling and not the path words, so `gh "pr" merge 5` is untouched and stays
-  # #135 to answer.
-  function ghreduce(t,   o, c, i) {
+  # quote in front of the option ended it. So the token is dequoted first.
+  # cw_reduce is not reused because it also reduces a path to its basename,
+  # which would read --repo=o/r as r. This reduces the OPTION spelling and not
+  # the path words, so `gh "pr" merge 5` is untouched and stays #135 to answer.
+  #
+  # THROUGH THE WORD READER SINCE #166, and not by stripping the three quoting
+  # characters, which it did until then. Stripping left the dollar of an ANSI-C
+  # or locale span behind, so -t written in either read as a dollar and -t, the
+  # token did not open with a dash, and the walk read it as a path word while
+  # gh ran the merge. The reader answers what bash passes: the dollar goes with
+  # its quote and the escapes are decoded. The stumps the table under A STUMP IS
+  # AN INCOMPLETE WORD relies on were measured on every row and reduce as they
+  # did -- a lone double quote to nothing, a double quote and a dollar to the
+  # dollar. One spelling moved: a doubled backslash in front of the dash is one
+  # backslash to bash, so that token is a path word, gh rejects it as a
+  # subcommand, and the walk no longer reads it as an option. That trade is
+  # pinned in the issue file of #166.
+  function ghreduce(t,   o) {
     o = ""
-    for (i = 1; i <= length(t); i++) {
-      c = substr(t, i, 1)
-      if (index(strip, c) == 0) o = o c
-    }
+    wd_start(t)
+    while (wd_next()) if (wd_ev == "text") o = o wd_ch
     return o
   }
   # 0 not an option, so the walk stops; 1 the option takes the next word;
@@ -2032,7 +2376,7 @@ CS_GH_AWK='
   # `gh pr --repo=$(echo o/r) merge 5` permitted, both a merge of PR 5. The table
   # under A STUMP IS AN INCOMPLETE WORD below says what each cut leaves.
   function unfinished(v) { return v == "" || v ~ /[$<>]$/ }
-  BEGIN { strip = sprintf("%c%c%c", 34, 39, 92); nparts = split(want, part, /[[:space:]]+/) }
+  BEGIN { nparts = split(want, part, /[[:space:]]+/) }
   {
     line = $0
     if (line !~ /^gh([[:space:]]|$)/) next
@@ -2145,7 +2489,7 @@ CS_GH_AWK='
 # stands for every verb of its group, and a caller guarding a whole group asks
 # once rather than once per rule.
 cs_gh_opaque() {  # cs_gh_opaque <subcommand path> -- stdin: one command
-  awk -v mode=opaque -v want="$1" "$CS_GH_AWK"
+  awk -v mode=opaque -v want="$1" "$CS_WORD_AWK$CS_GH_AWK"
 }
 # Print the arguments of a gh subcommand and succeed, or print nothing and fail
 # if this command is not that subcommand. The subcommand is given as its whole
@@ -2258,7 +2602,7 @@ cs_gh_opaque() {  # cs_gh_opaque <subcommand path> -- stdin: one command
 # narrowing that fixed that cut at a newline, so a continuation made every
 # command look bare.
 cs_gh_args() {  # cs_gh_args <subcommand path> -- stdin: one command
-  awk -v mode=args -v want="$1" "$CS_GH_AWK"
+  awk -v mode=args -v want="$1" "$CS_WORD_AWK$CS_GH_AWK"
 }
 
 # THE WALK IS PART OF THE LOAD, and this is #79 answer to the same question one
@@ -2299,4 +2643,22 @@ if [ -z "$CS_GH_AWK" ]; then
   CS_INVALID_LIST="CS_GH_AWK is empty"
   echo "lib/command-scan.sh: $CS_INVALID_LIST. cs_gh_args and cs_gh_opaque are withdrawn, so every consumer that requires them refuses." >&2
   unset -f cs_gh_args cs_gh_opaque 2>/dev/null
+fi
+
+# THE WORD READER IS PART OF THE LOAD TOO (#166), and it fails the dangerous way
+# where CS_GH_AWK above fails the harmless one. CS_WORD_AWK is a set of function
+# definitions and nothing else, so emptied it leaves every program that calls
+# wd_next calling a function that is not there, and that program does not
+# compile: awk exits 2 before reading a line. cs_split would print nothing, so
+# no command word would stand at ^ for any rule, and cs_gh_args would fail,
+# which every caller reads as "not this path". Every consumer of the three
+# would permit. So all three are withdrawn together, and each consumer's own
+# load guard refuses. quoted_base_flag in no-pr-decisions.sh reads the reader
+# too, and that hook requires cs_split, so it refuses before that question is
+# asked. What a reader that does not COMPILE does is #242's, as it is for
+# CS_GH_AWK.
+if [ -z "$CS_WORD_AWK" ]; then
+  CS_INVALID_LIST="CS_WORD_AWK is empty"
+  echo "lib/command-scan.sh: $CS_INVALID_LIST. cs_split, cs_gh_args and cs_gh_opaque are withdrawn, so every consumer that requires them refuses." >&2
+  unset -f cs_split cs_gh_args cs_gh_opaque 2>/dev/null
 fi
