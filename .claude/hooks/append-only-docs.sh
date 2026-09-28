@@ -30,17 +30,29 @@
 # answered once, there. Its grep passes answered a 300 KB line in 0.03 s and
 # were never the risk; the cap is here because a rule that reaches every Bash
 # hook but one is the shape #84 was filed against. This file still matches paths
-# where they stand rather than through the tokeniser. The library is tested for
-# before it is sourced, and both functions after, for THE LOAD CONTRACT's reason.
+# where they stand rather than through the tokeniser -- but over the command
+# with its backslash continuations joined, by cs_join, the third function it
+# takes (#156). Every rule below is a grep, grep matches within a line, and each
+# destroying rule wants the verb and the path on one: `truncate -s 0 \`, a
+# newline and an entry was permitted, and so was every verb here and the
+# truncating `>`. no-pr-decisions.sh joins for the same reason, and cs_within_cap
+# already measured the joined text, so the cap and the rules read one text now.
+# The trade, taken knowingly: cs_join joins a trailing backslash inside quotes
+# too, where a shell reads it literally, so quoted prose ending a line in `rm \`
+# and naming an entry on the next is refused; checks/GH-156.sh pins it. The
+# library is tested for before it is sourced, and all three functions after,
+# for THE LOAD CONTRACT's reason.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
 if ! command -v cs_tool_input >/dev/null 2>&1 \
+   || ! command -v cs_join >/dev/null 2>&1 \
    || ! command -v cs_within_cap >/dev/null 2>&1; then
-  echo "Blocked: append-only-docs.sh could not load lib/command-scan.sh, so it cannot read the command it was handed, or hold the line cap every Bash hook holds. Refusing rather than permitting." >&2
+  echo "Blocked: append-only-docs.sh could not load lib/command-scan.sh, so it cannot read the command it was handed, join its continuations, or hold the line cap every Bash hook holds. Refusing rather than permitting." >&2
   exit 2
 fi
 
 COMMAND=$(cs_tool_input command) || exit 2
+COMMAND=$(printf '%s\n' "$COMMAND" | cs_join)
 # THE LINE CAP, in lib/command-scan.sh: a line longer than 16 KB is refused
 # before any pass reads it, because a hook still reading when the harness
 # timeout kills it permits. Issue #96.

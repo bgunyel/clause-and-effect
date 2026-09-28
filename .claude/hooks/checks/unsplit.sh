@@ -8052,7 +8052,8 @@ done
 # sets differ, and that difference is the reason the guards cannot share a list:
 # four want cs_git_args, no-pr-decisions.sh wants cs_gh_args and cs_join instead,
 # and the two convention hooks want neither. Since #96 every one of them wants
-# cs_within_cap, and append-only-docs.sh wants nothing else.
+# cs_within_cap, and append-only-docs.sh wants only cs_join beside it, since
+# #156, whose issue file drives that pair.
 mk_halflib no-git-push.sh cs_normalise
 mk_halflib no-git-push.sh cs_split
 mk_halflib no-git-push.sh cs_git_args
@@ -8570,7 +8571,7 @@ done | LC_ALL=C sort -u)
   exit 1
 }
 tok 'the two document hooks require the functions this suite expects' \
-    'cs_tool_input cs_within_cap' \
+    'cs_join cs_tool_input cs_within_cap' \
     "$(printf '%s' "$DOC_HOOK_FUNCS" | tr '\n' ' ' | sed 's/ $//')"
 DOC_FUNCS_UNNAMED=
 for doc_func in $DOC_HOOK_FUNCS; do
@@ -10817,7 +10818,6 @@ pytest-uv alembic-uv|quote-double-3|BLOCK|gap|GH-136|the group flag in double qu
 pytest-uv alembic-uv|quote-single-3|BLOCK|gap|GH-136|the group flag in single quotes
 pytest-uv alembic-uv|quote-double-4|BLOCK|gap|GH-136|the group value in double quotes
 pytest-uv alembic-uv|quote-single-4|BLOCK|gap|GH-136|the group value in single quotes
-docs-truncate|continuation|ALLOW|gap|GH-156|the verb and the path on either side of a backslash, which this hook's greps read as two lines and a shell runs as one
 docs-truncate|word-path|ALLOW|gap|GH-171|a command word spelled as a path, which this hook's verb grep does not reduce to the name it spells
 docs-truncate|word-dot|ALLOW|gap|GH-171|a command word spelled with ./, which this hook's verb grep does not reduce to the name it spells
 docs-truncate|word-dquoted|ALLOW|gap|GH-171|a double-quoted command word, which this hook's verb grep does not reduce to the name it spells
@@ -11048,6 +11048,7 @@ GH-95.1:none GH-95.2:none GH-96.1:none GH-97.1:seed GH-128:transformation
 GH-117:transformation GH-118:transformation GH-133:none GH-134:transformation GH-137.1:seed
 GH-137.2:seed GH-139:transformation GH-109.5:none GH-130.1:none GH-130.2:none
 GH-130.3:none GH-130.4:none GH-130.5:seed GH-130.6:none
+GH-156:transformation
 '
 # One row per entry that is either in scope or carries the field: `<ID>|in|out`,
 # the `variants` keyword, and whatever follows it. An entry out of scope is
@@ -11644,7 +11645,7 @@ req GH-107.1
 TEXT_CHECK_ARGS=$(text_check_faults "${SUITE_FILES[@]}")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '321' "${TEXT_CHECK_ARGS##*COUNT }"
+    '322' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
