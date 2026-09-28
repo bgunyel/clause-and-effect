@@ -801,6 +801,9 @@ heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
 normalise-swallows-a-missing-heredoc-pass%lib/command-scan.sh%/^  unset -f cs_normalise$/d%GH-182.2%caught
+heredoc-quoting-inverted%lib/command-scan.sh%s|d !~ /|d ~ /|%GH-202.1%caught
+readmission-splits-the-raw-command%no-pr-decisions.sh%s/^\$BODIES"$/$COMMAND"/%GH-202.1%caught
+readmission-drops-the-fallback%no-pr-decisions.sh%s/ || BODIES=\$COMMAND$//%GH-202.3%caught
 command-word-not-reduced%lib/command-scan.sh%s/^      w = substr(s, 1, i - 1)$/      w = "x"/%GH-117%caught
 wrapper-word-spelling-not-admitted%lib/command-scan.sh%s/SPELLING((ba|z|)sh/((ba|z|)sh/%GH-117%caught
 prefix-word-spelling-not-reduced%lib/command-scan.sh%s/return cw_name(w)/return w/%GH-117%caught

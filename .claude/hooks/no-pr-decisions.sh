@@ -188,7 +188,8 @@
 # What it cost in this file, and why the required list below is its own and
 # not a list shared with its siblings. Issue #84 found this line bare here too,
 # and this hook's set is the one that makes a shared list wrong: it calls
-# cs_gh_args, cs_gh_opaque and cs_join, and no cs_git_args at all. Every rule in
+# cs_gh_args, cs_gh_opaque, cs_join and cs_drop_quoted_heredocs (#202), and no
+# cs_git_args at all. Every rule in
 # this file reads its arguments through cs_gh_args, so renaming that one
 # permitted `gh pr merge` and `gh pr create --base main` alike.
 #
@@ -218,6 +219,7 @@ if ! command -v cs_normalise >/dev/null 2>&1 \
    || ! command -v cs_gh_args >/dev/null 2>&1 \
    || ! command -v cs_gh_opaque >/dev/null 2>&1 \
    || ! command -v cs_join >/dev/null 2>&1 \
+   || ! command -v cs_drop_quoted_heredocs >/dev/null 2>&1 \
    || ! command -v cs_tool_input >/dev/null 2>&1 \
    || ! command -v cs_within_cap >/dev/null 2>&1; then
   echo "Blocked: no-pr-decisions.sh could not load lib/command-scan.sh, so it cannot tell whether this command decides a pull request or a release. Refusing rather than permitting." >&2
@@ -242,6 +244,10 @@ if ! printf '%s\n' "$COMMAND" | cs_within_cap; then
 fi
 SCAN=$(printf '%s\n' "$COMMAND" | cs_normalise)
 CMDS=$(printf '%s\n' "$SCAN" | cs_split)
+# The text CMDS is split from, which is $SCAN until the heredoc re-admission
+# below parts the two: from there $SCAN is what the three graphql rules read as
+# text, and this is what every command rule and line_was_cut read. #202.
+CMDTEXT=$SCAN
 
 DECIDE="Blocked: deciding a pull request is Bertan's call, not an agent's. Opening a PR, commenting on it and editing it are allowed; accepting, rejecting, merging and reopening are not."
 
@@ -640,10 +646,50 @@ CMDLIST
 # gh api reading a heredoc is a decision hiding in text that was just dropped --
 # a heredoc is the ordinary way to send a graphql mutation. The raw command is
 # re-admitted for that shape alone, and the split redone over what it added.
+#
+# TWO TEXTS, SINCE #202, because re-admitting is two acts and only one of them
+# is wanted of every body. The raw command used to go into $SCAN and all of it
+# was split into CMDS, so every heredoc body on the line became command
+# candidates for every rule after this point -- a QUOTED body included, where
+# bash expands nothing and nothing can run. A pull request body quoting
+# `gh api -X POST repos/o/r/releases -f tag_name=v1` in backticks, written by
+# `cat > f <<'MD'` and sent by a gh api PATCH on the next line, was refused as
+# that release write; so was a body naming a merge, a release create or a state
+# field beside any gh api call, a read included. That is how the bodies of this
+# repository's pull requests and issues are written. #202's triage measured
+# eleven such shapes, every one refused.
+#
+# So the raw command still goes into $SCAN whole: the three graphql rules read
+# it as TEXT, and a mutation sent through a quoted heredoc -- piped, on stdin,
+# or staged in a file that a later `-f query=@file` reads -- is exactly what they
+# are for. CMDS is split from CMDTEXT instead, which gets the raw command with
+# its quoted bodies taken out by cs_drop_quoted_heredocs, the library's answer
+# to where a body begins and what quoting is, and not one written here. An
+# unquoted body is kept and re-read exactly as before, because bash runs the
+# `$( )` and the backticks in it. line_was_cut and the state field's fallback
+# read CMDTEXT too, so a backtick or a `state=closed` in a quoted body no longer
+# marks the line cut; and the graphql gate is asked of CMDS, so a quoted body
+# line reading `gh api graphql` no longer opens it.
+#
+# A FAILED CALL FALLS BACK ON THE RAW COMMAND, which is the reading before #202:
+# it refuses more and never less. When the call can fail is said beside
+# cs_drop_quoted_heredocs.
+#
+# THE TRADE, taken knowingly, and the one thing #202 leaves: $SCAN still holds a
+# quoted body's text, so prose in one naming a mutation or a baseRefName is
+# refused when a real `gh api graphql` call stands on the same line. That is
+# item 1 of TWO BLEEDS THE GATE LEAVES, below, arriving through a heredoc. It
+# costs refusals and never permissions -- beside a REST write the gate stays
+# shut and the same prose is permitted -- and GH-202.2 pins both rows. Taking
+# the quoted bodies out of $SCAN as well would close it and open the
+# file-staged mutation, which is a decision.
 if gh_rule api && echo "$COMMAND" | grep -q '<<'; then
+  BODIES=$(printf '%s\n' "$COMMAND" | cs_drop_quoted_heredocs) || BODIES=$COMMAND
   SCAN="$SCAN
 $COMMAND"
-  CMDS=$(printf '%s\n' "$SCAN" | cs_split)
+  CMDTEXT="$CMDTEXT
+$BODIES"
+  CMDS=$(printf '%s\n' "$CMDTEXT" | cs_split)
 fi
 
 # The verdict flags, bundled or not. gh takes shorthand flags together, so
@@ -1671,10 +1717,13 @@ while IFS= read -r CMD; do
   # the only one with a fallback. Every other rule in this loop needs the
   # endpoint and nothing else, so a cut either leaves the endpoint readable or
   # removes it and the arm refuses.
+  #
+  # The line is CMDTEXT and not $SCAN, which holds a quoted heredoc's body: a
+  # backtick in one cut nothing, and a `state=closed` in one is prose. #202.
   if printf '%s\n' "$ENDPOINT" | grep -qiE '/pulls/'; then
     if printf '%s\n' "$CMD" | grep -qiE "$STATE_FIELD_RE"; then
       API_STATE=1
-    elif line_was_cut "$SCAN" && printf '%s\n' "$SCAN" | grep -qiE "$STATE_FIELD_RE"; then
+    elif line_was_cut "$CMDTEXT" && printf '%s\n' "$CMDTEXT" | grep -qiE "$STATE_FIELD_RE"; then
       API_STATE=1
     fi
   fi

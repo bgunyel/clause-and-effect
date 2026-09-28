@@ -223,7 +223,8 @@
 #     the rest. The sets differ, which is why one shared list would be wrong:
 #     no-git-push.sh, no-commit-to-main.sh and no-work-on-stale-branch.sh call
 #     cs_normalise, cs_split and cs_git_args; no-pr-decisions.sh calls
-#     cs_normalise, cs_split, cs_gh_args, cs_gh_opaque and cs_join, and no
+#     cs_normalise, cs_split, cs_gh_args, cs_gh_opaque, cs_join and
+#     cs_drop_quoted_heredocs, and no
 #     cs_git_args at all; pytest-via-uv-group.sh and alembic-via-uv-group.sh
 #     call cs_normalise and cs_split and neither of the argument readers, nor
 #     cs_gh_opaque. Every one of them calls
@@ -235,7 +236,9 @@
 #     cs_join, which no required list names either (#182): cs_join is answered
 #     by cs_within_cap, as above, and cs_drop_heredocs by the library
 #     withdrawing cs_normalise when it is missing -- CS_NORMALISE ANSWERS FOR
-#     CS_DROP_HEREDOCS, below cs_normalise. A required list narrower than the set is
+#     CS_DROP_HEREDOCS, below cs_normalise. cs_drop_quoted_heredocs calls it
+#     too (#202), and answers for it by its status, which its caller reads --
+#     see that function. A required list narrower than the set is
 #     the #84 defect exactly, and #69 found the same thing in the last two from
 #     the other end -- cs_split required, cs_normalise not. The enumeration here
 #     is a convenience and goes stale; check-hooks.sh derives both sides off the
@@ -357,6 +360,25 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # paragraphs below record being answered wrongly, one answer after another.
 # What a library missing this function does is THE LOAD CONTRACT's, and is
 # answered below cs_normalise.
+#
+# ONE ARGUMENT, `keep-unquoted`, and #202 is why. With it, the body of a heredoc
+# whose delimiter is UNQUOTED is printed rather than dropped, and only a quoted
+# body goes. Every question of where a body begins and ends is still answered
+# here, once, by the same lines; the argument decides only what happens to a
+# body's lines once they are known to be one. cs_drop_quoted_heredocs, below,
+# is that call under a name, and no caller passes it any other way. Anything
+# else as the argument is refused with status 2 and nothing printed, so a
+# misspelt mode cannot quietly mean the default.
+#
+# "QUOTED" IS BASH'S RULE: the delimiter word as written holds a `'`, a `"` or
+# a `\` anywhere, so `<<'X'`, `<<"X"`, `<<-'X'`, `<<-"X"` and the partly quoted
+# `<<X"Y"` are quoted, and bash performs no expansion in their bodies -- no
+# parameter, no `$( )`, no backtick. Nothing in such a body can run, so nothing
+# in it is a command. An unquoted body is expanded, so a `$( )` or a backtick
+# in it does run, and keeping it is keeping those. `<<\X` counts as quoted by
+# this rule and is a separate defect of this pass: its delimiter is read as
+# `\X`, which never arrives, so the END give-back returns the body as commands
+# in either mode -- the refusing direction, and not #202's.
 #
 # A heredoc body is data, not commands. This repository writes dev-log entries
 # and commit messages through a quoted heredoc, and those texts name the very
@@ -495,12 +517,19 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # bash begins it. Raised on review of the pull request for #128 and kept, on
 # the grounds the whole file keeps everywhere else: a
 # refusal is visible and one edit away, and a permitted push is neither.
-cs_drop_heredocs() {
-  awk '
+cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout: the same, bodies dropped
+  case "${1:-}" in
+    ''|keep-unquoted) ;;
+    *) return 2 ;;
+  esac
+  awk -v keep="${1:-}" '
     ind {
       line = $0
       if (dash) sub(/^\t+/, "", line)
-      held[++nheld] = $0
+      # A kept body is printed as it goes and never held, so the END give-back
+      # has nothing of it to return twice.
+      if (kept) print
+      else held[++nheld] = $0
       if (line == d) { ind = 0; nheld = 0 }
       next
     }
@@ -518,6 +547,9 @@ cs_drop_heredocs() {
           d = substr(scan, RSTART, RLENGTH)
           dash = (d ~ /^<<-/)
           sub(/^<<-?[[:space:]]*/, "", d)
+          # Asked of the delimiter as written, before its quotes come off: the
+          # paragraph above this function headed QUOTED says which rule.
+          kept = (keep != "" && d !~ /[\047"\\]/)
           gsub(/[\047"]/, "", d)
           opener = 1
         }
@@ -733,6 +765,29 @@ if ! declare -F cs_drop_heredocs >/dev/null 2>&1; then
   echo "lib/command-scan.sh: cs_drop_heredocs is not defined, and cs_normalise calls it. cs_normalise is withdrawn, so every consumer that requires it refuses." >&2
   unset -f cs_normalise
 fi
+
+# Drop QUOTED heredoc bodies and nothing else: lines on stdin, the same lines
+# out, with the body of every heredoc whose delimiter is quoted taken away and
+# every unquoted body kept where it stands. cs_drop_heredocs in its
+# keep-unquoted mode, which says what "quoted" is and why; this is the name a
+# hook calls it by, so that THE LOAD CONTRACT has a function to require rather
+# than an argument to trust.
+#
+# no-pr-decisions.sh is its caller, for #202. That hook re-reads a command's
+# heredoc bodies as commands once a gh api call is on the line, because a
+# mutation sent through a heredoc is a decision hidden in text cs_normalise
+# dropped. It re-read the quoted ones too, where bash expands nothing, so a
+# pull request body quoting `gh api -X POST .../releases` in backticks was that
+# release write. It asks this function which bodies can hold a command.
+#
+# NOT WITHDRAWN when cs_drop_heredocs is missing, unlike cs_normalise above,
+# because its failure is loud: the call it makes answers 127 and this returns
+# that status, which its caller reads -- and falls back on the whole raw text,
+# the reading before #202, which refuses more and never less. Its one caller
+# also requires cs_normalise, which that same state withdraws.
+cs_drop_quoted_heredocs() {  # stdin: lines; stdout: the same, quoted heredoc bodies dropped
+  cs_drop_heredocs keep-unquoted
+}
 
 # Join backslash line continuations, and nothing else.
 #
