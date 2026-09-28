@@ -16,11 +16,11 @@
 # WHAT IS DRIVEN is `dup_stderr`, in the library since this issue made this
 # file its second caller, against one fixture per shape, each written below
 # with the shape on its second line. A reported shape is asserted as
-# `2:<shape>`, the output the guard prints; a clean one as the empty string. Each
-# must-flag row was run once against the old pattern and failed there, with the
-# old pattern's empty output; that run is recorded in the pull request, since a
-# check that restores the old pattern would be a check of a function nobody
-# calls.
+# `2:<shape>`, the output the guard prints; a clean one as the empty string.
+# Each must-flag row was run once against the old pattern and failed there --
+# every one empty but the continuation, which printed only its line 4; that
+# run is recorded in the pull request, since a check that restores the old
+# pattern would be a check of a function nobody calls.
 #
 # WHAT IS NOT HERE is `exec 3>&2`, the triage's first row, which the unsplit
 # file's #109 section already drives against its own fixture, and which moved
@@ -37,11 +37,11 @@ requirement GH-185 <<'REQ'
   `/proc/<anything>/fd/2` after `>`, `>>`, `>|`, `<` or `<>`; blanks and one
   quote allowed before the target. Continuations are folded first and a folded
   line is reported under its first line's number. It reports nothing for fd 1,
-  written or implicit, whatever spelling points it at stderr -- `>&2`, `1>&2`,
-  `>/dev/stderr`, `1>/dev/stderr`, `>>`, `>|` and `&>` -- nor for `2>&1`,
-  `>/dev/null 2>&1` or a here-string naming `/dev/stderr`. `no-git-push.sh`,
-  `no-pr-decisions.sh` and `lib/command-scan.sh`, which both source, report
-  nothing.
+  whether written or implicit, whatever spelling points it at stderr --
+  `>&2`, `1>&2`, `>/dev/stderr`, `1>/dev/stderr`, `>>`, `>|` and `&>` -- nor
+  for `2>&1`, `>/dev/null 2>&1` or a here-string naming `/dev/stderr`.
+  `no-git-push.sh`, `no-pr-decisions.sh` and `lib/command-scan.sh`, which
+  both source, report nothing.
 - from: #185, the sixth review of PR #169, and #185's triage
 - kind: defect-permitting
 - status: active
