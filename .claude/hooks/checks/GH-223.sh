@@ -39,7 +39,10 @@ requirement GH-223.2 <<'REQ'
   once per program, and each copy is held to one spelling: the #223 issue
   file counts every copy in `generate-requirements.sh`,
   `split-requirements.sh`, the library, the end-of-run file and the unsplit
-  file, so a copy changed or added in any of them is red. The generator and
+  file, each whole between its delimiters, and each grammar's opening apart,
+  so a copy changed in any of them, by an alternative appended inside its
+  delimiters among other edits, or one added there with its grammar's
+  opening, is red. The generator and
   the suite's reader of `requirements/` give one verdict on one body: both
   refuse a field given twice, and both accept a blank line, which the reader
   skips without ending the field before it.
@@ -52,7 +55,8 @@ requirement GH-223.2 <<'REQ'
   a bash test, and none of them can read the others' definition. The blank
   line is accepted rather than refused because the reader is the gate and two
   legacy files hold one, `GH-148` and `GH-155.1`. What it does not see, named:
-  a copy spelled in a file it does not count, such as another issue file.
+  a copy spelled in a file it does not count, such as another issue file, and
+  a copy added in one it counts with an opening of its own.
 REQ
 requirement GH-223.3 <<'REQ'
 - text: The suite reads no stdin. The driver makes its stdin `/dev/null`
@@ -127,7 +131,10 @@ requirement GH-223.6 <<'REQ'
   sub-ID of a family with no issue file is named as not written yet or is an
   example, so neither is asked. What it does not see, named: a deleted ID
   that nothing in the registry cites, a bare `GH-<n>` entry deleted, and a
-  citation anywhere else -- an issue file, a document, a commit.
+  citation anywhere else -- an issue file, a document, a commit. What the
+  read asked is held to a literal, the count of its citations and the
+  families they fall in, so a read that asked nothing is red rather than
+  clean; the literal moves whenever such a citation is added or removed.
 REQ
 requirement GH-223.7 <<'REQ'
 - text: `generate-requirements.sh` writes each file through a temporary file
@@ -192,30 +199,41 @@ tok 'and each is in requirements/ with the checksum and length it had at 0d5829d
   '' "$(split_moved_bad "$HOOKS/requirements" "$R223_LATE")"
 
 # ITEM 2. Every copy of each grammar, counted where it is spelled. A row per
-# file, `<file> <ID opening> <ID, awk> <ID, bash> <field> <continuation>`: the
-# opening `GH-[1-9]` counts every copy however its tail is spelled, so a copy
-# whose opening changed drops out of it, and one whose tail changed drops out
-# of its spelling's count. The two scripts are the judged ones; the suite's
-# files are read off $SUITE_DIR, being the tooling.
+# file, `<file>` and then a count per spelling below, in its order. Each
+# spelling is a whole copy, bracketed at both ends by its delimiters -- the
+# awk copies' slashes, the bash copy's quotes -- so a copy widened inside
+# them, by an alternative appended or a class changed, is no longer that
+# spelling and drops out of its count; a substring count kept it, which is
+# how an appended `|^\t` went green in review of PR #332. Each grammar also
+# has an opening, counted apart and bracketed only at its front, so that a
+# copy added with a tail of its own is counted there and nowhere else. The
+# two scripts are the judged ones; the suite's files are read off
+# $SUITE_DIR, being the tooling.
 req GH-223.2
 r223_count() {  # r223_count <file> <literal> -- how many times the file spells it
   grep -oF -- "$2" "$1" | wc -l | tr -d ' '
 }
-R223_ID_OPEN='GH-[1-9]'
-R223_ID_AWK='^GH-[1-9][0-9]*(\.[1-9][0-9]*)?$'
-R223_ID_BASH='^GH-[1-9][0-9]*([.][1-9][0-9]*)?$'
-R223_FIELD='^- [a-z-]+:'
-R223_CONT='^  [^ ]'
-tok 'each grammar'"'"'s spelling stands in each file as many times as #223 counted it there, prose and expected output among them, so a copy changed or added is red' \
-'generate-requirements.sh 1 1 0 1 1
-split-requirements.sh 2 1 0 1 1
-checks/library.sh 1 0 1 0 0
-checks/end-of-run.sh 2 2 0 2 1
-checks/unsplit.sh 0 0 0 2 1' \
-  "$(for f in "$HOOKS/generate-requirements.sh" "$HOOKS/split-requirements.sh" \
-              "$SUITE_DIR/checks/library.sh" "$SUITE_DIR/checks/end-of-run.sh" "$SUITE_DIR/checks/unsplit.sh"; do
-       printf '%s' "${f#"$HOOKS"/}" | sed "s|^$SUITE_DIR/||"
-       for l in "$R223_ID_OPEN" "$R223_ID_AWK" "$R223_ID_BASH" "$R223_FIELD" "$R223_CONT"; do
+R223_SPELLINGS=(
+  'GH-[1-9]'                                # the ID's opening, prose and expected output among it
+  '/^GH-[1-9][0-9]*(\.[1-9][0-9]*)?$/'      # the ID, awk
+  "'^GH-[1-9][0-9]*([.][1-9][0-9]*)?\$'"    # the ID, bash
+  '/^- ['                                   # the field's opening
+  '/^- [a-z-]+:/'                           # the field
+  '/^- [a-z-]+:[ \t]*/'                     # the field, with the blanks after it, as a strip
+  '/^  ['                                   # the continuation's opening
+  '/^  [^ ]/'                               # the continuation
+)
+tok 'each grammar'"'"'s spelling stands in each file as many times as #223 counted it there, each copy whole, so a copy changed, or added with the opening, is red' \
+'generate-requirements.sh 1 1 0 1 1 0 1 1
+split-requirements.sh 2 1 0 1 1 0 1 1
+checks/library.sh 1 0 1 0 0 0 0 0
+checks/end-of-run.sh 2 1 0 2 2 0 1 1
+checks/unsplit.sh 0 0 0 2 1 1 1 1' \
+  "$(for rel in generate-requirements.sh split-requirements.sh \
+                checks/library.sh checks/end-of-run.sh checks/unsplit.sh; do
+       case $rel in checks/*) f=$SUITE_DIR/$rel ;; *) f=$HOOKS/$rel ;; esac
+       printf '%s' "$rel"
+       for l in "${R223_SPELLINGS[@]}"; do
          printf ' %s' "$(r223_count "$f" "$l")"
        done
        printf '\n'
@@ -346,15 +364,21 @@ exit 1" "$(generator_run --check "$R223/no-literal"; printf '|'; generator_run -
 # off $HOOKS, whose requirements.md and requirements/ are what is judged, and
 # the families off the suite's checks/, the tooling.
 req GH-223.6
-r223_cited_bad() {  # r223_cited_bad <hooks dir> <checks dir> -- each GH-<n>.<m> cited, of a family with an issue file, with no file
+r223_cited() {  # r223_cited <hooks dir> <checks dir> -- each GH-<n>.<m> a file cites, of a family with an issue file, once per file
   local f id n
   for f in "$1/requirements.md" "$1"/requirements/GH-*.md; do
     [ -f "$f" ] || continue
     grep -oE 'GH-[1-9][0-9]*\.[1-9][0-9]*' -- "$f" | LC_ALL=C sort -u | while IFS= read -r id; do
       n=${id#GH-}; n=${n%%.*}
-      [ -f "$2/GH-$n.sh" ] && [ ! -f "$1/requirements/$id.md" ] && printf '%s: cites %s, which has no entry\n' "${f#"$1"/}" "$id"
+      [ -f "$2/GH-$n.sh" ] || continue
+      printf '%s: cites %s' "${f#"$1"/}" "$id"
+      [ -f "$1/requirements/$id.md" ] || printf ', which has no entry'
+      printf '\n'
     done
   done
+}
+r223_cited_bad() {  # r223_cited_bad -- stdin, r223_cited's lines: the citations with no file
+  grep -F ', which has no entry'
 }
 mkdir -p "$R223/cited/requirements" "$R223/cited/checks"
 : > "$R223/cited/checks/GH-5.sh"
@@ -363,9 +387,21 @@ printf 'GH-5.1, GH-5.2, GH-5, GH-6.1 and GH-5.10.\n' > "$R223/cited/requirements
 tok 'a cited sub-ID of a family with an issue file and no file is named, and a bare ID and a family with no issue file are not' \
 'requirements.md: cites GH-5.10, which has no entry
 requirements.md: cites GH-5.2, which has no entry
-requirements/GH-5.1.md: cites GH-5.3, which has no entry' "$(r223_cited_bad "$R223/cited" "$R223/cited/checks")"
+requirements/GH-5.1.md: cites GH-5.3, which has no entry' "$(r223_cited "$R223/cited" "$R223/cited/checks" | r223_cited_bad)"
+# The registry is read once, and both rows below ask that one read. The first
+# says only what failed, so a read of nothing -- no families, no registry --
+# passes it; the second holds what the read asked to a literal: the
+# citations, a line per file and ID, and the families they fall in. It moves
+# when a citation of a family with an issue file is added or removed, which is
+# a change a reviewer should see (review of PR #332).
+R223_CITED=$(r223_cited "$HOOKS" "$SUITE_DIR/checks")
 tok 'every GH-<n>.<m> the registry cites, of a family with an issue file, has its file under requirements/' \
-  '' "$(r223_cited_bad "$HOOKS" "$SUITE_DIR/checks")"
+  '' "$(printf '%s\n' "$R223_CITED" | r223_cited_bad)"
+tok 'and that read asked the registry'"'"'s citations of families with an issue file: these many, in these families' \
+  '88
+GH-110 GH-144 GH-157 GH-159 GH-166 GH-174 GH-177 GH-182 GH-205 GH-219 GH-223 GH-224' \
+  "$(printf '%s\n' "$R223_CITED" | grep -c .
+     printf '%s\n' "$R223_CITED" | sed -n 's/.*: cites GH-\([0-9]*\)\..*/GH-\1/p' | LC_ALL=C sort -u | tr '\n' ' ' | sed 's/ $//')"
 
 # ITEM 11. A `cp` first on PATH that writes part of its destination and fails
 # when that is GH-5.1's, and is the real one otherwise; the fixture has two

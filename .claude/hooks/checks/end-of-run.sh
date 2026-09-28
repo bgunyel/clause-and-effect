@@ -2117,9 +2117,8 @@ tok 'the declared and pinned records are the files the driver set them to' \
 req GH-223.2
 R223_AGREE="$FIXTURES/r223-agree"
 rm -rf -- "$R223_AGREE"; cp -r "$REQ_FIX/clean" "$R223_AGREE"
-mkdir -p "$R223_AGREE/checks"
 printf "REQUIREMENTS_LEGACY='\n'\n" > "$R223_AGREE/check-hooks.sh"
-sed 's/^@//' > "$R223_AGREE/checks/GH-5.sh" <<'FIX'
+issue_fixture "$R223_AGREE/checks/GH-5.sh" <<'FIX'
 @requirement GH-5.1 <<'REQ'
 - text: a sub-issue that is permit-only
 
@@ -2130,15 +2129,18 @@ sed 's/^@//' > "$R223_AGREE/checks/GH-5.sh" <<'FIX'
 REQ
 FIX
 rm -f -- "$R223_AGREE/requirements/GH-5.1.md"
-R223_AGREE_GEN=$(bash "$HOOKS/generate-requirements.sh" "$R223_AGREE" 2>&1; printf 'exit %s' "$?")
+R223_AGREE_GEN=$(generator_run "$R223_AGREE")
+# Each verdict is read as a whole line, bracketed by the newlines around it,
+# so a line that says more than the literal is not taken for it.
+R223_NL=$'\n'
 OUT=$(req_fixture "$R223_AGREE")
 tok 'the generator writes a body with a blank line' 'wrote requirements/GH-5.1.md
 exit 0' "$R223_AGREE_GEN"
-holds 'and the reader takes the file it wrote as well formed' "$OUT" "ok${TAB}FR-45${TAB}every requirement entry is well formed"
+holds 'and the reader takes the file it wrote as well formed' "$R223_NL$OUT$R223_NL" "${R223_NL}ok${TAB}FR-45${TAB}every requirement entry is well formed$R223_NL"
 printf -- '- text: again\n' >> "$R223_AGREE/requirements/GH-5.1.md"
 OUT=$(req_fixture "$R223_AGREE")
-holds 'and refuses one that gives a field twice, as the generator refuses its declaration' "$OUT" \
-  "FAIL${TAB}FR-45${TAB}GH-5.1: the field text is given twice"
+holds 'and refuses one that gives a field twice, as the generator refuses its declaration' "$R223_NL$OUT$R223_NL" \
+  "${R223_NL}FAIL${TAB}FR-45${TAB}GH-5.1: the field text is given twice$R223_NL"
 
 echo "--- every result goes through pass and fail ---"
 # A result printed any other way is printed and not recorded, so it covers

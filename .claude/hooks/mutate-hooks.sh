@@ -838,6 +838,7 @@ generator-reads-no-legacy-set%generate-requirements.sh%s/^LEGACY=" \$(printf /LE
 generator-lets-another-issue-declare%generate-requirements.sh%s/\[ "\$rel" = "checks\/GH-\$n.sh" \]/true/%GH-223.4%caught
 generator-writes-a-field-twice%generate-requirements.sh%s/if (key in given) problem/if (0) problem/%GH-223.2%caught
 generator-field-grammar-widened%generate-requirements.sh%s/(\$0 ~ \/^- \[a-z-\]+:\/)/($0 ~ \/^- [a-z0-9-]+:\/)/%GH-223.2%caught
+generator-continuation-widened-by-appending%generate-requirements.sh%s/\$0 ~ \/^  \[^ \]\/)/$0 ~ \/^  [^ ]|^\\t\/)/%GH-223.2%caught
 splitter-id-grammar-widened%split-requirements.sh%s/(\$2 !~ \/^GH-\[1-9\]\[0-9\]\*/($2 !~ \/^GH-[0-9][0-9]*/%GH-223.2%caught
 generator-writes-over-the-destination%generate-requirements.sh%s/ [&][&] cp -- "\$STAGE\/\$id" "\$TMP"/ \&\& cp -- "$STAGE\/$id" "$SPLIT\/$id.md" \&\& cp -- "$STAGE\/$id" "$TMP"/%GH-223.7%caught
 generator-leaves-its-temporary-file%generate-requirements.sh%s/; \[ -z "\$TMP" \] || rm -f -- "\$TMP"'/'/%GH-223.7%caught

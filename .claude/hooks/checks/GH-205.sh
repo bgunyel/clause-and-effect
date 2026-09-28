@@ -55,10 +55,8 @@ requirement GH-205.2 <<'REQ'
   by `GH-`, spelled other than `requirement <ID> <<'REQ'` at the start of the
   line; an ID outside the grammar; an ID declared twice; a
   declaration never closed; a body that is empty, holds a line that is no
-  field, or carries a `generated` field of its own; and what GH-223.4 and
-  GH-223.2 add, which since #223 stand where its refusals of a declared ID
-  whose file is hand-written and of a generated file no issue file declares
-  any more stood. With
+  field, or carries a `generated` field of its own; a declared ID whose file
+  is hand-written; and a generated file no issue file declares any more. With
   `--check` it writes nothing and exits 1 on a refusal, which it reports
   alone; with none, it names each file that is not what its declaration would
   write and exits 1. Against this repository it names the entries the suite
@@ -72,6 +70,15 @@ requirement GH-205.2 <<'REQ'
   it, because a text reader is always one spelling behind bash. Bash records
   it when the suite runs the file, and GH-205.1's check then finds an entry
   declared and not written, so the run is red where the script was silent.
+  Since #223 two of the refusals above are read otherwise, and the text is
+  left as #205 wrote it, as an entry's text is. Which file is hand-written
+  is decided by the legacy set and not by the file's `generated` field
+  (GH-223.4): a declared legacy ID is refused, and a file outside the set is
+  the generator's to replace whatever it carries, where #205 refused one
+  with no `generated` field. And a blank line in a body is not a line that
+  is no field: it is accepted, as the suite's reader accepts it (GH-223.2).
+  A generated file no issue file declares is still refused, as a file
+  outside the legacy set that no issue file declares.
 REQ
 requirement GH-205.3 <<'REQ'
 - text: `REQUIREMENT_SHAPE` and `INV_SCOPE` hold legacy `GH-` entries only. A

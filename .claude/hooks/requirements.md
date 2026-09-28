@@ -1345,6 +1345,11 @@ it has no entry above (Q16).
   what it found stands -- a generator that read nothing and reported a pass,
   and a stage path `awk -v` could mangle, which the generator now refuses and
   reads whole
+- #332: the pull request for #223; rev-agent-223's review of it is cited in
+  #223's issue file where what it found stands -- a count of the grammar
+  copies that read substrings, so a copy widened inside its delimiters kept
+  its count, and a read of the registry's citations that could ask nothing
+  and pass
 - #176: the heredoc append `append-only-docs.sh` refuses because a `>` in the
   heredoc's prose, with a guarded path after it, reads as a truncating
   redirect. Cited in #157's issue file, where the dev-log README routes
