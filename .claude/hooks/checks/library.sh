@@ -1581,7 +1581,13 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # front of the target.
 #
 # WHERE A WORD ENDS is `end`, one set that every part reads: a blank, one of
-# `;&|()<>`, and a backtick, which ends a command substitution. It was three
+# `;&|()<>`, and a backtick. That is where bash ends a word in the text alone,
+# and not everywhere: a substitution's closing `)` or backtick ends no word,
+# so `$(:)1` is one word, and an escaped blank joins one, so `a\ 1` is one;
+# which of the two a character is depends on the state bash is in when it
+# reads it, which the text does not carry. GH-185's note names that class and
+# pins its representatives, and the fifth review of #185's pull request set
+# the line there: named, not reached, since reaching it is a lexer. It was three
 # copies until the second review of #185's pull request found two of them
 # without the backtick, so a path closing a substitution was never bounded.
 # It is the tokeniser's BOUND in lib/command-scan.sh, and is not read from
@@ -1634,7 +1640,11 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 #
 # Continuations are folded first and whole-line comments blanked after, in
 # the order bash reads them: a comment-only line after a continuation is part
-# of the line above to bash, and its `#` inside a word. Each continued line is
+# of the line above to bash, and its `#` inside a word. A line that starts a
+# logical line with `#` is a comment, is blanked, and starts no continuation,
+# so the line after a comment ending in a backslash is read as bash reads it,
+# continued if it ends in one -- `# note \`, `exec 3>\`, `/dev/stderr` is
+# `exec 3>/dev/stderr` (the fifth review). Each continued line is
 # also read on its own, beside the fold, so a line after a backslash bash does
 # not continue -- one ending a comment -- is still read: until the fourth
 # review of #185's pull request the fold blanked comments first and continued
@@ -1678,7 +1688,9 @@ dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplic
         }
         function emit(l) { if (l ~ /^[[:space:]]*#/) l = ""; print l sep unquoted(l) }
         function flush(   i) { emit(buf); for (i = 1; i <= n; i++) emit(alone[i]) }
-        { if (cont) { buf = buf $0; alone[++n] = $0 } else { buf = $0; n = 0 }
+        { if (cont) { buf = buf $0; alone[++n] = $0 }
+          else if ($0 ~ /^[[:space:]]*#/) { emit(""); next }
+          else { buf = $0; n = 0 }
           if (buf ~ /\\$/) { sub(/\\$/, "", buf); cont = 1; next }
           cont = 0; flush() }
         END { if (cont) flush() }' "$1" \

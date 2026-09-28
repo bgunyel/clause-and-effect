@@ -19,18 +19,19 @@
 # continuation, a heredoc and a shape spread over two lines. A reported shape
 # is asserted as `<line>:<shape>`, the output the guard prints; a clean one as
 # the empty string. Each must-flag row was run against the old pattern, and
-# each failed there -- every one empty but the continuation, which printed
-# only its line 4 -- but those the old pattern reached too, each here for a
-# clause of the new one: `exec 3>& 2`, a blank after `>&`; a source at the
-# start of a line and right after a backtick, `(`, `)` or `|`, which pin where
-# the new one reads a word start and which the old one read after any
-# non-digit; and `3>&2 exec` after a comment ending in a backslash, which the
-# old one read line by line and this pull request's fold had hidden. That run
-# is recorded in the pull request, since a check that restores the
-# old pattern would be a check of a function nobody calls. A shape the guard
-# does not reach is asserted as the empty string too, beside the clean ones,
-# and says so in its row; a trade is asserted as what the guard prints, and
-# its row says it is a trade.
+# each failed there -- every one empty but two: the continuation, which
+# printed only its line 4, and a file ending inside a continuation, which it
+# printed with the backslash on, having read each line alone -- but those the
+# old pattern reached too, each here for a clause of the new one:
+# `exec 3>& 2`, a blank after `>&`; a source at the start of a line and right
+# after a backtick, `(`, `)` or `|`, which pin where the new one reads a word
+# start and which the old one read after any non-digit; and `3>&2 exec` after
+# a comment ending in a backslash, which the old one read line by line and
+# this pull request's fold had hidden. That run is recorded in the pull
+# request, since a check that restores the old pattern would be a check of a
+# function nobody calls. A shape the guard does not reach is asserted as the
+# empty string too, beside the clean ones, and says so in its row; a trade is
+# asserted as what the guard prints, and its row says it is a trade.
 #
 # WHAT IS NOT HERE is `exec 3>&2`, the triage's first row, which the unsplit
 # file's #109 section already drives against its own fixture, and which moved
@@ -58,7 +59,8 @@ requirement GH-185 <<'REQ'
   the backslashes and the repeated `/` and `./` segments taken out of every
   redirection's target word, and a line either reading matches is reported.
   Continuations are folded first and whole-line comments blanked after, as
-  bash reads them, and each continued line is read on its own as well as
+  bash reads them; a line that starts a logical line with `#` is a comment and
+  continues nothing; and each continued line is read on its own as well as
   joined; a folded line is reported under its first line's number, and a
   continued line under its own. It reports nothing for fd 1, whether written
   or implicit, `01` included -- `>&2`, `1>&2`, `>/dev/stderr`,
@@ -98,41 +100,60 @@ requirement GH-185 <<'REQ'
   ordinary path, `exec 3>/tmp/err`, and a relative path, `exec 3>stderr` run
   from `/dev`. A glob, which bash expands in a redirection's target, so `exec
   3>/dev/stde?r`, `exec 3>/dev/stde[r]r` and `exec 3>/dev/stder*` open stderr,
-  and reaching one would mean matching a pattern against a path. And a
-  subscript nested twice in a `{name}`, `exec {a[b[c[1]]]}>&2`, since a
-  pattern matches brackets to a fixed depth and this one matches one level of
-  nesting. Every one of them writes to stderr, measured. The implicit fd of an
-  input operator departs from the triage's wording, which has the guard report
-  nothing for the implicit fd: that fd is 0, `exec <&2` and then `>&0` writes
-  to stderr -- measured -- and the contract is any fd but 1, so it is
-  reported. Trades taken in the refusing direction, each pinned below by a row
-  that says it is a trade and asserts what the guard prints, so that a change
-  which flips one is a red: `<` by path opens a read-only descriptor on Linux,
-  so a write by way of one fails -- measured, for a source written and left
-  implicit -- and it is reported anyway, as the triage asked, while `<>` opens
-  one for writing and is a real duplication, and `<` onto a process
-  substitution, which the triage did not ask, is not reported, since a write
-  by way of it fails too -- measured; fd 2 reopened onto itself,
-  `2>/dev/stderr`, is reported though it hides nothing, because the contract
-  is any fd but 1; the digits after a `>&` start a word to the source as they
-  do to bash, but bash reads them as a target, so `exec >&13>&2`, a target of
-  13 and then fd 1, is reported, and so is `exec 2>&1<&2`, which duplicates
-  onto fd 0 the stdout fd 2 was just pointed at; a blank escaped with a
-  backslash is a word start to the source, so `echo a\ 3>&2`, where bash reads
-  `a 3` as one word and fd 1, is reported; the fd target is not bounded on its
-  right, so `exec 3>&20` is reported; a path whose last component is `stderr`
-  is reported in any directory, so a log file, `exec 2>"$dir/stderr"` or `exec
-  3>/tmp/stderr`, is; a process substitution is reported whatever the command
-  in it writes to, `exec 3> >(cat >/dev/null)` among them; the second reading
-  takes out quotes without reading which quote holds which, so `exec 3>\&2`, a
-  file named `&2`, `exec 3>'/dev/std\err'`, whose quotes keep the backslash,
-  and `exec 3>/dev/std\$'err'` are reported; and quotes are read only in a
-  target word, so a shape inside quoted text, `echo "use exec 3>&2 here"`, or
-  in a heredoc body, which is not dropped, is a red. Each of these was
-  measured not to write to stderr, `2>/dev/stderr` and the quoted and heredoc
-  text aside. The path target is bounded on its right, so `/dev/stderr2` and
-  `2>/tmp/stderr.log` are not reported. fd 1 by `/dev/fd/2` is a plain refusal
-  that `arms` does not count, which is #263's and not this guard's.
+  and reaching one would mean matching a pattern against a path. A subscript
+  nested twice in a `{name}`, `exec {a[b[c[1]]]}>&2`, since a pattern matches
+  brackets to a fixed depth and this one matches one level of nesting. And a
+  class, named rather than reached: a word, a comment or an operator whose
+  boundary depends on quote, substitution, escape or `eval` state, which the
+  text alone does not carry -- a substitution's close ends no word, so `f
+  $(:)1<&2` and ``f `:`1<&2`` are fd 0; an escaped blank joins a word, so `f
+  a\ 1<&2` is fd 0; a `#` inside a multi-line string, `x="` and then `#"; exec
+  3>&2`, is no comment; and an operator escaped for `eval`, `eval exec
+  3\>\&2`, is one only when `eval` reads it again. Each round of review found
+  members of it, and reaching them is a lexer, which is #317's question; these
+  five are its pinned representatives. Every one of them writes to stderr,
+  measured. The implicit fd of an input operator departs from the triage's
+  wording, which has the guard report nothing for the implicit fd: that fd is
+  0, `exec <&2` and then `>&0` writes to stderr -- measured -- and the
+  contract is any fd but 1, so it is reported. Trades taken in the refusing
+  direction, each pinned below by a row that says it is a trade and asserts
+  what the guard prints, so that a change which flips one is a red: `<` by
+  path opens a read-only descriptor on Linux, so a write by way of one fails
+  -- measured, for a source written and left implicit -- and it is reported
+  anyway, as the triage asked, while `<>` opens one for writing and is a real
+  duplication, and `<` onto a process substitution, which the triage did not
+  ask, is not reported, since a write by way of it fails too -- measured; fd 2
+  reopened onto itself, `2>/dev/stderr`, is reported though it hides nothing,
+  because the contract is any fd but 1; the digits after a `>&` start a word
+  to the source as they do to bash, but bash reads them as a target, so `exec
+  >&13>&2`, a target of 13 and then fd 1, is reported, and so is `exec
+  2>&1<&2`, which duplicates onto fd 0 the stdout fd 2 was just pointed at; a
+  blank escaped with a backslash is a word start to the source, so `echo a\
+  3>&2`, where bash reads `a 3` as one word and fd 1, is reported; the fd
+  target is not bounded on its right, so `exec 3>&20` is reported; a path
+  whose last component is `stderr` is reported in any directory, so a log
+  file, `exec 2>"$dir/stderr"` or `exec 3>/tmp/stderr`, is; a process
+  substitution is reported whatever the command in it writes to, `exec 3>
+  >(cat >/dev/null)` among them; the second reading takes out quotes without
+  reading which quote holds which, so `exec 3>\&2`, a file named `&2`, `exec
+  3>'/dev/std\err'`, whose quotes keep the backslash, and `exec
+  3>/dev/std\$'err'` are reported; quotes are read only in a target word, so a
+  shape inside quoted text, `echo "use exec 3>&2 here"`, or in a heredoc body,
+  which is not dropped, is a red, and so is one in a trailing comment, `echo
+  hi # exec 3>&2`, or in a comment after blanks inside a joined line, `: x\`
+  and then `  #y; exec 3>&2`; a substitution's close is a word start to the
+  source, so `echo X $(:)3>&2`, one word and fd 1 to bash, is reported; an
+  escaped `;` is an end to the path, so `exec 3>/dev/stderr\;x`, a file, is
+  reported; fd 2 duplicated onto itself, `exec 2>&2`, is reported as
+  `2>/dev/stderr` is; and a continued line is read on its own as well as
+  joined, so `echo x\` and then `3>&2`, one word `x3` to bash, reports `3>&2`,
+  and a joined line bash does not join is reported beside the line it runs --
+  after a comment ending in a backslash, `: # c\` and then `exec 3>&2`, and
+  across an escaped backslash, `echo a\\` and then `exec 3>&2`, which is
+  #315's. Each was measured to hide no write to stderr. The path target is
+  bounded on its right, so `/dev/stderr2` and `2>/tmp/stderr.log` are not
+  reported. fd 1 by `/dev/fd/2` is a plain refusal that `arms` does not count,
+  which is #263's and not this guard's.
 REQ
 # Only a shape pin. GH-185 is not in the invariance families' scope: those
 # rewrite a command a hook judges, and this is a static check on hook source,
@@ -140,7 +161,9 @@ REQ
 shape_pin 'GH-185:static'
 
 # THE FIXTURES, a file each: a shebang, which the comment strip blanks, the
-# shape on line 2, and `exit 0`. A fixture that failed to be written would read
+# shape from line 2 on, and `exit 0`; one fixture below, a file that ends
+# inside a continuation, is written without the `exit 0` and held to its own
+# line count. A fixture that failed to be written would read
 # as clean, and the clean rows would pass on nothing, so each is held to its
 # line count before any row reads it.
 R185_DIR="$FIXTURES/r185"
@@ -572,6 +595,74 @@ tok 'and the shape inside quoted text: a trade' \
 tok 'and the shape in a heredoc body, which is not dropped: a trade' \
     '3:exec 3>&2' "$(dup_stderr "$R185_DIR/trade-heredoc-body.sh")"
 
+# AND THE SIX THE FIFTH REVIEW FOUND WITH NO ENTRY IN THE NOTE AND NO ROW, with
+# #315's joined line and one this round's fold rows gave. Each was measured
+# to hide no write to stderr: it points fd 1 or a file, is a comment, puts fd
+# 2 onto itself, or reaches stderr only through a line the guard also reports
+# under its own number.
+r185_fixture trade-joined-word 'echo x\' '3>&2'
+r185_fixture trade-substitution-close 'echo X $(:)3>&2'
+r185_fixture trade-trailing-comment 'echo hi # exec 3>&2'
+r185_fixture trade-escaped-separator 'exec 3>/dev/stderr\;x'
+r185_fixture trade-fd-two-dup 'exec 2>&2'
+r185_fixture trade-comment-joined ': # c\' 'exec 3>&2'
+r185_fixture trade-escaped-backslash 'echo a\\' 'exec 3>&2'
+r185_fixture trade-indented-comment-joined ': x\' '  #y; exec 3>&2'
+tok 'dup_stderr reports 3>&2 read alone after a join bash makes into the word x3: a trade' \
+    '3:3>&2' "$(dup_stderr "$R185_DIR/trade-joined-word.sh")"
+tok 'and a source after a substitution'"'"'s close, one word to bash: a trade' \
+    '2:echo X $(:)3>&2' "$(dup_stderr "$R185_DIR/trade-substitution-close.sh")"
+tok 'and the shape in a trailing comment: a trade' \
+    '2:echo hi # exec 3>&2' "$(dup_stderr "$R185_DIR/trade-trailing-comment.sh")"
+tok 'and a path with an escaped ; in it, a file: a trade' \
+    '2:exec 3>/dev/stderr\;x' "$(dup_stderr "$R185_DIR/trade-escaped-separator.sh")"
+tok 'and 2>&2, fd 2 onto itself: a trade' \
+    '2:exec 2>&2' "$(dup_stderr "$R185_DIR/trade-fd-two-dup.sh")"
+tok 'and a joined line bash does not join, beside the line it runs: a trade' \
+    '2:: # cexec 3>&2 3:exec 3>&2' "$(dup_stderr "$R185_DIR/trade-comment-joined.sh")"
+tok 'and across an escaped backslash, #315'"'"'s, beside the line it runs: a trade' \
+    '2:echo a\exec 3>&2 3:exec 3>&2' "$(dup_stderr "$R185_DIR/trade-escaped-backslash.sh")"
+tok 'and a comment after blanks inside a joined line: a trade' \
+    '2:: x  #y; exec 3>&2' "$(dup_stderr "$R185_DIR/trade-indented-comment-joined.sh")"
+
+# THREE CLAUSES THE FIFTH REVIEW OF THIS FILE'S PULL REQUEST FOUND UNDRIVEN:
+# the fold's flush at the end of a file, which a sourced library ending inside
+# a continuation needs -- `. lib.sh` whose last line is `exec 3>&2\` leaves fd
+# 3 on stderr, measured; the leading zeros of a source wider than one digit,
+# fd 10 written `010`, which writes to stderr, measured; and the blanks in
+# front of a comment's `#`, which make an indented comment one.
+printf '%s\n' '#!/bin/bash' 'exec 3>&2\' > "$R185_DIR/ends-continued.sh"
+[ "$(wc -l < "$R185_DIR/ends-continued.sh" | tr -d ' ')" = 2 ] || {
+  echo "the #185 fixture ends-continued.sh was not written; the checks against it prove nothing" >&2
+  exit 1
+}
+r185_fixture zero-padded-wide-source 'exec 010>&2'
+r185_fixture indented-comment '  # exec 3>&2'
+tok 'dup_stderr reports a file that ends inside a continuation, which a sourced library runs' \
+    '2:exec 3>&2' "$(dup_stderr "$R185_DIR/ends-continued.sh")"
+tok 'dup_stderr reports fd 10 written 010' \
+    '2:exec 010>&2' "$(dup_stderr "$R185_DIR/zero-padded-wide-source.sh")"
+tok 'dup_stderr does not report an indented comment' \
+    '' "$(dup_stderr "$R185_DIR/indented-comment.sh")"
+
+# A COMMENT STARTS NO CONTINUATION, also from the fifth review. The fold read
+# a line after a comment ending in a backslash on its own, but bash continues
+# that line when it ends in one too: `# note \`, then `exec 3>\` and
+# `/dev/stderr`, is a comment and then `exec 3>/dev/stderr`, and writes to
+# stderr -- measured, and with `exec 3>&\` and `2`. A line whose first
+# non-blank is `#` is now blanked and starts nothing.
+r185_fixture comment-then-continued-path '# note \' 'exec 3>\' '/dev/stderr'
+r185_fixture comment-then-continued-fd '# note \' 'exec 3>&\' '2'
+tok 'dup_stderr reports a continuation that starts after a comment ending in a backslash' \
+    '3:exec 3>/dev/stderr' "$(dup_stderr "$R185_DIR/comment-then-continued-path.sh")"
+tok 'and with the fd target on the continued line' \
+    '3:exec 3>&2' "$(dup_stderr "$R185_DIR/comment-then-continued-fd.sh")"
+# And an indented comment, which is one to bash too -- measured -- found by
+# mutating the blanks out of that test before this round was pushed.
+r185_fixture indented-comment-then-continued '  # note \' 'exec 3>\' '/dev/stderr'
+tok 'and after an indented comment ending in a backslash' \
+    '3:exec 3>/dev/stderr' "$(dup_stderr "$R185_DIR/indented-comment-then-continued.sh")"
+
 # WHAT STAYS CLEAN: fd 1, written or implicit, in every spelling, and the
 # ordinary shapes the hooks carry. fd 1 by /dev/fd/2 is a refusal `arms` does
 # not count, which is #263's.
@@ -712,6 +803,26 @@ tok 'nor an fd one prints' \
 r185_fixture twice-nested-subscript 'exec {a[b[c[1]]]}>&2'
 tok 'nor a subscript nested twice in a {name}' \
     '' "$(dup_stderr "$R185_DIR/twice-nested-subscript.sh")"
+
+# AND THE CLASS THE FIFTH REVIEW NAMED, with its representatives: a word, a
+# comment or an operator whose boundary depends on quote, substitution,
+# escape or `eval` state, which a pattern over the text cannot carry. Reaching
+# it is a lexer, which is #317's question. Each writes to stderr -- measured.
+r185_fixture lexer-substitution-close 'f $(:)1<&2'
+r185_fixture lexer-backtick-close 'f `:`1<&2'
+r185_fixture lexer-escaped-blank 'f a\ 1<&2'
+r185_fixture lexer-string-comment 'x="' '#"; exec 3>&2'
+r185_fixture lexer-eval 'eval exec 3\>\&2'
+tok 'nor fd 0 after a substitution'"'"'s close, which ends no word: the lexer-state class' \
+    '' "$(dup_stderr "$R185_DIR/lexer-substitution-close.sh")"
+tok 'nor after a backtick substitution'"'"'s close' \
+    '' "$(dup_stderr "$R185_DIR/lexer-backtick-close.sh")"
+tok 'nor after an escaped blank, which joins the word' \
+    '' "$(dup_stderr "$R185_DIR/lexer-escaped-blank.sh")"
+tok 'nor a line inside a multi-line string, whose # is not a comment' \
+    '' "$(dup_stderr "$R185_DIR/lexer-string-comment.sh")"
+tok 'nor an operator escaped for eval to read' \
+    '' "$(dup_stderr "$R185_DIR/lexer-eval.sh")"
 
 # THE LIBRARY BOTH HOOKS SOURCE, which the unsplit file's two rows do not ask:
 # a descriptor it opened is open in the hook that sourced it.
