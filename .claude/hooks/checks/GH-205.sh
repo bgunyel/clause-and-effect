@@ -256,19 +256,15 @@ tok 'and out keeps the others, a prefix of a legacy ID among them' \
 # `@` in front of the word and the `@` taken off as the file is made, so that no
 # line of this file opens a declaration it does not mean.
 req GH-205.2
-r205_issue() {  # r205_issue <file> -- stdin, with the @ taken off each @requirement
-  mkdir -p "$(dirname -- "$1")"
-  sed 's/@requirement/requirement/' > "$1"
-}
-r205_gen() {  # r205_gen [--check] <dir> -- what the script printed, and its status
-  bash "$HOOKS/generate-requirements.sh" "$@" 2>&1; printf 'exit %s' "$?"
-}
+# `issue_fixture` and `generator_run`, which write a fixture's issue file and
+# run the script over it, are in the library since #223's issue file became
+# their second caller.
 mkdir -p "$R205/gen/requirements"
 printf '### GH-4\n- text: hand-written\n' > "$R205/gen/requirements/GH-4.md"
 # The legacy set the script reads, by name, out of the check-hooks.sh beside
 # checks/ (#223): GH-4 is the fixture's hand-written entry.
 printf "REQUIREMENTS_LEGACY='\nGH-4\n'\n" > "$R205/gen/check-hooks.sh"
-r205_issue "$R205/gen/checks/GH-5.sh" <<'FIX'
+issue_fixture "$R205/gen/checks/GH-5.sh" <<'FIX'
 section "a fixture"
 @requirement GH-5.1 <<'REQ'
 - text: a sub-entry,
@@ -285,11 +281,11 @@ tok 'with nothing written yet, --check names each declared file as not written, 
   requirements/GH-5.md is not written; checks/GH-5.sh declares it
   requirements/GH-5.1.md is not written; checks/GH-5.sh declares it
 exit 1 GH-4.md' \
-  "$(r205_gen --check "$R205/gen"; printf ' '; ls "$R205/gen/requirements" | tr '\n' ' ' | sed 's/ $//')"
+  "$(generator_run --check "$R205/gen"; printf ' '; ls "$R205/gen/requirements" | tr '\n' ' ' | sed 's/ $//')"
 tok 'a run writes each declared entry, in version order, and leaves the hand-written one alone' \
 'wrote requirements/GH-5.md
 wrote requirements/GH-5.1.md
-exit 0' "$(r205_gen "$R205/gen")"
+exit 0' "$(generator_run "$R205/gen")"
 # Read through od, since a command substitution drops a NUL and the label says
 # byte for byte.
 tok 'the file is the heading, the fields byte for byte, and the issue file named last' \
@@ -297,18 +293,18 @@ tok 'the file is the heading, the fields byte for byte, and the issue file named
   "$({ cat "$R205/gen/requirements/GH-5.1.md"; printf '|'; cat "$R205/gen/requirements/GH-4.md"; printf '|'; } | od -c)"
 tok 'a second run writes nothing' \
 'generate-requirements.sh: every generated entry is its declaration; nothing was written
-exit 0' "$(r205_gen "$R205/gen")"
+exit 0' "$(generator_run "$R205/gen")"
 tok 'and --check then names the generated entries' \
 'generate-requirements.sh: every generated entry is its declaration: GH-5 GH-5.1
-exit 0' "$(r205_gen --check "$R205/gen")"
+exit 0' "$(generator_run --check "$R205/gen")"
 printf -- '- note: edited by hand\n' >> "$R205/gen/requirements/GH-5.md"
 tok 'a generated file edited by hand is named by --check, which writes nothing' \
 'generate-requirements.sh: not what the issue files declare:
   requirements/GH-5.md differs from its declaration in checks/GH-5.sh
-exit 1|1' "$(r205_gen --check "$R205/gen"; printf '|'; grep -c 'edited by hand' "$R205/gen/requirements/GH-5.md")"
+exit 1|1' "$(generator_run --check "$R205/gen"; printf '|'; grep -c 'edited by hand' "$R205/gen/requirements/GH-5.md")"
 tok 'and a run writes it back' \
 'wrote requirements/GH-5.md
-exit 0|0' "$(r205_gen "$R205/gen"; printf '|'; grep -c 'edited by hand' "$R205/gen/requirements/GH-5.md")"
+exit 0|0' "$(generator_run "$R205/gen"; printf '|'; grep -c 'edited by hand' "$R205/gen/requirements/GH-5.md")"
 
 # EACH REFUSAL, in a copy of the fixture with one thing broken, and in each
 # nothing is written: the copy's requirements/ is read after the run.
@@ -319,7 +315,7 @@ r205_after() {  # r205_after <dir> -- the files requirements/ holds
   ls "$1/requirements" | tr '\n' ' ' | sed 's/ $//'
 }
 r205_refused spelled
-r205_issue "$R205/spelled/checks/GH-6.sh" <<'FIX'
+issue_fixture "$R205/spelled/checks/GH-6.sh" <<'FIX'
   @requirement GH-6 <<'REQ'
 @requirement GH-6.1 <<REQ
 @requirement GH-6.2 <<'EOF'
@@ -337,9 +333,9 @@ tok 'a declaration spelled each of these other ways is refused: indented, unquot
   checks/GH-6.sh: line 4: a declaration spelled other than requirement <ID> <<'REQ': requirement GH-6.3 extra <<'REQ'
   checks/GH-6.sh: line 5: a declaration spelled other than requirement <ID> <<'REQ': requirement  GH-6.4 <<'REQ'
   checks/GH-6.sh: line 6: a declaration spelled other than requirement <ID> <<'REQ': requirement GH-6.5$(printf '\t')junk <<'REQ'
-exit 1|GH-4.md GH-5.1.md GH-5.md" "$(r205_gen "$R205/spelled"; printf '|'; r205_after "$R205/spelled")"
+exit 1|GH-4.md GH-5.1.md GH-5.md" "$(generator_run "$R205/spelled"; printf '|'; r205_after "$R205/spelled")"
 r205_refused grammar
-r205_issue "$R205/grammar/checks/GH-6.sh" <<'FIX'
+issue_fixture "$R205/grammar/checks/GH-6.sh" <<'FIX'
 @requirement GH-06 <<'REQ'
 - text: a leading zero
 REQ
@@ -351,9 +347,9 @@ tok 'an ID outside the grammar is refused' \
 'generate-requirements.sh: refused, and nothing was written:
   checks/GH-6.sh: line 1: GH-06 is not an ID of the grammar GH-<n> or GH-<n>.<m>
   checks/GH-6.sh: line 4: GH-6.0 is not an ID of the grammar GH-<n> or GH-<n>.<m>
-exit 1|GH-4.md GH-5.1.md GH-5.md' "$(r205_gen "$R205/grammar"; printf '|'; r205_after "$R205/grammar")"
+exit 1|GH-4.md GH-5.1.md GH-5.md' "$(generator_run "$R205/grammar"; printf '|'; r205_after "$R205/grammar")"
 r205_refused twice
-r205_issue "$R205/twice/checks/GH-6.sh" <<'FIX'
+issue_fixture "$R205/twice/checks/GH-6.sh" <<'FIX'
 @requirement GH-5 <<'REQ'
 - text: the same ID, in another issue file
 REQ
@@ -361,18 +357,18 @@ FIX
 tok 'an ID declared twice is refused, naming both files' \
 'generate-requirements.sh: refused, and nothing was written:
   GH-5: declared twice, in checks/GH-5.sh and in checks/GH-6.sh
-exit 1|GH-4.md GH-5.1.md GH-5.md' "$(r205_gen "$R205/twice"; printf '|'; r205_after "$R205/twice")"
+exit 1|GH-4.md GH-5.1.md GH-5.md' "$(generator_run "$R205/twice"; printf '|'; r205_after "$R205/twice")"
 r205_refused unclosed
-r205_issue "$R205/unclosed/checks/GH-6.sh" <<'FIX'
+issue_fixture "$R205/unclosed/checks/GH-6.sh" <<'FIX'
 @requirement GH-6 <<'REQ'
 - text: never closed
 FIX
 tok 'a declaration never closed is refused' \
 'generate-requirements.sh: refused, and nothing was written:
   checks/GH-6.sh: GH-6 is declared at line 1 and never closed by a line reading REQ
-exit 1|GH-4.md GH-5.1.md GH-5.md' "$(r205_gen "$R205/unclosed"; printf '|'; r205_after "$R205/unclosed")"
+exit 1|GH-4.md GH-5.1.md GH-5.md' "$(generator_run "$R205/unclosed"; printf '|'; r205_after "$R205/unclosed")"
 r205_refused body
-r205_issue "$R205/body/checks/GH-6.sh" <<'FIX'
+issue_fixture "$R205/body/checks/GH-6.sh" <<'FIX'
 @requirement GH-6 <<'REQ'
 REQ
 @requirement GH-6.1 <<'REQ'
@@ -392,9 +388,9 @@ tok 'a body that is empty, holds a line that is no field, or carries its own gen
   checks/GH-6.sh: line 1: GH-6 is declared with no fields
   checks/GH-6.sh: line 4: GH-6.1: a line that is no field of the entry:   a continuation of no field
   checks/GH-6.sh: line 10: GH-6.2 carries a generated field of its own, which is this script'"'"'s to write
-exit 1|GH-4.md GH-5.1.md GH-5.md' "$(r205_gen "$R205/body"; printf '|'; r205_after "$R205/body")"
+exit 1|GH-4.md GH-5.1.md GH-5.md' "$(generator_run "$R205/body"; printf '|'; r205_after "$R205/body")"
 r205_refused hand
-r205_issue "$R205/hand/checks/GH-6.sh" <<'FIX'
+issue_fixture "$R205/hand/checks/GH-6.sh" <<'FIX'
 @requirement GH-4 <<'REQ'
 - text: a declaration of an entry written by hand
 REQ
@@ -407,9 +403,9 @@ tok 'a declared legacy ID is refused, and its file is left as it was' \
 'generate-requirements.sh: refused, and nothing was written:
   GH-4: declared in checks/GH-6.sh, and a legacy entry, which stays hand-written
 exit 1|### GH-4
-- text: hand-written' "$(r205_gen "$R205/hand"; printf '|'; cat "$R205/hand/requirements/GH-4.md")"
+- text: hand-written' "$(generator_run "$R205/hand"; printf '|'; cat "$R205/hand/requirements/GH-4.md")"
 r205_refused orphan
-r205_issue "$R205/orphan/checks/GH-5.sh" <<'FIX'
+issue_fixture "$R205/orphan/checks/GH-5.sh" <<'FIX'
 @requirement GH-5 <<'REQ'
 - text: a bare entry
 REQ
@@ -417,12 +413,12 @@ FIX
 tok 'a generated file no issue file declares any more is refused, and left where it is' \
 'generate-requirements.sh: refused, and nothing was written:
   requirements/GH-5.1.md: outside the legacy set, and no issue file declares it
-exit 1|GH-4.md GH-5.1.md GH-5.md' "$(r205_gen "$R205/orphan"; printf '|'; r205_after "$R205/orphan")"
+exit 1|GH-4.md GH-5.1.md GH-5.md' "$(generator_run "$R205/orphan"; printf '|'; r205_after "$R205/orphan")"
 # And a refused run writes nothing even where it would otherwise have written:
 # a fixture whose one file is stale and whose other declaration is broken.
 r205_refused partial
 printf -- '- note: stale\n' >> "$R205/partial/requirements/GH-5.md"
-r205_issue "$R205/partial/checks/GH-6.sh" <<'FIX'
+issue_fixture "$R205/partial/checks/GH-6.sh" <<'FIX'
 @requirement GH-06 <<'REQ'
 - text: out of grammar
 REQ
@@ -432,7 +428,7 @@ tok 'and a refusal writes nothing at all, not even the file it would have rewrit
 tok 'and --check reports the refusal alone, not the stale file beside it' \
 'generate-requirements.sh: refused, and nothing was written:
   checks/GH-6.sh: line 1: GH-06 is not an ID of the grammar GH-<n> or GH-<n>.<m>
-exit 1' "$(r205_gen --check "$R205/partial")"
+exit 1' "$(generator_run --check "$R205/partial")"
 tok 'a malformed argument list is a usage error, each way, an empty directory among them' '64 64 64' \
   "$(bash "$HOOKS/generate-requirements.sh" --bogus > /dev/null 2>&1; printf '%s ' "$?"
      bash "$HOOKS/generate-requirements.sh" "$R205/gen" "$R205/gen" > /dev/null 2>&1; printf '%s ' "$?"
@@ -445,12 +441,12 @@ tok 'a malformed argument list is a usage error, each way, an empty directory am
 tok 'a hooks directory that is not there is refused' \
 "generate-requirements.sh: refused, and nothing was written:
   $R205/no-such-dir is not a directory holding checks/, so there is no issue file to read
-exit 1" "$(r205_gen --check "$R205/no-such-dir")"
+exit 1" "$(generator_run --check "$R205/no-such-dir")"
 mkdir -p "$R205/no-checks/requirements"
 tok 'and so is one with no checks/' \
 "generate-requirements.sh: refused, and nothing was written:
   $R205/no-checks is not a directory holding checks/, so there is no issue file to read
-exit 1" "$(r205_gen "$R205/no-checks")"
+exit 1" "$(generator_run "$R205/no-checks")"
 # The awk that dies is a stand-in first on PATH that exits 2, since a file awk
 # cannot open is readable all the same to root.
 mkdir -p "$R205/dead-awk"
@@ -458,7 +454,7 @@ printf '#!/bin/sh\nexit 2\n' > "$R205/dead-awk/awk"
 chmod +x "$R205/dead-awk/awk"
 tok 'an awk that died is a failed reading, not an empty one' \
 'generate-requirements.sh: reading the issue files failed, awk exit 2; nothing was written
-exit 1' "$(PATH="$R205/dead-awk:$PATH" r205_gen --check "$R205/gen")"
+exit 1' "$(PATH="$R205/dead-awk:$PATH" generator_run --check "$R205/gen")"
 # The stage's path reaches awk whole: under a TMPDIR holding a backslash and a
 # `t`, which `awk -v` would read as a tab and fail to open, the refusal is still
 # the one the declaration earns.
@@ -468,7 +464,7 @@ mkdir -p "$R205/tmp\\t"
 tok 'a TMPDIR holding a backslash escape is a path, not an escape' \
 "generate-requirements.sh: refused, and nothing was written:
   checks/GH-6.sh: line 1: a declaration spelled other than requirement <ID> <<'REQ': requirement GH-6$(printf '\t')junk <<'REQ'
-exit 1" "$(TMPDIR="$R205/tmp\\t" r205_gen --check "$R205/tmpdir")"
+exit 1" "$(TMPDIR="$R205/tmp\\t" generator_run --check "$R205/tmpdir")"
 
 # HELD TO THIS SUITE, the script is run over `generator_view`: the issue files
 # from the suite's side and requirements/ from the judged side. So a judged side
@@ -477,11 +473,11 @@ exit 1" "$(TMPDIR="$R205/tmp\\t" r205_gen --check "$R205/tmpdir")"
 mkdir -p "$R205/judged"; cp -r "$R205/gen/requirements" "$R205/judged/"
 tok 'over the view, a judged side with no checks/ is read against the suite'"'"'s declarations' \
 'generate-requirements.sh: every generated entry is its declaration: GH-5 GH-5.1
-exit 0' "$(r205_gen --check "$(generator_view "$R205/gen" "$R205/judged" "$R205/view")")"
+exit 0' "$(generator_run --check "$(generator_view "$R205/gen" "$R205/judged" "$R205/view")")"
 printf -- '- note: stale on the judged side\n' >> "$R205/judged/requirements/GH-5.md"
 tok 'and it is the judged side'"'"'s requirements/ that is read' \
 'generate-requirements.sh: not what the issue files declare:
   requirements/GH-5.md differs from its declaration in checks/GH-5.sh
-exit 1' "$(r205_gen --check "$(generator_view "$R205/gen" "$R205/judged" "$R205/view")")"
+exit 1' "$(generator_run --check "$(generator_view "$R205/gen" "$R205/judged" "$R205/view")")"
 
 sourced_to_end

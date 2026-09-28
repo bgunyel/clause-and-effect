@@ -840,7 +840,7 @@ generator-writes-a-field-twice%generate-requirements.sh%s/if (key in given) prob
 generator-field-grammar-widened%generate-requirements.sh%s/(\$0 ~ \/^- \[a-z-\]+:\/)/($0 ~ \/^- [a-z0-9-]+:\/)/%GH-223.2%caught
 splitter-id-grammar-widened%split-requirements.sh%s/(\$2 !~ \/^GH-\[1-9\]\[0-9\]\*/($2 !~ \/^GH-[0-9][0-9]*/%GH-223.2%caught
 generator-writes-over-the-destination%generate-requirements.sh%s/ [&][&] cp -- "\$STAGE\/\$id" "\$TMP"/ \&\& cp -- "$STAGE\/$id" "$SPLIT\/$id.md" \&\& cp -- "$STAGE\/$id" "$TMP"/%GH-223.7%caught
-generator-leaves-its-temporary-file%generate-requirements.sh%s/\[ -n "\${TMP:-}" \] [&][&] rm -f -- "\$TMP"/:/%GH-223.7%caught
+generator-leaves-its-temporary-file%generate-requirements.sh%s/; \[ -z "\$TMP" \] || rm -f -- "\$TMP"'/'/%GH-223.7%caught
 late-legacy-entry-reworded%requirements/GH-204.8.md%s/at least one row recorded/at least one row/%GH-223.1%caught
 cited-entry-that-does-not-exist%requirements.md%s/cites it (GH-223.6)/cites it (GH-223.9)/%GH-223.6%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply

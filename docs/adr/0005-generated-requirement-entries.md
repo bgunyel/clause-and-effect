@@ -130,7 +130,7 @@ runs it against fixtures and against the repository.
   `shape_pin`, and `variants_pin` waits for a file whose entry is in the
   families' scope. That move is expected, not a defect.
 - **A branch cut before #205 that adds a hand-written `GH-` entry** is red once
-  it merges across. The remedy has four steps:
+  it merges across. The remedy has three steps:
   1. Declare the entry in its issue file.
   2. Move its token out of `REQUIREMENT_SHAPE` into a `shape_pin` in that
      issue file, and out of `INV_SCOPE` into a `variants_pin` if it has one.

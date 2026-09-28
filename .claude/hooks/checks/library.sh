@@ -20,8 +20,8 @@
 # WHAT IT DOES: it defines functions and nothing else. Sourcing it runs no
 # check, prints nothing and records nothing; the variables its functions read
 # -- $LEDGER, $REQ, $RAN, $HOOKS, $FIXTURES, $SUITE_DIR, $SUITE_DECLARED,
-# $SUITE_PINNED and the fixtures' own -- are set by check-hooks.sh, before the call that reads
-# them; and $STDERR_WRITE, which `arms` and `fn_writes` read, by the unsplit
+# $SUITE_PINNED and the fixtures' own -- are set by check-hooks.sh, before the
+# call that reads them; and $STDERR_WRITE, which `arms` and `fn_writes` read, by the unsplit
 # file's #109 section, which is sourced before any issue file that calls them.
 #
 # THE COMMENTS MOVED HERE WITH THEIR FUNCTIONS, and they kept the positional
@@ -1272,10 +1272,11 @@ generated_bad() {  # generated_bad <declared record> <requirements dir> <legacy 
         printf '%s: declared in %s, and not an ID of the grammar GH-<n> or GH-<n>.<m>\n' "$id" "$file"; continue
       fi
       case "$seen" in *" $id "*) printf '%s: declared a second time, in %s\n' "$id" "$file"; continue ;; esac
-      # A body with no field is what `requirement` records when it is called
-      # with no heredoc, since the driver's stdin is /dev/null (#223); named as
-      # what it is, and not as a file that is not its declaration.
-      if [[ $'\n'$body != *$'\n- '* ]]; then
+      # An empty body is what `requirement` records when it is called with no
+      # heredoc, since the driver's stdin is /dev/null (#223); named as what it
+      # is, and not as a file that is not its declaration. Empty and not "no
+      # field", which would be a copy of the field grammar GH-223.2 counts.
+      if [[ -z $body ]]; then
         printf '%s: declared in %s with no fields\n' "$id" "$file"; seen="$seen$id "; continue
       fi
       seen="$seen$id "
@@ -1425,6 +1426,18 @@ generator_view() {  # generator_view <suite dir> <hooks dir> <into>
     && ln -s -- "$2/requirements" "$3/requirements" \
     && printf '%s' "$3"
 }
+# GENERATOR FIXTURES, for the issue files that drive generate-requirements.sh
+# against a hooks directory of their own: #205's, and #223's, which made them
+# library functions as their second caller. A fixture's declarations are
+# written with an `@` in front of the word, taken off as the file is made, so
+# that no line of the calling file opens a declaration it does not mean.
+issue_fixture() {  # issue_fixture <file> -- stdin, with the @ taken off each @requirement
+  mkdir -p "$(dirname -- "$1")"
+  sed 's/@requirement/requirement/' > "$1"
+}
+generator_run() {  # generator_run [--check] <dir> -- what the script printed, and its status
+  bash "$HOOKS/generate-requirements.sh" "$@" 2>&1; printf 'exit %s' "$?"
+}
 # THE DECLARATION, as bash reads it (#205; here since #215's issue file became
 # its second caller). The fields arrive on stdin from a quoted heredoc, so
 # nothing in them is expanded, and they are recorded with the issue file that
@@ -1435,7 +1448,7 @@ generator_view() {  # generator_view <suite dir> <hooks dir> <into>
 # says so, with its tag, where a `fail` here would carry whatever tag stood
 # before the declaration.
 requirement() {  # requirement <ID> -- declare a generated GH- entry; its fields on stdin
-  local body= IFS=' '
+  local body=
   # A call with no heredoc reads the stdin the call inherits. Under the driver
   # that is /dev/null, which the driver makes it before any issue file is
   # sourced (#223), so the call records an empty body and the end of the run

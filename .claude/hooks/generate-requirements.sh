@@ -41,7 +41,9 @@
 # whose field was deleted by hand was refused as hand-written from then on, and
 # a legacy file that gained one was taken for its own and overwritten. These
 # are the rules the suite's `generated_bad` holds, and they are spelled here in
-# its words.
+# its words but one: a file nothing declares is one "no issue file declares",
+# where the suite says no issue file IT RAN declares it, since this reads the
+# issue files and never runs them.
 #
 # WHAT IT REFUSES, before it writes anything: a line whose first word, after
 # any indentation, is `requirement` followed by `GH-`, spelled any other way --
@@ -68,8 +70,12 @@
 # WRITES ARE ONE FILE AT A TIME, AND EACH IS WHOLE (#223): a file is written to
 # a temporary name in requirements/ and moved over its destination, so a
 # destination holds its old bytes or its new ones, never part of either. A
-# failure stops the run, names the file, and leaves no temporary file; the
-# files written before it are written, and a second run writes the rest.
+# failure stops the run, names the file, and leaves no temporary file, and so
+# does a TERM or an interrupt, since the EXIT trap removes it; the files written before
+# either are written, and a second run writes the rest. The trade, taken
+# knowingly: a file it rewrites takes the mode a new file takes under the
+# caller's umask, where the `cp` over it kept the mode the file had. Git keeps
+# no mode but the executable bit, which neither gives an entry.
 #
 # WHAT IT DOES NOT SEE, named: a call whose first word is not `requirement` --
 # `x=1 requirement GH-7 <<'REQ'` -- or whose ID is quoted or built by another
@@ -135,7 +141,11 @@ while IFS= read -r f; do
 done < <( (set +f; cd -- "$DIR/checks" 2>/dev/null && for f in GH-*.sh; do [ -f "$f" ] && printf '%s\n' "$f"; done) | LC_ALL=C sort -V)
 
 STAGE=$(mktemp -d) || exit 1
-trap 'rm -rf "$STAGE"' EXIT
+# The write loop's temporary file, if one is standing, is removed with the
+# stage, whatever ends the run: bash runs this trap on a TERM or an interrupt
+# too, measured with a TERM sent mid-write and no trap of its own for it.
+TMP=
+trap 'rm -rf "$STAGE"; [ -z "$TMP" ] || rm -f -- "$TMP"' EXIT
 
 # One awk program reads every issue file. Each declaration it accepts is staged
 # as $STAGE/<ID>, the file it would write; each thing it refuses is a line of
@@ -292,7 +302,6 @@ MODE=$(printf '%o' "$(( 0666 & ~0$(umask) ))")
 for id in $STALE; do
   TMP=$(mktemp "$SPLIT/.$id.md.XXXXXX") \
     && cp -- "$STAGE/$id" "$TMP" && chmod "$MODE" "$TMP" && mv -f -- "$TMP" "$SPLIT/$id.md" || {
-    [ -n "${TMP:-}" ] && rm -f -- "$TMP"
     echo "$NAME: writing requirements/$id.md failed, and it holds what it held before; the files named above were written"
     exit 1
   }

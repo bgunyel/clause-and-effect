@@ -74,7 +74,8 @@ REQ
 requirement GH-223.4 <<'REQ'
 - text: `generate-requirements.sh` decides which file is its own by the legacy
   set and never by the file, and applies the rules `generated_bad` holds, in
-  its words. It reads `REQUIREMENTS_LEGACY` by name out of the check-hooks.sh
+  its words save one: a file nothing declares is one no issue file declares,
+  where the suite, which runs them, says no issue file it ran does. It reads `REQUIREMENTS_LEGACY` by name out of the check-hooks.sh
   beside `checks/`, and refuses, writing nothing, a check-hooks.sh with no such
   literal. A legacy ID is never written, whatever its file carries: declaring
   one is refused, and so is a legacy file carrying a `generated` field. A file
@@ -132,15 +133,18 @@ requirement GH-223.7 <<'REQ'
 - text: `generate-requirements.sh` writes each file through a temporary file
   beside it, moved over the destination, so a destination holds its old bytes
   or its new ones and never part of either. A write that fails stops the run
-  with a non-zero status, names the file, and leaves no temporary file behind;
-  a file it writes has the mode a new file takes under the caller's umask.
+  with a non-zero status, names the file, and leaves no temporary file behind,
+  and so does a TERM or an interrupt, whose EXIT trap removes it; a file it writes
+  has the mode a new file takes under the caller's umask.
 - from: #223
 - kind: defect-permitting
 - status: active
 - direction: static: it runs the script with a `cp` that fails midway and reads what the directory holds
 - note: It wrote with a `cp` over each destination in turn until #223, so a
   failure midway left one file truncated. The files written before a failure
-  stay written; a second run writes the rest.
+  stay written; a second run writes the rest. The trade, taken knowingly: a
+  file it rewrites takes the umask's mode, where the `cp` kept the mode the
+  file had; git keeps no mode but the executable bit, which no entry has.
 REQ
 requirement GH-223.8 <<'REQ'
 - text: Every helper in the library that splits a list on blanks, or joins its
@@ -160,19 +164,12 @@ shape_pin 'GH-223.1:static GH-223.2:static GH-223.3:static GH-223.4:static
 
 R223="$FIXTURES/r223"
 mkdir -p "$R223"
-r223_gen() {  # r223_gen [--check] <dir> -- what the script printed, and its status
-  bash "$HOOKS/generate-requirements.sh" "$@" 2>&1; printf 'exit %s' "$?"
-}
 r223_hooks() {  # r223_hooks <dir> <legacy IDs> -- a hooks directory: checks/, requirements/ and the literal
   rm -rf -- "$1"; mkdir -p -- "$1/checks" "$1/requirements"
   printf "REQUIREMENTS_LEGACY='\n%s\n'\n" "$2" > "$1/check-hooks.sh"
 }
-# A fixture's declarations are written with an `@` in front of the word, taken
-# off as the file is made, so that no line of this file opens one it does not
-# mean.
-r223_issue() {  # r223_issue <file> -- stdin, with the @ taken off each @requirement
-  sed 's/@requirement/requirement/' > "$1"
-}
+# A fixture's issue file is written by the library's `issue_fixture`, and the
+# script run over it by `generator_run`, both shared with the #205 issue file.
 
 # ITEM 1. The literal, and the set it has to be.
 req GH-223.1
@@ -209,7 +206,7 @@ R223_ID_AWK='^GH-[1-9][0-9]*(\.[1-9][0-9]*)?$'
 R223_ID_BASH='^GH-[1-9][0-9]*([.][1-9][0-9]*)?$'
 R223_FIELD='^- [a-z-]+:'
 R223_CONT='^  [^ ]'
-tok 'each grammar is spelled one way, in the number of places it was spelled when #223 counted them' \
+tok 'each grammar'"'"'s spelling stands in each file as many times as #223 counted it there, prose and expected output among them, so a copy changed or added is red' \
 'generate-requirements.sh 1 1 0 1 1
 split-requirements.sh 2 1 0 1 1
 checks/library.sh 1 0 1 0 0
@@ -226,7 +223,7 @@ checks/unsplit.sh 0 0 0 2 1' \
 # And the generator's verdicts on the two bodies its copy and the reader's
 # disagreed on, which the end-of-run file asks of the reader.
 r223_hooks "$R223/grammar" ''
-r223_issue "$R223/grammar/checks/GH-7.sh" <<'FIX'
+issue_fixture "$R223/grammar/checks/GH-7.sh" <<'FIX'
 @requirement GH-7 <<'REQ'
 - text: a field,
 
@@ -236,8 +233,8 @@ REQ
 FIX
 tok 'a body with a blank line is written, and byte for byte' \
   "$(printf 'wrote requirements/GH-7.md\nexit 0|### GH-7\n- text: a field,\n\n  continued after a blank line\n- from: the fixture\n- generated: checks/GH-7.sh\n' | od -c)" \
-  "$({ r223_gen "$R223/grammar"; printf '|'; cat "$R223/grammar/requirements/GH-7.md"; } | od -c)"
-r223_issue "$R223/grammar/checks/GH-8.sh" <<'FIX'
+  "$({ generator_run "$R223/grammar"; printf '|'; cat "$R223/grammar/requirements/GH-7.md"; } | od -c)"
+issue_fixture "$R223/grammar/checks/GH-8.sh" <<'FIX'
 @requirement GH-8 <<'REQ'
 - text: a
 - text: b
@@ -246,7 +243,7 @@ FIX
 tok 'and a field given twice is refused, as the reader refuses it' \
 'generate-requirements.sh: refused, and nothing was written:
   checks/GH-8.sh: line 3: GH-8: the field text is given twice
-exit 1|GH-7.md' "$(r223_gen "$R223/grammar"; printf '|'; ls "$R223/grammar/requirements" | tr '\n' ' ' | sed 's/ $//')"
+exit 1|GH-7.md' "$(generator_run "$R223/grammar"; printf '|'; ls "$R223/grammar/requirements" | tr '\n' ' ' | sed 's/ $//')"
 
 # ITEM 3. This shell's stdin, the driver's line that makes it so, and what a
 # `requirement` with no heredoc records under it.
@@ -272,7 +269,7 @@ tok 'which generated_bad names as an entry declared with no fields' \
 req GH-223.4
 r223_hooks "$R223/marker" 'GH-1'
 printf '### GH-1\n- text: legacy\n' > "$R223/marker/requirements/GH-1.md"
-r223_issue "$R223/marker/checks/GH-7.sh" <<'FIX'
+issue_fixture "$R223/marker/checks/GH-7.sh" <<'FIX'
 @requirement GH-7 <<'REQ'
 - text: generated
 REQ
@@ -282,16 +279,16 @@ tok 'a generated file whose generated field was deleted is named by --check as n
 'generate-requirements.sh: not what the issue files declare:
   requirements/GH-7.md differs from its declaration in checks/GH-7.sh
 exit 1|requirements/GH-7.md: not, byte for byte, its declaration in checks/GH-7.sh' \
-  "$(r223_gen --check "$R223/marker"; printf '|'
+  "$(generator_run --check "$R223/marker"; printf '|'
      generated_bad <(printf 'GH-7\tchecks/GH-7.sh\t- text: generated\n\0') "$R223/marker/requirements" 'GH-1')"
 tok 'and a run writes it back, field and all' \
 'wrote requirements/GH-7.md
 exit 0|### GH-7
 - text: generated
-- generated: checks/GH-7.sh' "$(r223_gen "$R223/marker"; printf '|'; cat "$R223/marker/requirements/GH-7.md")"
+- generated: checks/GH-7.sh' "$(generator_run "$R223/marker"; printf '|'; cat "$R223/marker/requirements/GH-7.md")"
 r223_hooks "$R223/stray" 'GH-1'
 printf '### GH-1\n- text: legacy\n- generated: checks/GH-1.sh\n' > "$R223/stray/requirements/GH-1.md"
-r223_issue "$R223/stray/checks/GH-1.sh" <<'FIX'
+issue_fixture "$R223/stray/checks/GH-1.sh" <<'FIX'
 @requirement GH-1 <<'REQ'
 - text: a declaration of a legacy entry
 REQ
@@ -305,11 +302,11 @@ exit 1|### GH-1
 - generated: checks/GH-1.sh
 |GH-1: declared in checks/GH-1.sh, and a legacy entry, which stays hand-written
 requirements/GH-1.md: a legacy entry carrying a generated field, which only a declared entry'"'"'s file carries' \
-  "$(r223_gen "$R223/stray"; printf '|'; cat "$R223/stray/requirements/GH-1.md"; printf '|'
+  "$(generator_run "$R223/stray"; printf '|'; cat "$R223/stray/requirements/GH-1.md"; printf '|'
      generated_bad <(printf 'GH-1\tchecks/GH-1.sh\t- text: a declaration of a legacy entry\n\0') "$R223/stray/requirements" 'GH-1')"
 r223_hooks "$R223/owner" 'GH-1'
 printf '### GH-1\n- text: legacy\n' > "$R223/owner/requirements/GH-1.md"
-r223_issue "$R223/owner/checks/GH-7.sh" <<'FIX'
+issue_fixture "$R223/owner/checks/GH-7.sh" <<'FIX'
 @requirement GH-9 <<'REQ'
 - text: in another issue's file
 REQ
@@ -318,7 +315,7 @@ tok 'an ID declared in another issue'"'"'s file is refused, naming both files, a
 'generate-requirements.sh: refused, and nothing was written:
   GH-9: declared in checks/GH-7.sh, where an entry of #9 is declared in checks/GH-9.sh
 exit 1|GH-1.md|GH-9: declared in checks/GH-7.sh, where an entry of #9 is declared in checks/GH-9.sh' \
-  "$(r223_gen "$R223/owner"; printf '|'; ls "$R223/owner/requirements" | tr '\n' ' ' | sed 's/ $//'; printf '|'
+  "$(generator_run "$R223/owner"; printf '|'; ls "$R223/owner/requirements" | tr '\n' ' ' | sed 's/ $//'; printf '|'
      generated_bad <(printf 'GH-9\tchecks/GH-7.sh\t- text: in another issue'"'"'s file\n\0') "$R223/owner/requirements" 'GH-1')"
 r223_hooks "$R223/orphan" 'GH-1'
 printf '### GH-1\n- text: legacy\n' > "$R223/orphan/requirements/GH-1.md"
@@ -327,7 +324,7 @@ tok 'a file outside the legacy set that nothing declares is refused, marker or n
 'generate-requirements.sh: refused, and nothing was written:
   requirements/GH-6.md: outside the legacy set, and no issue file declares it
 exit 1|requirements/GH-6.md: outside the legacy set, and no issue file the suite ran declares it' \
-  "$(r223_gen --check "$R223/orphan"; printf '|'; generated_bad /dev/null "$R223/orphan/requirements" 'GH-1')"
+  "$(generator_run --check "$R223/orphan"; printf '|'; generated_bad /dev/null "$R223/orphan/requirements" 'GH-1')"
 # And the literal the script reads the set from, missing each way it can be.
 r223_hooks "$R223/no-literal" ''
 printf 'LEGACY=x\n' > "$R223/no-literal/check-hooks.sh"
@@ -342,8 +339,8 @@ exit 1|generate-requirements.sh: refused, and nothing was written:
   $R223/unclosed-literal/check-hooks.sh holds no REQUIREMENTS_LEGACY literal, so which entries stay hand-written cannot be read
 exit 1|generate-requirements.sh: refused, and nothing was written:
   $R223/no-driver/check-hooks.sh holds no REQUIREMENTS_LEGACY literal, so which entries stay hand-written cannot be read
-exit 1" "$(r223_gen --check "$R223/no-literal"; printf '|'; r223_gen --check "$R223/unclosed-literal"; printf '|'
-           r223_gen --check "$R223/no-driver")"
+exit 1" "$(generator_run --check "$R223/no-literal"; printf '|'; generator_run --check "$R223/unclosed-literal"; printf '|'
+           generator_run --check "$R223/no-driver")"
 
 # ITEM 9. The citations the registry makes, against the files it holds. Read
 # off $HOOKS, whose requirements.md and requirements/ are what is judged, and
@@ -375,7 +372,7 @@ tok 'every GH-<n>.<m> the registry cites, of a family with an issue file, has it
 # stale files, so the first is written and the second fails.
 req GH-223.7
 r223_hooks "$R223/atomic" ''
-r223_issue "$R223/atomic/checks/GH-5.sh" <<'FIX'
+issue_fixture "$R223/atomic/checks/GH-5.sh" <<'FIX'
 @requirement GH-5 <<'REQ'
 - text: new
 REQ
@@ -394,12 +391,30 @@ tok 'a write that fails midway names the file, leaves it its old bytes and no te
 generate-requirements.sh: writing requirements/GH-5.1.md failed, and it holds what it held before; the files named above were written
 exit 1|GH-5.1.md GH-5.md|old
 |### GH-5' \
-  "$(PATH="$R223/half-cp:$PATH" r223_gen "$R223/atomic"; printf '|'
+  "$(PATH="$R223/half-cp:$PATH" generator_run "$R223/atomic"; printf '|'
      ls -A "$R223/atomic/requirements" | tr '\n' ' ' | sed 's/ $//'; printf '|'
      cat "$R223/atomic/requirements/GH-5.1.md"; printf '|'; head -n 1 "$R223/atomic/requirements/GH-5.md")"
+# And a TERM that arrives mid-write, sent by a `cp` to the script that ran it,
+# which the EXIT trap outlives: it is what removes the temporary file, since
+# the loop's own failure branch never runs. The shell around it reports the
+# signal on stderr, which is not a row's and is dropped.
+r223_hooks "$R223/term" ''
+issue_fixture "$R223/term/checks/GH-5.sh" <<'FIX'
+@requirement GH-5 <<'REQ'
+- text: new
+REQ
+FIX
+printf 'old\n' > "$R223/term/requirements/GH-5.md"
+mkdir -p "$R223/term-cp"
+printf '#!/bin/sh\nfor last; do :; done\nprintf partial > "$last"\nkill -TERM "$PPID"\nexit 1\n' > "$R223/term-cp/cp"
+chmod +x "$R223/term-cp/cp"
+tok 'a TERM mid-write exits 143, leaves the file its old bytes, and leaves no temporary file' \
+'exit 143|GH-5.md|old' \
+  "$( (PATH="$R223/term-cp:$PATH" generator_run "$R223/term" | tail -n 1) 2>/dev/null; printf '|'
+     ls -A "$R223/term/requirements" | tr '\n' ' ' | sed 's/ $//'; printf '|'; cat "$R223/term/requirements/GH-5.md")"
 tok 'and a second run writes the rest, with the mode a new file takes under the umask, 022 here' \
 'wrote requirements/GH-5.1.md
-exit 0|644' "$(umask 022; r223_gen "$R223/atomic"; printf '|'; stat -c %a "$R223/atomic/requirements/GH-5.1.md")"
+exit 0|644' "$(umask 022; generator_run "$R223/atomic"; printf '|'; stat -c %a "$R223/atomic/requirements/GH-5.1.md")"
 
 # ITEM 12. Each helper called under a caller's IFS of a colon, in a subshell so
 # that the IFS ends with it; the tokens hold colons, so a split on one is seen.
