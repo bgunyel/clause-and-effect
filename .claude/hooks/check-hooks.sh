@@ -28,8 +28,8 @@
 # where it begins. Every check carries the IDs of the requirements it
 # establishes, which requirements.md and the requirements/ directory beside this
 # suite define, and a requirement
-# no check reaches points at the runbook.md it is verified by once that is
-# written. The section "this suite's header names every file it checks" holds
+# no check reaches points at the section of runbook.md it is verified by (#110).
+# The section "this suite's header names every file it checks" holds
 # this paragraph to settings.json, to the disk and to what the suite reads.
 #
 # A hook is a process, so the only way to test its verdict is to run it; what
@@ -383,7 +383,7 @@ JUDGED=
 # every check below a `command not found`, which prints no FAIL and sets no
 # FAILED -- a green run having asked nothing -- so it stops the run instead.
 SUITE_LIBRARY=library.sh
-SUITE_CHECKS="unsplit.sh GH-205.sh GH-215.sh GH-157.sh GH-144.sh GH-118.sh GH-177.sh GH-219.sh GH-186.sh GH-166.sh GH-266.sh GH-273.sh GH-174.sh GH-182.sh"
+SUITE_CHECKS="unsplit.sh GH-205.sh GH-215.sh GH-157.sh GH-144.sh GH-118.sh GH-177.sh GH-219.sh GH-186.sh GH-166.sh GH-266.sh GH-273.sh GH-174.sh GH-182.sh GH-110.sh"
 SUITE_LAST=end-of-run.sh
 SUITE_SOURCED=
 for f in $SUITE_LIBRARY $SUITE_CHECKS $SUITE_LAST; do
