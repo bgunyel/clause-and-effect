@@ -8406,7 +8406,9 @@ mk_emptylist() {  # mk_emptylist <hook>
   # cs_split is deliberately not asked here: whether it is withdrawn is the
   # mechanism, and a fixture guard exits the suite rather than failing a check,
   # which would report a removed mechanism as an aborted run instead of as red.
-  bash -c ". '$dir/lib/command-scan.sh' && command -v cs_normalise && command -v cs_git_args \
+  # By what sourcing defined, and not the status it returned, as mk_halflib
+  # asks (#279).
+  bash -c ". '$dir/lib/command-scan.sh'; command -v cs_normalise && command -v cs_git_args \
            && command -v cs_gh_args && command -v cs_join" >/dev/null 2>&1 || {
     echo "the emptied-list library for $hook does not load with its other functions; the checks using it prove nothing" >&2
     exit 1
@@ -14588,11 +14590,11 @@ holds
 a command this suite called was not found:
 x.sh: line 1: nf_x: command not found' \
     "$( ( NOT_FOUND=$FV_SOME; NOT_FOUND_AT_HEAD=$FV_SOME; holds() ( : ); eval "$FOOT_VERDICT_CODE" 2>&1 >/dev/null ) )"
-# AND THE TAGS ARE THE ONES WRITTEN ABOVE, read back from the ledger: a row under
-# the wrong `req` covers the wrong requirement, and nothing else would say so.
-# The read stood here and chose its rows by label, so a fixture row with any
-# other label went unread, and so did every fixture after it (#279). It is in
-# the end-of-run file now, reading every row of every block once all have run.
+# The tags written above are read back from the ledger by the end-of-run file,
+# every row of every block once all have run: a row under the wrong `req`
+# covers the wrong requirement, and nothing else would say so. The read stood
+# here and chose its rows by label, so a fixture row with any other label went
+# unread, and so did every fixture after it (#279).
 req GH-204.1
 # THE LEDGER'S VERDICT, driven: a ledger holding a FAIL row fails the run
 # whatever FAILED says, and one holding only ok rows leaves FAILED as it was.

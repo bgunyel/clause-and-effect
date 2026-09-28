@@ -2222,7 +2222,8 @@ fi
 # read back from the ledger once every block of them has run (#279): every row
 # inside a `verdict_fixtures begin` ... `end` block, whatever its label, with
 # its tags. The read stood in the unsplit file's #204 section, chose its rows by
-# a label beginning `the final verdict `, and ran before GH-204.7's fixtures, so
+# a label beginning `the final verdict ` or reading `and says why on stderr`,
+# and ran before GH-204.7's fixtures, so
 # a fixture row under another label and a leftover `req` -- the slip of rounds
 # 5 and 7 of the review of PR #216 -- and both of GH-204.7's rows went unread.
 # The literal is every row, in the order the blocks ran; a row added to a block

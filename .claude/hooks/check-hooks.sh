@@ -730,8 +730,9 @@ done
 # a child that did not finish, is a FAIL row at the head, and the run goes on
 # to its verdict with the record as it stands. A file whose sourcing defined
 # nothing still stops the run. See `record_loaded` in the library. Measured
-# before it was relied on: for the library and the tokeniser the record this
-# child writes is byte for byte the one the child before #279 wrote.
+# before it was relied on, against the library and the tokeniser at 0d5829d:
+# the record this child writes is byte for byte the one the child before #279
+# wrote, 30,498 and 57,596 bytes.
 LOADED_CHILD='bf=" $(compgen -A function | tr "\n" " ") "; bv=" $(compgen -v | tr "\n" " ") bf bv n v "
 . "$1" 3>&- >/dev/null 2>&1
 printf "%s" "$?" >&3 || exit 3

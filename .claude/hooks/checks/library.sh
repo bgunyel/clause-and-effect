@@ -1101,8 +1101,13 @@ record_loaded() {  # record_loaded <file> <out> -- record it into LOADED_BODY an
 # tags and its own label. That was `tail -n 4` and a literal of four tags with
 # one label, so a verdict row replaced by another of the same tag read green,
 # and so did a clause added to the verdict with no row. So the rows are derived
-# from the verdict code the driver ends on: every `eval "$<NAME>_VERDICT_CODE"`
-# line of the driver, in order, and for each the clauses of that code.
+# from the verdict code the driver ends on: every evaluation of a
+# `<NAME>_VERDICT_CODE` on a line of the driver that is not a comment, braces
+# or none, in order, and for each the clauses of that code. The names are read
+# off the driver's text and the code off this shell, `${!name}`: the two are
+# one only because the driver defines each verdict's code before it takes it,
+# and a fixture that hands in another driver's text is asking about this
+# shell's code under that driver's names.
 #
 # WHICH CLAUSES WRITE A ROW is the one thing written here and not derived, and
 # it is written as the table below, keyed by the clause's condition as the
@@ -1113,27 +1118,33 @@ record_loaded() {  # record_loaded <file> <out> -- record it into LOADED_BODY an
 # such row at all. LEDGER_VERDICT_CODE writes none by design: it reads the
 # rows, and there is no question of its own a row could answer. Each of those
 # two is held to the one clause it has. A verdict variable the table does not
-# know, a clause it does not know, and a place FOOT_VERDICT_CODE sets FAILED
-# outside a clause of the `if <condition>; then` form are each a line in place
-# of a row, which no ledger ends on, so the check goes red until the table says
-# what the new clause writes.
+# know, a clause it does not know, and a line of FOOT_VERDICT_CODE naming
+# FAILED beyond one per clause of the `if <condition>; then` form are each a
+# line in place of a row, which no ledger ends on, so the check goes red until
+# the table says what the new clause writes. A clause is counted by the lines
+# that name FAILED, however the assignment is spelt -- `FAILED=1`,
+# `(( FAILED = 1 ))`, `let` or `printf -v` -- because counting `FAILED=` let
+# the others by (review of #279's first round). What it does not see, named: a
+# clause that sets the failure without naming FAILED on its line, through
+# another variable or text it evaluates.
 verdict_tail_want() {  # verdict_tail_want <driver> -- "<tags> TAB <label>" of each row the ledger ends on, or a line for what has none
   local name code cond clauses
   printf 'GH-204.8\t%s\n' 'every heading section wrote down has at least one row under it'
-  for name in $(sed -n 's/^eval "\$\([A-Za-z0-9_]*_VERDICT_CODE\)"$/\1/p' "$1"); do
+  for name in $(grep -v '^[[:space:]]*#' "$1" | grep -oE 'eval "\$\{?[A-Za-z0-9_]+_VERDICT_CODE\}?"' \
+                 | sed -E 's/^eval "\$\{?([A-Za-z0-9_]+)\}?"$/\1/'); do
     code=${!name}
-    clauses=$(grep -c 'FAILED=' <<< "$code")
+    clauses=$(grep -c 'FAILED' <<< "$code")
     case $name in
       SOURCED_VERDICT_CODE|LEDGER_VERDICT_CODE)
         [ "$clauses" = 1 ] \
-          || printf '%s sets FAILED in %s places, and one clause is all it is known to write no row for\n' "$name" "$clauses"
+          || printf '%s names FAILED on %s lines, and one clause is all it is known to write no row for\n' "$name" "$clauses"
         continue ;;
       FOOT_VERDICT_CODE) ;;
       *) printf '%s is taken at the end of the driver, and which rows it writes is not known\n' "$name"
          continue ;;
     esac
     [ "$clauses" = "$(grep -c '^if .*; then$' <<< "$code")" ] \
-      || printf '%s sets FAILED in %s places, and not each in a clause of its own\n' "$name" "$clauses"
+      || printf '%s names FAILED on %s lines, and not each in a clause of its own\n' "$name" "$clauses"
     while IFS= read -r cond; do
       case $cond in
         '[[ -n $LOADED_CHANGED ]]')
@@ -1187,7 +1198,8 @@ verdict_fixture_rows() {  # verdict_fixture_rows <marks> <ledger> -- each row in
 }
 # Every line of the named files that evaluates a verdict's code -- `eval
 # "$<NAME>_VERDICT_CODE"`, braces or none -- outside a block, as <file>:<line>;
-# a block opens and closes at a `verdict_fixtures` call at the start of a line.
+# a block opens and closes at a `verdict_fixtures` call starting a line, after
+# any indentation.
 # Read as text, so a spelling through another variable, or an `eval` of text
 # built some other way, is not seen; the fixtures written so far are all this
 # one spelling.
@@ -1654,7 +1666,12 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
   # says is kept, so a fixture that fails to load for a reason of its own still
   # shows bash's diagnostic; review of #182's pull request found the first
   # version dropping all of it.
-  bash -c ". '$dir/lib/command-scan.sh' && command -v cs_renamed_away >/dev/null 2>&1" \
+  # Loading is judged by what sourcing defined, and not by the status it
+  # returned (#279): a tokeniser copy that sources non-zero loads all the same,
+  # and its own checks say what is wrong with it; asked with `&&`, it stopped
+  # the run here, unjudged, which is how the registry row
+  # tokeniser-sources-non-zero first came back did-not-complete.
+  bash -c ". '$dir/lib/command-scan.sh'; command -v cs_renamed_away >/dev/null 2>&1" \
     2> >(grep -vF 'cs_drop_heredocs is not defined, and cs_normalise calls it' >&2) || {
     echo "the half-library for $hook does not load at all; the check using it proves nothing" >&2
     exit 1

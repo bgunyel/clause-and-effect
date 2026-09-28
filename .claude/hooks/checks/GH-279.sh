@@ -3,8 +3,9 @@
 # label-matched what they read, and the head's record child read a failed
 # source as emptiness.
 #
-# THREE DEFECTS, one per requirement below, each found by review of PR #216 or
-# PR #220 and each latent when #279 was filed.
+# FOUR DEFECTS, under the three requirements below, each found by review of PR
+# #216 or PR #220 and each latent when #279 was filed; the first two are one
+# requirement's, because they had to be fixed together.
 #
 #   - The record child ran `. "$1" || exit 1`, and the head asked only whether
 #     the record was empty. A tokeniser copy that sourced non-zero stopped the
@@ -35,6 +36,7 @@
 # has a row, `tokeniser-sources-non-zero`: a tokeniser copy that ends in
 # `false` is the shape the defect needed, and the run with it is judged, with
 # the head's FAIL row under GH-279.1, where before #279 it stopped unjudged.
+# Its first run found two fixture guards stopping it the same way, below.
 
 section "=== issue #279: the record child's three outcomes, and what the end-of-run read-backs read ==="
 
@@ -47,7 +49,11 @@ requirement GH-279.1 <<'REQ'
   ended before sourcing returned, is a FAIL row at the head, under GH-279.1,
   naming the file and why; the run goes on to its verdict with the record as it
   stands. A file whose sourcing defined nothing still stops the run, and says
-  so, with the status when it was not 0.
+  so, with the status when it was not 0. And a fixture the suite builds from a
+  copy of the tokeniser -- a half-library, an emptied-list library -- is
+  judged to load by what sourcing it defined, not by the status sourcing
+  returned, so a tokeniser copy that sources non-zero is judged by the run and
+  does not stop it.
 - from: #279
 - kind: defect-permitting
 - status: active
@@ -61,7 +67,11 @@ requirement GH-279.1 <<'REQ'
   All 26 registry rows that mutate the tokeniser were probed by the reviewer,
   and each sourced with status 0, so neither had fired. A record the child did
   not finish is used all the same once the row has failed the run: a name it
-  lacks is not compared at the foot, and the row is what says so.
+  lacks is not compared at the foot, and the row is what says so. A child that
+  did not finish and recorded nothing is such a row too, and not a stop: that
+  the file would have defined nothing is what it did not get to say. And a
+  file that turns on `set -e` and then fails ends the child, so its row says
+  the child exited, not that sourcing returned; either way it is a FAIL.
 REQ
 requirement GH-279.2 <<'REQ'
 - text: The end-of-run file's last check before the matrix derives the rows the
@@ -84,9 +94,11 @@ requirement GH-279.2 <<'REQ'
   to the verdict. Counting FOOT_VERDICT_CODE's clauses alone, the fix first
   proposed, would miss the heading row and the two verdict variables written
   after it.
-  What it does not see, named: a clause written as `if` over more than one
-  line, which is counted as a place that sets the failure outside a clause and
-  is red, not missed.
+  A clause is counted by the lines of the code that name FAILED, however the
+  assignment is spelt. What it does not see, named: a clause that sets the
+  failure without naming FAILED on its line, through another variable or text
+  it evaluates. A clause written as `if` over more than one line is counted
+  as a line outside a clause of its own, and is red, not missed.
 REQ
 requirement GH-279.3 <<'REQ'
 - text: Every block of verdict fixtures -- the rows that drive the final
@@ -173,6 +185,22 @@ tok 'the head records each file through record_loaded, and stops the run only wh
 'for f in "$SUITE_DIR/checks/$SUITE_LIBRARY" "$HOOKS/lib/command-scan.sh"; do
   record_loaded "$f" "$FIXTURES/record" || exit 1
 done' "$(grep -F -A2 'for f in "$SUITE_DIR/checks/$SUITE_LIBRARY" "$HOOKS/lib/command-scan.sh"; do' "${SUITE_FILES[0]}")"
+# AND THE FIXTURE GUARDS THAT LOAD A COPY OF THE TOKENISER (#279). The first
+# run of the registry row tokeniser-sources-non-zero, with the head fixed, came
+# back did-not-complete all the same: `mk_halflib` asked `. lib && command -v`,
+# and its guard stopped the run on the status, saying the copy "does not load
+# at all" -- the head's defect one fixture over. `mk_emptylist`, in the unsplit
+# file, asked the same way. Both ask what sourcing defined now. `mk_halflib` is
+# the library's and is driven here, against a copy of the tokeniser that ends
+# in `false`; `mk_emptylist` has one caller and is not, and the registry row is
+# what exercises it.
+mkdir -p "$R279/hooks-false/lib"
+cp "$HOOKS/no-git-push.sh" "$R279/hooks-false/"
+{ cat "$HOOKS/lib/command-scan.sh"; echo false; } > "$R279/hooks-false/lib/command-scan.sh"
+tok 'the tokeniser copy the guard is asked about sources with a non-zero status' \
+    'status 1' "$(bash -c '. "$1" 2>/dev/null; echo "status $?"' _ "$R279/hooks-false/lib/command-scan.sh")"
+tok 'and a half-library built from it is built, and does not stop the run' \
+    'status 0' "$( ( HOOKS="$R279/hooks-false" FIXTURES="$R279/halflib"; mk_halflib no-git-push.sh cs_split ) 2>&1; echo "status $?" )"
 tok 'and this run'"'"'s record of both was whole, or the head would have said so above' \
     'whole whole' \
     "$(for f in "$SUITE_DIR/checks/$SUITE_LIBRARY" "$HOOKS/lib/command-scan.sh"; do
@@ -184,23 +212,19 @@ tok 'and this run'"'"'s record of both was whole, or the head would have said so
 # The derivation of this driver, as a literal: the heading question's row, then
 # the final verdict's three clauses that write one.
 req GH-279.2
-tok 'the rows the ledger ends on, derived from this driver'"'"'s verdict code, are the heading question'"'"'s and one for each clause of FOOT_VERDICT_CODE' \
-"$(printf '%s\t%s\n' \
+R279_TAIL=$(printf '%s\t%s\n' \
    GH-204.8 'every heading section wrote down has at least one row under it' \
    GH-204.1 'every function and tokeniser variable this run started with is the one it ended with' \
    GH-204.5 'no command this suite called was missing, in this shell or in any subshell of it' \
-   GH-204.5 'the not-found record is where the head put it, so what the handler wrote is what the verdict reads')" \
-    "$(verdict_tail_want "${SUITE_FILES[0]}")"
+   GH-204.5 'the not-found record is where the head put it, so what the handler wrote is what the verdict reads')
+tok 'the rows the ledger ends on, derived from this driver'"'"'s verdict code, are the heading question'"'"'s and one for each clause of FOOT_VERDICT_CODE' \
+    "$R279_TAIL" "$(verdict_tail_want "${SUITE_FILES[0]}")"
 # A driver of the verdict lines alone, copied from this one, and a ledger that
 # ends as the derivation says, after a row of something else.
 grep -E '^eval "\$[A-Za-z0-9_]+_VERDICT_CODE"$' "${SUITE_FILES[0]}" > "$R279/driver"
-printf '%s\t%s\t%s\t%s\n' \
-  GH-1 static ok 'a row before them' \
-  GH-204.8 static ok 'every heading section wrote down has at least one row under it' \
-  GH-204.1 static ok 'every function and tokeniser variable this run started with is the one it ended with' \
-  GH-204.5 static ok 'no command this suite called was missing, in this shell or in any subshell of it' \
-  GH-204.5 static ok 'the not-found record is where the head put it, so what the handler wrote is what the verdict reads' \
-  > "$R279/tail-ledger"
+{ printf '%s\t%s\t%s\t%s\n' GH-1 static ok 'a row before them'
+  awk -F'\t' '{ print $1 "\tstatic\tok\t" $2 }' <<< "$R279_TAIL"
+} > "$R279/tail-ledger"
 tok 'the driver fixture holds the three verdict lines, in the order this driver takes them' \
 'SOURCED_VERDICT_CODE
 FOOT_VERDICT_CODE
@@ -212,17 +236,10 @@ sed '$d' "$R279/tail-ledger" > "$R279/tail-swapped"
 printf '%s\t%s\t%s\t%s\n' GH-204.5 static ok 'another GH-204.5 row' >> "$R279/tail-swapped"
 tok 'a verdict row replaced by another row of the same tag is red, and both are named' \
 "derived:
-$(printf '%s\t%s\n' \
-   GH-204.8 'every heading section wrote down has at least one row under it' \
-   GH-204.1 'every function and tokeniser variable this run started with is the one it ended with' \
-   GH-204.5 'no command this suite called was missing, in this shell or in any subshell of it' \
-   GH-204.5 'the not-found record is where the head put it, so what the handler wrote is what the verdict reads')
+$R279_TAIL
 the ledger ends:
-$(printf '%s\t%s\n' \
-   GH-204.8 'every heading section wrote down has at least one row under it' \
-   GH-204.1 'every function and tokeniser variable this run started with is the one it ended with' \
-   GH-204.5 'no command this suite called was missing, in this shell or in any subshell of it' \
-   GH-204.5 'another GH-204.5 row')" "$(verdict_tail_read "$R279/driver" "$R279/tail-swapped")"
+$(sed '$d' <<< "$R279_TAIL")
+$(printf '%s\t%s' GH-204.5 'another GH-204.5 row')" "$(verdict_tail_read "$R279/driver" "$R279/tail-swapped")"
 # A clause added to the verdict code, in a subshell of its own: the ledger
 # above, which ends as the unchanged verdict derives, is red against it.
 tok 'a clause added to the final verdict with no row known for it is named, and the ledger no longer matches' \
@@ -230,23 +247,28 @@ tok 'a clause added to the final verdict with no row known for it is named, and 
 red' "$( FOOT_VERDICT_CODE+=$'\nif [[ -e $R279_NONE ]]; then\n  FAILED=1\nfi'
          verdict_tail_want "$R279/driver" | tail -n 1
          [ -n "$(verdict_tail_read "$R279/driver" "$R279/tail-ledger")" ] && echo red )"
-tok 'and so is one that sets the failure outside a clause of its own' \
-    'FOOT_VERDICT_CODE sets FAILED in 4 places, and not each in a clause of its own' \
-    "$( FOOT_VERDICT_CODE+=$'\n[[ -e $R279_NONE ]] && FAILED=1'
+# The failure set outside an `if`, and spelt without `FAILED=`, which the
+# count of `FAILED=` let by (review of #279's first round).
+tok 'and so is one that sets the failure outside a clause of its own, however the assignment is spelt' \
+    'FOOT_VERDICT_CODE names FAILED on 4 lines, and not each in a clause of its own' \
+    "$( FOOT_VERDICT_CODE+=$'\n[[ -e $R279_NONE ]] && (( FAILED = 1 ))'
         verdict_tail_want "$R279/driver" | sed -n 2p )"
 tok 'and a second clause in either verdict known to write no row' \
-'SOURCED_VERDICT_CODE sets FAILED in 2 places, and one clause is all it is known to write no row for
-LEDGER_VERDICT_CODE sets FAILED in 2 places, and one clause is all it is known to write no row for' \
-    "$( SOURCED_VERDICT_CODE+=$'\n[[ -e $R279_NONE ]] && FAILED=1'
-        LEDGER_VERDICT_CODE+=$'\n[[ -e $R279_NONE ]] && FAILED=1'
+'SOURCED_VERDICT_CODE names FAILED on 2 lines, and one clause is all it is known to write no row for
+LEDGER_VERDICT_CODE names FAILED on 2 lines, and one clause is all it is known to write no row for' \
+    "$( SOURCED_VERDICT_CODE+=$'\n[[ -e $R279_NONE ]] && let FAILED=1'
+        LEDGER_VERDICT_CODE+=$'\n[[ -e $R279_NONE ]] && printf -v FAILED 1'
         verdict_tail_want "$R279/driver" | grep -v '^GH-' )"
-# A verdict variable the table does not know, taken at the end of a driver,
+# A verdict variable the table does not know, taken at the end of a driver:
 # its name holding a digit, which the first reading of the driver's lines,
-# `[A-Z_]*`, did not see. Written through printf, so that this file's text holds no evaluation of a
-# verdict's code for GH-279.3's read to find.
+# `[A-Z_]*`, did not see; indented, braced and followed by more, which the
+# anchored reading did not see (review of #279's first round); and one in a
+# comment, which is not taken. Written through printf, so that this file's
+# text holds no evaluation of a verdict's code for GH-279.3's read to find.
 cp "$R279/driver" "$R279/driver-more"
-printf 'eval "$%s"\n' R279_EXTRA_VERDICT_CODE >> "$R279/driver-more"
-tok 'and a verdict variable the table does not know is named' \
+printf '  eval "${%s}" || :\n' R279_EXTRA_VERDICT_CODE >> "$R279/driver-more"
+printf '# eval "$%s"\n' R279_COMMENTED_VERDICT_CODE >> "$R279/driver-more"
+tok 'and a verdict variable the table does not know is named, however the line spells it, and one in a comment is not' \
     'R279_EXTRA_VERDICT_CODE is taken at the end of the driver, and which rows it writes is not known' \
     "$(verdict_tail_want "$R279/driver-more" | grep -v '^GH-')"
 
@@ -256,7 +278,7 @@ tok 'and a verdict variable the table does not know is named' \
 # a fixture row whose label does not begin `the final verdict `, under a `req`
 # left over from the block before it, the slip the label read could not see.
 # Both are put back before anything is asked, so a FAIL below is recorded in
-# the real ledger, as the #204.8 fixture in the unsplit file does it.
+# the real ledger, as GH-204.8's fixture in the unsplit file does it.
 R279_LEDGER=$LEDGER R279_MARKS=$VERDICT_MARKS
 LEDGER="$R279/marks-ledger" VERDICT_MARKS="$R279/marks"
 : > "$LEDGER"; : > "$VERDICT_MARKS"
