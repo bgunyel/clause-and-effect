@@ -253,3 +253,5 @@ Full runs on `e19e246`: the head in the worktree, and each mutation on a `git cl
 | U8: the direct-reader pattern without its `comment_reflow <` alternative | 2 FAIL, the driven row and the suite row |
 
 `cde846f` changes only a comment. It was run once more: ALL CHECKS PASSED.
+
+**Correction, 2026-09-28 19:10 +0300.** The round-2 section above says the branch was 6 commits ahead of `origin/dev-05` before that section was committed. It was 7: the assistant left `cde846f` out of the count. `git rev-list --count origin/dev-05..HEAD` read 7 immediately before the append.
