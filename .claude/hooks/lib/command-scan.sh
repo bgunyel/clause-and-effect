@@ -977,9 +977,11 @@ CS_CONTROL_WORDS='[{}!]|if|then|elif|else|fi|while|until|for|do|done|case|esac|s
 # no-work-on-stale-branch.sh match this anchor on the command as it came, where
 # cs_split reads it with its continuations joined, so a wrapper word separated
 # from its `-c` by a backslash-newline is refused by no-pr-decisions.sh, which
-# matches the joined text, and permitted by the other two push and commit hooks
-# (#309, measured at cd67c8e by the review of PR #260; this paragraph said ONE
-# difference until round 4 of that review). Until round 2 there was a third:
+# matches the joined text, and permitted by all three of those: a push by the
+# two push and commit hooks and a commit on a stale branch by the third (#309,
+# measured by the review of PR #260 and by its author on a rebuilt stale-branch
+# fixture; this paragraph said ONE difference until round 4 of that review,
+# and "the other two" until round 5). Until round 2 there was a third:
 # cs_split's tail stopped at a token opening a quote, and this did not, so
 # `sudo "x" sh -c 'git push --all origin'` was refused here while cs_split
 # offered no candidate for it. The tail reads whole words now and offers the
@@ -1537,7 +1539,12 @@ cs_split() {
     # what keeps the reader off every ordinary line; only a token that holds one
     # is read, from where it starts to the first blank the reader reports, which
     # it reports only outside a quote. Those blanks are the space and the tab,
-    # as they are to bash; a quote never closed runs to the end of the line,
+    # as they are to bash. The blank-cut scan in front of it, the fast path, also
+    # cuts at a newline, a vertical tab, a form feed and a carriage return, as
+    # tokend does, so a token holding one of those and no quote is cut there
+    # where bash would not cut it -- in the refusing direction, since it only
+    # offers more words (round 5 of the review of PR #260). A quote never closed
+    # runs to the end of the line,
     # which is one word, and reads as prose rather than as commands.
     #
     # ONE FUNCTION, over any string: word_end(s, i) is where the word starting

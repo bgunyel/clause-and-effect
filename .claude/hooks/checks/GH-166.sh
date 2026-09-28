@@ -163,7 +163,8 @@ requirement GH-166.1 <<'REQ'
   `sudo -u deploy nice -n 10 git push --all origin`, and `exec`, which is on no
   list, are all permitted (#304). The wrapper anchor is matched on the command
   as it came, not joined, in three hooks, so a continuation between a wrapper
-  word and its `-c` hides it from two of them (#309). Nor does a word read through the reader reach
+  word and its `-c` hides it from all three: no-git-push.sh, no-commit-to-main.sh
+  and no-work-on-stale-branch.sh (#309). Nor does a word read through the reader reach
   a command substitution in double quotes as a value, where the separator walk
   cuts first: `GH_TOKEN="$(cat t)" gh pr merge 5` is permitted (#303).
 REQ
@@ -501,7 +502,9 @@ for consumer in cw_reduce ghreduce word_end; do
 done
 # And the two that ask word_end, held to asking it: the comment above says they
 # are not walks of their own, which only a call can show. A one-line function
-# is read as its line. Review of PR #260, round 4.
+# is read as its line. Review of PR #260, round 4; tagged GH-166.1, whose
+# property it is, since round 5.
+req GH-166.1
 for caller in wordend printhead; do
   body=$(sed -n "/function $caller(/{/}\$/{p;q};:a;n;p;/^    }\$/q;ba}" "$HOOKS/lib/command-scan.sh" \
     | grep -v '^[[:space:]]*#')
@@ -510,6 +513,7 @@ for caller in wordend printhead; do
     *) fail static '%s does not call word_end outside a comment, so it answers where a word ends itself' "$caller" ;;
   esac
 done
+req GH-166
 body=$(sed -n '/^quoted_base_flag()/,/^}/p' "$HOOKS/no-pr-decisions.sh" | grep -v '^[[:space:]]*#')
 case "$body" in
   *'$CS_WORD_AWK'*'wd_start('*'wd_next()'*) pass static 'quoted_base_flag interpolates CS_WORD_AWK and calls wd_start and wd_next outside a comment' ;;

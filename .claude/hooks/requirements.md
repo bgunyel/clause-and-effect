@@ -1436,15 +1436,18 @@ it has no entry above (Q16).
   permitted. Cited in the GH-166 issue file among what a word read through the
   reader does not reach. Pre-existing, found by the review of #260, round 3;
   it adds its requirements in the pull request that fixes it
-- #304: nested prefix words behind a valued option, and `exec`, on no prefix
-  list: `sudo -u deploy nice -n 10 git push --all origin` and
-  `exec git push --all origin` are permitted. Cited in GH-166.1's note and
+- #304: a command word past the tail offer's third word is not reached,
+  however it got there -- one prefix word with enough valued options,
+  `sudo -u root -g grp -D /srv git push origin main`; nested prefix words behind
+  a valued option, `sudo -u deploy nice -n 10 git push --all origin`; and
+  `exec`, on no prefix list, `exec git push --all origin` -- all permitted. Cited in GH-166.1's note and
   beside the tail offer's bound in `lib/command-scan.sh`. Pre-existing, found
   by the review of #260, round 3; it adds its requirements in the pull request
   that fixes it
 - #309: three hooks match the wrapper anchor on the command as it came, where
   `cs_split` joins continuations, so `bash \` and a newline before `-c` hides the
-  wrapper from no-git-push.sh and no-commit-to-main.sh. Cited in GH-166.1's note
+  wrapper from no-git-push.sh, no-commit-to-main.sh and
+  no-work-on-stale-branch.sh. Cited in GH-166.1's note
   and in the wrapper token's rationale in `lib/command-scan.sh`. Pre-existing,
   found by the review of #260, round 4; it adds its requirements in the pull
   request that fixes it

@@ -570,12 +570,19 @@ TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[
 # carried with the load written beside it. Round 3 of that review timed a run
 # at load 10 in 390 s and called the figure about three times too high, so it
 # was taken again on a quieter machine, the same way, against the tree at
-# c2bd412: 430 s, 388 s, 325 s, at load averages of 3.9, 8.7 and 3.7. The
-# slowest is carried, as above; the day is MEASURED_ON's, and stands only there.
-# WHICH WAY IT IS WRONG: this is a quiet machine's figure, so under the load
-# the first set was taken at -- peer sessions running this suite beside it --
-# the budget --list prints understates a pass by two to three times.
+# c2bd412: 430 s, 388 s, 325 s, at load averages of 3.9, 8.7 and 3.7.
+#
+# TWO CONDITIONS, SO TWO FIGURES, and the rule above -- carry the slowest,
+# because a budget that is short costs somebody an afternoon -- is kept for
+# each. One figure could not keep it: the quiet one understates a pass under
+# peer load by two to three times, and the loaded one overstates a quiet pass
+# by as much. So the slowest of the quiet set is the rate --list multiplies,
+# and the slowest of the loaded set stands beside it as the rate under load,
+# which --list prints too and RUN_BOUND below is derived from. Round 5 of the
+# review of PR #260 found the comment carrying the quiet figure under a rule
+# it broke. The quiet set's day is MEASURED_ON's, and stands only there.
 MEASURED_SECONDS_PER_RUN=430
+MEASURED_SECONDS_UNDER_LOAD=1272
 # The day it was taken, printed by --list beside it. It stood as a literal inside
 # that printf until the re-measurement above, which moved the rate and left the
 # printed date naming the previous measurement -- a second copy of one fact,
@@ -962,6 +969,9 @@ if [ -n "$LIST" ]; then
   printf 'about %s minutes for that pass, at the %s s a run measured on %s; re-measure it, it is not derived\n' \
     "$(( (RUNS_NEEDED * MEASURED_SECONDS_PER_RUN + 30) / 60 ))" \
     "$MEASURED_SECONDS_PER_RUN" "$MEASURED_ON"
+  printf 'and about %s minutes while other sessions run this suite beside it, at the %s s a run measured under that load\n' \
+    "$(( (RUNS_NEEDED * MEASURED_SECONDS_UNDER_LOAD + 30) / 60 ))" \
+    "$MEASURED_SECONDS_UNDER_LOAD"
   exit 0
 fi
 
@@ -1126,9 +1136,14 @@ echo "  running check-hooks.sh against $WORK ..."
 # the sentence above became false and the baseline itself was killed at the
 # bound -- exit 124, read as "the unmutated copy is not green", with nothing
 # wrong in the tree. Three times the rate keeps the sentence true whatever the
-# rate is re-measured to. The cost is the other job of a bound: a mutation that
-# loops is now given about an hour before it is called did-not-complete.
-RUN_BOUND=$(( MEASURED_SECONDS_PER_RUN * 3 ))
+# rate is re-measured to -- the rate UNDER LOAD, since round 5 of that review,
+# when three quiet runs came to 1290 s and the loaded baselines on record ran
+# 908 to 1272 s: a bound on the quiet figure would kill a baseline on a busy
+# machine and report the tree red again. The cost is the other job of a bound: a mutation that
+# loops is given three of the slowest runs recorded before it is called
+# did-not-complete. How long that is follows the constant; it is not restated
+# here, because the last sentence that did went stale by three times.
+RUN_BOUND=$(( MEASURED_SECONDS_UNDER_LOAD * 3 ))
 timeout "$RUN_BOUND" env CHECK_HOOKS_DIR="$WORK" bash "$SUITE" --matrix > "$RUN_OUT" 2>"$WORK_ROOT/baseline.err"
 BASELINE_STATUS=$?
 RUNS=$((RUNS + 1))
