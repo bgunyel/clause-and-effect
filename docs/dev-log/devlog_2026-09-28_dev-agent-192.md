@@ -165,3 +165,63 @@ groups**:
 
 "The other three" in that bullet is wrong as well: it is 12 pins in two
 groups.
+
+
+## Review round 1, 2026-09-28 18:25 +0300
+
+rev-agent-192 posted round 1 on PR #318 at `e7dc1e3`. It raised three gating findings (G1–G3) and three non-gating asks (N1–N3), and filed #319–#322. The assistant agreed with all six. The fixes are `751c1d6`. When this section was written, before it was committed, the branch was 4 commits ahead of `origin/dev-05` and 0 behind it.
+
+- **G1 and G2, one class: the reader normalised fewer line shapes than its targets carry.**
+  - `prose` now reads through `prose_reflow`. Before `comment_reflow`, it turns a tab, a CR, a VT and an FF into a blank, and takes each line's leading blanks off.
+  - An indented comment's `#` now comes off, so an absence pin reads a phrase re-added wrapped inside a function (G1).
+  - A tab no longer splits a phrase. That was `flatten`'s `tr -s '[:space:]'`, which the sweep retired, and so a regression on GH-97.2 (G2).
+  - The library paragraph that said no pin needed indented comments was wrong for absence pins, and the assistant wrote it. A presence pin names where today's text sits; an absence pin must read wherever the text can be put back.
+  - `comment_reflow` is unchanged, as #192 requires. `beside` reads through `prose_reflow` too.
+  - GH-192.1's pinned limit row flipped from FAIL to ok, as its comment said it would.
+- **G3: a wider reader satisfied a presence pin from somewhere else.**
+  - GH-182's literal now runs into `, which no consumer calls`, which only the statement carries.
+  - G1's own fix widens the reader again, into that same class. So the assistant re-ran rev-agent-192's instrumentation of `written` after the fix: 124 calls through `prose`.
+  - No pin has an extra reflowed occurrence beside a single raw one.
+  - `THE LINE CAP` went from 4 reflow occurrences to 5, from an indented wrapped cross-reference at `lib/command-scan.sh:1485–1486`. It is already in #321, with 3 raw occurrences.
+- **N1: the GH-192.3 audit was narrower than its requirement text.**
+  - It now reads `"${NAME}"` and a quoted `.md` path written into a pin.
+  - It derives variables assigned indented, after `local`/`export`/`readonly`, single-quoted, or with a trailing comment.
+  - Both the audit and the derivation are driven against fixtures.
+  - Lower-case names are deliberately not derived, and the requirement's note says why.
+  - Re-measured with the widened audit: 100 on `origin/dev-05` (unchanged), 0 at `e7dc1e3` and at `751c1d6`. The widening found no new variable in today's text.
+- **N2:** the audit's comment claimed `prose` keeps a `#` inside a literal. It does not keep one that a wrap puts at a line's start. The comment was corrected.
+- **N3:** the `beside` row moved under GH-192.1, and GH-192.1's text now names `beside`.
+
+### Measured
+
+Every row is a full `check-hooks.sh` run on a `git clone` of `751c1d6`, so each has a `.git`. Every mutation's diffstat was confirmed non-empty before its result was counted. The unmutated head read ALL CHECKS PASSED (5m13s wall-clock, 3m29s user).
+
+| mutation | result on `751c1d6` |
+|---|---|
+| B: wrapped `$ARGUMENT` in an indented comment of `report-stale-branches.sh` | 1 FAIL, `and the report does not argue it a second time` |
+| C: wrapped `$HISTORY` in an indented comment of `no-work-on-stale-branch.sh` | 1 FAIL, `the history of the recorded version is told in the guard, once` |
+| H: tab-wrapped `publishing a` / `release` in CONTEXT.md's reserved-act entry | 1 FAIL, `and no longer narrows it to publishing one` |
+| F: `lib/command-scan.sh:709` deleted | 1 FAIL, `the library says cs_normalise answers for cs_drop_heredocs` |
+| E2: `"$(prose "$SKILL_MD")"` → `"${SKILL_MD}"` | 1 FAIL, the GH-192.3 audit |
+| U1: `prose_reflow` without the `tr` | 3 FAIL: the tab row, the `prose_reflow` row, the `beside` row |
+| U2: `prose_reflow` without the leading-blank strip | 2 FAIL: the indented row, the `prose_reflow` row |
+| U3: `beside` back on `comment_reflow` | 1 FAIL, the `beside` row |
+| U4: the audit without the `${NAME}` scan | 1 FAIL, the audit fixture row |
+| U5: the audit without the `.md`-path scan | 1 FAIL, the audit fixture row |
+| U6: the derivation back to the old regex | 1 FAIL, the derivation row |
+
+B, C, H and F were ALL CHECKS PASSED on `e7dc1e3` in rev-agent-192's runs.
+
+### Found in the sweep, not fixed here
+
+- **#323.** Seven readers call `comment_reflow` directly, so they skip `prose_reflow`'s normalisation. GH-157's four `lacks` and GH-177's two are absence pins among them. The direction was derived from the reader, not measured by a suite run, and no target file holds a tab today. #318's own `LEFT_OPEN_PROSE` is one of the seven. It carries only presence pins, and on `origin/dev-05` those read raw lines, so it is not a regression.
+- **#319's fix now lands in `prose_reflow`.**
+
+### A second correction to the first entry
+
+The assistant's correction at 17:20 above gets the composition of the 134 wrong: it counts the 7 left-open `holds`/`lacks` inside the 134, and they are not in it. Re-derived at `e7dc1e3`, 128 `$(prose …)` pin sites stand outside `checks/GH-192.sh`: 97 continued `written`, 18 continued `unarmed`, 12 one-line `written` and 1 one-line `unarmed`. Less the one new `written` that rev-agent-192 excluded, which the assistant did not identify separately, that is 127, and the 7 `prose_occurrences` bring it to 134. This agrees with rev-agent-192's re-derivation. So the 122 moved by the scripted pass does **not** include the 7 left-open pins. Those are 7 more, read through `comment_reflow` on the string rather than through `prose`. The PR body counts them separately and was right. Only this entry's correction was wrong.
+
+## Open, after round 1
+
+- The *Open* bullet above that says an indented comment keeps its `#` no longer holds: G1 closed it.
+- #319 through #323 are open.
