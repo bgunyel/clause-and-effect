@@ -1670,6 +1670,19 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # The second reading takes quotes out without reading which quote holds which,
 # so `3>\&2`, a file named `&2`, is reported.
 #
+# THE TOOLS READ THE FILE, and until the seventh review of #185's pull request
+# they read it by the caller's locale and their own operand rules, not as bash
+# does: under a UTF-8 locale GNU grep took a file holding a NUL, or a line with
+# a byte that is not UTF-8, as binary and printed nothing, and `[:blank:]` took
+# in an EM SPACE; and awk took a file named `x=1.sh` as an assignment and one
+# named `-` as stdin, and read stdin instead. The same file was red on one
+# machine and green on another. So the whole pipeline runs under `LC_ALL=C`,
+# exported to its tools and local to the call; grep reads with `-a`; and awk
+# reads the file on stdin, never as an operand. The class is the tools'
+# semantics, where every earlier class was the pattern's, and checks/GH-185.sh
+# pins a row for each member, called under `C.UTF-8`, the locale CI gives the
+# suite, so each tells the fix from its absence wherever it runs.
+#
 # A FILE IT CANNOT READ is reported as `UNREADABLE`, with the reason on stderr,
 # and never as the empty string a clean file gives: every row that asks a real
 # file would pass on an absent one otherwise. A directory is not a regular
@@ -1702,6 +1715,7 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # a fixture and argues what it does not reach.
 dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplication writes
   local end src imp fd path proc sep
+  local -x LC_ALL=C
   [ -f "$1" ] && [ -r "$1" ] || {
     echo "dup_stderr: $1 is not a readable file, so nothing in it was asked" >&2
     echo UNREADABLE
@@ -1736,7 +1750,7 @@ dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplic
           n = 0
         }
         { run[++n] = $0; if ($0 ~ /\\$/) next; flush() }
-        END { flush() }' "$1" \
-    | grep -nE "${src}([<>]${fd}|(>|>>|<|<>|>[|])${path}|(>|>>|<>|>[|])${proc})|${imp}(<${fd}|(<|<>)${path}|<>${proc})" \
+        END { flush() }' < "$1" \
+    | grep -anE "${src}([<>]${fd}|(>|>>|<|<>|>[|])${path}|(>|>>|<>|>[|])${proc})|${imp}(<${fd}|(<|<>)${path}|<>${proc})" \
     | sed "s/${sep}.*//" | tr '\n' ' ' | sed 's/ $//'
 }
