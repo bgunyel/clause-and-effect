@@ -112,11 +112,12 @@ R293_FIRST_LARGE="$FIXTURES/r293-first-large"
 R293_FIRST_SMALL="$FIXTURES/r293-first-small"
 { head -c 160000 /dev/zero | tr '\0' a; printf '\nsecond\n'; } > "$R293_FIRST_LARGE"
 { head -c 40000 /dev/zero | tr '\0' a; printf '\nsecond\n'; } > "$R293_FIRST_SMALL"
-# The child's status is `child_status` and not `rc`, as `unarmed` names grep's
-# `grep_status`: the #98 self-test derives every helper that reads `rc=$?` as
-# one that runs a hook, and this one runs none.
+# The status is `timeout_status` and not `rc`: it is what `timeout` returns,
+# the child bash's status or 124 at the cut-off, and the #98 self-test derives
+# every helper that reads `rc=$?` as one that runs a hook, which this one does
+# not. Named after the tool it reads, as `unarmed` names grep's `grep_status`.
 r293_fail_ms() {  # r293_fail_ms <message file> -- "<CPU ms> <exit>", the fastest of three
-  local i ms child_status best=
+  local i ms timeout_status best=
   for i in 1 2 3; do
     ms=$(LC_ALL=C.UTF-8 LEDGER= REQ=GH-0 timeout 20 bash -c '
       source "$1" || exit 90
@@ -125,8 +126,8 @@ r293_fail_ms() {  # r293_fail_ms <message file> -- "<CPU ms> <exit>", the fastes
       cpu=$( { time fail static "%s" "$m" > /dev/null; } 2>&1 ) || exit 91
       user=${cpu% *} sys=${cpu#* }
       echo $(( 10#${user/./} + 10#${sys/./} ))' bash "$SUITE_DIR/checks/library.sh" "$1" 2> /dev/null)
-    child_status=$?
-    [ "$child_status" = 0 ] || { printf '%s %s\n' - "$child_status"; return; }
+    timeout_status=$?
+    [ "$timeout_status" = 0 ] || { printf '%s %s\n' - "$timeout_status"; return; }
     if [ -z "$best" ] || [ "$ms" -lt "$best" ]; then best=$ms; fi
   done
   # Every status but 0 returned above, so the one printed here is 0.
