@@ -1472,20 +1472,31 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
 # asked for one when #192 was swept, since each such pin reads a comment at
 # column 0.
 #
-# THE FIXTURE IS WRITTEN ONLY FROM A FILE WITH SOMETHING IN IT, and otherwise
+# THE FIXTURE IS WRITTEN ONLY WHEN ITS PROSE HOLDS A WORD, and otherwise
 # removed, so `written` and `unarmed` over it find no file and fail naming
-# grep's status 2. An extraction that found nothing, a directory and a path
-# that is not there all reach that arm rather than an empty reflow, over which
-# `unarmed` would read ok -- the vacuity `unarmed` and `lacks` each refuse. The
-# path mirrors the source's under $FIXTURES/prose, so a failure names the file
-# it read.
+# grep's status 2. An extraction that found nothing, a file of blank lines, a
+# directory and a path that is not there all reach that arm rather than a
+# reflow of blanks, over which `unarmed` would read ok -- the vacuity `unarmed`
+# and `lacks` each refuse. comment_reflow turns an empty line into one blank,
+# which is why the question is a word and not a size (review of #192's
+# branch). The path mirrors the source's under $FIXTURES/prose, so a failure
+# names the file it read.
+#
+# AND ONLY FROM AN ABSOLUTE PATH. `written` and `unarmed` refuse a relative
+# name through `absolute_or_fail`, since one is read from this suite's own
+# directory and not from the hooks under judgment (#142); behind `prose` they
+# are handed the fixture's path, which is always absolute, so the refusal has
+# to be made here. A relative source writes nothing, and the pin fails.
 prose() {  # prose <file> -- the path of <file> as comment_reflow reads it, written under $FIXTURES/prose
   local out="$FIXTURES/prose/${1#/}"
   mkdir -p -- "${out%/*}"
   rm -f -- "$out"
-  if [ -f "$1" ] && [ -s "$1" ]; then
-    comment_reflow < "$1" > "$out"
-  fi
+  case "$1" in
+    /*) if [ -f "$1" ]; then
+          comment_reflow < "$1" > "$out"
+          grep -q '[^[:space:]]' "$out" 2>/dev/null || rm -f -- "$out"
+        fi ;;
+  esac
   printf '%s\n' "$out"
 }
 # `prose_count` counts LINES, and a reflow is one line, so over `prose` it

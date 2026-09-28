@@ -6859,17 +6859,15 @@ written 'the enumeration names the act the report cites' \
 # word broken at a hyphen.
 # Each `unarmed` below is paired with a `written` over the same fixture, which
 # is the one that fails if the extraction found nothing.
-RESERVED_PROSE=$(prose "$RESERVED_ENTRY")
-PARAGRAPH_PROSE=$(prose "$PARAGRAPH")
 req GH-97.2 FR-29
 written 'the reserved act entry reserves any write to a release' \
-  "$RESERVED_PROSE" 'any write to a release'
+  "$(prose "$RESERVED_ENTRY")" 'any write to a release'
 unarmed 'and no longer narrows it to publishing one' \
-  "$RESERVED_PROSE" 'publishing a release'
+  "$(prose "$RESERVED_ENTRY")" 'publishing a release'
 written 'the boundary paragraph refuses any write to a release' \
-  "$PARAGRAPH_PROSE" 'any write to a release'
+  "$(prose "$PARAGRAPH")" 'any write to a release'
 unarmed 'and no longer narrows it to creating or deleting one' \
-  "$PARAGRAPH_PROSE" 'create or delete a release'
+  "$(prose "$PARAGRAPH")" 'create or delete a release'
 
 # The skill read that enumeration as closed and counted it -- "one of the four
 # acts CONTEXT.md names" -- and #70 found the count stale the moment a fifth act
@@ -6973,9 +6971,9 @@ written 'the sweep says how often it is run, which is by hand and never' \
 # report prints turns one side or the other red.
 req GH-100
 written 'the sweep defines stale by what the report prints for a merged pull request' \
-  "$SWEEP_SECTION" '`merged: pull request #N`'
+  "$(prose "$SWEEP_SECTION")" '`merged: pull request #N`'
 written 'and for a closed one' \
-  "$SWEEP_SECTION" '`closed without merging: pull request #N`'
+  "$(prose "$SWEEP_SECTION")" '`closed without merging: pull request #N`'
 written 'and unclassified by what it prints for a branch with no pull request' \
   "$(prose "$SWEEP_SECTION")" '`no pull request`'
 written 'and for one that is not at or behind its pull request head' \
@@ -7096,13 +7094,13 @@ written 'and a fetch into the local branch, which passes every hook too' \
 # that is the half no text check reaches, and it is #145's.
 req GH-143.4 US-26
 written 'the enumeration reserves moving the remote dev ref another way, or deleting it' \
-  "$RESERVED_PROSE" 'any way other than advancing it, or deleting that ref'
+  "$(prose "$RESERVED_ENTRY")" 'any way other than advancing it, or deleting that ref'
 written 'and says nothing refuses either at all, which is what leaves them reserved only' \
-  "$RESERVED_PROSE" 'Nothing refuses a remote force-move or deletion'
+  "$(prose "$RESERVED_ENTRY")" 'Nothing refuses a remote force-move or deletion'
 written 'and names the REST merge that advances the same ref under no rule at all' \
-  "$RESERVED_PROSE" 'a REST merge of any'
+  "$(prose "$RESERVED_ENTRY")" 'a REST merge of any'
 unarmed 'and counts none of the acts that neither a hook nor the server covers' \
-  "$RESERVED_PROSE" 'the only acts'
+  "$(prose "$RESERVED_ENTRY")" 'the only acts'
 
 # CLAUDE.md's *Domain docs* section said "docs/adr/ holds one ADR", and the ADR
 # that states the decision above made it false in the same commit. Nothing held
@@ -7122,16 +7120,15 @@ DOMAIN_SECTION="$FIXTURES/claude-md-domain-docs.md"
 awk '/^### Domain docs$/ {f=1; print; next}
      f && /^#/ {exit}
      f {print}' "$CLAUDE_MD" > "$DOMAIN_SECTION"
-DOMAIN_PROSE=$(prose "$DOMAIN_SECTION")
 req GH-143.5
 written 'the extracted section is the domain docs section' \
   "$DOMAIN_SECTION" '### Domain docs'
 unarmed 'and it is that section rather than the whole file' \
   "$DOMAIN_SECTION" '### Triage labels'
 written 'the domain docs section points at the ADR directory' \
-  "$DOMAIN_PROSE" '`docs/adr/` holds the ADRs'
+  "$(prose "$DOMAIN_SECTION")" '`docs/adr/` holds the ADRs'
 unarmed 'and states no count of what is in it' \
-  "$DOMAIN_PROSE" 'holds one ADR'
+  "$(prose "$DOMAIN_SECTION")" 'holds one ADR'
 
 # #99 Q9 and Q13: the rule, in the boundary section this suite already
 # extracted and checked from both ends. Both routes, the qualifier that keeps
@@ -7162,8 +7159,10 @@ tok 'nor its forced branch move' \
 # this rule has no hook. $LEFT_OPEN is a string, so the string helpers, over
 # the string as comment_reflow reads it: the library's rule for a pin on
 # prose, which `prose` applies to a file. `lacks` fails on an empty read, so
-# the absence below needs no `written` beside it.
-LEFT_OPEN_PROSE=$(printf '%s\n' "$LEFT_OPEN" | comment_reflow)
+# the absence below needs no `written` beside it -- which holds only because an
+# empty $LEFT_OPEN stays empty here: comment_reflow turns an empty line into a
+# blank, and `lacks` passes a blank (review of #192's branch).
+LEFT_OPEN_PROSE=${LEFT_OPEN:+$(printf '%s\n' "$LEFT_OPEN" | comment_reflow)}
 req GH-99.1 GH-73
 holds 'the extracted list is the left-open list' "$LEFT_OPEN_PROSE" 'Deliberately left open'
 lacks 'and the unenforced rule is not one of its items' \
@@ -7220,10 +7219,11 @@ unarmed 'the branch-hygiene skill does not describe worktrees forking from HEAD'
 # The count removed from this section's head, held removed. Split across two
 # quoted words so that this line does not contain the phrase it refuses. Read
 # as prose, so a count re-added across a line break of that head is found, and
-# beside a `written` over the same reflow, the sentence the count stood in.
+# beside a `written` over the same reflow, the sentence the count stood in --
+# split the same way, or it would match itself here and could not fail.
 req GH-99.1
 written 'this section'"'"'s head says what its checks are evidence about' \
-  "$(prose "$SUITE_TEXT")" 'These are evidence about the citations named below and nothing else.'
+  "$(prose "$SUITE_TEXT")" 'These are evidence about the citations'' named below and nothing else.'
 unarmed 'and no longer counts its citations at three' \
   "$(prose "$SUITE_TEXT")" "three citations"" named below"
 unarmed 'nor at four, the number a correction would have reached for' \
@@ -11596,6 +11596,9 @@ text_check_faults() {  # text_check_faults <file>... -- "<file>:<line>: <fault>"
     if (ntok < 3) { print start ": fewer than three arguments"; next }
     a = tok[3]
     gsub(/"/, "", a)
+    # A pin on prose names its file inside `$(prose ...)` (#192), and the
+    # rule asks the file, not the substitution around it.
+    if (a ~ /^\$\(prose [^)]*\)$/) { sub(/^\$\(prose /, "", a); sub(/\)$/, "", a) }
     if (a ~ /(^|\/)\.\.?(\/|$)/ || a ~ /\/\//)
       print start ": " tok[3] " has a . or .. segment or an empty one, so which directory it reads cannot be told from its spelling"
     else if (a !~ /^\$/)
@@ -11626,15 +11629,22 @@ printf '%s\n' 'x=1' "armed 'fine' \"\$HOOKS/no-git-push.sh\" 'y'" "written 'join
   "  \"\$SUITE_DIR/checks/../no-git-push.sh\" 'y'" > "$TCF_ONE"
 printf '%s\n' "unarmed 'up' \"\$HOOKS/../hooks/no-git-push.sh\" 'y'" "armed 'bare' check-hooks.sh 'y'" \
   "armed 'dot' \"\$HOOKS/checks/./library.sh\" 'y'" "armed 'empty' \"\$HOOKS/checks//library.sh\" 'y'" \
-  "armed 'deeper' \"\$SUITE_DIR/checks/sub/x.sh\" 'y'" > "$TCF_TWO"
+  "armed 'deeper' \"\$SUITE_DIR/checks/sub/x.sh\" 'y'" \
+  "written 'prose, wrong door' \"\$(prose \"\$SUITE_DIR/no-git-push.sh\")\" 'y z'" \
+  "unarmed 'prose, bare' \"\$(prose \"no-git-push.sh\")\" 'y z'" > "$TCF_TWO"
 TCF_WHY='has a . or .. segment or an empty one, so which directory it reads cannot be told from its spelling'
+# The last two lines name their file through `prose` (#192), and are judged
+# by the file inside the substitution: behind it, `written` is handed the
+# fixture's absolute path, and `absolute_or_fail` sees nothing wrong.
 tok 'a text-check fault is reported at its own file and line, and a ., .. or empty segment is refused after any variable' \
 "$TCF_ONE:3: \"\$SUITE_DIR/checks/../no-git-push.sh\" $TCF_WHY
 $TCF_TWO:1: \"\$HOOKS/../hooks/no-git-push.sh\" $TCF_WHY
 $TCF_TWO:2: check-hooks.sh is a bare name, read from the directory this suite runs in
 $TCF_TWO:3: \"\$HOOKS/checks/./library.sh\" $TCF_WHY
 $TCF_TWO:4: \"\$HOOKS/checks//library.sh\" $TCF_WHY
-COUNT 7" "$(text_check_faults "$TCF_ONE" "$TCF_TWO")"
+$TCF_TWO:6: \"\$(prose \"\$SUITE_DIR/no-git-push.sh\")\" names a hook and is read from \$HOOKS
+$TCF_TWO:7: \"\$(prose \"no-git-push.sh\")\" is a bare name, read from the directory this suite runs in
+COUNT 9" "$(text_check_faults "$TCF_ONE" "$TCF_TWO")"
 req GH-107.1
 TEXT_CHECK_ARGS=$(text_check_faults "${SUITE_FILES[@]}")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')

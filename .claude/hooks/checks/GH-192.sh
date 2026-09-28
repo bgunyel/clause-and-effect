@@ -7,7 +7,7 @@
 # `unarmed ... 'four acts'` read ok with `four` ending one line of the
 # branch-hygiene skill and `acts` opening the next, and the whole suite passed
 # (#192, measured on PR #183's branch at d86223b); GH-99.1's two `'0'` counts
-# over CLAUDE.md and its count over this suite's own text were the same shape.
+# over CLAUDE.md and its absence over this suite's own text were the same shape.
 # All three are the permitting direction, and silent. A presence pin was the
 # other half: a rewrap that changed no word turned it red.
 #
@@ -32,8 +32,9 @@ requirement GH-192.1 <<'REQ'
   wrapped across a line break of Markdown, or across two column-0 comment
   lines, is found there by `written` and makes `unarmed` fail, where over the
   file's lines `written` fails and `unarmed` reads ok. From a directory, a path
-  that is not there, or an empty file it writes nothing, so `written` and
-  `unarmed` over the path it prints both fail and name grep's status 2.
+  that is not there, an empty file, a file of blank lines or a relative name
+  it writes nothing, so `written` and `unarmed` over the path it prints both
+  fail and name grep's status 2.
 - from: #192
 - kind: defect-permitting
 - status: active
@@ -61,7 +62,8 @@ requirement GH-192.3 <<'REQ'
   suite's own text and the left-open string named in this file. A pin is a
   `written`, `unarmed`, `holds` or `lacks` call, its continuation lines joined,
   or a `prose_count`; one naming such a variable directly, rather than through
-  `prose`, fails the audit unless its literal holds a `#`. `beside` reads the
+  `prose`, fails the audit unless its literal opens with a `#`, the one a
+  heading's pin needs and `prose` would take off. `beside` reads the
   comment block it is given through `comment_reflow`.
 - from: #192
 - kind: defect-permitting
@@ -89,6 +91,7 @@ R192_MD="$FIXTURES/r192-skill.txt"
 R192_SH="$FIXTURES/r192-header.sh"
 R192_TWICE="$FIXTURES/r192-twice.txt"
 R192_EMPTY="$FIXTURES/r192-empty.txt"
+R192_BLANK="$FIXTURES/r192-blank.txt"
 R192_DIR="$FIXTURES/r192-dir"
 R192_GONE="$FIXTURES/r192-no-such-file"
 printf '%s\n' '## A heading' 'The reserved acts below are the four' \
@@ -97,13 +100,18 @@ printf '%s\n' '#!/bin/bash' '# The count is gone: no second' '#   pointer named 
   'code=1' '  # an indented' '  # phrase wrapped' > "$R192_SH"
 printf '%s\n' 'four acts, and four acts; the four' 'acts' > "$R192_TWICE"
 : > "$R192_EMPTY"
+printf '\n\n' > "$R192_BLANK"
 mkdir -p "$R192_DIR"
 printf '%s\n' 'four acts' > "$R192_DIR/inside.txt"
 rm -f "$R192_GONE"
 [ "$(wc -l < "$R192_MD")" = 4 ] && [ "$(wc -l < "$R192_SH")" = 6 ] \
   && [ "$(wc -l < "$R192_TWICE")" = 2 ] && [ ! -s "$R192_EMPTY" ] \
-  && [ -d "$R192_DIR" ] && [ ! -e "$R192_GONE" ] || {
-  echo "the #192 fixtures were not created as written; the checks against them prove nothing" >&2
+  && [ "$(wc -c < "$R192_BLANK")" = 2 ] \
+  && [ -d "$R192_DIR" ] && [ ! -e "$R192_GONE" ] \
+  && ! grep -qF 'four acts the' "$R192_MD" && ! grep -qF 'pre-built' "$R192_MD" \
+  && ! grep -qF 'second pointer' "$R192_SH" && ! grep -qF 'indented phrase' "$R192_SH" \
+  && [ "$(grep -c 'four acts' "$R192_TWICE")" = 1 ] || {
+  echo "the #192 fixtures were not created as written, each phrase wrapped where its row says; the checks against them prove nothing" >&2
   exit 1
 }
 # The paths the fixtures' reflows are written to, composed here rather than
@@ -146,6 +154,19 @@ tok 'from an empty file prose writes nothing, so unarmed over its path fails and
 "${R192_INDENT}FAIL r192 driven check
                 grep exited 2 on $R192_EMPTY_PROSE, so it was not read and the absence of |four acts| is evidence of nothing" \
     "$(unarmed 'r192 driven check' "$(prose "$R192_EMPTY")" 'four acts')"
+tok 'and from a file of blank lines, which comment_reflow would turn into a blank' \
+"${R192_INDENT}FAIL r192 driven check
+                grep exited 2 on $FIXTURES/prose${R192_BLANK}, so it was not read and the absence of |four acts| is evidence of nothing" \
+    "$(unarmed 'r192 driven check' "$(prose "$R192_BLANK")" 'four acts')"
+# A relative name is read from this suite's directory, not from the hooks under
+# judgment; `absolute_or_fail` refuses one in `written` and `unarmed`, and
+# behind `prose` they see only the fixture's absolute path, so `prose` refuses.
+# Run from $FIXTURES, where the name does resolve, so that it is the spelling
+# and not a missing file that is refused.
+tok 'and from a relative name, though it names a file in the directory it runs in' \
+"${R192_INDENT}FAIL r192 driven check
+                grep exited 2 on $FIXTURES/prose/r192-skill.txt, so it was not read and the absence of |four acts| is evidence of nothing" \
+    "$(cd "$FIXTURES" && unarmed 'r192 driven check' "$(prose r192-skill.txt)" 'four acts')"
 tok 'and from a directory, though one inside it says the literal' \
 "${R192_INDENT}FAIL r192 driven check
                 grep exited 2 on $R192_DIR_PROSE, so it was not read and the absence of |four acts| is evidence of nothing" \
@@ -196,10 +217,12 @@ tok 'beside reads the comment block it is given through comment_reflow, so a wra
     "$(beside 'r192 driven check' "$R192_BESIDE" 'holds the three equal, so a change')"
 
 # THE AUDIT. A pin line, its continuation lines joined, that names one of the
-# prose variables directly and then a quoted literal holding a blank and no
-# `#`, is printed as `<variable> |<literal>|`. A line whose first word is not a
-# pin is not one, so an extraction such as `entry "$CONTEXT_MD" 'Worktree
-# branch'` is not read as a pin; `prose_count` is asked wherever it stands,
+# prose variables directly and then, after blanks, a quoted literal holding a
+# blank and not opening with `#`, is printed as `<variable> |<literal>|`. The
+# blanks may be a continuation's, the literal opening the next line. A `#`
+# inside a literal exempts nothing: `prose` keeps it. A line whose first word
+# is not a pin is not one, so an extraction such as `entry "$CONTEXT_MD"
+# 'Worktree branch'` is not read as a pin; `prose_count` is asked wherever it stands,
 # since it sits inside a `tok`. A comment line is skipped before joining. A pin
 # called inside `$( )`, as this file's own rows call them, is not a line's
 # first word and is not audited: the suite's pins stand at a line's start.
@@ -213,19 +236,21 @@ r192_raw_prose_pins() {  # r192_raw_prose_pins <text file> <variable names> -- e
         line = substr(line, 1, length(line) - 1) " " nxt
       pin = (line ~ /^[ \t]*(written|unarmed|holds|lacks) /)
       for (i = 1; i <= n; i++) {
-        pat = "\"$" v[i] "\" "
+        pat = "\"$" v[i] "\""
         rest = line
         before = ""
         while ((p = index(rest, pat)) > 0) {
           before = before substr(rest, 1, p - 1)
           rest = substr(rest, p + length(pat))
+          if (rest !~ /^[ \t]+/) continue
+          sub(/^[ \t]+/, "", rest)
           q = substr(rest, 1, 1)
           if (q != "\047" && q != "\"") continue
           if (!pin && before !~ /prose_count $/) continue
           lit = substr(rest, 2)
           e = index(lit, q)
           if (e) lit = substr(lit, 1, e - 1)
-          if (lit ~ /[ \t]/ && index(lit, "#") == 0) print v[i] " |" lit "|"
+          if (lit ~ /[ \t]/ && lit !~ /^#/) print v[i] " |" lit "|"
         }
       }
     }' "$1"
@@ -238,6 +263,9 @@ printf '%s\n' \
   "written 'raw, one line' \"\$R192_V\" 'four acts'" \
   "written 'raw, continued' \\" \
   "  \"\$R192_V\" 'five acts'" \
+  "holds 'literal on the next line' \"\$R192_V\" \\" \
+  "    'six acts'" \
+  "written 'a # inside' \"\$R192_V\" 'pull request #N'" \
   "unarmed 'through prose' \"\$(prose \"\$R192_V\")\" 'four acts'" \
   "# written 'a comment' \"\$R192_V\" 'four acts'" \
   "written 'a heading' \"\$R192_V\" '## A heading'" \
@@ -245,13 +273,15 @@ printf '%s\n' \
   "tok 'a count' '0' \"\$(prose_count \"\$R192_V\" 'git branch -f')\"" \
   "entry \"\$R192_V\" 'Worktree branch' > out" \
   "holds 'double quoted' \"\$R192_V\" \"three citations\"\" named below\"" > "$R192_AUDIT_FIX"
-[ "$(wc -l < "$R192_AUDIT_FIX")" = 10 ] || {
-  echo "the #192 audit fixture was not written as ten lines; the check against it proves nothing" >&2
+[ "$(wc -l < "$R192_AUDIT_FIX")" = 13 ] || {
+  echo "the #192 audit fixture was not written as thirteen lines; the check against it proves nothing" >&2
   exit 1
 }
-tok 'the audit reports a raw prose pin on one line, continued, counted, and double-quoted, and nothing else' \
+tok 'the audit reports a raw prose pin on one line, continued, with its literal on the next line, holding a # inside, counted, and double-quoted, and nothing else' \
 'R192_V |four acts|
 R192_V |five acts|
+R192_V |six acts|
+R192_V |pull request #N|
 R192_V |git branch -f|
 R192_V |three citations|' \
     "$(r192_raw_prose_pins "$R192_AUDIT_FIX" 'R192_V')"
