@@ -64,55 +64,52 @@ requirement GH-185 <<'REQ'
 - kind: defect-permitting
 - status: active
 - direction: static: a property of the suite's helpers
-- note: What it does not reach is what the text cannot say without being
-  run. This list is the one place that names it, and each spelling written
-  in it is pinned below by a row that reports nothing. Dataflow, which is
-  why the shape is refused rather than counted: a target or a source held in
-  a variable, `exec 3>"$dest"` or `exec 3>&$err`; a target computed by an
-  expansion or an escape -- arithmetic, `exec 3>&$((1+1))`; an escape,
-  `exec 3>&$'\x32'`; a parameter's default, `exec 3>${x:-/dev/stderr}`; a
-  command substitution, `exec 3>$(echo /dev/stderr)` or
-  `exec 3>&$(echo 2)`; and a brace expansion, `exec 3>/dev/std{e..e}rr`; a
-  coprocess's descriptor, held in `COPROC`, `exec 4>&${COPROC[1]}`; fd 1
-  duplicated while it points at stderr --
-  `exec 1>&2 3>&1`, `exec >&2` and then `exec 3>&1`, and
-  `{ exec 3>&1; } >&2` -- whose entry is fd 1 pointed at stderr, which is
-  #310's for a whole process and the #109 section's group redirected once
-  for a group, and which reaching here would mean refusing every descriptor
-  pointed at stdout, the `3>&1 1>&2 2>&3` swap among them; and a descriptor
-  inherited from the process that runs the hook, which has no spelling in
-  the hook to pin. The filesystem: a symlink or a named pipe to stderr,
-  which in the text is an ordinary path, `exec 3>/tmp/err`, and a relative
-  path, `exec 3>stderr` run from `/dev`. And a glob, which bash expands in a
-  redirection's target, so `exec 3>/dev/stde?r`, `exec 3>/dev/stde[r]r` and
-  `exec 3>/dev/stder*` open stderr -- measured -- and reaching one would
-  mean matching a pattern against a path. Every one of them writes to
-  stderr, measured. The
-  implicit fd of an input operator departs from the triage's wording, which
-  has the guard report nothing for the implicit fd: that fd is 0,
-  `exec <&2` and then `>&0` writes to stderr -- measured -- and the contract
-  is any fd but 1, so it is reported. Trades taken in the refusing
-  direction: `<` by path opens a read-only descriptor on Linux, so a write
-  by way of one fails -- measured, for a source written and left implicit
-  -- and it is reported anyway, as the triage asked, while `<>` opens one for
-  writing and is a real duplication, and `<` onto a process substitution,
-  which the triage did not ask, is not reported, since a write through it
-  fails too -- measured; fd 2 reopened onto itself, `2>/dev/stderr`, is
-  reported though it hides nothing, because the contract is any fd but 1;
-  an explicit source is read after anything but a digit or a `$`, so
-  `a3>&2`, which bash reads as fd 1, and `>&13>&2`, a target of 13 and then
-  fd 1, are reported; the fd target is not bounded on its right, so `>&20`
-  is reported; a path whose last component is `stderr` is reported in any
-  directory, so a log file `2>"$dir/stderr"` is; a process substitution is
-  reported whatever the command in it writes to; the second reading takes
-  out quotes without reading which quote holds which, so `exec 3>\&2`, a
-  file named `&2`, `exec 3>'/dev/std\err'`, whose quotes keep the
+- note: What it does not reach is what the text cannot say without being run.
+  This list is the one place that names it, and each unreached shape it writes
+  out is pinned below by a row that reports nothing. Dataflow, which is why
+  the shape is refused rather than counted: a target or a source held in a
+  variable, `exec 3>"$dest"` or `exec 3>&$err`; a target computed by an
+  expansion or an escape -- arithmetic, `exec 3>&$((1+1))`; an escape, `exec
+  3>&$'\x32'`; a parameter's default, `exec 3>${x:-/dev/stderr}`; a command
+  substitution, `exec 3>$(echo /dev/stderr)` or `exec 3>&$(echo 2)`; and a
+  brace expansion, `exec 3>/dev/std{e..e}rr`; a coprocess's descriptor, held
+  in `COPROC`, `exec 4>&${COPROC[1]}`; fd 1 duplicated while it points at
+  stderr -- `exec 1>&2 3>&1`, `exec >&2` and then `exec 3>&1`, and `{ exec
+  3>&1; } >&2` -- whose entry is fd 1 pointed at stderr, which is #310's for a
+  whole process and the #109 section's group redirected once for a group, and
+  which reaching here would mean refusing every descriptor pointed at stdout,
+  the `3>&1 1>&2 2>&3` swap among them; and a descriptor inherited from the
+  process that runs the hook, which has no spelling in the hook to pin. The
+  filesystem: a symlink or a named pipe to stderr, which in the text is an
+  ordinary path, `exec 3>/tmp/err`, and a relative path, `exec 3>stderr` run
+  from `/dev`. And a glob, which bash expands in a redirection's target, so
+  `exec 3>/dev/stde?r`, `exec 3>/dev/stde[r]r` and `exec 3>/dev/stder*` open
+  stderr -- measured -- and reaching one would mean matching a pattern against
+  a path. Every one of them writes to stderr, measured. The implicit fd of an
+  input operator departs from the triage's wording, which has the guard report
+  nothing for the implicit fd: that fd is 0, `exec <&2` and then `>&0` writes
+  to stderr -- measured -- and the contract is any fd but 1, so it is
+  reported. Trades taken in the refusing direction: `<` by path opens a
+  read-only descriptor on Linux, so a write by way of one fails -- measured,
+  for a source written and left implicit -- and it is reported anyway, as the
+  triage asked, while `<>` opens one for writing and is a real duplication,
+  and `<` onto a process substitution, which the triage did not ask, is not
+  reported, since a write through it fails too -- measured; fd 2 reopened onto
+  itself, `2>/dev/stderr`, is reported though it hides nothing, because the
+  contract is any fd but 1; an explicit source is read after anything but a
+  digit or a `$`, so `a3>&2`, which bash reads as fd 1, and `>&13>&2`, a
+  target of 13 and then fd 1, are reported; the fd target is not bounded on
+  its right, so `>&20` is reported; a path whose last component is `stderr` is
+  reported in any directory, so a log file `2>"$dir/stderr"` is; a process
+  substitution is reported whatever the command in it writes to; the second
+  reading takes out quotes without reading which quote holds which, so `exec
+  3>\&2`, a file named `&2`, `exec 3>'/dev/std\err'`, whose quotes keep the
   backslash, and `exec 3>/dev/std\$'err'` are reported; and quotes are read
-  only in a target word, so a shape inside quoted text, or in a heredoc
-  body, which is not dropped, is a red. The path target is bounded on its
-  right, so `/dev/stderr2` and `2>/tmp/stderr.log` are not reported. fd 1
-  by `/dev/fd/2` is a plain refusal that `arms` does not count, which is
-  #263's and not this guard's.
+  only in a target word, so a shape inside quoted text, or in a heredoc body,
+  which is not dropped, is a red. The path target is bounded on its right, so
+  `/dev/stderr2` and `2>/tmp/stderr.log` are not reported. fd 1 by `/dev/fd/2`
+  is a plain refusal that `arms` does not count, which is #263's and not this
+  guard's.
 REQ
 # Only a shape pin. GH-185 is not in the invariance families' scope: those
 # rewrite a command a hook judges, and this is a static check on hook source,
