@@ -31,13 +31,16 @@ section "=== issue #185: dup_stderr reaches every spelling of a descriptor point
 requirement GH-185 <<'REQ'
 - text: `dup_stderr <file>` reports, as `<line>:<text>` space-joined, every
   line that points a descriptor other than 1 at stderr: a source written as a
-  single digit other than 1, as a number of two digits or more, or as a
-  `{name}`, or left implicit on `<`, `<&` or `<>`, where it is 0; a target of
-  fd 2 after `>&` or `<&`, or of `/dev/stderr`, `/dev/fd/2` or
+  number whose value is not 1, leading zeros read as bash reads them, or as a
+  `{name}`, or left implicit on `<`, `<&` or `<>`, where it is 0 -- after
+  anything but `<` and a word of digits alone, so `{ cat; }<&2` and `a1<&2`
+  are fd 0; a target of fd 2, leading zeros allowed, after `>&` or `<&`, or of
+  `/dev/stderr`, `/dev/fd/2` or
   `/proc/<anything>/fd/2` after `>`, `>>`, `>|`, `<` or `<>`; blanks and one
   quote allowed before the target. Continuations are folded first and a folded
   line is reported under its first line's number. It reports nothing for fd 1,
-  whether written or implicit, whatever spelling points it at stderr --
+  whether written or implicit, `01` included, whatever spelling points it at
+  stderr --
   `>&2`, `1>&2`, `>/dev/stderr`, `1>/dev/stderr`, `>>`, `>|` and `&>` -- nor
   for `2>&1`, `>/dev/null 2>&1` or a here-string naming `/dev/stderr`.
   `no-git-push.sh`, `no-pr-decisions.sh` and `lib/command-scan.sh`, which
@@ -50,12 +53,19 @@ requirement GH-185 <<'REQ'
   rather than counted: a target or a source held in a variable,
   `exec 3>"$dest"` or `exec 3>&$err`; a descriptor inherited from the process
   that runs the hook; and a path reaching stderr by another spelling,
-  `//dev/stderr` or a symlink. Two trades are taken in the refusing direction:
-  `<` and `<>` by path open a read-only descriptor on Linux, so a write through
-  one fails -- measured -- and they are reported anyway, as the triage asked;
-  and fd 2 reopened onto itself, `2>/dev/stderr`, is reported though it hides
-  nothing, because the contract is any fd but 1. Heredoc bodies are not
-  dropped, so a body line naming the shape is a red. fd 1 by `/dev/fd/2` is a
+  `//dev/stderr` or a symlink. The implicit fd of an input operator departs
+  from the triage's wording, which has the guard report nothing for the
+  implicit fd: that fd is 0, `exec <&2` and then `>&0` writes to stderr --
+  measured -- and the contract is any fd but 1, so it is reported. Trades
+  taken in the refusing direction: `<` by path opens a read-only descriptor
+  on Linux, so a write through one fails -- measured, for a source written
+  and left implicit -- and it is reported anyway, as the triage asked, while
+  `<>` opens one for writing and is a real duplication; fd 2 reopened onto
+  itself, `2>/dev/stderr`, is reported though it hides nothing, because the
+  contract is any fd but 1; an explicit source is read after any non-digit,
+  so `a3>&2`, which bash reads as fd 1, is reported; and neither target is
+  bounded on its right, so `>&20` and `/dev/stderr2` are reported. Heredoc
+  bodies are not dropped, so a body line naming the shape is a red. fd 1 by `/dev/fd/2` is a
   plain refusal that `arms` does not count, which is #263's and not this
   guard's.
 REQ
@@ -151,6 +161,23 @@ tok 'and fd 0 left implicit on <&, which is the same duplication' \
 tok 'and fd 0 left implicit on < by path' \
     '2:exec </dev/stderr' "$(dup_stderr "$R185_DIR/implicit-input-path.sh")"
 
+# THE IMPLICIT FD AFTER A WORD, found by review of this file's pull request:
+# the anchor refused a `}` and any digit in front of the operator, so a group's
+# input and a word ending in a digit hid fd 0. Bash reads digits as the fd only
+# when the word is digits alone.
+r185_fixture group-input '{ cat; }<&2'
+r185_fixture word-digit-input 'cat a1<&2'
+tok 'dup_stderr reports fd 0 duplicated onto a brace group, after its }' \
+    '2:{ cat; }<&2' "$(dup_stderr "$R185_DIR/group-input.sh")"
+tok 'and after a word ending in a digit, which bash does not read as the fd' \
+    '2:cat a1<&2' "$(dup_stderr "$R185_DIR/word-digit-input.sh")"
+
+# LEADING ZEROS, read as bash reads them, also found by that review: `02` is
+# fd 2 and was missed as a target, and `01` is fd 1.
+r185_fixture zero-padded-target 'exec 3>&02'
+tok 'dup_stderr reports fd 2 written 02, which bash duplicates as 2' \
+    '2:exec 3>&02' "$(dup_stderr "$R185_DIR/zero-padded-target.sh")"
+
 # FD 2 ONTO ITSELF, reported because the contract is any fd but 1; it hides
 # nothing, and the requirement's note records the trade.
 r185_fixture fd-two 'exec 2>/dev/stderr'
@@ -177,6 +204,8 @@ r185_fixture one-dev-fd 'echo "refused" 1>/dev/fd/2'
 r185_fixture two-to-one 'git fetch 2>&1'
 r185_fixture null-and-two 'git fetch >/dev/null 2>&1'
 r185_fixture here-string 'cat <<< /dev/stderr'
+r185_fixture one-padded 'exec 01>&2'
+r185_fixture one-input 'cat 1<&2'
 tok 'dup_stderr does not report >&2, the implicit fd 1' \
     '' "$(dup_stderr "$R185_DIR/implicit-dup.sh")"
 tok 'nor 1>&2' \
@@ -199,6 +228,10 @@ tok 'nor >/dev/null 2>&1' \
     '' "$(dup_stderr "$R185_DIR/null-and-two.sh")"
 tok 'nor a here-string naming /dev/stderr, which is text and not an input operator' \
     '' "$(dup_stderr "$R185_DIR/here-string.sh")"
+tok 'nor fd 1 written 01' \
+    '' "$(dup_stderr "$R185_DIR/one-padded.sh")"
+tok 'nor fd 1 written in front of an input operator, a word of digits alone' \
+    '' "$(dup_stderr "$R185_DIR/one-input.sh")"
 
 # THE LIBRARY BOTH HOOKS SOURCE, which the unsplit file's two rows do not ask:
 # a descriptor it opened is open in the hook that sourced it.

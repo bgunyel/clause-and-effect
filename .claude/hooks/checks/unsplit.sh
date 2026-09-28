@@ -13425,8 +13425,9 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch
 # `fn_writes` calls the function holding them silent, so the call count is never
 # consulted either -- two arms, count one, both derivations quiet. Which fd a
 # write lands on after a duplication is dataflow and not text, so it is refused
-# rather than counted: `dup_stderr` below fails on any fd other than 1 being
-# pointed at 2 in either hook, which is what a duplication has to write.
+# rather than counted: `dup_stderr`, in checks/library.sh since #185, fails on
+# any fd other than 1 being pointed at 2 in either hook, which is what a
+# duplication has to write.
 # THE SPELLINGS IT REACHES, AND THOSE IT DOES NOT. The sixth review of PR #169
 # found it reaching one, `N>&2` with a single digit, and named two it missed:
 # `exec 3>/dev/stderr`, which names the destination instead of duplicating a
@@ -13775,6 +13776,7 @@ tok 'and fn_writes calls the function holding them silent, so the call count is 
     'speaks silent' "$(fn_writes "$FN_FIXTURES/dup-stderr.sh")"
 tok 'so dup_stderr refuses the shape, and can see one' \
     '1:exec 3>&2' "$(dup_stderr "$FN_FIXTURES/dup-stderr.sh")"
+req GH-109.2 GH-185
 tok 'no-git-push.sh points no other fd at 2' '' "$(dup_stderr "$HOOKS/no-git-push.sh")"
 tok 'no-pr-decisions.sh points no other fd at 2' '' "$(dup_stderr "$HOOKS/no-pr-decisions.sh")"
 

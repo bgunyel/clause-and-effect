@@ -1452,24 +1452,36 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # single-digit fd written `N>&2`, of a contract that says any fd but 1.
 #
 # WHAT IT REACHES, read off the text as three parts. A SOURCE fd written
-# explicitly -- a single digit other than 1, any number of two digits or more,
-# or a `{name}` -- or left implicit on an input operator, where it is 0. A
-# TARGET that is fd 2, after `>&` or `<&`, or stderr by path -- `/dev/stderr`,
-# `/dev/fd/2` or `/proc/<anything>/fd/2` -- after `>`, `>>`, `>|`, `<` or
-# `<>`. Blanks, and one quote, allowed in front of the target. The implicit fd
-# on an output operator is 1, which is an ordinary refusal and is never
-# reported however it is spelled; `<<` and `<<<` are not input operators and
-# are stepped over. Comments are blanked whole-line only and continuations are
-# folded first, as `hook_text` does for the counters, and a folded line is
-# reported under the number of its first line; heredoc bodies are not dropped,
-# so a body line naming the shape is a red -- the refusing direction, and the
-# one #289 cannot move. checks/GH-185.sh drives each part against a fixture and
-# argues what it does not reach.
+# explicitly -- a number whose value is not 1, leading zeros read as bash reads
+# them, so `02` is fd 2 and `01` is fd 1, or a `{name}` -- or left implicit on
+# an input operator, where it is 0. Bash reads digits in front of an operator
+# as its fd only when the word is nothing but digits, so the implicit fd is
+# found after anything but `<` and a word of digits alone: `}<&2` and `a1<&2`
+# are fd 0, and ` 1<&2` is fd 1. A TARGET that is fd 2, leading zeros allowed,
+# after `>&` or `<&`, or stderr by path -- `/dev/stderr`, `/dev/fd/2` or
+# `/proc/<anything>/fd/2` -- after `>`, `>>`, `>|`, `<` or `<>`. Blanks, and
+# one quote, allowed in front of the target. The implicit fd on an output
+# operator is 1, which is an ordinary refusal and is never reported however it
+# is spelled; `<<` and `<<<` are not input operators and are stepped over.
+# Where the two ends are loose, they are loose in the refusing direction: an
+# explicit source is read after any non-digit, so `a3>&2`, which bash reads as
+# fd 1, is reported; and neither target is bounded on its right, so `>&20` and
+# `/dev/stderr2` are reported too.
+#
+# Comments are blanked whole-line only and continuations folded first. The
+# fold is its own and not `hook_text`'s, for two reasons: `hook_text` drops
+# heredoc bodies with the tokeniser's pass, and #289's misread `<<` drops real
+# code with them, which is the permitting direction here; and its fold joins
+# lines, so the numbers `grep -n` prints stop being the file's. This one pads
+# a fold with blank lines, so a folded line is reported under its first line's
+# number and every line after it under its own. Heredoc bodies stay, so a body
+# line naming the shape is a red -- the refusing direction. checks/GH-185.sh
+# drives each part against a fixture and argues what it does not reach.
 dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplication writes
   local q="[\"']?" src imp fd path
-  src='((^|[^0-9])(0|[2-9]|[0-9][0-9]+)|[{][A-Za-z_][A-Za-z0-9_]*[}])'
-  imp='(^|[^0-9}<])'
-  fd="&[[:space:]]*${q}2"
+  src='((^|[^0-9])(0+|0*[2-9]|0*[1-9][0-9]+)|[{][A-Za-z_][A-Za-z0-9_]*[}])'
+  imp='(^|[^0-9<]|[^[:space:];&|()<>0-9][0-9]+)'
+  fd="&[[:space:]]*${q}0*2"
   path="[[:space:]]*${q}(/dev/stderr|/dev/fd/2|/proc/[^/[:space:]]+/fd/2)"
   hook_uncommented "$1" \
     | awk '{ if (cont) buf = buf $0; else { buf = $0; n = 0 }
