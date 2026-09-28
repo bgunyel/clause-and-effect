@@ -40,7 +40,7 @@
 # mutated copy of the hooks and never a mutated suite. The evidence is a
 # recorded run instead, as GH-144.4's is.
 #
-# MEASURED, 2026-09-28, in answer to round 4 of its review: sixteen whole runs
+# MEASURED, 2026-09-28, in answer to round 5 of its review: twenty whole runs
 # of the suite, each in its own scratch clone of the branch with one edit
 # applied there, so no backup of this checkout was needed. Each run's record
 # was copied out at the start of end-of-run.sh, after every check had run;
@@ -65,11 +65,25 @@
 #   R187_TAB set to a blank                      1     the second and     10
 #                                                      third rows
 #
-# Six more broke the fixture guard's clauses one at a time: the modified
+# Eight more broke the fixture guard's clauses one at a time: the modified
 # copy's appended line not written, and the renamed modified copy's; the
-# renamed copy, and the renamed modified copy, given the report's name; a line
-# appended to the byte copy, and to the renamed copy. Each exited 1 with no
-# FAIL row, the guard having stopped the run at 6075 rows.
+# renamed copy, and the renamed modified copy, given the report's name; the
+# byte copy, and the modified copy, given another name; a line appended to the
+# byte copy, and to the renamed copy. Each exited 1 with no FAIL row, the guard
+# having stopped the run at 6075 rows. So did the modified copy given another
+# name with #187's own defect put back as an alternative to `cmp -s`, a copy
+# recorded for having the report's name: round 5 of the review measured that
+# pair green before the guard held the name, row 1 then testing what row 4
+# tests.
+#
+# One run stayed green, and is recorded so that it is not rediscovered:
+# `ran report-stale-branches.sh 0`, a constant in place of "$rc", exited 0
+# with no FAIL row and the record unchanged. Every copy these rows run exits 0,
+# as the report must under each pinned PATH, so no row here can drive the
+# status. The "only for an exit of 0 or 2" in GH-187's text is `ran`'s, held by
+# `ran_probe` under GH-109.4; and a report that exits otherwise is already a
+# FAIL in `report_says` itself, so a crashed run is not credited in a green
+# suite.
 #
 # `runs` is what GH-109.4 derived, `report-stale-branches.sh was run N times
 # under a tag`. It reads the record in unsplit.sh, before this file is
@@ -146,9 +160,11 @@ R187_TAB=$'\t'
 # line appended, which changes nothing it does and keeps its name; a byte copy
 # under another name; and one with the line appended under another name. The
 # requirement is two-sided -- recorded whatever the name, and for no other
-# script -- so each side is driven under both names. Each copy sits two levels
-# down, as the report cds to its own grandparent. All are made from $HOOKS, so
-# under an override the two byte copies are still byte copies.
+# script -- so each side is driven under both names. Each row's label rests on
+# both properties of its copy, whether it is a byte copy and whether it has the
+# report's name, so the guard below holds both, for all four copies. Each copy
+# sits two levels down, as the report cds to its own grandparent. All are made
+# from $HOOKS, so under an override the two byte copies are still byte copies.
 R187_DIR="$FIXTURES/r187"
 R187_COPY="$R187_DIR/copy/.claude/hooks/report-stale-branches.sh"
 R187_MODIFIED="$R187_DIR/modified/.claude/hooks/report-stale-branches.sh"
@@ -163,7 +179,9 @@ cp "$HOOKS/report-stale-branches.sh" "$R187_RENAMED_MODIFIED"
 printf '# a line #187 appended, so that this is not the registered report\n' >> "$R187_MODIFIED"
 printf '# a line #187 appended, so that this is not the registered report\n' >> "$R187_RENAMED_MODIFIED"
 cmp -s "$R187_COPY" "$HOOKS/report-stale-branches.sh" \
+  && [ "${R187_COPY##*/}" = report-stale-branches.sh ] \
   && ! cmp -s "$R187_MODIFIED" "$HOOKS/report-stale-branches.sh" \
+  && [ "${R187_MODIFIED##*/}" = report-stale-branches.sh ] \
   && cmp -s "$R187_RENAMED" "$HOOKS/report-stale-branches.sh" \
   && [ "${R187_RENAMED##*/}" != report-stale-branches.sh ] \
   && ! cmp -s "$R187_RENAMED_MODIFIED" "$HOOKS/report-stale-branches.sh" \
