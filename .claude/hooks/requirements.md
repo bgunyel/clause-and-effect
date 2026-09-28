@@ -1541,4 +1541,6 @@ it has no entry above (Q16).
   `git -C . push`. That is why `says_exactly` is in the library, driven by the
   #98 self-test against a fixture that says a second line. Its second round
   added a sixth `PUSH_REFUSE` arm past the hand-written list of arms, green,
-  which is why #164's issue file holds that list to a count off the hook
+  which is why #164's issue file holds that list to a count off the hook. Its
+  fourth measured a heredoc arm counted by that row's raw read and dropped by
+  #182's `hook_text`, which is why the count does not read through it

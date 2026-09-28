@@ -84,13 +84,35 @@ git -c push.default=matching push| This command sets git configuration for itsel
 # does not see, named: a new trigger routed into an existing site, which gives
 # that site's pinned text; and an echo added after a site under a condition
 # none of the five contexts meets.
+#
+# NOT THROUGH `hook_text`, though #182 made that the one reader for the
+# refusal-arm counters, whose private copies of its pipeline disagreed. This is
+# a different question. Those count writes to stderr, and a heredoc body is
+# text they must not count; this counts expansions, and an unquoted heredoc
+# body expands `$PUSH_REFUSE` like any other code. Routed through `hook_text`,
+# a sixth arm written as `cat >&2 <<EOF` with `$PUSH_REFUSE` in its body is
+# counted 5 and passes -- measured by review of PR #291, round 4, with the row
+# red on the raw text. The real hook has no heredoc arm, so the fixture below
+# carries one, and its two rows hold both halves: this reader counts the body,
+# and `hook_text` does not. A quoted heredoc, `<<'EOF'`, expands nothing and is
+# counted anyway: over, and red.
+ncm164_expansions() {  # ncm164_expansions <file> -- how many times it expands PUSH_REFUSE
+  grep -v '^[[:space:]]*#' "$1" | grep -oE '\$\{?PUSH_REFUSE([^A-Za-z0-9_]|$)' | wc -l | tr -d ' '
+}
 req GH-164
+NCM164_HEREDOC="$FIXTURES/ncm164-heredoc-arm.sh"
+printf '%s\n' 'echo "$PUSH_REFUSE" >&2' 'cat >&2 <<EOF' '$PUSH_REFUSE A heredoc arm.' 'EOF' \
+  '  # echo "$PUSH_REFUSE" in a whole-line comment' > "$NCM164_HEREDOC"
+tok 'the PUSH_REFUSE count reads a heredoc body as the expansion it is: an echo and a heredoc arm are 2' \
+  '2' "$(ncm164_expansions "$NCM164_HEREDOC")"
+tok 'and hook_text drops that body, which is why the count does not read through it' \
+  '1' "$(hook_text "$NCM164_HEREDOC" | grep -oE '\$\{?PUSH_REFUSE([^A-Za-z0-9_]|$)' | wc -l | tr -d ' ')"
+
 NCM164_HOOK="$HOOKS/no-commit-to-main.sh"
 if absolute_or_fail 'the PUSH_REFUSE count reads the hook under judgment' "$NCM164_HOOK"; then
   if [ -f "$NCM164_HOOK" ] && [ -r "$NCM164_HOOK" ]; then
     tok 'no-commit-to-main.sh expands PUSH_REFUSE as many times as NCM164_ARMS has arms, so an arm added to either is red until it is in the other' \
-      "$(printf '%s\n' "$NCM164_ARMS" | grep -c .)" \
-      "$(grep -v '^[[:space:]]*#' "$NCM164_HOOK" | grep -oE '\$\{?PUSH_REFUSE([^A-Za-z0-9_]|$)' | wc -l | tr -d ' ')"
+      "$(printf '%s\n' "$NCM164_ARMS" | grep -c .)" "$(ncm164_expansions "$NCM164_HOOK")"
   else
     fail static 'the PUSH_REFUSE count: %s was not read, so no count of it is evidence' "$NCM164_HOOK"
   fi
