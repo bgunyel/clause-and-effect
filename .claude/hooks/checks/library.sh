@@ -1561,13 +1561,28 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # `$` are a parameter and are not read as a source. Bash reads digits in front
 # of an operator as its fd only when the word is nothing but digits, so the
 # implicit fd is found after anything but `<` and a word of digits alone:
-# `}<&2` and `a1<&2` are fd 0, and ` 1<&2` and `` `1<&2 `` are fd 1. A TARGET
+# `}<&2` and `a1<&2` are fd 0, and ` 1<&2` and `` `1<&2 `` are fd 1. The
+# digits after `>&` or `<&` are the exception: bash reads them as that
+# operator's target and never as the next one's fd, so `>&1<&2` is fd 0; after
+# any other operator they are the fd, and `>1<&2` is a syntax error. A TARGET
 # that is fd 2, leading zeros allowed, after `>&` or `<&`; or, after `>`, `>>`,
 # `>|`, `<` or `<>`, a path whose last component is `stderr` or whose last two
 # are `fd/2` -- which reaches `/dev/stderr`, `/dev/fd/2` and every
 # `/proc/.../fd/2` without listing them -- or, after any of those but `<`,
 # which opens it read-only, a process substitution, `>(`, whatever the command
 # in it writes to. Blanks allowed in front of the target.
+#
+# WHERE A WORD ENDS is `end`, one set that every part reads: a blank, one of
+# `;&|()<>`, and a backtick, which ends a command substitution. It was three
+# copies until the second review of #185's pull request found two of them
+# without the backtick, so a path closing a substitution was never bounded.
+# It is the tokeniser's BOUND in lib/command-scan.sh, and is not read from
+# there: that is a string inside an awk program there, not a value to import,
+# and a guard asked of the hooks that shares their tokeniser's text shares its
+# defects. Whether the target word, the second reading's, stops at a backtick
+# cannot be observed, because the path and the fd target stop there first; the
+# mutation that takes it out stays green, and that is why.
+#
 # The implicit fd on an output operator is 1, which is an ordinary refusal and
 # is never reported however it is spelled; `<<` and `<<<` are not input
 # operators and are stepped over.
@@ -1588,6 +1603,12 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # right, so `>&20` is reported; and a path is read by its end in any
 # directory, so a log file named `stderr` is reported. A path is bounded on its
 # right, since read by its end it would otherwise reach `2>/tmp/stderr.log`.
+# The second reading takes quotes out without reading which quote holds which,
+# so `3>\&2`, a file named `&2`, is reported.
+#
+# A FILE IT CANNOT READ is reported as `UNREADABLE`, with the reason on stderr,
+# and never as the empty string a clean file gives: every row that asks a real
+# file would pass on an absent one otherwise.
 #
 # Comments are blanked whole-line only and continuations folded first. The
 # fold is its own and not `hook_text`'s, for two reasons: `hook_text` drops
@@ -1599,20 +1620,26 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
 # line naming the shape is a red -- the refusing direction. checks/GH-185.sh
 # drives each part against a fixture and argues what it does not reach.
 dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplication writes
-  local src imp fd path proc sep
+  local end src imp fd path proc sep
+  [ -f "$1" ] && [ -r "$1" ] || {
+    echo "dup_stderr: $1 is not a readable file, so nothing in it was asked" >&2
+    echo UNREADABLE
+    return 1
+  }
+  end='[:space:];&|()<>`'
   src='((^|[^0-9$])(0+|0*[2-9]|0*[1-9][0-9]+)|(^|[^$])[{][A-Za-z_][A-Za-z0-9_]*([[][^]]*[]])?[}])'
-  imp='(^|[^0-9<]|[^[:space:];&|()<>`0-9][0-9]+)'
+  imp="(^|[^0-9<]|[^${end}0-9][0-9]+|[<>]&[[:space:]]*[0-9]+)"
   fd='&[[:space:]]*0*2'
-  path='[[:space:]]*[^[:space:];&|()<>]*/(stderr|fd/2)([[:space:];&|()<>]|$)'
+  path="[[:space:]]*[^${end}]*/(stderr|fd/2)([${end}]|\$)"
   proc='[[:space:]]*>[(]'
   sep=$(printf ';\001;')
   hook_uncommented "$1" \
-    | awk -v sep="$sep" '
+    | awk -v sep="$sep" -v word="^[^${end}]*" '
         function unquoted(s,   out, w) {
           out = ""
           while (match(s, /[<>][&|>]?[ \t]*/)) {
             out = out substr(s, 1, RSTART + RLENGTH - 1); s = substr(s, RSTART + RLENGTH)
-            match(s, /^[^ \t;&|()<>]*/); w = substr(s, 1, RLENGTH); s = substr(s, RLENGTH + 1)
+            match(s, word); w = substr(s, 1, RLENGTH); s = substr(s, RLENGTH + 1)
             gsub(/\$["\047]|["\047\\]/, "", w); gsub(/\/+/, "/", w)
             while (sub(/\/\.\//, "/", w)) ;
             out = out w

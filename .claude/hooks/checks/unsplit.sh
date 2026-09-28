@@ -13449,7 +13449,8 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch
 # process, and a group redirected once, above, for a group. THE FILESYSTEM: a
 # symlink, a named pipe, a path relative to the working directory. And A GLOB,
 # which bash expands in a redirection's target. GH-185's note argues each, and
-# checks/GH-185.sh pins each as reporting nothing. #185 asks
+# checks/GH-185.sh pins as reporting nothing each the text can spell; an
+# inherited descriptor has no spelling in the hook. #185 asks
 # lib/command-scan.sh too, which both hooks source, so a descriptor opened
 # there is not in that list.
 #
