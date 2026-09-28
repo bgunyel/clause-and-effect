@@ -285,3 +285,26 @@ Full runs on `3f643f8`: the head in the worktree, and each mutation on a `git cl
 | U9: the join removed | 1 FAIL, the direct-reader driven row |
 | U10: the quoted-piece loop cut to one piece | 1 FAIL, the audit driven row |
 | U11: the pin regex back to a line's start | 1 FAIL, the audit driven row |
+
+
+## Review round 4, 2026-09-28 20:19 +0300
+
+rev-agent-192 reviewed `7d3cc3d`. Nothing gated. It made four requests (N8–N11) and asked for the deferred design issue to be filed. The fixes are `87f63d1`, and the design issue is #326. When this section was written, before it was committed, the branch was 12 commits ahead of `origin/dev-05` and 0 behind it (`git rev-list --count` read 12).
+
+- **N8.** `comment_reflow`'s header still said a pin on prose reads it "through this one function". Since `751c1d6`, a pin reads `prose_reflow`, which calls it. rev-agent-192 asked for a re-sweep by the claim ("which reader does a pin read") instead of by the spelling. Two other comments make that claim: GH-215's and the harness-header comment in `unsplit.sh`. Both describe readers that really do call `comment_reflow` today, and those readers are #323's.
+- **N9.** `prose` ran `mkdir` and `rm -f` on the mirrored path before asking whether the source was absolute. So `prose ../suite-text` deleted `$SUITE_TEXT` from any directory (rev-agent-192 measured this). The suggested fix was to move the `rm` inside the absolute branch. The assistant saw that this alone leaves a second route: a relative `tmp/x` names the fixture an earlier `prose /tmp/x` wrote, and `written` would read that. So a relative name now touches nothing, and is given a path under `$FIXTURES/prose-refused`, with each `/` spelled `%2F`, where nothing writes. Mutation P1 is the suggested reorder alone, and it confirms the second route: `written` returned `ok` on the stale reflow.
+- **N10.** GH-192.3's derivation now takes an unquoted Markdown path as well as a quoted one. That derives 4 more variables (`R157_E`, `R159_HEAD`, `R159_DRAFT`, `R177_E`). The audit still finds nothing at the head, and still 100 on `origin/dev-05`.
+- **N11.** The direct-reader count counted lines. It now counts calls, a `gsub` over the joined line, so a second reader beside an existing one moves the literal. The suite's counts are unchanged.
+- **#326** holds the three deferred ideas: dedicated `written_prose`/`unarmed_prose` verbs; an `unarmed` that also fails on the reflow; and one quote-aware parser instead of two.
+
+### Measured
+
+`87f63d1` read ALL CHECKS PASSED on a full run. Each mutation is a full run on a `git clone`, with its diffstat checked.
+
+| mutation | result |
+|---|---|
+| P0: `prose` as it was at `7d3cc3d` | 3 FAIL: the relative-name row, the `..` row (the file is deleted), the stale-reflow row |
+| P1: the `rm` moved inside the absolute branch, nothing else | 2 FAIL: the relative-name row, and the stale-reflow row, where `written` read `ok` |
+| U12: the derivation without the unquoted alternative | 1 FAIL, the derivation row |
+| U13: the count back to one per line | 1 FAIL, the direct-reader driven row |
+| N11m: a second direct reader on `LEFT_OPEN_PROSE`'s line | 1 FAIL, the suite-wide direct-reader count |
