@@ -73,13 +73,18 @@ Two subcommands, one per thing a green run has to be true about:
     wanted.
 
     The summary stays under GitHub's 1 MiB cap for any log, on either path
-    that writes its one code block (#207). A failing row is shown if it fits
-    what is left of `SUMMARY_BLOCK_BYTES`, fences counted; a row that does
-    not fit is skipped rather than ending the list, and the summary counts
-    what it left out. When the suite exits non-zero without a failing row,
-    the log's last `TAIL_LINES` lines are shown, cut from their start to the
-    same budget, and the summary says how many bytes were cut. An exit 0
-    shows no tail, even when the log does not support it (#228).
+    (#207). Each failing row is shown up to `ROW_BYTES`, and a row over it is
+    cut there and ends with a line saying so (#227), so no one row can take
+    the block and hide the rows after it, and the first row is always shown.
+    A capped row is shown if it fits what is left of `SUMMARY_BLOCK_BYTES`,
+    fences counted; a row that does not fit is skipped rather than ending the
+    list. Every row not shown is named, in log order, by its `FAIL` line cut
+    to `NAME_BYTES`, in a block of its own held to `NAMES_BLOCK_BYTES`, and a
+    log with more of them than that holds counts the rest. When the suite
+    exits non-zero without a failing row, the log's last `TAIL_LINES` lines
+    are shown, cut from their start to `SUMMARY_BLOCK_BYTES`, and the summary
+    says how many bytes were cut. An exit 0 shows no tail, even when the log
+    does not support it (#228).
 
     How the suite step ended is recorded beside the counts, as ``ended``
     (#208): ``exited`` when the step wrote the suite's exit status, else
@@ -123,15 +128,49 @@ DETAIL_INDENT = "       "
 PASSED_LINE = "ALL CHECKS PASSED"
 FAILED_LINE = "SOME CHECKS FAILED"
 # GitHub refuses a step summary over 1 MiB, and the whole summary is lost with
-# it. The summary carries at most one code block, the failing rows or the log's
-# tail, and everything around it is under 1 KiB (460 bytes beside a full tail
-# block, measured for #207), so the bound is put on that block: half the cap,
-# counted in UTF-8 bytes, which is what GitHub counts, and counted with its
-# fences. A fence is one backtick longer than the longest run inside it, so a
-# block that is one run of backticks is three times its text; a budget on the
-# text alone let 500 KiB of rows make a 1.1 MiB summary (#207). A row count
-# would not bound it either: a row's detail lines have no length limit.
+# it. The summary carries at most two code blocks: the failing rows or the
+# log's tail, held to SUMMARY_BLOCK_BYTES, and the names of the failing rows not
+# shown, held to NAMES_BLOCK_BYTES. Every note that grows with the number of
+# rows -- a cut row's marker, a name -- is inside one of the two and counted
+# there, so the text outside them is a fixed set of sentences with a few numbers
+# in them: 460 bytes beside a full tail block (#207), and 858 on the rows path
+# at its longest, a stopped suite with an outcome it cannot explain, measured
+# with every count five digits long, a 40-character tested commit and a
+# 14-character outcome (#227). So 512 + 256 KiB of blocks leave 256 KiB for
+# that text. Each budget is counted in UTF-8 bytes, which is what GitHub
+# counts, and with its block's fences. A fence is one backtick longer than the
+# longest run inside it, so a block that is one run of backticks is three times
+# its text; a budget on the text alone let 500 KiB of rows make a 1.1 MiB
+# summary (#207). A row count would not bound it either: a row's detail lines
+# have no length limit.
 SUMMARY_BLOCK_BYTES = 512 * 1024
+# The most any one failing row may take of the rows block: its `FAIL` line and
+# detail, and the marker a cut row ends with. A row over it is shown from its
+# start and cut, so no single row can take the block and hide the rows after it
+# (#227): before, a 524,200-byte row was shown whole and the 20 rows after it
+# were not. 32 KiB is 80 times the largest failing row of run 36427909808 (411
+# bytes), the one of the last four failing runs whose log could still be
+# downloaded when #227 was built, and holds the 2,000-line detail of 22,121
+# bytes the parser's tests pass through whole. Fifteen rows at the cap fit the
+# block, fences included, and a sixteenth does not. And the first row is
+# always shown, for any log: a row that is one run of backticks is fenced at
+# three times its text, 3 * 32,768 + 8 = 98,312 bytes at most, a fifth of the
+# block.
+ROW_BYTES = 32 * 1024
+# How a cut row says so, as the last line of what is shown of it. It counts
+# against ROW_BYTES; the room it takes is reserved at the row's whole size,
+# which has at least as many digits as what is cut.
+CUT_NOTE = "  [row cut here: its last {} bytes are in the uploaded log]"
+# A failing row that is not shown is named by its `FAIL` line, and a `FAIL` line
+# has no length limit either, so each is cut to its first NAME_BYTES. 512 is
+# above every one of the 7,811 row lines in the log of run 36427909808 (the
+# longest 371 bytes, the 99th percentile 193), so a real row's name is whole.
+NAME_BYTES = 512
+# The names are fenced in a block of their own, held to this. It holds 508 names
+# of NAME_BYTES even when each is one run of backticks, 510 when none holds one,
+# and about 3,400 of the median row line (75 bytes). A log with more failing
+# rows not shown than that names the first in log order and counts the rest.
+NAMES_BLOCK_BYTES = 256 * 1024
 # A suite that exits non-zero with no failing row stopped in a guard, and a
 # guard's message is its last few lines. Forty covers a message and the
 # section headings before it, and is enough to say where the suite stopped.
@@ -316,6 +355,38 @@ def clip_from_end(lines, budget):
     return kept, sum(map(line_bytes, lines)) - sum(map(line_bytes, kept))
 
 
+def first_bytes(line, n):
+    """The first `n` bytes of `line`, less the bytes of a character the cut
+    would split: "ignore" drops them, where "replace" would add three bytes of
+    U+FFFD in their place."""
+    return line.encode("utf-8")[:max(n, 0)].decode("utf-8", "ignore")
+
+
+def capped(block):
+    """
+    A failing row as shown: whole if it fits ROW_BYTES, else its lines from the
+    start up to ROW_BYTES, the first line that does not fit kept in part, and
+    CUT_NOTE last, saying how many bytes are left out. The note's room is taken
+    first, at the digits of the row's whole size, which what is cut cannot have
+    more of, so the note and the text together never pass ROW_BYTES. Fences are
+    the block's and not a row's, so they are counted where rows are put in it.
+    """
+    total = sum(map(line_bytes, block))
+    if total <= ROW_BYTES:
+        return block
+    budget = ROW_BYTES - line_bytes(CUT_NOTE.format(total))
+    kept, size = [], 0
+    for line in block:
+        if size + line_bytes(line) > budget:
+            part = first_bytes(line, budget - size - 1)  # less the part's newline
+            if part:
+                kept.append(part)
+            break
+        kept.append(line)
+        size += line_bytes(line)
+    return kept + [CUT_NOTE.format(total - sum(map(line_bytes, kept)))]
+
+
 def how_it_ended(exit_status, suite_outcome, started):
     """
     "exited", "cancelled", "timed-out" or "unknown" (#208). The suite step
@@ -397,31 +468,49 @@ def report(log_path, exit_status, suite_outcome, seconds, tested_commit, json_pa
         if stopped:
             parts.append(f"{stopped}\n\n")
         parts.append(f"### Failing rows ({failed})\n\n")
-        # A row that does not fit is skipped, and the loop goes on, so a row
-        # over the budget no longer hides the rows after it (#207). A row that
-        # fits still can: rows are taken in log order, and one that nearly
-        # fills the budget leaves no room for the rest, which are skipped and
-        # counted. The trade is that a skipped row's name is not on the page,
-        # only in the count below and in the uploaded log. Cutting the row to
-        # the budget left would keep its name, but a row that size takes all of
-        # it and hides the rest again. A cap on every row would settle both; it
-        # changes what a shown row is, which #207 did not ask for, and is #227.
-        shown, size, longest, rows_shown = [], 0, 0, 0
+        # Every row is capped at ROW_BYTES, so none takes the block and hides
+        # the rest (#227), and the first is always shown. Rows are taken in log
+        # order, and a capped row that does not fit what is left is skipped
+        # and the loop goes on (#207), so a row that widens the fence past the
+        # room left does not hide the small rows after it. A skipped row is
+        # not shown, and is named below instead: so the rows not shown are not
+        # always the last ones, and nothing below says they are.
+        shown, size, longest, not_shown = [], 0, 0, []
         for block in failing:
-            block_size = sum(map(line_bytes, block))
-            block_longest = max(map(longest_run, block))
-            if fenced_size(size + block_size,
-                           max(longest, block_longest)) > SUMMARY_BLOCK_BYTES:
+            row = capped(block)
+            row_size = sum(map(line_bytes, row))
+            row_longest = max(map(longest_run, row))
+            if fenced_size(size + row_size, max(longest, row_longest)) > SUMMARY_BLOCK_BYTES:
+                not_shown.append(block[0])
                 continue
-            shown.extend(block)
-            size += block_size
-            longest = max(longest, block_longest)
-            rows_shown += 1
+            shown.extend(row)
+            size += row_size
+            longest = max(longest, row_longest)
         if shown:
             parts.append(fenced(shown))
-        if rows_shown < failed:
-            parts.append(f"\n{failed - rows_shown} more failing row(s) are in the "
-                         "uploaded log.\n")
+        if not_shown:
+            # Named in log order until NAMES_BLOCK_BYTES is used, and the rest
+            # counted. The loop stops at the first name that does not fit
+            # rather than skipping it, so the rows left unnamed are the last
+            # ones, which is what the count says.
+            names, size, longest = [], 0, 0
+            for line in not_shown:
+                name = first_bytes(line, NAME_BYTES)
+                if fenced_size(size + line_bytes(name),
+                               max(longest, longest_run(name))) > NAMES_BLOCK_BYTES:
+                    break
+                names.append(name)
+                size += line_bytes(name)
+                longest = max(longest, longest_run(name))
+            parts.append(f"\n{len(not_shown)} of the {failed} failing rows are not shown "
+                         "above, to keep this summary under GitHub's 1 MiB limit; the "
+                         "uploaded log holds them. Their `FAIL` lines, in log order, each "
+                         f"cut to its first {NAME_BYTES} bytes:\n\n")
+            parts.append(fenced(names))
+            if len(names) < len(not_shown):
+                parts.append(f"\nThe last {len(not_shown) - len(names)} of those "
+                             f"{len(not_shown)} are not named here either, for the "
+                             "same reason.\n")
     elif exit_status != 0:
         lead = stopped or f"The suite exited {exit_status} without printing a failing row."
         parts.append(f"{lead} The end of its log:\n\n")
