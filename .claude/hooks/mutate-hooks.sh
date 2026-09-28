@@ -563,13 +563,32 @@ TOOLING='^(check-hooks[.]sh|mutate-hooks[.]sh|checks/([^/.][^/]*|[.][^/.][^/]*|[
 # 200 check results, so the rate was taken again the same way against the merged
 # tree: 274 s, 250 s, 266 s. The slowest is under the reading above, so the
 # constant does not move -- the suite grew without the run getting slower.
-# RE-MEASURED 2026-09-27 at #159, because that branch took the suite from 6213
-# check results to 6854 as the matrix line reads them, past the quarter the
-# staleness check allows over 5296. Three consecutive runs the same way, against
-# the branch's tree: 279 s, 271 s, 288 s. Other sessions were running on the
-# machine (load average 3.9 at the start), which can only have slowed the runs,
-# and the slowest is carried for the reason above.
-MEASURED_SECONDS_PER_RUN=288
+# RE-MEASURED on PR #260 (#166, #266, #273), whose rows took the suite past a
+# quarter over the size below and turned the staleness check red. Twice. The
+# first three runs were taken while other sessions ran this suite beside them,
+# at load averages of 33.7, 14.2 and 17.8: 1118 s, 908 s, 1272 s, and 1272 was
+# carried with the load written beside it. Round 3 of that review timed a run
+# at load 10 in 390 s and called the figure about three times too high, so it
+# was taken again on a quieter machine, the same way, against the tree at
+# c2bd412: 430 s, 388 s, 325 s, at load averages of 3.9, 8.7 and 3.7.
+#
+# TWO CONDITIONS, SO TWO FIGURES, and the rule above -- carry the slowest,
+# because a budget that is short costs somebody an afternoon -- is kept for
+# each. One figure could not keep it: the quiet one understates a pass under
+# peer load by two to three times, and the loaded one overstates a quiet pass
+# by as much. So the slowest of the quiet set is the rate --list multiplies,
+# and the slowest of the loaded set stands beside it as the rate under load,
+# which --list prints too and RUN_BOUND below is derived from. Round 5 of the
+# review of PR #260 found the comment carrying the quiet figure under a rule
+# it broke. The quiet set's day is MEASURED_ON's, and stands only there.
+MEASURED_SECONDS_PER_RUN=430
+MEASURED_SECONDS_UNDER_LOAD=1272
+# The day it was taken, printed by --list beside it. It stood as a literal inside
+# that printf until the re-measurement above, which moved the rate and left the
+# printed date naming the previous measurement -- a second copy of one fact,
+# which went stale the first time the fact moved. So it is a constant here,
+# moved with the rate.
+MEASURED_ON=2026-09-28
 # The suite's size when the rate was last CONFIRMED, as the number of check
 # results its OWN matrix line reports -- which is a little under the total it
 # prints, because the last findings are appended after the record is copied for
@@ -584,7 +603,7 @@ MEASURED_SECONDS_PER_RUN=288
 # shape as correcting a stale count in prose rather than deriving it. It moves
 # here because the rate above was actually re-taken at this size, not because
 # the tree grew.
-MEASURED_AT_RESULTS=6854
+MEASURED_AT_RESULTS=6892
 
 # WHAT MAKES A ROW RUNNABLE, asked in one place because two callers need the
 # same answer and gave different ones. Pass one below refuses a row for each
@@ -706,13 +725,29 @@ quoted-base-flag-permitted%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/END { 
 quoted-base-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ \&\& q <= length("--base") + (w ~ \/^--base=\/))/)/%GH-139%caught
 quoted-equals-read-as-value%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ + (w ~ \/^--base=\/))/)/%GH-139%caught
 quoted-shorthand-value-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if ((q \&\& q <= b)/if ((q/%GH-139%caught
-ansi-hex-escape-not-decoded%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "x") {/if (0) {/%GH-139%caught
-open-quote-holds-no-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (st) w = w "\\n"; //%GH-139%caught
-nul-decoded-as-a-character%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (v == 0) { if (!cut) { cut = 1; cutw = w } } else w = w chr(v)/w = w chr(v)/%GH-139%caught
-nul-cut-span-keeps-its-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (cut) { if (/if (0) { if (/%GH-139%caught
+ansi-hex-escape-not-decoded%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (e == "x") {/if (0) {/%GH-139 GH-166%caught
+open-quote-holds-no-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (wd_st) w = w "\\n"; //%GH-139%caught
+nul-decoded-as-a-character%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (v == 0) { wd_cut = 1; wd_ev = "cut" } else wd_ch = wd_chr(v)/wd_ch = wd_chr(v)/%GH-139 GH-166%caught
+nul-cut-span-keeps-its-newline%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (wd_st == 3 \&\& wd_cut) { if (/if (0) { if (/%GH-139%caught
 empty-span-read-as-value%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/ || (qe \&\& qe <= length("--base") + 1)//%GH-139%caught
 cut-span-at-line-end-always-refused%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (w == "" || (w ~ \/^-\/ \&\& w !~ \/\[\[:space:\]\]\/))/if (1)/%GH-139%caught
-c-escape-takes-the-next-character%no-pr-decisions.sh%/^quoted_base_flag()/,/^}/s/if (e == "c") { put(0); return }/if (e == "c") { if (i < n) i++; w = w "?"; return }/%GH-139%caught
+c-escape-takes-the-next-character%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (e == "c") { wd_put(0); return }/if (e == "c") { if (wd_i <= wd_n) wd_i++; wd_ch = "?"; return }/%GH-139 GH-166%caught
+ansi-quote-not-read-as-quoting%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (c == "\$" \&\& d == "\\047")/if (0)/%GH-166%caught
+locale-quote-not-read-as-quoting%lib/command-scan.sh%/^CS_WORD_AWK=/,/^'$/s/if (c == "\$" \&\& d == "\\042")/if (0)/%GH-166%caught
+wrapper-anchor-admits-no-dollar%lib/command-scan.sh%/^CS_WORD_SPELLING=/s/(\[\\\$\]?/(/%GH-166%caught
+option-read-without-the-reader%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^    while (wd_next()) if (wd_ev == "text") o = o wd_ch$/    o = t/%GH-166%caught
+word-reader-not-withdrawn%lib/command-scan.sh%s/^if \[ -z "\$CS_WORD_AWK" \]; then$/if false; then/%GH-166%caught
+word-end-cuts-at-every-blank%lib/command-scan.sh%/    function word_end(/,/^    }$/s/^      wd_start(s, i)$/      return q/%GH-166.1%caught
+word-end-fast-path-ignores-the-backslash%lib/command-scan.sh%/    function word_end(/,/^    }$/s/ \&\& index(t, "\\\\") == 0) return q/) return q/%GH-166.1 GH-273%caught
+strip-walk-cuts-at-every-blank%lib/command-scan.sh%/^      wrapped = 0$/,/Walked back rather than matched/s/wordend(/tokend(/g%GH-166.1%caught
+tail-offer-reads-blank-cut-tokens%lib/command-scan.sh%/    function nextword(/,/^    }$/s/q = wordend(r)/q = tokend(r)/%GH-166.1%caught
+head-word-cut-at-its-first-blank%lib/command-scan.sh%/    function printhead(/,/^    }$/s/^      i = word_end(s, 1)$/      i = index(s " ", " ")/%GH-166.1%caught
+tail-offer-bound-two-words%lib/command-scan.sh%s/^        for (k = 0; k < 3; k++) {$/        for (k = 0; k < 2; k++) {/%GH-166.1%caught
+wrapper-assignment-value-stops-at-a-blank%lib/command-scan.sh%/^CS_WRAPPER_RE=/s/=(\$CS_WRAP_TOKEN|\[\[:space:\]\]+)/=[^[:space:]]*[[:space:]]+/%GH-273%caught
+wrapper-token-reads-no-escape%lib/command-scan.sh%/^CS_WRAP_TOKEN=/s/|\\\\\\\\\.|/|/%GH-166.1 GH-273%caught
+wrapper-option-skip-cuts-at-every-blank%lib/command-scan.sh%/^CS_WRAPPER_RE=/s/(-(\$CS_WRAP_TOKEN|\[\[:space:\]\]+))\*/(-[^[:space:]]*[[:space:]]+)*/%GH-166.1%caught
+wrapper-token-stops-at-a-quoted-blank%lib/command-scan.sh%s/^CS_WRAP_TOKEN=.*/CS_WRAP_TOKEN="[^[:space:]]+[[:space:]]+"/%GH-166.1%caught
+tail-offer-bound-four-words%lib/command-scan.sh%s/^        for (k = 0; k < 3; k++) {$/        for (k = 0; k < 4; k++) {/%GH-166.1%caught
 api-read-taken-for-a-write%no-pr-decisions.sh%/^gh_api_is_write()/,/^}/s/^  return 1$/  return 0/%FR-20%caught
 release-allowlist-admits-a-write%no-pr-decisions.sh%/^RELEASE_READ_VERBS=/s/verify-asset"/verify-asset create edit delete"/%FR-48%caught
 gh-option-never-unreadable%lib/command-scan.sh%/^CS_GH_AWK=/,/^  }.$/s/^    return 3$/    return 2/%GH-118 US-15%caught
@@ -941,9 +976,12 @@ if [ -n "$LIST" ]; then
   # the half-minute added before the divide so the minutes round rather than
   # truncate -- a budget that is short is the one that costs somebody an
   # afternoon, and truncation is always short.
-  printf 'about %s minutes for that pass, at the %s s a run measured on 2026-09-27; re-measure it, it is not derived\n' \
+  printf 'about %s minutes for that pass, at the %s s a run measured on %s; re-measure it, it is not derived\n' \
     "$(( (RUNS_NEEDED * MEASURED_SECONDS_PER_RUN + 30) / 60 ))" \
-    "$MEASURED_SECONDS_PER_RUN"
+    "$MEASURED_SECONDS_PER_RUN" "$MEASURED_ON"
+  printf 'and about %s minutes while other sessions run this suite beside it, at the %s s a run measured under that load\n' \
+    "$(( (RUNS_NEEDED * MEASURED_SECONDS_UNDER_LOAD + 30) / 60 ))" \
+    "$MEASURED_SECONDS_UNDER_LOAD"
   exit 0
 fi
 
@@ -1102,7 +1140,20 @@ echo "  running check-hooks.sh against $WORK ..."
 # a mutation that left one looping would hang this harness rather than report
 # anything. A run killed at the bound prints no matrix, which is read below as
 # did-not-complete -- never as caught.
-RUN_BOUND=600
+#
+# DERIVED FROM THE RATE, because it was a second copy of it. It stood here as
+# 600 s beside a rate of 275, and when PR #260 re-measured the rate at 1272 s
+# the sentence above became false and the baseline itself was killed at the
+# bound -- exit 124, read as "the unmutated copy is not green", with nothing
+# wrong in the tree. Three times the rate keeps the sentence true whatever the
+# rate is re-measured to -- the rate UNDER LOAD, since round 5 of that review,
+# when three quiet runs came to 1290 s and the loaded baselines on record ran
+# 908 to 1272 s: a bound on the quiet figure would kill a baseline on a busy
+# machine and report the tree red again. The cost is the other job of a bound: a mutation that
+# loops is given three of the slowest runs recorded before it is called
+# did-not-complete. How long that is follows the constant; it is not restated
+# here, because the last sentence that did went stale by three times.
+RUN_BOUND=$(( MEASURED_SECONDS_UNDER_LOAD * 3 ))
 timeout "$RUN_BOUND" env CHECK_HOOKS_DIR="$WORK" bash "$SUITE" --matrix > "$RUN_OUT" 2>"$WORK_ROOT/baseline.err"
 BASELINE_STATUS=$?
 RUNS=$((RUNS + 1))

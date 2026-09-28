@@ -93,8 +93,11 @@
 #     header -- `124 s, taken 2026-09-17`, `The 2026-09-17 readings` and the
 #     freeze paragraph's quotation of the log's first line -- and three below
 #     `set -u`, at MEASURED_SECONDS_PER_RUN: MEASURED 2026-09-20, the 124 s it
-#     replaced on 2026-09-17, and the `--list` line that prints the rate's
-#     date. The header's are counted on its prose as comment_reflow reads it,
+#     replaced on 2026-09-17, and MEASURED_ON, the day the rate was last
+#     measured. That third was the `--list` line's own literal until #166
+#     re-measured the rate on PR #260 and moved it into the constant, which
+#     --list prints through a %s; the count stayed six. The header's are
+#     counted on its prose as comment_reflow reads it,
 #     which rejoins a date broken at a hyphen across a line; the code's on its
 #     lines as written, where a comment is indented and the reader cannot
 #     rejoin it. The review's fourth round measured the first version, which
@@ -312,8 +315,8 @@ tok 'a date broken across a line of the header is counted, and one inside the lo
 R215_REST=$(r215_header "$R215_MUT")
 holds 'outside the log, the header is read to its last paragraph' "$R215_REST" \
   'the documents it is judged against stay this repository'
-tok 'and outside the log the harness carries seven ISO dates, six as at #215 and the rate re-measured at #159 (a re-measure of the rate that adds a date moves this literal)' \
-    '7' "$(r215_dates "$R215_MUT")"
+tok 'and outside the log the harness carries six ISO dates, as at #215 (a re-measure of the rate that adds a date moves this literal)' \
+    '6' "$(r215_dates "$R215_MUT")"
 # Case folded, so a record opening `Selection of` or written in capitals is read
 # as one written in lower case.
 R215_REST=${R215_REST,,}
