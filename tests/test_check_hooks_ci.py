@@ -697,36 +697,46 @@ def test_report_says_a_single_row_left_unnamed_in_the_singular(tmp_path):
     ("constant", "changed", "message"),
     [
         ("ROW_BYTES = 32 * 1024\n", "ROW_BYTES = 174761\n",
-         "a capped row of backticks no longer fits the rows block: the first row can be left out"),
+         "::error::a capped row of backticks no longer fits the rows block: the first row can be left out"),
         ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 523265\n",
-         "the two blocks and the text outside them can pass GitHub's 1 MiB summary limit"),
+         "::error::the two blocks and the text outside them can pass GitHub's 1 MiB summary limit"),
         ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 1535\n",
-         "a name cut to NAME_BYTES no longer fits the names block: none may be named"),
+         "::error::a name cut to NAME_BYTES no longer fits the names block: none may be named"),
+        ("ROW_BYTES = 32 * 1024\n", "ROW_BYTES = 589\n",
+         "::error::a cut row no longer has room for its note and a name: "
+         "its FAIL line can be left out"),
         ("ROW_BYTES = 32 * 1024\n", "ROW_BYTES = 174760\n", None),
         ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 523264\n", None),
         ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 1536\n", None),
+        ("ROW_BYTES = 32 * 1024\n", "ROW_BYTES = 590\n", None),
     ],
-    ids=["first-row", "one-mebibyte", "first-name",
-         "first-row-at-the-bound", "one-mebibyte-at-the-bound", "first-name-at-the-bound"],
+    ids=["first-row", "one-mebibyte", "first-name", "fail-line",
+         "first-row-at-the-bound", "one-mebibyte-at-the-bound", "first-name-at-the-bound",
+         "fail-line-at-the-bound"],
 )
 def test_script_refuses_to_load_with_budgets_that_break_what_the_summary_counts_on(
         tmp_path, constant, changed, message):
     """
-    Three things the summary counts on hold only for some values of its
+    Four things the summary counts on hold only for some values of its
     budgets: the first row fits the rows block, the first name fits the names
-    block, and the two blocks leave room under 1 MiB for the text outside
-    them. Each is checked where the constants are, so a change that breaks
-    one stops the script with the reason. Every other test goes red too, but
-    only on a literal, which says nothing about why (review of #227, round 2).
+    block, the two blocks leave room under 1 MiB for the text outside them,
+    and a cut row has room for its note and a name's worth of its `FAIL`
+    line (review of #227, round 4). Each is checked where the constants are,
+    so a change that breaks one stops the script with the reason. Every other
+    test goes red too, but only on a literal, which says nothing about why
+    (review of #227, round 2).
     A copy of the script with one constant changed is run, and the change is
     checked to apply exactly once, so a renamed constant cannot pass this
     unedited. Each change is one past the bound its check states: 3 * 174,761
     + 8 is 524,291, and 3 * 174,760 + 8 is 524,288, the rows block exactly;
     523,265 of names and 512 KiB of rows leave 1,023 bytes under 1 MiB for the
-    text outside; and a 1,535-byte names block is one short of 3 * 512. At
-    each bound itself the script loads, so each bound is the one the check
+    text outside; a 1,535-byte names block is one short of 3 * 512; and a
+    589-byte row cap is one short of a 512-byte name, its newline, and the
+    note at its widest, 77 bytes with the 19 digits of sys.maxsize. At each
+    bound itself the script loads, so each bound is the one the check
     states. Those bounds round the widest fenced row and name up, by 16 bytes
-    and 5, so a check is refusing a little early and never late.
+    and 5, and take the note at more digits than any log can need, so a check
+    is refusing a little early and never late.
 
     The copy runs under PYTHONOPTIMIZE, which drops every `assert`: written as
     asserts, the checks let a copy with any budget load (review of #227,

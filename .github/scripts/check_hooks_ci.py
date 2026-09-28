@@ -171,10 +171,12 @@ ROW_BYTES = 32 * 1024
 # row always fits. That holds only while the widest a capped row can be fenced
 # fits the block, so a change to either constant that breaks it stops here,
 # with the reason, rather than in a test's literal (review of #227, round 2).
+# This bounds ROW_BYTES from above; the check after NAME_BYTES bounds it from
+# below.
 # A raise and not an assert, which `python -O` would drop (round 3). At import,
 # so it stops `verify-merge` too: a bad constant is a defect in this file.
 if 3 * ROW_BYTES + 8 > SUMMARY_BLOCK_BYTES:
-    raise SystemExit("a capped row of backticks no longer fits the rows block: "
+    raise SystemExit("::error::a capped row of backticks no longer fits the rows block: "
                      "the first row can be left out")
 # How a cut row says so, as the last line of what is shown of it. The number is
 # what the log holds and the summary does not show, counted in the log's bytes:
@@ -197,6 +199,17 @@ CUT_NOTE = "  [row cut here: its last {} bytes are in the uploaded log]"
 # 36427909808 (the longest 371 bytes, the 99th percentile 193), so a real
 # row's name is whole.
 NAME_BYTES = 512
+# A cut row keeps a part of its `FAIL` line of the room its note leaves, less
+# the part's newline. So the row cap has to leave room for the widest note and
+# a name, or a cut row is shown as its note alone, and its `FAIL` line is
+# nowhere on the page: counted as shown, it is not named either. The widest
+# note counts sys.maxsize, which no log read into memory can pass: 77 bytes,
+# so ROW_BYTES is 590 at least, and a cut row then shows its `FAIL` line at
+# least as fully as a name does. At ROW_BYTES = 60 a cut row was its note alone,
+# 66 bytes with a 10 MB row, over the cap too (review of #227, round 4).
+if NAME_BYTES + 1 + len(CUT_NOTE.format(sys.maxsize).encode("utf-8")) + 1 > ROW_BYTES:
+    raise SystemExit("::error::a cut row no longer has room for its note and a name: "
+                     "its FAIL line can be left out")
 # The names are fenced in a block of their own, held to this. It holds 509 names
 # of NAME_BYTES even when each ends in the longest run of backticks one can
 # hold, 505 after its `  FAIL `, and 510 when none holds one, and 3,449 of the
@@ -207,14 +220,14 @@ NAMES_BLOCK_BYTES = 256 * 1024
 # beside SUMMARY_BLOCK_BYTES, under GitHub's 1 MiB. One KiB stands for that
 # text.
 if SUMMARY_BLOCK_BYTES + NAMES_BLOCK_BYTES + 1024 > 1024 * 1024:
-    raise SystemExit("the two blocks and the text outside them can pass GitHub's "
-                     "1 MiB summary limit")
+    raise SystemExit("::error::the two blocks and the text outside them can pass "
+                     "GitHub's 1 MiB summary limit")
 # And the first name always fits its block, which the summary's wording counts
 # on: a name fenced is at most 3 * NAME_BYTES - 5 bytes, when all of it after
 # its `  FAIL ` is one run of backticks. The check rounds that up to
 # 3 * NAME_BYTES.
 if 3 * NAME_BYTES > NAMES_BLOCK_BYTES:
-    raise SystemExit("a name cut to NAME_BYTES no longer fits the names block: "
+    raise SystemExit("::error::a name cut to NAME_BYTES no longer fits the names block: "
                      "none may be named")
 # A suite that exits non-zero with no failing row stopped in a guard, and a
 # guard's message is its last few lines. Forty covers a message and the
