@@ -64,11 +64,11 @@ thing in the record.
   this directory (#237), or a `>` followed on its line by such a path (#176).
   Write the text to a scratch file with the Write tool first, and append it
   with `cat <file> >> <entry>`.
-  `append-only-docs-edit.sh` does not yet refuse Edit or Write on an entry
-  outside the session's project directory, in another checkout of this
-  repository: a linked worktree's entry when the project directory is the main
-  checkout, or the main checkout's when it is the worktree (#159). There this
-  rule is held by the agent and not by a guard.
+  `append-only-docs-edit.sh` refuses an Edit or a Write of an entry that
+  exists in the main checkout and in a linked worktree alike, whichever of the
+  two is the session's project directory (#159). An entry exists from its
+  first write, so a draft not yet merged is refused too, in a worktree as in
+  the main checkout (#190).
 - Written for technical readers who know the codebase. Prefer measured numbers
   and commit SHAs over recollection — and say which figures were measured versus
   recalled.
