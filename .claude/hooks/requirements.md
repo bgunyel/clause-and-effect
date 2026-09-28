@@ -153,7 +153,8 @@ An `active` requirement is **covered** (Q15) when it has
 
 A requirement with `seam: none` needs no check, and has none tagged with it; its
 `verify` must resolve: `tests/<file>.py` to a file that exists, and
-`runbook §<n>` to a heading `## §<n>` in `.claude/hooks/runbook.md`.
+`runbook §<n>` to a heading `## §<n>` in `.claude/hooks/runbook.md`, and to
+one only (#110).
 
 The suite fails on each of these, and `--matrix` shows the rest:
 
@@ -165,6 +166,14 @@ The suite fails on each of these, and `--matrix` shows the rest:
   a `superseded-by` naming no entry, a `direction` with no reason, `seam: none`
   with a `verify` that does not resolve, and `seam: none` with checks tagged with
   it after all;
+- a runbook that is there and is not a regular file or cannot be read, a
+  number that heads two of its sections, and a section of it whose
+  **Verifies** line does not name exactly the entries whose `verify` is that
+  section: a section with no such line or with two, a line naming an entry
+  that points elsewhere or nowhere, and an entry pointing at the section that
+  the line leaves out, gap entries included (#110). So is a Verifies line in no
+  `## §<n>` section, a runbook holding no such section, and one absent or empty
+  while entries point into it;
 - a `GH-` entry out of place: one left in this file, a file under
   `requirements/` whose name is not the ID it holds, one holding a second entry
   or none, one with text before its heading, a `##` heading in it, or a line
@@ -313,7 +322,7 @@ and held to the same standard of saying only what it asks.
   branch, so that the pull request I open contains only my own work and not a
   reversion of everything merged into that branch since.
 - from: #36, User Stories, 5
-- status: gap → #110
+- status: active
 - seam: none
 - verify: runbook §1
 
@@ -322,7 +331,7 @@ and held to the same standard of saying only what it asks.
   base, so that which tool an agent reached for does not change what my review
   sees.
 - from: #36, User Stories, 6
-- status: gap → #110
+- status: active
 - seam: none
 - verify: runbook §1
 
@@ -827,7 +836,7 @@ and held to the same standard of saying only what it asks.
 - text: The repository has `delete_branch_on_merge` enabled and
   `allow_squash_merge` and `allow_rebase_merge` disabled.
 - from: #36, Amendment of 2026-09-09, and Amendment of 2026-09-11
-- status: gap → #110
+- status: active
 - seam: none
 - verify: runbook §3
 
@@ -1181,8 +1190,11 @@ it has no entry above (Q16).
   left and has taken all fifteen off; it adds checks, not requirements of its own,
   and the three defects found doing it are #130, #131 and #133, which have entries
   above
-- #110: the live acceptance runbook, not yet written; `verify: runbook §<n>` names
-  its sections
+- #110: has entries under requirements/, GH-110.1 to GH-110.5, declared in its
+  issue file, and is listed here only because this file cited it before it
+  landed, as the owner of the `runbook §<n>` sections that US-5, US-6 and FR-39
+  pointed at while they were `gap → #110`. It wrote `runbook.md` and took those
+  three gaps off
 - #111: a pull request, for #94
 - #116: a pull request, for #98
 - #119: a pull request, for #101
