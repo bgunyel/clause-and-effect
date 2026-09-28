@@ -74,6 +74,9 @@ is therefore a file with one writer, and two loops never open the same one.
   as small as it can be -- one line, resolved by keeping both names. Nothing
   else about the list is pinned whole for the same reason: the checks hold only
   its two ends.
+
+  *Superseded by ADR 0006 (#295): the list is now derived from the issue
+  numbers, and no loop edits it.*
 - A check file is sourced inside `source_checks`, a function, so a `declare` at
   its top level makes a variable local to that call rather than global. It
   works for every variable read inside the call, which is every check; one read
