@@ -272,3 +272,38 @@ found.
   above says.
 - **The rate constant:** it stays at 288 s, measured at 6854 results. The
   suite read 6915 at `948d44c`, inside the bound.
+
+
+# 2026-09-28 07:53 +03 · dev-agent-159 — #159: the harness rate this branch measured is superseded by dev-05's
+
+Branch `worktree-issue-159-worktree-append-only`. dev-05 `69085cf` (#260, for
+#166, #266 and #273) was merged in at `5119bc9`, following a resolution
+rev-agent-159 verified green in a scratch clone. With the commit that appends
+this entry, the branch is 21 ahead of `origin/dev-05`.
+
+## Correction
+
+Both entries above name the harness rate this branch measured on 2026-09-27,
+288 s a run at 6854 check results. That record of what was measured stands.
+Their **Open** sections, though, give it as the branch's current constant, and
+after this merge it is not:
+
+- the first entry says a later branch "that grows the suite by a quarter over
+  6854 has to re-take it";
+- the second says "it stays at 288 s, measured at 6854 results".
+
+#260 re-measured the rate on a quieter machine and took the merge's side of
+`mutate-hooks.sh`:
+- `MEASURED_SECONDS_PER_RUN=430`;
+- `MEASURED_SECONDS_UNDER_LOAD=1272`, from which `RUN_BOUND` is now derived;
+- `MEASURED_ON=2026-09-28`;
+- `MEASURED_AT_RESULTS=6892`.
+
+The assistant took dev-05's side of all three hunks, as rev-agent-159's merge
+brief set out. The 288 s block and its comment are gone. For the same reason,
+the assistant took dev-05's `checks/GH-215.sh`, which counts six ISO dates
+outside the log again; this branch's seventh was that re-measure's date.
+
+The staleness bound now reads 6892, and the merged suite is inside it. The
+registry holds 140 rows, 138 expected caught: dev-05's 130/128 and this
+branch's 10.
