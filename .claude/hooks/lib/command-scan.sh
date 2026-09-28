@@ -361,28 +361,83 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # What a library missing this function does is THE LOAD CONTRACT's, and is
 # answered below cs_normalise.
 #
-# ONE ARGUMENT, `keep-unquoted`, and #202 is why. With it, the body of a heredoc
-# whose delimiter is UNQUOTED is printed rather than dropped, and only a quoted
-# body goes. Every question of where a body begins and ends is still answered
-# here, once, by the same lines; the argument decides only what happens to a
-# body's lines once they are known to be one. cs_drop_quoted_heredocs, below,
-# is that call under a name, and no caller passes it any other way. Anything
-# else as the argument is refused with status 2 and nothing printed, so a
-# misspelt mode cannot quietly mean the default.
+# ONE ARGUMENT, `keep-unquoted`, and #202 is why. With it the pass drops a body
+# only where the drop is PROVEN harmless, and prints every other body as it
+# stands. Where a body begins and ends is still answered here, once, by the
+# same lines; the argument decides only whether a body's lines are dropped
+# once they are known to be one, and whether an opener is trusted to be one.
+# cs_drop_quoted_heredocs, below, is that call under a name, and no caller
+# passes it any other way. Anything else as the argument is refused with status
+# 2 and nothing printed, so a misspelt mode cannot quietly mean the default.
 #
-# "QUOTED" IS BASH'S RULE: the delimiter word as written holds a `'`, a `"` or
-# a `\` anywhere, so `<<'X'`, `<<"X"`, `<<-'X'`, `<<-"X"` and the partly quoted
-# `<<X"Y"` are quoted, and bash performs no expansion in their bodies -- no
-# parameter, no `$( )`, no backtick. Nothing in such a body is run by the shell
-# that reads the heredoc, so nothing in it is a command of THIS command line.
-# What the heredoc feeds is another matter: a shell reading its script from
-# stdin runs the body, and that is the wrapper anchor's question, not this
-# pass's -- CS_WRAPPER_RE answers it for `sh <<` and not yet for `sh -s <<` or
-# `source /dev/stdin <<`, which is #311. An unquoted body is expanded, so a
-# `$( )` or a backtick in it does run, and keeping it is keeping those. `<<\X` counts as quoted by
-# this rule and is a separate defect of this pass: its delimiter is read as
-# `\X`, which never arrives, so the END give-back returns the body as commands
-# in either mode -- the refusing direction, and not #202's.
+# In that mode a body is dropped when three things hold, and kept otherwise.
+# Each is a question whose uncertain answer is "keep", because keeping is the
+# reading before #202 and refuses more, never less.
+#
+#   1. ITS DELIMITER IS QUOTED, by bash's rule: the word as written holds a
+#      `'`, a `"` or a `\` anywhere, so `<<'X'`, `<<"X"`, `<<-'X'`, `<<-"X"`
+#      and the partly quoted `<<X"Y"` are quoted, and bash performs no
+#      expansion in their bodies -- no parameter, no `$( )`, no backtick. An
+#      unquoted body is expanded, so a `$( )` or a backtick in it does run, and
+#      keeping it is keeping those.
+#
+#   2. WHAT READS IT IS A KNOWN DATA CONSUMER: `cat` redirected to a file --
+#      `cat > F <<'X'`, `cat >> F <<'X'` or `cat <<'X' > F`, and nothing else
+#      in its command -- or a `gh` command, which reads stdin as a request body
+#      or a query and never runs it. The heredoc not being expanded says
+#      nothing of what it FEEDS, and the first version of this mode trusted
+#      every quoted body: `sh -s <<'EOF'`, `bash /dev/stdin <<'EOF'`,
+#      `ssh host bash -s <<'EOF'`, `cat <<'EOF' | sh`, `source <(cat <<'EOF'`,
+#      `while read -r c; do $c; done <<'EOF'`, `$(cat <<'EOF' ...)` as a command
+#      word and `python3 - <<'EOF'` were each refused by the re-read before
+#      #202 and permitted by it -- fifteen shapes, found by review of the pull
+#      request and measured on stdin, and a list with no end, since any
+#      program that runs its stdin belongs on it. So the rule was turned round:
+#      the list is of what is known not to run a body, which has an end. A file
+#      target under /dev/ or /proc/, and a single `|` after the command, leave
+#      the consumer unproven, since either can hand the body back to a reader.
+#      What stays open is a body staged in a file that a LATER command runs --
+#      `cat > s.sh <<'EOF'` then `sh s.sh` -- which is #311's to close with
+#      the rest of the stdin-shell family, and GH-202.1 pins as the trade.
+#
+#   3. ITS OPENER IS ONE BASH SEES. The `<<` is matched by a regular
+#      expression on each physical line, quotes included -- the class #289
+#      names -- and before #202 that cost nothing on a line with a gh api call,
+#      because the re-read put the raw command back. A drop decided on a
+#      misread opener hides real commands up to the next line equal to its
+#      delimiter: `-f body="heredocs use <<EOF"` is not an opener, and a
+#      `gh pr merge 5` on the next line was permitted once this mode trusted
+#      it. So in this mode the pass carries a quote state over the whole
+#      command, outside bodies, and trusts an opener only where that state
+#      says bash would: outside `'...'`, `"..."` and `$'...'`, outside a `#`
+#      comment, not behind a backslash, with its delimiter's quotes closed, its
+#      command starting on its own line, no second `<<` on the line and the
+#      line ending where the body begins. What the tracker does not model -- a
+#      `$( )` or a backtick inside double quotes, whose nested quoting it
+#      cannot follow, and a `${...}` there holding a quote -- is doubt.
+#
+# DOUBT IS STICKY. The first opener the tracker cannot vouch for ends every
+# drop for the rest of the command: its lines are printed as they come, and so
+# is everything after them. A wrong guess about one opener would otherwise
+# leave the tracker reading a body as command text, and its quote state
+# wrong for every later decision. So a tracker error has two outcomes and no
+# third: a drop that should have been made is not -- the reading before #202 --
+# or a drop is made that the regular expression alone would have made -- the
+# reading of this mode before review. It can never make a drop that neither of
+# those makes.
+#
+# WHAT IT COSTS, measured on 372 distinct commands carrying `gh api` and `<<`,
+# taken from the local session transcripts: the version that trusted every
+# quoted body permitted 4 that the re-read refused, and this one 3 of those 4.
+# The fourth is a `python3 - <<'PY'` script, whose body does run. One idiom is
+# given up by name: `-f body="$(cat <<'MD' ...)"` stands inside `"$(`, which
+# the tracker does not follow, so it is doubt and refused as before #202 -- 2
+# of the 372.
+#
+# `<<\X` counts as quoted by rule 1 and is a separate defect of this pass: its
+# delimiter is read as `\X`, which never arrives, so the END give-back returns
+# the body as commands in either mode -- the refusing direction, and not
+# #202's.
 #
 # A heredoc body is data, not commands. This repository writes dev-log entries
 # and commit messages through a quoted heredoc, and those texts name the very
@@ -526,7 +581,59 @@ cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout
     ''|keep-unquoted) ;;
     *) return 2 ;;
   esac
-  awk -v keep="${1:-}" '
+  awk -v keep="${1:-}" -v separators="$CS_SEPARATORS" '
+    # THE QUOTE STATE of keep-unquoted mode, rule 3 above: advance it over the
+    # characters of s from `from` up to `to`, and return where it stopped, which
+    # is past `to` when a backslash there escaped the character at `to`. q is
+    # the open quote -- a `\047`, a `"`, `$` for `$...` ANSI quoting, or empty;
+    # cmt says a comment has begun; doubt is set on what it cannot follow; sep
+    # is the last separator seen and fsep the first since it was cleared, both
+    # outside quotes, and the separators are CS_SEPARATORS, as cs_split reads
+    # them. Never called in the default mode.
+    function lex(s, from, to,    i, c, j) {
+      for (i = from; i < to; i++) {
+        c = substr(s, i, 1)
+        if (q == "\047") { if (c == "\047") q = ""; continue }
+        if (q == "$") {
+          if (c == "\\") { i++; continue }
+          if (c == "\047") q = ""
+          continue
+        }
+        if (q == "\042") {
+          if (c == "\\") { i++; continue }
+          if (c == "\042") { q = ""; continue }
+          if (c == "`" || (c == "$" && substr(s, i + 1, 1) == "(")) { doubt = 1; continue }
+          if (c == "$" && substr(s, i + 1, 1) == "{") {
+            j = index(substr(s, i + 2), "}")
+            if (j == 0 || substr(s, i + 2, j - 1) ~ /[\047\042`]|[$][(]/) doubt = 1
+            else i += j + 1
+          }
+          continue
+        }
+        if (c == "\\") { i++; continue }
+        if (c == "\047" || c == "\042") { q = c; continue }
+        if (c == "$" && substr(s, i + 1, 1) == "\047") { q = "$"; i++; continue }
+        if (c == "#" && (i == 1 || index(" \t<>" separators, substr(s, i - 1, 1)) > 0)) {
+          cmt = 1
+          return length(s) + 1
+        }
+        if (index(separators, c) > 0) { sep = i; if (!fsep) fsep = i }
+      }
+      return i
+    }
+    # RULE 2 above: the command the heredoc belongs to, as the text in front of
+    # its opener back to a separator (pre) and behind its delimiter up to the
+    # next (post), is a known data consumer. `nxt` is the separator that ends
+    # it, and a lone `|` hands cat or gh output on to a reader.
+    function consumer(pre, post, nxt) {
+      if (nxt == "|") return 0
+      if (pre ~ /^[ \t]*gh[ \t]/) return 1
+      if (pre ~ /^[ \t]*cat[ \t]*>>?[ \t]*[^ \t]+[ \t]*$/ && post ~ /^[ \t]*$/)
+        return pre !~ />>?[ \t]*\/(dev|proc)\//
+      if (pre ~ /^[ \t]*cat[ \t]+$/ && post ~ /^[ \t]*>>?[ \t]*[^ \t]+[ \t]*$/)
+        return post !~ />>?[ \t]*\/(dev|proc)\//
+      return 0
+    }
     ind {
       line = $0
       if (dash) sub(/^\t+/, "", line)
@@ -542,6 +649,9 @@ cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout
       # stands: the first match wins, as it did when every logical line was one
       # physical line. `opener` set means a body is waiting for the line to end,
       # which it can only be while the line is still being continued.
+      # Doubt is sticky: in keep-unquoted mode, once an opener could not be
+      # vouched for, nothing more is dropped. See DOUBT IS STICKY above.
+      if (keep != "" && doubt) { print; next }
       if (!opener) {
         # A here-string is not a heredoc. Blanked at its own width, so a real
         # heredoc later on the same line is still found where it stands.
@@ -551,11 +661,45 @@ cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout
           d = substr(scan, RSTART, RLENGTH)
           dash = (d ~ /^<<-/)
           sub(/^<<-?[[:space:]]*/, "", d)
-          # Asked of the delimiter as written, before its quotes come off: the
-          # paragraph above this function headed QUOTED says which rule.
+          # Asked of the delimiter as written, before its quotes come off: rule
+          # 1 in the paragraph above this function says which rule.
           kept = (keep != "" && d !~ /[\047"\\]/)
+          if (keep != "") {
+            # Rule 3: is this an opener bash sees? Each line below is one of
+            # its conditions, so that each can be broken by one mutation.
+            q0 = q
+            cmt = 0; sep = 0; fsep = 0
+            seen = 1
+            if (lex($0, 1, RSTART) != RSTART) seen = 0
+            if (q != "" || cmt) seen = 0
+            if (sep == 0 && (cont || q0 != "")) seen = 0
+            pre = substr($0, sep + 1, RSTART - sep - 1)
+            fsep = 0
+            if (lex($0, RSTART, RSTART + RLENGTH) != RSTART + RLENGTH || q != "") seen = 0
+            fsep = 0
+            lex($0, RSTART + RLENGTH, length($0) + 1)
+            post = substr($0, RSTART + RLENGTH, (fsep ? fsep : length($0) + 1) - RSTART - RLENGTH)
+            nxt = (fsep ? substr($0, fsep, 2) : "")
+            if (nxt != "||") nxt = substr(nxt, 1, 1)
+            if (substr(scan, RSTART + RLENGTH) ~ /<</) seen = 0
+            if (q != "" || $0 ~ /\\$/) seen = 0
+            if (!seen) { doubt = 1; print; next }
+            cont = 0
+            # Rule 2: a quoted body that no known data consumer reads is kept.
+            if (!consumer(pre, post, nxt)) kept = 1
+          }
           gsub(/[\047"]/, "", d)
           opener = 1
+        } else if (keep != "") {
+          # A line with no opener is command text, and the quote state is
+          # carried over it. Whether it continues decides whether the next
+          # line starts a command of its own, which rule 3 asks.
+          cmt = 0
+          lex($0, 1, length($0) + 1)
+          r = 0
+          p = 0
+          while (r < length($0) && substr($0, length($0) - r, 1) == "\\") { r++; p = 1 - p }
+          cont = (p && q == "")
         }
       }
       if (!opener) { print; next }
