@@ -66,13 +66,50 @@ pass() {  # pass <refuse|permit|static> <format> [arguments...] -- an ok line, r
   printf '  ok   %s\n' "$line"
   record "$dir" ok "${line%%$'\n'*}"
 }
+# A FAIL LINE MARKS ITS OWN DETAIL (#224). Every line of the message after the
+# first is printed with `indent`, seven spaces, the width of `  FAIL `,
+# whatever the line already starts with: a line at column 0 gets them, one that
+# opens with spaces gets them added to its own, and a blank line is printed as
+# the seven spaces alone. A message embeds a hook's stderr verbatim, and before
+# #224 a line of it stood wherever the hook put it, so the log did not say which
+# lines were a row's. The `check-hooks` job summary guessed, and took a
+# library's stray stderr at column 0 as the detail of the failing row above it,
+# and cut a stderr short at a blank line or at one opening `---`.
+# .github/scripts/check_hooks_ci.py takes a failing row's detail by these seven
+# spaces, as DETAIL_INDENT, and tests/test_check_hooks_ci.py runs this function
+# into that parser, so the two spellings cannot drift apart with the tests
+# green. The ledger records the first line, which the indent never reaches.
+#
+# LINEAR IN THE MESSAGE, AND WHY NO LINE OF IT IS CUT BY A PATTERN (#293). The
+# indent was first written as `${line//$'\n'/$'\n'$indent}`, and under a UTF-8
+# locale bash's substitution grows with the square of the message: one `fail`
+# over a 10,000-line message of 580 KB took 6.8 s, against 0.06 s before #224.
+# The second form cut the first line off with `${line%%$'\n'*}` and the rest
+# with `${line#*$'\n'}`, and both strips grow with the square of the FIRST
+# line, however few lines follow it: 887 ms of CPU for a 40,000-byte first
+# line, against 55 ms at 10,000 (review of PR #285, round 3). So the whole
+# message is read into an array by `mapfile`, element 0 is the first line and
+# the rest are given the indent, which is linear in both shapes: 13 ms for a
+# 40,000-byte first line and 15 ms at 160,000; 70 ms for 10,000 lines of 58
+# bytes and 299 ms for 40,000. The here-string adds one newline and
+# `mapfile -t` takes one off, so a message ending in a newline still ends in an
+# indent-only line, and an empty message is one empty element, printed as
+# `  FAIL ` alone, as the substitution printed both. `record`'s own tab
+# substitution is #300's.
 fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, recorded
-  local dir="$1" fmt="$2" line
+  local dir="$1" fmt="$2" line first indent='       '
+  local -a rest
   shift 2
   printf -v line "$fmt" "$@"
-  printf '  FAIL %s\n' "$line"
+  mapfile -t rest <<< "$line"
+  first=${rest[0]}
+  unset 'rest[0]'
+  printf '  FAIL %s\n' "$first"
+  if (( ${#rest[@]} )); then
+    printf '%s\n' "${rest[@]/#/$indent}"
+  fi
   FAILED=1
-  record "$dir" FAIL "${line%%$'\n'*}"
+  record "$dir" FAIL "$first"
 }
 req() {  # req <ID>... -- the requirements the checks after this establish
   REQ="$*"
@@ -1010,7 +1047,8 @@ record_of() {  # record_of <file> <out> -- 1 if sourcing <file> alone defined no
 }
 
 # THE SOURCING ROUTINE (#204). check-hooks.sh sources every file of checks/ but
-# this one through it, once, in the order of one list the driver writes. It asks
+# this one through it, once, in the order of one list the driver derives (#295,
+# `suite_checks` below). It asks
 # five things, failing the run on each, in this order. First, once: that every
 # file under the directory is on the list or is this library, so an issue file
 # added and not listed is a FAIL rather than a file whose checks never ran. Then
@@ -1113,6 +1151,71 @@ sourced_mark() {  # sourced_mark <start|end> <file>
 # file, not in the driver (measured, bash 5.2).
 sourced_to_end() {  # sourced_to_end -- the end marker of the file that calls it
   sourced_mark end "${BASH_SOURCE[1]} ${BASH_LINENO[0]}"
+}
+# THE ROUTINE, DRIVEN AGAINST FIXTURES (#204's, here since #295's issue file
+# became its second caller). Each fixture runs `source_checks` in a subshell of
+# its own, with a record of its own, and names that subshell as the one that
+# records -- the driver's $SOURCED_SHELL is this shell -- so what it writes is
+# its own, and a FAIL it
+# prints is the one asserted and is not recorded, as in the #98 self-test. The
+# FAIL prefix is rewritten on the way out, because the #104 section reads this
+# suite for a quoted line opening with a result word.
+sourcing_run() {  # sourcing_run <dir> <file>... -- what source_checks printed, REQ after it, and its record
+  ( cd -- "$(dirname -- "$1")" || exit 1
+    umask 022
+    # A trap of its own, because a subshell shows its parent's traps only until
+    # it sets one, and then drops them all from `trap -p` (measured, bash 5.2):
+    # the first trap a fixture set would otherwise read as every other removed.
+    trap ':' EXIT
+    SOURCED="$1.record"; : > "$SOURCED"; SOURCED_SHELL=$BASHPID; SUITE_LIBRARY=library.sh
+    # Entered with a tag already set, as a driver that left one would: the first
+    # file must open without it, which only the clear before each file gives --
+    # the one after each file cannot reach the first.
+    REQ=GH-0
+    source_checks "$@" > "$1.out"
+    sed 's/^  FAIL /FAIL: /' "$1.out"
+    printf 'REQ=[%s] after the last file\n' "$REQ"
+    sed 's/^/record: /' "$SOURCED" )
+}
+
+# THE LIST THE DRIVER HANDS source_checks, derived and never written (#295): the
+# unsplit file, then every issue file of <dir> -- `GH-<n>.sh`, <n> digits with
+# no leading zero -- in ascending numeric order of <n>, a name a line. The
+# end-of-run file is not on it; the driver names that one after it. Nothing else
+# in <dir> is: a merge's `GH-166.sh.orig`, an editor's swap file, `GH-12a.sh`,
+# `GH-012.sh` and `notes.sh` are left off, so `source_checks` fails the run on
+# each as a file on no list and never sources it. That refusal is the guard; a
+# glob handed straight to the routine would have sourced whatever lay there.
+#
+# It was a line of the driver's, SUITE_CHECKS, that every branch adding an issue
+# file appended to, so any two such branches conflicted on it. Sorted by number
+# the order is one nobody chose, which is why ADR 0004 had rejected a listing;
+# it is fixed, though, so a file that depends on it is red on the pull request
+# that adds it and never a flake, and before it was taken the whole suite ran in
+# the list's order, ascending and descending, and agreed row for row (ADR 0006).
+#
+# A directory it cannot list returns 1 and prints nothing, so the driver can
+# stop rather than source the unsplit file alone: `source_checks` lists the
+# same directory to find strays, and would find none there either. So does a
+# stage of the pipeline that fails, which pipefail -- local to this function
+# through `local -` -- turns into the function's status rather than a list cut
+# short (review of this change).
+#
+# WHAT IT GIVES UP, named. The hand-written list failed the run on an issue
+# file it named that was not there; a derived list cannot name a file that is
+# gone, so deleting an issue file is silent here. What is left to see it is
+# the #205 check that every generated entry is declared by a file the run
+# sourced, which reaches only a file that declared one -- and the old list was
+# silent too whenever the deletion took the name off the list with it. And a
+# symlink or other non-directory named `GH-<n>.sh` is sourced like a file.
+suite_checks() {  # suite_checks <dir> -- the unsplit file, then every issue file of <dir> by number
+  local - sc_names sc_issues
+  set -o pipefail
+  sc_names=$(cd -- "$1" 2>/dev/null && find . -mindepth 1 -maxdepth 1 ! -type d -name 'GH-*.sh') || return 1
+  sc_issues=$(printf '%s\n' "$sc_names" | sed -n 's|^\./GH-\([1-9][0-9]*\)\.sh$|\1|p' \
+                | LC_ALL=C sort -n | sed 's|.*|GH-&.sh|') || return 1
+  printf '%s\n' unsplit.sh
+  [ -z "$sc_issues" ] || printf '%s\n' "$sc_issues"
 }
 
 # EVERY SECTION HEADING HAS A ROW UNDER IT. `section` writes each heading down

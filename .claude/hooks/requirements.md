@@ -1534,6 +1534,10 @@ it has no entry above (Q16).
   `lib/command-scan.sh` unread as hook code and this issue's. Whether the
   hooks or only the suite should change is its own decision, so it has no
   entry above
+- #285: the pull request for #224; rev-agent-224's review of it is cited where
+  what it found stands -- a quadratic `fail`, fixed there as #293, then the
+  fix's own quadratic in a long first line, and a requirement's text wider
+  than the check that drives it, narrowed in GH-224.2
 - #289: a `<<` the tokeniser misreads -- inside quotes, where `'<<'` leaves an
   empty delimiter the next blank line ends, or in a trailing comment -- opens a
   heredoc, and when a line ends it the code in between is dropped. In the
@@ -1544,6 +1548,12 @@ it has no entry above (Q16).
   and fixtures pin the counters' half at today's count, and beside
   `hook_text` and in the unsplit file's #109 section. It adds its requirements
   in the pull request that fixes it
+- #300: `pass`'s first-line strip and `record`'s tab substitution, each
+  quadratic in the first line of a message, found by dev-agent's sweep in
+  round 3 of the review of #285 and left there because neither is in its
+  diff. Cited in #293's issue file and beside `fail`, where each says the time
+  it measures is not `record`'s. It adds its requirements in the pull request
+  that fixes it
 - #302: `R182_CALLERS`, which holds GH-182.2's claim of who calls
   `cs_drop_heredocs`, does not read a call written after a control word or a
   prefix word -- `if`, `while`, `!`, `command`. Filed from round 4 of the
