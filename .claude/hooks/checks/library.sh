@@ -1464,13 +1464,30 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
 # left-open pins of #184 -- which is why it is a rule here and not a fourth
 # fix.
 #
-# WHAT `prose` CANNOT READ, from comment_reflow above. It takes a `#` off a line
-# opening with one, so a heading's `##` loses a mark and a pin on it goes red;
-# a heading is one line, which is why such a pin stays on the lines. And it
-# leaves an INDENTED comment's `#` in place, so a phrase wrapped across comment
-# lines inside a function reads with a `#` in it: no pin on the hooks' prose
-# asked for one when #192 was swept, since each such pin reads a comment at
-# column 0.
+# WHAT `prose` READS THAT comment_reflow ALONE DOES NOT. Before the reflow,
+# `prose_reflow` turns a tab, a carriage return, a vertical tab and a form feed
+# into a blank, and takes the blanks off each line's start. The first is what
+# `flatten` did, `tr -s '[:space:]'`, before #192 retired it: comment_reflow
+# squeezes only spaces, so a tab inside a wrapped phrase split it, and GH-97.2's
+# absence over CONTEXT.md read ok with the phrase standing there (review of
+# #192's branch, round 1: red on origin/dev-05, green on the branch). The second
+# is what makes an INDENTED comment prose: comment_reflow takes a `#` only at
+# column 0, so a phrase wrapped across two comment lines inside a function read
+# with a `#` in it, and an absence pin on a hook's prose read ok with the
+# phrase re-added there (same review, over report-stale-branches.sh and
+# no-work-on-stale-branch.sh). A presence pin may name where today's text sits;
+# an absence pin has to read wherever the text can be put back, which is any
+# comment. comment_reflow itself is left as it was: #192 keeps its behaviour,
+# and its other readers are held to it.
+#
+# WHAT `prose` CANNOT READ. It takes a `#` off a line opening with one, blanks
+# before it or not, so a heading's `##` loses a mark and a pin on it goes red;
+# a heading is one line, which is why such a pin stays on the lines. The same
+# holds of a `#` a wrap puts at a line's start in the middle of a sentence,
+# `pull request` over `#N`, which reads as `pull request N`: a literal holding
+# a `#` is found only where no wrap falls just before it, so a presence pin on
+# one can go red on a rewrap, and an absence pin on one would read ok. None of
+# the latter stood in the suite when this was written.
 #
 # THE FIXTURE IS WRITTEN ONLY WHEN ITS PROSE HOLDS A WORD, and otherwise
 # removed, so `written` and `unarmed` over it find no file and fail naming
@@ -1487,13 +1504,16 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
 # directory and not from the hooks under judgment (#142); behind `prose` they
 # are handed the fixture's path, which is always absolute, so the refusal has
 # to be made here. A relative source writes nothing, and the pin fails.
-prose() {  # prose <file> -- the path of <file> as comment_reflow reads it, written under $FIXTURES/prose
+prose_reflow() {  # prose_reflow -- prose on stdin, one line out: blanks normalised, then comment_reflow
+  tr '\t\r\v\f' '    ' | sed -e 's/^ *//' | comment_reflow
+}
+prose() {  # prose <file> -- the path of <file> as prose_reflow reads it, written under $FIXTURES/prose
   local out="$FIXTURES/prose/${1#/}"
   mkdir -p -- "${out%/*}"
   rm -f -- "$out"
   case "$1" in
     /*) if [ -f "$1" ]; then
-          comment_reflow < "$1" > "$out"
+          prose_reflow < "$1" > "$out"
           grep -q '[^[:space:]]' "$out" 2>/dev/null || rm -f -- "$out"
         fi ;;
   esac
@@ -1532,11 +1552,11 @@ dev_pointer() {  # dev_pointer <file> -- the comment block above the derivation
        { block = "" }' "$1" 2>/dev/null
 }
 
-# The block is prose, so it is read through comment_reflow, by the rule for a
+# The block is prose, so it is read through prose_reflow, by the rule for a
 # pin on prose above: the two literals the unsplit file gives it are clauses of
 # a wrapped comment, and each matched only while the wrap fell outside it.
 beside() {  # beside <label> <file> <literal>
-  if dev_pointer "$2" | comment_reflow | grep -qF -- "$3"; then
+  if dev_pointer "$2" | prose_reflow | grep -qF -- "$3"; then
     pass static 'beside %s' "$1"
   else
     fail static '%s\n         expected the comment above the derivation in %s\n         to contain |%s|' \
