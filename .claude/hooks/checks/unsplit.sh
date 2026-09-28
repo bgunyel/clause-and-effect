@@ -7157,12 +7157,15 @@ tok 'nor its forced branch move' \
     '0' "$(prose_occurrences "$CLAUDE_MD" 'git branch -f')"
 # #99 Q13: not a sixth consequence. Those are consequences of the hooks, and
 # this rule has no hook. $LEFT_OPEN is a string, so the string helpers, over
-# the string as comment_reflow reads it: the library's rule for a pin on
-# prose, which `prose` applies to a file. `lacks` fails on an empty read, so
-# the absence below needs no `written` beside it -- which holds only because an
-# empty $LEFT_OPEN stays empty here: comment_reflow turns an empty line into a
-# blank, and `lacks` passes a blank (review of #192's branch).
-LEFT_OPEN_PROSE=${LEFT_OPEN:+$(printf '%s\n' "$LEFT_OPEN" | comment_reflow)}
+# the string as prose_reflow reads it: the library's reader for a pin on prose,
+# which `prose` applies to a file. Through bare comment_reflow a tab inside the
+# phrase split it, and the `lacks` below read ok with `git reset --hard` and
+# `origin/dev-NN` standing in the list a tab apart (review of #192's branch,
+# round 2, measured). `lacks` fails on an empty read, so the absence below
+# needs no `written` beside it -- which holds only because an empty $LEFT_OPEN
+# stays empty here: the reader turns an empty line into a blank, and `lacks`
+# passes a blank (review of #192's branch).
+LEFT_OPEN_PROSE=${LEFT_OPEN:+$(printf '%s\n' "$LEFT_OPEN" | prose_reflow)}
 req GH-99.1 GH-73
 holds 'the extracted list is the left-open list' "$LEFT_OPEN_PROSE" 'Deliberately left open'
 lacks 'and the unenforced rule is not one of its items' \

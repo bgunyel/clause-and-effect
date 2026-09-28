@@ -71,14 +71,22 @@ requirement GH-192.3 <<'REQ'
   lines joined, or a `prose_count`; one naming such a file directly, as
   `"$NAME"`, `"${NAME}"` or the quoted path, rather than through `prose`,
   fails the audit unless its literal opens with a `#`, the one a heading's pin
-  needs and `prose` would take off.
+  needs and `prose` would take off. And no file of the suite pipes text into
+  `comment_reflow` directly but the library's `prose_reflow`, GH-215's rows
+  that drive `comment_reflow` itself, and the direct readers #323 holds, each
+  file's count of such calls pinned as a literal.
 - from: #192
 - kind: defect-permitting
 - status: active
 - direction: static: a property of the suite's own text
 - note: The audit reads text, so it reaches the pins that name one of those
   files in one of the three shapes above, followed by a quoted literal, and
-  nothing else. A variable with a lower-case name is not derived: the suite's
+  nothing else, and only a quoted literal is judged: a pin whose literal is
+  itself a variable, `"$PHRASE"`, is not, since its value cannot be read off
+  the text. None of those read raw prose with a blank in the value when this
+  was written: `$HISTORY`, `$ARGUMENT` and `$CITATION` go through `prose`
+  (review of #192's branch, round 2). A variable with a lower-case name is not
+  derived: the suite's
   are function locals, `f` and `hook` among them, reused for whatever file is
   at hand, and one of them assigned a Markdown path would make every pin
   naming it a finding. The pins on a hook file's comments are the other half
@@ -390,5 +398,49 @@ tok 'each prose variable named here is set, so the audit asks about text that ex
     '' "$R192_UNSET"
 tok 'no pin in the suite reads the lines of a prose file with a literal that holds a blank' \
     '' "$(r192_raw_prose_pins "$SUITE_TEXT" "$R192_DERIVED $R192_NAMED")"
+
+# THE DIRECT READERS. A reader added beside `prose` that pipes into bare
+# comment_reflow skips prose_reflow's normalisation, so a tab or an indented
+# `#` splits a phrase under its pins. $LEFT_OPEN_PROSE was one, added by #192's
+# own sweep, and its `lacks` read ok with the phrase standing in CLAUDE.md a
+# tab apart (review of #192's branch, round 2). A call is `| comment_reflow` or
+# `comment_reflow <` on a line that is not a comment; a label or a comment
+# naming the function is not one. The counts are literals, so a new direct
+# reader turns this red, and so does #323 moving one of its own. The
+# function's name is held in a variable, and the pattern built from it, so
+# that neither this pattern nor the fixture below is a call in this file's own
+# text: the first run of this row counted the pattern itself.
+R192_CR=comment_reflow
+r192_direct_reflows() {  # r192_direct_reflows <file>... -- each file calling comment_reflow directly, and how often
+  local f n
+  for f in "$@"; do
+    n=$(grep -vE '^[[:space:]]*#' -- "$f" | grep -cE "\\| *$R192_CR([^_[:alnum:]]|\$)|$R192_CR *<")
+    [ "$n" = 0 ] || printf '%s %s\n' "${f##*/}" "$n"
+  done | sort
+}
+# Driven first, against a text of its own.
+R192_DIRECT_FIX="$FIXTURES/r192-direct.sh"
+printf '%s\n' \
+  "A=\$(printf x | $R192_CR)" \
+  "B=\$($R192_CR < \"\$F\")" \
+  "  sed 1d \"\$F\" | $R192_CR | sed 's/ *\$//'" \
+  "# a comment: printf x | $R192_CR" \
+  "tok '$R192_CR reads a blank' 'x' \"\$(printf x | prose_reflow)\"" \
+  "${R192_CR}_more() { :; }" \
+  "C=\$(printf x | ${R192_CR}_more)" > "$R192_DIRECT_FIX"
+[ "$(wc -l < "$R192_DIRECT_FIX")" = 7 ] || {
+  echo "the #192 direct-reader fixture was not written as seven lines; the check against it proves nothing" >&2
+  exit 1
+}
+tok 'the direct-reader count finds a pipe, a redirect and a pipe inside a pipeline, and no comment, label, other function or prose_reflow' \
+    'r192-direct.sh 3' "$(r192_direct_reflows "$R192_DIRECT_FIX")"
+tok 'no file of the suite calls comment_reflow directly but prose_reflow, GH-215'"'"'s driven rows and the readers #323 holds' \
+'GH-118.sh 1
+GH-157.sh 1
+GH-177.sh 2
+GH-215.sh 5
+library.sh 1
+unsplit.sh 1' \
+    "$(r192_direct_reflows "${SUITE_FILES[@]}")"
 
 sourced_to_end

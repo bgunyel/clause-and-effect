@@ -667,7 +667,11 @@ flip "$SUITE_DIR" no-pr-decisions.sh ALLOW BLOCK 'an unreadable option before an
 # continuation, so the `^#` it strips never matches there; a `#` pushed to
 # column 0 would lose its mark and turn a pin red, never green. The same raw
 # shape in the other pins over CLAUDE.md was #192's class, and #192 moved them
-# onto the library's `prose`, which is this reader over a file.
+# onto the library's `prose`, which is not this reader: it reads through
+# `prose_reflow`, which takes the blanks off a line's start first, so there
+# the indented `#118,` does lose its mark. None of this section's pins holds a
+# `#`, so either reader would do today; that it still reads bare
+# comment_reflow, and so splits a phrase at a tab, is #323's.
 R118_LEFT_OPEN=$(awk '/^\*\*Deliberately left open\.\*\*/ { f = 1 } f && /^## / { exit } f' \
   "$SUITE_DIR/../../CLAUDE.md" | comment_reflow)
 holds 'CLAUDE.md names the refused pull request read as a left-open consequence' \
