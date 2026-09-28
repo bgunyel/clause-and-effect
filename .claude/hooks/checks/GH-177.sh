@@ -36,7 +36,8 @@ requirement GH-177 <<'REQ'
 - text: `append-only-docs-edit.sh` permits exactly one edit to a history entry, and
   refuses every other one as it did. The permitted edit is a call carrying no
   `content` string -- which every `Write` the harness sends carries -- of a file
-  at any depth under `docs/dev-log/` named `devlog_<x>_<session>.md`, `<x>`
+  at any depth under `docs/dev-log/`, every guarded directory in its path being
+  `docs/dev-log/` (GH-159.1), named `devlog_<x>_<session>.md`, `<x>`
   anything without an underscore and not checked for a date, whose `old_string` is
   the file's current first line and occurs in the file exactly once, counted as the
   Edit tool matches it -- a substring anywhere, overlapping, so `replace_all` has
@@ -147,7 +148,9 @@ requirement GH-177.1 <<'REQ'
 - status: active
 - note: The permitted rows are #246's gap and not this requirement's: this is what
   the documents say, and they say those spellings are permitted today, so ALLOW
-  is its right verdict, for the reason GH-157.3 gives for #159's rows. When #246
+  is its right verdict: a doc-claim's right verdict is the one its document
+  states, which is why checks/GH-157.sh's header says #159's rows were not
+  `gap` rows while the README said the Edit guard permitted them. When #246
   closes them the rows go red, and the documents are what changes with them. ADR
   0003 is not read, because this suite's header names every document the suite
   reads and does not name it; its sentence is held by review. The documents

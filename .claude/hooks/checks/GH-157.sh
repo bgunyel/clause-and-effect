@@ -73,23 +73,32 @@
 # also fed to its guard, with the verdict the bullet states, and the Edit guard
 # is fed both tools the bullet names, in both directions it names. The
 # sentences rest on three open issues: #176 for a `>` read out of a heredoc,
-# #237 for a `sed -i`, an `rm` or an `mv` read out of one, and #159 for the
-# Edit guard. Each is cited on the rows it owns, in the label, so a search for
-# the issue's number finds them. What is measured is that each remedy #159
-# proposes turns its rows red -- resolving the enclosing repository with git,
-# and matching the directory's trailing segments -- and that taking the `>`
-# rule, the `sed -i` rule or `mv` out of the Bash guard turns the row it
-# decides red. A fix of another shape is not known to. The Edit fixture is a
-# real repository with a linked worktree inside it, as agents' stand, because
-# #159's first remedy asks git where the file is: against a plain directory it
-# left the suite green (review of #234, round 2).
+# #237 for a `sed -i`, an `rm` or an `mv` read out of one, and #190 for a draft
+# refused from its first write, since the guard reads existence and not the
+# merge base ADR 0003 names. They rested on a fourth, #159, for the Edit guard,
+# until it closed. Each is cited on the rows it owns, in the label, so a
+# search for the issue's number finds them. What was measured is that each
+# remedy #159 proposed turned its rows red -- resolving the enclosing repository
+# with git, and matching the directory's trailing segments -- and that taking
+# the `>` rule, the `sed -i` rule or `mv` out of the Bash guard turns the row it
+# decides red. The Edit fixture is a real repository with a linked worktree
+# inside it, as agents' stand, because #159's first remedy asks git where the
+# file is: against a plain directory it left the suite green (review of #234,
+# round 2).
 #
-# WHY THE #159 ROWS ARE NOT `gap` ROWS (review of #234, round 3, which asked).
+# #159 CLOSED ITS ROWS, by the second remedy: the Edit guard reads whether a
+# path is guarded off the path's own segments. So the four cross-checkout rows
+# went red as this header said they would, and are BLOCK now, and the README's
+# sentence moved with them -- from what the guard did not refuse to what it
+# refuses, which is what GH-157.2 pins. #159's own issue file asks the guard
+# the full question; these rows stay because they are the README's example.
+#
+# WHY THE #159 ROWS WERE NOT `gap` ROWS (review of #234, round 3, which asked).
 # A `gap` row asserts today's verdict for a requirement whose right verdict it
 # is not, and covers nothing. GH-157.3's requirement is what the README says,
-# and the README says the guard permits these edits today, so ALLOW is the
-# right verdict of the requirement they are tagged with; they are #159's gap,
-# and not GH-157.3's. The label says which verdict the guard owes. The heredoc
+# and the README said the guard permitted these edits, so ALLOW was the right
+# verdict of the requirement they were tagged with; they were #159's gap, and
+# not GH-157.3's. The label said which verdict the guard owed. The heredoc
 # rows are further from a gap: #176 and #237 leave the verdict itself to be
 # decided, so there is no right verdict yet to write down beside today's.
 
@@ -132,22 +141,24 @@ requirement GH-157.2 <<'REQ'
   an `mv` followed on its line by a path under the directory (#237), or a
   `>` followed on its line by such a path (#176) -- so the text is written
   to a scratch file and appended with `cat <file> >> <entry>`; and that
-  `append-only-docs-edit.sh` does not yet refuse Edit or Write on an entry
-  outside the session's project directory, in another checkout of this
-  repository, in either direction (#159), so that there the rule is held by
-  the agent and not by a guard. It does not carry the phrase
-  `are refused on an entry that already exists`, the first triage brief's
-  wording of a claim that is false in that case. These bullets are read as
-  part of GH-157.1's span.
+  `append-only-docs-edit.sh` refuses an Edit or a Write of an entry that
+  exists in the main checkout and in a linked worktree alike, whichever of
+  the two is the session's project directory (#159), and that an entry
+  exists from its first write, so a draft not yet merged is refused too, in a
+  worktree as in the main checkout (#190). It does not carry the
+  phrase `does not yet refuse`, the wording of the sentence #159 replaced,
+  nor `are refused on an entry that already exists`, the first triage
+  brief's wording, which named no checkout. These bullets are read as part
+  of GH-157.1's span.
 - from: #157, and review of #234
 - kind: doc-claim
 - status: active
 - direction: static: it reads the README's text against literals
-- note: An instruction and not a claim about the guard, because the claim is
-  false in the case above. Whether the guards behave as the bullet says is
-  GH-157.3's. The `lacks` is one phrase, and reads the whole section: the
-  same claim in other words after the span is not seen, which is the limit
-  #145 owns.
+- note: Until #159 the last sentence was an instruction to hold the rule by
+  hand where the guard did not, because the claim was false there. Whether
+  the guards behave as the bullet says is GH-157.3's. The `lacks` are one
+  phrase each, and read the whole section: the same claim in other words
+  after the span is not seen, which is the limit #145 owns.
 REQ
 requirement GH-157.3 <<'REQ'
 - text: What the Conventions section of `docs/dev-log/README.md` says the two
@@ -158,23 +169,23 @@ requirement GH-157.3 <<'REQ'
   text only names such a path, one whose `rm` has its path on the next
   line, and `cat <file> >> <entry>`. `append-only-docs-edit.sh`, given a
   repository with a linked worktree in it and an existing entry in each,
-  permits an Edit and a Write of the worktree's entry when the project
-  directory is the main checkout, and of the main checkout's when it is the
-  worktree (#159); and refuses both tools on each checkout's own entry.
+  untracked and so a draft (#190), refuses an Edit and a Write
+  of either checkout's entry whichever of the two is the project directory
+  (#159).
 - from: review of #234, rounds 1 to 3
 - kind: doc-claim
 - status: active
 - note: Some of these verdicts are defects, or may be, that the README routes
   around, asserted at today's verdict so that the README's sentence and the
-  guard cannot part silently: the four permitted edits are #159's, whose
-  right verdict is BLOCK, and the heredoc refusals are #176's and #237's,
+  guard cannot part silently: the heredoc refusals are #176's and #237's,
   which leave the verdict to be decided. They are not `gap` rows, because
   today's verdict is the one this requirement states; the issue file's
-  header says so at length. Measured: each remedy #159 proposes, and taking
-  out the rule that decides each heredoc refusal, turns a check here red; a
-  fix of another shape is not known to. Not in the invariance families'
-  scope: it is a `doc-claim`, about what a document says of the guards, and
-  the examples are the document's own.
+  header says so at length. Four Edit rows were permitted until #159 closed
+  them, and are refused now. Measured: taking out the rule that decides each
+  heredoc refusal turns a check here red, and so does putting the Edit guard
+  back on the project root, which `mutate-hooks.sh` registers. Not in the
+  invariance families' scope: it is a `doc-claim`, about what a document says
+  of the guards, and the examples are the document's own.
 REQ
 shape_pin 'GH-157.1:static GH-157.2:static GH-157.3'
 
@@ -217,7 +228,7 @@ R157_SPAN=$(paste -sd' ' <<'SPAN'
 - If the agent does not know its session name, or it is in doubt, it should call the `ListAgents` function to see its session name.
 - A dev-log entry should start with date and time of the entry. Open with branch, commit range, and how far ahead of its root branch the current branch ended up.
 - If the dev-log file that the agent is trying to write already exists, the agent should append a new dev-log entry to the file with a date and time.
-- An append is made with `>>` from Bash, and an entry that exists is never edited with the Edit or Write tool, except to correct the session segment of its heading onto its file name, which ADR 0003 permits (#177). `append-only-docs.sh` reads a heredoc's text as part of the command, so a heredoc append whose prose reads as a command that rewrites an entry can be refused: a `sed -i` anywhere in the text, for example, or an `rm` or an `mv` followed on its line by a path under this directory (#237), or a `>` followed on its line by such a path (#176). Write the text to a scratch file with the Write tool first, and append it with `cat <file> >> <entry>`. `append-only-docs-edit.sh` does not yet refuse Edit or Write on an entry outside the session's project directory, in another checkout of this repository: a linked worktree's entry when the project directory is the main checkout, or the main checkout's when it is the worktree (#159). There this rule is held by the agent and not by a guard.
+- An append is made with `>>` from Bash, and an entry that exists is never edited with the Edit or Write tool, except to correct the session segment of its heading onto its file name, which ADR 0003 permits (#177). `append-only-docs.sh` reads a heredoc's text as part of the command, so a heredoc append whose prose reads as a command that rewrites an entry can be refused: a `sed -i` anywhere in the text, for example, or an `rm` or an `mv` followed on its line by a path under this directory (#237), or a `>` followed on its line by such a path (#176). Write the text to a scratch file with the Write tool first, and append it with `cat <file> >> <entry>`. `append-only-docs-edit.sh` refuses an Edit or a Write of an entry that exists in the main checkout and in a linked worktree alike, whichever of the two is the session's project directory (#159). An entry exists from its first write, so a draft not yet merged is refused too, in a worktree as in the main checkout (#190).
 SPAN
 )
 
@@ -232,6 +243,8 @@ lacks 'nor the counting rule that went with it' "$R157_LOW" 'counts sessions wit
 req GH-157.2
 lacks 'and it does not claim that Edit and Write are refused on an entry' "$R157_LOW" \
   'are refused on an entry that already exists'
+lacks 'nor that the Edit guard does not yet refuse in another checkout, which #159 closed' "$R157_LOW" \
+  'does not yet refuse'
 
 # GH-157.3: the append bullet's examples, fed to the guards it names. The
 # heredoc is built rather than written out, so every check appends to one entry.
@@ -256,7 +269,9 @@ check append-only-docs.sh ALLOW 'cat <file> >> <entry>, the route the README giv
   'cat /tmp/entry.md >> docs/dev-log/devlog_2026-01-01_x.md'
 
 # A repository with a linked worktree inside it, where agents' stand, and an
-# existing entry in each. One commit, because `git worktree add` needs one.
+# existing entry in each. One commit, because `git worktree add` needs one; the
+# entries are never committed, so each is a draft, which the README says is
+# refused too (#190).
 R157_MAIN="$FIXTURES/r157-main"
 R157_WT="$R157_MAIN/.claude/worktrees/r157"
 git init -q -b feature-157 "$R157_MAIN"
@@ -275,11 +290,11 @@ r157_call() {  # r157_call <Edit|Write> <file> -- the tool call, as the harness 
 # feed hands the guard CLAUDE_PROJECT_DIR as $REPO_ROOT, so each call below
 # names the session's project directory by assigning it for that call alone.
 for r157_tool in Edit Write; do
-  REPO_ROOT="$R157_MAIN" feed "$PATH" append-only-docs-edit.sh ALLOW \
-    "$r157_tool of the worktree's entry, the project directory the main checkout (#159: the guard owes BLOCK; ALLOW is today's, and what the README says)" \
+  REPO_ROOT="$R157_MAIN" feed "$PATH" append-only-docs-edit.sh BLOCK \
+    "$r157_tool of the worktree's entry, the project directory the main checkout (ALLOW until #159)" \
     "$(r157_call "$r157_tool" "$R157_WT/$R157_E")"
-  REPO_ROOT="$R157_WT" feed "$PATH" append-only-docs-edit.sh ALLOW \
-    "$r157_tool of the main checkout's entry, the project directory the worktree (#159: the guard owes BLOCK; ALLOW is today's, and what the README says)" \
+  REPO_ROOT="$R157_WT" feed "$PATH" append-only-docs-edit.sh BLOCK \
+    "$r157_tool of the main checkout's entry, the project directory the worktree (ALLOW until #159)" \
     "$(r157_call "$r157_tool" "$R157_MAIN/$R157_E")"
   REPO_ROOT="$R157_WT" feed "$PATH" append-only-docs-edit.sh BLOCK \
     "$r157_tool of the worktree's entry, the project directory the worktree" \
