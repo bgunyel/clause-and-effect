@@ -1085,6 +1085,31 @@ sourced_mark() {  # sourced_mark <start|end> <file>
 sourced_to_end() {  # sourced_to_end -- the end marker of the file that calls it
   sourced_mark end "${BASH_SOURCE[1]} ${BASH_LINENO[0]}"
 }
+# THE LIST THE DRIVER HANDS source_checks, derived and never written (#295): the
+# unsplit file, then every issue file of <dir> -- `GH-<n>.sh`, <n> digits with
+# no leading zero -- in ascending numeric order of <n>, a name a line. The
+# end-of-run file is not on it; the driver names that one after it. Nothing else
+# in <dir> is: a merge's `GH-166.sh.orig`, an editor's swap file, `GH-12a.sh`,
+# `GH-012.sh` and `notes.sh` are left off, so `source_checks` fails the run on
+# each as a file on no list and never sources it. That refusal is the guard; a
+# glob handed straight to the routine would have sourced whatever lay there.
+#
+# It was a line of the driver's, SUITE_CHECKS, that every branch adding an issue
+# file appended to, so any two such branches conflicted on it. Sorted by number
+# the order is one nobody chose, which is why ADR 0004 had rejected a listing;
+# it is fixed, though, so a file that depends on it is red on the pull request
+# that adds it and never a flake, and before it was taken the whole suite ran in
+# the list's order, ascending and descending, and agreed row for row (ADR 0006).
+#
+# A directory it cannot list returns 1 and prints nothing, so the driver can
+# stop rather than source the unsplit file alone: `source_checks` lists the
+# same directory to find strays, and would find none there either.
+suite_checks() {  # suite_checks <dir> -- the unsplit file, then every issue file of <dir> by number
+  local sc_names
+  sc_names=$(cd -- "$1" 2>/dev/null && find . -mindepth 1 -maxdepth 1 ! -type d -name 'GH-*.sh') || return 1
+  printf '%s\n' unsplit.sh
+  printf '%s\n' "$sc_names" | sed -n 's|^\./GH-\([1-9][0-9]*\)\.sh$|\1|p' | LC_ALL=C sort -n | sed 's|.*|GH-&.sh|'
+}
 
 # EVERY SECTION HEADING HAS A ROW UNDER IT. `section` writes each heading down
 # with the number of rows the ledger held when it was printed, and a heading

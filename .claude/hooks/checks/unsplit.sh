@@ -15031,7 +15031,9 @@ tok 'the EXIT trap this suite runs under is SUITE_EXIT_CODE' 'same' \
 # THE ORDER THE DRIVER STATES, held at both ends: the unsplit file first and the
 # end-of-run file last. Only the ends, because an issue file is added between
 # them by the loop that writes it, and a literal of the whole list here would be
-# the one line every such loop edits -- the conflict this split exists to end.
+# a line every such loop edits -- the conflict this split exists to end. What
+# lies between them is derived from the directory since #295, and its issue
+# file holds that order.
 # The last file's end marker names its last line, which is stripped here, since
 # every edit to that file moves it; the routine asks that number of each file.
 tok 'the driver sources the unsplit file first and the end-of-run file last' \
