@@ -1542,3 +1542,12 @@ it has no entry above (Q16).
   the derivation ran, which that pull request closed by moving it to the foot
   of #182's issue file. Cited there, beside the derivation. It adds its
   requirements in the pull request that fixes it
+- #311: a shell reading a heredoc through an option or through `/dev/stdin` --
+  `sh -s <<'EOF'`, `bash -s <<'EOF'`, `source /dev/stdin <<'EOF'` -- is not
+  recognised as a wrapper by `CS_WRAPPER_RE`, so the body it runs is never
+  read, in any hook. Filed from the spec review of #202's pull request, which
+  permits two such shapes beside a `gh api` call that the old re-read refused
+  by accident. Cited in #202's issue file, where GH-202.1 pins those two rows
+  as a trade, and beside the re-admission in `no-pr-decisions.sh` and the
+  quoting rule in `lib/command-scan.sh`. It adds its requirements in the pull
+  request that fixes it

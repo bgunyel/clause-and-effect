@@ -683,6 +683,17 @@ CMDLIST
 # shut and the same prose is permitted -- and GH-202.2 pins both rows. Taking
 # the quoted bodies out of $SCAN as well would close it and open the
 # file-staged mutation, which is a decision.
+#
+# AND A SECOND TRADE, the other way, found by review of this branch: a quoted
+# body is not run by the shell that reads the heredoc, but it is run by a shell
+# the heredoc FEEDS -- `sh -s <<'EOF'`, `bash -s <<'EOF'`,
+# `source /dev/stdin <<'EOF'`. No hook recognises those as wrappers, so they
+# were permitted with no gh api call on the line before this change and are
+# after it; beside a gh api call the old re-read refused them by accident, and
+# now permits them. A refusal lost, in the permitting direction, taken because
+# the answer is the wrapper anchor's for every hook and not a re-read here for
+# lines that happen to carry a gh api call. #311 owns it; GH-202.1 pins the two
+# rows, and the flagless `sh <<'EOF'`, which the anchor does know, as refused.
 if gh_rule api && echo "$COMMAND" | grep -q '<<'; then
   BODIES=$(printf '%s\n' "$COMMAND" | cs_drop_quoted_heredocs) || BODIES=$COMMAND
   SCAN="$SCAN

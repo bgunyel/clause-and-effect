@@ -373,9 +373,13 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # "QUOTED" IS BASH'S RULE: the delimiter word as written holds a `'`, a `"` or
 # a `\` anywhere, so `<<'X'`, `<<"X"`, `<<-'X'`, `<<-"X"` and the partly quoted
 # `<<X"Y"` are quoted, and bash performs no expansion in their bodies -- no
-# parameter, no `$( )`, no backtick. Nothing in such a body can run, so nothing
-# in it is a command. An unquoted body is expanded, so a `$( )` or a backtick
-# in it does run, and keeping it is keeping those. `<<\X` counts as quoted by
+# parameter, no `$( )`, no backtick. Nothing in such a body is run by the shell
+# that reads the heredoc, so nothing in it is a command of THIS command line.
+# What the heredoc feeds is another matter: a shell reading its script from
+# stdin runs the body, and that is the wrapper anchor's question, not this
+# pass's -- CS_WRAPPER_RE answers it for `sh <<` and not yet for `sh -s <<` or
+# `source /dev/stdin <<`, which is #311. An unquoted body is expanded, so a
+# `$( )` or a backtick in it does run, and keeping it is keeping those. `<<\X` counts as quoted by
 # this rule and is a separate defect of this pass: its delimiter is read as
 # `\X`, which never arrives, so the END give-back returns the body as commands
 # in either mode -- the refusing direction, and not #202's.
@@ -517,7 +521,7 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # bash begins it. Raised on review of the pull request for #128 and kept, on
 # the grounds the whole file keeps everywhere else: a
 # refusal is visible and one edit away, and a permitted push is neither.
-cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout: the same, bodies dropped
+cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout: the same, bodies dropped (unquoted ones kept, with the argument)
   case "${1:-}" in
     ''|keep-unquoted) ;;
     *) return 2 ;;
@@ -756,7 +760,10 @@ cs_normalise() {
 #
 # cs_join, which cs_normalise calls as well, is not withdrawn for, because
 # cs_within_cap already answers for it: every Bash hook calls that, and it
-# fails when cs_join does. cs_drop_heredocs has no such second caller in a hook.
+# fails when cs_join does. cs_drop_heredocs has no such second caller in a hook:
+# cs_drop_quoted_heredocs calls it too since #202, but answers for it only to
+# its own caller and only by its status, which says nothing to a consumer of
+# cs_normalise.
 #
 # It must stand after both definitions, for the reason the cs_split withdrawal
 # gives, and check-hooks.sh drives every consumer of cs_normalise against a

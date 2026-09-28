@@ -52,7 +52,8 @@ requirement GH-202.1 <<'REQ'
   UNQUOTED heredoc is re-read as commands exactly as before, since bash runs
   the `$( )` and backticks in it: a merge or a release write in one, beside a
   `gh api` call, is refused.
-- from: #202, and its triage's table: rows 4, 8 to 8‴ and 9, shapes A to F
+- from: #202, and its triage's table: rows 4, 8 to 8‴ and 9, shapes A, B, C, D,
+  D2 and F
 - kind: defect-refusing
 - status: active
 - variants: none: its subject is a heredoc -- an opener, a body on lines of its
@@ -61,10 +62,19 @@ requirement GH-202.1 <<'REQ'
   delimiter are rows here
 - note: The re-admission is still gated on a `gh api` call on the line, and no
   verdict is pinned here on a heredoc whose line has none. Row 7 of the issue,
-  an unpaired backtick, is out of scope, and so is `<<\X`, which the heredoc
-  pass does not recognise as an opener at all: its delimiter never arrives, so
-  its body comes back as commands in every hook -- the refusing direction, in
-  the library.
+  an unpaired backtick, is out of scope, and so is `<<\X`, whose delimiter the
+  heredoc pass reads as `\X`: it never arrives, so the body is given back as
+  commands in every hook -- the refusing direction, in the library.
+  THE TRADE, taken knowingly and pinned: "nothing in a quoted body can run" is
+  true of the heredoc and not of what reads it. A shell reading its script from
+  stdin through an option or through `/dev/stdin` -- `sh -s <<'EOF'`,
+  `bash -s <<'EOF'`, `source /dev/stdin <<'EOF'` -- runs the body, and no hook
+  recognises those as wrappers, so they are permitted with no `gh api` call on
+  the line, before this fix and after it. Beside a `gh api` call the old
+  re-read refused them by accident, and this fix permits them: a refusal
+  lost, in the permitting direction. The fix belongs in the wrapper anchor,
+  for every hook, and is #311's; the flagless `sh <<'EOF'` stays refused as a
+  wrapper.
 REQ
 requirement GH-202.2 <<'REQ'
 - text: A quoted heredoc's body is still read as TEXT by the three graphql rules
@@ -102,7 +112,9 @@ requirement GH-202.3 <<'REQ'
 - kind: defect-permitting
 - status: active
 - direction: refuse-only: a library that cannot answer and a call that fails
-  can only refuse more, and the rows that permit are GH-202.1's
+  can only refuse more, and the rows that permit are GH-202.1's; that the
+  failing fixture still permits an ordinary command is a fixture guard, not a
+  row
 - variants: none: its subject is the library the hook loads, which is a state
   of the tree rather than a spelling
 REQ
@@ -157,6 +169,16 @@ check no-pr-decisions.sh ALLOW 'row 6: a backticked issue write in the body, the
 check no-pr-decisions.sh ALLOW 'shape D3: a backticked merge in a quoted body, then gh issue comment, no gh api on the line' \
   $'cat > /tmp/new.md <<\'MD\'\nnever `gh pr merge 5` here\nMD\ngh issue comment 5 -F /tmp/new.md'
 
+# THE TRADE, pinned where it is permitted: a quoted heredoc read by a shell that
+# is not recognised as a wrapper runs its body, and beside a gh api call these
+# were refused only because the old re-read read every body. Found by the spec
+# review of this branch, measured BLOCK at 84af65e. #311 owns the wrapper
+# anchor, and closing it turns these two red, which is the intended outcome.
+check no-pr-decisions.sh ALLOW "TRADE (#311): sh -s <<'EOF' running a merge, beside a gh api read" \
+  $'sh -s <<\'EOF\'\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
+check no-pr-decisions.sh ALLOW "TRADE (#311): bash -s <<'EOF' running a release create, beside a gh api read" \
+  $'bash -s <<\'EOF\'\ngh release create v1\nEOF\ngh api repos/o/r/issues/5'
+
 # THE UNQUOTED BODY, which bash expands: re-read as commands exactly as before.
 req GH-202.1 US-15
 check no-pr-decisions.sh BLOCK 'row 9: row 4 with <<MD unquoted, where bash runs the backticks' \
@@ -169,6 +191,10 @@ check no-pr-decisions.sh BLOCK 'a backticked merge in an unquoted body, then W' 
   $'cat > /tmp/new.md <<EOF\nx `gh pr merge 5` y\nEOF\ngh api -X PATCH repos/o/r/pulls/196 -F body=@/tmp/new.md'
 check no-pr-decisions.sh BLOCK 'a merge inside $( ) in an unquoted body, then a gh api read' \
   $'cat <<EOF\nx $(gh pr merge 5) y\nEOF\ngh api repos/o/r/pulls/196'
+# The edge of the trade: a shell reading the heredoc with nothing between, which
+# the wrapper anchor does recognise, is refused whatever the quoting.
+check no-pr-decisions.sh BLOCK "sh <<'EOF' running a merge, beside a gh api read: a wrapper, whatever the quoting" \
+  $'sh <<\'EOF\'\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
 # A quoted and an unquoted heredoc on one line, each deciding by its own
 # quoting: the quoted body's release write is prose, the unquoted body's merge
 # is a command. A mode that answered per line rather than per heredoc turns
@@ -242,15 +268,18 @@ sed 's/^  cs_drop_heredocs keep-unquoted$/  cs_drop_heredocs keep-nothing-known/
   "$HOOKS/lib/command-scan.sh" > "$R202_FAILING/lib/command-scan.sh"
 # Both directions on the edit, as mk_halflib guards its rename: an edit that
 # matched nothing leaves the working library behind, and the rows below would
-# read the fix's own verdicts as the fallback's.
+# read the fix's own verdicts as the fallback's. And that the fixture still
+# permits an ordinary read, as mk_halflib asks that what is left still loads: a
+# fixture refusing everything would pass both rows below for a reason of its
+# own. A guard and not a row, so GH-202.3 stays refuse-only.
 grep -q '^  cs_drop_heredocs keep-nothing-known$' "$R202_FAILING/lib/command-scan.sh" \
   && ! grep -q '^  cs_drop_heredocs keep-unquoted$' "$R202_FAILING/lib/command-scan.sh" \
-  && [ -x "$R202_FAILING/no-pr-decisions.sh" ] || {
-  echo "the #202 failing-mode fixture was not built; the checks against it prove nothing" >&2
+  && [ -x "$R202_FAILING/no-pr-decisions.sh" ] \
+  && printf '%s' 'gh pr view 5' | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
+     | ( cd "$SUITE_DIR" && "$R202_FAILING/no-pr-decisions.sh" ) >/dev/null 2>&1 || {
+  echo "the #202 failing-mode fixture was not built, or refuses an ordinary read; the checks against it prove nothing" >&2
   exit 1
 }
-check_in "$SUITE_DIR" "$R202_FAILING/no-pr-decisions.sh" ALLOW \
-  'with the call failing, a command with no heredoc is judged as ever, so the fixture loads' 'gh pr view 5'
 check_in "$SUITE_DIR" "$R202_FAILING/no-pr-decisions.sh" BLOCK \
   "with the call failing, row 4's quoted release write is re-read from the raw command and refused" \
   $'cat > /tmp/new.md <<\'MD\'\nMeasured: `gh api -X POST repos/o/r/releases -f tag_name=v1` stays BLOCK.\nMD\ngh api -X PATCH repos/o/r/pulls/196 -F body=@/tmp/new.md'
