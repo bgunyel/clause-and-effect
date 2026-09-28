@@ -981,7 +981,8 @@ record_of() {  # record_of <file> <out> -- 1 if sourcing <file> alone defined no
 }
 
 # THE SOURCING ROUTINE (#204). check-hooks.sh sources every file of checks/ but
-# this one through it, once, in the order of one list the driver writes. It asks
+# this one through it, once, in the order of one list the driver derives (#295,
+# `suite_checks` below). It asks
 # five things, failing the run on each, in this order. First, once: that every
 # file under the directory is on the list or is this library, so an issue file
 # added and not listed is a FAIL rather than a file whose checks never ran. Then
@@ -1085,6 +1086,32 @@ sourced_mark() {  # sourced_mark <start|end> <file>
 sourced_to_end() {  # sourced_to_end -- the end marker of the file that calls it
   sourced_mark end "${BASH_SOURCE[1]} ${BASH_LINENO[0]}"
 }
+# THE ROUTINE, DRIVEN AGAINST FIXTURES (#204's, here since #295's issue file
+# became its second caller). Each fixture runs `source_checks` in a subshell of
+# its own, with a record of its own, and names that subshell as the one that
+# records -- the driver's $SOURCED_SHELL is this shell -- so what it writes is
+# its own, and a FAIL it
+# prints is the one asserted and is not recorded, as in the #98 self-test. The
+# FAIL prefix is rewritten on the way out, because the #104 section reads this
+# suite for a quoted line opening with a result word.
+sourcing_run() {  # sourcing_run <dir> <file>... -- what source_checks printed, REQ after it, and its record
+  ( cd -- "$(dirname -- "$1")" || exit 1
+    umask 022
+    # A trap of its own, because a subshell shows its parent's traps only until
+    # it sets one, and then drops them all from `trap -p` (measured, bash 5.2):
+    # the first trap a fixture set would otherwise read as every other removed.
+    trap ':' EXIT
+    SOURCED="$1.record"; : > "$SOURCED"; SOURCED_SHELL=$BASHPID; SUITE_LIBRARY=library.sh
+    # Entered with a tag already set, as a driver that left one would: the first
+    # file must open without it, which only the clear before each file gives --
+    # the one after each file cannot reach the first.
+    REQ=GH-0
+    source_checks "$@" > "$1.out"
+    sed 's/^  FAIL /FAIL: /' "$1.out"
+    printf 'REQ=[%s] after the last file\n' "$REQ"
+    sed 's/^/record: /' "$SOURCED" )
+}
+
 # THE LIST THE DRIVER HANDS source_checks, derived and never written (#295): the
 # unsplit file, then every issue file of <dir> -- `GH-<n>.sh`, <n> digits with
 # no leading zero -- in ascending numeric order of <n>, a name a line. The
@@ -1103,12 +1130,26 @@ sourced_to_end() {  # sourced_to_end -- the end marker of the file that calls it
 #
 # A directory it cannot list returns 1 and prints nothing, so the driver can
 # stop rather than source the unsplit file alone: `source_checks` lists the
-# same directory to find strays, and would find none there either.
+# same directory to find strays, and would find none there either. So does a
+# stage of the pipeline that fails, which pipefail -- local to this function
+# through `local -` -- turns into the function's status rather than a list cut
+# short (review of this change).
+#
+# WHAT IT GIVES UP, named. The hand-written list failed the run on an issue
+# file it named that was not there; a derived list cannot name a file that is
+# gone, so deleting an issue file is silent here. What is left to see it is
+# the #205 check that every generated entry is declared by a file the run
+# sourced, which reaches only a file that declared one -- and the old list was
+# silent too whenever the deletion took the name off the list with it. And a
+# symlink or other non-directory named `GH-<n>.sh` is sourced like a file.
 suite_checks() {  # suite_checks <dir> -- the unsplit file, then every issue file of <dir> by number
-  local sc_names
+  local - sc_names sc_issues
+  set -o pipefail
   sc_names=$(cd -- "$1" 2>/dev/null && find . -mindepth 1 -maxdepth 1 ! -type d -name 'GH-*.sh') || return 1
+  sc_issues=$(printf '%s\n' "$sc_names" | sed -n 's|^\./GH-\([1-9][0-9]*\)\.sh$|\1|p' \
+                | LC_ALL=C sort -n | sed 's|.*|GH-&.sh|') || return 1
   printf '%s\n' unsplit.sh
-  printf '%s\n' "$sc_names" | sed -n 's|^\./GH-\([1-9][0-9]*\)\.sh$|\1|p' | LC_ALL=C sort -n | sed 's|.*|GH-&.sh|'
+  [ -z "$sc_issues" ] || printf '%s\n' "$sc_issues"
 }
 
 # EVERY SECTION HEADING HAS A ROW UNDER IT. `section` writes each heading down

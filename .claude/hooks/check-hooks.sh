@@ -204,9 +204,9 @@
 #     takes to be sourced: the driver derives $SUITE_CHECKS below from the
 #     directory, in ascending order of the issue number, and no line of this
 #     file is edited to add one (#295). `source_checks` fails the run on a file
-#     under checks/ that is on no list -- one whose name is not `GH-<n>.sh`, or
-#     `unsplit.sh`, `end-of-run.sh` or the library -- and on one that does not end with that line;
-#     the record fails it on a second call. Every heading the file prints,
+#     under checks/ that is on no list -- one whose name is not `GH-<n>.sh`,
+#     `unsplit.sh`, `end-of-run.sh` or the library -- and on one that does not
+#     end with that line; the record fails it on a second call. Every heading the file prints,
 #     its opening one and any after it, is printed with `section`. Nothing
 #     refuses one printed with `echo` or `printf`: it is not written down, so
 #     GH-204.8's check counts its rows for the heading before it; and past the
@@ -877,8 +877,8 @@ GH-204.7 GH-204.8
 '
 
 # THE CHECKS, sourced into this shell: $SUITE_CHECKS in the order it was
-# derived, the unsplit file first, and the end-of-run file last, which reads the record every check before it
-# wrote. This is the one call of `source_checks`, and the #204 checks hold it to
+# derived, the unsplit file first, and the end-of-run file last, which reads
+# the record every check before it wrote. This is the one call of `source_checks`, and the #204 checks hold it to
 # that.
 source_checks "$SUITE_DIR/checks" $SUITE_CHECKS "$SUITE_LAST"
 # AND WHAT IT SOURCED IS WHAT IT WAS GIVEN: every file started and ran to its

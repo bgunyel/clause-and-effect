@@ -14814,29 +14814,8 @@ section "=== issue #204: the driver sources each file of checks/ whole, in order
 # partway through, whether or not it wrote its end marker first, a `req` that would carry across the boundary, and a file
 # that leaves the shell changed.
 #
-# Each fixture runs `source_checks` in a subshell of its own, with a record of
-# its own, and names that subshell as the one that records -- the driver's
-# $SOURCED_SHELL is this shell -- so what it writes is its own, and a FAIL it
-# prints is the one asserted and is not recorded, as in the #98 self-test. The
-# FAIL prefix is rewritten on the way out, because the #104 section reads this
-# suite for a quoted line opening with a result word.
-sourcing_run() {  # sourcing_run <dir> <file>... -- what source_checks printed, REQ after it, and its record
-  ( cd -- "$(dirname -- "$1")" || exit 1
-    umask 022
-    # A trap of its own, because a subshell shows its parent's traps only until
-    # it sets one, and then drops them all from `trap -p` (measured, bash 5.2):
-    # the first trap a fixture set would otherwise read as every other removed.
-    trap ':' EXIT
-    SOURCED="$1.record"; : > "$SOURCED"; SOURCED_SHELL=$BASHPID; SUITE_LIBRARY=library.sh
-    # Entered with a tag already set, as a driver that left one would: the first
-    # file must open without it, which only the clear before each file gives --
-    # the one after each file cannot reach the first.
-    REQ=GH-0
-    source_checks "$@" > "$1.out"
-    sed 's/^  FAIL /FAIL: /' "$1.out"
-    printf 'REQ=[%s] after the last file\n' "$REQ"
-    sed 's/^/record: /' "$SOURCED" )
-}
+# The fixtures run `source_checks` through `sourcing_run`, in the library since
+# #295's issue file became its second caller.
 SRC_FIX="$FIXTURES/sourcing"
 mkdir -p "$SRC_FIX/whole" "$SRC_FIX/returns" "$SRC_FIX/no-end" "$SRC_FIX/early" "$SRC_FIX/exits" "$SRC_FIX/state"
 # Each says what REQ was when it opened, and then ends inside a `req`.

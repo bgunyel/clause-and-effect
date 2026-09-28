@@ -24,9 +24,9 @@
 #
 # WHAT IS DRIVEN is `suite_checks`, over a fixture directory whose issue files
 # sort differently as text and as numbers, and `source_checks` over what it
-# derived, in a subshell with a sourcing record of its own -- as the #204
-# fixtures in the unsplit file run it -- so the FAILs it prints for the strays
-# beside them are this file's evidence and not red rows. And the driver: its one
+# derived, through `sourcing_run`, the library's runner for the #204 fixtures,
+# in a subshell with a sourcing record of its own -- so the FAILs it prints for
+# the strays beside them are this file's evidence and not red rows. And the driver: its one
 # assignment of the list, and the list it derived for this run.
 
 section "=== issue #295: the order the checks are sourced in is derived from checks/, and nothing else there runs ==="
@@ -40,8 +40,9 @@ requirement GH-295 <<'REQ'
   `checks/`, the library aside, is on no list, so `source_checks` fails the
   run on it and never sources it: a merge's `GH-166.sh.orig`, an editor's
   `.swp`, `GH-12a.sh`, `GH-012.sh`, `GH-0.sh`, `notes.sh`. A `checks/` that
-  cannot be listed stops the run before anything is judged, rather than
-  leaving a list of the unsplit file alone.
+  cannot be listed, or a stage of the derivation's pipeline that fails, stops
+  the run before anything is judged, rather than leaving a list of the
+  unsplit file alone.
 - from: #295
 - kind: defect-permitting
 - status: active
@@ -50,10 +51,12 @@ requirement GH-295 <<'REQ'
 - note: The order was measured before it was taken: the whole suite run with
   the issue files in the list's order, ascending and descending, agreed row
   for row (ADR 0006). The rule it rests on is tooling, which `mutate-hooks.sh`
-  refuses as a target, so its evidence is the fixture rows and the mutations
-  run by hand that PR #295's description records, as ADR 0004 did for
-  `source_checks`. What it does not reach, named: a stray whose name matches
-  the pattern, which is an issue file by definition and is sourced.
+  refuses as a target, so its evidence is the fixture rows and six mutations
+  run by hand in throwaway clones, each red on a GH-295 row, which ADR 0006
+  lists; ADR 0004 did the same for `source_checks`. What it does not reach,
+  named: a stray whose name matches the pattern, which is an issue file by
+  definition and is sourced; and an issue file deleted, which a derived list
+  cannot name as missing, as the written one did while the name stayed on it.
 REQ
 shape_pin 'GH-295:static'
 
@@ -70,17 +73,6 @@ done
 [ "$(cd "$R295_DIR" && ls -A | wc -l)" = 13 ] || {
   echo "the #295 fixture was not created; the checks against it prove nothing" >&2
   exit 1
-}
-# The routine over a directory and a list, in a subshell that records on its
-# own, as the #204 fixtures do: what the routine printed, its FAIL prefix
-# rewritten because the #104 section reads this suite for a quoted line opening
-# with a result word, and then its record.
-r295_sourcing() {  # r295_sourcing <dir> <file>... -- what source_checks printed, and its record
-  ( cd -- "$(dirname -- "$1")" || exit 1
-    SOURCED="$1.record"; : > "$SOURCED"; SOURCED_SHELL=$BASHPID; SUITE_LIBRARY=library.sh
-    source_checks "$@" > "$1.out"
-    sed 's/^  FAIL /FAIL: /' "$1.out"
-    sed 's/^/record: /' "$SOURCED" )
 }
 
 req GH-295
@@ -103,6 +95,7 @@ GH-9.sh ran
 GH-10.sh ran
 GH-100.sh ran
 end-of-run.sh ran
+REQ=[] after the last file
 record: start $R295_DIR/unsplit.sh
 record: end $R295_DIR/unsplit.sh 2
 record: start $R295_DIR/GH-2.sh
@@ -115,16 +108,34 @@ record: start $R295_DIR/GH-100.sh
 record: end $R295_DIR/GH-100.sh 2
 record: start $R295_DIR/end-of-run.sh
 record: end $R295_DIR/end-of-run.sh 2" \
-    "$(r295_sourcing "$R295_DIR" $(suite_checks "$R295_DIR") end-of-run.sh)"
+    "$(sourcing_run "$R295_DIR" $(suite_checks "$R295_DIR") end-of-run.sh)"
 tok 'a directory that cannot be listed derives nothing, and says so with its status' \
     'status 1' "$(suite_checks "$FIXTURES/r295/no-such-dir"; printf 'status %s\n' "$?")"
+# And a stage of its pipeline that fails: a `sort` that prints nothing and exits
+# 1, on a PATH holding it beside the real `find` and `sed`. Without pipefail the
+# function returned the last `sed`'s 0 over a list of the unsplit file alone
+# (review of this change).
+R295_BIN="$FIXTURES/r295/bin"
+mkdir -p "$R295_BIN"
+ln -sf "$(command -v find)" "$R295_BIN/find"
+ln -sf "$(command -v sed)" "$R295_BIN/sed"
+printf '#!%s\nexit 1\n' "$BASH" > "$R295_BIN/sort"
+chmod +x "$R295_BIN/sort"
+[ -x "$R295_BIN/find" ] && [ -x "$R295_BIN/sed" ] && [ -x "$R295_BIN/sort" ] || {
+  echo "the #295 failing-sort fixture was not created; the check against it proves nothing" >&2
+  exit 1
+}
+tok 'and a stage of the pipeline that fails derives nothing either, and says so with its status' \
+    'status 1' "$(PATH="$R295_BIN"; suite_checks "$R295_DIR"; printf 'status %s\n' "$?")"
 
 # AND THE DRIVER. Its one assignment of the list is the derivation, with the
 # guard that stops the run when it fails; a literal list written again beside
-# it, or in its place, is a second line here.
+# it, or in its place -- or an append, an `export` or a `declare` of it -- is a
+# second line here. Every line that is not a comment and assigns the name is
+# read, wherever the name stands on it (review of this change).
 tok 'the driver assigns its list once, from suite_checks, and stops the run when that fails' \
     'SUITE_CHECKS=$(suite_checks "$SUITE_DIR/checks") || {' \
-    "$(grep -E '^[[:space:]]*SUITE_CHECKS=' "${SUITE_FILES[0]}")"
+    "$(grep -v '^[[:space:]]*#' "${SUITE_FILES[0]}" | grep -E '(^|[^_[:alnum:]])SUITE_CHECKS[+]?=')"
 # And the list it derived for this run, read without the function under check:
 # the unsplit file first, then names of the issue-file shape whose numbers only
 # rise. Nothing is printed when all of that holds.
@@ -150,6 +161,5 @@ not an issue file: unsplit.sh
 not rising: GH-10.sh after GH-100.sh
 not an issue file: GH-012.sh' \
     "$(r295_order 'GH-2.sh unsplit.sh GH-100.sh GH-10.sh GH-012.sh')"
-present 'and this file is on it' GH-295.sh "$(printf '%s ' $SUITE_CHECKS)"
 
 sourced_to_end
