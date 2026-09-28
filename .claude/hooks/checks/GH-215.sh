@@ -93,8 +93,11 @@
 #     header -- `124 s, taken 2026-09-17`, `The 2026-09-17 readings` and the
 #     freeze paragraph's quotation of the log's first line -- and three below
 #     `set -u`, at MEASURED_SECONDS_PER_RUN: MEASURED 2026-09-20, the 124 s it
-#     replaced on 2026-09-17, and the `--list` line that prints the rate's
-#     date. The header's are counted on its prose as comment_reflow reads it,
+#     replaced on 2026-09-17, and MEASURED_ON, the day the rate was last
+#     measured. That third was the `--list` line's own literal until #166
+#     re-measured the rate on PR #260 and moved it into the constant, which
+#     --list prints through a %s; the count stayed six. The header's are
+#     counted on its prose as comment_reflow reads it,
 #     which rejoins a date broken at a hyphen across a line; the code's on its
 #     lines as written, where a comment is indented and the reader cannot
 #     rejoin it. The review's fourth round measured the first version, which
