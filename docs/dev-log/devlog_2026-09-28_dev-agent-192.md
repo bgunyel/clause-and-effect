@@ -255,3 +255,33 @@ Full runs on `e19e246`: the head in the worktree, and each mutation on a `git cl
 `cde846f` changes only a comment. It was run once more: ALL CHECKS PASSED.
 
 **Correction, 2026-09-28 19:10 +0300.** The round-2 section above says the branch was 6 commits ahead of `origin/dev-05` before that section was committed. It was 7: the assistant left `cde846f` out of the count. `git rev-list --count origin/dev-05..HEAD` read 7 immediately before the append.
+
+
+## Review round 3, 2026-09-28 19:51 +0300
+
+rev-agent-192 reviewed `8ed812f`. Nothing gated. It requested G5 and two requirement-text fixes, N6 and N7. The fixes are `3f643f8`. When this section was written, before it was committed, the branch was 10 commits ahead of `origin/dev-05` and 0 behind it (`git rev-list --count` read 10).
+
+- **G5: both GH-192.3 audits were narrower than GH-192.3's text.** rev-agent-192 offered three options: widen (a), dedicated verbs (b), or state the reach (c). The assistant took (a) for all three measured shapes, and (c) for what is left.
+  - **The direct-reader count**, which the assistant added in round 2, read line by line. So `printf … |` over `  comment_reflow)` was not counted. That is #192's defect, in a guard written against #192's class. It now joins a line ending in `|` or `\` to the next, skipping comment lines in between.
+  - **The pin audit** read a literal only as far as its first closing quote. So `'four'' acts'` read as `four`. It now reads the whole shell word the quoted pieces make.
+  - It also took a pin only at a line's start, so `[ -n "$X" ] && unarmed …` was not audited. It now also takes a pin after `;`, `&`, `|`, `{`, `then` or `do`.
+  - GH-192.3's note now names what neither audit reaches: a helper inside `$( )`, a literal that is a variable or an ANSI-C string, a lower-case name, and a `comment_reflow` reached through another name. The suite writes no pin after `if`, `elif`, `else`, `while`, `until` or `!` (a grep over non-comment lines found 0), and the text lists only the separators it reads.
+  - Option (b) was not taken here. It would rewrite every one of the 134 pin sites on a pull request already in its third review round.
+- **A mistake on the way.** The first run went red at `and no longer counts its citations at three`. The assistant's new expected-output literal spelled the phrase that GH-99.1 forbids in the suite's own text, which is why the original fixture split it into two quoted pieces. The fixture now uses a neutral phrase.
+- **N6.** Over the path `prose` prints for an unreadable source, only `unarmed` names grep's status 2; `written` fails as it does for a literal not found. GH-192.1's text and the library paragraph said both named the status. Both are corrected.
+- **N7.** A missing word in GH-192.3's note was restored.
+- **Re-measured with the round-3 audits:** the pin audit reports 100 on `origin/dev-05` and 0 at `3f643f8`. The direct-reader counts are unchanged at both, less `library.sh`'s one, which `origin/dev-05` does not have.
+
+### Measured
+
+Full runs on `3f643f8`: the head in the worktree, and each mutation on a `git clone` with its diffstat checked.
+
+| run | result |
+|---|---|
+| head | ALL CHECKS PASSED (373 s wall-clock, 212 s user, 172 s sys, with four other runs alongside) |
+| L: a wrapped `\|` / `comment_reflow` after `LEFT_OPEN_PROSE=` | 1 FAIL, the direct-reader count (rev-agent-192: ALL CHECKS PASSED at `8ed812f`) |
+| M1: `"$SKILL_MD" 'four'' acts'` | 1 FAIL, the pin audit (was ALL CHECKS PASSED) |
+| M3: `[ -n "$SKILL_MD" ] && unarmed … "$SKILL_MD" 'four acts'` | 2 FAIL: the text-check count, as before, and now the pin audit |
+| U9: the join removed | 1 FAIL, the direct-reader driven row |
+| U10: the quoted-piece loop cut to one piece | 1 FAIL, the audit driven row |
+| U11: the pin regex back to a line's start | 1 FAIL, the audit driven row |
