@@ -1,0 +1,163 @@
+#!/bin/bash
+# THE ISSUE FILE OF #224: `fail` marks which lines of the log are a failing
+# row's, by indenting every line of its message after the first.
+#
+# Why: the `check-hooks` job summary shows a failing row with its detail, and
+# the log did not say which lines those were, so the summary guessed -- the
+# lines up to the next row, heading or blank line. The guess took a library's
+# stderr, printed at column 0 before the row it belongs to, as the detail of
+# the failing row above it, which run 35836366963's log can produce; and it
+# cut a hook's stderr short at its first blank line or line opening `---`.
+# `fail` embeds that stderr verbatim, so a line of it started wherever the
+# hook started it, column 0 included. Split off by the triage of the issue
+# that bounds the summary's size, which #224's own text names.
+#
+# The indent is seven spaces, the width of the `  FAIL ` a row opens with, so
+# a continuation line stands under the message's first character. It is added
+# to every line after the first whatever the line starts with, a blank line
+# included, so the hook's stderr is byte-exact once one indent is removed:
+# that is what the summary shows. .github/scripts/check_hooks_ci.py spells the
+# same seven spaces as DETAIL_INDENT, and tests/test_check_hooks_ci.py runs
+# this library's own `fail` into that parser, which is what keeps the two
+# spellings one; this file asks the bash half alone.
+#
+# WHAT IS DRIVEN is `fail` itself, inside $( ) where its row is not recorded
+# and its FAILED does not reach this shell, so a `fail` printed here is this
+# file's evidence and not a red row, as in #219's file. The ledger is asked in
+# a child bash that sources the library, because `record` writes only from the
+# shell whose $$ it is, and a child bash is one.
+
+section "=== issue #224: fail marks the lines of its message after the first ==="
+
+requirement GH-224.1 <<'REQ'
+- text: `fail` prints its message's first line after `  FAIL `, as before,
+  and every line after the first with seven spaces in front of it, whatever
+  the line already starts with. A line at column 0 gets the seven spaces, a
+  line that opens with spaces gets them added to its own, and a blank line
+  becomes the seven spaces alone. So a hook's stderr that `fail` embeds is
+  byte-exact once seven spaces are taken off each line after the first, and
+  no line of a failing row's message stands at column 0.
+- from: #224
+- kind: defect-permitting
+- status: active
+- direction: static: a property of the suite's helpers
+- note: The seven spaces are also .github/scripts/check_hooks_ci.py's
+  DETAIL_INDENT, which takes a failing row's detail by them for the job
+  summary. tests/test_check_hooks_ci.py runs this `fail` into that parser;
+  this entry is the bash half. A stray line that opens with seven spaces and
+  that `fail` did not print is read there as detail of the row above it --
+  the open case #224 records rather than fixes.
+REQ
+requirement GH-224.2 <<'REQ'
+- text: The ledger line `fail` records for a message of several lines is its
+  first line only, byte for byte, as it was before #224.
+- from: #224
+- kind: defect-permitting
+- status: active
+- direction: static: a property of the suite's helpers
+- note: That the ledger `mutate-hooks.sh` reads is unchanged by #224 for every
+  `fail` call follows from this and is not checked here: it was measured over
+  a set of messages in PR #285, and the check below drives one. That the
+  indent never reaches the ledger cannot be driven at all, because the first
+  line is the one line the indent is never put on (review of PR #285, round
+  2).
+REQ
+shape_pin 'GH-224.1:static GH-224.2:static'
+
+# What `fail` prints opens with two blanks, held in a variable so that no
+# quoted string here opens with a result's prefix: #104's audit at the foot of
+# the suite reads every such string as a result printed around pass and fail.
+R224_ROW='  '
+# The indent, written out: seven spaces. Not read from the library, because
+# what is under test is whether the library prints these.
+R224_IND='       '
+# A hook's stderr holding every line the old guess stopped at or took in: one
+# at column 0, a blank one, one opening `---` and one opening `===`, and one
+# the hook indented itself.
+R224_STDERR='first line
+column zero
+
+--- a/diff
+=== not a heading
+   three spaces'
+
+req GH-224.1
+tok 'a fail embedding a stderr of several lines prints every line after the first with the indent in front, a column-0 line, a blank one and a --- one included' \
+"${R224_ROW}FAIL r224 driven check
+${R224_IND}         stderr |first line
+${R224_IND}column zero
+${R224_IND}
+${R224_IND}--- a/diff
+${R224_IND}=== not a heading
+${R224_IND}   three spaces|" \
+    "$(fail static '%s\n         stderr |%s|' 'r224 driven check' "$R224_STDERR")"
+tok 'a fail of one line prints that line alone, as before' \
+    "${R224_ROW}FAIL r224 one line" \
+    "$(fail static 'r224 %s' 'one line')"
+tok "and a message's own blank lines, one after another and at its end, are each the indent alone" \
+"${R224_ROW}FAIL r224 blanks
+${R224_IND}
+${R224_IND}
+${R224_IND}after two
+${R224_IND}" \
+    "$(fail static 'r224 blanks\n\n\nafter two\n')"
+
+# EVERY LINE OF A LONG MESSAGE, and not only of a short one (review of PR
+# #285, round 4). The rows above drive messages of seven lines at most, and
+# GH-293 drives long ones with their output thrown away, so a `fail` that kept
+# its first twenty continuation lines and dropped the rest silently passed the
+# whole suite and the Python tests. This row drives 2,000 continuation lines --
+# blank ones, ones the message indented itself and ones at column 0 among them
+# -- and compares what `fail` prints with a text built without it: the row
+# line, then every line after the first with the indent put in front by `sed`.
+# A difference is reported as `cmp` gives it, the first byte and line that
+# differ, rather than as two texts of two thousand lines.
+R224_LONG_IN="$FIXTURES/r224-long-in"
+R224_LONG_WANT="$FIXTURES/r224-long-want"
+R224_LONG_GOT="$FIXTURES/r224-long-got"
+{
+  printf 'r224 a long message\n'
+  awk 'BEGIN { for (i = 1; i <= 2000; i++) {
+                 if (i % 100 == 50) print ""
+                 else if (i % 7 == 0) print "   indented line " i
+                 else print "line " i } }'
+} > "$R224_LONG_IN"
+{
+  printf '%sFAIL %s\n' "$R224_ROW" 'r224 a long message'
+  tail -n +2 "$R224_LONG_IN" | sed "s/^/$R224_IND/"
+} > "$R224_LONG_WANT"
+( fail static '%s' "$(< "$R224_LONG_IN")" ) > "$R224_LONG_GOT"
+# THE INPUT IS ASKED FIRST (review of PR #285, round 5). Were the generator
+# above to break -- an edit, or an awk that reads it otherwise -- the input
+# would be one line or none, `sed` and `fail` would agree over it, and this
+# row would pass having driven nothing: measured, with the awk program given
+# one `{` too many and `fail` keeping twenty lines, it printed ok. So the row
+# fails unless its input holds what its label says, written as literals and
+# not read back from the generator: 2,001 lines and 22,128 bytes, 20 of the
+# lines blank and 282 opening with three spaces.
+R224_LONG_LABEL='a fail over a message of 2,001 lines prints all 2,000 after the first, each with the indent in front, byte for byte as sed puts it there'
+R224_LONG_HOLDS="$(( $(wc -l < "$R224_LONG_IN") )) lines, $(( $(wc -c < "$R224_LONG_IN") )) bytes, $(grep -c '^$' "$R224_LONG_IN") blank, $(grep -c '^   ' "$R224_LONG_IN") indented"
+if [ "$R224_LONG_HOLDS" != '2001 lines, 22128 bytes, 20 blank, 282 indented' ]; then
+  fail static '%s\n         its input holds %s, not 2001 lines, 22128 bytes, 20 blank, 282 indented, so a comparison over it asks nothing' \
+    "$R224_LONG_LABEL" "$R224_LONG_HOLDS"
+else
+  tok "$R224_LONG_LABEL" 'identical' "$(cmp "$R224_LONG_WANT" "$R224_LONG_GOT" 2>&1 && echo identical)"
+fi
+
+# The ledger, from a child bash with a ledger of its own. What it records for
+# the message above is its first line, which is what it recorded before #224:
+# measured, not assumed, against the library as #224 found it -- see the pull
+# request -- and pinned here as that literal.
+req GH-224.2
+R224_LEDGER="$FIXTURES/r224-ledger"
+: > "$R224_LEDGER"
+LEDGER="$R224_LEDGER" REQ=GH-0 bash -c 'source "$1"; fail static "%s\n         stderr |%s|" "r224 driven check" "$2" > /dev/null' \
+  bash "$SUITE_DIR/checks/library.sh" "$R224_STDERR"
+# Read with an `x` after it, so the line's own newline is compared too and
+# not stripped by the $( ).
+R224_TAB=$'\t'
+tok 'the ledger records only the first line of a fail of several lines, byte for byte as before #224' \
+    "GH-0${R224_TAB}static${R224_TAB}FAIL${R224_TAB}r224 driven check
+x" "$(cat "$R224_LEDGER"; printf x)"
+
+sourced_to_end

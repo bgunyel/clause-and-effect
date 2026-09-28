@@ -66,13 +66,50 @@ pass() {  # pass <refuse|permit|static> <format> [arguments...] -- an ok line, r
   printf '  ok   %s\n' "$line"
   record "$dir" ok "${line%%$'\n'*}"
 }
+# A FAIL LINE MARKS ITS OWN DETAIL (#224). Every line of the message after the
+# first is printed with `indent`, seven spaces, the width of `  FAIL `,
+# whatever the line already starts with: a line at column 0 gets them, one that
+# opens with spaces gets them added to its own, and a blank line is printed as
+# the seven spaces alone. A message embeds a hook's stderr verbatim, and before
+# #224 a line of it stood wherever the hook put it, so the log did not say which
+# lines were a row's. The `check-hooks` job summary guessed, and took a
+# library's stray stderr at column 0 as the detail of the failing row above it,
+# and cut a stderr short at a blank line or at one opening `---`.
+# .github/scripts/check_hooks_ci.py takes a failing row's detail by these seven
+# spaces, as DETAIL_INDENT, and tests/test_check_hooks_ci.py runs this function
+# into that parser, so the two spellings cannot drift apart with the tests
+# green. The ledger records the first line, which the indent never reaches.
+#
+# LINEAR IN THE MESSAGE, AND WHY NO LINE OF IT IS CUT BY A PATTERN (#293). The
+# indent was first written as `${line//$'\n'/$'\n'$indent}`, and under a UTF-8
+# locale bash's substitution grows with the square of the message: one `fail`
+# over a 10,000-line message of 580 KB took 6.8 s, against 0.06 s before #224.
+# The second form cut the first line off with `${line%%$'\n'*}` and the rest
+# with `${line#*$'\n'}`, and both strips grow with the square of the FIRST
+# line, however few lines follow it: 887 ms of CPU for a 40,000-byte first
+# line, against 55 ms at 10,000 (review of PR #285, round 3). So the whole
+# message is read into an array by `mapfile`, element 0 is the first line and
+# the rest are given the indent, which is linear in both shapes: 13 ms for a
+# 40,000-byte first line and 15 ms at 160,000; 70 ms for 10,000 lines of 58
+# bytes and 299 ms for 40,000. The here-string adds one newline and
+# `mapfile -t` takes one off, so a message ending in a newline still ends in an
+# indent-only line, and an empty message is one empty element, printed as
+# `  FAIL ` alone, as the substitution printed both. `record`'s own tab
+# substitution is #300's.
 fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, recorded
-  local dir="$1" fmt="$2" line
+  local dir="$1" fmt="$2" line first indent='       '
+  local -a rest
   shift 2
   printf -v line "$fmt" "$@"
-  printf '  FAIL %s\n' "$line"
+  mapfile -t rest <<< "$line"
+  first=${rest[0]}
+  unset 'rest[0]'
+  printf '  FAIL %s\n' "$first"
+  if (( ${#rest[@]} )); then
+    printf '%s\n' "${rest[@]/#/$indent}"
+  fi
   FAILED=1
-  record "$dir" FAIL "${line%%$'\n'*}"
+  record "$dir" FAIL "$first"
 }
 req() {  # req <ID>... -- the requirements the checks after this establish
   REQ="$*"

@@ -14933,18 +14933,18 @@ printf '%s\n' "trap ':' USR1" 'sourced_to_end' > "$SRC_FIX/state/trap.sh"
 printf '%s\n' 'umask 077' 'sourced_to_end' > "$SRC_FIX/state/umask.sh"
 tok '(vi) a file that leaves an option, the directory, a trap or the umask changed is a FAIL, which names the change' \
 "FAIL: opt.sh left the shell changed:
-         was: set +o errexit
-         now: set -o errexit
-         was: set +o noglob
-         now: set -o noglob
+                was: set +o errexit
+                now: set -o errexit
+                was: set +o noglob
+                now: set -o noglob
 FAIL: dir.sh left the shell changed:
-         was: directory $SRC_FIX
-         now: directory /
+                was: directory $SRC_FIX
+                now: directory /
 FAIL: trap.sh left the shell changed:
-         now: trap -- ':' SIGUSR1
+                now: trap -- ':' SIGUSR1
 FAIL: umask.sh left the shell changed:
-         was: 0022
-         now: 0077
+                was: 0022
+                now: 0077
 REQ=[] after the last file
 record: start $SRC_FIX/state/opt.sh
 record: end $SRC_FIX/state/opt.sh 2
