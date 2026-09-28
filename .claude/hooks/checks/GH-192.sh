@@ -11,10 +11,12 @@
 # All three are the permitting direction, and silent. A presence pin was the
 # other half: a rewrap that changed no word turned it red.
 #
-# The reader is the library's `prose`, over comment_reflow, and the rule is
-# written once, beside it. This file drives the two helpers #192 adds and the
-# one it moves onto the reader, against fixtures of its own, and then audits
-# the suite's own text for a pin the rule reaches that still reads the lines.
+# The reader is the library's `prose`, over `prose_reflow`, which normalises
+# blanks and then runs comment_reflow, and the rule is written once, beside it.
+# This file drives the helpers #192 adds and the one it moves onto the reader,
+# against fixtures of its own, and then audits the suite's own text: for a pin
+# the rule reaches that still reads the lines, and for a reader that pipes into
+# comment_reflow directly.
 #
 # WHAT IS DRIVEN is each helper inside $( ), where its `pass` or `fail` is not
 # recorded and its FAILED does not reach this shell, so a helper that fails
