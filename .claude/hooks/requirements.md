@@ -1351,18 +1351,6 @@ it has no entry above (Q16).
   cited where a rule is held for the legacy entries and not yet for a
   generated one -- an ID deleted outright, with its declaration, its pin and
   its file, which nothing disagrees with afterwards
-- #159: the issue filed as "append-only-docs-edit.sh is inoperative in every
-  linked worktree". What it measured is narrower than its title, and review
-  of #234 measured the other half: the guard permits an Edit or a Write of an
-  entry in another checkout of this repository than the session's project
-  directory -- a linked worktree's entry when the project directory is the
-  main checkout, and the main checkout's when it is the worktree. Cited in
-  #157's issue file, which pins the dev-log README saying so, so that the
-  README gives the append rule as an instruction rather than as something the
-  guard holds, and which feeds the guard both directions at today's verdict
-  (GH-157.3), against a real linked worktree. Each of the two remedies the
-  issue proposes was measured turning a check there red. It adds its
-  requirements in the pull request that fixes it
 - #176: the heredoc append `append-only-docs.sh` refuses because a `>` in the
   heredoc's prose, with a guarded path after it, reads as a truncating
   redirect. Cited in #157's issue file, where the dev-log README routes
@@ -1518,6 +1506,24 @@ it has no entry above (Q16).
   file, where the three shapes are pinned at today's permitted verdict and
   GH-177's text says what is refused. It adds its requirements in the pull
   request that fixes it
+- #259: `append-only-docs.sh`'s truncating-redirect rule reads its stretch
+  across a `;`, so a redirect anywhere on a line is read as one into a
+  guarded path written after it in another command, and the line is refused.
+  Filed from #159's branch, whose issue file pins the redirect's left boundary
+  with the guarded entry in front of the `>` for that reason. It adds its
+  requirements in the pull request that fixes it
+- #190: ADR 0003 says the Edit companion reads the merge base, and
+  `append-only-docs-edit.sh` reads existence on disk, so a draft -- an entry
+  not yet merged -- is refused from its first write. Cited in #159's issue
+  file, where a draft in a worktree is refused with the main checkout as the
+  project directory, the accepted trade, and in #157's, whose fixture entries
+  are drafts the README says are refused. It adds its requirements in the
+  pull request that fixes it
+- #282: with `grep` absent from `PATH`, both append-only hooks exit 0, a
+  fail-open for a missing tool that predates #159. Cited in #159's issue
+  file, where the derivation of which hooks the checkout question reaches
+  reads a failed grep as a hook it could not read, and reaches it. It adds its
+  requirements in the pull request that fixes it
 - #283: the invoker's exported shell functions reach every process this suite
   starts -- the hooks it feeds and the child shells its helpers run -- and the
   library's jq guard asks `command -v jq`, which answers for a function. Found

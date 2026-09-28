@@ -5660,8 +5660,9 @@ check append-only-docs.sh ALLOW 'the append that is documented is still permitte
 
 # The Edit/Write companion reads tool_input.file_path rather than .command, and
 # its verdict turns on whether the file already exists -- so it is asked about
-# real paths in this repository, with CLAUDE_PROJECT_DIR naming the root it
-# anchors to. A new seam in this suite, named as one.
+# real paths in this repository, with CLAUDE_PROJECT_DIR naming the root a
+# relative path is resolved against -- since #159 it decides nothing else, the
+# guard reading the path's own segments. A new seam in this suite, named as one.
 REPO_ROOT=$(cd "$SUITE_DIR/../.." && pwd)
 
 # An ALLOW that came from the path simply not being there would say nothing
@@ -11779,7 +11780,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '132' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '142' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11905,7 +11906,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '130' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '140' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
@@ -14823,29 +14824,8 @@ section "=== issue #204: the driver sources each file of checks/ whole, in order
 # partway through, whether or not it wrote its end marker first, a `req` that would carry across the boundary, and a file
 # that leaves the shell changed.
 #
-# Each fixture runs `source_checks` in a subshell of its own, with a record of
-# its own, and names that subshell as the one that records -- the driver's
-# $SOURCED_SHELL is this shell -- so what it writes is its own, and a FAIL it
-# prints is the one asserted and is not recorded, as in the #98 self-test. The
-# FAIL prefix is rewritten on the way out, because the #104 section reads this
-# suite for a quoted line opening with a result word.
-sourcing_run() {  # sourcing_run <dir> <file>... -- what source_checks printed, REQ after it, and its record
-  ( cd -- "$(dirname -- "$1")" || exit 1
-    umask 022
-    # A trap of its own, because a subshell shows its parent's traps only until
-    # it sets one, and then drops them all from `trap -p` (measured, bash 5.2):
-    # the first trap a fixture set would otherwise read as every other removed.
-    trap ':' EXIT
-    SOURCED="$1.record"; : > "$SOURCED"; SOURCED_SHELL=$BASHPID; SUITE_LIBRARY=library.sh
-    # Entered with a tag already set, as a driver that left one would: the first
-    # file must open without it, which only the clear before each file gives --
-    # the one after each file cannot reach the first.
-    REQ=GH-0
-    source_checks "$@" > "$1.out"
-    sed 's/^  FAIL /FAIL: /' "$1.out"
-    printf 'REQ=[%s] after the last file\n' "$REQ"
-    sed 's/^/record: /' "$SOURCED" )
-}
+# The fixtures run `source_checks` through `sourcing_run`, in the library since
+# #295's issue file became its second caller.
 SRC_FIX="$FIXTURES/sourcing"
 mkdir -p "$SRC_FIX/whole" "$SRC_FIX/returns" "$SRC_FIX/no-end" "$SRC_FIX/early" "$SRC_FIX/exits" "$SRC_FIX/state"
 # Each says what REQ was when it opened, and then ends inside a `req`.
@@ -15040,7 +15020,9 @@ tok 'the EXIT trap this suite runs under is SUITE_EXIT_CODE' 'same' \
 # THE ORDER THE DRIVER STATES, held at both ends: the unsplit file first and the
 # end-of-run file last. Only the ends, because an issue file is added between
 # them by the loop that writes it, and a literal of the whole list here would be
-# the one line every such loop edits -- the conflict this split exists to end.
+# a line every such loop edits -- the conflict this split exists to end. What
+# lies between them is derived from the directory since #295, and its issue
+# file holds that order.
 # The last file's end marker names its last line, which is stripped here, since
 # every edit to that file moves it; the routine asks that number of each file.
 tok 'the driver sources the unsplit file first and the end-of-run file last' \
