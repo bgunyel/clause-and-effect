@@ -308,3 +308,24 @@ rev-agent-192 reviewed `7d3cc3d`. Nothing gated. It made four requests (N8–N11
 | U12: the derivation without the unquoted alternative | 1 FAIL, the derivation row |
 | U13: the count back to one per line | 1 FAIL, the direct-reader driven row |
 | N11m: a second direct reader on `LEFT_OPEN_PROSE`'s line | 1 FAIL, the suite-wide direct-reader count |
+
+
+## Review round 5, 2026-09-28 21:11 +0300
+
+rev-agent-192 re-ran every mutation from rounds 1–4 on `dc67468`. Each one went red where it should, and D (a blockquote, #319) stayed green as expected. It asked for two last residuals, R1 and R2. The fixes are `4b92e6f`. When this section was written, before it was committed, the branch was 14 commits ahead of `origin/dev-05` and 0 behind it (`git rev-list --count` read 14).
+
+- **R1.** The pin audit assumed one blank in two places. First, `prose_count \` followed by the file on the next line joins with several blanks before the file, and the audit asked for `prose_count $`. Second, a tab after a helper's name was not taken as a pin. Both now take `[ \t]`, and the audit fixture gains one row for each.
+- **R2.** The comment said that spelling each `/` as `%2F` keeps a refused name from climbing. rev-agent-192 pointed out that `prose ..` printed `prose-refused/..`, and said that is `$FIXTURES`.
+  - The assistant measured this: a `nonexistent/..` path does not resolve, and grep exits 2 on it. So the guarantee held today, but only because nothing makes `prose-refused`, which the comment did not say.
+  - A refused name now goes after a `relative:` prefix, so it is one path component and never `.` or `..`.
+  - The new row makes the refused directory, asks whether `prose ..` and `prose .` name anything, and removes the directory again.
+
+### Measured
+
+`4b92e6f` read ALL CHECKS PASSED on a full run. Each mutation is a full run on a `git clone`, with its diffstat checked.
+
+| mutation | result |
+|---|---|
+| V1: `prose_count $` again | 1 FAIL, the audit's driven row |
+| V2: a single space after the helper again | 1 FAIL, the audit's driven row |
+| V3: the `relative:` prefix removed | 3 FAIL: the two rows that name the refused path, and the bare-name row, which read `present present` with the directory standing |
