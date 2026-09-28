@@ -44,12 +44,18 @@
 # pre-fix hook neither calling nor requiring the new function; the one other
 # red was GH-182.3's verbatim pin of the re-admission block, whose text the fix
 # changes. With this hook beside the first version's library, from 78c9de9,
-# every one of the thirty-two BLOCK rows added for the review went red with
+# every one of the thirty-seven BLOCK rows added for the review went red with
 # got=ALLOW, and nothing else did but the two that a copy without a .git always
-# fails. The sticky-doubt row is the exception, green on both: the first
-# version refused it too, through the END give-back, and it is there for the
-# mutation that makes doubt forget. This repository's hooks were never edited
-# to do either.
+# fails. This repository's hooks were never edited to do either.
+#
+# AND WHICH CONDITION EACH ROW HOLDS: every registered mutation of the fix was
+# applied alone and every row fed to the mutated hook on stdin, and each
+# mutation turned at least one row. Three did not until rows were added for
+# them -- a `<<` behind a backslash and in a comment, whose rows used `echo`, a
+# reader that keeps its body whichever condition holds; and a `/dev` target,
+# whose row also piped to `sh` -- and a fourth, doubt being sticky, showed the
+# statement it named decided nothing that `if (doubt) seen = 0` did not, and
+# that statement is gone.
 #
 # WHAT IT TAKES FROM ELSEWHERE: $SUITE_DIR and $FIXTURES from the driver's
 # prelude, and mk_halflib and halflib_path from the library.
@@ -295,9 +301,27 @@ check no-pr-decisions.sh BLOCK 'a command continued onto the opener line: bash -
 check no-pr-decisions.sh BLOCK 'a $( ) in double quotes in front of a real cat > F opener is doubt' \
   $'echo "$(x "a")" && cat > /tmp/f <<\'EOF\'\nnever `gh pr merge 5` here\nEOF\ngh api repos/o/r/pulls/5'
 # DOUBT IS STICKY: the first opener the quote state cannot vouch for ends every
-# drop after it, so a real consumer's body later in the same command is kept.
+# drop after it, so a real consumer's body later in the same command is kept --
+# pinned as the cost it is, since bash runs nothing of that body. The doubted
+# `<<X` has its delimiter on the next line, so cs_normalise ends it there and
+# the later body is dropped from $SCAN: only the stickiness refuses the row. An
+# earlier version of this row opened with `<<"`, which never ends, and the END
+# give-back refused it whatever this mode did; the mutation harness said so.
 check no-pr-decisions.sh BLOCK 'a doubted opener keeps a later cat > F body too' \
-  $'echo "<<" ; true\ncat > /tmp/f <<\'EOF\'\nnever `gh pr merge 5` here\nEOF\ngh api repos/o/r/pulls/5'
+  $'echo "a <<X"\nX\ncat > /tmp/f <<\'EOF\'\nnever `gh pr merge 5` here\nEOF\ngh api repos/o/r/pulls/5'
+# EACH CONDITION'S OWN ROW, found by breaking each one alone: a row whose opener
+# is refused by a second condition as well, or whose reader is no data consumer
+# anyway, says nothing about the first. The escape and comment rows above use
+# `echo`, which keeps its body whichever condition holds; these use `gh`, which
+# drops it unless the condition does.
+check no-pr-decisions.sh BLOCK "a backslash before the <<, beside gh: gh gets the word < and reads a file named EOF" \
+  $'gh api repos/o/r/pulls/5 \\<<\'EOF\'\ngh pr merge 5\nEOF'
+check no-pr-decisions.sh BLOCK "<<'EOF' in a # comment after a gh command" \
+  $'gh api repos/o/r/pulls/5 # <<\'EOF\'\ngh pr merge 5\nEOF'
+check no-pr-decisions.sh BLOCK "a ; inside a # comment is not a separator, so cat > F behind it is not a command" \
+  $'echo hi # x; cat > /tmp/f <<\'EOF\'\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
+check no-pr-decisions.sh BLOCK "\$(cat > /dev/stdout <<'EOF' ...) as the command word: a /dev target is not a proven file" \
+  $'$(cat > /dev/stdout <<\'EOF\'\ngh pr merge 5\nEOF\n)\ngh api repos/o/r/pulls/5'
 # THE SECOND TRADE, pinned where it is refused: the idiom whose opener stands
 # inside "$(, doubt and kept, as before #202.
 check no-pr-decisions.sh BLOCK "TRADE: -f body=\"\$(cat <<'MD' ...)\" is doubt, and its body is re-read" \

@@ -584,13 +584,22 @@ cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout
   awk -v keep="${1:-}" -v separators="$CS_SEPARATORS" '
     # THE QUOTE STATE of keep-unquoted mode, rule 3 above: advance it over the
     # characters of s from `from` up to `to`, and return where it stopped, which
-    # is past `to` when a backslash there escaped the character at `to`. q is
-    # the open quote -- a `\047`, a `"`, `$` for `$...` ANSI quoting, or empty;
-    # cmt says a comment has begun; doubt is set on what it cannot follow; sep
-    # is the last separator seen and fsep the first since it was cleared, both
-    # outside quotes, and the separators are CS_SEPARATORS, as cs_split reads
-    # them. Never called in the default mode.
+    # is past `to` when a backslash there escaped the character at `to` and
+    # nothing else. q is the open quote -- a `\047`, a `"`, `$` for `$...` ANSI
+    # quoting, or empty; cmt says a comment has begun, and once it has, the
+    # rest of the line is not read and the return is `to`; doubt is set on what
+    # it cannot follow; sep is the last separator seen and fsep the first since
+    # it was cleared, both outside quotes and outside a comment, and the
+    # separators are CS_SEPARATORS, as cs_split reads them. Never called in the
+    # default mode.
+    #
+    # A comment answered through the return once, as the end of the line, and
+    # so the escape condition below refused a `<<` in a comment by accident and
+    # the comment condition beside it was never the one that decided: breaking
+    # it survived the mutation harness. Each now answers its own question, and
+    # `gh api ... # <<'EOF'` is the row only the comment condition refuses.
     function lex(s, from, to,    i, c, j) {
+      if (cmt) return to
       for (i = from; i < to; i++) {
         c = substr(s, i, 1)
         if (q == "\047") { if (c == "\047") q = ""; continue }
@@ -615,7 +624,7 @@ cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout
         if (c == "$" && substr(s, i + 1, 1) == "\047") { q = "$"; i++; continue }
         if (c == "#" && (i == 1 || index(" \t<>" separators, substr(s, i - 1, 1)) > 0)) {
           cmt = 1
-          return length(s) + 1
+          return to
         }
         if (index(separators, c) > 0) { sep = i; if (!fsep) fsep = i }
       }
@@ -649,9 +658,6 @@ cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout
       # stands: the first match wins, as it did when every logical line was one
       # physical line. `opener` set means a body is waiting for the line to end,
       # which it can only be while the line is still being continued.
-      # Doubt is sticky: in keep-unquoted mode, once an opener could not be
-      # vouched for, nothing more is dropped. See DOUBT IS STICKY above.
-      if (keep != "" && doubt) { print; next }
       if (!opener) {
         # A here-string is not a heredoc. Blanked at its own width, so a real
         # heredoc later on the same line is still found where it stands.
@@ -683,10 +689,14 @@ cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout
             if (nxt != "||") nxt = substr(nxt, 1, 1)
             if (substr(scan, RSTART + RLENGTH) ~ /<</) seen = 0
             if (q != "" || $0 ~ /\\$/) seen = 0
-            # Doubt raised on this very line -- a `$( )` in double quotes in
-            # front of the opener, say -- is about this opener too, and not
-            # only the ones after it. The first version of this line was
-            # missing, and `echo "$(x "a")" && cat > F <<'EOF'` dropped.
+            # DOUBT IS STICKY, and this line is all that makes it so: doubt is
+            # never cleared, so once raised it vetoes this opener and every one
+            # after it. That includes doubt raised on this very line -- a
+            # `$( )` in double quotes in front of the opener, say -- which the
+            # first version did not ask about, so `echo "$(x "a")" && cat > F
+            # <<'EOF'` dropped. A second statement that printed every line
+            # once doubt was raised stood at the head of this block, and the
+            # mutation harness showed it decided nothing this line did not.
             if (doubt) seen = 0
             if (!seen) { doubt = 1; print; next }
             cont = 0

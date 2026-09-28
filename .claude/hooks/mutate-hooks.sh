@@ -820,7 +820,8 @@ heredoc-opener-escape-ignored%lib/command-scan.sh%s/lex(\$0, 1, RSTART) != RSTAR
 heredoc-continued-segment-seen%lib/command-scan.sh%s/(cont || q0 != "")/(q0 != "")/%GH-202.1%caught
 heredoc-dq-substitution-not-doubted%lib/command-scan.sh%s/{ doubt = 1; continue }/{ continue }/%GH-202.1%caught
 heredoc-doubt-on-its-own-line-ignored%lib/command-scan.sh%/^            if (doubt) seen = 0$/d%GH-202.1%caught
-heredoc-doubt-not-sticky%lib/command-scan.sh%s/if (keep != "" && doubt) { print; next }/if (0) { print; next }/%GH-202.1%caught
+heredoc-doubt-not-sticky%lib/command-scan.sh%s/^            cmt = 0; sep = 0; fsep = 0$/            cmt = 0; sep = 0; fsep = 0; doubt = 0/%GH-202.1%caught
+heredoc-comment-not-read%lib/command-scan.sh%s/if (c == "#" \&\& (i == 1/if (0 \&\& (i == 1/%GH-202.1%caught
 heredoc-any-reader-a-consumer%lib/command-scan.sh%/^            if (!consumer(pre, post, nxt)) kept = 1$/d%GH-202.1%caught
 heredoc-consumer-pipe-ignored%lib/command-scan.sh%s/if (nxt == "|") return 0/if (0) return 0/%GH-202.1%caught
 heredoc-consumer-dev-target%lib/command-scan.sh%s/^        return pre !~ .*$/        return 1/%GH-202.1%caught
