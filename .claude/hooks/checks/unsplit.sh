@@ -9044,8 +9044,14 @@ farm_stub_gh "$WITH_JQ_BIN" || {
 
 cp -a "$WITH_JQ_BIN" "$NO_JQ_BIN"
 rm -f "$NO_JQ_BIN/jq"
-[ -n "$( PATH="$WITH_JQ_BIN"; command -v jq )" ] \
-  && [ -z "$( PATH="$NO_JQ_BIN"; command -v jq )" ] \
+# Whether each farm holds a `jq` is asked of the directory, through `farm_has`,
+# and never of the calling shell, for the reason GH IN THE FARM gives: a `jq`
+# function exported by the invoker's profile resolves ahead of PATH, under the
+# jq-less PATH too, and this guard read it as a `jq` the copy still held and
+# aborted the whole run on that host (#174). The issue file of #174 drives this
+# guard's text under a shell that defines `jq`.
+farm_has "$WITH_JQ_BIN" jq \
+  && ! farm_has "$NO_JQ_BIN" jq \
   && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$NO_JQ_BIN") | grep -c '^[<>]')" = 1 ] \
   && [ "$(diff <(ls -A "$WITH_JQ_BIN") <(ls -A "$NO_JQ_BIN") | grep '^[<>]')" = '< jq' ] || {
   echo "the jq-less PATH fixture is not the with-jq one minus jq; the checks using it prove nothing" >&2
@@ -10069,14 +10075,14 @@ tok 'every_hook: two permitting hooks pass' 'ok' "$(every_hook_of allow-0 allow-
 # capitals or digits, and the `function` keyword with or without parens. Comments
 # are stripped first, as cs_calls strips them.
 #
-# Three functions keep out of it on purpose, by that first gap: `unarmed` and
-# `prose_count` read grep's status and run no hook, so they name it
-# `grep_status` rather than `rc`, and #219's issue file drives them against a
-# directory, a missing file and a readable one instead. Spelled `rc=$?`, either
-# turns this red and asks for a crashing-hook fixture it has no use for.
-# `r293_fail_ms`, in #293's issue file, reads the status of a child bash that
-# times `fail` and runs no hook either, so it names it `child_status`; spelled
-# `rc=$?`, its first full run turned this red.
+# A function that reads a status and runs no hook keeps out of it on purpose, by
+# that first gap: it names the status after the tool it reads, `grep_status` or
+# `awk_status`, rather than `rc`, and the issue file that owns it drives it over
+# the inputs that status reports on. Spelled `rc=$?`, such a function turns this
+# red and asks for a crashing-hook fixture it has no use for. Which functions do
+# this is not listed here, because nothing would read the list: the count this
+# comment once gave was left stale by the pull request that added a third, and
+# review found it, not the suite.
 STATUS_READERS=$(sed 's/[[:space:]]*#.*$//' "$SUITE_TEXT" \
   | awk '/^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
            fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
