@@ -16,9 +16,9 @@
 # tagged GH-156.
 #
 # The fix is cs_join, the function no-pr-decisions.sh calls for this exact
-# reason -- and the rules run over the command as it came AND over it joined,
-# refusing if either text is refused. It is #84's shape: one question answered
-# in one consumer and never asked in another.
+# reason -- and the rules run over the command as it came, over it joined, and
+# over it joined as bash joins, refusing if any reading is refused. It is #84's
+# shape: one question answered in one consumer and never asked in another.
 #
 # BOTH TEXTS, because the joined text alone opened a hole the raw one did not
 # have, in the first version of this fix (review of PR #329, round 1). cs_join
@@ -30,6 +30,13 @@
 # so were a comment ending in `\` over `rm -rf` of the directory, truncate, tee,
 # cp, mv and sed -i. Joining only odd runs would have closed the escaped rows
 # and not the comments. The same class, outside this hook, is #337.
+#
+# AND A THIRD, AS BASH JOINS, because the two left a composite of their halves
+# open (round 3): a line bash does not continue, then a destroying command with
+# a continuation between its verb and its path. The raw text never has both on
+# one line, and the joined text glues the verb away. join_as_bash joins only
+# where bash does -- an odd run, outside a comment -- which is a subset of
+# cs_join's joins, so its text gives back boundaries and takes none away.
 #
 # ONE ROW PER SPELLING, not one representative, because the three rules that
 # read a verb each carry their own stretch after it -- to the path for the verb
@@ -220,6 +227,128 @@ rm -rf docs/dev-log'
 check append-only-docs.sh BLOCK 'a truncating > opening the line after an escaped backslash, refused by the joined pass' \
   "echo done \\\\
 > $AOD156_E"
+
+# THE COMPOSITE, which the raw and joined readings each miss half of (review of
+# PR #329, round 3). A line bash does not continue, then a destroying command
+# with a continuation between its verb and its path. Bash runs the command; the
+# raw reading never has the verb and the entry on one line, and the joined one
+# glues the verb onto the word before it. Every row was permitted on dev-05 and
+# by the two-reading version, and the reading as bash joins refuses it.
+req GH-156
+check append-only-docs.sh BLOCK 'an escaped backslash, then rm with a continuation before the entry' \
+  "echo done \\\\
+rm -f \\
+  $AOD156_E"
+check append-only-docs.sh BLOCK 'a comment ending in a backslash, then rm -rf with a continuation before the directory' \
+  '# tidy\
+rm -rf \
+docs/dev-log'
+check append-only-docs.sh BLOCK 'and mv behind an escaped backslash with a continuation before the entry' \
+  "echo a\\\\
+mv \\
+  $AOD156_E /tmp/x"
+check append-only-docs.sh BLOCK 'and tee' \
+  "echo a\\\\
+tee \\
+  $AOD156_E"
+check append-only-docs.sh BLOCK 'and truncate' \
+  "echo a\\\\
+truncate -s 0 \\
+  $AOD156_E"
+check append-only-docs.sh BLOCK 'and cp' \
+  "echo done \\\\
+cp \\
+new.md $AOD156_E"
+check append-only-docs.sh BLOCK 'and sed with a continuation before its -i' \
+  "echo done \\\\
+sed \\
+  -i s/a/b/ $AOD156_E"
+check append-only-docs.sh BLOCK 'and perl with a continuation before its -i, behind a trailing comment' \
+  "x=1 # note\\
+perl \\
+  -i -pe s/a/b/ $AOD156_E"
+check append-only-docs.sh BLOCK 'and a continuation inside the verb itself, r then m' \
+  "echo done \\\\
+r\\
+m -f $AOD156_E"
+check append-only-docs.sh BLOCK 'and a continuation inside the path' \
+  'echo done \\
+rm -rf docs/\
+dev-log'
+check append-only-docs.sh BLOCK 'two lines bash does not continue, one after the other, then the composite' \
+  "echo a \\\\
+echo b \\\\
+rm -f \\
+  $AOD156_E"
+check append-only-docs.sh BLOCK 'a run of four backslashes is even and ends its line too' \
+  "echo done \\\\\\\\
+rm -f \\
+  $AOD156_E"
+
+# BOTH JOINS FAIL CLOSED, and which message fires is the claim, because the
+# readings back each other up: with the joined reading's status test gone and
+# its join failing, the reading as bash joins still refuses `rm -f \`, a
+# newline and an entry, so a verdict alone would stay green. So each fixture is
+# asked for its own join's message.
+#
+# The first is review of PR #329's round-3 fixture: a cs_join that succeeds on
+# its first call and fails on every call after. cs_within_cap's call is the
+# first, and in a subshell, so the count is kept in a file.
+req GH-156
+AOD156_JOIN2="$FIXTURES/gh156-second-join-fails"
+mkdir -p "$AOD156_JOIN2/lib"
+cp "$HOOKS/append-only-docs.sh" "$AOD156_JOIN2/"
+cp "$HOOKS/lib/command-scan.sh" "$AOD156_JOIN2/lib/"
+cat >> "$AOD156_JOIN2/lib/command-scan.sh" <<EOF
+eval "\$(declare -f cs_join | sed '1s/^cs_join/cs_join_real/')"
+cs_join() {
+  local n
+  n=\$(cat "$AOD156_JOIN2/count" 2>/dev/null || echo 0)
+  echo \$((n + 1)) > "$AOD156_JOIN2/count"
+  if [ "\$n" -ge 1 ]; then cat >/dev/null; return 1; fi
+  cs_join_real
+}
+EOF
+# No guard that the real cs_join survived the rename: had it not, the first
+# call -- cs_within_cap's -- would fail, the cap would refuse with its own
+# message, and the `says` below would be red rather than vacuously green.
+echo 0 > "$AOD156_JOIN2/count"
+check_in "$ON_DEV" "$AOD156_JOIN2/append-only-docs.sh" BLOCK \
+  'a cs_join that fails only on its second call refuses rm with a continuation before the entry' \
+  "rm -f \\
+  $AOD156_E"
+echo 0 > "$AOD156_JOIN2/count"
+says "$ON_DEV" "$AOD156_JOIN2/append-only-docs.sh" \
+  'append-only-docs.sh could not join the command'"'"'s continuations with cs_join, so it cannot judge what the shell would run. Refusing rather than permitting.' \
+  'and it is the joined reading'"'"'s status test that refuses it' \
+  "rm -f \\
+  $AOD156_E"
+
+# The second: join_as_bash failing, in a copy of the hook. Asked of a command
+# only that reading refuses, so that a missing status test would be a permit
+# and not only a missing message.
+req GH-156
+AOD156_BJ="$FIXTURES/gh156-bash-join-fails"
+mkdir -p "$AOD156_BJ/lib"
+cp "$HOOKS/lib/command-scan.sh" "$AOD156_BJ/lib/"
+sed '/^BASH_JOINED=/i join_as_bash() { cat >/dev/null; return 1; }' \
+  "$HOOKS/append-only-docs.sh" > "$AOD156_BJ/append-only-docs.sh"
+chmod +x "$AOD156_BJ/append-only-docs.sh"
+[ "$(grep -c '^join_as_bash() { cat >/dev/null; return 1; }$' "$AOD156_BJ/append-only-docs.sh")" = 1 ] || {
+  echo "the failing join_as_bash was not put in front of BASH_JOINED; the checks using it prove nothing" >&2
+  exit 1
+}
+check_in "$ON_DEV" "$AOD156_BJ/append-only-docs.sh" BLOCK \
+  'a join_as_bash that fails refuses the composite only it reads' \
+  "echo done \\\\
+rm -f \\
+  $AOD156_E"
+says "$ON_DEV" "$AOD156_BJ/append-only-docs.sh" \
+  'append-only-docs.sh could not join the command'"'"'s continuations as bash does, so it cannot judge what the shell would run. Refusing rather than permitting.' \
+  'and it is that reading'"'"'s status test that refuses it' \
+  "echo done \\\\
+rm -f \\
+  $AOD156_E"
 
 # THE LOAD CONTRACT for the function the fix calls. With cs_join renamed away
 # the hook refuses even without a guard for it, because cs_within_cap joins

@@ -10621,12 +10621,16 @@ inv_continuation() {  # inv_continuation <command>
 # A line continuation INSIDE the last word, which bash joins back into the one
 # word (#156, whose `docs/\`-newline-`dev-log` row is this shape and which
 # `continuation`, breaking only between words, never reached). A word carrying a
-# quote, a backslash or a `$` is left alone: inside single quotes bash does not
-# join, and a break inside an expansion is a different word.
+# quote, a backslash or a `$` is left alone, and so is any command carrying a
+# `#`: inside single quotes bash does not join, a break inside an expansion is
+# a different word, and the last word may stand in a comment, where a backslash
+# continues nothing (review of PR #329, round 3; no seed carries a `#` today,
+# so that skip is latent).
 inv_continuation_inword() {  # inv_continuation_inword <command>
   local head="${1% *}" last="${1##* }" cut
   [ "$head" != "$1" ] && [ "${#last}" -ge 2 ] || return 0
   case "$last" in *\\*|*\'*|*\"*|*\$*) return 0 ;; esac
+  case "$1" in *#*) return 0 ;; esac
   cut=$(( ${#last} / 2 ))
   printf '%s %s\\\n%s' "$head" "${last:0:cut}" "${last:cut}"
 }
@@ -11838,7 +11842,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '154' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '155' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11964,7 +11968,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '152' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '153' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
