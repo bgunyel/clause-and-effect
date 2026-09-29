@@ -42,12 +42,15 @@
 #   - the first `YYYY-MM-DD` on that line is the file's date;
 #   - what stands between the `# ` and that date, its key less a leading
 #     `devlog` -- the title `Devlog —`, `Dev log —` or `Dev-log —` -- and then
-#     less a leading `session` with something after it, is the TITLE, and names
-#     no session, or names the file's;
+#     keyed again, which takes off a leading `session` with something after it,
+#     is the TITLE, and names no session, or names the file's. Keyed again and
+#     not stripped here, so the one copy of the guard's strip is the pinned one
+#     (#354);
 #   - after that date a ` HH:MM` or a ` HH:MM:SS`, or either after a `T`, is
-#     taken off when it is there, then a zone when one follows, a blank before
-#     it or none and a blank or the end after it: `Z`, `UTC`, or a `+` or `-`
-#     with two digits and, colon or not, two more. What is left up to the first
+#     taken off when it is there; then a zone, whether a time came before it
+#     or not, with a blank before it or none and a blank or the end after it:
+#     `Z`, `UTC`, or a `+` or `-` with two digits and, optionally, two more,
+#     a colon before them or none. What is left up to the first
 #     ` — ` -- em dash, one blank each side -- is the heading's LABEL.
 #   - when neither the title nor the label names a session, the REST after that
 #     ` — ` is read: its first word, blanks around it dropped, or its first two
@@ -110,8 +113,9 @@
 # see a row go red: both append-only guards refuse the edit, and
 # mutate-hooks.sh copies .claude/hooks/ and nothing under docs/. So every
 # property is driven against fixture directories first, each asserted whole as
-# a literal, through the one function the real rows are made from, and the
-# real directory is then read by that same function. Its list is derived from
+# a literal, through r162_judge over the list r162_names derives, and the real
+# directory is then read by those same two, each judgement classed whole by
+# r162_class, which is held to literals of its own. Its list is derived from
 # the directory -- every name in it but README.md, a subdirectory or a dotfile
 # included -- so an entry added is an entry asked, and a file the rule cannot
 # read as an entry is red rather than passed over.
@@ -180,8 +184,7 @@ r162_judge() {  # r162_judge <path> -- `names its session`, `names no session`, 
     printf 'its heading is dated %s, and its name %s' "${BASH_REMATCH[0]}" "$date"; return
   }
   title=${first#'# '}; title=${title%%"$date"*}
-  title=$(r162_key "$title"); title=${title#devlog}
-  case "$title" in session?*) title=${title#session} ;; esac
+  title=$(r162_key "$title"); title=$(r162_key "${title#devlog}")
   if [ -n "$title" ] && [ "$title" != "$(r162_key "$sess")" ]; then
     printf 'its heading names |%s| before its date, and its name %s' "${first%%"$date"*}" "$sess"; return
   fi
@@ -208,11 +211,23 @@ r162_judge() {  # r162_judge <path> -- `names its session`, `names no session`, 
   fi
 }
 
+r162_names() {  # r162_names <dir> -- every path in it but README.md, sorted, each ended by a NUL
+  find "$1" -mindepth 1 -maxdepth 1 ! -name README.md -print0 2>/dev/null | LC_ALL=C sort -z
+}
+
 r162_report() {  # r162_report <dir> -- `<name>: <judgement>` for every name in it but README.md, sorted
   local path
   while IFS= read -r -d '' path; do
     printf '%s: %s\n' "${path##*/}" "$(r162_judge "$path")"
-  done < <(find "$1" -mindepth 1 -maxdepth 1 ! -name README.md -print0 2>/dev/null | LC_ALL=C sort -z)
+  done < <(r162_names "$1")
+}
+
+r162_class() {  # r162_class <judgement> -- `named`, `none` or `contradicts`, the judgement compared whole
+  case "$1" in
+    'names its session') printf 'named' ;;
+    'names no session') printf 'none' ;;
+    *) printf 'contradicts' ;;
+  esac
 }
 
 # THE KEY, against literals: the two spellings of a name the file names carry,
@@ -386,24 +401,34 @@ holds 'an entry added to a directory is read with nothing else changed' \
     "$(r162_report "$R162_OK")" \
     'devlog_2026-09-29_dev-agent-162.md: its heading names | · dev-agent-161|, and its name dev-agent-162'
 
+# A JUDGEMENT IS CLASSED WHOLE (#354). The real rows once read `<name>:
+# <judgement>` lines by their end, and a name is text the judgement repeats:
+# `devlog_<date>_x: names its session.md` headed `# <date> · y` is judged
+# `… and its name x: names its session`, and was passed. So each real row
+# takes its judgement from r162_judge alone and classes it by equality.
+tok 'a judgement ending as a passing one does is classed by the whole of it' \
+    'contradicts:named:none' \
+    "$(r162_class 'its heading names | · y|, and its name x: names its session'):$(r162_class 'names its session'):$(r162_class 'names no session')"
+
 # THE REAL DIRECTORY, a row an entry. Guarded first: a read that found nothing,
 # or not the entry #162 was filed against, would leave every row below unasked
 # and the section green.
 R162_DIR="$SUITE_DIR/../../docs/dev-log"
-R162_REAL=$(r162_report "$R162_DIR")
-holds 'the real dev-log was read, the entry #162 was filed against among it' "$R162_REAL" \
-    'devlog_2026-09-17_session-5.md: '
-[ -n "$R162_REAL" ] && while IFS= read -r r162_line; do
-  case "$r162_line" in
-    *': names its session') pass static '%s: its heading is dated and named as its file is' "${r162_line%%: *}" ;;
-    *': names no session') pass static '%s: its heading is dated as its file is, and names no session' "${r162_line%%: *}" ;;
-    *) fail static '%s\n         its heading contradicts its file name' "$r162_line" ;;
+mapfile -d '' R162_PATHS < <(r162_names "$R162_DIR")
+holds 'the real dev-log was read, the entry #162 was filed against among it' \
+    "$(printf '%s\n' "${R162_PATHS[@]##*/}")" 'devlog_2026-09-17_session-5.md'
+for r162_path in "${R162_PATHS[@]}"; do
+  r162_said=$(r162_judge "$r162_path")
+  case "$(r162_class "$r162_said")" in
+    named) pass static '%s: its heading is dated and named as its file is' "${r162_path##*/}" ;;
+    none) pass static '%s: its heading is dated as its file is, and names no session' "${r162_path##*/}" ;;
+    *) fail static '%s: %s\n         its heading contradicts its file name' "${r162_path##*/}" "$r162_said" ;;
   esac
-done <<< "$R162_REAL"
+done
 
 # THE README SAYS SO, where an entry is written: the whole bullet, once.
 R162_README="$SUITE_DIR/../../docs/dev-log/README.md"
 tok 'the dev-log README states the rule where an entry is written, once' '1' \
-    "$(prose_occurrences "$R162_README" "- An entry's first line is its heading. It carries the date its file name carries, and when it names a session it names the one the file is named for; it may name none. \`check-hooks.sh\` reads every entry file's first line against its name and is red on one that contradicts it; an entry appended after the first is not read (#162). Where nothing before the first \` — \` after the date names a session, the first word after that dash is read as one unless it opens with \`#\`, so \`# <date> <time> +03 — #<n>: …\` names none. An entry exists from its first write, so write the heading right the first time.")"
+    "$(prose_occurrences "$R162_README" "- An entry's first line is its heading. It carries the date its file name carries, and when it names a session it names the one the file is named for; it may name none. \`check-hooks.sh\` reads every entry file's first line against its name and is red on one that contradicts it; an entry appended after the first is not read (#162). A session is read in three places: before the date, less a \`Devlog\` title; after the date, its time and its zone, up to the first \` — \`; and, only when neither of those names one, after that dash, where the first word, or \`session\` and the word after it, is read as the session unless it opens with \`#\`. So \`# <date> <time> +03 — #<n>: …\` names none, and \`# <date> <time> +03 — WIP\` names \`WIP\`. An entry exists from its first write, so write the heading right the first time.")"
 
 sourced_to_end

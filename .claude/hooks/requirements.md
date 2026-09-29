@@ -1620,3 +1620,9 @@ it has no entry above (Q16).
   follow-up` and `# Devlog session 5 — <date>`. Filed from review of #162's
   pull request, and closed in it: both are agreeing fixtures in GH-162, cited
   in its header
+- #354: two defects in the #162 check found in review of its pull request:
+  the real-directory rows classed a `<name>: <judgement>` line by its end, so
+  a name ending as a passing judgement does was passed, and the title's
+  `session` strip was a second, unpinned copy of the guard's. Closed in that
+  pull request: a judgement is classed whole, and the title is keyed through
+  the pinned copy. Cited in GH-162's header
