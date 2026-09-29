@@ -23,8 +23,8 @@
 # bodies taken out by cs_drop_quoted_heredocs in lib/command-scan.sh -- the
 # heredoc pass's own answer to where a body begins, in a mode that drops a body
 # only when the opener's line fits a grammar -- a quoted delimiter of plain
-# words, `cat` into a plain file or `gh api` reading it -- and its opener is
-# one bash sees. line_was_cut and the state fallback read
+# words and `cat` into a plain file reading it -- and the text in front of it
+# is in an alphabet the pass reads. line_was_cut and the state fallback read
 # CMDTEXT. The hook argues it above the re-admission, the library above the
 # heredoc pass.
 #
@@ -78,13 +78,18 @@ requirement GH-202.1 <<'REQ'
   `gh api` call is on its line, a heredoc's body is not split into command
   candidates for any rule, and is not read by `line_was_cut` or the state
   field's fallback, only when the line holding its opener fits a grammar and
-  the quote state carried from the lines before puts the opener where bash
-  sees one. The grammar: a QUOTED delimiter of letters, digits, `_` and whole
-  `'...'` or `"..."` spans of them, so `<<'X'`, `<<"X"`, `<<-'X'`, `<<-"X"` and
-  `<<X"Y"`; and a reader that is `cat` redirected to a plain file -- a path of
-  plain words, optionally led by one `$NAME/`, with no `//`, `.` or `..`
-  component and none naming dev, proc or a device -- or `gh api`, with no lone
-  `|` after it. So prose in such a body quoting a release write,
+  every character in front of the opener is in an alphabet. The grammar: a
+  QUOTED delimiter of letters, digits, `_` and whole `'...'` or `"..."` spans
+  of them, so `<<'X'`, `<<"X"`, `<<-'X'`, `<<-"X"` and `<<X"Y"`, with no
+  carriage return, form feed or vertical tab between it and `<<`; and a
+  reader that is `cat` redirected to a plain path -- plain words, optionally
+  led by one `$NAME/`, with no component named stdout, stderr or fd -- with no
+  lone `|` after it. The alphabet: single and double quotes, a backslash
+  escape, `$NAME`, `${NAME}`, a `$(` outside double quotes, a `#` after a
+  blank or at a line's start, and the separators; outside single quotes a
+  backtick, any other dollar form, a `#` inside a word, `((` and a line ending
+  in a backslash are doubt, and doubt keeps every body after it. So prose in
+  such a body quoting a release write,
   a merge, a release create or `-f state=closed`, in backticks, in a `$( )` or
   at a line's start, is permitted beside a `gh api` write or read; and a body
   line reading `gh api graphql` does not open the graphql gate. Every other
@@ -92,15 +97,15 @@ requirement GH-202.1 <<'REQ'
   write in it, beside a `gh api` call, is refused: an UNQUOTED body, which bash
   expands; a quoted body fed to anything else -- a shell or an interpreter
   reading stdin, a pipe, a process or command substitution, a loop, `tee`,
-  `gh codespace ssh`, `cat` into /dev/stdout however spelt; a body whose
-  delimiter is outside the grammar, `<<"it's"`, `<<E\OF`, `<<\EOF`,
-  `<<$'EOF'`; and every body in a command where a `<<` stood that bash does
-  not see as an opener -- inside single, double or `$'...'` quotes, after a
-  `#`, behind a backslash, before a continuation -- or after a construct whose
-  quoting the pass does not follow: a `$( )` or a backtick inside double
-  quotes, a `${...}` with an operator, `$[...]`, `((`.
+  any `gh` command -- `gh api` too, whose output can be the body --, `cat`
+  into /dev/stdout however spelt; a body whose delimiter is outside the
+  grammar, `<<"it's"`, `<<E\OF`, `<<\EOF`, `<<$'EOF'`, `<<\r'EOF'`; and every
+  body in a command where a `<<` stood that bash does not see as an opener --
+  inside single, double or `$'...'` quotes, after a `#`, behind a backslash,
+  before a continuation -- or after anything outside the alphabet.
 - from: #202, and its triage's table: rows 4, 8 to 8‴ and 9, shapes A, B, C, D,
-  D2 and F; rev-agent-202's round-1 review of the pull request, Gates 1 and 2
+  D2 and F; rev-agent-202's review of the pull request, Gates 1 and 2 of round
+  1, 4 and 5 of round 2, 6 and 7 of round 3
 - kind: defect-refusing
 - status: active
 - variants: none: its subject is a heredoc -- an opener, a body on lines of its
@@ -114,7 +119,7 @@ requirement GH-202.1 <<'REQ'
   as `\X`, and a later line reading `\X` ends a body bash ended at `X` -- the
   permitting direction, in every hook, which is #351's and not this
   requirement's, though an earlier version of this note called it refusing.
-  TWO TRADES, taken knowingly and pinned. A quoted body written to a file by
+  THREE TRADES, taken knowingly and pinned. A quoted body written to a file by
   `cat > s.sh <<'EOF'` and run by a later command, `sh s.sh`, is dropped, `cat`
   into a file being a data consumer: refused beside a `gh api` call by the old
   re-read, by accident, and permitted now -- a refusal lost, in the permitting
@@ -122,7 +127,11 @@ requirement GH-202.1 <<'REQ'
   And `-f body="$(cat <<'MD' ...)"`, whose opener stands inside `"$(`, is
   doubt, so its body is kept and a merge named in it is refused, as before
   #202: 2 of 372 `gh api` heredoc commands taken from local session
-  transcripts.
+  transcripts. And a NAME is not resolved, the family of CLAUDE.md
+  consequence 6: a plain path is not shown to be a regular file, so a
+  variable set to /dev/fd, a symlink to /dev/stdout, a FIFO a background
+  shell reads, or a function named `cat`, each turns `cat > F` into a reader,
+  and each is permitted -- one row of each family is pinned.
 REQ
 requirement GH-202.2 <<'REQ'
 - text: A quoted heredoc's body is still read as TEXT by the three graphql rules
@@ -226,8 +235,14 @@ flip "$SUITE_DIR" no-pr-decisions.sh BLOCK ALLOW "cat >> F, which appends" \
   $'cat >> /tmp/new.md <<\'MD\'\nnever `gh pr merge 5` here\nMD\ngh api -X PATCH repos/o/r/pulls/196 -F body=@/tmp/new.md'
 flip "$SUITE_DIR" no-pr-decisions.sh BLOCK ALLOW "cat <<'MD' > F, the redirect after the opener" \
   $'cat <<\'MD\' > /tmp/new.md\nnever `gh pr merge 5` here\nMD\ngh api -X PATCH repos/o/r/pulls/196 -F body=@/tmp/new.md'
-flip "$SUITE_DIR" no-pr-decisions.sh BLOCK ALLOW "gh api reading the quoted body on stdin with -F body=@-" \
+# gh api was a data consumer in rounds 1 and 2 and is not since round 3: its
+# output can be the body, and reaches a reader through a pipe, `<( )`,
+# `> >( )`, a brace group, an `if` or a command substitution. Refused, as
+# before #202.
+req GH-202.1 US-15
+check no-pr-decisions.sh BLOCK "gh api reading the quoted body on stdin with -F body=@-: no gh is a data consumer" \
   $'gh api -X PATCH repos/o/r/issues/5 -F body=@- <<\'MD\'\nnever `gh pr merge 5` here\nMD'
+req GH-202.1 US-14
 flip "$SUITE_DIR" no-pr-decisions.sh BLOCK ALLOW "a double-quoted string closed on its own line does not doubt a later opener" \
   $'gh api -X PATCH repos/o/r/issues/5 -f body="a\nb" && cat > /tmp/f <<\'EOF\'\nnever `gh pr merge 5` here\nEOF\ngh api repos/o/r/pulls/5'
 flip "$SUITE_DIR" no-pr-decisions.sh BLOCK ALLOW 'a plain ${X} in double quotes does not doubt a later opener' \
@@ -278,9 +293,9 @@ check no-pr-decisions.sh BLOCK "python3 - <<'EOF' runs its body" \
   $'python3 - <<\'EOF\'\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
 check no-pr-decisions.sh BLOCK "tee F <<'EOF' is not a known consumer: it writes its body to stdout too" \
   $'tee /tmp/f <<\'EOF\'\nnever `gh pr merge 5` here\nEOF\ngh api repos/o/r/pulls/5'
-check no-pr-decisions.sh BLOCK "cat > /dev/stdout <<'EOF' | sh: a /dev target is not a proven file" \
+check no-pr-decisions.sh BLOCK "cat > /dev/stdout <<'EOF' | sh: a stdout component is not a plain path" \
   $'cat > /dev/stdout <<\'EOF\' | sh\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
-check no-pr-decisions.sh BLOCK "cat > F <<'EOF' | sh: a lone pipe after the consumer leaves it unproven" \
+check no-pr-decisions.sh BLOCK "cat > F <<'EOF' | sh: a lone pipe after cat keeps the body" \
   $'cat > /tmp/f <<\'EOF\' | sh\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
 
 # THE OPENERS BASH DOES NOT SEE, which the first version of this fix trusted: a
@@ -340,7 +355,7 @@ check no-pr-decisions.sh BLOCK "<<'EOF' in a # comment after a gh command" \
   $'gh api repos/o/r/pulls/5 # <<\'EOF\'\ngh pr merge 5\nEOF'
 check no-pr-decisions.sh BLOCK "a ; inside a # comment is not a separator, so cat > F behind it is not a command" \
   $'echo hi # x; cat > /tmp/f <<\'EOF\'\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
-check no-pr-decisions.sh BLOCK "\$(cat > /dev/stdout <<'EOF' ...) as the command word: a /dev target is not a proven file" \
+check no-pr-decisions.sh BLOCK "\$(cat > /dev/stdout <<'EOF' ...) as the command word: a stdout component is not a plain path" \
   $'$(cat > /dev/stdout <<\'EOF\'\ngh pr merge 5\nEOF\n)\ngh api repos/o/r/pulls/5'
 # ROUND 2 OF THE REVIEW: WHAT THE DROP TRUSTED THAT IT DID NOT MODEL. The
 # round-1 version dropped a body at any opener its quote state passed and any
@@ -367,7 +382,7 @@ check no-pr-decisions.sh BLOCK "n08: cat > //dev/stdout inside source <(...)" \
   $'source <(cat > //dev/stdout <<\'EOF\'\ngh pr merge 5\nEOF\n)\ngh api repos/o/r/pulls/5'
 check no-pr-decisions.sh BLOCK 'n09: cat > "/dev/stdout" in a group piped to sh' \
   $'( cat > "/dev/stdout" <<\'EOF\'\ngh pr merge 5\nEOF\n) | sh\ngh api repos/o/r/pulls/5'
-check no-pr-decisions.sh BLOCK "n10: gh codespace ssh runs its stdin: only gh api is a data consumer" \
+check no-pr-decisions.sh BLOCK "n10: gh codespace ssh runs its stdin, and no gh is a data consumer" \
   $'gh codespace ssh -c cs <<\'EOF\'\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
 check no-pr-decisions.sh BLOCK 'n11: cat > //dev/stdout in a group piped to sh, the pipe past the group' \
   $'( cat > //dev/stdout <<\'EOF\'\ngh pr merge 5\nEOF\n) | sh\ngh api repos/o/r/pulls/5'
@@ -413,18 +428,95 @@ check no-pr-decisions.sh BLOCK 'COST: $(( )) earlier in the command is doubt' \
 check no-pr-decisions.sh BLOCK 'COST: ${X:-a} earlier in the command is doubt' \
   $'echo ${X:-a} && cat > /tmp/f <<\'EOF\'\nnever `gh pr merge 5` here\nEOF\ngh api repos/o/r/pulls/5'
 # WHAT THE GRAMMAR KEEPS, each refused before #202 and permitted since: the
-# target spellings this repository writes, gh api with a quoted --jq, and the
-# review's control n12 -- a group piped to sh whose cat writes to a real file,
-# so sh reads nothing.
+# target spellings this repository writes, and the review's control n12 -- a
+# group piped to sh whose cat writes to a plain path, so sh reads nothing
+# from cat unless the name is not what it looks like, which is the trade.
 req GH-202.1 US-14
 flip "$SUITE_DIR" no-pr-decisions.sh BLOCK ALLOW 'cat > $S/r.md, a variable directory unquoted' \
   $'cat > $S/r.md <<\'MD\'\nnever `gh pr merge 5` here\nMD\ngh api -X PATCH repos/o/r/pulls/196 -F body=@$S/r.md'
 flip "$SUITE_DIR" no-pr-decisions.sh BLOCK ALLOW 'cat > "$CLAUDE_JOB_DIR/tmp/r.md", a variable directory in double quotes' \
   $'cat > "$CLAUDE_JOB_DIR/tmp/r.md" <<\'MD\'\nnever `gh pr merge 5` here\nMD\ngh api -X PATCH repos/o/r/pulls/196 -F body=@x'
-flip "$SUITE_DIR" no-pr-decisions.sh BLOCK ALLOW "gh api with a quoted -q and -F body=@- reading the body" \
-  $'gh api repos/o/r/issues/5 -q \'.body\' -F body=@- <<\'MD\'\nnever `gh pr merge 5` here\nMD'
-flip "$SUITE_DIR" no-pr-decisions.sh BLOCK ALLOW 'n12: a group piped to sh whose cat writes to a real file' \
+flip "$SUITE_DIR" no-pr-decisions.sh BLOCK ALLOW 'n12: a group piped to sh whose cat writes to a plain path' \
   $'( cat > /tmp/x <<\'EOF\'\ngh pr merge 5\nEOF\n) | sh\ngh api repos/o/r/pulls/5'
+req GH-202.1 US-15
+# ROUND 3 OF THE REVIEW, GATE 6: THE TEXT IN FRONT OF THE OPENER. Round 2 read
+# it with a model of bash that doubted a list; each of these was read wrong
+# without doubt, left the state at the top where bash was inside a string, and
+# let a later `cat > f` drop lines bash runs -- the review ran each under bash.
+# Each was refused before #202 and permitted at 2a642f3; the alphabet refuses
+# them now. The labels keep the review's names.
+check no-pr-decisions.sh BLOCK 'q01: a backtick at the top level opens a substitution, not a separator' \
+  $'gh api repos/o/r/issues/5/comments -f body=x\nx=`cat > f <<\'EOF\'\n`; gh pr merge 5; echo `\nEOF\n`'
+check no-pr-decisions.sh BLOCK 'q02: quotes inside a top-level backtick substitution' \
+  $'gh api repos/o/r/issues/5/comments -f body=x\necho `echo \'a`b\'\ncat > f <<\'EOF\'\n\'\ngh pr merge 5\nEOF'
+check no-pr-decisions.sh BLOCK "q03: a # straight after \$( )'s closing paren" \
+  $'gh api repos/o/r/issues/5/comments -f body=x\necho $(true)#\'\ncat > f <<\'EOF\'\n\'\ngh pr merge 5\nEOF'
+check no-pr-decisions.sh BLOCK 'q04: a # straight after a backtick' \
+  $'gh api repos/o/r/issues/5/comments -f body=x\necho `true`#\'\ncat > f <<\'EOF\'\n\'\ngh pr merge 5\nEOF'
+check no-pr-decisions.sh BLOCK "q05: \$\$' is \$\$ and a plain quote, not ANSI quoting" \
+  $'gh api repos/o/r/issues/5/comments -f body=x\necho $$\'a\\\' b\'\ncat > f <<\'EOF\'\n\'\ngh pr merge 5\nEOF'
+check no-pr-decisions.sh BLOCK 'q06: a continuation glues the next line, a #, onto a word' \
+  $'gh api repos/o/r/issues/5/comments -f body=x\necho a\\\n#\'\ncat > f <<\'EOF\'\n\'\ngh pr merge 5\nEOF'
+check no-pr-decisions.sh BLOCK 'q07: a continuation after a lone $' \
+  $'gh api repos/o/r/issues/5/comments -f body=x\necho $\\\n\'a\\\'\ncat > f <<\'EOF\'\n\'\ngh pr merge 5\nEOF'
+check no-pr-decisions.sh BLOCK 'q08: \} inside "${...}"' \
+  $'gh api repos/o/r/issues/5/comments -f body=x\necho "${x:-a\\}b"\ncat > f <<\'EOF\'\n"}"\ngh pr merge 5\nEOF'
+# The author's, each the row only one rule of the alphabet refuses, found by
+# breaking each alone and feeding every row: a bare `((`, where the pass took
+# `<< 2` for an opener and skipped lines bash reads; and a `#` after `;`,
+# which bash reads as a comment and a word-character rule would not.
+check no-pr-decisions.sh BLOCK 'a bare (( 1 << 2 )) taken for an opener puts the quote state out of step' \
+  $'(( 1 << 2 ))\necho "\n2\n; cat > /tmp/f <<\'Z\'\n"\ngh pr merge 5\nZ\ngh api repos/o/r/pulls/5'
+check no-pr-decisions.sh BLOCK 'a # after ; is a comment to bash, and the cat behind it is not a command' \
+  $'true;# ; cat > /tmp/f <<\'EOF\'\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
+# A backtick inside double quotes, the row only its rule refuses: bash reads
+# the substitution's inner quote as the command's, the lexer would read it as
+# closing the string and then open a single quote, and a line that begins
+# with `'` flips the two the other way. A search of 1,168 generated inner
+# strings with a fixed tail found none; the tail had to open with the quote.
+check no-pr-decisions.sh BLOCK 'a backtick inside double quotes holding a double and a single quote' \
+  $'x="`echo "\'`"\n\' ; cat > /tmp/f <<\'Z\'\n\'\ngh pr merge 5\nZ\ngh api repos/o/r/pulls/5'
+# A CARRIAGE RETURN between << and the delimiter: awk takes it for space, bash
+# for part of the word, so bash ends the body at a line the pass waits past.
+# The review could not build one; the author did, and the default mode has it
+# too, in every hook, which is reported on #351.
+check no-pr-decisions.sh BLOCK "a carriage return between << and 'EOF'" \
+  $'cat > /tmp/f <<\r\'EOF\'\nbody\n\rEOF\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
+# GATE 7: gh api's output reaching a reader. The review's two, and the author's
+# three through a brace group, an if and a command substitution, each refused
+# before #202 and permitted at 2a642f3. No gh is a data consumer since.
+check no-pr-decisions.sh BLOCK "q11: sh <(gh api gists ... --jq content <<'EOF' ...)" \
+  $'sh <(gh api gists -F \'files[a.sh][content]=@-\' --jq \'.files[].content\' <<\'EOF\'\ngh pr merge 5\nEOF\n)'
+check no-pr-decisions.sh BLOCK "q12: gh api gists ... <<'EOF' > >(sh)" \
+  $'gh api gists -F \'files[a.sh][content]=@-\' --jq \'.files[].content\' <<\'EOF\' > >(sh)\ngh pr merge 5\nEOF'
+check no-pr-decisions.sh BLOCK 'the same in a brace group piped to sh' \
+  $'{ :; gh api gists -F \'files[a.sh][content]=@-\' --jq \'.files[].content\' <<\'EOF\'\ngh pr merge 5\nEOF\n} | sh'
+check no-pr-decisions.sh BLOCK 'the same in an if piped to sh' \
+  $'if true; then :; gh api gists -F \'files[a.sh][content]=@-\' --jq \'.files[].content\' <<\'EOF\'\ngh pr merge 5\nEOF\nfi | sh'
+check no-pr-decisions.sh BLOCK 'the same as a command substitution in command position' \
+  $'$(gh api gists -F \'files[a.sh][content]=@-\' --jq \'.files[].content\' <<\'EOF\'\ngh pr merge 5\nEOF\n)'
+# THE DEVICE NAMES, one row each, so that dropping any one member of the list
+# turns a row red. Round 3 of the review found the list could be cut to
+# stdout with every row green; the members that no row could reach are gone.
+check no-pr-decisions.sh BLOCK 'a stdout component, through a variable directory, in a group piped to sh' \
+  $'( cat > "$D/stdout" <<\'EOF\'\ngh pr merge 5\nEOF\n) | sh\ngh api repos/o/r/pulls/5'
+check no-pr-decisions.sh BLOCK 'an fd component: /dev/fd/1 in a group piped to sh' \
+  $'( cat > /dev/fd/1 <<\'EOF\'\ngh pr merge 5\nEOF\n) | sh\ngh api repos/o/r/pulls/5'
+check no-pr-decisions.sh BLOCK 'a stderr component: /dev/stderr in a group with 2>&1 piped to sh' \
+  $'( cat > /dev/stderr <<\'EOF\'\ngh pr merge 5\nEOF\n) 2>&1 | sh\ngh api repos/o/r/pulls/5'
+# THE THIRD TRADE, pinned where it is permitted: a name that is not what it
+# looks like. Nothing reading the text resolves a variable, a symlink, a FIFO
+# or a function, as CLAUDE.md's consequence 6 says of a command word. Each
+# was refused before #202 by the re-read, and is permitted now.
+req GH-202.1 US-14
+check no-pr-decisions.sh ALLOW 'TRADE: a variable set to /dev/fd names the pipe as "$S/1"' \
+  $'( S=/dev/fd; cat > "$S/1" <<\'EOF\'\ngh pr merge 5\nEOF\n) | sh\ngh api repos/o/r/pulls/5'
+check no-pr-decisions.sh ALLOW 'TRADE: a symlink to /dev/stdout' \
+  $'ln -sf /dev/stdout /tmp/o; ( cat > /tmp/o <<\'EOF\'\ngh pr merge 5\nEOF\n) | sh\ngh api repos/o/r/pulls/5'
+check no-pr-decisions.sh ALLOW 'TRADE: a function named cat' \
+  $'cat() { bash; }; cat > f <<\'EOF\'\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
+check no-pr-decisions.sh ALLOW 'TRADE: a FIFO a background shell reads' \
+  $'mkfifo p; sh < p & cat > p <<\'EOF\'\ngh pr merge 5\nEOF\ngh api repos/o/r/pulls/5'
 req GH-202.1 US-15
 # THE SECOND TRADE, pinned where it is refused: the idiom whose opener stands
 # inside "$(, doubt and kept, as before #202.

@@ -667,8 +667,8 @@ CMDLIST
 # library's answer to where a body begins, what quoting is, which opener bash
 # sees and what reads a body, and not one written here. It drops a body only
 # when the opener's line fits a grammar the library writes out -- a quoted
-# delimiter of plain words, `cat` into a plain file or `gh api` reading it --
-# and its quote state vouches for the opener. Every
+# delimiter of plain words and `cat` into a plain path reading it -- and
+# every character in front of the opener is in the library's alphabet. Every
 # other body is kept and re-read exactly as before -- an unquoted one because
 # bash runs the `$( )` and the backticks in it, and a quoted one fed to
 # anything else because that reader may run it. line_was_cut and the state
@@ -688,16 +688,22 @@ CMDLIST
 # now. A second round found the same class one level down -- a delimiter,
 # a target, a gh subcommand and constructs the quote state did not read, each
 # trusted because nothing said not to -- and the library now drops only what
-# its grammar names. Where it still trusts a model, and how far the claim
-# goes, is WHERE IT STILL TRUSTS A MODEL, in lib/command-scan.sh above the
-# heredoc pass; an earlier version of this sentence said the answer could only
-# fail towards the re-read, which round 2 of the review measured false.
+# its grammar names. A third found it one level further down again: the text
+# in front of the opener was read by a model of bash that doubted a list, and
+# eight shapes it read wrong let a later `cat > F` drop lines bash runs; and
+# gh api, then a data consumer, returned a body as output that a pipe, `<( )`
+# or a compound command handed to a reader. Since then that text is held to
+# an alphabet and no gh command is a consumer -- THE ALPHABET, in
+# lib/command-scan.sh above the heredoc pass, says what is named. Earlier
+# versions of this paragraph said the answer could only fail towards the
+# re-read, and then that it trusted a model only so far; round 2 and round 3
+# of the review measured each false.
 #
 # A FAILED CALL FALLS BACK ON THE RAW COMMAND, which is the reading before #202:
 # it refuses more and never less. When the call can fail is said beside
 # cs_drop_quoted_heredocs.
 #
-# THREE TRADES, taken knowingly, and what #202 leaves. One costs refusals:
+# FOUR TRADES, taken knowingly, and what #202 leaves. One costs refusals:
 # $SCAN still holds a quoted body's text, so prose in one naming a mutation or
 # a baseRefName is refused when a real `gh api graphql` call stands on the same
 # line. That is item 1 of TWO BLEEDS THE GATE LEAVES, below, arriving through a
@@ -720,6 +726,14 @@ CMDLIST
 # the rest, which the old re-read also refused by accident and this change
 # still refuses by keeping the body -- all of them #311's, for every hook.
 # GH-202.1 pins the staged script as permitted, and those as refused.
+#
+# And one more in the permitting direction: a name is not resolved, which is
+# CLAUDE.md's consequence 6 reached through a file name rather than a command
+# word. A variable set to /dev/fd, a symlink to /dev/stdout, a FIFO a
+# background shell reads, or a function named `cat` turns `cat > F` into a
+# reader, refused before #202 by the re-read and permitted now. Round 3 of the
+# review measured five and asked for them recorded rather than fixed, nothing
+# reading the text being able to close them; GH-202.1 pins one of each.
 if gh_rule api && echo "$COMMAND" | grep -q '<<'; then
   BODIES=$(printf '%s\n' "$COMMAND" | cs_drop_quoted_heredocs) || BODIES=$COMMAND
   SCAN="$SCAN
