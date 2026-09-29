@@ -1807,14 +1807,22 @@ hook_text() {  # hook_text <file> -- a hook's text as the refusal-arm counters r
 # with those calls taken out names no `$1`, `$@` or `$*`, braced or not, and
 # no drop or `sed` of its own. GH-182.sh argues each half of that, and the
 # review of #182's pull request that found the first two versions short.
+# A helper's name is bounded on the left, so `raw_hook_text "$1"` is not a
+# read through `hook_text`, and taking it out does not leave `raw_` behind as
+# though the file had been read through the helper. Review of #181's pull
+# request found both unbounded, and found this function answering true for
+# every question the suite put to it; checks/GH-181.sh puts the false ones.
 reads_only_through() {  # reads_only_through <function> <helper>... -- its file argument read through each helper, and nowhere else
-  local body rest h
+  local body rest h re
   body=$(declare -f "$1") || return 1
   rest=$body
   shift
   for h in "$@"; do
-    [[ $body == *"$h \"\$1\""* ]] || return 1
-    rest=${rest//"$h \"\$1\""/}
+    re="[^A-Za-z0-9_]$h \"\\\$1\""
+    [[ $body =~ $re ]] || return 1
+    while [[ $rest =~ $re ]]; do
+      rest=${rest/"${BASH_REMATCH[0]}"/"${BASH_REMATCH[0]:0:1}"}
+    done
   done
   [[ $rest != *cs_drop_heredocs* && $rest != *'sed '* ]] && ! [[ $rest =~ \$\{?(1|[@*]) ]]
 }

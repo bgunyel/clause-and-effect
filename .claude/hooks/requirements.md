@@ -1256,12 +1256,13 @@ it has no entry above (Q16).
   untouched. Cited where `says_first` says why an opening is a different question
   from a fragment: ordering is already a live concern at one of these constants,
   which is what made it worth asking at the other
-- #181: has an entry, GH-181.1, generated from its issue file, and is listed
-  here only because #109's section cited it before it landed, as `fn_calls`
-  not seeing an indirect call, so a wrapper around a function that writes a
-  refusal hid arms from the count. The indirect call is now refused by
-  GH-181.1 rather than only tripwired by the function table: no function in
-  either boundary hook may call a function that writes
+- #181: has entries, GH-181.1 and GH-181.2, generated from its issue file,
+  and is listed here only because #109's section cited it before it landed,
+  as `fn_calls` not seeing an indirect call, so a wrapper around a function
+  that writes a refusal hid arms from the count. The indirect call is now
+  refused by GH-181.1 rather than only tripwired by the function table: no
+  function in either boundary hook may call a function that writes; and
+  GH-181.2 refuses a definition in any shape but the one the derivations read
 - #182: has entries, generated from its issue file, and is listed here only
   because #109's section cited it before it landed, as `arms` and `fn_writes`
   not knowing where a heredoc body starts. Of the three shapes it was filed

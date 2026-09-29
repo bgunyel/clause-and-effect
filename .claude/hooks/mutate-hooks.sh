@@ -455,8 +455,17 @@
 # `a-writer-wrapped-on-one-line` keeps its call on the definition line, which is
 # read by the one widening `writer_callers` makes over `fn_writes`'s rules. A
 # derivation that lost that widening would catch the first and let the second
-# through, so the first being caught is no evidence about the second. The third
-# row, `a-writer-wrapped-under-a-name-with-a-hyphen`, is GH-181.2's own rule.
+# through, so the first being caught is no evidence about the second.
+#
+# FOUR ROWS FOR GH-181.2, because `odd_defs` asks one question of four parts of
+# bash's definition grammar, and a row reaches one part.
+# `a-writer-wrapped-under-a-name-with-a-hyphen` is the name, the review that
+# found it the first. `a-writer-wrapped-after-a-separator` is the position,
+# `a-writer-wrapped-by-an-indented-keyword` the form, and
+# `a-writer-wrapped-with-a-blank-in-its-parentheses` the spacing -- three of
+# the four spellings rev-agent-181's review measured green under the guard that
+# asked only for the name. Each wrapper is called twice and read by no
+# derivation, so no function table row moves and each names GH-181.2 alone.
 #
 # THREE ROWS FOR ONE UNION, #156's. append-only-docs.sh judges the command as it
 # came, joined by cs_join, and joined as bash joins, and refuses if any is
@@ -937,6 +946,9 @@ cited-entry-that-does-not-exist%requirements.md%s/cites it (GH-223.6)/cites it (
 a-writer-wrapped-and-called-twice%no-git-push.sh%s/^check_push() {$/wrap() {\n  check_push "$1" "$2"\n}\ncheck_push() {/;s/^    check_push "\$CMD" "\$ARGS" || exit 2$/    wrap "$CMD" "$ARGS" || exit 2; wrap "$CMD" "$ARGS" || exit 2/%GH-181.1%caught
 a-writer-wrapped-on-one-line%no-git-push.sh%s/^check_push() {$/wrap() { check_push "$1" "$2"; }\ncheck_push() {/;s/^    check_push "\$CMD" "\$ARGS" || exit 2$/    wrap "$CMD" "$ARGS" || exit 2/%GH-181.1%caught
 a-writer-wrapped-under-a-name-with-a-hyphen%no-git-push.sh%s/^check_push() {$/wrap-it() { check_push "$1" "$2"; }\ncheck_push() {/;s/^    check_push "\$CMD" "\$ARGS" || exit 2$/    wrap-it "$CMD" "$ARGS" || exit 2; wrap-it "$CMD" "$ARGS" || exit 2/%GH-181.2%caught
+a-writer-wrapped-after-a-separator%no-git-push.sh%s/^check_push() {$/: ; wrap() { check_push "$1" "$2"; }\ncheck_push() {/;s/^    check_push "\$CMD" "\$ARGS" || exit 2$/    wrap "$CMD" "$ARGS" || exit 2; wrap "$CMD" "$ARGS" || exit 2/%GH-181.2%caught
+a-writer-wrapped-by-an-indented-keyword%no-git-push.sh%s/^check_push() {$/  function wrap { check_push "$1" "$2"; }\ncheck_push() {/;s/^    check_push "\$CMD" "\$ARGS" || exit 2$/    wrap "$CMD" "$ARGS" || exit 2; wrap "$CMD" "$ARGS" || exit 2/%GH-181.2%caught
+a-writer-wrapped-with-a-blank-in-its-parentheses%no-git-push.sh%s/^check_push() {$/wrap ( ) {\n  check_push "$1" "$2"\n}\ncheck_push() {/;s/^    check_push "\$CMD" "\$ARGS" || exit 2$/    wrap "$CMD" "$ARGS" || exit 2; wrap "$CMD" "$ARGS" || exit 2/%GH-181.2%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS
