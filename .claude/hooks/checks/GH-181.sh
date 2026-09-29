@@ -44,8 +44,8 @@
 # reading is a check and not only prose.
 #
 # WHAT A BODY IS, and the one place it is wider than `fn_writes`. The rules
-# for where a function opens and closes are `fn_writes`'s, and are listed in
-# checks/library.sh beside the derivation. A definition line is different: a
+# for where a function opens and closes are `fn_writes`'s, and are listed below
+# beside the derivation. A definition line is different: a
 # one-line wrapper keeps its call there, so what stands after the name and
 # parentheses is read as the body -- including a line `fn_writes` does not
 # read as a one-liner, such as a subshell body. The repository writes
@@ -77,8 +77,8 @@
 #
 # WHAT IT TAKES FROM ELSEWHERE: $FIXTURES and $HOOKS from check-hooks.sh's
 # prelude; $STDERR_WRITE, which `fn_writes` reads, from #109's section in the
-# unsplit file; and `hook_text`, `fn_writes`, `fn_calls` and `writer_callers`
-# from checks/library.sh.
+# unsplit file; and `hook_text`, `fn_writes` and `fn_calls` from
+# checks/library.sh. `writer_callers` is this file's own, defined below.
 
 section "=== issue #181: no function in a boundary hook calls a function that writes ==="
 
@@ -112,6 +112,43 @@ requirement GH-181.1 <<'REQ'
   static property of a file's text, and there is no command to rewrite.
 REQ
 shape_pin 'GH-181.1:static'
+
+# THE CALLERS OF A WRITER, which `fn_calls` cannot count: #181's derivation,
+# here and not in checks/library.sh beside the three counters, because this
+# file is its one caller and the library holds only what more than one section
+# calls. It reads the hook through two of them. Which functions write is
+# `fn_writes`'s answer, read and not re-derived, so this cannot be narrower
+# than the table GH-109.2 pins. Which function a line belongs to is asked again,
+# on `fn_writes`'s rules -- a definition in column 1 opens one, a `}` in column
+# 1 closes it, a line ending `;` then `}` closes its own -- with one widening:
+# what stands on a definition line after its name and parentheses is that
+# function's body, which is where a one-line wrapper keeps its call, and a
+# comment standing alone after the opening brace is not. A call is a token,
+# split as `fn_calls` splits one.
+writer_callers() {  # writer_callers <file> -- "<caller> <writer>" a line, for a function body naming a writer; sorted
+  hook_text "$1" \
+    | awk -v WR="$(fn_writes "$1" | awk 'sub(/ writes$/, "") { printf "%s ", $0 }')" '
+        BEGIN { n = split(WR, a, " "); for (i = 1; i <= n; i++) wr[a[i]] = 1 }
+        {
+          owner = ""
+          if ($0 ~ /^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || $0 ~ /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/) {
+            fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
+            body = $0; sub(/^function[[:space:]]+/, "", body)
+            sub(/^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*(\(\))?/, "", body)
+            sub(/^[[:space:]]*\{[[:space:]]+#.*$/, "", body)
+            owner = fn
+            if ($0 ~ /;[[:space:]]*\}[[:space:]]*$/) fn = ""
+          } else if ($0 ~ /^\}/) {
+            fn = ""
+          } else {
+            owner = fn; body = $0
+          }
+          if (owner == "") next
+          n = split(body, t, /[^A-Za-z0-9_$-]+/)
+          for (i = 1; i <= n; i++) if (t[i] in wr) print owner, t[i]
+        }' \
+    | LC_ALL=C sort -u
+}
 
 R181="$FIXTURES/r181"
 mkdir -p "$R181"
