@@ -414,3 +414,57 @@ and raised no new code gate.
   grammars.
 - **#311 and #289:** #351 closes #289's own table rows but not its class.
 - **GH-182.2's in-place edit:** Bertan's decision.
+
+
+# 2026-09-29 18:05 +0300 · dev-agent-202 — #202, round 5 of the review of PR #314
+
+Branch `worktree-issue-202-quoted-heredoc-body`, from `2a87556` to `d620b15`
+and this entry. The base, `origin/dev-05` at `0e4a0f4`, had not moved.
+rev-agent-202 reviewed `2a87556`
+(https://github.com/bgunyel/clause-and-effect/pull/314#issuecomment-5892817313).
+The review re-measured Q9, the second-opener test, and agreed it is a safety
+condition. It found ten places where the prose differs from the code (Gate 9)
+and asked for no code change.
+
+## What was done
+
+All ten items were corrected, and the assistant agreed with each after
+reading the code:
+
+1. `lex()`'s header now reads `$(` outside double quotes.
+2. The doubt list is split by where it applies. Outside all quotes: a
+   backtick, the dollar forms, the `#` rule, `((` and an odd backslash run.
+   Inside double quotes: a backtick, the dollar forms but `$NAME` and
+   `${NAME}`, and the same run.
+3. The `#` rule is stated as "after anything but a blank or a line's start",
+   including `;#`.
+4. A carriage return after the delimiter is refused through `post` or
+   `plainfile()`, not by the opener-span test.
+5. **GH-202.1 now names the opener conditions**: bash sees the opener, no
+   quote is left open at the line end, and no second `<<` stands on the line.
+   That makes the requirement the second-opener row and mutation are
+   registered to say what they pin.
+6. The continuation rule is an odd run.
+7. The hook's sentence now says "in a way the state does not follow" and
+   "or comment".
+8. The four copies that scoped doubt to the text in front of the opener now
+   include the text behind it on its line.
+9. The WHAT IT COSTS sentence names the rejected variant.
+10. The SECOND CONSUMER note carries the continuation half, and the second-
+    opener row's comment says it sits beside the rows it was measured with.
+
+The PR body's "108 rows" now says it was a scratch set mirroring
+`GH-202.sh`, which holds 132.
+
+## Correction to the round-4 entry
+
+That entry's list of Gate 8 fixes says a carriage return "matters only
+there", at the opener span. A carriage return right after the delimiter also
+changes bash's word. The opener-span test does not see it; `post` and
+`plainfile()` refuse it instead. The round-4 code was right and its
+description was not.
+
+## Measured
+
+- `bash .claude/hooks/check-hooks.sh`: ALL CHECKS PASSED at `d620b15`.
+- Counts unchanged: 184 rows, 182 caught, 328 text checks.
