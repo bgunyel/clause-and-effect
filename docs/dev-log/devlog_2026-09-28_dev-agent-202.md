@@ -354,3 +354,63 @@ list. rev-agent-202 reviewed `2a642f3`
 - **#311**: the staged script.
 - **#289**: `cs_normalise`'s own opener.
 - **GH-182.2's in-place edit**: Bertan's decision.
+
+
+# 2026-09-29 17:48 +0300 · dev-agent-202 — #202, round 4 of the review of PR #314
+
+Branch `worktree-issue-202-quoted-heredoc-body`, from `9571f1f` to `372e16d`
+and this entry. The assistant merged `origin/dev-05` at `0e4a0f4` (#342),
+which merged cleanly. rev-agent-202 reviewed `9571f1f`
+(https://github.com/bgunyel/clause-and-effect/pull/314#issuecomment-5892296388)
+and raised no new code gate.
+
+## What the review found, and what was done
+
+- **Gate 8: three pieces of prose were wider than the code.**
+  - The `lex()` header listed a carriage return as doubt, but only the opener
+    span is tested for one. The header now says why a carriage return matters
+    only there.
+  - "Alphabet" and "what is not named is not trusted" claimed an allow-list
+    over characters. The code is a list of the constructs that change bash's
+    quote or comment state, and it passes every other character. It is now
+    THE DOUBT LIST, and says that. The review's 20 probes are cited as the
+    measurement behind "every other character passes".
+  - Removing the command-started-here test depends on `consumer()` requiring
+    `pre` to begin with `cat`. That dependency is now recorded where
+    `consumer()` is defined.
+- **Q9: the second-opener test.** The review found no row the test alone
+  refuses, and offered to delete it or keep it as a refusal cost. The
+  assistant disagreed and showed why:
+  - Without the test, the second body is read as command text.
+  - A lone `"` in that body puts the state inside a string where bash is at
+    the top.
+  - A later `echo "; cat > /tmp/g <<'Z'` then drops a merge that bash runs,
+    checked by execution.
+
+  The test is pinned as a BLOCK row and registered as a mutation.
+
+## Measured
+
+- **Registry:** 184 rows, 182 caught; text checks 328. Derived on the tree
+  merged with `0e4a0f4`, which added none.
+- **Harness:** `mutate-hooks.sh -v heredoc-second-opener-ignored` at
+  `372e16d` caught it. Its baseline, the whole suite unmutated, was green.
+
+## Mistakes and dead ends
+
+- **The assistant again put an apostrophe inside the awk program** ("the
+  opener's line"), in the new comment on `consumer()`. The library failed to
+  load, and the scratch check that scans that program for apostrophes caught
+  it before anything was run against the hooks.
+- **The assistant pushed `372e16d` before its new pins had a green run.** The
+  harness baseline ran the suite afterwards, and it was green.
+
+## Open
+
+- **#351**, worked in its own worktree
+  (`worktree-issue-351-delimiter-quote-removal`, `32ba0da`, suite green). It
+  has no pull request yet. It and this branch both change the opener block of
+  `cs_drop_heredocs`, and whichever lands second unifies the two delimiter
+  grammars.
+- **#311 and #289:** #351 closes #289's own table rows but not its class.
+- **GH-182.2's in-place edit:** Bertan's decision.
