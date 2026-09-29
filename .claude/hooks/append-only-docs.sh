@@ -55,13 +55,23 @@
 # joined pass and not the raw one.
 #
 # The trade, taken knowingly, and only in the refusing direction because of the
-# raw pass: cs_join joins backslashes a shell reads literally -- inside single
-# quotes, in a comment, in a quoted heredoc's body -- so prose there that ends a
-# line in `rm \` and names an entry on the next is refused. And a continuation
-# inside a name, `docs/dev-log\`, a newline and `book`, which a shell reads as
+# raw pass. The joined pass is the rules dev-05 had, read over the command with
+# each line-ending backslash and its newline taken out, so it gives any command
+# the verdict dev-05 gave that text. Where bash joins too, unquoted or in double
+# quotes, that is the
+# one-line verdict, and its looseness with it: the verb rule reads a verb
+# anywhere before an entry, prose and arguments included, which is #237's
+# shape. Where bash does not join -- single quotes, a comment, a quoted
+# heredoc's body, an escaped backslash -- it is the verdict of a line bash never
+# runs: a destroying verb or a `>` anywhere on a line that ends in a backslash,
+# and an entry named on the next, is refused. `rm -f tmp.txt  # clean \` over
+# `cat` an entry is refused, and so is the append this directory exists for,
+# `cat >>` an entry from a quoted heredoc whose body has a Markdown hard line
+# break after a line that mentions `rm`. And a continuation inside a name,
+# `docs/dev-log\`, a newline and `book`, which a shell reads as
 # `docs/dev-logbook`, is refused, as it was before #156: the raw pass sees the
 # backslash stand where the boundary group matches it. checks/GH-156.sh pins
-# all four. The library is tested for before it is sourced, and all three
+# each of these. The library is tested for before it is sourced, and all three
 # functions after, for THE LOAD CONTRACT's reason.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
@@ -80,7 +90,12 @@ if ! printf '%s\n' "$COMMAND" | cs_within_cap; then
   echo "Blocked: append-only-docs.sh: $CS_LINE_CAP_REFUSAL" >&2
   exit 2
 fi
-JOINED=$(printf '%s\n' "$COMMAND" | cs_join) || exit 2
+# No status test on the join: cs_within_cap has just joined the same text through
+# cs_join and refuses when any part of its pipeline fails, so a failing join
+# never reaches this line, and an `|| exit 2` here was one no check could drive
+# (review of PR #329, round 2). A join that succeeded and printed nothing costs
+# the joined pass alone; the raw pass still reads the command.
+JOINED=$(printf '%s\n' "$COMMAND" | cs_join)
 
 # The trailing group is the directory boundary, and it is what #69 was about.
 # `.` and `-` are path-name characters here so that `docs/dev-log.bak` and

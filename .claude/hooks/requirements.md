@@ -1369,7 +1369,9 @@ it has no entry above (Q16).
   when the dev-log README was found citing #176 for all four of its
   examples. Cited in #157's issue file beside the `sed -i`, `rm` and `mv`
   rows; taking the `sed -i` rule, or `mv`, out of the guard was measured
-  turning the row it decides red. Fix or accept is its own decision, so it
+  turning the row it decides red. Cited also in #156's issue file, whose joined
+  reading widens the same refusal across a line that ends in a backslash, a
+  heredoc's hard line break among them. Fix or accept is its own decision, so it
   has no entry above
 - #238: the permitting half of a stale read, which #144 leaves: a session that
   fetched before a dev branch rotated reads the outgoing branch as active, so

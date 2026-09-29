@@ -38,13 +38,21 @@
 #
 # TWO TRADES, both pinned below as verdicts rather than left to a comment, and
 # both in the refusing direction.
-#   - A backslash a shell reads literally. cs_join joins a trailing backslash
-#     wherever it stands, and inside single quotes, in a comment and in a
-#     quoted heredoc's body a backslash-newline is two characters, not a
-#     continuation. So prose there that ends a line in `rm \` and names an entry
-#     on the next is refused now where it was permitted -- the joined pass
-#     refuses it. One edit away. Inside double quotes it is no trade: a shell
-#     joins a backslash-newline there too.
+#   - A line bash does not join, read joined. The joined pass is dev-05's rules
+#     over the command with each line-ending backslash and its newline taken
+#     out, so it gives any command dev-05's verdict on that text. Where bash
+#     joins too -- unquoted, or inside double quotes -- that is the one-line
+#     verdict, looseness and all: the verb rule reads a verb anywhere before an
+#     entry, prose and arguments included, which is #237's shape. Where bash
+#     does not -- single quotes, a comment, a quoted heredoc's body -- a
+#     destroying verb or a `>` ANYWHERE on a line that ends in a backslash, with
+#     an entry named on the next, is refused, whatever the verb is doing there:
+#     prose ending in `rm \`, a real `rm` of another file under a comment that
+#     ends in `\`, and, costliest, the append this directory exists for --
+#     `cat >>` an entry from a quoted heredoc whose body has a Markdown hard line
+#     break after a line mentioning `rm`. #237 is that shape on one line; this
+#     widens it across lines. One edit away: take the backslash off, or write
+#     the body to a scratch file and append that, as the dev-log README does.
 #   - A continuation INSIDE a name. `docs/dev-log\`, a newline and `book` is the
 #     path `docs/dev-logbook` to a shell, which is another directory, and it is
 #     refused, as it was on dev-05: the joined pass permits it, and the raw pass
@@ -146,6 +154,19 @@ check append-only-docs.sh BLOCK 'the trade: a quoted heredoc body ending a line 
   "cat >> notes.md <<'X'
 then rm \\
 $AOD156_E
+X"
+check append-only-docs.sh BLOCK 'the trade at its width: a real rm of another file under a comment ending in a backslash, and cat of an entry next, is refused' \
+  "rm -f tmp.txt  # clean \\
+cat $AOD156_E"
+check append-only-docs.sh BLOCK 'the trade at its costliest: cat >> an entry from a quoted heredoc with a hard line break after a line mentioning rm is refused, though it appends (#237, across lines)' \
+  "cat >> $AOD156_E <<'X'
+Ran rm on scratch files \\
+and read $AOD156_E
+X"
+check append-only-docs.sh ALLOW 'and the same append without the hard line break stays permitted' \
+  "cat >> $AOD156_E <<'X'
+Ran rm on scratch files
+and read $AOD156_E
 X"
 check append-only-docs.sh BLOCK 'the trade: a continuation inside a name, docs/dev-log\ then book, is docs/dev-logbook to a shell and refused, by the raw pass' \
   'rm -rf docs/dev-log\

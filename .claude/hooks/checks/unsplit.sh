@@ -10485,7 +10485,7 @@ INV_TRANSFORMS='
   global-flag global-flag-gitdir option-eats-verb
   quote-double-2 quote-double-3 quote-double-4 quote-double-5 quote-double-last
   quote-single-2 quote-single-3 quote-single-4 quote-single-5 quote-single-last
-  continuation
+  continuation continuation-inword
   redirect-null redirect-dup redirect-quoted
   word-path word-dot word-dquoted word-squoted word-escaped
   word-ansi word-locale
@@ -10618,6 +10618,18 @@ inv_continuation() {  # inv_continuation <command>
   [ "$head" != "$1" ] || return 0
   printf '%s \\\n  %s' "$head" "$last"
 }
+# A line continuation INSIDE the last word, which bash joins back into the one
+# word (#156, whose `docs/\`-newline-`dev-log` row is this shape and which
+# `continuation`, breaking only between words, never reached). A word carrying a
+# quote, a backslash or a `$` is left alone: inside single quotes bash does not
+# join, and a break inside an expansion is a different word.
+inv_continuation_inword() {  # inv_continuation_inword <command>
+  local head="${1% *}" last="${1##* }" cut
+  [ "$head" != "$1" ] && [ "${#last}" -ge 2 ] || return 0
+  case "$last" in *\\*|*\'*|*\"*|*\$*) return 0 ;; esac
+  cut=$(( ${#last} / 2 ))
+  printf '%s %s\\\n%s' "$head" "${last:0:cut}" "${last:cut}"
+}
 # #117: the command word as a path, quoted or escaped. bash runs all five, and
 # not one of the other eleven transformations changes the command word at all.
 inv_cmdword() {  # inv_cmdword <command> <prefix> <suffix>
@@ -10694,6 +10706,7 @@ inv_apply() {  # inv_apply <transformation> <command> -- the variant, or nothing
     quote-single-5)   inv_quote_at "$2" "'" 5 ;;
     quote-single-last) inv_quote_at "$2" "'" last ;;
     continuation)     inv_continuation "$2" ;;
+    continuation-inword) inv_continuation_inword "$2" ;;
     redirect-null)    printf '%s >/dev/null' "$2" ;;
     redirect-dup)     printf '%s 2>&1' "$2" ;;
     redirect-quoted)  printf '%s > "out.txt"' "$2" ;;
