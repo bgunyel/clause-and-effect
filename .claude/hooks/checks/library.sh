@@ -489,9 +489,15 @@ written() {  # written <label> <file> <literal> -- the file as written, # and al
 # bytes from one without -- grep exits 1 on both when the literal is not there
 # -- and whether a file has bytes is not what an absence pin asks (review of
 # #256's branch). A file emptied by a failed write is a presence question, and
-# a pin that must not read a truncation as evidence pairs its `unarmed` with an
-# `armed` or a `written` over the same file. `lacks` is handed text and not a
-# file, which is why it refuses an empty one and this does not.
+# a pin that must not read a truncation as evidence pairs its `unarmed` with a
+# presence check. `lacks` is handed text and not a file, which is why it
+# refuses an empty one and this does not.
+#
+# THE PRESENCE CHECKS, listed here and pointed to from elsewhere, so the list
+# is written once: over a file, an `armed` or a `written` over the same file,
+# which goes red, or a fixture guard that stops the suite when the file does
+# not say what it must -- the report fixture's in unsplit.sh, ahead of its
+# `unarmed` pins, is one; over text, a `holds` over the same text.
 #
 # It was an `else` after the grep, and that is the defect twice over. First a
 # file that is not there: grep exits 2, which fell into the else arm and
@@ -768,10 +774,10 @@ holds() {  # holds <label> <text> <literal>
 # `prose_count` are handed a PATH, and grep's status already tells an unread
 # file (2) from a read one with nothing in it (1), so an empty FILE is a read
 # file there and its absences are real ones. A truncated file is a presence
-# question, which `armed` or `written` over the same file answers, or `holds`
-# over its text. `prose_occurrences` is handed a path and still takes this
-# side, because it reads through `prose`, which writes nothing for a reflow
-# with no word in it, so grep finds no file and it prints `unread`.
+# question, for the presence checks `unarmed`'s header lists.
+# `prose_occurrences` is handed a path and still takes this side, because it
+# reads through `prose`, which writes nothing for a reflow with no word in it,
+# so grep finds no file and it prints `unread`.
 lacks() {  # lacks <label> <text> <literal>
   if [ -z "$2" ]; then
     fail static '%s\n         nothing was read, so the absence of |%s| is evidence of nothing' "$1" "$3"
@@ -1582,11 +1588,10 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
 # directory and a path that is not there all reach that arm rather than a
 # reflow of blanks, over which `unarmed` would read ok. An empty file, a file
 # with no prose in it and a failed extraction all reflow alike, so once
-# reflowed the difference is gone, as it is for any text, which is why `lacks`
-# refuses an empty string; `unarmed` passes a zero-byte file it was handed,
-# by design (#256), and so is never handed one from here. comment_reflow turns
-# an empty line into one blank, which is why the question is a word and not a
-# size (review of #192's branch). The path mirrors the source's under
+# reflowed the difference is gone; `unarmed` passes a zero-byte file it was
+# handed, by design (#256), and so is never handed one from here.
+# comment_reflow turns an empty line into one blank, which is why the question
+# is a word and not a size (review of #192's branch). The path mirrors the source's under
 # $FIXTURES/prose, so a failure names the file it read.
 #
 # AND ONLY FROM AN ABSOLUTE PATH. `written` and `unarmed` refuse a relative

@@ -11,7 +11,8 @@
 # text, where a failed read and an empty file both arrive as "", so empty is
 # all it can refuse on. The other two are handed a path, where grep's status
 # already tells an unread file (2) from a read one with nothing in it (1). A
-# truncated file is a presence question, for `armed`, `written` and `holds`.
+# truncated file is a presence question, for the presence checks `unarmed`'s
+# header in library.sh lists.
 # Triage took option 2 of the issue: record the choice beside the helpers and
 # pin it as verdicts, and add no `[ -s ]`, which would refuse a true absence in
 # a file that is legitimately empty.
@@ -27,18 +28,25 @@
 # suite it runs is this repository's and a mutation to the copy's library would
 # be read and never executed. The evidence is a recorded run instead.
 #
-# MEASURED, 2026-09-29, by hand: this file alone, sourced in a fresh bash after
-# a copy of library.sh with one edit applied to the copy, the driver's
-# bookkeeping stubbed, so no whole-suite run and no edit to this checkout.
+# MEASURED, 2026-09-29, by rev-agent-256 in round 2 of the review of PR #342:
+# the whole suite, at 8790a26, in a scratch clone per edit with one edit to
+# its library.sh, and no exported shell functions. The figures are FAILs and
+# the rows that went red. An earlier table here ran this file alone, with the
+# driver's bookkeeping stubbed by bodies it did not record; it is withdrawn,
+# and rows 3 and 5 are why -- a run of one file cannot see the rows elsewhere.
 #
-#   the edit to the copy                                   red row
-#   none                                                   none of 3
-#   `[ -s "$2" ]` after status 1 in `unarmed`              GH-256.1, unarmed
-#   `[ -s "$2" ] || fail; return` in front of its grep     GH-256.1, unarmed
-#   `[ -s "$1" ]` after status 0|1 in `prose_count`        GH-256.1, prose_count
-#   status 1 left to the unread arm of `prose_count`       GH-256.1, prose_count
-#   `lacks` with its empty-string arm made `if false`      GH-256.2
-#   `nothing was read, so ` deleted from `lacks`'s message GH-256.2
+#   the edit to the copy                                   FAIL  red rows
+#   none                                                   0     none
+#   `[ -s "$2" ]` after status 1 in `unarmed`              1     GH-256.1 unarmed
+#   `[ -s "$2" ] || fail; return` in front of its grep     7     GH-256.1 unarmed,
+#                                                                six GH-192/GH-219
+#   `[ -s "$1" ]` after status 0|1 in `prose_count`        1     GH-256.1 prose_count
+#   status 1 left to the unread arm of `prose_count`       2     GH-256.1 prose_count,
+#                                                                one GH-219
+#   `lacks` with its empty-string arm made `if false`      1     GH-256.2
+#   `nothing was read, so ` deleted from `lacks`'s message 1     GH-256.2
+#   `prose` keeps a reflow with no word in it              3     three GH-192
+#   the fixture given a byte                               0     stops at its guard
 
 section "=== issue #256: an empty file is a read file, and an empty string is not ==="
 
@@ -51,8 +59,8 @@ requirement GH-256.1 <<'REQ'
 - status: active
 - direction: static: a property of the suite's helpers
 - note: A `[ -s ]` question would refuse that true absence. A file a failed
-  write emptied is a presence question, answered by an `armed` or `written`
-  over the same file, and not by these two.
+  write emptied is a presence question, for the presence checks `unarmed`'s
+  header in checks/library.sh lists, and not for these two.
 REQ
 requirement GH-256.2 <<'REQ'
 - text: `lacks <label> <text> <literal>` fails on an empty string, saying
