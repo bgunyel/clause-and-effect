@@ -226,3 +226,88 @@ merge.
 - **Full suite on `eed393b`** (measured): 8330 ok, 0 FAIL.
 - **Not re-run:** `mutate-hooks.sh -v` and the hand mutations. Their figures
   are for `cd12f48`.
+
+---
+
+# 2026-09-29 · dev-agent-181 — rev-agent-181's rounds 2 to 4
+
+23:44 +03.
+
+Branch `worktree-issue-181-writer-callers`, from `31845a2` to `a7ec6cb`, plus
+this entry's commit. With it the branch is 15 commits ahead of
+`origin/dev-05` (`1486270`) and 0 behind. Every round in this entry was
+about one function, `reads_only_through`, the guard that holds the suite's
+own readers to reading their file only through `hook_text`.
+
+## What was wrong, and whose
+
+- **Round 2 (R2-F1, gating), the assistant's.** Round 1's fix bounded the
+  helper's name on the left by `[^A-Za-z0-9_]`. That closed `raw_hook_text`
+  and left `raw-hook_text "$1"` and `./hook_text "$1"` passing. The assistant
+  had written a guard against one spelling of a class, and it showed the
+  class. The assistant then saw that no left bound refuses
+  `cat hook_text "$1"`, since a blank stands in front of the name there. So
+  `c59f6ad` read the call where a command starts instead. R2-F2 (two
+  restated counts, and a shape stated more narrowly than the check) and R2-F3
+  (the `<`/`>` excusal undriven) were smaller.
+- **Round 3, nothing gating.** rev-agent-181 measured more bypasses and false
+  reds, and filed #362: a text rule is the wrong tool for this question, and
+  a behavioural probe is proposed instead. The assistant closed one of the
+  bypasses, the array `f=(hook_text "$1")`, and recorded the rest as trades.
+  It also took item 5: it trimmed the lists to what `declare -f` prints and
+  gave each member a reader that passes through it.
+- **Round 4, the assistant's.** The trim removed `;` on the claim that
+  `declare -f` never puts one before a call. It does inside `$(…)`. `>(` was
+  named in the prose but missing from the list. Both were false reds, and
+  both are back with a reader each. rev-agent-181's row 3 turned out to be
+  the assistant's too: the removal took each call out with the character
+  after it, and that character can be where the next call starts.
+
+## Mistakes in the measuring, both the assistant's
+
+- The first R1 mutation run judged nothing (0 ok, 0 FAIL). The assistant's
+  mutation table dropped the replacement's closing quote, so the library did
+  not load. The assistant moved the table into a Python file of raw strings
+  and reran R1, which went red.
+- The first suite run of the round-4 fix went red, 1 FAIL. The suite's own
+  scanner closes a function only at a column-1 `}`, and two multi-line
+  one-liner fixtures had none. The assistant rewrote them with the brace on
+  its own line.
+
+## Measurements
+
+All figures below were measured with bash 5.2.21, at high load with other
+sessions' suites running.
+
+- **Full suite:**
+  - `c59f6ad`: 8333 ok, 0 FAIL.
+  - `8626587`: 8333 ok, 0 FAIL.
+  - `a7ec6cb`: 8333 ok, 0 FAIL.
+- **Hand mutations**, each in a `git clone --shared` detached at the commit
+  named:
+  - At `c59f6ad`, against a baseline of 8333 ok, 0 FAIL:
+    - round 1's left bound put back: 2 FAIL;
+    - the `${!` clause dropped: 1 FAIL;
+    - the `BASH_ARGV` clause dropped: 1 FAIL;
+    - the right bound dropped: 1 FAIL;
+    - `odd_defs` without `<` `>`: 1 FAIL.
+  - At `8626587`:
+    - the left list without `|`: 1 FAIL;
+    - the right list without `;`: 2 FAIL;
+    - `(` accepted after `=`: 1 FAIL.
+  - At `a7ec6cb`: the left list without `;`, 1 FAIL; without
+    `>`, 1 FAIL; the removal eating the next call's start, 1 FAIL.
+- **Member by member**, sourcing the fixtures and a copy of the loop with
+  the lists parametrised: every member of both lists, and keeping the
+  character after a call, is the only way at least one true-case reader
+  passes.
+- **Registry:** unchanged, at 190 rows and 188 caught. Its rows cannot reach
+  `checks/`, so the hand mutations are this guard's evidence.
+
+## Left open
+
+- #362, for the probe that replaces the text rule, and the trades asserted
+  until then: refused are an assignment prefix, `if`, `!`, `time`,
+  `command`, `coproc`, backticks and any `${!…}`; passed are `$_`, `eval`,
+  `perl`, and a call spelled as a line of a multi-line string.
+- #338's three shapes and #361's three hand copies, as before.
