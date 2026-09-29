@@ -82,13 +82,21 @@ document means that no second copy of the text is written by hand.
   behind that disagrees, so the suite passes. Before #205 such a deletion
   also edited the shared literal. The rule that an ID is never deleted is
   held for the legacy set only, and holding it for a generated ID would need
-  history or a grow-only ledger of IDs, which is a shared hunk again (#223).
+  history or a grow-only ledger of IDs, which is a shared hunk again. #223
+  narrows the trade without either: a generated `GH-<n>.<m>` that
+  `requirements.md` or another entry still cites must keep its file
+  (GH-223.6). What still passes is a deleted ID that nothing in the registry
+  cites.
 
 **Telling legacy from generated (Q4).**
 
 - *The marker field decides*: a file carrying `generated` is generated, and one
   without it is hand-written. Rejected: nothing then stops a new hand-written
-  file that simply leaves the marker off.
+  file that simply leaves the marker off. The generator still decided this
+  way until #223, and the suite did not, so the two disagreed on a marker
+  deleted by hand or added to a legacy file. Since #223 the generator reads
+  `REQUIREMENTS_LEGACY` out of `check-hooks.sh` and decides by the set, as the
+  suite does (GH-223.4).
 - *A hand-kept residue list* for new `gap` and `seam: none` entries, as #200
   proposed. Rejected: a new entry of either kind has an issue file like any
   other, the one of the work that found it, and is declared there with no
@@ -122,15 +130,15 @@ runs it against fixtures and against the repository.
   `shape_pin`, and `variants_pin` waits for a file whose entry is in the
   families' scope. That move is expected, not a defect.
 - **A branch cut before #205 that adds a hand-written `GH-` entry** is red once
-  it merges across. The remedy has four steps:
-  1. Delete the hand-written `requirements/GH-<n>.md`.
-  2. Declare the entry in its issue file.
-  3. Move its token out of `REQUIREMENT_SHAPE` into a `shape_pin` in that
+  it merges across. The remedy has three steps:
+  1. Declare the entry in its issue file.
+  2. Move its token out of `REQUIREMENT_SHAPE` into a `shape_pin` in that
      issue file, and out of `INV_SCOPE` into a `variants_pin` if it has one.
-  4. Run the generator.
+  3. Run the generator, which replaces the hand-written file.
 
-  The file must go first, because the generator refuses a declared ID whose
-  file is hand-written and leaves that file alone. The tokens must move,
+  Until #223 the file had to be deleted first, because the generator refused
+  a declared ID whose file was hand-written. It now replaces any file outside
+  the legacy set, so the step is gone. The tokens must move,
   because a branch cut before #205 appended them to the shared literals and
   wrote no pin, and `pins_bad` names both halves of that. Adding the ID to
   `REQUIREMENTS_LEGACY` is not a remedy. The
