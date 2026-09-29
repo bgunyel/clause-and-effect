@@ -1640,6 +1640,12 @@ it has no entry above (Q16).
   wrapper around such a writer is not refused. Cited in GH-181.1's note and
   on its fixture, which asserts today's reading. It adds its requirements in
   the pull request that fixes it
+- #361: `fn_writes`, `writer_callers` and the shape `odd_defs` excuses are
+  three hand copies of where a function starts and ends, and the check that
+  holds them together reads only blank-free regex literals, as text present
+  rather than in its role, and does not read `odd_defs`. Filed from review of
+  #181's pull request, round 2, and cited in #181's issue file beside that
+  check. It adds its requirements in the pull request that fixes it
 - #233: `append-only-docs.sh` permits a truncating redirect spelled `>|` or
   written at the start of a line. Cited in the GH-156 issue file, beside the
   one continuation row whose `>` opens a line and is refused by the joined

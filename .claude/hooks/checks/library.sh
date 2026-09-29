@@ -1801,30 +1801,49 @@ hook_text() {  # hook_text <file> -- a hook's text as the refusal-arm counters r
     | sed ':a;/\\$/{N;s/\\\n//;ba}'
 }
 # WHICH READS A HELPER MAKES OF ITS FILE, asked by checks/GH-182.sh of the
-# three counters and by checks/GH-181.sh of `writer_callers`, and here since
-# #181 made it two callers. True when the function's definition, as bash holds
-# it, passes its file argument to each helper named, as `<helper> "$1"`, and
-# with those calls taken out names no `$1`, `$@` or `$*`, braced or not, and
-# no drop or `sed` of its own. GH-182.sh argues each half of that, and the
-# review of #182's pull request that found the first two versions short.
-# A helper's name is bounded on the left, so `raw_hook_text "$1"` is not a
-# read through `hook_text`, and taking it out does not leave `raw_` behind as
-# though the file had been read through the helper. Review of #181's pull
-# request found both unbounded, and found this function answering true for
-# every question the suite put to it; checks/GH-181.sh puts the false ones.
+# three counters and by checks/GH-181.sh of `writer_callers` and `odd_defs`,
+# and here since #181 made it two callers. True when the function's
+# definition, as bash holds it, passes its file argument to each helper named,
+# as `<helper> "$1"` in a command's first word, and with those calls taken out
+# names no `$1`, `$@` or `$*`, braced or not, no indirection `${!...}` and no
+# `BASH_ARGV`, and no drop or `sed` of its own. GH-182.sh argues each half of
+# that, and the review of #182's pull request that found the first two
+# versions short.
+#
+# THE CALL IS READ WHERE A COMMAND STARTS, NOT BOUNDED BY WHAT MAY NOT STAND
+# BESIDE IT, and two rounds of review of #181's pull request are why. The first
+# answer bounded the name on the left by `[^A-Za-z0-9_]`, which closed
+# `raw_hook_text "$1"` and left `raw-hook_text "$1"` and `./hook_text "$1"`
+# passing: a guard against one spelling of a class, exhibiting the class. A list
+# of what may not precede the name cannot be completed, since `-`, `/`, `+`
+# and `:` all build another command word, and no left bound at all refuses
+# `cat hook_text "$1"`, where the helper is only an argument. So the call must
+# start a line, or follow `;`, `|`, `&` or `(`, with blanks between, as
+# `declare -f` prints a pipeline's head, a list's next command and a command
+# substitution. And `"$1"` must be a whole word, ending at a blank, `;`, `|`,
+# `&`, `)` or the end of the text. Each match is taken out whole.
+#
+# THE TRADES. A call after a keyword, `if hook_text "$1" | ...`, is refused,
+# since `if` is not in the list: a false red, visible, and a shape no reader
+# here writes. A filter of the reader's own other than `sed`, a
+# `perl -pe` before its `awk`, passes. The readers run awk programs of their
+# own, which can rewrite any line they are given, so no list of filter names
+# can say that none was applied; `sed` is refused because it is the fold's own
+# tool, the one a second fold would be written with.
 reads_only_through() {  # reads_only_through <function> <helper>... -- its file argument read through each helper, and nowhere else
   local body rest h re
   body=$(declare -f "$1") || return 1
   rest=$body
   shift
   for h in "$@"; do
-    re="[^A-Za-z0-9_]$h \"\\\$1\""
+    re=$'(^|[\n;|&(])[[:space:]]*'"$h"$' "\\$1"([[:space:];|&)]|$)'
     [[ $body =~ $re ]] || return 1
     while [[ $rest =~ $re ]]; do
-      rest=${rest/"${BASH_REMATCH[0]}"/"${BASH_REMATCH[0]:0:1}"}
+      rest=${rest/"${BASH_REMATCH[0]}"/ }
     done
   done
-  [[ $rest != *cs_drop_heredocs* && $rest != *'sed '* ]] && ! [[ $rest =~ \$\{?(1|[@*]) ]]
+  [[ $rest != *cs_drop_heredocs* && $rest != *'sed '* && $rest != *BASH_ARGV* ]] \
+    && ! [[ $rest =~ \$\{?(1|[@*]) || $rest =~ \$\{! ]]
 }
 arms() {  # arms <file> -- in how many places it writes a refusal to stderr
   hook_text "$1" | grep -oE "$STDERR_WRITE" | wc -l | tr -d ' '

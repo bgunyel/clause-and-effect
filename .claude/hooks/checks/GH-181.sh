@@ -33,9 +33,10 @@
 # made from outside every function body, and `fn_calls` counts those
 # correctly; the trades below are the calls the text does not show. That rests
 # on one convention the derivations share, held rather than assumed: every
-# function is defined as `name() {`, in column 1, named as an identifier, with
-# its brace on that line or the next line that is not blank -- which GH-181.2
-# holds below. `nested_defs`, in #109's section, holds one part of it, an
+# function is defined as `name()` in column 1, named as an identifier, with
+# blanks allowed before the parentheses and none inside them, and its body a
+# brace group opened on that line or on the next line that is not blank --
+# which GH-181.2 holds below. `nested_defs`, in #109's section, holds one part of it, an
 # indented definition in the parenthesis form.
 #
 # A DEFINITION THE PATTERNS CANNOT READ IS REFUSED, NOT READ, and two reviews
@@ -100,7 +101,7 @@
 # narrower than the table GH-109.2 pins, and never wider either.
 #
 # THE TRADES, taken knowingly; each is a fixture below asserting what the
-# derivation does today, and each is in GH-181.1's note. Three are calls the
+# derivation does today, and each is in GH-181.1's note. Four are calls the
 # text does not name:
 #   - A call through a variable, `$CALL "$1"` with CALL set outside the body,
 #     is not a token of the writer's name.
@@ -121,7 +122,7 @@
 #     delimiter, is dropped with the body by `hook_text`, as a write there is.
 #     Heredoc bodies are #182's and are read as data; a body that runs code is
 #     not a shape either hook writes.
-# And three are a body attributed to the wrong function, where `fn_writes`'s
+# And five are a body attributed to the wrong function, where `fn_writes`'s
 # rules misread where a function starts or ends. Each is a misleading red and
 # not a green, the class the unsplit file's #109 section names for a
 # one-liner: the table gains a row, so the run goes red, but the row it shows
@@ -136,6 +137,14 @@
 #   - A `}` in column 1 inside a body, the last line of a multi-line string,
 #     closes the function early, so the lines after it belong to no function.
 #     The same rule #182 closed for a heredoc body, and a string is not one.
+#   - A redirect on a column-1 closing brace, `} >&2`, makes the whole body
+#     write, and `fn_writes` skips every `}` line, so the function is silent
+#     here and `arms` reads the write as one. #338's, from its round-2 comment
+#     by review of #181's pull request.
+#   - A trailing comment ending in `\` is joined onto the next line by
+#     `hook_text`'s fold, which bash does not do, since a backslash in a
+#     comment continues nothing. On a definition line the comment strip then
+#     deletes the call the fold swallowed. #338's too, from the same comment.
 # In the refusing direction, a body line naming a writer in a string or a
 # trailing comment reads as a call, and a definition line that closes its
 # body neither with `;` `}` nor on a later `}` in column 1 leaves the lines
@@ -181,17 +190,20 @@ requirement GH-181.1 <<'REQ'
   misleading red since the table gains a row that reads harmless: a writer
   `fn_writes` calls silent because its write stands on a definition line
   (#338), a definition line ending in `;` `}` that does not close its body,
-  and a `}` in column 1 inside a multi-line string. A body line naming a
+  a `}` in column 1 inside a multi-line string, a redirect on a column-1
+  closing brace (#338), and a trailing comment ending in `\`, which the fold
+  joins onto the next line and bash does not (#338). A body line naming a
   writer in a string or trailing comment reads as a call, a false red. Not in
   the invariance families' scope: like GH-157's entries it is a static
   property of a file's text, and there is no command to rewrite.
 REQ
 requirement GH-181.2 <<'REQ'
 - text: Every function defined in `no-git-push.sh` or `no-pr-decisions.sh` is
-  defined as `name() {`, in column 1, named as an identifier -- a letter or
-  `_`, then letters, digits or `_` -- with its brace on that line or on the
-  next line that is not blank, which is the one shape `fn_writes`, `fn_calls`
-  and `writer_callers` all read: `odd_defs`, which prints each line carrying a
+  defined as `name()` in column 1, named as an identifier -- a letter or `_`,
+  then letters, digits or `_` -- with blanks allowed before the parentheses
+  and none inside them, and its body a brace group opened on that line or on
+  the next line that is not blank, which is the one shape `fn_writes`,
+  `fn_calls` and `writer_callers` all read: `odd_defs`, which prints each line carrying a
   definition's signature -- a `(`, blanks and `)`, or the word `function` --
   other than that shape's own parentheses, prints nothing for
   `no-git-push.sh`, and for `no-pr-decisions.sh` prints the seven lines of
@@ -262,9 +274,9 @@ writer_callers() {  # writer_callers <file> -- "<caller> <writer>" a line, for a
 # THE DEFINITIONS THE PATTERNS CANNOT READ, GH-181.2's. A line is reported when
 # it carries a definition's signature -- a `(`, blanks and `)`, or the word
 # `function` -- anywhere, once the one shape every derivation reads has been
-# taken off its front: an identifier in column 1, `()`, and a brace. A `(` `)`
-# after `$`, `<`, `>` or `=` is a substitution or an empty array, and is taken
-# out first. When that shape's brace is not on its line, the next line that is
+# taken off its front: an identifier in column 1, blanks, `()`, and a brace. A
+# `(` `)` after `$`, `<`, `>` or `=` is a substitution or an empty array, and
+# is taken out first. When that shape's brace is not on its line, the next line that is
 # not blank must open with it, or the definition's own line is reported, since
 # a body that is an `if`, a `for` or a subshell is attributed by no rule the
 # derivations share. A definition with nothing after it is reported at the end.
@@ -444,6 +456,27 @@ wrap() {
 wrap a
 wrap b
 R181_EOF
+# #338's two further shapes, filed from review of #181's pull request.
+cat > "$R181/redirect-on-the-closing-brace.sh" <<'R181_EOF'
+speaks() {
+  echo "refused"
+} >&2
+wrap() {
+  speaks "$1"
+}
+wrap a
+wrap b
+R181_EOF
+cat > "$R181/comment-ending-in-a-backslash.sh" <<'R181_EOF'
+speaks() {
+  echo "refused" >&2
+}
+wrap() {  # wrap <msg> -- see C:\
+  speaks "$1"
+}
+wrap a
+wrap b
+R181_EOF
 cat > "$R181/writer-named-in-a-string.sh" <<'R181_EOF'
 speaks() {
   echo "refused" >&2
@@ -455,9 +488,10 @@ speaks a
 R181_EOF
 # GH-181.2's: every spelling of a definition the patterns cannot read -- by
 # name, by position, by form, by spacing and by body -- and beside them the
-# shape they can, with what is not a definition at all. The first seven lines
-# after the writer are the four measured by review of #181's pull request and
-# the name that review before it found.
+# shape they can, with what is not a definition at all. The first nine lines
+# after the writer are the four spellings measured by review of #181's pull
+# request -- one line, one, three and three -- and the name the review before
+# it found.
 cat > "$R181/odd-defs.sh" <<'R181_EOF'
 speaks() {
   echo "refused" >&2
@@ -491,7 +525,7 @@ cat > "$R181/plain-defs.sh" <<'R181_EOF'
 speaks() {
   echo "refused" >&2
 }
-shouts()
+shouts ()
 {
   echo "x" >&2
 }
@@ -504,6 +538,7 @@ arr=()
 arr=( )
 local -a more=()
 x=$() y=$( )
+diff <() >( )
 # wrap-it() { speaks "$1"; } is a comment
 # function wrap { speaks; }
 cat <<EOF
@@ -581,6 +616,10 @@ tok 'nor a call after a definition line that ends in ; } without closing its bod
     '' "$(writer_callers "$R181/definition-line-ends-like-a-one-liner.sh")"
 tok 'nor a call after a } in column 1 inside a string, a misleading red' \
     '' "$(writer_callers "$R181/brace-in-a-string.sh")"
+tok 'nor a writer whose redirect stands on its closing brace, which is #338' \
+    '' "$(writer_callers "$R181/redirect-on-the-closing-brace.sh")"
+tok 'nor a call the fold joins onto a comment ending in a backslash, which is #338' \
+    '' "$(writer_callers "$R181/comment-ending-in-a-backslash.sh")"
 tok 'and it reads a writer named in a string as a call, the false red it accepts' \
     'usage speaks' "$(writer_callers "$R181/writer-named-in-a-string.sh")"
 req GH-109.2 GH-181.1
@@ -613,6 +652,12 @@ fi
 # asked for in `writer_callers` as fixed text. The count is a literal, so a
 # read that finds none is red rather than vacuous. It asks one direction:
 # `writer_callers`'s one widening is its own, and is argued above.
+# WHAT IT DOES NOT HOLD, filed as #361 from review of #181's pull request: it
+# reads only regex literals with no blank or `/` in them, asks for each as text
+# present anywhere in `writer_callers` rather than in the same role, and does
+# not hold `odd_defs`' copy of the shape at all -- three hand copies of the
+# attribution rules, held by one presence check. The fix is one attribution
+# pass the three share, which is an altitude change and not #181's.
 R181_FW_PATTERNS=$(declare -f fn_writes | grep -oE '/[^/[:space:]]+/' | LC_ALL=C sort -u)
 tok "fn_writes's patterns are read, all six of them" \
     '6' "$(printf '%s\n' "$R181_FW_PATTERNS" | grep -c .)"
@@ -643,7 +688,7 @@ wrap() if true; then speaks "$1"; fi
 wrap() ( speaks "$1" )
 wrap()
 last()' "$(odd_defs "$R181/odd-defs.sh")"
-tok 'and nothing in the shape they read, nor a substitution or an empty array, nor a comment or a heredoc body' \
+tok 'and nothing in the shape they read, nor a substitution of either kind or an empty array, nor a comment or a heredoc body' \
     '' "$(odd_defs "$R181/plain-defs.sh")"
 tok 'and awk text is reported like any other, so the hooks'"'"' own is pinned and not excused' \
     '    function shut(a) { st = 0 }
@@ -671,8 +716,15 @@ fi
 # beside the helper, `${@}` and `${*}`, the two shapes review of #182 found,
 # a drop and a `sed` of its own, a helper named only as the suffix of
 # another's name, and that suffix beside the real call, which a removal
-# unbounded on the left turned into a pass. One reader passes, and one is
-# asked for a helper it does not call.
+# unbounded on the left turned into a pass. The next round of that review
+# found the left bound itself one spelling wide -- `raw-hook_text "$1"` and
+# `./hook_text "$1"` passed -- so the call is now read where a command starts,
+# and these add a hyphen and a path in front of the name, the helper named as
+# an argument of `cat`, `"$1"` continued into a longer word, and the file
+# read through `${!#}` and through `BASH_ARGV`. One reader passes, and one is
+# asked for a helper it does not call. The two trades the library states are
+# asserted as what it does: a call after `if` is refused, a false red, and a
+# `perl` filter of the reader's own passes.
 r181_through() { hook_text "$1" | wc -l; }
 r181_cat_beside() { hook_text "$1"; cat "$1"; }
 r181_braced_at() { hook_text "$1"; printf '%s' "${@}"; }
@@ -681,15 +733,31 @@ r181_own_drop() { hook_text "$1" | cs_drop_heredocs; }
 r181_own_sed() { hook_text "$1" | sed 's/x//'; }
 r181_suffix() { raw_hook_text "$1"; }
 r181_suffix_beside() { hook_text "$1"; raw_hook_text "$1"; }
+r181_hyphen_prefix() { raw-hook_text "$1"; }
+r181_path() { ./hook_text "$1"; }
+r181_as_argument() { cat hook_text "$1"; }
+r181_longer_word() { hook_text "$1"x; }
+r181_indirect() { hook_text "$1"; printf '%s' "${!#}"; }
+r181_bash_argv() { hook_text "$1"; printf '%s' "${BASH_ARGV[0]}"; }
+r181_after_if() { if hook_text "$1" | grep -q x; then return 0; fi; }
+r181_own_perl() { hook_text "$1" | perl -pe 's/x//'; }
 req GH-182.1 GH-181.1 GH-181.2
 tok 'reads_only_through passes one reader of the file through the helper, and refuses every other' \
     'r181_through ' "$(for fn in r181_through r181_cat_beside r181_braced_at r181_braced_star \
-                            r181_own_drop r181_own_sed r181_suffix r181_suffix_beside; do
+                            r181_own_drop r181_own_sed r181_suffix r181_suffix_beside \
+                            r181_hyphen_prefix r181_path r181_as_argument r181_longer_word \
+                            r181_indirect r181_bash_argv; do
                          reads_only_through "$fn" hook_text && printf '%s ' "$fn"
                        done)"
 tok 'and refuses a reader asked for a helper it does not call' \
     'refused' "$(reads_only_through r181_through hook_text fn_writes && echo passed || echo refused)"
+tok 'it refuses a call after if, a false red it takes, and passes a perl filter, a trade it states' \
+    'refused passed' "$(reads_only_through r181_after_if hook_text && echo -n passed || echo -n refused
+                        printf ' '
+                        reads_only_through r181_own_perl hook_text && echo -n passed || echo -n refused)"
 unset -f r181_through r181_cat_beside r181_braced_at r181_braced_star \
-         r181_own_drop r181_own_sed r181_suffix r181_suffix_beside
+         r181_own_drop r181_own_sed r181_suffix r181_suffix_beside \
+         r181_hyphen_prefix r181_path r181_as_argument r181_longer_word \
+         r181_indirect r181_bash_argv r181_after_if r181_own_perl
 
 sourced_to_end
