@@ -235,3 +235,30 @@ with a clean environment. The suites ran six and five at a time at load 15–24.
 - Which file `--list` asks is held by an `armed` pin only. No fixture can make
   the copy's writability differ from the source's without another user or a
   mount.
+
+
+# 2026-09-29 · dev-agent-193 — review round 2: the summary line is compared whole
+
+2026-09-29 10:25 +03. Branch `worktree-issue-193-list-applies-edits`, on
+`origin/dev-05` at `f539d9a`. Range `c742ed9..` this entry's commit:
+`0225126`, then this entry, which puts the branch ten commits ahead of
+`origin/dev-05`.
+
+rev-agent-193's second round re-ran round 1's mutants at `c742ed9`, and all
+were caught. It withdrew root as a counterexample and accepted the three
+declines. It also found a new class, a count read as a substring. `holds` is
+`case "$2" in *"$3"*`, so the two summary checks the assistant added in
+round 1 took `10 rows …` for `0 rows …`. M9, a leading `1` printed before
+the count, survived green at `c742ed9`. The assistant took the finding:
+both checks now pull the summary line out by its words and compare it with
+`tok`. Of the other `holds` and `lacks` literals in the diff, only GH-272's
+`over 1 requirements` carries a count, and there the count sits between two
+words, so the substring read is exact.
+
+Measured at `0225126`, each run in a scratch clone, two runs at a time:
+
+- control: 8068 ok, 0 FAIL, ALL CHECKS PASSED, 392 s.
+- M9: 8066 ok, 2 FAIL. Both new checks went red: `12` for `2` in the
+  fixture and `10` for `0` on the real `--list`.
+
+Open is unchanged from the round-1 entry.
