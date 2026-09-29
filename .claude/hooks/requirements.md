@@ -1369,7 +1369,9 @@ it has no entry above (Q16).
   when the dev-log README was found citing #176 for all four of its
   examples. Cited in #157's issue file beside the `sed -i`, `rm` and `mv`
   rows; taking the `sed -i` rule, or `mv`, out of the guard was measured
-  turning the row it decides red. Fix or accept is its own decision, so it
+  turning the row it decides red. Cited also in #156's issue file, whose joined
+  reading widens the same refusal across a line that ends in a backslash, a
+  heredoc's hard line break among them. Fix or accept is its own decision, so it
   has no entry above
 - #238: the permitting half of a stale read, which #144 leaves: a session that
   fetched before a dev branch rotated reads the outgoing branch as active, so
@@ -1614,6 +1616,21 @@ it has no entry above (Q16).
   comment or operator whose boundary depends on quote, substitution, escape
   or `eval` state -- and pinned its representatives. Cited in GH-185's note
   as that class's structural fix. It adds its requirements in the pull
+  request that fixes it
+- #233: `append-only-docs.sh` permits a truncating redirect spelled `>|` or
+  written at the start of a line. Cited in the GH-156 issue file, beside the
+  one continuation row whose `>` opens a line and is refused by the joined
+  reading rather than by a fix of #233's. Pre-existing; it adds its
+  requirements in the pull request that fixes it
+- #329: a pull request, for #156; rev-agent-156's review rounds are cited where
+  the second reading, of the command as it came, was added
+- #337: `cs_join` joins an even run of trailing backslashes and a backslash in
+  a comment, which bash continues neither of, so the command on the next line
+  loses its boundary: `echo done \\`, a newline and `git push origin main` is
+  permitted by no-git-push.sh, and a `gh pr merge` the same way by
+  no-pr-decisions.sh. Cited in the GH-156 issue file and in GH-156's note as
+  the same class outside `append-only-docs.sh`. Pre-existing, found by the
+  class sweep of #329's review, round 1; it adds its requirements in the pull
   request that fixes it
 - #350: the pull request for #193 and #272; rev-agent-193's review of it is
   cited where what its first round found stands. `--list` asked whether a
