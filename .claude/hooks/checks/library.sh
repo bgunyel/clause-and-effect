@@ -485,11 +485,13 @@ written() {  # written <label> <file> <literal> -- the file as written, # and al
 #
 # AND 1 PASSES ON A ZERO-BYTE FILE, deliberately (#256). An empty file is read,
 # and nothing is in it, so the absence is true; a `[ -s ]` question after the
-# status would refuse that true absence and learn nothing grep's status has not
-# said. A file emptied by a failed write is a presence question, and a pin that
-# must not read a truncation as evidence pairs its `unarmed` with an `armed` or
-# a `written` over the same file. `lacks` is handed text and not a file, which
-# is why it refuses an empty one and this does not.
+# status would refuse that true absence. What it tells apart is a file with
+# bytes from one without -- grep exits 1 on both when the literal is not there
+# -- and whether a file has bytes is not what an absence pin asks (review of
+# #256's branch). A file emptied by a failed write is a presence question, and
+# a pin that must not read a truncation as evidence pairs its `unarmed` with an
+# `armed` or a `written` over the same file. `lacks` is handed text and not a
+# file, which is why it refuses an empty one and this does not.
 #
 # It was an `else` after the grep, and that is the defect twice over. First a
 # file that is not there: grep exits 2, which fell into the else arm and
@@ -1580,11 +1582,11 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
 # directory and a path that is not there all reach that arm rather than a
 # reflow of blanks, over which `unarmed` would read ok. An empty file, a file
 # with no prose in it and a failed extraction all reflow alike, so once
-# reflowed the difference is gone, which is the reason `lacks` refuses an
-# empty string; `unarmed` passes a zero-byte file it was handed, by design
-# (#256), and so is never handed one from here. comment_reflow turns an empty
-# line into one blank, which is why the question is a word and not a size
-# (review of #192's branch). The path mirrors the source's under
+# reflowed the difference is gone, as it is for any text, which is why `lacks`
+# refuses an empty string; `unarmed` passes a zero-byte file it was handed,
+# by design (#256), and so is never handed one from here. comment_reflow turns
+# an empty line into one blank, which is why the question is a word and not a
+# size (review of #192's branch). The path mirrors the source's under
 # $FIXTURES/prose, so a failure names the file it read.
 #
 # AND ONLY FROM AN ABSOLUTE PATH. `written` and `unarmed` refuse a relative
