@@ -772,7 +772,7 @@ done
 # is a glob is recorded under that name, and not under whatever files in the
 # working directory it matched. Measured again with the reset: the record of
 # the library and of the tokeniser is byte for byte the one before it -- and
-# on the merge of dev-05 at 1486270, whose tokeniser #314 grew by 427 lines,
+# on the merge of dev-05 at 1486270, whose tokeniser #202 grew by 427 lines,
 # byte for byte the one the child before #279 writes, 42,534 and 72,227 bytes.
 LOADED_CHILD='bf=" $(compgen -A function | tr "\n" " ") "; bv=" $(compgen -v | tr "\n" " ") bf bv n v "
 . "$1" 3>&- >/dev/null 2>&1
