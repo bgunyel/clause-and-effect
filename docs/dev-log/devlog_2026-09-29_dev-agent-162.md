@@ -315,3 +315,72 @@ paragraph also needed to name `r162_rows`. Nothing else was found to drift.
   - the guard's needle replaced: 1 FAIL.
 - The full suite with the quote fix in place printed ALL CHECKS PASSED, 8121
   ok.
+
+## Appended 2026-09-29 — review round 4 (rev-agent-162), answered in `1dbe707` and the commit holding this section
+
+**Finding 8, a permitting hole in the assistant's round-1 fix.** In round 1
+the assistant made a rest opening with `#` read as naming none, so that
+#157's `# <date> <time> +03 — #<n>: …` would pass. rev-agent-162 showed that
+this hid any session written after the number:
+`— #128 — session 2` on `session-5` passed, and so did
+`— #205 — dev-agent-999: …` and `— #205 · dev-agent-999: …`. Now a `#<n>`
+followed by ` — ` or ` · ` is passed over, and what follows it is read the
+usual way.
+
+The assistant's first version of the fix keyed the displayed label, number
+included, so `— #205 · dev-agent-205` on `dev-agent-205` keyed as
+`205devagent205` and was red. The assistant found that on a probe before
+commit. The judge now keys the word it read (`named`) apart from the label it
+reports, and an agreeing fixture pins the case.
+
+After a `#<n>` joined any other way (a colon, a comma, a slash), the rest is
+the summary and names none. That includes `#205, session dev-agent-999`. It is
+a permitting trade, taken knowingly, because a summary names other sessions.
+The header names it and a fixture pins it.
+
+**Finding 9, a count attested by its subject.** The rows-made row compared
+the rows `r162_rows` made against a count from `r162_names`, the enumerator
+`r162_rows` iterates. So a narrowing of `r162_names` shrank both sides
+together, and rev-agent-162's mutant n1 passed green with three real entries
+unasked. The expected names now come from a bash glob (`dotglob`, `nullglob`,
+README taken off, sorted under `C`). The row compares the whole list, not only
+its length, and the read guard reads the same glob.
+
+**Finding 10.** The README bullet said a session is read "after the date, its
+time and its zone", which the assistant wrote in round 2. A writer could take
+the time and the zone as part of the session. It now says "less its time and
+zone", and names the `#<n>` pass-over.
+
+**Recommended, and taken.** The assistant linked #162, #344 and #354 to the
+pull request with `addCloseIssueReferences`, and `closingIssuesReferences`
+now reads `[162, 344, 354]`.
+
+**Recommended, and declined.** rev-agent-162 offered reading `git ls-files` in
+place of the working tree, to avoid local false reds from `.swp` or `.orig`
+files. The assistant kept the working tree. An entry is written, and the suite
+run, before it is committed. Plain `git ls-files` does not list a file that
+has not been added, so the one entry most likely to be wrong, the one being
+written, would go unread. `--others --exclude-standard` would list it, but
+then what is read depends on each machine's ignore settings. A stray file in
+the tree fails in the refusing direction, locally only, and CI reads a clean
+checkout.
+
+**Evidence, measured.**
+
+- The #162 section alone: 91 ok, 0 FAIL. The new fixtures are inside
+  existing literals, so the row count is unchanged.
+- Mutations of the round-4 code, one at a time in scratch copies:
+  - n1, `r162_names` narrowed to skip real entries: 87 / 1, the glob row;
+  - the `#<n>` pass-over deleted: 89 / 2;
+  - the key taken over the label, number included: 90 / 1;
+  - ` · ` not accepted after `#<n>`: 89 / 2;
+  - a comma accepted after `#<n>`: 90 / 1. The assistant's first spelling of
+    this mutant needed a blank before the comma and so never matched. The
+    assistant rewrote it and re-ran it;
+  - the rows' `fail` arm flipped: 90 / 1;
+  - the real call deleted: 15 / 1;
+  - the README pin on the old zone wording: 90 / 1.
+- **Survived**: `dotglob` taken off the glob, 91 / 0. No dotfile is on disk,
+  and a dotfile would be red on its own row either way, since its name is
+  not an entry's.
+- The full suite at `1dbe707` printed ALL CHECKS PASSED, 8121 ok.
