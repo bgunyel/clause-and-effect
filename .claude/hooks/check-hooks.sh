@@ -748,77 +748,51 @@ done
 # and writes that status on fd 3 before it records anything; and `record_of`
 # reads the child's own exit status as well. A file that sourced non-zero, and
 # a child that did not finish, is a FAIL row at the head, and the run goes on
-# to its verdict with the record as it stands. A file whose sourcing defined
-# nothing still stops the run. See `record_loaded` in the library. Measured
-# before it was relied on, against the library and the tokeniser at 0d5829d:
-# the record this child writes is byte for byte the one the child before #279
-# wrote, 30,498 and 57,596 bytes.
+# to its verdict. A file whose sourcing defined nothing still stops the run.
+# See `record_loaded` in the library. Measured before it was relied on,
+# against the library and the tokeniser at 0d5829d: the record this child
+# writes is byte for byte the one the child before #279 wrote, 30,498 and
+# 57,596 bytes.
 #
-# AND THE CHILD READS IN A SHELL OF ITS OWN SETTING, NOT THE ONE THE FILE LEFT
-# (review round 1 of PR #330). The loops below run in the shell that just
-# sourced the file, so what the file set is what they read with, and each of
-# these was measured to leave a record that the child called whole while it
-# lacked names: `IFS=x` joined every name into one bogus key; `shopt -s
-# nullglob` dropped a function whose name is a glob; `shopt -s nocasematch`
-# skipped `path` as though it were the `PATH` the child started with; and
-# `trap 'exit 0' EXIT` turned the child's `exit 3` into 0; and `declare`
-# aliased to `builtin echo` recorded a body of `-f <name>`. So after the status
-# is written, the child puts each back: no traps, no aliases, globbing off, case
-# matched, and IFS as bash starts it. Each command there is written with a
-# backslash, which an alias the file defined cannot expand; a function the file
-# defines under the same name is the shadowed-builtin limit named above. Globbing
-# off also means a function whose name is a glob is recorded under that name,
-# and not under whatever files in the working directory it matched.
-#
-# AND WHAT THE CHILD WORKS WITH IS OUT OF THE FILE'S REACH, OR THE CHILD SAYS
-# SO (review round 2 of PR #330). The reset left the child's own bookkeeping
-# where the file could reach it: the names it started with were held in
-# variables, `bf` and `bv`, and it looped through `n` and `v`. Measured: `bf="
-# a "` dropped the function `a` from a record called whole; `readonly v`
-# dropped a variable; `readonly IFS=x` made the reset's own assignment fail,
-# and nothing read that; `bv=" W "` recorded bash's own variables; `readonly n`
-# emptied the record, and the run stopped saying the file defined nothing. So:
-#   - The names the child starts with are written before the source to fd 4,
-#     and read back after it from fd 5, both open on one file `record_of`
-#     names, and ended by a line `e:` that is no name's, so that what `read`
-#     trims from the end is never a name the child compares against. Both are closed while the file is sourced, so no variable and no
-#     descriptor of the file's can stand in for them; and the file's own `bf`,
-#     `v` or `n` is now a name like any other, and recorded.
-#   - The child's own names, `_lc_before`, `_lc_nl`, `_lc_n` and `_lc_v`, are
-#     set only after the source; a file that declared any of them, in any way,
-#     readonly included, ends the child with 4.
-#   - Every builtin the child calls after the source is enabled again first,
-#     since `enable -n declare` recorded every body empty, `enable -n printf`
-#     recorded garbage keys, and `enable -n compgen` recorded nothing; and a
-#     step of the reset that fails, as IFS readonly does, ends the child with 4.
-# `record_of` reads 4 as a FAIL row of its own. The status line is written
-# with a backslash too, so an alias of `printf` no longer reaches it. What it
-# does not reach, named: the descriptors bash saves 4 and 5 to while the file
-# is sourced, which the file could close by number; and a variable declared
-# with no value, which `compgen -v` does not list and never did.
+# AND AFTER THE SOURCE THE CHILD RUNS NO PROGRAM, ONLY BASH'S OWN LISTINGS
+# (review rounds 1 to 3 of PR #330). The child used to record in a loop, in the
+# shell that had just sourced the file, and each round of that review found
+# something more the file could leave there to change the record while the
+# child called it whole: IFS, nullglob, nocasematch, an EXIT trap, an alias of
+# `declare` (round 1); the child's own variables, and builtins disabled with
+# `enable -n` (round 2); `exit` aliased to `:` under every guard written
+# after the source, and a trace written into the record (round 3). Each fix
+# was a guard, and each guard was more program for the next state to reach.
+# So the program went instead:
+#   - The names the child starts with are the same two listings, `declare -F`
+#     and `declare -p`, written to fd 4 before the source, in a shell nothing
+#     has touched.
+#   - Everything after the source is on the source's own line, one brace
+#     group, which bash parses whole before the file runs: no alias the file
+#     defines reaches any of it.
+#   - What it runs is the status, to fd 3; `enable declare`; and `declare -F`,
+#     `declare -f` and `declare -p`, to fds 5, 6 and 7, then `e:` on fd 7. No
+#     loop, no word splitting, no pattern, no variable of the child's own, and
+#     nothing on its standard output, which `record_of` sends to /dev/null, so
+#     that a trace pointed at fd 1 goes nowhere. Descriptors 3 to 7 are closed
+#     while the file is sourced.
+#   - Every comparison is made in the suite's shell, by `record_dump`, which
+#     refuses a dump that is not whole or holds a line bash would not have
+#     written there; see the library.
+# What the file can still do to the child, and what comes of it: disable
+# `declare` and `enable` both, or skip commands with a DEBUG trap under
+# extdebug, and the dump is missing or its marker is, which is a FAIL row;
+# write into a dump descriptor, as an EXIT trap can, and the dump is refused,
+# which is a FAIL row; and define a function under the name of a builtin the
+# child calls, `declare`, `enable` or `printf`, which is the shadowed-builtin
+# limit named above and is not reached.
 #
 # Measured with each change: the record of the library and of the tokeniser is
 # byte for byte the one the child before #279 writes -- 42,534 and 72,227
 # bytes on the merge of dev-05 at 1486270, whose tokeniser #202 grew by 427
-# lines, and 42,825 and 72,227 once round 2 was in.
-LOADED_CHILD='\compgen -A function -P "f:" >&4; \compgen -v -P "v:" >&4 && \printf "e:\n" >&4 || exit 3
-. "$1" 3>&- 4>&- 5<&- >/dev/null 2>&1
-\printf "%s" "$?" >&3 || exit 3
-\enable compgen continue declare exit printf read set shopt trap unalias 2>/dev/null || exit 4
-{ \declare -p _lc_before || \declare -p _lc_nl || \declare -p _lc_n || \declare -p _lc_v; } >/dev/null 2>&1 && exit 4
-\trap - EXIT ERR DEBUG RETURN; \unalias -a; \shopt -u nocasematch; \set -f; \printf -v IFS " \t\n" 2>/dev/null || exit 4
-\printf -v _lc_nl "\n" && { IFS= \read -r -d "" _lc_before <&5; [[ -n $_lc_before ]]; } || exit 4
-_lc_before=$_lc_nl$_lc_before
-for _lc_n in $(\compgen -A function); do
-  [[ $_lc_before == *"${_lc_nl}f:$_lc_n$_lc_nl"* ]] && continue
-  \printf "%s\0%s\0" "$_lc_n" "$(\declare -f "$_lc_n")" || exit 3
-done
-for _lc_n in $(\compgen -v); do
-  [[ $_lc_before == *"${_lc_nl}v:$_lc_n$_lc_nl"* || $_lc_n == BASH_* || $_lc_n == _ ]] && continue
-  [[ $_lc_n == _lc_before || $_lc_n == _lc_nl || $_lc_n == _lc_n || $_lc_n == _lc_v ]] && continue
-  _lc_v=$(\declare -p "$_lc_n"); \printf "\$%s\0%s\0" "$_lc_n" "${_lc_v#declare -* }" || exit 3
-done
-exit 0'
+# lines, and 46,022 and 72,227 once round 3 was in.
+LOADED_CHILD='\declare -F >&4 && \printf "e:\n" >&4 && \declare -p >&4 && \printf "e:\n" >&4 || \exit 3
+{ . "$1" 3>&- 4>&- 5>&- 6>&- 7>&- >/dev/null 2>&1; \printf "%s" "$?" >&3; \enable declare; \declare -F >&5 && \declare -f >&6 && \declare -p >&7 && \printf "e:\n" >&7; } 2>/dev/null'
 declare -A LOADED_FROM=() LOADED_STATUS=()
 for f in "$SUITE_DIR/checks/$SUITE_LIBRARY" "$HOOKS/lib/command-scan.sh"; do
   record_loaded "$f" "$FIXTURES/record" || exit 1

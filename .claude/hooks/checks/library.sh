@@ -1070,38 +1070,117 @@ suite_range() {  # suite_range <variable> <sed address> <sed address> -- 1 on an
   return 1
 }
 # What sourcing <file> alone defines, with an empty environment, written to
-# <out> as NUL-separated name/definition pairs by the program in $LOADED_CHILD,
-# and the status sourcing returned to <out>.sourced. 1 if it defined nothing;
-# 2 if the child did not finish -- it exited non-zero, was killed, or ended
-# before sourcing returned, as a file that runs `exit` ends it, or it could
-# not put back a name or a setting it works with that the file changed (exit
-# 4, said as that) -- whatever <out> holds; 3 if sourcing returned non-zero
-# and still defined something. The child's names from before the source go
-# through <out>.before.
+# <out> as NUL-separated name/definition pairs by `record_dump` below, from
+# the listings the program in $LOADED_CHILD dumps beside <out>, and the status
+# sourcing returned, which the child writes to <out>.sourced. 1 if it defined
+# nothing; 2 if the child did not finish -- it wrote no status, as a file that
+# runs `exit` leaves it, or it exited non-zero, was killed, or dumped
+# something `record_dump` refuses -- and <out> is then left empty; 3 if
+# sourcing returned non-zero and still defined something.
 # Why, in words, on stdout, for 2 and 3, and for 1 when sourcing returned
 # non-zero. The three are apart because the head treats them apart (#279): see
 # `record_loaded` below. The #204 section drives it with an exported function
 # kept out and a file that defines nothing refused, and #279's issue file with
 # each of the other outcomes.
 record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did not finish, 3 sourcing returned non-zero; why on stdout
-  local child_status
-  env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$1" > "$2" 3> "$2.sourced" 4> "$2.before" 5< "$2.before"
+  local child_status sourced why
+  : > "$2"
+  env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$1" > /dev/null 3> "$2.sourced" 4> "$2.before" \
+    5> "$2.names" 6> "$2.functions" 7> "$2.variables"
   child_status=$?
-  if [ "$child_status" = 4 ]; then
-    printf 'sourcing it left a name or a setting the child that records it works with, and the child could not put it back'
+  sourced=$(< "$2.sourced")
+  if [ -z "$sourced" ]; then
+    printf 'the child that records it wrote no status for it: it ended before sourcing it returned, or could not write one'
     return 2
   elif [ "$child_status" != 0 ]; then
     printf 'the child that records it exited %s' "$child_status"
     return 2
-  elif [ ! -s "$2.sourced" ]; then
-    printf 'the child that records it ended before sourcing it returned'
+  elif [[ ! $sourced =~ ^[0-9]+$ ]]; then
+    printf 'the child that records it wrote a status that is not one'
     return 2
-  elif [ "$(< "$2.sourced")" != 0 ]; then
-    printf 'sourcing it returned %s' "$(< "$2.sourced")"
+  elif ! why=$(record_dump "$2"); then
+    : > "$2"
+    printf 'the dump of its %s is not whole, or holds text the child did not write there' "$why"
+    return 2
+  elif [ "$sourced" != 0 ]; then
+    printf 'sourcing it returned %s' "$sourced"
     [ -s "$2" ] || return 1
     return 3
   fi
   [ -s "$2" ]
+}
+# THE RECORD, MADE IN THIS SHELL FROM WHAT THE CHILD DUMPED (#279, round 3 of
+# the review of PR #330). The child does no more after the source than write
+# bash's own listings, each to a descriptor of its own, so that nothing the
+# file left in its shell has a program to act on; the reading is done here,
+# where the file never ran. Every line of every dump has to be accounted for,
+# or the record is not made and <out> is left empty: the names the child
+# started with are the same two listings, each ended by `e:`; each function name is a line `declare -f<flags>
+# <name>`; the functions are cut at each name's header, `<name> () `, in the
+# order the names came, and each has to end on a line `}`; and each variable is
+# a line `declare -<flags> <name>[=<value>]`, one a line because bash quotes a
+# newline in a value, ending in `e:`. So text the file got into a dump -- a
+# trace written to one of them, say -- is refused rather than read as a name.
+# Written to <out> as the child before this wrote it: `<name>` and `$<name>`,
+# each with its definition, NUL after each; a name the child started with,
+# `_` and `BASH_*` left out. What it does not reach, named: a function whose
+# body holds a heredoc line that is the next function's header and a `}` line
+# before it, which cuts there; and a variable whose value holds a newline,
+# should a bash print one unquoted. Prints which dump, and returns 1, when one
+# is not whole.
+record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote beside it; 1 and which dump on stdout when one is not whole
+  local line name chunk listing=functions k=-1 fn_re='^declare -f[a-z]* (.+)$' var_re='^declare -[a-zA-Z-]+ ([A-Za-z_][A-Za-z0-9_]*)(=|$)'
+  local -a lines=() names=()
+  local -A was_f=() was_v=()
+  mapfile -t lines < "$1.before"
+  [ "${#lines[@]}" -gt 0 ] && [ "${lines[-1]}" = e: ] || { printf 'starting names'; return 1; }
+  unset 'lines[-1]'
+  for line in "${lines[@]}"; do
+    if [ "$listing" = variables ]; then
+      [[ $line =~ $var_re ]] || { printf 'starting names'; return 1; }
+      was_v[${BASH_REMATCH[1]}]=1
+    elif [ "$line" = e: ]; then
+      listing=variables
+    else
+      [[ $line =~ $fn_re ]] || { printf 'starting names'; return 1; }
+      was_f[${BASH_REMATCH[1]}]=1
+    fi
+  done
+  [ "$listing" = variables ] || { printf 'starting names'; return 1; }
+  mapfile -t lines < "$1.names"
+  for line in "${lines[@]}"; do
+    [[ $line =~ $fn_re ]] || { printf 'function names'; return 1; }
+    names+=("${BASH_REMATCH[1]}")
+  done
+  mapfile -t lines < "$1.functions"
+  for line in "${lines[@]}"; do
+    if [ $((k + 1)) -lt "${#names[@]}" ] && [ "$line" = "${names[k + 1]} () " ]; then
+      if [ "$k" -ge 0 ]; then
+        [[ $chunk == *$'\n}' ]] || { printf 'functions'; return 1; }
+        [ -n "${was_f[${names[k]}]-}" ] || printf '%s\0%s\0' "${names[k]}" "$chunk" >> "$1"
+      fi
+      k=$((k + 1))
+      chunk=$line
+    elif [ "$k" -lt 0 ]; then
+      printf 'functions'; return 1
+    else
+      chunk+=$'\n'$line
+    fi
+  done
+  [ $((k + 1)) = "${#names[@]}" ] || { printf 'functions'; return 1; }
+  if [ "$k" -ge 0 ]; then
+    [[ $chunk == *$'\n}' ]] || { printf 'functions'; return 1; }
+    [ -n "${was_f[${names[k]}]-}" ] || printf '%s\0%s\0' "${names[k]}" "$chunk" >> "$1"
+  fi
+  mapfile -t lines < "$1.variables"
+  [ "${#lines[@]}" -gt 0 ] && [ "${lines[-1]}" = e: ] || { printf 'variables'; return 1; }
+  unset 'lines[-1]'
+  for line in "${lines[@]}"; do
+    [[ $line =~ $var_re ]] || { printf 'variables'; return 1; }
+    name=${BASH_REMATCH[1]}
+    [[ -n ${was_v[$name]-} || $name == BASH_* || $name == _ ]] && continue
+    printf '$%s\0%s\0' "$name" "${line#declare -* }" >> "$1"
+  done
 }
 # THE HEAD'S RECORD OF ONE FILE (#279): `record_of`, and what the head does
 # with each outcome. A file whose sourcing defined nothing gives the foot
@@ -1109,9 +1188,9 @@ record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did no
 # the status too, when sourcing returned non-zero. Any other outcome is
 # recorded as it stands and the run goes on: a file that sourced non-zero, or
 # a child that did not finish, is a FAIL row here, under GH-279.1, naming the
-# file and why, and not an abort. A record the child did not finish can be
-# short of names, and a name it lacks is not compared at the foot; the row is
-# what says so, and it fails the run. Written to LOADED_BODY and LOADED_FROM,
+# file and why, and not an abort. A child that did not finish leaves no
+# record, so nothing of that file is compared at the foot; the row is what
+# says so, and it fails the run. Written to LOADED_BODY and LOADED_FROM,
 # which the driver declares, and the outcome to LOADED_STATUS, keyed by the
 # file, so that a check can read what the head found rather than record the
 # file again (round 1 of the review of PR #330). The FAIL row is tagged through
