@@ -56,7 +56,9 @@
 #     ` — ` -- em dash, one blank each side -- is the heading's LABEL.
 #   - when neither the title nor the label names a session, the REST after that
 #     ` — ` is read: its first word, blanks around it dropped, or its first two
-#     when the first is the word `session`. A rest opened with `#` names none,
+#     when the first is the word `session`. A `#<n>` followed by ` — ` or
+#     ` · ` is passed over first, and what follows it is read the same way,
+#     keyed without the number. A rest opened with `#` otherwise names none,
 #     as the #157 entries' `#<n>:` does. That is the session a title-first
 #     heading writes last, and any heading that uses the dash where the others
 #     use a ` · `.
@@ -85,7 +87,13 @@
 #     after the dash in more than one word -- `session 2 — #128: …`,
 #     `dev-agent-9 (continued)` -- which the reading of one word passed green;
 #     a false red is visible, and a false green is not. Open the rest with
-#     `#<n>`, or name the session before the dash.
+#     `#<n>:`, or name the session before the dash. The same holds after a
+#     `#<n> — `: `— #205 — the summary` reads `the`.
+#   - a session after a `#<n>` joined to it by anything but ` — ` or ` · ` is
+#     not read, so `# <date> <time> +03 — #205, session dev-agent-999` names
+#     none. This one is on the permitting side, and taken knowingly: after an
+#     issue number, a colon, a comma or anything else opens the summary, and a
+#     summary names other sessions. No entry is that shape.
 #   - a title before the date other than the three spellings of `Devlog` is
 #     read as a session, so `# Notes — <date> · session 9 — …` is red. No entry
 #     is that shape.
@@ -137,7 +145,8 @@ requirement GH-162 <<'REQ'
   without seconds and then a zone, each where it stands, up to the first
   ` — `; and, when neither of those names one, in the rest after that dash,
   whose first word is read, or its first two when the first is `session`,
-  and which names none when it opens with `#`. A heading naming no session
+  after a `#<n>` and a ` — ` or ` · ` when it opens with them, and which
+  otherwise names none when it opens with `#`. A heading naming no session
   in any of the three is not held to one. The list of entries
   is derived from the directory, so an entry added is asked with nothing else
   changed, and the rule is driven against fixture directories, each asserted
@@ -172,7 +181,7 @@ r162_key() {  # r162_key <text> -- the Edit guard's session_key, copied: its let
 }
 
 r162_judge() {  # r162_judge <path> -- `names its session`, `names no session`, or what is wrong
-  local name=${1##*/} date sess first title label rest _
+  local name=${1##*/} date sess first title label named rest _
   if ! [[ $name =~ ^devlog_([0-9]{4}-[0-9]{2}-[0-9]{2})_(.+)[.]md$ ]]; then
     printf 'its name is not devlog_<date>_<session>.md'; return
   fi
@@ -196,18 +205,20 @@ r162_judge() {  # r162_judge <path> -- `names its session`, `names no session`, 
   [[ $label =~ ^(\ ?(Z|UTC|[+-][0-9]{2}(:?[0-9]{2})?))([[:space:]]|$) ]] && label=${label#"${BASH_REMATCH[1]}"}
   rest=
   case "$label" in *' — '*) rest=${label#*' — '} label=${label%%' — '*} ;; esac
+  named=$label
   if [ -z "$title" ] && [ -z "$(r162_key "$label")" ]; then
-    local w1= w2=
+    local w1= w2= lead= issue='^[[:space:]]*(#[0-9]+ (—|·) )(.*)$'
+    if [[ $rest =~ $issue ]]; then lead=${BASH_REMATCH[1]} rest=${BASH_REMATCH[3]}; fi
     read -r w1 w2 _ <<< "$rest"
     case "$w1" in
       '#'*) ;;
       *) [ "$(r162_key "$w1")" = session ] && [ -n "$w2" ] && w1="$w1 $w2"
-         label=" — $w1" ;;
+         named=$w1 label=" — $lead$w1" ;;
     esac
   fi
-  if [ -z "$(r162_key "$label")" ]; then
+  if [ -z "$(r162_key "$named")" ]; then
     if [ -n "$title" ]; then printf 'names its session'; else printf 'names no session'; fi
-  elif [ "$(r162_key "$label")" = "$(r162_key "$sess")" ]; then
+  elif [ "$(r162_key "$named")" = "$(r162_key "$sess")" ]; then
     printf 'names its session'
   else
     printf 'its heading names |%s|, and its name %s' "$label" "$sess"
@@ -298,6 +309,11 @@ r162_entry "$R162_OK" devlog_2026-09-26_dev-agent-217.md '# 2026-09-26 15:30 UTC
 r162_entry "$R162_OK" devlog_2026-09-26_dev-agent-218.md $'# 2026-09-26 · dev-agent-218 — written with CRLF\r'
 r162_entry "$R162_OK" devlog_2026-09-26_session-2.md '# 2026-09-26 · session 2 — a correction to session 1'
 r162_entry "$R162_OK" devlog_2026-09-26_zulu-1.md '# 2026-09-26 15:30 Zulu-1 — a session whose name opens as a zone does'
+# A session after a `#<n>` and a ` · ` or ` — `, keyed without the number;
+# and the trade the header names, a session after a `#<n>` and anything else,
+# which is the summary and names none.
+r162_entry "$R162_OK" devlog_2026-09-26_dev-agent-219.md '# 2026-09-26 18:55 +03 — #205 · dev-agent-219: the session after the issue'
+r162_entry "$R162_OK" devlog_2026-09-26_dev-agent-220.md '# 2026-09-26 18:55 +03 — #205, session dev-agent-999'
 tok 'every shape an entry is written in agrees, and README.md is not an entry' \
 'devlog_2026-08-01_session-1.md: names its session
 devlog_2026-08-10_session-2.md: names its session
@@ -316,6 +332,8 @@ devlog_2026-09-25_dev-agent-215.md: names no session
 devlog_2026-09-26_dev-agent-216.md: names its session
 devlog_2026-09-26_dev-agent-217.md: names its session
 devlog_2026-09-26_dev-agent-218.md: names its session
+devlog_2026-09-26_dev-agent-219.md: names its session
+devlog_2026-09-26_dev-agent-220.md: names no session
 devlog_2026-09-26_session-2.md: names its session
 devlog_2026-09-26_zulu-1.md: names its session
 devlog_2026-09-27_dev-agent-110.md: names its session
@@ -365,6 +383,11 @@ r162_entry "$R162_BAD" devlog_2026-09-23_dev-agent-214.md $'# Dev-log — 2026-0
 r162_entry "$R162_BAD" devlog_2026-09-23_dev-agent-215.md '# Dev-log — 2026-09-23 — dev-agent-999 (continued)'
 r162_entry "$R162_BAD" devlog_2026-09-25_dev-agent-216.md '# 2026-09-25 14:09 +03 — the check-hooks summary'
 r162_entry "$R162_BAD" devlog_2026-09-19_session-6.md '# Devlog session 7 — 2026-09-19'
+# A session written after #157's `#<n>` and a ` — ` or ` · `, which reading a
+# `#` as naming none passed green.
+r162_entry "$R162_BAD" devlog_2026-09-19_session-8.md '# 2026-09-19 21:53 +03 — #128 — session 2'
+r162_entry "$R162_BAD" devlog_2026-09-24_dev-agent-220.md '# 2026-09-24 18:55 +03 — #205 — dev-agent-999: new entries'
+r162_entry "$R162_BAD" devlog_2026-09-24_dev-agent-221.md '# 2026-09-24 18:55 +03 — #205 · dev-agent-999: new entries'
 tok 'a moved session, a moved date, a named trade, and a file that is not an entry are each red, with the reason' \
 '.devlog_2026-09-18_session-1.md: its name is not devlog_<date>_<session>.md
 devlog_2026-08-01_session-1.md: its heading names | · session 2|, and its name session-1
@@ -382,6 +405,7 @@ devlog_2026-09-18_session-3.md: its first line is not a heading
 devlog_2026-09-18_session-4.md: its first line is not a heading
 devlog_2026-09-19_session-5.md: its heading names | — session 2|, and its name session-5
 devlog_2026-09-19_session-6.md: its heading names |# Devlog session 7 — | before its date, and its name session-6
+devlog_2026-09-19_session-8.md: its heading names | — #128 — session 2|, and its name session-8
 devlog_2026-09-20_clause-and-effect-37.md: its heading names | · session `clause-and-effect-38`|, and its name clause-and-effect-37
 devlog_2026-09-20_dev-agent-130.md: its heading names |, session `dev-agent-131`|, and its name dev-agent-130
 devlog_2026-09-20_dev-agent-212.md: its heading names | — session `dev-agent-999`|, and its name dev-agent-212
@@ -392,6 +416,8 @@ devlog_2026-09-23_dev-agent-215.md: its heading names | — dev-agent-999|, and 
 devlog_2026-09-23_dev-agent-9.md: its heading names | — dev-agent-204|, and its name dev-agent-9
 devlog_2026-09-24_dev-agent-205.md: its heading names | – #205: new `GH-` entries declared|, and its name dev-agent-205
 devlog_2026-09-24_dev-agent-211.md: its heading names | — dev-agent-999|, and its name dev-agent-211
+devlog_2026-09-24_dev-agent-220.md: its heading names | — #205 — dev-agent-999:|, and its name dev-agent-220
+devlog_2026-09-24_dev-agent-221.md: its heading names | — #205 · dev-agent-999:|, and its name dev-agent-221
 devlog_2026-09-25_dev-agent-207.md: its heading names | — WIP|, and its name dev-agent-207
 devlog_2026-09-25_dev-agent-216.md: its heading names | — the|, and its name dev-agent-216
 notes_2026-09-18_session-1.md: its name is not devlog_<date>_<session>.md' \
@@ -421,10 +447,10 @@ tok 'a judgement ending as a passing one does is classed by the whole of it' \
 # made in this shell. The literal's first `ok` is broken by a quote, because
 # a quoted string opening with a result's prefix reads to GH-104.1 as a result
 # printed outside pass and fail.
-r162_rows() {  # r162_rows <dir> -- an ok or a FAIL row for every name in it but README.md, counted in R162_MADE
+r162_rows() {  # r162_rows <dir> -- an ok or a FAIL row for every name in it but README.md, each name added to R162_MADE
   local path said
   while IFS= read -r -d '' path; do
-    R162_MADE=$((R162_MADE + 1))
+    R162_MADE+="${path##*/}"$'\n'
     said=$(r162_judge "$path")
     case "$(r162_class "$said")" in
       named) pass static '%s: its heading is dated and named as its file is' "${path##*/}" ;;
@@ -451,20 +477,25 @@ tok 'a row an entry: ok where it names its session or none, FAIL where it contra
 # THE REAL DIRECTORY, a row an entry, off the root the suite derives once.
 # Guarded on both sides: a read that found nothing, or not the entry #162 was
 # filed against as a whole name, would leave every row below unasked; and rows
-# not made for every name read would leave the rest unasked. Either is a green
-# section that asked nothing.
+# not made for every name the directory holds would leave the rest unasked.
+# Either is a green section that asked nothing. What the directory holds is
+# read by a glob and not by r162_names, which the rows are made over: a list
+# narrowed there would narrow both sides of a comparison with itself.
 R162_DIR="$REPO_ROOT/docs/dev-log"
-R162_READ=$(r162_names "$R162_DIR" | tr '\0' '\n' | sed 's|.*/||')
+R162_HELD=$(shopt -s dotglob nullglob
+  for r162_path in "$R162_DIR"/*; do
+    [ "${r162_path##*/}" = README.md ] || printf '%s\n' "${r162_path##*/}"
+  done | LC_ALL=C sort)
 holds 'the real dev-log was read, the entry #162 was filed against among it' \
-    $'\n'"$R162_READ"$'\n' $'\ndevlog_2026-09-17_session-5.md\n'
-R162_MADE=0
+    $'\n'"$R162_HELD"$'\n' $'\ndevlog_2026-09-17_session-5.md\n'
+R162_MADE=
 r162_rows "$R162_DIR"
-tok 'a row was made for every name the real dev-log was read to hold' \
-    "$(printf '%s\n' "$R162_READ" | grep -c .)" "$R162_MADE"
+tok 'a row was made for every name the real dev-log holds, the names read by a glob' \
+    "$R162_HELD" "${R162_MADE%$'\n'}"
 
 # THE README SAYS SO, where an entry is written: the whole bullet, once.
 R162_README="$REPO_ROOT/docs/dev-log/README.md"
 tok 'the dev-log README states the rule where an entry is written, once' '1' \
-    "$(prose_occurrences "$R162_README" "- An entry's first line is its heading. It carries the date its file name carries, and when it names a session it names the one the file is named for; it may name none. \`check-hooks.sh\` reads every entry file's first line against its name and is red on one that contradicts it; an entry appended after the first is not read (#162). A session is read in three places: before the date, less a \`Devlog\` title; after the date, its time and its zone, up to the first \` — \`; and, only when neither of those names one, after that dash, where the first word, or \`session\` and the word after it, is read as the session unless it opens with \`#\`. So \`# <date> <time> +03 — #<n>: …\` names none, and \`# <date> <time> +03 — WIP\` names \`WIP\`. An entry exists from its first write, so write the heading right the first time.")"
+    "$(prose_occurrences "$R162_README" "- An entry's first line is its heading. It carries the date its file name carries, and when it names a session it names the one the file is named for; it may name none. \`check-hooks.sh\` reads every entry file's first line against its name and is red on one that contradicts it; an entry appended after the first is not read (#162). A session is read in three places: before the date, less a \`Devlog\` title; after the date, less its time and zone, up to the first \` — \`; and, only when neither of those names one, after that dash, where the first word, or \`session\` and the word after it, is read as the session unless it opens with \`#\`, a \`#<n>\` followed by \` — \` or \` · \` being passed over first. So \`# <date> <time> +03 — #<n>: …\` names none, and \`# <date> <time> +03 — WIP\` names \`WIP\`. An entry exists from its first write, so write the heading right the first time.")"
 
 sourced_to_end
