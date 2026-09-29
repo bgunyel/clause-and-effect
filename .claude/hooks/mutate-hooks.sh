@@ -892,6 +892,12 @@ heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
 normalise-swallows-a-missing-heredoc-pass%lib/command-scan.sh%/^  unset -f cs_normalise$/d%GH-182.2%caught
+delimiter-grammar-ignored%lib/command-scan.sh%s/if (!delimiter(d) || substr/if (substr/%GH-351.1%caught
+delimiter-span-space-ignored%lib/command-scan.sh%s/!delimiter(d) || substr(scan, RSTART, RLENGTH + 1) ~ \/\[\\r\\f\\v\]\/)/!delimiter(d))/%GH-351.1%caught
+delimiter-space-after-ignored%lib/command-scan.sh%s/substr(scan, RSTART, RLENGTH + 1)/substr(scan, RSTART, RLENGTH)/%GH-351.1%caught
+delimiter-single-span-admits-double%lib/command-scan.sh%s/|\\047\[^\\047"\]\*\\047|/|\\047[^\\047]*\\047|/%GH-351.1%caught
+delimiter-double-span-admits-single%lib/command-scan.sh%s/|"\[^"\\047/|"[^"/%GH-351.1%caught
+delimiter-give-back-not-sticky%lib/command-scan.sh%/^      if (gaveup) { print; next }$/d%GH-351.1%caught
 command-word-not-reduced%lib/command-scan.sh%s/^      w = substr(s, 1, i - 1)$/      w = "x"/%GH-117%caught
 wrapper-word-spelling-not-admitted%lib/command-scan.sh%s/SPELLING((ba|z|)sh/((ba|z|)sh/%GH-117%caught
 prefix-word-spelling-not-reduced%lib/command-scan.sh%s/return cw_name(w)/return w/%GH-117%caught

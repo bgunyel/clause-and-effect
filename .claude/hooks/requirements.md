@@ -1653,3 +1653,7 @@ it has no entry above (Q16).
   measured each hand mutation of the helpers under the whole suite, and
   those figures replaced a table of runs scoped to the issue file. Cited in
   #256's issue file as the source of that table
+- #314: the pull request for #202, whose round-2 review by rev-agent-202
+  measured #351's delimiters permitted in that pull request's keep-unquoted
+  mode, where the author then found them permitted by every hook on dev-05.
+  Cited in #351's issue file as where the defect was found

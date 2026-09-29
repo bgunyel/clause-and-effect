@@ -498,6 +498,23 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # refusal is visible and one edit away, and a permitted push is neither.
 cs_drop_heredocs() {
   awk '
+    # THE DELIMITER GRAMMAR, #351: a word for which deleting its quote
+    # characters is what bash quote removal does to it -- plain characters
+    # other than a backslash, a dollar and a backtick, whole \047...\047 spans
+    # holding no double quote, and whole "..." spans holding no single quote,
+    # backslash, dollar or backtick. The quote of the other kind is excluded
+    # because the pass deletes every quote character and bash keeps one
+    # inside the other: the first version of this grammar let `<<"it\047s"`
+    # through, and the #128-style property run below found it.
+    # Outside it the two part, and the terminator this pass waits for is not
+    # the one bash ends the body on: `<<"it\047s"` ends at it\047s where this
+    # waited for its, `<<\EOF` and `<<E\OF` at EOF, `<<$\047EOF\047` and
+    # `<<$"EOF"` at EOF where this waited for $EOF, `<<"E\"F"` at E"F. A body
+    # that ends later here than in bash hides the lines between, which bash
+    # runs; measured, with no-git-push.sh permitting a push on each.
+    function delimiter(w) {
+      return w ~ /^([^\047"\\$`]|\047[^\047"]*\047|"[^"\047\\$`]*")+$/
+    }
     ind {
       line = $0
       if (dash) sub(/^\t+/, "", line)
@@ -506,6 +523,9 @@ cs_drop_heredocs() {
       next
     }
     {
+      # Once a delimiter could not be read, nothing more is dropped: every
+      # line from there to the end is given back as commands. #351 below.
+      if (gaveup) { print; next }
       # An opener found on an earlier line of this logical line is the one that
       # stands: the first match wins, as it did when every logical line was one
       # physical line. `opener` set means a body is waiting for the line to end,
@@ -519,6 +539,24 @@ cs_drop_heredocs() {
           d = substr(scan, RSTART, RLENGTH)
           dash = (d ~ /^<<-/)
           sub(/^<<-?[[:space:]]*/, "", d)
+          # A delimiter this pass cannot read the way bash does is not trusted
+          # to end anywhere, and nor is anything after it: skipping just this
+          # opener would read its body as commands, and an opener inside that
+          # body -- text, to bash -- could then drop lines bash runs once the
+          # real body has ended. So the rest of the command is given back,
+          # which is where every other uncertainty in this pass lands. #351.
+          #
+          # The match, and the character after it, are asked too: to awk a
+          # carriage return, form feed or vertical tab is space, so the regex
+          # steps over one before the word and stops at one after it, and to
+          # bash each is part of the word. `<<\r\047EOF\047` ends at a line
+          # reading \rEOF, and `<<\047EOF\047\r` at one reading EOF\r; here
+          # both waited for EOF.
+          if (!delimiter(d) || substr(scan, RSTART, RLENGTH + 1) ~ /[\r\f\v]/) {
+            gaveup = 1
+            print
+            next
+          }
           gsub(/[\047"]/, "", d)
           opener = 1
         }

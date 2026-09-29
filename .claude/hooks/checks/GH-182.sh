@@ -112,10 +112,11 @@ requirement GH-182.3 <<'REQ'
   is a bare parameter, such as `$CMDS` or `$1`, or a word in capitals -- the
   two lines a one-parameter heredoc body and its delimiter are made of -- and
   a line the drop rewrites rather than removes, the line ending an opener's
-  logical line when it ends in an even run of backslashes, reads as a red. The
-  one exception is the block that no-pr-decisions.sh's `grep -q '<<'` drops,
-  whose quoted opener has an empty delimiter that the next blank line ends: it
-  is held verbatim until #289 stops the tokeniser dropping it. `hook_text` is
+  logical line when it ends in an even run of backslashes, reads as a red.
+  There was one exception, the block that no-pr-decisions.sh's `grep -q '<<'`
+  dropped, its quoted opener leaving a delimiter that the next blank line
+  ended; since #351 that delimiter, a lone quote, is outside the heredoc pass's
+  grammar and nothing after it is dropped, so there is none. `hook_text` is
   that drop and then the fold, pinned as written, so no stage the counters
   read escapes the question. So an arm or a call hidden by an opener the
   tokeniser misreads is a red run that names the line, and not a count that
@@ -205,9 +206,11 @@ speaks
 R182_EOF
 # The half of the fail-safe that does not hold, asserted as the trade it is and
 # owned by #289: an opener the tokeniser misreads, whose body a line then ends.
-# A quoted `'<<'` has an empty delimiter once its quotes are gone, so a blank
-# line ends it -- the shape no-pr-decisions.sh carries -- and a trailing comment
-# naming `<<LIST` is ended by the real `LIST` further down.
+# A trailing comment naming `<<LIST` is ended by the real `LIST` further down.
+# A quoted `'<<'`, whose delimiter was empty once its quotes were gone and so
+# ended at a blank line -- the shape no-pr-decisions.sh carries -- was the
+# other, and since #351 is not: a lone quote is outside the heredoc pass's
+# delimiter grammar, and the rest of the text is given back.
 cat > "$R182/quoted-opener-a-blank-line-ends.sh" <<'R182_EOF'
 if echo "$C" | grep -q '<<'; then
   echo "refused" >&2
@@ -266,8 +269,8 @@ tok 'arms gives back the lines of an opener whose terminator never arrives' \
 tok 'and fn_writes reads them in their place' \
     'hint writes
 speaks writes' "$(fn_writes "$R182/quoted-opener-never-closed.sh")"
-tok 'arms loses the arm under a quoted <<, whose empty delimiter a blank line ends: the trade #289 owns' \
-    '1' "$(arms "$R182/quoted-opener-a-blank-line-ends.sh")"
+tok 'arms counts the arm under a quoted <<, whose lone-quote delimiter #351 does not trust' \
+    '2' "$(arms "$R182/quoted-opener-a-blank-line-ends.sh")"
 tok 'arms loses the arm after a trailing comment naming <<LIST, which the real LIST ends: the same trade' \
     '1' "$(arms "$R182/trailing-comment-opener-a-delimiter-ends.sh")"
 # All three counters, and not the one the issue named first: `fn_writes` and
@@ -393,16 +396,12 @@ hook_dropped() {  # hook_dropped <file> -- "-<line>" per line removed, "+<line>"
 # two alternate, since which copy of a repeated line diff calls dropped is
 # diff's choice, and the lines dropped are the same whichever it makes.
 #
-# Each hook's answer is a literal: none for no-git-push.sh, and for
-# no-pr-decisions.sh the block under its `grep -q '<<'`, verbatim, blank
-# terminator included. An arm or a call added to that block changes the text
-# and is red; so is #289 closing, which leaves the literal naming lines nothing
-# drops, and it goes when #289 does. The cost, taken knowingly: an edit to that
-# block that changes no verdict -- a line reworded, a variable renamed -- is red
-# here too, which is the refusing direction. Respelling the `grep -q '<<'` so
-# the tokeniser cannot see its `<<` would end that, and is declined: it is a guard
-# edit made for a counter's sake, and it would hide #289's one instance rather
-# than hold it.
+# Each hook's answer is a literal, and since #351 it is none for both. For
+# no-pr-decisions.sh it was the block under its `grep -q '<<'`, verbatim, the
+# quoted `<<` there leaving a delimiter a blank line ended; the literal was
+# written to go red when that stopped, and #351 stopped it, the lone quote
+# being outside the heredoc pass's delimiter grammar. An arm or a call hidden
+# in either hook by a drop is red here.
 r182_unshaped() {  # r182_unshaped -- stdin: hook_dropped's lines; stdout: those no heredoc of this shape explains
   grep -vE '^-(\$([A-Za-z_][A-Za-z0-9_]*|[0-9])|[A-Z][A-Z0-9_]*)$'
 }
@@ -413,14 +412,6 @@ r182_unshaped() {  # r182_unshaped -- stdin: hook_dropped's lines; stdout: those
 r182_a_late_caller() {  # r182_a_late_caller -- never called; a fixture for R182_CALLERS
   cs_drop_heredocs < /dev/null
 }
-R182_FALSE_OPENER=$(cat <<'R182_EOF'
--  SCAN="$SCAN
--$COMMAND"
--  CMDS=$(printf '%s\n' "$SCAN" | cs_split)
--fi
--
-R182_EOF
-)
 # The empty row below asks something only if the diff ran: with no GNU diff to
 # read --old-line-format, or a process substitution that failed, it would pass
 # on nothing. no-git-push.sh reads its commands through heredoc loops, so its
@@ -433,8 +424,8 @@ else
 fi
 tok 'hook_text drops nothing from no-git-push.sh but one-parameter heredoc bodies and their delimiters' \
     '' "$(printf '%s\n' "$R182_PUSH_DROPPED" | r182_unshaped)"
-tok 'and from no-pr-decisions.sh those and the block under its quoted <<, verbatim, which #289 owns' \
-    "$R182_FALSE_OPENER" "$(hook_dropped "$HOOKS/no-pr-decisions.sh" | r182_unshaped)"
+tok 'and from no-pr-decisions.sh the same, the block under its quoted << no longer dropped since #351' \
+    '' "$(hook_dropped "$HOOKS/no-pr-decisions.sh" | r182_unshaped)"
 # What makes those two rows about the text the counters read: `hook_text` is
 # `hook_bodiless` and then the fold, and nothing between, pinned as bash holds
 # it. A stage added after the drop -- a filter, a route round #289 -- would be
@@ -448,13 +439,11 @@ R182_EOF
 )
 tok 'hook_text is the drop and then the fold, with no stage between' \
     "$R182_HOOK_TEXT" "$(declare -f hook_text | sed 's/[[:space:]]*$//')"
-# Driven, not only asserted: the two trade fixtures above each hide an arm, and
-# this is what names it.
-tok 'r182_unshaped names the arm a quoted << hides, and the lines with it' \
-    '-  echo "refused" >&2
--fi
--' "$(hook_dropped "$R182/quoted-opener-a-blank-line-ends.sh" | r182_unshaped)"
-tok 'and the arm a trailing comment naming <<LIST hides, with the real opener' \
+# Driven, not only asserted: the trade fixture above hides an arm, and this is
+# what names it. The quoted-<< fixture hid one too, until #351, and hides none.
+tok 'r182_unshaped names nothing under a quoted << whose word is a lone quote, since #351' \
+    '' "$(hook_dropped "$R182/quoted-opener-a-blank-line-ends.sh" | r182_unshaped)"
+tok 'r182_unshaped names the arm a trailing comment naming <<LIST hides, with the real opener' \
     '-echo "refused" >&2
 -while read -r x; do :; done <<LIST' "$(hook_dropped "$R182/trailing-comment-opener-a-delimiter-ends.sh" | r182_unshaped)"
 tok 'and an opener the drop rewrites, as the line it was and the line it became' \
