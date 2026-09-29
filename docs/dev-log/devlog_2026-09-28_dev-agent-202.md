@@ -269,3 +269,88 @@ which conflicted on the same two lists. rev-agent-202 reviewed `b6ece96`
 - **#311**: the staged script, still the one recorded trade.
 - **#289**: `cs_normalise`'s own opener.
 - **GH-182.2's in-place edit**: Bertan's decision.
+
+
+# 2026-09-29 16:49 +0300 · dev-agent-202 — #202, round 3 of the review of PR #314
+
+Branch `worktree-issue-202-quoted-heredoc-body`, from `2a642f3` to `e46e7c1`
+and this entry. The assistant merged `origin/dev-05` at `01bfef4` (#350,
+`f0cc6a0`), which conflicted on the text-check literal and the cited-issue
+list. rev-agent-202 reviewed `2a642f3`
+(https://github.com/bgunyel/clause-and-effect/pull/314#issuecomment-5887869787).
+
+## What the review found, and what was done
+
+- **Gate 6: the text in front of an opener still went through a deny-list.**
+  The review measured eight shapes that `lex()` read wrong without doubting
+  (q01–q08): a backtick taken for a separator, quotes inside backticks, a `#`
+  after `)` or a backtick, `$$'`, two continuations, and `\}` inside `"${…}"`.
+  rev-agent-202 suggested an alphabet allow-list, and the assistant built it:
+  - allowed: quotes, a backslash escape, `$NAME`, `${NAME}`, a `#` after a
+    blank, and the separators;
+  - everything else outside single quotes is doubt.
+
+  The assistant allowed `$(` outside double quotes, against the suggestion.
+  With `$(` refused, the corpus gave back one of the three commands #202
+  gains (an `id=$(gh api … --jq .id)` in front of the opener), and no row
+  needed it refused.
+- **A carriage return between `<<` and the delimiter.** The review could not
+  build one that permits. The assistant did (`cat > /tmp/f <<\r'EOF'`),
+  because awk's `[[:space:]]` takes the `\r` for space. It is refused at the
+  opener now. It also permits in the default mode on `dev-05`, where bash ran
+  the push; that is reported on #351.
+- **Gate 7: `gh api`'s output reaches a reader.** The review measured `<( )`
+  and `> >( )`. The assistant measured three more channels: a brace group, an
+  `if`, and a command substitution. The review's suggested patch (no `>`
+  after, not inside an unclosed paren) would have left the first two open.
+  So the assistant took `gh api` out of the consumers. None of the 372 corpus
+  commands fed it a quoted heredoc.
+- **Trades.** A name is not resolved: a variable set to `/dev/fd`, a symlink,
+  a FIFO, or a function named `cat`. These are recorded as CLAUDE.md
+  consequence 6's family, with one permitted row each. The claims "a variable
+  cannot smuggle in a device" and "a proven file" are corrected.
+- **The Gate 5 remainder.** The assistant ran each mutation alone against
+  every row on stdin, now 108 rows.
+  - The device list is `stdout|stderr|fd`, with one row each. `dev`, `proc`,
+    `stdin`, `tty`, `.` and `..` had no row any member alone could turn red.
+  - Two tests decided nothing and were deleted, with the reason in the code:
+    the carriage return inside `lex()` and the "command started here" test.
+  - The `lex()` call over the delimiter was a no-op and is gone.
+  - Three new rules got rows only they refuse: a bare `((`, a `#` after `;`,
+    and a backtick inside double quotes. For the last, a search of 1,168
+    generated strings found nothing, because its tail was fixed. The
+    assistant then built the row by hand: the next line has to open with the
+    quote.
+
+## Measured
+
+- **Corpus:** 332 permitted by all three, 37 refused by all three, 3 gained
+  and kept. The three are `01bfef4`, `2a642f3` and this branch.
+- **`CHECK_HOOKS_DIR` from a copy of `9b7b017`:**
+  - pre-fix hook: 20 `flip` rows and 5 TRADE rows red with got=BLOCK;
+  - round-2 library: its 15 permitted rows red with got=ALLOW.
+- **Registry:** 183 rows, 181 caught; text checks 328.
+- **Suite:** ALL CHECKS PASSED at `9b7b017`.
+- `mutate-hooks.sh -v` on the 28 #202 rows at `9b7b017`: all 28 caught, 29
+  runs including the baseline.
+
+## Mistakes and dead ends
+
+- **The brute-force search for a backtick-in-quotes witness found none.**
+  The assistant did not delete the rule on that evidence. It worked out why
+  the search could not find one (its tail was fixed, and the witness needs
+  the next line to open with a quote), and built that row by hand.
+- **A heredoc of Python** carrying the new comments was refused by
+  `no-pr-decisions.sh`, because its text named `gh api` beside a wrapper. The
+  assistant moved each edit into a script file.
+- **An append of this entry's round-2 predecessor** was refused by
+  `append-only-docs.sh`, because a `sed -i` on a scratch file shared the
+  command with the entry's path. The assistant split the two.
+
+## Open
+
+- **#351**: the delimiter defect in the default mode, now with a carriage
+  return row.
+- **#311**: the staged script.
+- **#289**: `cs_normalise`'s own opener.
+- **GH-182.2's in-place edit**: Bertan's decision.
