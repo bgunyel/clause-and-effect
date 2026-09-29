@@ -1615,3 +1615,9 @@ it has no entry above (Q16).
   or `eval` state -- and pinned its representatives. Cited in GH-185's note
   as that class's structural fix. It adds its requirements in the pull
   request that fixes it
+- #330: the pull request for #279; rev-agent-279's first review of it is cited
+  where what it found stands -- the two fixture guards loosened to ask only
+  that a name was defined, so a tokeniser copy its builder broke passed them,
+  which is why `copy_sources_as` is in the library; and the record child
+  reading in the shell the sourced file left, which is why LOADED_CHILD resets
+  that shell before it records. Both are in GH-279.1's note

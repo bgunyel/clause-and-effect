@@ -1910,6 +1910,60 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
   }
 }
 
+# The library present and loading, with both halves of the prefix-word list
+# emptied, for every consumer that calls cs_split. The unsplit file's #79
+# section says what it is for and drives it; #279's issue file drives the
+# builder itself, which is why it is here.
+emptylist_path() {  # emptylist_path <hook> -- where the emptied-list copy of it sits
+  printf '%s\n' "$FIXTURES/emptylist-$1/$1"
+}
+mk_emptylist() {  # mk_emptylist <hook>
+  local hook="$1"
+  local target dir why
+  target=$(emptylist_path "$hook")
+  dir=$(dirname "$target")
+  mkdir -p "$dir/lib"
+  cp "$HOOKS/$hook" "$dir/"
+  # Emptied IN PLACE. Appending would land after CS_WRAPPER_RE is derived and
+  # after the withdrawal has already run against a full list, so the fixture
+  # would test nothing the library does on load; the first version of these
+  # appended, and was green for that reason.
+  sed -E 's/^CS_WRAP_OPTION_WORDS=.*/CS_WRAP_OPTION_WORDS=""/;
+          s/^CS_WRAP_OPERAND_WORDS=.*/CS_WRAP_OPERAND_WORDS=""/' \
+      "$HOOKS/lib/command-scan.sh" > "$dir/lib/command-scan.sh"
+  # Both directions on the edit, as mk_halflib does on its rename: a sed that
+  # matched nothing leaves a complete library, and the checks against it pass.
+  grep -q '^CS_WRAP_OPTION_WORDS=""$' "$dir/lib/command-scan.sh" \
+    && grep -q '^CS_WRAP_OPERAND_WORDS=""$' "$dir/lib/command-scan.sh" || {
+    echo "the emptied-list library for $hook did not empty both halves; the checks using it prove nothing" >&2
+    exit 1
+  }
+  ! grep -qE "^CS_WRAP_(OPTION|OPERAND)_WORDS='" "$dir/lib/command-scan.sh" || {
+    echo "the emptied-list library for $hook still assigns a full list; the checks using it prove nothing" >&2
+    exit 1
+  }
+  # And that it still loads with every OTHER function defined, so a refusal
+  # against it is the list's doing and not a library broken some other way.
+  # cs_split is deliberately not asked here: whether it is withdrawn is the
+  # mechanism, and a fixture guard exits the suite rather than failing a check,
+  # which would report a removed mechanism as an aborted run instead of as red.
+  # By what sourcing defined, and a status that is the original's, as
+  # mk_halflib asks (#279); see `copy_sources_as` in the library.
+  why=$(copy_sources_as "$dir/lib/command-scan.sh" "$HOOKS/lib/command-scan.sh") || {
+    echo "the emptied-list library for $hook does not source as the tokeniser it was copied from: $why; the checks using it prove nothing" >&2
+    exit 1
+  }
+  bash -c ". '$dir/lib/command-scan.sh'; command -v cs_normalise && command -v cs_git_args \
+           && command -v cs_gh_args && command -v cs_join" >/dev/null 2>&1 || {
+    echo "the emptied-list library for $hook does not load with its other functions; the checks using it prove nothing" >&2
+    exit 1
+  }
+  [ -x "$target" ] || {
+    echo "the emptied-list fixture for $hook is not at $target, or is not executable; the checks using it prove nothing" >&2
+    exit 1
+  }
+}
+
 # THE REFUSAL-ARM COUNTERS: `arms`, `fn_writes` and `fn_calls`, here since
 # #182, whose issue file became their second caller after the #109 section in
 # the unsplit file. Their argument -- what each counts and the shapes it cannot

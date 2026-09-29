@@ -761,7 +761,8 @@ done
 # lacked names: `IFS=x` joined every name into one bogus key; `shopt -s
 # nullglob` dropped a function whose name is a glob; `shopt -s nocasematch`
 # skipped `path` as though it were the `PATH` the child started with; and
-# `trap 'exit 0' EXIT` turned the child's `exit 3` into 0. So after the status
+# `trap 'exit 0' EXIT` turned the child's `exit 3` into 0; and `declare`
+# aliased to `builtin echo` recorded a body of `-f <name>`. So after the status
 # is written, the child puts each back: no traps, no aliases, globbing off, case
 # matched, and IFS as bash starts it. Each command there is written with a
 # backslash, which an alias the file defined cannot expand; a function the file

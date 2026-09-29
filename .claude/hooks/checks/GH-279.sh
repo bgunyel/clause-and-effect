@@ -80,8 +80,8 @@ requirement GH-279.1 <<'REQ'
   measured: the two fixture guards had been loosened to ask only that a name
   was defined, so a copy its builder broke passed them; and a file that left
   IFS changed gave a record the child called whole while it lacked names,
-  which the sweep of that class found nullglob, nocasematch and an EXIT trap
-  doing too.
+  which the sweep of that class found nullglob, nocasematch, an EXIT trap
+  and an alias of `declare` doing too.
 REQ
 requirement GH-279.2 <<'REQ'
 - text: The end-of-run file's last check before the matrix derives the rows the
@@ -198,7 +198,8 @@ tok 'a caller'"'"'s tag is the same after record_loaded writes a FAIL row as bef
 # reset in LOADED_CHILD each was measured to leave a record the child called
 # whole that lacked a name: IFS joined every name into one key, nullglob
 # dropped the function whose name is a glob, and nocasematch skipped `path`
-# as though it were the `PATH` the child started with.
+# as though it were the `PATH` the child started with. An EXIT trap and an
+# alias follow.
 printf '%s\n' 'r279_a() { :; }' 'r279_b() { :; }' 'R279_V=1' 'IFS=x' > "$R279/state-ifs.sh"
 printf '%s\n' 'r279_a() { :; }' 'r279_g*() { :; }' 'shopt -s nullglob' > "$R279/state-glob.sh"
 printf '%s\n' 'r279_a() { :; }' 'path=1' 'shopt -s nocasematch' > "$R279/state-case.sh"
@@ -227,6 +228,15 @@ tok 'the child whose write fails exits 3' \
     'exited 3' "$(env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$R279/whole.sh" > /dev/full 3> "$R279/full.sourced" 2> /dev/null; echo "exited $?")"
 tok 'and still exits 3 when the file it sourced traps EXIT to exit 0' \
     'exited 3' "$(env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$R279/state-trap.sh" > /dev/full 3> "$R279/full.sourced" 2> /dev/null; echo "exited $?")"
+# And an alias the file defines expands in the lines the child reads after
+# it: with `declare` aliased to `builtin echo`, the child recorded r279_a's body
+# as `-f r279_a` and exited 0. The body is compared, since the name is right.
+printf '%s\n' 'r279_a() { :; }' 'shopt -s expand_aliases' "alias declare='builtin echo'" > "$R279/state-alias.sh"
+tok 'a file that aliases declare has its function recorded as bash defines it, not as the alias prints it' \
+    $'r279_a () \n{ \n    :\n}' \
+    "$( ( declare -A LOADED_BODY=() LOADED_FROM=() LOADED_STATUS=()
+          record_loaded "$R279/state-alias.sh" "$R279/record" > /dev/null 2>&1
+          printf '%s' "${LOADED_BODY[r279_a]}" ) )"
 # And the head records through it, stopping only on the one outcome that stops
 # it. Pinned as text, since only a whole run shows it behaving; the registry
 # row `tokeniser-sources-non-zero` is that run.
