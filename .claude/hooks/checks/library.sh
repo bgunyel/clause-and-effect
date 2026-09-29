@@ -1748,6 +1748,24 @@ hook_text() {  # hook_text <file> -- a hook's text as the refusal-arm counters r
   hook_bodiless "$1" \
     | sed ':a;/\\$/{N;s/\\\n//;ba}'
 }
+# WHICH READS A HELPER MAKES OF ITS FILE, asked by checks/GH-182.sh of the
+# three counters and by checks/GH-181.sh of `writer_callers`, and here since
+# #181 made it two callers. True when the function's definition, as bash holds
+# it, passes its file argument to each helper named, as `<helper> "$1"`, and
+# with those calls taken out names no `$1`, `$@` or `$*`, braced or not, and
+# no drop or `sed` of its own. GH-182.sh argues each half of that, and the
+# review of #182's pull request that found the first two versions short.
+reads_only_through() {  # reads_only_through <function> <helper>... -- its file argument read through each helper, and nowhere else
+  local body rest h
+  body=$(declare -f "$1") || return 1
+  rest=$body
+  shift
+  for h in "$@"; do
+    [[ $body == *"$h \"\$1\""* ]] || return 1
+    rest=${rest//"$h \"\$1\""/}
+  done
+  [[ $rest != *cs_drop_heredocs* && $rest != *'sed '* ]] && ! [[ $rest =~ \$\{?(1|[@*]) ]]
+}
 arms() {  # arms <file> -- in how many places it writes a refusal to stderr
   hook_text "$1" | grep -oE "$STDERR_WRITE" | wc -l | tr -d ' '
 }

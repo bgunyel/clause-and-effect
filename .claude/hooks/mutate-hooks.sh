@@ -430,6 +430,15 @@
 # froze: the account of when these rows were run is in the dev-logs of PR #158's
 # sessions, and this paragraph keeps only the rule.
 #
+# TWO ROWS FOR ONE RULE, #181's, because `writer_callers` reads a body in two
+# places and a row reaches only one of them. `a-writer-wrapped-and-called-twice`
+# is #181's triage reproduction, a wrapper whose call is a body line;
+# `a-writer-wrapped-on-one-line` keeps its call on the definition line, which is
+# read by the one widening `writer_callers` makes over `fn_writes`'s rules. A
+# derivation that lost that widening would catch the first and let the second
+# through, so the first being caught is no evidence about the second. The third
+# row, `a-writer-wrapped-under-a-name-with-a-hyphen`, is GH-181.2's own rule.
+#
 # WHAT IS REGISTERED, counted rather than characterised, because the sentence
 # that characterised it ("the rules that gained checks under #103") claimed the
 # whole of two issues and named eight rows -- and the count that replaced it was
@@ -846,6 +855,7 @@ late-legacy-entry-reworded%requirements/GH-204.8.md%s/at least one row recorded/
 cited-entry-that-does-not-exist%requirements.md%s/cites it (GH-223.6)/cites it (GH-223.9)/%GH-223.6%caught
 a-writer-wrapped-and-called-twice%no-git-push.sh%s/^check_push() {$/wrap() {\n  check_push "$1" "$2"\n}\ncheck_push() {/;s/^    check_push "\$CMD" "\$ARGS" || exit 2$/    wrap "$CMD" "$ARGS" || exit 2; wrap "$CMD" "$ARGS" || exit 2/%GH-181.1%caught
 a-writer-wrapped-on-one-line%no-git-push.sh%s/^check_push() {$/wrap() { check_push "$1" "$2"; }\ncheck_push() {/;s/^    check_push "\$CMD" "\$ARGS" || exit 2$/    wrap "$CMD" "$ARGS" || exit 2/%GH-181.1%caught
+a-writer-wrapped-under-a-name-with-a-hyphen%no-git-push.sh%s/^check_push() {$/wrap-it() { check_push "$1" "$2"; }\ncheck_push() {/;s/^    check_push "\$CMD" "\$ARGS" || exit 2$/    wrap-it "$CMD" "$ARGS" || exit 2; wrap-it "$CMD" "$ARGS" || exit 2/%GH-181.2%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

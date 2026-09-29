@@ -284,13 +284,10 @@ tok 'arms loses the arm after a trailing comment naming <<LIST, which the real L
 # `$*` is left, braced or not, and no drop or `sed` of its own. The first
 # version asked only the second half, so a counter piping `cat "$1"` beside
 # `hook_text` passed; the second let the brace reach `1` alone, so `${@}` and
-# `${*}` passed. Review of #182's pull request found each.
+# `${*}` passed. Review of #182's pull request found each. The question is
+# `reads_only_through`, in the library since #181 asked it of a fourth reader.
 R182_THROUGH=$(for fn in arms fn_writes fn_calls; do
-  body=$(declare -f "$fn")
-  rest=${body//'hook_text "$1"'/}
-  [[ $body == *'hook_text "$1"'* && $rest != *cs_drop_heredocs* && $rest != *'sed '* ]] \
-    && ! [[ $rest =~ \$\{?(1|[@*]) ]] \
-    && printf '%s ' "$fn"
+  reads_only_through "$fn" hook_text && printf '%s ' "$fn"
 done)
 tok 'arms, fn_writes and fn_calls each read the hook through hook_text, and name it nowhere else' \
     'arms fn_writes fn_calls ' "$R182_THROUGH"
@@ -364,19 +361,19 @@ written 'the library says cs_normalise answers for cs_drop_heredocs' \
 
 # WHAT THE DROP TAKES FROM THE HOOKS THE COUNTERS READ. Which hooks those are is
 # read off the suite, every `arms`, `fn_writes` or `fn_calls` written with a
-# `"$HOOKS/<name>"` argument -- and `writer_callers`, #181's, which reads a hook
-# through `hook_text` and `fn_writes` both -- and then pinned as a literal, so a
-# third is a red run and not a hook read with nothing holding what its drop
-# takes. A call that
-# names its hook through another variable is not read; every call that reads
-# a hook of this directory names it that way today.
+# `"$HOOKS/<name>"` argument -- and `writer_callers`, #181's, which is not a
+# counter but reads a hook through `hook_text` and `fn_writes` both -- and then
+# pinned as a literal, so a third is a red run and not a hook read with nothing
+# holding what its drop takes. A call that names its hook through another
+# variable is not read; every call that reads a hook of this directory names
+# it that way today.
 req GH-182.3
 # Whole-line comments blanked by the counters' own first stage, and the name
 # bounded on the left, so a comment or a `farms "$HOOKS/x.sh"` adds no hook.
 R182_COUNTED=$(hook_uncommented "$SUITE_TEXT" \
   | grep -oE '(^|[^A-Za-z0-9_])(arms|fn_writes|fn_calls|writer_callers) "\$HOOKS/[A-Za-z0-9_.-]+"' \
   | sed 's|.*/||; s|"$||' | LC_ALL=C sort -u | tr '\n' ' ')
-tok 'the counters read two hooks of this directory' \
+tok 'the counters, and writer_callers beside them, read two hooks of this directory' \
     'no-git-push.sh no-pr-decisions.sh ' "$R182_COUNTED"
 # Every line the drop in `hook_text` removed, `-` in front: the library's two
 # stages, `hook_uncommented` and `hook_bodiless`, diffed, so the text judged is

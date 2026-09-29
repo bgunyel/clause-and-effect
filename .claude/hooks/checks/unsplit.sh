@@ -11824,7 +11824,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '154' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '155' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11950,7 +11950,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '152' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '153' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
@@ -13672,7 +13672,9 @@ tok 'arms counts a trailing comment, which is the false red this trade accepts' 
 # twice and the text here still reads one. That is a call graph and not a
 # pattern, so it is refused rather than counted: GH-181.1, in checks/GH-181.sh,
 # asks that no function in either hook calls a function that writes, which
-# leaves only calls from the top level to reach a writer, and those this counts.
+# leaves only calls from the top level to reach a writer, and those this counts
+# -- as far as the text shows a call; checks/GH-181.sh names the calls it does
+# not show, and GH-181.2 the names none of these patterns can read.
 # Until #181 the row above was all that stood in the way, and it is a tripwire
 # and not a fix: it pins the whole function table, so a wrapper has to be
 # declared before it can hide anything, but it shows the wrapper as `silent`,
@@ -13691,8 +13693,8 @@ tok 'arms counts a trailing comment, which is the false red this trade accepts' 
 # The last fixture is the third shape of the helper hole, after #181's indirect
 # call, which GH-181.1 refuses, and #182's heredoc, which is closed: a function
 # defined inside another one. The patterns are anchored at column 1 -- which is
-# this file's convention
-# and what the closing `}` relies on too -- so a nested definition is never
+# this file's convention and what the closing `}` relies on too -- so a nested
+# definition is never
 # entered, its writes are attributed to the function around it, which already
 # writes, and nothing moves. It is asserted here as the behaviour it is, and refused
 # outright below, because the honest fix for a convention a derivation depends on
