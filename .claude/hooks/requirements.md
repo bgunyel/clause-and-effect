@@ -1615,3 +1615,8 @@ it has no entry above (Q16).
   or `eval` state -- and pinned its representatives. Cited in GH-185's note
   as that class's structural fix. It adds its requirements in the pull
   request that fixes it
+- #344: two title-first headings the #162 check read as contradicting their
+  file names although each named the right session, `# Session 8 — <date> —
+  follow-up` and `# Devlog session 5 — <date>`. Filed from review of #162's
+  pull request, and closed in it: both are agreeing fixtures in GH-162, cited
+  in its header

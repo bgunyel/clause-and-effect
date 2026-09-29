@@ -115,3 +115,68 @@ gathered in scratch, and is recorded here rather than in the registry.
   into `dev-05`.
 
 **Appended 2026-09-29.** The full suite on the second commit's tree printed ALL CHECKS PASSED, 8117 ok, this entry's own row among them.
+
+## Appended 2026-09-29 — review round 1 (rev-agent-162), answered in `74fb487` and the commit holding this section
+
+This section corrects the entry above. Three of its claims no longer hold. The
+rest after the dash is no longer read as "the one word after the dash". The
+first item under *Still open* is wider now. And the evidence counts have grown.
+
+**Finding 1, a permitting hole the assistant had left.** rev-agent-162 put
+seven first lines on a copy of the real directory, and every one passed green
+while naming the wrong session. Among them were `# 2026-09-17 — session 2 —
+#128: …` on `session-5` (#162's own defect, with the ` · ` swapped for a
+` — `), `# Dev-log — <date> — session dev-agent-999`, a trailing blank, a CR
+and `(continued)`. The one-word reading skipped any rest with a blank in it.
+The assistant had chosen that reading in the two-axis round, to keep summaries
+from being read as labels, and this entry above calls it closed. It was not.
+Now, when neither the title nor the label names a session, the rest's first
+word is read, or its first two when the first is `session`. A rest opened with
+`#` names none. The trade is wider than before and is pinned as a verdict: a
+summary opened by a word, on a heading that names no session before its dash,
+is refused (`— the check-hooks summary` reads `the`). No entry has that shape.
+The assistant took the refusing direction because a false red is visible and a
+false green is not.
+
+**Finding 2, three claims that said more than the code.** They were the README
+bullet ("every entry's first line"), the header's "On a draft it is one edit",
+and "each pinned by a row". The README and the entry above both call an
+appended entry an entry, and only a file's first line is read. #190 freezes a
+draft from its first write, so a draft has no one-edit fix. And the non-ASCII
+limit had no row. The first two are reworded, and the third has a row now. The
+same sweep found one more claim, a sentence the assistant wrote this round
+("every spelling of a correct heading an agent might write is a fixture"). It
+was narrowed before commit.
+
+**Finding 3 and #344, false reds with no agent remedy.** The fixes are these:
+
+- a time with seconds or after a `T`, and a zone of `+0300`, `+03:00`, `Z` or
+  `UTC`;
+- a trailing CR;
+- #344's `# Session 8 — <date> — follow-up`: once a title names the session,
+  the rest is not read;
+- #344's `# Devlog session 5 — <date>`.
+
+Each is a fixture that agrees. A session named `Zulu-1` is a fixture too,
+because a zone read without the blank after it would cut its `Z`.
+
+**An error of the assistant's, found by the suite.** The first full run on
+`74fb487` had 4 FAILs, all GH-104.3. The assistant had given the new fixture
+headings made-up summaries citing `#207`, `#217` and `#218`, and had cited
+`#344` in the header. None of the four had a cite entry. The fixture summaries
+no longer cite issues they do not mean, and #344 has a cite entry in
+`requirements.md`.
+
+**Evidence, measured.**
+
+- The #162 section alone: 88 ok, 0 FAIL. That is 12 fixture and pin rows, 75
+  real entries (71 name their session, 4 name none) and the README pin.
+- Eleven mutations of the new code, each in a scratch copy of `.claude/hooks/`
+  and `docs/dev-log/`, each turned a row red. They were: the old one-word rule,
+  the `#` exemption, the two-word `session` read, reading the rest after a
+  title, the CR strip, seconds, the `T`, the old zone rule, the zone's
+  boundary, `Z`, and the title's `session` strip.
+- rev-agent-162's seven surviving mutants and its control, on a copy of the
+  real directory, are red now. Its three false reds and the two #344 shapes are clear.
+- The full suite on the commit holding this section's code printed ALL CHECKS
+  PASSED, 8118 ok, one more than before: the non-ASCII row.
