@@ -1822,18 +1822,25 @@ hook_text() {  # hook_text <file> -- a hook's text as the refusal-arm counters r
 # `/`, `+` and `:` all build another command word, and no such list refuses
 # `cat hook_text "$1"` at all, since what stands in front of the name there is
 # a blank and the helper is only an argument. So the call must start a line,
-# follow `|` or `&`, or follow a `(` that opens a command substitution, a
-# process substitution or a subshell -- one after `$`, `<` or a blank -- with
-# blanks between; and `"$1"` must be a whole word, ending at a blank, `;` or
-# `)`. Each match is taken out whole.
+# follow `;`, `|` or `&`, or follow a `(` that opens a command substitution, a
+# process substitution or a subshell -- one after `$`, `<`, `>` or a blank --
+# with blanks between; and `"$1"` must be a whole word, ending at a blank, `;`
+# or `)`. Each call is taken out with what stood before it, and the character
+# after it is kept, since that character can be where the next call starts: a
+# newline between two calls inside one `$(...)`, which the first version of
+# this took out with the first call, refusing the second.
 #
 # THE LISTS ARE WHAT `declare -f` PRINTS, AND NOTHING WIDER, because a member
 # no definition can put beside a call is a member no fixture can hold. It
-# breaks a list onto lines, so no `;` stands before a call; it spaces `|`, `&`
-# and a redirect off the word before them, so none stands after `"$1"`; and a
-# body ends at `}`, never at a call. Review of #181's pull request, round 3,
-# measured those members changing no verdict. Each member left is a reader in
-# checks/GH-181.sh that passes through it. A `(` after `=` is an array, and
+# spaces `|`, `&` and a redirect off the word before them, so none stands after
+# `"$1"`, and a body ends at `}`, never at a call; review of #181's pull
+# request, round 3, measured those members changing no verdict. It breaks a
+# list onto lines at the top of a body but not inside `$(...)` or `<(...)`, where
+# bash 5.2 prints `x=$(true; hook_text "$1")` on one line, so `;` stays before
+# a call: round 3 removed it with the others and round 4 measured that shape
+# refused. Each member left is a reader in checks/GH-181.sh that passes
+# through it and through no other member, and the respacing it rests on was
+# measured with bash 5.2 and no older bash. A `(` after `=` is an array, and
 # `local -a f=(hook_text "$1")` holds the file's name as data, which is why the
 # `(` is asked for its left side.
 #
@@ -1847,7 +1854,9 @@ hook_text() {  # hook_text <file> -- a hook's text as the refusal-arm counters r
 # prints as they were written; and any `${!...}` in the reader, `${!seen[@]}`
 # included, since an indirection is refused wherever it stands. Passed, each a
 # construction rather than a mistake: the file's name taken from `$_` after the
-# call, or rebuilt by `eval`; and a filter of the reader's own other than
+# call, or rebuilt by `eval`; a call spelled as a line of a multi-line string,
+# which reads as a command start, so the string can hold the file's name as the
+# array did; and a filter of the reader's own other than
 # `sed`, a `perl -pe` before its `awk` -- the readers run awk programs of their
 # own, which can rewrite any line they are given, so no list of filter names
 # can say that none was applied, and `sed` is refused because it is the fold's
@@ -1858,10 +1867,10 @@ reads_only_through() {  # reads_only_through <function> <helper>... -- its file 
   rest=$body
   shift
   for h in "$@"; do
-    re=$'(\n|[|&]|[$<[:space:]]\\()[[:space:]]*'"$h"$' "\\$1"[[:space:];)]'
+    re=$'(\n|[;|&]|[$<>[:space:]]\\()[[:space:]]*'"$h"$' "\\$1"[[:space:];)]'
     [[ $body =~ $re ]] || return 1
     while [[ $rest =~ $re ]]; do
-      rest=${rest/"${BASH_REMATCH[0]}"/ }
+      rest=${rest/"${BASH_REMATCH[0]}"/" ${BASH_REMATCH[0]: -1}"}
     done
   done
   [[ $rest != *cs_drop_heredocs* && $rest != *'sed '* && $rest != *BASH_ARGV* ]] \
