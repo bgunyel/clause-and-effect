@@ -23,14 +23,16 @@ Two subcommands, one per thing a green run has to be true about:
     Reads the suite's log and writes three things: the job summary a reviewer
     reads instead of the log, with its failing rows and their detail lines;
     the step outputs; and a JSON file uploaded beside the log. The last two
-    are the machine-readable counts #193 asked for, and they are NOT the
+    are the machine-readable counts of a run, and they are NOT the
     quantities `mutate-hooks.sh` pins. `MEASURED_AT_RESULTS` is the count on
     the suite's own matrix line, a little under the rows the log prints, and
     `MEASURED_SECONDS_PER_RUN` is timed the way the harness pays for a run,
     in `--matrix` mode against a copied tree on the workstation, not on a
     hosted 2-core runner. So `results` and `seconds` here are what a run
     printed and how long it took. How the harness's constants follow from
-    them is #193's to settle.
+    them is settled nowhere: #193 was cited here as the issue that would,
+    and it landed as `--list` applying each row's edit, which leaves both
+    constants a measurement taken on the workstation.
 
     A row is a line opening with ``"  ok   "`` or ``"  FAIL "``, which
     `check-hooks.sh` guarantees is printed only by its `pass` and `fail`. A

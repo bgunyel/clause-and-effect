@@ -12,7 +12,7 @@ Two claims are under test, and each is what a green CI run rests on:
   computed the merge, and a shallow clone, which is how `actions/checkout`
   fetches and which hides a commit's parents from `git rev-list`.
 - `report` says what the suite's log says. Its counts are the machine-readable
-  record of a run that #193 will work from, and its summary is what a reviewer
+  record of a run, and its summary is what a reviewer
   reads instead of the log, so it must never report fewer failures than the log
   holds, nor a pass the suite did not print, nor lose the summary to GitHub's
   1 MiB cap.

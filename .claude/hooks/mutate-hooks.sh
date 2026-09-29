@@ -25,14 +25,15 @@
 # per row: a row pass one refuses never reaches a run, and neither does one
 # whose edit fails or leaves its file as it was.
 #
-# IT IS COUNTED BY APPLYING EVERY ROW'S EDIT, and so it is exact (#193). `--list`
+# IT IS COUNTED BY APPLYING EVERY ROW'S EDIT, and so it is the count a pass runs,
+# under the one assumption named below (#193). `--list`
 # runs each row's `sed` over the file beside this harness, through `row_apply`,
 # the function pass two edits the copy with, and counts a row only when that
 # edit succeeds and changes its file. So the three things that cost a row its
 # run in pass two -- a target that is not writable in the copy, a `sed`
 # expression that fails, and an edit that applies to nothing -- are seen
 # before any run. A row declared `caught` whose anchor a rename has moved is
-# marked on its own line by `--list`, in the few seconds it takes, where it
+# marked on its own line by `--list`, which runs no suite, where it
 # used to surface only as `did-not-apply` after a whole pass. Until #193 the
 # count was a prediction off the DECLARED outcome and could be one too many
 # for exactly that row, and all three places that said so hedged it; Bertan's
@@ -106,7 +107,7 @@
 #
 # check-hooks.sh does ask `--list` for the three figures its #148 checks compare
 # against derivations of their own. That runs no suite and writes nothing under
-# .claude/hooks/; it costs the row edits above, a few seconds.
+# .claude/hooks/; what it costs is the row edits above and no run.
 # Nothing here is a PreToolUse hook and settings.json does not register it.
 # Naming rows costs the baseline plus one run each, so re-asking a single rule
 # is two runs.
@@ -1044,17 +1045,16 @@ if [ -n "$LIST" ]; then
     #
     # Nothing is applied to a row pass one refuses: its target may name a file
     # outside the hooks directory, and there is nothing to learn by reading it.
-    GOT=fault
     FAULT=$(row_fault "$id" "$file" "$edit" "$reqs" "$want")
-    if [ -z "$FAULT" ]; then
-      if ! FAULT=$(row_apply "$SRC/$file" "$edit" "$file" 2>&1 >"$WORK_ROOT/mutated"); then
-        GOT=fault
-      elif cmp -s "$SRC/$file" "$WORK_ROOT/mutated"; then
-        GOT=unchanged
-      else
-        GOT=applies
-        RUNS_NEEDED=$((RUNS_NEEDED + 1))
-      fi
+    if [ -n "$FAULT" ]; then
+      GOT=fault
+    elif ! FAULT=$(row_apply "$SRC/$file" "$edit" "$file" 2>&1 >"$WORK_ROOT/mutated"); then
+      GOT=fault
+    elif cmp -s "$SRC/$file" "$WORK_ROOT/mutated"; then
+      GOT=unchanged
+    else
+      GOT=applies
+      RUNS_NEEDED=$((RUNS_NEEDED + 1))
     fi
     case "$id" in
       selftest-*) SELFTESTS=$((SELFTESTS + 1)) ;;
@@ -1066,7 +1066,7 @@ if [ -n "$LIST" ]; then
     esac
     printf '%-52s %-26s %-16s %-10s %s\n' "$id" "$file" "$want" "$GOT" "$reqs"
     # AND WHEN THE EDIT DOES NOT DO WHAT THE ROW DECLARES, it says so on the
-    # row, which is the few seconds in which a rotted anchor now surfaces. A
+    # row, which is where a rotted anchor now surfaces, with no run made. A
     # fault is marked with its reason instead; its declared outcome is not
     # judged, since pass two never gets as far as reporting one.
     if [ "$GOT" = fault ]; then
@@ -1221,7 +1221,7 @@ while IFS='%' read -r ID FILE EDIT REQS WANT; do
     case " $SELECTED " in *" $ID "*) ;; *) continue ;; esac
   fi
   MATCHED=$((MATCHED + 1))
-  # The refusals are row_fault's, above, because `--list` has to predict
+  # The refusals are row_fault's, above, because `--list` has to count
   # which rows this pass will run and the two have to mean the same thing by a
   # runnable row. What is this pass's alone is reporting the reason and counting
   # the row out; what the reason SAYS is written once.

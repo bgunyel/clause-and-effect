@@ -12092,10 +12092,16 @@ fi
 # holds each to its declaration, is what makes the declared count the right
 # one. Between them: the declarations are true (GH-193), and `--list` counts
 # what they say (here). A rotted anchor turns both red, GH-193 on the row and
-# this on the figure; a `--list` that stopped counting what it applies -- that
-# counted every row pass one admits, as it did before #193 -- turns only this
-# red, and only once some edit stops applying, which is the case GH-193's own
-# fixture drives against the harness.
+# this on the figure. What this check CANNOT see is the regression #193 is
+# about: a `--list` put back to counting off the declarations, as it did before
+# #193, counts exactly what this side counts, so the two agree on every
+# registry, with an edit that has stopped applying or without one. That is
+# caught by GH-193's fixture alone, whose literal run count assumes the edits
+# were applied -- measured by hand, that mutant turned that row red and left
+# this one green. What is left here is the harness's arithmetic: the figure
+# dropped, renamed, or spelled off a constant the registry has since moved
+# past. A fault counted as a run is not among them while the registry holds
+# no fault, and it holds none; GH-193's fixture holds four.
 req GH-148
 MUT_RUNS_HERE=$((1 + $(printf '%s' "$MUT_RUN_OUTCOMES" | grep -cv '^did-not-apply$')))
 tok 'and how many runs of this suite a whole-registry pass costs, the baseline included' \

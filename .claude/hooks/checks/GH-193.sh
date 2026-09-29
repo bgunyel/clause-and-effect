@@ -7,8 +7,9 @@
 # counted as a run and reported `did-not-apply` only after a whole pass, which
 # is hours. Nothing but a run found a rotted anchor. #193 made `--list` apply
 # each edit, through `row_apply`, the function pass two edits the copy with, so
-# the count is what a pass runs and a rotted anchor is marked on its row in the
-# few seconds `--list` takes.
+# the count is what a pass runs and a rotted anchor is marked on its row by a
+# command that runs no suite. Measured on this branch under load 27: three
+# runs of `--list` took 3.1 to 3.9 s of wall clock and 0.83 to 0.91 s of CPU.
 #
 # WHAT IS CHECKED, in three parts:
 #   - The registry. Every row's edit, applied here with `sed --sandbox` to the
@@ -195,16 +196,18 @@ armed 'pass two included' \
       "$R193_MUT" 'if ! row_apply "$TARGET" "$EDIT" "$FILE in the working copy" > "$WORK_ROOT/mutated" 2>"$WORK_ROOT/sed.err"; then'
 
 # THE HEDGE IN THE HEADER, asked of its prose through prose_reflow, the reader a
-# pin on prose takes (#192), and of the whole header: the region ends at
+# pin on prose takes (#192), and of the header alone: the region ends at
 # `set -u`, and its last paragraph is asked for so that a region cut short is
-# red rather than an absence.
+# red rather than an absence. Not `prose` with `unarmed`, as #192's rule words
+# it, because `prose` reads the whole file, and the code below `set -u` says
+# `at most` in the comment recording why the output line no longer does.
 req GH-193
 R193_HEADER=$(sed -n '1,/^set -u$/p' "$R193_MUT" | prose_reflow)
 holds 'the header is read to its last paragraph' "$R193_HEADER" \
   'the documents it is judged against stay this repository'
 lacks 'the header no longer hedges the run count' "$R193_HEADER" 'at most'
 holds 'and says what replaced the hedge' "$R193_HEADER" \
-  "IT IS COUNTED BY APPLYING EVERY ROW'S EDIT, and so it is exact (#193)."
+  "IT IS COUNTED BY APPLYING EVERY ROW'S EDIT, and so it is the count a pass runs, under the one assumption named below (#193)."
 holds 'and what --list does, on its usage line' "$R193_HEADER" \
   "--list the registry, each row's edit applied sandboxed and never in place, and no suite run"
 
