@@ -21,7 +21,7 @@ whether a stopped suite reads as a timeout (#208).
 
 What rerun-on-base-move.sh reads back from a run of this workflow -- the
 stamped title and the artifact's name -- is pinned as literals here, on the
-producing side, and so are the job outputs, the record #193 would read.
+producing side, and so are the job outputs, the record of a run's counts.
 
 The file is read as text. PyYAML is not a dependency of the test group, and
 the claims here are about the exact lines the workflow carries.
