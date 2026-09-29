@@ -223,7 +223,8 @@
 #     the rest. The sets differ, which is why one shared list would be wrong:
 #     no-git-push.sh, no-commit-to-main.sh and no-work-on-stale-branch.sh call
 #     cs_normalise, cs_split and cs_git_args; no-pr-decisions.sh calls
-#     cs_normalise, cs_split, cs_gh_args, cs_gh_opaque and cs_join, and no
+#     cs_normalise, cs_split, cs_gh_args, cs_gh_opaque, cs_join and
+#     cs_drop_quoted_heredocs, and no
 #     cs_git_args at all; pytest-via-uv-group.sh and alembic-via-uv-group.sh
 #     call cs_normalise and cs_split and neither of the argument readers, nor
 #     cs_gh_opaque. Every one of them calls
@@ -236,7 +237,9 @@
 #     cs_drop_heredocs, which no required list names (#182), and cs_join:
 #     cs_join is answered by cs_within_cap, as above, and cs_drop_heredocs by the library
 #     withdrawing cs_normalise when it is missing -- CS_NORMALISE ANSWERS FOR
-#     CS_DROP_HEREDOCS, below cs_normalise. A required list narrower than the set is
+#     CS_DROP_HEREDOCS, below cs_normalise. cs_drop_quoted_heredocs calls it
+#     too (#202), and answers for it by its status, which its caller reads --
+#     see that function. A required list narrower than the set is
 #     the #84 defect exactly, and #69 found the same thing in the last two from
 #     the other end -- cs_split required, cs_normalise not. The enumeration here
 #     is a convenience and goes stale; check-hooks.sh derives both sides off the
@@ -358,6 +361,115 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # paragraphs below record being answered wrongly, one answer after another.
 # What a library missing this function does is THE LOAD CONTRACT's, and is
 # answered below cs_normalise.
+#
+# ONE ARGUMENT, `keep-unquoted`, and #202 is why. With it the pass drops a body
+# only where the drop is PROVEN harmless, and prints every other body as it
+# stands. Where a body begins and ends is still answered here, once, by the
+# same lines; the argument decides only whether a body's lines are dropped
+# once they are known to be one, and whether an opener is trusted to be one.
+# cs_drop_quoted_heredocs, below, is that call under a name, and no caller
+# passes it any other way. Anything else as the argument is refused with status
+# 2 and nothing printed, so a misspelt mode cannot quietly mean the default.
+#
+# In that mode a body is dropped only when the line holding its opener fits a
+# grammar written out below, and nothing in front of the opener is on THE
+# DOUBT LIST, below. Everything the grammar does not name, and everything
+# after a doubt, keeps the body -- the reading before #202, which refuses more
+# and never less. The first three versions of this mode each trusted something it had
+# not named, and each review of the pull request found a list with no end:
+# fifteen readers that run a body in round 1; sixteen openers, targets and
+# subcommands in round 2; eight constructs the quote state read wrong, and a
+# reader whose output is the body, in round 3.
+#
+#   1. THE DELIMITER. Quoted by bash's rule -- the word holds a `'`, a `"` or
+#      a `\` -- since bash expands nothing in such a body, where an unquoted
+#      body runs its `$( )` and backticks, and keeping it keeps those. And in
+#      the grammar: letters, digits and `_`, and whole `'...'` or
+#      `"..."` spans of the same, so `<<'X'`, `<<"X"`, `<<-'X'` and
+#      the partly quoted `<<X"Y"` are in and `<<"it's"`, `<<\X`, `<<$'X'`
+#      are not. For a word in the grammar, deleting the quote characters is
+#      bash quote removal, so the terminator waited for is bash's; outside it,
+#      round 2 measured bodies ending at a line bash had passed. That defect
+#      is in the default mode too, in every hook, and is #351's -- as is a
+#      carriage return between `<<` and the word, which awk takes for space.
+#
+#   2. THE READER. `cat` redirected to a plain path -- `cat > F`, `cat >> F`
+#      or `cat <<'X' > F`, nothing else in its command, and no lone `|` after
+#      it. A heredoc not being expanded says nothing of what it FEEDS: `sh -s`,
+#      `bash /dev/stdin`, `cat | sh`, `source <(cat ...)`, a while-read loop,
+#      `$(cat ...)` as a command word, `python3 -`, `gh codespace ssh` each run
+#      it, and `gh api`, admitted in rounds 1 and 2, can return it as output
+#      that a pipe, `<( )`, `> >( )`, a group or a compound command hands to a
+#      reader. F is a plain path, optionally led by one `$NAME/`, with no
+#      component named stdout, stderr or fd. What stays open is a body staged
+#      in a file that a LATER command runs -- `cat > s.sh <<'EOF'` then
+#      `sh s.sh` -- #311's with the stdin shells, and the trade GH-202.1 pins;
+#      and a name that is not what it looks like, below.
+#
+#   3. THE OPENER. The `<<` is matched by a regular expression on each
+#      physical line, quotes included -- #289's class -- and before #202 that
+#      cost nothing on a line with a gh api call, because the re-read put the
+#      raw command back. So in this mode the pass carries a quote state over
+#      the command, outside bodies, and trusts an opener only where that state
+#      says bash sees one: outside `'...'` and `"..."`, outside a `#` comment,
+#      not behind a backslash, no second `<<` on the line and no quote left
+#      open at its end.
+#
+# THE DOUBT LIST, since round 3, in front of every opener and behind it on
+# its line. The quote state reads single and double quotes, a backslash
+# escape, `$NAME`, `${NAME}`, a `$(` outside double quotes, a `#` after a blank
+# or at the start of a line, and the separators. Outside all quotes these are
+# doubt: a backtick, any other dollar form, a `#` after anything but a blank or
+# the start of a line (`;#` too, though bash reads it as a comment), `((`, and
+# a line ending in an odd run of backslashes; inside double quotes, a
+# backtick, any dollar form but `$NAME` and `${NAME}`, and the same odd run --
+# the constructs that change bash's quote or comment state in a way this state
+# does not follow. Every other
+# character passes, because none of them changes that state. That is a claim
+# about bash, measured and not proven: round 4 of the review aimed twenty
+# constructs the list does not name -- process substitution, `[[ ]]`, arrays,
+# brace expansion, extglob, a function body, here-strings and more -- at the
+# same tail, and bash ran the payload in none. Round 2 had read these with a
+# model of bash and doubted a shorter list; round 3 measured eight shapes it
+# read wrong without doubting, each leaving the state at the top of the
+# command where bash was inside a string, so that a later `cat > F` dropped
+# lines bash runs. An earlier version of this paragraph called the list an
+# alphabet and said nothing it did not name was trusted, which is wider than
+# the code: it passes what it does not name. `$(` outside double quotes is
+# read against the review's suggestion, and says why beside `dollar()`.
+#
+# A NAME IS NOT RESOLVED, and that is taken knowingly, as CLAUDE.md's
+# consequence 6 takes it for a command word: a variable set to /dev/fd, a
+# symlink to /dev/stdout, a FIFO a background shell reads, or a function named
+# `cat`, each turns `cat > F` into a reader, and nothing reading the text can
+# say so. Round 3 of the review measured five such spellings, refused before
+# #202 by the re-read and permitted since; GH-202.1 pins one of each family as
+# permitted. An earlier version of this paragraph and of the pull request said
+# a variable could not smuggle in a device, and called the path a proven file.
+#
+# DOUBT IS STICKY. The first opener the quote state cannot vouch for ends every
+# drop for the rest of the command, and so does a doubted construct anywhere
+# before one. An opener wrongly taken for one and KEPT would have its "body"
+# skipped, which bash reads as command text, and a string opened there leaves
+# the state where bash is not; the rows in GH-202.1 that put a `<<` in quotes,
+# after `#`, behind a backslash, before a continuation or in `(( ))`, and then
+# drop a later body, are that.
+#
+# WHAT IT COSTS, measured on 372 distinct commands carrying `gh api` and `<<`,
+# taken from the local session transcripts: the version that trusted every
+# quoted body permitted 4 that the re-read refused, and this one 3 of those 4,
+# all `cat >(>) F <<'X'`. The fourth is a `python3 - <<'PY'` script, whose body
+# does run. The rejected variant of the doubt list, with `$(` on it as well,
+# gave back one of the three; the shipped list keeps all three. One idiom is given up by name: `-f body="$(cat <<'MD' ...)"` stands
+# inside `"$(`, which is doubt, so it is refused as before #202 -- 2 of the
+# 372. So is a real `cat > F` body after `$(( ))` or `${X:-a}` earlier in the
+# command, which GH-202.1 pins as a cost.
+#
+# `<<\X` counts as quoted by rule 1 and is outside the grammar, so this mode
+# keeps its body. In the default mode it is #351: its delimiter is taken as
+# `\X`, and a later line reading `\X` ends a body bash ended at `X`, hiding
+# the lines between -- the permitting direction, which an earlier version of
+# this paragraph said it was not.
 #
 # A heredoc body is data, not commands. This repository writes dev-log entries
 # and commit messages through a quoted heredoc, and those texts name the very
@@ -496,12 +608,196 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # bash begins it. Raised on review of the pull request for #128 and kept, on
 # the grounds the whole file keeps everywhere else: a
 # refusal is visible and one edit away, and a permitted push is neither.
-cs_drop_heredocs() {
-  awk '
+cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout: the same, bodies dropped (unquoted ones kept, with the argument)
+  case "${1:-}" in
+    ''|keep-unquoted) ;;
+    *) return 2 ;;
+  esac
+  awk -v keep="${1:-}" -v separators="$CS_SEPARATORS" '
+    # THE QUOTE STATE of keep-unquoted mode, rule 3 above: advance it over the
+    # characters of s from `from` up to `to`, and return where it stopped, which
+    # is past `to` when a backslash there escaped the character at `to` and
+    # nothing else. q is the open quote -- a `\047`, a `"`, or empty; cmt says
+    # a comment has begun, and once it has, the rest of the line is not read
+    # and the return is `to`; sep is the last separator seen and fsep the first
+    # since it was cleared, both outside quotes and outside a comment, and the
+    # separators are CS_SEPARATORS, as cs_split reads them. Never called in the
+    # default mode.
+    #
+    # THE DOUBT LIST, above cs_drop_heredocs, since round 3 of the review. It
+    # reads single and double quotes, a backslash escape, `$NAME`, `${NAME}`,
+    # a `$(` outside double quotes, a `#` after a blank or at the start of a
+    # line, and the separators. Outside all quotes it raises doubt at a
+    # backtick, any other dollar form, a `#` after anything but a blank or the
+    # start of a line -- `;#` among them, which bash reads as a comment and
+    # this state does not try to -- `((`, and a line ending in an odd run of
+    # backslashes, which continues it; an even run is escaped backslashes.
+    # Inside double quotes it raises doubt at a backtick, any dollar form but
+    # `$NAME` and `${NAME}`, and the same odd run. Every other character
+    # passes: none changes bash quote or comment state. A carriage return,
+    # form feed or vertical tab is not on the list, since to this state a
+    # blank means nothing but before a `#`, where such a character is no
+    # blank either. Where one does matter is the delimiter: between `<<` and
+    # its word it is tested at the opener, and after the word it is part of
+    # post, which no consumer admits. Round 2 read more and
+    # doubted a shorter list, and round 3 measured eight shapes it read wrong
+    # without doubting: a backtick taken for a separator, quotes inside a
+    # backtick, a `#` after `)` or a backtick taken for a comment, `$$\047`
+    # taken for ANSI quoting, a continuation, a `\}` inside `"${...}"`. Each
+    # left the state at the top of the command where bash was inside a string,
+    # so a later `cat > F` dropped lines bash runs.
+    function lex(s, from, to,    i, c, n) {
+      if (cmt) return to
+      n = length(s)
+      for (i = from; i < to; i++) {
+        c = substr(s, i, 1)
+        if (q == "\047") { if (c == "\047") q = ""; continue }
+        # A line continued outside single quotes glues the next line onto
+        # this one, which the state reads as a line of its own.
+        if (c == "\\" && i == n) { doubt = 1; continue }
+        if (q == "\042") {
+          if (c == "\\") { i++; continue }
+          if (c == "\042") { q = ""; continue }
+          if (c == "`") { doubt = 1; continue }
+          if (c == "$") i = dollar(s, i, 0)
+          continue
+        }
+        if (c == "\\") { i++; continue }
+        if (c == "\047" || c == "\042") { q = c; continue }
+        if (c == "`") { doubt = 1; continue }
+        if (c == "$") { i = dollar(s, i, 1); continue }
+        if (c == "(" && substr(s, i + 1, 1) == "(") doubt = 1
+        # A comment begins at a `#` that starts a word; bash says which do
+        # after a `)` or a backtick, and this state does not, so a `#` that
+        # follows anything but a blank or the start of the line is doubt.
+        if (c == "#") {
+          if (i == 1 || substr(s, i - 1, 1) == " " || substr(s, i - 1, 1) == "\t") { cmt = 1; return to }
+          doubt = 1
+          continue
+        }
+        if (index(separators, c) > 0) { sep = i; if (!fsep) fsep = i }
+      }
+      return i
+    }
+    # WHAT A DOLLAR MAY BEGIN, outside single quotes: `$NAME`, whose name the
+    # loop steps over as plain characters, `${NAME}`, stepped over whole, and --
+    # outside double quotes only, `top` set -- the `$(` of a command
+    # substitution. Anything else a dollar begins is doubt: `$[ ]`, `$\047`,
+    # `$"`, `$$`, `$1`, `$?`, a `${...}` with an operator, whose word has
+    # quoting and escapes of its own, and any `$(` inside double quotes.
+    # Returns where the loop is to go on from.
+    #
+    # WHY `$(` OUTSIDE DOUBLE QUOTES, against round 3 of the review, which
+    # asked for `$NAME` and `${NAME}` alone. The command inside it is quoted by
+    # the same rules as the text around it, and the loop reads it by those
+    # rules, with this doubt list; its `(` and `)` are separators, which is what
+    # bash makes them for what stands next to them. The two places the inside
+    # differs are doubt already: `$((` is arithmetic, which the `((` rule
+    # refuses, and a `#` straight after the closing `)` starts a comment to
+    # bash where the loop cannot say so, which the `#` rule refuses. Refusing
+    # `$(` as well cost one of the three commands #202 gains in the 372-command
+    # corpus -- `id=$(gh api ... --jq .id)` on the line in front -- and closed
+    # no row the rest of the doubt list leaves open.
+    function dollar(s, i, top,    j) {
+      if (substr(s, i + 1, 1) ~ /[A-Za-z_]/) return i
+      if (top && substr(s, i + 1, 1) == "(") return i
+      if (substr(s, i + 1) ~ /^\{[A-Za-z_][A-Za-z0-9_]*\}/) {
+        j = index(substr(s, i + 1), "}")
+        return i + j
+      }
+      doubt = 1
+      return i
+    }
+    # THE GRAMMAR OF RULE 1, in keep-unquoted mode: a delimiter of letters, digits
+    # and `_`, and whole `\047...\047` or `"..."` spans of the same, of which
+    # `EOF`, `\047EOF\047`, `"EOF"` and `M"D"` are all instances. For such a word,
+    # deleting the quote characters IS bash quote removal, so the terminator
+    # this pass waits for is the one bash ends the body on. Outside it the two
+    # part: `<<"it\047s"`, `<<E\OF`, `<<\EOF`, `<<$\047EOF\047` and `<<"E\"F"` end at a
+    # line the pass waits past, measured by round 2 of the review of #202 --
+    # and the default mode has the same defect in every hook, which is #351.
+    function delimiter(w) {
+      return w ~ /^([A-Za-z0-9_]|\047[A-Za-z0-9_]+\047|"[A-Za-z0-9_]+")+$/
+    }
+    # THE FILE OF RULE 2: the target cat writes a body to is a plain path.
+    # Optionally double-quoted, and optionally led by one `$NAME/` or
+    # `${NAME}/`, since that is how the commands this repository runs name
+    # their scratch files; then words of [A-Za-z0-9_.+-] joined by single
+    # slashes -- so no `//`, no `$( )`, no `>(...)`. And no component named
+    # stdout, stderr or fd, anywhere in the path, which is how a write reaches
+    # a descriptor another command reads: `/dev/stdout`, `$D/stdout`,
+    # `/dev/fd/1`, `/proc/self/fd/1`, `/dev/stderr` under `2>&1`.
+    #
+    # NOT A PROOF THAT THE PATH IS A REGULAR FILE, and an earlier version of
+    # this comment and of the pull request said it was. Nothing reading the
+    # text can say what a name is: a variable set to /dev/fd, a symlink to
+    # /dev/stdout, a FIFO a background shell reads, or a function named `cat`
+    # each makes a plain path a reader. That is the family of CLAUDE.md
+    # consequence 6 -- a name is not resolved -- and it is taken knowingly
+    # here as there; GH-202.1 pins one row of each as permitted.
+    #
+    # The component list is what a mutation of each member could turn red.
+    # It held dev, proc, stdin, tty, `.` and `..` as well, and round 3 of the
+    # review found every row green with the list cut to stdout: none of them
+    # reaches a descriptor another command reads that stdout, stderr or fd
+    # does not already name -- /dev/tty and /dev/stdin are not read back by
+    # the command line, and `..` only reaches a name the list then refuses.
+    function plainfile(t) {
+      if (t ~ /^".*"$/) t = substr(t, 2, length(t) - 2)
+      if (t !~ /^((\$[A-Za-z_][A-Za-z0-9_]*|\$\{[A-Za-z_][A-Za-z0-9_]*\})\/|\/)?[A-Za-z0-9_.+-]+(\/[A-Za-z0-9_.+-]+)*$/) return 0
+      if (t ~ /(^|\/)(stdout|stderr|fd)(\/|$)/) return 0
+      return 1
+    }
+    # RULE 2 above: the command the heredoc belongs to, as the text in front of
+    # its opener back to a separator (pre) and behind its delimiter up to the
+    # next (post), is `cat` writing to a plain file, and `nxt`, the separator
+    # that ends it, is not a lone `|`.
+    #
+    # A SECOND CONSUMER BREAKS AN ARGUMENT ELSEWHERE. The opener block keeps no
+    # test that the command began on the line of the opener, and says why: a line
+    # that opens inside a quote has its closing quote in front of any `cat`
+    # that follows without a separator, and pre must begin with `cat`; and a
+    # line continued onto the opener line is doubt, so pre cannot have begun on
+    # an earlier line. That holds for this consumer and for no other by
+    # construction. A consumer
+    # whose pre may begin with a quote or a word ending in one -- anything but
+    # a literal command name -- needs that test back, with a row that only it
+    # refuses. Round 4 of the review asked for this to be written where the
+    # consumer is, since that is where the next one would be added.
+    #
+    # NOT gh api, which rounds 1 and 2 admitted. It does not run its stdin, but
+    # its OUTPUT can be the body -- a gist created from stdin and read back
+    # with --jq -- and that output reaches a reader through a pipe, `<( )`,
+    # `> >( )`, a brace group, an `if` or a command substitution: round 3 of
+    # the review measured two, and the author four more, each refused before
+    # #202. Every one is where the output goes and not what it reads, so a rule
+    # per channel would be a deny-list again. And it reading a quoted heredoc
+    # is not a shape this repository writes: none of the 372 gh api heredoc
+    # commands taken from the local transcripts had one, measured when it was
+    # dropped. `cat > F`, whose output goes to F, is.
+    function consumer(pre, post, nxt,    t) {
+      if (nxt == "|") return 0
+      if (pre ~ /^[ \t]*cat[ \t]*>>?[ \t]*[^ \t]+[ \t]*$/ && post ~ /^[ \t]*$/) {
+        t = pre
+        sub(/^[ \t]*cat[ \t]*>>?[ \t]*/, "", t)
+        sub(/[ \t]*$/, "", t)
+        return plainfile(t)
+      }
+      if (pre ~ /^[ \t]*cat[ \t]+$/ && post ~ /^[ \t]*>>?[ \t]*[^ \t]+[ \t]*$/) {
+        t = post
+        sub(/^[ \t]*>>?[ \t]*/, "", t)
+        sub(/[ \t]*$/, "", t)
+        return plainfile(t)
+      }
+      return 0
+    }
     ind {
       line = $0
       if (dash) sub(/^\t+/, "", line)
-      held[++nheld] = $0
+      # A kept body is printed as it goes and never held, so the END give-back
+      # has nothing of it to return twice.
+      if (kept) print
+      else held[++nheld] = $0
       if (line == d) { ind = 0; nheld = 0 }
       next
     }
@@ -519,8 +815,70 @@ cs_drop_heredocs() {
           d = substr(scan, RSTART, RLENGTH)
           dash = (d ~ /^<<-/)
           sub(/^<<-?[[:space:]]*/, "", d)
+          # Asked of the delimiter as written, before its quotes come off: rule
+          # 1 in the paragraph above this function says which rule.
+          kept = (keep != "" && d !~ /[\047"\\]/)
+          if (keep != "") {
+            # Rule 3: is this an opener bash sees? Each line below is one of
+            # its conditions, so that each can be broken by one mutation.
+            cmt = 0; sep = 0; fsep = 0
+            seen = 1
+            if (lex($0, 1, RSTART) != RSTART) seen = 0
+            if (q != "" || cmt) seen = 0
+            # No test that the command began on this line. One stood here, and
+            # nothing could reach it: a line that opens inside a quote has its
+            # closing quote in front of any `cat` that follows without a
+            # separator, and pre must begin with `cat`; a continued line is
+            # doubt. Round 3 of the review asked for a row or a deletion.
+            pre = substr($0, sep + 1, RSTART - sep - 1)
+            # The grammar of rule 1. Every comment in this program is inside a
+            # single-quoted shell word, so it spells an apostrophe \047: a bare
+            # one ended the word, and the library failed to load -- the hook
+            # refusing everything -- until the rows below were run.
+            if (!delimiter(d)) seen = 0
+            # Between `<<` and the delimiter the opener regex takes any space,
+            # and to awk a carriage return, form feed or vertical tab is one;
+            # to bash it is part of the word, so `<<\r\047EOF\047` waits for a
+            # line reading `\rEOF`, and the pass for one reading `EOF`. The
+            # delimiter grammar sees the word after that space is taken off,
+            # and lex() is not run over this span, so it is asked here. Found
+            # by the author in round 3, where the review could not build one.
+            if (substr($0, RSTART, RLENGTH) ~ /[\r\f\v]/) seen = 0
+            # The rest of the line, from the end of the delimiter: the grammar
+            # keeps the quotes in a delimiter balanced, so reading them would
+            # leave the state where it was.
+            fsep = 0
+            lex($0, RSTART + RLENGTH, length($0) + 1)
+            post = substr($0, RSTART + RLENGTH, (fsep ? fsep : length($0) + 1) - RSTART - RLENGTH)
+            nxt = (fsep ? substr($0, fsep, 2) : "")
+            if (nxt != "||") nxt = substr(nxt, 1, 1)
+            # A second `<<` on the line: this pass takes the first opener only,
+            # so the second body would be read as command text, and a quote in
+            # it leaves the state inside a string where bash is at the top.
+            # Round 4 of the review found no row this line alone refused and
+            # offered it as a refusal cost; the row that needs it is in
+            # GH-202.1, a second body holding a lone `"`.
+            if (substr(scan, RSTART + RLENGTH) ~ /<</) seen = 0
+            # A quote left open at the end of the line: bash begins the body
+            # after the line that closes it, and this pass after this one.
+            if (q != "") seen = 0
+            # DOUBT IS STICKY, and this line is all that makes it so: doubt is
+            # never cleared, so once raised it vetoes this opener and every one
+            # after it. That includes doubt raised on this very line -- in
+            # front of the opener, or behind it: a continuation after the
+            # opener is doubt, since the lines that continue it are not read.
+            if (doubt) seen = 0
+            if (!seen) { doubt = 1; print; next }
+            # Rule 2: a quoted body that no known data consumer reads is kept.
+            if (!consumer(pre, post, nxt)) kept = 1
+          }
           gsub(/[\047"]/, "", d)
           opener = 1
+        } else if (keep != "") {
+          # A line with no opener is command text, and the quote state is
+          # carried over it.
+          cmt = 0
+          lex($0, 1, length($0) + 1)
         }
       }
       if (!opener) { print; next }
@@ -725,7 +1083,10 @@ cs_normalise() {
 #
 # cs_join, which cs_normalise calls as well, is not withdrawn for, because
 # cs_within_cap already answers for it: every Bash hook calls that, and it
-# fails when cs_join does. cs_drop_heredocs has no such second caller in a hook.
+# fails when cs_join does. cs_drop_heredocs has no such second caller in a hook:
+# cs_drop_quoted_heredocs calls it too since #202, but answers for it only to
+# its own caller and only by its status, which says nothing to a consumer of
+# cs_normalise.
 #
 # It must stand after both definitions, for the reason the cs_split withdrawal
 # gives, and check-hooks.sh drives every consumer of cs_normalise against a
@@ -734,6 +1095,35 @@ if ! declare -F cs_drop_heredocs >/dev/null 2>&1; then
   echo "lib/command-scan.sh: cs_drop_heredocs is not defined, and cs_normalise calls it. cs_normalise is withdrawn, so every consumer that requires it refuses." >&2
   unset -f cs_normalise
 fi
+
+# Drop the quoted heredoc bodies whose opener line fits a grammar, and nothing else:
+# lines on stdin, the same lines out, with the body of a heredoc taken away only
+# when its opener line fits the grammar above cs_drop_heredocs -- a quoted delimiter of plain
+# words and `cat` into a plain path reading it -- its opener is one bash
+# sees, and nothing in front of it or behind it on its line is on the doubt
+# list; every other body kept
+# where it
+# stands. cs_drop_heredocs in its keep-unquoted mode, whose paragraph says each
+# of the three and why; this is the name a hook calls it by, so that THE LOAD
+# CONTRACT has a function to require rather than an argument to trust. The name
+# says less than the function does: it was given when the first of the three
+# was the whole rule, and review of #202's pull request added the other two.
+#
+# no-pr-decisions.sh is its caller, for #202. That hook re-reads a command's
+# heredoc bodies as commands once a gh api call is on the line, because a
+# mutation sent through a heredoc is a decision hidden in text cs_normalise
+# dropped. It re-read the quoted ones too, where bash expands nothing, so a
+# pull request body quoting `gh api -X POST .../releases` in backticks was that
+# release write. It asks this function which bodies cannot hold a command.
+#
+# NOT WITHDRAWN when cs_drop_heredocs is missing, unlike cs_normalise above,
+# because its failure is loud: the call it makes answers 127 and this returns
+# that status, which its caller reads -- and falls back on the whole raw text,
+# the reading before #202, which refuses more and never less. Its one caller
+# also requires cs_normalise, which that same state withdraws.
+cs_drop_quoted_heredocs() {  # stdin: lines; stdout: the same, quoted heredoc bodies dropped
+  cs_drop_heredocs keep-unquoted
+}
 
 # Join backslash line continuations, and nothing else.
 #

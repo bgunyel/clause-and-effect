@@ -910,6 +910,35 @@ heredoc-opener-continuation%lib/command-scan.sh%/if (p) { print; next }/d;/if (r
 heredoc-opener-parity%lib/command-scan.sh%s|if (p) { print; next }|if (r) { print; next }|%GH-128%caught
 heredoc-boundary-run-kept%lib/command-scan.sh%s|if (r > 0) sub|if (0) sub|%GH-128%caught
 normalise-swallows-a-missing-heredoc-pass%lib/command-scan.sh%/^  unset -f cs_normalise$/d%GH-182.2%caught
+heredoc-quoting-inverted%lib/command-scan.sh%s|d !~ /|d ~ /|%GH-202.1%caught
+readmission-splits-the-raw-command%no-pr-decisions.sh%s/^\$BODIES"$/$COMMAND"/%GH-202.1%caught
+readmission-drops-the-fallback%no-pr-decisions.sh%s/ || BODIES=\$COMMAND$//%GH-202.3%caught
+heredoc-opener-in-quotes-seen%lib/command-scan.sh%s/^            if (q != "" || cmt) seen = 0$/            if (cmt) seen = 0/%GH-202.1%caught
+heredoc-opener-in-comment-seen%lib/command-scan.sh%s/^            if (q != "" || cmt) seen = 0$/            if (q != "") seen = 0/%GH-202.1%caught
+heredoc-opener-escape-ignored%lib/command-scan.sh%s/lex(\$0, 1, RSTART) != RSTART)/lex($0, 1, RSTART) < 0)/%GH-202.1%caught
+heredoc-doubt-on-its-own-line-ignored%lib/command-scan.sh%/^            if (doubt) seen = 0$/d%GH-202.1%caught
+heredoc-doubt-not-sticky%lib/command-scan.sh%s/^            cmt = 0; sep = 0; fsep = 0$/            cmt = 0; sep = 0; fsep = 0; doubt = 0/%GH-202.1%caught
+heredoc-comment-not-read%lib/command-scan.sh%s/{ cmt = 1; return to }/{ continue }/%GH-202.1%caught
+heredoc-any-reader-a-consumer%lib/command-scan.sh%/^            if (!consumer(pre, post, nxt)) kept = 1$/d%GH-202.1%caught
+heredoc-consumer-pipe-ignored%lib/command-scan.sh%s/if (nxt == "|") return 0/if (0) return 0/%GH-202.1%caught
+heredoc-delimiter-grammar-ignored%lib/command-scan.sh%/^            if (!delimiter(d)) seen = 0$/d%GH-202.1%caught
+heredoc-open-quote-at-eol-ignored%lib/command-scan.sh%/^            if (q != "") seen = 0$/d%GH-202.1%caught
+heredoc-second-opener-ignored%lib/command-scan.sh%/^            if (substr(scan, RSTART + RLENGTH) ~ \/<<\/) seen = 0$/d%GH-202.1%caught
+heredoc-cr-in-opener-ignored%lib/command-scan.sh%/substr(\$0, RSTART, RLENGTH) ~ /d%GH-202.1%caught
+heredoc-plainfile-any-path%lib/command-scan.sh%s/^    function plainfile(t) {$/    function plainfile(t) { return 1/%GH-202.1%caught
+heredoc-plainfile-shape-unchecked%lib/command-scan.sh%/^      if (t !~ .*) return 0$/d%GH-202.1%caught
+heredoc-plainfile-component%lib/command-scan.sh%/^      if (t ~ .*(stdout|stderr|fd).*) return 0$/d%GH-202.1%caught
+heredoc-component-stdout-dropped%lib/command-scan.sh%s/(stdout|stderr|fd)(/(stderr|fd)(/%GH-202.1%caught
+heredoc-component-stderr-dropped%lib/command-scan.sh%s/(stdout|stderr|fd)(/(stdout|fd)(/%GH-202.1%caught
+heredoc-component-fd-dropped%lib/command-scan.sh%s/(stdout|stderr|fd)(/(stdout|stderr)(/%GH-202.1%caught
+heredoc-arith-not-doubted%lib/command-scan.sh%/^        if (c == "(" && substr(s, i + 1, 1) == "(") doubt = 1$/d%GH-202.1%caught
+heredoc-backtick-not-doubted%lib/command-scan.sh%s/^        if (c == "`") { doubt = 1; continue }$/        if (c == "`") continue/%GH-202.1%caught
+heredoc-dq-backtick-not-doubted%lib/command-scan.sh%s/^          if (c == "`") { doubt = 1; continue }$/          if (c == "`") continue/%GH-202.1%caught
+heredoc-dollar-not-doubted%lib/command-scan.sh%/^      doubt = 1$/d%GH-202.1%caught
+heredoc-dq-dollar-not-read%lib/command-scan.sh%/^          if (c == "\$") i = dollar(s, i, 0)$/d%GH-202.1%caught
+heredoc-dq-substitution-not-doubted%lib/command-scan.sh%s/if (top \&\& substr(s, i + 1, 1) == "(")/if (substr(s, i + 1, 1) == "(")/%GH-202.1%caught
+heredoc-hash-in-word-not-doubted%lib/command-scan.sh%/^          doubt = 1$/d%GH-202.1%caught
+heredoc-continuation-not-doubted%lib/command-scan.sh%/ i == n) { doubt = 1; continue }$/d%GH-202.1%caught
 command-word-not-reduced%lib/command-scan.sh%s/^      w = substr(s, 1, i - 1)$/      w = "x"/%GH-117%caught
 wrapper-word-spelling-not-admitted%lib/command-scan.sh%s/SPELLING((ba|z|)sh/((ba|z|)sh/%GH-117%caught
 prefix-word-spelling-not-reduced%lib/command-scan.sh%s/return cw_name(w)/return w/%GH-117%caught

@@ -1604,6 +1604,18 @@ it has no entry above (Q16).
   Cited in #185's issue file, in GH-185's note, which is the one list of what
   `dup_stderr` does not reach, and beside the rows that pin it. It adds its
   requirements in the pull request that fixes it
+- #311: a shell reading a heredoc through an option or through `/dev/stdin` --
+  `sh -s <<'EOF'`, `bash -s <<'EOF'`, `source /dev/stdin <<'EOF'` -- is not
+  recognised as a wrapper by `CS_WRAPPER_RE`, so the body it runs is never
+  read, in any hook. Filed from the spec review of #202's pull request, whose
+  first version permitted such shapes beside a `gh api` call that the old
+  re-read refused by accident; its final version refuses them there again, by
+  dropping a quoted body only when a known data consumer reads it, and leaves
+  one of the family permitted -- a body staged by `cat > s.sh <<'EOF'` and run
+  by a later `sh s.sh`. Cited in #202's issue file, where GH-202.1 pins that row
+  as a trade, and beside the re-admission in `no-pr-decisions.sh` and the
+  heredoc pass in `lib/command-scan.sh`. It adds its requirements in the pull
+  request that fixes it
 - #315: `dup_stderr`'s fold joins across an escaped trailing backslash,
   which bash does not, and reports the joined line under the first line's
   number beside the line bash runs. Filed from review of #185's pull request,
@@ -1650,6 +1662,15 @@ it has no entry above (Q16).
   own. Two clauses of `row_apply`'s test and pass two's `FAILED=1` for a row it
   refuses survived green, which is why GH-193's fixture has a read-only row and
   a directory row and GH-272's registry holds the two self-tests
+- #351: the heredoc pass removes a delimiter's quotes by deleting quote
+  characters, which is not bash's quote removal, so `<<"it's"`, `<<E\OF`,
+  `<<\EOF`, `<<$'EOF'` and `<<"E\"F"` end a body on a line bash has already
+  passed and hide what lies between, in every hook. Filed from round 2 of the
+  review of #202's pull request, which closed it for that pull request's
+  keep-unquoted mode with a delimiter grammar and measured the default mode
+  permitting it on dev-05. Cited in GH-202.1's note and beside the grammar in
+  `lib/command-scan.sh`. It adds its requirements in the pull request that
+  fixes it
 - #352: pass two writes through a symlinked directory on a row's path, which
   `row_apply`'s symlink test does not see, since it asks of the last component
   only. Filed from review of #350. Cited in #193's issue file among what it
