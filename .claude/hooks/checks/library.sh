@@ -1099,7 +1099,6 @@ record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did no
     printf 'the child that records it wrote a status that is not one'
     return 2
   elif ! why=$(record_dump "$2"); then
-    : > "$2"
     printf 'the dump of its %s is not whole, or holds text the child did not write there' "$why"
     return 2
   elif [ "$sourced" != 0 ]; then
@@ -1127,11 +1126,13 @@ record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did no
 # body holds a heredoc line that is the next function's header and a `}` line
 # before it, which cuts there; and a variable whose value holds a newline,
 # should a bash print one unquoted. Prints which dump, and returns 1, when one
-# is not whole.
+# is not whole, and then leaves <out> as it found it: the record is written to
+# <out>.part and moved over <out> only once every dump has been read.
 record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote beside it; 1 and which dump on stdout when one is not whole
   local line name chunk listing=functions k=-1 fn_re='^declare -f[a-z]* (.+)$' var_re='^declare -[a-zA-Z-]+ ([A-Za-z_][A-Za-z0-9_]*)(=|$)'
   local -a lines=() names=()
   local -A was_f=() was_v=()
+  : > "$1.part"
   mapfile -t lines < "$1.before"
   [ "${#lines[@]}" -gt 0 ] && [ "${lines[-1]}" = e: ] || { printf 'starting names'; return 1; }
   unset 'lines[-1]'
@@ -1157,7 +1158,7 @@ record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote bes
     if [ $((k + 1)) -lt "${#names[@]}" ] && [ "$line" = "${names[k + 1]} () " ]; then
       if [ "$k" -ge 0 ]; then
         [[ $chunk == *$'\n}' ]] || { printf 'functions'; return 1; }
-        [ -n "${was_f[${names[k]}]-}" ] || printf '%s\0%s\0' "${names[k]}" "$chunk" >> "$1"
+        [ -n "${was_f[${names[k]}]-}" ] || printf '%s\0%s\0' "${names[k]}" "$chunk" >> "$1.part"
       fi
       k=$((k + 1))
       chunk=$line
@@ -1170,7 +1171,7 @@ record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote bes
   [ $((k + 1)) = "${#names[@]}" ] || { printf 'functions'; return 1; }
   if [ "$k" -ge 0 ]; then
     [[ $chunk == *$'\n}' ]] || { printf 'functions'; return 1; }
-    [ -n "${was_f[${names[k]}]-}" ] || printf '%s\0%s\0' "${names[k]}" "$chunk" >> "$1"
+    [ -n "${was_f[${names[k]}]-}" ] || printf '%s\0%s\0' "${names[k]}" "$chunk" >> "$1.part"
   fi
   mapfile -t lines < "$1.variables"
   [ "${#lines[@]}" -gt 0 ] && [ "${lines[-1]}" = e: ] || { printf 'variables'; return 1; }
@@ -1179,8 +1180,9 @@ record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote bes
     [[ $line =~ $var_re ]] || { printf 'variables'; return 1; }
     name=${BASH_REMATCH[1]}
     [[ -n ${was_v[$name]-} || $name == BASH_* || $name == _ ]] && continue
-    printf '$%s\0%s\0' "$name" "${line#declare -* }" >> "$1"
+    printf '$%s\0%s\0' "$name" "${line#declare -* }" >> "$1.part"
   done
+  mv -f -- "$1.part" "$1"
 }
 # THE HEAD'S RECORD OF ONE FILE (#279): `record_of`, and what the head does
 # with each outcome. A file whose sourcing defined nothing gives the foot
