@@ -1078,9 +1078,13 @@ record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did no
 # file and why, and not an abort. A record the child did not finish can be
 # short of names, and a name it lacks is not compared at the foot; the row is
 # what says so, and it fails the run. Written to LOADED_BODY and LOADED_FROM,
-# which the driver declares. Called by the driver's prelude, and by #279's
-# issue file in a subshell of its own for each outcome.
-record_loaded() {  # record_loaded <file> <out> -- record it into LOADED_BODY and LOADED_FROM; 1 if it defined nothing
+# which the driver declares, and the outcome to LOADED_STATUS, keyed by the
+# file, so that a check can read what the head found rather than record the
+# file again (round 1 of the review of PR #330). The FAIL row is tagged through
+# a `local` REQ, so a caller's tag is the same after it as before. Called by
+# the driver's prelude, and by #279's issue file in a subshell of its own for
+# each outcome.
+record_loaded() {  # record_loaded <file> <out> -- record it into LOADED_BODY, LOADED_FROM and LOADED_STATUS; 1 if it defined nothing
   local why record_status k v
   why=$(record_of "$1" "$2")
   record_status=$?
@@ -1089,11 +1093,11 @@ record_loaded() {  # record_loaded <file> <out> -- record it into LOADED_BODY an
     1) printf 'sourcing %s alone defined nothing%s, so nothing of it can be compared at the foot; nothing was judged\n' \
          "$1" "${why:+ ($why)}" >&2
        return 1 ;;
-    *) REQ=GH-279.1
+    *) local REQ=GH-279.1
        fail static 'the record of %s is not to be trusted whole: %s; the names it holds are compared at the foot, and a name it lacks is not' \
-         "$1" "$why"
-       REQ= ;;
+         "$1" "$why" ;;
   esac
+  LOADED_STATUS[$1]=$record_status
   while IFS= read -r -d '' k && IFS= read -r -d '' v; do
     LOADED_BODY[$k]=$v
     LOADED_FROM[$k]=$1
@@ -1828,13 +1832,36 @@ beside() {  # beside <label> <file> <literal>
 # check_in read as permitted because it was not exit 2 (see `verdict`, where
 # those thirteen would each FAIL today). A fixture guard that
 # derives its own path proves nothing about the check beside it.
+# WHETHER A COPY OF THE TOKENISER SOURCES AS ITS ORIGINAL DOES: the status
+# sourcing each returns, taken the same way, and the two compared. A fixture
+# guard that loads a copy asks this, and not whether sourcing the copy returned
+# 0 (#279): the tokeniser under check may itself source non-zero -- the
+# registry row tokeniser-sources-non-zero is one that does -- and its copy is
+# then a fixture working and not a fixture broken, and its own checks say what
+# is wrong with it. Nor only whether a name is defined, which is what the
+# two guards asked on this branch until round 1 of the review of PR #330
+# measured the cost: a copy its builder broke -- an unterminated `if`
+# appended, where every function is defined and sourcing returns 2 -- passed
+# every half-library guard, and every check driving one was green. A copy the builder broke into the status its original
+# already returns is not told apart from it; that is the limit, named.
+copy_sources_as() {  # copy_sources_as <copy> <original> -- 1 and why on stdout when they source with different statuses
+  local copy_status original_status
+  bash -c '. "$1"' _ "$1" > /dev/null 2>&1
+  copy_status=$?
+  bash -c '. "$1"' _ "$2" > /dev/null 2>&1
+  original_status=$?
+  [ "$copy_status" = "$original_status" ] && return 0
+  printf 'it sources with status %s, and the tokeniser it was copied from with %s' \
+    "$copy_status" "$original_status"
+  return 1
+}
 halflib_path() {  # halflib_path <hook> <cs_function> -- where that fixture sits
   printf '%s\n' "$FIXTURES/halflib-$1-$2/$1"
 }
 mk_halflib() {  # mk_halflib <hook> <cs_function>
   local hook="$1"
   local fn="$2"
-  local target dir
+  local target dir why
   target=$(halflib_path "$hook" "$fn")
   dir=$(dirname "$target")
   mkdir -p "$dir/lib"
@@ -1853,18 +1880,23 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
   }
   # And that what is left still loads. A fixture broken some other way would
   # refuse for a reason this section does not name, and would read as evidence
-  # for the guard.
+  # for the guard. First, that it sources as the tokeniser it was copied from
+  # does -- asked before the load below, so that what it says on a refusal is
+  # this guard's line alone. See `copy_sources_as`.
+  why=$(copy_sources_as "$dir/lib/command-scan.sh" "$HOOKS/lib/command-scan.sh") || {
+    echo "the half-library for $hook does not source as the tokeniser it was copied from: $why; the check using it proves nothing" >&2
+    exit 1
+  }
   # The one line filtered out of its stderr is the library's own report of a
   # withdrawal (#182's, for a library missing cs_drop_heredocs), which is the
   # fixture working and in a green log reads as a failure. Anything else it
   # says is kept, so a fixture that fails to load for a reason of its own still
   # shows bash's diagnostic; review of #182's pull request found the first
   # version dropping all of it.
-  # Loading is judged by what sourcing defined, and not by the status it
-  # returned (#279): a tokeniser copy that sources non-zero loads all the same,
-  # and its own checks say what is wrong with it; asked with `&&`, it stopped
-  # the run here, unjudged, which is how the registry row
-  # tokeniser-sources-non-zero first came back did-not-complete.
+  # Loading is judged by what sourcing defined, and its status by the one
+  # above, and not by `&&` (#279): asked that way, a tokeniser copy that
+  # sources non-zero stopped the run here, unjudged, which is how the registry
+  # row tokeniser-sources-non-zero first came back did-not-complete.
   bash -c ". '$dir/lib/command-scan.sh'; command -v cs_renamed_away >/dev/null 2>&1" \
     2> >(grep -vF 'cs_drop_heredocs is not defined, and cs_normalise calls it' >&2) || {
     echo "the half-library for $hook does not load at all; the check using it proves nothing" >&2

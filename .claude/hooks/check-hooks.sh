@@ -753,9 +753,28 @@ done
 # before it was relied on, against the library and the tokeniser at 0d5829d:
 # the record this child writes is byte for byte the one the child before #279
 # wrote, 30,498 and 57,596 bytes.
+#
+# AND THE CHILD READS IN A SHELL OF ITS OWN SETTING, NOT THE ONE THE FILE LEFT
+# (review round 1 of PR #330). The loops below run in the shell that just
+# sourced the file, so what the file set is what they read with, and each of
+# these was measured to leave a record that the child called whole while it
+# lacked names: `IFS=x` joined every name into one bogus key; `shopt -s
+# nullglob` dropped a function whose name is a glob; `shopt -s nocasematch`
+# skipped `path` as though it were the `PATH` the child started with; and
+# `trap 'exit 0' EXIT` turned the child's `exit 3` into 0. So after the status
+# is written, the child puts each back: no traps, no aliases, globbing off, case
+# matched, and IFS as bash starts it. Each command there is written with a
+# backslash, which an alias the file defined cannot expand; a function the file
+# defines under the same name is the shadowed-builtin limit named above. A file
+# that aliases or traps the status line itself leaves `<out>.sourced` empty,
+# and that is a FAIL row already. Globbing off also means a function whose name
+# is a glob is recorded under that name, and not under whatever files in the
+# working directory it matched. Measured again with the reset: the record of
+# the library and of the tokeniser is byte for byte the one before it.
 LOADED_CHILD='bf=" $(compgen -A function | tr "\n" " ") "; bv=" $(compgen -v | tr "\n" " ") bf bv n v "
 . "$1" 3>&- >/dev/null 2>&1
 printf "%s" "$?" >&3 || exit 3
+\trap - EXIT ERR DEBUG RETURN; \unalias -a; \shopt -u nocasematch; \set -f; \printf -v IFS " \t\n"
 for n in $(compgen -A function); do
   [[ $bf == *" $n "* ]] && continue
   printf "%s\0%s\0" "$n" "$(declare -f "$n")" || exit 3
@@ -765,7 +784,7 @@ for n in $(compgen -v); do
   v=$(declare -p "$n"); printf "\$%s\0%s\0" "$n" "${v#declare -* }" || exit 3
 done
 exit 0'
-declare -A LOADED_FROM=()
+declare -A LOADED_FROM=() LOADED_STATUS=()
 for f in "$SUITE_DIR/checks/$SUITE_LIBRARY" "$HOOKS/lib/command-scan.sh"; do
   record_loaded "$f" "$FIXTURES/record" || exit 1
 done

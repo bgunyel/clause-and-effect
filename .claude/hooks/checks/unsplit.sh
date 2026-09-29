@@ -8374,7 +8374,7 @@ emptylist_path() {  # emptylist_path <hook> -- where the emptied-list copy of it
 }
 mk_emptylist() {  # mk_emptylist <hook>
   local hook="$1"
-  local target dir
+  local target dir why
   target=$(emptylist_path "$hook")
   dir=$(dirname "$target")
   mkdir -p "$dir/lib"
@@ -8402,8 +8402,12 @@ mk_emptylist() {  # mk_emptylist <hook>
   # cs_split is deliberately not asked here: whether it is withdrawn is the
   # mechanism, and a fixture guard exits the suite rather than failing a check,
   # which would report a removed mechanism as an aborted run instead of as red.
-  # By what sourcing defined, and not the status it returned, as mk_halflib
-  # asks (#279).
+  # By what sourcing defined, and a status that is the original's, as
+  # mk_halflib asks (#279); see `copy_sources_as` in the library.
+  why=$(copy_sources_as "$dir/lib/command-scan.sh" "$HOOKS/lib/command-scan.sh") || {
+    echo "the emptied-list library for $hook does not source as the tokeniser it was copied from: $why; the checks using it prove nothing" >&2
+    exit 1
+  }
   bash -c ". '$dir/lib/command-scan.sh'; command -v cs_normalise && command -v cs_git_args \
            && command -v cs_gh_args && command -v cs_join" >/dev/null 2>&1 || {
     echo "the emptied-list library for $hook does not load with its other functions; the checks using it prove nothing" >&2

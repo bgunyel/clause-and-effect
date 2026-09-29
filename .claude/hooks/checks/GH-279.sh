@@ -49,11 +49,15 @@ requirement GH-279.1 <<'REQ'
   ended before sourcing returned, is a FAIL row at the head, under GH-279.1,
   naming the file and why; the run goes on to its verdict with the record as it
   stands. A file whose sourcing defined nothing still stops the run, and says
-  so, with the status when it was not 0. And a fixture the suite builds from a
-  copy of the tokeniser -- a half-library, an emptied-list library -- is
-  judged to load by what sourcing it defined, not by the status sourcing
-  returned, so a tokeniser copy that sources non-zero is judged by the run and
-  does not stop it.
+  so, with the status when it was not 0. The child records in a shell of its
+  own setting and not the one the file left: what the file left in IFS,
+  globbing, case matching, traps or aliases changes neither which names it
+  records nor how it ends. And a fixture the suite builds from a copy of the
+  tokeniser -- a half-library, an emptied-list library -- is judged to load
+  by what sourcing it defined and by a status that is the one sourcing the
+  tokeniser it was copied from returns, not by a status of 0: a tokeniser copy
+  that sources non-zero, as the tokeniser does, is judged by the run and does
+  not stop it, and a copy its builder broke into another status does.
 - from: #279
 - kind: defect-permitting
 - status: active
@@ -72,6 +76,12 @@ requirement GH-279.1 <<'REQ'
   the file would have defined nothing is what it did not get to say. And a
   file that turns on `set -e` and then fails ends the child, so its row says
   the child exited, not that sourcing returned; either way it is a FAIL.
+  Round 1 of the review of PR #330 found two more on this branch, each
+  measured: the two fixture guards had been loosened to ask only that a name
+  was defined, so a copy its builder broke passed them; and a file that left
+  IFS changed gave a record the child called whole while it lacked names,
+  which the sweep of that class found nullglob, nocasematch and an EXIT trap
+  doing too.
 REQ
 requirement GH-279.2 <<'REQ'
 - text: The end-of-run file's last check before the matrix derives the rows the
@@ -136,7 +146,7 @@ mkdir -p "$R279"
 # quoted string opening with a result's own prefix is read by the #104 audit
 # as a result printed outside `pass` and `fail`.
 r279_loaded() {  # r279_loaded <file> -- record_loaded's output, its status, and the names it recorded
-  ( declare -A LOADED_BODY=() LOADED_FROM=()
+  ( declare -A LOADED_BODY=() LOADED_FROM=() LOADED_STATUS=()
     record_loaded "$1" "$R279/record" > "$R279/said" 2>&1
     loaded_status=$?
     sed 's/^  FAIL /FAIL: /' "$R279/said"
@@ -178,6 +188,45 @@ status 1" "$(r279_loaded "$R279/nothing.sh")"
 tok 'and so does one that defines nothing and sources non-zero, naming the status' \
 "sourcing $R279/nothing-nonzero.sh alone defined nothing (sourcing it returned 1), so nothing of it can be compared at the foot; nothing was judged
 status 1" "$(r279_loaded "$R279/nothing-nonzero.sh")"
+# A caller's tag is the same after the FAIL row as before it: the row is tagged
+# through a `local` REQ, and a routine the head calls once would otherwise
+# clear the tag of any later caller (round 1 of the review of PR #330).
+tok 'a caller'"'"'s tag is the same after record_loaded writes a FAIL row as before it' \
+    'GH-1' "$( ( req GH-1; record_loaded "$R279/nonzero.sh" "$R279/record" > /dev/null 2>&1; printf '%s' "$REQ" ) )"
+# THE CHILD RECORDS IN A SHELL OF ITS OWN SETTING (round 1 of the review of PR
+# #330). Each file below leaves the child's shell set some way, and before the
+# reset in LOADED_CHILD each was measured to leave a record the child called
+# whole that lacked a name: IFS joined every name into one key, nullglob
+# dropped the function whose name is a glob, and nocasematch skipped `path`
+# as though it were the `PATH` the child started with.
+printf '%s\n' 'r279_a() { :; }' 'r279_b() { :; }' 'R279_V=1' 'IFS=x' > "$R279/state-ifs.sh"
+printf '%s\n' 'r279_a() { :; }' 'r279_g*() { :; }' 'shopt -s nullglob' > "$R279/state-glob.sh"
+printf '%s\n' 'r279_a() { :; }' 'path=1' 'shopt -s nocasematch' > "$R279/state-case.sh"
+printf '%s\n' 'r279_a() { :; }' "trap 'exit 0' EXIT" > "$R279/state-trap.sh"
+tok 'a file that leaves IFS changed has each of its names recorded, and no row is written' \
+'status 0
+recorded $R279_V from state-ifs.sh
+recorded r279_a from state-ifs.sh
+recorded r279_b from state-ifs.sh' "$(r279_loaded "$R279/state-ifs.sh")"
+tok 'and so does one that turns nullglob on, its function whose name is a glob among them' \
+'status 0
+recorded r279_a from state-glob.sh
+recorded r279_g* from state-glob.sh' "$(r279_loaded "$R279/state-glob.sh")"
+tok 'and so does one that turns nocasematch on, a variable whose name differs from one the child started with only in case among them' \
+'status 0
+recorded $path from state-case.sh
+recorded r279_a from state-case.sh' "$(r279_loaded "$R279/state-case.sh")"
+# An EXIT trap changes nothing while the child finishes, so it is driven where
+# the child's write fails: its stdout is /dev/full, and the child has to exit
+# 3. Without the reset, `trap 'exit 0' EXIT` made that 0 -- a whole record. The
+# same write from a file with no trap is the control that /dev/full fails it.
+tok 'a file that traps EXIT is recorded, and no row is written' \
+'status 0
+recorded r279_a from state-trap.sh' "$(r279_loaded "$R279/state-trap.sh")"
+tok 'the child whose write fails exits 3' \
+    'exited 3' "$(env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$R279/whole.sh" > /dev/full 3> "$R279/full.sourced" 2> /dev/null; echo "exited $?")"
+tok 'and still exits 3 when the file it sourced traps EXIT to exit 0' \
+    'exited 3' "$(env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$R279/state-trap.sh" > /dev/full 3> "$R279/full.sourced" 2> /dev/null; echo "exited $?")"
 # And the head records through it, stopping only on the one outcome that stops
 # it. Pinned as text, since only a whole run shows it behaving; the registry
 # row `tokeniser-sources-non-zero` is that run.
@@ -190,10 +239,13 @@ done' "$(grep -F -A2 'for f in "$SUITE_DIR/checks/$SUITE_LIBRARY" "$HOOKS/lib/co
 # back did-not-complete all the same: `mk_halflib` asked `. lib && command -v`,
 # and its guard stopped the run on the status, saying the copy "does not load
 # at all" -- the head's defect one fixture over. `mk_emptylist`, in the unsplit
-# file, asked the same way. Both ask what sourcing defined now. `mk_halflib` is
-# the library's and is driven here, against a copy of the tokeniser that ends
-# in `false`; `mk_emptylist` has one caller and is not, and the registry row is
-# what exercises it.
+# file, asked the same way. Both then asked only what sourcing defined, and
+# round 1 of the review of PR #330 measured the cost: a copy its builder broke,
+# which defines every name and sources with status 2, passed every
+# half-library guard. So each asks `copy_sources_as` as well: the copy's status
+# is the original's. Both builders are driven here, each in both directions --
+# against a copy of the tokeniser that ends in `false`, which they build, and
+# against a small original whose copy their own edit breaks, which they refuse.
 mkdir -p "$R279/hooks-false/lib"
 cp "$HOOKS/no-git-push.sh" "$R279/hooks-false/"
 { cat "$HOOKS/lib/command-scan.sh"; echo false; } > "$R279/hooks-false/lib/command-scan.sh"
@@ -201,11 +253,36 @@ tok 'the tokeniser copy the guard is asked about sources with a non-zero status'
     'status 1' "$(bash -c '. "$1" 2>/dev/null; echo "status $?"' _ "$R279/hooks-false/lib/command-scan.sh")"
 tok 'and a half-library built from it is built, and does not stop the run' \
     'status 0' "$( ( HOOKS="$R279/hooks-false" FIXTURES="$R279/halflib"; mk_halflib no-git-push.sh cs_split ) 2>&1; echo "status $?" )"
-tok 'and this run'"'"'s record of both was whole, or the head would have said so above' \
-    'whole whole' \
-    "$(for f in "$SUITE_DIR/checks/$SUITE_LIBRARY" "$HOOKS/lib/command-scan.sh"; do
-         record_of "$f" "$R279/this-run" > /dev/null && printf 'whole '
-       done | sed 's/ $//')"
+tok 'and so is an emptied-list library' \
+    'status 0' "$( ( HOOKS="$R279/hooks-false" FIXTURES="$R279/emptylist"; mk_emptylist no-git-push.sh ) 2>&1; echo "status $?" )"
+tok 'a copy that sources with the status its original does is not refused' \
+    'status 0: ' "$(why=$(copy_sources_as "$R279/nonzero.sh" "$R279/nonzero.sh"); echo "status $?: $why")"
+printf '%s\n' 'r279_a() { :; }' 'if true; then' > "$R279/unterminated.sh"
+tok 'a copy that sources with status 2 where its original sources with 0 is refused, naming both' \
+    'status 1: it sources with status 2, and the tokeniser it was copied from with 0' \
+    "$(why=$(copy_sources_as "$R279/unterminated.sh" "$R279/whole.sh"); echo "status $?: $why")"
+# Originals whose copy the builder's own edit breaks. The half-library's rename
+# leaves the top-level call to cs_split with nothing to call, 127; the emptied
+# list fails the test the original ends on, 1. Each copy still defines every
+# name its guard asks for, so a guard that asked only that would build it.
+mkdir -p "$R279/hooks-renamed/lib" "$R279/hooks-emptied/lib"
+cp "$HOOKS/no-git-push.sh" "$R279/hooks-renamed/"
+cp "$HOOKS/no-git-push.sh" "$R279/hooks-emptied/"
+printf '%s\n' 'cs_split() { :; }' 'cs_split' > "$R279/hooks-renamed/lib/command-scan.sh"
+printf '%s\n' "CS_WRAP_OPTION_WORDS='a'" "CS_WRAP_OPERAND_WORDS='b'" \
+  'cs_normalise() { :; }' 'cs_git_args() { :; }' 'cs_gh_args() { :; }' 'cs_join() { :; }' \
+  '[ -n "$CS_WRAP_OPTION_WORDS" ]' > "$R279/hooks-emptied/lib/command-scan.sh"
+tok 'a half-library its builder broke into another status stops the run, naming both' \
+    'the half-library for no-git-push.sh does not source as the tokeniser it was copied from: it sources with status 127, and the tokeniser it was copied from with 0; the check using it proves nothing
+status 1' "$( ( HOOKS="$R279/hooks-renamed" FIXTURES="$R279/halflib-renamed"; mk_halflib no-git-push.sh cs_split ) 2>&1; echo "status $?" )"
+tok 'and so does an emptied-list library' \
+    'the emptied-list library for no-git-push.sh does not source as the tokeniser it was copied from: it sources with status 1, and the tokeniser it was copied from with 0; the checks using it prove nothing
+status 1' "$( ( HOOKS="$R279/hooks-emptied" FIXTURES="$R279/emptylist-emptied"; mk_emptylist no-git-push.sh ) 2>&1; echo "status $?" )"
+# And what the head found when it recorded the two files this run judges: its
+# own outcome for each, as record_loaded kept it, and not a second recording
+# of the files (round 1 of the review of PR #330).
+tok 'and the head found its record of both whole: the outcome it kept for each is 0' \
+    '0 0' "${LOADED_STATUS[$SUITE_DIR/checks/$SUITE_LIBRARY]-unset} ${LOADED_STATUS[$HOOKS/lib/command-scan.sh]-unset}"
 
 # --- GH-279.2: the rows the ledger ends on, derived -----------------------------
 #
