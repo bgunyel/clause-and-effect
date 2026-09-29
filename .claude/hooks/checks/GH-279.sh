@@ -321,6 +321,16 @@ tok 'and so does one that points a trace at the child'"'"'s standard output' \
 'status 0
 recorded $R279_V from xtrace.sh
 recorded r279_a from xtrace.sh' "$(r279_loaded "$R279/xtrace.sh")"
+# Every command after the source is written with a backslash, which no alias
+# expands, so what the one parsed line holds that the backslashes do not is
+# its brace: `{` aliased reaches a group on a line after the source, and the
+# child's dump is then the alias's. Measured: with the group split after the
+# source, this row goes red, and no other does.
+printf '%s\n' 'r279_a() { :; }' 'R279_V=1' 'shopt -s expand_aliases' "alias {='echo r279;'" > "$R279/alias-brace.sh"
+tok 'and so does one that aliases the brace a group opens with' \
+'status 0
+recorded $R279_V from alias-brace.sh
+recorded r279_a from alias-brace.sh' "$(r279_loaded "$R279/alias-brace.sh")"
 # What a file can still do, and each is a FAIL row: leave the child no way to
 # dump, as `declare` and `enable` both disabled do; the same under an EXIT trap
 # that makes the child's status 0, which the missing marker gives away; skip
