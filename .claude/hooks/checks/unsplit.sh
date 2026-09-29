@@ -11670,7 +11670,7 @@ req GH-107.1
 TEXT_CHECK_ARGS=$(text_check_faults "${SUITE_FILES[@]}")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '323' "${TEXT_CHECK_ARGS##*COUNT }"
+    '327' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -11870,16 +11870,19 @@ MUT_STATUS_AWK='
 # because they are this audit's own questions and not pass one's, and a figure
 # that answered them would disagree with the harness by construction.
 #
-# WHICH LEAVES THE FIGURE ABLE TO BE ONE TOO HIGH, and saying so is better than
-# implying otherwise. Pass TWO drops a row without running the suite in three
-# further cases -- a target not writable in the copy, a `sed` that fails, and an
-# edit that turns out to apply to nothing -- and neither side can see any of
-# them without copying the tree and running the edit, which `--list` does not
-# do. The harness's header states the same limit, and so does `--list`'s own
-# output line, which says `at most`. An earlier version of this comment said a
-# pass "runs such a row and reports what it finds", which is false for all
-# three. Bertan's review of PR #183; #193 is the change that would make the
-# figure exact rather than an upper bound.
+# AND THIS LIST IS STILL READ OFF THE DECLARED OUTCOMES, while `--list` now
+# applies each edit and counts what it finds (#193). Pass TWO drops a row
+# without running the suite in three further cases -- a target not writable in
+# the copy, a `sed` that fails, and an edit that turns out to apply to nothing
+# -- and `--list` sees all three, where this list sees none. That is on
+# purpose: the GH-193 check, in its own issue file, holds every row's edit to
+# its declared outcome by applying it itself, so while that check is green the
+# declared outcome IS what the edit does, and the count read off this list is
+# the count `--list` measures. Applying the edits here as well would make this
+# the harness's program a second time and the comparison below would ask
+# nothing. An earlier version of this comment said a pass "runs such a row and
+# reports what it finds", which is false for all three; Bertan's review of PR
+# #183.
 MUT_RUN_OUTCOMES=
 while IFS='%' read -r MID MFILE MEDIT MREQS MWANT; do
   [ -n "$MID" ] || continue
@@ -12098,6 +12101,26 @@ fi
 # made both sides over-report by one and agree -- and agreeing is all this check
 # can see. It is read off MUT_RUN_OUTCOMES, which is the audit loop's answer to
 # both questions, and never off a constant. Bertan's review of PR #183.
+#
+# WHAT IT ESTABLISHES SINCE #193, which changed what the other side is. `--list`
+# no longer predicts off the declarations: it applies every row's edit and
+# counts the rows whose edit changes their file. This side still counts off the
+# declarations. So the two agreeing says the harness's MEASURED count equals the
+# DECLARED count -- and GH-193's check, which applies every edit itself and
+# holds each to its declaration, is what makes the declared count the right
+# one. Between them: the declarations are true (GH-193), and `--list` counts
+# what they say (here). A rotted anchor turns both red, GH-193 on the row and
+# this on the figure. What this check CANNOT see is the regression #193 is
+# about: a `--list` put back to counting off the declarations, as it did before
+# #193, counts exactly what this side counts, so the two agree on every
+# registry, with an edit that has stopped applying or without one. That is
+# caught by GH-193's fixture alone, whose literal run count assumes the edits
+# were applied -- measured by hand, that mutant turned that row red and left
+# this one green. What is left here is the harness's arithmetic: the figure
+# dropped, renamed, or spelled off a constant the registry has since moved
+# past. A fault counted as a run is not among them while the registry holds
+# no fault; GH-193 holds the real `--list` to none, and its fixture holds one
+# of each kind.
 req GH-148
 MUT_RUNS_HERE=$((1 + $(printf '%s' "$MUT_RUN_OUTCOMES" | grep -cv '^did-not-apply$')))
 tok 'and how many runs of this suite a whole-registry pass costs, the baseline included' \

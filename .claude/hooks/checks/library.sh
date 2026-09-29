@@ -1472,6 +1472,28 @@ generator_run() {  # generator_run [--check] <dir> -- what the script printed, a
 legacy_fixture() {  # legacy_fixture <dir> <legacy IDs> -- <dir>/check-hooks.sh, holding only the literal
   printf "REQUIREMENTS_LEGACY='\n%s\n'\n" "$2" > "$1/check-hooks.sh"
 }
+# A COPY OF THE MUTATION HARNESS WHOSE REGISTRY IS THE ROWS GIVEN, and nothing
+# else of it changed, for the #193 and #272 issue files to drive against files of
+# their own (#193). The harness reads everything relative to its own directory,
+# so a copy in a fixture directory applies its rows to that directory's files and
+# runs the check-hooks.sh written beside it. What is beside it is the caller's to
+# write. The rows replace the registry heredoc's body whole; a copy that still
+# holds a line of the real registry, or none of the rows, would drive the real
+# rows or nothing, so the caller holds the copy's registry to its literal before
+# reading anything the copy prints.
+harness_fixture() {  # harness_fixture <dir> <rows> -- <dir>/mutate-hooks.sh, registering <rows> alone
+  mkdir -p "$1" || return 1
+  HF_ROWS=$2 awk '
+    /^MUTATIONS=\$\(cat <</ { print; print ENVIRON["HF_ROWS"]; body = 1; next }
+    body && /^MUTATIONS$/ { body = 0 }
+    !body' "$SUITE_DIR/mutate-hooks.sh" > "$1/mutate-hooks.sh"
+}
+# The registry of such a copy, read the way the #107 section reads the real one.
+harness_rows() {  # harness_rows <harness> -- the body of its registry heredoc
+  awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
+       f && /^MUTATIONS$/ { exit }
+       f' "$1"
+}
 # THE DECLARATION, as bash reads it (#205; here since #215's issue file became
 # its second caller). The fields arrive on stdin from a quoted heredoc, so
 # nothing in them is expanded, and they are recorded with the issue file that

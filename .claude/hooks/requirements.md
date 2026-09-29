@@ -1298,12 +1298,12 @@ it has no entry above (Q16).
   remedy tail survived green. `$REFUSE` was closed with it, on the same
   reasoning and without waiting for a round that measures it. It also found the
   `ABOUT AN HOUR` heading this file records under #148
-- #193: the issue that owns making `--list` apply each row's edit, so the run
-  count is exact rather than an upper bound and a rotted anchor surfaces without
-  a whole-registry pass. Cited beside the three pass-two cases `--list` cannot
-  see, so that the limit names what would lift it. It has no entry above on
-  purpose: the requirement that would carry it is the change, and GH-148 states
-  today's behaviour as the upper bound it is
+- #193: has an entry, GH-193, generated from its issue file, and is listed here
+  only because the #148 section cited it before it landed, as the issue that
+  would make `--list` apply each row's edit, so that the run count was exact
+  rather than an upper bound and a rotted anchor surfaced without a
+  whole-registry pass. It landed as that: `--list` applies every edit through
+  the function pass two uses, and GH-148 states the count as measured
 - #183: the pull request for #148; Bertan's review of it is cited where each of
   the seven things it corrected stands. Two were the issue's own thesis failing
   on the number the branch had just made load-bearing: the harness's runtime was
@@ -1631,6 +1631,18 @@ it has no entry above (Q16).
   no-pr-decisions.sh. Cited in the GH-156 issue file and in GH-156's note as
   the same class outside `append-only-docs.sh`. Pre-existing, found by the
   class sweep of #329's review, round 1; it adds its requirements in the pull
+  request that fixes it
+- #350: the pull request for #193 and #272; rev-agent-193's review of it is
+  cited where what its first round found stands. `--list` asked whether a
+  target was writable of the file beside the harness, under an assumption a
+  read-only mount breaks, so it now asks of a copy made as pass two makes its
+  own. Two clauses of `row_apply`'s test and pass two's `FAILED=1` for a row it
+  refuses survived green, which is why GH-193's fixture has a read-only row and
+  a directory row and GH-272's registry holds the two self-tests
+- #352: pass two writes through a symlinked directory on a row's path, which
+  `row_apply`'s symlink test does not see, since it asks of the last component
+  only. Filed from review of #350. Cited in #193's issue file among what it
+  does not check, and beside `row_apply`. It adds its requirements in the pull
   request that fixes it
 - #254: the pull request for #219; round 1 of rev-agent-219's review of it
   raised that `unarmed` and `prose_count` pass on a zero-byte file while
