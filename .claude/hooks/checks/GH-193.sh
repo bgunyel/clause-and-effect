@@ -199,8 +199,13 @@ fault: readonly.sh in the working copy is not a writable regular file
 fault: adir in the working copy is not a writable regular file
 fault: the target ../hook.sh is not a path inside the hooks directory' \
     "$(printf '%s\n' "$R193_LIST" | awk 'sub(/^    \^ /, "") { sub(/failed: .*/, "failed:"); print }')"
-holds 'and the summary counts both' "$R193_LIST" \
-  '2 rows whose edit does not do what the row declares, and 6 faults; each is marked on its own line above'
+# The summary line whole, read out by its words and compared exactly: `holds`
+# is a substring test, so a literal opening on a count is met by any larger
+# count ending in the same digit -- `12 rows` holds `2 rows` (review of PR #350,
+# round 2). The same for the real `--list` below.
+tok 'and the summary counts both' \
+    '2 rows whose edit does not do what the row declares, and 6 faults; each is marked on its own line above' \
+    "$(printf '%s\n' "$R193_LIST" | grep -F 'rows whose edit does not do what the row declares')"
 # The baseline, the row that applies, and the self-test whose edit applies
 # though it declares otherwise: pass two runs the suite on it, whatever it
 # declares, so it is counted. Counting off the declarations instead gives six.
@@ -234,8 +239,9 @@ rmdir "$R193_HARNESS/tmp"
 req GH-193
 tok 'the real --list marks no row, as a fault or as an edit that does not do what it declares' \
     '' "$(printf '%s\n' "$MUT_LIST" | awk '/^    \^/ { print prev; print } { prev = $0 }')"
-holds 'and its summary says so' "$MUT_LIST" \
-  '0 rows whose edit does not do what the row declares, and 0 faults; each is marked on its own line above'
+tok 'and its summary says so' \
+    '0 rows whose edit does not do what the row declares, and 0 faults; each is marked on its own line above' \
+    "$(printf '%s\n' "$MUT_LIST" | grep -F 'rows whose edit does not do what the row declares')"
 
 # THE SUM, pinned on the code: nothing `--list` is given makes it write under
 # the directory, so the comparison is read rather than driven.
