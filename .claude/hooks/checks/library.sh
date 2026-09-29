@@ -1073,8 +1073,11 @@ suite_range() {  # suite_range <variable> <sed address> <sed address> -- 1 on an
 # <out> as NUL-separated name/definition pairs by the program in $LOADED_CHILD,
 # and the status sourcing returned to <out>.sourced. 1 if it defined nothing;
 # 2 if the child did not finish -- it exited non-zero, was killed, or ended
-# before sourcing returned, as a file that runs `exit` ends it -- whatever
-# <out> holds; 3 if sourcing returned non-zero and still defined something.
+# before sourcing returned, as a file that runs `exit` ends it, or it could
+# not put back a name or a setting it works with that the file changed (exit
+# 4, said as that) -- whatever <out> holds; 3 if sourcing returned non-zero
+# and still defined something. The child's names from before the source go
+# through <out>.before.
 # Why, in words, on stdout, for 2 and 3, and for 1 when sourcing returned
 # non-zero. The three are apart because the head treats them apart (#279): see
 # `record_loaded` below. The #204 section drives it with an exported function
@@ -1082,9 +1085,12 @@ suite_range() {  # suite_range <variable> <sed address> <sed address> -- 1 on an
 # each of the other outcomes.
 record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did not finish, 3 sourcing returned non-zero; why on stdout
   local child_status
-  env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$1" > "$2" 3> "$2.sourced"
+  env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$1" > "$2" 3> "$2.sourced" 4> "$2.before" 5< "$2.before"
   child_status=$?
-  if [ "$child_status" != 0 ]; then
+  if [ "$child_status" = 4 ]; then
+    printf 'sourcing it left a name or a setting the child that records it works with, and the child could not put it back'
+    return 2
+  elif [ "$child_status" != 0 ]; then
     printf 'the child that records it exited %s' "$child_status"
     return 2
   elif [ ! -s "$2.sourced" ]; then
@@ -1867,23 +1873,6 @@ beside() {  # beside <label> <file> <literal>
   fi
 }
 
-# The library present and loading, with exactly one function renamed away. Built
-# by a call at the top level and named by convention, rather than returned from a
-# substitution: an `exit 1` inside `$( )` kills the subshell and leaves the suite
-# running, so a fixture guard written that way would report and then be ignored.
-#
-# Where the fixture goes, derived once. The builder below takes its directory
-# from this rather than composing the same path a second time, and that is not
-# tidiness: the first version of mk_halflib wrote
-# `local hook="$1" fn="$2" dir="$FIXTURES/halflib-$fn-$hook"`, and `local`
-# expands all of its arguments before it assigns any of them, so $fn and $hook
-# were still empty and every fixture was built in one directory named
-# `halflib--`. All four fixture guards passed -- they were asked about the
-# directory that had been built, not about the one the checks would drive -- and
-# thirteen checks reported ALLOW against a hook that was not there, which
-# check_in read as permitted because it was not exit 2 (see `verdict`, where
-# those thirteen would each FAIL today). A fixture guard that
-# derives its own path proves nothing about the check beside it.
 # WHETHER A COPY OF THE TOKENISER SOURCES AS ITS ORIGINAL DOES: the status
 # sourcing each returns, taken the same way, and the two compared. A fixture
 # guard that loads a copy asks this, and not whether sourcing the copy returned
@@ -1907,6 +1896,24 @@ copy_sources_as() {  # copy_sources_as <copy> <original> -- 1 and why on stdout 
     "$copy_status" "$original_status"
   return 1
 }
+
+# The library present and loading, with exactly one function renamed away. Built
+# by a call at the top level and named by convention, rather than returned from a
+# substitution: an `exit 1` inside `$( )` kills the subshell and leaves the suite
+# running, so a fixture guard written that way would report and then be ignored.
+#
+# Where the fixture goes, derived once. The builder below takes its directory
+# from this rather than composing the same path a second time, and that is not
+# tidiness: the first version of mk_halflib wrote
+# `local hook="$1" fn="$2" dir="$FIXTURES/halflib-$fn-$hook"`, and `local`
+# expands all of its arguments before it assigns any of them, so $fn and $hook
+# were still empty and every fixture was built in one directory named
+# `halflib--`. All four fixture guards passed -- they were asked about the
+# directory that had been built, not about the one the checks would drive -- and
+# thirteen checks reported ALLOW against a hook that was not there, which
+# check_in read as permitted because it was not exit 2 (see `verdict`, where
+# those thirteen would each FAIL today). A fixture guard that
+# derives its own path proves nothing about the check beside it.
 halflib_path() {  # halflib_path <hook> <cs_function> -- where that fixture sits
   printf '%s\n' "$FIXTURES/halflib-$1-$2/$1"
 }

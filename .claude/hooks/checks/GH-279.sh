@@ -51,8 +51,11 @@ requirement GH-279.1 <<'REQ'
   stands. A file whose sourcing defined nothing still stops the run, and says
   so, with the status when it was not 0. The child records in a shell of its
   own setting and not the one the file left: what the file left in IFS,
-  globbing, case matching, traps or aliases changes neither which names it
-  records nor how it ends. And a fixture the suite builds from a copy of the
+  globbing, case matching, traps, aliases or enabled builtins changes neither
+  which names it records nor how it ends. What it records with is out of the
+  file's reach: the names it started with are kept outside any variable while
+  the file is sourced, and a file that declared a name the child works with,
+  or left a setting it cannot put back, is a FAIL row saying so. And a fixture the suite builds from a copy of the
   tokeniser -- a half-library, an emptied-list library -- is judged to load
   by what sourcing it defined and by a status that is the one sourcing the
   tokeniser it was copied from returns, not by a status of 0: a tokeniser copy
@@ -84,7 +87,11 @@ requirement GH-279.1 <<'REQ'
   was defined, so a copy its builder broke passed them; and a file that left
   IFS changed gave a record the child called whole while it lacked names,
   which the sweep of that class found nullglob, nocasematch, an EXIT trap
-  and an alias of `declare` doing too.
+  and an alias of `declare` doing too. Round 2 found the class inside that
+  fix: the child's own bookkeeping, `bf`, `bv`, `n` and `v`, and the reset's
+  own success, were the file's to change -- a readonly `v`, or `bf` assigned,
+  dropped a name from a record called whole -- and its sweep found builtins
+  the file disables with `enable -n` doing the same.
 REQ
 requirement GH-279.2 <<'REQ'
 - text: The end-of-run file's last check before the matrix derives the rows the
@@ -228,9 +235,9 @@ tok 'a file that traps EXIT is recorded, and no row is written' \
 'status 0
 recorded r279_a from state-trap.sh' "$(r279_loaded "$R279/state-trap.sh")"
 tok 'the child whose write fails exits 3' \
-    'exited 3' "$(env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$R279/whole.sh" > /dev/full 3> "$R279/full.sourced" 2> /dev/null; echo "exited $?")"
+    'exited 3' "$(env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$R279/whole.sh" > /dev/full 3> "$R279/full.sourced" 4> "$R279/full.before" 5< "$R279/full.before" 2> /dev/null; echo "exited $?")"
 tok 'and still exits 3 when the file it sourced traps EXIT to exit 0' \
-    'exited 3' "$(env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$R279/state-trap.sh" > /dev/full 3> "$R279/full.sourced" 2> /dev/null; echo "exited $?")"
+    'exited 3' "$(env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$R279/state-trap.sh" > /dev/full 3> "$R279/full.sourced" 4> "$R279/full.before" 5< "$R279/full.before" 2> /dev/null; echo "exited $?")"
 # And an alias the file defines expands in the lines the child reads after
 # it: with `declare` aliased to `builtin echo`, the child recorded r279_a's body
 # as `-f r279_a` and exited 0. The body is compared, since the name is right.
@@ -239,6 +246,73 @@ tok 'a file that aliases declare has its function recorded as bash defines it, n
     $'r279_a () \n{ \n    :\n}' \
     "$( ( declare -A LOADED_BODY=() LOADED_FROM=() LOADED_STATUS=()
           record_loaded "$R279/state-alias.sh" "$R279/record" > /dev/null 2>&1
+          printf '%s' "${LOADED_BODY[r279_a]}" ) )"
+# WHAT THE CHILD WORKS WITH IS OUT OF THE FILE'S REACH, OR THE CHILD SAYS SO
+# (round 2 of the review of PR #330). The child held the names it started with
+# in `bf` and `bv` and looped through `n` and `v`, and a file could reach all
+# four: `bf=" r279_a "` dropped r279_a, `readonly v` dropped R279_V, `bv=" ...
+# "` recorded bash's own variables, and `readonly n` emptied the record. Now
+# they are the file's names like any other, and recorded.
+printf '%s\n' 'r279_a() { :; }' 'R279_V=1' 'bf=" r279_a "' > "$R279/own-bf.sh"
+printf '%s\n' 'r279_a() { :; }' 'R279_V=1' 'readonly v=2' > "$R279/own-v.sh"
+printf '%s\n' 'r279_a() { :; }' 'R279_V=1' 'bv=" R279_V "' > "$R279/own-bv.sh"
+printf '%s\n' 'r279_a() { :; }' 'R279_V=1' 'readonly n=3' > "$R279/own-n.sh"
+tok 'a file that assigns bf has every name it defines recorded, bf among them' \
+'status 0
+recorded $R279_V from own-bf.sh
+recorded $bf from own-bf.sh
+recorded r279_a from own-bf.sh' "$(r279_loaded "$R279/own-bf.sh")"
+tok 'and so does one that makes v readonly' \
+'status 0
+recorded $R279_V from own-v.sh
+recorded $v from own-v.sh
+recorded r279_a from own-v.sh' "$(r279_loaded "$R279/own-v.sh")"
+tok 'and one that assigns bv, which records none of bash'"'"'s own variables' \
+'status 0
+recorded $R279_V from own-bv.sh
+recorded $bv from own-bv.sh
+recorded r279_a from own-bv.sh' "$(r279_loaded "$R279/own-bv.sh")"
+tok 'and one that makes n readonly' \
+'status 0
+recorded $R279_V from own-n.sh
+recorded $n from own-n.sh
+recorded r279_a from own-n.sh' "$(r279_loaded "$R279/own-n.sh")"
+# The names the child does work with, and a reset it cannot make: each ends it
+# with 4, which is a FAIL row that says so.
+printf '%s\n' 'r279_a() { :; }' '_lc_v=1' > "$R279/lc-name.sh"
+printf '%s\n' 'r279_a() { :; }' 'readonly _lc_n' > "$R279/lc-readonly.sh"
+printf '%s\n' 'r279_a() { :; }' 'readonly IFS=x' > "$R279/ifs-readonly.sh"
+printf '%s\n' 'r279_a() { :; }' 'enable -n enable' > "$R279/enable-off.sh"
+tok 'a file that assigns a name the child works with is a FAIL row saying the child could not put it back' \
+"FAIL: the record of $R279/lc-name.sh is not to be trusted whole: sourcing it left a name or a setting the child that records it works with, and the child could not put it back; the names it holds are compared at the foot, and a name it lacks is not
+status 0" "$(r279_loaded "$R279/lc-name.sh")"
+tok 'and so is one that declares such a name readonly, with no value' \
+"FAIL: the record of $R279/lc-readonly.sh is not to be trusted whole: sourcing it left a name or a setting the child that records it works with, and the child could not put it back; the names it holds are compared at the foot, and a name it lacks is not
+status 0" "$(r279_loaded "$R279/lc-readonly.sh")"
+tok 'and one that makes IFS readonly, so that the reset cannot be made' \
+"FAIL: the record of $R279/ifs-readonly.sh is not to be trusted whole: sourcing it left a name or a setting the child that records it works with, and the child could not put it back; the names it holds are compared at the foot, and a name it lacks is not
+status 0" "$(r279_loaded "$R279/ifs-readonly.sh")"
+tok 'and one that disables enable, so that no builtin can be enabled again' \
+"FAIL: the record of $R279/enable-off.sh is not to be trusted whole: sourcing it left a name or a setting the child that records it works with, and the child could not put it back; the names it holds are compared at the foot, and a name it lacks is not
+status 0" "$(r279_loaded "$R279/enable-off.sh")"
+# A builtin the child calls, disabled by the file: `enable -n compgen` recorded
+# nothing, `enable -n printf` recorded garbage keys, and `enable -n declare`
+# recorded every body empty. Each is enabled again before the record.
+printf '%s\n' 'r279_a() { :; }' 'R279_V=1' 'enable -n compgen' > "$R279/off-compgen.sh"
+printf '%s\n' 'r279_a() { :; }' 'R279_V=1' 'enable -n printf' > "$R279/off-printf.sh"
+printf '%s\n' 'r279_a() { :; }' 'enable -n declare' > "$R279/off-declare.sh"
+tok 'a file that disables compgen has every name it defines recorded' \
+'status 0
+recorded $R279_V from off-compgen.sh
+recorded r279_a from off-compgen.sh' "$(r279_loaded "$R279/off-compgen.sh")"
+tok 'and so does one that disables printf' \
+'status 0
+recorded $R279_V from off-printf.sh
+recorded r279_a from off-printf.sh' "$(r279_loaded "$R279/off-printf.sh")"
+tok 'and one that disables declare has its function recorded as bash defines it' \
+    $'r279_a () \n{ \n    :\n}' \
+    "$( ( declare -A LOADED_BODY=() LOADED_FROM=() LOADED_STATUS=()
+          record_loaded "$R279/off-declare.sh" "$R279/record" > /dev/null 2>&1
           printf '%s' "${LOADED_BODY[r279_a]}" ) )"
 # And the head records through it, stopping only on the one outcome that stops
 # it. Pinned as text, since only a whole run shows it behaving; the registry

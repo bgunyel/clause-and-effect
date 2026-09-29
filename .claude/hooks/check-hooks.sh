@@ -766,25 +766,56 @@ done
 # is written, the child puts each back: no traps, no aliases, globbing off, case
 # matched, and IFS as bash starts it. Each command there is written with a
 # backslash, which an alias the file defined cannot expand; a function the file
-# defines under the same name is the shadowed-builtin limit named above. A file
-# that aliases or traps the status line itself leaves `<out>.sourced` empty,
-# and that is a FAIL row already. Globbing off also means a function whose name
-# is a glob is recorded under that name, and not under whatever files in the
-# working directory it matched. Measured again with the reset: the record of
-# the library and of the tokeniser is byte for byte the one before it -- and
-# on the merge of dev-05 at 1486270, whose tokeniser #202 grew by 427 lines,
-# byte for byte the one the child before #279 writes, 42,534 and 72,227 bytes.
-LOADED_CHILD='bf=" $(compgen -A function | tr "\n" " ") "; bv=" $(compgen -v | tr "\n" " ") bf bv n v "
-. "$1" 3>&- >/dev/null 2>&1
-printf "%s" "$?" >&3 || exit 3
-\trap - EXIT ERR DEBUG RETURN; \unalias -a; \shopt -u nocasematch; \set -f; \printf -v IFS " \t\n"
-for n in $(compgen -A function); do
-  [[ $bf == *" $n "* ]] && continue
-  printf "%s\0%s\0" "$n" "$(declare -f "$n")" || exit 3
+# defines under the same name is the shadowed-builtin limit named above. Globbing
+# off also means a function whose name is a glob is recorded under that name,
+# and not under whatever files in the working directory it matched.
+#
+# AND WHAT THE CHILD WORKS WITH IS OUT OF THE FILE'S REACH, OR THE CHILD SAYS
+# SO (review round 2 of PR #330). The reset left the child's own bookkeeping
+# where the file could reach it: the names it started with were held in
+# variables, `bf` and `bv`, and it looped through `n` and `v`. Measured: `bf="
+# a "` dropped the function `a` from a record called whole; `readonly v`
+# dropped a variable; `readonly IFS=x` made the reset's own assignment fail,
+# and nothing read that; `bv=" W "` recorded bash's own variables; `readonly n`
+# emptied the record, and the run stopped saying the file defined nothing. So:
+#   - The names the child starts with are written before the source to fd 4,
+#     and read back after it from fd 5, both open on one file `record_of`
+#     names. Both are closed while the file is sourced, so no variable and no
+#     descriptor of the file's can stand in for them; and the file's own `bf`,
+#     `v` or `n` is now a name like any other, and recorded.
+#   - The child's own names, `_lc_before`, `_lc_nl`, `_lc_n` and `_lc_v`, are
+#     set only after the source; a file that declared any of them, in any way,
+#     readonly included, ends the child with 4.
+#   - Every builtin the child calls after the source is enabled again first,
+#     since `enable -n declare` recorded every body empty, `enable -n printf`
+#     recorded garbage keys, and `enable -n compgen` recorded nothing; and a
+#     step of the reset that fails, as IFS readonly does, ends the child with 4.
+# `record_of` reads 4 as a FAIL row of its own. The status line is written
+# with a backslash too, so an alias of `printf` no longer reaches it. What it
+# does not reach, named: the descriptors bash saves 4 and 5 to while the file
+# is sourced, which the file could close by number; and a variable declared
+# with no value, which `compgen -v` does not list and never did.
+#
+# Measured with each change: the record of the library and of the tokeniser is
+# byte for byte the one the child before #279 writes -- 42,534 and 72,227
+# bytes on the merge of dev-05 at 1486270, whose tokeniser #202 grew by 427
+# lines, and 42,825 and 72,227 once round 2 was in.
+LOADED_CHILD='\compgen -A function -P "f:" >&4; \compgen -v -P "v:" >&4 || exit 3
+. "$1" 3>&- 4>&- 5<&- >/dev/null 2>&1
+\printf "%s" "$?" >&3 || exit 3
+\enable compgen continue declare exit printf read set shopt trap unalias || exit 4
+{ \declare -p _lc_before || \declare -p _lc_nl || \declare -p _lc_n || \declare -p _lc_v; } >/dev/null 2>&1 && exit 4
+\trap - EXIT ERR DEBUG RETURN; \unalias -a; \shopt -u nocasematch; \set -f; \printf -v IFS " \t\n" || exit 4
+\printf -v _lc_nl "\n" && { IFS= \read -r -d "" _lc_before <&5; [[ -n $_lc_before ]]; } || exit 4
+_lc_before=$_lc_nl$_lc_before
+for _lc_n in $(\compgen -A function); do
+  [[ $_lc_before == *"${_lc_nl}f:$_lc_n$_lc_nl"* ]] && continue
+  \printf "%s\0%s\0" "$_lc_n" "$(\declare -f "$_lc_n")" || exit 3
 done
-for n in $(compgen -v); do
-  [[ $bv == *" $n "* || $n == BASH_* || $n == _ ]] && continue
-  v=$(declare -p "$n"); printf "\$%s\0%s\0" "$n" "${v#declare -* }" || exit 3
+for _lc_n in $(\compgen -v); do
+  [[ $_lc_before == *"${_lc_nl}v:$_lc_n$_lc_nl"* || $_lc_n == BASH_* || $_lc_n == _ ]] && continue
+  [[ $_lc_n == _lc_before || $_lc_n == _lc_nl || $_lc_n == _lc_n || $_lc_n == _lc_v ]] && continue
+  _lc_v=$(\declare -p "$_lc_n"); \printf "\$%s\0%s\0" "$_lc_n" "${_lc_v#declare -* }" || exit 3
 done
 exit 0'
 declare -A LOADED_FROM=() LOADED_STATUS=()
