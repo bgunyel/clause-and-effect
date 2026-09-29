@@ -68,6 +68,17 @@
 # that put the quote state out of step were refused by that version already;
 # they are there for the conditions each names.
 #
+# AND FOR ROUND 3, at 9b7b017, merged with origin/dev-05 01bfef4: with the
+# pre-fix hook from 01bfef4, all twenty `flip` rows and the five TRADE rows
+# went red with got=BLOCK, beside the load rows and GH-182.3's pin; with the
+# round-2 library from 2a642f3, the fifteen BLOCK rows that version permitted
+# went red with got=ALLOW -- q01 to q08, the carriage return, q11, q12, the
+# brace group, the if, the command substitution and the gh api stdin row --
+# and nothing else did but the two that a copy without a .git always fails.
+# The other rows added this round were refused by that version already, and
+# are there for the rule each names: every registered mutation of the drop,
+# applied alone with every row fed on stdin, turns at least one of them.
+#
 # WHAT IT TAKES FROM ELSEWHERE: $SUITE_DIR and $FIXTURES from the driver's
 # prelude, and mk_halflib and halflib_path from the library.
 
