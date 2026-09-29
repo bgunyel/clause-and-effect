@@ -46,8 +46,8 @@
 # `echo done \\`, a newline and `rm -f` an entry was refused before #156 and
 # permitted by its first version, and so were a comment ending in `\` over a
 # `rm -rf` of the directory, and truncate, tee, cp, mv and sed -i the same way
-# (review of PR #329). Joining only odd runs, bash's rule and cs_drop_heredocs',
-# would have fixed the escaped rows and not the comments. So judge_text runs
+# (review of PR #329). Joining only odd runs, bash's rule and the one the
+# heredoc pass keeps, would have fixed the escaped rows and not the comments. So judge_text runs
 # over each text in turn and the hook refuses if either is refused: everything
 # refused before #156 still is, by construction, since the raw pass is the old
 # hook unchanged, and every continuation #156 closed still is, since the joined

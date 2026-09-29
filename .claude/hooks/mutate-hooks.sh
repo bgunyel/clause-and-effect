@@ -320,9 +320,8 @@
 # The sixth round added two, and both break a DERIVATION rather than a rule:
 # `guard-trigger-loses-its-name` deletes the line naming a list the guard still
 # tests, which is the fifth-trigger slip that round measured by construction;
-# `doc-hook-function-not-named` drops one of the functions the message says
-# the document hooks need -- cs_join since #156 re-anchored it, when the text it
-# matched gained that third function and the edit stopped applying. Neither is reachable by driving a fixture -- the
+# `doc-hook-function-not-named` drops one of the two functions the message says
+# the document hooks need. Neither is reachable by driving a fixture -- the
 # point of both checks is that they read the guard's own condition and the
 # hooks' own load guards rather than a list written beside them. Run as a
 # selection on 2026-09-20: baseline plus two, both caught, byte-identical after.
@@ -435,13 +434,20 @@
 # came and again joined, and refuses if either is refused, so each pass is a
 # rule whose loss the other does not cover.
 # `append-only-reads-only-the-joined-text` deletes the raw pass, which puts the
-# hook back to #156's first version:
-# a verb glued onto the word before it by an even run of backslashes or a
-# comment's backslash is permitted, the defect review of PR #329 found.
+# hook back to #156's first version: a verb glued onto the word before it by an
+# even run of backslashes or a comment's backslash is permitted, the defect
+# review of PR #329 found.
 # `append-only-reads-only-the-raw-text` deletes the joined pass, which puts it
 # back to dev-05: a continuation between the verb and the path is permitted,
 # the defect #156 was filed for. Both name GH-156 alone, since its issue file
 # holds both halves' rows.
+#
+# #156 also moved a row it did not add. `doc-hook-function-not-named` matched
+# the withdrawal message's list of the document hooks' functions, which #156
+# lengthened by cs_join, so its edit stopped applying and only a whole pass
+# would have said so (review of PR #329). It now drops cs_join, which puts the
+# message back to its text before #156; the run log above, frozen at #215,
+# still describes the row as it was.
 #
 # WHAT IS REGISTERED, counted rather than characterised, because the sentence
 # that characterised it ("the rules that gained checks under #103") claimed the
