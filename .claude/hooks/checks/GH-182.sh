@@ -286,7 +286,13 @@ tok 'arms loses the arm after a trailing comment naming <<LIST, which the real L
 # version asked only the second half, so a counter piping `cat "$1"` beside
 # `hook_text` passed; the second let the brace reach `1` alone, so `${@}` and
 # `${*}` passed. Review of #182's pull request found each. The question is
-# `reads_only_through`, in the library since #181 asked it of a fourth reader.
+# `reads_only_through`, in the library since #181 asked it of a fourth reader,
+# and review of #181's pull request moved it on twice more: the call is read
+# only where a command starts and `"$1"` only as a whole word, so a helper named
+# inside another word or as another command's argument is not a read through
+# it; and `${!...}` and `BASH_ARGV` are refused beside `$1`, `$@` and `$*`. The
+# library argues that half, and states the trades it takes; checks/GH-181.sh
+# holds each of them, and the false cases this row does not ask.
 R182_THROUGH=$(for fn in arms fn_writes fn_calls; do
   reads_only_through "$fn" hook_text && printf '%s ' "$fn"
 done)

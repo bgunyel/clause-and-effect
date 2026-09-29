@@ -720,12 +720,27 @@ fi
 # found the left bound itself one spelling wide -- `raw-hook_text "$1"` and
 # `./hook_text "$1"` passed -- so the call is now read where a command starts,
 # and these add a hyphen and a path in front of the name, the helper named as
-# an argument of `cat`, `"$1"` continued into a longer word, and the file
-# read through `${!#}` and through `BASH_ARGV`. One reader passes, and one is
-# asked for a helper it does not call. The two trades the library states are
-# asserted as what it does: a call after `if` is refused, a false red, and a
-# `perl` filter of the reader's own passes.
+# an argument of `cat`, `"$1"` continued into a longer word, the file read
+# through `${!#}` and through `BASH_ARGV`, and its name held in an array.
+#
+# AND ITS TRUE CASES, ONE PER MEMBER OF ITS LISTS, since the third round of
+# that review measured a member deleted from each list changing no verdict:
+# a call starting a line and ending at a blank, at the end of its line, and at
+# `;`; after `|`, `&`, `$(`, `<(` and a subshell's `(`, those after `$(` and
+# `<(` ending at `)`. Every member is the only way at least one of them
+# passes, so deleting any member refuses a reader -- measured member by member
+# on the commit that wrote this. One reader is also asked for a helper it does
+# not call. The trades the library states are asserted as what it does, each a
+# row of the last check: the false reds it takes, and the constructions it
+# passes, which #362 is filed to close.
 r181_through() { hook_text "$1" | wc -l; }
+r181_last_on_its_line() { true; hook_text "$1"; }
+r181_before_a_list() { hook_text "$1"; return 0; }
+r181_after_a_pipe() { true | hook_text "$1"; }
+r181_after_an_and() { true && hook_text "$1"; }
+r181_in_a_substitution() { local x; x=$(hook_text "$1"); printf '%s' "$x"; }
+r181_in_a_process_substitution() { cat <(hook_text "$1"); }
+r181_in_a_subshell() { (hook_text "$1"); }
 r181_cat_beside() { hook_text "$1"; cat "$1"; }
 r181_braced_at() { hook_text "$1"; printf '%s' "${@}"; }
 r181_braced_star() { hook_text "$1"; printf '%s' "${*}"; }
@@ -739,25 +754,58 @@ r181_as_argument() { cat hook_text "$1"; }
 r181_longer_word() { hook_text "$1"x; }
 r181_indirect() { hook_text "$1"; printf '%s' "${!#}"; }
 r181_bash_argv() { hook_text "$1"; printf '%s' "${BASH_ARGV[0]}"; }
+r181_in_an_array() { local -a f=(hook_text "$1"); cat "${f[1]}"; }
 r181_after_if() { if hook_text "$1" | grep -q x; then return 0; fi; }
+r181_after_an_assignment() { LC_ALL=C hook_text "$1" | wc -l; }
+r181_after_a_bang() { ! hook_text "$1"; }
+r181_after_time() { time hook_text "$1"; }
+r181_after_command() { command hook_text "$1"; }
+r181_after_coproc() { coproc hook_text "$1"; }
+r181_in_backticks() { local x; x=`hook_text "$1"`; printf '%s' "$x"; }
+r181_beside_an_indirection() { local -A seen=(); hook_text "$1"; for k in "${!seen[@]}"; do :; done; }
+r181_through_underscore() { hook_text "$1" > /dev/null; cat "$_"; }
+r181_through_eval() { local f; hook_text "$1"; eval "f=\$$((0+1))"; cat "$f"; }
 r181_own_perl() { hook_text "$1" | perl -pe 's/x//'; }
 req GH-182.1 GH-181.1 GH-181.2
-tok 'reads_only_through passes one reader of the file through the helper, and refuses every other' \
-    'r181_through ' "$(for fn in r181_through r181_cat_beside r181_braced_at r181_braced_star \
-                            r181_own_drop r181_own_sed r181_suffix r181_suffix_beside \
-                            r181_hyphen_prefix r181_path r181_as_argument r181_longer_word \
-                            r181_indirect r181_bash_argv; do
-                         reads_only_through "$fn" hook_text && printf '%s ' "$fn"
-                       done)"
+tok 'reads_only_through passes a reader through each place a call can stand, and refuses every other' \
+    'r181_through r181_last_on_its_line r181_before_a_list r181_after_a_pipe r181_after_an_and r181_in_a_substitution r181_in_a_process_substitution r181_in_a_subshell ' \
+    "$(for fn in r181_through r181_last_on_its_line r181_before_a_list r181_after_a_pipe \
+                 r181_after_an_and r181_in_a_substitution r181_in_a_process_substitution \
+                 r181_in_a_subshell r181_cat_beside r181_braced_at r181_braced_star \
+                 r181_own_drop r181_own_sed r181_suffix r181_suffix_beside \
+                 r181_hyphen_prefix r181_path r181_as_argument r181_longer_word \
+                 r181_indirect r181_bash_argv r181_in_an_array; do
+         reads_only_through "$fn" hook_text && printf '%s ' "$fn"
+       done)"
 tok 'and refuses a reader asked for a helper it does not call' \
     'refused' "$(reads_only_through r181_through hook_text fn_writes && echo passed || echo refused)"
-tok 'it refuses a call after if, a false red it takes, and passes a perl filter, a trade it states' \
-    'refused passed' "$(reads_only_through r181_after_if hook_text && echo -n passed || echo -n refused
-                        printf ' '
-                        reads_only_through r181_own_perl hook_text && echo -n passed || echo -n refused)"
-unset -f r181_through r181_cat_beside r181_braced_at r181_braced_star \
+tok 'it refuses the false reds it takes, and passes the constructions #362 is filed for' \
+    'r181_after_if refused
+r181_after_an_assignment refused
+r181_after_a_bang refused
+r181_after_time refused
+r181_after_command refused
+r181_after_coproc refused
+r181_in_backticks refused
+r181_beside_an_indirection refused
+r181_through_underscore passed
+r181_through_eval passed
+r181_own_perl passed' \
+    "$(for fn in r181_after_if r181_after_an_assignment r181_after_a_bang r181_after_time \
+                 r181_after_command r181_after_coproc r181_in_backticks \
+                 r181_beside_an_indirection r181_through_underscore r181_through_eval \
+                 r181_own_perl; do
+         if reads_only_through "$fn" hook_text; then echo "$fn passed"; else echo "$fn refused"; fi
+       done)"
+unset -f r181_through r181_last_on_its_line r181_before_a_list r181_after_a_pipe \
+         r181_after_an_and r181_in_a_substitution r181_in_a_process_substitution \
+         r181_in_a_subshell r181_cat_beside r181_braced_at r181_braced_star \
          r181_own_drop r181_own_sed r181_suffix r181_suffix_beside \
          r181_hyphen_prefix r181_path r181_as_argument r181_longer_word \
-         r181_indirect r181_bash_argv r181_after_if r181_own_perl
+         r181_indirect r181_bash_argv r181_in_an_array r181_after_if \
+         r181_after_an_assignment r181_after_a_bang r181_after_time \
+         r181_after_command r181_after_coproc r181_in_backticks \
+         r181_beside_an_indirection r181_through_underscore r181_through_eval \
+         r181_own_perl
 
 sourced_to_end

@@ -1806,37 +1806,59 @@ hook_text() {  # hook_text <file> -- a hook's text as the refusal-arm counters r
 # definition, as bash holds it, passes its file argument to each helper named,
 # as `<helper> "$1"` in a command's first word, and with those calls taken out
 # names no `$1`, `$@` or `$*`, braced or not, no indirection `${!...}` and no
-# `BASH_ARGV`, and no drop or `sed` of its own. GH-182.sh argues each half of
-# that, and the review of #182's pull request that found the first two
-# versions short.
+# `BASH_ARGV`, and no drop or `sed` of its own. GH-182.sh argues the two
+# halves #182 asked -- a read through the helper, and nothing else read -- and
+# the review of #182's pull request that found their first two versions short.
+# What review of #181's pull request added, where the call is read and the two
+# further names refused, is argued here, since it is this function's and not
+# any one caller's.
 #
 # THE CALL IS READ WHERE A COMMAND STARTS, NOT BOUNDED BY WHAT MAY NOT STAND
 # BESIDE IT, and two rounds of review of #181's pull request are why. The first
 # answer bounded the name on the left by `[^A-Za-z0-9_]`, which closed
 # `raw_hook_text "$1"` and left `raw-hook_text "$1"` and `./hook_text "$1"`
 # passing: a guard against one spelling of a class, exhibiting the class. A list
-# of what may not precede the name cannot be completed, since `-`, `/`, `+`
-# and `:` all build another command word, and no left bound at all refuses
-# `cat hook_text "$1"`, where the helper is only an argument. So the call must
-# start a line, or follow `;`, `|`, `&` or `(`, with blanks between, as
-# `declare -f` prints a pipeline's head, a list's next command and a command
-# substitution. And `"$1"` must be a whole word, ending at a blank, `;`, `|`,
-# `&`, `)` or the end of the text. Each match is taken out whole.
+# of characters barred in front of the name cannot be completed, since `-`,
+# `/`, `+` and `:` all build another command word, and no such list refuses
+# `cat hook_text "$1"` at all, since what stands in front of the name there is
+# a blank and the helper is only an argument. So the call must start a line,
+# follow `|` or `&`, or follow a `(` that opens a command substitution, a
+# process substitution or a subshell -- one after `$`, `<` or a blank -- with
+# blanks between; and `"$1"` must be a whole word, ending at a blank, `;` or
+# `)`. Each match is taken out whole.
 #
-# THE TRADES. A call after a keyword, `if hook_text "$1" | ...`, is refused,
-# since `if` is not in the list: a false red, visible, and a shape no reader
-# here writes. A filter of the reader's own other than `sed`, a
-# `perl -pe` before its `awk`, passes. The readers run awk programs of their
+# THE LISTS ARE WHAT `declare -f` PRINTS, AND NOTHING WIDER, because a member
+# no definition can put beside a call is a member no fixture can hold. It
+# breaks a list onto lines, so no `;` stands before a call; it spaces `|`, `&`
+# and a redirect off the word before them, so none stands after `"$1"`; and a
+# body ends at `}`, never at a call. Review of #181's pull request, round 3,
+# measured those members changing no verdict. Each member left is a reader in
+# checks/GH-181.sh that passes through it. A `(` after `=` is an array, and
+# `local -a f=(hook_text "$1")` holds the file's name as data, which is why the
+# `(` is asked for its left side.
+#
+# THE TRADES, each asserted in checks/GH-181.sh, and none of them closed here:
+# the text rule is the wrong tool for a behavioural question, and #362 is
+# filed for the probe that answers it -- stub the helpers, point `$1` at a path
+# that is not there, and fail on any read of it. Refused, each a false red,
+# visible and one edit away: a call after an assignment prefix,
+# `LC_ALL=C hook_text "$1"`; after a keyword or a reserved word, `if`, `!`,
+# `time` or `coproc`; after `command`; inside backticks, which `declare -f`
+# prints as they were written; and any `${!...}` in the reader, `${!seen[@]}`
+# included, since an indirection is refused wherever it stands. Passed, each a
+# construction rather than a mistake: the file's name taken from `$_` after the
+# call, or rebuilt by `eval`; and a filter of the reader's own other than
+# `sed`, a `perl -pe` before its `awk` -- the readers run awk programs of their
 # own, which can rewrite any line they are given, so no list of filter names
-# can say that none was applied; `sed` is refused because it is the fold's own
-# tool, the one a second fold would be written with.
+# can say that none was applied, and `sed` is refused because it is the fold's
+# own tool, the one a second fold would be written with.
 reads_only_through() {  # reads_only_through <function> <helper>... -- its file argument read through each helper, and nowhere else
   local body rest h re
   body=$(declare -f "$1") || return 1
   rest=$body
   shift
   for h in "$@"; do
-    re=$'(^|[\n;|&(])[[:space:]]*'"$h"$' "\\$1"([[:space:];|&)]|$)'
+    re=$'(\n|[|&]|[$<[:space:]]\\()[[:space:]]*'"$h"$' "\\$1"[[:space:];)]'
     [[ $body =~ $re ]] || return 1
     while [[ $rest =~ $re ]]; do
       rest=${rest/"${BASH_REMATCH[0]}"/ }
