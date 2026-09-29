@@ -905,6 +905,7 @@ heredoc-any-reader-a-consumer%lib/command-scan.sh%/^            if (!consumer(pr
 heredoc-consumer-pipe-ignored%lib/command-scan.sh%s/if (nxt == "|") return 0/if (0) return 0/%GH-202.1%caught
 heredoc-delimiter-grammar-ignored%lib/command-scan.sh%/^            if (!delimiter(d)) seen = 0$/d%GH-202.1%caught
 heredoc-open-quote-at-eol-ignored%lib/command-scan.sh%/^            if (q != "") seen = 0$/d%GH-202.1%caught
+heredoc-second-opener-ignored%lib/command-scan.sh%/^            if (substr(scan, RSTART + RLENGTH) ~ \/<<\/) seen = 0$/d%GH-202.1%caught
 heredoc-cr-in-opener-ignored%lib/command-scan.sh%/substr(\$0, RSTART, RLENGTH) ~ /d%GH-202.1%caught
 heredoc-plainfile-any-path%lib/command-scan.sh%s/^    function plainfile(t) {$/    function plainfile(t) { return 1/%GH-202.1%caught
 heredoc-plainfile-shape-unchecked%lib/command-scan.sh%/^      if (t !~ .*) return 0$/d%GH-202.1%caught

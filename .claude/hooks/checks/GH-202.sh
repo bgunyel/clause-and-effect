@@ -24,7 +24,7 @@
 # heredoc pass's own answer to where a body begins, in a mode that drops a body
 # only when the opener's line fits a grammar -- a quoted delimiter of plain
 # words and `cat` into a plain file reading it -- and the text in front of it
-# is in an alphabet the pass reads. line_was_cut and the state fallback read
+# holds nothing on the pass's doubt list. line_was_cut and the state fallback read
 # CMDTEXT. The hook argues it above the re-admission, the library above the
 # heredoc pass.
 #
@@ -89,17 +89,17 @@ requirement GH-202.1 <<'REQ'
   `gh api` call is on its line, a heredoc's body is not split into command
   candidates for any rule, and is not read by `line_was_cut` or the state
   field's fallback, only when the line holding its opener fits a grammar and
-  every character in front of the opener is in an alphabet. The grammar: a
+  nothing in front of the opener is on a doubt list. The grammar: a
   QUOTED delimiter of letters, digits, `_` and whole `'...'` or `"..."` spans
   of them, so `<<'X'`, `<<"X"`, `<<-'X'`, `<<-"X"` and `<<X"Y"`, with no
   carriage return, form feed or vertical tab between it and `<<`; and a
   reader that is `cat` redirected to a plain path -- plain words, optionally
   led by one `$NAME/`, with no component named stdout, stderr or fd -- with no
-  lone `|` after it. The alphabet: single and double quotes, a backslash
-  escape, `$NAME`, `${NAME}`, a `$(` outside double quotes, a `#` after a
-  blank or at a line's start, and the separators; outside single quotes a
-  backtick, any other dollar form, a `#` inside a word, `((` and a line ending
-  in a backslash are doubt, and doubt keeps every body after it. So prose in
+  lone `|` after it. The doubt list, outside single quotes: a backtick, any
+  dollar form but `$NAME`, `${NAME}` and a `$(` outside double quotes, a `#`
+  inside a word, `((` and a line ending in a backslash, the constructs that
+  change bash's quote or comment state in a way the pass does not follow;
+  every other character passes, and doubt keeps every body after it. So prose in
   such a body quoting a release write,
   a merge, a release create or `-f state=closed`, in backticks, in a `$( )` or
   at a line's start, is permitted beside a `gh api` write or read; and a body
@@ -113,7 +113,7 @@ requirement GH-202.1 <<'REQ'
   grammar, `<<"it's"`, `<<E\OF`, `<<\EOF`, `<<$'EOF'`, `<<\r'EOF'`; and every
   body in a command where a `<<` stood that bash does not see as an opener --
   inside single, double or `$'...'` quotes, after a `#`, behind a backslash,
-  before a continuation -- or after anything outside the alphabet.
+  before a continuation -- or after anything on the doubt list.
 - from: #202, and its triage's table: rows 4, 8 to 8‴ and 9, shapes A, B, C, D,
   D2 and F; rev-agent-202's review of the pull request, Gates 1 and 2 of round
   1, 4 and 5 of round 2, 6 and 7 of round 3
@@ -454,7 +454,7 @@ req GH-202.1 US-15
 # it with a model of bash that doubted a list; each of these was read wrong
 # without doubt, left the state at the top where bash was inside a string, and
 # let a later `cat > f` drop lines bash runs -- the review ran each under bash.
-# Each was refused before #202 and permitted at 2a642f3; the alphabet refuses
+# Each was refused before #202 and permitted at 2a642f3; the doubt list refuses
 # them now. The labels keep the review's names.
 check no-pr-decisions.sh BLOCK 'q01: a backtick at the top level opens a substitution, not a separator' \
   $'gh api repos/o/r/issues/5/comments -f body=x\nx=`cat > f <<\'EOF\'\n`; gh pr merge 5; echo `\nEOF\n`'
@@ -472,7 +472,7 @@ check no-pr-decisions.sh BLOCK 'q07: a continuation after a lone $' \
   $'gh api repos/o/r/issues/5/comments -f body=x\necho $\\\n\'a\\\'\ncat > f <<\'EOF\'\n\'\ngh pr merge 5\nEOF'
 check no-pr-decisions.sh BLOCK 'q08: \} inside "${...}"' \
   $'gh api repos/o/r/issues/5/comments -f body=x\necho "${x:-a\\}b"\ncat > f <<\'EOF\'\n"}"\ngh pr merge 5\nEOF'
-# The author's, each the row only one rule of the alphabet refuses, found by
+# The author's, each the row only one rule of the doubt list refuses, found by
 # breaking each alone and feeding every row: a bare `((`, where the pass took
 # `<< 2` for an opener and skipped lines bash reads; and a `#` after `;`,
 # which bash reads as a comment and a word-character rule would not.
@@ -487,6 +487,14 @@ check no-pr-decisions.sh BLOCK 'a # after ; is a comment to bash, and the cat be
 # strings with a fixed tail found none; the tail had to open with the quote.
 check no-pr-decisions.sh BLOCK 'a backtick inside double quotes holding a double and a single quote' \
   $'x="`echo "\'`"\n\' ; cat > /tmp/f <<\'Z\'\n\'\ngh pr merge 5\nZ\ngh api repos/o/r/pulls/5'
+# A SECOND OPENER ON THE LINE, the row only its test refuses: the pass takes
+# the first opener only, so without the test it read the second body as
+# command text, and the lone `"` in it put the state inside a string where
+# bash is at the top. Round 4 of the review found no row for the test and
+# offered it as a refusal cost; bash runs the merge here, and with the test
+# deleted this is permitted.
+check no-pr-decisions.sh BLOCK 'a second opener on the line, whose body holds a lone double quote' \
+  $'cat > /tmp/f <<\'A\'; cat <<\'B\'\na\nA\n"\nB\necho "; cat > /tmp/g <<\'Z\'\n"\ngh pr merge 5\nZ\ngh api repos/o/r/pulls/5'
 # A CARRIAGE RETURN between << and the delimiter: awk takes it for space, bash
 # for part of the word, so bash ends the body at a line the pass waits past.
 # The review could not build one; the author did, and the default mode has it
