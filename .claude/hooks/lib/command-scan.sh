@@ -418,10 +418,13 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # THE DOUBT LIST, since round 3, in front of every opener and behind it on
 # its line. The quote state reads single and double quotes, a backslash
 # escape, `$NAME`, `${NAME}`, a `$(` outside double quotes, a `#` after a blank
-# or at the start of a line, and the separators. Outside single quotes, these
-# are doubt: a backtick anywhere, any other dollar form, a `#` inside a word,
-# `((`, and a line ending in a backslash -- the constructs that change bash's
-# quote or comment state in a way this state does not follow. Every other
+# or at the start of a line, and the separators. Outside all quotes these are
+# doubt: a backtick, any other dollar form, a `#` after anything but a blank or
+# the start of a line (`;#` too, though bash reads it as a comment), `((`, and
+# a line ending in an odd run of backslashes; inside double quotes, a
+# backtick, any dollar form but `$NAME` and `${NAME}`, and the same odd run --
+# the constructs that change bash's quote or comment state in a way this state
+# does not follow. Every other
 # character passes, because none of them changes that state. That is a claim
 # about bash, measured and not proven: round 4 of the review aimed twenty
 # constructs the list does not name -- process substitution, `[[ ]]`, arrays,
@@ -456,8 +459,8 @@ cs_tool_input() {  # cs_tool_input <field> -- stdin: the tool call; stdout: tool
 # taken from the local session transcripts: the version that trusted every
 # quoted body permitted 4 that the re-read refused, and this one 3 of those 4,
 # all `cat >(>) F <<'X'`. The fourth is a `python3 - <<'PY'` script, whose body
-# does run. The doubt list, with `$(` on it as well, gave back one of the
-# three. One idiom is given up by name: `-f body="$(cat <<'MD' ...)"` stands
+# does run. The rejected variant of the doubt list, with `$(` on it as well,
+# gave back one of the three; the shipped list keeps all three. One idiom is given up by name: `-f body="$(cat <<'MD' ...)"` stands
 # inside `"$(`, which is doubt, so it is refused as before #202 -- 2 of the
 # 372. So is a real `cat > F` body after `$(( ))` or `${X:-a}` earlier in the
 # command, which GH-202.1 pins as a cost.
@@ -623,14 +626,20 @@ cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout
     #
     # THE DOUBT LIST, above cs_drop_heredocs, since round 3 of the review. It
     # reads single and double quotes, a backslash escape, `$NAME`, `${NAME}`,
-    # a `#` after a blank or at the start of a line, and the separators; and
-    # outside single quotes it raises doubt at a backtick anywhere, any other
-    # dollar form, a `#` inside a word, `((` and a line ending in a backslash.
-    # Every other character passes: none changes bash quote or comment state.
-    # A carriage return, form feed or vertical tab is not on the list, since
-    # to this state a blank means nothing but before a `#`, where such a
-    # character is no blank either; the one place one matters is between `<<`
-    # and its word, and that is tested at the opener. Round 2 read more and
+    # a `$(` outside double quotes, a `#` after a blank or at the start of a
+    # line, and the separators. Outside all quotes it raises doubt at a
+    # backtick, any other dollar form, a `#` after anything but a blank or the
+    # start of a line -- `;#` among them, which bash reads as a comment and
+    # this state does not try to -- `((`, and a line ending in an odd run of
+    # backslashes, which continues it; an even run is escaped backslashes.
+    # Inside double quotes it raises doubt at a backtick, any dollar form but
+    # `$NAME` and `${NAME}`, and the same odd run. Every other character
+    # passes: none changes bash quote or comment state. A carriage return,
+    # form feed or vertical tab is not on the list, since to this state a
+    # blank means nothing but before a `#`, where such a character is no
+    # blank either. Where one does matter is the delimiter: between `<<` and
+    # its word it is tested at the opener, and after the word it is part of
+    # post, which no consumer admits. Round 2 read more and
     # doubted a shorter list, and round 3 measured eight shapes it read wrong
     # without doubting: a backtick taken for a separator, quotes inside a
     # backtick, a `#` after `)` or a backtick taken for a comment, `$$\047`
@@ -747,8 +756,10 @@ cs_drop_heredocs() {  # cs_drop_heredocs [keep-unquoted] -- stdin: lines; stdout
     # A SECOND CONSUMER BREAKS AN ARGUMENT ELSEWHERE. The opener block keeps no
     # test that the command began on the line of the opener, and says why: a line
     # that opens inside a quote has its closing quote in front of any `cat`
-    # that follows without a separator, and pre must begin with `cat`. That
-    # holds for this consumer and for no other by construction. A consumer
+    # that follows without a separator, and pre must begin with `cat`; and a
+    # line continued onto the opener line is doubt, so pre cannot have begun on
+    # an earlier line. That holds for this consumer and for no other by
+    # construction. A consumer
     # whose pre may begin with a quote or a word ending in one -- anything but
     # a literal command name -- needs that test back, with a row that only it
     # refuses. Round 4 of the review asked for this to be written where the
@@ -1089,7 +1100,8 @@ fi
 # lines on stdin, the same lines out, with the body of a heredoc taken away only
 # when its opener line fits the grammar above cs_drop_heredocs -- a quoted delimiter of plain
 # words and `cat` into a plain path reading it -- its opener is one bash
-# sees, and nothing in front of it is on the doubt list; every other body kept
+# sees, and nothing in front of it or behind it on its line is on the doubt
+# list; every other body kept
 # where it
 # stands. cs_drop_heredocs in its keep-unquoted mode, whose paragraph says each
 # of the three and why; this is the name a hook calls it by, so that THE LOAD

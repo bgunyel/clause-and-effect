@@ -668,7 +668,8 @@ CMDLIST
 # sees and what reads a body, and not one written here. It drops a body only
 # when the opener's line fits a grammar the library writes out -- a quoted
 # delimiter of plain words and `cat` into a plain path reading it -- and
-# nothing in front of the opener is on the library's doubt list. Every
+# nothing in front of the opener, or behind it on its line, is on the
+# library's doubt list. Every
 # other body is kept and re-read exactly as before -- an unquoted one because
 # bash runs the `$( )` and the backticks in it, and a quoted one fed to
 # anything else because that reader may run it. line_was_cut and the state
@@ -693,7 +694,8 @@ CMDLIST
 # eight shapes it read wrong let a later `cat > F` drop lines bash runs; and
 # gh api, then a data consumer, returned a body as output that a pipe, `<( )`
 # or a compound command handed to a reader. Since then the constructs in that
-# text that change bash's quote state are doubt and no gh command is a
+# text that change bash's quote or comment state in a way the state does not
+# follow are doubt, and no gh command is a
 # consumer -- THE DOUBT LIST, in lib/command-scan.sh above the heredoc pass,
 # says which, and why every other character passes. Earlier
 # versions of this paragraph said the answer could only fail towards the
