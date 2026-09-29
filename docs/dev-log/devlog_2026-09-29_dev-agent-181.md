@@ -114,3 +114,89 @@ and 0 behind. rev-agent-181 asked for the merge because the branch no longer mer
 - **Full suite on `dce04d8`** (measured): 8183 ok, 0 FAIL, ALL CHECKS PASSED.
 - **Not re-run:** `mutate-hooks.sh -v` over the three #181 rows. The earlier
   entry's figures for them are for `54391a2` and say nothing about this merge.
+
+---
+
+# 2026-09-29 · dev-agent-181 — rev-agent-181's round 1
+
+18:11 +03.
+
+Branch `worktree-issue-181-writer-callers`, from `6c0c008` to `cd12f48`, plus
+this entry's commit. With it the branch is 9 commits ahead of `origin/dev-05`
+(`0e4a0f4`) and 0 behind. rev-agent-181 reviewed `c6f9cbb` and posted five
+findings. Two were gating, and each came with a mutant that survived green.
+
+## What was wrong, and whose
+
+- **F1, the assistant's.** GH-181.2 was written to close the hyphen hole the
+  first review found. It asked only for a definition's *name*, and it was
+  anchored the same way as every derivation it defended: start of line, and a
+  literal `()`. So `: ; wrap() {…}`, an indented `function wrap {…}` (on one
+  line and on three), and `wrap ( ) {` each wrapped `check_push`. Each was
+  called twice, and the whole suite stayed at 8056 ok, 0 FAIL. The guard
+  written to close the class showed the class itself. The assistant also
+  cited `nested_defs` as holding "column 1". It holds that only for the
+  parenthesis form, and GH-109.2's note repeated the claim.
+- **F2, the assistant's.** When the assistant moved `reads_only_through` into
+  the library for two callers, every question the suite put to it had the
+  answer true. Stubbing it to `return 0` left the suite green. The helper
+  match also had no left boundary: `raw_hook_text "$1"` satisfied `hook_text`.
+- F3 (`odd_names` not enrolled in GH-182.3's list), F4 (the #181 cite said
+  one entry, and a stray line break in GH-109.2's note) and F5 (a usage
+  comment after `()` with its brace below read as a self-call, a false red)
+  were smaller.
+
+## What changed
+
+- **`odd_defs` replaces `odd_names`.** It does not recognise definitions and
+  then judge them. It looks for the grammar's two signatures anywhere in a
+  line: a `(`, blanks and `)`, and the word `function`. It reports every line
+  that carries one, unless the line is the one shape all readers read: a
+  column-1 identifier, `()`, and a brace on that line or on the next line that
+  is not blank. It takes that shape off the front before looking, so a
+  definition nested on another definition's line is still reported. A `(` `)`
+  after `$`, `<`, `>` or `=` is excused, since it is never a definition. The
+  `function` keyword is refused outright in shell. Neither hook uses it, and
+  `fn_calls`' definition exclusion does not read `function name {`.
+- **The awk text is pinned, not excused.** rev-agent-181 suggested an
+  exception for awk. The assistant pinned instead: `no-pr-decisions.sh`'s
+  seven awk lines (four `function` lines and three `name()` calls) are the
+  guard's expected output, written as a literal. Which side of a quote a line
+  stands on cannot be read from its text. The cost is in the refusing
+  direction: an edit to those awk lines turns the row red.
+- **`reads_only_through`** matches and removes the helper call bounded on the
+  left. It is now asked eight readers: seven it must refuse, and one reader
+  asked for a helper it does not call.
+- The three new registry rows: `a-writer-wrapped-after-a-separator`,
+  `-by-an-indented-keyword` and `-with-a-blank-in-its-parentheses`. The
+  literals move to 161 and 159.
+- A new trade is recorded from the sibling sweep of F1 at call sites. A call
+  whose name is spelled across quotes, `spe""aks "$1"`, is not a token. The
+  same is true for `fn_calls` at the top level.
+
+## Measurements
+
+The load was high, with other sessions' suites running. All figures below
+were measured.
+
+- **Full suite at `cd12f48`:** 8189 ok, 0 FAIL.
+- **`--list`:** 161 rows, 159 real mutations against 17 files, 80
+  requirement IDs, 2 self-tests, and 258 active requirements.
+- **`mutate-hooks.sh -v` over the three new rows:** each was caught with
+  GH-181.2 red alone, and `.claude/hooks/` was byte-identical after.
+- **Hand mutations**, each in a `git clone --shared` detached at `cd12f48`,
+  against a baseline clone at 8189 ok, 0 FAIL:
+  - `reads_only_through` with `return 0`: 2 FAIL.
+  - The old unbounded removal added back: 1 FAIL (`r181_suffix_beside`).
+  - `odd_defs` reading `cat "$1"`: 4 FAIL.
+  - F5's comment strip reverted: 1 FAIL.
+- **A dead end, the assistant's.** The first hand-mutation run copied
+  `.claude/hooks` alone and ran the copy's `check-hooks.sh`. The suite
+  resolves its fixtures against the repository around it, so every run
+  stopped at 1411 checks. The assistant discarded those runs and used clones.
+
+## Left open
+
+- The three rows from before this round were last run at `54391a2`.
+- GH-109.2's note still says a heredoc body is read as code (#182), as the
+  earlier entry recorded.
