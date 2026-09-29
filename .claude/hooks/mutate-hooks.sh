@@ -12,7 +12,9 @@
 # evidence. This file is where the re-running happens.
 #
 # Run:  bash .claude/hooks/mutate-hooks.sh            every registered mutation
-#       bash .claude/hooks/mutate-hooks.sh --list     the registry, and nothing run
+#       bash .claude/hooks/mutate-hooks.sh --list     the registry, each row's edit applied
+#                                                     sandboxed and never in place, and no
+#                                                     suite run
 #       bash .claude/hooks/mutate-hooks.sh -v <id>... one or more by id, verbosely
 #
 # SLOW ENOUGH THAT NOTHING RUNS IT FOR YOU, which is why it is a separate script
@@ -21,22 +23,37 @@
 # they cost in wall-clock at the row count of the day, are both on `--list`'s
 # summary and are written nowhere else (#148). The run count is not simply one
 # per row: a row pass one refuses never reaches a run, and neither does one
-# declared `did-not-apply`.
+# whose edit fails or leaves its file as it was.
 #
-# IT IS A PREDICTION FROM THE REGISTRY AS WRITTEN, and it can be one too many.
-# `--list` reads the table; it does not copy the tree or apply an edit, which is
-# what `the registry, and nothing run` means. So three things it cannot see
-# still cost a row its run in pass two: a target that is not writable in the
-# copy, a `sed` expression that fails, and -- the one this paragraph used to
-# claim it modelled -- an edit that applies to nothing. That last is read off
-# the DECLARED outcome here, so a row declared `caught` whose anchor a rename
-# has moved is predicted to run and reports `did-not-apply` without running.
-# The paragraph below on rows not exercised since the files under them changed
-# is the same fact from the other side, so this is not hypothetical. Bertan's
-# review of PR #183. Making `--list` apply each edit would answer it properly
-# and would surface a rotted anchor in a second rather than after a whole pass;
-# that changes what `--list` is -- `the registry, and nothing run` -- so it is
-# #193 and not this.
+# IT IS COUNTED BY APPLYING EVERY ROW'S EDIT, and so it is the count a pass runs
+# (#193). `--list` copies .claude/hooks/ once, the way pass two copies it
+# before each row, and runs each row's `sed` over that copy's file through
+# `row_apply`, the function pass two edits the copy with, and counts a row only
+# when that edit succeeds and changes its file. So the three things that cost a
+# row its run in pass two -- a target that is not writable in the copy, a `sed`
+# expression that fails, and an edit that applies to nothing -- are seen
+# before any run, and asked of the file pass two asks them of. A row declared
+# `caught` whose anchor a rename has moved is marked on its own line by
+# `--list`, which runs no suite, where it used to surface only as
+# `did-not-apply` after a whole pass. Until #193 the count was a prediction off
+# the DECLARED outcome and could be one too many for exactly that row, and all
+# three places that said so hedged it; Bertan's review of PR #183 found the
+# unhedged version.
+#
+# OF THE COPY AND NOT OF THE FILE BESIDE THIS HARNESS, because the two can
+# answer differently. #193's first version asked of the file here and named an
+# assumption -- that the answers agree whenever the running user owns that
+# file -- and review of PR #350 named a case where they do not: on a read-only
+# mount the file here is not writable and its copy under the temporary
+# directory is. Asking where pass two asks leaves no assumption to name.
+#
+# `--list` WRITES NOTHING UNDER .claude/hooks/. Its copy is in the temporary
+# directory the guards below vet, each edit goes through `sed --sandbox` to a
+# scratch file there, never back into its file, and `--list` sums .claude/hooks/ before and
+# after, as a whole run does, and exits non-zero if a byte moved. The sandbox
+# is #272's fix as well: a `w`, `r` or `e` in a row's edit wrote, read or ran
+# something in pass two before any guard was asked, and now it is refused and
+# reported as that row's fault.
 #
 # NO MAGNITUDE IS WRITTEN IN THIS HEADER, and the first version of #148's own
 # fix is why. It kept one, in capitals a few lines above here, classified it as
@@ -91,7 +108,9 @@
 # apart.
 #
 # check-hooks.sh does ask `--list` for the three figures its #148 checks compare
-# against derivations of their own. That runs no mutation and costs nothing.
+# against derivations of their own. That runs no suite and writes nothing under
+# .claude/hooks/; what it costs is one copy of the tree, the row edits above,
+# and no run.
 # Nothing here is a PreToolUse hook and settings.json does not register it.
 # Naming rows costs the baseline plus one run each, so re-asking a single rule
 # is two runs.
@@ -439,6 +458,28 @@
 # through, so the first being caught is no evidence about the second. The third
 # row, `a-writer-wrapped-under-a-name-with-a-hyphen`, is GH-181.2's own rule.
 #
+# THREE ROWS FOR ONE UNION, #156's. append-only-docs.sh judges the command as it
+# came, joined by cs_join, and joined as bash joins, and refuses if any is
+# refused, so each reading is a rule whose loss the others do not cover.
+# `append-only-reads-only-the-joined-text` deletes the raw pass, which puts the
+# hook back to #156's first version: a verb glued onto the word before it by an
+# even run of backslashes or a comment's backslash is permitted, the defect
+# review of PR #329 found.
+# `append-only-reads-only-the-raw-text` deletes the joined pass, which puts it
+# back to dev-05: a continuation between the verb and the path is permitted,
+# the defect #156 was filed for. `append-only-reads-no-bash-join` deletes the
+# third, which puts it back to 22e849c: a line bash does not continue, then a
+# destroying command with a continuation between its verb and its path, is
+# permitted -- the composite review of PR #329 found in round 3. Each names
+# GH-156 alone, since its issue file holds every reading's rows.
+#
+# #156 also moved a row it did not add. `doc-hook-function-not-named` matched
+# the withdrawal message's list of the document hooks' functions, which #156
+# lengthened by cs_join, so its edit stopped applying and only a whole pass
+# would have said so (review of PR #329). It now drops cs_join, which puts the
+# message back to its text before #156; the run log above, frozen at #215,
+# still describes the row as it was.
+#
 # WHAT IS REGISTERED, counted rather than characterised, because the sentence
 # that characterised it ("the rules that gained checks under #103") claimed the
 # whole of two issues and named eight rows -- and the count that replaced it was
@@ -616,7 +657,7 @@ MEASURED_AT_RESULTS=6892
 
 # WHAT MAKES A ROW RUNNABLE, asked in one place because two callers need the
 # same answer and gave different ones. Pass one below refuses a row for each
-# reason this function gives; `--list`'s run count has to predict which rows a
+# reason this function gives; `--list`'s run count has to say which rows a
 # pass will actually run. It did not ask any of them -- it counted every row
 # whose outcome was not did-not-apply -- so one malformed row made it
 # over-report by one, and
@@ -680,6 +721,43 @@ row_fault() {  # row_fault <id> <file> <edit> <reqs> <want> -- a reason, or noth
   esac
 }
 
+# WHAT A ROW'S EDIT DOES TO ITS FILE, asked in one place for row_fault's reason:
+# pass two edits the copy with it and `--list` counts with it, so the count and
+# the run cannot mean two things by an edit that applies (#193). The edited
+# text goes to stdout and never back into the file; the caller decides where it
+# lands. A reason goes to stderr, with a non-zero status.
+#
+# `sed --sandbox`, because a row's edit is a sed script and a sed script is more
+# than a substitution: `w` and `s///w` write a file, `r` reads one, and `e` and
+# `s///e` run a command -- all of it while sed runs, before any guard here is
+# asked, so the sum at the end of a run would report a write into
+# .claude/hooks/ after it had happened and could not stop it (#272). The
+# sandbox refuses every one of them as sed failing, which is reported as the
+# row's fault. Refusing the letters by reading the text was rejected: `w` is an
+# ordinary character inside a pattern, so the text cannot say which it is.
+#
+# A WRITABLE REGULAR FILE, asked before sed runs, and of a copy by both callers:
+# pass two of the copy it is about to overwrite, and `--list` of a copy made the
+# same way, so the two cannot answer it differently. A target that is itself a
+# symlink is refused too: a mutation written through one lands wherever it
+# points, which need not be in the copy, and no file under .claude/hooks/ is
+# one. That asks of the last component only. A symlinked DIRECTORY earlier on
+# the path is not asked about, and pass two writes through it to wherever it
+# points; that predates this function and is #352's.
+row_apply() {  # row_apply <target> <edit> <name> -- the edited text on stdout, or why not on stderr
+  local err
+  if [ -L "$1" ] || [ ! -f "$1" ] || [ ! -w "$1" ]; then
+    echo "$3 is not a writable regular file" >&2
+    return 1
+  fi
+  # sed's own complaint is kept for the reason, and its stdout is this
+  # function's, through descriptor 3.
+  { err=$(sed --sandbox -e "$2" -- "$1" 2>&1 1>&3 3>&-); } 3>&1 || {
+    echo "the sed expression failed: $err" >&2
+    return 1
+  }
+}
+
 VERBOSE=
 LIST=
 SELECTED=
@@ -719,7 +797,7 @@ refusal-claims-every-consumer%lib/command-scan.sh%s/every consumer that requires
 refusal-names-two-lists%lib/command-scan.sh%s/CS_SEPARATORS, CS_CONTROL_WORDS, CS_WORD_SPELLING, CS_WRAP_TOKEN or CS_WRAP_WORDS/CS_SEPARATORS or CS_WRAP_WORDS/%GH-134.1%caught
 emptiness-not-named%lib/command-scan.sh%s/\[ -n "\$CS_SEPARATORS" \]/[ -n "always" ]/%GH-134.1%caught
 guard-trigger-loses-its-name%lib/command-scan.sh%s/}CS_SEPARATORS is empty"/}"/%GH-134.1%caught
-doc-hook-function-not-named%lib/command-scan.sh%s/cs_tool_input and cs_within_cap/cs_tool_input/%GH-134.1%caught
+doc-hook-function-not-named%lib/command-scan.sh%s/need only cs_tool_input, cs_within_cap and cs_join/need only cs_tool_input and cs_within_cap/%GH-134.1%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught
@@ -785,6 +863,9 @@ verb-rule-unbounded-on-the-left%append-only-docs.sh%s/\\s+(\[^;&|\]\*\[^;&|A-Za-
 option-letters-not-a-boundary%append-only-docs.sh%s/(-\[A-Za-z\]+)?\$APPEND_ONLY_DIR/$APPEND_ONLY_DIR/%GH-159.2%caught
 gate-option-letters-not-a-boundary%append-only-docs.sh%s/^APPEND_ONLY='(^|\[^A-Za-z0-9_.-\])(-\[A-Za-z\]+)?'"\$APPEND_ONLY_DIR"$/APPEND_ONLY='(^|[^A-Za-z0-9_.-])'"$APPEND_ONLY_DIR"/%GH-159.2%caught
 redirect-rule-unbounded-on-the-left%append-only-docs.sh%s/>\\s\*(\[^>|&\]\*\[^>|&A-Za-z0-9_.-\])?\$APPEND_ONLY_DIR/>\\s*[^>|\&]*$APPEND_ONLY_DIR/%GH-159.2%caught
+append-only-reads-only-the-joined-text%append-only-docs.sh%/^judge_text "\$COMMAND"$/d%GH-156%caught
+append-only-reads-only-the-raw-text%append-only-docs.sh%/^judge_text "\$JOINED"$/d%GH-156%caught
+append-only-reads-no-bash-join%append-only-docs.sh%/^judge_text "\$BASH_JOINED"$/d%GH-156%caught
 heading-correction-read-off-the-root%append-only-docs-edit.sh%s@^  while \[\[ \$rest =~ \$GUARDED_RE \]\]; do$@  case "${abs#"$ROOT"/}" in docs/dev-log/*) ;; *) return 1 ;; esac\n  while [[ $rest =~ $GUARDED_RE ]]; do@%GH-159.1%caught
 heading-correction-any-dev-log-pair%append-only-docs-edit.sh%/^heading_correction()/,/^}/s@^      \*) return 1 ;;$@      *) ;;@%GH-159.1%caught
 heading-correction-last-pair-only%append-only-docs-edit.sh%s@^  while \[\[ \$rest =~ \$GUARDED_RE \]\]; do$@  while [[ $rest =~ ^.*$GUARDED_RE ]]; do@%GH-159.1%caught
@@ -880,137 +961,15 @@ MUTATIONS
 # being red. A harness that reported caught whenever anything anywhere went red
 # would pass every other row here and fail this one.
 
-if [ -n "$LIST" ]; then
-  printf '%-52s %-26s %-16s %s\n' 'MUTATION' 'FILE' 'EXPECTED' 'REQUIREMENTS'
-  # The counts are printed rather than restated in prose anywhere, which is the
-  # whole of #107's complaint applied to this file's own header: the previous
-  # version characterised the registry in four documents and got the number
-  # wrong in all four. #148 finished that -- the header states none of these and
-  # points here instead, and check-hooks.sh's #148 checks compare the two figures
-  # below against a derivation of each it makes for itself.
-  ROWS=0
-  REAL=0
-  SELFTESTS=0
-  RUNS_NEEDED=1   # the baseline, which a pass pays before it believes any row
-  FILES=
-  IDS=
-  while IFS='%' read -r id file edit reqs want; do
-    [ -n "$id" ] || continue
-    ROWS=$((ROWS + 1))
-    # A PASS IS NOT ONE RUN PER ROW, and two separate things take rows off the
-    # count. A row whose edit is expected to leave its target byte-identical
-    # never reaches a run -- that is what the self-test expecting did-not-apply
-    # establishes. And a row pass one refuses never reaches one either, which
-    # this line asked nothing about until Bertan's review of PR #183: a single
-    # malformed row made this figure predict one run more than the pass performs.
-    # Both are read off the registry, which moves when the registry does, and
-    # never off a constant, which is the thing #148 was filed about.
-    if [ -z "$(row_fault "$id" "$file" "$edit" "$reqs" "$want")" ] \
-       && [ "$want" != did-not-apply ]; then
-      RUNS_NEEDED=$((RUNS_NEEDED + 1))
-    fi
-    case "$id" in
-      selftest-*) SELFTESTS=$((SELFTESTS + 1)) ;;
-      *) REAL=$((REAL + 1))
-         FILES="$FILES$file
-"
-         for r in $reqs; do IDS="$IDS$r
-"; done ;;
-    esac
-    printf '%-52s %-26s %-16s %s\n' "$id" "$file" "$want" "$reqs"
-  done <<< "$MUTATIONS"
-  echo
-  printf '%s rows: %s real mutations against %s files, naming %s requirement IDs, and %s self-tests\n' \
-    "$ROWS" "$REAL" \
-    "$(printf '%s' "$FILES" | sort -u | grep -c .)" \
-    "$(printf '%s' "$IDS" | sort -u | grep -c .)" \
-    "$SELFTESTS"
-  # WHAT A ROW MAY NAME INTO, which is the denominator the header used to write
-  # out beside the numerator. The fourth field is only ever an ACTIVE
-  # requirement -- a retired or superseded one has no covering check, so a row
-  # naming it would report `survived` on every run for ever and read as a defect
-  # in the hooks rather than in the row, which is why check-hooks.sh's registry
-  # audit refuses one. Counted by ID rather than by line, so that an entry
-  # carrying the field twice counts once, and read from beside this script
-  # because that is the requirements.md, and the requirements/ beside it, that
-  # this registry's rows are judged against.
-  # The status line is matched the way that audit matches it, whitespace either
-  # side of the word tolerated -- two readings of one field that disagree about
-  # a trailing space are a defect waiting to happen.
-  #
-  # SECTION-AWARE, because requirements.md is not all entries. Its `##` headings
-  # divide it, and only three of them hold requirements; `## Provenance` holds
-  # `### #37.1` criteria and the sections above hold prose. Reading `### `
-  # anywhere, and never clearing the id at a `##` boundary, counted a stray
-  # `- status: active` in a later section against whichever heading was last
-  # seen -- and check-hooks.sh's #148 check made the same mistake, so the two
-  # agreed and were wrong together, which is the one failure its own comment
-  # says a doubled program cannot find. Bertan's review of PR #183. The section
-  # rule is check-hooks.sh's REQUIREMENTS_AWK, which is the canonical reader of
-  # this file, and the check compares this count against that reader's own.
-  #
-  # AND THE SPLIT SET BESIDE IT, which is where every `GH-` entry is (#200): one
-  # file per ID under requirements/, each holding one entry and no `##` heading,
-  # so each opens as a section that holds requirements. Listed here rather than
-  # by `requirements_split` in checks/library.sh, which this script cannot source;
-  # the order does not matter to a count, and every name in the directory is
-  # read, as there, so a misnamed file is counted rather than skipped. Regular
-  # files only, as there too: mawk aborts on a directory, and check-hooks.sh's
-  # canonical reader is what names one.
-  REQ_SPLIT=()
-  if [ -d "$SRC/requirements" ]; then
-    for f in "$SRC"/requirements/*; do [ -f "$f" ] && REQ_SPLIT+=("$f"); done
-  fi
-  ACTIVE=$(awk '
-    FNR == 1 && FILENAME != ARGV[1] { part = "req"; id = "" }
-    /^## / { id = ""; part = ($0 ~ /^## (User stories|Functional requirements|Boundary issues)$/) ? "req" : "other"; next }
-    /^### / { id = (part == "req") ? $2 : ""; next }
-    id != "" && /^- status:[ \t]*active[ \t]*$/ { active[id] = 1 }
-    END { n = 0; for (i in active) n++; print n + 0 }' "$SRC/requirements.md" ${REQ_SPLIT[@]+"${REQ_SPLIT[@]}"})
-  # Stderr is NOT discarded. It was, in the commit that fixed the same mistake
-  # one file over -- so why the read failed (mawk aborting on a directory, a
-  # permission error) was thrown away, and since `--list` exits 0 regardless,
-  # check-hooks.sh's capture never printed it either: the suite went red with no
-  # reason attached. Bertan's review of PR #183. It goes to this command's own
-  # stderr, which that capture keeps.
-  # Nothing read is not zero, and it is not a count either. An unreadable or
-  # renamed file would otherwise print `0 requirements ... are active`, which
-  # reads like a measurement and is none -- the shape this whole file exists to
-  # argue against. The failure says so in a line of its own, carrying none of
-  # the words check-hooks.sh's #148 check reads the figure out of, so that check
-  # goes red rather than picking a number out of an apology.
-  if [ -n "$ACTIVE" ] && [ "$ACTIVE" != 0 ]; then
-    printf '%s requirements in requirements.md and requirements/ are active, which is what a row may name\n' "$ACTIVE"
-  else
-    printf 'NO ACTIVE REQUIREMENT WAS READ OUT OF requirements.md AND requirements/, so how many a row may name is not known here\n'
-  fi
-  # AT MOST, and the word is the whole point of it. This is a prediction off the
-  # table, so it counts rows whose edit is DECLARED to apply; only a run can see
-  # one whose anchor has rotted, or a target the copy cannot write, or a `sed`
-  # that fails. The header and GH-148 both say so, and this line -- the one a
-  # person actually reads -- said `plus one per row whose edit applies` flat.
-  # The caveat was in the two places nobody looks and missing from the one they
-  # do. Bertan's review of PR #183.
-  printf '%s runs of check-hooks.sh for a whole-registry pass, at most: the baseline plus every row the table declares runnable; only a run sees an edit that applies to nothing\n' \
-    "$RUNS_NEEDED"
-  # AND WHAT THAT COSTS, derived here rather than rounded into the header. The
-  # rate is the dated measurement above divided by the run count it was taken
-  # at; the product follows the registry, which is the whole of #148 applied to
-  # the one number that had already rotted. Integer arithmetic throughout, with
-  # the half-minute added before the divide so the minutes round rather than
-  # truncate -- a budget that is short is the one that costs somebody an
-  # afternoon, and truncation is always short.
-  printf 'about %s minutes for that pass, at the %s s a run measured on %s; re-measure it, it is not derived\n' \
-    "$(( (RUNS_NEEDED * MEASURED_SECONDS_PER_RUN + 30) / 60 ))" \
-    "$MEASURED_SECONDS_PER_RUN" "$MEASURED_ON"
-  printf 'and about %s minutes while other sessions run this suite beside it, at the %s s a run measured under that load\n' \
-    "$(( (RUNS_NEEDED * MEASURED_SECONDS_UNDER_LOAD + 30) / 60 ))" \
-    "$MEASURED_SECONDS_UNDER_LOAD"
-  exit 0
-fi
-
 # The working copy. A directory of its own under the temporary one, so that the
 # copy is made by name rather than into a directory that already exists.
+#
+# MADE BEFORE `--list` AND NOT AFTER IT (#193). `--list` copies the tree here
+# and writes each row's edited text to a scratch file beside it, so it needs the
+# same answer a run does to the question below, whether that directory is
+# anywhere near .claude/hooks/ -- asked here, once, for both, rather than beside
+# `--list` a second time. It makes one copy, where pass two makes one per row,
+# because it writes nothing into it.
 WORK_ROOT=$(mktemp -d) || { echo "mutate-hooks.sh: mktemp -d failed" >&2; exit 1; }
 trap 'rm -rf "$WORK_ROOT"' EXIT
 WORK="$WORK_ROOT/hooks"
@@ -1079,6 +1038,197 @@ tree_sum() {  # tree_sum <dir>
   printf '%s\n%s\n' "$listing" "$sums" | sha256sum | cut -d' ' -f1
 }
 
+if [ -n "$LIST" ]; then
+  # WHAT .claude/hooks/ HOLDS BEFORE `--list` TOUCHES ANYTHING, compared with
+  # what it holds after, exactly as a run compares them (#193). The sandbox and
+  # the scratch file are why nothing should move; this is what says nothing did.
+  LIST_SUM_BEFORE=$(tree_sum "$SRC") || {
+    echo "mutate-hooks.sh: $SRC could not be summed, so nothing below could say --list left it alone" >&2
+    exit 1
+  }
+  # THE COPY EVERY ROW IS ASKED OF, made the way pass two makes its own, so that
+  # whether a target is writable is asked where pass two asks it (review of PR
+  # #350). Nothing writes into it, so one serves every row.
+  hooks_copy || { echo "mutate-hooks.sh: the working copy could not be made" >&2; exit 1; }
+  printf '%-52s %-26s %-16s %-10s %s\n' 'MUTATION' 'FILE' 'EXPECTED' 'EDIT' 'REQUIREMENTS'
+  # The counts are printed rather than restated in prose anywhere, which is the
+  # whole of #107's complaint applied to this file's own header: the previous
+  # version characterised the registry in four documents and got the number
+  # wrong in all four. #148 finished that -- the header states none of these and
+  # points here instead, and check-hooks.sh's #148 checks compare the two figures
+  # below against a derivation of each it makes for itself.
+  ROWS=0
+  REAL=0
+  SELFTESTS=0
+  RUNS_NEEDED=1   # the baseline, which a pass pays before it believes any row
+  FAULTS=0
+  MISMATCHES=0
+  FILES=
+  IDS=
+  while IFS='%' read -r id file edit reqs want; do
+    [ -n "$id" ] || continue
+    ROWS=$((ROWS + 1))
+    # A PASS IS NOT ONE RUN PER ROW, and the EDIT column is what takes rows off
+    # the count. A row pass one refuses never reaches a run, which this count
+    # asked nothing about until Bertan's review of PR #183: a single malformed
+    # row made it one run more than the pass performs. Nor does a row whose edit
+    # fails, or leaves its file as it was -- and those were read off the
+    # DECLARED outcome until #193, so a row whose anchor had rotted was counted
+    # as a run it would never get. Now the edit is applied, through row_apply,
+    # which is what pass two edits the copy with, and a row counts only when
+    # its edit changes its file.
+    #
+    #   applies    the edit changes its file; pass two runs the suite on it
+    #   unchanged  the edit leaves its file as it was; pass two reports
+    #              did-not-apply and runs nothing
+    #   fault      pass one refuses the row, or the target is not a writable
+    #              regular file, or sed failed -- the sandbox refusing a `w`,
+    #              `r` or `e` among the ways; the reason is on the next line
+    #
+    # Nothing is applied to a row pass one refuses: its target may name a file
+    # outside the hooks directory, and there is nothing to learn by reading it.
+    FAULT=$(row_fault "$id" "$file" "$edit" "$reqs" "$want")
+    if [ -n "$FAULT" ]; then
+      GOT=fault
+    elif ! FAULT=$(row_apply "$WORK/$file" "$edit" "$file in the working copy" 2>&1 >"$WORK_ROOT/mutated"); then
+      GOT=fault
+    elif cmp -s "$WORK/$file" "$WORK_ROOT/mutated"; then
+      GOT=unchanged
+    else
+      GOT=applies
+      RUNS_NEEDED=$((RUNS_NEEDED + 1))
+    fi
+    case "$id" in
+      selftest-*) SELFTESTS=$((SELFTESTS + 1)) ;;
+      *) REAL=$((REAL + 1))
+         FILES="$FILES$file
+"
+         for r in $reqs; do IDS="$IDS$r
+"; done ;;
+    esac
+    printf '%-52s %-26s %-16s %-10s %s\n' "$id" "$file" "$want" "$GOT" "$reqs"
+    # AND WHEN THE EDIT DOES NOT DO WHAT THE ROW DECLARES, it says so on the
+    # row, which is where a rotted anchor now surfaces, with no run made. A
+    # fault is marked with its reason instead; its declared outcome is not
+    # judged, since pass two never gets as far as reporting one.
+    if [ "$GOT" = fault ]; then
+      FAULTS=$((FAULTS + 1))
+      printf '    ^ fault: %s\n' "$FAULT"
+    else
+      case "$want:$GOT" in
+        caught:applies|survived:applies|did-not-apply:unchanged) ;;
+        *:applies) MISMATCHES=$((MISMATCHES + 1))
+           printf '    ^ declared %s, and the edit changes %s\n' "$want" "$file" ;;
+        *) MISMATCHES=$((MISMATCHES + 1))
+           printf '    ^ declared %s, and the edit leaves %s as it was\n' "$want" "$file" ;;
+      esac
+    fi
+  done <<< "$MUTATIONS"
+  echo
+  printf '%s rows: %s real mutations against %s files, naming %s requirement IDs, and %s self-tests\n' \
+    "$ROWS" "$REAL" \
+    "$(printf '%s' "$FILES" | sort -u | grep -c .)" \
+    "$(printf '%s' "$IDS" | sort -u | grep -c .)" \
+    "$SELFTESTS"
+  # WHAT A ROW MAY NAME INTO, which is the denominator the header used to write
+  # out beside the numerator. The fourth field is only ever an ACTIVE
+  # requirement -- a retired or superseded one has no covering check, so a row
+  # naming it would report `survived` on every run for ever and read as a defect
+  # in the hooks rather than in the row, which is why check-hooks.sh's registry
+  # audit refuses one. Counted by ID rather than by line, so that an entry
+  # carrying the field twice counts once, and read from beside this script
+  # because that is the requirements.md, and the requirements/ beside it, that
+  # this registry's rows are judged against.
+  # The status line is matched the way that audit matches it, whitespace either
+  # side of the word tolerated -- two readings of one field that disagree about
+  # a trailing space are a defect waiting to happen.
+  #
+  # SECTION-AWARE, because requirements.md is not all entries. Its `##` headings
+  # divide it, and only three of them hold requirements; `## Provenance` holds
+  # `### #37.1` criteria and the sections above hold prose. Reading `### `
+  # anywhere, and never clearing the id at a `##` boundary, counted a stray
+  # `- status: active` in a later section against whichever heading was last
+  # seen -- and check-hooks.sh's #148 check made the same mistake, so the two
+  # agreed and were wrong together, which is the one failure its own comment
+  # says a doubled program cannot find. Bertan's review of PR #183. The section
+  # rule is check-hooks.sh's REQUIREMENTS_AWK, which is the canonical reader of
+  # this file, and the check compares this count against that reader's own.
+  #
+  # AND THE SPLIT SET BESIDE IT, which is where every `GH-` entry is (#200): one
+  # file per ID under requirements/, each holding one entry and no `##` heading,
+  # so each opens as a section that holds requirements. Listed here rather than
+  # by `requirements_split` in checks/library.sh, which this script cannot source;
+  # the order does not matter to a count, and every name in the directory is
+  # read, as there, so a misnamed file is counted rather than skipped. Regular
+  # files only, as there too: mawk aborts on a directory, and check-hooks.sh's
+  # canonical reader is what names one.
+  REQ_SPLIT=()
+  if [ -d "$SRC/requirements" ]; then
+    for f in "$SRC"/requirements/*; do [ -f "$f" ] && REQ_SPLIT+=("$f"); done
+  fi
+  ACTIVE=$(awk '
+    FNR == 1 && FILENAME != ARGV[1] { part = "req"; id = "" }
+    /^## / { id = ""; part = ($0 ~ /^## (User stories|Functional requirements|Boundary issues)$/) ? "req" : "other"; next }
+    /^### / { id = (part == "req") ? $2 : ""; next }
+    id != "" && /^- status:[ \t]*active[ \t]*$/ { active[id] = 1 }
+    END { n = 0; for (i in active) n++; print n + 0 }' "$SRC/requirements.md" ${REQ_SPLIT[@]+"${REQ_SPLIT[@]}"})
+  # Stderr is NOT discarded. It was, in the commit that fixed the same mistake
+  # one file over -- so why the read failed (mawk aborting on a directory, a
+  # permission error) was thrown away, and since `--list` exits 0 whatever it read,
+  # check-hooks.sh's capture never printed it either: the suite went red with no
+  # reason attached. Bertan's review of PR #183. It goes to this command's own
+  # stderr, which that capture keeps.
+  # Nothing read is not zero, and it is not a count either. An unreadable or
+  # renamed file would otherwise print `0 requirements ... are active`, which
+  # reads like a measurement and is none -- the shape this whole file exists to
+  # argue against. The failure says so in a line of its own, carrying none of
+  # the words check-hooks.sh's #148 check reads the figure out of, so that check
+  # goes red rather than picking a number out of an apology.
+  if [ -n "$ACTIVE" ] && [ "$ACTIVE" != 0 ]; then
+    printf '%s requirements in requirements.md and requirements/ are active, which is what a row may name\n' "$ACTIVE"
+  else
+    printf 'NO ACTIVE REQUIREMENT WAS READ OUT OF requirements.md AND requirements/, so how many a row may name is not known here\n'
+  fi
+  # THE RUN COUNT, AND NO HEDGE ON IT, because the reason for the one it carried
+  # is gone. It was a prediction off the table that counted rows whose edit was
+  # DECLARED to apply, and it said `at most` here, since only a run could see
+  # an anchor that had rotted, a target the copy could not write, or a `sed`
+  # that failed -- Bertan's review of PR #183 found the caveat in the header and
+  # GH-148 and missing from this line, the one a person actually reads. Each of
+  # those is now seen above, on its row, and counted out (#193). check-hooks.sh
+  # reads the figure by the words `runs of check-hooks.sh for a whole-registry
+  # pass`, so a rewording keeps them.
+  printf '%s rows whose edit does not do what the row declares, and %s faults; each is marked on its own line above\n' \
+    "$MISMATCHES" "$FAULTS"
+  printf '%s runs of check-hooks.sh for a whole-registry pass: the baseline plus every row whose edit applies above\n' \
+    "$RUNS_NEEDED"
+  # AND WHAT THAT COSTS, derived here rather than rounded into the header. The
+  # rate is the dated measurement above divided by the run count it was taken
+  # at; the product follows the registry, which is the whole of #148 applied to
+  # the one number that had already rotted. Integer arithmetic throughout, with
+  # the half-minute added before the divide so the minutes round rather than
+  # truncate -- a budget that is short is the one that costs somebody an
+  # afternoon, and truncation is always short.
+  printf 'about %s minutes for that pass, at the %s s a run measured on %s; re-measure it, it is not derived\n' \
+    "$(( (RUNS_NEEDED * MEASURED_SECONDS_PER_RUN + 30) / 60 ))" \
+    "$MEASURED_SECONDS_PER_RUN" "$MEASURED_ON"
+  printf 'and about %s minutes while other sessions run this suite beside it, at the %s s a run measured under that load\n' \
+    "$(( (RUNS_NEEDED * MEASURED_SECONDS_UNDER_LOAD + 30) / 60 ))" \
+    "$MEASURED_SECONDS_UNDER_LOAD"
+  # THE ONE THING `--list` EXITS NON-ZERO FOR: .claude/hooks/ moved under it. A
+  # fault or a row that does not do what it declares is marked above and is not
+  # a failure here -- check-hooks.sh's GH-193 check is what goes red on those.
+  # An empty sum after is a failure too, for the reason tree_sum gives.
+  LIST_SUM_AFTER=$(tree_sum "$SRC") || LIST_SUM_AFTER=
+  if [ -z "$LIST_SUM_AFTER" ] || [ "$LIST_SUM_BEFORE" != "$LIST_SUM_AFTER" ]; then
+    echo "mutate-hooks.sh: .claude/hooks/ changed while --list ran" >&2
+    echo "       before $LIST_SUM_BEFORE" >&2
+    echo "       after  $LIST_SUM_AFTER" >&2
+    exit 1
+  fi
+  exit 0
+fi
+
 # The requirements whose checks failed in one run, read off the matrix. An ID
 # line opens a requirement and every `    FAIL` line under it belongs to it; a
 # failure's continuation lines are indented further and say nothing here.
@@ -1113,7 +1263,7 @@ while IFS='%' read -r ID FILE EDIT REQS WANT; do
     case " $SELECTED " in *" $ID "*) ;; *) continue ;; esac
   fi
   MATCHED=$((MATCHED + 1))
-  # The refusals are row_fault's, above, because `--list` has to predict
+  # The refusals are row_fault's, above, because `--list` has to count
   # which rows this pass will run and the two have to mean the same thing by a
   # runnable row. What is this pass's alone is reporting the reason and counting
   # the row out; what the reason SAYS is written once.
@@ -1197,13 +1347,12 @@ while IFS='%' read -r ID FILE EDIT REQS WANT; do
 
   hooks_copy || { echo "  FAIL $ID: the working copy could not be made"; FAILED=1; continue; }
   TARGET="$WORK/$FILE"
-  if [ ! -w "$TARGET" ]; then
-    echo "  FAIL $ID: $FILE is not a writable file in the working copy"
-    FAILED=1
-    continue
-  fi
-  if ! sed "$EDIT" "$TARGET" > "$WORK_ROOT/mutated" 2>"$WORK_ROOT/sed.err"; then
-    echo "  FAIL $ID: the sed expression failed: $(cat "$WORK_ROOT/sed.err")"
+  # Through row_apply, which is what `--list` counted with, so a row it called a
+  # fault is one this refuses and a row it counted is one this runs (#193). The
+  # sandbox is in there too, so a `w`, `r` or `e` in the edit is this refusal and
+  # not a write, a read or a command (#272).
+  if ! row_apply "$TARGET" "$EDIT" "$FILE in the working copy" > "$WORK_ROOT/mutated" 2>"$WORK_ROOT/sed.err"; then
+    echo "  FAIL $ID: $(cat "$WORK_ROOT/sed.err")"
     FAILED=1
     continue
   fi
