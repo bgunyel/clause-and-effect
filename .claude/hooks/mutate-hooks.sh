@@ -844,6 +844,8 @@ generator-writes-over-the-destination%generate-requirements.sh%s/ [&][&] cp -- "
 generator-leaves-its-temporary-file%generate-requirements.sh%s/; \[ -z "\$TMP" \] || rm -f -- "\$TMP"'/'/%GH-223.7%caught
 late-legacy-entry-reworded%requirements/GH-204.8.md%s/at least one row recorded/at least one row/%GH-223.1%caught
 cited-entry-that-does-not-exist%requirements.md%s/cites it (GH-223.6)/cites it (GH-223.9)/%GH-223.6%caught
+a-writer-wrapped-and-called-twice%no-git-push.sh%s/^check_push() {$/wrap() {\n  check_push "$1" "$2"\n}\ncheck_push() {/;s/^    check_push "\$CMD" "\$ARGS" || exit 2$/    wrap "$CMD" "$ARGS" || exit 2; wrap "$CMD" "$ARGS" || exit 2/%GH-181.1%caught
+a-writer-wrapped-on-one-line%no-git-push.sh%s/^check_push() {$/wrap() { check_push "$1" "$2"; }\ncheck_push() {/;s/^    check_push "\$CMD" "\$ARGS" || exit 2$/    wrap "$CMD" "$ARGS" || exit 2/%GH-181.1%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS

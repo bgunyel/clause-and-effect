@@ -1256,9 +1256,12 @@ it has no entry above (Q16).
   untouched. Cited where `says_first` says why an opening is a different question
   from a fragment: ordering is already a live concern at one of these constants,
   which is what made it worth asking at the other
-- #181: `fn_calls` cannot see an indirect call, so a wrapper around a function
-  that writes a refusal hides arms from the count. Cited beside that helper,
-  which names what it can and cannot see
+- #181: has an entry, GH-181.1, generated from its issue file, and is listed
+  here only because #109's section cited it before it landed, as `fn_calls`
+  not seeing an indirect call, so a wrapper around a function that writes a
+  refusal hid arms from the count. The indirect call is now refused by
+  GH-181.1 rather than only tripwired by the function table: no function in
+  either boundary hook may call a function that writes
 - #182: has entries, generated from its issue file, and is listed here only
   because #109's section cited it before it landed, as `arms` and `fn_writes`
   not knowing where a heredoc body starts. Of the three shapes it was filed
@@ -1615,3 +1618,10 @@ it has no entry above (Q16).
   or `eval` state -- and pinned its representatives. Cited in GH-185's note
   as that class's structural fix. It adds its requirements in the pull
   request that fixes it
+- #338: `fn_writes` calls a function silent when its write stands on the
+  definition line of any shape but a `;` `}` one-liner -- a body opened on that
+  line and closed on a later one, or a subshell body. Found while implementing
+  #181, whose `writer_callers` reads the writer set from `fn_writes`, so a
+  wrapper around such a writer is not refused. Cited in GH-181.1's note and
+  on its fixture, which asserts today's reading. It adds its requirements in
+  the pull request that fixes it

@@ -364,15 +364,17 @@ written 'the library says cs_normalise answers for cs_drop_heredocs' \
 
 # WHAT THE DROP TAKES FROM THE HOOKS THE COUNTERS READ. Which hooks those are is
 # read off the suite, every `arms`, `fn_writes` or `fn_calls` written with a
-# `"$HOOKS/<name>"` argument, and then pinned as a literal, so a third is a red
-# run and not a hook read with nothing holding what its drop takes. A call that
+# `"$HOOKS/<name>"` argument -- and `writer_callers`, #181's, which reads a hook
+# through `hook_text` and `fn_writes` both -- and then pinned as a literal, so a
+# third is a red run and not a hook read with nothing holding what its drop
+# takes. A call that
 # names its hook through another variable is not read; every call that reads
 # a hook of this directory names it that way today.
 req GH-182.3
 # Whole-line comments blanked by the counters' own first stage, and the name
 # bounded on the left, so a comment or a `farms "$HOOKS/x.sh"` adds no hook.
 R182_COUNTED=$(hook_uncommented "$SUITE_TEXT" \
-  | grep -oE '(^|[^A-Za-z0-9_])(arms|fn_writes|fn_calls) "\$HOOKS/[A-Za-z0-9_.-]+"' \
+  | grep -oE '(^|[^A-Za-z0-9_])(arms|fn_writes|fn_calls|writer_callers) "\$HOOKS/[A-Za-z0-9_.-]+"' \
   | sed 's|.*/||; s|"$||' | LC_ALL=C sort -u | tr '\n' ' ')
 tok 'the counters read two hooks of this directory' \
     'no-git-push.sh no-pr-decisions.sh ' "$R182_COUNTED"

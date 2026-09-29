@@ -1771,6 +1771,41 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
     | tr -c 'A-Za-z0-9_$-' '\n' \
     | grep -cxF -- "$2"
 }
+# THE CALLERS OF A WRITER, which `fn_calls` cannot count: #181's derivation,
+# here beside the three because it reads through two of them, and argued in
+# checks/GH-181.sh with the fixtures that drive it. Which functions write is
+# `fn_writes`'s answer, read and not re-derived, so this cannot be narrower
+# than the table GH-109.2 pins. Which function a line belongs to is asked again,
+# on `fn_writes`'s rules -- a definition in column 1 opens one, a `}` in column
+# 1 closes it, a line ending `;` then `}` closes its own -- with one widening:
+# what stands on a definition line after its name and parentheses is that
+# function's body, which is where a one-line wrapper keeps its call, and a
+# comment standing alone after the opening brace is not. A call is a token,
+# split as `fn_calls` splits one.
+writer_callers() {  # writer_callers <file> -- "<caller> <writer>" a line, for a function body naming a writer; sorted
+  hook_text "$1" \
+    | awk -v WR="$(fn_writes "$1" | awk 'sub(/ writes$/, "") { printf "%s ", $0 }')" '
+        BEGIN { n = split(WR, a, " "); for (i = 1; i <= n; i++) wr[a[i]] = 1 }
+        {
+          owner = ""
+          if ($0 ~ /^function[[:space:]]+[A-Za-z_][A-Za-z0-9_]*/ || $0 ~ /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/) {
+            fn = $0; sub(/^function[[:space:]]+/, "", fn); sub(/[[:space:](){].*/, "", fn)
+            body = $0; sub(/^function[[:space:]]+/, "", body)
+            sub(/^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*(\(\))?/, "", body)
+            sub(/^[[:space:]]*\{[[:space:]]+#.*$/, "", body)
+            owner = fn
+            if ($0 ~ /;[[:space:]]*\}[[:space:]]*$/) fn = ""
+          } else if ($0 ~ /^\}/) {
+            fn = ""
+          } else {
+            owner = fn; body = $0
+          }
+          if (owner == "") next
+          n = split(body, t, /[^A-Za-z0-9_$-]+/)
+          for (i = 1; i <= n; i++) if (t[i] in wr) print owner, t[i]
+        }' \
+    | LC_ALL=C sort -u
+}
 # THE DUPLICATED DESCRIPTOR, which the three counters above cannot see through,
 # so the #109 section in the unsplit file refuses it in both hooks rather than
 # counting it; that section argues why. Here since #185, whose issue file became
