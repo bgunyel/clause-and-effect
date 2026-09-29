@@ -1620,3 +1620,7 @@ it has no entry above (Q16).
   `lacks` refuses an empty string, and filed it as #256, and dev-agent-219's
   answer there -- one rule, asked of a string in one and a path in the others
   -- is the decision #256 records. Cited in #256's issue file
+- #342: the pull request for #256; round 2 of rev-agent-256's review of it
+  measured each hand mutation of the helpers under the whole suite, and
+  those figures replaced a table of runs scoped to the issue file. Cited in
+  #256's issue file as the source of that table
