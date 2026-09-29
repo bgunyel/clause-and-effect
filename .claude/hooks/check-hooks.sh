@@ -780,7 +780,8 @@ done
 # emptied the record, and the run stopped saying the file defined nothing. So:
 #   - The names the child starts with are written before the source to fd 4,
 #     and read back after it from fd 5, both open on one file `record_of`
-#     names. Both are closed while the file is sourced, so no variable and no
+#     names, and ended by a line `e:` that is no name's, so that what `read`
+#     trims from the end is never a name the child compares against. Both are closed while the file is sourced, so no variable and no
 #     descriptor of the file's can stand in for them; and the file's own `bf`,
 #     `v` or `n` is now a name like any other, and recorded.
 #   - The child's own names, `_lc_before`, `_lc_nl`, `_lc_n` and `_lc_v`, are
@@ -800,7 +801,7 @@ done
 # byte for byte the one the child before #279 writes -- 42,534 and 72,227
 # bytes on the merge of dev-05 at 1486270, whose tokeniser #202 grew by 427
 # lines, and 42,825 and 72,227 once round 2 was in.
-LOADED_CHILD='\compgen -A function -P "f:" >&4; \compgen -v -P "v:" >&4 || exit 3
+LOADED_CHILD='\compgen -A function -P "f:" >&4; \compgen -v -P "v:" >&4 && \printf "e:\n" >&4 || exit 3
 . "$1" 3>&- 4>&- 5<&- >/dev/null 2>&1
 \printf "%s" "$?" >&3 || exit 3
 \enable compgen continue declare exit printf read set shopt trap unalias 2>/dev/null || exit 4
