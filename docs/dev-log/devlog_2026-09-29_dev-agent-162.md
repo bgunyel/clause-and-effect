@@ -232,3 +232,86 @@ before it.
   `x: names its session` file as `ok`.
 - The full suite at `4d81a55` printed ALL CHECKS PASSED, 8119 ok, one more
   than before: the `r162_class` row.
+
+## Appended 2026-09-29 — review round 3 (rev-agent-162), answered in `22209ed` and the commit holding this section
+
+### A correction to this entry's voice
+
+CLAUDE.md asks for active voice with a named agent for errors and corrections.
+This entry broke that rule in the places below. rev-agent-162 found the first
+one, and the assistant's sweep of the rest of the entry found the others. The
+entry cannot be edited, so each is restated here.
+
+- *Errors on the way*, first bullet. The assistant wrote both of those FAILs:
+  a line of the requirement's heredoc that opened with `written`, and a
+  fixture heading citing `PR #152`. The assistant rewrapped the first and
+  reworded the second.
+- *Errors on the way*, the two-axis review. The four comments that claimed
+  more than the code did were the assistant's. The assistant built the spec
+  reviewer's narrower reading.
+- Round 1, *Finding 2*. The assistant wrote the three claims that said more
+  than the code. The assistant reworded two of them and added a row for the
+  third. The assistant also wrote the "every spelling of a correct heading"
+  sentence, and narrowed it before commit.
+- Round 1, *Finding 3*. The false reds came from the assistant's time and zone
+  strips, and the assistant widened them.
+- Round 2, *Finding 4*. The drifted round-1 reply and README bullet were the
+  assistant's, and the assistant rewrote both. The assistant also wrote the
+  `check-hooks.sh` header line and the zone wording, and fixed both.
+- Round 2, *#354*. The assistant wrote the real rows that classed a line by
+  its end and passed the `x: names its session` file. The assistant wrote the
+  unpinned `session` strip too.
+
+### Round 3
+
+**Finding 5, a `fail` arm nothing drove.** rev-agent-162 flipped the real
+loop's `fail` to `pass`, and the mutant survived, 89 ok / 0 FAIL. The
+assistant had reported that survivor in round 2 and put it down to the real
+directory holding no contradiction. rev-agent-162 showed that the arm could be
+driven all the same. A row printed inside `$( )` is not recorded, because
+`record` returns in a subshell. So the assistant moved the loop into
+`r162_rows <dir>`, which the fixtures and the real directory share. A fixture
+directory holds one entry naming its session, one naming none, one
+contradicting it, and #354's colon-named file. Its rows are asserted whole,
+FAIL lines included. With the mutant, the section is now 90 ok / 1 FAIL.
+
+**A sibling the assistant's own mutations found.** Deleting the real
+`r162_rows` call left the section green at 15 ok / 0 FAIL. The read guard
+proved that names were read, and nothing proved that rows were made from them.
+`r162_rows` now counts its rows, and a row holds that count equal to the number
+of names read. Without the call it is 1 FAIL.
+
+**An error of the assistant's, found by the suite.** The first full run on
+`22209ed` had 1 FAIL, GH-104.1. That check greps the suite's text for a quoted
+string opening with a result's prefix. The literal the assistant wrote for the
+rows fixture opened `'  ok   devlog_…`. The assistant broke that word with a
+quote, as `end-of-run.sh` does for its own pattern, and said why beside it.
+
+**Finding 6.** The assistant's header listed the rule "in the order
+`r162_judge` asks it", and left out the readable-file test. The assistant has
+added it, and has made the date test say that the line must carry a date at
+all. On a full re-read of the header, the "THE DIRECTORY IS AN ARGUMENT"
+paragraph also needed to name `r162_rows`. Nothing else was found to drift.
+
+**Recommended, and taken.**
+
+- Both dev-log paths now come from `REPO_ROOT`, the root `unsplit.sh` derives
+  once, as GH-177 uses it.
+- The read guard matches a whole name between newlines, so a stray
+  `…session-5.md.orig` alone no longer satisfies it. That holds by
+  construction. The one mutant run on it only shows the guard going red when
+  the name it wants is absent.
+
+**Evidence, measured.**
+
+- The #162 section alone: 91 ok, 0 FAIL, two more than before, for the
+  fixture-rows literal and the rows-made count.
+- Mutations of the round-3 code, each in a scratch copy:
+  - the `fail` arm flipped: 90 / 1;
+  - the `none` arm flipped: 86 / 5;
+  - `r162_class` by suffix: 89 / 2;
+  - the real call deleted: 15 / 1;
+  - `REPO_ROOT` misspelled in either path: 1 FAIL each;
+  - the guard's needle replaced: 1 FAIL.
+- The full suite with the quote fix in place printed ALL CHECKS PASSED, 8121
+  ok.

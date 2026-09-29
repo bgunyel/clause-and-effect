@@ -418,7 +418,9 @@ tok 'a judgement ending as a passing one does is classed by the whole of it' \
 # printed inside `$( )` is not recorded -- `record` returns in a subshell, and
 # its FAILED dies with it -- so the rows over a fixture directory are asserted
 # whole as a literal, FAIL lines included, and only the real directory's are
-# made in this shell.
+# made in this shell. The literal's first `ok` is broken by a quote, because
+# a quoted string opening with a result's prefix reads to GH-104.1 as a result
+# printed outside pass and fail.
 r162_rows() {  # r162_rows <dir> -- an ok or a FAIL row for every name in it but README.md, counted in R162_MADE
   local path said
   while IFS= read -r -d '' path; do
@@ -438,7 +440,7 @@ r162_entry "$R162_ROWS" devlog_2026-09-24_dev-agent-205.md '# 2026-09-24 18:55 +
 r162_entry "$R162_ROWS" devlog_2026-09-17_session-6.md '# 2026-09-17 · session 2 — #133: a refused retarget'
 r162_entry "$R162_ROWS" 'devlog_2026-09-23_x: names its session.md' '# 2026-09-23 · y'
 tok 'a row an entry: ok where it names its session or none, FAIL where it contradicts, and a name is not a verdict' \
-'  ok   devlog_2026-09-17_session-5.md: its heading is dated and named as its file is
+'  o''k   devlog_2026-09-17_session-5.md: its heading is dated and named as its file is
   FAIL devlog_2026-09-17_session-6.md: its heading names | · session 2|, and its name session-6
                 its heading contradicts its file name
   FAIL devlog_2026-09-23_x: names its session.md: its heading names | · y|, and its name x: names its session
