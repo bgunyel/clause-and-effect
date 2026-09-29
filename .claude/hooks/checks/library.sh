@@ -1835,32 +1835,39 @@ hook_text() {  # hook_text <file> -- a hook's text as the refusal-arm counters r
 # spaces `|`, `&` and a redirect off the word before them, so none stands after
 # `"$1"`, and a body ends at `}`, never at a call; review of #181's pull
 # request, round 3, measured those members changing no verdict. It breaks a
-# list onto lines at the top of a body but not inside `$(...)` or `<(...)`, where
-# bash 5.2 prints `x=$(true; hook_text "$1")` on one line, so `;` stays before
-# a call: round 3 removed it with the others and round 4 measured that shape
-# refused. Each member left is a reader in checks/GH-181.sh that passes
-# through it and through no other member, and the respacing it rests on was
+# list onto lines at the top of a body but not inside `$(...)`, `<(...)` or
+# `>(...)`, where bash 5.2 prints `x=$(true; hook_text "$1")` on one line, so
+# `;` stays before a call: round 3 removed it with the others and round 4
+# measured that shape refused. Each member left is the only way at least one
+# reader in checks/GH-181.sh passes, and the respacing it rests on was
 # measured with bash 5.2 and no older bash. A `(` after `=` is an array, and
 # `local -a f=(hook_text "$1")` holds the file's name as data, which is why the
 # `(` is asked for its left side.
 #
-# THE TRADES, each asserted in checks/GH-181.sh, and none of them closed here:
-# the text rule is the wrong tool for a behavioural question, and #362 is
-# filed for the probe that answers it -- stub the helpers, point `$1` at a path
-# that is not there, and fail on any read of it. Refused, each a false red,
-# visible and one edit away: a call after an assignment prefix,
-# `LC_ALL=C hook_text "$1"`; after a keyword or a reserved word, `if`, `!`,
-# `time` or `coproc`; after `command`; inside backticks, which `declare -f`
-# prints as they were written; and any `${!...}` in the reader, `${!seen[@]}`
-# included, since an indirection is refused wherever it stands. Passed, each a
-# construction rather than a mistake: the file's name taken from `$_` after the
-# call, or rebuilt by `eval`; a call spelled as a line of a multi-line string,
-# which reads as a command start, so the string can hold the file's name as the
-# array did; and a filter of the reader's own other than
-# `sed`, a `perl -pe` before its `awk` -- the readers run awk programs of their
-# own, which can rewrite any line they are given, so no list of filter names
-# can say that none was applied, and `sed` is refused because it is the fold's
-# own tool, the one a second fold would be written with.
+# THE TRADES, two classes and not two lists, since each round of review of
+# #181's pull request found another member of each, and each widening of the
+# rule here opened a spelling of the second. Neither is closed here: the text
+# rule is the wrong tool for a behavioural question, and #362 is filed for the
+# probe that answers it -- stub the helpers, point `$1` at a path that is not
+# there, and fail on any read of it. checks/GH-181.sh asserts members of each
+# class as rows, as examples of it and not as its extent.
+#   - REFUSED, a false red, visible and one edit away: a call after any
+#     keyword or prefix word the lists do not name -- `if`, `while`, `until`,
+#     `elif`, `!`, `time`, `command`, `coproc`, `exec`, an assignment such as
+#     `LC_ALL=C`, a `{` group, and whatever else can stand before a command --
+#     and a call inside backticks, which `declare -f` prints as written. So is
+#     any `${!...}` in the reader, `${!seen[@]}` included, since an
+#     indirection is refused wherever it stands.
+#   - PASSED, a construction rather than a mistake: any text the rule reads as
+#     a command start that bash reads as data -- a string of one line or
+#     several, a heredoc body, a separator escaped as `\;` -- so the file's name
+#     can be held there and read by something else; and any name the text does
+#     not spell, taken from `$_` after the call or rebuilt by `eval`. A filter
+#     of the reader's own other than `sed`, a `perl -pe` before its `awk`,
+#     passes too: the readers run awk programs of their own, which can rewrite
+#     any line they are given, so no list of filter names can say that none
+#     was applied, and `sed` is refused because it is the fold's own tool, the
+#     one a second fold would be written with.
 reads_only_through() {  # reads_only_through <function> <helper>... -- its file argument read through each helper, and nowhere else
   local body rest h re
   body=$(declare -f "$1") || return 1

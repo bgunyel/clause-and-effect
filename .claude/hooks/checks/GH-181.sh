@@ -725,18 +725,19 @@ fi
 #
 # AND ITS TRUE CASES, ONE PER MEMBER OF ITS LISTS, since the third round of
 # that review measured a member deleted from each list changing no verdict:
-# a call starting a line and ending at a blank, at the end of its line, and at
-# `;`; after `;`, `|`, `&`, `$(`, `<(`, `>(` and a subshell's `(`, those after
-# a substitution's `(` ending at `)`. Every member is the only way at least one
-# of them passes, so deleting any member refuses a reader -- measured member by
-# member on the commit that wrote this. Round 4 of that review found `;` and
-# `>` missing, each a false red, and they are back with a reader each. So is
-# two calls on two lines of one `$(...)`, which the removal refused by taking
-# the newline between them out with the first. One reader is also asked for a
-# helper it does not call. The trades the library states are asserted as what
-# it does, each a row of the last check but `sed`'s, which is a false case in
-# the first: the false reds it takes, and the constructions it passes, which
-# #362 is filed to close.
+# a call starting a line; after `;`, `|`, `&`, `$(`, `<(`, `>(` and a
+# subshell's `(`; and ending at a blank, at the end of its line, at `;`, and at
+# the `)` that closes a substitution, where the last call inside one ends.
+# Every member is the only way at least one of them passes, so deleting any
+# member refuses a reader -- measured member by member on the commit that
+# wrote this. Round 4 of that review found `;` and `>` missing, each a false
+# red, and they are back with a reader each. So are two calls inside one
+# `$(...)`, on two lines and on one, which the removal refused by taking out
+# with the first call the newline or the `;` where the second starts. One
+# reader is also asked for a helper it does not call. Members of the two trade
+# classes the library states are asserted as what it does, each a row of the
+# last check but `sed`'s, which is a false case in the first -- examples of
+# each class and not its extent, which #362 is filed to close.
 r181_through() { hook_text "$1" | wc -l; }
 r181_last_on_its_line() { true; hook_text "$1"; }
 r181_before_a_list() { hook_text "$1"; return 0; }
@@ -752,6 +753,11 @@ r181_twice_in_a_substitution() {
   x=$(
 hook_text "$1"
 hook_text "$1")
+  printf '%s' "$x"
+}
+r181_twice_on_one_line() {
+  local x
+  x=$(hook_text "$1"; hook_text "$1")
   printf '%s' "$x"
 }
 r181_cat_beside() { hook_text "$1"; cat "$1"; }
@@ -782,15 +788,16 @@ r181_own_perl() { hook_text "$1" | perl -pe 's/x//'; }
 r181_in_a_multiline_string() {
   local s="
 hook_text "$1" "
+  s=${s#*hook_text }
   cat "${s% }"
 }
 req GH-182.1 GH-181.1 GH-181.2
 tok 'reads_only_through passes a reader through each place a call can stand, and refuses every other' \
-    'r181_through r181_last_on_its_line r181_before_a_list r181_after_a_pipe r181_after_an_and r181_in_a_substitution r181_in_a_process_substitution r181_in_a_subshell r181_after_a_semicolon r181_in_an_output_substitution r181_twice_in_a_substitution ' \
+    'r181_through r181_last_on_its_line r181_before_a_list r181_after_a_pipe r181_after_an_and r181_in_a_substitution r181_in_a_process_substitution r181_in_a_subshell r181_after_a_semicolon r181_in_an_output_substitution r181_twice_in_a_substitution r181_twice_on_one_line ' \
     "$(for fn in r181_through r181_last_on_its_line r181_before_a_list r181_after_a_pipe \
                  r181_after_an_and r181_in_a_substitution r181_in_a_process_substitution \
                  r181_in_a_subshell r181_after_a_semicolon r181_in_an_output_substitution \
-                 r181_twice_in_a_substitution r181_cat_beside r181_braced_at r181_braced_star \
+                 r181_twice_in_a_substitution r181_twice_on_one_line r181_cat_beside r181_braced_at r181_braced_star \
                  r181_own_drop r181_own_sed r181_suffix r181_suffix_beside \
                  r181_hyphen_prefix r181_path r181_as_argument r181_longer_word \
                  r181_indirect r181_bash_argv r181_in_an_array; do
@@ -827,6 +834,6 @@ unset -f r181_through r181_last_on_its_line r181_before_a_list r181_after_a_pipe
          r181_after_command r181_after_coproc r181_in_backticks \
          r181_beside_an_indirection r181_through_underscore r181_through_eval \
          r181_own_perl r181_after_a_semicolon r181_in_an_output_substitution \
-         r181_twice_in_a_substitution r181_in_a_multiline_string
+         r181_twice_in_a_substitution r181_twice_on_one_line r181_in_a_multiline_string
 
 sourced_to_end
