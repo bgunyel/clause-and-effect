@@ -152,3 +152,86 @@ any hook file was touched. Without them auto mode refuses hook edits.
   is now owned by no issue. It is not #193's.
 - `--list`'s writability assumption (a source file owned by someone else) is
   named, not driven.
+
+
+# 2026-09-29 · dev-agent-193 — review round 1: `--list` asks of a copy, and three survivors driven
+
+2026-09-29 09:31 +03. Branch `worktree-issue-193-list-applies-edits`, still
+on `origin/dev-05` at `f539d9a` (0 behind). Range `a03f4b0..` this entry's
+commit: `ab548aa`, `ea95ede` and `15971c6`, then this entry, which puts the
+branch eight commits ahead of `origin/dev-05`. It answers rev-agent-193's first
+review round on PR #350.
+
+## What the review found, and what changed
+
+- **The independent program in GH-193 knew three outcomes, and `row_apply`
+  has a fourth**, a target it will not write. A `chmod 444` on
+  `lib/command-scan.sh` left GH-193 green. So did a `--list` that falsely
+  marked every `survived:applies` row. GH-193 now reads the real `--list`: no
+  row may be marked, and its summary must say `0 … and 0 faults`. The
+  assistant declined to teach the program the precondition, because that
+  would be a second copy of `row_apply`'s test.
+- **The writability assumption.** The first entry named it: `--list` asked of
+  the source file, so its answer agreed with pass two only while the running
+  user owned that file. rev-agent-193 pointed out that a read-only mount
+  breaks it, and relayed a `/code-review` suggestion to ask of a copy instead.
+  `--list` now copies the tree once with `hooks_copy` and asks there, so the
+  assumption is gone. This closes the first entry's third "Open" item.
+  - rev-agent-193 also named root as a counterexample. The assistant disputed
+    that in the reply, since `access(W_OK)` succeeds for root on the source
+    and on the copy alike.
+  - Neither case was measured. `unshare -rm` is refused in this sandbox, so no
+    read-only bind mount could be made.
+- **Three branches no fixture could tell from their negation.** They were the
+  `-w` and `-f` clauses of `row_apply`, and pass two's `FAILED=1` after a
+  refusal. GH-193's fixture now has a read-only row and a directory row.
+  GH-272's fixture registry now holds the two self-tests, so a pass's exit 1
+  can only come from the faulted rows.
+- **The assistant's own sweep found one more:** the claim that `--list`
+  refuses a `TMPDIR` inside the hooks directory was undriven, and GH-193 now
+  drives it.
+- **The symlink prose claimed more than the test does.** The test asks about
+  the last component only. The prose is narrowed, and the directory case is
+  #352, which rev-agent-193 filed. The question the first entry left with no
+  owner is now #353, also filed by rev-agent-193, and
+  `check_hooks_ci.py` cites it.
+
+## Mistakes, and who found them
+
+- The assistant wrote GH-272's self-test check as `$2 ~ /^selftest-/`. That
+  also matched pass two's progress line, whose second field is
+  `selftest-survives:`. The first batch's control run found it: it was red in
+  all six runs of that batch. Fixed in `ea95ede`.
+- The assistant's first comment on the new fixture rows called four of them
+  "one clause each" of `row_apply`'s test. The missing-target row is refused
+  by `-f` and `-w` alike, so it drives neither. The #148 comment also still
+  said GH-193's fixture "holds four" faults, and after this round it holds
+  six. Both were corrected in `15971c6`, the second by dropping the number.
+
+## Measurements
+
+Every mutant was built in a `git clone` under the session scratchpad and run
+with a clean environment. The suites ran six and five at a time at load 15–24.
+
+- M1 (`-w`), M2 (`-f`), M3 (`FAILED=1`), M4 (`chmod 444`) and M5 (the
+  `survived:applies` mark) were run at `ab548aa`. All five were caught, by the
+  checks named in the reply on PR #350.
+- M6 (`--list` asks the source), M7 (no copy), M8 (the containment refusal
+  deleted) and M10 (the header sentence cut) were run at `ea95ede`. All four
+  were caught. M6 is caught only by an `armed` pin.
+- In the first batch, control, M2 and M3 also failed `cs_normalise over one
+  512 KB line`, fastest 1159–1452 ms against a 1000 ms wall-clock bound. That
+  is load, not this diff. The quieter second batch's control, at `ea95ede`,
+  was 8068 ok and 0 FAIL, ALL CHECKS PASSED, in 867 s.
+- The final control, at `15971c6`: 8068 ok and 0 FAIL, ALL CHECKS PASSED, in 329 s, run alone.
+- `--list` on the real registry after the copy was added: 1.2 s wall, 0.75 s
+  CPU, 0 marks, 152 runs.
+
+## Open
+
+- #352: a symlinked directory on a row's path, in both halves and in
+  `tree_sum`.
+- #353: how the rate constants follow from CI's counts.
+- Which file `--list` asks is held by an `armed` pin only. No fixture can make
+  the copy's writability differ from the source's without another user or a
+  mount.
