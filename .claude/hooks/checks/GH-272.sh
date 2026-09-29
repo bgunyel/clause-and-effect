@@ -18,11 +18,17 @@
 #
 # WHAT IS CHECKED: a copy of the harness whose registry is one row per command
 # the sandbox refuses, each naming a file under $FIXTURES to write or a command
-# that would create one, run twice -- `--list`, and a whole pass against a stub
-# check-hooks.sh that prints one requirement and exits 0, so the baseline is
-# green and pass two reaches every row in well under a second. Every row is a
-# fault in both, nothing is counted or run for any of them, and afterwards none
-# of the files they name exists.
+# that would create one, and the two self-tests, run twice -- `--list`, and a
+# whole pass against a stub check-hooks.sh that prints one requirement and
+# exits 0, so the baseline is green and pass two reaches every row in well
+# under a second. Every refused row is a fault in both, nothing is counted or
+# run for any of them, and afterwards none of the files they name exists.
+#
+# THE SELF-TESTS ARE THERE FOR THE EXIT STATUS. Without them a whole pass
+# fails on their absence before it reaches a row, so its exit 1 said nothing
+# about the rows, and deleting `FAILED=1` from pass two's refusal of a row
+# left this file green (review of PR #350). With them, and with both reporting
+# what they declare, the faulted rows are the only thing left to make it 1.
 #
 # WHAT IS NOT HERE: a command the sandbox does not refuse. GNU sed's sandbox
 # covers `e`, `r` and `w`, the `R` and `W` forms, and the `e` and `w` flags of
@@ -58,7 +64,9 @@ r272-W%hook.sh%W $FIXTURES/r272-W%GH-1%caught
 r272-r%hook.sh%r $FIXTURES/r272-source%GH-1%caught
 r272-R%hook.sh%R $FIXTURES/r272-source%GH-1%caught
 r272-e%hook.sh%1e touch $FIXTURES/r272-e%GH-1%caught
-r272-e-flag%hook.sh%s|alpha|touch $FIXTURES/r272-e-flag|e%GH-1%caught"
+r272-e-flag%hook.sh%s|alpha|touch $FIXTURES/r272-e-flag|e%GH-1%caught
+selftest-survives%hook.sh%s/alpha/omega/%GH-1%survived
+selftest-applies-nothing%hook.sh%s/nothing-matches-this/x/%GH-1%did-not-apply"
 harness_fixture "$R272" "$R272_ROWS"
 printf 'alpha\n' > "$R272/hook.sh"
 printf 'read in\n' > "$FIXTURES/r272-source"
@@ -67,26 +75,34 @@ printf '# A fixture\n\n## Boundary issues\n\n### GH-1\n- status: active\n' > "$R
 tok 'the copy of the harness registers the fixture rows and nothing else' \
     "$R272_ROWS" "$(harness_rows "$R272/mutate-hooks.sh")"
 
-# --list: every row a fault, and the run count the baseline alone.
+# --list: every refused row a fault, and the run count the baseline and the
+# self-test whose edit applies.
 R272_LIST=$(bash "$R272/mutate-hooks.sh" --list 2>&1)
 tok '--list reports each edit carrying a command the sandbox refuses as a fault' \
-    'r272-w-flag:fault r272-w:fault r272-W:fault r272-r:fault r272-R:fault r272-e:fault r272-e-flag:fault ' \
+    'r272-w-flag:fault r272-w:fault r272-W:fault r272-r:fault r272-R:fault r272-e:fault r272-e-flag:fault selftest-survives:applies selftest-applies-nothing:unchanged ' \
     "$(printf '%s\n' "$R272_LIST" | awk '/^$/ { exit } NR > 1 && !/^    \^/ { printf "%s:%s ", $1, $4 }')"
 tok 'as sed failing, for every one of them' \
     '7' "$(printf '%s\n' "$R272_LIST" | grep -c '^    ^ fault: the sed expression failed: ')"
 tok 'and counts none of them' \
-    '1' "$(printf '%s\n' "$R272_LIST" | awk '/runs of check-hooks.sh for a whole-registry pass/ { print $1; exit }')"
+    '2' "$(printf '%s\n' "$R272_LIST" | awk '/runs of check-hooks.sh for a whole-registry pass/ { print $1; exit }')"
 
-# A whole pass, against the stub: the baseline is green, and every row is a
-# FAIL before any run of the suite on a mutated copy.
+# A whole pass, against the stub: the baseline is green, every refused row is
+# a FAIL before any run of the suite on a mutated copy, and the self-tests
+# report what they declare.
 R272_RUN=$(bash "$R272/mutate-hooks.sh" 2>&1)
 R272_STATUS=$?
 holds 'a pass reaches the rows: the baseline against the stub suite is green' "$R272_RUN" \
   'ok   the unmutated copy is green, over 1 requirements'
 tok 'and reports each of them as a FAIL, as sed failing' \
     '7' "$(printf '%s\n' "$R272_RUN" | grep -cE '^  FAIL r272-(w-flag|w|W|r|R|e|e-flag): the sed expression failed: ')"
-lacks 'and runs the suite on none of them' "$R272_RUN" 'running check-hooks.sh against the mutated copy'
-tok 'and exits non-zero' '1' "$R272_STATUS"
+tok 'and runs the suite on none of them, the self-test whose edit applies being the one run' \
+    'selftest-survives' \
+    "$(printf '%s\n' "$R272_RUN" | sed -n 's/^  \.\.\.  \([^:]*\): running check-hooks.sh against the mutated copy$/\1/p')"
+tok 'the self-tests report what they declare' \
+    'ok selftest-survives survived|ok selftest-applies-nothing did-not-apply|' \
+    "$(printf '%s\n' "$R272_RUN" | awk '$2 ~ /^selftest-/ { printf "%s %s %s|", $1, $2, $3 }')"
+lacks 'and the registry is not refused for lacking one' "$R272_RUN" 'FAIL the registry holds'
+tok 'so the faulted rows alone make the pass exit non-zero' '1' "$R272_STATUS"
 
 # AND NOTHING WAS WRITTEN OR RUN, by either: none of the files the rows name to
 # write or create is there. Asked of each by name, so a red says which command

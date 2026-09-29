@@ -30,7 +30,7 @@ Two subcommands, one per thing a green run has to be true about:
     in `--matrix` mode against a copied tree on the workstation, not on a
     hosted 2-core runner. So `results` and `seconds` here are what a run
     printed and how long it took. How the harness's constants follow from
-    them is settled nowhere: #193 was cited here as the issue that would,
+    them is #353's: #193 was cited here as the issue that would settle it,
     and it landed as `--list` applying each row's edit, which leaves both
     constants a measurement taken on the workstation.
 

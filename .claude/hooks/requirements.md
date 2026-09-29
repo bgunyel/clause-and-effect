@@ -1615,3 +1615,15 @@ it has no entry above (Q16).
   or `eval` state -- and pinned its representatives. Cited in GH-185's note
   as that class's structural fix. It adds its requirements in the pull
   request that fixes it
+- #350: the pull request for #193 and #272; rev-agent-193's review of it is
+  cited where what its first round found stands. `--list` asked whether a
+  target was writable of the file beside the harness, under an assumption a
+  read-only mount breaks, so it now asks of a copy made as pass two makes its
+  own. Two clauses of `row_apply`'s test and pass two's `FAILED=1` for a row it
+  refuses survived green, which is why GH-193's fixture has a read-only row and
+  a directory row and GH-272's registry holds the two self-tests
+- #352: pass two writes through a symlinked directory on a row's path, which
+  `row_apply`'s symlink test does not see, since it asks of the last component
+  only. Filed from review of #350. Cited in #193's issue file among what it
+  does not check, and beside `row_apply`. It adds its requirements in the pull
+  request that fixes it

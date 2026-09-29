@@ -25,29 +25,31 @@
 # per row: a row pass one refuses never reaches a run, and neither does one
 # whose edit fails or leaves its file as it was.
 #
-# IT IS COUNTED BY APPLYING EVERY ROW'S EDIT, and so it is the count a pass runs,
-# under the one assumption named below (#193). `--list`
-# runs each row's `sed` over the file beside this harness, through `row_apply`,
-# the function pass two edits the copy with, and counts a row only when that
-# edit succeeds and changes its file. So the three things that cost a row its
-# run in pass two -- a target that is not writable in the copy, a `sed`
+# IT IS COUNTED BY APPLYING EVERY ROW'S EDIT, and so it is the count a pass runs
+# (#193). `--list` copies .claude/hooks/ once, the way pass two copies it
+# before each row, and runs each row's `sed` over that copy's file through
+# `row_apply`, the function pass two edits the copy with, and counts a row only
+# when that edit succeeds and changes its file. So the three things that cost a
+# row its run in pass two -- a target that is not writable in the copy, a `sed`
 # expression that fails, and an edit that applies to nothing -- are seen
-# before any run. A row declared `caught` whose anchor a rename has moved is
-# marked on its own line by `--list`, which runs no suite, where it
-# used to surface only as `did-not-apply` after a whole pass. Until #193 the
-# count was a prediction off the DECLARED outcome and could be one too many
-# for exactly that row, and all three places that said so hedged it; Bertan's
-# review of PR #183 found the unhedged version.
+# before any run, and asked of the file pass two asks them of. A row declared
+# `caught` whose anchor a rename has moved is marked on its own line by
+# `--list`, which runs no suite, where it used to surface only as
+# `did-not-apply` after a whole pass. Until #193 the count was a prediction off
+# the DECLARED outcome and could be one too many for exactly that row, and all
+# three places that said so hedged it; Bertan's review of PR #183 found the
+# unhedged version.
 #
-# ONE ASSUMPTION IS LEFT IN IT, and it is named rather than hidden: that a
-# target writable here, by the user running this, is writable in the copy.
-# `cp -a` keeps the mode and the copy belongs to that user, so the two answers
-# agree whenever that user owns the file beside the harness, as in any checkout
-# they made. `row_apply` states it where it asks.
+# OF THE COPY AND NOT OF THE FILE BESIDE THIS HARNESS, because the two can
+# answer differently. #193's first version asked of the file here and named an
+# assumption -- that the answers agree whenever the running user owns that
+# file -- and review of PR #350 named a case where they do not: on a read-only
+# mount the file here is not writable and its copy under the temporary
+# directory is. Asking where pass two asks leaves no assumption to name.
 #
-# `--list` WRITES NOTHING UNDER .claude/hooks/. Each edit goes through `sed
-# --sandbox` to a scratch file in the temporary directory the guards below
-# vet, never back into its file, and `--list` sums .claude/hooks/ before and
+# `--list` WRITES NOTHING UNDER .claude/hooks/. Its copy is in the temporary
+# directory the guards below vet, each edit goes through `sed --sandbox` to a
+# scratch file there, never back into its file, and `--list` sums .claude/hooks/ before and
 # after, as a whole run does, and exits non-zero if a byte moved. The sandbox
 # is #272's fix as well: a `w`, `r` or `e` in a row's edit wrote, read or ran
 # something in pass two before any guard was asked, and now it is refused and
@@ -107,7 +109,8 @@
 #
 # check-hooks.sh does ask `--list` for the three figures its #148 checks compare
 # against derivations of their own. That runs no suite and writes nothing under
-# .claude/hooks/; what it costs is the row edits above and no run.
+# .claude/hooks/; what it costs is one copy of the tree, the row edits above,
+# and no run.
 # Nothing here is a PreToolUse hook and settings.json does not register it.
 # Naming rows costs the baseline plus one run each, so re-asking a single rule
 # is two runs.
@@ -702,16 +705,14 @@ row_fault() {  # row_fault <id> <file> <edit> <reqs> <want> -- a reason, or noth
 # row's fault. Refusing the letters by reading the text was rejected: `w` is an
 # ordinary character inside a pattern, so the text cannot say which it is.
 #
-# A WRITABLE REGULAR FILE, asked before sed runs. Pass two asks it of the copy
-# it is about to overwrite, which is the real question. `--list` asks it of the
-# file beside this harness, which rests on one assumption: `cp -a` keeps the
-# mode and makes the copy the running user's, so the two answers agree whenever
-# that user owns the file beside the harness. Where it does not, the two can
-# disagree in either direction -- a file owned by someone else and not writable
-# here makes a copy that is -- and this is the one case in which `--list`'s
-# count is not the run count of a pass. A symlink is refused too:
-# a mutation written through one lands wherever it points, which need not be in
-# the copy, and no file under .claude/hooks/ is one.
+# A WRITABLE REGULAR FILE, asked before sed runs, and of a copy by both callers:
+# pass two of the copy it is about to overwrite, and `--list` of a copy made the
+# same way, so the two cannot answer it differently. A target that is itself a
+# symlink is refused too: a mutation written through one lands wherever it
+# points, which need not be in the copy, and no file under .claude/hooks/ is
+# one. That asks of the last component only. A symlinked DIRECTORY earlier on
+# the path is not asked about, and pass two writes through it to wherever it
+# points; that predates this function and is #352's.
 row_apply() {  # row_apply <target> <edit> <name> -- the edited text on stdout, or why not on stderr
   local err
   if [ -L "$1" ] || [ ! -f "$1" ] || [ ! -w "$1" ]; then
@@ -926,12 +927,12 @@ MUTATIONS
 # The working copy. A directory of its own under the temporary one, so that the
 # copy is made by name rather than into a directory that already exists.
 #
-# MADE BEFORE `--list` AND NOT AFTER IT (#193). `--list` writes each row's
-# edited text to a scratch file in this temporary directory, so it needs the
+# MADE BEFORE `--list` AND NOT AFTER IT (#193). `--list` copies the tree here
+# and writes each row's edited text to a scratch file beside it, so it needs the
 # same answer a run does to the question below, whether that directory is
 # anywhere near .claude/hooks/ -- asked here, once, for both, rather than beside
-# `--list` a second time. `--list` makes no copy; it only writes the scratch
-# file.
+# `--list` a second time. It makes one copy, where pass two makes one per row,
+# because it writes nothing into it.
 WORK_ROOT=$(mktemp -d) || { echo "mutate-hooks.sh: mktemp -d failed" >&2; exit 1; }
 trap 'rm -rf "$WORK_ROOT"' EXIT
 WORK="$WORK_ROOT/hooks"
@@ -1008,6 +1009,10 @@ if [ -n "$LIST" ]; then
     echo "mutate-hooks.sh: $SRC could not be summed, so nothing below could say --list left it alone" >&2
     exit 1
   }
+  # THE COPY EVERY ROW IS ASKED OF, made the way pass two makes its own, so that
+  # whether a target is writable is asked where pass two asks it (review of PR
+  # #350). Nothing writes into it, so one serves every row.
+  hooks_copy || { echo "mutate-hooks.sh: the working copy could not be made" >&2; exit 1; }
   printf '%-52s %-26s %-16s %-10s %s\n' 'MUTATION' 'FILE' 'EXPECTED' 'EDIT' 'REQUIREMENTS'
   # The counts are printed rather than restated in prose anywhere, which is the
   # whole of #107's complaint applied to this file's own header: the previous
@@ -1048,9 +1053,9 @@ if [ -n "$LIST" ]; then
     FAULT=$(row_fault "$id" "$file" "$edit" "$reqs" "$want")
     if [ -n "$FAULT" ]; then
       GOT=fault
-    elif ! FAULT=$(row_apply "$SRC/$file" "$edit" "$file" 2>&1 >"$WORK_ROOT/mutated"); then
+    elif ! FAULT=$(row_apply "$WORK/$file" "$edit" "$file in the working copy" 2>&1 >"$WORK_ROOT/mutated"); then
       GOT=fault
-    elif cmp -s "$SRC/$file" "$WORK_ROOT/mutated"; then
+    elif cmp -s "$WORK/$file" "$WORK_ROOT/mutated"; then
       GOT=unchanged
     else
       GOT=applies
