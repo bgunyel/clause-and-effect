@@ -353,6 +353,15 @@ esac
 # With --matrix the check lines go nowhere and the matrix is what is printed, on
 # the stdout this line keeps as fd 3. A fixture guard still speaks on stderr.
 if [ -n "$MATRIX" ]; then exec 3>&1 >/dev/null; fi
+# THE SUITE READS NO STDIN (#223). Nothing here reads what this run was started
+# with, and a check that did would read whatever its caller happened to hand
+# it: the rest of the registry under mutate-hooks.sh, which feeds each row's
+# run from a here-string, or a pipe that never closes, where the read waits.
+# `requirement` called without its heredoc was such a read. So stdin is
+# /dev/null from here on, before any file under checks/ is sourced, and a
+# heredoc or a pipe still gives a single command its own; a `requirement`
+# with no heredoc records an empty body, which the end of the run names.
+exec 0</dev/null
 
 FAILED=0
 # The ledger, the tag and the record of which hooks ran. What each one is, and
@@ -541,10 +550,21 @@ HEADINGS="$FIXTURES/headings"
 # call and a line per `shape_pin` or `variants_pin` call, which the end of the
 # run holds the files under requirements/ and the shared literals to. See
 # `generated_bad` in the library for what each holds.
-DECLARED="$FIXTURES/declared"
-: > "$DECLARED"
-PINNED="$FIXTURES/pinned"
-: > "$PINNED"
+#
+# NAMED FOR THE SUITE, AND HELD WHERE THEY ARE (#223). They were `DECLARED` and
+# `PINNED`, words any check might use for a scratch value, and every file of
+# the suite shares this shell: an issue file that assigned either would send
+# every later declaration or pin to that value, and the end of the run would
+# read that one. So the names carry the suite's prefix, and the end of the run
+# fails on either one not being what it is here, as it does for $NOT_FOUND. A
+# fixture points them elsewhere for one command, or inside a subshell, and
+# that ends where the command or the subshell does.
+SUITE_DECLARED="$FIXTURES/declared"
+: > "$SUITE_DECLARED"
+SUITE_PINNED="$FIXTURES/pinned"
+: > "$SUITE_PINNED"
+SUITE_DECLARED_AT_HEAD=$SUITE_DECLARED
+SUITE_PINNED_AT_HEAD=$SUITE_PINNED
 NOT_FOUND="$FIXTURES/not-found"
 # Where the verdict expects the record to be. The GH-204.5 self-test points
 # $NOT_FOUND elsewhere and puts it back. A section that copied that and did not
@@ -851,13 +871,13 @@ GH-167:3774825998:1365 GH-171:1548953849:1055 GH-175:1964502293:1348
 # generated from it. These stay hand-written, and none is rewritten, migrated
 # or declared; an entry outside them is generated, or the run is red. The list
 # never grows -- a branch cut before #205 that adds a hand-written entry,
-# when it merges across, deletes the file, declares the entry, moves its tokens
-# out of REQUIREMENT_SHAPE and INV_SCOPE into pins beside the declaration, and
-# runs the generator, which does not replace a hand-written file -- so no
-# loop edits this, and the #205 issue file holds it to its count and its
-# checksum. Here and not in
-# that file because the #141 section in the unsplit file, sourced before any
-# issue file, reads it too.
+# when it merges across, declares the entry, moves its tokens out of
+# REQUIREMENT_SHAPE and INV_SCOPE into pins beside the declaration, and runs
+# the generator, which replaces the hand-written file -- so no loop edits
+# this, and the #205 issue file holds it to its count and its checksum. Here
+# and not in that file because the #141 section in the unsplit file, sourced
+# before any issue file, reads it too; and generate-requirements.sh reads it
+# out of this file by name, to know which files are never its own (#223).
 REQUIREMENTS_LEGACY='
 GH-43.1 GH-43.2 GH-43.3 GH-43.4 GH-43.5 GH-43.6 GH-44.1 GH-44.2 GH-44.3
 GH-44.4 GH-44.5 GH-44.6 GH-44.7 GH-47.1 GH-47.2 GH-50.1 GH-50.2 GH-50.3

@@ -21,8 +21,8 @@ under `checks/` that it sources (#204), and where this file says
 
 **IDs are never renumbered and never reused.** A requirement that stops being
 true is marked, never deleted: its `status` says what became of it. The suite
-holds that for the `GH-` entries written before #205, and not yet for a
-generated one (#223). A new `US-`
+holds that for the `GH-` entries written before #205, and for a generated
+sub-ID only while this file or another entry cites it (GH-223.6). A new `US-`
 or `FR-` requirement is appended at the end of its family; a new `GH-` one is a
 new file, `requirements/<ID>.md`, generated from its declaration (below). So an
 ID cited in an issue, a commit or a check means the same thing for as long as
@@ -1265,10 +1265,15 @@ it has no entry above (Q16).
   on, the permitting one was closed by #169 counting occurrences; #182 closed
   the two inflating ones, and a `}` body line that made `fn_writes` call a
   writer silent, by dropping bodies with the tokeniser's own pass
-- #185: `dup_stderr` does not reach `/dev/stderr` named on an `exec`, nor a
-  two-digit fd. Cited where that guard is, because a guard narrower than the
-  prose beside it reads as coverage -- the shape the fifth review of PR #169
-  found in `nested_defs` and the sixth found here
+- #185: has an entry, GH-185, generated from its issue file, and is listed here
+  only because #109's section cited it before it landed, as `dup_stderr` not
+  reaching `/dev/stderr` named on an `exec`, nor a two-digit fd. Cited where
+  that guard is, because a guard narrower than the prose beside it reads as
+  coverage -- the shape the fifth review of PR #169 found in `nested_defs` and
+  the sixth found here. #185 widened it to every spelling of the text that
+  points an fd other than 1 at stderr; what it still does not reach is what
+  the text cannot say without being run, and GH-185's note is the one list
+  of it, with a row pinning each spelling it names
 - #187: has an entry, GH-187, generated from its issue file, and is listed
   here only because the library cited it before it landed, where
   `report_says` took the exception by basename
@@ -1345,10 +1350,11 @@ it has no entry above (Q16).
   what it found stands -- a generator that read nothing and reported a pass,
   and a stage path `awk -v` could mangle, which the generator now refuses and
   reads whole
-- #223: the issue holding what review of #222 filed rather than gated; it is
-  cited where a rule is held for the legacy entries and not yet for a
-  generated one -- an ID deleted outright, with its declaration, its pin and
-  its file, which nothing disagrees with afterwards
+- #332: the pull request for #223; rev-agent-223's review of it is cited in
+  #223's issue file where what it found stands -- a count of the grammar
+  copies that read substrings, so a copy widened inside its delimiters kept
+  its count, and a read of the registry's citations that could ask nothing
+  and pass
 - #176: the heredoc append `append-only-docs.sh` refuses because a `>` in the
   heredoc's prose, with a guarded path after it, reads as a truncating
   redirect. Cited in #157's issue file, where the dev-log README routes
@@ -1473,6 +1479,14 @@ it has no entry above (Q16).
   raw shape in the GH-99.1 and GH-117.1 pins over CLAUDE.md, and in
   `prose_count`, was added to #192 then, as that issue's class. It adds its
   requirements in the pull request that fixes it
+- #323: the suite's readers that pipe into `comment_reflow` directly rather
+  than through `prose_reflow`, so a tab or an indented `#` splits a phrase
+  under their pins -- GH-118's left-open section, GH-157's Conventions, GH-177's
+  CLAUDE.md and CONTEXT.md reads, GH-215's header readers and $MUT_PROSE.
+  Cited in #192's issue file, whose GH-192.3 pins each file's count of direct
+  calls, and in #118's, beside the reader it names. Filed from round 1 of the
+  review of #192's pull request; it adds its requirements in the pull request
+  that fixes it
 - #241: a word in the gh path position that gh never receives as written --
   an empty argument, a lone `-`, and the `$` stump a `$(` cut leaves -- read by
   the walk as a path word, so a merge is read as not this path. Cited in
@@ -1561,6 +1575,12 @@ it has no entry above (Q16).
   the derivation ran, which that pull request closed by moving it to the foot
   of #182's issue file. Cited there, beside the derivation. It adds its
   requirements in the pull request that fixes it
+- #263: `arms` does not count a refusal written to `/dev/fd/2` or
+  `/proc/self/fd/2` by fd 1, since `STDERR_WRITE` names `>&2` and
+  `/dev/stderr` alone. Filed from #185's triage, which widened `dup_stderr` to
+  those paths for every fd but 1 and left fd 1 to `STDERR_WRITE`, whose gap
+  this is. Cited in #185's issue file, beside the rows that assert fd 1 is
+  never reported. It adds its requirements in the pull request that fixes it
 - #291: the pull request for #164; rev-agent-164's review of it is cited where
   what it found stands -- a message pinned as `says_first` on it and `says_not`
   on it with a space after, and called whole, which a second `echo >&2` after
@@ -1571,3 +1591,27 @@ it has no entry above (Q16).
   which is why #164's issue file holds that list to a count off the hook. Its
   fourth measured a heredoc arm counted by that row's raw read and dropped by
   #182's `hook_text`, which is why the count does not read through it
+- #310: `exec >&2` points fd 1 at stderr for the rest of the process, and the
+  refusal-arm count reads it as one arm and every later write as none. Filed
+  from #185, whose guard reports any fd but 1 and so leaves fd 1 pointed at
+  stderr to it -- the entry of every duplication of fd 1 that reaches stderr.
+  Cited in #185's issue file, in GH-185's note, which is the one list of what
+  `dup_stderr` does not reach, and beside the rows that pin it. It adds its
+  requirements in the pull request that fixes it
+- #315: `dup_stderr`'s fold joins across an escaped trailing backslash,
+  which bash does not, and reports the joined line under the first line's
+  number beside the line bash runs. Filed from review of #185's pull request,
+  which found the fold permitting as well -- it blanked a comment-only line
+  before bash would join it, continued a comment, and started a join earlier
+  than bash does -- and closed that family there by reading a run of
+  continued lines joined from every line of it to its end. Cited in the
+  library beside the fold and in GH-185's note. It adds its requirements in
+  the pull request that fixes it
+- #317: refuse, in the hooks, any descriptor but 0, 1 and 2 on the write side,
+  and read redirections with bash's own parser, rather than widen
+  `dup_stderr`'s open-side pattern again. Filed from review of #185's pull
+  request, which named there the class that pattern cannot close -- a word,
+  comment or operator whose boundary depends on quote, substitution, escape
+  or `eval` state -- and pinned its representatives. Cited in GH-185's note
+  as that class's structural fix. It adds its requirements in the pull
+  request that fixes it
