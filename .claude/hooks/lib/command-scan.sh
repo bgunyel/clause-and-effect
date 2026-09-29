@@ -1018,8 +1018,9 @@ fi
 
 # Drop the quoted heredoc bodies that are proven to be data, and nothing else:
 # lines on stdin, the same lines out, with the body of a heredoc taken away only
-# when its delimiter is quoted, its opener is one bash sees and what reads it is
-# `cat` into a file or a `gh` command -- and every other body kept where it
+# when its opener line fits the grammar above cs_drop_heredocs -- a quoted delimiter of plain
+# words, `cat` into a plain file or `gh api` reading it -- and its opener is
+# one bash sees; every other body kept where it
 # stands. cs_drop_heredocs in its keep-unquoted mode, whose paragraph says each
 # of the three and why; this is the name a hook calls it by, so that THE LOAD
 # CONTRACT has a function to require rather than an argument to trust. The name

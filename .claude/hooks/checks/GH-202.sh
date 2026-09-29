@@ -22,8 +22,9 @@
 # CMDS is split from CMDTEXT, which re-admits the raw command with some of its
 # bodies taken out by cs_drop_quoted_heredocs in lib/command-scan.sh -- the
 # heredoc pass's own answer to where a body begins, in a mode that drops a body
-# only when its delimiter is quoted, its opener is one bash sees and `cat` into
-# a file or a `gh` command reads it. line_was_cut and the state fallback read
+# only when the opener's line fits a grammar -- a quoted delimiter of plain
+# words, `cat` into a plain file or `gh api` reading it -- and its opener is
+# one bash sees. line_was_cut and the state fallback read
 # CMDTEXT. The hook argues it above the re-admission, the library above the
 # heredoc pass.
 #
@@ -56,6 +57,16 @@
 # whose row also piped to `sh` -- and a fourth, doubt being sticky, showed the
 # statement it named decided nothing that `if (doubt) seen = 0` did not, and
 # that statement is gone.
+#
+# AND AGAIN FOR ROUND 2, at 518acfe merged with origin/dev-05 f539d9a: with
+# the pre-fix hook from f539d9a, all twenty-two `flip` rows and the TRADE row
+# went red with got=BLOCK, beside the load rows and GH-182.3's pin; with the
+# round-1 library from b6ece96, the eighteen BLOCK rows that version permitted
+# went red with got=ALLOW -- the review's n01 to n11, n15 and k01, the three
+# device paths the author added and the two COST rows -- and nothing else did
+# but the two that a copy without a .git always fails. n13 and the four rows
+# that put the quote state out of step were refused by that version already;
+# they are there for the conditions each names.
 #
 # WHAT IT TAKES FROM ELSEWHERE: $SUITE_DIR and $FIXTURES from the driver's
 # prelude, and mk_halflib and halflib_path from the library.
