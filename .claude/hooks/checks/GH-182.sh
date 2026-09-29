@@ -81,7 +81,8 @@ requirement GH-182.2 <<'REQ'
   `cs_normalise`, and says so on stderr naming both, so every consumer that
   requires `cs_normalise` refuses by its load guard; the intact library prints
   nothing on loading. No hook calls `cs_drop_heredocs` but through
-  `cs_normalise`; in the check suite only `hook_bodiless` does, which
+  `cs_normalise` or, since #202, `cs_drop_quoted_heredocs`, whose one caller
+  reads its status; in the check suite only `hook_bodiless` does, which
   `hook_text` and GH-182.3 read through, beside a fixture of this issue's that
   is defined to be found and never run; and no guard names it.
 - from: #182
@@ -413,10 +414,16 @@ r182_unshaped() {  # r182_unshaped -- stdin: hook_dropped's lines; stdout: those
 r182_a_late_caller() {  # r182_a_late_caller -- never called; a fixture for R182_CALLERS
   cs_drop_heredocs < /dev/null
 }
+# #202 added the CMDTEXT lines and the call to cs_drop_quoted_heredocs to that
+# block. Neither is an arm, and the call is not hidden from the load contract:
+# `cs_calls` in the unsplit file reads the hook's raw text, not `hook_text`.
 R182_FALSE_OPENER=$(cat <<'R182_EOF'
+-  BODIES=$(printf '%s\n' "$COMMAND" | cs_drop_quoted_heredocs) || BODIES=$COMMAND
 -  SCAN="$SCAN
 -$COMMAND"
--  CMDS=$(printf '%s\n' "$SCAN" | cs_split)
+-  CMDTEXT="$CMDTEXT
+-$BODIES"
+-  CMDS=$(printf '%s\n' "$CMDTEXT" | cs_split)
 -fi
 -
 R182_EOF
@@ -487,7 +494,7 @@ R182_CALLERS=$(declare -F | awk '{ print $3 }' | while read -r fn; do
     | grep -qE '(^|[|;&(])[[:space:]]*cs_drop_heredocs([[:space:];)]|$)' \
     && printf '%s ' "$fn"
 done)
-tok 'cs_drop_heredocs is called by cs_normalise, by the suite through hook_bodiless, and by nothing else but the late fixture' \
-    'cs_normalise hook_bodiless r182_a_late_caller ' "$R182_CALLERS"
+tok 'cs_drop_heredocs is called by cs_normalise, by cs_drop_quoted_heredocs (#202), by the suite through hook_bodiless, and by nothing else but the late fixture' \
+    'cs_drop_quoted_heredocs cs_normalise hook_bodiless r182_a_late_caller ' "$R182_CALLERS"
 
 sourced_to_end
