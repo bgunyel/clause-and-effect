@@ -78,5 +78,9 @@ thing in the record.
   a module's actual code), say so. Verification that only ruled out one link in
   the chain is not verification, and the entry should make that distinction.
 - Close with what is still open and what the next session should pick up.
+- An entry's first line is its heading. It carries the date its file name
+  carries, and when it names a session it names the one the file is named for;
+  it may name none. `check-hooks.sh` reads every entry's first line against its
+  name and is red on one that contradicts it (#162).
 - Do not add the entries in this file.
 
