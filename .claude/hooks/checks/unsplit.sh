@@ -13462,12 +13462,28 @@ says "$ON_DEV" no-pr-decisions.sh 'This names main, which is not a dev-NN branch
 # `fn_writes` calls the function holding them silent, so the call count is never
 # consulted either -- two arms, count one, both derivations quiet. Which fd a
 # write lands on after a duplication is dataflow and not text, so it is refused
-# rather than counted: `dup_stderr` below fails on any fd other than 1 being
-# pointed at 2 in either hook, which is what a duplication has to write.
-# TWO SPELLINGS IT DOES NOT REACH, found by the sixth review of PR #169 and owned
-# by #185: `exec 3>/dev/stderr`, which names the destination instead of
-# duplicating a descriptor, and a two-digit fd, which the leading `[^0-9]` cannot
-# match into. Both are the permitting direction, and neither hook writes either.
+# rather than counted: `dup_stderr`, in checks/library.sh since #185, fails on
+# any fd other than 1 being pointed at 2 in either hook, which is what a
+# duplication has to write.
+# THE SPELLINGS IT REACHES, AND THOSE IT DOES NOT. The sixth review of PR #169
+# found it reaching one, `N>&2` with a single digit, and named two it missed:
+# `exec 3>/dev/stderr`, which names the destination instead of duplicating a
+# descriptor, and a two-digit fd, which the leading `[^0-9]` could not match
+# into. #185's triage found five more, and #185 closed all seven: any explicit
+# fd but 1, of any width or as a `{name}`; the input operators, whose implicit
+# fd is 0; and stderr by path as well as by number. Review of #185's pull
+# request found more in the text -- a target word spelled with quotes or a
+# backslash, a /proc path of another depth, a subscripted name and a process
+# substitution -- and #185 closed those too. The library states the whole
+# grammar beside the function, and checks/GH-185.sh drives each part.
+# What it still does not reach is what the text cannot say without being run:
+# dataflow, which is the reason the shape is refused rather than counted in
+# the first place, the filesystem, and a glob. GH-185's note is the one list of
+# them, and checks/GH-185.sh pins each spelling it names; this paragraph does
+# not list them again, because the review of #185's pull request found three
+# copies of that list disagreeing. #185 asks
+# lib/command-scan.sh too, which both hooks source, so a descriptor opened
+# there is not in that list.
 #
 # A HEREDOC BODY WAS THE SECOND, and "one shape remains" stood here until the
 # third review of PR #169 counted them. This pipeline stripped whole-line
@@ -13794,17 +13810,15 @@ tok 'and it sees one whose brace is on the next line, which requiring the brace 
 # The duplicated descriptor: neither derivation can see through it, so it is
 # refused in both hooks rather than counted. Asserted as what each one does, and
 # then as the absence of the shape in the files the counts are taken from.
-dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplication writes
-  sed 's/^[[:space:]]*#.*$//' "$1" \
-    | grep -nE '(^|[^0-9])[03-9]>&[[:space:]]*2' \
-    | tr '\n' ' ' | sed 's/ $//'
-}
+# `dup_stderr` is defined in checks/library.sh since #185, whose issue file
+# became its second caller and drives every spelling it reaches.
 tok 'arms reads one for two arms written through a duplicated descriptor' \
     '1' "$(arms "$FN_FIXTURES/dup-stderr.sh")"
 tok 'and fn_writes calls the function holding them silent, so the call count is never asked' \
     'speaks silent' "$(fn_writes "$FN_FIXTURES/dup-stderr.sh")"
 tok 'so dup_stderr refuses the shape, and can see one' \
     '1:exec 3>&2' "$(dup_stderr "$FN_FIXTURES/dup-stderr.sh")"
+req GH-109.2 GH-185
 tok 'no-git-push.sh points no other fd at 2' '' "$(dup_stderr "$HOOKS/no-git-push.sh")"
 tok 'no-pr-decisions.sh points no other fd at 2' '' "$(dup_stderr "$HOOKS/no-pr-decisions.sh")"
 
