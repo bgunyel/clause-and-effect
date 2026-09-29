@@ -224,7 +224,7 @@ GH-134 GH-134.1:static GH-135:gap GH-136:gap GH-139 GH-167:gap GH-175:gap
 GH-130.1 GH-130.2 GH-130.3 GH-130.4 GH-130.5 GH-130.6
 GH-107.1:static GH-107.2:static GH-137.1 GH-137.2 GH-143.4:static GH-143.5:static      
 GH-108.1 GH-108.2 GH-108.3 GH-108.4 GH-108.5 GH-108.6 GH-108.7                         
-GH-108.8:static GH-108.9:static GH-108.10:static GH-156:gap GH-141:static
+GH-108.8:static GH-108.9:static GH-108.10:static GH-156 GH-141:static
 GH-128 GH-171:gap
 GH-155.1:static GH-148:static
 GH-109.1:static GH-109.2:refuse-only GH-109.3:static GH-109.4:static

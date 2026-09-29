@@ -68,8 +68,11 @@ requirement GH-279.1 <<'REQ'
   record and stopped the run as a file that "defined nothing", which is the
   refusing direction; a child that died partway left a partial record that
   passed as whole, which is the permitting one, and gives this entry its kind.
-  All 26 registry rows that mutate the tokeniser were probed by the reviewer,
-  and each sourced with status 0, so neither had fired. A record the child did
+  When #279 was filed, the reviewer probed the 26 registry rows then
+  applicable that mutate the tokeniser, and each sourced with status 0, so
+  neither had fired. Measured again on the merge of dev-05 at 1486270, after
+  #314: 83 rows name the tokeniser, 82 of them change it, and every one of
+  those but tokeniser-sources-non-zero sources with status 0. A record the child did
   not finish is used all the same once the row has failed the run: a name it
   lacks is not compared at the foot, and the row is what says so. A child that
   did not finish and recorded nothing is such a row too, and not a stop: that

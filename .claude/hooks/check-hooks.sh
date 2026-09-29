@@ -771,7 +771,9 @@ done
 # and that is a FAIL row already. Globbing off also means a function whose name
 # is a glob is recorded under that name, and not under whatever files in the
 # working directory it matched. Measured again with the reset: the record of
-# the library and of the tokeniser is byte for byte the one before it.
+# the library and of the tokeniser is byte for byte the one before it -- and
+# on the merge of dev-05 at 1486270, whose tokeniser #314 grew by 427 lines,
+# byte for byte the one the child before #279 writes, 42,534 and 72,227 bytes.
 LOADED_CHILD='bf=" $(compgen -A function | tr "\n" " ") "; bv=" $(compgen -v | tr "\n" " ") bf bv n v "
 . "$1" 3>&- >/dev/null 2>&1
 printf "%s" "$?" >&3 || exit 3
@@ -897,8 +899,8 @@ GH-130.5:423110139:3450 GH-130.6:3398838914:2836 GH-131:976030016:1610
 GH-133:1655092711:1513 GH-134:2462285111:1737 GH-134.1:175342827:1850
 GH-135:2245415987:1695 GH-136:1821333198:624 GH-137.1:2188355493:1363
 GH-137.2:3816430604:1859 GH-139:2474037372:4416 GH-141:4095480653:1665
-GH-143.4:1351248197:1919 GH-143.5:2325415628:855 GH-148:2277754167:7215
-GH-155.1:3143088805:5291 GH-156:1579607799:1497 GH-164:2373618740:1411
+GH-143.4:1351248197:1919 GH-143.5:2325415628:855 GH-148:2585122127:7474
+GH-155.1:3143088805:5291 GH-156:3539913285:5066 GH-164:2373618740:1411
 GH-167:3774825998:1365 GH-171:1548953849:1055 GH-175:1964502293:1348
 '
 
