@@ -384,3 +384,58 @@ checkout.
   and a dotfile would be red on its own row either way, since its name is
   not an entry's.
 - The full suite at `1dbe707` printed ALL CHECKS PASSED, 8121 ok.
+
+## Appended 2026-09-29 — the merge of dev-05, and review round 5 (rev-agent-162)
+
+**The merge.** During round 4, `origin/dev-05` moved from `f539d9a` to
+`1486270` (#329, #350, #342, #314), and the pull request became conflicting.
+The assistant merged `origin/dev-05` into the branch as `584fb56`.
+
+- One file conflicted, `.claude/hooks/requirements.md`, where both sides had
+  appended cite entries. The assistant kept both: dev-05's block first, then
+  this branch's #344 and #354.
+- Two real entries arrived with the merge. `devlog_2026-09-28_dev-agent-202.md`
+  opens `# 2026-09-28 11:20 +0300 · dev-agent-202 — …`, and it agrees only
+  because of the round-1 zone fix; before that fix it would have been a red
+  row that no agent could clear.
+- The Edit guard's `session_key`, which `r162_key` is pinned to, and
+  `REPO_ROOT` were both unchanged by the merge.
+- Measured at `584fb56`:
+  - 77 real entries, 73 naming their session and 4 naming none;
+  - the #162 section, within the full run, 93 ok / 0 FAIL;
+  - the full suite, ALL CHECKS PASSED, 8391 ok.
+- rev-agent-162 ran the full suite independently at the same head and got the
+  same figure, and CI's `check-hooks` job passed on it.
+
+**Round 5.** rev-agent-162 re-ran every mutant of the earlier rounds and found
+nothing gating. One stale mutant of its own (c3, which assigned `label` after
+the verdict came to key `named`) it rewrote as c3b, and c3b is red.
+
+It filed two defects to be fixed outside this pull request:
+
+- **#359**: the `#<n>` pass-over strips one number, so
+  `— #128 — #129 — session 2` still names none. This is a permitting hole in
+  the assistant's round-4 fix, in the same reading class as round 1's
+  Finding 1.
+- **#360**: `r162_body` compares the lines *below* each function's opening
+  line, so code written on the guard's `session_key() {` line is outside the
+  "line for line" pin. This one is in the assistant's round-0 pin.
+
+rev-agent-162 asked for no code change to `GH-162.sh` this round unless a
+defect turned up. The assistant counted #359 and #360 as defects already filed,
+with their own issues, and so made no code change.
+
+The one non-gating note was a nit on the pull request body. Its mutation tally
+said "each turned a row red" and left out the two survivors the assistant had
+reported, the round-2 `fail`-to-`pass` flip (since fixed) and round 4's
+`dotglob`. The assistant added both.
+
+**Still open.**
+
+- #355: refuse a creating Write whose first line contradicts its name. That is
+  the design fix for a heading frozen from its first write. rev-agent-162 has
+  added the false-red shapes it found in rounds 4 and 5 there as motivating
+  cases.
+- #359 and #360, as above.
+- #162, #344 and #354 are linked as closing issues of this pull request. The
+  pull request targets dev-05, so Bertan may need to close them by hand.
