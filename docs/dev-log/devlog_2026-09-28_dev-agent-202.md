@@ -174,3 +174,98 @@ reviewed `78c9de9`
   quote state serves only the `keep-unquoted` mode.
 - **GH-182.2's in-place edit**: still Bertan's decision, as the first entry
   says.
+
+
+# 2026-09-29 12:15 +0300 · dev-agent-202 — #202, round 2 of the review of PR #314
+
+Branch `worktree-issue-202-quoted-heredoc-body`, from `c446ec3` to `48e462e`
+and this entry. The assistant merged `origin/dev-05` at `abffdbf` (`b6ece96`),
+which conflicted on the registry literals and the cited-issue list, and at
+`f539d9a` (`02f21fc`), which merged cleanly, and at `b120086` (#329, `48e462e`),
+which conflicted on the same two lists. rev-agent-202 reviewed `b6ece96`
+(https://github.com/bgunyel/clause-and-effect/pull/314#issuecomment-5884057201).
+
+## What the review found, and what was done
+
+- **Gate 4: the drop still trusted what it did not model.** The round-1 mode
+  vetoed a drop only at constructs it knew it could not follow. The review
+  measured 16 shapes the base refuses and round 1 permitted:
+  - delimiters that deleting quote characters gets wrong (`<<"it's"`,
+    `<<E\OF`, `<<\EOF`, `<<$'EOF'`, `<<"E\"F"`);
+  - `${…}` and `$[…]`;
+  - `/dev/stdout` spelled so a text test misses it (`//`, `"…"`, `/./`,
+    `>(sh)`);
+  - `gh codespace ssh`.
+
+  rev-agent-202 suggested making round 1's inversion for the opener line, and
+  the assistant did. A drop now needs:
+  - a delimiter grammar;
+  - `cat` into a plain file, or `gh api` and no other `gh`;
+  - no `${…}` with an operator, `$[…]` or `((` earlier on the line, which are
+    doubt.
+
+  On the 372-command corpus, all 3 permits #202 gains are kept and nothing
+  else moves.
+- **The default mode has the delimiter defect in every hook.** The assistant
+  ran the five delimiters against `no-git-push.sh` on `dev-05` with no
+  `gh api` on the line. All five were permitted, and bash ran the payload
+  line in each (the push replaced by `touch`, in a scratch directory). Filed
+  as #351. The library's `<<\X` note, which called that shape refusing, was
+  wrong, and is corrected.
+- **Gate 5: three conditions survived mutation (N6–N8).** The assistant
+  applied every mutation alone to every row on stdin and found more of the
+  class than the three.
+  - Three tests shadowed each other: `.`/`..`, a `/dev`–`/proc` prefix, and
+    device names. They are one line now.
+  - The delimiter-closure test was implied by the grammar and is gone.
+  - A word grammar for `gh api` refused only what the quote state already
+    doubts. It is gone.
+  - Once the grammar was in, the escape, quote and comment conditions stopped
+    deciding any drop on their own line. The assistant then found where they
+    still matter: a `<<` taken for an opener and kept makes the quote state
+    skip lines that bash reads as commands. A string opened there leaves the
+    state at the top where bash is inside quotes, and a later `; cat > F`
+    drops a merge. Bash ran the merge line in all four such rows (quote,
+    comment, backslash, continuation), measured by execution. Those rows are
+    each condition's witness now.
+- **Prose.** The three statements that the mode "can only fail towards the
+  re-read" are rewritten as WHERE IT STILL TRUSTS A MODEL: the claim covers
+  the constructs named, and is not a proof over bash's grammar.
+
+## Measured
+
+- **Corpus:** 372 distinct commands holding `gh api` and `<<` from local
+  transcripts, on `f539d9a`, `b6ece96` and this branch: 332 permitted by all
+  three, 37 refused by all three, 3 gained by #202 and kept.
+- **`CHECK_HOOKS_DIR`, from a copy of `518acfe`:**
+  - pre-fix hook: all 22 `flip` rows and the TRADE row red with got=BLOCK;
+  - round-1 library: the 18 BLOCK rows it permitted red with got=ALLOW.
+- **Registry:** 178 rows, 176 caught; text checks 324. Derived off the
+  registry of the tree merged with `b120086`.
+- `mutate-hooks.sh -v` on the 23 #202 rows at `518acfe`: all 23 caught, 24
+  runs including the baseline, and `.claude/hooks/` byte-identical
+  afterwards.
+- `bash .claude/hooks/check-hooks.sh`: ALL CHECKS PASSED on the tree merged
+  with `b120086`.
+
+## Mistakes and dead ends
+
+- **The assistant's first edit of the grammar broke the library.** Four
+  comments inside the single-quoted awk program carried an apostrophe, which
+  ended the shell word, so `lib/command-scan.sh` failed to load and every
+  command was refused. The rows run on stdin showed every row BLOCK, including
+  those that must be ALLOW. Two older comments had a pair of apostrophes that
+  bash had been silently deleting. All six are spelt `\047` now, and the
+  library says why.
+- **The assistant's first registry count on the `abffdbf` merge was wrong.**
+  It added this branch's 11 to dev-05's literal and pinned 163/161. The suite
+  said 166/164, because the merge base held 142 rows, not 145.
+- **The #311 cite entry**, carried from round 0, still called `sh -s` the
+  permitted trade. The assistant rewrote it in the `abffdbf` merge.
+
+## Open
+
+- **#351**: the delimiter defect in the default mode, in every hook.
+- **#311**: the staged script, still the one recorded trade.
+- **#289**: `cs_normalise`'s own opener.
+- **GH-182.2's in-place edit**: Bertan's decision.
