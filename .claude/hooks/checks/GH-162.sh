@@ -38,8 +38,10 @@
 # THE RULE, per entry, in the order `r162_judge` asks it; the first failure is
 # the one reported:
 #   - the name is `devlog_<YYYY-MM-DD>_<session>.md`, <session> not empty;
+#   - it is a file that can be read, and not a directory or anything else;
 #   - its first line opens with `# `;
-#   - the first `YYYY-MM-DD` on that line is the file's date;
+#   - that line carries a `YYYY-MM-DD`, and the first it carries is the
+#     file's date;
 #   - what stands between the `# ` and that date, its key less a leading
 #     `devlog` -- the title `Devlog —`, `Dev log —` or `Dev-log —` -- and then
 #     keyed again, which takes off a leading `session` with something after it,
@@ -113,9 +115,10 @@
 # see a row go red: both append-only guards refuse the edit, and
 # mutate-hooks.sh copies .claude/hooks/ and nothing under docs/. So every
 # property is driven against fixture directories first, each asserted whole as
-# a literal, through r162_judge over the list r162_names derives, and the real
-# directory is then read by those same two, each judgement classed whole by
-# r162_class, which is held to literals of its own. Its list is derived from
+# a literal, through r162_judge over the list r162_names derives; the rows are
+# made by r162_rows, which classes each judgement whole by r162_class and is
+# itself asserted whole, FAIL rows included, over a fixture directory; and the
+# real directory is then read by that same r162_rows. Its list is derived from
 # the directory -- every name in it but README.md, a subdirectory or a dotfile
 # included -- so an entry added is an entry asked, and a file the rule cannot
 # read as an entry is red rather than passed over.
@@ -410,24 +413,55 @@ tok 'a judgement ending as a passing one does is classed by the whole of it' \
     'contradicts:named:none' \
     "$(r162_class 'its heading names | · y|, and its name x: names its session'):$(r162_class 'names its session'):$(r162_class 'names no session')"
 
-# THE REAL DIRECTORY, a row an entry. Guarded first: a read that found nothing,
-# or not the entry #162 was filed against, would leave every row below unasked
-# and the section green.
-R162_DIR="$SUITE_DIR/../../docs/dev-log"
-mapfile -d '' R162_PATHS < <(r162_names "$R162_DIR")
+# THE ROWS, one an entry, made by one function for the fixtures and the real
+# directory alike, so the arm that fails is driven and not only written. A row
+# printed inside `$( )` is not recorded -- `record` returns in a subshell, and
+# its FAILED dies with it -- so the rows over a fixture directory are asserted
+# whole as a literal, FAIL lines included, and only the real directory's are
+# made in this shell.
+r162_rows() {  # r162_rows <dir> -- an ok or a FAIL row for every name in it but README.md, counted in R162_MADE
+  local path said
+  while IFS= read -r -d '' path; do
+    R162_MADE=$((R162_MADE + 1))
+    said=$(r162_judge "$path")
+    case "$(r162_class "$said")" in
+      named) pass static '%s: its heading is dated and named as its file is' "${path##*/}" ;;
+      none) pass static '%s: its heading is dated as its file is, and names no session' "${path##*/}" ;;
+      *) fail static '%s: %s\n         its heading contradicts its file name' "${path##*/}" "$said" ;;
+    esac
+  done < <(r162_names "$1")
+}
+R162_ROWS="$FIXTURES/r162-rows"
+mkdir -p "$R162_ROWS"
+r162_entry "$R162_ROWS" devlog_2026-09-17_session-5.md '# 2026-09-17 · session 5 — #128: a continued heredoc opener'
+r162_entry "$R162_ROWS" devlog_2026-09-24_dev-agent-205.md '# 2026-09-24 18:55 +03 — #205: new `GH-` entries declared'
+r162_entry "$R162_ROWS" devlog_2026-09-17_session-6.md '# 2026-09-17 · session 2 — #133: a refused retarget'
+r162_entry "$R162_ROWS" 'devlog_2026-09-23_x: names its session.md' '# 2026-09-23 · y'
+tok 'a row an entry: ok where it names its session or none, FAIL where it contradicts, and a name is not a verdict' \
+'  ok   devlog_2026-09-17_session-5.md: its heading is dated and named as its file is
+  FAIL devlog_2026-09-17_session-6.md: its heading names | · session 2|, and its name session-6
+                its heading contradicts its file name
+  FAIL devlog_2026-09-23_x: names its session.md: its heading names | · y|, and its name x: names its session
+                its heading contradicts its file name
+  ok   devlog_2026-09-24_dev-agent-205.md: its heading is dated as its file is, and names no session' \
+    "$(r162_rows "$R162_ROWS")"
+
+# THE REAL DIRECTORY, a row an entry, off the root the suite derives once.
+# Guarded on both sides: a read that found nothing, or not the entry #162 was
+# filed against as a whole name, would leave every row below unasked; and rows
+# not made for every name read would leave the rest unasked. Either is a green
+# section that asked nothing.
+R162_DIR="$REPO_ROOT/docs/dev-log"
+R162_READ=$(r162_names "$R162_DIR" | tr '\0' '\n' | sed 's|.*/||')
 holds 'the real dev-log was read, the entry #162 was filed against among it' \
-    "$(printf '%s\n' "${R162_PATHS[@]##*/}")" 'devlog_2026-09-17_session-5.md'
-for r162_path in "${R162_PATHS[@]}"; do
-  r162_said=$(r162_judge "$r162_path")
-  case "$(r162_class "$r162_said")" in
-    named) pass static '%s: its heading is dated and named as its file is' "${r162_path##*/}" ;;
-    none) pass static '%s: its heading is dated as its file is, and names no session' "${r162_path##*/}" ;;
-    *) fail static '%s: %s\n         its heading contradicts its file name' "${r162_path##*/}" "$r162_said" ;;
-  esac
-done
+    $'\n'"$R162_READ"$'\n' $'\ndevlog_2026-09-17_session-5.md\n'
+R162_MADE=0
+r162_rows "$R162_DIR"
+tok 'a row was made for every name the real dev-log was read to hold' \
+    "$(printf '%s\n' "$R162_READ" | grep -c .)" "$R162_MADE"
 
 # THE README SAYS SO, where an entry is written: the whole bullet, once.
-R162_README="$SUITE_DIR/../../docs/dev-log/README.md"
+R162_README="$REPO_ROOT/docs/dev-log/README.md"
 tok 'the dev-log README states the rule where an entry is written, once' '1' \
     "$(prose_occurrences "$R162_README" "- An entry's first line is its heading. It carries the date its file name carries, and when it names a session it names the one the file is named for; it may name none. \`check-hooks.sh\` reads every entry file's first line against its name and is red on one that contradicts it; an entry appended after the first is not read (#162). A session is read in three places: before the date, less a \`Devlog\` title; after the date, its time and its zone, up to the first \` — \`; and, only when neither of those names one, after that dash, where the first word, or \`session\` and the word after it, is read as the session unless it opens with \`#\`. So \`# <date> <time> +03 — #<n>: …\` names none, and \`# <date> <time> +03 — WIP\` names \`WIP\`. An entry exists from its first write, so write the heading right the first time.")"
 
