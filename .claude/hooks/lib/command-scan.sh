@@ -228,12 +228,13 @@
 #     call cs_normalise and cs_split and neither of the argument readers, nor
 #     cs_gh_opaque. Every one of them calls
 #     cs_tool_input as well, and every Bash hook among them calls cs_within_cap
-#     (#96); append-only-docs.sh calls those two and nothing else, and
+#     (#96); append-only-docs.sh calls those two and cs_join (#156), and
 #     append-only-docs-edit.sh only cs_tool_input. cs_within_cap calls cs_join,
-#     which no required list names: it answers for that itself, by failing when
-#     any part of its pipeline does. cs_normalise calls cs_drop_heredocs and
-#     cs_join, which no required list names either (#182): cs_join is answered
-#     by cs_within_cap, as above, and cs_drop_heredocs by the library
+#     which only the two hooks that call it directly require, no-pr-decisions.sh
+#     and append-only-docs.sh; for the rest cs_within_cap answers for it, by
+#     failing when any part of its pipeline does. cs_normalise calls
+#     cs_drop_heredocs, which no required list names (#182), and cs_join:
+#     cs_join is answered by cs_within_cap, as above, and cs_drop_heredocs by the library
 #     withdrawing cs_normalise when it is missing -- CS_NORMALISE ANSWERS FOR
 #     CS_DROP_HEREDOCS, below cs_normalise. A required list narrower than the set is
 #     the #84 defect exactly, and #69 found the same thing in the last two from
@@ -1954,14 +1955,14 @@ if [ -z "$CS_WRAP_OPTION_WORDS" ] || [ -z "$CS_WRAP_OPERAND_WORDS" ] \
    || [ -z "$CS_CONTROL_WORDS" ] || [ -z "$CS_SEPARATORS" ] \
    || [ "$CS_LISTS_VALID" -ne 1 ]; then
   # "every consumer that needs it", and not "every consumer". append-only-docs.sh
-  # and append-only-docs-edit.sh source this library for cs_tool_input and
-  # cs_within_cap and never call cs_split, so their load guards do not require it
-  # and they go on permitting -- measured, append-only-docs-edit.sh exits 0 with
-  # a broken control-word list. The first version of this line claimed a refusal
-  # on the one path where there is none, printed on every Edit and Write. Review
-  # of PR #172.
+  # sources this library for cs_tool_input, cs_within_cap and cs_join (#156),
+  # and append-only-docs-edit.sh for cs_tool_input alone; neither calls
+  # cs_split, so their load guards do not require it and they go on permitting
+  # -- measured, append-only-docs-edit.sh exits 0 with a broken control-word
+  # list. The first version of this line claimed a refusal on the one path where
+  # there is none, printed on every Edit and Write. Review of PR #172.
   [ -z "$CS_INVALID_LIST" ] \
-    || echo "lib/command-scan.sh: $CS_INVALID_LIST. cs_split is withdrawn, so every consumer that requires it refuses; the two document hooks need only cs_tool_input and cs_within_cap and are unaffected." >&2
+    || echo "lib/command-scan.sh: $CS_INVALID_LIST. cs_split is withdrawn, so every consumer that requires it refuses; the two document hooks need only cs_tool_input, cs_within_cap and cs_join and are unaffected." >&2
   unset -f cs_split
 fi
 

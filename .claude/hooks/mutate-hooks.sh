@@ -430,6 +430,28 @@
 # froze: the account of when these rows were run is in the dev-logs of PR #158's
 # sessions, and this paragraph keeps only the rule.
 #
+# THREE ROWS FOR ONE UNION, #156's. append-only-docs.sh judges the command as it
+# came, joined by cs_join, and joined as bash joins, and refuses if any is
+# refused, so each reading is a rule whose loss the others do not cover.
+# `append-only-reads-only-the-joined-text` deletes the raw pass, which puts the
+# hook back to #156's first version: a verb glued onto the word before it by an
+# even run of backslashes or a comment's backslash is permitted, the defect
+# review of PR #329 found.
+# `append-only-reads-only-the-raw-text` deletes the joined pass, which puts it
+# back to dev-05: a continuation between the verb and the path is permitted,
+# the defect #156 was filed for. `append-only-reads-no-bash-join` deletes the
+# third, which puts it back to 22e849c: a line bash does not continue, then a
+# destroying command with a continuation between its verb and its path, is
+# permitted -- the composite review of PR #329 found in round 3. Each names
+# GH-156 alone, since its issue file holds every reading's rows.
+#
+# #156 also moved a row it did not add. `doc-hook-function-not-named` matched
+# the withdrawal message's list of the document hooks' functions, which #156
+# lengthened by cs_join, so its edit stopped applying and only a whole pass
+# would have said so (review of PR #329). It now drops cs_join, which puts the
+# message back to its text before #156; the run log above, frozen at #215,
+# still describes the row as it was.
+#
 # WHAT IS REGISTERED, counted rather than characterised, because the sentence
 # that characterised it ("the rules that gained checks under #103") claimed the
 # whole of two issues and named eight rows -- and the count that replaced it was
@@ -710,7 +732,7 @@ refusal-claims-every-consumer%lib/command-scan.sh%s/every consumer that requires
 refusal-names-two-lists%lib/command-scan.sh%s/CS_SEPARATORS, CS_CONTROL_WORDS, CS_WORD_SPELLING, CS_WRAP_TOKEN or CS_WRAP_WORDS/CS_SEPARATORS or CS_WRAP_WORDS/%GH-134.1%caught
 emptiness-not-named%lib/command-scan.sh%s/\[ -n "\$CS_SEPARATORS" \]/[ -n "always" ]/%GH-134.1%caught
 guard-trigger-loses-its-name%lib/command-scan.sh%s/}CS_SEPARATORS is empty"/}"/%GH-134.1%caught
-doc-hook-function-not-named%lib/command-scan.sh%s/cs_tool_input and cs_within_cap/cs_tool_input/%GH-134.1%caught
+doc-hook-function-not-named%lib/command-scan.sh%s/need only cs_tool_input, cs_within_cap and cs_join/need only cs_tool_input and cs_within_cap/%GH-134.1%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught
@@ -776,6 +798,9 @@ verb-rule-unbounded-on-the-left%append-only-docs.sh%s/\\s+(\[^;&|\]\*\[^;&|A-Za-
 option-letters-not-a-boundary%append-only-docs.sh%s/(-\[A-Za-z\]+)?\$APPEND_ONLY_DIR/$APPEND_ONLY_DIR/%GH-159.2%caught
 gate-option-letters-not-a-boundary%append-only-docs.sh%s/^APPEND_ONLY='(^|\[^A-Za-z0-9_.-\])(-\[A-Za-z\]+)?'"\$APPEND_ONLY_DIR"$/APPEND_ONLY='(^|[^A-Za-z0-9_.-])'"$APPEND_ONLY_DIR"/%GH-159.2%caught
 redirect-rule-unbounded-on-the-left%append-only-docs.sh%s/>\\s\*(\[^>|&\]\*\[^>|&A-Za-z0-9_.-\])?\$APPEND_ONLY_DIR/>\\s*[^>|\&]*$APPEND_ONLY_DIR/%GH-159.2%caught
+append-only-reads-only-the-joined-text%append-only-docs.sh%/^judge_text "\$COMMAND"$/d%GH-156%caught
+append-only-reads-only-the-raw-text%append-only-docs.sh%/^judge_text "\$JOINED"$/d%GH-156%caught
+append-only-reads-no-bash-join%append-only-docs.sh%/^judge_text "\$BASH_JOINED"$/d%GH-156%caught
 heading-correction-read-off-the-root%append-only-docs-edit.sh%s@^  while \[\[ \$rest =~ \$GUARDED_RE \]\]; do$@  case "${abs#"$ROOT"/}" in docs/dev-log/*) ;; *) return 1 ;; esac\n  while [[ $rest =~ $GUARDED_RE ]]; do@%GH-159.1%caught
 heading-correction-any-dev-log-pair%append-only-docs-edit.sh%/^heading_correction()/,/^}/s@^      \*) return 1 ;;$@      *) ;;@%GH-159.1%caught
 heading-correction-last-pair-only%append-only-docs-edit.sh%s@^  while \[\[ \$rest =~ \$GUARDED_RE \]\]; do$@  while [[ $rest =~ ^.*$GUARDED_RE ]]; do@%GH-159.1%caught
