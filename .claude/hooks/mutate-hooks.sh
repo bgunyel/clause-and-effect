@@ -431,6 +431,18 @@
 # froze: the account of when these rows were run is in the dev-logs of PR #158's
 # sessions, and this paragraph keeps only the rule.
 #
+# TWO ROWS FOR ONE UNION, #156's. append-only-docs.sh judges the command as it
+# came and again joined, and refuses if either is refused, so each pass is a
+# rule whose loss the other does not cover.
+# `append-only-reads-only-the-joined-text` deletes the raw pass, which puts the
+# hook back to #156's first version:
+# a verb glued onto the word before it by an even run of backslashes or a
+# comment's backslash is permitted, the defect review of PR #329 found.
+# `append-only-reads-only-the-raw-text` deletes the joined pass, which puts it
+# back to dev-05: a continuation between the verb and the path is permitted,
+# the defect #156 was filed for. Both name GH-156 alone, since its issue file
+# holds both halves' rows.
+#
 # WHAT IS REGISTERED, counted rather than characterised, because the sentence
 # that characterised it ("the rules that gained checks under #103") claimed the
 # whole of two issues and named eight rows -- and the count that replaced it was
@@ -777,6 +789,8 @@ verb-rule-unbounded-on-the-left%append-only-docs.sh%s/\\s+(\[^;&|\]\*\[^;&|A-Za-
 option-letters-not-a-boundary%append-only-docs.sh%s/(-\[A-Za-z\]+)?\$APPEND_ONLY_DIR/$APPEND_ONLY_DIR/%GH-159.2%caught
 gate-option-letters-not-a-boundary%append-only-docs.sh%s/^APPEND_ONLY='(^|\[^A-Za-z0-9_.-\])(-\[A-Za-z\]+)?'"\$APPEND_ONLY_DIR"$/APPEND_ONLY='(^|[^A-Za-z0-9_.-])'"$APPEND_ONLY_DIR"/%GH-159.2%caught
 redirect-rule-unbounded-on-the-left%append-only-docs.sh%s/>\\s\*(\[^>|&\]\*\[^>|&A-Za-z0-9_.-\])?\$APPEND_ONLY_DIR/>\\s*[^>|\&]*$APPEND_ONLY_DIR/%GH-159.2%caught
+append-only-reads-only-the-joined-text%append-only-docs.sh%/^judge_text "\$COMMAND"$/d%GH-156%caught
+append-only-reads-only-the-raw-text%append-only-docs.sh%/^judge_text "\$JOINED"$/d%GH-156%caught
 heading-correction-read-off-the-root%append-only-docs-edit.sh%s@^  while \[\[ \$rest =~ \$GUARDED_RE \]\]; do$@  case "${abs#"$ROOT"/}" in docs/dev-log/*) ;; *) return 1 ;; esac\n  while [[ $rest =~ $GUARDED_RE ]]; do@%GH-159.1%caught
 heading-correction-any-dev-log-pair%append-only-docs-edit.sh%/^heading_correction()/,/^}/s@^      \*) return 1 ;;$@      *) ;;@%GH-159.1%caught
 heading-correction-last-pair-only%append-only-docs-edit.sh%s@^  while \[\[ \$rest =~ \$GUARDED_RE \]\]; do$@  while [[ $rest =~ ^.*$GUARDED_RE ]]; do@%GH-159.1%caught
