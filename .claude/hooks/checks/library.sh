@@ -456,7 +456,9 @@ need_worktree() {  # need_worktree <dir> <fixture name>
 # this read an unread directory as a phrase said nowhere. So grep's status is
 # asked: 0 and 1 are counts -- `grep -c` exits 1 when the count is zero, and
 # that `0` is a real one -- and any other status prints a line naming it and
-# the file, which no count equals.
+# the file, which no count equals. On a zero-byte file grep prints `0` and
+# exits 1, and that `0` is a real count too, for the reason `unarmed` gives for
+# passing one (#256).
 prose_count() {  # prose_count <file> <literal> -- how many lines say it
   local n grep_status
   n=$(grep -cF -- "$2" "$1" 2>/dev/null)
@@ -480,6 +482,14 @@ written() {  # written <label> <file> <literal> -- the file as written, # and al
 # status is what decides: 0 is the literal found, 1 is the file read and the
 # literal not in it, and anything else is a file grep could not read, which
 # fails and names the status and the file. Only 1 passes.
+#
+# AND 1 PASSES ON A ZERO-BYTE FILE, deliberately (#256). An empty file is read,
+# and nothing is in it, so the absence is true; a `[ -s ]` question after the
+# status would refuse that true absence and learn nothing grep's status has not
+# said. A file emptied by a failed write is a presence question, and a pin that
+# must not read a truncation as evidence pairs its `unarmed` with an `armed` or
+# a `written` over the same file. `lacks` is handed text and not a file, which
+# is why it refuses an empty one and this does not.
 #
 # It was an `else` after the grep, and that is the defect twice over. First a
 # file that is not there: grep exits 2, which fell into the else arm and
@@ -748,8 +758,15 @@ holds() {  # holds <label> <text> <literal>
     *) fail static '%s\n         expected |%s|\n         in |%s|' "$1" "$3" "$2" ;;
   esac
 }
-# The absence has to be an absence in something that was read, for the reason
-# `unarmed` gives: an empty line is what a deleted read prints.
+# The absence has to be an absence in something that was read -- the rule
+# `unarmed` applies too, asked of different evidence (#256). `lacks` is handed a
+# STRING, and a read that failed or was deleted prints an empty line, which is
+# also what an empty file reads as: once they are text the two cannot be told
+# apart, so an empty string is refused as nothing read. `unarmed` and
+# `prose_count` are handed a PATH, and grep's status already tells an unread
+# file (2) from a read one with nothing in it (1), so an empty FILE is a read
+# file there and its absences are real ones. A truncated file is a presence
+# question, which `armed`, `written` and `holds` over the same file answer.
 lacks() {  # lacks <label> <text> <literal>
   if [ -z "$2" ]; then
     fail static '%s\n         nothing was read, so the absence of |%s| is evidence of nothing' "$1" "$3"
@@ -1558,11 +1575,13 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
 # naming grep's status 2, and `written` fails as it does for a literal not
 # found. An extraction that found nothing, a file of blank lines, a
 # directory and a path that is not there all reach that arm rather than a
-# reflow of blanks, over which `unarmed` would read ok -- the vacuity `unarmed`
-# and `lacks` each refuse. comment_reflow turns an empty line into one blank,
-# which is why the question is a word and not a size (review of #192's
-# branch). The path mirrors the source's under $FIXTURES/prose, so a failure
-# names the file it read.
+# reflow of blanks, over which `unarmed` would read ok. A reflow is text until
+# it is written, so an empty one is refused here for the reason `lacks` refuses
+# an empty string; `unarmed` passes a zero-byte file it was handed, by design
+# (#256), and so is never handed one from here. comment_reflow turns an empty
+# line into one blank, which is why the question is a word and not a size
+# (review of #192's branch). The path mirrors the source's under
+# $FIXTURES/prose, so a failure names the file it read.
 #
 # AND ONLY FROM AN ABSOLUTE PATH. `written` and `unarmed` refuse a relative
 # name through `absolute_or_fail`, since one is read from this suite's own

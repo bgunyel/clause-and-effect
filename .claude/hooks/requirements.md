@@ -1615,3 +1615,8 @@ it has no entry above (Q16).
   or `eval` state -- and pinned its representatives. Cited in GH-185's note
   as that class's structural fix. It adds its requirements in the pull
   request that fixes it
+- #254: the pull request for #219; round 1 of rev-agent-219's review of it
+  raised that `unarmed` and `prose_count` pass on a zero-byte file while
+  `lacks` refuses an empty string, and filed it as #256, and dev-agent-219's
+  answer there -- one rule, asked of a string in one and a path in the others
+  -- is the decision #256 records. Cited in #256's issue file
