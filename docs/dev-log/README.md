@@ -80,7 +80,12 @@ thing in the record.
 - Close with what is still open and what the next session should pick up.
 - An entry's first line is its heading. It carries the date its file name
   carries, and when it names a session it names the one the file is named for;
-  it may name none. `check-hooks.sh` reads every entry's first line against its
-  name and is red on one that contradicts it (#162).
+  it may name none. `check-hooks.sh` reads every entry file's first line
+  against its name and is red on one that contradicts it; an entry appended
+  after the first is not read (#162). Where nothing before the first ` — `
+  after the date names a session, the first word after that dash is read as one
+  unless it opens with `#`, so `# <date> <time> +03 — #<n>: …` names none.
+  An entry exists from its first write, so write the heading right the first
+  time.
 - Do not add the entries in this file.
 
