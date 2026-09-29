@@ -50,11 +50,11 @@ GIT_ENV = {
 }
 
 
-def run_script(*args, cwd=None):
+def run_script(*args, cwd=None, script=SCRIPT, env=GIT_ENV):
     assert RUNNER_PYTHON, "python3.12, the runner's python3, is needed to run check_hooks_ci.py as CI does"
     return subprocess.run(
-        [RUNNER_PYTHON, str(SCRIPT), *args],
-        cwd=cwd, env=GIT_ENV, capture_output=True, text=True,
+        [RUNNER_PYTHON, str(script), *args],
+        cwd=cwd, env=env, capture_output=True, text=True,
     )
 
 
@@ -384,100 +384,450 @@ def test_verify_merge_refuses_when_the_base_tip_cannot_be_read(tmp_path, merge_r
     assert "Traceback" not in result.stderr
 
 
-def test_report_bounds_the_summary_by_bytes_and_says_what_it_left_out(tmp_path):
+def test_report_cuts_a_row_that_fits_the_budget_and_shows_every_row_after_it(tmp_path):
     """
-    GitHub refuses a step summary over 1 MiB and loses all of it. Three rows of
-    300 KiB each: two fit under the 512 KiB budget only if the budget is in
-    bytes and not rows -- here the first alone fits, the second would pass it.
-    """
-    detail = "       " + "x" * (300 * 1024)
-    log = "".join(f"  FAIL row {i}\n{detail}\n" for i in range(3)) + "\nSOME CHECKS FAILED\n"
-    result, paths = report(tmp_path, log, 1)
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    summary = paths["summary.md"].read_text()
-    assert len(summary.encode("utf-8")) < 1024 * 1024
-    assert "  FAIL row 0" in summary.splitlines()
-    assert "  FAIL row 1" not in summary.splitlines()
-    assert "2 more failing row(s) are in the uploaded log." in summary.splitlines()
-    assert json.loads(paths["result.json"].read_text())["failed"] == 3
-
-
-def test_report_says_every_row_was_left_out_when_the_first_is_over_budget(tmp_path):
-    detail = "       " + "x" * (600 * 1024)
-    log = f"  FAIL huge\n{detail}\n\nSOME CHECKS FAILED\n"
-    result, paths = report(tmp_path, log, 1)
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    summary = paths["summary.md"].read_text()
-    assert len(summary.encode("utf-8")) < 1024 * 1024
-    assert "1 more failing row(s) are in the uploaded log." in summary.splitlines()
-
-
-def test_report_skips_a_row_over_budget_and_shows_the_rows_after_it(tmp_path):
-    """
-    A row over the budget must not hide the rows behind it (#207). The 600 KiB row is
-    left to the uploaded log and counted; the two small rows after it fit, so
-    they are shown, and the count names only the row that is not.
-    """
-    detail = "       " + "x" * (600 * 1024)
-    log = f"  FAIL big\n{detail}\n  FAIL small-1\n  FAIL small-2\n\nSOME CHECKS FAILED\n"
-    result, paths = report(tmp_path, log, 1)
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    summary = paths["summary.md"].read_text()
-    assert len(summary.encode("utf-8")) <= 1048576
-    assert "```text\n  FAIL small-1\n  FAIL small-2\n```\n" in summary
-    assert "  FAIL big" not in summary.splitlines()
-    assert "1 more failing row(s) are in the uploaded log." in summary.splitlines()
-
-
-def test_report_counts_the_fence_against_the_row_budget(tmp_path):
-    """
-    A fence is one backtick longer than the longest run inside it, and there
-    are two, so a block's size is not its text's. Row a is 300 KiB of backticks:
-    its text fits the 512 KiB budget, its fenced block (about 900 KiB) does not.
-    Counted on text alone, a and b together are 500 KiB, and the summary they
-    make is 1.1 MiB -- past GitHub's cap, and lost.
+    #227's first case. A row of 524,212 bytes fits the 512 KiB block, and
+    before the cap it was shown whole and left room for only 4 of the 20 rows
+    after it. Capped at 32,768 bytes, it keeps its `FAIL` line and 32,692
+    bytes of detail, and ends with a line saying the log's other 491,509 bytes
+    of it are in the uploaded log: the row is 524,219 bytes there, its detail
+    line indented, and the summary shows 32,710 of them, the indent included
+    and the cut line's newline not. Every row after it is shown.
     """
     log = (
-        "  FAIL a\n           " + "`" * (300 * 1024) + "\n"
-        "  FAIL b\n           " + "x" * (200 * 1024) + "\n"
-        "\nSOME CHECKS FAILED\n"
+        "  FAIL big\n       " + "x" * 524200 + "\n"
+        + "".join(f"  FAIL small-{i}\n" for i in range(20))
+        + "\nSOME CHECKS FAILED\n"
     )
     result, paths = report(tmp_path, log, 1)
 
     assert result.returncode == 0, result.stdout + result.stderr
     summary = paths["summary.md"].read_text()
     assert len(summary.encode("utf-8")) <= 1048576
-    assert "  FAIL a" not in summary.splitlines()
-    assert "```text\n  FAIL b\n    " + "x" * 204800 + "\n```\n" in summary
-    assert "1 more failing row(s) are in the uploaded log." in summary.splitlines()
+    assert (
+        "```text\n"
+        "  FAIL big\n"
+        + "x" * 32692 + "\n"
+        "  [row cut here: its last 491509 bytes are in the uploaded log]\n"
+        + "".join(f"  FAIL small-{i}\n" for i in range(20))
+        + "```\n"
+    ) in summary
+    assert "not shown" not in summary
+    assert json.loads(paths["result.json"].read_text())["failed"] == 21
 
 
-def test_report_counts_a_shown_rows_fence_against_the_rows_after_it(tmp_path):
+def test_report_counts_a_cut_rows_left_out_bytes_as_the_log_holds_them(tmp_path):
     """
-    A fence is the block's, not a row's: row a's 102,400 backticks make the
-    fence 102,401 wide for every row shown with it. So row b, 307,214 bytes of
-    plain text, does not fit beside a (614,436 bytes fenced), though a and b
-    with plain fences would be 409,640 and fit. Row c, nine bytes, still fits.
+    A cut row's note says how many of its bytes are in the uploaded log and
+    not on the page, and the log indents every detail line by seven spaces
+    that the summary removes. A row of 1,000 detail lines of 99 bytes is
+    107,012 bytes in the log. The summary shows its `FAIL` line, 326 whole
+    lines and 91 bytes of the 327th: 34,992 of the log's bytes, each line's
+    indent counted and the cut line's newline not. So 72,020 are left out.
+    Counted in the summary's own bytes the note said 67,308: seven short for
+    each of the 673 lines left out whole, and one for the cut line's newline
+    (review of #227's first commit).
+    """
+    log = "  FAIL many\n" + ("       " + "m" * 99 + "\n") * 1000 + "\nSOME CHECKS FAILED\n"
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        "```text\n"
+        "  FAIL many\n"
+        + ("m" * 99 + "\n") * 326
+        + "m" * 91 + "\n"
+        "  [row cut here: its last 72020 bytes are in the uploaded log]\n"
+        "```\n"
+    ) in paths["summary.md"].read_text()
+
+
+def test_report_reserves_a_cut_notes_room_at_the_rows_size_in_the_log(tmp_path):
+    """
+    The note's room is reserved at the digits of the row's size in the log,
+    because what is cut is counted in the log's bytes and can have as many.
+    A row of 50,000 blank detail lines is 50,012 bytes in the summary, five
+    digits, and 400,012 in the log, six: each blank line is one byte in the
+    summary and eight in the log. The note takes 64 bytes and leaves 32,704:
+    the `FAIL` line's 12 and 32,692 blank lines, 261,548 of the log's bytes.
+    So 138,464 are left out, six digits, and the row is 32,768 bytes.
+
+    Reserved at the summary's five digits, the room was 32,705, one blank
+    line more was kept, the note still said a six-digit 138,456, and the row
+    was 32,769 bytes, one over the cap (review of #227, round 1: every other
+    cut row in these tests has a size of the same digits in both).
+    """
+    log = "  FAIL void\n" + "       \n" * 50000 + "\nSOME CHECKS FAILED\n"
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        "```text\n"
+        "  FAIL void\n"
+        + "\n" * 32692
+        + "  [row cut here: its last 138464 bytes are in the uploaded log]\n"
+        "```\n"
+    ) in paths["summary.md"].read_text()
+
+
+def test_report_keeps_no_part_of_a_line_when_the_lines_before_it_fill_the_cap(tmp_path):
+    """
+    The boundary where the lines kept fill a cut row's room to the byte, so
+    the room left for a part of the next line, less its newline, is -1. The
+    row is 647,119 bytes in the log, so its note is 64 bytes and leaves 32,704
+    of room: the `FAIL` line's 9 and the first detail line's 32,695. No part
+    of the second is kept, and its 614,408 bytes in the log, indent and
+    newline included, are the ones the note says are left out. The row is
+    32,768 bytes, the cap, and the row after it is shown.
+
+    Three rules meet here, and each of them wrong only here goes unseen by
+    every other test (review of #227, round 1). A slice of -1 read as all but
+    the last byte keeps 614,399 bytes of the second line, the row is not
+    capped, and the first failure is not shown. An empty part kept adds an
+    empty line and counts it shown. A line that fills the room exactly, taken
+    as not fitting, is kept as a part of itself, and the note says 614,409.
     """
     log = (
-        "  FAIL a\n           " + "`" * 102400 + "\n"
-        "  FAIL b\n           " + "x" * 307200 + "\n"
-        "  FAIL c\n"
-        "\nSOME CHECKS FAILED\n"
+        "  FAIL e\n       " + "d" * 32694 + "\n       " + "t" * 614400 + "\n"
+        "  FAIL second\n\nSOME CHECKS FAILED\n"
     )
     result, paths = report(tmp_path, log, 1)
 
     assert result.returncode == 0, result.stdout + result.stderr
     summary = paths["summary.md"].read_text()
     assert (
-        "`" * 102401 + "text\n  FAIL a\n    " + "`" * 102400 + "\n  FAIL c\n"
-        + "`" * 102401 + "\n"
+        "```text\n"
+        "  FAIL e\n"
+        + "d" * 32694 + "\n"
+        "  [row cut here: its last 614408 bytes are in the uploaded log]\n"
+        "  FAIL second\n"
+        "```\n"
     ) in summary
-    assert "  FAIL b" not in summary.splitlines()
-    assert "1 more failing row(s) are in the uploaded log." in summary.splitlines()
+    assert "not shown" not in summary
+
+
+def test_report_shows_whole_a_row_at_the_cap_and_a_block_filled_to_the_byte(tmp_path):
+    """
+    Both bounds are inclusive, and at both the text is exactly the bound.
+    Rows r01 .. r15 are 32,768 bytes each, the cap, and are shown whole with no
+    cut note. Row r16 is 32,756 bytes, which brings the rows to 524,276 and
+    the fenced block to 524,288, the budget, so it is shown too. Read as
+    exclusive, the cap cuts all fifteen, and the block leaves r16 out and
+    names it (review of #227, round 1).
+    """
+    log = (
+        "".join(f"  FAIL r{i:02d}\n       " + "x" * 32756 + "\n" for i in range(1, 16))
+        + "  FAIL r16\n       " + "x" * 32744 + "\n"
+        + "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert (
+        "```text\n"
+        + "".join(f"  FAIL r{i:02d}\n" + "x" * 32756 + "\n" for i in range(1, 16))
+        + "  FAIL r16\n" + "x" * 32744 + "\n"
+        "```\n"
+    ) in summary
+    assert "row cut here" not in summary
+    assert "not shown" not in summary
+
+
+@pytest.mark.parametrize(
+    ("name", "detail", "block"),
+    [
+        ("first", "x" * 614400,
+         "```text\n  FAIL first\n" + "x" * 32690 + "\n"
+         "  [row cut here: its last 581711 bytes are in the uploaded log]\n"
+         "  FAIL second\n```\n"),
+        # The fence grows with the backticks the row keeps, and the row is
+        # still shown: capped at 32,768 bytes, it is fenced at 98,296 at most,
+        # so the first row fits the 512 KiB block for any log.
+        ("first", "`" * 614400,
+         "`" * 32691 + "text\n  FAIL first\n" + "`" * 32690 + "\n"
+         "  [row cut here: its last 581711 bytes are in the uploaded log]\n"
+         "  FAIL second\n" + "`" * 32691 + "\n"),
+        # Cut in bytes and never inside a character. The shorter name leaves
+        # 32,691 bytes of room, odd, which hold 16,345 two-byte characters; the
+        # odd byte is dropped, not shown as a three-byte U+FFFD, and counted
+        # as cut. With a name one byte shorter, the log holds one byte less of
+        # the row and the summary shows one byte less, so the count is the same.
+        ("wide", "é" * 307200,
+         "```text\n  FAIL wide\n" + "é" * 16345 + "\n"
+         "  [row cut here: its last 581711 bytes are in the uploaded log]\n"
+         "  FAIL second\n```\n"),
+    ],
+    ids=["ascii", "backticks", "two-byte"],
+)
+def test_report_cuts_a_first_row_over_the_budget_rather_than_leaving_it_out(tmp_path, name,
+                                                                            detail, block):
+    """
+    #227's second case. A first row of 600 KiB does not fit the block at all,
+    and was left out whole, so the first failure was named nowhere on the
+    page. It is shown from its start, cut, and the row after it is shown.
+    """
+    log = f"  FAIL {name}\n       {detail}\n  FAIL second\n\nSOME CHECKS FAILED\n"
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert len(summary.encode("utf-8")) <= 1048576
+    assert block in summary
+    assert "not shown" not in summary
+
+
+def test_report_counts_a_shown_rows_fence_against_the_rows_after_it_and_names_the_rest(tmp_path):
+    """
+    A fence is the block's, not a row's: row a keeps 32,695 backticks, so the
+    fence is 32,696 wide for every row shown with it. Each row here is capped
+    at 32,768 bytes. Counted on text alone, a and x01 .. x15 are 524,288 bytes
+    and fit the block exactly; counted with a's fences, a and x01 .. x13 are
+    524,150 and x14 would take it to 556,918. So x14 and x15 are not shown,
+    and are named; c, nine bytes, still fits in the 138 left and is shown
+    (#207: a row that does not fit does not hide the rows after it). The rows
+    not shown are not the last ones, and the summary does not say they are.
+    """
+    log = (
+        "  FAIL a\n       " + "`" * 60000 + "\n"
+        + "".join(f"  FAIL x{i:02d}\n       " + "x" * 60000 + "\n" for i in range(1, 16))
+        + "  FAIL c\n"
+        + "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert len(summary.encode("utf-8")) <= 1048576
+    assert (
+        "`" * 32696 + "text\n"
+        "  FAIL a\n" + "`" * 32695 + "\n"
+        "  [row cut here: its last 27306 bytes are in the uploaded log]\n"
+        + "".join(f"  FAIL x{i:02d}\n" + "x" * 32693 + "\n"
+                  "  [row cut here: its last 27308 bytes are in the uploaded log]\n"
+                  for i in range(1, 14))
+        + "  FAIL c\n"
+        + "`" * 32696 + "\n"
+    ) in summary
+    assert (
+        "\n2 of the 17 failing rows are not shown above, to keep this summary under "
+        "GitHub's 1 MiB limit; the uploaded log holds them. Their `FAIL` lines, in log "
+        "order, each one longer than 512 bytes cut to at most 512:\n\n"
+        "```text\n  FAIL x14\n  FAIL x15\n```\n"
+    ) in summary
+    assert "more failing row" not in summary
+    assert "not named" not in summary
+
+
+@pytest.mark.parametrize(
+    ("rows", "lead"),
+    [
+        (20, "\n5 of the 20 failing rows are not shown above, to keep this summary under "
+             "GitHub's 1 MiB limit; the uploaded log holds them. Their `FAIL` lines, in log "
+             "order, each one longer than 512 bytes cut to at most 512:\n\n"),
+        (16, "\n1 of the 16 failing rows is not shown above, to keep this summary under "
+             "GitHub's 1 MiB limit; the uploaded log holds it. Its `FAIL` line, cut to at "
+             "most 512 bytes if it is longer:\n\n"),
+    ],
+    ids=["five-not-shown", "one-not-shown"],
+)
+def test_report_names_every_failing_row_when_none_can_be_shown_whole(tmp_path, rows, lead):
+    """
+    #227's third case: rows whose `FAIL` line alone is 600 KiB, so no row is
+    shown whole and no name on the page is either. Each shown row is its
+    `FAIL` line's first 32,703 bytes and a cut marker, 32,768 bytes together:
+    fifteen fill the block to 491,532 bytes fenced, and a sixteenth would take
+    it to 524,300. The rows left are each named by their `FAIL` line's first
+    512 bytes. Before the cap, no row name at all was on this page. With
+    sixteen rows one is left, and the sentence naming it is singular (review
+    of #227, round 2: it said "1 of the 16 failing rows are").
+    """
+    log = (
+        "".join(f"  FAIL row-{i:02d} " + "y" * 614400 + "\n" for i in range(rows))
+        + "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert len(summary.encode("utf-8")) <= 1048576
+    assert (
+        "```text\n"
+        + "".join(f"  FAIL row-{i:02d} " + "y" * 32689 + "\n"
+                  "  [row cut here: its last 581712 bytes are in the uploaded log]\n"
+                  for i in range(15))
+        + "```\n"
+        + lead
+        + "```text\n"
+        + "".join(f"  FAIL row-{i:02d} " + "y" * 498 + "\n" for i in range(15, rows))
+        + "```\n"
+    ) in summary
+    assert "not named" not in summary
+
+
+def test_report_says_a_single_row_left_unnamed_in_the_singular(tmp_path):
+    """
+    772 rows of one 2,003-byte `FAIL` line each: 261 fill the rows block and
+    511 are not shown. 510 plain names are 261,642 bytes fenced and a 511th
+    would pass 256 KiB, so one row is left unnamed, and the sentence counting
+    it is singular (review of #227, round 2: it said "The last 1 of those 511
+    are").
+    """
+    log = (
+        "".join(f"  FAIL r{i:04d} " + "z" * 1990 + "\n" for i in range(772))
+        + "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert (
+        "\n511 of the 772 failing rows are not shown above, to keep this summary under "
+        "GitHub's 1 MiB limit; the uploaded log holds them. Their `FAIL` lines, in log "
+        "order, each one longer than 512 bytes cut to at most 512:\n\n"
+        "```text\n"
+        + "".join(f"  FAIL r{i:04d} " + "z" * 499 + "\n" for i in range(261, 771))
+        + "```\n"
+        "\nThe last of those 511 is not named here either, for the same reason.\n"
+    ) in summary
+    assert "  FAIL r0771" not in summary
+
+
+@pytest.mark.parametrize(
+    ("constant", "changed", "message"),
+    [
+        ("ROW_BYTES = 32 * 1024\n", "ROW_BYTES = 174761\n",
+         "::error::a capped row of backticks no longer fits the rows block: the first row can be left out"),
+        ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 523265\n",
+         "::error::the two blocks and the text outside them can pass GitHub's 1 MiB summary limit"),
+        ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 1535\n",
+         "::error::a name cut to NAME_BYTES no longer fits the names block: none may be named"),
+        ("ROW_BYTES = 32 * 1024\n", "ROW_BYTES = 589\n",
+         "::error::a cut row no longer has room for its note and a name: "
+         "its FAIL line can be left out"),
+        ("ROW_BYTES = 32 * 1024\n", "ROW_BYTES = 174760\n", None),
+        ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 523264\n", None),
+        ("NAMES_BLOCK_BYTES = 256 * 1024\n", "NAMES_BLOCK_BYTES = 1536\n", None),
+        ("ROW_BYTES = 32 * 1024\n", "ROW_BYTES = 590\n", None),
+    ],
+    ids=["first-row", "one-mebibyte", "first-name", "fail-line",
+         "first-row-at-the-bound", "one-mebibyte-at-the-bound", "first-name-at-the-bound",
+         "fail-line-at-the-bound"],
+)
+def test_script_refuses_to_load_with_budgets_that_break_what_the_summary_counts_on(
+        tmp_path, constant, changed, message):
+    """
+    Four things the summary counts on hold only for some values of its
+    budgets: the first row fits the rows block, the first name fits the names
+    block, the two blocks leave room under 1 MiB for the text outside them,
+    and a cut row has room for its note and a name's worth of its `FAIL`
+    line (review of #227, round 4). Each is checked where the constants are,
+    so a change that breaks one stops the script with the reason. Every other
+    test goes red too, but only on a literal, which says nothing about why
+    (review of #227, round 2).
+    A copy of the script with one constant changed is run, and the change is
+    checked to apply exactly once, so a renamed constant cannot pass this
+    unedited. Each change is one past the bound its check states: 3 * 174,761
+    + 8 is 524,291, and 3 * 174,760 + 8 is 524,288, the rows block exactly;
+    523,265 of names and 512 KiB of rows leave 1,023 bytes under 1 MiB for the
+    text outside; a 1,535-byte names block is one short of 3 * 512; and a
+    589-byte row cap is one short of a 512-byte name, its newline, and the
+    note at its widest, 77 bytes with the 19 digits of sys.maxsize. At each
+    bound itself the script loads, so each bound is the one the check
+    states. Those bounds round the widest fenced row and name up, by 16 bytes
+    and 5, and take the note at more digits than any log can need, so a check
+    is refusing a little early and never late.
+
+    The copy runs under PYTHONOPTIMIZE, which drops every `assert`: written as
+    asserts, the checks let a copy with any budget load (review of #227,
+    round 3).
+    """
+    source = SCRIPT.read_text()
+    assert source.count(constant) == 1
+    copy = tmp_path / "check_hooks_ci.py"
+    copy.write_text(source.replace(constant, changed))
+    result = run_script("--help", script=copy, env={**GIT_ENV, "PYTHONOPTIMIZE": "1"})
+
+    if message is None:
+        assert result.returncode == 0, result.stderr
+    else:
+        assert result.returncode == 1
+        assert result.stderr == message + "\n"
+
+
+def plain_names(first, last):
+    """The names of rows r<first> .. r<last - 1> of the thousands-of-rows log."""
+    return "".join(f"  FAIL r{i:04d} " + "z" * 499 + "\n" for i in range(first, last))
+
+
+@pytest.mark.parametrize(
+    ("odd_row", "odd_text", "names", "unnamed", "first_unnamed"),
+    [
+        (770, "`" * 1990,
+         "```text\n" + plain_names(261, 770) + "```\n",
+         2230, 770),
+        (261, "`" * 1990,
+         "`" * 500 + "text\n  FAIL r0261 " + "`" * 499 + "\n" + plain_names(262, 770)
+         + "`" * 500 + "\n",
+         2230, 770),
+        (261, "`" * 253 + "z" * 1737,
+         "`" * 254 + "text\n  FAIL r0261 " + "`" * 253 + "z" * 246 + "\n"
+         + plain_names(262, 771) + "`" * 254 + "\n",
+         2229, 771),
+    ],
+    ids=["stops-at-a-wider-fence", "carries-a-named-fence", "fills-the-block-to-the-byte"],
+)
+def test_report_names_what_fits_of_thousands_of_rows_and_counts_the_rest(
+        tmp_path, odd_row, odd_text, names, unnamed, first_unnamed):
+    """
+    The names are held to a budget of their own, 256 KiB, because there is one
+    per row not shown and a `FAIL` line has no length limit. Three thousand
+    rows of one 2,003-byte `FAIL` line each: 261 fill the rows block (523,044
+    bytes of text, and a 262nd would pass 512 KiB), and 2,739 are left, each
+    named by its first 512 bytes, 513 with a newline. Named without that
+    budget, the 2,739 would add 1.4 MB and GitHub would drop the whole summary.
+    One row's text is odd, and where it stands decides how many names fit.
+
+    stops-at-a-wider-fence: r0770's `FAIL` line is backticks, so its name
+    would make the fence 500 wide and the block 262,636 bytes, past 256 KiB,
+    where r0771's plain name would still fit, at 261,642. The names stop at
+    r0770 rather than skip it: the count says "the last 2,230", and a name
+    after one left out would make that untrue.
+
+    carries-a-named-fence: r0261's name, the first, holds 499 backticks, so
+    the fence is 500 wide for every name after it. 509 names are 261,117
+    bytes, 262,123 fenced, and a 510th would take the block to 262,636. With
+    the fence taken from each name alone, the 510th counts at 261,642 and is
+    named, and the block written is 262,636 bytes, past its budget.
+
+    fills-the-block-to-the-byte: r0261's name holds 253 backticks, a fence of
+    254, so 510 names are 261,630 bytes and 262,144 fenced, the budget
+    exactly, and all 510 are named. Read as exclusive, the budget names 509.
+    The last two were found by review of #227, round 1.
+    """
+    log = (
+        "".join(f"  FAIL r{i:04d} " + (odd_text if i == odd_row else "z" * 1990) + "\n"
+                for i in range(3000))
+        + "\nSOME CHECKS FAILED\n"
+    )
+    result, paths = report(tmp_path, log, 1)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = paths["summary.md"].read_text()
+    assert len(summary.encode("utf-8")) <= 1048576
+    assert (
+        "```text\n"
+        + "".join(f"  FAIL r{i:04d} " + "z" * 1990 + "\n" for i in range(261))
+        + "```\n"
+        "\n2739 of the 3000 failing rows are not shown above, to keep this summary under "
+        "GitHub's 1 MiB limit; the uploaded log holds them. Their `FAIL` lines, in log "
+        "order, each one longer than 512 bytes cut to at most 512:\n\n"
+        + names
+        + f"\nThe last {unnamed} of those 2739 are not named here either, for the same "
+        "reason.\n"
+    ) in summary
+    assert f"  FAIL r{first_unnamed:04d}" not in summary
+    assert f"  FAIL r{first_unnamed + 1:04d}" not in summary
 
 
 @pytest.mark.parametrize(
