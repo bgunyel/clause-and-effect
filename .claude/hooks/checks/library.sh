@@ -19,9 +19,9 @@
 #
 # WHAT IT DOES: it defines functions and nothing else. Sourcing it runs no
 # check, prints nothing and records nothing; the variables its functions read
-# -- $LEDGER, $REQ, $RAN, $HOOKS, $FIXTURES, $SUITE_DIR, $DECLARED, $PINNED and
-# the fixtures' own -- are set by check-hooks.sh, before the call that reads
-# them; and $STDERR_WRITE, which `arms` and `fn_writes` read, by the unsplit
+# -- $LEDGER, $REQ, $RAN, $HOOKS, $FIXTURES, $SUITE_DIR, $SUITE_DECLARED,
+# $SUITE_PINNED and the fixtures' own -- are set by check-hooks.sh, before the
+# call that reads them; and $STDERR_WRITE, which `arms` and `fn_writes` read, by the unsplit
 # file's #109 section, which is sourced before any issue file that calls them.
 #
 # THE COMMENTS MOVED HERE WITH THEIR FUNCTIONS, and they kept the positional
@@ -112,6 +112,9 @@ fail() {  # fail <refuse|permit|static> <format> [arguments...] -- a FAIL line, 
   record "$dir" FAIL "$first"
 }
 req() {  # req <ID>... -- the requirements the checks after this establish
+  # Joined on a space whatever IFS the caller has: "$*" joins on its first
+  # character, and a tag list joined on a colon is one tag no entry has (#223).
+  local IFS=' '
   REQ="$*"
 }
 section() {  # section <heading> -- print it, and let no tag carry across it
@@ -709,7 +712,9 @@ report_says() {  # report_says <PATH> <script> <literal> <label>
 # review of PR #169's finding at a second call site, filed by the sixth. That
 # guard stays, naming its own cause.
 every_hook() {  # every_hook <dir> <label> <cmd> -- permit, by every hook in $XH_HOOKS, of at least one
-  local dir="$1" label="$2" cmd="$3" hook rc err refused= runs=0
+  local - dir="$1" label="$2" cmd="$3" hook rc err refused= runs=0 IFS=$' \t\n'
+  # The list split on blanks, and not globbed, whatever the caller left (#223).
+  set -f
   for hook in $XH_HOOKS; do
     runs=$((runs + 1))
     err=$(printf '%s' "$cmd" | jq -Rs '{tool_name:"Bash",tool_input:{command:.}}' \
@@ -1236,9 +1241,9 @@ sections_without_rows() {  # sections_without_rows <headings record> <ledger> --
 # THE GENERATED ENTRIES (#205). A `GH-` entry outside the legacy set is declared
 # by `requirement` in an issue file, and its file under requirements/ is written
 # from that declaration by generate-requirements.sh. These two read the record
-# the run kept of what it declared and pinned -- $DECLARED, a record per
+# the run kept of what it declared and pinned -- $SUITE_DECLARED, a record per
 # `requirement` call, `<ID> TAB <issue file> TAB <body>` ended by a NUL, and
-# $PINNED, a line per `shape_pin` or `variants_pin` call, `<shape|variants> TAB
+# $SUITE_PINNED, a line per `shape_pin` or `variants_pin` call, `<shape|variants> TAB
 # <issue file> TAB <tokens>` -- and print what does not hold, a line each,
 # sorted, and nothing when all of it does. Each is driven against a fixture in
 # the #205 issue file, and against this repository at the end of the run.
@@ -1256,7 +1261,7 @@ generated_id() {  # generated_id <ID> -- true when it is GH-<n> or GH-<n>.<m>
   [[ $1 =~ $re ]]
 }
 generated_bad() {  # generated_bad <declared record> <requirements dir> <legacy literal>
-  local - rec id file body want seen=' ' legacy f n
+  local - rec id file body want seen=' ' legacy f n IFS=$' \t\n'
   set -f
   legacy=" $(printf '%s ' $3)"
   {
@@ -1267,6 +1272,13 @@ generated_bad() {  # generated_bad <declared record> <requirements dir> <legacy 
         printf '%s: declared in %s, and not an ID of the grammar GH-<n> or GH-<n>.<m>\n' "$id" "$file"; continue
       fi
       case "$seen" in *" $id "*) printf '%s: declared a second time, in %s\n' "$id" "$file"; continue ;; esac
+      # An empty body is what `requirement` records when it is called with no
+      # heredoc, since the driver's stdin is /dev/null (#223); named as what it
+      # is, and not as a file that is not its declaration. Empty and not "no
+      # field", which would be a copy of the field grammar GH-223.2 counts.
+      if [[ -z $body ]]; then
+        printf '%s: declared in %s with no fields\n' "$id" "$file"; seen="$seen$id "; continue
+      fi
       seen="$seen$id "
       case "$legacy" in *" $id "*) printf '%s: declared in %s, and a legacy entry, which stays hand-written\n' "$id" "$file"; continue ;; esac
       # An entry of #<n> is declared in #<n>'s issue file and in no other, which
@@ -1302,6 +1314,29 @@ generated_bad() {  # generated_bad <declared record> <requirements dir> <legacy 
     done
   } | LC_ALL=C sort
 }
+# THE CHECKSUM LITERALS (#200's, here since #223's issue file became its
+# second caller). Each token that the split set beside <dir> does not bear out,
+# as ` ID:absent` or ` ID:changed(now ID:<cksum>:<length>)`. A changed entry
+# says the token it has now, so that the red says how to move it (rev-agent-200,
+# round 4 of PR #210); whether the change was meant is the reviewer's to say,
+# not this line's. A function so that a fixture can ask it that, which a loop
+# over this repository's own entries -- none of them changed -- never could.
+# The literal is split on blanks and not globbed, whatever the caller left
+# (#223); it turned globbing back on at its end whatever it found until then.
+split_moved_bad() {  # split_moved_bad <requirements dir> <literal>
+  local - tok id now bad= IFS=$' \t\n'
+  set -f
+  for tok in $2; do
+    id=${tok%%:*}
+    if [ ! -f "$1/$id.md" ]; then
+      bad="$bad $id:absent"
+    else
+      now=$(cksum < "$1/$id.md" | awk '{ print $1 ":" $2 }')
+      [ "$now" = "${tok#*:}" ] || bad="$bad $id:changed(now $id:$now)"
+    fi
+  done
+  printf '%s' "$bad"
+}
 # What the pins get wrong: a generated entry in either shared literal, which is
 # the hunk every loop edited until the pins (#211); a pin naming an entry no
 # issue file declares, or one another issue file declares; an entry pinned twice
@@ -1309,7 +1344,7 @@ generated_bad() {  # generated_bad <declared record> <requirements dir> <legacy 
 # are what the entries say is the comparison each shared literal already had,
 # which the end of the run hands them to.
 pins_bad() {  # pins_bad <declared record> <pinned record> <shape literal> <scope literal> <legacy literal>
-  local - rec id file kind tok legacy
+  local - rec id file kind tok legacy IFS=$' \t\n'
   local -A declared=() pinned=()
   set -f
   legacy=" $(printf '%s ' $5)"
@@ -1362,7 +1397,7 @@ pins_bad() {  # pins_bad <declared record> <pinned record> <shape literal> <scop
 # legacy entries and the end of the run to the generated ones, since the
 # derivation reads both.
 legacy_tokens() {  # legacy_tokens <in|out> <legacy literal> <tokens>
-  local - tok legacy
+  local - tok legacy IFS=$' \t\n'
   set -f
   legacy=" $(printf '%s ' $2)"
   for tok in $3; do
@@ -1381,12 +1416,33 @@ legacy_tokens() {  # legacy_tokens <in|out> <legacy literal> <tokens>
 # $SUITE_DIR and never off the copy, and they are what this run sourced and
 # declared. Reading the copy's instead asks the copy for a checks/ directory
 # the override guard does not require, and a copy without one turned the
-# GH-205.2 row red for that reason alone (review of PR #222, round 3). Prints
-# the directory.
+# GH-205.2 row red for that reason alone (review of PR #222, round 3). And
+# check-hooks.sh from the suite's side too, since #223: the script reads the
+# legacy set out of it, and the driver is the tooling as the issue files are.
+# Prints the directory.
 generator_view() {  # generator_view <suite dir> <hooks dir> <into>
   rm -rf -- "$3" && mkdir -p -- "$3" \
-    && ln -s -- "$1/checks" "$3/checks" && ln -s -- "$2/requirements" "$3/requirements" \
+    && ln -s -- "$1/checks" "$3/checks" && ln -s -- "$1/check-hooks.sh" "$3/check-hooks.sh" \
+    && ln -s -- "$2/requirements" "$3/requirements" \
     && printf '%s' "$3"
+}
+# GENERATOR FIXTURES, for the issue files that drive generate-requirements.sh
+# against a hooks directory of their own: #205's, and #223's, which made them
+# library functions as their second caller. A fixture's declarations are
+# written with an `@` in front of the word, taken off as the file is made, so
+# that no line of the calling file opens a declaration it does not mean.
+issue_fixture() {  # issue_fixture <file> -- stdin, with the @ taken off each @requirement
+  mkdir -p "$(dirname -- "$1")"
+  sed 's/@requirement/requirement/' > "$1"
+}
+generator_run() {  # generator_run [--check] <dir> -- what the script printed, and its status
+  bash "$HOOKS/generate-requirements.sh" "$@" 2>&1; printf 'exit %s' "$?"
+}
+# The legacy set the script reads, by name, out of the check-hooks.sh beside
+# checks/ (#223), written the one way the driver writes it. A fixture that
+# means a malformed literal writes its own.
+legacy_fixture() {  # legacy_fixture <dir> <legacy IDs> -- <dir>/check-hooks.sh, holding only the literal
+  printf "REQUIREMENTS_LEGACY='\n%s\n'\n" "$2" > "$1/check-hooks.sh"
 }
 # THE DECLARATION, as bash reads it (#205; here since #215's issue file became
 # its second caller). The fields arrive on stdin from a quoted heredoc, so
@@ -1399,10 +1455,15 @@ generator_view() {  # generator_view <suite dir> <hooks dir> <into>
 # before the declaration.
 requirement() {  # requirement <ID> -- declare a generated GH- entry; its fields on stdin
   local body=
-  # A call with no heredoc would read the terminal and wait; it records an
-  # empty body instead, which the end of the run reports as not its file.
+  # A call with no heredoc reads the stdin the call inherits. Under the driver
+  # that is /dev/null, which the driver makes it before any issue file is
+  # sourced (#223), so the call records an empty body and the end of the run
+  # names the entry as declared with no fields; before that it read whatever
+  # the suite was started with -- the rest of the registry, under
+  # mutate-hooks.sh -- or waited on a pipe that stayed open. A terminal is still
+  # not read, for a caller outside the driver.
   [ -t 0 ] || IFS= read -r -d '' body
-  printf '%s\t%s\t%s\0' "$*" "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$body" >> "$DECLARED"
+  printf '%s\t%s\t%s\0' "$*" "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$body" >> "$SUITE_DECLARED"
 }
 # THE PINS, #211's decision: the second copy of an entry's shape, and of its
 # variants keyword when it is in the invariance families' scope, written in the
@@ -1412,22 +1473,25 @@ requirement() {  # requirement <ID> -- declare a generated GH- entry; its fields
 # `variants_pin`, its twin for the variants keyword, came here from the #205
 # issue file when #144's issue file became its second caller.
 shape_pin() {  # shape_pin '<ID>[:<shape>]...' -- the shape of entries this issue file declares
-  local -
+  local - IFS=$' \t\n'
   set -f
-  printf 'shape\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$PINNED"
+  printf 'shape\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$SUITE_PINNED"
 }
 variants_pin() {  # variants_pin '<ID>:<keyword>...' -- the variants of entries this issue file declares
-  local -
+  local - IFS=$' \t\n'
   set -f
-  printf 'variants\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$PINNED"
+  printf 'variants\t%s\t%s\n' "${BASH_SOURCE[1]#"$SUITE_DIR"/}" "$(printf '%s ' $*)" >> "$SUITE_PINNED"
 }
 # THE READER OF A HEADER'S PROSE (#183's, a function since #215's issue file
 # became its second caller). Comment lines on stdin, one line of prose out: the
 # `#` and up to three blanks after it taken off each line, the lines joined, and
-# every run of spaces squeezed to one. A pin on hand-wrapped prose reads this and
-# not the file, because a phrase crosses a line break wherever the wrap falls;
-# and it reads it through this one function, because a second copy of the
-# reader is a second rule of what rewrapping may do. #215's first reader took
+# every run of spaces squeezed to one. A pin on hand-wrapped prose reads a
+# reflow and not the file, because a phrase crosses a line break wherever the
+# wrap falls; and every reflow ends in this one function, because a second copy
+# of the reader is a second rule of what rewrapping may do. Since #192 a pin on
+# prose reads `prose_reflow` below, which normalises blanks and then calls this,
+# so what rewrapping may do is this function plus that one line; the readers
+# that still pipe into this directly are #323's. #215's first reader took
 # `# ?` off and squeezed nothing, so a trailing blank or a deeper indent turned
 # its pins red where $MUT_PROSE's stayed green; review of #215's pull request
 # measured both.
@@ -1446,6 +1510,136 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
   sed -e 's/^#[ \t]\{0,3\}//' \
     | sed -e ':a' -e '/[[:alnum:]]-[ \t]*$/{N;s/-[ \t]*\n[ \t]*/-/;ba' -e '}' \
     | tr '\n' ' ' | tr -s ' '
+}
+
+# THE RULE FOR A PIN ON PROSE (#192), stated here once: a pin whose literal
+# holds a blank and whose file is prose -- Markdown, or a comment -- reads the
+# file through `prose`, while a pin on code reads the lines, and so does a pin
+# on prose whose literal needs a line's opening `#`, with a comment saying so.
+#
+# Why: `written`, `unarmed` and `prose_count` grep a file's lines, so a phrase
+# matches only where the wrap happens not to fall inside it. An absence pin
+# then reads ok with the phrase standing in the file, the permitting direction
+# and silent; a presence pin goes red on a rewrap that changed no word. GH-70.3
+# was the instance: `four acts` re-added to the branch-hygiene skill across a
+# line break, and the whole suite passed (#192, measured on PR #183's branch at
+# d86223b). The suite had found the class three times before and fixed the
+# instance each time -- a `flatten` helper beside GH-97.2, $MUT_PROSE, and the
+# left-open pins of #184 -- which is why it is a rule here and not a fourth
+# fix.
+#
+# WHAT `prose` READS THAT comment_reflow ALONE DOES NOT. Before the reflow,
+# `prose_reflow` turns a tab, a carriage return, a vertical tab and a form feed
+# into a blank, and takes the blanks off each line's start. The first is what
+# `flatten` did, `tr -s '[:space:]'`, before #192 retired it: comment_reflow
+# squeezes only spaces, so a tab inside a wrapped phrase split it, and GH-97.2's
+# absence over CONTEXT.md read ok with the phrase standing there (review of
+# #192's branch, round 1: red on origin/dev-05, green on the branch). The second
+# is what makes an INDENTED comment prose: comment_reflow takes a `#` only at
+# column 0, so a phrase wrapped across two comment lines inside a function read
+# with a `#` in it, and an absence pin on a hook's prose read ok with the
+# phrase re-added there (same review, over report-stale-branches.sh and
+# no-work-on-stale-branch.sh). A presence pin may name where today's text sits;
+# an absence pin has to read wherever the text can be put back, which is any
+# comment. comment_reflow itself is left as it was: #192 keeps its behaviour,
+# and its other readers are held to it.
+#
+# WHAT `prose` CANNOT READ. It takes a `#` off a line opening with one, blanks
+# before it or not, so a heading's `##` loses a mark and a pin on it goes red;
+# a heading is one line, which is why such a pin stays on the lines. The same
+# holds of a `#` a wrap puts at a line's start in the middle of a sentence,
+# `pull request` over `#N`, which reads as `pull request N`: a literal holding
+# a `#` is found only where no wrap falls just before it, so a presence pin on
+# one can go red on a rewrap, and an absence pin on one would read ok. None of
+# the latter stood in the suite when this was written.
+#
+# THE FIXTURE IS WRITTEN ONLY WHEN ITS PROSE HOLDS A WORD, and otherwise
+# removed, so `written` and `unarmed` over it find no file: `unarmed` fails
+# naming grep's status 2, and `written` fails as it does for a literal not
+# found. An extraction that found nothing, a file of blank lines, a
+# directory and a path that is not there all reach that arm rather than a
+# reflow of blanks, over which `unarmed` would read ok -- the vacuity `unarmed`
+# and `lacks` each refuse. comment_reflow turns an empty line into one blank,
+# which is why the question is a word and not a size (review of #192's
+# branch). The path mirrors the source's under $FIXTURES/prose, so a failure
+# names the file it read.
+#
+# AND ONLY FROM AN ABSOLUTE PATH. `written` and `unarmed` refuse a relative
+# name through `absolute_or_fail`, since one is read from this suite's own
+# directory and not from the hooks under judgment (#142); behind `prose` they
+# are handed the fixture's path, which is always absolute, so the refusal has
+# to be made here. A relative source touches nothing and writes nothing, and
+# the path printed for it is one nothing writes: under $FIXTURES/prose-refused,
+# the name after `relative:` with each `/` spelled `%2F`, so it is one path
+# component and never `.` or `..` -- `prose ..` without the prefix printed
+# `prose-refused/..`, which stayed unresolved only while nothing had made that
+# directory (review of #192's branch, round 5).
+# Two earlier shapes were each wrong. The first ran `mkdir` and `rm -f` on the
+# mirrored path before asking whether the source was absolute, so `prose
+# ../suite-text`, from any directory, deleted $SUITE_TEXT (review of #192's
+# branch, round 4, measured). Moving the `rm` inside the absolute arm alone
+# would have left the mirrored path standing: a relative `tmp/x` names the
+# fixture an earlier `prose /tmp/x` wrote, and `written` would read that.
+prose_reflow() {  # prose_reflow -- prose on stdin, one line out: blanks normalised, then comment_reflow
+  tr '\t\r\v\f' '    ' | sed -e 's/^ *//' | comment_reflow
+}
+prose() {  # prose <file> -- the path of <file> as prose_reflow reads it, written under $FIXTURES/prose
+  local out
+  case "$1" in
+    /*) out="$FIXTURES/prose/${1#/}"
+        mkdir -p -- "${out%/*}"
+        rm -f -- "$out"
+        if [ -f "$1" ]; then
+          prose_reflow < "$1" > "$out"
+          grep -q '[^[:space:]]' "$out" 2>/dev/null || rm -f -- "$out"
+        fi ;;
+    *) out="$FIXTURES/prose-refused/relative:${1//\//%2F}" ;;
+  esac
+  printf '%s\n' "$out"
+}
+# `prose_count` counts LINES, and a reflow is one line, so over `prose` it
+# could no longer tell one saying from two. This counts OCCURRENCES of the
+# literal in the reflow instead, so a pin that holds a count at 1 still goes
+# red on a second copy. A status other than 0 and 1 prints the line
+# `prose_count` prints for it, which no count equals.
+prose_occurrences() {  # prose_occurrences <file> <literal> -- how many times its prose says it
+  local reflowed found grep_status
+  reflowed=$(prose "$1")
+  found=$(grep -oF -- "$2" "$reflowed" 2>/dev/null)
+  grep_status=$?
+  case $grep_status in
+    0) printf '%s\n' "$found" | grep -c '' ;;
+    1) printf '0\n' ;;
+    *) printf 'unread: grep exited %s on %s\n' "$grep_status" "$reflowed" ;;
+  esac
+}
+
+# THE POINTER BESIDE THE DEV-BRANCH DERIVATION, the `for-each-ref` over
+# refs/remotes/origin/dev- that three hooks share, read by #62's checks in the
+# unsplit file; in the library since #192's issue file drives `beside` too.
+#
+# The comment block standing immediately above the derivation. `armed` would
+# ask only whether a literal is somewhere in a file, and somewhere is not
+# beside: a pointer that drifted to the head of either file would still satisfy
+# grep while no longer standing where the derivation is read and edited, which
+# is the whole of what a pointer is for. A blank line ends the block, so a
+# pointer separated from the derivation does not count as beside it.
+dev_pointer() {  # dev_pointer <file> -- the comment block above the derivation
+  awk '/^#/ { block = block $0 "\n"; next }
+       /for-each-ref.*refs\/remotes\/origin\/dev-/ { printf "%s", block; exit }
+       { block = "" }' "$1" 2>/dev/null
+}
+
+# The block is prose, so it is read through prose_reflow, by the rule for a
+# pin on prose above: the two literals the unsplit file gives it are clauses of
+# a wrapped comment, and each matched only while the wrap fell outside it.
+beside() {  # beside <label> <file> <literal>
+  if dev_pointer "$2" | prose_reflow | grep -qF -- "$3"; then
+    pass static 'beside %s' "$1"
+  else
+    fail static '%s\n         expected the comment above the derivation in %s\n         to contain |%s|' \
+           "$1" "$2" "$3"
+  fi
 }
 
 # The library present and loading, with exactly one function renamed away. Built
@@ -1576,4 +1770,191 @@ fn_calls() {  # fn_calls <file> <function> -- how many times it appears as a cal
     | grep -vE "^(function[[:space:]]+)?$2[[:space:]]*\(\)" \
     | tr -c 'A-Za-z0-9_$-' '\n' \
     | grep -cxF -- "$2"
+}
+# THE DUPLICATED DESCRIPTOR, which the three counters above cannot see through,
+# so the #109 section in the unsplit file refuses it in both hooks rather than
+# counting it; that section argues why. Here since #185, whose issue file became
+# its second caller, and widened by it: the pattern reached one spelling, a
+# single-digit fd written `N>&2`, of a contract that says any fd but 1.
+#
+# WHAT IT REACHES, read off the text as three parts. A SOURCE fd written
+# explicitly -- a number whose value is not 1, leading zeros read as bash reads
+# them, so `02` is fd 2 and `01` is fd 1, or a `{name}`, a subscript allowed
+# and one subscript nested in it, each holding a character or more, since bash
+# reads an empty one as no name -- or left implicit on an input operator, where
+# it is 0. Bash reads digits or a `{name}` in front of an operator as its fd
+# only when they are the whole word, so a written source is read only where a
+# word starts: after a character of `end`, below, or after a quote, which may
+# open a string `eval` or `sh -c` runs -- `eval "3>&2 exec"`, which the pattern
+# before #185 reported and round 4 of review hid until the sixth found it -- or
+# close one, `"$x"3>&2`, which is then a trade. `a3>&2`, `$sha256>&2` and
+# `${msg}>&2` are fd 1, and are not reported; until the fourth review of #185's
+# pull request a source was read after anything but a digit or a `$`, `a3>&2`
+# and `"$x"3>&2` were recorded as refusing-direction trades, and `$sha256>&2`
+# was reported against the requirement's own word that fd 1 never is. After `<`
+# or `>` bash reads the digits as that operator's fd and stops on a syntax
+# error, so no line tells those two word starts apart; they are read because
+# the source reads `end` whole. For the same reason the implicit fd is found
+# after anything but `<` and a word of digits alone: `}<&2` and `a1<&2` are fd
+# 0, and ` 1<&2` and `` `1<&2 `` are fd 1. The digits after `>&` or `<&` are
+# the exception: bash reads them as that operator's target and never as the
+# next one's fd, so `>&1<&2` is fd 0; after any other operator they are the fd,
+# and `>1<&2` is a syntax error. A TARGET that is fd 2, leading zeros allowed,
+# after `>&` or `<&`; or, after `>`, `>>`, `>|`, `<` or `<>`, a path whose last
+# component is `stderr` or whose last two are `fd/2` -- which reaches
+# `/dev/stderr`, `/dev/fd/2` and every `/proc/.../fd/2` naming this process
+# without listing them, and reports `/proc/$PPID/fd/2` too, the parent's, a
+# trade GH-185's note lists -- or, after any of those but `<`, which opens it
+# read-only, a process substitution, `>(`, whatever the command in it writes to.
+# Blanks allowed in front of the target.
+#
+# WHERE A WORD ENDS is `end`, one set that every part reads: a blank, which is a
+# space or a tab as bash's blanks are, one of `;&|()<>`, and a backtick. It read
+# `[:space:]` until the sixth review of #185's pull request, which let a form
+# feed end a word, so `x=<FF>1<&2`, fd 0 to bash, read as fd 1; every blank in
+# the pattern is `[:blank:]` now. That set is where bash ends a word in the text
+# alone, and not everywhere: a substitution's closing `)` or backtick ends no
+# word, so `$(:)1` is one word, an escaped blank joins one, so `a\ 1` is one,
+# and an extglob pattern's close ends none, so `!(x)1` is one; an alias is
+# expanded as bash reads the line, into text this one never sees; which a
+# character is depends on the state bash is in when it reads it, which the text
+# does not carry. GH-185's note names that class and pins its representatives,
+# and the fifth review set the line there: named, not reached, since reaching it
+# is a lexer. It was three copies until the second review found two of them
+# without the backtick, so a path closing a substitution was never bounded. It
+# is the tokeniser's BOUND in lib/command-scan.sh, and is not read from there:
+# that is a string inside an awk program there, not a value to import, and a
+# guard asked of the hooks that shares their tokeniser's text shares its
+# defects. The second reading's target word stops at a backtick too, and round 2
+# of that review said this could not be observed; round 3 observed it: without
+# the stop, ``x=`: >a`$'3'>&2`` has `$'3'` taken out of the quotes of a word
+# that is not a target, and reads as fd 3, where bash reads fd 1. Whether that
+# word matches an empty run or fails to match one cannot be observed, since
+# awk's `substr` gives the same word and the same rest either way.
+#
+# The implicit fd on an output operator is 1, which is an ordinary refusal and
+# is never reported however it is spelled; `<<` and `<<<` are not input
+# operators and are stepped over.
+#
+# EACH LINE IS READ TWICE: as written, and with the quotes, the backslashes and
+# the repeated `/` and `./` segments taken out of every redirection's target
+# word, so `>&\2`, `>&''2`, `>&$'2'` and `>"/dev/"stderr` read as the bare
+# spellings they are. The two readings are joined on one line, split by a `;`
+# that ends every part of the pattern, and a line either one matches is
+# reported as written. Both readings are needed: a quote taken out can leave
+# a word of digits alone in front of the next operator, so `>"1"<&2`, fd 0
+# onto stderr, reads as fd 1 without its quotes. What an escape or an
+# expansion in a target stands for is not read; GH-185's note names what that
+# leaves.
+#
+# The `;` is also the second reading's start of line, which is why no part of
+# the pattern has a `^`: the two readings agree on everything in front of a
+# line's first target word, so a source or an implicit fd at the start of a
+# line is read after the `;`, and a `^` could never be the reason a line
+# matched (the third review found it dead). The second reading finds an
+# operator as `<` or `>` and then an `&` or `|` if one follows; `>>` and `<>`
+# are two operators to it, and the word after the second is the one it reads,
+# so a `>` in that class could not be observed either.
+#
+# Where the ends are loose, they are loose in the refusing direction: the
+# digits after `>&` are a word start to the source, so `>&13>&2`, a target of
+# 13 and then fd 1, is reported; the fd target is not bounded on its right, so
+# `>&20` is reported; and a path is read by its end in any directory, so a
+# log file named `stderr` is reported. GH-185's note lists every trade, and a
+# row pins each. A path is bounded on its
+# right, since read by its end it would otherwise reach `2>/tmp/stderr.log`.
+# The second reading takes quotes out without reading which quote holds which,
+# so `3>\&2`, a file named `&2`, is reported.
+#
+# THE TOOLS READ THE FILE, and until the seventh review of #185's pull request
+# they read it by the caller's locale and their own operand rules, not as bash
+# does: under a UTF-8 locale GNU grep took a file holding a NUL, or a line with
+# a byte that is not UTF-8, as binary and printed nothing, and `[:blank:]` took
+# in an EM SPACE; and awk took a file named `x=1.sh` as an assignment and one
+# named `-` as stdin, and read stdin instead. The same file was red on one
+# machine and green on another. So the whole pipeline runs under `LC_ALL=C`,
+# exported to its tools and local to the call, and awk reads the file on stdin,
+# never as an operand. The class is the tools' semantics, where every earlier
+# class was the pattern's, and checks/GH-185.sh pins a row for each member,
+# called under `C.UTF-8`, the locale CI gives the suite, so each tells the fix
+# from its absence wherever it runs. The eighth review found one more, in bash
+# rather than the tools: bash drops every NUL from the text it reads, so
+# `exec 3>&<NUL>2` is `exec 3>&2` to it, and the pipeline read it with the NUL
+# kept. `tr` takes each NUL out first, which leaves every line's number as it
+# was. grep read with `-a` until then, for a file holding a NUL; under
+# `LC_ALL=C` a file with none is never binary to it, so `-a` went, since no
+# row could tell it from its absence, and the NUL rows go red without the
+# `tr`, since grep then reads the file as binary.
+#
+# A FILE IT CANNOT READ is reported as `UNREADABLE`, with the reason on stderr,
+# and never as the empty string a clean file gives: every row that asks a real
+# file would pass on an absent one otherwise. A directory is not a regular
+# file, and a row drives that half. The readable half has no row: a file of
+# mode 000 is readable by root, so the row would pass or fail by who runs it.
+#
+# A RUN OF CONTINUED LINES -- each but its last ending in a backslash -- is
+# read joined from every line of it to its end, each join under its own first
+# line's number, and a join whose first non-blank is `#` is a comment and is
+# blanked. Which of those lines starts bash's logical line depends on whether a
+# backslash is escaped or inside a trailing comment, which is the state the
+# text does not carry, and one of the joins is bash's whichever it is: `: #
+# note\`, `3>\`, `/dev/stderr f` is the comment and then `3>/dev/stderr f`,
+# reported under its own line, and `: x\` then `#y; exec 3>&2` is one line to
+# bash, whose `#` is inside a word. That is the sixth review's fix for the
+# family of joins the fold started too early. It replaced three narrower ones:
+# until the fourth review the fold blanked comments before it joined and
+# continued a comment, and `: # price in $\` then `3>&2 exec` read as the
+# parameter `$3`, which the pattern before #185 had reported; the fourth added
+# a reading of each continued line alone, and the fifth a rule that a comment
+# at a logical line's start continues nothing, and each was one member of the
+# family. Reading more joins can only add a report, and the joins bash does not
+# make are the refusing-direction trades GH-185's note lists, #315's escaped
+# backslash among them. The fold is its own and not `hook_text`'s, for two
+# reasons: `hook_text` drops heredoc bodies with the tokeniser's pass, and
+# #289's misread `<<` drops real code with them, which is the permitting
+# direction here; and its fold joins lines, so the numbers `grep -n` prints
+# stop being the file's. Heredoc bodies stay, so a body line naming the shape
+# is a red -- the refusing direction. checks/GH-185.sh drives each part against
+# a fixture and argues what it does not reach.
+dup_stderr() {  # dup_stderr <file> -- any fd but 1 pointed at 2, which a duplication writes
+  local end src imp fd path proc sep
+  local -x LC_ALL=C
+  [ -f "$1" ] && [ -r "$1" ] || {
+    echo "dup_stderr: $1 is not a readable file, so nothing in it was asked" >&2
+    echo UNREADABLE
+    return 1
+  }
+  end='[:blank:];&|()<>`'
+  src="[${end}\"']((0+|0*[2-9]|0*[1-9][0-9]+)|[{][A-Za-z_][A-Za-z0-9_]*([[]([^][]|[[][^][]+[]])+[]])?[}])"
+  imp="([^0-9<]|[^${end}0-9][0-9]+|[<>]&[[:blank:]]*[0-9]+)"
+  fd='&[[:blank:]]*0*2'
+  path="[[:blank:]]*[^${end}]*/(stderr|fd/2)([${end}]|\$)"
+  proc='[[:blank:]]*>[(]'
+  sep=$(printf ';\001;')
+  tr -d '\000' < "$1" \
+    | awk -v sep="$sep" -v word="^[^${end}]*" '
+        function unquoted(s,   out, w) {
+          out = ""
+          while (match(s, /[<>][&|]?[[:blank:]]*/)) {
+            out = out substr(s, 1, RSTART + RLENGTH - 1); s = substr(s, RSTART + RLENGTH)
+            match(s, word); w = substr(s, 1, RLENGTH); s = substr(s, RLENGTH + 1)
+            gsub(/\$["\047]|["\047\\]/, "", w); gsub(/\/+/, "/", w)
+            while (sub(/\/\.\//, "/", w)) ;
+            out = out w
+          }
+          return out s
+        }
+        function emit(l) { if (l ~ /^[[:blank:]]*#/) l = ""; print l sep unquoted(l) }
+        function flush(   k, i, t, l) {
+          for (k = 1; k <= n; k++) {
+            t = ""
+            for (i = k; i <= n; i++) { l = run[i]; sub(/\\$/, "", l); t = t l }
+            emit(t)
+          }
+          n = 0
+        }
+        { run[++n] = $0; if ($0 ~ /\\$/) next; flush() }
+        END { flush() }' \
+    | grep -nE "${src}([<>]${fd}|(>|>>|<|<>|>[|])${path}|(>|>>|<>|>[|])${proc})|${imp}(<${fd}|(<|<>)${path}|<>${proc})" \
+    | sed "s/${sep}.*//" | tr '\n' ' ' | sed 's/ $//'
 }
