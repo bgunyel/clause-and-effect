@@ -1627,3 +1627,12 @@ it has no entry above (Q16).
   or `eval` state -- and pinned its representatives. Cited in GH-185's note
   as that class's structural fix. It adds its requirements in the pull
   request that fixes it
+- #351: the heredoc pass removes a delimiter's quotes by deleting quote
+  characters, which is not bash's quote removal, so `<<"it's"`, `<<E\OF`,
+  `<<\EOF`, `<<$'EOF'` and `<<"E\"F"` end a body on a line bash has already
+  passed and hide what lies between, in every hook. Filed from round 2 of the
+  review of #202's pull request, which closed it for that pull request's
+  keep-unquoted mode with a delimiter grammar and measured the default mode
+  permitting it on dev-05. Cited in GH-202.1's note and beside the grammar in
+  `lib/command-scan.sh`. It adds its requirements in the pull request that
+  fixes it

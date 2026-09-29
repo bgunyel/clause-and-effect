@@ -666,8 +666,9 @@ CMDLIST
 # some of its quoted bodies taken out by cs_drop_quoted_heredocs -- the
 # library's answer to where a body begins, what quoting is, which opener bash
 # sees and what reads a body, and not one written here. It drops a body only
-# where the drop is proven harmless: a quoted delimiter, an opener its quote
-# state vouches for, and `cat` into a file or a `gh` command reading it. Every
+# when the opener's line fits a grammar the library writes out -- a quoted
+# delimiter of plain words, `cat` into a plain file or `gh api` reading it --
+# and its quote state vouches for the opener. Every
 # other body is kept and re-read exactly as before -- an unquoted one because
 # bash runs the `$( )` and the backticks in it, and a quoted one fed to
 # anything else because that reader may run it. line_was_cut and the state
@@ -684,8 +685,13 @@ CMDLIST
 # and permitted by that version: the merge was dropped as a body. Found by
 # review, with more shapes -- the `<<` inside single or double quotes, after a
 # `#`, behind a backslash, inside `$'...'` -- and each is a row in GH-202.1
-# now. Why the library's answer can only fail towards the re-read is DOUBT IS
-# STICKY, in lib/command-scan.sh above the heredoc pass.
+# now. A second round found the same class one level down -- a delimiter,
+# a target, a gh subcommand and constructs the quote state did not read, each
+# trusted because nothing said not to -- and the library now drops only what
+# its grammar names. Where it still trusts a model, and how far the claim
+# goes, is WHERE IT STILL TRUSTS A MODEL, in lib/command-scan.sh above the
+# heredoc pass; an earlier version of this sentence said the answer could only
+# fail towards the re-read, which round 2 of the review measured false.
 #
 # A FAILED CALL FALLS BACK ON THE RAW COMMAND, which is the reading before #202:
 # it refuses more and never less. When the call can fail is said beside
