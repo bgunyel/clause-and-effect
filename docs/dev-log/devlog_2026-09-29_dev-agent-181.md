@@ -85,3 +85,32 @@ running beside them.
   read as code (#182), though #182 has closed. That wording predates this
   lane. The assistant left it, because the note is a legacy entry and each
   edit to one moves its `SPLIT_MOVED` token.
+
+---
+
+# 2026-09-29 · dev-agent-181 — merge of dev-05 at 0e4a0f4
+
+17:14 +03.
+
+Branch `worktree-issue-181-writer-callers`, from `c6f9cbb` to `dce04d8`.
+It merges `origin/dev-05` at `0e4a0f4`, which brought in #329, #350 and #342.
+With this entry's commit the branch is 7 commits ahead of `origin/dev-05`
+and 0 behind. rev-agent-181 asked for the merge because the branch no longer merged clean.
+
+- **Conflicts.** There were two, and both were additive. In
+  `mutate-hooks.sh` the header paragraph for #181's rows sat beside #156's.
+  In `requirements.md` the #338 cite entry sat beside #233, #329, #337, #350,
+  #352, #254 and #342. The assistant kept both sides of each.
+- **A literal that merged clean and wrong.** Each side added three registry
+  rows. Each moved the row literal in `checks/unsplit.sh` from 152 to 155, and
+  the caught literal from 150 to 153. Git saw one agreed change, so there was
+  no conflict marker. The assistant re-derived both from the merged registry:
+  158 rows, 156 declared caught, 1 did-not-apply and 1 survived. The
+  assistant's first suite run started before the literals were fixed, and it
+  stopped that run unread.
+- **`--list` on the merged tree** (measured): 158 rows, 156 real mutations
+  against 17 files, 80 requirement IDs, 2 self-tests, and 258 active
+  requirements.
+- **Full suite on `dce04d8`** (measured): 8183 ok, 0 FAIL, ALL CHECKS PASSED.
+- **Not re-run:** `mutate-hooks.sh -v` over the three #181 rows. The earlier
+  entry's figures for them are for `54391a2` and say nothing about this merge.
