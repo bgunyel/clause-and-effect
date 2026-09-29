@@ -1478,6 +1478,14 @@ it has no entry above (Q16).
   raw shape in the GH-99.1 and GH-117.1 pins over CLAUDE.md, and in
   `prose_count`, was added to #192 then, as that issue's class. It adds its
   requirements in the pull request that fixes it
+- #323: the suite's readers that pipe into `comment_reflow` directly rather
+  than through `prose_reflow`, so a tab or an indented `#` splits a phrase
+  under their pins -- GH-118's left-open section, GH-157's Conventions, GH-177's
+  CLAUDE.md and CONTEXT.md reads, GH-215's header readers and $MUT_PROSE.
+  Cited in #192's issue file, whose GH-192.3 pins each file's count of direct
+  calls, and in #118's, beside the reader it names. Filed from round 1 of the
+  review of #192's pull request; it adds its requirements in the pull request
+  that fixes it
 - #241: a word in the gh path position that gh never receives as written --
   an empty argument, a lone `-`, and the `$` stump a `$(` cut leaves -- read by
   the walk as a path word, so a merge is read as not this path. Cited in

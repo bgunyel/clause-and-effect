@@ -43,27 +43,6 @@ dev_derivation() {  # dev_derivation <file> -- the derivation, as written
       "$1" 2>/dev/null
 }
 
-# The comment block standing immediately above the derivation. `armed` would
-# ask only whether a literal is somewhere in a file, and somewhere is not
-# beside: a pointer that drifted to the head of either file would still satisfy
-# grep while no longer standing where the derivation is read and edited, which
-# is the whole of what a pointer is for. A blank line ends the block, so a
-# pointer separated from the derivation does not count as beside it.
-dev_pointer() {  # dev_pointer <file> -- the comment block above the derivation
-  awk '/^#/ { block = block $0 "\n"; next }
-       /for-each-ref.*refs\/remotes\/origin\/dev-/ { printf "%s", block; exit }
-       { block = "" }' "$1" 2>/dev/null
-}
-
-beside() {  # beside <label> <file> <literal>
-  if dev_pointer "$2" | grep -qF -- "$3"; then
-    pass static 'beside %s' "$1"
-  else
-    fail static '%s\n         expected the comment above the derivation in %s\n         to contain |%s|' \
-           "$1" "$2" "$3"
-  fi
-}
-
 # A guard for the one check below that compares two numbers rather than
 # matching a literal. An absent derivation must not reach `[ -gt ]`, which
 # errors rather than answering.
@@ -1577,10 +1556,10 @@ check_in "$ON_MAIN" no-commit-to-main.sh ALLOW 'a body naming a commit on a cont
 # pin that is a prefix goes on passing after the rest of the sentence is gone.
 req GH-128
 written 'the library counts what the direction of the fix costs' \
-  "$HOOKS/lib/command-scan.sh" \
+  "$(prose "$HOOKS/lib/command-scan.sh")" \
   '750 such shapes on dev-05, 816 on the first fix, 848 here, of 2,100.'
 written 'and decomposes the rise into the two departures already named' \
-  "$HOOKS/lib/command-scan.sh" \
+  "$(prose "$HOOKS/lib/command-scan.sh")" \
   'of the 124 that arrive, 108 are the END give-back and 16 the unquoted-body'
 
 section "=== REGRESSION: review of 02a14d8, bundled gh shorthand flags ==="
@@ -5805,7 +5784,7 @@ armed 'and delete_branch_on_merge must be on, which is what the gone detector re
 # asserts, and stripping comments would erase the line rather than a remark.
 req FR-44 GH-71
 written 'and the guard points at that report instead of recording a value itself' \
-  "$HOOKS/no-work-on-stale-branch.sh" 'That report is the live answer, and'
+  "$(prose "$HOOKS/no-work-on-stale-branch.sh")" 'That report is the live answer, and'
 # And the same counting the dev-branch argument gets below, for the same reason
 # and against the same failure. This history is the one thing in the change that
 # is prose rather than code, which is what the last two records of it were --
@@ -5816,18 +5795,20 @@ written 'and the guard points at that report instead of recording a value itself
 # itself.
 HISTORY='it asserted both settings disabled before they were'
 tok 'the history of the recorded version is told in the guard, once' \
-    '1' "$(prose_count "$HOOKS/no-work-on-stale-branch.sh" "$HISTORY")"
+    '1' "$(prose_occurrences "$HOOKS/no-work-on-stale-branch.sh" "$HISTORY")"
 tok 'and the report does not tell it a second time' \
-    '0' "$(prose_count "$HOOKS/report-stale-branches.sh" "$HISTORY")"
+    '0' "$(prose_occurrences "$HOOKS/report-stale-branches.sh" "$HISTORY")"
 written 'the report says where that argument lives instead' \
-  "$HOOKS/report-stale-branches.sh" "is in no-work-on-stale-branch.sh's header"
+  "$(prose "$HOOKS/report-stale-branches.sh")" "is in no-work-on-stale-branch.sh's header"
 # What these six pins are NOT evidence of, named because the suite is evidence
 # about the cases it names and nothing else: they read the call sites, not
 # `drift` itself. Mutate that function to return early and all six stay green.
 # Pinning its body was considered and rejected -- the only seam that would drive
 # it is sourcing the report, and sourcing the report runs the fetch.
 # Read-only by name and by content. The name is checked by being the path above;
-# the content is checked here.
+# the content is checked here. On the lines and not through `prose`: these are
+# commands the report would run, which is code, and a comment that named one
+# across a line break is not the report running it.
 req GH-44.7
 unarmed 'the report removes no worktree' \
   "$HOOKS/report-stale-branches.sh" 'worktree remove'
@@ -5957,11 +5938,11 @@ beside 'and so does the pull request hook' \
 # written, so a reworded second copy is a second copy uncounted.
 ARGUMENT='sort makes dev-09 beat dev-10, and an unfiltered glob lets origin/dev-foo'
 tok 'the argument the report points at is made in the guard, once' \
-    '1' "$(prose_count "$HOOKS/no-work-on-stale-branch.sh" "$ARGUMENT")"
+    '1' "$(prose_occurrences "$HOOKS/no-work-on-stale-branch.sh" "$ARGUMENT")"
 tok 'and the report does not argue it a second time' \
-    '0' "$(prose_count "$HOOKS/report-stale-branches.sh" "$ARGUMENT")"
+    '0' "$(prose_occurrences "$HOOKS/report-stale-branches.sh" "$ARGUMENT")"
 tok 'nor does the pull request hook, which points at it too' \
-    '0' "$(prose_count "$HOOKS/no-pr-decisions.sh" "$ARGUMENT")"
+    '0' "$(prose_occurrences "$HOOKS/no-pr-decisions.sh" "$ARGUMENT")"
 # And the sentence that does the pointing: without it the report holds a bare
 # pairing pointer and no trace of where its reasoning went. `beside` rather than
 # `written`, because a pointer that is not beside the derivation is not doing
@@ -6590,9 +6571,9 @@ awk '/^## What an unattended agent may do to this repository$/ {f=1; print; next
 # in what came out, and a line from another section is not.
 req GH-63 US-16
 written 'the extracted section is the boundary section' \
-  "$SECTION" 'What an unattended agent may do to this repository'
+  "$(prose "$SECTION")" 'What an unattended agent may do to this repository'
 unarmed 'and it is that section rather than the whole file' \
-  "$SECTION" 'Import cost is a design constraint'
+  "$(prose "$SECTION")" 'Import cost is a design constraint'
 
 # Narrowed again, to the paragraph that says what is enforced. The section's last
 # paragraph is about what is deliberately NOT guarded, and it discusses
@@ -6604,9 +6585,9 @@ unarmed 'and it is that section rather than the whole file' \
 PARAGRAPH="$FIXTURES/boundary-paragraph.md"
 awk -v RS= '/Enforced by/' "$SECTION" > "$PARAGRAPH"
 written 'and the paragraph taken from it is the one that says what is enforced' \
-  "$PARAGRAPH" 'Enforced by'
+  "$(prose "$PARAGRAPH")" 'Enforced by'
 unarmed 'and it stops short of what is deliberately left unguarded' \
-  "$PARAGRAPH" 'Deliberately left open'
+  "$(prose "$PARAGRAPH")" 'Deliberately left open'
 
 # Registered on Bash or at SessionStart, but about documents or commands rather
 # than about what an agent may do to this repository. Each name here is a
@@ -6736,9 +6717,9 @@ BOUNDARY_HOOKS=$(for hook in $REGISTERED; do
 req US-20 FR-2
 for hook in $BOUNDARY_HOOKS; do
   written "$hook carries the test a fix has to pass" \
-    "$HOOKS/$hook" 'would plausibly write'
+    "$(prose "$HOOKS/$hook")" 'would plausibly write'
   written "and the shape that does not earn one, in $hook" \
-    "$HOOKS/$hook" 'have to construct'
+    "$(prose "$HOOKS/$hook")" 'have to construct'
 done
 # AND EVERY ONE OF THEM ADMITS A QUOTED GUARDED NAME, issue #117. The second
 # question of each boundary hook's wrapper rule is that hook's own pattern, so
@@ -6769,27 +6750,27 @@ set +f
 # The two that state it in full, named because a check is evidence about what it
 # names and the loop above is satisfied by the phrase alone.
 written 'no-git-push.sh writes the rule out under its own heading' \
-  "$HOOKS/no-git-push.sh" 'STOPPING RULE. A newly found evasion earns a fix only if it is a shape an'
+  "$(prose "$HOOKS/no-git-push.sh")" 'STOPPING RULE. A newly found evasion earns a fix only if it is a shape an'
 written 'and says where to stop' \
-  "$HOOKS/no-git-push.sh" 'closed. Stop when the shapes stop being ones an agent would plausibly write.'
+  "$(prose "$HOOKS/no-git-push.sh")" 'closed. Stop when the shapes stop being ones an agent would plausibly write.'
 written 'no-pr-decisions.sh writes it out too' \
-  "$HOOKS/no-pr-decisions.sh" 'STOPPING RULE. A newly found evasion earns a fix only if it is a shape an'
+  "$(prose "$HOOKS/no-pr-decisions.sh")" 'STOPPING RULE. A newly found evasion earns a fix only if it is a shape an'
 written 'and applies it to the endpoint list that is its own growth' \
-  "$HOOKS/no-pr-decisions.sh" 'growing when the spellings stop being ones an agent would plausibly write.'
+  "$(prose "$HOOKS/no-pr-decisions.sh")" 'growing when the spellings stop being ones an agent would plausibly write.'
 # The two that cite rather than restate. Both name no-git-push.sh, which the
 # loop above has just asked for the rule, so a citation and its referent are
 # checked together rather than one at a time -- the #84 shape, one level out.
 written 'no-commit-to-main.sh cites the rule rather than restating it' \
-  "$HOOKS/no-commit-to-main.sh" 'This stops mistakes, not adversaries. The stopping rule in no-git-push.sh'
+  "$(prose "$HOOKS/no-commit-to-main.sh")" 'This stops mistakes, not adversaries. The stopping rule in no-git-push.sh'
 written 'no-work-on-stale-branch.sh inherits it by name' \
-  "$HOOKS/no-work-on-stale-branch.sh" 'STOPPING RULE, inherited from no-git-push.sh. A newly found evasion earns a'
+  "$(prose "$HOOKS/no-work-on-stale-branch.sh")" 'STOPPING RULE, inherited from no-git-push.sh. A newly found evasion earns a'
 # What the rule is for, in the sentence the four exist under. Not derived off the
 # loop: no-pr-decisions.sh does not carry it, and a loop asking for it would pin
 # three files and a hole.
 written 'no-git-push.sh says what standard it is held to' \
-  "$HOOKS/no-git-push.sh" 'This stops mistakes, not adversaries.'
+  "$(prose "$HOOKS/no-git-push.sh")" 'This stops mistakes, not adversaries.'
 written 'and so does no-work-on-stale-branch.sh' \
-  "$HOOKS/no-work-on-stale-branch.sh" 'This stops mistakes, not adversaries.'
+  "$(prose "$HOOKS/no-work-on-stale-branch.sh")" 'This stops mistakes, not adversaries.'
 
 section "=== the documents answer the citations the hooks make into them ==="
 # A fourth kind of check, and the section above with its direction reversed:
@@ -6832,33 +6813,33 @@ WORKTREE_ENTRY="$FIXTURES/context-worktree-branch.md"
 entry "$CONTEXT_MD" 'Worktree branch' > "$WORKTREE_ENTRY"
 req GH-70.1 FR-27 US-24 FR-37
 written 'the extracted entry is the worktree branch entry' \
-  "$WORKTREE_ENTRY" '**Worktree branch**:'
+  "$(prose "$WORKTREE_ENTRY")" '**Worktree branch**:'
 unarmed 'and it is that entry rather than the whole glossary' \
-  "$WORKTREE_ENTRY" '**Reserved act**:'
+  "$(prose "$WORKTREE_ENTRY")" '**Reserved act**:'
 
 # no-work-on-stale-branch.sh sends a reader here for what a worktree branch is,
 # and what that hook refuses is a commit on one whose pull request has merged.
 # Before #70 the entry defined the branch and stopped, so a reader who followed
 # the pointer learned everything about it except the fact the refusal turns on.
 written 'the entry says the branch lives for one pull request' \
-  "$WORKTREE_ENTRY" 'exists for exactly one pull request'
+  "$(prose "$WORKTREE_ENTRY")" 'exists for exactly one pull request'
 written 'and that the worktree it was made in is not reused after it' \
-  "$WORKTREE_ENTRY" 'is not reused'
+  "$(prose "$WORKTREE_ENTRY")" 'is not reused'
 
 RESERVED_ENTRY="$FIXTURES/context-reserved-act.md"
 entry "$CONTEXT_MD" 'Reserved act' > "$RESERVED_ENTRY"
 req GH-70.3 FR-27 US-26
 written 'the extracted entry is the reserved act entry' \
-  "$RESERVED_ENTRY" '**Reserved act**:'
+  "$(prose "$RESERVED_ENTRY")" '**Reserved act**:'
 unarmed 'and it is that entry rather than the whole glossary' \
-  "$RESERVED_ENTRY" '**Worktree branch**:'
+  "$(prose "$RESERVED_ENTRY")" '**Worktree branch**:'
 
 # report-stale-branches.sh calls removing a worktree "a reserved act in
 # CONTEXT.md" in its header, and prints the same claim into every session's
 # transcript. The enumeration named four acts and that was not one of them.
 req GH-70.3 FR-29 US-26
 written 'the enumeration names the act the report cites' \
-  "$RESERVED_ENTRY" 'removing a worktree or deleting a worktree branch'
+  "$(prose "$RESERVED_ENTRY")" 'removing a worktree or deleting a worktree branch'
 
 # #97 widened the release rule from publishing and deleting to any write, and
 # the two documents that state the rule are widened with it -- no-pr-decisions.sh
@@ -6867,30 +6848,26 @@ written 'the enumeration names the act the report cites' \
 # and the absence of each old one are asserted, because a document that gained
 # the new phrase and kept the old would state two rules.
 #
-# Asserted against the text with its line breaks joined. `written` and `unarmed`
-# match within a line, and CLAUDE.md wraps "create or delete a" and "release"
-# onto two lines, so an `unarmed` over the paragraph as written passes while the
-# phrase still stands in it. Measured on dev-05: the absence check read ok there
-# unjoined, and is red joined.
-# An extraction that found nothing flattens to an empty file, and `unarmed` over
-# an empty file reads ok. Each `unarmed` below is therefore paired with a
-# `written` over the same file, which is the one that fails then.
-flatten() {  # flatten <file> -- one line, every run of whitespace one space
-  tr -s '[:space:]' ' ' < "$1"
-}
-RESERVED_FLAT="$FIXTURES/context-reserved-act.flat"
-flatten "$RESERVED_ENTRY" > "$RESERVED_FLAT"
-PARAGRAPH_FLAT="$FIXTURES/boundary-paragraph.flat"
-flatten "$PARAGRAPH" > "$PARAGRAPH_FLAT"
+# Asserted against the text as `prose` reads it, by the library's rule for a
+# pin on prose. This block is where the suite first met that rule's class:
+# `written` and `unarmed` match within a line, and CLAUDE.md wraps "create or
+# delete a" and "release" onto two lines, so an `unarmed` over the paragraph as
+# written passed while the phrase still stood in it. Measured on dev-05: the
+# absence check read ok there unjoined, and is red joined. The fix then was a
+# `flatten` helper defined here, a second reader with a rule of its own for
+# what a rewrap may do; #192 retired it for the library's, which also rejoins a
+# word broken at a hyphen.
+# Each `unarmed` below is paired with a `written` over the same fixture, which
+# is the one that fails if the extraction found nothing.
 req GH-97.2 FR-29
 written 'the reserved act entry reserves any write to a release' \
-  "$RESERVED_FLAT" 'any write to a release'
+  "$(prose "$RESERVED_ENTRY")" 'any write to a release'
 unarmed 'and no longer narrows it to publishing one' \
-  "$RESERVED_FLAT" 'publishing a release'
+  "$(prose "$RESERVED_ENTRY")" 'publishing a release'
 written 'the boundary paragraph refuses any write to a release' \
-  "$PARAGRAPH_FLAT" 'any write to a release'
+  "$(prose "$PARAGRAPH")" 'any write to a release'
 unarmed 'and no longer narrows it to creating or deleting one' \
-  "$PARAGRAPH_FLAT" 'create or delete a release'
+  "$(prose "$PARAGRAPH")" 'create or delete a release'
 
 # The skill read that enumeration as closed and counted it -- "one of the four
 # acts CONTEXT.md names" -- and #70 found the count stale the moment a fifth act
@@ -6907,11 +6884,11 @@ unarmed 'and no longer narrows it to creating or deleting one' \
 # allowed to stand goes stale in silence, which is the direction that matters.
 req GH-70.3
 unarmed 'the skill does not carry the count that went stale' \
-  "$SKILL_MD" 'four acts'
+  "$(prose "$SKILL_MD")" 'four acts'
 unarmed 'nor a corrected one, which would go stale the same way' \
-  "$SKILL_MD" 'five acts'
+  "$(prose "$SKILL_MD")" 'five acts'
 written 'it cites the enumeration instead of counting it' \
-  "$SKILL_MD" 'entry holds the list'
+  "$(prose "$SKILL_MD")" 'entry holds the list'
 
 # The third citation, and the one that had gone unwritten rather than merely
 # undocumented: both hooks name a local sweep as what removes a merged worktree
@@ -6929,7 +6906,7 @@ written 'it cites the enumeration instead of counting it' \
 req GH-70.2 FR-38
 CITATION='"The sweep" in the branch-hygiene skill'
 for hook in no-work-on-stale-branch.sh report-stale-branches.sh; do
-  written "$hook points at the sweep by name" "$HOOKS/$hook" "$CITATION"
+  written "$hook points at the sweep by name" "$(prose "$HOOKS/$hook")" "$CITATION"
 done
 
 # Extracted for the reason the glossary entries are: `git branch -d` is in this
@@ -6941,16 +6918,16 @@ done
 SWEEP_SECTION="$FIXTURES/branch-hygiene-sweep.md"
 awk '/^## The sweep/ {f=1; print; next} f && /^## / {exit} f {print}' \
     "$SKILL_MD" > "$SWEEP_SECTION"
-written 'the extracted section is the sweep' "$SWEEP_SECTION" 'The sweep'
+written 'the extracted section is the sweep' "$(prose "$SWEEP_SECTION")" 'The sweep'
 unarmed 'and it is that section rather than the rotation beside it' \
-  "$SWEEP_SECTION" 'Create the new branch'
+  "$(prose "$SWEEP_SECTION")" 'Create the new branch'
 
 # What a sweep has to say to be the thing those two headers name: it deletes the
 # local branch, it removes the worktree standing on it -- the act CONTEXT.md now
 # reserves, and one that no command in this repository's documents performed
 # before #70 -- and it takes the rotation's care over the same flag.
-written 'the sweep removes the worktree' "$SWEEP_SECTION" 'git worktree remove'
-written 'and deletes the local branch' "$SWEEP_SECTION" 'git branch -d'
+written 'the sweep removes the worktree' "$(prose "$SWEEP_SECTION")" 'git worktree remove'
+written 'and deletes the local branch' "$(prose "$SWEEP_SECTION")" 'git branch -d'
 # And unlocks it first, without which the other two cannot run here at all.
 # Review of the first two commits found the procedure unable to execute on this
 # repository: EnterWorktree locks every worktree it creates, `git worktree
@@ -6966,25 +6943,25 @@ written 'and deletes the local branch' "$SWEEP_SECTION" 'git branch -d'
 # refuse would pass every check here. What guards the difference is a person
 # running it; these hold the text against the citations, and nothing more.
 written 'and unlocks it first, which is what makes the other two possible' \
-  "$SWEEP_SECTION" 'git worktree unlock'
+  "$(prose "$SWEEP_SECTION")" 'git worktree unlock'
 written 'and warns that prune will not rescue a worktree still locked' \
-  "$SWEEP_SECTION" 'exempt from pruning by design'
+  "$(prose "$SWEEP_SECTION")" 'exempt from pruning by design'
 written 'with the care the rotation takes over the same flag' \
-  "$SWEEP_SECTION" 'never `-D`'
+  "$(prose "$SWEEP_SECTION")" 'never `-D`'
 # The report classifies three ways and only one of the three is the sweep's. A
 # sweep that acted on `unclassified` would delete a branch freshly cut for work
 # not yet started, which is the case that classification exists to protect. The
 # literal is the instruction and not the word: `unclassified` alone is satisfied
 # by a section that says to sweep those too.
 written 'and leaves the unclassified alone' \
-  "$SWEEP_SECTION" 'Leave every unclassified branch alone'
+  "$(prose "$SWEEP_SECTION")" 'Leave every unclassified branch alone'
 
 # The cadence is the half that makes both hook headers honest. #70's complaint
 # was not that the sweep was undocumented but that it "is named as a thing that
 # happens", so a sweep written without its cadence would answer the citation and
 # leave the claim behind it as false as it was. Pinned for that reason.
 written 'the sweep says how often it is run, which is by hand and never' \
-  "$SWEEP_SECTION" 'Cadence: manual, and unscheduled'
+  "$(prose "$SWEEP_SECTION")" 'Cadence: manual, and unscheduled'
 
 # Issue #100: the sweep defined its classes by pull request state and the report
 # it acts on computed them from refs. The report now reads pull requests, and
@@ -6994,17 +6971,17 @@ written 'the sweep says how often it is run, which is by hand and never' \
 # report prints turns one side or the other red.
 req GH-100
 written 'the sweep defines stale by what the report prints for a merged pull request' \
-  "$SWEEP_SECTION" '`merged: pull request #N`'
+  "$(prose "$SWEEP_SECTION")" '`merged: pull request #N`'
 written 'and for a closed one' \
-  "$SWEEP_SECTION" '`closed without merging: pull request #N`'
+  "$(prose "$SWEEP_SECTION")" '`closed without merging: pull request #N`'
 written 'and unclassified by what it prints for a branch with no pull request' \
-  "$SWEEP_SECTION" '`no pull request`'
+  "$(prose "$SWEEP_SECTION")" '`no pull request`'
 written 'and for one that is not at or behind its pull request head' \
-  "$SWEEP_SECTION" '`not at or behind its head`'
+  "$(prose "$SWEEP_SECTION")" '`not at or behind its head`'
 written 'and says what the classes are when the report could not read pull requests' \
-  "$SWEEP_SECTION" '`pull requests: NOT READ`'
+  "$(prose "$SWEEP_SECTION")" '`pull requests: NOT READ`'
 written 'where a gone upstream is stale by ref state' \
-  "$SWEEP_SECTION" '`stale by ref state`'
+  "$(prose "$SWEEP_SECTION")" '`stale by ref state`'
 
 # The sweep is not the only place the skill defines stale. *Report what is
 # stale*, which an agent follows to produce the report a person reads, kept the
@@ -7021,13 +6998,13 @@ awk '/^### 2\. Report what is stale/ {f=1; print; next} f && /^###? / {exit} f {
     "$SKILL_MD" > "$STALE_SECTION"
 req GH-100 US-29
 written 'the extracted section is Report what is stale' \
-  "$STALE_SECTION" 'Report what is stale'
+  "$(prose "$STALE_SECTION")" 'Report what is stale'
 unarmed 'and it stops before the procedure that follows it' \
-  "$STALE_SECTION" "Bertan's procedure"
+  "$(prose "$STALE_SECTION")" "Bertan's procedure"
 written 'it defines stale with the head test the report applies' \
-  "$STALE_SECTION" "at or behind that pull request's head commit"
+  "$(prose "$STALE_SECTION")" "at or behind that pull request's head commit"
 written 'and calls a name matched off a head it is ahead of unclassified' \
-  "$STALE_SECTION" 'is unclassified, not stale'
+  "$(prose "$STALE_SECTION")" 'is unclassified, not stale'
 # It also says its commands cover the last commit dates, which none of them
 # printed; the second review of #120 found that too.
 written 'and one of its commands prints the commit dates it says they cover' \
@@ -7043,29 +7020,29 @@ awk 'NR == 1 { next } /^#/ { print; next } { exit }' \
     "$HOOKS/report-stale-branches.sh" > "$REPORT_HEADER"
 req GH-99.1
 written 'the extracted header is the report header' \
-  "$REPORT_HEADER" 'THE ARMING PROPERTY IS NOT SELF-ANNOUNCING'
+  "$(prose "$REPORT_HEADER")" 'THE ARMING PROPERTY IS NOT SELF-ANNOUNCING'
 unarmed 'and it stops at the first line of code' "$REPORT_HEADER" 'FETCH_TIMEOUT='
 written 'the report points at the rule for where a worktree branch starts' \
-  "$REPORT_HEADER" 'WHERE A NEW WORKTREE BRANCH STARTS is a rule in CLAUDE.md, not argued here'
+  "$(prose "$REPORT_HEADER")" 'WHERE A NEW WORKTREE BRANCH STARTS is a rule in CLAUDE.md, not argued here'
 written 'and at the glossary entry that says what the tip is' \
-  "$REPORT_HEADER" "CONTEXT.md's *active dev branch* entry"
+  "$(prose "$REPORT_HEADER")" "CONTEXT.md's *active dev branch* entry"
 unarmed 'and does not carry the first route itself' "$REPORT_HEADER" '--no-track'
-unarmed 'nor the second' "$REPORT_HEADER" 'reset --hard'
+unarmed 'nor the second' "$(prose "$REPORT_HEADER")" 'reset --hard'
 
 # #99 Q1: what the tip is. The entry is where a reader of the pointer arrives.
 ACTIVE_ENTRY="$FIXTURES/context-active-dev-branch.md"
 entry "$CONTEXT_MD" 'Active dev branch' > "$ACTIVE_ENTRY"
 req GH-99.1 FR-27 US-24
 written 'the extracted entry is the active dev branch entry' \
-  "$ACTIVE_ENTRY" '**Active dev branch**:'
+  "$(prose "$ACTIVE_ENTRY")" '**Active dev branch**:'
 unarmed 'and it is that entry rather than the whole glossary' \
   "$ACTIVE_ENTRY" '**Check**:'
 written 'the entry says the tip is the remote-tracking ref as the last fetch left it' \
-  "$ACTIVE_ENTRY" 'as the last fetch left it'
+  "$(prose "$ACTIVE_ENTRY")" 'as the last fetch left it'
 written 'and that the local dev branch is a working copy' \
-  "$ACTIVE_ENTRY" 'is a working copy'
+  "$(prose "$ACTIVE_ENTRY")" 'is a working copy'
 written 'which a worktree branch is never cut from' \
-  "$ACTIVE_ENTRY" 'never cut from'
+  "$(prose "$ACTIVE_ENTRY")" 'never cut from'
 
 # #99 Q2: moving a local main or dev-NN is reserved, and like the sweep it is
 # reserved without being refused. The entry names what passes every hook, the
@@ -7074,11 +7051,11 @@ written 'which a worktree branch is never cut from' \
 # literal checked above, which has to survive the addition unbroken.
 req GH-99.1 US-26
 written 'the enumeration reserves moving a local main or dev branch' \
-  "$RESERVED_ENTRY" 'moving a local `main` or `dev-NN`'
+  "$(prose "$RESERVED_ENTRY")" 'moving a local `main` or `dev-NN`'
 written 'and names moving the ref without a push, which passes every hook' \
-  "$RESERVED_ENTRY" 'git branch -f'
+  "$(prose "$RESERVED_ENTRY")" 'git branch -f'
 written 'and a fetch into the local branch, which passes every hook too' \
-  "$RESERVED_ENTRY" 'git fetch origin dev-NN:dev-NN'
+  "$(prose "$RESERVED_ENTRY")" 'git fetch origin dev-NN:dev-NN'
 
 # #143: the same shape one spelling out. The clause above reserves moving a LOCAL
 # main or dev-NN; this one reserves moving the active dev branch's REMOTE ref any
@@ -7088,7 +7065,7 @@ written 'and a fetch into the local branch, which passes every hook too' \
 # rule that would refuse any of it is GH-143.1 to GH-143.3 and is not written
 # yet, so this pins the document half only.
 #
-# Asserted against the FLATTENED entry, for the reason recorded at GH-97.2 above:
+# Asserted against the entry as `prose` reads it, for GH-97.2's reason above:
 # a literal matches within a line, so a check over the entry as written is partly
 # a check on where the paragraph happens to wrap. These three read
 # $RESERVED_ENTRY when they were first written, and adding the clause
@@ -7117,13 +7094,13 @@ written 'and a fetch into the local branch, which passes every hook too' \
 # that is the half no text check reaches, and it is #145's.
 req GH-143.4 US-26
 written 'the enumeration reserves moving the remote dev ref another way, or deleting it' \
-  "$RESERVED_FLAT" 'any way other than advancing it, or deleting that ref'
+  "$(prose "$RESERVED_ENTRY")" 'any way other than advancing it, or deleting that ref'
 written 'and says nothing refuses either at all, which is what leaves them reserved only' \
-  "$RESERVED_FLAT" 'Nothing refuses a remote force-move or deletion'
+  "$(prose "$RESERVED_ENTRY")" 'Nothing refuses a remote force-move or deletion'
 written 'and names the REST merge that advances the same ref under no rule at all' \
-  "$RESERVED_FLAT" 'a REST merge of any'
+  "$(prose "$RESERVED_ENTRY")" 'a REST merge of any'
 unarmed 'and counts none of the acts that neither a hook nor the server covers' \
-  "$RESERVED_FLAT" 'the only acts'
+  "$(prose "$RESERVED_ENTRY")" 'the only acts'
 
 # CLAUDE.md's *Domain docs* section said "docs/adr/ holds one ADR", and the ADR
 # that states the decision above made it false in the same commit. Nothing held
@@ -7136,22 +7113,22 @@ unarmed 'and counts none of the acts that neither a hook nor the server covers' 
 #
 # The pairing is GH-97.2's, and here the superseded wording is a narrower claim
 # rather than a narrower rule: a section that gained the directory and kept the
-# count would say both. Flattened for the same reason as the entry above.
+# count would say both. Read through `prose` for the same reason as the entry
+# above, except the two headings that check the extraction: a heading is one
+# line, and `prose` takes the `#` its literal needs off it.
 DOMAIN_SECTION="$FIXTURES/claude-md-domain-docs.md"
 awk '/^### Domain docs$/ {f=1; print; next}
      f && /^#/ {exit}
      f {print}' "$CLAUDE_MD" > "$DOMAIN_SECTION"
-DOMAIN_FLAT="$FIXTURES/claude-md-domain-docs.flat"
-flatten "$DOMAIN_SECTION" > "$DOMAIN_FLAT"
 req GH-143.5
 written 'the extracted section is the domain docs section' \
-  "$DOMAIN_FLAT" '### Domain docs'
+  "$DOMAIN_SECTION" '### Domain docs'
 unarmed 'and it is that section rather than the whole file' \
-  "$DOMAIN_FLAT" '### Triage labels'
+  "$DOMAIN_SECTION" '### Triage labels'
 written 'the domain docs section points at the ADR directory' \
-  "$DOMAIN_FLAT" '`docs/adr/` holds the ADRs'
+  "$(prose "$DOMAIN_SECTION")" '`docs/adr/` holds the ADRs'
 unarmed 'and states no count of what is in it' \
-  "$DOMAIN_FLAT" 'holds one ADR'
+  "$(prose "$DOMAIN_SECTION")" 'holds one ADR'
 
 # #99 Q9 and Q13: the rule, in the boundary section this suite already
 # extracted and checked from both ends. Both routes, the qualifier that keeps
@@ -7160,28 +7137,39 @@ unarmed 'and states no count of what is in it' \
 # rests on, which is what the report's main ancestry line reads.
 req GH-99.1 FR-37
 written 'the boundary section gives the first route, untracked' \
-  "$SECTION" 'git worktree add --no-track -b <branch> <path> origin/dev-NN'
-written 'and the second' "$SECTION" 'git reset --hard origin/dev-NN'
+  "$(prose "$SECTION")" 'git worktree add --no-track -b <branch> <path> origin/dev-NN'
+written 'and the second' "$(prose "$SECTION")" 'git reset --hard origin/dev-NN'
 written 'and confines the second to a worktree EnterWorktree has just created' \
-  "$SECTION" 'just created'
-written 'and says that nothing enforces the rule' "$SECTION" 'Nothing enforces'
+  "$(prose "$SECTION")" 'just created'
+written 'and says that nothing enforces the rule' "$(prose "$SECTION")" 'Nothing enforces'
 written 'and what a skipped step rests on instead' \
-  "$SECTION" 'only while `origin/main` is an ancestor'
+  "$(prose "$SECTION")" 'only while `origin/main` is an ancestor'
 written 'and points at the glossary rather than re-arguing it' \
-  "$SECTION" '*active dev branch*'
+  "$(prose "$SECTION")" '*active dev branch*'
 # Pointing, not re-arguing, counted in the direction a retelling takes: the
 # commands that pass every hook are the glossary's to list, once. Counted over
-# the whole of CLAUDE.md rather than the section, which is stricter.
+# the whole of CLAUDE.md rather than the section, which is stricter. Counted
+# in its prose: a restatement that wraps inside the command is still one, and
+# over the lines it counted 0 (#192).
 tok 'CLAUDE.md does not restate the glossary'"'"'s fetch into a local branch' \
-    '0' "$(prose_count "$CLAUDE_MD" 'git fetch origin dev-NN:dev-NN')"
+    '0' "$(prose_occurrences "$CLAUDE_MD" 'git fetch origin dev-NN:dev-NN')"
 tok 'nor its forced branch move' \
-    '0' "$(prose_count "$CLAUDE_MD" 'git branch -f')"
+    '0' "$(prose_occurrences "$CLAUDE_MD" 'git branch -f')"
 # #99 Q13: not a sixth consequence. Those are consequences of the hooks, and
-# this rule has no hook. $LEFT_OPEN is a string, so the string helpers.
+# this rule has no hook. $LEFT_OPEN is a string, so the string helpers, over
+# the string as prose_reflow reads it: the library's reader for a pin on prose,
+# which `prose` applies to a file. Through bare comment_reflow a tab inside the
+# phrase split it, and the `lacks` below read ok with `git reset --hard` and
+# `origin/dev-NN` standing in the list a tab apart (review of #192's branch,
+# round 2, measured). `lacks` fails on an empty read, so the absence below
+# needs no `written` beside it -- which holds only because an empty $LEFT_OPEN
+# stays empty here: the reader turns an empty line into a blank, and `lacks`
+# passes a blank (review of #192's branch).
+LEFT_OPEN_PROSE=${LEFT_OPEN:+$(printf '%s\n' "$LEFT_OPEN" | prose_reflow)}
 req GH-99.1 GH-73
-holds 'the extracted list is the left-open list' "$LEFT_OPEN" 'Deliberately left open'
+holds 'the extracted list is the left-open list' "$LEFT_OPEN_PROSE" 'Deliberately left open'
 lacks 'and the unenforced rule is not one of its items' \
-  "$LEFT_OPEN" 'git reset --hard origin/dev-NN'
+  "$LEFT_OPEN_PROSE" 'git reset --hard origin/dev-NN'
 
 # CONSEQUENCE 6, and the half of it that is not a count. The item above answers
 # recommendation 4 of #117's triage, which called the question a judgement call
@@ -7196,11 +7184,11 @@ lacks 'and the unenforced rule is not one of its items' \
 # without the document are three permitted commands with no reason attached.
 req GH-117.1
 holds 'consequence 6 names the command substitution spelling' \
-  "$LEFT_OPEN" '$(command -v gh) pr merge 5'
+  "$LEFT_OPEN_PROSE" '$(command -v gh) pr merge 5'
 holds 'and the backtick spelling' \
-  "$LEFT_OPEN" '`command -v gh` pr merge 5'
+  "$LEFT_OPEN_PROSE" '`command -v gh` pr merge 5'
 holds 'and the parameter spelling' \
-  "$LEFT_OPEN" '$GH pr merge 5'
+  "$LEFT_OPEN_PROSE" '$GH pr merge 5'
 # The measurement, not just the decision. #117 settled this by counting, and a
 # claim without its number is a claim to re-measure -- so the corpus size is in
 # the paragraph and is held there, which is what stops the item decaying into
@@ -7212,7 +7200,7 @@ holds 'and says what corpus the decision was measured against' \
 # reads an accepted gap and proposes the one-line fix that was already measured
 # and found to close nothing.
 holds 'and records that the close was written and rejected on its numbers' \
-  "$LEFT_OPEN" 'The close was written first and rejected on its own numbers.'
+  "$LEFT_OPEN_PROSE" 'The close was written first and rejected on its own numbers.'
 # THE LINE THE ITEM DRAWS, which its first draft drew in the wrong place: it
 # offered `"$VENV/bin/gh"` as an example of a permitted variable, and the same
 # commit refused it -- the reduction resets at each slash, so the word spells
@@ -7220,7 +7208,7 @@ holds 'and records that the close was written and rejected on its numbers' \
 # below; this holds the document to saying which, so the example and the
 # behaviour cannot drift apart again.
 holds 'and draws the line at a variable that is the whole word' \
-  "$LEFT_OPEN" 'A variable is only unresolved while it is the whole word.'
+  "$LEFT_OPEN_PROSE" 'A variable is only unresolved while it is the whole word.'
 
 # #99 Q5 took `head` out of settings.json, and the branch-hygiene skill's notes
 # went on arguing from it: every worktree made after a rotation branched from
@@ -7229,15 +7217,20 @@ holds 'and draws the line at a variable that is the whole word' \
 # rather than the sentence, because the sentence can be reworded around it.
 req GH-99.2
 unarmed 'the branch-hygiene skill does not describe worktrees forking from HEAD' \
-  "$SKILL_MD" 'worktree.baseRef: head'
+  "$(prose "$SKILL_MD")" 'worktree.baseRef: head'
 
 # The count removed from this section's head, held removed. Split across two
-# quoted words so that this line does not contain the phrase it refuses.
+# quoted words so that this line does not contain the phrase it refuses. Read
+# as prose, so a count re-added across a line break of that head is found, and
+# beside a `written` over the same reflow, the sentence the count stood in --
+# split the same way, or it would match itself here and could not fail.
 req GH-99.1
-unarmed 'this section'"'"'s head no longer counts its citations at three' \
-  "$SUITE_TEXT" "three citations"" named below"
+written 'this section'"'"'s head says what its checks are evidence about' \
+  "$(prose "$SUITE_TEXT")" 'These are evidence about the citations'' named below and nothing else.'
+unarmed 'and no longer counts its citations at three' \
+  "$(prose "$SUITE_TEXT")" "three citations"" named below"
 unarmed 'nor at four, the number a correction would have reached for' \
-  "$SUITE_TEXT" "four citations"" named below"
+  "$(prose "$SUITE_TEXT")" "four citations"" named below"
 echo "--- issue #105: CONTEXT.md defines check and probe against each other ---"
 # FR-11. The distinction this suite's own header cites -- "Check, not probe" --
 # and the collision CONTEXT.md was started for (#38). It is a PAIR of
@@ -7261,18 +7254,18 @@ written 'the extracted entry is the check entry' "$CHECK_ENTRY" '**Check**:'
 unarmed 'and it is that entry rather than the pair' "$CHECK_ENTRY" '**Probe**:'
 written 'the extracted entry is the probe entry' "$PROBE_ENTRY" '**Probe**:'
 unarmed 'and it is that entry rather than the rest of the glossary' \
-  "$PROBE_ENTRY" '**Reserved act**:'
+  "$(prose "$PROBE_ENTRY")" '**Reserved act**:'
 written 'a check has its expected verdict written out in advance' \
-  "$CHECK_ENTRY" 'written out in advance'
+  "$(prose "$CHECK_ENTRY")" 'written out in advance'
 written 'so running it can only agree or disagree with what was already claimed' \
-  "$CHECK_ENTRY" 'only agree or disagree with what was already claimed'
+  "$(prose "$CHECK_ENTRY")" 'only agree or disagree with what was already claimed'
 written 'and every assertion in this suite is one' \
-  "$CHECK_ENTRY" '`.claude/hooks/check-hooks.sh` and the files it sources, is a check.'
+  "$(prose "$CHECK_ENTRY")" '`.claude/hooks/check-hooks.sh` and the files it sources, is a check.'
 written 'a probe has no answer until it runs' \
-  "$PROBE_ENTRY" 'not known until it runs'
-written 'and each scripts/probe_*.py is one' "$PROBE_ENTRY" '`scripts/probe_*.py` is a probe'
-written 'the check entry warns against calling one a probe' "$CHECK_ENTRY" '_Avoid_: probe'
-written 'and the probe entry against calling one a check' "$PROBE_ENTRY" '_Avoid_: check'
+  "$(prose "$PROBE_ENTRY")" 'not known until it runs'
+written 'and each scripts/probe_*.py is one' "$(prose "$PROBE_ENTRY")" '`scripts/probe_*.py` is a probe'
+written 'the check entry warns against calling one a probe' "$(prose "$CHECK_ENTRY")" '_Avoid_: probe'
+written 'and the probe entry against calling one a check' "$(prose "$PROBE_ENTRY")" '_Avoid_: check'
 
 echo "--- issue #105: the worktree branch entry records what the boundary keys on ---"
 # FR-28. The same entry the #70 block above extracts, asked its other half --
@@ -7292,21 +7285,21 @@ echo "--- issue #105: the worktree branch entry records what the boundary keys o
 # block above, so the extra tags bought nothing and claimed something.
 req FR-28
 written 'the entry says the permission keys on where the command runs' \
-  "$WORKTREE_ENTRY" 'keys on **where the command runs**'
+  "$(prose "$WORKTREE_ENTRY")" 'keys on **where the command runs**'
 written 'and deliberately not on what the branch is called' \
-  "$WORKTREE_ENTRY" 'deliberately not on what the'
+  "$(prose "$WORKTREE_ENTRY")" 'deliberately not on what the'
 written 'it names the comparison the hook makes' \
-  "$WORKTREE_ENTRY" 'compares `git rev-parse'
+  "$(prose "$WORKTREE_ENTRY")" 'compares `git rev-parse'
 written 'against the other half of that comparison' \
-  "$WORKTREE_ENTRY" '--git-dir` with `--git-common-dir`'
+  "$(prose "$WORKTREE_ENTRY")" '--git-dir` with `--git-common-dir`'
 written 'and says a naming rule was available and is wrong twice over' \
-  "$WORKTREE_ENTRY" 'naming rule was available and is wrong twice over'
+  "$(prose "$WORKTREE_ENTRY")" 'naming rule was available and is wrong twice over'
 written 'the first reason: the two ways a worktree is made here disagree on the prefix' \
-  "$WORKTREE_ENTRY" 'so a prefix rule would disagree between them'
+  "$(prose "$WORKTREE_ENTRY")" 'so a prefix rule would disagree between them'
 written 'the second: a branch in the main checkout can be given the name the rule looks for' \
-  "$WORKTREE_ENTRY" 'can be given whatever name the rule looks for'
+  "$(prose "$WORKTREE_ENTRY")" 'can be given whatever name the rule looks for'
 written 'and it tells the next reader not to fix it into one' \
-  "$WORKTREE_ENTRY" '"fix" this into a rule about the name.'
+  "$(prose "$WORKTREE_ENTRY")" '"fix" this into a rule about the name.'
 
 echo "--- issue #105: the rotation is Bertan's, and the agent's half is reads ---"
 # US-27, US-28, FR-24, FR-25 and FR-26. The sweep half of this skill is already
@@ -7321,6 +7314,8 @@ HYGIENE_HEAD="$FIXTURES/branch-hygiene-head.md"
 awk '/^# Branch hygiene$/ {f=1} f && /^## What an agent does$/ {exit} f {print}' \
     "$SKILL_MD" > "$HYGIENE_HEAD"
 req FR-26 US-28 FR-24
+# The two headings on the lines: `prose` takes a heading's opening `#` off, and
+# a heading is one line. Every pin after them reads the head through `prose`.
 written 'the extracted head is the opening of the skill' \
   "$HYGIENE_HEAD" '# Branch hygiene'
 unarmed 'and it stops before what an agent does' \
@@ -7338,44 +7333,45 @@ unarmed 'and it stops before what an agent does' \
 # literal described less, which is the same defect as a tag naming a requirement
 # its check does not establish -- one sentence further down.
 written 'the invariant names main, and exactly one active dev branch beside it' \
-  "$HYGIENE_HEAD" 'holds `main`, exactly one **active dev branch**'
+  "$(prose "$HYGIENE_HEAD")" 'holds `main`, exactly one **active dev branch**'
 written 'and gives that branch the name the rest of the file uses' \
-  "$HYGIENE_HEAD" 'named `dev-NN`'
+  "$(prose "$HYGIENE_HEAD")" 'named `dev-NN`'
 written 'with however many worktree branches in flight against it' \
-  "$HYGIENE_HEAD" 'however many **worktree branches** are in flight against it'
+  "$(prose "$HYGIENE_HEAD")" 'however many **worktree branches** are in flight against it'
 written 'and sends a reader to CONTEXT.md for all three terms' \
-  "$HYGIENE_HEAD" 'defines all three terms'
+  "$(prose "$HYGIENE_HEAD")" 'defines all three terms'
 # US-28 and FR-24: whose the rotation is, and that it is reserved rather than
 # merely discouraged.
 written 'rotation is declared a reserved act in the skill'"'"'s own words' \
-  "$HYGIENE_HEAD" '**Rotation is a reserved act, and so are the sweep'
+  "$(prose "$HYGIENE_HEAD")" '**Rotation is a reserved act, and so are the sweep'
 written 'and the skill cites the entry that holds the list rather than counting it' \
-  "$HYGIENE_HEAD" '*reserved act* entry holds the list'
+  "$(prose "$HYGIENE_HEAD")" '*reserved act* entry holds the list'
 written 'it says the hooks refuse both pushes a rotation needs, and are right to' \
-  "$HYGIENE_HEAD" 'refuses both of the pushes a rotation needs'
+  "$(prose "$HYGIENE_HEAD")" 'refuses both of the pushes a rotation needs'
 written 'and that Bertan runs it where no hook applies' \
-  "$HYGIENE_HEAD" 'Bertan runs the procedure'
-written 'from his own terminal' "$HYGIENE_HEAD" 'from his own terminal, where no hook applies.'
+  "$(prose "$HYGIENE_HEAD")" 'Bertan runs the procedure'
+written 'from his own terminal' "$(prose "$HYGIENE_HEAD")" 'from his own terminal, where no hook applies.'
 # FR-25 and US-29: the half that stays, and that it is a read of the remote
 # rather than of the command that ran.
 AGENT_SECTION="$FIXTURES/branch-hygiene-agent.md"
 awk '/^## What an agent does$/ {f=1} f && /^## Bertan/ {exit} f {print}' \
     "$SKILL_MD" > "$AGENT_SECTION"
 req FR-25 US-27 US-29
+# The headings on the lines, for the reason the head's are above.
 written 'the extracted section is what an agent does' \
   "$AGENT_SECTION" '## What an agent does'
 unarmed 'and it stops before the procedure that is not an agent'"'"'s' \
   "$AGENT_SECTION" "## Bertan's procedure"
 written 'both steps are reads, and the agent stops after them' \
-  "$AGENT_SECTION" 'Both steps are reads. Report the answers and stop'
+  "$(prose "$AGENT_SECTION")" 'Both steps are reads. Report the answers and stop'
 written 'naming the four acts it is not to take, nor offer to' \
-  "$AGENT_SECTION" 'push or delete anything, and do not offer to.'
+  "$(prose "$AGENT_SECTION")" 'push or delete anything, and do not offer to.'
 written 'the merge is confirmed from the remote, never from the command that ran' \
-  "$AGENT_SECTION" 'Never take "the merge command ran" as evidence'
+  "$(prose "$AGENT_SECTION")" 'Never take "the merge command ran" as evidence'
 written 'and the two fields that confirm it are named' \
-  "$AGENT_SECTION" '`state` must be `MERGED` and `mergedAt` must be non-null'
+  "$(prose "$AGENT_SECTION")" '`state` must be `MERGED` and `mergedAt` must be non-null'
 written 'the sweep below is named as the other half, and not an agent'"'"'s' \
-  "$AGENT_SECTION" 'an agent that has produced the'
+  "$(prose "$AGENT_SECTION")" 'an agent that has produced the'
 # US-27 and FR-24, driven rather than read: every command the agent's half
 # instructs is put through the two hooks that judge these surfaces, from a linked
 # worktree, and must be permitted. A skill whose middle step is refused is the
@@ -7855,9 +7851,9 @@ req GH-102
 SELF_PARAGRAPH="$FIXTURES/check-hooks-first-paragraph.txt"
 first_comment_block "$SUITE_TEXT" > "$SELF_PARAGRAPH"
 written 'the extracted paragraph is the one that states the scope' \
-  "$SELF_PARAGRAPH" 'Regression checks for'
+  "$(prose "$SELF_PARAGRAPH")" 'Regression checks for'
 unarmed 'and it stops before the paragraph after it' \
-  "$SELF_PARAGRAPH" 'A hook is a process'
+  "$(prose "$SELF_PARAGRAPH")" 'A hook is a process'
 SELF_NAMED=$(grep -oE '[A-Za-z0-9_.-]+\.(sh|json|md)' "$SELF_PARAGRAPH" | sort -u | tr '\n' ' ')
 # Every hook settings.json runs, on any event and any matcher -- wider than
 # REGISTERED above, which leaves out the Edit companion because the boundary
@@ -7917,9 +7913,9 @@ set +f
 SELF_WHOLE_HEADER="$FIXTURES/check-hooks-header.txt"
 awk 'NR == 1 { next } /^#/ { print; next } { exit }' "$SUITE_TEXT" > "$SELF_WHOLE_HEADER"
 written 'the whole header runs on past the first paragraph' \
-  "$SELF_WHOLE_HEADER" 'A hook is a process'
+  "$(prose "$SELF_WHOLE_HEADER")" 'A hook is a process'
 unarmed 'and it points at no number below it, since none is there' \
-  "$SELF_WHOLE_HEADER" 'the number below'
+  "$(prose "$SELF_WHOLE_HEADER")" 'the number below'
 
 # US-31 and FR-35: the header states what a green run is worth. Two sentences,
 # and the suite would be no less green without either -- which is the point of
@@ -7931,13 +7927,13 @@ unarmed 'and it points at no number below it, since none is there' \
 # and says nothing about worth.
 req US-31 FR-35
 written 'the header names the green run that permitted a wholesale push' \
-  "$SELF_WHOLE_HEADER" 'the suite passed while `if true; then git push --mirror origin;'
+  "$(prose "$SELF_WHOLE_HEADER")" 'the suite passed while `if true; then git push --mirror origin;'
 written 'and the second occasion beside it' \
-  "$SELF_WHOLE_HEADER" 'fi` was permitted, and passed again while a commit message mentioning `<<EOF`'
+  "$(prose "$SELF_WHOLE_HEADER")" 'fi` was permitted, and passed again while a commit message mentioning `<<EOF`'
 written 'and states what a check suite is evidence of' \
-  "$SELF_WHOLE_HEADER" 'So a green run is not a measure of the boundary. A check suite is evidence'
+  "$(prose "$SELF_WHOLE_HEADER")" 'So a green run is not a measure of the boundary. A check suite is evidence'
 written 'and of what it is not' \
-  "$SELF_WHOLE_HEADER" 'about the cases it names and about nothing else'
+  "$(prose "$SELF_WHOLE_HEADER")" 'about the cases it names and about nothing else'
 
 section "=== issue #84: every hook refuses when lib/command-scan.sh does not load ==="
 # THE LOAD CONTRACT, driven. lib/command-scan.sh states it; the hooks that
@@ -8553,6 +8549,8 @@ NO_CS_SPLIT=$(for hook_file in "$HOOKS"/*.sh; do
 done)
 tok 'exactly two hooks source the library and do not require cs_split' \
     'append-only-docs-edit.sh append-only-docs.sh ' "$NO_CS_SPLIT"
+# On the lines: the withdrawal is a message the library prints, one `echo`, and
+# its words are code rather than a wrapped comment.
 written 'and the withdrawal names them as two, not as every consumer' \
         "$HOOKS/lib/command-scan.sh" 'the two document hooks need only'
 # The same clause names the FUNCTIONS those hooks need, and that is a second
@@ -8764,7 +8762,7 @@ for hook in $LIB_CONSUMERS; do
   unarmed "$hook does not require the word list itself" "$HOOKS/$hook" 'CS_WRAP_OPTION_WORDS'
 done
 written 'the load contract says the word list is part of the load' \
-  "$HOOKS/lib/command-scan.sh" 'THE WORD LIST IS PART OF THE LOAD'
+  "$(prose "$HOOKS/lib/command-scan.sh")" 'THE WORD LIST IS PART OF THE LOAD'
 
 echo "--- the contract is written where the rename is made ---"
 # The checks above are evidence about four guards as they stand. They say nothing
@@ -8774,20 +8772,20 @@ echo "--- the contract is written where the rename is made ---"
 # `armed`: this is prose, and stripping comments would leave nothing to match.
 req GH-84.3
 written 'the library states the load contract' \
-  "$HOOKS/lib/command-scan.sh" 'THE LOAD CONTRACT'
+  "$(prose "$HOOKS/lib/command-scan.sh")" 'THE LOAD CONTRACT'
 written 'and says that a rename reaches every consumer and this suite' \
-  "$HOOKS/lib/command-scan.sh" 'RENAMING A cs_* FUNCTION REACHES EVERY FILE THAT SOURCES THIS ONE'
+  "$(prose "$HOOKS/lib/command-scan.sh")" 'RENAMING A cs_* FUNCTION REACHES EVERY FILE THAT SOURCES THIS ONE'
 written 'and records why this is not one sourced preamble' \
-  "$HOOKS/lib/command-scan.sh" 'Not factored into one sourced preamble'
+  "$(prose "$HOOKS/lib/command-scan.sh")" 'Not factored into one sourced preamble'
 # The pointer, from each of the four. #84's finding was not that the argument was
 # unwritten but that it was written in one hook and read by nobody editing the
 # other three, so a guard that does not point at the shared statement is a guard
 # whose reasoning is about to be re-derived or dropped.
 for hook in no-git-push.sh no-pr-decisions.sh no-commit-to-main.sh no-work-on-stale-branch.sh; do
-  written "$hook points at the contract by name" "$HOOKS/$hook" 'THE LOAD CONTRACT'
+  written "$hook points at the contract by name" "$(prose "$HOOKS/$hook")" 'THE LOAD CONTRACT'
 done
 written 'append-only-docs.sh points at the contract by name, having taken a guard in #96' \
-  "$HOOKS/append-only-docs.sh" 'THE LOAD CONTRACT'
+  "$(prose "$HOOKS/append-only-docs.sh")" 'THE LOAD CONTRACT'
 # And that each guard is live code rather than a commented-out line. `armed`
 # strips comments first, which is the difference that matters: every literal
 # above would match a guard commented out during a debugging session and left
@@ -9212,9 +9210,9 @@ armed 'the library defines the shared reader' "$HOOKS/lib/command-scan.sh" 'cs_t
 # #95's acceptance: the fail direction for each condition stated in one place.
 # `written`, because it is prose.
 written 'the library states the fail direction of the input read' \
-  "$HOOKS/lib/command-scan.sh" 'THE INPUT READ'
+  "$(prose "$HOOKS/lib/command-scan.sh")" 'THE INPUT READ'
 written 'and records the trade an environment without jq pays' \
-  "$HOOKS/lib/command-scan.sh" 'THE TRADE, taken knowingly'
+  "$(prose "$HOOKS/lib/command-scan.sh")" 'THE TRADE, taken knowingly'
 
 echo "--- issue #96: a line long enough to outlast the timeout ---"
 # The harness kills a hook that runs past its "timeout" in settings.json, and a
@@ -9718,7 +9716,7 @@ tok 'and skipopts has one definition left, cs_git_args own, since the gh pair be
 # Where the argument is written. Prose, so `written`: the header that states the
 # cap is where someone raising it will look for what it gives up.
 req GH-96.1
-written 'the library states the line cap' "$HOOKS/lib/command-scan.sh" 'THE LINE CAP'
+written 'the library states the line cap' "$(prose "$HOOKS/lib/command-scan.sh")" 'THE LINE CAP'
 
 # cs_within_cap, as a function rather than through a hook. Fail-closed is the
 # claim that matters most here and no hook check can make it: every consumer
@@ -11601,6 +11599,9 @@ text_check_faults() {  # text_check_faults <file>... -- "<file>:<line>: <fault>"
     if (ntok < 3) { print start ": fewer than three arguments"; next }
     a = tok[3]
     gsub(/"/, "", a)
+    # A pin on prose names its file inside `$(prose ...)` (#192), and the
+    # rule asks the file, not the substitution around it.
+    if (a ~ /^\$\(prose [^)]*\)$/) { sub(/^\$\(prose /, "", a); sub(/\)$/, "", a) }
     if (a ~ /(^|\/)\.\.?(\/|$)/ || a ~ /\/\//)
       print start ": " tok[3] " has a . or .. segment or an empty one, so which directory it reads cannot be told from its spelling"
     else if (a !~ /^\$/)
@@ -11631,20 +11632,27 @@ printf '%s\n' 'x=1' "armed 'fine' \"\$HOOKS/no-git-push.sh\" 'y'" "written 'join
   "  \"\$SUITE_DIR/checks/../no-git-push.sh\" 'y'" > "$TCF_ONE"
 printf '%s\n' "unarmed 'up' \"\$HOOKS/../hooks/no-git-push.sh\" 'y'" "armed 'bare' check-hooks.sh 'y'" \
   "armed 'dot' \"\$HOOKS/checks/./library.sh\" 'y'" "armed 'empty' \"\$HOOKS/checks//library.sh\" 'y'" \
-  "armed 'deeper' \"\$SUITE_DIR/checks/sub/x.sh\" 'y'" > "$TCF_TWO"
+  "armed 'deeper' \"\$SUITE_DIR/checks/sub/x.sh\" 'y'" \
+  "written 'prose, wrong door' \"\$(prose \"\$SUITE_DIR/no-git-push.sh\")\" 'y z'" \
+  "unarmed 'prose, bare' \"\$(prose \"no-git-push.sh\")\" 'y z'" > "$TCF_TWO"
 TCF_WHY='has a . or .. segment or an empty one, so which directory it reads cannot be told from its spelling'
+# The last two lines name their file through `prose` (#192), and are judged
+# by the file inside the substitution: behind it, `written` is handed the
+# fixture's absolute path, and `absolute_or_fail` sees nothing wrong.
 tok 'a text-check fault is reported at its own file and line, and a ., .. or empty segment is refused after any variable' \
 "$TCF_ONE:3: \"\$SUITE_DIR/checks/../no-git-push.sh\" $TCF_WHY
 $TCF_TWO:1: \"\$HOOKS/../hooks/no-git-push.sh\" $TCF_WHY
 $TCF_TWO:2: check-hooks.sh is a bare name, read from the directory this suite runs in
 $TCF_TWO:3: \"\$HOOKS/checks/./library.sh\" $TCF_WHY
 $TCF_TWO:4: \"\$HOOKS/checks//library.sh\" $TCF_WHY
-COUNT 7" "$(text_check_faults "$TCF_ONE" "$TCF_TWO")"
+$TCF_TWO:6: \"\$(prose \"\$SUITE_DIR/no-git-push.sh\")\" names a hook and is read from \$HOOKS
+$TCF_TWO:7: \"\$(prose \"no-git-push.sh\")\" is a bare name, read from the directory this suite runs in
+COUNT 9" "$(text_check_faults "$TCF_ONE" "$TCF_TWO")"
 req GH-107.1
 TEXT_CHECK_ARGS=$(text_check_faults "${SUITE_FILES[@]}")
 TEXT_CHECK_BAD=$(printf '%s\n' "$TEXT_CHECK_ARGS" | grep -v '^COUNT ')
 tok 'this suite makes as many text checks as it expects' \
-    '321' "${TEXT_CHECK_ARGS##*COUNT }"
+    '322' "${TEXT_CHECK_ARGS##*COUNT }"
 if [ -z "$TEXT_CHECK_BAD" ]; then
   pass static 'every text check names its file through a variable, so an override moves what it reads'
 else
@@ -12572,7 +12580,7 @@ env_cmd "$ENV_DETACHED" "$PATH" no-commit-to-main.sh ALLOW 'a commit on a detach
 env_cmd "$ENV_DETACHED" "$PATH" no-work-on-stale-branch.sh ALLOW 'neither staleness detector has a branch to read' \
   'git commit -m "wip"'
 written 'the detached-HEAD design is stated where the hook reads the branch' \
-  "$HOOKS/no-work-on-stale-branch.sh" \
+  "$(prose "$HOOKS/no-work-on-stale-branch.sh")" \
   'A detached HEAD has no branch, so neither detector has anything to read.'
 
 echo "--- no remote named origin ---"
@@ -12902,7 +12910,8 @@ report_says "$ENV_NO_GIT_BIN" "$ENV_REPORT_COPY/report-stale-branches.sh" \
 # run: a directory unsearchable enough to fail that cd is one the file cannot be
 # read out of either, so bash exits 126 before the guard is reached. Measured, not
 # assumed -- and it is why this one line is held to the file rather than to a
-# verdict.
+# verdict. On the lines, as the three after it are: it is an `echo` the report
+# runs, and where that message breaks is what it prints.
 written 'the unreachable-root guard says why it reported nothing too' \
   "$HOOKS/report-stale-branches.sh" \
   'branches: NOT READ -- this file could not reach the repository root from its'
@@ -14674,6 +14683,8 @@ req GH-204.3
 tok 'the suite text opens with the driver header' \
     '# Regression checks for the hooks under .claude/hooks/ and what they rest on.' \
     "$(sed -n 2p "$SUITE_TEXT")"
+# On the lines: the literal is the library's opening line, `#` and all, which
+# `prose` would take off.
 written 'and holds the library' "$SUITE_TEXT" '# THE HELPER LIBRARY of the hook check suite.'
 # A range that matched nothing is a FAIL. Driven in a subshell, as the #98
 # self-test drives its helpers: the FAIL it prints there is the one asserted and

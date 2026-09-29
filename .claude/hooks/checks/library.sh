@@ -1424,10 +1424,13 @@ variants_pin() {  # variants_pin '<ID>:<keyword>...' -- the variants of entries 
 # THE READER OF A HEADER'S PROSE (#183's, a function since #215's issue file
 # became its second caller). Comment lines on stdin, one line of prose out: the
 # `#` and up to three blanks after it taken off each line, the lines joined, and
-# every run of spaces squeezed to one. A pin on hand-wrapped prose reads this and
-# not the file, because a phrase crosses a line break wherever the wrap falls;
-# and it reads it through this one function, because a second copy of the
-# reader is a second rule of what rewrapping may do. #215's first reader took
+# every run of spaces squeezed to one. A pin on hand-wrapped prose reads a
+# reflow and not the file, because a phrase crosses a line break wherever the
+# wrap falls; and every reflow ends in this one function, because a second copy
+# of the reader is a second rule of what rewrapping may do. Since #192 a pin on
+# prose reads `prose_reflow` below, which normalises blanks and then calls this,
+# so what rewrapping may do is this function plus that one line; the readers
+# that still pipe into this directly are #323's. #215's first reader took
 # `# ?` off and squeezed nothing, so a trailing blank or a deeper indent turned
 # its pins red where $MUT_PROSE's stayed green; review of #215's pull request
 # measured both.
@@ -1446,6 +1449,136 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
   sed -e 's/^#[ \t]\{0,3\}//' \
     | sed -e ':a' -e '/[[:alnum:]]-[ \t]*$/{N;s/-[ \t]*\n[ \t]*/-/;ba' -e '}' \
     | tr '\n' ' ' | tr -s ' '
+}
+
+# THE RULE FOR A PIN ON PROSE (#192), stated here once: a pin whose literal
+# holds a blank and whose file is prose -- Markdown, or a comment -- reads the
+# file through `prose`, while a pin on code reads the lines, and so does a pin
+# on prose whose literal needs a line's opening `#`, with a comment saying so.
+#
+# Why: `written`, `unarmed` and `prose_count` grep a file's lines, so a phrase
+# matches only where the wrap happens not to fall inside it. An absence pin
+# then reads ok with the phrase standing in the file, the permitting direction
+# and silent; a presence pin goes red on a rewrap that changed no word. GH-70.3
+# was the instance: `four acts` re-added to the branch-hygiene skill across a
+# line break, and the whole suite passed (#192, measured on PR #183's branch at
+# d86223b). The suite had found the class three times before and fixed the
+# instance each time -- a `flatten` helper beside GH-97.2, $MUT_PROSE, and the
+# left-open pins of #184 -- which is why it is a rule here and not a fourth
+# fix.
+#
+# WHAT `prose` READS THAT comment_reflow ALONE DOES NOT. Before the reflow,
+# `prose_reflow` turns a tab, a carriage return, a vertical tab and a form feed
+# into a blank, and takes the blanks off each line's start. The first is what
+# `flatten` did, `tr -s '[:space:]'`, before #192 retired it: comment_reflow
+# squeezes only spaces, so a tab inside a wrapped phrase split it, and GH-97.2's
+# absence over CONTEXT.md read ok with the phrase standing there (review of
+# #192's branch, round 1: red on origin/dev-05, green on the branch). The second
+# is what makes an INDENTED comment prose: comment_reflow takes a `#` only at
+# column 0, so a phrase wrapped across two comment lines inside a function read
+# with a `#` in it, and an absence pin on a hook's prose read ok with the
+# phrase re-added there (same review, over report-stale-branches.sh and
+# no-work-on-stale-branch.sh). A presence pin may name where today's text sits;
+# an absence pin has to read wherever the text can be put back, which is any
+# comment. comment_reflow itself is left as it was: #192 keeps its behaviour,
+# and its other readers are held to it.
+#
+# WHAT `prose` CANNOT READ. It takes a `#` off a line opening with one, blanks
+# before it or not, so a heading's `##` loses a mark and a pin on it goes red;
+# a heading is one line, which is why such a pin stays on the lines. The same
+# holds of a `#` a wrap puts at a line's start in the middle of a sentence,
+# `pull request` over `#N`, which reads as `pull request N`: a literal holding
+# a `#` is found only where no wrap falls just before it, so a presence pin on
+# one can go red on a rewrap, and an absence pin on one would read ok. None of
+# the latter stood in the suite when this was written.
+#
+# THE FIXTURE IS WRITTEN ONLY WHEN ITS PROSE HOLDS A WORD, and otherwise
+# removed, so `written` and `unarmed` over it find no file: `unarmed` fails
+# naming grep's status 2, and `written` fails as it does for a literal not
+# found. An extraction that found nothing, a file of blank lines, a
+# directory and a path that is not there all reach that arm rather than a
+# reflow of blanks, over which `unarmed` would read ok -- the vacuity `unarmed`
+# and `lacks` each refuse. comment_reflow turns an empty line into one blank,
+# which is why the question is a word and not a size (review of #192's
+# branch). The path mirrors the source's under $FIXTURES/prose, so a failure
+# names the file it read.
+#
+# AND ONLY FROM AN ABSOLUTE PATH. `written` and `unarmed` refuse a relative
+# name through `absolute_or_fail`, since one is read from this suite's own
+# directory and not from the hooks under judgment (#142); behind `prose` they
+# are handed the fixture's path, which is always absolute, so the refusal has
+# to be made here. A relative source touches nothing and writes nothing, and
+# the path printed for it is one nothing writes: under $FIXTURES/prose-refused,
+# the name after `relative:` with each `/` spelled `%2F`, so it is one path
+# component and never `.` or `..` -- `prose ..` without the prefix printed
+# `prose-refused/..`, which stayed unresolved only while nothing had made that
+# directory (review of #192's branch, round 5).
+# Two earlier shapes were each wrong. The first ran `mkdir` and `rm -f` on the
+# mirrored path before asking whether the source was absolute, so `prose
+# ../suite-text`, from any directory, deleted $SUITE_TEXT (review of #192's
+# branch, round 4, measured). Moving the `rm` inside the absolute arm alone
+# would have left the mirrored path standing: a relative `tmp/x` names the
+# fixture an earlier `prose /tmp/x` wrote, and `written` would read that.
+prose_reflow() {  # prose_reflow -- prose on stdin, one line out: blanks normalised, then comment_reflow
+  tr '\t\r\v\f' '    ' | sed -e 's/^ *//' | comment_reflow
+}
+prose() {  # prose <file> -- the path of <file> as prose_reflow reads it, written under $FIXTURES/prose
+  local out
+  case "$1" in
+    /*) out="$FIXTURES/prose/${1#/}"
+        mkdir -p -- "${out%/*}"
+        rm -f -- "$out"
+        if [ -f "$1" ]; then
+          prose_reflow < "$1" > "$out"
+          grep -q '[^[:space:]]' "$out" 2>/dev/null || rm -f -- "$out"
+        fi ;;
+    *) out="$FIXTURES/prose-refused/relative:${1//\//%2F}" ;;
+  esac
+  printf '%s\n' "$out"
+}
+# `prose_count` counts LINES, and a reflow is one line, so over `prose` it
+# could no longer tell one saying from two. This counts OCCURRENCES of the
+# literal in the reflow instead, so a pin that holds a count at 1 still goes
+# red on a second copy. A status other than 0 and 1 prints the line
+# `prose_count` prints for it, which no count equals.
+prose_occurrences() {  # prose_occurrences <file> <literal> -- how many times its prose says it
+  local reflowed found grep_status
+  reflowed=$(prose "$1")
+  found=$(grep -oF -- "$2" "$reflowed" 2>/dev/null)
+  grep_status=$?
+  case $grep_status in
+    0) printf '%s\n' "$found" | grep -c '' ;;
+    1) printf '0\n' ;;
+    *) printf 'unread: grep exited %s on %s\n' "$grep_status" "$reflowed" ;;
+  esac
+}
+
+# THE POINTER BESIDE THE DEV-BRANCH DERIVATION, the `for-each-ref` over
+# refs/remotes/origin/dev- that three hooks share, read by #62's checks in the
+# unsplit file; in the library since #192's issue file drives `beside` too.
+#
+# The comment block standing immediately above the derivation. `armed` would
+# ask only whether a literal is somewhere in a file, and somewhere is not
+# beside: a pointer that drifted to the head of either file would still satisfy
+# grep while no longer standing where the derivation is read and edited, which
+# is the whole of what a pointer is for. A blank line ends the block, so a
+# pointer separated from the derivation does not count as beside it.
+dev_pointer() {  # dev_pointer <file> -- the comment block above the derivation
+  awk '/^#/ { block = block $0 "\n"; next }
+       /for-each-ref.*refs\/remotes\/origin\/dev-/ { printf "%s", block; exit }
+       { block = "" }' "$1" 2>/dev/null
+}
+
+# The block is prose, so it is read through prose_reflow, by the rule for a
+# pin on prose above: the two literals the unsplit file gives it are clauses of
+# a wrapped comment, and each matched only while the wrap fell outside it.
+beside() {  # beside <label> <file> <literal>
+  if dev_pointer "$2" | prose_reflow | grep -qF -- "$3"; then
+    pass static 'beside %s' "$1"
+  else
+    fail static '%s\n         expected the comment above the derivation in %s\n         to contain |%s|' \
+           "$1" "$2" "$3"
+  fi
 }
 
 # The library present and loading, with exactly one function renamed away. Built
