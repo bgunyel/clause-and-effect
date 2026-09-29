@@ -49,13 +49,15 @@ requirement GH-279.1 <<'REQ'
   ended before sourcing returned, is a FAIL row at the head, under GH-279.1,
   naming the file and why; the run goes on to its verdict with the record as it
   stands. A file whose sourcing defined nothing still stops the run, and says
-  so, with the status when it was not 0. The child records in a shell of its
-  own setting and not the one the file left: what the file left in IFS,
-  globbing, case matching, traps, aliases or enabled builtins changes neither
-  which names it records nor how it ends. What it records with is out of the
-  file's reach: the names it started with are kept outside any variable while
-  the file is sourced, and a file that declared a name the child works with,
-  or left a setting it cannot put back, is a FAIL row saying so. And a fixture the suite builds from a copy of the
+  so, with the status when it was not 0. Before it records, the child puts
+  back what a file was measured to leave in its shell that changed a record:
+  IFS, globbing, case matching, traps, aliases and disabled builtins. It keeps
+  the names it started with outside any variable while the file is sourced,
+  so a file's own names are recorded whatever they are called. And a file
+  that declared a name the child works with, left IFS readonly, or disabled
+  `enable` itself is a FAIL row saying the child could not put it back. That
+  is the whole of the claim: each clause is a fixture, and what the child
+  does not reach is named in the note. And a fixture the suite builds from a copy of the
   tokeniser -- a half-library, an emptied-list library -- is judged to load
   by what sourcing it defined and by a status that is the one sourcing the
   tokeniser it was copied from returns, not by a status of 0: a tokeniser copy
@@ -92,6 +94,14 @@ requirement GH-279.1 <<'REQ'
   own success, were the file's to change -- a readonly `v`, or `bf` assigned,
   dropped a name from a record called whole -- and its sweep found builtins
   the file disables with `enable -n` doing the same.
+  What the child does not reach, named: a function the file defines under the
+  name of a builtin the child calls, which is the head's shadowed-builtin
+  limit; the descriptors bash saves fds 4 and 5 to while the file is sourced,
+  which a file could close by number; a variable declared with no value,
+  which `compgen -v` does not list; and any other state a file can leave in
+  the child's shell and no fixture here drives. `set -e` and `set -u` left at
+  the end of a file were probed once and changed no record; no fixture holds
+  that.
 REQ
 requirement GH-279.2 <<'REQ'
 - text: The end-of-run file's last check before the matrix derives the rows the

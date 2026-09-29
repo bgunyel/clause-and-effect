@@ -803,9 +803,9 @@ done
 LOADED_CHILD='\compgen -A function -P "f:" >&4; \compgen -v -P "v:" >&4 || exit 3
 . "$1" 3>&- 4>&- 5<&- >/dev/null 2>&1
 \printf "%s" "$?" >&3 || exit 3
-\enable compgen continue declare exit printf read set shopt trap unalias || exit 4
+\enable compgen continue declare exit printf read set shopt trap unalias 2>/dev/null || exit 4
 { \declare -p _lc_before || \declare -p _lc_nl || \declare -p _lc_n || \declare -p _lc_v; } >/dev/null 2>&1 && exit 4
-\trap - EXIT ERR DEBUG RETURN; \unalias -a; \shopt -u nocasematch; \set -f; \printf -v IFS " \t\n" || exit 4
+\trap - EXIT ERR DEBUG RETURN; \unalias -a; \shopt -u nocasematch; \set -f; \printf -v IFS " \t\n" 2>/dev/null || exit 4
 \printf -v _lc_nl "\n" && { IFS= \read -r -d "" _lc_before <&5; [[ -n $_lc_before ]]; } || exit 4
 _lc_before=$_lc_nl$_lc_before
 for _lc_n in $(\compgen -A function); do
