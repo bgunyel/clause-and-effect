@@ -100,7 +100,7 @@ tok 'and runs the suite on none of them, the self-test whose edit applies being 
     "$(printf '%s\n' "$R272_RUN" | sed -n 's/^  \.\.\.  \([^:]*\): running check-hooks.sh against the mutated copy$/\1/p')"
 tok 'the self-tests report what they declare' \
     'ok selftest-survives survived|ok selftest-applies-nothing did-not-apply|' \
-    "$(printf '%s\n' "$R272_RUN" | awk '$2 ~ /^selftest-/ { printf "%s %s %s|", $1, $2, $3 }')"
+    "$(printf '%s\n' "$R272_RUN" | awk '($1 == "ok" || $1 == "FAIL") && $2 ~ /^selftest-/ { printf "%s %s %s|", $1, $2, $3 }')"
 lacks 'and the registry is not refused for lacking one' "$R272_RUN" 'FAIL the registry holds'
 tok 'so the faulted rows alone make the pass exit non-zero' '1' "$R272_STATUS"
 
