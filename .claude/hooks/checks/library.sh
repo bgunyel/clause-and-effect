@@ -1591,8 +1591,8 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
 # reflowed the difference is gone; `unarmed` passes a zero-byte file it was
 # handed, by design (#256), and so is never handed one from here.
 # comment_reflow turns an empty line into one blank, which is why the question
-# is a word and not a size (review of #192's branch). The path mirrors the source's under
-# $FIXTURES/prose, so a failure names the file it read.
+# is a word and not a size (review of #192's branch). The path mirrors the
+# source's under $FIXTURES/prose, so a failure names the file it read.
 #
 # AND ONLY FROM AN ABSOLUTE PATH. `written` and `unarmed` refuse a relative
 # name through `absolute_or_fail`, since one is read from this suite's own

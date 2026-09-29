@@ -30,10 +30,11 @@
 #
 # MEASURED, 2026-09-29, by rev-agent-256 in round 2 of the review of PR #342:
 # the whole suite, at 8790a26, in a scratch clone per edit with one edit to
-# its library.sh, and no exported shell functions. The figures are FAILs and
-# the rows that went red. An earlier table here ran this file alone, with the
-# driver's bookkeeping stubbed by bodies it did not record; it is withdrawn,
-# and rows 3 and 5 are why -- a run of one file cannot see the rows elsewhere.
+# its library.sh, or to this file for the fixture row, and no exported shell
+# functions. The figures are FAILs and the rows that went red. An earlier
+# table here ran this file alone, with the driver's bookkeeping stubbed by
+# bodies it did not record; it is withdrawn, and rows 3 and 5 are why -- a run
+# of one file cannot see the rows elsewhere.
 #
 #   the edit to the copy                                   FAIL  red rows
 #   none                                                   0     none
