@@ -149,10 +149,11 @@ fi
 # whose edit applies, one that does not, a `sed` that does not parse, a target
 # that is not there, a target that is a symlink, a target that is read-only, a
 # target that is a directory, and a target pass one refuses for climbing out of
-# the directory. The last four of `row_apply`'s cases are one clause each of
-# its test: without `-w` the read-only row applies, and without `-f` the
-# directory row is refused by sed in sed's words rather than by the test in its
-# own (review of PR #350). The check-hooks.sh beside it is empty: the
+# the directory. The symlink, read-only and directory rows are one clause each
+# of `row_apply`'s test: without `-L` the symlink row applies, without `-w` the
+# read-only row applies, and without `-f` the directory row is refused by sed
+# in sed's words rather than by the test in its own (review of PR #350). The
+# missing target is refused by `-f` and `-w` alike, so it drives neither. The check-hooks.sh beside it is empty: the
 # harness only needs one there to be readable, and `--list` runs none of it.
 req GH-193
 R193_HARNESS="$FIXTURES/r193-harness"

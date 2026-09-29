@@ -12101,7 +12101,8 @@ fi
 # this one green. What is left here is the harness's arithmetic: the figure
 # dropped, renamed, or spelled off a constant the registry has since moved
 # past. A fault counted as a run is not among them while the registry holds
-# no fault, and it holds none; GH-193's fixture holds four.
+# no fault; GH-193 holds the real `--list` to none, and its fixture holds one
+# of each kind.
 req GH-148
 MUT_RUNS_HERE=$((1 + $(printf '%s' "$MUT_RUN_OUTCOMES" | grep -cv '^did-not-apply$')))
 tok 'and how many runs of this suite a whole-registry pass costs, the baseline included' \
