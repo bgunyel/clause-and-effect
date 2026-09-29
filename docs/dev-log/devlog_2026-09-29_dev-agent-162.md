@@ -180,3 +180,55 @@ no longer cite issues they do not mean, and #344 has a cite entry in
   real directory, are red now. Its three false reds and the two #344 shapes are clear.
 - The full suite on the commit holding this section's code printed ALL CHECKS
   PASSED, 8118 ok, one more than before: the non-ASCII row.
+
+## Appended 2026-09-29 — review round 2 (rev-agent-162), answered in `4d81a55`
+
+rev-agent-162 re-ran the round-1 mutants: every one was red where a
+contradiction stood, and green where the heading was right. Its seven
+mutations of the round-1 code were each caught. It accepted the condition the
+assistant had added to its sketch, that the rest is read only when neither the
+title nor the label named a session, together with the wider trade that
+condition brings.
+
+**Finding 4, a claim of the assistant's own round-1 delta that drifted.** The
+round-1 reply said the README bullet "now tells the writer the rule before the
+first write". It did not. The bullet named one word after the dash, but the
+code also reads `session` and the word after it, and it skips the rest
+entirely when the title named a session. Under the bullet,
+`— session dev-agent-162` would be refused; the code passes it. This is the
+class of round 1's Finding 2, in the text written to answer it. The bullet now
+names all three places a session is read, and the time and the zone. The
+`check-hooks.sh` header said "first heading" where the code reads the first
+line. Both are fixed, and the zone's wording in the issue file's header is
+too: two more digits are optional, and a zone is taken with or without a time
+before it.
+
+**#354, filed by rev-agent-162 and folded in here.**
+
+- The real rows classed a `<name>: <judgement>` line by its end. A name is
+  text that the judgement repeats, so `devlog_<date>_x: names its session.md`,
+  with a wrong heading, was passed. Each real row now takes its judgement from
+  `r162_judge` and classes it by equality in `r162_class`, which has a row of
+  literals.
+- The title's `session` strip was a second copy of the guard's, and nothing
+  pinned it. The title is now keyed a second time through `r162_key`, which is
+  pinned line for line to the guard.
+
+**Evidence, measured.**
+
+- The #162 section alone: 89 ok, 0 FAIL, one more than before, for the
+  `r162_class` row.
+- Mutations in scratch copies, one at a time:
+  - classing by suffix: 1 FAIL;
+  - the title not keyed again: 1 FAIL;
+  - the key copy with no `session` strip: 9 FAIL;
+  - the real list read as empty: the read guard FAILs;
+  - the README pin with `session` and the word after it deleted: 1 FAIL.
+- **Survived**: flipping the real loop's `fail` to `pass`. Nothing on disk
+  contradicts, so no real row can show it. On a copy of `docs/dev-log/` holding
+  `session-5` with its old heading and #354's `x: names its session` file, the
+  unmutated section is 88 ok / 2 FAIL, naming both, and the mutated one is
+  90 ok / 0 FAIL. rev-agent-162 had measured that, before this round, the loop recorded the
+  `x: names its session` file as `ok`.
+- The full suite at `4d81a55` printed ALL CHECKS PASSED, 8119 ok, one more
+  than before: the `r162_class` row.
