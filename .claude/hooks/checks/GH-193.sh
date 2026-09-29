@@ -194,11 +194,12 @@ armed 'and both halves apply an edit through the one function' \
 armed 'pass two included' \
       "$R193_MUT" 'if ! row_apply "$TARGET" "$EDIT" "$FILE in the working copy" > "$WORK_ROOT/mutated" 2>"$WORK_ROOT/sed.err"; then'
 
-# THE HEDGE IN THE HEADER, asked of its prose, read the way GH-215 reads it, and
-# of the whole header: the region ends at `set -u`, and its last paragraph is
-# asked for so that a region cut short is red rather than an absence.
+# THE HEDGE IN THE HEADER, asked of its prose through prose_reflow, the reader a
+# pin on prose takes (#192), and of the whole header: the region ends at
+# `set -u`, and its last paragraph is asked for so that a region cut short is
+# red rather than an absence.
 req GH-193
-R193_HEADER=$(sed -n '1,/^set -u$/p' "$R193_MUT" | comment_reflow)
+R193_HEADER=$(sed -n '1,/^set -u$/p' "$R193_MUT" | prose_reflow)
 holds 'the header is read to its last paragraph' "$R193_HEADER" \
   'the documents it is judged against stay this repository'
 lacks 'the header no longer hedges the run count' "$R193_HEADER" 'at most'
