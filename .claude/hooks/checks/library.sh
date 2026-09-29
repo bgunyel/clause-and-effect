@@ -766,7 +766,10 @@ holds() {  # holds <label> <text> <literal>
 # `prose_count` are handed a PATH, and grep's status already tells an unread
 # file (2) from a read one with nothing in it (1), so an empty FILE is a read
 # file there and its absences are real ones. A truncated file is a presence
-# question, which `armed`, `written` and `holds` over the same file answer.
+# question, which `armed` or `written` over the same file answers, or `holds`
+# over its text. `prose_occurrences` is handed a path and still takes this
+# side, because it reads through `prose`, which writes nothing for a reflow
+# with no word in it, so grep finds no file and it prints `unread`.
 lacks() {  # lacks <label> <text> <literal>
   if [ -z "$2" ]; then
     fail static '%s\n         nothing was read, so the absence of |%s| is evidence of nothing' "$1" "$3"
@@ -1575,9 +1578,10 @@ comment_reflow() {  # comment_reflow -- comment lines on stdin, their prose on o
 # naming grep's status 2, and `written` fails as it does for a literal not
 # found. An extraction that found nothing, a file of blank lines, a
 # directory and a path that is not there all reach that arm rather than a
-# reflow of blanks, over which `unarmed` would read ok. A reflow is text until
-# it is written, so an empty one is refused here for the reason `lacks` refuses
-# an empty string; `unarmed` passes a zero-byte file it was handed, by design
+# reflow of blanks, over which `unarmed` would read ok. An empty file, a file
+# with no prose in it and a failed extraction all reflow alike, so once
+# reflowed the difference is gone, which is the reason `lacks` refuses an
+# empty string; `unarmed` passes a zero-byte file it was handed, by design
 # (#256), and so is never handed one from here. comment_reflow turns an empty
 # line into one blank, which is why the question is a word and not a size
 # (review of #192's branch). The path mirrors the source's under
