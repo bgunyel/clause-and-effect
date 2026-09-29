@@ -355,8 +355,12 @@ tok 'and prints nothing on loading' \
 for hook in $LIB_CONSUMERS; do
   unarmed "$hook does not require cs_drop_heredocs itself" "$HOOKS/$hook" 'cs_drop_heredocs'
 done
+# The literal runs past the heading into the clause only the statement
+# carries: the heading alone is also a cross-reference in the load contract,
+# wrapped there, and the reflow reads both, so with the statement deleted the
+# pin still read ok (review of #192's branch, round 1).
 written 'the library says cs_normalise answers for cs_drop_heredocs' \
-  "$HOOKS/lib/command-scan.sh" 'CS_NORMALISE ANSWERS FOR CS_DROP_HEREDOCS'
+  "$(prose "$HOOKS/lib/command-scan.sh")" 'CS_NORMALISE ANSWERS FOR CS_DROP_HEREDOCS, which no consumer calls'
 
 # WHAT THE DROP TAKES FROM THE HOOKS THE COUNTERS READ. Which hooks those are is
 # read off the suite, every `arms`, `fn_writes` or `fn_calls` written with a

@@ -833,7 +833,17 @@ decision-load-guard-drops-what-it-cannot-tell%no-pr-decisions.sh%s/, so it canno
 generated-entry-edited-by-hand%requirements/GH-205.1.md%s/^- from: #205$/- from: #205, edited by hand/%GH-205.1 GH-205.2%caught
 legacy-entry-marked-generated%requirements/GH-61.md%$a- generated: checks/GH-61.sh%GH-205.1 GH-205.2%caught
 generator-drops-the-generated-field%generate-requirements.sh%s/ body "- generated: " rel "\\n"/ body/%GH-205.2%caught
-generator-replaces-a-hand-written-file%generate-requirements.sh%s/if \[ -e "\$f" \] [&][&] ! grep/if false \&\& ! grep/%GH-205.2%caught
+generator-writes-a-legacy-entry%generate-requirements.sh%/and a legacy entry, which stays hand-written/s/\*" \$id "\*)/*" no-such-id "*)/%GH-205.2 GH-223.4%caught
+generator-reads-no-legacy-set%generate-requirements.sh%s/^LEGACY=" \$(printf /LEGACY=" $(: /%GH-205.2 GH-223.4%caught
+generator-lets-another-issue-declare%generate-requirements.sh%s/\[ "\$rel" = "checks\/GH-\$n.sh" \]/true/%GH-223.4%caught
+generator-writes-a-field-twice%generate-requirements.sh%s/if (key in given) problem/if (0) problem/%GH-223.2%caught
+generator-field-grammar-widened%generate-requirements.sh%s/(\$0 ~ \/^- \[a-z-\]+:\/)/($0 ~ \/^- [a-z0-9-]+:\/)/%GH-223.2%caught
+generator-continuation-widened-by-appending%generate-requirements.sh%s/\$0 ~ \/^  \[^ \]\/)/$0 ~ \/^  [^ ]|^\\t\/)/%GH-223.2%caught
+splitter-id-grammar-widened%split-requirements.sh%s/(\$2 !~ \/^GH-\[1-9\]\[0-9\]\*/($2 !~ \/^GH-[0-9][0-9]*/%GH-223.2%caught
+generator-writes-over-the-destination%generate-requirements.sh%s/ [&][&] cp -- "\$STAGE\/\$id" "\$TMP"/ \&\& cp -- "$STAGE\/$id" "$SPLIT\/$id.md" \&\& cp -- "$STAGE\/$id" "$TMP"/%GH-223.7%caught
+generator-leaves-its-temporary-file%generate-requirements.sh%s/; \[ -z "\$TMP" \] || rm -f -- "\$TMP"'/'/%GH-223.7%caught
+late-legacy-entry-reworded%requirements/GH-204.8.md%s/at least one row recorded/at least one row/%GH-223.1%caught
+cited-entry-that-does-not-exist%requirements.md%s/cites it (GH-223.6)/cites it (GH-223.9)/%GH-223.6%caught
 selftest-anchor-that-matches-nothing%lib/command-scan.sh%s/CS_NO_SUCH_VARIABLE_IS_DEFINED_HERE/x/%FR-4%did-not-apply
 selftest-registered-against-the-wrong-requirement%lib/command-scan.sh%/^CS_WRAP_OPTION_WORDS=/s/nohup|//%GH-100%survived
 MUTATIONS
