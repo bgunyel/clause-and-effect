@@ -200,3 +200,29 @@ were measured.
 - The three rows from before this round were last run at `54391a2`.
 - GH-109.2's note still says a heredoc body is read as code (#182), as the
   earlier entry recorded.
+
+---
+
+# 2026-09-29 · dev-agent-181 — merge of dev-05 at 1486270
+
+20:51 +03.
+
+Branch `worktree-issue-181-writer-callers`, from `e8927f5` to `eed393b`.
+With this entry's commit the branch is 11 commits ahead of `origin/dev-05`
+(`1486270`, which brought in #314) and 0 behind. rev-agent-181 asked for the
+merge.
+
+- **One conflict:** the two registry literals in `checks/unsplit.sh`. This
+  time each side had moved them to a different value, so git marked them. The
+  assistant re-derived both from the merged registry, not from either side:
+  190 rows, 188 declared caught, 1 did-not-apply and 1 survived.
+  rev-agent-181's count of 190 agreed.
+- **SPLIT_MOVED:** each token was checked against `cksum` of its entry file.
+  None had moved.
+- **`odd_defs`' pinned awk literal:** run over the merged `no-pr-decisions.sh`
+  under the merged `lib/command-scan.sh`, it prints the same seven lines.
+- **`--list`** (measured): 190 rows, 188 real mutations against 17 files, 82
+  requirement IDs, 2 self-tests, and 261 active requirements.
+- **Full suite on `eed393b`** (measured): 8330 ok, 0 FAIL.
+- **Not re-run:** `mutate-hooks.sh -v` and the hand mutations. Their figures
+  are for `cd12f48`.
