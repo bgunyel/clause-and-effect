@@ -228,12 +228,13 @@
 #     call cs_normalise and cs_split and neither of the argument readers, nor
 #     cs_gh_opaque. Every one of them calls
 #     cs_tool_input as well, and every Bash hook among them calls cs_within_cap
-#     (#96); append-only-docs.sh calls those two and nothing else, and
+#     (#96); append-only-docs.sh calls those two and cs_join (#156), and
 #     append-only-docs-edit.sh only cs_tool_input. cs_within_cap calls cs_join,
-#     which no required list names: it answers for that itself, by failing when
-#     any part of its pipeline does. cs_normalise calls cs_drop_heredocs and
-#     cs_join, which no required list names either (#182): cs_join is answered
-#     by cs_within_cap, as above, and cs_drop_heredocs by the library
+#     which only the two hooks that call it directly require, no-pr-decisions.sh
+#     and append-only-docs.sh; for the rest cs_within_cap answers for it, by
+#     failing when any part of its pipeline does. cs_normalise calls
+#     cs_drop_heredocs, which no required list names (#182), and cs_join:
+#     cs_join is answered by cs_within_cap, as above, and cs_drop_heredocs by the library
 #     withdrawing cs_normalise when it is missing -- CS_NORMALISE ANSWERS FOR
 #     CS_DROP_HEREDOCS, below cs_normalise. A required list narrower than the set is
 #     the #84 defect exactly, and #69 found the same thing in the last two from

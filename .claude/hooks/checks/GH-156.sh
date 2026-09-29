@@ -15,29 +15,43 @@
 # as every undeclared variant does; the first row below is the same command,
 # tagged GH-156.
 #
-# The fix is cs_join over the command right after it is read, the function
-# no-pr-decisions.sh calls for this exact reason, and which cs_within_cap already
-# read through -- so the cap and the rules now read the same text. It is #84's
-# shape: one question answered in one consumer and never asked in another.
+# The fix is cs_join, the function no-pr-decisions.sh calls for this exact
+# reason -- and the rules run over the command as it came AND over it joined,
+# refusing if either text is refused. It is #84's shape: one question answered
+# in one consumer and never asked in another.
+#
+# BOTH TEXTS, because the joined text alone opened a hole the raw one did not
+# have, in the first version of this fix (review of PR #329, round 1). cs_join
+# joins any trailing backslash, and bash continues a line only on an odd run and
+# never in a comment. Where bash does not continue, the next line is a command
+# of its own, and the joined text glued its verb onto the word before it, where
+# the verb rule's `(^|[;&|]|\s)` no longer matched: `echo done \\`, a newline
+# and `rm -f` an entry was refused on dev-05 and permitted by that version, and
+# so were a comment ending in `\` over `rm -rf` of the directory, truncate, tee,
+# cp, mv and sed -i. Joining only odd runs would have closed the escaped rows
+# and not the comments. The same class, outside this hook, is #337.
 #
 # ONE ROW PER SPELLING, not one representative, because the three rules that
 # read a verb each carry their own stretch after it -- to the path for the verb
 # list and the redirect, to the `-i` for the in-place rule, whose path may stand
 # anywhere.
 #
-# TWO TRADES, both pinned below as verdicts rather than left to a comment.
+# TWO TRADES, both pinned below as verdicts rather than left to a comment, and
+# both in the refusing direction.
 #   - A backslash a shell reads literally. cs_join joins a trailing backslash
 #     wherever it stands, and inside single quotes, in a comment and in a
 #     quoted heredoc's body a backslash-newline is two characters, not a
 #     continuation. So prose there that ends a line in `rm \` and names an entry
-#     on the next is refused now where it was permitted. The refusing
-#     direction, and one edit away. Inside double quotes it is no trade: a
-#     shell joins a backslash-newline there too.
+#     on the next is refused now where it was permitted -- the joined pass
+#     refuses it. One edit away. Inside double quotes it is no trade: a shell
+#     joins a backslash-newline there too.
 #   - A continuation INSIDE a name. `docs/dev-log\`, a newline and `book` is the
 #     path `docs/dev-logbook` to a shell, which is another directory, and it is
-#     permitted now where it was refused: the backslash had stood where the
-#     boundary group matched it. That is the permitting direction, and it is
-#     right, for the reason #69 gives for `docs/dev-logbook` on one line.
+#     refused, as it was on dev-05: the joined pass permits it, and the raw pass
+#     sees the backslash stand where the boundary group matches it. The first
+#     version of this fix, which read the joined text alone, permitted it; the
+#     raw pass is what gives it back, and keeping every dev-05 refusal by
+#     construction is worth this one.
 
 section "=== issue #156: append-only-docs.sh reads continuations joined ==="
 
@@ -133,9 +147,58 @@ check append-only-docs.sh BLOCK 'the trade: a quoted heredoc body ending a line 
 then rm \\
 $AOD156_E
 X"
-check append-only-docs.sh ALLOW 'a continuation inside a name, docs/dev-log\ then book, is docs/dev-logbook to a shell and permitted' \
+check append-only-docs.sh BLOCK 'the trade: a continuation inside a name, docs/dev-log\ then book, is docs/dev-logbook to a shell and refused, by the raw pass' \
   'rm -rf docs/dev-log\
 book'
+
+# THE BOUNDARY A JOIN GLUES, which is why the raw text is still read. Each row
+# is a line bash does not continue -- an even run of backslashes, or a backslash
+# in a comment -- and a destroying command on the next line, which bash runs.
+# Every one was refused on dev-05 and permitted by the joined-only version;
+# the raw pass refuses it. The control with a space before the comment's
+# backslash kept its `\s` either way.
+req GH-156
+check append-only-docs.sh BLOCK 'an escaped backslash ends the line, so rm on the next is a command of its own' \
+  "echo done \\\\
+rm -f $AOD156_E"
+check append-only-docs.sh BLOCK 'and rm -rf of the directory after an escaped backslash' \
+  'echo done \\
+rm -rf docs/dev-log'
+check append-only-docs.sh BLOCK 'and truncate after an escaped backslash' \
+  "echo done \\\\
+truncate -s 0 $AOD156_E"
+check append-only-docs.sh BLOCK 'and sed -i after an escaped backslash' \
+  "echo done \\\\
+sed -i s/a/b/ $AOD156_E"
+check append-only-docs.sh BLOCK 'and truncate after an escaped backslash ending a bare command word' \
+  "ls \\\\
+truncate -s 0 $AOD156_E"
+check append-only-docs.sh BLOCK 'and tee after an escaped backslash with no space before it' \
+  "echo a\\\\
+tee $AOD156_E"
+check append-only-docs.sh BLOCK 'and cp after an escaped backslash with no space before it' \
+  "echo a\\\\
+cp x $AOD156_E"
+check append-only-docs.sh BLOCK 'a comment ending in a backslash continues nothing, so rm -rf on the next line runs' \
+  '# tidy up\
+rm -rf docs/dev-log'
+check append-only-docs.sh BLOCK 'and mv after a trailing comment ending in a backslash' \
+  "x=1 # note\\
+mv $AOD156_E /tmp/x"
+check append-only-docs.sh BLOCK 'and rm after a comment with no space before its #' \
+  "ls #x\\
+rm $AOD156_E"
+check append-only-docs.sh BLOCK 'the control: a space before the comment backslash keeps the boundary in the joined text too' \
+  '# tidy up \
+rm -rf docs/dev-log'
+# A truncating `>` opening the next line truncates the entry in bash. The raw
+# pass permits it, since a `>` at the start of a line is #233's; the joined
+# pass refuses it, the `\` of the escaped run standing where `[^>]` matches.
+# Pinned as the verdict it is, not as a fix of #233, whose one-line spelling
+# is still permitted.
+check append-only-docs.sh BLOCK 'a truncating > opening the line after an escaped backslash, refused by the joined pass' \
+  "echo done \\\\
+> $AOD156_E"
 
 # THE LOAD CONTRACT for the function the fix calls. With cs_join renamed away
 # the hook refuses even without a guard for it, because cs_within_cap joins
@@ -145,7 +208,7 @@ req GH-84.1 GH-156
 mk_halflib append-only-docs.sh cs_join
 check_in "$ON_DEV" "$(halflib_path append-only-docs.sh cs_join)" BLOCK \
   'a library missing only cs_join, append-only-docs.sh' 'ls'
-says "$ON_DEV" "$(halflib_path append-only-docs.sh cs_join)" 'append-only-docs.sh could not load' \
+says "$ON_DEV" "$(halflib_path append-only-docs.sh cs_join)" 'append-only-docs.sh could not load lib/command-scan.sh, so it cannot read the command it was handed, join its continuations, or hold the line cap every Bash hook holds. Refusing rather than permitting.' \
   'append-only-docs.sh, a library missing only cs_join, refused by its guard' 'ls'
 req GH-84.2 GH-156
 armed 'append-only-docs.sh requires cs_join' "$HOOKS/append-only-docs.sh" 'command -v cs_join'

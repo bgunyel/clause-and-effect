@@ -30,20 +30,39 @@
 # answered once, there. Its grep passes answered a 300 KB line in 0.03 s and
 # were never the risk; the cap is here because a rule that reaches every Bash
 # hook but one is the shape #84 was filed against. This file still matches paths
-# where they stand rather than through the tokeniser -- but over the command
-# with its backslash continuations joined, by cs_join, the third function it
-# takes (#156). Every rule below is a grep, grep matches within a line, and each
-# destroying rule wants the verb and the path on one: `truncate -s 0 \`, a
-# newline and an entry was permitted, and so were rm, mv, cp, tee, the
-# truncating `>`, and sed or perl with a continuation before its `-i`.
-# no-pr-decisions.sh joins for the same reason, and cs_within_cap already
-# measured the joined text, so the cap and the rules read one text now.
-# The trade, taken knowingly: cs_join joins every trailing backslash, including
-# the ones a shell reads literally -- inside single quotes, in a comment, in a
-# quoted heredoc's body -- so prose there that ends a line in `rm \` and names
-# an entry on the next is refused. The refusing direction; checks/GH-156.sh
-# pins all three. The library is tested for before it is sourced, and all
-# three functions after, for THE LOAD CONTRACT's reason.
+# where they stand rather than through the tokeniser -- over the command as it
+# was handed over, and again over it with its backslash continuations joined,
+# by cs_join, the third function it takes (#156). Every rule below is a grep,
+# grep matches within a line, and each destroying rule wants the verb and the
+# path on one: `truncate -s 0 \`, a newline and an entry was permitted, and so
+# were rm, mv, cp, tee, the truncating `>`, and sed or perl with a continuation
+# before its `-i`. no-pr-decisions.sh joins for the same reason.
+#
+# BOTH TEXTS, AND NOT THE JOINED ONE ALONE, which is what #156's first version
+# read. cs_join joins every trailing backslash, and a shell does not: an escaped
+# one, `\\`, ends its line, and so does any backslash in a comment. There the
+# next line is a command of its own, but the joined text glued its verb onto the
+# word before, and every rule that wants a boundary before the verb lost it --
+# `echo done \\`, a newline and `rm -f` an entry was refused before #156 and
+# permitted by its first version, and so were a comment ending in `\` over a
+# `rm -rf` of the directory, and truncate, tee, cp, mv and sed -i the same way
+# (review of PR #329). Joining only odd runs, bash's rule and cs_drop_heredocs',
+# would have fixed the escaped rows and not the comments. So judge_text runs
+# over each text in turn and the hook refuses if either is refused: everything
+# refused before #156 still is, by construction, since the raw pass is the old
+# hook unchanged, and every continuation #156 closed still is, since the joined
+# pass is its first version. A cs_join that printed nothing would cost the
+# joined pass and not the raw one.
+#
+# The trade, taken knowingly, and only in the refusing direction because of the
+# raw pass: cs_join joins backslashes a shell reads literally -- inside single
+# quotes, in a comment, in a quoted heredoc's body -- so prose there that ends a
+# line in `rm \` and names an entry on the next is refused. And a continuation
+# inside a name, `docs/dev-log\`, a newline and `book`, which a shell reads as
+# `docs/dev-logbook`, is refused, as it was before #156: the raw pass sees the
+# backslash stand where the boundary group matches it. checks/GH-156.sh pins
+# all four. The library is tested for before it is sourced, and all three
+# functions after, for THE LOAD CONTRACT's reason.
 LIB="$(dirname "$0")/lib/command-scan.sh"
 [ -r "$LIB" ] && . "$LIB"
 if ! command -v cs_tool_input >/dev/null 2>&1 \
@@ -54,7 +73,6 @@ if ! command -v cs_tool_input >/dev/null 2>&1 \
 fi
 
 COMMAND=$(cs_tool_input command) || exit 2
-COMMAND=$(printf '%s\n' "$COMMAND" | cs_join)
 # THE LINE CAP, in lib/command-scan.sh: a line longer than 16 KB is refused
 # before any pass reads it, because a hook still reading when the harness
 # timeout kills it permits. Issue #96.
@@ -62,6 +80,7 @@ if ! printf '%s\n' "$COMMAND" | cs_within_cap; then
   echo "Blocked: append-only-docs.sh: $CS_LINE_CAP_REFUSAL" >&2
   exit 2
 fi
+JOINED=$(printf '%s\n' "$COMMAND" | cs_join) || exit 2
 
 # The trailing group is the directory boundary, and it is what #69 was about.
 # `.` and `-` are path-name characters here so that `docs/dev-log.bak` and
@@ -123,34 +142,41 @@ fi
 APPEND_ONLY_DIR='docs/+(\./+)*(dev-log|lessons-learned|eval-reports)(/|[^A-Za-z0-9_.-]|$)'
 APPEND_ONLY='(^|[^A-Za-z0-9_.-])(-[A-Za-z]+)?'"$APPEND_ONLY_DIR"
 
-if echo "$COMMAND" | grep -qE "$APPEND_ONLY"; then
-  # rm / mv / cp over an existing entry, or over the directory itself.
-  #
-  # truncate and tee are here because both overwrite an entry in place without
-  # naming a redirect, so the two rules below saw neither: `truncate -s 0` and
-  # `tee <path> < new.md` were both measured permitted in #69. The list is what
-  # has been measured and nothing more -- a verb added on a guess is a rule no
-  # check asks about.
-  #
-  # The trade, taken knowingly: `tee -a` appends, which is the operation this
-  # directory exists to allow, and it is refused here with the truncating
-  # spelling because the verb is read and its options are not. `>>` is the
-  # documented way to append and stays permitted; the check suite pins the
-  # refusal so that it is a decision rather than a surprise.
-  if echo "$COMMAND" | grep -qE "(^|[;&|]|\s)(rm|mv|cp|truncate|tee)\s+([^;&|]*[^;&|A-Za-z0-9_.-])?(-[A-Za-z]+)?$APPEND_ONLY_DIR"; then
-    echo "Blocked: removing or overwriting an append-only docs directory, or a file under one. CLAUDE.md treats docs/dev-log/, docs/lessons-learned/ and docs/eval-reports/ as history; corrections belong in a new entry." >&2
-    exit 2
+# judge_text <text> -- exits 2 with a message when a rule refuses the text,
+# and returns when none does. Called on the raw command and then on the
+# joined one; see BOTH TEXTS in the header.
+judge_text() {
+  if echo "$1" | grep -qE "$APPEND_ONLY"; then
+    # rm / mv / cp over an existing entry, or over the directory itself.
+    #
+    # truncate and tee are here because both overwrite an entry in place without
+    # naming a redirect, so the two rules below saw neither: `truncate -s 0` and
+    # `tee <path> < new.md` were both measured permitted in #69. The list is what
+    # has been measured and nothing more -- a verb added on a guess is a rule no
+    # check asks about.
+    #
+    # The trade, taken knowingly: `tee -a` appends, which is the operation this
+    # directory exists to allow, and it is refused here with the truncating
+    # spelling because the verb is read and its options are not. `>>` is the
+    # documented way to append and stays permitted; the check suite pins the
+    # refusal so that it is a decision rather than a surprise.
+    if echo "$1" | grep -qE "(^|[;&|]|\s)(rm|mv|cp|truncate|tee)\s+([^;&|]*[^;&|A-Za-z0-9_.-])?(-[A-Za-z]+)?$APPEND_ONLY_DIR"; then
+      echo "Blocked: removing or overwriting an append-only docs directory, or a file under one. CLAUDE.md treats docs/dev-log/, docs/lessons-learned/ and docs/eval-reports/ as history; corrections belong in a new entry." >&2
+      exit 2
+    fi
+    # in-place rewrite
+    if echo "$1" | grep -qE "(^|[;&|]|\s)(sed|perl)\s+[^;&|]*-i" && echo "$1" | grep -qE "$APPEND_ONLY"; then
+      echo "Blocked: in-place edit of an append-only docs file. CLAUDE.md treats docs/dev-log/, docs/lessons-learned/ and docs/eval-reports/ as history; corrections belong in a new entry." >&2
+      exit 2
+    fi
+    # truncating redirect (single >), but not an >> append
+    if echo "$1" | grep -qE "[^>]>\s*([^>|&]*[^>|&A-Za-z0-9_.-])?$APPEND_ONLY_DIR"; then
+      echo "Blocked: truncating redirect into an append-only docs file. Use >> to append, or write a new entry. CLAUDE.md treats these directories as history." >&2
+      exit 2
+    fi
   fi
-  # in-place rewrite
-  if echo "$COMMAND" | grep -qE "(^|[;&|]|\s)(sed|perl)\s+[^;&|]*-i" && echo "$COMMAND" | grep -qE "$APPEND_ONLY"; then
-    echo "Blocked: in-place edit of an append-only docs file. CLAUDE.md treats docs/dev-log/, docs/lessons-learned/ and docs/eval-reports/ as history; corrections belong in a new entry." >&2
-    exit 2
-  fi
-  # truncating redirect (single >), but not an >> append
-  if echo "$COMMAND" | grep -qE "[^>]>\s*([^>|&]*[^>|&A-Za-z0-9_.-])?$APPEND_ONLY_DIR"; then
-    echo "Blocked: truncating redirect into an append-only docs file. Use >> to append, or write a new entry. CLAUDE.md treats these directories as history." >&2
-    exit 2
-  fi
-fi
+}
+judge_text "$COMMAND"
+judge_text "$JOINED"
 
 exit 0

@@ -320,8 +320,9 @@
 # The sixth round added two, and both break a DERIVATION rather than a rule:
 # `guard-trigger-loses-its-name` deletes the line naming a list the guard still
 # tests, which is the fifth-trigger slip that round measured by construction;
-# `doc-hook-function-not-named` drops one of the two functions the message says
-# the document hooks need. Neither is reachable by driving a fixture -- the
+# `doc-hook-function-not-named` drops one of the functions the message says
+# the document hooks need -- cs_join since #156 re-anchored it, when the text it
+# matched gained that third function and the edit stopped applying. Neither is reachable by driving a fixture -- the
 # point of both checks is that they read the guard's own condition and the
 # hooks' own load guards rather than a list written beside them. Run as a
 # selection on 2026-09-20: baseline plus two, both caught, byte-identical after.
@@ -710,7 +711,7 @@ refusal-claims-every-consumer%lib/command-scan.sh%s/every consumer that requires
 refusal-names-two-lists%lib/command-scan.sh%s/CS_SEPARATORS, CS_CONTROL_WORDS, CS_WORD_SPELLING, CS_WRAP_TOKEN or CS_WRAP_WORDS/CS_SEPARATORS or CS_WRAP_WORDS/%GH-134.1%caught
 emptiness-not-named%lib/command-scan.sh%s/\[ -n "\$CS_SEPARATORS" \]/[ -n "always" ]/%GH-134.1%caught
 guard-trigger-loses-its-name%lib/command-scan.sh%s/}CS_SEPARATORS is empty"/}"/%GH-134.1%caught
-doc-hook-function-not-named%lib/command-scan.sh%s/cs_tool_input and cs_within_cap/cs_tool_input/%GH-134.1%caught
+doc-hook-function-not-named%lib/command-scan.sh%s/need only cs_tool_input, cs_within_cap and cs_join/need only cs_tool_input and cs_within_cap/%GH-134.1%caught
 gh-issue-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule issue || gh_rule 'pr merge'; then/%US-14%caught
 gh-issue-two-verbs-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'issue delete' || gh_rule 'issue transfer' || gh_rule 'pr merge'; then/%US-14%caught
 pr-read-refused%no-pr-decisions.sh%s/^if gh_rule 'pr merge'; then$/if gh_rule 'pr view' || gh_rule 'pr comment' || gh_rule 'pr merge'; then/%US-13%caught
