@@ -311,3 +311,55 @@ sessions' suites running.
   `command`, `coproc`, backticks and any `${!…}`; passed are `$_`, `eval`,
   `perl`, and a call spelled as a line of a multi-line string.
 - #338's three shapes and #361's three hand copies, as before.
+
+---
+
+# 2026-09-30 · dev-agent-181 — rev-agent-181's round 5
+
+00:04 +03.
+
+Branch `worktree-issue-181-writer-callers`, from `c23c09c` to `762e867`, plus
+this entry's commit. With it the branch is 17 commits ahead of
+`origin/dev-05` (`1486270`) and 0 behind.
+
+rev-agent-181's final sweep found no new class. It did find two things the
+assistant had written:
+
+- **The `;` and `>` members added in round 4 opened a bypass.** An escaped
+  separator, `a=$(echo \; hook_text "$1")`, passes, and rev-agent-181 measured
+  it printing the file at runtime. So round 5 asked for no further change to
+  the rule in this pull request, and the assistant made none. The bypass is
+  #362's.
+- **The previous entry's "Left open" read as the whole set.** It named the
+  trades as lists, and rev-agent-181 measured members missing from both.
+
+What changed, all in prose and fixtures:
+
+- The trades are now stated as two classes, citing #362:
+  - **Refused (false reds):** a call after any keyword or prefix word the
+    lists do not name, a call inside backticks, and any `${!...}`.
+  - **Passed (bypasses):** any text the rule reads as a command start that
+    bash reads as data, and any name the text does not spell.
+
+  The rows in #181's issue file are examples of each class, not its extent.
+- `r181_in_a_multiline_string` did not read the file at runtime. The
+  assistant now cuts the string down to the file's name and `cat`s it.
+  Measured with `hook_text` stubbed: it prints the file.
+- The one-line pair `x=$(hook_text "$1"; hook_text "$1")` now pins the kept
+  `;`. With the old removal it is refused, which was measured.
+- Two prose corrections. The library names `>(...)` beside `$(...)` and
+  `<(...)`, which `declare -f` was measured to print on one line. The
+  true-cases paragraph no longer says the calls ending at `)` follow a
+  substitution's `(`.
+
+## Measurements
+
+- **Full suite on `762e867`:** 8333 ok, 0 FAIL (measured).
+
+## Left open, as classes
+
+- **#362:** the text rule, and both of its trade classes above.
+- **#338:** a write or a body line that `fn_writes` attributes to no
+  function, three shapes recorded so far.
+- **#361:** three hand copies of the attribution rules, held by one presence
+  check.
