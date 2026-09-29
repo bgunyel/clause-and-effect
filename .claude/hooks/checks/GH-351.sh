@@ -114,6 +114,22 @@ check no-pr-decisions.sh BLOCK '<<\EOF with a later \EOF line, a merge after bas
 check no-pr-decisions.sh BLOCK "a carriage return after 'EOF', a merge after bash ends the body" \
   $'cat <<\'EOF\'\r\nx\nEOF\r\ngh pr merge 5\nEOF'
 
+# #289's OWN TABLE, closed as a consequence: a `<<` inside quotes whose word
+# is a lone quote -- `grep -c "<<"`, `echo '<<'` -- left an empty delimiter
+# once its quotes were gone, so the next blank line ended a body that hid a
+# merge or a push. A lone quote is outside the grammar, so the rest is given
+# back. Each was permitted at 0e4a0f4, and bash runs the command in each.
+# #289's wider class -- a quoted `<<` followed by a word, one in a trailing
+# comment -- is not this grammar's to close and stays #289's.
+req GH-351.1 US-15
+check no-pr-decisions.sh BLOCK '#289: grep -c "<<", then a merge before a blank line' \
+  $'grep -c "<<" notes.md\ngh pr merge 5\n\necho done'
+check no-pr-decisions.sh BLOCK "#289: echo '<<', then a merge before a blank line" \
+  $'echo \'<<\'\ngh pr merge 5\n\necho done'
+req GH-351.1 US-1
+check no-git-push.sh BLOCK '#289: grep -c "<<", then a push before a blank line' \
+  $'grep -c "<<" notes.md\ngit push --force origin main\n\necho done'
+
 # THE DELIMITERS IN THE GRAMMAR, whose bodies are still dropped: a push in each
 # body is text to bash and permitted, as it was. A grammar too narrow turns
 # one of these red.
