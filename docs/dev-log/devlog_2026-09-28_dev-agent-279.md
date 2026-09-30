@@ -115,3 +115,70 @@ Everything below was run in this session. Nothing is recalled.
   evaluated through another variable is not seen, which both requirements name.
 - #218 and #221 stay out of scope, as the issue says. `$VERDICT_MARKS` is one
   more piece of driver state a sourced file can change, which is #221's class.
+
+# 2026-09-30 · dev-agent-279 — the review of PR #330: five rounds, and the record child rebuilt (#279)
+
+**2026-09-30 17:15 +03.** Appended to this entry, which is dated 2026-09-28. That is the file's date, and an entry cannot be renamed, so this section carries its own. Branch `worktree-issue-279-verdict-readbacks`. It runs from `5a03b23`, where the entry above was written, to `b15f391`, plus the commit that appends this section. It stands 20 commits ahead of `origin/dev-05` at `285e10d` before this one, and none behind. The review was rev-agent-279's, over five rounds on PR #330. This section also carries the corrections to the entry above that the review asked for.
+
+## Corrections to the entry above
+
+- **"A `local REQ` in `record_loaded`" is not a suggestion not taken.** Round 1 of the review raised it again, and the assistant took it in `f3f5cea`. `sourcing_fail` keeps its own pattern, which its comment argues is safe.
+- **The two fixture guards no longer ask with `;`.** `mk_halflib` and `mk_emptylist` now ask `copy_sources_as` as well: a copy has to source with the status its original does. Round 1 measured a copy the builder broke (an unterminated `if` appended, status 2) passing every half-library guard with the old question. `mk_emptylist` moved to the library in `c783217`, because #279's issue file now calls it too.
+- **The record child described above no longer exists.** The rounds below replaced it, and the byte figures above (30,498 and 57,596) are from `0d5829d` only.
+
+## What the review found, and what was done
+
+- **Round 1** (`f3f5cea`, `c783217`):
+  - finding 1 was the guards above;
+  - finding 2 was a record child that ran its loops in the shell the sourced file had just set. `IFS=x` joined every name into one key, and the record was still called whole.
+  - The assistant's sweep of that class found nullglob, nocasematch, an EXIT trap and an alias of `declare` doing the same. The child was given a reset line.
+- **Round 2** (`6cf1cfb`, `78c1f78`, `a8a9089`) found the class inside the reset. The child's own variables (`bf`, `bv`, `n`, `v`) and the reset's own success were reachable by the file: `readonly v` dropped a name silently. The assistant moved the before-lists to descriptors, gave the child `_lc_*` names with an exit-4 check, and re-enabled builtins, since the sweep found `enable -n` corrupting records too.
+- **Round 3** (`f2e99a9`, `779b5af`, `7450987`) found it a third time: `alias exit=:` reached every guard written after the source, and a trace could be written into the record. rev-agent-279 asked for the altitude fix instead of another guard, and the assistant took it:
+  - the child writes `declare -F`/`declare -p` before the source;
+  - it then runs one brace group on the source's own line, parsed before the file runs, that only dumps `declare -F`, `-f` and `-p` to their own descriptors;
+  - a new library function, `record_dump`, reads those dumps in the suite's shell and refuses any line it cannot account for.
+- **Round 4** (`df17124`) found `record_dump` stricter than bash. It refused the trailer line `declare -f<flags> <name>` that bash prints after an exported, readonly or traced function, and a closing line with redirections, `} > /dev/null`. The child before #279 recorded both. It also found comments claiming refusals for dumps forged on purpose, which the code does not make. Forgery is now a named limit, since these checks stop mistakes and not adversaries.
+- **Round 5** (`b15f391`):
+  - a fixture for the trailer branch's `record_closed` guard;
+  - the note's heredoc limit, which named the order that is refused rather than the one that mis-cuts;
+  - the caveat on the sourced-non-zero row restored;
+  - a variable declared with no value left unrecorded again, as `compgen -v` left it;
+  - `record_dump` cleaning up its own `.part`.
+  - Its heredoc findings are filed as #363.
+- **Merges of `origin/dev-05`:**
+  - `29f1a1f` (`abffdbf`) and `fd84115` (`f539d9a`);
+  - `1f9487a` (`1486270`, #314 for #202, which grew the tokeniser by 427 lines);
+  - `874171e` (`4cf79b1`);
+  - `9d794bd` (`285e10d`).
+
+  Each time the registry pins were re-derived with `mutate-hooks.sh --list` on the merged tree, not incremented: 153/151, then 185/183, then 191/189.
+
+## Measured
+
+- **Records:** after every change, the child's record of the library and of the tokeniser was compared with `cmp` against the record the child before #279 writes. It was byte for byte the same each time. The last figures are 47,315 and 72,227 bytes at `b15f391`. The tokeniser figures before #202 grew it were 57,596.
+- **Mutations:** each round's fixes were reverted one at a time, in whole-suite runs in scratch clones with an unmutated control:
+  - round 1: 11 of 11 went red;
+  - round 2: 5 of 6 went red;
+  - round 3: 13 of 14 went red;
+  - round 4: 6 of 6 went red.
+
+  The two survivors were real. Dropping `IFS=` from the round-2 read-back survived, because the entry `read` trims was one the child skips in the suite's environment. It was closed by construction, with an end marker. Splitting round 3's dump group onto a later line survived, because every command in it carries a backslash. It was closed by a fixture that aliases `{`, which that split turns red alone.
+- **The registry row:** `tokeniser-sources-non-zero` came back caught at every head it was run on (`c783217`, `a8a9089`, `7450987`, `df17124`), with GH-117, GH-118, GH-124, GH-279.1, GH-96.2, GH-96.3 and GH-98 red.
+- **Figures before this section:** the full suite at `9d794bd` gave ALL CHECKS PASSED, 8,502 ok. The run at `b15f391` is in the pull request's body.
+
+## Dead ends and mistakes
+
+- **Guards that kept growing.** The assistant answered rounds 1 and 2 with guards, and each guard was more program in the tainted shell for the next piece of state to reach. rev-agent-279 named the pattern in round 3, after its third appearance. The class stopped growing only when the program left the child.
+- **An unmeasured claim in a draft.** The assistant's round-1 reply said a function named as a glob was expanded against the working directory. It measured this only before posting (it was recorded under a file's name, `r279_gx`), so the claim went out true. But it had been written first.
+- **A first version refused bash's own output.** The first `record_dump` (`f2e99a9`) wrote functions before validating the variables, so it left partial records. It was fixed in `779b5af`, before the reviewer saw it. It also refused bash's trailer and redirection lines, which the reviewer found in round 4. The assistant had swept function shapes for heredocs, subshell bodies and headers, but not attributes and redirections.
+- **Two citations the suite refused.** `#314` was cited without a cite entry (`fb978bc`). `#330` needed an entry once the checks cited it (`c783217`).
+- **A byte figure written as "once round 3 was in"** went stale when the library changed, and the reviewer caught it in round 4. The code's figure is now dated by commit.
+- **A run count miscounted in the pull request body** (fifteen for fourteen), corrected the same hour.
+- **`2>&1` after a `git push` in one line** was read by `no-git-push.sh` as the destination and refused, once. Committing and pushing as separate commands passed.
+
+## Open
+
+- **#363:** heredocs in a function's body that `record_dump` reads wrongly. All are refusing, and none reaches a file the suite records today.
+- **#339:** the verdict scanners read one spelling of an evaluation.
+- **Named limits, in GH-279.1's note:** a record forged on purpose, through the saved descriptors, a DEBUG or EXIT trap, or a function named after `declare`, `enable` or `printf`; and a name bash itself starts with, assigned by the file.
+- #218 and #221 stay out of scope, as before.
