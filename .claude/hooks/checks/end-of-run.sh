@@ -2240,6 +2240,32 @@ else
     "$MUT_AT_RESULTS" "$RESULTS_NOW"
 fi
 
+# THE VERDICT FIXTURES ARE RECORDED UNDER THE REQUIREMENT EACH ESTABLISHES,
+# read back from the ledger once every block of them has run (#279): every row
+# inside a `verdict_fixtures begin` ... `end` block, whatever its label, with
+# its tags. The read stood in the unsplit file's #204 section, chose its rows by
+# a label beginning `the final verdict ` or reading `and says why on stderr`,
+# and ran before GH-204.7's fixtures, so
+# a fixture row under another label and a leftover `req` -- the slip of rounds
+# 5 and 7 of the review of PR #216 -- and both of GH-204.7's rows went unread.
+# The literal is every row, in the order the blocks ran; a row added to a block
+# is red here until it is written in, with the tags it should carry.
+req GH-204.1 GH-204.5 GH-204.7 GH-279.3
+tok 'every row inside a block of verdict fixtures is recorded under the requirement it establishes, whatever its label' \
+'GH-204.1 | the final verdict fails on a recorded function redefined
+GH-204.5 | the final verdict fails on a missing command and on a moved record
+GH-204.1 GH-204.5 | the final verdict keeps a failure it was given, through a helper that clears it too, and fails on nothing else
+GH-204.1 GH-204.5 | and says why on stderr
+GH-204.1 | a FAIL the ledger holds fails the run, whatever FAILED says, and ok rows do not
+GH-204.7 | the final verdict fails on a record that is short, empty or has a marker too many, keeps a failure it was given, and fails on nothing else
+GH-204.7 | and says why on stderr' \
+    "$(verdict_fixture_rows "$VERDICT_MARKS" "$LEDGER")"
+# And a fixture evaluated outside any block is one the read above never sees,
+# so every check file is read for one.
+req GH-279.3
+tok 'and no check file evaluates a verdict'"'"'s code outside a block of verdict fixtures' '' \
+    "$(cd "$SUITE_DIR/checks" && verdict_evals_outside $SUITE_CHECKS "$SUITE_LAST")"
+
 # EVERY SECTION HEADING HAS A ROW UNDER IT, a `---` subheading's rows counting
 # for its `===` heading: asked here, once every row but the foot's is in the
 # ledger, of every heading `section` wrote down (see `heading_mark`, and #204's
@@ -2300,22 +2326,22 @@ else
   pass static 'the not-found record is where the head put it, so what the handler wrote is what the verdict reads'
 fi
 # EACH OF THE VERDICT'S QUESTIONS HAS ITS ROW, read back from the ledger: the
-# last four rows recorded are the heading question's and the verdict's three,
-# above, each under the requirement it establishes -- so a question with no
-# row, or a row under the wrong tag, is red here and not only a line on stderr.
-# The heading question is among them because a text pin shows that it is
-# written, and only the ledger that it ran, under GH-204.8 -- a `||` ending the
-# line before it, or its `req` lost, left the pin green (round 3 of the review
-# of PR #220). Its label is read as well as its tag, so the GH-204.8 row in that
-# place is that question's and not another's (round 4).
-req GH-204.1 GH-204.5 GH-204.8
-tok 'the heading question and the verdict'"'"'s three questions end the ledger, each as a row under its own requirement, the heading question'"'"'s under its own label' \
-'GH-204.8
-GH-204.1
-GH-204.5
-GH-204.5
-every heading section wrote down has at least one row under it' \
-    "$(tail -n 4 "$LEDGER" | cut -f1; tail -n 4 "$LEDGER" | head -n 1 | cut -f4)"
+# rows recorded last are the heading question's and one for each clause of the
+# final verdict that writes one, above, each under the requirement it
+# establishes and under its own label -- so a question with no row, a row under
+# the wrong tag, or a row replaced by another of the same tag, is red here and
+# not only a line on stderr. The heading question is among them because a text
+# pin shows that it is written, and only the ledger that it ran, under GH-204.8
+# -- a `||` ending the line before it, or its `req` lost, left the pin green
+# (round 3 of the review of PR #220). The rows were `tail -n 4` and a literal
+# of their tags with the heading row's label alone, so a verdict row replaced
+# by another of its tag, and a clause added to the verdict with no row, both
+# read green (#279). They are derived from the verdict code the driver ends on
+# now, and which clauses write a row is a table beside the derivation: see
+# `verdict_tail_want` in the library.
+req GH-204.1 GH-204.5 GH-204.8 GH-279.2
+tok 'the heading question and each clause of the final verdict that writes a row end the ledger, in order, each under its own requirement and its own label' \
+    '' "$(verdict_tail_read "${SUITE_FILES[0]}" "$LEDGER")"
 
 # --matrix: every requirement, from the record as it stands now, the findings
 # above included, and then the verdict line the run would have printed.

@@ -1070,13 +1070,306 @@ suite_range() {  # suite_range <variable> <sed address> <sed address> -- 1 on an
   return 1
 }
 # What sourcing <file> alone defines, with an empty environment, written to
-# <out> as NUL-separated name/definition pairs by the program in $LOADED_CHILD;
-# 1 if that is nothing. The head of check-hooks.sh records what it runs against
-# this way, and the #204 section drives it: an exported function kept out, a
-# file that defines nothing refused.
-record_of() {  # record_of <file> <out> -- 1 if sourcing <file> alone defined nothing
-  env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$1" > "$2"
+# <out> as NUL-separated name/definition pairs by `record_dump` below, from
+# the listings the program in $LOADED_CHILD dumps beside <out>, and the status
+# sourcing returned, which the child writes to <out>.sourced. 1 if it defined
+# nothing; 2 if the child did not finish -- it wrote no status, as a file that
+# runs `exit` leaves it, or it exited non-zero, was killed, or dumped
+# something `record_dump` refuses -- and <out> is then left empty; 3 if
+# sourcing returned non-zero and still defined something.
+# Why, in words, on stdout, for 2 and 3, and for 1 when sourcing returned
+# non-zero. The three are apart because the head treats them apart (#279): see
+# `record_loaded` below. The #204 section drives it with an exported function
+# kept out and a file that defines nothing refused, and #279's issue file with
+# each of the other outcomes.
+record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did not finish, 3 sourcing returned non-zero; why on stdout
+  local child_status sourced why
+  : > "$2"
+  env -i PATH="$PATH" "$BASH" -c "$LOADED_CHILD" _ "$1" > /dev/null 3> "$2.sourced" 4> "$2.before" \
+    5> "$2.names" 6> "$2.functions" 7> "$2.variables"
+  child_status=$?
+  sourced=$(< "$2.sourced")
+  if [ -z "$sourced" ]; then
+    printf 'the child that records it wrote no status for it: it ended before sourcing it returned, or could not write one'
+    return 2
+  elif [ "$child_status" != 0 ]; then
+    printf 'the child that records it exited %s' "$child_status"
+    return 2
+  elif [[ ! $sourced =~ ^[0-9]+$ ]]; then
+    printf 'the child that records it wrote a status that is not one'
+    return 2
+  elif ! why=$(record_dump "$2"); then
+    printf 'the dump of its %s is not whole, or holds text the child did not write there' "$why"
+    return 2
+  elif [ "$sourced" != 0 ]; then
+    printf 'sourcing it returned %s' "$sourced"
+    [ -s "$2" ] || return 1
+    return 3
+  fi
   [ -s "$2" ]
+}
+# Whether the last line of one function of the dump closes it: `}`, or `}`
+# and the redirections the function was written with, `} > /dev/null`, as
+# `declare -f` prints them (round 4 of the review of PR #330, which measured
+# the first version refusing both).
+record_closed() {  # record_closed <chunk> -- 0 when its last line closes a function
+  local last=${1##*$'\n'}
+  [[ $1 == *$'\n'* ]] && [[ $last == '}' || $last == '} '?* ]]
+}
+# One function of the dump, cut at its header, written to <out>.part unless
+# the child started with it; 1 when it does not end on its closing line.
+record_chunk() {  # record_chunk <out> <name> <chunk> <started-with> -- 1 when <chunk> is not closed
+  record_closed "$3" || return 1
+  [ -n "$4" ] || printf '%s\0%s\0' "$2" "$3" >> "$1.part"
+}
+# THE RECORD, MADE IN THIS SHELL FROM WHAT THE CHILD DUMPED (#279, round 3 of
+# the review of PR #330). The child does no more after the source than write
+# bash's own listings, each to a descriptor of its own, so that nothing the
+# file left in its shell has a program to act on; the reading is done here,
+# where the file never ran. Every line of every dump has to be accounted for,
+# or the record is not made and <out> is left empty: the names the child
+# started with are the same two listings, each ended by `e:`; each function name is a line `declare -f<flags>
+# <name>`; the functions are cut at each name's header, `<name> () `, in the
+# order the names came, and each has to end on its closing line, `}` or `}`
+# and its redirections, which a line `declare -f<flags> <name>` may follow for
+# the function it closes; and each variable is a line `declare -<flags>
+# <name>[=<value>]`, one a line because bash quotes a newline in a value,
+# ending in `e:`. So text the file got into a dump that is not in bash's shape
+# is refused rather than read as a name; a line in bash's shape is read as
+# bash's, which is the forgery limit the driver names beside $LOADED_CHILD.
+# Written to <out> as the child before this wrote it: `<name>` and `$<name>`,
+# each with its definition, NUL after each; a name the child started with,
+# `_`, `BASH_*` and a variable declared with no value left out, the last as
+# `compgen -v` left it out for that child (round 5 of the review of PR #330). What it does not reach, named: a function whose
+# body holds a heredoc line that is the next function's header and a `}` line
+# before it, which cuts there; and a variable whose value holds a newline,
+# should a bash print one unquoted. Prints which dump, and returns 1, when one
+# is not whole, and then leaves <out> as it found it and no <out>.part beside
+# it: the record is written to <out>.part by `record_read` below, and moved
+# over <out> only once every dump has been read.
+record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote beside it; 1 and which dump on stdout when one is not whole
+  record_read "$1" || { rm -f -- "$1.part"; return 1; }
+  mv -f -- "$1.part" "$1"
+}
+# The reading `record_dump` does, into <out>.part, which it moves over <out>
+# or removes, so that neither a refused record nor its part is left beside
+# <out> (round 5 of the review of PR #330).
+record_read() {  # record_read <out> -- <out>.part from the dumps beside <out>; 1 and which dump on stdout when one is not whole
+  local line name chunk listing=functions k=-1 fn_re='^declare -f[a-z]* (.+)$' trailer_re='^declare -f[a-z]+ (.+)$' var_re='^declare -[a-zA-Z-]+ ([A-Za-z_][A-Za-z0-9_]*)(=|$)'
+  local -a lines=() names=()
+  local -A was_f=() was_v=()
+  : > "$1.part"
+  mapfile -t lines < "$1.before"
+  [ "${#lines[@]}" -gt 0 ] && [ "${lines[-1]}" = e: ] || { printf 'starting names'; return 1; }
+  unset 'lines[-1]'
+  for line in "${lines[@]}"; do
+    if [ "$listing" = variables ]; then
+      [[ $line =~ $var_re ]] || { printf 'starting names'; return 1; }
+      was_v[${BASH_REMATCH[1]}]=1
+    elif [ "$line" = e: ]; then
+      listing=variables
+    else
+      [[ $line =~ $fn_re ]] || { printf 'starting names'; return 1; }
+      was_f[${BASH_REMATCH[1]}]=1
+    fi
+  done
+  [ "$listing" = variables ] || { printf 'starting names'; return 1; }
+  mapfile -t lines < "$1.names"
+  for line in "${lines[@]}"; do
+    [[ $line =~ $fn_re ]] || { printf 'function names'; return 1; }
+    names+=("${BASH_REMATCH[1]}")
+  done
+  mapfile -t lines < "$1.functions"
+  for line in "${lines[@]}"; do
+    if [ $((k + 1)) -lt "${#names[@]}" ] && [ "$line" = "${names[k + 1]} () " ]; then
+      if [ "$k" -ge 0 ]; then
+        record_chunk "$1" "${names[k]}" "$chunk" "${was_f[${names[k]}]-}" || { printf 'functions'; return 1; }
+      fi
+      k=$((k + 1))
+      chunk=$line
+    elif [ "$k" -lt 0 ]; then
+      printf 'functions'; return 1
+    elif [[ $line =~ $trailer_re && ${BASH_REMATCH[1]} == "${names[k]}" ]] && record_closed "$chunk"; then
+      continue
+    else
+      chunk+=$'\n'$line
+    fi
+  done
+  [ $((k + 1)) = "${#names[@]}" ] || { printf 'functions'; return 1; }
+  if [ "$k" -ge 0 ]; then
+    record_chunk "$1" "${names[k]}" "$chunk" "${was_f[${names[k]}]-}" || { printf 'functions'; return 1; }
+  fi
+  mapfile -t lines < "$1.variables"
+  [ "${#lines[@]}" -gt 0 ] && [ "${lines[-1]}" = e: ] || { printf 'variables'; return 1; }
+  unset 'lines[-1]'
+  for line in "${lines[@]}"; do
+    [[ $line =~ $var_re ]] || { printf 'variables'; return 1; }
+    name=${BASH_REMATCH[1]}
+    [ "${BASH_REMATCH[2]}" = = ] || continue
+    [[ -n ${was_v[$name]-} || $name == BASH_* || $name == _ ]] && continue
+    printf '$%s\0%s\0' "$name" "${line#declare -* }" >> "$1.part"
+  done
+}
+# THE HEAD'S RECORD OF ONE FILE (#279): `record_of`, and what the head does
+# with each outcome. A file whose sourcing defined nothing gives the foot
+# nothing to compare, so it stops the run, as `052cc89` decided, saying why --
+# the status too, when sourcing returned non-zero. Any other outcome is
+# recorded as it stands and the run goes on: a file that sourced non-zero, or
+# a child that did not finish, is a FAIL row here, under GH-279.1, naming the
+# file and why, and not an abort. A file that sourced non-zero leaves a record
+# of what it defined before it failed, which is compared, while a name it did
+# not get to define is in no record; a child that did not finish leaves none,
+# so nothing of that file is compared at the foot. The row says which, and it
+# fails the run (rounds 4 and 5 of the review of PR #330: the one text the two
+# shared said the second was compared in part, and the first text written for
+# the first then dropped its caveat). Written to LOADED_BODY and LOADED_FROM,
+# which the driver declares, and the outcome to LOADED_STATUS, keyed by the
+# file, so that a check can read what the head found rather than record the
+# file again (round 1 of the review of PR #330). The FAIL row is tagged through
+# a `local` REQ, so a caller's tag is the same after it as before. Called by
+# the driver's prelude, and by #279's issue file in a subshell of its own for
+# each outcome.
+record_loaded() {  # record_loaded <file> <out> -- record it into LOADED_BODY, LOADED_FROM and LOADED_STATUS; 1 if it defined nothing
+  local why record_status k v
+  why=$(record_of "$1" "$2")
+  record_status=$?
+  case $record_status in
+    0) ;;
+    1) printf 'sourcing %s alone defined nothing%s, so nothing of it can be compared at the foot; nothing was judged\n' \
+         "$1" "${why:+ ($why)}" >&2
+       return 1 ;;
+    3) local REQ=GH-279.1
+       fail static 'the record of %s holds what sourcing it defined, but %s; that is compared at the foot, and a name it did not get to define is not' \
+         "$1" "$why" ;;
+    *) local REQ=GH-279.1
+       fail static 'the record of %s was not made: %s; nothing of it is compared at the foot' \
+         "$1" "$why" ;;
+  esac
+  LOADED_STATUS[$1]=$record_status
+  while IFS= read -r -d '' k && IFS= read -r -d '' v; do
+    LOADED_BODY[$k]=$v
+    LOADED_FROM[$k]=$1
+  done < "$2"
+}
+
+# THE ROWS THAT END THE LEDGER (#279). The end-of-run file's last check before
+# the matrix asks that the ledger ends on the heading question's row and on a
+# row for each clause of the final verdict that writes one, each under its own
+# tags and its own label. That was `tail -n 4` and a literal of four tags with
+# one label, so a verdict row replaced by another of the same tag read green,
+# and so did a clause added to the verdict with no row. So the rows are derived
+# from the verdict code the driver ends on: every evaluation of a
+# `<NAME>_VERDICT_CODE` on a line of the driver that is not a comment, braces
+# or none, in order, and for each the clauses of that code. The names are read
+# off the driver's text and the code off this shell, `${!name}`: the two are
+# one only because the driver defines each verdict's code before it takes it,
+# and a fixture that hands in another driver's text is asking about this
+# shell's code under that driver's names.
+#
+# WHICH CLAUSES WRITE A ROW is the one thing written here and not derived, and
+# it is written as the table below, keyed by the clause's condition as the
+# verdict code spells it. FOOT_VERDICT_CODE writes one row per clause, in
+# clause order: the end-of-run file asks the same condition just before, as a
+# row. SOURCED_VERDICT_CODE writes none to the tail: its row is the driver's,
+# after the last file, and it prints only when it fails, so a green run has no
+# such row at all. LEDGER_VERDICT_CODE writes none by design: it reads the
+# rows, and there is no question of its own a row could answer. Each of those
+# two is held to the one clause it has. A verdict variable the table does not
+# know, a clause it does not know, and a line of FOOT_VERDICT_CODE naming
+# FAILED beyond one per clause of the `if <condition>; then` form are each a
+# line in place of a row, which no ledger ends on, so the check goes red until
+# the table says what the new clause writes. A clause is counted by the lines
+# that name FAILED, however the assignment is spelt -- `FAILED=1`,
+# `(( FAILED = 1 ))`, `let` or `printf -v` -- because counting `FAILED=` let
+# the others by (review of #279's first round). What it does not see, named: a
+# clause that sets the failure without naming FAILED on its line, through
+# another variable or text it evaluates.
+verdict_tail_want() {  # verdict_tail_want <driver> -- "<tags> TAB <label>" of each row the ledger ends on, or a line for what has none
+  local name code cond clauses
+  printf 'GH-204.8\t%s\n' 'every heading section wrote down has at least one row under it'
+  for name in $(grep -v '^[[:space:]]*#' "$1" | grep -oE 'eval "\$\{?[A-Za-z0-9_]+_VERDICT_CODE\}?"' \
+                 | sed -E 's/^eval "\$\{?([A-Za-z0-9_]+)\}?"$/\1/'); do
+    code=${!name}
+    clauses=$(grep -c 'FAILED' <<< "$code")
+    case $name in
+      SOURCED_VERDICT_CODE|LEDGER_VERDICT_CODE)
+        [ "$clauses" = 1 ] \
+          || printf '%s names FAILED on %s lines, and one clause is all it is known to write no row for\n' "$name" "$clauses"
+        continue ;;
+      FOOT_VERDICT_CODE) ;;
+      *) printf '%s is taken at the end of the driver, and which rows it writes is not known\n' "$name"
+         continue ;;
+    esac
+    [ "$clauses" = "$(grep -c '^if .*; then$' <<< "$code")" ] \
+      || printf '%s names FAILED on %s lines, and not each in a clause of its own\n' "$name" "$clauses"
+    while IFS= read -r cond; do
+      case $cond in
+        '[[ -n $LOADED_CHANGED ]]')
+          printf 'GH-204.1\t%s\n' 'every function and tokeniser variable this run started with is the one it ended with' ;;
+        '[[ -s $NOT_FOUND ]]')
+          printf 'GH-204.5\t%s\n' 'no command this suite called was missing, in this shell or in any subshell of it' ;;
+        '[[ $NOT_FOUND != "$NOT_FOUND_AT_HEAD" ]]')
+          printf 'GH-204.5\t%s\n' 'the not-found record is where the head put it, so what the handler wrote is what the verdict reads' ;;
+        *) printf '%s has a clause with no row known for it: if %s\n' "$name" "$cond" ;;
+      esac
+    done < <(sed -n 's/^if \(.*\); then$/\1/p' <<< "$code")
+  done
+}
+verdict_tail_read() {  # verdict_tail_read <driver> <ledger> -- nothing when the ledger ends on the rows derived, else both
+  local want got
+  want=$(verdict_tail_want "$1")
+  got=$(tail -n "$(printf '%s\n' "$want" | wc -l)" "$2" | cut -f1,4)
+  [ "$want" = "$got" ] || printf 'derived:\n%s\nthe ledger ends:\n%s' "$want" "$got"
+}
+
+# THE VERDICT FIXTURES, ENUMERATED BY WHERE THEY STAND (#279). The rows that
+# drive the final verdict's code are read back from the ledger with their tags,
+# because a row under the wrong `req` covers the wrong requirement and nothing
+# else says so. The read chose them by label -- a label beginning `the final
+# verdict `, or `and says why on stderr` -- so a fixture row with any other
+# label was never read; and it ran before GH-204.7's fixtures, so theirs were
+# never read either. Now each block of them is opened with
+# `verdict_fixtures begin` and closed with `verdict_fixtures end`, which write
+# down how many rows the ledger held, and every row between the two is read,
+# whatever it says; the end-of-run file reads them once every block has run.
+# A mark written from a subshell is not written, as a row printed there is not
+# recorded. A fixture evaluated outside any block is what this cannot see by
+# itself, so `verdict_evals_outside` reads the check files for one.
+verdict_fixtures() {  # verdict_fixtures <begin|end> -- write down where a block of verdict fixtures begins or ends
+  [ -n "$VERDICT_MARKS" ] && [ -n "$LEDGER" ] && [ "$BASHPID" = "$$" ] || return 0
+  printf '%s\t%s\t%s\n' "$1" "$(wc -l < "$LEDGER")" "${BASH_SOURCE[1]#"$SUITE_DIR"/}" >> "$VERDICT_MARKS"
+}
+# Each row inside a block, as `<tags> | <label>`, and a line for a mark out of
+# place: an `end` with no `begin` open in its file, a `begin` inside a block,
+# and a block never ended.
+verdict_fixture_rows() {  # verdict_fixture_rows <marks> <ledger> -- each row inside a block, and a line for each mark out of place
+  awk -F'\t' '
+    FILENAME == ARGV[1] {
+      if ($1 == "begin" && open == "") { open = $3; from = $2 }
+      else if ($1 == "end" && open == $3) { for (i = from + 1; i <= $2; i++) row[i] = 1; open = "" }
+      else printf "a %s mark in %s out of place, after row %s\n", $1, $3, $2
+      next
+    }
+    FNR in row { print $1 " | " $4 }
+    END { if (open != "") printf "a block begun in %s after row %s and never ended\n", open, from }' "$1" "$2"
+}
+# Every line of the named files that evaluates a verdict's code -- `eval
+# "$<NAME>_VERDICT_CODE"`, braces or none -- outside a block, as <file>:<line>;
+# a block opens and closes at a `verdict_fixtures` call starting a line, after
+# any indentation.
+# Read as text, so a spelling through another variable, or an `eval` of text
+# built some other way, is not seen; the fixtures written so far are all this
+# one spelling.
+verdict_evals_outside() {  # verdict_evals_outside <file>... -- <file>:<line> of each verdict evaluated outside a block
+  local out awk_status
+  [ "$#" -gt 0 ] || { echo 'unread: no file was named'; return; }
+  out=$(awk '
+    FNR == 1 { inside = 0 }
+    /^[[:space:]]*verdict_fixtures begin([[:space:]]|$)/ { inside = 1 }
+    /^[[:space:]]*verdict_fixtures end([[:space:]]|$)/ { inside = 0 }
+    !inside && /eval "\$\{?[A-Za-z0-9_]+_VERDICT_CODE\}?"/ { print FILENAME ":" FNR }' "$@" 2>/dev/null)
+  awk_status=$?
+  if [ "$awk_status" = 0 ]; then printf '%s' "$out"; else echo "unread: awk exited $awk_status"; fi
 }
 
 # THE SOURCING ROUTINE (#204). check-hooks.sh sources every file of checks/ but
@@ -1694,6 +1987,30 @@ beside() {  # beside <label> <file> <literal>
   fi
 }
 
+# WHETHER A COPY OF THE TOKENISER SOURCES AS ITS ORIGINAL DOES: the status
+# sourcing each returns, taken the same way, and the two compared. A fixture
+# guard that loads a copy asks this, and not whether sourcing the copy returned
+# 0 (#279): the tokeniser under check may itself source non-zero -- the
+# registry row tokeniser-sources-non-zero is one that does -- and its copy is
+# then a fixture working and not a fixture broken, and its own checks say what
+# is wrong with it. Nor only whether a name is defined, which is what the
+# two guards asked on this branch until round 1 of the review of PR #330
+# measured the cost: a copy its builder broke -- an unterminated `if`
+# appended, where every function is defined and sourcing returns 2 -- passed
+# every half-library guard, and every check driving one was green. A copy the builder broke into the status its original
+# already returns is not told apart from it; that is the limit, named.
+copy_sources_as() {  # copy_sources_as <copy> <original> -- 1 and why on stdout when they source with different statuses
+  local copy_status original_status
+  bash -c '. "$1"' _ "$1" > /dev/null 2>&1
+  copy_status=$?
+  bash -c '. "$1"' _ "$2" > /dev/null 2>&1
+  original_status=$?
+  [ "$copy_status" = "$original_status" ] && return 0
+  printf 'it sources with status %s, and the tokeniser it was copied from with %s' \
+    "$copy_status" "$original_status"
+  return 1
+}
+
 # The library present and loading, with exactly one function renamed away. Built
 # by a call at the top level and named by convention, rather than returned from a
 # substitution: an `exit 1` inside `$( )` kills the subshell and leaves the suite
@@ -1717,7 +2034,7 @@ halflib_path() {  # halflib_path <hook> <cs_function> -- where that fixture sits
 mk_halflib() {  # mk_halflib <hook> <cs_function>
   local hook="$1"
   local fn="$2"
-  local target dir
+  local target dir why
   target=$(halflib_path "$hook" "$fn")
   dir=$(dirname "$target")
   mkdir -p "$dir/lib"
@@ -1736,14 +2053,24 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
   }
   # And that what is left still loads. A fixture broken some other way would
   # refuse for a reason this section does not name, and would read as evidence
-  # for the guard.
+  # for the guard. First, that it sources as the tokeniser it was copied from
+  # does -- asked before the load below, so that what it says on a refusal is
+  # this guard's line alone. See `copy_sources_as`.
+  why=$(copy_sources_as "$dir/lib/command-scan.sh" "$HOOKS/lib/command-scan.sh") || {
+    echo "the half-library for $hook does not source as the tokeniser it was copied from: $why; the check using it proves nothing" >&2
+    exit 1
+  }
   # The one line filtered out of its stderr is the library's own report of a
   # withdrawal (#182's, for a library missing cs_drop_heredocs), which is the
   # fixture working and in a green log reads as a failure. Anything else it
   # says is kept, so a fixture that fails to load for a reason of its own still
   # shows bash's diagnostic; review of #182's pull request found the first
   # version dropping all of it.
-  bash -c ". '$dir/lib/command-scan.sh' && command -v cs_renamed_away >/dev/null 2>&1" \
+  # Loading is judged by what sourcing defined, and its status by the one
+  # above, and not by `&&` (#279): asked that way, a tokeniser copy that
+  # sources non-zero stopped the run here, unjudged, which is how the registry
+  # row tokeniser-sources-non-zero first came back did-not-complete.
+  bash -c ". '$dir/lib/command-scan.sh'; command -v cs_renamed_away >/dev/null 2>&1" \
     2> >(grep -vF 'cs_drop_heredocs is not defined, and cs_normalise calls it' >&2) || {
     echo "the half-library for $hook does not load at all; the check using it proves nothing" >&2
     exit 1
@@ -1752,6 +2079,60 @@ mk_halflib() {  # mk_halflib <hook> <cs_function>
   # the one the `halflib--` bug got wrong.
   [ -x "$target" ] || {
     echo "the half-library fixture for $hook is not at $target, or is not executable; the check using it proves nothing" >&2
+    exit 1
+  }
+}
+
+# The library present and loading, with both halves of the prefix-word list
+# emptied, for every consumer that calls cs_split. The unsplit file's #79
+# section says what it is for and drives it; #279's issue file drives the
+# builder itself, which is why it is here.
+emptylist_path() {  # emptylist_path <hook> -- where the emptied-list copy of it sits
+  printf '%s\n' "$FIXTURES/emptylist-$1/$1"
+}
+mk_emptylist() {  # mk_emptylist <hook>
+  local hook="$1"
+  local target dir why
+  target=$(emptylist_path "$hook")
+  dir=$(dirname "$target")
+  mkdir -p "$dir/lib"
+  cp "$HOOKS/$hook" "$dir/"
+  # Emptied IN PLACE. Appending would land after CS_WRAPPER_RE is derived and
+  # after the withdrawal has already run against a full list, so the fixture
+  # would test nothing the library does on load; the first version of these
+  # appended, and was green for that reason.
+  sed -E 's/^CS_WRAP_OPTION_WORDS=.*/CS_WRAP_OPTION_WORDS=""/;
+          s/^CS_WRAP_OPERAND_WORDS=.*/CS_WRAP_OPERAND_WORDS=""/' \
+      "$HOOKS/lib/command-scan.sh" > "$dir/lib/command-scan.sh"
+  # Both directions on the edit, as mk_halflib does on its rename: a sed that
+  # matched nothing leaves a complete library, and the checks against it pass.
+  grep -q '^CS_WRAP_OPTION_WORDS=""$' "$dir/lib/command-scan.sh" \
+    && grep -q '^CS_WRAP_OPERAND_WORDS=""$' "$dir/lib/command-scan.sh" || {
+    echo "the emptied-list library for $hook did not empty both halves; the checks using it prove nothing" >&2
+    exit 1
+  }
+  ! grep -qE "^CS_WRAP_(OPTION|OPERAND)_WORDS='" "$dir/lib/command-scan.sh" || {
+    echo "the emptied-list library for $hook still assigns a full list; the checks using it prove nothing" >&2
+    exit 1
+  }
+  # And that it still loads with every OTHER function defined, so a refusal
+  # against it is the list's doing and not a library broken some other way.
+  # cs_split is deliberately not asked here: whether it is withdrawn is the
+  # mechanism, and a fixture guard exits the suite rather than failing a check,
+  # which would report a removed mechanism as an aborted run instead of as red.
+  # By what sourcing defined, and a status that is the original's, as
+  # mk_halflib asks (#279); see `copy_sources_as` in the library.
+  why=$(copy_sources_as "$dir/lib/command-scan.sh" "$HOOKS/lib/command-scan.sh") || {
+    echo "the emptied-list library for $hook does not source as the tokeniser it was copied from: $why; the checks using it prove nothing" >&2
+    exit 1
+  }
+  bash -c ". '$dir/lib/command-scan.sh'; command -v cs_normalise && command -v cs_git_args \
+           && command -v cs_gh_args && command -v cs_join" >/dev/null 2>&1 || {
+    echo "the emptied-list library for $hook does not load with its other functions; the checks using it prove nothing" >&2
+    exit 1
+  }
+  [ -x "$target" ] || {
+    echo "the emptied-list fixture for $hook is not at $target, or is not executable; the checks using it prove nothing" >&2
     exit 1
   }
 }
