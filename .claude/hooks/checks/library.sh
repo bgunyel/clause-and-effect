@@ -1800,6 +1800,89 @@ hook_text() {  # hook_text <file> -- a hook's text as the refusal-arm counters r
   hook_bodiless "$1" \
     | sed ':a;/\\$/{N;s/\\\n//;ba}'
 }
+# WHICH READS A HELPER MAKES OF ITS FILE, asked by checks/GH-182.sh of the
+# three counters and by checks/GH-181.sh of `writer_callers` and `odd_defs`,
+# and here since #181 made it two callers. True when the function's
+# definition, as bash holds it, passes its file argument to each helper named,
+# as `<helper> "$1"` in a command's first word, and with those calls taken out
+# names no `$1`, `$@` or `$*`, braced or not, no indirection `${!...}` and no
+# `BASH_ARGV`, and no drop or `sed` of its own. GH-182.sh argues the two
+# halves #182 asked -- a read through the helper, and nothing else read -- and
+# the review of #182's pull request that found their first two versions short.
+# What review of #181's pull request added, where the call is read and the two
+# further names refused, is argued here, since it is this function's and not
+# any one caller's.
+#
+# THE CALL IS READ WHERE A COMMAND STARTS, NOT BOUNDED BY WHAT MAY NOT STAND
+# BESIDE IT, and two rounds of review of #181's pull request are why. The first
+# answer bounded the name on the left by `[^A-Za-z0-9_]`, which closed
+# `raw_hook_text "$1"` and left `raw-hook_text "$1"` and `./hook_text "$1"`
+# passing: a guard against one spelling of a class, exhibiting the class. A list
+# of characters barred in front of the name cannot be completed, since `-`,
+# `/`, `+` and `:` all build another command word, and no such list refuses
+# `cat hook_text "$1"` at all, since what stands in front of the name there is
+# a blank and the helper is only an argument. So the call must start a line,
+# follow `;`, `|` or `&`, or follow a `(` that opens a command substitution, a
+# process substitution or a subshell -- one after `$`, `<`, `>` or a blank --
+# with blanks between; and `"$1"` must be a whole word, ending at a blank, `;`
+# or `)`. Each call is taken out with what stood before it, and the character
+# after it is kept, since that character can be where the next call starts: a
+# newline between two calls inside one `$(...)`, which the first version of
+# this took out with the first call, refusing the second.
+#
+# THE LISTS ARE WHAT `declare -f` PRINTS, AND NOTHING WIDER, because a member
+# no definition can put beside a call is a member no fixture can hold. It
+# spaces `|`, `&` and a redirect off the word before them, so none stands after
+# `"$1"`, and a body ends at `}`, never at a call; review of #181's pull
+# request, round 3, measured those members changing no verdict. It breaks a
+# list onto lines at the top of a body but not inside `$(...)`, `<(...)` or
+# `>(...)`, where bash 5.2 prints `x=$(true; hook_text "$1")` on one line, so
+# `;` stays before a call: round 3 removed it with the others and round 4
+# measured that shape refused. Each member left is the only way at least one
+# reader in checks/GH-181.sh passes, and the respacing it rests on was
+# measured with bash 5.2 and no older bash. A `(` after `=` is an array, and
+# `local -a f=(hook_text "$1")` holds the file's name as data, which is why the
+# `(` is asked for its left side.
+#
+# THE TRADES, two classes and not two lists, since each round of review of
+# #181's pull request found another member of each, and each widening of the
+# rule here opened a spelling of the second. Neither is closed here: the text
+# rule is the wrong tool for a behavioural question, and #362 is filed for the
+# probe that answers it -- stub the helpers, point `$1` at a path that is not
+# there, and fail on any read of it. checks/GH-181.sh asserts members of each
+# class as rows, as examples of it and not as its extent.
+#   - REFUSED, a false red, visible and one edit away: a call after any
+#     keyword or prefix word the lists do not name -- `if`, `while`, `until`,
+#     `elif`, `!`, `time`, `command`, `coproc`, `exec`, an assignment such as
+#     `LC_ALL=C`, a `{` group, and whatever else can stand before a command --
+#     and a call inside backticks, which `declare -f` prints as written. So is
+#     any `${!...}` in the reader, `${!seen[@]}` included, since an
+#     indirection is refused wherever it stands.
+#   - PASSED, a construction rather than a mistake: any text the rule reads as
+#     a command start that bash reads as data -- a string of one line or
+#     several, a heredoc body, a separator escaped as `\;` -- so the file's name
+#     can be held there and read by something else; and any name the text does
+#     not spell, taken from `$_` after the call or rebuilt by `eval`. A filter
+#     of the reader's own other than `sed`, a `perl -pe` before its `awk`,
+#     passes too: the readers run awk programs of their own, which can rewrite
+#     any line they are given, so no list of filter names can say that none
+#     was applied, and `sed` is refused because it is the fold's own tool, the
+#     one a second fold would be written with.
+reads_only_through() {  # reads_only_through <function> <helper>... -- its file argument read through each helper, and nowhere else
+  local body rest h re
+  body=$(declare -f "$1") || return 1
+  rest=$body
+  shift
+  for h in "$@"; do
+    re=$'(\n|[;|&]|[$<>[:space:]]\\()[[:space:]]*'"$h"$' "\\$1"[[:space:];)]'
+    [[ $body =~ $re ]] || return 1
+    while [[ $rest =~ $re ]]; do
+      rest=${rest/"${BASH_REMATCH[0]}"/" ${BASH_REMATCH[0]: -1}"}
+    done
+  done
+  [[ $rest != *cs_drop_heredocs* && $rest != *'sed '* && $rest != *BASH_ARGV* ]] \
+    && ! [[ $rest =~ \$\{?(1|[@*]) || $rest =~ \$\{! ]]
+}
 arms() {  # arms <file> -- in how many places it writes a refusal to stderr
   hook_text "$1" | grep -oE "$STDERR_WRITE" | wc -l | tr -d ' '
 }

@@ -11842,7 +11842,7 @@ MUT_ROWS=$(awk '/^MUTATIONS=\$\(cat <</ { f = 1; next }
 # moves when a mutation is registered, which is the edit it is here to make
 # visible.
 tok 'the registry holds as many mutations as this suite expects' \
-    '184' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
+    '190' "$(printf '%s\n' "$MUT_ROWS" | grep -c '%')"
 MUT_BAD=
 MUT_OUTCOMES=
 mapfile -t MUT_REQ_SPLIT < <(requirements_split "$HOOKS/requirements.md")
@@ -11971,7 +11971,7 @@ tok 'one registered mutation is expected not to apply' \
 tok 'and one is expected to survive, being registered against the wrong requirement' \
     '1' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^survived$')"
 tok 'and every other registered mutation is expected to be caught' \
-    '182' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
+    '188' "$(printf '%s' "$MUT_OUTCOMES" | grep -c '^caught$')"
 
 # ISSUE #148: EVERY COUNT ABOUT THE REGISTRY IS DERIVED BY `--list`, AND THE
 # DISTINCTION THAT SAYS WHICH NUMBERS THIS FILE STILL WRITES AS LITERALS.
@@ -13711,9 +13711,16 @@ tok 'arms counts a trailing comment, which is the false red this trade accepts' 
 # WHAT IT STILL CANNOT SEE, named because this number is what the arm count rests
 # on: an indirect call. Move the call into another function that is itself called
 # twice and the text here still reads one. That is a call graph and not a
-# pattern, and #181 owns it; what keeps it from mattering today is the row above,
-# which pins the whole function table of both hooks, so the second function has
-# to be declared before it can hide anything.
+# pattern, so it is refused rather than counted: GH-181.1, in checks/GH-181.sh,
+# asks that no function in either hook calls a function that writes, which
+# leaves only calls from the top level to reach a writer, and those this counts
+# -- as far as the text shows a call; checks/GH-181.sh names the calls it does
+# not show, and GH-181.2 the definitions none of these patterns can read.
+# Until #181 the row above was all that stood in the way, and it is a tripwire
+# and not a fix: it pins the whole function table, so a wrapper has to be
+# declared before it can hide anything, but it shows the wrapper as `silent`,
+# and reconciling the table to that row takes the wrapper's calls out of the
+# question.
 # `fn_calls` is defined in checks/library.sh since #182, whose issue file became
 # its second caller. What it reads and why stands here, beside the fixtures
 # and pins it is argued with.
@@ -13725,9 +13732,10 @@ tok 'arms counts a trailing comment, which is the false red this trade accepts' 
 # same either way is not evidence about which one is running.
 #
 # The last fixture is the third shape of the helper hole, after #181's indirect
-# call and #182's heredoc, which is closed: a function defined inside another
-# one. The patterns are anchored at column 1 -- which is this file's convention
-# and what the closing `}` relies on too -- so a nested definition is never
+# call, which GH-181.1 refuses, and #182's heredoc, which is closed: a function
+# defined inside another one. The patterns are anchored at column 1 -- which is
+# this file's convention and what the closing `}` relies on too -- so a nested
+# definition is never
 # entered, its writes are attributed to the function around it, which already
 # writes, and nothing moves. It is asserted here as the behaviour it is, and refused
 # outright below, because the honest fix for a convention a derivation depends on
@@ -13834,6 +13842,12 @@ tok 'and the arm count reads its three writes as one call site' \
 # the shape an author reaches for is the one without the keyword. Written down
 # rather than found later: the guard below is evidence about the parenthesis
 # form and about nothing else.
+# #181 CLOSED THAT TRADE, and every other spelling of a definition with it.
+# GH-181.2, in checks/GH-181.sh, asks for a definition's signatures anywhere in
+# a line and pins the hooks' awk lines as a literal, rather than telling shell
+# from awk -- so the keyword form, a definition after a separator and a blank
+# inside the parentheses are refused there, and this guard is the narrower
+# question it always was.
 # THE BRACE IS NOT ASKED FOR EITHER, and the fifth review of PR #169 is why.
 # This required `{` on the definition's own line, so `inner()` with its brace on
 # the next one read as clean -- `fn_writes` never entered it, its writes went to

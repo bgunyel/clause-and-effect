@@ -1256,9 +1256,13 @@ it has no entry above (Q16).
   untouched. Cited where `says_first` says why an opening is a different question
   from a fragment: ordering is already a live concern at one of these constants,
   which is what made it worth asking at the other
-- #181: `fn_calls` cannot see an indirect call, so a wrapper around a function
-  that writes a refusal hides arms from the count. Cited beside that helper,
-  which names what it can and cannot see
+- #181: has entries, GH-181.1 and GH-181.2, generated from its issue file,
+  and is listed here only because #109's section cited it before it landed,
+  as `fn_calls` not seeing an indirect call, so a wrapper around a function
+  that writes a refusal hid arms from the count. The indirect call is now
+  refused by GH-181.1 rather than only tripwired by the function table: no
+  function in either boundary hook may call a function that writes; and
+  GH-181.2 refuses a definition in any shape but the one the derivations read
 - #182: has entries, generated from its issue file, and is listed here only
   because #109's section cited it before it landed, as `arms` and `fn_writes`
   not knowing where a heredoc body starts. Of the three shapes it was filed
@@ -1629,6 +1633,31 @@ it has no entry above (Q16).
   or `eval` state -- and pinned its representatives. Cited in GH-185's note
   as that class's structural fix. It adds its requirements in the pull
   request that fixes it
+- #338: `fn_writes` calls a function silent when its write stands on the
+  definition line of any shape but a `;` `}` one-liner -- a body opened on that
+  line and closed on a later one, or a subshell body. Found while implementing
+  #181, whose `writer_callers` reads the writer set from `fn_writes`, so a
+  wrapper around such a writer is not refused. Review of #181's pull request,
+  round 2, added two more shapes of the class in a comment on it: a redirect
+  on a column-1 closing brace, which `fn_writes` skips, and a trailing comment
+  ending in `\`, which `hook_text`'s fold joins onto the next line and bash
+  does not. Cited in GH-181.1's note and on the three fixtures in #181's issue
+  file that assert today's reading of each. It adds its requirements in the
+  pull request that fixes it
+- #361: `fn_writes`, `writer_callers` and the shape `odd_defs` excuses are
+  three hand copies of where a function starts and ends, and the check that
+  holds them together reads only blank-free regex literals, as text present
+  rather than in its role, and does not read `odd_defs`. Filed from review of
+  #181's pull request, round 2, and cited in #181's issue file beside that
+  check. It adds its requirements in the pull request that fixes it
+- #362: `reads_only_through` answers from a reader's text whether it reads
+  its file argument only through the helpers named, and each round of review
+  of #181's pull request found another spelling the text rules miss. Filed
+  from round 3 for a behavioural probe instead: stub the helpers, point `$1`
+  at a path that is not there, and fail on any read of it. Cited in the
+  library beside the function, among the trades it states, and in #181's
+  issue file on the fixtures that assert each. It adds its requirements in the
+  pull request that fixes it
 - #233: `append-only-docs.sh` permits a truncating redirect spelled `>|` or
   written at the start of a line. Cited in the GH-156 issue file, beside the
   one continuation row whose `>` opens a line and is refused by the joined
