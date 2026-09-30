@@ -796,7 +796,7 @@ done
 # Measured with each change: the record of the library and of the tokeniser is
 # byte for byte the one the child before #279 writes -- 42,534 and 72,227
 # bytes on the merge of dev-05 at 1486270, whose tokeniser #202 grew by 427
-# lines, and 46,585 and 72,227 at round 4 of that review.
+# lines, and 46,585 and 72,227 at df17124, in round 4 of that review.
 LOADED_CHILD='\declare -F >&4 && \printf "e:\n" >&4 && \declare -p >&4 && \printf "e:\n" >&4 || \exit 3
 { . "$1" 3>&- 4>&- 5>&- 6>&- 7>&- >/dev/null 2>&1; \printf "%s" "$?" >&3; \enable declare; \declare -F >&5 && \declare -f >&6 && \declare -p >&7 && \printf "e:\n" >&7; } 2>/dev/null'
 declare -A LOADED_FROM=() LOADED_STATUS=()
@@ -902,7 +902,7 @@ GH-107.2:2755331717:3017 GH-108.1:1735229711:765 GH-108.2:2104747290:1161
 GH-108.3:3492012368:611 GH-108.4:272803982:544 GH-108.5:450734685:1460
 GH-108.6:4185336533:1248 GH-108.7:132764282:816 GH-108.8:32710089:758
 GH-108.9:1889065276:1360 GH-108.10:1327094914:1146 GH-109.1:722393216:550
-GH-109.2:3501734001:2130 GH-109.3:655958765:398 GH-109.4:2245848118:874
+GH-109.2:2307138995:2509 GH-109.3:655958765:398 GH-109.4:2245848118:874
 GH-109.5:1126951843:1652 GH-117:149840679:3224 GH-117.1:2522200149:1957
 GH-118:2824389669:9473 GH-124:95512510:244 GH-127:705289083:213
 GH-128:3819682974:2698 GH-130:3976834831:1480 GH-130.1:2601395581:1689
