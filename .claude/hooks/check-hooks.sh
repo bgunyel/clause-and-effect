@@ -780,18 +780,23 @@ done
 #   - Every comparison is made in the suite's shell, by `record_dump`, which
 #     refuses a dump that is not whole or holds a line bash would not have
 #     written there; see the library.
-# What the file can still do to the child, and what comes of it: disable
-# `declare` and `enable` both, or skip commands with a DEBUG trap under
-# extdebug, and the dump is missing or its marker is, which is a FAIL row;
-# write into a dump descriptor, as an EXIT trap can, and the dump is refused,
-# which is a FAIL row; and define a function under the name of a builtin the
-# child calls, `declare`, `enable` or `printf`, which is the shadowed-builtin
-# limit named above and is not reached.
+# What the file can still do to the child, and what comes of it. By mistake:
+# disable `declare` and `enable` both, skip every command with a DEBUG trap
+# under extdebug, or write text into a dump that is not in bash's shape, and
+# the dump or its marker is missing or refused, which is a FAIL row. On
+# purpose, it can forge the record, and that is a limit, named and not
+# guarded, since these checks stop mistakes and not adversaries: a status and
+# a dump in bash's shape, written through the descriptors bash saves 3 to 7 at
+# while the file is sourced, from a DEBUG trap that outlives the source, from
+# an EXIT trap, or by a function named after a builtin the child calls --
+# `declare`, `enable` or `printf`, the shadowed-builtin limit named above --
+# is read as bash's own (round 4 of the review of PR #330, which measured each
+# on bash 5.2.21).
 #
 # Measured with each change: the record of the library and of the tokeniser is
 # byte for byte the one the child before #279 writes -- 42,534 and 72,227
 # bytes on the merge of dev-05 at 1486270, whose tokeniser #202 grew by 427
-# lines, and 46,022 and 72,227 once round 3 was in.
+# lines, and 46,585 and 72,227 at round 4 of that review.
 LOADED_CHILD='\declare -F >&4 && \printf "e:\n" >&4 && \declare -p >&4 && \printf "e:\n" >&4 || \exit 3
 { . "$1" 3>&- 4>&- 5>&- 6>&- 7>&- >/dev/null 2>&1; \printf "%s" "$?" >&3; \enable declare; \declare -F >&5 && \declare -f >&6 && \declare -p >&7 && \printf "e:\n" >&7; } 2>/dev/null'
 declare -A LOADED_FROM=() LOADED_STATUS=()

@@ -1099,6 +1099,7 @@ record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did no
     printf 'the child that records it wrote a status that is not one'
     return 2
   elif ! why=$(record_dump "$2"); then
+    rm -f -- "$2.part"
     printf 'the dump of its %s is not whole, or holds text the child did not write there' "$why"
     return 2
   elif [ "$sourced" != 0 ]; then
@@ -1108,6 +1109,20 @@ record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did no
   fi
   [ -s "$2" ]
 }
+# Whether the last line of one function of the dump closes it: `}`, or `}`
+# and the redirections the function was written with, `} > /dev/null`, as
+# `declare -f` prints them (round 4 of the review of PR #330, which measured
+# the first version refusing both).
+record_closed() {  # record_closed <chunk> -- 0 when its last line closes a function
+  local last=${1##*$'\n'}
+  [[ $1 == *$'\n'* ]] && [[ $last == '}' || $last == '} '?* ]]
+}
+# One function of the dump, cut at its header, written to <out>.part unless
+# the child started with it; 1 when it does not end on its closing line.
+record_chunk() {  # record_chunk <out> <name> <chunk> <started-with> -- 1 when <chunk> is not closed
+  record_closed "$3" || return 1
+  [ -n "$4" ] || printf '%s\0%s\0' "$2" "$3" >> "$1.part"
+}
 # THE RECORD, MADE IN THIS SHELL FROM WHAT THE CHILD DUMPED (#279, round 3 of
 # the review of PR #330). The child does no more after the source than write
 # bash's own listings, each to a descriptor of its own, so that nothing the
@@ -1116,10 +1131,13 @@ record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did no
 # or the record is not made and <out> is left empty: the names the child
 # started with are the same two listings, each ended by `e:`; each function name is a line `declare -f<flags>
 # <name>`; the functions are cut at each name's header, `<name> () `, in the
-# order the names came, and each has to end on a line `}`; and each variable is
-# a line `declare -<flags> <name>[=<value>]`, one a line because bash quotes a
-# newline in a value, ending in `e:`. So text the file got into a dump -- a
-# trace written to one of them, say -- is refused rather than read as a name.
+# order the names came, and each has to end on its closing line, `}` or `}`
+# and its redirections, which a line `declare -f<flags> <name>` may follow for
+# the function it closes; and each variable is a line `declare -<flags>
+# <name>[=<value>]`, one a line because bash quotes a newline in a value,
+# ending in `e:`. So text the file got into a dump that is not in bash's shape
+# is refused rather than read as a name; a line in bash's shape is read as
+# bash's, which is the forgery limit the driver names beside $LOADED_CHILD.
 # Written to <out> as the child before this wrote it: `<name>` and `$<name>`,
 # each with its definition, NUL after each; a name the child started with,
 # `_` and `BASH_*` left out. What it does not reach, named: a function whose
@@ -1129,7 +1147,7 @@ record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did no
 # is not whole, and then leaves <out> as it found it: the record is written to
 # <out>.part and moved over <out> only once every dump has been read.
 record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote beside it; 1 and which dump on stdout when one is not whole
-  local line name chunk listing=functions k=-1 fn_re='^declare -f[a-z]* (.+)$' var_re='^declare -[a-zA-Z-]+ ([A-Za-z_][A-Za-z0-9_]*)(=|$)'
+  local line name chunk listing=functions k=-1 fn_re='^declare -f[a-z]* (.+)$' trailer_re='^declare -f[a-z]+ (.+)$' var_re='^declare -[a-zA-Z-]+ ([A-Za-z_][A-Za-z0-9_]*)(=|$)'
   local -a lines=() names=()
   local -A was_f=() was_v=()
   : > "$1.part"
@@ -1157,21 +1175,21 @@ record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote bes
   for line in "${lines[@]}"; do
     if [ $((k + 1)) -lt "${#names[@]}" ] && [ "$line" = "${names[k + 1]} () " ]; then
       if [ "$k" -ge 0 ]; then
-        [[ $chunk == *$'\n}' ]] || { printf 'functions'; return 1; }
-        [ -n "${was_f[${names[k]}]-}" ] || printf '%s\0%s\0' "${names[k]}" "$chunk" >> "$1.part"
+        record_chunk "$1" "${names[k]}" "$chunk" "${was_f[${names[k]}]-}" || { printf 'functions'; return 1; }
       fi
       k=$((k + 1))
       chunk=$line
     elif [ "$k" -lt 0 ]; then
       printf 'functions'; return 1
+    elif [[ $line =~ $trailer_re && ${BASH_REMATCH[1]} == "${names[k]}" ]] && record_closed "$chunk"; then
+      continue
     else
       chunk+=$'\n'$line
     fi
   done
   [ $((k + 1)) = "${#names[@]}" ] || { printf 'functions'; return 1; }
   if [ "$k" -ge 0 ]; then
-    [[ $chunk == *$'\n}' ]] || { printf 'functions'; return 1; }
-    [ -n "${was_f[${names[k]}]-}" ] || printf '%s\0%s\0' "${names[k]}" "$chunk" >> "$1.part"
+    record_chunk "$1" "${names[k]}" "$chunk" "${was_f[${names[k]}]-}" || { printf 'functions'; return 1; }
   fi
   mapfile -t lines < "$1.variables"
   [ "${#lines[@]}" -gt 0 ] && [ "${lines[-1]}" = e: ] || { printf 'variables'; return 1; }
@@ -1190,9 +1208,11 @@ record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote bes
 # the status too, when sourcing returned non-zero. Any other outcome is
 # recorded as it stands and the run goes on: a file that sourced non-zero, or
 # a child that did not finish, is a FAIL row here, under GH-279.1, naming the
-# file and why, and not an abort. A child that did not finish leaves no
-# record, so nothing of that file is compared at the foot; the row is what
-# says so, and it fails the run. Written to LOADED_BODY and LOADED_FROM,
+# file and why, and not an abort. A file that sourced non-zero leaves a whole
+# record, which is compared; a child that did not finish leaves none, so
+# nothing of that file is compared at the foot. The row says which, and it
+# fails the run (round 4 of the review of PR #330, which found the one text
+# the two shared saying the second was compared in part). Written to LOADED_BODY and LOADED_FROM,
 # which the driver declares, and the outcome to LOADED_STATUS, keyed by the
 # file, so that a check can read what the head found rather than record the
 # file again (round 1 of the review of PR #330). The FAIL row is tagged through
@@ -1208,8 +1228,11 @@ record_loaded() {  # record_loaded <file> <out> -- record it into LOADED_BODY, L
     1) printf 'sourcing %s alone defined nothing%s, so nothing of it can be compared at the foot; nothing was judged\n' \
          "$1" "${why:+ ($why)}" >&2
        return 1 ;;
+    3) local REQ=GH-279.1
+       fail static 'the record of %s is whole, but %s; what it defined is compared at the foot' \
+         "$1" "$why" ;;
     *) local REQ=GH-279.1
-       fail static 'the record of %s is not to be trusted whole: %s; the names it holds are compared at the foot, and a name it lacks is not' \
+       fail static 'the record of %s was not made: %s; nothing of it is compared at the foot' \
          "$1" "$why" ;;
   esac
   LOADED_STATUS[$1]=$record_status

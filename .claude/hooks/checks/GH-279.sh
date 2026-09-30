@@ -89,16 +89,27 @@ requirement GH-279.1 <<'REQ'
   round 3 inside the next: `exit` aliased under every guard written after the
   source, and a trace written into the record. Each fix had been a guard, and
   each guard more program for the next state to reach, so round 3 took the
-  program out of the child instead. What the child does not reach, named: a
-  function the file defines under the name of a builtin the child calls,
-  `declare`, `enable` or `printf`, which is the head's shadowed-builtin limit;
-  a name bash itself starts with, `OPTIND` or `PS4` say, which a file assigns,
-  since the child compares against the names it started with and that was so
-  before #279 too; a function whose body holds a heredoc line that is the next
-  function's header followed by a `}` line, which is cut there; and any state
-  a file can leave in the child's shell that no fixture here drives. `set -e`,
-  `set -u` and posix mode left at the end of a file were probed and changed no
-  record; no fixture holds that.
+  program out of the child instead. Round 4 found the reader of its dumps
+  stricter than bash: it refused what `declare -f` prints for an exported,
+  readonly or traced function, and for one written with redirections, each of
+  which the child before #279 recorded; it reads both now, and records each as
+  that child did. What the child does not reach, named: a record forged on
+  purpose -- a status and a dump in bash's shape, written through the
+  descriptors bash saves 3 to 7 at while the file is sourced, from a DEBUG
+  trap that outlives the source or an EXIT trap, or by a function the file
+  defines under the name of a builtin the child calls, `declare`, `enable` or
+  `printf`, which is the head's shadowed-builtin limit -- since these checks
+  stop mistakes and not adversaries; a name bash itself starts with, `OPTIND`
+  or `PS4` say, which a file assigns, since the child compares against the
+  names it started with and that was so before #279 too; a function whose body
+  holds a heredoc line that is the next function's header followed by a `}`
+  line, which is cut there; a variable declared with no value, `declare -A`
+  say, which is recorded as bash lists it, so one the file fills later in a
+  run would read as redefined at the foot, where `compgen -v`, which the child
+  before #279 used, did not list it; and any state a file can leave in the
+  child's shell that no fixture here drives. `set -e`, `set -u` and posix mode
+  left at the end of a file were probed and changed no record; no fixture
+  holds that.
 REQ
 requirement GH-279.2 <<'REQ'
 - text: The end-of-run file's last check before the matrix derives the rows the
@@ -188,14 +199,14 @@ tok 'a file that sources with status 0 and defines something is recorded, and no
 recorded $R279_V from whole.sh
 recorded r279_a from whole.sh' "$(r279_loaded "$R279/whole.sh")"
 tok 'a file that sources non-zero is a FAIL row naming it and its status, and what it defined is recorded all the same' \
-"FAIL: the record of $R279/nonzero.sh is not to be trusted whole: sourcing it returned 1; the names it holds are compared at the foot, and a name it lacks is not
+"FAIL: the record of $R279/nonzero.sh is whole, but sourcing it returned 1; what it defined is compared at the foot
 status 0
 recorded r279_a from nonzero.sh" "$(r279_loaded "$R279/nonzero.sh")"
 tok 'a child killed partway through its dump is a FAIL row, and leaves no record' \
-"FAIL: the record of $R279/killed.sh is not to be trusted whole: the child that records it exited 137; the names it holds are compared at the foot, and a name it lacks is not
+"FAIL: the record of $R279/killed.sh was not made: the child that records it exited 137; nothing of it is compared at the foot
 status 0" "$(r279_loaded "$R279/killed.sh")"
 tok 'and so is a file that ends the child before sourcing it returns' \
-"FAIL: the record of $R279/exits.sh is not to be trusted whole: the child that records it wrote no status for it: it ended before sourcing it returned, or could not write one; the names it holds are compared at the foot, and a name it lacks is not
+"FAIL: the record of $R279/exits.sh was not made: the child that records it wrote no status for it: it ended before sourcing it returned, or could not write one; nothing of it is compared at the foot
 status 0" "$(r279_loaded "$R279/exits.sh")"
 tok 'a file that defines nothing stops the run, and writes no row' \
 "sourcing $R279/nothing.sh alone defined nothing, so nothing of it can be compared at the foot; nothing was judged
@@ -331,31 +342,58 @@ tok 'and so does one that aliases the brace a group opens with' \
 'status 0
 recorded $R279_V from alias-brace.sh
 recorded r279_a from alias-brace.sh' "$(r279_loaded "$R279/alias-brace.sh")"
-# What a file can still do, and each is a FAIL row: leave the child no way to
-# dump, as `declare` and `enable` both disabled do; the same under an EXIT trap
-# that makes the child's status 0, which the missing marker gives away; skip
-# the child's commands with a DEBUG trap under extdebug; write into a dump from
-# an EXIT trap; and run `exit` itself, which is not a reset failing but the
-# file ending the child, and is said as that (round 3, finding 10).
+# Round 4: what `declare -f` prints for a function that is exported, readonly
+# or traced -- a line `declare -f<flags> <name>` after it -- and for one written
+# with redirections, which close it on the `}` line. The first version of the
+# reader refused both, and each is recorded now as the child before #279
+# recorded it: the trailer is not part of the body, and the redirections are.
+printf '%s\n' 'r279_a() { :; }' 'r279_b() { :; }' 'r279_c() { :; }' \
+  'export -f r279_a' 'readonly -f r279_b' 'declare -ft r279_c' > "$R279/trailers.sh"
+printf '%s\n' 'r279_a() { :; } > /dev/null' 'r279_b() { :; } 2>&1 < /dev/null' 'export -f r279_a' > "$R279/redirs.sh"
+tok 'a file whose functions are exported, readonly and traced has each recorded' \
+'status 0
+recorded r279_a from trailers.sh
+recorded r279_b from trailers.sh
+recorded r279_c from trailers.sh' "$(r279_loaded "$R279/trailers.sh")"
+tok 'and one whose functions carry redirections, the redirections in the body and the trailer not' \
+    $'r279_a () \n{ \n    :\n} > /dev/null' \
+    "$( ( declare -A LOADED_BODY=() LOADED_FROM=() LOADED_STATUS=()
+          record_loaded "$R279/redirs.sh" "$R279/record" > /dev/null 2>&1
+          printf '%s' "${LOADED_BODY[r279_a]}" ) )"
+tok 'and the other of them is recorded too' \
+'status 0
+recorded r279_a from redirs.sh
+recorded r279_b from redirs.sh' "$(r279_loaded "$R279/redirs.sh")"
+# What a file can still do by mistake, and each is a FAIL row: leave the child
+# no way to dump, as `declare` and `enable` both disabled do; the same under an
+# EXIT trap that makes the child's status 0, which the missing marker gives
+# away; skip every command of the child's with a DEBUG trap under extdebug;
+# write text that is not in bash's shape into a dump from an EXIT trap; and run
+# `exit` itself, which is the file ending the child, and is said as that (round
+# 3, finding 10). A dump forged in bash's shape is not refused; that is the
+# limit the driver names beside $LOADED_CHILD, and no row here pretends
+# otherwise.
 printf '%s\n' 'r279_a() { :; }' 'enable -n declare enable' > "$R279/no-dump.sh"
 printf '%s\n' 'r279_a() { :; }' "trap 'exit 0' EXIT" 'enable -n declare enable' > "$R279/no-dump-trapped.sh"
 printf '%s\n' 'r279_a() { :; }' 'shopt -s extdebug' "trap 'false' DEBUG" > "$R279/skips.sh"
 printf '%s\n' 'r279_a() { :; }' "trap 'echo junk >&7' EXIT" > "$R279/writes-dump.sh"
 printf '%s\n' 'r279_a() { :; }' 'exit 4' > "$R279/exits-4.sh"
 tok 'a file that leaves the child no way to dump is a FAIL row, and leaves no record' \
-"FAIL: the record of $R279/no-dump.sh is not to be trusted whole: the child that records it exited 127; the names it holds are compared at the foot, and a name it lacks is not
+"FAIL: the record of $R279/no-dump.sh was not made: the child that records it exited 127; nothing of it is compared at the foot
 status 0" "$(r279_loaded "$R279/no-dump.sh")"
 tok 'and so is the same under an EXIT trap that ends the child with 0' \
-"FAIL: the record of $R279/no-dump-trapped.sh is not to be trusted whole: the dump of its variables is not whole, or holds text the child did not write there; the names it holds are compared at the foot, and a name it lacks is not
+"FAIL: the record of $R279/no-dump-trapped.sh was not made: the dump of its variables is not whole, or holds text the child did not write there; nothing of it is compared at the foot
 status 0" "$(r279_loaded "$R279/no-dump-trapped.sh")"
 tok 'and one that skips the child'"'"'s commands with a DEBUG trap' \
-"FAIL: the record of $R279/skips.sh is not to be trusted whole: the child that records it wrote no status for it: it ended before sourcing it returned, or could not write one; the names it holds are compared at the foot, and a name it lacks is not
+"FAIL: the record of $R279/skips.sh was not made: the child that records it wrote no status for it: it ended before sourcing it returned, or could not write one; nothing of it is compared at the foot
 status 0" "$(r279_loaded "$R279/skips.sh")"
 tok 'and one that writes into a dump from an EXIT trap' \
-"FAIL: the record of $R279/writes-dump.sh is not to be trusted whole: the dump of its variables is not whole, or holds text the child did not write there; the names it holds are compared at the foot, and a name it lacks is not
+"FAIL: the record of $R279/writes-dump.sh was not made: the dump of its variables is not whole, or holds text the child did not write there; nothing of it is compared at the foot
 status 0" "$(r279_loaded "$R279/writes-dump.sh")"
+tok 'and leaves no partial record beside the one it did not make' \
+    'absent' "$([ -e "$R279/record.part" ] && echo present || echo absent)"
 tok 'and one that runs exit 4 itself, said as the file ending the child' \
-"FAIL: the record of $R279/exits-4.sh is not to be trusted whole: the child that records it wrote no status for it: it ended before sourcing it returned, or could not write one; the names it holds are compared at the foot, and a name it lacks is not
+"FAIL: the record of $R279/exits-4.sh was not made: the child that records it wrote no status for it: it ended before sourcing it returned, or could not write one; nothing of it is compared at the foot
 status 0" "$(r279_loaded "$R279/exits-4.sh")"
 # RECORD_DUMP, DRIVEN WITH DUMPS WRITTEN BY HAND: each rule it reads a dump by,
 # broken one at a time against a whole dump. Printed: its status, why, and each
@@ -399,10 +437,21 @@ tok 'and a function that does not end on }, as one cut at a heredoc line that is
     'status 1: functions' "$(r279_dump "$R279_BEFORE" "$R279_NAMES" $'r279_a () \n{ \n    cat <<EOF\nr279_pre () \nEOF\n}\nr279_pre () \n{ \n    :\n}\n' "$R279_VARS")"
 tok 'and a named function with no header' \
     'status 1: functions' "$(r279_dump "$R279_BEFORE" "$R279_NAMES" $'r279_a () \n{ \n    :\n}\n' "$R279_VARS")"
+tok 'a trailer naming a function other than the one it follows is refused' \
+    'status 1: functions' "$(r279_dump "$R279_BEFORE" "$R279_NAMES" $'r279_a () \n{ \n    :\n}\ndeclare -fx r279_pre\nr279_pre () \n{ \n    :\n}\n' "$R279_VARS")"
 tok 'variables that do not end in e: are refused' \
     'status 1: variables' "$(r279_dump "$R279_BEFORE" "$R279_NAMES" "$R279_FNS" $'declare -r R279_V="1"\n')"
 tok 'and a variable line that is not a declaration' \
     'status 1: variables' "$(r279_dump "$R279_BEFORE" "$R279_NAMES" "$R279_FNS" $'declare -r R279_V="1"\n+ printf e:\ne:\n')"
+# And a dump it refuses leaves the record it was to replace as it found it,
+# which neither caller shows, since both empty it first (round 4, finding 17).
+printf '%s' "$R279_BEFORE" > "$R279/k.before"
+printf '%s' "$R279_NAMES" > "$R279/k.names"
+printf '%s' "$R279_FNS" > "$R279/k.functions"
+printf '%s' $'declare -r R279_V="1"\n' > "$R279/k.variables"
+printf '%s' 'kept' > "$R279/k"
+tok 'a refused dump leaves the record it was to replace as it found it' \
+    'status 1: kept' "$(record_dump "$R279/k" > /dev/null; echo "status $?: $(< "$R279/k")")"
 # And the head records through it, stopping only on the one outcome that stops
 # it. Pinned as text, since only a whole run shows it behaving; the registry
 # row `tokeniser-sources-non-zero` is that run.
