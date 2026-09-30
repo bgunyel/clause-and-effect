@@ -363,3 +363,32 @@ What changed, all in prose and fixtures:
   function, three shapes recorded so far.
 - **#361:** three hand copies of the attribution rules, held by one presence
   check.
+
+---
+
+# 2026-09-30 · dev-agent-181 — merge of dev-05 at 4cf79b1
+
+08:46 +03.
+
+Branch `worktree-issue-181-writer-callers`, from `aae8062` to `566ef15`.
+With this entry's commit the branch is 19 commits ahead of `origin/dev-05`
+(`4cf79b1`, which brought in #343) and 0 behind.
+
+rev-agent-181 asked for the merge. After dev-05 moved, GitHub's merge ref
+went stale and the verify-merge step refused it. There was nothing wrong
+with the code.
+
+- **The merge was clean.** #343 touched no hook, and no registry row.
+- **Pinned figures, re-derived rather than carried** (measured):
+  - 190 rows and 188 declared caught, matching both literals;
+  - every SPLIT_MOVED token matches its entry file's `cksum`;
+  - `--list`: 190 rows, 188 real mutations against 17 files, 82 requirement
+    IDs, 2 self-tests.
+
+  The one figure the merge moved is active requirements, 261 to 262, which
+  is #162's entry. No literal pins it.
+- **Full suite on `566ef15`** (measured): 8428 ok, 0 FAIL. rev-agent-181's
+  scratch clone of the same merge read the same.
+- **#343's dev-log rule** reads an entry file's first line against its name.
+  This file's first line carries 2026-09-29 and dev-agent-181, as its name
+  does, and the suite is green on it.
