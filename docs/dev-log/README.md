@@ -78,5 +78,17 @@ thing in the record.
   a module's actual code), say so. Verification that only ruled out one link in
   the chain is not verification, and the entry should make that distinction.
 - Close with what is still open and what the next session should pick up.
+- An entry's first line is its heading. It carries the date its file name
+  carries, and when it names a session it names the one the file is named for;
+  it may name none. `check-hooks.sh` reads every entry file's first line
+  against its name and is red on one that contradicts it; an entry appended
+  after the first is not read (#162). A session is read in three places: before
+  the date, less a `Devlog` title; after the date, less its time and zone, up
+  to the first ` — `; and, only when neither of those names one, after that
+  dash, where the first word, or `session` and the word after it, is read as
+  the session unless it opens with `#`, a `#<n>` followed by ` — ` or ` · `
+  being passed over first. So `# <date> <time> +03 — #<n>: …` names none,
+  and `# <date> <time> +03 — WIP` names `WIP`. An entry exists
+  from its first write, so write the heading right the first time.
 - Do not add the entries in this file.
 
