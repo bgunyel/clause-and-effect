@@ -1722,3 +1722,11 @@ it has no entry above (Q16).
   again inside each fix, and which is why LOADED_CHILD now runs no program
   after the source and `record_dump` reads its listings in the suite's
   shell. Both are in GH-279.1's note
+- #363: heredocs in a function's body that `record_dump` reads wrongly: a
+  function with a heredoc redirection of its own is refused, where the child
+  before #279 recorded it, and a `} ` line or a trailer-shaped line after a
+  `}` line in a heredoc body cuts or trims a function, which the foot reads
+  as a redefinition. Filed from round 5 of the review of #279's pull request,
+  #330; all refusing, and none reaches a file the suite records today. Cited
+  in GH-279.1's note. It adds its requirements in the pull request that fixes
+  it

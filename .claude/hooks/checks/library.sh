@@ -1099,7 +1099,6 @@ record_of() {  # record_of <file> <out> -- 1 defined nothing, 2 the child did no
     printf 'the child that records it wrote a status that is not one'
     return 2
   elif ! why=$(record_dump "$2"); then
-    rm -f -- "$2.part"
     printf 'the dump of its %s is not whole, or holds text the child did not write there' "$why"
     return 2
   elif [ "$sourced" != 0 ]; then
@@ -1140,13 +1139,22 @@ record_chunk() {  # record_chunk <out> <name> <chunk> <started-with> -- 1 when <
 # bash's, which is the forgery limit the driver names beside $LOADED_CHILD.
 # Written to <out> as the child before this wrote it: `<name>` and `$<name>`,
 # each with its definition, NUL after each; a name the child started with,
-# `_` and `BASH_*` left out. What it does not reach, named: a function whose
+# `_`, `BASH_*` and a variable declared with no value left out, the last as
+# `compgen -v` left it out for that child (round 5 of the review of PR #330). What it does not reach, named: a function whose
 # body holds a heredoc line that is the next function's header and a `}` line
 # before it, which cuts there; and a variable whose value holds a newline,
 # should a bash print one unquoted. Prints which dump, and returns 1, when one
-# is not whole, and then leaves <out> as it found it: the record is written to
-# <out>.part and moved over <out> only once every dump has been read.
+# is not whole, and then leaves <out> as it found it and no <out>.part beside
+# it: the record is written to <out>.part by `record_read` below, and moved
+# over <out> only once every dump has been read.
 record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote beside it; 1 and which dump on stdout when one is not whole
+  record_read "$1" || { rm -f -- "$1.part"; return 1; }
+  mv -f -- "$1.part" "$1"
+}
+# The reading `record_dump` does, into <out>.part, which it moves over <out>
+# or removes, so that neither a refused record nor its part is left beside
+# <out> (round 5 of the review of PR #330).
+record_read() {  # record_read <out> -- <out>.part from the dumps beside <out>; 1 and which dump on stdout when one is not whole
   local line name chunk listing=functions k=-1 fn_re='^declare -f[a-z]* (.+)$' trailer_re='^declare -f[a-z]+ (.+)$' var_re='^declare -[a-zA-Z-]+ ([A-Za-z_][A-Za-z0-9_]*)(=|$)'
   local -a lines=() names=()
   local -A was_f=() was_v=()
@@ -1197,10 +1205,10 @@ record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote bes
   for line in "${lines[@]}"; do
     [[ $line =~ $var_re ]] || { printf 'variables'; return 1; }
     name=${BASH_REMATCH[1]}
+    [ "${BASH_REMATCH[2]}" = = ] || continue
     [[ -n ${was_v[$name]-} || $name == BASH_* || $name == _ ]] && continue
     printf '$%s\0%s\0' "$name" "${line#declare -* }" >> "$1.part"
   done
-  mv -f -- "$1.part" "$1"
 }
 # THE HEAD'S RECORD OF ONE FILE (#279): `record_of`, and what the head does
 # with each outcome. A file whose sourcing defined nothing gives the foot
@@ -1208,11 +1216,13 @@ record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote bes
 # the status too, when sourcing returned non-zero. Any other outcome is
 # recorded as it stands and the run goes on: a file that sourced non-zero, or
 # a child that did not finish, is a FAIL row here, under GH-279.1, naming the
-# file and why, and not an abort. A file that sourced non-zero leaves a whole
-# record, which is compared; a child that did not finish leaves none, so
-# nothing of that file is compared at the foot. The row says which, and it
-# fails the run (round 4 of the review of PR #330, which found the one text
-# the two shared saying the second was compared in part). Written to LOADED_BODY and LOADED_FROM,
+# file and why, and not an abort. A file that sourced non-zero leaves a record
+# of what it defined before it failed, which is compared, while a name it did
+# not get to define is in no record; a child that did not finish leaves none,
+# so nothing of that file is compared at the foot. The row says which, and it
+# fails the run (rounds 4 and 5 of the review of PR #330: the one text the two
+# shared said the second was compared in part, and the first text written for
+# the first then dropped its caveat). Written to LOADED_BODY and LOADED_FROM,
 # which the driver declares, and the outcome to LOADED_STATUS, keyed by the
 # file, so that a check can read what the head found rather than record the
 # file again (round 1 of the review of PR #330). The FAIL row is tagged through
@@ -1229,7 +1239,7 @@ record_loaded() {  # record_loaded <file> <out> -- record it into LOADED_BODY, L
          "$1" "${why:+ ($why)}" >&2
        return 1 ;;
     3) local REQ=GH-279.1
-       fail static 'the record of %s is whole, but %s; what it defined is compared at the foot' \
+       fail static 'the record of %s holds what sourcing it defined, but %s; that is compared at the foot, and a name it did not get to define is not' \
          "$1" "$why" ;;
     *) local REQ=GH-279.1
        fail static 'the record of %s was not made: %s; nothing of it is compared at the foot' \

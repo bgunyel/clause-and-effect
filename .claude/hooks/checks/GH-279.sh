@@ -101,15 +101,16 @@ requirement GH-279.1 <<'REQ'
   `printf`, which is the head's shadowed-builtin limit -- since these checks
   stop mistakes and not adversaries; a name bash itself starts with, `OPTIND`
   or `PS4` say, which a file assigns, since the child compares against the
-  names it started with and that was so before #279 too; a function whose body
-  holds a heredoc line that is the next function's header followed by a `}`
-  line, which is cut there; a variable declared with no value, `declare -A`
-  say, which is recorded as bash lists it, so one the file fills later in a
-  run would read as redefined at the foot, where `compgen -v`, which the child
-  before #279 used, did not list it; and any state a file can leave in the
-  child's shell that no fixture here drives. `set -e`, `set -u` and posix mode
-  left at the end of a file were probed and changed no record; no fixture
-  holds that.
+  names it started with and that was so before #279 too; a heredoc in a
+  function's body that holds a `}` line and then a line that is the next
+  function's header, which cuts the function there and gives the next one its
+  tail, so that the foot reads both as redefined -- the other order, the
+  header first, is refused -- and the rest of what a heredoc in a body can do
+  to the reader, which is #363's; a variable declared with no value, which is
+  not recorded, as `compgen -v` did not list it for the child before #279
+  (round 5 made the two agree); and any state a file can leave in the child's
+  shell that no fixture here drives. `set -e`, `set -u` and posix mode left at
+  the end of a file were probed and changed no record; no fixture holds that.
 REQ
 requirement GH-279.2 <<'REQ'
 - text: The end-of-run file's last check before the matrix derives the rows the
@@ -199,7 +200,7 @@ tok 'a file that sources with status 0 and defines something is recorded, and no
 recorded $R279_V from whole.sh
 recorded r279_a from whole.sh' "$(r279_loaded "$R279/whole.sh")"
 tok 'a file that sources non-zero is a FAIL row naming it and its status, and what it defined is recorded all the same' \
-"FAIL: the record of $R279/nonzero.sh is whole, but sourcing it returned 1; what it defined is compared at the foot
+"FAIL: the record of $R279/nonzero.sh holds what sourcing it defined, but sourcing it returned 1; that is compared at the foot, and a name it did not get to define is not
 status 0
 recorded r279_a from nonzero.sh" "$(r279_loaded "$R279/nonzero.sh")"
 tok 'a child killed partway through its dump is a FAIL row, and leaves no record' \
@@ -293,9 +294,8 @@ tok 'and one that assigns _lc_v' \
 'status 0
 recorded $_lc_v from lc-name.sh
 recorded r279_a from lc-name.sh' "$(r279_loaded "$R279/lc-name.sh")"
-tok 'and one that declares _lc_n readonly with no value, which is recorded as bash lists it' \
+tok 'and one that declares _lc_n readonly with no value, which is not recorded, as the child before #279 did not record it' \
 'status 0
-recorded $_lc_n from lc-readonly.sh
 recorded r279_a from lc-readonly.sh' "$(r279_loaded "$R279/lc-readonly.sh")"
 tok 'and one that makes IFS readonly' \
 'status 0
@@ -326,7 +326,6 @@ printf '%s\n' 'r279_a() { :; }' 'R279_V=1' 'BASH_XTRACEFD=1' 'set -x' > "$R279/x
 tok 'a file that aliases exit has every name it defines recorded' \
 'status 0
 recorded $R279_V from alias-exit.sh
-recorded $_lc_v from alias-exit.sh
 recorded r279_a from alias-exit.sh' "$(r279_loaded "$R279/alias-exit.sh")"
 tok 'and so does one that points a trace at the child'"'"'s standard output' \
 'status 0
@@ -364,6 +363,16 @@ tok 'and the other of them is recorded too' \
 'status 0
 recorded r279_a from redirs.sh
 recorded r279_b from redirs.sh' "$(r279_loaded "$R279/redirs.sh")"
+# And a trailer-shaped line inside a body, before the function closes, is the
+# body's: a heredoc holding `declare -fx <name>`. The reader skips a trailer
+# only once its function is closed, and without that it dropped this line
+# from the body (round 5 of the review of PR #330).
+printf '%s\n' 'r279_h() { cat <<EOF' 'declare -fx r279_h' 'EOF' '}' > "$R279/heredoc-trailer.sh"
+tok 'a trailer-shaped line in a heredoc, before its function closes, stays in the body' \
+    $'r279_h () \n{ \n    cat <<EOF\ndeclare -fx r279_h\nEOF\n\n}' \
+    "$( ( declare -A LOADED_BODY=() LOADED_FROM=() LOADED_STATUS=()
+          record_loaded "$R279/heredoc-trailer.sh" "$R279/record" > /dev/null 2>&1
+          printf '%s' "${LOADED_BODY[r279_h]}" ) )"
 # What a file can still do by mistake, and each is a FAIL row: leave the child
 # no way to dump, as `declare` and `enable` both disabled do; the same under an
 # EXIT trap that makes the child's status 0, which the missing marker gives
@@ -415,8 +424,8 @@ r279_dump() {  # r279_dump <before> <names> <functions> <variables> -- record_du
 R279_BEFORE=$'declare -f r279_pre\ne:\ndeclare -- R279_PRE="1"\ne:\n'
 R279_NAMES=$'declare -f r279_a\ndeclare -f r279_pre\n'
 R279_FNS=$'r279_a () \n{ \n    :\n}\nr279_pre () \n{ \n    :\n}\n'
-R279_VARS=$'declare -- BASH_R279="1"\ndeclare -- R279_PRE="1"\ndeclare -r R279_V="1"\ndeclare -- _="x"\ne:\n'
-tok 'a whole dump is recorded, less the names the child started with, _ and BASH_*' \
+R279_VARS=$'declare -A R279_EMPTY\ndeclare -- BASH_R279="1"\ndeclare -- R279_PRE="1"\ndeclare -r R279_V="1"\ndeclare -- _="x"\ne:\n'
+tok 'a whole dump is recorded, less the names the child started with, _, BASH_* and a variable with no value' \
 'status 0
 recorded r279_a as r279_a () 
 { 
