@@ -1674,9 +1674,22 @@ it has no entry above (Q16).
   measured each hand mutation of the helpers under the whole suite, and
   those figures replaced a table of runs scoped to the issue file. Cited in
   #256's issue file as the source of that table
+- #344: two title-first headings the #162 check read as contradicting their
+  file names although each named the right session, `# Session 8 — <date> —
+  follow-up` and `# Devlog session 5 — <date>`. Filed from review of #162's
+  pull request, and closed in it: both are agreeing fixtures in GH-162, cited
+  in its header
+- #354: two defects in the #162 check found in review of its pull request:
+  the real-directory rows classed a `<name>: <judgement>` line by its end, so
+  a name ending as a passing judgement does was passed, and the title's
+  `session` strip was a second, unpinned copy of the guard's. Closed in that
+  pull request: a judgement is classed whole, and the title is keyed through
+  the pinned copy. Cited in GH-162's header
 - #330: the pull request for #279; rev-agent-279's first review of it is cited
   where what it found stands -- the two fixture guards loosened to ask only
   that a name was defined, so a tokeniser copy its builder broke passed them,
   which is why `copy_sources_as` is in the library; and the record child
-  reading in the shell the sourced file left, which is why LOADED_CHILD resets
-  that shell before it records. Both are in GH-279.1's note
+  reading in the shell the sourced file left, which its rounds 2 and 3 found
+  again inside each fix, and which is why LOADED_CHILD now runs no program
+  after the source and `record_dump` reads its listings in the suite's
+  shell. Both are in GH-279.1's note
