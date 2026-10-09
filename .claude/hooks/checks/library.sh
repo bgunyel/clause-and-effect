@@ -1130,31 +1130,34 @@ record_chunk() {  # record_chunk <out> <name> <chunk> <started-with> -- 1 when <
 # or the record is not made and <out> is left empty: the names the child
 # started with are its functions, each a line `declare -f<flags> <name>`, and
 # its variables, each a line `<name>` as `compgen -v` lists it, each listing
-# ended by `e:`; each function name is a line `declare -f<flags> <name>`; the functions are cut at each name's header, `<name> () `, in the
-# order the names came, and each has to end on its closing line, `}` or `}`
-# and its redirections, which a line `declare -f<flags> <name>` may follow for
-# the function it closes; and each variable is a line `declare -<flags>
-# <name>[=<value>]`, one a line because bash quotes a newline in a value,
-# ending in `e:`. So text the file got into a dump that is not in bash's shape
-# is refused rather than read as a name; a line in bash's shape is read as
-# bash's, which is the forgery limit the driver names beside $LOADED_CHILD.
-# Written to <out> as the child before this wrote it: `<name>` and `$<name>`,
-# each with its definition, NUL after each; a name the child started with,
-# `_`, `BASH_*` and a variable declared with no value left out, the last as
-# `compgen -v` left it out for that child (round 5 of the review of PR #330).
-# The two sides of that are read by one rule each, and they agree: a variable
-# a file sets has a value, which is what `compgen -v` lists, and the variables
-# `declare -p` prints with no value while `compgen -v` lists them -- SECONDS,
-# RANDOM, COMP_WORDBREAKS and bash's other dynamic ones -- are in every
-# child's starting names, so the `=` rule never meets them (round 6, which
-# found OLDPWD left out while the starting names were `declare -p`'s, as the
-# driver says beside $LOADED_CHILD). What it does not reach, named: a function whose
-# body holds a heredoc line that is the next function's header and a `}` line
-# before it, which cuts there; and a variable whose value holds a newline,
-# should a bash print one unquoted. Prints which dump, and returns 1, when one
-# is not whole, and then leaves <out> as it found it and no <out>.part beside
-# it: the record is written to <out>.part by `record_read` below, and moved
-# over <out> only once every dump has been read.
+# ended by `e:`; each function name is a line `declare -f<flags> <name>`; the
+# functions are cut at each name's header, `<name> () `, in the order the names
+# came, and each has to end on its closing line, `}` or `}` and its
+# redirections, which a line `declare -f<flags> <name>` may follow for the
+# function it closes; and each variable is a line
+# `declare -<flags> <name>[=<value>]`, one a line because bash quotes a newline
+# in a value, ending in `e:`. So text the file got into a dump that is not in
+# bash's shape is refused rather than read as a name; a line in bash's shape is
+# read as bash's, which is the forgery limit the driver names beside
+# $LOADED_CHILD. Written to <out> as the child before this wrote it: `<name>`
+# and `$<name>`, each with its definition, NUL after each; a name the child
+# started with, `_`, `BASH_*` and a variable declared with no value left out,
+# the last as `compgen -v` left it out for that child (round 5 of the review of
+# PR #330). The two sides of that are read by one rule each, and they agree: a
+# variable a file sets has a value, which is what `compgen -v` lists, and the
+# variables `declare -p` prints with no value while `compgen -v` lists them --
+# SECONDS, RANDOM, COMP_WORDBREAKS and bash's other dynamic ones -- are in
+# every child's starting names, so the `=` rule never meets them; so is
+# PIPESTATUS, which `compgen -v` lists only once a command has run, and the
+# child's lists after two (round 6, which found OLDPWD left out while the
+# starting names were `declare -p`'s, as the driver says beside $LOADED_CHILD).
+# What it does not reach, named: a function whose body holds a heredoc line
+# that is the next function's header and a `}` line before it, which cuts
+# there; and a variable whose value holds a newline, should a bash print one
+# unquoted. Prints which dump, and returns 1, when one is not whole, and then
+# leaves <out> as it found it and no <out>.part beside it: the record is
+# written to <out>.part by `record_read` below, and moved over <out> only once
+# every dump has been read.
 record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote beside it; 1 and which dump on stdout when one is not whole
   record_read "$1" || { rm -f -- "$1.part"; return 1; }
   mv -f -- "$1.part" "$1"
