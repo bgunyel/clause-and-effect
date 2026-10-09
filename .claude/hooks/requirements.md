@@ -1714,3 +1714,19 @@ it has no entry above (Q16).
   `session` strip was a second, unpinned copy of the guard's. Closed in that
   pull request: a judgement is classed whole, and the title is keyed through
   the pinned copy. Cited in GH-162's header
+- #330: the pull request for #279; rev-agent-279's first review of it is cited
+  where what it found stands -- the two fixture guards loosened to ask only
+  that a name was defined, so a tokeniser copy its builder broke passed them,
+  which is why `copy_sources_as` is in the library; and the record child
+  reading in the shell the sourced file left, which its rounds 2 and 3 found
+  again inside each fix, and which is why LOADED_CHILD now runs no program
+  after the source and `record_dump` reads its listings in the suite's
+  shell. Both are in GH-279.1's note
+- #363: heredocs in a function's body that `record_dump` reads wrongly: a
+  function with a heredoc redirection of its own is refused, where the child
+  before #279 recorded it, and a `} ` line or a trailer-shaped line after a
+  `}` line in a heredoc body cuts or trims a function, which the foot reads
+  as a redefinition. Filed from round 5 of the review of #279's pull request,
+  #330; all refusing, and none reaches a file the suite records today. Cited
+  in GH-279.1's note. It adds its requirements in the pull request that fixes
+  it

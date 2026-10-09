@@ -863,6 +863,7 @@ worktree-may-push-the-branch-it-stands-on%no-git-push.sh%/^if \[ "$CURRENT" = "m
 any-branch-pushable%no-git-push.sh%/^names_this_branch()/,/^}/s/\*) return 1 ;;/*) return 0 ;;/%US-3%caught
 own-branch-push-refused%no-git-push.sh%/^names_this_branch()/,/^}/s/") return 0 ;;/") return 1 ;;/%US-4%caught
 library-loaded-unguarded%no-git-push.sh%$a. "$(dirname "$0")/lib/command-scan.sh"%GH-84.2%caught
+tokeniser-sources-non-zero%lib/command-scan.sh%$a false%GH-279.1%caught
 merged-branch-not-gone%no-work-on-stale-branch.sh%s/= "\[gone\]"/= "never-this-string"/%FR-38%caught
 bare-pytest-permitted%pytest-via-uv-group.sh%s/grep -qE '\^(pytest|/grep -qE '^(no-such-tool-at-all|/%GH-69.1%caught
 edit-guard-anchored-to-the-root%append-only-docs-edit.sh%s@^if echo "$ABS" | grep -qE "$GUARDED_RE"; then$@if echo "${ABS#"$ROOT"/}" | grep -qE "^${GUARDED_RE#/}"; then@%GH-159.1 GH-159.2 GH-157.3%caught

@@ -547,6 +547,10 @@ export BASH_ENV="$JUDGED_ENV"
 # printed; see `heading_mark` in the library.
 HEADINGS="$FIXTURES/headings"
 : > "$HEADINGS"
+# Where each block of verdict fixtures begins and ends, as the number of rows
+# the ledger held there (#279); see `verdict_fixtures` in the library.
+VERDICT_MARKS="$FIXTURES/verdict-marks"
+: > "$VERDICT_MARKS"
 # What the issue files declared and pinned (#205): a record per `requirement`
 # call and a line per `shape_pin` or `variants_pin` call, which the end of the
 # run holds the files under requirements/ and the shared literals to. See
@@ -733,26 +737,77 @@ done
 # section helper, not across the file boundary -- other than the handler; a
 # redefinition that puts the same body back; and a builtin the comparison uses,
 # `declare`, `printf` or `eval`, shadowed by a function of that name.
-LOADED_CHILD='bf=" $(compgen -A function | tr "\n" " ") "; bv=" $(compgen -v | tr "\n" " ") bf bv n v "
-. "$1" >/dev/null 2>&1 || exit 1
-for n in $(compgen -A function); do
-  [[ $bf == *" $n "* ]] && continue
-  printf "%s\0%s\0" "$n" "$(declare -f "$n")"
-done
-for n in $(compgen -v); do
-  [[ $bv == *" $n "* || $n == BASH_* || $n == _ ]] && continue
-  v=$(declare -p "$n"); printf "\$%s\0%s\0" "$n" "${v#declare -* }"
-done'
-declare -A LOADED_FROM=()
+#
+# AND THE CHILD SAYS HOW IT ENDED, apart from what it recorded (#279). It ran
+# `. "$1" || exit 1`, and the head asked only whether the record was empty, so
+# three different things were read as two. A copy that sourced with a non-zero
+# status left an empty record, and the run stopped before any section saying
+# the file "defined nothing", which it had not; under mutate-hooks.sh that row
+# came back did-not-complete instead of judged. And a child that died partway
+# through printing left a partial record that passed as a whole one. So the
+# child now records whatever sourcing defined, whatever status it returned,
+# and writes that status on fd 3 before it records anything; and `record_of`
+# reads the child's own exit status as well. A file that sourced non-zero, and
+# a child that did not finish, is a FAIL row at the head, and the run goes on
+# to its verdict. A file whose sourcing defined nothing still stops the run.
+# See `record_loaded` in the library. Measured before it was relied on,
+# against the library and the tokeniser at 0d5829d: the record this child
+# writes is byte for byte the one the child before #279 wrote, 30,498 and
+# 57,596 bytes.
+#
+# AND AFTER THE SOURCE THE CHILD RUNS NO PROGRAM, ONLY BASH'S OWN LISTINGS
+# (review rounds 1 to 3 of PR #330). The child used to record in a loop, in the
+# shell that had just sourced the file, and each round of that review found
+# something more the file could leave there to change the record while the
+# child called it whole: IFS, nullglob, nocasematch, an EXIT trap, an alias of
+# `declare` (round 1); the child's own variables, and builtins disabled with
+# `enable -n` (round 2); `exit` aliased to `:` under every guard written
+# after the source, and a trace written into the record (round 3). Each fix
+# was a guard, and each guard was more program for the next state to reach.
+# So the program went instead:
+#   - The names the child starts with are `declare -F` and `compgen -v`,
+#     written to fd 4 before the source, in a shell nothing has touched. The
+#     variables are `compgen -v`'s, the listing the child before #279 took
+#     both sides from, and not `declare -p`'s: the two disagree about bash's
+#     starting set in both directions. `declare -p` lists OLDPWD, declared and
+#     unset, so a file that changed directory had it left out of the record;
+#     and it prints SECONDS, RANDOM and COMP_WORDBREAKS with no value, so a
+#     rule over its text that dropped OLDPWD let those in (round 6 of the
+#     review of PR #330, which measured both).
+#   - Everything after the source is on the source's own line, one brace
+#     group, which bash parses whole before the file runs: no alias the file
+#     defines reaches any of it.
+#   - What it runs is the status, to fd 3; `enable declare`; and `declare -F`,
+#     `declare -f` and `declare -p`, to fds 5, 6 and 7, then `e:` on fd 7. No
+#     loop, no word splitting, no pattern, no variable of the child's own, and
+#     nothing on its standard output, which `record_of` sends to /dev/null, so
+#     that a trace pointed at fd 1 goes nowhere. Descriptors 3 to 7 are closed
+#     while the file is sourced.
+#   - Every comparison is made in the suite's shell, by `record_dump`, which
+#     refuses a dump that is not whole or holds a line bash would not have
+#     written there; see the library.
+# What the file can still do to the child, and what comes of it. By mistake:
+# disable `declare` and `enable` both, skip every command with a DEBUG trap
+# under extdebug, or write text into a dump that is not in bash's shape, and
+# the dump or its marker is missing or refused, which is a FAIL row. On
+# purpose, it can forge the record, and that is a limit, named and not
+# guarded, since these checks stop mistakes and not adversaries: a status and
+# a dump in bash's shape, written through the descriptors bash saves 3 to 7 at
+# while the file is sourced, from a DEBUG trap that outlives the source, from
+# an EXIT trap, or by a function named after a builtin the child calls --
+# `declare`, `enable` or `printf`, the shadowed-builtin limit named above --
+# is read as bash's own (round 4 of the review of PR #330, which measured each
+# on bash 5.2.21).
+#
+# Measured with each change: the record of the library and of the tokeniser is
+# byte for byte the one the child before #279 writes -- 42,534 and 72,227
+# bytes on the merge of dev-05 at 1486270, whose tokeniser #202 grew by 427
+# lines, and 46,585 and 72,227 at df17124, in round 4 of that review.
+LOADED_CHILD='\declare -F >&4 && \printf "e:\n" >&4 && \compgen -v >&4 && \printf "e:\n" >&4 || \exit 3
+{ . "$1" 3>&- 4>&- 5>&- 6>&- 7>&- >/dev/null 2>&1; \printf "%s" "$?" >&3; \enable declare; \declare -F >&5 && \declare -f >&6 && \declare -p >&7 && \printf "e:\n" >&7; } 2>/dev/null'
+declare -A LOADED_FROM=() LOADED_STATUS=()
 for f in "$SUITE_DIR/checks/$SUITE_LIBRARY" "$HOOKS/lib/command-scan.sh"; do
-  record_of "$f" "$FIXTURES/record" || {
-    echo "sourcing $f alone defined nothing, so nothing of it can be compared at the foot; nothing was judged" >&2
-    exit 1
-  }
-  while IFS= read -r -d '' k && IFS= read -r -d '' v; do
-    LOADED_BODY[$k]=$v
-    LOADED_FROM[$k]=$f
-  done < "$FIXTURES/record"
+  record_loaded "$f" "$FIXTURES/record" || exit 1
 done
 # The names sourcing the library defined, which the #204 section holds the
 # scanner that reads its text to.
