@@ -1,0 +1,291 @@
+[
+ {
+  "label": "auth-fail+hdr",
+  "status": 401,
+  "x-generation-id": null,
+  "x-provider-name": null,
+  "header_keys": [
+   "access-control-allow-origin",
+   "access-control-expose-headers",
+   "cf-ray",
+   "connection",
+   "content-type",
+   "date",
+   "permissions-policy",
+   "referrer-policy",
+   "server",
+   "set-cookie",
+   "transfer-encoding",
+   "x-content-type-options"
+  ],
+  "body": {
+   "error": {
+    "message": "User not found.",
+    "code": 401
+   }
+  }
+ },
+ {
+  "label": "bad-model+hdr",
+  "status": 400,
+  "x-generation-id": "gen-1788604093-2ua4hr06dQ9bYlLj1r8Z",
+  "x-provider-name": null,
+  "header_keys": [
+   "access-control-allow-origin",
+   "access-control-expose-headers",
+   "cf-ray",
+   "connection",
+   "content-type",
+   "date",
+   "permissions-policy",
+   "referrer-policy",
+   "server",
+   "set-cookie",
+   "transfer-encoding",
+   "x-content-type-options",
+   "x-generation-id"
+  ],
+  "body": {
+   "error": {
+    "message": "nonexistent/model-does-not-exist is not a valid model ID",
+    "code": 400
+   },
+   "user_id": "<redacted>"
+  }
+ },
+ {
+  "label": "ok-nostructured+hdr",
+  "status": 200,
+  "x-generation-id": "gen-1788604093-voVY75H1XpkSOREW007c",
+  "x-provider-name": null,
+  "header_keys": [
+   "access-control-allow-origin",
+   "access-control-expose-headers",
+   "cf-ray",
+   "connection",
+   "content-encoding",
+   "content-type",
+   "date",
+   "permissions-policy",
+   "referrer-policy",
+   "server",
+   "set-cookie",
+   "transfer-encoding",
+   "x-content-type-options",
+   "x-generation-id"
+  ],
+  "body": {
+   "id": "gen-1788604093-voVY75H1XpkSOREW007c",
+   "object": "chat.completion",
+   "created": 1788604093,
+   "model": "deepseek/deepseek-v4-flash-0731",
+   "provider": "Baidu",
+   "system_fingerprint": null,
+   "service_tier": null,
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "length",
+     "native_finish_reason": "length",
+     "message": {
+      "role": "assistant",
+      "content": null,
+      "refusal": null,
+      "reasoning": "We need answer. Need",
+      "reasoning_details": [
+       {
+        "type": "reasoning.text",
+        "text": "We need answer. Need",
+        "format": "unknown",
+        "index": 0
+       }
+      ]
+     }
+    }
+   ],
+   "usage": {
+    "prompt_tokens": 84,
+    "completion_tokens": 5,
+    "total_tokens": 89,
+    "cost": 4.69812e-06,
+    "is_byok": false,
+    "prompt_tokens_details": {
+     "cached_tokens": 0,
+     "cache_write_tokens": 0,
+     "audio_tokens": 0,
+     "video_tokens": 0
+    },
+    "cost_details": {
+     "upstream_inference_cost": 4.69812e-06,
+     "upstream_inference_prompt_cost": 4.19832e-06,
+     "upstream_inference_completions_cost": 4.998e-07
+    },
+    "completion_tokens_details": {
+     "reasoning_tokens": 5,
+     "image_tokens": 0,
+     "audio_tokens": 0
+    }
+   },
+   "openrouter_metadata": {
+    "requested": "deepseek/deepseek-v4-flash-0731",
+    "strategy": "direct",
+    "region": "AMS",
+    "summary": "available=29, selected=Baidu",
+    "attempt": 1,
+    "is_byok": false,
+    "endpoints": {
+     "total": 30,
+     "available": [
+      {
+       "provider": "Baidu",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": true
+      },
+      {
+       "provider": "OpenInference",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "GMICloud",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Wafer",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "AkashML",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Sail Research",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Reka",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "DigitalOcean",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Relace",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "SiliconFlow",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Parasail",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Fireworks",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "CoreWeave",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "BaseTen",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Venice",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Morph",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Makora",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Together",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Mancer 2",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "DeepInfra",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "StreamLake",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "BaseTen",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Inceptron",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Novita",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Alibaba",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Cloudflare",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "NextBit",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "Phala",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      },
+      {
+       "provider": "AtlasCloud",
+       "model": "deepseek/deepseek-v4-flash-20260731",
+       "selected": false
+      }
+     ]
+    },
+    "generation_time": 944
+   }
+  }
+ }
+]

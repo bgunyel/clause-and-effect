@@ -81,6 +81,26 @@ a different and probably unreachable goal — but to answer, months later and
 without a login to anyone's console, *which server answered, under what routing
 constraint, at what price, and did it fall back to get there.*
 
+**What counts as good enough is pre-registered elsewhere, and is not restated
+here.** The tolerance a provider cell must clear, the n behind it, the six
+pre-registration rules, the frozen case draw, the attribution invariants that run
+before any reproduction, and the meaning of each outcome — including the
+disconfirming one — are fixed in
+[`docs/eval-reports/2026-09-05-provider-acceptance-pre-registration.md`](../eval-reports/2026-09-05-provider-acceptance-pre-registration.md),
+written before the log held a single provider-attributed row. **This document
+cites that entry and never repeats its numerals.** A threshold copied into a file
+that is revised in place is a threshold that drifts, and `docs/design/` is the
+copy that can be edited; the report is append-only, and it grows by dated appends
+of two kinds — amendments, which owe an old value, and registrations, which have
+none — under the shared timing rule that entry's own
+[§The two kinds of append](../eval-reports/2026-09-05-provider-acceptance-pre-registration.md#the-two-kinds-of-append)
+states and this document does not restate.
+
+The MiniMax table above has a second job under that registration: reproducing it
+from the log's own rows — in rank and direction, on terms the entry fixes — is the
+**positive control** for provider attribution. It is prospective, because
+`record_attempt` has no caller in `src/` yet.
+
 ### A second reason arrived on 2026-08-26
 
 The design started as a provider-attribution problem. Measuring it turned up a
@@ -974,6 +994,21 @@ filter the sweep would query `/api/v1/generation` forever for ids that were neve
 OpenRouter's, and trap 4 would then mark them swept-and-empty — true, and
 useless.
 
+What those bodies do carry, column by column, was read out of each provider's
+own documentation in
+[`docs/research/non-openrouter-response-bodies.md`](../research/non-openrouter-response-bodies.md)
+(issue #10). Its first finding bears on the path filter described above:
+`ai_common.llm.get_llm` builds a different client per server, and three of the
+five it charts — OpenAI, Ollama and Anthropic, leaving Groq and vLLM — do not
+use `/chat/completions` at all, so a filter on that path would see almost none
+of this project's non-OpenRouter traffic as it is wired today. Five, not the
+enum's seven: `OPENROUTER` is the baseline the others are measured against, and
+`GOOGLE` was outside that ticket's scope and is uncharted. That
+is a reading of the installed package and of published documentation, not an
+observation of the wire — the research document marks which claims are which,
+and nothing in this design is revised on the strength of it until the
+observations it lists have been made.
+
 ### The enrichment sweep
 
 A row is written immediately with everything the socket saw, and completed
@@ -1258,6 +1293,15 @@ rather than every failure — and is argued there.
 - **How often retries actually fire in a real run is unknown.** The probe forced
   them. Whether the published cost totals are 1% low or 60% low is exactly what
   the first logged panel run will answer.
+- **The acceptance reads do not exist**, and the criteria they will be judged
+  against are already fixed. The seven queries, the rule-in/rule-out bars and the
+  gate are pre-registered in
+  [`docs/eval-reports/2026-09-05-provider-acceptance-pre-registration.md`](../eval-reports/2026-09-05-provider-acceptance-pre-registration.md);
+  the reads themselves are the first build step and are written nowhere yet. Two
+  of that entry's clauses are conditionals the build settles, not open questions:
+  the tolerance depends on the judge runner's failure types, and the sampled chain
+  cross-check applies only if `routing_chain` is taken from the completions body
+  rather than the sweep.
 - **Provider pinning is a separate, related decision** and is not part of this
   document. The log makes routing *visible*; it does not make it *stable*.
 - **The confounded `structured_output` table in `llm_config.py` is not fixed by

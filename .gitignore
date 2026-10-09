@@ -8,6 +8,7 @@ __pycache__/
 
 # Coding Assistants Related
 .claude/settings.local.json
+.claude/worktrees/
 
 # Input/Output folders
 input/
@@ -20,5 +21,6 @@ data/tier-1/raw/
 
 # Environment Variables
 .env
+
 
 

@@ -1,0 +1,305 @@
+{
+ "caller": {
+  "total_seconds": 1.051,
+  "parsed": "_Answer(city='Ankara')",
+  "response_metadata": {
+   "model_name": "deepseek/deepseek-v4-flash-0731",
+   "id": "gen-1788604002-IkfyZH6VdB2oI8PlH9Ry",
+   "created": 1788604002,
+   "object": "chat.completion",
+   "finish_reason": "tool_calls",
+   "logprobs": null,
+   "model_provider": "openrouter",
+   "cost": 1.0205916e-05,
+   "cost_details": {
+    "upstream_inference_completions_cost": 1.69932e-06,
+    "upstream_inference_prompt_cost": 8.506596e-06,
+    "upstream_inference_cost": 1.0205916e-05
+   }
+  },
+  "additional_kwargs_keys": [],
+  "usage_metadata": {
+   "input_tokens": 375,
+   "output_tokens": 17,
+   "total_tokens": 392,
+   "input_token_details": {
+    "cache_read": 256,
+    "cache_creation": 0
+   },
+   "output_token_details": {
+    "reasoning": 0
+   }
+  },
+  "message_id": "lc_run--01a0711b-3139-7402-a09e-6eca408cddb4-0"
+ },
+ "wire": [
+  {
+   "label": "hdr-2",
+   "sent_header": true,
+   "url": "https://openrouter.ai/api/v1/chat/completions",
+   "request_headers": {
+    "host": "openrouter.ai",
+    "accept-encoding": "gzip, deflate, zstd",
+    "connection": "keep-alive",
+    "http-referer": "https://docs.langchain.com",
+    "x-title": "LangChain",
+    "accept": "application/json",
+    "user-agent": "speakeasy-sdk/python 0.11.46 2.914.0 1.0.0 openrouter",
+    "authorization": "<redacted>",
+    "content-type": "application/json",
+    "content-length": "570",
+    "x-openrouter-metadata": "enabled"
+   },
+   "request_body": {
+    "messages": [
+     {
+      "content": "Which city is the capital of Türkiye? Answer with the city name only.",
+      "role": "user"
+     }
+    ],
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "provider": {
+     "require_parameters": true
+    },
+    "reasoning": {
+     "effort": "high",
+     "summary": "auto"
+    },
+    "stream": false,
+    "temperature": 0.0,
+    "tool_choice": {
+     "function": {
+      "name": "_Answer"
+     },
+     "type": "function"
+    },
+    "tools": [
+     {
+      "function": {
+       "name": "_Answer",
+       "description": "",
+       "parameters": {
+        "properties": {
+         "city": {
+          "description": "the city named in the question",
+          "type": "string"
+         }
+        },
+        "required": [
+         "city"
+        ],
+        "type": "object"
+       }
+      },
+      "type": "function"
+     }
+    ],
+    "top_p": 0.95
+   },
+   "status": 200,
+   "response_headers": {
+    "date": "Sat, 05 Sep 2026 10:26:43 GMT",
+    "content-type": "application/json",
+    "transfer-encoding": "chunked",
+    "connection": "keep-alive",
+    "access-control-allow-origin": "*",
+    "x-generation-id": "gen-1788604002-IkfyZH6VdB2oI8PlH9Ry",
+    "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+    "set-cookie": "<redacted>",
+    "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+    "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+    "x-content-type-options": "nosniff",
+    "content-encoding": "gzip",
+    "server": "cloudflare",
+    "cf-ray": "a3648989b9cdbe9d-AMS"
+   },
+   "wire_seconds": 1.03,
+   "response_body": {
+    "id": "gen-1788604002-IkfyZH6VdB2oI8PlH9Ry",
+    "object": "chat.completion",
+    "created": 1788604002,
+    "model": "deepseek/deepseek-v4-flash-0731",
+    "provider": "Baidu",
+    "system_fingerprint": null,
+    "service_tier": null,
+    "choices": [
+     {
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "tool_calls",
+      "native_finish_reason": "tool_calls",
+      "message": {
+       "role": "assistant",
+       "content": null,
+       "refusal": null,
+       "reasoning": null,
+       "tool_calls": [
+        {
+         "type": "function",
+         "index": 0,
+         "id": "call_bd0f68743a5a4d69aeb96b79",
+         "function": {
+          "name": "_Answer",
+          "arguments": "{\"city\": \"Ankara\"}"
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "usage": {
+     "prompt_tokens": 375,
+     "completion_tokens": 17,
+     "total_tokens": 392,
+     "cost": 1.0205916e-05,
+     "is_byok": false,
+     "prompt_tokens_details": {
+      "cached_tokens": 256,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+     },
+     "cost_details": {
+      "upstream_inference_cost": 1.0205916e-05,
+      "upstream_inference_prompt_cost": 8.506596e-06,
+      "upstream_inference_completions_cost": 1.69932e-06
+     },
+     "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+     }
+    },
+    "openrouter_metadata": {
+     "requested": "deepseek/deepseek-v4-flash-0731",
+     "strategy": "direct",
+     "region": "AMS",
+     "summary": "available=23, selected=Baidu",
+     "attempt": 1,
+     "is_byok": false,
+     "endpoints": {
+      "total": 30,
+      "available": [
+       {
+        "provider": "Baidu",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": true
+       },
+       {
+        "provider": "Relace",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "AkashML",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "DeepInfra",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "StreamLake",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Makora",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Wafer",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Morph",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Together",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Parasail",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Venice",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "NextBit",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Phala",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "AtlasCloud",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Cloudflare",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "OpenInference",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Sail Research",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "DigitalOcean",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Reka",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "BaseTen",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Inceptron",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "Fireworks",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       },
+       {
+        "provider": "BaseTen",
+        "model": "deepseek/deepseek-v4-flash-20260731",
+        "selected": false
+       }
+      ]
+     },
+     "generation_time": 789
+    }
+   }
+  }
+ ]
+}

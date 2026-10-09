@@ -88,6 +88,22 @@ def get_llm_config():
     # provider it has no alias for. Before adding a panelist, check the alias
     # dict for the *provider*, not just the model.
     provider = LlmServers.OPENROUTER
+    # Left wrapped, deliberately. `OPENROUTER_API_KEY` is a `SecretStr` and goes
+    # into every roster entry below still wrapped; `get_llm` is handed it as-is,
+    # and nothing here unwraps it. So an entry renders as
+    # `{'model': ..., 'api_key': SecretStr('**********')}` under str(), an
+    # f-string and %s alike.
+    #
+    # Nothing prints a whole entry today -- the ten probe and eval sites that
+    # report a model all print `entry["model"]` alone -- and that is exactly why
+    # calling `.get_secret_value()` here would be a silent change: no test and no
+    # output would differ, and the masking would be gone from every future
+    # rendering, including a traceback that shows the dict.
+    #
+    # It is also why CodeQL's py/clear-text-logging-sensitive-data on
+    # `probe_three_shape_pool.py` is a false positive. It taints the whole entry
+    # and flags the line that logs `entry["model"]` -- a ModelNames enum -- while
+    # the field it is tainted by is masked anyway.
     api_key = settings.OPENROUTER_API_KEY
 
     # Every panelist runs on the same settings, so that a disagreement between

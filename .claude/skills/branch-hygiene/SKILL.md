@@ -1,37 +1,46 @@
 ---
 name: branch-hygiene
-description: Rotate to the next development branch after a PR is merged into main. Use immediately after a dev-NN branch lands in main via pull request, or whenever the repository has stale branches beyond main plus one active dev branch. Covers checkout main, pull, create dev-NN+1, and delete the merged branch locally and remotely.
+description: Report whether the active dev branch is ready to rotate and what branches are stale, and hold Bertan's two procedures - rotating the dev branch, and sweeping merged worktree branches and the worktrees standing on them. Use after a dev-NN pull request lands in main, after a worktree branch's pull request merges, or when branches beyond main, one active dev branch and the worktree branches in flight against it are lying around. Both procedures are Bertan's; an agent runs only the read-only half and reports what it found.
 ---
 
 # Branch hygiene
 
-This repository holds **exactly two branches at any time**: `main`, and one
-active development branch named `dev-NN`. Work never lands on `main` directly —
-only through a pull request from the active dev branch.
+At any time this repository holds `main`, exactly one **active dev branch**
+named `dev-NN`, and however many **worktree branches** are in flight against it.
+Work never lands on `main` directly — only through a pull request from the
+active dev branch — and an agent's work reaches the active dev branch the same
+way, by a pull request from the worktree branch it was done on. `CONTEXT.md`
+defines all three terms.
 
-When that PR is merged, the dev branch has served its purpose and is rotated:
-the next branch takes the next number, and the merged one is deleted from both
-the local repository and the remote.
+When that pull request into `main` is merged, the dev branch has served its
+purpose and is rotated: the next branch takes the next number, and the merged
+one is deleted from both the local repository and the remote.
 
-## When this applies
+**Rotation is a reserved act, and so are the sweep's removals.** Rotating the
+dev branch, advancing the active dev branch on the remote, and removing a
+worktree or deleting a worktree branch are each reserved. `CONTEXT.md`'s
+*reserved act* entry holds the list; this file cites it rather than counting it,
+so that a number here cannot go stale while the list grows there. What it makes
+Bertan's is every step of either procedure that changes something — the whole
+of the rotation below, and steps 2 and 3 of the sweep. Step 3 is included
+rather than argued about: `git worktree prune` removes worktree entries too,
+and deciding whether pruning an administrative file is really *removing a
+worktree* is a distinction a reader would have to get right unprompted, for no
+gain over simply reserving both.
+`.claude/hooks/no-git-push.sh` refuses both of the pushes a rotation needs — the
+first push of `dev-NN+1`, and the remote deletion of `dev-NN` — from anywhere,
+correctly. Issue #41 considered carving a hook exception for this skill and
+rejected it: the exception would reopen the wholesale and deletion forms that
+PR #35 closed, for a procedure run every few weeks. Bertan runs the procedure
+from his own terminal, where no hook applies.
 
-Apply **after a PR from `dev-NN` into `main` has been merged**, and not before.
-Also apply when the repository has drifted — any branch other than `main` and
-the single active dev branch is stale and should be removed.
+An agent keeps the half that is genuinely useful and changes nothing: confirm
+from the remote that the merge actually happened, and report what is stale.
 
-Do **not** apply while a PR is open, in review, or closed-without-merge. The
-delete step is unrecoverable from the local repository alone, so the merge is
-the precondition for the whole procedure, not just the last step.
+## What an agent does
 
-## The naming rule
-
-The new branch is the merged branch's number plus one, zero-padded to two
-digits. `dev-01` merged → create `dev-02`. `dev-02` merged → create `dev-03`.
-`dev-09` merged → create `dev-10`.
-
-## Procedure
-
-Run these in order. Each step's verification is what makes the next one safe.
+Both steps are reads. Report the answers and stop — do not check out, create,
+push or delete anything, and do not offer to.
 
 ### 1. Confirm the merge really happened
 
@@ -41,9 +50,79 @@ Never take "the merge command ran" as evidence. Ask the remote:
 gh pr view <PR#> --json state,mergedAt,headRefName --jq '{state,mergedAt,headRefName}'
 ```
 
-`state` must be `MERGED` and `mergedAt` must be non-null. If it says `OPEN`
-or `CLOSED`, stop — there is nothing to rotate, and deleting the branch would
-discard the work.
+`state` must be `MERGED` and `mergedAt` must be non-null. If it says `OPEN` or
+`CLOSED`, there is nothing to rotate, and say so plainly: rotating on a
+closed-without-merge pull request would discard the work.
+
+### 2. Report what is stale
+
+Part of this now runs on its own. `.claude/hooks/report-stale-branches.sh` is a
+`SessionStart` hook that does the pruning fetch, reads every pull request, and
+reports stale branches and the worktrees standing on them — the read-only half
+of this step, and nothing else: it removes nothing, which is why it is named
+`report-` and not `sweep-`. Its output is already in the session; read it before
+running the commands below, and run them for what it does not cover — the last
+commit dates, and any pull request merged or closed since the session started.
+
+**The sweep** below is the other half — what acts on that report. It is
+Bertan's, for the reason the rotation is, and an agent that has produced the
+report stops there.
+
+That fetch is also what arms `.claude/hooks/no-work-on-stale-branch.sh`, which
+refuses a commit on a branch whose work is over, and — since #144 —
+`.claude/hooks/no-pr-decisions.sh`, which judges a pull request's base against
+the active dev branch it derives from those same refs. Both hooks are exactly as
+fresh as that fetch; when the report says the fetch failed, neither of the stale
+guard's two detectors is armed for that session, and a base is judged against
+whatever branch the stale refs still call active.
+
+```bash
+git fetch --prune
+git branch -a
+git for-each-ref --sort=-committerdate \
+  --format='%(refname:short)%09%(committerdate:short)' refs/heads/
+gh pr list --state all --limit 30 --json number,headRefName,state \
+  --jq '.[] | "#\(.number)\t\(.headRefName)\t\(.state)"'
+```
+
+Stale is a branch whose work is over: a `dev-NN` other than the active one, or a
+worktree branch whose pull request is merged or closed and which is
+at or behind that pull request's head commit. A name match alone does not make
+the pull request this branch's: a name reused for new work, or work committed
+after the merge, is ahead of that head, and is unclassified, not stale. The read
+above does not carry the head; the one in *The sweep*, step 1, does, with the
+ancestry test the report runs. A worktree branch with an open pull request is
+**not** stale — several open at once is the ordinary state of this repository,
+not drift. That is what the invariant at the top of this file already says, and
+it is the half of it most easily read as a mess to tidy.
+
+**A worktree branch with no pull request at all is neither, and saying which it
+is takes more than this skill can see.** A branch freshly cut for work not yet
+started and a branch abandoned after a rotation are both branches with no pull
+request, and ahead/behind does not separate them: a fresh one cut before the dev
+branch moved is `ahead == 0`, and an abandoned one carrying a commit of its own
+is `ahead > 0`, so the count that would condemn the first exonerates the second.
+Only whoever cut it knows. Report it by name with its ahead/behind and its last
+commit date, call it unclassified rather than stale, and stop — the *reserved
+act* entry in `CONTEXT.md` says what to do where nothing enforces.
+
+Two more things to name in the report rather than act on:
+
+- **Open pull requests against `dev-NN`.** Deleting a base branch closes the
+  pull requests that target it, so a rotation waits until they are merged or
+  retargeted. Say which ones are open.
+- **A branch that was never merged.** Its commits exist nowhere else. Report it;
+  losing them should be a decision, not a side effect.
+
+## Bertan's procedure
+
+Run from a terminal, where no hook applies. Each step's verification is what
+makes the next one safe.
+
+### 1. Confirm the merge, and that nothing is in flight
+
+The two reads above, if an agent has not already run them: `state` is `MERGED`
+with a non-null `mergedAt`, and no pull request is open against `dev-NN`.
 
 ### 2. Move to main and pull
 
@@ -61,11 +140,14 @@ git status -sb | head -1
 
 ### 3. Create the new branch
 
+The new branch is the merged branch's number plus one, zero-padded to two
+digits: `dev-01` merged → create `dev-02`; `dev-09` merged → create `dev-10`.
 Derive the number from the branch that was merged, not from whatever happens to
 exist locally:
 
 ```bash
 git checkout -b dev-NN+1
+git push -u origin dev-NN+1
 ```
 
 Verify you are on it before going any further — step 4 cannot delete the branch
@@ -99,32 +181,224 @@ git log --oneline main | head -5
 
 ### 5. Verify the invariant holds
 
-The repository should now show `main` and the new dev branch, and nothing else:
-
 ```bash
 git branch -a
-```
-
-Prune any remote-tracking references left behind by the remote delete:
-
-```bash
 git fetch --prune
 ```
+
+`main`, the new dev branch, and any worktree branch still in flight — nothing
+else. Prune the remote-tracking references left behind by the remote
+delete.
 
 ## What must be true at the end
 
 - `main` contains the merge commit and matches the remote.
-- The new `dev-NN+1` branch exists, is checked out, and is based on the updated
-  `main`.
+- The new `dev-NN+1` branch exists, is checked out, is based on the updated
+  `main`, and is on the remote.
 - The merged `dev-NN` is gone from the local repository and from `origin`.
-- `git branch -a` lists `main` and `dev-NN+1` only.
+- Every other branch present is a worktree branch, and no pull request is left
+  pointing at the deleted `dev-NN`: each was merged before the rotation or
+  retargeted to `dev-NN+1` after it. Whether each of those is still in flight or
+  merely not yet swept is the sweep's question, not the rotation's.
+
+## The sweep
+
+The local half of a worktree branch's end, and the counterpart of the remote
+half `delete_branch_on_merge` performs automatically. `CONTEXT.md`'s *worktree
+branch* entry states the lifetime this enforces: a worktree branch exists for
+one pull request, and the worktree that produced it is not reused afterwards.
+
+Also Bertan's. Removing a worktree is one of the acts that entry names, which is
+why `.claude/hooks/report-stale-branches.sh` names what is over and removes
+nothing, and why its name is `report-`.
+
+**Cadence: manual, and unscheduled.** Nothing runs this and nothing reminds
+anyone to. That is a deliberate position rather than an omission: a merged
+worktree branch left lying about locally costs nothing except a line in the
+report, and the one way it could cost something — work committed onto it after
+its pull request merged — is refused by
+`.claude/hooks/no-work-on-stale-branch.sh` whether or not anyone has swept. So
+this is run when the report has accumulated enough to be worth clearing, and a
+rotation is the natural moment: every branch in flight was merged or retargeted
+before it, so the report just after one names very nearly the whole backlog.
+
+Read the two hook headers that cite the sweep in that register. They name a
+procedure that is written and is run by hand — not one that has already
+happened.
+
+Run from a terminal, where no hook applies.
+
+### 1. Take the list from the report, and act only on the merged
+
+The report classifies three ways and exactly one of the three is the sweep's.
+It reads every pull request when the session starts and matches them by head
+name to every local branch but `main` and a `dev-NN`, which it classifies
+without one. Where a branch has several, an open one decides; otherwise the
+newest does.
+
+- **stale** — a worktree branch whose pull request is merged or closed, and
+  which is at or behind that pull request's head commit. The report prints
+  `merged: pull request #N` or `closed without merging: pull request #N`.
+  These are the sweep's, and only these. (A `dev-NN` other than the active one
+  is stale too, printed as `rotated past`; that one is the rotation's.)
+- **clear** — a worktree branch with an open pull request. The report counts
+  it and does not list it. It is in flight. Several at once is the ordinary
+  state of this repository, not drift.
+- **unclassified** — a branch with no pull request at all, printed as
+  `no pull request` with its ahead/behind. A branch freshly cut for work not
+  yet started and a branch abandoned after a rotation read identically, and
+  ahead/behind does not separate them; the reasoning is at the end of *Report
+  what is stale* above. Also a branch whose pull request is merged or closed
+  but which is `not at or behind its head` — a name reused for new work, or
+  work committed after the merge. Leave every unclassified branch alone.
+  Sweeping one deletes work that was about to start.
+
+The report's header, in `report-stale-branches.sh`, gives the reasons for these
+rules and the limits they leave.
+
+**When the report says `pull requests: NOT READ`, it did not compute those
+classes.** `gh` was missing or did not answer, and the report fell back to ref
+state, which cannot see a pull request. By ref state, a branch whose upstream is
+gone is `stale by ref state` — merged, or closed and its branch deleted by hand.
+A branch with no commit of its own that the dev branch has moved past is
+unclassified, `merged, or cut and not yet worked`. Everything else is counted
+clear. That fallback misses most merged branches here, for the reason the
+header gives, and calls a branch closed with commits of its own clear. Take no
+list from that report. Classify by the read below instead.
+
+Confirm from the remote rather than from the report — the report's
+classification is as fresh as its fetch, and a pull request merged or closed
+since then is a branch it has not reclassified. This is the report's own read,
+with the same limit of 1000, plus `mergedAt`. It is wider than the read in
+*Report what is stale*: that one lists recent pull requests for a person to
+look over, and this one has to find every branch the report could have named.
+The head commit is there so that a branch can be checked against the pull
+request's head with `git merge-base --is-ancestor <branch> <headRefOid>`, as the
+report does. A name match alone does not show it is the same branch:
+
+```bash
+gh pr list --state all --limit 1000 --json number,headRefName,state,mergedAt,headRefOid \
+  --jq '.[] | "\(.headRefName)\t\(.state)\t\(.mergedAt)\t\(.headRefOid)"'
+```
+
+A branch whose pull request is `CLOSED` rather than `MERGED` is stale by the
+same definition and is **not** swept on that evidence alone: its commits exist
+nowhere else. Report it, decide, and only then remove it.
+
+### 2. Unlock the worktree, remove it, then delete the branch
+
+Three commands, and neither ordering is a preference.
+
+**Unlock first, because every worktree here is locked.** `EnterWorktree` locks
+the worktree it creates, so `git worktree remove` refuses one outright:
+
+```
+fatal: cannot remove a locked working tree, lock reason: claude session <name>
+use 'remove -f -f' to override or unlock first
+```
+
+Take the other door. git names `remove -f -f` first and it is the wrong one: a
+lock says a session is using this worktree, and forcing past it discards
+whatever that session has not committed. The lock reason carries what decides
+the question — the session's name, its pid, and that process's start time,
+which is what separates a live session from a stale lock whose pid has since
+been handed to something else:
+
+```bash
+git worktree list --porcelain
+```
+
+A session that ends cleanly removes its own worktree, so a locked worktree that
+outlived its session is precisely the sweep's population. Confirm that rather
+than assume it; if the process is alive, this worktree is not the sweep's and
+nothing here applies to it:
+
+```bash
+ps -p <pid>
+```
+
+Then, and only then:
+
+```bash
+git worktree unlock .claude/worktrees/<name>
+git worktree remove .claude/worktrees/<name>
+git branch -d <branch>
+```
+
+The branch goes last because a linked worktree holds it checked out and git
+refuses to delete a branch a worktree is standing on — `cannot delete branch
+'<name>' used by worktree at '<path>'`.
+
+`git worktree remove` refuses a worktree holding uncommitted changes or
+untracked files — `'<path>' contains modified or untracked files, use --force
+to delete it`. Treat that refusal as `-d`'s: it is saying there is something
+there nobody has looked at. Look before reaching for `--force`.
+
+Use `-d`, never `-D`, for the reason step 4 of the rotation gives — the
+lowercase form refuses a branch whose commits are not reachable from HEAD, so a
+refusal here means the pull request did not merge the way the report believes.
+The squash-or-rebase exception named there applies unchanged, and so does its
+remedy: confirm the merge commit with `gh pr view` before forcing anything.
+
+### 3. Verify, and prune what step 2 could not
+
+```bash
+git worktree prune
+git fetch --prune
+git branch -a
+git worktree list
+```
+
+`git worktree remove` cleans up its own metadata, so `git worktree prune` is not
+here to finish step 2. It is for the other way a worktree ends — a directory
+deleted by hand, which leaves an administrative entry behind that `git worktree
+list` still reports.
+
+**`prune` will not rescue a worktree that is still locked, and does not say
+so.** A locked worktree is exempt from pruning by design — holding the
+administrative files against pruning is what `git worktree lock` is for — so if
+the directory went by hand while the lock stood, `prune` skips it, exits 0, and
+`git worktree list` goes on naming it. That is the one failure in this
+procedure that reports success, which is why the invariant below is checked
+against `git worktree list` rather than inferred from the exit codes above.
+
+There is no `git push origin --delete` in this procedure.
+`delete_branch_on_merge` has already taken the remote half, and if it had not,
+`.claude/hooks/no-git-push.sh` would refuse the deletion form anyway.
+
+What must be true at the end: every branch the report called stale is gone
+locally, every worktree that stood on one is gone, every unclassified branch is
+untouched, and `git worktree list` names no worktree without a branch.
 
 ## Notes
 
-- The new branch has no upstream until its first push. Use
-  `git push -u origin dev-NN+1` the first time, plain `git push` after that.
-- Rotate only after a merge, not after each session. A branch spanning several
-  sessions is normal; several branches open at once is not.
-- If a stale branch turns up that was never merged, do not delete it silently.
-  Its commits exist nowhere else — report it and let the decision be made
-  deliberately.
+- A new worktree branch starts at `origin/dev-NN`, set when the worktree is
+  created — the rule is in CLAUDE.md's boundary section — so every worktree
+  made after a rotation branches from the new dev branch. One made before it
+  does not, which is the second reason a rotation waits for the branches in
+  flight.
+- Rotate only after a merge, not after each session. A dev branch spanning
+  several sessions is normal; two dev branches at once is not.
+- Between step 3 and step 4 of **Bertan's procedure** above -- the steps in this
+  note are that procedure's and not the sweep's, which runs 1 to 3 -- both
+  `origin/dev-NN` and `origin/dev-NN+1` exist, and so they do in any agent
+  session that fetched in that window. For an agent the window closes at step 4,
+  where `git push origin --delete dev-NN` takes the remote half: the next
+  SessionStart `git fetch --prune` in `report-stale-branches.sh` drops
+  `origin/dev-NN` from that session's refs. Step 5 is where Bertan's own
+  remote-tracking ref is pruned, which is a later moment and his, not an
+  agent's. Nothing in this procedure has to change for it: since #144
+  `no-pr-decisions.sh` refuses a pull request based on the older of the two and
+  names the newer, deriving the active dev branch from the same
+  highest-`origin/dev-NN` read the report above makes.
+  Before that it accepted either, so the window was one in which a worktree pull
+  request could land on the branch on its way out and nothing would say so.
+- Push a worktree branch with `git push -u origin <branch>` the first time, as
+  the rotation pushes `dev-NN+1`. Without the upstream, a merged branch whose
+  remote half `delete_branch_on_merge` has removed is indistinguishable from one
+  that was never pushed — both read as having no upstream, and the `[gone]` that
+  says *this branch had a remote and lost it* never appears. What reads that
+  `[gone]` is `no-work-on-stale-branch.sh`'s first detector, and the report when
+  it could not read pull requests. When it can, the report classifies by pull
+  request and does not need the upstream. Most worktree branches here are pushed
+  without `-u`, so do not count on this note having been followed.

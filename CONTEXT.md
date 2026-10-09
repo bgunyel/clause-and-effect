@@ -1,0 +1,160 @@
+# Clause and Effect
+
+A question-answering system over regulatory text, built evaluation-first: an
+architecture decision is measured before it is kept. A check asserts, a probe
+asks, and the two must not borrow each other's name. This glossary is written
+lazily — a term is added when a collision has actually been resolved in the
+repository, not in advance of one.
+
+## Language
+
+**Active dev branch**:
+The single `dev-NN` branch that work lands on today. A worktree branch is
+proposed into it by pull request; it reaches `main` only through a pull request
+Bertan merges. There is exactly one at a time, and advancing it on the remote is
+a reserved act — `.claude/hooks/no-git-push.sh` refuses a push of `main` or of
+any `dev-<digits>` branch from anywhere.
+
+Its tip is `origin/dev-NN` as the last fetch left it. The local `dev-NN`
+is a working copy, not the branch: it is usually checked out in Bertan's main
+checkout with edits in progress, and it can sit behind the remote or ahead of it
+with commits nobody has pushed. A worktree branch is therefore never cut from
+it. Bringing it up to date is not an agent's to do either — moving it is a
+reserved act, below — so the tip an agent reads is the remote-tracking ref, which
+the SessionStart fetch in `.claude/hooks/report-stale-branches.sh` refreshes.
+
+*Which* `dev-NN` is active is read the same way everywhere: the highest
+`refs/remotes/origin/dev-[0-9]+` by version sort. Three files derive it from that
+one pipeline — the report above, `no-work-on-stale-branch.sh`, and since #144
+`no-pr-decisions.sh`, which judges a pull request's base against it. So a session
+that has not fetched since a rotation reads the superseded branch as active, and
+that costs a wrong verdict in BOTH directions: `--base dev-05` is permitted after
+the rotation to `dev-06`, which lands a pull request on the branch on its way out
+and is the defect #144 exists to close, and `--base dev-06` — the correct base —
+is refused. Measured in a fixture holding only the superseded ref. Only where no
+`dev-NN` ref can be read at all does the rule fall back to accepting any of them.
+_Avoid_: development branch, current branch
+
+**Check**:
+An assertion whose expected verdict is written out in advance, so running it can
+only agree or disagree with what was already claimed. Every assertion in the
+check suite, `.claude/hooks/check-hooks.sh` and the files it sources, is a check.
+_Avoid_: probe, test
+
+**History entry**:
+A file under one of the append-only directories — `docs/dev-log/`,
+`docs/lessons-learned/`, `docs/eval-reports/` — that is present on the active
+dev branch at the point where a branch last took that branch in: its merge base
+with the active dev branch's tip, not the tip itself, since an entry merged
+after a branch forked is one that branch never had and so cannot have
+rewritten. It is never rewritten; a correction goes in a newer entry. Before it
+is merged, the same file is a **draft**: it has not reached the active dev
+branch, and correcting it — after review or at any other time — is the ordinary
+case, not a breach. A directory's `README.md` describes the directory rather
+than recording anything, and is neither.
+
+What makes a file history is where it stands, not whether it exists, is
+committed or is pushed. Existence was the first answer, and it froze a draft the
+moment it was written. In #149 it refused two sessions correcting their own
+unmerged entries: one went around the refusal with a script, the other left
+four stale counts in a pushed entry. The append-only rule is also stated by
+this effect rather than by the commands that could cause it: a history entry
+of which the merge base's copy is no longer a byte prefix has been rewritten,
+whichever tool did it. A pure append leaves that prefix intact, so it is not a
+rewrite. Nor is the one exception below: an entry whose only difference from
+that copy is its first line's session segment, corrected onto the file name, has
+been relabelled and not rewritten, and a check built from this sentence has to
+allow for it (#177).
+
+One part of one line of a history entry is the entry's *label* rather than its
+history, and may be corrected in place: the session segment of a `docs/dev-log/`
+entry's `# <date> · <session> — <rest>` heading, when it disagrees with the
+session the file is named for, changed only to agree with it. A label that
+contradicts its own file name states nothing a reader relies on — it misfiles
+the record. The date, the rest of the heading and every byte of the body remain
+history and are refused as before, and a correction to anything the entry *says*
+still goes in the newest entry. ADR 0003 decides this (#177) and
+`append-only-docs-edit.sh` computes it. The Bash half makes no exception for it,
+because a command's text cannot show what it would leave unchanged: the
+spellings it refuses on an entry — `sed -i`, `rm`, `mv`, `cp`, `tee`, `truncate`
+and a `>` — it refuses for the correction too, and an interpreter or another
+in-place editor, which it does not refuse at all, is #246's to close.
+_Avoid_: frozen entry, published entry, old entry
+
+**Issue file**:
+The checks written by the work that closed one issue, kept in one file named by
+that issue, under `.claude/hooks/checks/`. Tags name what a check covers; an
+issue file names who wrote it, so its checks may carry any requirement's tags.
+It is not a section, which is a heading in the suite's output that rows from
+several issue files may sit under.
+_Avoid_: family, section
+
+**Probe**:
+An empirical measurement whose answer is not known until it runs. Each
+`scripts/probe_*.py` is a probe — one measurement, its output landing in
+`docs/eval-reports/`.
+_Avoid_: check
+
+**Reserved act**:
+An act that belongs to Bertan and not to an agent: advancing the active dev
+branch on the remote — or moving that same remote ref any way other than
+advancing it, or deleting that ref — merging any pull request, rotating the dev
+branch, removing a worktree or deleting a worktree branch, any write to a
+release, and moving a local `main` or `dev-NN`, its ref or the working tree of
+the checkout it is checked out in.
+Reserved is not a synonym for refused. The hooks refuse the ordinary spellings
+of some of these and they stop mistakes, not adversaries; others nothing refuses
+at all. `git worktree remove`, the whole of the sweep, and `git branch -d`,
+which both the sweep and a rotation end with, pass every hook and are reserved
+all the same. So do `git branch -f`, `git fetch origin dev-NN:dev-NN` and a
+fast-forward in the main checkout, each of which moves a local branch Bertan
+owns. Git refuses the first two while that branch is checked out anywhere, so
+they reach one that is not; the fast-forward reaches the checked-out one, and
+rewrites files with edits in progress.
+
+Nothing refuses a remote force-move or deletion of the active dev branch's ref
+at all, and the wording of this entry was one clause short of naming either
+until #143 measured it. Both pass all seven registered Bash hooks whenever they
+are spelled through `gh api` rather than as a push, and `dev-NN` carries no
+ruleset to refuse them afterwards the way `main` does. So does a write to
+`origin`'s contents that advances the same ref, and so does a REST merge of any
+branch into it — an endpoint no hook names at all, whose effect is the first
+act this entry reserves. How many such spellings there are is not recorded
+here. The sentence that counted them was wrong about the paragraph it stood in,
+which already named a further one, and review of the commit that added it found
+another still; a count is the part that goes stale, and a measured set is only
+ever as wide as the spellings someone thought to try. The lesson generalises
+past this entry: an act is reserved by its effect, and a rule written against
+one command's spelling guards one spelling.
+
+Where nothing enforces, an agent reports what it found and stops.
+_Avoid_: forbidden act, blocked act
+
+**Worktree branch**:
+The branch an agent works on, checked out in a linked worktree and proposed into
+the active dev branch by pull request. It is the only branch an agent may push,
+and only from that worktree.
+
+The permission keys on **where the command runs**, deliberately not on what the
+branch is called: `.claude/hooks/no-git-push.sh` compares `git rev-parse
+--git-dir` with `--git-common-dir`, and its header carries the mechanism. A
+naming rule was available and is wrong twice over. Worktrees are made two ways
+here — `EnterWorktree`, which prefixes the branch `worktree-`, and `git worktree
+add -b`, which does not — so a prefix rule would disagree between them; and a
+branch in the main checkout can be given whatever name the rule looks for, which
+would carry the exception to the one place it is meant not to reach. Do not
+"fix" this into a rule about the name.
+
+A worktree branch exists for exactly one pull request. When that pull request
+merges into the active dev branch the branch is finished: on the remote
+`delete_branch_on_merge` removes it, and locally the sweep in the
+`branch-hygiene` skill does — one of the acts the *reserved act* entry above
+names, so an agent reports a branch whose work is over and removes nothing. The
+next unit of work is cut from the active dev branch's tip onto a new branch in
+a new worktree; the worktree that produced the merged branch is not reused. That
+clause is the operative half. A worktree outliving its branch is precisely how
+work gets committed onto a branch whose pull request has already merged, which
+happened twice before anything refused it and is what
+`.claude/hooks/no-work-on-stale-branch.sh` now refuses; that file's header names
+both occasions.
+_Avoid_: feature branch, agent branch

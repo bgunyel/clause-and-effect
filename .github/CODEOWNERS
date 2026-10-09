@@ -1,0 +1,11 @@
+# Ownership of every path in this repository.
+#
+# GitHub never requests review from a pull request's own author, so this
+# assigns nothing on Bertan's own PRs. It exists to route contributions from
+# forks of this public repository, and to state ownership explicitly.
+#
+# Do not pair this with branch protection's "Require review from Code Owners":
+# a sole owner who authors every PR cannot approve their own, and the rule
+# would make every PR into main unmergeable without an admin override.
+
+* @bgunyel
