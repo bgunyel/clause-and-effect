@@ -765,9 +765,15 @@ done
 # after the source, and a trace written into the record (round 3). Each fix
 # was a guard, and each guard was more program for the next state to reach.
 # So the program went instead:
-#   - The names the child starts with are the same two listings, `declare -F`
-#     and `declare -p`, written to fd 4 before the source, in a shell nothing
-#     has touched.
+#   - The names the child starts with are `declare -F` and `compgen -v`,
+#     written to fd 4 before the source, in a shell nothing has touched. The
+#     variables are `compgen -v`'s, the listing the child before #279 took
+#     both sides from, and not `declare -p`'s: the two disagree about bash's
+#     starting set in both directions. `declare -p` lists OLDPWD, declared and
+#     unset, so a file that changed directory had it left out of the record;
+#     and it prints SECONDS, RANDOM and COMP_WORDBREAKS with no value, so a
+#     rule over its text that dropped OLDPWD let those in (round 6 of the
+#     review of PR #330, which measured both).
 #   - Everything after the source is on the source's own line, one brace
 #     group, which bash parses whole before the file runs: no alias the file
 #     defines reaches any of it.
@@ -797,7 +803,7 @@ done
 # byte for byte the one the child before #279 writes -- 42,534 and 72,227
 # bytes on the merge of dev-05 at 1486270, whose tokeniser #202 grew by 427
 # lines, and 46,585 and 72,227 at df17124, in round 4 of that review.
-LOADED_CHILD='\declare -F >&4 && \printf "e:\n" >&4 && \declare -p >&4 && \printf "e:\n" >&4 || \exit 3
+LOADED_CHILD='\declare -F >&4 && \printf "e:\n" >&4 && \compgen -v >&4 && \printf "e:\n" >&4 || \exit 3
 { . "$1" 3>&- 4>&- 5>&- 6>&- 7>&- >/dev/null 2>&1; \printf "%s" "$?" >&3; \enable declare; \declare -F >&5 && \declare -f >&6 && \declare -p >&7 && \printf "e:\n" >&7; } 2>/dev/null'
 declare -A LOADED_FROM=() LOADED_STATUS=()
 for f in "$SUITE_DIR/checks/$SUITE_LIBRARY" "$HOOKS/lib/command-scan.sh"; do

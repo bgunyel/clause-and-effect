@@ -74,54 +74,58 @@ requirement GH-279.1 <<'REQ'
   permitting one, and gives this entry its kind. When #279 was filed, the
   reviewer probed the 26 registry rows then applicable that mutate the
   tokeniser, and each sourced with status 0, so neither had fired. Measured
-  again on the merge of dev-05 at 1486270, once #202 had grown it: 83 rows
-  name the tokeniser, 82 of them change it, and every one of those but
-  tokeniser-sources-non-zero sources with status 0. A child that did not
-  finish leaves no record, and its row is what fails the run; a file that
-  turns on `set -e` and then fails ends the child before it writes a status,
-  and its row says so. Review of PR #330 found the rest on this branch, each
-  measured. Round 1: the two fixture guards had been loosened to ask only that
-  a name was defined, so a copy its builder broke passed them; and a file that
-  left IFS changed gave a record the child called whole while it lacked names,
-  which the sweep of that class found nullglob, nocasematch, an EXIT trap and
-  an alias of `declare` doing too. Round 2 found the class inside that fix --
-  the child's own variables, and builtins disabled with `enable -n` -- and
-  round 3 inside the next: `exit` aliased under every guard written after the
-  source, and a trace written into the record. Each fix had been a guard, and
-  each guard more program for the next state to reach, so round 3 took the
-  program out of the child instead. Round 4 found the reader of its dumps
-  stricter than bash: it refused what `declare -f` prints for an exported,
-  readonly or traced function, and for one written with redirections, each of
-  which the child before #279 recorded; it reads both now, and records each as
-  that child did. What the child does not reach, named: a record forged on
-  purpose -- a status and a dump in bash's shape, written through the
-  descriptors bash saves 3 to 7 at while the file is sourced, from a DEBUG
-  trap that outlives the source or an EXIT trap, or by a function the file
-  defines under the name of a builtin the child calls, `declare`, `enable` or
-  `printf`, which is the head's shadowed-builtin limit -- since these checks
-  stop mistakes and not adversaries; a name bash itself starts with, `OPTIND`
-  or `PS4` say, which a file assigns, since the child compares against the
-  names it started with and that was so before #279 too; a heredoc in a
-  function's body that holds a `}` line and then a line that is the next
-  function's header, which cuts the function there and gives the next one its
-  tail, so that the foot reads both as redefined -- the other order, the
-  header first, is refused -- and the rest of what a heredoc in a body can do
-  to the reader, which is #363's; a variable declared with no value, which is
-  not recorded, as `compgen -v` did not list it for the child before #279
-  (round 5 made the two agree); and any state a file can leave in the child's
-  shell that no fixture here drives. `set -e`, `set -u` and posix mode left at
-  the end of a file were probed and changed no record; no fixture holds that.
+  again on the merge of dev-05 at 1486270, once #202 had grown it: 83 rows name
+  the tokeniser, 82 of them change it, and every one of those but
+  tokeniser-sources-non-zero sources with status 0. A child that did not finish
+  leaves no record, and its row is what fails the run; a file that turns on
+  `set -e` and then fails ends the child before it writes a status, and its row
+  says so. Review of PR #330 found the rest on this branch, each measured.
+  Round 1: the two fixture guards had been loosened to ask only that a name was
+  defined, so a copy its builder broke passed them; and a file that left IFS
+  changed gave a record the child called whole while it lacked names, which the
+  sweep of that class found nullglob, nocasematch, an EXIT trap and an alias of
+  `declare` doing too. Round 2 found the class inside that fix -- the child's
+  own variables, and builtins disabled with `enable -n` -- and round 3 inside
+  the next: `exit` aliased under every guard written after the source, and a
+  trace written into the record. Each fix had been a guard, and each guard more
+  program for the next state to reach, so round 3 took the program out of the
+  child instead. Round 4 found the reader of its dumps stricter than bash: it
+  refused what `declare -f` prints for an exported, readonly or traced
+  function, and for one written with redirections, each of which the child
+  before #279 recorded; it reads both now, and records each as that child did.
+  Round 6 found the child's starting variables taken from `declare -p`, which
+  lists OLDPWD declared and unset where `compgen -v` does not, so a file that
+  changed directory had OLDPWD left out of its record; they are `compgen -v`'s
+  now, as that child's were. What the child does not reach, named: a record
+  forged on purpose -- a status and a dump in bash's shape, written through the
+  descriptors bash saves 3 to 7 at while the file is sourced, from a DEBUG trap
+  that outlives the source or an EXIT trap, or by a function the file defines
+  under the name of a builtin the child calls, `declare`, `enable` or `printf`,
+  which is the head's shadowed-builtin limit -- since these checks stop
+  mistakes and not adversaries; a name bash itself starts with, `OPTIND` or
+  `PS4` say, which a file assigns, since the child compares against the names
+  it started with and that was so before #279 too; a heredoc in a function's
+  body that holds a `}` line and then a line that is the next function's
+  header, which cuts the function there and gives the next one its tail, so
+  that the foot reads both as redefined -- the other order, the header first,
+  is refused -- and the rest of what a heredoc in a body can do to the reader,
+  which is #363's; a variable declared with no value, which is not recorded, as
+  `compgen -v` did not list it for the child before #279 (rounds 5 and 6 made
+  the two agree); and any state a file can leave in the child's shell that no
+  fixture here drives. `set -e`, `set -u` and posix mode left at the end of a
+  file were probed and changed no record; no fixture holds that.
 REQ
 requirement GH-279.2 <<'REQ'
 - text: The end-of-run file's last check before the matrix derives the rows the
   ledger has to end on from the verdict code the driver ends on -- the heading
   question's row, then one for each clause of the final verdict that writes
-  one, in order -- and compares each row's tags and label. Which clauses write
-  a row is a table beside the derivation: each clause of FOOT_VERDICT_CODE
-  writes one; SOURCED_VERDICT_CODE and LEDGER_VERDICT_CODE write none, and each
-  is held to the one clause it has. A verdict variable, a clause, or a place
-  that sets the failure outside a clause of its own, that the table does not
-  know, is red until the table says what it writes.
+  one, in order -- and compares each row's tags, and the label of each row that
+  passed. Which clauses write a row is a table beside the derivation: each
+  clause of FOOT_VERDICT_CODE writes one; SOURCED_VERDICT_CODE and
+  LEDGER_VERDICT_CODE write none, and each is held to the one clause it has. A
+  verdict variable, a clause, or a place that sets the failure outside a clause
+  of its own, that the table does not know, is red until the table says what it
+  writes.
 - from: #279
 - kind: defect-permitting
 - status: active
@@ -138,6 +142,12 @@ requirement GH-279.2 <<'REQ'
   failure without naming FAILED on its line, through another variable or text
   it evaluates. A clause written as `if` over more than one line is counted
   as a line outside a clause of its own, and is red, not missed.
+  A row that failed is read by its tags and not its label, since the label a
+  clause writes when it fails carries the failure's detail, and the table
+  knows the one it writes when it passes; reading both made a failing verdict
+  row fail this check too, under requirements that did nothing wrong (round 6
+  of the review of PR #330). What that lets by, named: a FAIL row standing in
+  for another row of its tag, which the run is red on all the same.
 REQ
 requirement GH-279.3 <<'REQ'
 - text: Every block of verdict fixtures -- the rows that drive the final
@@ -373,6 +383,23 @@ tok 'a trailer-shaped line in a heredoc, before its function closes, stays in th
     "$( ( declare -A LOADED_BODY=() LOADED_FROM=() LOADED_STATUS=()
           record_loaded "$R279/heredoc-trailer.sh" "$R279/record" > /dev/null 2>&1
           printf '%s' "${LOADED_BODY[r279_h]}" ) )"
+# Round 6: the variables the child starts with are `compgen -v`'s, as the
+# child before #279's were. Taken from `declare -p`, they held OLDPWD, which
+# bash starts declared and unset, so a file that changed directory had OLDPWD
+# left out of its record and never compared. And a rule over `declare -p`'s
+# text that dropped OLDPWD dropped SECONDS, RANDOM and COMP_WORDBREAKS too,
+# which it prints with no value, so a file that assigned them had them
+# recorded where that child did not. Each row is what that child records.
+printf '%s\n' 'r279_a() { :; }' 'cd /' > "$R279/start-oldpwd.sh"
+printf '%s\n' 'r279_a() { :; }' 'SECONDS=5' 'RANDOM=3' 'COMP_WORDBREAKS=x' 'FUNCNAME=x' \
+  'false | true' > "$R279/start-dynamic.sh"
+tok 'a file that changes directory has OLDPWD recorded, which bash starts declared and unset' \
+'status 0
+recorded $OLDPWD from start-oldpwd.sh
+recorded r279_a from start-oldpwd.sh' "$(r279_loaded "$R279/start-oldpwd.sh")"
+tok 'and one that assigns bash'"'"'s own SECONDS, RANDOM, COMP_WORDBREAKS, FUNCNAME and PIPESTATUS has none of them recorded' \
+'status 0
+recorded r279_a from start-dynamic.sh' "$(r279_loaded "$R279/start-dynamic.sh")"
 # What a file can still do by mistake, and each is a FAIL row: leave the child
 # no way to dump, as `declare` and `enable` both disabled do; the same under an
 # EXIT trap that makes the child's status 0, which the missing marker gives
@@ -421,7 +448,7 @@ r279_dump() {  # r279_dump <before> <names> <functions> <variables> -- record_du
     printf 'recorded %s as %s\n' "$k" "$v"
   done < "$R279/d"
 }
-R279_BEFORE=$'declare -f r279_pre\ne:\ndeclare -- R279_PRE="1"\ne:\n'
+R279_BEFORE=$'declare -f r279_pre\ne:\nR279_PRE\ne:\n'
 R279_NAMES=$'declare -f r279_a\ndeclare -f r279_pre\n'
 R279_FNS=$'r279_a () \n{ \n    :\n}\nr279_pre () \n{ \n    :\n}\n'
 R279_VARS=$'declare -A R279_EMPTY\ndeclare -- BASH_R279="1"\ndeclare -- R279_PRE="1"\ndeclare -r R279_V="1"\ndeclare -- _="x"\ne:\n'
@@ -433,11 +460,13 @@ recorded r279_a as r279_a ()
 }
 recorded $R279_V as R279_V="1"' "$(r279_dump "$R279_BEFORE" "$R279_NAMES" "$R279_FNS" "$R279_VARS")"
 tok 'starting names that do not end in e: are refused' \
-    'status 1: starting names' "$(r279_dump $'declare -f r279_pre\ne:\ndeclare -- R279_PRE="1"\n' "$R279_NAMES" "$R279_FNS" "$R279_VARS")"
+    'status 1: starting names' "$(r279_dump $'declare -f r279_pre\ne:\nR279_PRE\n' "$R279_NAMES" "$R279_FNS" "$R279_VARS")"
 tok 'and so are starting names with no listing of variables' \
     'status 1: starting names' "$(r279_dump $'declare -f r279_pre\ne:\n' "$R279_NAMES" "$R279_FNS" "$R279_VARS")"
-tok 'and a starting name that is not a declaration' \
-    'status 1: starting names' "$(r279_dump $'+ declare -F\ne:\ndeclare -- R279_PRE="1"\ne:\n' "$R279_NAMES" "$R279_FNS" "$R279_VARS")"
+tok 'and a starting function name that is not a declaration' \
+    'status 1: starting names' "$(r279_dump $'+ declare -F\ne:\nR279_PRE\ne:\n' "$R279_NAMES" "$R279_FNS" "$R279_VARS")"
+tok 'and a starting variable that is not a name, as a declaration is not' \
+    'status 1: starting names' "$(r279_dump $'declare -f r279_pre\ne:\ndeclare -- R279_PRE="1"\ne:\n' "$R279_NAMES" "$R279_FNS" "$R279_VARS")"
 tok 'a function name that is not a declaration is refused' \
     'status 1: function names' "$(r279_dump "$R279_BEFORE" $'declare -f r279_a\nr279_pre\n' "$R279_FNS" "$R279_VARS")"
 tok 'text before the first function is refused' \
@@ -551,6 +580,21 @@ $R279_TAIL
 the ledger ends:
 $(sed '$d' <<< "$R279_TAIL")
 $(printf '%s\t%s' GH-204.5 'another GH-204.5 row')" "$(verdict_tail_read "$R279/driver" "$R279/tail-swapped")"
+# A verdict row that failed, which writes the label its failure carries and
+# not the one derived: the run is red on that row, and this one reads its tags
+# alone (round 6 of the review of PR #330). Under another tag it is red.
+sed '$d' "$R279/tail-ledger" > "$R279/tail-failed"
+printf '%s\t%s\t%s\t%s\n' GH-204.5 static FAIL 'the not-found record was moved during the run' >> "$R279/tail-failed"
+sed '$d' "$R279/tail-ledger" > "$R279/tail-failed-tag"
+printf '%s\t%s\t%s\t%s\n' GH-204.1 static FAIL 'the not-found record was moved during the run' >> "$R279/tail-failed-tag"
+tok 'a verdict row that failed, under its own tag and the label its failure writes, reads as matching' \
+    '' "$(verdict_tail_read "$R279/driver" "$R279/tail-failed")"
+tok 'and under another tag it is red' \
+"derived:
+$R279_TAIL
+the ledger ends:
+$(sed '$d' <<< "$R279_TAIL")
+$(printf '%s\t%s' GH-204.1 'the not-found record was moved during the run')" "$(verdict_tail_read "$R279/driver" "$R279/tail-failed-tag")"
 # A clause added to the verdict code, in a subshell of its own: the ledger
 # above, which ends as the unchanged verdict derives, is red against it.
 tok 'a clause added to the final verdict with no row known for it is named, and the ledger no longer matches' \

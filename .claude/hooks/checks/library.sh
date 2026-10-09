@@ -1128,8 +1128,9 @@ record_chunk() {  # record_chunk <out> <name> <chunk> <started-with> -- 1 when <
 # file left in its shell has a program to act on; the reading is done here,
 # where the file never ran. Every line of every dump has to be accounted for,
 # or the record is not made and <out> is left empty: the names the child
-# started with are the same two listings, each ended by `e:`; each function name is a line `declare -f<flags>
-# <name>`; the functions are cut at each name's header, `<name> () `, in the
+# started with are its functions, each a line `declare -f<flags> <name>`, and
+# its variables, each a line `<name>` as `compgen -v` lists it, each listing
+# ended by `e:`; each function name is a line `declare -f<flags> <name>`; the functions are cut at each name's header, `<name> () `, in the
 # order the names came, and each has to end on its closing line, `}` or `}`
 # and its redirections, which a line `declare -f<flags> <name>` may follow for
 # the function it closes; and each variable is a line `declare -<flags>
@@ -1140,7 +1141,14 @@ record_chunk() {  # record_chunk <out> <name> <chunk> <started-with> -- 1 when <
 # Written to <out> as the child before this wrote it: `<name>` and `$<name>`,
 # each with its definition, NUL after each; a name the child started with,
 # `_`, `BASH_*` and a variable declared with no value left out, the last as
-# `compgen -v` left it out for that child (round 5 of the review of PR #330). What it does not reach, named: a function whose
+# `compgen -v` left it out for that child (round 5 of the review of PR #330).
+# The two sides of that are read by one rule each, and they agree: a variable
+# a file sets has a value, which is what `compgen -v` lists, and the variables
+# `declare -p` prints with no value while `compgen -v` lists them -- SECONDS,
+# RANDOM, COMP_WORDBREAKS and bash's other dynamic ones -- are in every
+# child's starting names, so the `=` rule never meets them (round 6, which
+# found OLDPWD left out while the starting names were `declare -p`'s, as the
+# driver says beside $LOADED_CHILD). What it does not reach, named: a function whose
 # body holds a heredoc line that is the next function's header and a `}` line
 # before it, which cuts there; and a variable whose value holds a newline,
 # should a bash print one unquoted. Prints which dump, and returns 1, when one
@@ -1155,7 +1163,7 @@ record_dump() {  # record_dump <out> -- <out> from the dumps the child wrote bes
 # or removes, so that neither a refused record nor its part is left beside
 # <out> (round 5 of the review of PR #330).
 record_read() {  # record_read <out> -- <out>.part from the dumps beside <out>; 1 and which dump on stdout when one is not whole
-  local line name chunk listing=functions k=-1 fn_re='^declare -f[a-z]* (.+)$' trailer_re='^declare -f[a-z]+ (.+)$' var_re='^declare -[a-zA-Z-]+ ([A-Za-z_][A-Za-z0-9_]*)(=|$)'
+  local line name chunk listing=functions k=-1 fn_re='^declare -f[a-z]* (.+)$' trailer_re='^declare -f[a-z]+ (.+)$' name_re='^[A-Za-z_][A-Za-z0-9_]*$' var_re='^declare -[a-zA-Z-]+ ([A-Za-z_][A-Za-z0-9_]*)(=|$)'
   local -a lines=() names=()
   local -A was_f=() was_v=()
   : > "$1.part"
@@ -1164,8 +1172,8 @@ record_read() {  # record_read <out> -- <out>.part from the dumps beside <out>; 
   unset 'lines[-1]'
   for line in "${lines[@]}"; do
     if [ "$listing" = variables ]; then
-      [[ $line =~ $var_re ]] || { printf 'starting names'; return 1; }
-      was_v[${BASH_REMATCH[1]}]=1
+      [[ $line =~ $name_re ]] || { printf 'starting names'; return 1; }
+      was_v[$line]=1
     elif [ "$line" = e: ]; then
       listing=variables
     else
@@ -1315,11 +1323,25 @@ verdict_tail_want() {  # verdict_tail_want <driver> -- "<tags> TAB <label>" of e
     done < <(sed -n 's/^if \(.*\); then$/\1/p' <<< "$code")
   done
 }
+# Each row's tags are read, and its label when it passed. The table knows the
+# label a clause writes when it passes and not the one it writes when it
+# fails, which carries the failure's own detail, so a verdict row that failed
+# made this row fail too, under requirements that did nothing wrong (round 6
+# of the review of PR #330). A FAIL row's label is not read: the run is red on
+# that row already, so not reading it permits nothing, and a FAIL row standing
+# in for another of its tag is the one thing it lets by.
 verdict_tail_read() {  # verdict_tail_read <driver> <ledger> -- nothing when the ledger ends on the rows derived, else both
-  local want got
+  local want got i tags result label
+  local -a wants=() rows=()
   want=$(verdict_tail_want "$1")
-  got=$(tail -n "$(printf '%s\n' "$want" | wc -l)" "$2" | cut -f1,4)
-  [ "$want" = "$got" ] || printf 'derived:\n%s\nthe ledger ends:\n%s' "$want" "$got"
+  mapfile -t wants <<< "$want"
+  mapfile -t rows < <(tail -n "${#wants[@]}" "$2" | cut -f1,3,4)
+  got=$(tail -n "${#wants[@]}" "$2" | cut -f1,4)
+  for i in "${!wants[@]}"; do
+    IFS=$'\t' read -r tags result label <<< "${rows[i]}"
+    [ "$tags" = "${wants[i]%%$'\t'*}" ] && { [ "$result" = FAIL ] || [ "$label" = "${wants[i]#*$'\t'}" ]; } \
+      || { printf 'derived:\n%s\nthe ledger ends:\n%s' "$want" "$got"; return; }
+  done
 }
 
 # THE VERDICT FIXTURES, ENUMERATED BY WHERE THEY STAND (#279). The rows that

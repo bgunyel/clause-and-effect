@@ -2338,9 +2338,11 @@ fi
 # by another of its tag, and a clause added to the verdict with no row, both
 # read green (#279). They are derived from the verdict code the driver ends on
 # now, and which clauses write a row is a table beside the derivation: see
-# `verdict_tail_want` in the library.
+# `verdict_tail_want` in the library. A row that failed is read by its tags
+# alone, since its label carries the failure's detail and the run is red on it
+# already (round 6 of the review of PR #330); see `verdict_tail_read`.
 req GH-204.1 GH-204.5 GH-204.8 GH-279.2
-tok 'the heading question and each clause of the final verdict that writes a row end the ledger, in order, each under its own requirement and its own label' \
+tok 'the heading question and each clause of the final verdict that writes a row end the ledger, in order, each under its own requirement, and under its own label where it passed' \
     '' "$(verdict_tail_read "${SUITE_FILES[0]}" "$LEDGER")"
 
 # --matrix: every requirement, from the record as it stands now, the findings
