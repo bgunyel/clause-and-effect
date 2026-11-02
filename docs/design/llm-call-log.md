@@ -376,14 +376,30 @@ code after it works is usually cheaper than promoting it during, but the socket
 patch reads the contextvar and imports from wherever the wrapper lands, so
 lifting afterwards would mean touching the patch too. The lift went first.
 
-The product path is **synchronous**: `generator.py:83,99` and `main_dev.py:39`
-call `.invoke()`, and `ComplianceAgent.ask()` is a sync method. So the wrapper
-has two entry points, `llm_call()` and `llm_call_sync()`, sharing one recording
-path — `recorder.record_call_sync` is the second one's half and exists already.
-**`llm_call_sync()` itself is not built**, and its first call site is blocked on
-a decision: `generator.py:99` makes a second billed model call per product
-answer and discards the result, so wiring the wrapper there would log a call
-that should not exist.
+The product path is **synchronous**: `generator.py` calls `.invoke()`, and
+`ComplianceAgent.ask()` is a sync method. So the wrapper has two entry points,
+`llm_call()` and `llm_call_sync()`, sharing one recording path —
+`recorder.record_call_sync` is the second one's half and exists already.
+**`llm_call_sync()` itself is not built.**
+
+Its first call site **was** blocked on a decision and no longer is. Today
+`generator.py` makes **two** billed model calls per product answer — a plain
+`invoke` and a structured one — and discards the first one's result, so wiring
+the wrapper there as it stands would log a call that should not exist. **Decision
+— Bertan, 2026-09-05** ([#8](https://github.com/bgunyel/clause-and-effect/issues/8)):
+finish the migration rather than revert it. After it, `generator.py` holds
+**one** invocation, the structured one, with `stage='generate'`, and that is the
+call `llm_call_sync()` wraps. The migration is build work and has not landed, so
+until it does this paragraph describes the decided target and the code still
+holds both calls; the two are out of step on purpose, and a reader counting
+`.invoke()` in `generator.py` today will find two.
+
+`main_dev.py` is **not** a call site the wrapper should reach. Its
+`llm.invoke("Give me information about Ankara.")` is a scratch smoke call in a
+living development file and is deliberately left unwrapped, so once the socket
+patch exists **every development run is expected to write an `llm_attempt` row
+with a null `call_id`**. That is the nullable `call_id` doing its job, not a
+bypass to close.
 
 The socket patch needs no such split — it wraps both `httpx.AsyncClient.send`
 and `httpx.Client.send`.
@@ -755,7 +771,8 @@ entry point has to remember to open one.
 |---|---|---|
 | `call_id` | generated uuid | what the contextvar carries |
 | `run_id` | the run | |
-| `stage`, `case_id` | call site | **nullable** — they are eval concepts and the product path has neither |
+| `stage` | call site | **nullable** — which call site made the call; not an eval concept (see below) |
+| `case_id` | call site | **nullable** — an eval concept, and the product path has none |
 | `model`, `channel` | the config entry | `channel` is the `structured_output` mode |
 | `llm_server` | the config entry | `LlmServers.value` — who we bought the call from, **not** who ran it |
 | `requested_provider` | the config entry | the routing constraint we sent, as JSON |
@@ -769,6 +786,20 @@ entry point has to remember to open one.
 | `error_type`, `error_message` | wrapper | |
 | `metadata` | call site | JSONB, for whatever a site knows that has no column |
 | `created_at`, `updated_at` | the database | **departure 4** |
+
+**Decision — Bertan, 2026-09-05: `stage` names the call site, not a position in
+the judge's protocol** ([#8](https://github.com/bgunyel/clause-and-effect/issues/8)).
+It always did. The protocol has three stages, A→B→C, and the judge's call sites
+already pass **five** labels, because `A1` and `A2` are call sites inside one logical
+stage rather than stages of their own: `stage_a.py` passes `"A"`, `stage_a1.py`
+`"A1"`, `stage_a2.py` `"A2"`, `stage_b.py` `"B"` and `stage_c.py` `"C"`. The
+product path's one call will pass `stage='generate'` once `llm_call_sync()` is
+built. `call_site` would be the more accurate name; it was not bought, because
+`llm_call` is wired at all five judge stages and the rename is an Alembic
+migration bought for a naming improvement. The name is kept and paid
+for with this definition instead. Nullability is unchanged — what was wrong was
+the reason the table gave for it, not the word — so `stage` stays nullable for a
+call site that names nothing, and no migration follows from the correction.
 
 **`llm_attempt`** — one row per upstream HTTP request, written by the socket
 patch. **This is the table that says what a call actually cost.**
