@@ -50,6 +50,17 @@ only agree or disagree with what was already claimed. Every assertion in the
 check suite, `.claude/hooks/check-hooks.sh` and the files it sources, is a check.
 _Avoid_: probe, test
 
+**Header condition**:
+Whether a request, as it was actually sent, asked OpenRouter for routing
+metadata. It belongs to one request, not to a run or a date: a run that adopted
+the capture seam can still send a headerless request, and a request the seam
+never saw cannot be assumed to carry the header. So a comparison across
+conditions reads the condition per request and never infers it from when the
+request was made. It is not the **observation state**, which says where a
+recorded served provider was read from — a request can carry the header and the
+response still omit what the header asked for (#34).
+_Avoid_: header state, request condition
+
 **History entry**:
 A file under one of the append-only directories — `docs/dev-log/`,
 `docs/lessons-learned/`, `docs/eval-reports/` — that is present on the active
