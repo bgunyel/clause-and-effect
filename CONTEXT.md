@@ -8,6 +8,15 @@ repository, not in advance of one.
 
 ## Language
 
+**Acceptance rate**:
+For one `(model, channel, provider)` cell, the share of the calls that provider
+**served** which came back structurally clean. Its denominator is the calls the
+provider served, never the calls in which it was offered — that is pool
+exposure. It is the rate a rule-in or rule-out is judged on. A pool holding one
+provider leaves it fully identified, because a served call can still fail; what
+a one-provider pool removes is the pin's choice, not the rate.
+_Avoid_: selection rate, routing propensity
+
 **Active dev branch**:
 The single `dev-NN` branch that work lands on today. A worktree branch is
 proposed into it by pull request; it reaches `main` only through a pull request
@@ -88,6 +97,16 @@ issue file names who wrote it, so its checks may carry any requirement's tags.
 It is not a section, which is a heading in the suite's output that rows from
 several issue files may sit under.
 _Avoid_: family, section
+
+**Pool exposure**:
+The number of calls in which a provider was among the endpoints the router
+offered — the candidate pool, read per attempt. It says whether a provider
+*could* have served a call, and so whether its acceptance cell is testable at
+all. It is not the denominator of an acceptance rate: a provider offered in 100
+pools and served in 3 has an exposure of 100 and three observations. The number
+of distinct providers across a cell's observed pools is what decides whether a
+pin is a choice at all — with one, there is no alternative to pin away from.
+_Avoid_: denominator, acceptance
 
 **Probe**:
 An empirical measurement whose answer is not known until it runs. Each
