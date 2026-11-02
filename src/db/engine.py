@@ -40,30 +40,59 @@ numbers have their reasons attached rather than looking arbitrary:
 - **``pool_timeout`` 10s**, down from SQLAlchemy's default of 30. An exhausted
   pool is a stalled write, and a write that must not stall a run may not wait
   three times longer than the query it is waiting to make.
-- **``pool_pre_ping`` and ``pool_recycle`` 300s**, because a serverless host
-  drops idle connections and a stale one surfaces as a failed write rather
-  than as a reconnect.
+- **``pool_pre_ping``, because a serverless host drops idle connections** and
+  a stale one surfaces as a failed write rather than as a reconnect. Kept
+  ``True`` on both engines, on the argument below.
+- **``pool_recycle`` 300s bounds connection *age*, not idle time**, and does
+  not cover the same failure. Verified against SQLAlchemy's source rather than
+  assumed: ``_ConnectionRecord`` tests ``time.time() - starttime > _recycle``
+  and ``starttime`` is stamped when the connection is opened, so a connection
+  that idled 280 seconds inside its first 300 is never recycled. The idle drop
+  is the case only ``pool_pre_ping`` covers; the two are not redundant.
 
 **The round trip, measured 2026-08-26** against the live instance from this
 machine, ``aws-0-eu-central-2``. The design quotes 0.012 ms median for a local
 SQLite row as the *shape* of an argument and explicitly not as a stand-in for
 this; the real figure is four orders of magnitude larger, and how it is spent
-turns out to matter more than the network:
+turns out to matter more than the network. These figures are ``SELECT 1`` and
+a two-column ``UPDATE``:
 
 | one statement, connection already open        |  47 ms | 1 round trip  |
 | checkout + statement, implicit BEGIN/ROLLBACK | 141 ms | 3 round trips |
 | checkout + statement, ``AUTOCOMMIT``          |  48 ms | 1 round trip  |
 | checkout + statement, ``AUTOCOMMIT`` + pre-ping| 202 ms | ~4 round trips |
 
-Two consequences for the layer above, neither of which this module decides.
-**A single-row insert wrapped in an implicit transaction costs three round
-trips for one statement** — so a repository writing one row should say
-``AUTOCOMMIT`` and a repository writing a call plus its attempts should batch
-them into one transaction, and the difference between those two is 100 ms per
-call. **``pool_pre_ping`` costs about 155 ms per checkout here**, which over a
-150-call stability sample is around 23 seconds of wall clock buying protection
-against a stale connection. That trade was decided (decision 20) before the
-number existed; the number is recorded here so it can be revisited on evidence.
+**One consequence for the layer above, which this module does not decide.** A
+single-row insert wrapped in an implicit transaction costs three round trips
+for one statement — so a repository writing one row should say ``AUTOCOMMIT``
+and a repository writing a call plus its attempts should batch them into one
+transaction, and the difference between those two is 100 ms per call.
+
+**The pre-ping row above is superseded.** It was repeated once the repositories
+existed, against the real 23-column ``llm_call`` row with its JSONB and its
+NUMERIC — 20 samples, median. This is the generation of the figure that
+:mod:`src.db.repos.call_log` and design §*The remote figure* carry:
+
+| connection already open, no checkout       | 46.8 ms |
+| checkout + insert, ``pool_pre_ping=False`` | 47.7 ms |
+| checkout + insert, ``pool_pre_ping=True``  | 91.1 ms |
+
+**``pool_pre_ping`` costs 43.4 ms per write**, about 6.5 seconds over a
+150-call run — a quarter of the 23 seconds the ``SELECT 1`` figure implied, and
+under one percent of a panel that has been seen to take 19 minutes. **That
+trade is settled, not open**: Bertan, 2026-09-04, on the corrected figure. What
+decided it was not the size of the loss but the **direction** of it. A
+connection's idle gap before call *N*'s write approximates the duration of call
+*N*, so the longer a call takes the likelier its connection was dropped, and an
+unprotected pool would lose the rows of the *slowest* calls by preference —
+thinning the evidence hardest in the retry storms and worst cases this log was
+commissioned to measure. What such a loss costs is bounded: a failed write is
+caught, counted in :data:`~src.db.repos.ledger.LEDGER` and reported, so what
+goes missing is *which* row and what was in it, never the fact that something
+went missing. An idle-aware conditional ping — a ``checkin``/``checkout``
+listener pair stamping the return time and pinging only past a threshold — was
+considered and rejected: custom pool code in the half of the repository held to
+the strict standard, in exchange for a share of 6.5 seconds.
 
 Trap 6: **``DB_URL`` is a secret and contains a password.** It is never logged.
 Every message here names :func:`safe_target` — host, port and database — and
