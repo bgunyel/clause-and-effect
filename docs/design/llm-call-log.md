@@ -483,12 +483,35 @@ The cost is stated rather than glossed. A process-wide patch of
 `httpx.AsyncClient.send` / `httpx.Client.send` is a monkey-patch: it is
 sensitive to httpx's internals, it affects every HTTP client in the process
 rather than only the model ones, and a library upgrade can break it silently.
-Three things contain that:
+Four things contain that:
 
 1. It is installed from **one** place, by an explicit call at an entry point,
    not on import.
-2. It filters on the completions path and forwards everything else untouched.
-3. `scripts/probe_wire_params.py` already establishes the same technique in this
+2. **It selects on exact host and path, and passes everything else on
+   unchanged.** The table has one row, `openrouter.ai` +
+   `/api/v1/chat/completions`, with the host matched by `url.host` equality and
+   not by a substring or a path suffix
+   ([#15](https://github.com/bgunyel/clause-and-effect/issues/15),
+   [#14](https://github.com/bgunyel/clause-and-effect/issues/14)). An unmatched
+   request is not altered, only counted. The table applies only to what reaches
+   the patch, and that is decided first, by **distribution**: `openai` 3.8.0 and
+   `anthropic` 1.3.0 import `httpx2` 2.12.0, while `openrouter` 0.11.46 and
+   `groq` import plain `httpx` 0.28.1 (measured 2026-09-05, #15). So a
+   plain-`httpx` patch never sees the first two, whatever path they call.
+3. **A matched request is not passed on unchanged: it is mutated.** The socket
+   adds `X-OpenRouter-Metadata: enabled` to an OpenRouter completion that carries
+   neither that header nor the legacy `X-OpenRouter-Experimental-Metadata`, and
+   it never overwrites one a caller set
+   ([#14](https://github.com/bgunyel/clause-and-effect/issues/14),
+   [#34](https://github.com/bgunyel/clause-and-effect/issues/34)). Mutation has a
+   predicate of its own, `mutate(r) ⟺ capture(r) ∧ openrouter(r)`. It is kept
+   apart from the capture predicate because the two fail in opposite
+   directions: capture fails open, so under-capture is silent, and mutation
+   fails closed, so a stray header would shape traffic. With today's one-row
+   table the two select the same requests. **The patch is therefore not
+   read-only**, but what it writes is bounded by what it captures, so a request
+   it does not capture is never changed.
+4. `scripts/probe_wire_params.py` already establishes the same technique in this
    repository, for the same reason — *the socket is the last point the request is
    ours* — so this is an existing pattern rather than a new one.
 
