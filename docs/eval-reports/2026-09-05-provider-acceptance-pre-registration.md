@@ -627,6 +627,135 @@ produced any acquisition row.
 
 ---
 
+# Amendment — an acceptance rate's denominator is the calls its provider served, not pool exposure
+
+| | |
+|---|---|
+| amended | 2026-11-17 |
+| branch | `dev-06` |
+| commit at amendment | `20a52ca2991f` |
+| decided in | [#367 — R-b divides a served-call rate by pool exposure: the amendment it owes](https://github.com/bgunyel/clause-and-effect/issues/367) |
+| written by | [#376](https://github.com/bgunyel/clause-and-effect/issues/376), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | all of R-b, and the clause of R-c that defines *testable* |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). It changes what already-written sentences
+mean, so it owes an old value, and the old value is given in full below. No
+sentence of R-b keeps its meaning. *"`NOT_IN_POOL` is the degenerate case where
+the denominator is zero"* and R-b's heading become false in the other direction:
+`NOT_IN_POOL` still implies a zero denominator, but a zero denominator no longer
+implies `NOT_IN_POOL`. So R-b is amended as one block and is not patched one
+sentence at a time.
+
+**What stands unamended.** §1, §2, R1–R6, §5, the frozen draw, the invariant
+ordering, §8's outcome table, R-a, and every part of R-c except the clause quoted
+below. R-c's named set stays frozen at what R1 named, and the gap between named
+and testable is still always shown. This amendment moves only the quantity that
+the correction is taken over.
+
+## The old value
+
+R-b, verbatim. Its heading is set in bold so that this quote does not create a
+second anchor:
+
+> **R-b. `NOT_IN_POOL` is a denominator of zero, not a category**
+>
+> > Each cell's denominator is the number of calls in which its provider appeared
+> > in the pool. A cell present in *some* pools and not others is **not**
+> > `NOT_IN_POOL`; it is a cell with a smaller effective n. `NOT_IN_POOL` is the
+> > degenerate case where the denominator is zero. A cell with denominator zero is
+> > reported **undefined, never `0/n`**.
+>
+> The binary would have hidden the partial case, which is the commoner one.
+
+R-c's definition of *testable*, verbatim from inside its first quote:
+
+> — those with denominator > 0 —
+
+## The new value
+
+**R-b, as amended. A cell's denominator is the calls its provider served.**
+
+> Each cell's denominator is the number of calls its provider **served**. Every
+> cell is reported as the triple **(exposure, served, clean)**: the calls whose
+> pool offered its provider, the calls its provider served, and the served calls
+> that were structure-clean. A zero denominator covers two different states, and
+> each has a name:
+>
+> | state | exposure | served |
+> |---|---:|---:|
+> | `NOT_IN_POOL` | 0 | 0 |
+> | `OFFERED_NOT_SERVED` | > 0 | 0 |
+>
+> A cell in either state is reported **undefined, never `0/n`**. A cell offered
+> in some pools and not others is in neither state merely for that reason: its
+> served count is its effective n, and that count is smaller.
+
+Exposure is kept only to separate the two zero states. It is never a
+denominator. The partial case that the old R-b protected survives in substance:
+a cell offered in only some pools has a smaller served count, and the served
+count is the effective n.
+
+**R-c, as amended. *Testable* means served at least once.** The clause quoted
+above now reads:
+
+> — those served at least once —
+
+The argument for that narrowing is registered here, before the numbers, because
+after them it is indistinguishable from the thing R1 forbids:
+
+> **Whether a provider served a call is observable without seeing any rate, for
+> structure failures.** A structure failure reaches the router as an ordinary
+> 200 response, so it cannot change what the router offers or picks next. A cell
+> that was offered and never served has no observations, so it cannot have looked
+> good or bad, and counting it in the correction loses power and gains no
+> safety. **The argument does not hold for HTTP-level failures**, which can
+> change what the router offers or picks next. The offered count has the same
+> limit, so moving from offered to served does not weaken the argument.
+
+R-c's own argument paragraph is not part of the old value, because none of its
+sentences changes meaning. *"Pool membership is observable without seeing any
+rate"* is still true. It is no longer the whole argument, and the paragraph
+above adds what the served count needs. *"A cell drops out because its provider
+was never served"* was not literally true under the old R-b, which dropped a
+cell only when its provider was never offered. It is literally true now.
+
+## The reason
+
+[#20](https://github.com/bgunyel/clause-and-effect/issues/20) took pool exposure
+as the denominator deliberately. It derived the denominator from its own ruling
+of *"one exposure per provider per call"*, and it located the open question in
+*"whether being offered twice is one exposure or two"*. Its argument for R-c,
+though, spoke of serving: *"a cell drops out because its provider was never
+served"*. That mixes a selection quantity with an acceptance rate.
+[#31](https://github.com/bgunyel/clause-and-effect/issues/31) separated the two.
+It showed that the acceptance rate is a **served-call rate**: §2 rules in on
+*"n = 29 clean observations"*, and §7's positive control is a structure-failure
+rate. Its numerator is structure-clean calls among the calls the provider served.
+An exposure denominator dilutes that rate in the silent direction. In #31's
+words, *"offered in 100 pools, served 3 times with no failures reads 0/100, a
+false rule-in."*
+
+So this is a **change of meaning, not of wording**. R-b said what it meant to
+say, and what it meant was the wrong quantity.
+
+**Not decided here.** What a served call is when no provider is attributed,
+for example a timeout or a failure that carries no router metadata, belongs to
+[#371 — Failures with no served provider: where a timeout lands in the
+acceptance read](https://github.com/bgunyel/clause-and-effect/issues/371). When R-c's m
+is fixed, now that the served-at-least-once count grows across the acquisition
+window, belongs to [#377 — When is R-c's m fixed, if cells reach their declared
+n at different times?](https://github.com/bgunyel/clause-and-effect/issues/377).
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. The only per-provider traffic on record is
+[#22](https://github.com/bgunyel/clause-and-effect/issues/22)'s header A/B, which
+measured distortion, latency and cost and never computed a structure-failure
+rate.
+
+---
+
 # Registration — a channel change makes new cells, and acquisition runs on the roster channel
 
 | | |
@@ -652,8 +781,7 @@ different triple. R6 never moves a row from one triple to another, so under no
 reading do those rows re-test the `function_calling` cell. R6's cause list still
 governs exactly what it did: when the **same** triple may be measured again.
 What nothing above said is where the other rows go, and R-e says it. §1, §2,
-R1–R6, §5, the frozen draw, the invariant ordering, §8's outcome table and R-a to
-R-c all stand as registered.
+R1–R6, §5, the frozen draw, the invariant ordering, §8's outcome table, R-a, and R-b and R-c as amended all stand.
 
 **The trade, recorded.** The argument also applies to R6's *"model change"*. A
 new model slug puts its rows in a different triple as well, which would leave
@@ -669,11 +797,8 @@ switch cannot be told apart from relabelling to fit the result. Written before
 any such row exists, it is a commitment.
 
 **Labels.** R-d is reserved for [Append R-d: what the pin read reports when the
-observed pools hold one provider](https://github.com/bgunyel/clause-and-effect/issues/368),
-which waits on [Append the R-b/R-c amendment: served calls, not pool
-exposure](https://github.com/bgunyel/clause-and-effect/issues/376). R-e and R-f
-are the next free labels, and they are appended before R-d. A label is fixed
-when its ticket is decided, so the order of labels and the order in this file
+observed pools hold one provider](https://github.com/bgunyel/clause-and-effect/issues/368). 
+A label is fixed when its ticket is decided, so the order of labels and the order in this file
 can differ. The index records append order.
 
 ## R-e. A channel change makes new cells, not a re-test
@@ -716,12 +841,9 @@ per model: *every provider OpenRouter lists for model M*. That is channel-blind
 by design. Naming happens before any pool is seen, and the endpoints catalogue
 §5 reads is listed per model, not per request shape. Whether a named provider is
 **testable** is a fact about one cell, read from that cell's own rows under R-c,
-and the rows carry their channel. R-c's test is *denominator > 0* as R-c stands
-today, and becomes *served at least once* when the amendment decided in
-[#367](https://github.com/bgunyel/clause-and-effect/issues/367) is appended. The
-argument holds under either. Under R-f each model has exactly one channel per
-acquisition, so each named `(model, provider)` matches exactly one `(model,
-roster channel, provider)` cell. R1's named set and R-c's testable set then count
+and the rows carry their channel. Under the amendment above, R-c's test is served at least once. Under R-f each 
+model has exactly one channel per acquisition, so each named `(model, provider)` 
+matches exactly one `(model, roster channel, provider)` cell. R1's named set and R-c's testable set then count
 the same cells. A provider the roster channel never routes to is named but not
 testable, and it appears in the named-versus-testable gap that R-c already
 requires to be shown. `BaseTen`, for DeepSeek Flash on `json_schema`, would be
