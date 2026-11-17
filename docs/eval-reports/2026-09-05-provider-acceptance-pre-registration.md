@@ -974,3 +974,257 @@ read](https://github.com/bgunyel/clause-and-effect/issues/371).
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Registration — a no-response attempt is counted beside the rate, never in it
+
+| | |
+|---|---|
+| registered | 2026-11-17 |
+| branch | `dev-06` |
+| commit at registration | `fd9381c619ed` |
+| decided in | [#371 — Failures with no served provider: where a timeout lands in the acceptance read](https://github.com/bgunyel/clause-and-effect/issues/371) |
+| written by | [#384](https://github.com/bgunyel/clause-and-effect/issues/384), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| subject | where an attempt that got no HTTP response lands in the acceptance read, what an organic and a forced acquisition report for it, and the deadline it is read under |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is a registration, not an amendment**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). The guard is applied here, not just the
+label, because four passages above come close to the case and each was read for
+whether it already says what R-g says:
+
+- **R-b, as amended.** A cell's denominator is the calls its provider served. A
+  no-response attempt was served by nobody, so under the amended R-b it was
+  already in no denominator. R-g's first clause says so explicitly and changes
+  nothing R-b means. The triple *(exposure, served, clean)* keeps its three
+  members and their meanings. The forced cell's *timed out* sits beside the
+  triple and is not a fourth member of it.
+- **R-c, as amended.** *Testable* means served at least once. A no-response
+  attempt serves nothing, so it makes no cell testable and leaves m where it was.
+- **R-d's *Why observed*.** It says a call that fails at the HTTP level writes no
+  pool, and that the pin read reports only what the written pools show. R-g
+  counts those attempts. It does not give them a pool or a provider, so R-d's
+  reads are unchanged.
+- **R6.** It permits re-testing a failed cell after *"a config, model, or
+  provider change"*, and a deadline change is a config change. R-g's deadline
+  clause is written for **R-g's own numbers**: the no-response buckets, the
+  forced *timed out* count, and the no-response share that the amendment below
+  gates on. None of those had a decision rule before, so conditioning them on a
+  deadline changes no sentence. For a cell's rule-in, R6 governs a deadline
+  change as written.
+
+Nothing registered or amended so far says what the read does with an attempt
+that no provider answered, so R-g owes no old value. §1, §2, R1–R6, §5, the
+frozen draw, the invariant ordering, §8's outcome table, R-a, R-b and R-c as
+amended, R-d, R-e and R-f all stand. The gate that makes the count matter to a
+pin is a separate append, the amendment that follows this registration, because
+it changes what R4's pressure point already says.
+
+**Labels.** The label R-g was fixed when #371 was decided. Other registrations
+may be appended before it, so the order of labels and the order in this file
+can differ. The index records append order.
+
+## R-g. A no-response attempt is counted beside the rate, never in it
+
+> A **no-response attempt** is an attempt that left the client and got no HTTP
+> response. It names no provider, so it is **never in an acceptance rate's
+> denominator**. The acceptance rate stays a served-call structure rate, as R-b
+> amended defines it.
+>
+> - **Organic acquisition.** Each `(model, channel)` gets an **attempt-level
+>   count** of the attempts whose `served_provider` is still null. Attempts are
+>   reached through `call_id` to their call's `(model, channel)`, and the count
+>   is read only **once enrichment has finished**. It is split into three
+>   buckets: *no response* (`http_status` null), *4xx* and *5xx*. It is printed
+>   **beside every cell of that `(model, channel)`** and is never a denominator.
+> - **Forced acquisition (measurement pin).** Each cell reports a fourth number,
+>   **timed out**, beside *(exposure, served, clean)*. It counts the cell's
+>   no-response attempts under the pin. It is attributed to the **pinned
+>   condition** and is not proven against the provider, because OpenRouter's
+>   queueing sits between the two. Forced and organic counts never pool, as §2
+>   already says of a cell's n.
+> - **The deadline in force.** Acquisition runs under the stack's existing
+>   behaviour, and no new deadline is added for it. The deadline in force,
+>   outer and library-level, is recorded on **every `llm_call` row**, and the
+>   recording exists before the first acquisition call. A deadline that is
+>   absent is recorded as null, never as 0. For R-g's numbers, a run under a
+>   different deadline is a **different condition, not a re-test**, and its
+>   numbers are never pooled with those of another deadline.
+
+**Why outside the rate.** Folding a no-response attempt into the numerator would
+put *"the model answered unusably"* and *"nobody answered"* in one count, and
+only the first is a fact about a provider's output. `src/llm/call.py` already
+draws that line between `STRUCTURE_PROBLEM` and the network-or-provider statuses.
+The amended R-b reaches the same answer from the other side: nobody served the
+attempt, so there is no cell for it to be a failure of.
+
+**Why never out of the read.** Dropping it is the survivorship this registration
+exists to close. The motivating case is concrete. The 2026-08-23 channel
+experiment recorded DeepSeek V4 Flash at **3/6 under `json_schema`**, and all
+three failures were the probe's own 120 s `asyncio.wait_for` cutoff, with no
+response at all. A provider that times out every time would contribute to no
+cell's numerator or denominator, and would read as never having failed. That is
+the survivorship [#11](https://github.com/bgunyel/clause-and-effect/issues/11)
+found for 5xx and auth failures, in its largest form. The organic count absorbs
+#11's cases too, in buckets of their own.
+
+**Why attempts, not calls.** A call that timed out on its first attempt and was
+served clean on its second has `llm_call.status` `OK`. A call-level count would
+not see the timeout at all.
+
+**Why the forced number is attributed to the condition.** Under `only: [X]` with
+no fallbacks, no other provider could have served, so the timeout belongs to the
+cell's condition. It is not proven against X, because a request can wait in
+OpenRouter's queue before X ever sees it. The forced number is a measurement pin
+in the map's own sense: it holds routing fixed to measure something downstream
+of routing, which is legitimate. The config pin is the thing the map rules out.
+
+**Why the deadline is part of the condition.** A timeout exists only relative to
+a deadline. The same provider reads 3/6 under 120 s and 0/6 under no deadline at
+all. A no-response count read without the deadline it was taken under cannot be
+compared with any other count. No new deadline is added, because the map rules
+the retry deadline out until the log holds data: a deadline truncates exactly
+the retry storms whose cost is being counted.
+
+**Why the gate reads `http_status` and not `llm_call.status`.** No timeout the
+stack raises is a `TimeoutError` ([#383](https://github.com/bgunyel/clause-and-effect/issues/383)),
+so every real timeout is logged as `TRANSPORT_PROBLEM` and `CallStatus.TIMEOUT`
+is unreachable. R-g's *no response* bucket is defined on the attempt row's null
+`http_status`, which does not depend on how the exception was classified.
+
+**Not decided here.** How the socket writes an attempt row when `send` raises,
+and whether the header `generation_id` survives a client timeout, belong to
+[#385 — Specify the socket's attempt row on a raised send, and the deadline in
+force on llm_call](https://github.com/bgunyel/clause-and-effect/issues/385). So
+does whether the deadline is a column or a `metadata` key. Whether headers arrive
+before the body on a non-streamed call is unobserved. R-g holds either way, and
+that fact only changes how many no-response attempts the enrichment sweep can
+later attribute. Whether a forced cell also prints the 4xx and 5xx buckets
+beside *timed out* is not fixed here; the no-response share counts them either
+way. When the no-response share is read, and what n a forced acquisition that
+clears it declares, belongs to [#392 — When is the no-response share read, and
+what n does a forced clearing acquisition
+declare?](https://github.com/bgunyel/clause-and-effect/issues/392).
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Amendment — acceptable-set membership needs a cleared no-response share, not rule-in alone
+
+| | |
+|---|---|
+| amended | 2026-11-17 |
+| branch | `dev-06` |
+| commit at amendment | `fd9381c619ed` |
+| decided in | [#371 — Failures with no served provider: where a timeout lands in the acceptance read](https://github.com/bgunyel/clause-and-effect/issues/371) |
+| written by | [#384](https://github.com/bgunyel/clause-and-effect/issues/384), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | two clauses of [R4's anticipated pressure point](#r4s-anticipated-pressure-point): what membership is, and what every member clears |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). R4's pressure point says that
+*"membership is the rule-in test"*. Under that sentence a cell that rules in is a
+member. After this amendment a cell can rule in and still not be a member, so the
+sentence would have meant something different, and it owes an old value.
+
+**What stands unamended.** §2's definition of rule-in does not move: the upper
+bound below the tolerance in force, at the declared n. R3 is untouched. The gate
+governs what a rule-in **licenses**, not when rule-in is evaluated. The rest of
+R4's pressure point stands, including its registered position, *"accept the
+smaller k, or accept no pin"*, and *"k is chosen purely to buy refusal headroom,
+never to rescue a member"*. §1, R1, R2, R4–R6, §5, R-a to R-g, and R-b and R-c as
+amended all stand.
+
+## The old value
+
+From R4's anticipated pressure point, verbatim, the two sentences that carry
+the change. Each is quoted whole, with its own markup, so that it can be found:
+
+> Under the **k>1** reframing — where the pin becomes an *acceptable set*
+> `{only: [X, Y], allow_fallbacks: True}` and membership is the rule-in test — a
+> member failing rule-in shrinks the set, and a set that is too small no longer
+> buys refusal headroom.
+
+> Every member clears rule-in individually; k is chosen purely to buy refusal
+> headroom, never to rescue a member.
+
+The words that change are *"membership is the rule-in test"* in the first and
+*"Every member clears rule-in individually"* in the second. The rest of both
+sentences stands.
+
+## The new value
+
+The first passage now reads *"and membership is the rule-in test plus a
+cleared no-response share"*. The second now reads *"Every member clears rule-in,
+and its no-response share, individually"*. What the share is, and what happens
+when it does not clear:
+
+> A cell is a member of an acceptable set only if it **rules in** under §2 and
+> its **no-response share also clears**.
+>
+> - The **no-response share** is non-served attempts over all attempts. Its
+>   numerator is every attempt no provider served, whatever its bucket, so for
+>   organic acquisition it is the sum of R-g's three buckets.
+> - It **clears** when its Clopper-Pearson upper bound, 95% one-sided, is below
+>   the §1 tolerance in force. That is the same bound and the same reading as
+>   §2's rule-in, applied to a different quantity.
+> - It is read at the **`(model, channel)`** level for organic acquisition and
+>   **per cell** for forced acquisition. Forced and organic never pool.
+> - A cell that rules in and whose share does not clear is reported as
+>   **"rule-in, no-response unresolved"**. It is not a member. A config pin on
+>   it needs a **forced acquisition** whose per-cell share clears.
+
+A member whose share does not clear is not rescued any more than one that fails
+rule-in. The position stands as registered: accept the smaller k, or accept no
+pin.
+
+## The reason
+
+Without the gate, rule-in is blind to a provider that times out often. A
+provider that gets no response on 40% of its attempts still rules in on its 29
+clean served calls, because its no-response attempts are in no denominator
+under R-g, as they must be. The pin that follows sends traffic to a provider
+that fails 40% of the time, and nothing in the read says so. That is a false
+rule-in of the silent kind, which is the error §2's asymmetry is built against.
+
+Two alternatives were rejected when #371 was decided:
+
+- **Report only.** It prints the count and gates on nothing. A pin could then be
+  taken on a cell whose count was printed and ignored, and the case above stays
+  silent.
+- **Worst-case attribution.** Charging every organic no-response attempt to
+  every cell of its `(model, channel)` turns one organic timeout into a rule-out
+  across a whole `(model, channel)`.
+
+The organic share is read at `(model, channel)` level because an organic
+no-response attempt names no provider, so it cannot be charged to one cell. The
+forced acquisition is the way out of that bluntness, because under a pin the
+attempt belongs to the cell's condition.
+
+**The trade, recorded.** #371 judged the organic read blunt but safe. It is safe
+in one direction only. A provider can be held back by its neighbours' timeouts,
+and it can also be **let through by its neighbours' clean attempts** when it
+carries a small fraction of its `(model, channel)`'s attempts. In the case
+above, a provider with 19 no-response attempts of 48 has a share whose upper
+bound is 52.5% on its own. Pooled with 300 clean attempts from other providers
+on the same `(model, channel)`, it is 19/348 with an upper bound of 7.9%, which
+clears a 10% tolerance. Pooled with 1000, it is 19/1048 with an upper bound of
+2.7%, which clears 5% too. The organic gate then passes, nothing triggers a
+forced acquisition, and the silent false rule-in this amendment was decided to
+close stays open for that provider. The rule above is registered as decided.
+Its limit is recorded here, so that the commitment does not claim a safety it
+lacks. Whether the gate needs more than a `(model, channel)` read belongs to
+[#391 — The organic no-response share can be cleared by dilution: does the gate
+need more than a (model, channel) read?](https://github.com/bgunyel/clause-and-effect/issues/391),
+and any change it makes is a further amendment, owed before the first
+acquisition call.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. The only per-provider traffic on record is
+[#22](https://github.com/bgunyel/clause-and-effect/issues/22)'s header A/B, which
+measured distortion, latency and cost and never computed a structure-failure
+rate or a no-response share.
