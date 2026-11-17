@@ -112,8 +112,11 @@ _Avoid_: family, section
 **Pool exposure**:
 The number of calls in which a provider was among the endpoints the router
 offered — the candidate pool, read per attempt. It says whether a provider
-*could* have served a call, and so whether its acceptance cell is testable at
-all. It is not the denominator of an acceptance rate: a provider offered in 100
+*could* have served a call, and so tells apart the two ways an acceptance cell
+can have no observations: exposure zero is `NOT_IN_POOL`, never offered, and
+exposure above zero with nothing served is `OFFERED_NOT_SERVED`. It does not say
+whether a cell is testable — serving does (#367). It is not the denominator of
+an acceptance rate: a provider offered in 100
 pools and served in 3 has an exposure of 100 and three observations. The number
 of distinct providers across a cell's observed pools is what decides whether a
 pin is a choice at all — with one, there is no alternative to pin away from.
@@ -159,6 +162,19 @@ one command's spelling guards one spelling.
 
 Where nothing enforces, an agent reports what it found and stops.
 _Avoid_: forbidden act, blocked act
+
+**Testable cell**:
+An acceptance cell whose provider served at least one call, so that it holds
+observations a rule-in or rule-out can be judged on. Being offered is not
+enough: a provider offered in every pool and never selected has no observations,
+cannot produce a false rule-in, and counted anyway would cost the multiplicity
+correction power while buying nothing. The correction is taken over testable
+cells, and the gap to the named set is always shown. Whether a cell is testable
+can be seen without reading any rate, because the router picks a provider before
+the response exists. That holds for structure failures, which reach the router as
+ordinary responses, and not for HTTP-level failures, which can change what the
+router offers or picks next — a limit the offered count shares (#367).
+_Avoid_: offered, in the pool
 
 **Worktree branch**:
 The branch an agent works on, checked out in a linked worktree and proposed into
