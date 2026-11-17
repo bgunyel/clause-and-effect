@@ -753,3 +753,124 @@ in hand. The only per-provider traffic on record is
 [#22](https://github.com/bgunyel/clause-and-effect/issues/22)'s header A/B, which
 measured distortion, latency and cost and never computed a structure-failure
 rate.
+
+---
+
+# Registration — when the observed pools hold one provider, a pin has no alternative
+
+| | |
+|---|---|
+| registered | 2026-11-17 |
+| branch | `dev-06` |
+| commit at registration | `c774335625cb` |
+| decided in | [#31 — A one-provider pool: what the acceptance read prints when the router never had a choice](https://github.com/bgunyel/clause-and-effect/issues/31) |
+| written by | [#368](https://github.com/bgunyel/clause-and-effect/issues/368), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| subject | what the pin read and the acceptable-set read report for a cell whose observed pools hold one provider between them |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is a registration, not an amendment**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). The guard is applied here, not just the
+label, because three passages above come close to the case and each was read for
+whether it already says what R-d says:
+
+- **R-b, as amended.** A cell's denominator is the calls its provider served. A
+  provider that is the only one its pools ever offered still serves calls, so
+  its cell is in neither zero state and the amended R-b already reports its rate
+  normally. R-d's first clause says so explicitly and changes nothing R-b means.
+  It is written because #31 was opened on the opposite premise, that such a rate
+  is not identified, and the premise is the misreading this registration exists
+  to prevent.
+- **R-c, as amended.** *Testable* means served at least once, so the same cell
+  is testable and is counted in the correction's m. R-d leaves that as it
+  stands.
+- **[R4's anticipated pressure point](#r4s-anticipated-pressure-point).** It says
+  that k is chosen *"purely to buy refusal headroom"* and that a set too small
+  *"no longer buys"* it, and its position is *"accept the smaller k, or accept no
+  pin"*. It never says how large k can be. R-d puts an observed ceiling on k.
+  Every sentence of that paragraph keeps its meaning, and at a ceiling of one
+  the paragraph's own terms already imply that no headroom is bought.
+
+Nothing registered or amended so far says what a pin read prints when the
+router never offered an alternative, so R-d owes no old value. §1, §2, R1–R6,
+§5, the frozen draw, the invariant ordering, §8's outcome table, R-a, and R-b
+and R-c as amended all stand.
+
+**Labels.** The label R-d was fixed when #31 was decided. Other registrations
+may be appended before it, so the order of labels and the order in this file
+can differ. The index records append order.
+
+## R-d. One provider observed removes the pin's choice, not the acceptance rate
+
+> The condition is read off the per-attempt rows and never off the model. It
+> holds for a cell when **every pool observed on the cell's `(model, channel)`
+> in the acquisition window holds the same one provider**, counting distinct
+> providers and not endpoints. If a second provider appears in even one of those
+> pools, the condition does not hold. When it holds:
+>
+> - The cell **stays in the acceptance set**, and its acceptance rate is
+>   reported as any other cell's is.
+> - The **pin read reports *no alternative observed*** and makes no
+>   recommendation.
+> - The **acceptable-set read reports `max k = 1`**, so the refusal headroom
+>   that the k>1 reframing buys is zero.
+
+**Why the rate stays.** The acceptance rate is a served-call rate. Its numerator
+is the structure-clean calls among the calls the provider served, and a served
+call can still fail. If the only provider serves 29 calls, those are 29 genuine
+observations of its failure rate, and §2's bars apply to them unchanged. What a
+one-provider pool takes away is the pin's choice, not the rate's identification.
+If the cell fails rule-in, the remedy is a different model, because there is no
+other provider to pin to.
+
+**Why the pin read prints no recommendation.** A pin to the only provider the
+router offered is a no-op: it constrains the router to what it was already
+doing. A recommendation to pin would read as evidence that a choice was made,
+and none was available to make.
+
+**Why `max k` is observed and not assumed.** The acceptable-set read reports
+`max k` as the number of distinct providers observed across the same pools, and
+R-d registers the value it takes at one. A set cannot hold providers that were
+never offered, so with one provider the k>1 reframing has nothing to buy. If
+that provider fails rule-in, R4's registered position applies as written: accept
+no pin.
+
+**Why the rule is keyed on pools.** [#27](https://github.com/bgunyel/clause-and-effect/issues/27)
+measured Grok 4.6's pool under all three request shapes on one day and found two
+endpoints, both `xAI`, with `endpoints.total: 5`. `Amazon Bedrock`, which the
+catalogue lists, was never offered. That makes Grok one-provider today, at n=1
+per shape. It does not make Grok one-provider tomorrow. A rule naming the model
+would go stale without anything turning red, and a rule over the observed pools
+is evaluated from per-attempt pool storage
+([#20](https://github.com/bgunyel/clause-and-effect/issues/20) §1), which needs no
+new column. The distinct-provider count and `len(endpoints.available)` are
+different numbers, as Grok's 2 endpoints and 1 provider show, and R-d counts
+providers. Nothing in R-d names Grok.
+
+**Which pools are the cell's.** A pool belongs to a call, and a call belongs to a
+`(model, channel)` pair, not to a provider. So the pools a cell's condition is
+read over are every pool observed for its `(model, channel)` in the window,
+including any its own provider was absent from. A narrower reading, over only
+the pools that offered the cell's provider, fails in the permitting direction:
+an alternative that was offered only when the cell's provider was not would be
+missed, and the read would print *no alternative observed* when one was observed.
+This agrees with [#32](https://github.com/bgunyel/clause-and-effect/issues/32),
+which makes a pin a property of the `(model, channel)` pair.
+
+**Why *observed*.** [#11](https://github.com/bgunyel/clause-and-effect/issues/11)
+found the router metadata absent on 5xx responses and on auth failures, so a call
+that fails at the HTTP level writes no pool. The read can only report what the
+written pools show, and its wording says that. *No alternative observed* is a
+statement about the rows, not about what the router could have offered.
+
+**Not decided here.** R-d does not fix where the acquisition window starts or
+ends. The pin and acceptable-set reads are taken over the whole window, so they
+are only final when it closes. When R-c's m is fixed against the same window
+belongs to [#377 — When is R-c's m fixed, if cells reach their declared n at
+different times?](https://github.com/bgunyel/clause-and-effect/issues/377). Where a
+call with no attributed provider lands belongs to [#371 — Failures with no
+served provider: where a timeout lands in the acceptance
+read](https://github.com/bgunyel/clause-and-effect/issues/371).
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
