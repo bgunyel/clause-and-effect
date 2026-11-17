@@ -974,3 +974,99 @@ read](https://github.com/bgunyel/clause-and-effect/issues/371).
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Registration — a new model makes new cells, and a re-test counts only its own rows
+
+| | |
+|---|---|
+| registered | 2026-11-17 |
+| branch | `dev-06` |
+| commit at registration | `fd9381c619ed` |
+| decided in | [#378 — Does R6's model change re-test the same cell, or make new cells as a channel change does?](https://github.com/bgunyel/clause-and-effect/issues/378) |
+| written by | [#388](https://github.com/bgunyel/clause-and-effect/issues/388), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| subject | what R6's *model change* reaches, which cells a new model produces, and which rows a re-test counts |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is a registration, not an amendment**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). The guard is applied here, not just the
+label, because R6 is again the sentence an amendment would be changing. R6 permits
+*"re-testing a failed cell"* after *"a config, model, or provider change"*. What
+R6 re-tests is a **cell**, and a cell's model is read from its own rows, the way
+R-f reads its channel: `llm_call.model`, which holds the `ModelNames` value, e.g.
+`deepseek-v4-flash-0731`. It is not the OpenRouter slug that value was sent as,
+which `ai_common` resolves at call time and no column records, and it is not
+`llm_attempt.model_alias`, the wire id the response reports. Rows taken under a
+new `ModelNames` value carry that value, so they belong to a different triple,
+and R6 never moves a row from one triple to another. So R6's *model change* can
+reach only a change **behind** a fixed value: a provider redeploying, OpenRouter
+or the lab moving an alias, or an `ai_common` upgrade repointing the value's slug.
+That reads all three of R6's causes alike, as changes behind a fixed triple, which
+is how the channel registration above read *config change*. Nothing R6 said
+changes meaning. R1's key never let it reach another triple. What nothing above
+said is where a new model's rows go, which R-h says, and which rows a re-test
+counts, which R-i says. §1, §2, R1–R6, §5, the frozen draw, the invariant
+ordering, §8's outcome table, R-a, R-b and R-c as amended, R-d, R-e and R-f all
+stand.
+
+**The trade, recorded.** Keying on the `ModelNames` value means a change behind
+it does not make a new cell. Recorded before the new acquisition, such a change
+is what R6 permits and R-i governs. **Unrecorded, it mixes two models' rows into
+one cell**, and nothing in this registration detects it. The slug sent is
+recorded nowhere. `llm_run.commit_sha` pins `uv.lock`, so an `ai_common` repoint
+can be recovered. Whether `llm_attempt.model_alias` reveals an alias move is
+unobserved: the only response observed is for the dated slug
+`deepseek/deepseek-v4-flash-0731`, and six of the eight roster slugs are undated.
+That gap is held by [A change behind the model key is silent: what in the log
+detects it?](https://github.com/bgunyel/clause-and-effect/issues/387). Neither
+rule here says anything about R-c's m. Whether a re-test adds to it is held by
+[When is R-c's m fixed, if cells reach their declared n at different
+times?](https://github.com/bgunyel/clause-and-effect/issues/377).
+
+**Why now.** Once an acquisition row exists, applying either rule after a model
+change or a re-test cannot be told apart from relabelling to fit the result.
+Written before any such row exists, it is a commitment.
+
+**Labels.** R-g is reserved for [Append the no-response registration (R-g) and
+the R4 membership amendment](https://github.com/bgunyel/clause-and-effect/issues/384),
+whose ticket was decided first, so the two rules here are R-h and R-i. A label is
+fixed when its ticket is decided, so the order of labels and the order in this
+file can differ. The index records append order.
+
+## R-h. A new model makes new cells, not a re-test
+
+> When the roster replaces a model with a different `ModelNames` value,
+> acquisition under the new value produces **new** `(model, channel, provider)`
+> cells. Each needs its own R1 naming and its own R2 n before its first call. It
+> inherits nothing from the old value's cells, **in either direction**. A cell
+> that failed under the old value stays failed and is not re-tested by the new
+> one. A pass under the new value licenses a pin on the new value only, and a pass
+> under the old value licenses nothing on the new one.
+
+*Closes:* R4 evaded by relabelling, one level out, as with R-e. A successor
+model's pass reported under its failed predecessor's name is a different model's
+result under the same name. A dated successor snapshot is the likeliest case:
+`DEEPSEEK_V_4_FLASH_0731` and a later DeepSeek Flash snapshot are different
+values, and so different cells, however close the names read.
+
+## R-i. A re-test is a new acquisition of the same cell
+
+> A re-test permitted by R6 counts only the rows of acquisition runs whose
+> `llm_run.commit_sha` has, as an ancestor, the commit that records the cause.
+> It has its own R2 n, declared before its first call, and R3 evaluates it once,
+> at that n, on those rows only. Rows taken before the cause are never pooled
+> with them. The prior result stands, and it is reported beside the re-test's.
+
+*Closes:* R4 evaded by extension under R6's name. Pooling a failed cell's rows
+with the rows taken after the cause is that cell extended past its declared n.
+R2 fixes n *"before that cell's first call"*, and a re-tested cell's first call
+is already in the log, so without R-i nothing says when a re-test's n is fixed.
+
+The rule can be checked without seeing any rate. Which rows a re-test counts is
+decided by commit ancestry between `llm_run.commit_sha` and the commit recording
+the cause, and both are fixed before any acceptance rate is computed.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
