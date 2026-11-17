@@ -8,6 +8,19 @@ repository, not in advance of one.
 
 ## Language
 
+**Acceptance cell**:
+One `(model, channel, provider)` triple, the unit a rule-in or rule-out is
+judged on and the thing R1 names and R6 re-tests. Each part is read from the
+cell's own rows, never from configuration that may have changed since: the
+model is the `ModelNames` value the rows carry, e.g. `deepseek-v4-flash-0731`,
+not the OpenRouter slug that value was sent as and not the wire id the response
+reports; the channel is the `structured_output` mode the rows carry. So a new
+model or a new channel is a new cell, inheriting nothing from the old one,
+while a change *behind* the model — a provider redeploying, an alias being
+moved, a library repointing the value's slug — leaves the cell the same, and
+measuring it again is a re-test (#378).
+_Avoid_: pin candidate, model cell
+
 **Acceptance rate**:
 For one `(model, channel, provider)` cell, the share of the calls that provider
 **served** which came back structurally clean. Its denominator is the calls the
@@ -109,6 +122,21 @@ It is not a section, which is a heading in the suite's output that rows from
 several issue files may sit under.
 _Avoid_: family, section
 
+**No-response attempt**:
+An upstream attempt that left the client and got no HTTP response, so its
+`llm_attempt.http_status` is null. It names no provider, so it is never in an
+acceptance rate's denominator. It is still counted, per `(model, channel)` for
+organic routing and per cell under a measurement pin, because dropping it would
+let a provider that never answers read as one that never failed (#371). It is
+counted per attempt, not per call: a call that got no response on its first
+attempt and was served clean on its second has status `OK`. Not *timeout*: a
+timeout exists only relative to a deadline, and none of the timeouts the stack
+raises is a `TimeoutError`, so they are logged as `TRANSPORT_PROBLEM`, not
+`TIMEOUT` (#383). Not
+*unattributed*: a 4xx or 5xx with no router metadata is also unattributed, yet
+it got a response, and the count keeps it in a bucket of its own.
+_Avoid_: timeout, unattributed
+
 **Pool exposure**:
 The number of calls in which a provider was among the endpoints the router
 offered — the candidate pool, read per attempt. It says whether a provider
@@ -166,12 +194,15 @@ _Avoid_: forbidden act, blocked act
 **Testable cell**:
 An acceptance cell whose provider served at least one call, so that it holds
 observations a rule-in or rule-out can be judged on. Being offered is not
-enough: a provider offered in every pool and never selected has no observations,
-cannot produce a false rule-in, and counted anyway would cost the multiplicity
-correction power while buying nothing. The correction is taken over testable
-cells, and the gap to the named set is always shown. Whether a cell is testable
-can be seen without reading any rate, because the router picks a provider before
-the response exists. That holds for structure failures, which reach the router as
+enough: a provider offered in every pool and never selected has no observations
+and cannot produce a false rule-in. The multiplicity correction is nonetheless
+taken over the named set and not over testable cells: m is the named set's size,
+fixed at R1, because R2 declares n before a cell's first call and the testable
+count is known only once acquisition ends (#377). A named cell that is never
+served costs the correction power and buys nothing, and that cost is accepted.
+Testable is still reported, and the gap to the named set is always shown.
+Whether a cell is testable can be seen without reading any rate, because the
+router picks a provider before the response exists. That holds for structure failures, which reach the router as
 ordinary responses, and not for HTTP-level failures, which can change what the
 router offers or picks next — a limit the offered count shares (#367).
 _Avoid_: offered, in the pool
