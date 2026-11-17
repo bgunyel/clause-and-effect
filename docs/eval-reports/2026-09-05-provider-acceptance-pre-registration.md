@@ -753,3 +753,103 @@ in hand. The only per-provider traffic on record is
 [#22](https://github.com/bgunyel/clause-and-effect/issues/22)'s header A/B, which
 measured distortion, latency and cost and never computed a structure-failure
 rate.
+
+---
+
+# Registration — a channel change makes new cells, and acquisition runs on the roster channel
+
+| | |
+|---|---|
+| registered | 2026-11-17 |
+| branch | `dev-06` |
+| commit at registration | `20a52ca2991f` |
+| decided in | [#32 — Is a provider pin specified per model, or per (model, channel)?](https://github.com/bgunyel/clause-and-effect/issues/32) |
+| written by | [#370](https://github.com/bgunyel/clause-and-effect/issues/370), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| subject | which cells a channel change produces, and which channel an acquisition runs each model on |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is a registration, not an amendment**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). The guard is applied here, not just the
+label, because R6 is the sentence an amendment would be changing. R6 permits
+*"re-testing a failed cell"* after *"a config, model, or provider change"*, and a
+channel switch is a config change. Read literally, that seems to let DeepSeek V4
+Flash's failed `function_calling` cell be re-tested under `json_schema`. But what
+R6 re-tests is a **cell**, and R1 says what a cell is: a `(model, channel,
+provider)` triple, the same key this entry's subject line uses. Rows taken on
+`json_schema` carry `json_schema` in `llm_call.channel`, so they belong to a
+different triple. R6 never moves a row from one triple to another, so under no
+reading do those rows re-test the `function_calling` cell. R6's cause list still
+governs exactly what it did: when the **same** triple may be measured again.
+What nothing above said is where the other rows go, and R-e says it. §1, §2,
+R1–R6, §5, the frozen draw, the invariant ordering, §8's outcome table, R-a, and R-b and R-c as amended all stand.
+
+**The trade, recorded.** The argument also applies to R6's *"model change"*. A
+new model slug puts its rows in a different triple as well, which would leave
+that clause naming a re-test it cannot reach. This registration decides the
+channel only. Whether R6's model change means a change **behind** the same slug
+(a true re-test) or a **new** slug (new cells) is held by [Does R6's model change
+re-test the same cell, or make new cells as a channel change
+does?](https://github.com/bgunyel/clause-and-effect/issues/378). That question
+also has to be settled before the first acquisition call.
+
+**Why now.** Once an acquisition row exists, applying this rule after a channel
+switch cannot be told apart from relabelling to fit the result. Written before
+any such row exists, it is a commitment.
+
+**Labels.** R-d is reserved for [Append R-d: what the pin read reports when the
+observed pools hold one provider](https://github.com/bgunyel/clause-and-effect/issues/368). 
+A label is fixed when its ticket is decided, so the order of labels and the order in this file
+can differ. The index records append order.
+
+## R-e. A channel change makes new cells, not a re-test
+
+> When a model's channel changes, acquisition on the new channel produces **new**
+> `(model, channel, provider)` cells. Each needs its own R1 naming and its own R2
+> n before its first call. It inherits nothing from the cells on the old channel,
+> **in either direction**. A cell that failed on the old channel stays failed and
+> is not re-tested by the new one. A pass on the new channel licenses a pin on
+> the new channel only, and a pass on the old channel licenses nothing on the new
+> one.
+
+*Closes:* R4 evaded by relabelling, which is R6's own leak one level further
+out. A channel selects a provider pool, and the pools are not nested.
+[#27](https://github.com/bgunyel/clause-and-effect/issues/27) measured it: on
+DeepSeek V4 Flash, `BaseTen` appeared twice in the `function_calling` pool and
+not at all in the `json_schema` pool. A `json_schema` result reported under the
+`function_calling` cell's name is a different pool's result under the same name.
+It agrees with [#32](https://github.com/bgunyel/clause-and-effect/issues/32),
+which makes a pin a property of the `(model, channel)` pair.
+
+## R-f. Acquisition runs each model on its roster channel only
+
+> Each model is acquired on its **roster channel** and on no other. The roster
+> channel is the one `llm_config.structured_output` assigns the model at the
+> acquisition commit. A cell takes its channel from **`llm_call.channel` on its
+> own rows**, never from `llm_config`, whose assignment may have changed since.
+> There are no cross-channel cells: one acquisition yields one channel per model.
+
+The rule can be checked without seeing any rate. Among one acquisition's rows,
+count the distinct `llm_call.channel` values for each model. More than one means
+R-f was broken, and that is visible before any acceptance rate is computed.
+
+R-f is also what turns R-e's channel change into a single, dated event: the
+roster changes at a later commit, and the next acquisition runs on the new
+roster channel only.
+
+**§5 is unamended, and R-f is why it can stay so.** §5 names the candidate set
+per model: *every provider OpenRouter lists for model M*. That is channel-blind
+by design. Naming happens before any pool is seen, and the endpoints catalogue
+§5 reads is listed per model, not per request shape. Whether a named provider is
+**testable** is a fact about one cell, read from that cell's own rows under R-c,
+and the rows carry their channel. Under the amendment above, R-c's test is served at least once. Under R-f each 
+model has exactly one channel per acquisition, so each named `(model, provider)` 
+matches exactly one `(model, roster channel, provider)` cell. R1's named set and R-c's testable set then count
+the same cells. A provider the roster channel never routes to is named but not
+testable, and it appears in the named-versus-testable gap that R-c already
+requires to be shown. `BaseTen`, for DeepSeek Flash on `json_schema`, would be
+one. Without R-f, a provider named once could be tested in two cells, and the
+correction's m would count cells R1 never named.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
