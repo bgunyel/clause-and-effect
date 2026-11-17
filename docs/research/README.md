@@ -114,3 +114,17 @@ force, because the subject is someone else's system:
   accordingly. Feeds `docs/design/llm-call-log.md`, whose socket patch filters
   on the completions path — the document's first finding is that three of the
   five servers do not use that path at all.
+- [What OpenRouter's `model` field holds for an undated slug, and whether it moves](openrouter-undated-alias-model-field.md)
+  — for the eight OpenRouter slugs in the roster (six of them undated, such as
+  `x-ai/grok-4.6`), what the completion body's `model` carries and where a
+  versioned id appears instead. It also covers whether a move of the slug, of
+  the lab's alias, or of a provider's deployment is visible in any response
+  field or announced anywhere machine-readable. Read on 2026-11-17 against
+  OpenRouter's docs and OpenAPI document and the labs' model pages. It also
+  holds observed evidence of two kinds: sixteen completion bodies already
+  captured in `docs/eval-reports/` (six for undated slugs, all of which echo
+  the request), and unauthenticated reads of the public `/api/v1/models` and
+  `/endpoints` catalogue made that day. **No completion call was made.** Feeds
+  #387, whose question is how a change behind a `ModelNames` value would be
+  detected; the document's first finding is that `llm_attempt.model_alias`, as
+  specified, records the request echoed back.
