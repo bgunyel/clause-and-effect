@@ -122,6 +122,11 @@ It is not a section, which is a heading in the suite's output that rows from
 several issue files may sit under.
 _Avoid_: family, section
 
+**Mixed cell**:
+An acceptance cell whose served rows carry more than one permaslug with no
+recorded cause between them. It cannot be ruled in; its outcome is mixed, and
+it is re-tested only from a recorded cause (#387).
+
 **No-response attempt**:
 An upstream attempt that left the client and got no HTTP response, so its
 `llm_attempt.http_status` is null. It names no provider, so it is never in an

@@ -1643,3 +1643,219 @@ the cause, and both are fixed before any acceptance rate is computed.
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Amendment — a cell whose rows carry two permaslugs is mixed, and a mixed cell cannot be ruled in
+
+| | |
+|---|---|
+| amended | 2026-11-17 |
+| branch | `dev-06` |
+| commit at amendment | `c2f2816e04ff` |
+| decided in | [#387 — A change behind the model key is silent: what in the log detects it?](https://github.com/bgunyel/clause-and-effect/issues/387) |
+| written by | [#399](https://github.com/bgunyel/clause-and-effect/issues/399), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | R3 |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). R3 says that rule-in *"is evaluated exactly
+once, at the declared n"*. Under that sentence every cell that reaches its
+declared n is evaluated. After this amendment a cell can reach its n and not be
+evaluated, so the sentence would have meant something different, and it owes an
+old value.
+
+The registration of R-h and R-i recorded the gap this closes. A change behind a
+fixed `ModelNames` value, if no one records it, *"mixes two models' rows into one
+cell, and nothing in this registration detects it."*
+[#386](https://github.com/bgunyel/clause-and-effect/issues/386) and #387 found
+that the log can detect most such changes. The permaslug, the dated id
+OpenRouter routes a slug to, is stored on every attempt. This amendment says what
+the acceptance read does when it sees more than one.
+
+**What stands unamended**, each with its reason:
+
+- **§1 and §2, as amended.** They say what clears the bar. R3 says when the bar
+  is read, and only R3 changes.
+- **R4.** A mixed cell is never evaluated, so it is never *"failed at its
+  declared n"*, and R4 does not reach it.
+- **R5.** Rule-out peeks stay unrestricted, mixed rows included.
+- **R6.** It states what re-testing a **failed** cell requires. A mixed cell is
+  not failed, and this amendment says how a mixed cell is re-tested. It does so
+  on R6's terms, so no sentence of R6 changes meaning. *"A cause external to the
+  log"* still holds. The cause is the change itself, OpenRouter re-pointing the slug
+  to another dated model. The log is only where the change shows.
+- **R-i.** *"counts only the rows of acquisition runs whose `llm_run.commit_sha`
+  has, as an ancestor, the commit that records the cause"* is still a condition
+  that every counted row meets. The condition this amendment adds is in R3.
+  *"R3 evaluates it once, at that n, on those rows only"* reads through to R3,
+  and R3 is amended below.
+- **§8's outcome table.** It covers the reproduction, not cell outcomes. Its
+  *Not run* row is the precedent this amendment follows: an outcome that is
+  neither a pass nor a failure, registered so that it is not quietly counted as
+  either.
+- **R-g.** A no-response attempt is not a served row, so it never enters the
+  mix.
+
+R1, R2, §4 as amended, §5 to §9, R4's pressure point as amended, R-a, R-b as
+amended, R-c as amended twice, and R-d to R-h all stand. A mixed cell's model,
+channel and provider are still read from its own rows, as the *Acceptance cell*
+entry in `CONTEXT.md` says. The mix is a fact about which dated model served those
+rows, and it makes no new cell.
+
+## The old value
+
+R3, verbatim, from §3:
+
+> - **R3.** Rule-in is evaluated exactly once, at the declared n. A bound that
+>   clears at n=20 is not a pass. *Closes:* stopping on good news.
+
+## The new value
+
+**R3, as amended.**
+
+> - **R3.** Rule-in is evaluated exactly once, at the declared n, and never on
+>   rows that are **mixed**. A bound that clears at n=20 is not a pass. A cell
+>   whose rows are mixed is not evaluated, so its one evaluation is not spent,
+>   and its outcome is **mixed**. *Closes:* stopping on good news.
+
+**What mixed is.**
+
+> An acceptance cell is **mixed** when its served rows carry more than one
+> permaslug with no recorded cause between them. A row's permaslug is the one in
+> `endpoints` (hoisted), or failing that the one in
+> `routing_chain[].model_permaslug`. A null permaslug is its own bucket and never
+> a value. Null rows are printed and counted toward n and toward failures, and
+> they never make a mix: the mix is read over the values only.
+
+The mix is read over **served** rows, the rows an acceptance rate's denominator
+is made of. A null row is not dropped. Whether a row's metadata arrived might go
+with whether it failed, and dropping it could then remove failures in the silent
+direction. A change hidden in null rows cannot be seen. It joins the limit
+recorded under *The trade* below.
+
+**Only an external change mixes a cell.**
+
+> A change of `requested_slug` is our own commit, such as an `ai_common`
+> repoint, and `commit_sha` already dates it. R-i handles it as written: rows
+> before the commit are the prior cell, and rows descending from the commit are
+> the re-test. It never produces the mixed outcome.
+
+That holds when a commit carries the repoint, which it does when `ai_common` is
+installed from `uv.lock`. **A repoint that no commit carries** has no recorded
+cause, so the definition above reads the cell as **mixed**. An editable
+`ai_common` install is one such case, and it is the case #387 rejected `uv.lock`
+reconstruction for. Its rows show `requested_slug` changing where `commit_sha`
+does not. So the clause above covers a repoint that some commit carries. Reading
+the other case as mixed is the direction that blocks a rule-in.
+
+**The outcome.**
+
+> A mixed cell **cannot be ruled in**. R3 is not evaluated on mixed rows, so its
+> one evaluation is not spent and R4 does not fire. The cell's outcome is
+> **mixed**, distinct from *failed*. **Rule-out stays open** on the mixed rows
+> under R5, so a cell that is actually failing is still ruled out, and the
+> outcome rescues nothing.
+
+*Failed* would be a false claim about the provider. Mixed rows are observations
+of two dated models under one name, and a bound over them describes neither.
+Reporting the cell as unmeasured would be the leak R5 closes, a cell quietly
+dropped. So mixed is reported as an outcome, with its rows.
+
+**The identity check is not a peek.**
+
+> Slug and permaslug values reveal nothing about failures, so the read may
+> report them at any time. A mix found before the declared n ends that
+> acquisition without waiting for n.
+
+Ending an acquisition early is what R3 forbids on good news. Here the stop is
+decided by which permaslug the rows carry, which says nothing about failure. So it cannot be a
+stop on good news, and it cannot be an extension on bad.
+
+**The re-test.**
+
+> The detection is the R6 cause. It is recorded as a commit. The re-test counts
+> only rows whose `llm_run.commit_sha` descends from that commit and that carry
+> the new permaslug. It runs under R-i's own R2 n and one R3 evaluation. The
+> mixed rows stay standing as the prior result.
+
+Two cases follow from the definitions above. Each is written down here so that
+it is not settled after the rows exist:
+
+- **A null row in a re-test** counts toward the re-test's n and toward its
+  failures, as it does in any cell. It carries no permaslug, so it is neither
+  the new one nor another.
+- **A descendant row carrying any other permaslug**, the old one coming back or
+  a third, is not counted toward n, and it **makes the re-test mixed**. A
+  re-test is a cell's acquisition like any other, and the mixed rule applies to
+  it. Without this, a slug that alternates between two permaslugs could be
+  ruled in on the one the re-test happened to count.
+
+**What the read prints, per cell.**
+
+> Each distinct `requested_slug`, `model_alias` and permaslug, each with its row
+> count and its first and last `started_at`. Also, for information only and
+> never as a gate: the number of distinct `endpoint_id` values, and the distinct
+> `system_fingerprint` values.
+
+One provider legitimately runs several endpoints. BaseTen runs two in
+[#14](https://github.com/bgunyel/clause-and-effect/issues/14)'s pool, so more
+than one endpoint is not a mix. The fingerprint does not gate until item 9 of
+`docs/research/openrouter-undated-alias-model-field.md` is observed, because
+`vllm-dev-ep-8b5ae245` may name a replica rather than a deployment. A gate on it
+before then could mark as mixed a cell that never changed. The print also shows
+where `model_alias` differs from `requested_slug`. The echo held on 16 of 16
+captured bodies, and that is an observation, not a guarantee.
+
+`requested_slug` and `system_fingerprint` are not columns yet. #18's migration
+adds them to `llm_attempt` with #24's table, and their rows are verbatim on
+#387's resolution.
+
+**The trade, recorded.**
+
+> A lab's own alias move, or a provider redeploying, behind an **unchanged**
+> permaslug leaves no per-call trace the log is known to carry. It is
+> undetectable, and is accepted as a named limit, not closed. No per-run
+> catalogue snapshot is taken, because `/endpoints` cannot be joined to a call.
+
+So *not mixed* means *no change the log can see*. It does not mean *one
+deployment*. A cell that rules in under this amendment may still have been
+served by two deployments under one permaslug, or by another dated model in
+its null rows. That limit is written down here, before the numbers.
+
+## The reason
+
+A cell's rows are its evidence about one thing: the provider's failure rate on
+one model through one channel. When the dated model behind the slug
+changes partway through, the rows describe two things. A bound over them is then
+a bound on a mixture, weighted by when the change happened. A pin taken on it
+licenses whichever dated model serves next, and none of the rows may describe
+that one. That is a false rule-in of the silent kind, the error §2's asymmetry is
+built against.
+
+Three alternatives are not taken. #387 rejected the first and the third, and the
+cell's identity rules out the second:
+
+- **Fail the cell.** R4 would make that final, and a provider would be failed
+  for something the router or the lab did. *Failed* is a claim about a rate,
+  and no rate was measured.
+- **Split the cell by permaslug.** That makes the permaslug part of the cell's
+  identity, but the model in a cell is the `ModelNames` value, by the
+  *Acceptance cell* entry and R-h. A split would also let a cell be cut, after
+  its rows exist, into the part that looks good.
+- **Snapshot the catalogue per run.** #387 rejected it: `/endpoints` cannot be
+  joined to a call, so a snapshot dates a change to a run at best and attributes
+  it to no row.
+
+The mixed outcome blocks rule-in and leaves rule-out alone. That is the
+revisability asymmetry §3 grounds peeking on. A false rule-out on mixed rows
+corrects itself in rotation, and a false rule-in on them seals itself as a pin.
+
+**Three cases decided while writing this**, by Bertan on 2026-11-17 under #399,
+because #387's clauses left each open to more than one reading: null rows count
+toward n and never mix; a re-test row carrying another permaslug makes the
+re-test mixed; and a repoint that no commit carries reads as mixed.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
