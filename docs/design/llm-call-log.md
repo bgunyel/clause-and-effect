@@ -515,6 +515,189 @@ Four things contain that:
    repository, for the same reason — *the socket is the last point the request is
    ours* — so this is an existing pattern rather than a new one.
 
+### When `send` raises, and the deadline it raised under
+
+**Specification, not built.** Specified by
+[#385](https://github.com/bgunyel/clause-and-effect/issues/385) from the decision
+taken in [#371](https://github.com/bgunyel/clause-and-effect/issues/371). Three
+points were found while specifying and are marked as such. They are not
+decisions #371 took.
+
+A `send` that raises still made an attempt. The cause can be a library timeout,
+a cancellation from an outer deadline, or a connection reset. That attempt is
+exactly the **no-response attempt** the pre-registration's R-g counts: it left
+the client and got no HTTP response. So the socket writes its row and then
+re-raises. A no-response attempt also exists only relative to a deadline, so the
+deadline in force goes on the call.
+
+#### The attempt row on a raised send
+
+1. **The socket catches `BaseException`, not `Exception`.** The motivating case
+   is a probe's `asyncio.wait_for`, which reaches the socket as
+   `asyncio.CancelledError`, and that class is not an `Exception`. A handler on
+   `Exception` would log the library's own timeouts and miss every outer-deadline
+   one. `llm_call()` already draws the line at the same place
+   (`src/llm/call.py:483`).
+2. **The original exception is re-raised unchanged.** That means a bare
+   `raise`: never wrapped, never `raise … from`. The task's cancellation state is
+   not touched either (no `uncancel()`), because `asyncio.timeout` turns a
+   `CancelledError` back into a `TimeoutError` only if the exception arrives as
+   it left. Nothing above the socket can tell that the row was written.
+3. **A write failure never raises** (*Failure policy*). The repository catches,
+   returns a bool, and counts itself in `LEDGER`. **Found while specifying:**
+   `WriteLedger` counts a write only as written or failed, and the repositories
+   catch `Exception`. So if a *second* `BaseException` arrives during the
+   roughly 47 ms insert, the write is counted nowhere. That second exception
+   could be a further cancellation or a Ctrl-C. The socket counts that case as a
+   failed write and lets the interrupting exception propagate, because
+   swallowing a cancellation is worse than losing the row. The original
+   exception rides as its `__context__`. `llm_call()`'s own failure path has the
+   same gap:
+   [#393](https://github.com/bgunyel/clause-and-effect/issues/393).
+4. **What the row carries is every phase-1 column the request alone determines.**
+   - `call_id` comes from the contextvar, null outside a wrapper as for any
+     attempt.
+   - `seq`, `llm_server` and `started_at` are recorded as on any attempt, and so
+     is #26's `run_id` once the migration adds it.
+   - `request_seconds` runs from the call into `send` until it raised.
+   - [#34](https://github.com/bgunyel/clause-and-effect/issues/34)'s
+     `metadata_header` is read off the request as sent. It is `NOT NULL`, and a
+     send that raised was still sent with whatever header it carried.
+   - `seam_matched` is incremented on match, before `send`, so a raised send is
+     counted like any other.
+   - [#23](https://github.com/bgunyel/clause-and-effect/issues/23)'s
+     `generation_id_header` is written if headers arrived. The next section says
+     how the socket can see them at all.
+
+   `http_status`, `served_provider`, `model_alias`, the body `generation_id`,
+   cost, the token counts and `finish_reason` are null. The provider reported
+   none of them, which is exactly what null means here.
+5. **`error_type` holds the exception's qualified class name, verbatim**, for
+   example `httpx.ReadTimeout`, `asyncio.CancelledError` or
+   `httpx.RemoteProtocolError`. It is null on every attempt that got a
+   response. **Added while specifying; #371's list does not name it.** R-g has
+   forced acquisition report a fourth number per cell, *timed out*, and
+   `http_status IS NULL` cannot tell a timeout from a reset, because both are
+   no-response attempts. Without the class name that split is unrecoverable once
+   rows accumulate, which is the one kind of gap this effort cannot undo. It is
+   stored as the name and never classified at write time, on `served_provider`'s
+   directionality argument: a mapping applied in a read can be revised, and one
+   applied in a write cannot.
+   [#383](https://github.com/bgunyel/clause-and-effect/issues/383) shows how a
+   write-time classification fails silently: `llm_call.status` cannot hold
+   `TIMEOUT`, because no timeout the stack raises is a `TimeoutError`. The
+   column joins the `llm_attempt` table in
+   [#24](https://github.com/bgunyel/clause-and-effect/issues/24)'s replacement,
+   and rides the same migration.
+
+#### Headers on a raised body read
+
+**Found while specifying:** *if headers arrived* is not reachable by a plain
+wrapper around `send`. In httpx 0.28.1 (`_client.py:1629-1643`), `send` receives
+the headers in `_send_handling_auth` and then reads the body. If the read
+raises, it closes the response and re-raises, so the `Response` never reaches
+the caller. The patch therefore calls the original with `stream=True` and takes
+the headers from the response that comes back. When the caller asked for
+`stream=False`, the patch then reads the body itself, with the same
+`aread()`, and the same `aclose()` on `BaseException`, that httpx's own lines
+perform. So the caller sees the same response and the same exception. Only the
+public API is used, and no private method is patched. `Client.send` is wrapped
+the same way, with `read()` and `close()`.
+
+Whether OpenRouter sends the headers before the body on a non-streamed
+completion is **unobserved**. The design is the same either way. The answer only
+decides how many no-response attempts carry a `generation_id_header` that the
+sweep can later look up.
+
+There is one indirect reading, an **inference and not an observation**. The
+effective read timeout below is 5 s between bytes, yet non-streamed calls of
+about 7 s complete (*The generation record is not readable immediately*). So on
+calls that complete, bytes arrive within 5 s of the request. The status line and
+headers precede every body byte, so they arrive within that window too. A
+timeout before the headers stays possible on a call that does not complete. The
+observation that settles it is a non-streamed call whose `httpx` response event
+hook timestamps the header arrival against the end of the body.
+
+#### The deadline in force on `llm_call`
+
+A timeout only exists relative to a deadline: the same provider reads 3/6 under
+a 120 s `wait_for` and 0/6 under none (#371). So the deadline is part of the
+condition, and it is recorded per `llm_call` row before the first acquisition
+call. No deadline is added; the map's Out of scope rules that out. Two values
+are recorded, from two different sources, because neither layer can see the
+other's.
+
+**The outer deadline is declared, because the wrapper cannot see it.**
+`probe_a2_panel.py:170` puts `wait_for` around `tag_claims`, two frames above
+`llm_call()`, and asyncio offers no public way to read a task's enclosing
+timeout. So the caller that imposes the deadline declares it, through a context
+manager beside `call_context` in `src/db/capture/context.py`,
+`deadline_in_force(seconds)`, which sets a contextvar that the wrapper reads.
+There are three states, and they have to stay three:
+
+| state | the row says |
+|---|---|
+| declared, a number > 0 | an outer deadline of that many seconds was in force |
+| declared none | the caller states that nothing above the wrapper bounds the call |
+| undeclared | nobody said, and the row does not know |
+
+*None* is spelled null and never 0. A declaration of 0 or less raises
+`ValueError` at the declaration: that is a caller's bug, found on its first run
+before any model call is made, and it is not a logging failure inside a judged
+call. *Undeclared* must not be spelled like *none*. Otherwise an entry point that
+forgot to declare would publish *no deadline* for calls that a deadline cut
+short, which is the absent-reads-as-a-fact error the null doctrine exists to
+prevent. The value is the declared bound, not the remaining budget: two calls
+under one `wait_for` both record 120.
+
+**The library timeout is observed at the socket, because the config does not
+state it.** `ChatOpenRouter.request_timeout` is `None` for every panelist,
+because `ai_common.get_llm` sets none. And `None` does **not** mean no timeout:
+
+- It passes `httpx.USE_CLIENT_DEFAULT` (`openrouter/basesdk.py:236`).
+- The SDK's client is `httpx.AsyncClient(follow_redirects=True)`
+  (`openrouter/sdk.py:171`, or `langchain_openrouter/chat_models.py:452` when
+  extra headers are set).
+- That client's default is `Timeout(5.0)`, which is 5 s for each of connect,
+  read, write and pool (`httpx/_config.py:246`, 0.28.1).
+
+So a wrapper that copied the config would write *none* while 5 s was in force.
+This was read from the installed source on 2026-11-17 and not observed on the
+wire. The SDK also retries an `httpx.TimeoutException` inside its 300 s budget
+(`openrouter/utils/retries.py:255`). So a library timeout makes a no-response
+attempt *inside a call that can still end `OK`*, which is the case R-g counts
+attempts rather than calls for.
+
+httpx stamps the effective value on every request as
+`request.extensions["timeout"]`, a `{connect, read, write, pool}` dict
+(`_client.py:371` at build, `:585` at send). The socket reads it off each matched
+request after the original `send` returns or raises, because `_set_timeout`
+fills it inside `send` when the builder did not. It publishes the value into the
+call's context, the way it increments `seam_matched`. The wrapper writes the
+**distinct values seen across the call's matched attempts**: a list, normally
+holding one dict. An empty list means no matched request reached the socket,
+which is not the same fact as *no limit*. A null inside the dict is httpx's own
+spelling of *no limit for that phase*.
+
+**The retry budget is not part of the deadline in force.** The SDK checks it
+between attempts, so it decides how many attempts a call makes, not whether any
+attempt gets a response, and the no-response share is over attempts.
+
+**Storage is the builder's choice** (#371). Both of these spellings hold the
+three states:
+
+- **`metadata` keys owned by the wrapper.** `outer_deadline_seconds` is absent
+  when undeclared and JSON null when declared none, and `request_timeouts` sits
+  beside it. For those two keys the wrapper's value wins over a call site's
+  `metadata` argument, and a test says so.
+- **Columns.** `outer_deadline_seconds` is `Float`, nullable, with
+  `outer_deadline_declared` `Boolean NOT NULL` beside it, and `request_timeouts`
+  is JSONB `NOT NULL`.
+
+The names are fixed here either way, so that the acceptance reads can be written
+before the build. Those reads filter on a declared deadline and print what they
+exclude, as they already do for the header condition.
+
 ---
 
 ## Storage
