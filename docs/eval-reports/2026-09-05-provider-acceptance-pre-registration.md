@@ -1228,3 +1228,321 @@ in hand. The only per-provider traffic on record is
 [#22](https://github.com/bgunyel/clause-and-effect/issues/22)'s header A/B, which
 measured distortion, latency and cost and never computed a structure-failure
 rate or a no-response share.
+
+---
+
+# Amendment — the multiplicity correction is Bonferroni over the named set, and the draw grows to 125 cases
+
+| | |
+|---|---|
+| amended | 2026-11-17 |
+| branch | `dev-06` |
+| commit at amendment | `e59a02d674b6` |
+| decided in | [#377 — When is R-c's m fixed, if cells reach their declared n at different times?](https://github.com/bgunyel/clause-and-effect/issues/377) |
+| written by | [#390](https://github.com/bgunyel/clause-and-effect/issues/390), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | §1's *0/29* sentence; §2's rule-in bullet; R-c's heading, its correction clause as the amendment of R-b left it, and the last clause of its paragraph on R1; and three passages of §4 |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). It changes what already-written sentences
+mean, so it owes an old value, and the old value is given in full below.
+
+The pre-registration never says **which** multiplicity correction it uses.
+[#7](https://github.com/bgunyel/clause-and-effect/issues/7) controlled
+multiplicity only by restricting rule-in tests to genuine candidates, which is
+R1. §2's n = 29 is an **uncorrected** 95% bound.
+[#20](https://github.com/bgunyel/clause-and-effect/issues/20) then wrote *"the
+multiplicity correction"* into R-c as though one had been chosen, and none had.
+Under any family-wise correction, 0/29 does not rule in once m ≥ 2. Its one-sided
+upper bound is 11.9% at m = 2, 18.9% at m = 22 and 19.7% at m = 29, against a
+tolerance of 10%. So every sentence that rules a cell in on 29 changes meaning.
+The corrected n depends on m, and R2 declares n before a cell's first call, so m
+has to be known before the first call too. That is why R-c's choice of what the
+correction is taken over changes with it.
+
+**What stands unamended**, each with its reason:
+
+- **§2's table.** Its numbers are uncorrected 95% bounds, and they are still
+  true. They are the m = 1 row of the rule below.
+- **R2 and R3.** n is still declared before a cell's first call, and rule-in is
+  still evaluated exactly once, at that n. Only the way n is found changes.
+- **R-c's legitimacy argument**, *"Pool membership is observable without seeing
+  any rate"*, and its restatement for served calls in the amendment of R-b.
+  Both are still true. Neither is needed any more, because m is now fixed before
+  anything is observed.
+- **R-d's *"is counted in the correction's m"*.** Still true. A one-provider cell
+  is named, so it is counted.
+- **R-d's *"If the only provider serves 29 calls, those are 29 genuine
+  observations of its failure rate, and §2's bars apply to them unchanged"*.**
+  It reads through to §2, and §2 is amended below. 29 is §2's n at m = 1 under
+  the 10% branch.
+- **R-f's reason clause**, *"Without R-f, a provider named once could be tested
+  in two cells, and the correction's m would count cells R1 never named."* Still
+  true. R-f is also what makes the named set per `(model, channel)` the same as
+  §5's named set per model.
+- **R-g's *"it makes no cell testable and leaves m where it was"*.** Still true,
+  and more strongly: no attempt moves m, which is fixed at R1. R-g was appended
+  after #377 was decided, so #377 did not list it. It was read for this
+  amendment under the guard.
+- **The acceptable-set amendment's *"still rules in on its 29 clean served
+  calls"*.** Its argument holds at any n. 29 is §2's n at m = 1 under the 10%
+  branch. Read under the guard for the same reason as R-g.
+- **The *Verified against* paragraph after
+  [§Registrations](#registrations).** It records how §4's 29 were reproduced at
+  registration, and that record is still true.
+
+§1's conditional, R1 and R4–R6, §5 to §9, R-a, R-b as amended, R-e to R-g, and
+R4's pressure point as amended all stand. What the acceptable-set amendment says
+about the no-response share's bound is taken up under *Not decided here*.
+
+## The old value
+
+Each passage verbatim, with its own markup.
+
+From §1:
+
+> A cell clears it on 0/29 with a point estimate of zero.
+
+From §2, the rule-in bullet:
+
+> - **Rule-in:** upper bound below tolerance → **n = 29 clean observations**.
+
+R-c's heading, set in bold so that this quote does not create a second anchor:
+
+> **R-c. Named and testable are both reported, and the correction is over testable**
+
+R-c's correction clause, as the [amendment of
+R-b](#amendment--an-acceptance-rates-denominator-is-the-calls-its-provider-served-not-pool-exposure)
+left it:
+
+> The multiplicity correction is taken over the **testable** cells — those
+> served at least once — and the gap between named and testable is always shown.
+
+The last clause of R-c's paragraph on R1:
+
+> … which is why the named set stays frozen and only the correction's
+> denominator moves.
+
+From §4, the method line inside the frozen block, and two sentences:
+
+```
+method:     random.Random(20260905).sample(sorted(case_ids), 29)
+```
+
+> Within a cell there are still 29 distinct prompts.
+
+> Both routes cost 29 calls.
+
+R-c's heading and the last clause of its paragraph on R1 are not on #377's
+list. Both are here because the guard puts them here: each says the correction
+follows the testable count, and #377 decided that it does not.
+
+## The new value
+
+**The correction.**
+
+> The multiplicity correction is **single-step Bonferroni on each cell's
+> one-sided rule-in bound, at α/m** with α = 0.05. The family is **one pin
+> decision**: one `(model, channel)`. **m is the size of R1's named set for that
+> `(model, channel)`, fixed at R1**, before the first acquisition call. It is not
+> the testable count.
+>
+> R2's n follows from m. **The binding rule is the smallest n with
+> (1 − t)ⁿ ≤ 0.05 / m**, where t is whichever branch of §1's tolerance holds at
+> acquisition. Each cell is evaluated once, as R3 requires, as soon as it
+> reaches that n. Nothing waits for the acquisition window to close.
+>
+> **Rule-out is not corrected.** It stays at 2 consecutive failures, the
+> uncorrected 95% lower bound §2 registered.
+
+The table is illustrative. The formula binds.
+
+| m | t = 10% | t = 5% |
+|---:|---:|---:|
+| 1 | 29 | 59 |
+| 2 | 36 | 72 |
+| 12 | 53 | 107 |
+| 15 | 55 | 112 |
+| 29 | 61 | 125 |
+
+§1's condition currently fails, so the 5% column is the live one today. At m = 1
+the formula gives §2's 29 and 59 again. The *≤* and §2's *"below"* pick the same
+n. Zero failures in n has the upper bound 1 − (α/m)^(1/n), which is below t
+exactly when (1 − t)ⁿ < α/m. Equality never occurs, because (1 − t)ⁿ = 0.05 / m
+would need 3 to divide 10ⁿ at t = 10%, or 19 to divide 20ⁿ⁻¹ at t = 5%.
+
+**§1.** The sentence now reads: *"A cell clears it on 0/n, at the n §2 declares
+for it, with a point estimate of zero."*
+
+**§2's rule-in bullet** now reads:
+
+> - **Rule-in:** the one-sided upper bound at α/m below tolerance → **n clean
+>   observations, n the smallest with (1 − t)ⁿ ≤ 0.05 / m**.
+
+**R-c.** Its heading now reads *"Named and testable are both reported, and the
+correction is over the named set"*. Its correction clause now reads:
+
+> The multiplicity correction is taken over the **named** set: m is the number
+> of cells R1 named for the `(model, channel)`, fixed at R1. Testable cells —
+> those served at least once — are still reported, and the gap between named
+> and testable is always shown.
+
+The last clause of its paragraph on R1 now reads: *"… which is why the named set
+stays frozen. The correction is taken over that frozen set, so nothing about it
+moves on observation."*
+
+**The trade, recorded.** Testable stops being the correction's denominator. That
+reverses the clause the amendment of R-b wrote, for the reason below. A named
+cell that is never served still costs the correction power and buys no safety,
+as that amendment's argument says. The cost is accepted so that m is known
+before the first call, which R2 needs.
+
+**§4. The draw becomes one ordered list of 125 distinct cases.** Its head is
+§4's frozen 29, unchanged and in sorted order. Its tail is 96 cases drawn from
+the 404 not in §4's draw, under a new seed, in the order they were drawn. **Every
+cell in a family uses the list's first n cases**, n being the family's n under
+§2, so the pairing holds within each pin decision.
+
+```
+population: 433 (src.eval.dataset.load_tier1)
+head:       §4's draw, unchanged
+            head = random.Random(20260905).sample(sorted(case_ids), 29)
+            sha256 of the newline-joined sorted head reproduces
+            26cdec8e9ab8a5b3bfa15f76a88d136516066acc548a971bb402e07019638d84
+seed:       20261117
+method:     random.Random(20261117).sample(sorted(set(case_ids) - set(head)), 96)
+order:      the order sample() returns them in, which is the draw order
+sha256:     32547f20f5004126e7fb7765a2e7c1386f7c4b02559772cf232ccff69c033a2e
+            (of the newline-joined extension, in draw order)
+list:       sorted(head) followed by the extension in draw order
+sha256:     4802ad2996039d14ba5473f3d4fc638110181c242cd72e3fa3907459ceb19730
+            (of the newline-joined 125, in list order)
+```
+
+Each digest is over UTF-8 ids joined with `\n` and no trailing newline, as §4's
+is. Reproduced on CPython 3.13.15 under `uv run`, where §4's head also
+reproduces its own digest. **The seed is the amendment's date**, as §4's
+`20260905` was its registration's. It was fixed before the draw was run, and the
+draw was run once.
+
+The whole list, by position. Positions 1–29 are §4's 29, and 30–125 are the
+extension. *Sorted* means Python's string order, the order §4's digest is taken
+over, so `gdpr_art10_case4` comes before `gdpr_art6_case2`. That differs from
+the article order §4 prints its 29 in. Every family's n is at least 29, so the
+head's internal order never decides which cases a cell uses.
+
+```
+  1 gdpr_art10_case4      2 gdpr_art13_case6      3 gdpr_art13_case8      4 gdpr_art15_case2
+  5 gdpr_art17_case5      6 gdpr_art20_case2      7 gdpr_art23_case1      8 gdpr_art27_case4
+  9 gdpr_art32_case1     10 gdpr_art33_case2     11 gdpr_art33_case5     12 gdpr_art34_case1
+ 13 gdpr_art39_case2     14 gdpr_art41_case1     15 gdpr_art42_case4     16 gdpr_art58_case3
+ 17 gdpr_art60_case5     18 gdpr_art66_case5     19 gdpr_art69_case1     20 gdpr_art69_case2
+ 21 gdpr_art6_case2      22 gdpr_art6_case4      23 gdpr_art78_case2     24 gdpr_art80_case2
+ 25 gdpr_art81_case1     26 gdpr_art84_case3     27 gdpr_art86_case3     28 gdpr_art92_case2
+ 29 gdpr_art93_case2     30 gdpr_art27_case1     31 gdpr_art12_case7     32 gdpr_art37_case4
+ 33 gdpr_art33_case4     34 gdpr_art35_case3     35 gdpr_art48_case3     36 gdpr_art43_case5
+ 37 gdpr_art9_case5      38 gdpr_art49_case1     39 gdpr_art5_case5      40 gdpr_art16_case1
+ 41 gdpr_art11_case3     42 gdpr_art95_case2     43 gdpr_art4_case1      44 gdpr_art43_case2
+ 45 gdpr_art42_case2     46 gdpr_art61_case1     47 gdpr_art8_case1      48 gdpr_art23_case3
+ 49 gdpr_art64_case2     50 gdpr_art93_case1     51 gdpr_art53_case1     52 gdpr_art5_case8
+ 53 gdpr_art2_case4      54 gdpr_art24_case4     55 gdpr_art44_case1     56 gdpr_art83_case2
+ 57 gdpr_art84_case1     58 gdpr_art68_case2     59 gdpr_art75_case1     60 gdpr_art68_case4
+ 61 gdpr_art25_case4     62 gdpr_art78_case4     63 gdpr_art37_case5     64 gdpr_art70_case4
+ 65 gdpr_art29_case3     66 gdpr_art74_case3     67 gdpr_art79_case4     68 gdpr_art88_case1
+ 69 gdpr_art89_case4     70 gdpr_art94_case1     71 gdpr_art32_case3     72 gdpr_art67_case3
+ 73 gdpr_art20_case4     74 gdpr_art24_case3     75 gdpr_art17_case3     76 gdpr_art79_case1
+ 77 gdpr_art18_case2     78 gdpr_art1_case1      79 gdpr_art96_case3     80 gdpr_art25_case2
+ 81 gdpr_art64_case1     82 gdpr_art2_case5      83 gdpr_art23_case4     84 gdpr_art71_case2
+ 85 gdpr_art43_case3     86 gdpr_art70_case2     87 gdpr_art90_case3     88 gdpr_art94_case2
+ 89 gdpr_art47_case1     90 gdpr_art18_case1     91 gdpr_art17_case4     92 gdpr_art72_case1
+ 93 gdpr_art2_case1      94 gdpr_art49_case4     95 gdpr_art80_case1     96 gdpr_art49_case2
+ 97 gdpr_art26_case3     98 gdpr_art3_case1      99 gdpr_art61_case4    100 gdpr_art51_case2
+101 gdpr_art22_case4    102 gdpr_art93_case3    103 gdpr_art52_case3    104 gdpr_art77_case2
+105 gdpr_art64_case4    106 gdpr_art44_case3    107 gdpr_art82_case5    108 gdpr_art33_case6
+109 gdpr_art9_case4     110 gdpr_art70_case1    111 gdpr_art84_case2    112 gdpr_art12_case2
+113 gdpr_art82_case4    114 gdpr_art4_case8     115 gdpr_art31_case2    116 gdpr_art57_case3
+117 gdpr_art98_case2    118 gdpr_art56_case1    119 gdpr_art59_case1    120 gdpr_art10_case2
+121 gdpr_art9_case7     122 gdpr_art42_case1    123 gdpr_art3_case4     124 gdpr_art30_case2
+125 gdpr_art87_case1
+```
+
+§4's three sentences now read:
+
+- The method line in §4's block describes the list's head. The block above is
+  the method for the whole list.
+- *"Within a cell there are still n distinct prompts, n as §2 declares for the
+  cell's family."*
+- *"Both routes cost n calls."*
+
+**The cost, on record.** DeepSeek V4 Flash alone, at m = 29, needs **1,769**
+served calls at t = 10% (29 × 61) or **3,625** at 5% (29 × 125). The old n
+needed 841 (29 × 29).
+
+**The list's capacity, on record.** 125 cases supply n for m ≤ 30 under the 5%
+branch: n is 125 at m = 30 and 126 at m = 31. Under the 10% branch they supply
+any m this campaign could name. What a family named larger than that gets is
+under *Not decided here*.
+
+## The reason
+
+**Why Bonferroni.** Holm and Benjamini-Hochberg need every cell's p-value at
+once, and R3 evaluates each cell alone, at its own n and its own time.
+Bonferroni is the one correction compatible with R3. It holds under dependence,
+which the paired design creates, and it needs only m, never another cell's rate.
+Šidák assumes independence and buys at most one case. #377's resolution says it
+*"gives the same n"* at these sizes. Measured while writing this amendment, it
+gives the same n or one fewer at every m in the table: 35 against 36 at m = 2,
+and 124 against 125 at m = 29 under 5%.
+
+**Why the family is one `(model, channel)`.** A false rule-in corrupts one
+model's pin, and R-c already states the named set per model. A campaign-wide
+family of about 58 cells was rejected.
+
+**Why m is the named count.** It needs no observation at all, so it is known
+before the first call, as R2 needs. The testable count is known only once the
+acquisition window closes, and cells reach their n at different times. Fixing m
+at R1 also removes #377's question about testable cells that never reach n.
+Rejected: sizing n at the named m and reading the bar at the window's close with
+the testable m. That needs a pre-registered close. Without one, closing early is
+a lever decided after rates are visible. The power it buys is small, because n
+grows with the log of m: **58 against 61** for DeepSeek's 22 testable against 29
+named, at t = 10%.
+
+**Why rule-out stays uncorrected.** A false rule-out corrects itself when the
+pool rotates, and a false rule-in seals itself in as a pin. That is the
+revisability asymmetry §3 grounds peeking on. It is stated here because R-c says
+only *"the multiplicity correction"*, and never which bar it applies to.
+
+**Why 125 distinct cases, and not 29 used again.** §4's own reason. Repeats of a
+case are clustered observations, and a bound computed on them is optimistic, so
+61 or 125 calls cannot come from 29 prompts. Keeping the head frozen means
+[#7](https://github.com/bgunyel/clause-and-effect/issues/7)'s digest still
+verifies, and the extension has a seed and a digest of its own.
+
+**Not decided here.**
+
+- **Re-tests.** Whether an R6 re-test adds to m, or what bounds the extra chance
+  at rule-in that each re-test gets under a fixed m, belongs to [#397 — Does an
+  R6 re-test add to R-c's m, or does each re-test buy a free chance at
+  rule-in?](https://github.com/bgunyel/clause-and-effect/issues/397). This
+  amendment fixes m at R1 and says nothing about re-tests.
+- **The no-response share.** The [acceptable-set
+  amendment](#amendment--acceptable-set-membership-needs-a-cleared-no-response-share-not-rule-in-alone)
+  says the share clears when *"its Clopper-Pearson upper bound, 95% one-sided,
+  is below the §1 tolerance in force. That is the same bound and the same
+  reading as §2's rule-in, applied to a different quantity."* This amendment
+  corrects the rule-in bound only. So the share's bound stays at 95% as that
+  amendment states it, and the second sentence no longer holds of the level.
+  Whether the share takes the correction belongs to [#400 — Does the no-response
+  share's bound take R-c's Bonferroni correction, or stay at
+  95%?](https://github.com/bgunyel/clause-and-effect/issues/400).
+- **A named set larger than the list.** What n a cell gets when R1 names more
+  than 30 providers for its `(model, channel)` under the 5% branch belongs to
+  [#401 — What n does a cell get when R1 names more providers than the 125-case
+  draw supports?](https://github.com/bgunyel/clause-and-effect/issues/401).
+- **The acquisition window.** m no longer needs a close. R-d's pin and
+  acceptable-set reads still do.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.

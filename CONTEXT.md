@@ -194,12 +194,15 @@ _Avoid_: forbidden act, blocked act
 **Testable cell**:
 An acceptance cell whose provider served at least one call, so that it holds
 observations a rule-in or rule-out can be judged on. Being offered is not
-enough: a provider offered in every pool and never selected has no observations,
-cannot produce a false rule-in, and counted anyway would cost the multiplicity
-correction power while buying nothing. The correction is taken over testable
-cells, and the gap to the named set is always shown. Whether a cell is testable
-can be seen without reading any rate, because the router picks a provider before
-the response exists. That holds for structure failures, which reach the router as
+enough: a provider offered in every pool and never selected has no observations
+and cannot produce a false rule-in. The multiplicity correction is nonetheless
+taken over the named set and not over testable cells: m is the named set's size,
+fixed at R1, because R2 declares n before a cell's first call and the testable
+count is known only once acquisition ends (#377). A named cell that is never
+served costs the correction power and buys nothing, and that cost is accepted.
+Testable is still reported, and the gap to the named set is always shown.
+Whether a cell is testable can be seen without reading any rate, because the
+router picks a provider before the response exists. That holds for structure failures, which reach the router as
 ordinary responses, and not for HTTP-level failures, which can change what the
 router offers or picks next — a limit the offered count shares (#367).
 _Avoid_: offered, in the pool
