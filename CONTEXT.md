@@ -8,6 +8,19 @@ repository, not in advance of one.
 
 ## Language
 
+**Acceptance cell**:
+One `(model, channel, provider)` triple, the unit a rule-in or rule-out is
+judged on and the thing R1 names and R6 re-tests. Each part is read from the
+cell's own rows, never from configuration that may have changed since: the
+model is the `ModelNames` value the rows carry, e.g. `deepseek-v4-flash-0731`,
+not the OpenRouter slug that value was sent as and not the wire id the response
+reports; the channel is the `structured_output` mode the rows carry. So a new
+model or a new channel is a new cell, inheriting nothing from the old one,
+while a change *behind* the model — a provider redeploying, an alias being
+moved, a library repointing the value's slug — leaves the cell the same, and
+measuring it again is a re-test (#378).
+_Avoid_: pin candidate, model cell
+
 **Acceptance rate**:
 For one `(model, channel, provider)` cell, the share of the calls that provider
 **served** which came back structurally clean. Its denominator is the calls the
