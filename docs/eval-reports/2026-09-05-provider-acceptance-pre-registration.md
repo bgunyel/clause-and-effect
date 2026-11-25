@@ -4297,3 +4297,340 @@ effort's re-validation and is not governed here.
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Amendment — a re-test's no-response share is read on its rule-in slot, and an early stop spends the slot
+
+| | |
+|---|---|
+| amended | 2026-11-25 |
+| branch | `dev-06` |
+| commit at amendment | `7cb84e13e38b` |
+| decided in | [#422 — Is a re-test's no-response share read at its rule-in level α/(m·2ʲ), or at α/m?](https://github.com/bgunyel/clause-and-effect/issues/422) |
+| written by | [#425](https://github.com/bgunyel/clause-and-effect/issues/425), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | the [share-level amendment](#amendment--the-no-response-share-is-read-at-αm-over-the-named-set-the-level-rule-in-is-read-at)'s *clears* bullet and the bullet after it, as the [re-test reserve amendment](#amendment--re-tests-spend-a-family-reserve-and-the-j-th-extra-evaluation-in-a-family-is-read-at-αm2ʲ) left them, and its bound sentence; the re-test reserve amendment's slot bullet and the last two sentences of its trade; and one sentence of the [forced-membership amendment](#amendment--only-a-forced-acquisition-admits-a-member-and-the-organic-share-is-report-only)'s *The organic share is report-only* |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). The share-level amendment's *clears*
+bullet reads the share at α/m. The re-test reserve amendment left that as the
+text in force at a re-test until #422 decided. After this amendment a re-test's
+share is read at α/(m·2ʲ), so the bullet and the one after it would have meant
+something different, and they owe old values. So does the reserve's slot rule.
+Under it a slot is spent only when R3 evaluates, and after this amendment an
+early stop spends one too. Three more passages state the share's level as α/m
+at every evaluation, or bound rule-in alone, and they owe old values as well.
+
+The re-test reserve amendment left two questions open, and
+[#422](https://github.com/bgunyel/clause-and-effect/issues/422) asked both. At
+what level is a re-test's share read? And does a forced re-test that stops early
+pass its unspent slot forward? It decided that the share is read at
+α/(m·2ʲ), on the slot its rule-in spends, and that an early stop spends that
+slot. This amendment writes that decision.
+
+**What stands unamended**, each with its reason:
+
+- **The forced n.** The share-timing amendment's *Why the forced n is R2's n,
+  whatever the share's level*, as the re-test reserve amendment rewrote it,
+  already ends *"a forced share with no non-served attempt clears at 95%, at α/m
+  and at α/(m·2ʲ) alike"*. A re-test's n does not move.
+- **Rule-in.** The re-test reserve amendment's correction clause, its binding
+  rule, and §2's rule-in bullet as it rewrote them all stand. This amendment
+  reads the share at the level they already read rule-in at.
+- **j.** j is fixed at declaration, assigned in commit order of the recorded
+  causes within the family, and never reused by another cell. That stands. So
+  does the j bullet's last sentence, as the lapsed-pass amendment left it:
+  *"Only a mixed outcome's pass, or the pass of an acquisition that a cause
+  ended, to the same cell carries a slot forward."* An early stop is neither,
+  and after this amendment it spends its slot, so the sentence needs no third
+  case.
+- **The re-test reserve amendment's definition bullet**, *"**An extra
+  evaluation** is the R3 evaluation of a re-test under R6 and R-i."* It names
+  what a reserve slot is declared for, and its other two sentences keep the
+  forced run after an organic rule-in out of the reserve. When a slot is
+  **spent** is the slot bullet's to say, and that bullet is amended below. A
+  re-test is declared as an extra evaluation before its first call, when nobody
+  knows whether it will reach n. So a re-test that stops early is still read at
+  the j declared for it, and its n was computed from that j.
+- **The stop rule** and its sentence for re-tests, in the case-list and re-test
+  reserve amendments.
+- **The share-timing amendment's early stop.** It defines k\* *"at the level the
+  share is read at"*, so the level carries through and the wording does not
+  change. The early-stop labels stand as the forced-membership amendment wrote
+  them.
+- **The share-timing amendment's *Every unresolved forced share is an early
+  stop*.** It rests on the share's bound rising with k at the level the share is
+  read at. The share-level amendment checked that at 1 − 0.05/m for m in 1..31.
+  It was checked again for this amendment at every level α/(m·2ʲ), for m in
+  1..60 and j in 0..61, over s in 1..400 and k in 0..199, with
+  `scipy.stats.beta.isf`. No step decreases. Equal steps occur only where the
+  bound is within 2 × 10⁻¹⁴ of 1, far above either tolerance, where float
+  precision has run out.
+- **The mixed and cause-ended pass-throughs.** R3 as the mixed-cell amendment
+  amended it stands, and so does the lapsed-pass amendment's *A cause during an
+  acquisition*. A mixed outcome has neither an R3 evaluation nor an early stop,
+  and an acquisition that a cause ended has neither.
+- **The lapsed-pass amendment's *Why a cause during an acquisition passes its
+  slot unspent*.** Its reason cites *"a slot is spent only when R3 evaluates"*.
+  That was the rule when it was written, and the sentence is true as history.
+  Its conclusion stands under the slot rule as amended below: an acquisition
+  that a cause ended has neither an R3 evaluation nor an early stop, so its slot
+  is not spent. The same holds of that amendment's *What stands* bullet on the
+  re-test reserve amendment, which cites the same sentence.
+- **The forced-membership amendment's membership sentence**, as the re-test
+  reserve and lapsed-pass amendments left it. Its *"the share at the level the
+  share-level amendment states"* reads through to the share-level amendment as
+  amended below.
+- **The forced-membership amendment's invariant.** The forced acquisition after
+  an organic rule-in is the cell's first membership read, at α/m, and *"it
+  spends no slot of the re-test reserve"*. That stands. The slot it spends is the
+  cell's own α/m, as the slot bullet below says.
+- **The lapsed-pass amendment's *Re-testing a lapsed cell* and *A lapsed organic
+  rule-in*.** The first spends the next reserve slot, and its share is now read
+  at that slot's level too. The second's forced run is a first membership read
+  at α/m, and it draws no reserve slot.
+- **The share-level amendment's *Why α is not split*.** Its argument is per
+  read, so it holds at any level. Its *"m × α/m = α"* counts first evaluations,
+  and the trade below adds the re-tests. Its *"The level is the same under both
+  regimes"* holds at a re-test too, where both regimes read the share at
+  α/(m·2ʲ).
+- **The share-level amendment's bounds table, its A = 1 sentence, its k\* table
+  and its *The cost, on record***, as the forced-membership amendment left them.
+  Each is a statement at m = 29 and j = 0, a cell's first evaluation, and each
+  is still true.
+- **The forced-membership amendment's *What stands* bullets** saying that the
+  organic share *"is still read at α/m"*, and the 0.00323 and 0.00328 in its
+  reason. Each argues at a cell's first evaluation, as the text stood when it
+  was written, and each is still true as history.
+- **The *Not decided here* bullets that point at #422**, in the re-test reserve
+  and lapsed-pass amendments, and the forced-membership amendment's bullet on a
+  re-test's share level. Each is still true as history, and this amendment
+  writes what #422 decided.
+- **`CONTEXT.md`'s *Lapsed pass*.** Its *"only a re-test, spending a reserve
+  slot, can license one again"* stands. *Re-test* is updated, below.
+
+§1 and §2 as amended, R1, R2, R3 as amended, R4, R5, R6 as amended, §4 as
+amended, §5 to §9, R4's pressure point as amended, R-a, R-b as amended, R-c as
+amended twice, R-d to R-i, and the Bonferroni, mixed-cell, acceptable-set,
+share-timing, case-list, case-text and lapsed-pass amendments all stand, as
+later amendments left them. So do the dilution, share-level, forced-membership
+and re-test reserve amendments, except for the passages quoted below.
+
+## The old value
+
+Each passage verbatim, with its own markup, so that it can be found.
+
+**From the share-level amendment**, three passages.
+
+Its *clears* bullet and the bullet after it, as it wrote them:
+
+> - It **clears** when its Clopper-Pearson upper bound, one-sided at **α/m**
+>   with α = 0.05, is below the §1 tolerance in force. **m is R1's named count**
+>   for the cell's `(model, channel)`, fixed at R1: the m of R-c as amended. The
+>   level is the same under both regimes. That is the same bound, the same level
+>   and the same reading as §2's rule-in, applied to a different quantity.
+> - Rule-in and the share are each read at α/m. **α is not split** between them.
+
+The re-test reserve amendment replaced the *clears* bullet's last sentence with
+*"That is the same bound and the same reading as §2's rule-in, applied to a
+different quantity, and at a cell's first evaluation the same level."* It
+replaced the bullet after it with:
+
+> - At a cell's first evaluation, rule-in and the share are each read at α/m.
+>   **α is not split** between them. At an extra evaluation, rule-in is read at
+>   α/(m·2ʲ). The share's level there is held by [#422](https://github.com/bgunyel/clause-and-effect/issues/422),
+>   and until it is decided the bullet above, α/m, is the text in force.
+
+In the *clears* bullet, the words that change are the first sentence's
+*"one-sided at **α/m**"* and the last sentence's *"and at a cell's first
+evaluation the same level"*. Its second and third sentences stand. The bullet
+after it changes from its third sentence on.
+
+Its bound sentence, which rewrote the dilution amendment's:
+
+> At fixed s, the Clopper-Pearson upper bound on
+> k of s + k is `beta.ppf(1 − α/m, k + 1, s)`, and Beta(k + 1, s) is
+> stochastically increasing in k.
+
+The words that change are *"`beta.ppf(1 − α/m, k + 1, s)`"*, which names α/m as
+the level of every read. The rest stands.
+
+**From the re-test reserve amendment**, two passages.
+
+Its slot bullet:
+
+> - **A slot is spent only when R3 evaluates.** A slot is either a cell's own
+>   α/m or a reserve slot α/(m·2ʲ). An acquisition whose outcome is **mixed**
+>   passes its slot unspent to the cell's next acquisition. So a mixed first
+>   acquisition is re-tested at α/m, and a mixed re-test passes its α/(m·2ʲ) to
+>   the one after it. The unit of spending is an evaluation, not an acquisition
+>   and not a cell.
+
+The words that change are the first sentence, and *"an evaluation"* in the last.
+After this amendment an early stop spends a slot, and an early stop is not an R3
+evaluation. The middle three sentences stand.
+
+The last two sentences of its trade:
+
+> The bound is
+> on rule-in. The share at a re-test is under *Not decided here*.
+
+**From the forced-membership amendment**, the third sentence of its *The organic
+share is report-only*:
+
+> It is read once, at X's organic rule-in point, as the
+> share-timing amendment times it, and at α/m, the share-level amendment's level.
+
+The words that change are *"and at α/m, the share-level amendment's level"*.
+#422 prints the organic share at a re-test at α/(m·2ʲ).
+
+#422's resolution named the share-level amendment's two bullets, the reserve's
+*"A slot is spent only when R3 evaluates"*, and its trade's *"The bound is on
+rule-in"*. #425 added the trade's second sentence, and asked whether *"The unit
+of spending is an evaluation"* also owes a value. It does, for the reason given
+above. The assistant, writing this under #425, read every amendment and
+`CONTEXT.md` under the guard for each passage that states the share's level as
+α/m at every evaluation, or says that only R3 spends a slot. It found two more.
+The share-level amendment's bound sentence names α/m as the level of the bound
+it gives. The forced-membership amendment's report-only sentence reads the
+organic share at α/m, and #422's first decision moves that at a re-test. The
+forced-membership amendment's membership sentence reads through, and the
+lapsed-pass amendment's reason keeps its conclusion. Both are under *What
+stands*.
+
+## The new value
+
+**The share's level.** The *clears* bullet's first sentence now reads:
+
+> - It **clears** when its Clopper-Pearson upper bound, one-sided at the
+>   **level of the slot the cell's rule-in is read on**, with α = 0.05, is below
+>   the §1 tolerance in force: **α/m** at a cell's first evaluation, and
+>   **α/(m·2ʲ)** at a re-test declared at j.
+
+Its second and third sentences stand. Its last sentence now reads *"That is the
+same bound, the same level and the same reading as §2's rule-in, applied to a
+different quantity."* Those are the share-level amendment's own words, and
+after this amendment they hold at every evaluation.
+
+The bullet after it now reads:
+
+> - Rule-in and the share are read on **one slot**, each at that slot's level:
+>   α/m at a cell's first evaluation, and α/(m·2ʲ) at a re-test declared at j.
+>   One slot covers both reads, and **α is not split** between them. The
+>   organic share, which is report-only, is printed at the same level.
+
+**The bound sentence** now reads *"At fixed s, the Clopper-Pearson upper bound
+on k of s + k, at the level the share is read at, is
+`beta.isf(level, k + 1, s)`, and Beta(k + 1, s) is stochastically increasing in
+k."* `beta.isf(level, …)` and `beta.ppf(1 − level, …)` are the same quantile in
+exact arithmetic. In floating point, `1 − level` loses precision at the
+reserve's levels, as *k\* at a re-test* below shows.
+
+**The slot bullet** now reads:
+
+> - **A slot is spent when the cell's membership read is decided: when R3
+>   evaluates, or when an early stop fixes its share.** A slot is either a
+>   cell's own α/m or a reserve slot α/(m·2ʲ). An acquisition whose outcome is
+>   **mixed** passes its slot unspent to the cell's next acquisition. So a mixed
+>   first acquisition is re-tested at α/m, and a mixed re-test passes its
+>   α/(m·2ʲ) to the one after it. An acquisition that a cause ended passes its
+>   slot unspent too, as the lapsed-pass amendment says. A forced acquisition
+>   that **stops early** spends its slot. That includes a cell's own α/m slot
+>   when its first forced membership read stops early: a further forced
+>   acquisition of that cell is a re-test at the next j. The unit of spending is
+>   a decided read, which is an R3 evaluation or an early stop. It is not an
+>   acquisition and not a cell.
+
+**The trade's last two sentences** now read *"The bound holds in both
+directions. A re-test's share is read on the slot its rule-in spends, so the
+share direction's family-wise bound is α(1 + 1/m) too."*
+
+**The forced-membership amendment's sentence** now reads *"It is read once, at
+X's organic rule-in point, as the share-timing amendment times it, and at the
+share-level amendment's level: α/m at a cell's first evaluation, and α/(m·2ʲ)
+at a re-test declared at j."*
+
+**k\* at a re-test.** The share-timing amendment's formula binds. k\* is the
+smallest k for which the share's upper bound on k non-served attempts of n + k,
+*"at the level the share is read at"*, is at or above t. At a re-test that level
+is α/(m·2ʲ).
+
+Recomputed for this amendment, on CPython 3.13.15 with scipy 1.18.1 under
+`uv run`. n is the smallest n with (1 − t)ⁿ ≤ 0.05 / (m·2ʲ), in exact rational
+arithmetic. k\* is the smallest k with
+`scipy.stats.beta.isf(level, k + 1, n) ≥ t`. The grid is m in 1..60 and every j
+whose n fits the 433-case list: 3,446 `(m, j)` pairs at t = 10%, up to j = 61,
+and 1,421 at t = 5%, up to j = 27.
+
+> **k\* = 1 at every j, for m in 1..60, at both tolerances.** A re-test's forced
+> share clears only on zero non-served attempts, as a first test's does, and
+> the run stops at its first non-served attempt.
+
+That reproduces #422's measurement.
+
+**Why `isf` and not `ppf`.** The same grid computed with
+`beta.ppf(1 − level, k + 1, n)` gives 782 false exceptions at t = 10%. The first
+is at j = 38 (m = 58, n = 317, level 3.1 × 10⁻¹⁵). It gives none at t = 5%,
+where the list runs out at j = 27. `isf` gives none. The bound sentence above
+names `isf` for this reason.
+
+**The trade, recorded.** The share direction's family-wise bound is now
+**α(1 + 1/m)**, the same as rule-in's: 1.034α at m = 29, and 2α at m = 1. What
+is given up is admitting a re-test's share with one or two non-served attempts
+at a large n. Recomputed on the same grid for the reading rejected below, the
+share at α/m at a re-test: k\* is 2 from j = 3 at m = 1 (n = 49 at 10%, 99 at
+5%), and from j = 4 at m = 29 (n = 87 and 179). It is 3 at m = 1, j = 5 (n = 62
+and 126).
+
+## The reason
+
+**Why the share takes the reserve.** Read at α/m, a re-tested cell gets a fresh
+share read at α/m each time. So the share direction's family bound is
+α + R·α/m, with R the number of re-tests. R is chosen after failures are seen,
+through R6's config-change lever. That is #397's *Why the extra chance is not
+accepted*, pointed at the share. Membership is an intersection-union test, so a
+cell whose rate is fine but whose share is at or above t is falsely admitted by
+its share read alone. And the reserve raises a re-test's n while a share at α/m
+keeps its level, so the share gets **looser** further down the reserve, as *The
+trade* measures. A cell that is bad on the share and is re-tested enough times
+eventually clears.
+
+**Why one slot covers both reads.** It is the share-level amendment's *Why α is
+not split*. Each read makes its error with probability at most its own level,
+and requiring both reads costs no α. That holds at α/(m·2ʲ) as it does at α/m.
+Over the family, the first evaluations spend at most α in each direction, and
+the reserve spends at most α/m more.
+
+**Why an early stop spends its slot.** An early stop is the share read reaching
+its answer early. Once A reaches k\*, the outcome is fixed, as the share-timing
+amendment says. If its slot passed forward, a cell that is bad on the share
+could be re-read at the same α/(m·2ʲ) without limit, and the share direction
+would have no bound. A slot passes forward only when what ended the acquisition
+says nothing about either quantity being measured. For a mixed outcome that is an
+identity check, and for a cause it is a commit. An early stop is ended by the
+share's own data.
+
+**A correction, on record.** #422's question said that either answer on the
+early stop *"is safe in the admission direction, because an early stop can only
+refuse a cell"*. That holds of the acquisition that stops. Once the share is
+read at α/(m·2ʲ), it is false for the next re-test, for the reason above.
+
+Two alternatives are not taken. #422 rejected each:
+
+- **Keep the share at α/m at a re-test.** The share direction's bound is
+  α + R·α/m, unbounded in R, and the share loosens with j.
+- **Pass an early stop's slot forward**, as the lapsed-pass amendment does for an
+  acquisition that a cause ended. The share direction's bound is then unbounded.
+
+**`CONTEXT.md`'s *Re-test*** is updated, worded as proposed on #425. It said that
+the slot is spent *"only when R3 actually evaluates it"*.
+
+**Not decided here.** Nothing. #422 surfaced no new question. The open *What
+bounds an acquisition window* patch on map
+[#6](https://github.com/bgunyel/clause-and-effect/issues/6) does not depend on
+the share's level.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
