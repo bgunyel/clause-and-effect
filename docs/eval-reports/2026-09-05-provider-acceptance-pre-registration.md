@@ -3992,3 +3992,308 @@ Three alternatives are not taken. #397 rejected each:
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Amendment — a recorded cause after a pass lapses it, and a lapsed pass licenses nothing until a re-test passes
+
+| | |
+|---|---|
+| amended | 2026-11-25 |
+| branch | `dev-06` |
+| commit at amendment | `6d1966b16a23` |
+| decided in | [#414 — Does a recorded cause after a rule-in revoke the pin it licensed?](https://github.com/bgunyel/clause-and-effect/issues/414) |
+| written by | [#416](https://github.com/bgunyel/clause-and-effect/issues/416), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | R6; the [acceptable-set amendment](#amendment--acceptable-set-membership-needs-a-cleared-no-response-share-not-rule-in-alone)'s membership sentence, as the [forced-membership amendment](#amendment--only-a-forced-acquisition-admits-a-member-and-the-organic-share-is-report-only) and the [re-test reserve amendment](#amendment--re-tests-spend-a-family-reserve-and-the-j-th-extra-evaluation-in-a-family-is-read-at-αm2ʲ) left it; one row of the forced-membership amendment's labels table; and one sentence of the re-test reserve amendment's slot rule |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). R-i reaches only *"a re-test permitted by
+R6"*, and R6 permits re-testing *"a failed cell"*. After this amendment a cell
+whose pass has lapsed is re-tested under R-i, so R6's scope changes, and it owes
+an old value. The mixed-cell amendment could leave R6 standing because it wrote
+its own re-test rule. Doing that here would duplicate R-i. The membership
+sentence owes one too: under it, a forced acquisition that rules in and whose
+share clears admits a member. After this amendment such a cell is no longer a
+member once a recorded cause reaches it.
+
+[#414](https://github.com/bgunyel/clause-and-effect/issues/414) asked what a
+recorded cause does to a pass it reaches after rule-in. It decided that the
+cause neither revokes the pass nor leaves it standing. It **suspends** it. The
+pass stands as a result and licenses nothing until a re-test passes, and that
+re-test spends the re-test reserve. This amendment writes that decision.
+
+**Scope.** This governs what the acceptance read **licenses**, up to the point
+where it is handed off. Provider pinning itself is out of scope on map
+[#6](https://github.com/bgunyel/clause-and-effect/issues/6). **A cause recorded
+after a pin has been applied is the successor effort's re-validation, and it is
+not governed here.**
+
+**What stands unamended**, each with its reason:
+
+- **§1 and §2, as amended.** They say what clears the bar. This amendment says
+  what a pass that cleared it still licenses after a cause, and neither the bar
+  nor any n moves.
+- **R3, as the mixed-cell amendment amended it.** A cause that ends an
+  acquisition ends it before R3 evaluates, so R3's one evaluation is not spent,
+  as for a mixed cell. The stop is decided by a recorded commit or by the
+  identity of a row, neither of which says anything about failure. So it cannot
+  be a stop on good news, and it cannot be an extension on bad.
+- **R4.** A lapsed pass is never converted to *failed*, so R4 does not reach it.
+- **R5.** Rule-out peeks stay unrestricted. Rule-out stays open on a lapsed cell.
+- **R-i.** *"A re-test permitted by R6"* reads through to R6, which is amended
+  below. Which rows a re-test counts does not change.
+- **R-e and R-h.** *"A pass on the new channel licenses a pin on the new channel
+  only"* and *"A pass under the new value licenses a pin on the new value only"*
+  say **which** triple a pass licenses. Whether a pass licenses anything is the
+  membership sentence's to say, and that is amended below.
+- **R4's pressure point, as amended.** *"Every member clears rule-in, and its
+  no-response share, individually"* names no regime and no time. It reads
+  through to the membership sentence.
+- **The passages that describe R6 as permitting re-tests of a failed cell**: in
+  the channel registration, the no-response registration, the R-h and R-i
+  registration, the mixed-cell amendment and the share-timing amendment. Each argues about what a cause is, or about a cell that is neither
+  failed nor lapsed: a mixed cell, and an unresolved forced share, which is not a
+  pass. Each is still true as history.
+- **The mixed-cell amendment**, including *"The identity check is not a peek"*,
+  its re-test rule, and its accepted limit, *"A lab's own alias move, or a
+  provider redeploying, behind an **unchanged** permaslug leaves no per-call
+  trace the log is known to carry."* A redeploy behind an unchanged permaslug
+  stays that limit after a pass as before one.
+- **The forced-membership amendment**, except its membership sentence and one
+  row of its labels table, which are owed below. *Who gets a forced acquisition*
+  stands: a lapsed organic rule-in is still an organic rule-in. So does its
+  invariant: *"A further one needs a cause recorded under R6, before it, and
+  counts only R-i's rows"*, and the forced acquisition that follows an organic
+  rule-in is still the cell's **first** membership read.
+- **The re-test reserve amendment**, except one sentence of its slot rule, owed
+  below. *"A slot is spent only when R3 evaluates"* is the rule the cause-ended
+  acquisition below builds on. *"**An extra evaluation** is the R3 evaluation of
+  a re-test under R6 and R-i"* reaches a lapsed cell's re-test through R6 as
+  amended. j's assignment in commit order of the recorded causes, the stop rule
+  and its sentence for re-tests, and the trade, α(1 + 1/m), all stand. The bound
+  still holds, because a lapsed cell's re-test spends a reserve slot and an
+  acquisition that a cause ended spends none. Its *Not decided here* bullet on a
+  forced re-test that stops early is about an early stop, which this amendment
+  does not reach, and is held by
+  [#422](https://github.com/bgunyel/clause-and-effect/issues/422).
+- **§8's outcome table.** It covers the reproduction, not cell outcomes.
+- **`CONTEXT.md`'s *Re-test*.** *"a mixed outcome passes the slot on unspent"*
+  names one case and does not say it is the only one. *Acceptance cell* and
+  *Mixed cell* stand too.
+
+§1 and §2 as amended, R1, R2, R3 as amended, R4, R5, §4 as amended, §5 to §9,
+R4's pressure point as amended, R-a, R-b as amended, R-c as amended twice, R-d
+to R-i, and the mixed-cell, dilution, share-timing, share-level, case-list and
+case-text amendments all stand. So do the acceptable-set, forced-membership and
+re-test reserve amendments, except for the passages quoted below.
+
+## The old value
+
+Each passage verbatim, with its own markup, so that it can be found.
+
+**R6**, from §3:
+
+> - **R6.** Re-testing a failed cell requires a cause external to the log — a
+>   config, model, or provider change — recorded before the new acquisition, with
+>   the prior result left standing. *Closes:* R4 evaded by relabelling.
+
+The words that change are *"a failed cell"*. The rest of R6 stands.
+
+**The membership sentence**, as the text stands at this amendment. The
+acceptable-set amendment wrote it, and the forced-membership amendment replaced
+it with:
+
+> A cell is a member of an acceptable set only if **one forced acquisition** of
+> it rules in under §2 and its no-response share also clears. Both are read once
+> under the pin, at the family's R2 n, each at α/m. The share membership needs
+> is the **pinned-condition share**, which is X's share under the condition a
+> config pin `{only: [X, Y], allow_fallbacks: True}` sends X traffic under. **No
+> organic read admits a member.** The organic share is evidence about a
+> different quantity. It is not a test of this one.
+
+The re-test reserve amendment then replaced its second sentence, *"Both are read
+once under the pin, at the family's R2 n, each at α/m."*, with *"Both are read
+once under the pin. At a cell's first membership read, that is at the family's
+R2 n, each at α/m. At a re-test it is at the re-test's own R2 n, with rule-in at
+α/(m·2ʲ) and the share at the level the share-level amendment states."* Its first
+sentence is the one that changes: under it, a cell whose forced acquisition
+passed is a member whatever was recorded after the pass. The rest stands as
+those two amendments left it.
+
+**From the forced-membership amendment's labels table**, one row:
+
+> | a forced acquisition that reaches n and rules in | a member; its share clears, because every unresolved forced share is an early stop |
+
+The words that change are *"a member"*. The row's reason, that its share
+clears, stands.
+
+**From the re-test reserve amendment**, its slot rule's j bullet:
+
+> - **j is fixed when the re-test's R2 n is declared**, before its first call.
+>   It is assigned in commit order of the recorded causes within the family, and
+>   it is never reused by another cell. Only a mixed outcome's pass to the same
+>   cell carries a slot forward.
+
+The words that change are the last sentence's *"Only a mixed outcome's pass"*.
+The rest of the bullet stands, and a slot is still never reused by another cell.
+
+#414's resolution named R6 and the membership sentence. The assistant, writing
+this under #416, read every amendment and registration and `CONTEXT.md` under
+the guard, for each passage that says what a pass licenses, what R6 re-tests, or
+which acquisition passes a slot forward. It found the other two. The labels row
+says that a forced pass reads *a member*, and after this amendment it does only
+until a cause lapses it. The slot sentence says that only a mixed outcome passes
+a slot forward, and #414's sixth decision adds an acquisition that a cause
+ended. #413's input on #416 read that pass-through as consistent with the
+reserve's text. Read under the guard, the word *"Only"* excludes it, so the
+sentence is quoted here rather than left to be read against this amendment.
+
+## The new value
+
+**R6, as amended.**
+
+> - **R6.** Re-testing a failed or lapsed cell requires a cause external to the
+>   log — a config, model, or provider change — recorded before the new
+>   acquisition, with the prior result left standing. *Closes:* R4 evaded by
+>   relabelling.
+
+**The membership sentence's first sentence** now reads:
+
+> A cell is a member of an acceptable set only if **one forced acquisition** of
+> it rules in under §2 and its no-response share also clears, and **that pass
+> has not lapsed**.
+
+The rest of the membership sentence stands as the forced-membership and re-test
+reserve amendments left it. A lapsed cell is admitted again only by a re-test,
+which is a forced acquisition read as those sentences say.
+
+**What a lapsed pass is.**
+
+> A pass **lapses** when a recorded R6 cause reaches its cell before the
+> acceptance read is handed off. The pass stands as a result, as R6's prior
+> result does, and the read prints it, for example *"passed, lapsed by cause
+> `<sha>`"*. It licenses no membership and no pin. It is never converted to
+> *failed*. Rule-out stays open under R5.
+
+**Reach.**
+
+> The commit that records a cause declares the cells it reaches. A commit that
+> declares none reaches **every cell of its `ModelNames` value, on every
+> channel**.
+
+#414 gave examples. A provider redeploy reaches one `(model, channel, provider)`
+cell. An alias move, an OpenRouter re-point or an `ai_common` repoint reaches the
+whole model, since a slug is per model. A config change reaches whatever it
+touches, and its commit says what that is.
+
+**Detection after a pass.**
+
+> The read checks the identity of **every row of the model up to handoff**, not
+> only the counted rows. A row carrying a permaslug other than the passed rows'
+> permaslug is a detected cause. It is recorded as a commit, with the default
+> reach above. Reading identity is not a peek, as the mixed-cell amendment
+> already says.
+
+One case follows from the definitions. The mixed-cell amendment says that *"A
+null permaslug is its own bucket and never a value"*. So a null row after a pass
+carries no permaslug **other than** the passed rows', and it is not a detected
+cause. A change hidden in null rows cannot be seen after a pass, as before one,
+and it joins the mixed-cell amendment's recorded limit.
+
+**Re-testing a lapsed cell.**
+
+> Re-testing a lapsed cell is an R-i re-test. It spends the next reserve slot,
+> α/(m·2ʲ), with j in commit order of the causes within the `(model, channel)`,
+> as for any re-test. It counts only the rows that descend from the cause. A
+> cell that is never re-tested stays lapsed, and it is not a member.
+
+**A cause during an acquisition.**
+
+> A cause that reaches a cell during an acquisition, before R3 has evaluated
+> it, ends that acquisition. Its rows stand as the prior result. Its slot, α/m
+> or α/(m·2ʲ), passes **unspent** to the cell's next acquisition, as a mixed
+> outcome's slot does under the re-test reserve amendment. That acquisition
+> counts only the rows that descend from the cause.
+
+**A lapsed organic rule-in.**
+
+> A lapsed organic rule-in keeps its one forced acquisition, as the
+> forced-membership amendment gives every organic rule-in, at that run's
+> existing level. The forced run draws no reserve slot. It counts only the rows
+> that descend from the cause.
+
+That run's existing level is α/m, because the forced acquisition after an
+organic rule-in is the cell's first membership read.
+
+**The labels row** now reads:
+
+> | a forced acquisition that reaches n and rules in | a member, until a recorded cause lapses the pass, and then *"passed, lapsed by cause `<sha>`"* and not a member; its share clears, because every unresolved forced share is an early stop |
+
+**The slot sentence** now reads *"Only a mixed outcome's pass, or the pass of an
+acquisition that a cause ended, to the same cell carries a slot forward."*
+
+## The reason
+
+**Why the pass is suspended.** A cell's counted rows are evidence about the
+deployment that served them. A recorded cause that reaches the cell after its
+pass says that deployment may no longer be the one that serves. A pin taken on
+the pass would then rest on rows about a deployment that may be gone. The pass
+still happened, and its rows still describe what they measured, so the result
+stands. What it licenses is suspended until rows taken after the cause pass.
+
+**Why reach is declared, and defaults to the whole model.** Inferring reach from
+the kind of cause was rejected, because the classification would be made after
+the rows exist. The commit that records the cause is written before any re-test,
+so its declaration is fixed before any rate is computed. A commit that declares
+nothing reaches every cell of its `ModelNames` value, on every channel, because
+that is the direction that blocks a pin.
+
+**Why a re-test of a lapsed cell spends the reserve.** It is #397's argument, as
+the re-test reserve amendment gives it: Bonferroni counts the evaluations run,
+whatever caused them. Without this, a config change after a pass would buy a
+free test, which is #397's lever pointed the other way.
+
+**Why the read checks every row of the model.** A change after rule-in leaves no
+row in the cell's counted rows, which end at the rule-in point. Organic and
+forced-run rows keep landing on the model after it, so a change behind the
+model's slug shows there. Reading only the counted rows would miss it.
+
+**Why a cause during an acquisition passes its slot unspent.** The acquisition
+ends before R3 evaluates, and a slot is spent only when R3 evaluates. The rows
+it took before the cause are not pooled with the rows after it, as R-i requires
+of a re-test.
+
+**Why a lapsed organic rule-in keeps its forced run without a slot.** The
+organic pass never licensed membership, so the forced run is the evaluation
+#408 already budgeted for, not an extra one.
+
+Two alternatives are not taken. #414 rejected each:
+
+- **Leave the pass standing.** It licenses a pin on rows about a deployment that
+  may be gone. That is a false rule-in of the silent kind, which §2's asymmetry
+  is built against.
+- **Revoke it to *failed*, or to a rule-out.** That is a false claim about a rate
+  nobody measured, the mixed-cell amendment's reason for not failing a mixed
+  cell. It would also make every recorded cause a rule-out of every cell it
+  touches.
+
+**`CONTEXT.md`** gains **Lapsed pass**, worded as in #414's resolution.
+
+**Not decided here.**
+
+- **Where handoff falls.** This amendment says that a cause recorded before the
+  acceptance read is handed off reaches the read. Where handoff falls is the
+  open *What bounds an acquisition window* patch on map
+  [#6](https://github.com/bgunyel/clause-and-effect/issues/6).
+- **A lapsed cell's re-test share level.** It is a re-test, so its share level is
+  held by [#422 — Is a re-test's no-response share read at its rule-in level
+  α/(m·2ʲ), or at α/m?](https://github.com/bgunyel/clause-and-effect/issues/422),
+  and until it is decided the share-level amendment's α/m is the text in force.
+
+**Out of scope.** A cause recorded after a pin has been applied is the successor
+effort's re-validation and is not governed here.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
