@@ -57,6 +57,11 @@ is refused. Measured in a fixture holding only the superseded ref. Only where no
 `dev-NN` ref can be read at all does the rule fall back to accepting any of them.
 _Avoid_: development branch, current branch
 
+**Case list**:
+The one ordered list of every Tier-1 case that acquisition takes prompts from.
+Every cell in a family uses its first n positions, n from R2, and §4's 29 are
+its head (#401).
+
 **Check**:
 An assertion whose expected verdict is written out in advance, so running it can
 only agree or disagree with what was already claimed. Every assertion in the
