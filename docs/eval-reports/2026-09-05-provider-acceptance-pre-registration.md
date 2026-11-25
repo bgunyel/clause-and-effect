@@ -1919,6 +1919,12 @@ amendment writes that decision.
   and [#405 — Append the share-timing amendment: the no-response share is read
   once, where rule-in is read, and a forced acquisition decides membership
   alone](https://github.com/bgunyel/clause-and-effect/issues/405) writes it.
+  Whether an organic read can admit a member at all, [#408 — Does clearing the
+  no-response share by organic read, then by forced run, buy a second chance at
+  α/m?](https://github.com/bgunyel/clause-and-effect/issues/408) decided, and
+  [#411 — Append the forced-membership amendment: only a forced acquisition
+  admits a member, and the organic share is report-only](https://github.com/bgunyel/clause-and-effect/issues/411)
+  writes it.
 - **The forced read.** It was already per cell, and it is unchanged. Forced and
   organic never pool.
 - **Its rejected alternative *Worst-case attribution*.** It records what #371
