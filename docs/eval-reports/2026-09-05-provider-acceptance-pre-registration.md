@@ -1859,3 +1859,240 @@ re-test mixed; and a repoint that no commit carries reads as mixed.
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Amendment — an organic cell's no-response share charges every unattributed attempt to the candidate
+
+| | |
+|---|---|
+| amended | 2026-11-25 |
+| branch | `dev-06` |
+| commit at amendment | `63396fb71661` |
+| decided in | [#391 — The organic no-response share can be cleared by dilution: does the gate need more than a (model, channel) read?](https://github.com/bgunyel/clause-and-effect/issues/391) |
+| written by | [#404](https://github.com/bgunyel/clause-and-effect/issues/404), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | four passages of the [acceptable-set amendment](#amendment--acceptable-set-membership-needs-a-cleared-no-response-share-not-rule-in-alone): the share's ratio, the level it is read at, the reason given for that level, and its *The trade, recorded* |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). The acceptable-set amendment says the
+organic share *"is read at the **`(model, channel)`** level"*. Under that
+sentence every cell of a `(model, channel)` reads one share. After this
+amendment each cell reads its own, so the sentence would have meant something
+different, and it owes an old value. Three other passages of the same amendment
+state that level or rest on it. They owe old values for the same reason, and all
+four are given below.
+
+The acceptable-set amendment recorded the limit this closes, under *The trade,
+recorded*. Read per `(model, channel)`, a provider that carries a small fraction
+of its `(model, channel)`'s attempts can be let through by its neighbours' clean
+attempts. Its no-response attempts are diluted below the tolerance, nothing
+triggers a forced acquisition, and the silent false rule-in the gate was decided
+to close stays open for that provider. #391 decided how to close it, and this
+amendment writes that decision.
+
+**What stands unamended**, each with its reason:
+
+- **R-g.** Unchanged, including its attempt-level count in three buckets,
+  printed beside every cell of the `(model, channel)`. The count stays per
+  `(model, channel)`. Only the share read from it moves to the cell.
+- **§2's rule-in, and R3 as amended.** The share gates what a rule-in licenses.
+  Neither the bar nor when it is read changes.
+- **The acceptable-set amendment's numerator sentence**, *"Its numerator is
+  every attempt no provider served, whatever its bucket, so for organic
+  acquisition it is the sum of R-g's three buckets."* Still true. A, below, is
+  that sum.
+- **Its *clears* bullet.** The bound and its level do not move here: the
+  Clopper-Pearson upper bound, 95% one-sided, below the §1 tolerance in force.
+  [#400 — Does the no-response share's bound take R-c's Bonferroni correction,
+  or stay at 95%?](https://github.com/bgunyel/clause-and-effect/issues/400)
+  decided that the level moves to α/m, and [#407 — Append the share-level
+  amendment: the no-response share is read at α/m over the named
+  set](https://github.com/bgunyel/clause-and-effect/issues/407) writes it. Every
+  bound below is at the level the acceptable-set amendment states.
+- **Its last bullet.** A cell that rules in and whose share does not clear is
+  still *"rule-in, no-response unresolved"*. It is not a member, and a config pin
+  on it still needs a forced acquisition whose per-cell share clears. When the
+  share is read, and over which window A and s_X are counted, [#392 — When is
+  the no-response share read, and what n does a forced clearing acquisition
+  declare?](https://github.com/bgunyel/clause-and-effect/issues/392) decided,
+  and [#405 — Append the share-timing amendment: the no-response share is read
+  once, where rule-in is read, and a forced acquisition decides membership
+  alone](https://github.com/bgunyel/clause-and-effect/issues/405) writes it.
+- **The forced read.** It was already per cell, and it is unchanged. Forced and
+  organic never pool.
+- **Its rejected alternative *Worst-case attribution*.** It records what #371
+  rejected and why, and it is still true of the consequence it names. This
+  amendment takes the same arithmetic without that consequence. *Why this is not
+  the worst-case attribution #371 rejected*, below, says why.
+
+§1 and §2 as amended, R1, R2, R3 as amended, R4–R6, §4 as amended, §5 to §9,
+R4's pressure point as amended, R-a, R-b as amended, R-c as amended twice, R-d
+to R-i, and the mixed-cell amendment all stand.
+
+## The old value
+
+From the acceptable-set amendment, verbatim, four passages. Each is quoted
+whole, with its own markup, so that it can be found.
+
+**The share's ratio**, its first bullet:
+
+> - The **no-response share** is non-served attempts over all attempts. Its
+>   numerator is every attempt no provider served, whatever its bucket, so for
+>   organic acquisition it is the sum of R-g's three buckets.
+
+The words that change are *"non-served attempts over all attempts"*. Read per
+cell under organic routing, *all attempts* would be the cell's own, and an
+organic cell's own non-served attempts cannot be counted, because they name no
+provider. The second sentence stands.
+
+**The level**, its third bullet:
+
+> - It is read at the **`(model, channel)`** level for organic acquisition and
+>   **per cell** for forced acquisition. Forced and organic never pool.
+
+**The reason for the level**, from its *The reason*:
+
+> The organic share is read at `(model, channel)` level because an organic
+> no-response attempt names no provider, so it cannot be charged to one cell. The
+> forced acquisition is the way out of that bluntness, because under a pin the
+> attempt belongs to the cell's condition.
+
+**The dilution paragraph**, from the same section:
+
+> **The trade, recorded.** #371 judged the organic read blunt but safe. It is safe
+> in one direction only. A provider can be held back by its neighbours' timeouts,
+> and it can also be **let through by its neighbours' clean attempts** when it
+> carries a small fraction of its `(model, channel)`'s attempts. In the case
+> above, a provider with 19 no-response attempts of 48 has a share whose upper
+> bound is 52.5% on its own. Pooled with 300 clean attempts from other providers
+> on the same `(model, channel)`, it is 19/348 with an upper bound of 7.9%, which
+> clears a 10% tolerance. Pooled with 1000, it is 19/1048 with an upper bound of
+> 2.7%, which clears 5% too. The organic gate then passes, nothing triggers a
+> forced acquisition, and the silent false rule-in this amendment was decided to
+> close stays open for that provider. The rule above is registered as decided.
+> Its limit is recorded here, so that the commitment does not claim a safety it
+> lacks. Whether the gate needs more than a `(model, channel)` read belongs to
+> [#391 — The organic no-response share can be cleared by dilution: does the gate
+> need more than a (model, channel) read?](https://github.com/bgunyel/clause-and-effect/issues/391),
+> and any change it makes is a further amendment, owed before the first
+> acquisition call.
+
+#391 named the level bullet and the dilution paragraph. The assistant, writing
+this under #404, read the rest of the acceptable-set amendment under the guard
+and found two more passages whose meaning a per-cell read changes: the share's
+ratio and the reason given for the level.
+
+## The new value
+
+**The share's ratio.** The first bullet now reads:
+
+> - The **no-response share** is a cell's non-served attempts over its
+>   non-served and served attempts, counted as the read bullet below says for
+>   each regime. Its numerator is every attempt no provider served, whatever its
+>   bucket, so for organic acquisition it is the sum of R-g's three buckets.
+
+**The level.** The third bullet now reads:
+
+> - It is read **per cell** under both regimes. Forced and organic never pool.
+>   - **Forced acquisition.** The cell's non-served attempts under the pin, over
+>     all its attempts under the pin, as before.
+>   - **Organic acquisition.** Cell X's share is **A / (s_X + A)**. **A** is
+>     every attempt on X's `(model, channel)` whose `served_provider` is null,
+>     in all three of R-g's buckets. **s_X** is the attempts X's provider served
+>     under organic routing, clean or not, counted per attempt and not per call.
+
+A cell whose share does not clear reads *"rule-in, no-response unresolved"* and
+needs a forced acquisition, as the last bullet already says.
+
+**The reason for the level** now reads:
+
+> Both regimes read the share per cell. An organic no-response attempt names no
+> provider, so it cannot be charged to the one cell it belongs to, and it is
+> charged to every candidate instead. The forced acquisition is the way out of
+> that bluntness, because under a pin the attempt belongs to the cell's
+> condition.
+
+**The dilution paragraph** now reads:
+
+> **Dilution, closed by construction.** Let a_X be the attempts in A that were
+> in fact routed to X, so a_X ≤ A. X's own share is a_X / (s_X + a_X), which
+> increases with a_X, so no split of the unattributed attempts makes X look
+> worse than the read A / (s_X + A). Other providers' clean attempts are not in
+> s_X, so they cannot dilute it. The case above, a provider with 19 no-response
+> attempts of 48, has s_X = 29 and A ≥ 19, whatever its neighbours carry. Its
+> share is at least 19/48, with an upper bound of 52.48%. That case uses n = 29,
+> which is uncorrected. At the corrected rule-in n of 61 it reads at least
+> 19/80, with an upper bound of 32.87%. Neither clears either tolerance. The
+> trade this read makes in place of dilution is recorded in this amendment.
+
+The same holds of the bound the gate reads, not only of the ratio. At fixed s,
+the Clopper-Pearson upper bound on k of s + k is `beta.ppf(0.95, k + 1, s)`, and
+Beta(k + 1, s) is stochastically increasing in k. #391 checked this numerically
+for s in 20..200 and k in 0..40. It was checked again for this amendment for s
+in 1..400 and k in 0..199, with no exception.
+
+## The reason
+
+Without this amendment the acceptable-set amendment's gate is open in the case
+it was decided for. A provider that gets no response on a large part of its
+attempts, but carries a small part of its `(model, channel)`'s attempts, reads a
+pooled share below the tolerance. No forced acquisition is triggered. A pin on
+it is a false rule-in of the silent kind, the error §2's asymmetry is built
+against.
+
+**Bounds at the corrected rule-in n.** The Clopper-Pearson upper bound on A of
+s + A, **95% one-sided, the level the acceptable-set amendment states**.
+s = 61 and s = 125 are the m = 29 row of the Bonferroni amendment's table of n,
+under the 10% and 5% branches. Recomputed for this amendment with
+`scipy.stats.beta.ppf(0.95, k + 1, n - k)` at k = A and n = s + A:
+
+| A | s = 61, 10% | clears | s = 125, 5% | clears |
+|---:|---:|---|---:|---|
+| 0 | 4.79% | yes | 2.37% | yes |
+| 1 | 7.42% | yes | 3.71% | yes |
+| 2 | 9.66% | yes | 4.87% | yes |
+| 3 | 11.67% | no | 5.95% | no |
+| 19 | 32.87% | no | 18.76% | no |
+
+In practice the organic read clears only on a `(model, channel)` that is nearly
+free of no-response attempts. Otherwise it routes the candidate to a forced
+acquisition.
+
+**Why this is not the worst-case attribution #371 rejected.** #371 rejected
+charging every organic no-response attempt to every cell for its consequence:
+it *"turns one organic timeout into a rule-out across a whole
+`(model, channel)`"*. Under the acceptable-set amendment a share that does not
+clear is never a rule-out. It is only *"rule-in, no-response unresolved"*, so
+the same arithmetic now costs a forced run and nothing more. At the 95% level this
+amendment inherits, one timeout still clears at both tolerances, the A = 1 row
+above. #400 decided that the level moves to α/m, and #407, which writes that,
+gives this property up explicitly.
+
+Three alternatives are not taken. #391 rejected each:
+
+- **Accept the limit.** It leaves the silent false rule-in open.
+- **A forced acquisition for every candidate.** It is never safer than the read
+  above, and it always costs more.
+- **The largest plausible per-provider share, from pool exposure.** It cannot be
+  computed. An attempt that fails at the HTTP level writes no pool, as R-d's
+  *Why observed* says.
+
+**The trade, recorded.**
+
+> **A ignores attribution.** `served_provider` is phase 1 and is read from the
+> response body only. So a no-response attempt that the enrichment sweep later
+> traces to a provider through `routing_chain` still has a null
+> `served_provider`. It stays in A and is charged to every candidate, the
+> provider it was traced to included. Such a trace is possible only if the
+> header `generation_id` survives a timeout, and that is unobserved.
+
+Precision is given up so that the gate never depends on enrichment being right.
+A candidate can be sent to a forced acquisition by a timeout the log could have
+placed on another provider. That costs calls and never makes a false rule-in,
+which is the direction §2's asymmetry prefers. The limit is written down here,
+before the numbers.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.

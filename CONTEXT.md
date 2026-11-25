@@ -132,7 +132,11 @@ An upstream attempt that left the client and got no HTTP response, so its
 `llm_attempt.http_status` is null. It names no provider, so it is never in an
 acceptance rate's denominator. It is still counted, per `(model, channel)` for
 organic routing and per cell under a measurement pin, because dropping it would
-let a provider that never answers read as one that never failed (#371). It is
+let a provider that never answers read as one that never failed (#371). The
+count is per `(model, channel)` under organic routing, but the no-response share
+is read per cell under both regimes: under organic routing every no-response
+attempt is charged to the candidate, the worst case, and under a pin the attempt
+is attributed to the cell's condition by construction (#391). It is
 counted per attempt, not per call: a call that got no response on its first
 attempt and was served clean on its second has status `OK`. Not *timeout*: a
 timeout exists only relative to a deadline, and none of the timeouts the stack
