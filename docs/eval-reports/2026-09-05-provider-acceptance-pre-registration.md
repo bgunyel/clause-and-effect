@@ -2361,3 +2361,331 @@ Two alternatives are not taken. #392 rejected each:
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Amendment — the no-response share is read at α/m over the named set, the level rule-in is read at
+
+| | |
+|---|---|
+| amended | 2026-11-25 |
+| branch | `dev-06` |
+| commit at amendment | `1cbc4eda388f` |
+| decided in | [#400 — Does the no-response share's bound take R-c's Bonferroni correction, or stay at 95%?](https://github.com/bgunyel/clause-and-effect/issues/400) |
+| written by | [#407](https://github.com/bgunyel/clause-and-effect/issues/407), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | the [acceptable-set amendment](#amendment--acceptable-set-membership-needs-a-cleared-no-response-share-not-rule-in-alone)'s *clears* bullet; one sentence of the [Bonferroni amendment](#amendment--the-multiplicity-correction-is-bonferroni-over-the-named-set-and-the-draw-grows-to-125-cases)'s *Not decided here*; and every passage of the [dilution amendment](#amendment--an-organic-cells-no-response-share-charges-every-unattributed-attempt-to-the-candidate) and the [share-timing amendment](#amendment--the-no-response-share-is-read-once-where-rule-in-is-read-and-a-forced-acquisition-decides-membership-alone) that states the share's level, or reads a consequence of it |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). The acceptable-set amendment says the
+share clears when its Clopper-Pearson upper bound, *"95% one-sided"*, is below
+the tolerance in force. After this amendment the bound is read at α/m, so the
+sentence would have meant something different, and it owes an old value.
+
+The later amendments owe old values for two reasons. Some passages state a 95%
+bound, or a consequence of one, as the bound the gate reads. Five others name
+the share's level by pointing at the acceptable-set amendment, as *"the level
+the acceptable-set amendment states"* or *"the 95% level"* it states. That
+phrase meant 95% when each was written. This amendment changes what it would
+mean, so those passages would mean something different too.
+
+The Bonferroni amendment corrected the rule-in bound only. It left the share's
+level to [#400](https://github.com/bgunyel/clause-and-effect/issues/400). #400
+decided that the share takes the same correction, and this amendment writes that
+decision.
+
+**What stands unamended**, each with its reason:
+
+- **§2's rule-in, R3 as amended, and R-c as amended twice.** The share is now
+  read at their level. The bar, the point at which it is read, and m do not
+  move.
+- **Rule-out.** It stays uncorrected, at 2 consecutive failures, for the
+  Bonferroni amendment's reason. A share that does not clear is never a
+  rule-out.
+- **R-g.** Its buckets, its deadline clause and its count name no level.
+- **The share's definition and its reads.** These are the ratio bullet and its
+  numerator sentence as the dilution amendment left them, and the read bullet
+  and the last bullet as the share-timing amendment left them. None of them
+  names a level. The share is still read per cell, once, at the rule-in point.
+- **The share-timing amendment's early stop.** It defines k\* at *"the level the
+  share is read at"*, so the level carries through and the wording does not
+  change. Only the illustrative table and the sentence that reads k\* off it owe
+  old values.
+- **The share-timing amendment's *Why the forced n is R2's n, whatever the
+  share's level*.** It argues both levels, and it already states the thresholds
+  under α/29, 61 and 125. Recomputed for this amendment, the smallest n whose
+  zero-failure bound at 1 − 0.05/29 is below t is 61 at 10% and 125 at 5%. That
+  is R2's n for m = 29.
+- **The bound rises with k at any level.** The dilution amendment's bound
+  sentence and the share-timing amendment's *Every unresolved forced share is an
+  early stop* rest on this. Beta(k + 1, s) is stochastically increasing in k, so
+  every quantile of it is too. It was checked numerically for this amendment at
+  every level 1 − 0.05/m for m in 1..31, for s in 1..400 and k in 0..199, with
+  no exception.
+- **The dilution paragraph's 52.48%.** Its case uses n = 29, which is §2's n at
+  m = 1. At m = 1, α/m is 0.05, so the level is 95% and the bound is the one the
+  gate reads for that m.
+- **The arguments that hold at any level.** The share-timing amendment's
+  re-read example says *"The argument does not depend on the level"* of itself.
+  The dilution amendment's *Why this is not the worst-case attribution #371
+  rejected* holds at any level: a share that does not clear costs a forced run
+  and is never a rule-out. Only the sentences of each that state the level, or
+  read the A = 1 row, are owed below.
+
+§1 and §2 as amended, R1, R2, R3 as amended, R4–R6, §4 as amended, §5 to §9,
+R4's pressure point as amended, R-a, R-b as amended, R-c as amended twice, R-d
+to R-i and the mixed-cell amendment all stand. So do the dilution and
+share-timing amendments, except for the passages quoted below.
+
+## The old value
+
+Each passage verbatim, with its own markup, so that it can be found.
+
+**From the acceptable-set amendment**, its *clears* bullet:
+
+> - It **clears** when its Clopper-Pearson upper bound, 95% one-sided, is below
+>   the §1 tolerance in force. That is the same bound and the same reading as
+>   §2's rule-in, applied to a different quantity.
+
+The words that change are *"95% one-sided"*. The second sentence stands, and
+after this amendment it holds of the level too.
+
+**From the Bonferroni amendment**, its *Not decided here*, on the share:
+
+> So the share's bound stays at 95% as that amendment states it, and the second
+> sentence no longer holds of the level.
+
+**From the dilution amendment**, five passages.
+
+The last sentence of its *What stands* bullet on the *clears* bullet:
+
+> Every bound below is at the level the acceptable-set amendment states.
+
+The sentences of its dilution paragraph that bound the case:
+
+> Its share is at least 19/48, with an upper bound of 52.48%. That case uses
+> n = 29, which is uncorrected. At the corrected rule-in n of 61 it reads at
+> least 19/80, with an upper bound of 32.87%. Neither clears either tolerance.
+
+The words that change are *"with an upper bound of 32.87%"*. The rest stands.
+
+Its bound sentence:
+
+> At fixed s, the Clopper-Pearson upper bound on k of s + k is
+> `beta.ppf(0.95, k + 1, s)`, and Beta(k + 1, s) is stochastically increasing
+> in k.
+
+Its *Bounds at the corrected rule-in n*, with the table and the sentence after
+it:
+
+> **Bounds at the corrected rule-in n.** The Clopper-Pearson upper bound on A of
+> s + A, **95% one-sided, the level the acceptable-set amendment states**.
+> s = 61 and s = 125 are the m = 29 row of the Bonferroni amendment's table of n,
+> under the 10% and 5% branches. Recomputed for this amendment with
+> `scipy.stats.beta.ppf(0.95, k + 1, n - k)` at k = A and n = s + A:
+>
+> | A | s = 61, 10% | clears | s = 125, 5% | clears |
+> |---:|---:|---|---:|---|
+> | 0 | 4.79% | yes | 2.37% | yes |
+> | 1 | 7.42% | yes | 3.71% | yes |
+> | 2 | 9.66% | yes | 4.87% | yes |
+> | 3 | 11.67% | no | 5.95% | no |
+> | 19 | 32.87% | no | 18.76% | no |
+>
+> In practice the organic read clears only on a `(model, channel)` that is nearly
+> free of no-response attempts. Otherwise it routes the candidate to a forced
+> acquisition.
+
+The table's numbers are 95% bounds, and they are still true as such. What
+changes is the label, which named the level in force, the *clears* columns,
+which read the gate, and *"nearly free"*.
+
+Its A = 1 sentence:
+
+> At the 95% level this amendment inherits, one timeout still clears at both
+> tolerances, the A = 1 row above. #400 decided that the level moves to α/m, and
+> #407, which writes that, gives this property up explicitly.
+
+**From the share-timing amendment**, three passages.
+
+Its k\* table, with the sentence after it:
+
+> **k\* at the level the acceptable-set amendment states**, 95% one-sided.
+> Recomputed for this amendment with `scipy.stats.beta.ppf(0.95, k + 1, n)` for k
+> non-served attempts of n + k, at the m = 29 row of the Bonferroni amendment's
+> table of n:
+>
+> | A | n = 61, t = 10% | clears | n = 125, t = 5% | clears |
+> |---:|---:|---|---:|---|
+> | 2 | 9.66% | yes | 4.87% | yes |
+> | 3 | 11.67% | no | 5.95% | no |
+>
+> So k\* is 3 in both columns: the run stops at its 3rd non-served attempt. The
+> table is illustrative. The formula binds, so a change in the level the share is
+> read at carries through it.
+
+The words that change are the label, the *clears* columns, and *"So k\* is 3 in
+both columns: the run stops at its 3rd non-served attempt"*. The last two
+sentences stand.
+
+The first sentence of its re-read example:
+
+> At the 95% level the acceptable-set amendment states, a provider at s = 125
+> with A = 3 has a bound of 5.95% and does not clear 5%.
+
+The last sentence of its *Not decided here* bullet on the share's level:
+
+> Every bound above is at the level the acceptable-set amendment states.
+
+#407's checklist named the *clears* bullet, the Bonferroni amendment's sentence,
+the dilution amendment's A = 1 sentence and its table. A comment on #407 added
+the share-timing amendment's k\* table and its *"So k\* is 3"* sentence. The
+assistant, writing this under #407, read both later amendments in full under the
+guard and found five more passages. They are the dilution amendment's *What
+stands* sentence, its 32.87%, its bound sentence, and the share-timing
+amendment's re-read sentence and *Not decided here* sentence.
+
+The comment on #407 judged the re-read example as owing nothing, because its
+level is not stated as the level in force. That is true of its numbers, which
+are labelled 95% and stand. The assistant quoted it anyway, because the label
+names the acceptable-set amendment as the source of 95%, and after this
+amendment that source no longer says 95%.
+
+## The new value
+
+**The *clears* bullet** now reads:
+
+> - It **clears** when its Clopper-Pearson upper bound, one-sided at **α/m**
+>   with α = 0.05, is below the §1 tolerance in force. **m is R1's named count**
+>   for the cell's `(model, channel)`, fixed at R1: the m of R-c as amended. The
+>   level is the same under both regimes. That is the same bound, the same level
+>   and the same reading as §2's rule-in, applied to a different quantity.
+> - Rule-in and the share are each read at α/m. **α is not split** between them.
+
+**The Bonferroni amendment's sentence** no longer holds. The share's bound is
+corrected at the same α/m as rule-in, so the acceptable-set amendment's second
+sentence holds of the level again.
+
+**The phrase *"the level the acceptable-set amendment states"***, wherever an
+amendment written before this one uses it, means **95% one-sided**, the level
+that amendment stated when the phrase was written. Every bound it labels is a
+95% bound and is still true as one. None of them is the level in force. That
+covers the dilution amendment's *What stands* sentence and its table label, and
+the share-timing amendment's k\* label, its re-read sentence and its *Not decided
+here* sentence.
+
+**The dilution amendment's case** now reads *"At the corrected rule-in n of 61
+it reads at least 19/80, with an upper bound of 39.94% at α/29."* At m = 29 the
+corrected n is 61, so the level is α/29. It still does not clear either
+tolerance.
+
+**The bound sentence** now reads *"At fixed s, the Clopper-Pearson upper bound on
+k of s + k is `beta.ppf(1 − α/m, k + 1, s)`, and Beta(k + 1, s) is
+stochastically increasing in k."*
+
+**Bounds at the corrected rule-in n, at α/m.** These are the Clopper-Pearson
+upper bounds on A of s + A, one-sided at α/29. s = 61 and s = 125 are the m = 29
+row of the Bonferroni amendment's table of n, under the 10% and 5% branches.
+Recomputed for this amendment with `scipy.stats.beta.ppf(1 − 0.05/29, k + 1, n − k)`
+at k = A and n = s + A. The 95% columns repeat the dilution amendment's bounds,
+which were recomputed and are unchanged. Each *clears* column reads the bound at
+α/29:
+
+| A | s = 61, 10%, at 95% | at α/29 | clears | s = 125, 5%, at 95% | at α/29 | clears |
+|---:|---:|---:|---|---:|---:|---|
+| 0 | 4.79% | 9.91% | yes | 2.37% | 4.96% | yes |
+| 1 | 7.42% | 13.09% | no | 3.71% | 6.64% | no |
+| 2 | 9.66% | 15.69% | no | 4.87% | 8.05% | no |
+| 3 | 11.67% | 17.96% | no | 5.95% | 9.31% | no |
+| 19 | 32.87% | 39.94% | no | 18.76% | 23.31% | no |
+
+The sentence after the table now reads:
+
+> **As this amendment leaves the share, an organic share read at s_X equal to
+> the declared n clears only at A = 0**, that is, on a `(model, channel)` with no
+> non-served attempt at all up to X's rule-in point. Otherwise it routes the
+> candidate to a forced acquisition.
+
+**The A = 1 sentence** now reads:
+
+> At α/m one timeout does not clear at either tolerance. The A = 1 row reads
+> 13.09% at s = 61 and 6.64% at s = 125, for m = 29. The property the 95% level
+> gave, that one timeout still clears, is given up.
+
+**k\* at α/m.** The share-timing amendment's k\* table now reads at α/29,
+recomputed with `scipy.stats.beta.ppf(1 − 0.05/29, k + 1, n)` for k non-served
+attempts of n + k, at the m = 29 row of the Bonferroni amendment's table of n:
+
+| A | n = 61, t = 10% | clears | n = 125, t = 5% | clears |
+|---:|---:|---|---:|---|
+| 0 | 9.91% | yes | 4.96% | yes |
+| 1 | 13.09% | no | 6.64% | no |
+
+The sentence after it now reads *"So k\* is 1 in both columns: the run stops at
+its 1st non-served attempt."* The table is still illustrative and the formula
+still binds. A forced acquisition's share clears only on 0 non-served attempts:
+in 61 attempts at 10%, or 125 at 5%, for m = 29.
+
+## The reason
+
+**Why the share takes the correction.** Membership needs two things: rule-in,
+and a cleared share. A member is bad if its failure rate or its share is at or
+above t. R-c's Bonferroni caps the chance of any false rule-in in the family at
+α. Correcting rule-in alone caps only one of the two ways a member can be bad.
+With the share at 95%, the family's share direction is capped only by m × 0.05.
+At m = 29 that is 1.45, which is no cap at all. The share's direction is the
+timeout case, which the acceptable-set amendment calls silent.
+
+The counter-argument was that the organic share is read once per
+`(model, channel)`, so it is not a family. That premise was lost with the
+dilution amendment. Both regimes are now read per cell, so a family has m share
+reads, as it has m rule-in reads.
+
+**Why m is R1's named count.** It is rule-in's m, and it is known before the
+first call, as R2 needs. Rejected: m as the number of cells that ruled in. It
+depends on the data, which is #377's reason for rejecting the testable count.
+
+**Why α is not split.** Membership is an intersection-union test: a cell is
+admitted only if both reads pass. A bad cell is falsely admitted only if the
+read that should catch it passes anyway, and each read makes that error with
+probability at most α/m. Over the family a false admission has probability at
+most m × α/m = α, so requiring both reads costs no α. An α/2m split was rejected
+because it buys nothing.
+
+**The cost, on record.** As this amendment leaves the share, an organic share at
+s_X equal to the declared n clears only at A = 0. The dilution amendment's *one
+timeout still clears* is given up. One non-served attempt anywhere on a
+`(model, channel)` before X's rule-in point sends X to a forced acquisition. A
+forced acquisition's share clears on 0 non-served attempts in 61 or 125, and the
+run stops at its first non-served attempt. The cost falls on calls, and it never
+makes a false rule-in, which is the direction §2's asymmetry prefers.
+
+Three alternatives are not taken. #400 rejected each:
+
+- **The share uncorrected, at 95%.** It leaves the share direction capped by
+  m × 0.05.
+- **α/2m for each read.** It buys nothing, because requiring both reads costs no
+  α.
+- **m as the cells that ruled in.** It depends on the data.
+
+**Not decided here.**
+
+- **Whether an organic read can admit a member at all.** [#408 — Does clearing
+  the no-response share by organic read, then by forced run, buy a second chance
+  at α/m?](https://github.com/bgunyel/clause-and-effect/issues/408) decided that
+  only a forced acquisition admits a member, and that the organic share is
+  report-only. [#411 — Append the forced-membership amendment: only a forced
+  acquisition admits a member, and the organic share is
+  report-only](https://github.com/bgunyel/clause-and-effect/issues/411) writes
+  it. This amendment writes the organic share's level as #400 decided it, and
+  states its organic cost of the share as this amendment leaves it.
+- **What level a further forced acquisition is read at.** It is a re-test.
+  [#397 — Does an R6 re-test add to R-c's m, or does each re-test buy a free
+  chance at rule-in?](https://github.com/bgunyel/clause-and-effect/issues/397)
+  decided how re-tests spend α, and [#413 — Append the re-test reserve
+  amendment: the j-th extra evaluation in a family is read at
+  α/(m·2ʲ)](https://github.com/bgunyel/clause-and-effect/issues/413) writes it.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
