@@ -135,6 +135,12 @@ It is not a section, which is a heading in the suite's output that rows from
 several issue files may sit under.
 _Avoid_: family, section
 
+**Lapsed pass**:
+A rule-in pass whose cell a recorded R6 cause reaches before the acceptance
+read is handed off. It stands as a result and licenses no membership and no
+pin; only a re-test, spending a reserve slot, can license one again (#414).
+_Avoid_: revoked, stale pass, failed (a lapsed pass is not a claim about a rate)
+
 **Mixed cell**:
 An acceptance cell whose served rows carry more than one permaslug with no
 recorded cause between them. It cannot be ruled in; its outcome is mixed, and
