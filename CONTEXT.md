@@ -62,6 +62,14 @@ The one ordered list of every Tier-1 case that acquisition takes prompts from.
 Every cell in a family uses its first n positions, n from R2, and §4's 29 are
 its head (#401).
 
+**Case text**:
+The question, gold answer and supporting quote of a Tier-1 case as the
+pre-registration froze them, which is what acquisition sends and what quote
+token count is measured on. The golden set goes on being corrected and the case
+text does not follow it, so the same case id can name different text in the
+two.
+_Avoid_: golden set (for acquisition's input)
+
 **Check**:
 An assertion whose expected verdict is written out in advance, so running it can
 only agree or disagree with what was already claimed. Every assertion in the
