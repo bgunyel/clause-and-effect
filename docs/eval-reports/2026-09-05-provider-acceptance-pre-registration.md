@@ -2689,3 +2689,329 @@ Three alternatives are not taken. #400 rejected each:
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Amendment — the case list covers all 433 Tier-1 cases, and a family it cannot supply is stopped
+
+| | |
+|---|---|
+| amended | 2026-11-25 |
+| branch | `dev-06` |
+| commit at amendment | `88611bbf45b4` |
+| decided in | [#401 — What n does a cell get when R1 names more providers than the 125-case draw supports?](https://github.com/bgunyel/clause-and-effect/issues/401) |
+| written by | [#409](https://github.com/bgunyel/clause-and-effect/issues/409), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | five passages of the [Bonferroni amendment](#amendment--the-multiplicity-correction-is-bonferroni-over-the-named-set-and-the-draw-grows-to-125-cases): its heading, its §4 sentences on the list's length and its tail, its block's `list:` line and that line's digest note, its *whole list* sentence, and its capacity paragraph |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). The Bonferroni amendment made the draw one
+ordered list of 125 cases. This amendment lengthens that list to every Tier-1
+case. A sentence that says the list holds 125 cases, or that 125 is all it can
+supply, would then mean something different, so it owes an old value.
+
+The Bonferroni amendment left open what n a cell gets when R1 names more than
+30 providers for its `(model, channel)` under the 5% branch. At that m the
+binding n is 126 or more, and the list held 125.
+[#401](https://github.com/bgunyel/clause-and-effect/issues/401) found that the
+named count is not stable. Between 2026-09-05 and 2026-11-25 the provider count
+on OpenRouter's endpoints listing moved by about ten in either direction for the
+roster's models. It decided to **extend the list now, over the whole
+population, and never to cap m**. A family whose n the list still cannot supply
+receives no call.
+
+**What stands unamended**, each with its reason:
+
+- **The m = 29 row of the Bonferroni amendment's table of n.** The formula that
+  gives n from m is untouched, so every row of the table is still true.
+- **Its cost line**, *"DeepSeek V4 Flash alone, at m = 29, needs 1,769 served
+  calls …"*. It is still true at m = 29.
+- **Its Šidák line.** It was measured as stated, and the measurement is still
+  true.
+- **Its *Why 125 distinct cases, and not 29 used again*.** The clustering
+  argument holds for a list of any length. Repeats of a case are clustered
+  observations, so a longer list is still a list of distinct cases.
+- **Its *Not decided here* bullet on a named set larger than the list.** It
+  points at #401. It is still true as history, and this amendment writes what
+  #401 decided.
+- **The 125 themselves and their digests.** `32547f20…` is the 96-case
+  extension in draw order, and `4802ad29…` is the 125 in list order. They become
+  positions 1–125 of the case list, unchanged.
+- **The share-timing amendment's *"uses the case list's first n cases"*.** It
+  names the list's first n positions and not its length. Positions 1–125 do not
+  move, so it names the same cases for every n the 125 supplied. For a larger
+  n it now names cases that exist. That amendment's *Not decided here* already
+  says so. It is not on #401's list, because it was appended after #401 was
+  resolved, and it was read for this amendment under the guard.
+
+§1 and §2 as amended, R1, R2, R3 as amended, R4–R6, §4 as amended, §5 to §9,
+R4's pressure point as amended, R-a, R-b as amended, R-c as amended twice, R-d
+to R-i, and the mixed-cell, dilution, share-timing and share-level amendments
+all stand. So does the Bonferroni amendment, except for the passages quoted
+below.
+
+## The old value
+
+Each passage verbatim, with its own markup.
+
+The Bonferroni amendment's heading, set in bold so that this quote does not
+create a second anchor:
+
+> **Amendment — the multiplicity correction is Bonferroni over the named set, and the draw grows to 125 cases**
+
+The first two sentences of its §4 paragraph, which name the list's length and
+its tail:
+
+> **§4. The draw becomes one ordered list of 125 distinct cases.** Its head is
+> §4's frozen 29, unchanged and in sorted order. Its tail is 96 cases drawn from
+> the 404 not in §4's draw, under a new seed, in the order they were drawn.
+
+#401 named the first sentence. The *"Its tail"* sentence is here because the
+guard puts it here: once the list runs to 433, the list's tail is no longer
+those 96. The *"Its head"* sentence between them is quoted for context and
+stands.
+
+The `list:` line of its frozen block, with the note on the digest that follows
+it:
+
+```
+list:       sorted(head) followed by the extension in draw order
+sha256:     4802ad2996039d14ba5473f3d4fc638110181c242cd72e3fa3907459ceb19730
+            (of the newline-joined 125, in list order)
+```
+
+The sentence that introduces its printed list:
+
+> The whole list, by position. Positions 1–29 are §4's 29, and 30–125 are the
+> extension.
+
+Its capacity paragraph:
+
+> **The list's capacity, on record.** 125 cases supply n for m ≤ 30 under the 5%
+> branch: n is 125 at m = 30 and 126 at m = 31. Under the 10% branch they supply
+> any m this campaign could name. What a family named larger than that gets is
+> under *Not decided here*.
+
+## The new value
+
+**The case list.** The draw is one ordered list of **all 433 Tier-1 cases**, the
+**case list**. Positions 1–125 are the Bonferroni amendment's 125, unchanged and
+in their list order. Positions 126–433 are the other 308 cases, in the order
+seed `20261125` draws them. **Every cell in a family still uses the list's first
+n cases**, n being the family's n under §2, so the pairing holds within each pin
+decision.
+
+```
+population: 433 (src.eval.dataset.load_tier1, over data/tier-1 at git tree
+            6348d8f7b452816f88beab7c5a9e18660e3977f7, commit 3c936c3f9418)
+            asserted before drawing
+head:       the Bonferroni amendment's 125, in list order
+            sha256 4802ad2996039d14ba5473f3d4fc638110181c242cd72e3fa3907459ceb19730
+            asserted before drawing
+seed:       20261125
+method:     random.Random(20261125).sample(sorted(set(case_ids) - set(head)), 308)
+order:      the order sample() returns them in, which is the draw order
+sha256:     7962ad6b4a8e9629bbe7a2b891380cb8a5b0558dc0c7fbfbb028108160ec11f1
+            (of the newline-joined 308-case tail, in draw order)
+list:       head followed by the tail in draw order
+sha256:     0020415da942323a43e38756d3974d86269b8696301148adb1638e0c819a0085
+            (of the newline-joined 433, in list order)
+```
+
+Each digest is over UTF-8 ids joined with `\n` and no trailing newline, as §4's
+is. `308` is a literal and not `len(remaining)`, so a population that is not 433
+cannot be drawn around. If either assertion had failed, nothing would have been
+drawn. The failure would have gone to [#406 — What happens to the frozen case
+list if a Tier-1 case is edited or removed before
+acquisition?](https://github.com/bgunyel/clause-and-effect/issues/406).
+
+The population was read from `data/tier-1` at tree `6348d8f7…`, extracted from
+commit `3c936c3f9418` with `git archive`, and not from the working copy. That
+tree is byte-identical to the working copy at `88611bbf45b4`, and it is the tree
+§4 and the Bonferroni amendment drew from. Before the draw, §4's head reproduced
+`26cdec8e…`, the 96-case extension reproduced `32547f20…`, and the 125 in list
+order reproduced `4802ad29…`. The draw was then run once. Reproduced on CPython
+3.13.15 under `uv run`.
+
+**The seed is `20261125`, the date of #401's resolution.** It was fixed in that
+resolution, before this amendment was written, so the writer had no choice over
+it. This departs from the Bonferroni amendment's *"The seed is the amendment's
+date"*, and is recorded as a departure. This amendment happens to carry the same
+date, but the seed comes from #401 and not from that date.
+
+**The Bonferroni amendment's heading** now reads *"Amendment — the multiplicity
+correction is Bonferroni over the named set, and the draw grows to 125 cases,
+the head of the case list"*. Its text in place is not edited, so every link to
+its anchor still resolves.
+
+**Its §4 sentences** now read: *"§4. The draw becomes one ordered list of
+distinct cases, the case list, which the case-list amendment extends to all 433
+Tier-1 cases. Its first 125 positions are drawn here. … Positions 30–125 are 96
+cases drawn from the 404 not in §4's draw, under a new seed, in the order they
+were drawn."*
+
+**Its `list:` line and digest note** now describe positions 1–125, the case
+list's head. `4802ad29…` is the digest of that head, of the newline-joined 125 in
+list order. The digest of the whole list is `0020415d…`, in the block above.
+
+**Its *whole list* sentence** now reads: *"Positions 1–125 of the case list, by
+position. Positions 1–29 are §4's 29, and 30–125 are the extension. Positions
+126–433 are printed in the case-list amendment."*
+
+Positions 126–433, in the Bonferroni amendment's four-column format:
+
+```
+126 gdpr_art12_case1    127 gdpr_art55_case1    128 gdpr_art75_case4    129 gdpr_art92_case3
+130 gdpr_art46_case4    131 gdpr_art14_case4    132 gdpr_art86_case1    133 gdpr_art65_case2
+134 gdpr_art38_case4    135 gdpr_art7_case3     136 gdpr_art29_case2    137 gdpr_art52_case4
+138 gdpr_art9_case6     139 gdpr_art16_case2    140 gdpr_art54_case3    141 gdpr_art15_case3
+142 gdpr_art13_case4    143 gdpr_art50_case3    144 gdpr_art94_case3    145 gdpr_art38_case2
+146 gdpr_art21_case3    147 gdpr_art46_case2    148 gdpr_art4_case7     149 gdpr_art72_case2
+150 gdpr_art56_case4    151 gdpr_art92_case1    152 gdpr_art60_case4    153 gdpr_art61_case2
+154 gdpr_art4_case3     155 gdpr_art91_case1    156 gdpr_art13_case1    157 gdpr_art56_case3
+158 gdpr_art73_case2    159 gdpr_art63_case3    160 gdpr_art77_case3    161 gdpr_art28_case5
+162 gdpr_art74_case1    163 gdpr_art34_case3    164 gdpr_art44_case4    165 gdpr_art68_case1
+166 gdpr_art73_case1    167 gdpr_art40_case2    168 gdpr_art86_case2    169 gdpr_art15_case6
+170 gdpr_art99_case3    171 gdpr_art53_case3    172 gdpr_art80_case4    173 gdpr_art1_case3
+174 gdpr_art98_case1    175 gdpr_art88_case4    176 gdpr_art66_case1    177 gdpr_art39_case4
+178 gdpr_art9_case8     179 gdpr_art81_case3    180 gdpr_art50_case2    181 gdpr_art59_case3
+182 gdpr_art89_case5    183 gdpr_art43_case1    184 gdpr_art25_case1    185 gdpr_art45_case3
+186 gdpr_art52_case2    187 gdpr_art77_case1    188 gdpr_art32_case2    189 gdpr_art12_case5
+190 gdpr_art82_case1    191 gdpr_art9_case9     192 gdpr_art22_case2    193 gdpr_art9_case1
+194 gdpr_art35_case2    195 gdpr_art17_case1    196 gdpr_art63_case2    197 gdpr_art2_case2
+198 gdpr_art70_case5    199 gdpr_art48_case1    200 gdpr_art39_case1    201 gdpr_art30_case5
+202 gdpr_art83_case1    203 gdpr_art41_case2    204 gdpr_art41_case4    205 gdpr_art62_case4
+206 gdpr_art14_case3    207 gdpr_art28_case4    208 gdpr_art58_case5    209 gdpr_art29_case1
+210 gdpr_art38_case3    211 gdpr_art40_case5    212 gdpr_art44_case2    213 gdpr_art90_case2
+214 gdpr_art61_case5    215 gdpr_art5_case1     216 gdpr_art53_case4    217 gdpr_art14_case1
+218 gdpr_art95_case3    219 gdpr_art66_case4    220 gdpr_art62_case3    221 gdpr_art4_case6
+222 gdpr_art78_case1    223 gdpr_art52_case1    224 gdpr_art54_case4    225 gdpr_art21_case4
+226 gdpr_art62_case5    227 gdpr_art5_case2     228 gdpr_art27_case3    229 gdpr_art46_case1
+230 gdpr_art31_case1    231 gdpr_art51_case4    232 gdpr_art36_case2    233 gdpr_art97_case1
+234 gdpr_art10_case3    235 gdpr_art41_case5    236 gdpr_art57_case2    237 gdpr_art53_case2
+238 gdpr_art83_case3    239 gdpr_art83_case4    240 gdpr_art24_case1    241 gdpr_art6_case1
+242 gdpr_art35_case4    243 gdpr_art81_case4    244 gdpr_art7_case4     245 gdpr_art85_case1
+246 gdpr_art8_case2     247 gdpr_art12_case4    248 gdpr_art77_case4    249 gdpr_art51_case1
+250 gdpr_art71_case1    251 gdpr_art46_case5    252 gdpr_art87_case2    253 gdpr_art15_case7
+254 gdpr_art60_case2    255 gdpr_art56_case2    256 gdpr_art12_case6    257 gdpr_art55_case2
+258 gdpr_art34_case2    259 gdpr_art24_case2    260 gdpr_art99_case2    261 gdpr_art97_case3
+262 gdpr_art72_case3    263 gdpr_art5_case6     264 gdpr_art39_case3    265 gdpr_art36_case3
+266 gdpr_art15_case5    267 gdpr_art59_case4    268 gdpr_art58_case2    269 gdpr_art7_case6
+270 gdpr_art3_case2     271 gdpr_art21_case1    272 gdpr_art26_case1    273 gdpr_art4_case10
+274 gdpr_art57_case5    275 gdpr_art36_case1    276 gdpr_art41_case3    277 gdpr_art50_case1
+278 gdpr_art3_case5     279 gdpr_art75_case2    280 gdpr_art45_case4    281 gdpr_art9_case2
+282 gdpr_art54_case1    283 gdpr_art45_case1    284 gdpr_art61_case3    285 gdpr_art66_case2
+286 gdpr_art5_case7     287 gdpr_art18_case3    288 gdpr_art82_case3    289 gdpr_art50_case4
+290 gdpr_art60_case1    291 gdpr_art38_case1    292 gdpr_art13_case5    293 gdpr_art40_case1
+294 gdpr_art42_case6    295 gdpr_art9_case3     296 gdpr_art74_case2    297 gdpr_art89_case3
+298 gdpr_art3_case3     299 gdpr_art76_case3    300 gdpr_art30_case3    301 gdpr_art4_case9
+302 gdpr_art22_case1    303 gdpr_art62_case2    304 gdpr_art19_case3    305 gdpr_art5_case3
+306 gdpr_art2_case3     307 gdpr_art4_case2     308 gdpr_art7_case2     309 gdpr_art57_case1
+310 gdpr_art37_case2    311 gdpr_art78_case3    312 gdpr_art25_case3    313 gdpr_art33_case1
+314 gdpr_art8_case5     315 gdpr_art85_case4    316 gdpr_art75_case3    317 gdpr_art65_case4
+318 gdpr_art46_case3    319 gdpr_art97_case2    320 gdpr_art62_case1    321 gdpr_art8_case4
+322 gdpr_art47_case3    323 gdpr_art87_case3    324 gdpr_art64_case3    325 gdpr_art33_case3
+326 gdpr_art85_case2    327 gdpr_art95_case1    328 gdpr_art70_case3    329 gdpr_art21_case2
+330 gdpr_art11_case1    331 gdpr_art91_case2    332 gdpr_art28_case3    333 gdpr_art40_case4
+334 gdpr_art6_case3     335 gdpr_art76_case1    336 gdpr_art57_case4    337 gdpr_art14_case5
+338 gdpr_art34_case4    339 gdpr_art19_case2    340 gdpr_art68_case3    341 gdpr_art56_case5
+342 gdpr_art20_case1    343 gdpr_art13_case2    344 gdpr_art80_case3    345 gdpr_art89_case1
+346 gdpr_art96_case2    347 gdpr_art39_case5    348 gdpr_art51_case3    349 gdpr_art35_case1
+350 gdpr_art20_case5    351 gdpr_art73_case3    352 gdpr_art23_case2    353 gdpr_art66_case3
+354 gdpr_art5_case4     355 gdpr_art63_case1    356 gdpr_art88_case2    357 gdpr_art13_case3
+358 gdpr_art22_case3    359 gdpr_art65_case3    360 gdpr_art8_case3     361 gdpr_art71_case3
+362 gdpr_art47_case5    363 gdpr_art88_case3    364 gdpr_art85_case3    365 gdpr_art26_case2
+366 gdpr_art59_case2    367 gdpr_art7_case1     368 gdpr_art14_case2    369 gdpr_art91_case3
+370 gdpr_art45_case2    371 gdpr_art49_case5    372 gdpr_art41_case6    373 gdpr_art84_case4
+374 gdpr_art17_case2    375 gdpr_art37_case3    376 gdpr_art69_case3    377 gdpr_art30_case4
+378 gdpr_art79_case3    379 gdpr_art42_case5    380 gdpr_art81_case2    381 gdpr_art13_case7
+382 gdpr_art82_case2    383 gdpr_art15_case1    384 gdpr_art90_case1    385 gdpr_art6_case5
+386 gdpr_art12_case3    387 gdpr_art28_case2    388 gdpr_art48_case2    389 gdpr_art4_case5
+390 gdpr_art58_case1    391 gdpr_art19_case1    392 gdpr_art20_case3    393 gdpr_art99_case1
+394 gdpr_art37_case1    395 gdpr_art67_case1    396 gdpr_art67_case2    397 gdpr_art15_case4
+398 gdpr_art4_case4     399 gdpr_art30_case1    400 gdpr_art65_case1    401 gdpr_art52_case5
+402 gdpr_art79_case2    403 gdpr_art47_case2    404 gdpr_art58_case4    405 gdpr_art7_case5
+406 gdpr_art27_case2    407 gdpr_art14_case6    408 gdpr_art1_case2     409 gdpr_art11_case2
+410 gdpr_art78_case5    411 gdpr_art43_case4    412 gdpr_art36_case4    413 gdpr_art92_case4
+414 gdpr_art31_case3    415 gdpr_art76_case2    416 gdpr_art54_case2    417 gdpr_art10_case1
+418 gdpr_art26_case4    419 gdpr_art98_case3    420 gdpr_art83_case5    421 gdpr_art40_case3
+422 gdpr_art89_case2    423 gdpr_art16_case3    424 gdpr_art42_case3    425 gdpr_art55_case3
+426 gdpr_art32_case4    427 gdpr_art60_case3    428 gdpr_art28_case1    429 gdpr_art96_case1
+430 gdpr_art47_case4    431 gdpr_art49_case3    432 gdpr_art45_case5    433 gdpr_art55_case4
+```
+
+**The list's capacity, on record.** 433 cases supply n for any m up to
+**221,130,635** under the 5% branch, since 0.95⁴³³ ≈ 2.26 × 10⁻¹⁰. Under the 10%
+branch they supply any m up to about 3.25 × 10¹⁸. Both limits are far beyond any
+m this campaign could name. n is still 125 at m = 29 and m = 30, and 126 at
+m = 31 under the 5% branch, which the 125 could not supply and the 433 can.
+
+**The stop rule.** Registered here, in #401's wording:
+
+> Before a family's first acquisition call, whoever runs acquisition computes n
+> from the family's frozen m and the branch of §1 in force, and confirms that n
+> does not exceed the list's length. If it does, the family receives no call.
+> The stop is recorded with m, t and n, and only a later append can lift it.
+
+It applies under both branches of §1. Under the whole-population list it is
+practically unreachable. It is kept so that the rule covers every case rather
+than going silent at its edge. It is a **requirement on the acquisition reads**,
+for whoever builds acquisition.
+
+## The reason
+
+**Why extend, and not cap m.** R1 names every provider OpenRouter lists for the
+model at the acquisition commit. Capping m after reading the catalogue narrows
+R1 on observation. Capping it by a rule set now leaves some named providers
+untested, chosen arbitrarily. Either way, a named provider would go untested
+because the list was short, and the list's length is the thing that is cheap to
+change.
+
+**Why now, and over the whole population.** The named count moved by about ten
+in either direction in 2½ months. #401 read OpenRouter's endpoints listing on
+2026-11-25. DeepSeek V4 Flash, Kimi K3, MiniMax M3 and Grok 4.6 listed 19, 19, 5
+and 1 distinct providers, against R-a's 29, 15, 12 and 2 on 2026-09-05. That
+snapshot is not R1's m, which is read at the acquisition commit. m ≤ 30 holds today, and nothing keeps it there. New models (R-h),
+channel changes (R-e) and re-tests
+([#397](https://github.com/bgunyel/clause-and-effect/issues/397)) can each add to
+what the list must supply. These alternatives were rejected:
+
+- **Extend at the acquisition commit, only if needed.** That writes a second §4
+  amendment after m has been seen.
+- **Extend now to a fixed size.** That defers the question rather than closing
+  it.
+
+The whole population closes it, because no larger list can be drawn from
+Tier-1.
+
+**Why the head does not move.** Keeping positions 1–125 exactly as the
+Bonferroni amendment froze them means [#7](https://github.com/bgunyel/clause-and-effect/issues/7)'s
+digest and both of the Bonferroni amendment's digests still verify. Every family
+whose n is 125 or less uses exactly the cases it would have used before this
+amendment.
+
+**Why the stop is kept though it cannot be reached.** A rule that is silent at
+its edge leaves the edge to whoever meets it, and that person would meet it
+after m has been read. With the stop registered now, the edge is decided before
+any rate exists.
+
+**Not decided here.**
+
+- **Re-tests against the list.** [#397 — Does an R6 re-test add to R-c's m, or
+  does each re-test buy a free chance at
+  rule-in?](https://github.com/bgunyel/clause-and-effect/issues/397) decided
+  that re-tests spend a reserve at α/(m·2ʲ), and that the stop rule above gains
+  a sentence covering them. [#413 — Append the re-test reserve
+  amendment](https://github.com/bgunyel/clause-and-effect/issues/413) writes
+  both. This amendment states the stop for a family's first test only.
+- **Which version of the cases acquisition reads.** This amendment drew from
+  tree `6348d8f7…` and records that it did. That acquisition reads its case text
+  from that tree too, by hash and never from the working copy, was decided in
+  [#406](https://github.com/bgunyel/clause-and-effect/issues/406). [#412 —
+  Append the case-text amendment: acquisition reads the cases at tree 6348d8f7,
+  never the working copy](https://github.com/bgunyel/clause-and-effect/issues/412)
+  writes it.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
