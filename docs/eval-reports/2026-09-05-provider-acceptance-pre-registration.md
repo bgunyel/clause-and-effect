@@ -3636,3 +3636,359 @@ from the golden set that goes on being corrected.
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Amendment — re-tests spend a family reserve, and the j-th extra evaluation in a family is read at α/(m·2ʲ)
+
+| | |
+|---|---|
+| amended | 2026-11-25 |
+| branch | `dev-06` |
+| commit at amendment | `87def8be804e` |
+| decided in | [#397 — Does an R6 re-test add to R-c's m, or does each re-test buy a free chance at rule-in?](https://github.com/bgunyel/clause-and-effect/issues/397) |
+| written by | [#413](https://github.com/bgunyel/clause-and-effect/issues/413), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | three passages of the [Bonferroni amendment](#amendment--the-multiplicity-correction-is-bonferroni-over-the-named-set-and-the-draw-grows-to-125-cases): its correction clause, its binding rule, and §2's rule-in bullet as it rewrote it; the case list's *first n cases* sentence, in the Bonferroni amendment and in the [case-list amendment](#amendment--the-case-list-covers-all-433-tier-1-cases-and-a-family-it-cannot-supply-is-stopped); one passage of the [share-timing amendment](#amendment--the-no-response-share-is-read-once-where-rule-in-is-read-and-a-forced-acquisition-decides-membership-alone)'s *Why the forced n is R2's n*; the [share-level amendment](#amendment--the-no-response-share-is-read-at-αm-over-the-named-set-the-level-rule-in-is-read-at)'s *clears* bullet and the bullet after it; and one sentence of the [forced-membership amendment](#amendment--only-a-forced-acquisition-admits-a-member-and-the-organic-share-is-report-only)'s membership sentence |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). R-i gives a re-test *"its own R2 n"*, and
+the Bonferroni amendment's binding rule computes every R2 n from α/m. After this
+amendment a re-test's n and its level come from α/(m·2ʲ). So the binding rule,
+the correction clause it serves and §2's rule-in bullet would have meant
+something different, and they owe old values. So do four later passages that
+state the rule-in level as α/m, or a cell's n as the family's.
+
+The Bonferroni amendment fixed m at R1 and left re-tests open. Read literally, a
+frozen m means a re-test adds nothing to it. But R-i gives a re-tested cell its
+own R2 n and its own R3 evaluation, which is one more chance to clear rule-in.
+Under single-step Bonferroni at a fixed m, k re-tests of one cell spend up to
+(k + 1)·α/m on that cell, in the permitting direction.
+[#397](https://github.com/bgunyel/clause-and-effect/issues/397) decided to close
+that with a shrinking reserve counted across the family. This amendment writes
+that decision.
+
+**What stands unamended**, each with its reason:
+
+- **R6.** It says what a re-test needs: a cause external to the log, recorded
+  before the new acquisition, with the prior result left standing. This
+  amendment says what level the re-test is read at. No sentence of R6 changes
+  meaning.
+- **R-i.** *"It has its own R2 n, declared before its first call"* reads through
+  to the binding rule, which is amended below. Which rows a re-test counts does
+  not change.
+- **R3, as the mixed-cell amendment amended it.** *"A cell whose rows are mixed
+  is not evaluated, so its one evaluation is not spent"* is the rule the slot
+  rule below builds on. R3 still evaluates an acquisition once, at its declared
+  n.
+- **The case list's stop rule**, in the case-list amendment's wording. It
+  covers a family's first acquisition call, and it is not changed. One sentence
+  is added beside it below, for re-tests. The case-list amendment's *Not decided
+  here* already says that this amendment adds it.
+- **§1, as amended.** *"A cell clears it on 0/n, at the n §2 declares for it"*
+  reads through to §2, and only the way §2 declares n changes.
+- **§2's table and its rule-out bullet.** The table's numbers are uncorrected
+  95% bounds and are still true. Rule-out stays uncorrected, at 2 consecutive
+  failures, for a re-test as for a first evaluation.
+- **The Bonferroni amendment's table of n by m**, and its paragraph on why the
+  *≤* and §2's *"below"* pick the same n. The table is the first evaluation's,
+  j = 0, and every row of it is still true. The paragraph argues at α/m, and the
+  same argument holds at α/(m·2ʲ), as shown below.
+- **The forced-membership amendment's invariant.** *"The forced acquisition
+  that follows an organic rule-in is the cell's **first** membership read"*,
+  read at α/m, which *"spends no slot of the re-test reserve"*. That is this
+  amendment's first evaluation, j = 0. A further membership read needs an R6
+  cause, and it is a re-test.
+- **The share-timing amendment's forced-acquisition sub-bullets.** The ordinary
+  measurement pin *"declares the family's R2 n"*. That pin is the cell's first
+  membership read, so its n is still the family's. *"Another forced acquisition
+  … under its own R2 n"* reads through to the binding rule.
+- **The share-level amendment's *Why α is not split*.** Its argument is per
+  read: each read makes the error with probability at most its own level, and
+  requiring both reads costs no α. Its *"m × α/m = α"* counts first
+  evaluations. What re-tests add to rule-in is the trade recorded below. What
+  they add to the share is under *Not decided here*.
+- **The forced-membership amendment's** *"a family has m share reads, as it has
+  m rule-in reads"* … *"at most one forced read per cell, so at most m"*. It
+  counts first membership reads, under the invariant that a further one needs
+  an R6 cause. Re-tests are what this amendment counts.
+- **R-e and R-h.** A new channel or a new model makes a new family, with its own
+  m fixed at its own R1. Its count starts at j = 0.
+- **The *Not decided here* bullets that point at #397 or #413**, in the
+  Bonferroni, share-timing, share-level, case-list and forced-membership
+  amendments, and the R-h and R-i registration's sentence on R-c's m. Each is
+  still true as history, and this amendment writes what #397 decided.
+
+§1 as amended, §2's table and rule-out bullet, R1, R2, R3 as amended, R4–R6,
+§4 as amended, §5 to §9, R4's pressure point as amended, R-a, R-b as amended,
+R-c as amended twice, R-d to R-i, and the mixed-cell, dilution and case-text
+amendments all stand. So do the Bonferroni, share-timing, share-level,
+case-list and forced-membership amendments, except for the passages quoted
+below.
+
+## The old value
+
+Each passage verbatim, with its own markup, so that it can be found.
+
+**From the Bonferroni amendment**, four passages.
+
+Its correction clause:
+
+> The multiplicity correction is **single-step Bonferroni on each cell's
+> one-sided rule-in bound, at α/m** with α = 0.05. The family is **one pin
+> decision**: one `(model, channel)`. **m is the size of R1's named set for that
+> `(model, channel)`, fixed at R1**, before the first acquisition call. It is not
+> the testable count.
+
+The words that change are *"on each cell's one-sided rule-in bound, at α/m"*.
+The family and m stand.
+
+Its binding rule:
+
+> R2's n follows from m. **The binding rule is the smallest n with
+> (1 − t)ⁿ ≤ 0.05 / m**, where t is whichever branch of §1's tolerance holds at
+> acquisition. Each cell is evaluated once, as R3 requires, as soon as it
+> reaches that n. Nothing waits for the acquisition window to close.
+
+The words that change are *"R2's n follows from m"* and the bold rule. The rest
+stands, and is repeated in the new value so that the paragraph reads whole.
+
+§2's rule-in bullet, as it rewrote it:
+
+> - **Rule-in:** the one-sided upper bound at α/m below tolerance → **n clean
+>   observations, n the smallest with (1 − t)ⁿ ≤ 0.05 / m**.
+
+Its §4 sentence on which cases a cell uses:
+
+> **Every cell in a family uses the list's first n cases**, n being the family's
+> n under §2, so the pairing holds within each pin decision.
+
+**From the case-list amendment**, its restatement of that sentence:
+
+> **Every cell in a family still uses the list's first n cases**, n being the
+> family's n under §2, so the pairing holds within each pin decision.
+
+In both, the words that change are *"n being the family's n under §2"*. A
+re-test's n is its own.
+
+**From the share-timing amendment**, the second and third sentences of its *Why
+the forced n is R2's n, whatever the share's level*:
+
+> R2's n is the smallest n with (1 − t)ⁿ ≤ 0.05 / m, and the Bonferroni
+> amendment shows that equality never occurs at either tolerance. So at R2's n,
+> (1 − t)ⁿ < 0.05 / m ≤ 0.05, and a forced share with no non-served attempt
+> clears at 95% and at α/m alike.
+
+**From the share-level amendment**, its *clears* bullet and the bullet after it:
+
+> - It **clears** when its Clopper-Pearson upper bound, one-sided at **α/m**
+>   with α = 0.05, is below the §1 tolerance in force. **m is R1's named count**
+>   for the cell's `(model, channel)`, fixed at R1: the m of R-c as amended. The
+>   level is the same under both regimes. That is the same bound, the same level
+>   and the same reading as §2's rule-in, applied to a different quantity.
+> - Rule-in and the share are each read at α/m. **α is not split** between them.
+
+The words that change are *"the same level"* in the *clears* bullet's last
+sentence, and the first sentence of the bullet after it. The share's own level,
+α/m, is not changed here.
+
+**From the forced-membership amendment**, the second sentence of its membership
+sentence:
+
+> Both are read once under the pin, at the family's R2 n, each at α/m.
+
+#397's resolution named the first three. The assistant, writing this under
+#413, read every amendment after the Bonferroni amendment and `CONTEXT.md` under
+the guard, for each passage that states the rule-in level or a cell's n. It
+found the other five. They are the case list's sentence in both amendments, the
+share-timing amendment's R2 n sentence, the share-level amendment's two
+bullets, and the forced-membership amendment's membership sentence. Each states
+α/m or the family's n as the level or the n of every evaluation, and after this
+amendment that holds only of a cell's first.
+
+## The new value
+
+**The correction.** The correction clause's first sentence now reads:
+
+> The multiplicity correction is **single-step Bonferroni on each one-sided
+> rule-in bound**, with α = 0.05. A cell's **first** evaluation is read at
+> **α/m**. The **j-th extra evaluation in the family** is read at
+> **α/(m·2ʲ)**, for j = 1, 2, ….
+
+The rest of the clause stands. The family is one `(model, channel)`, and m is
+the size of R1's named set for it, fixed at R1.
+
+**The re-test reserve.**
+
+> - **An extra evaluation** is the R3 evaluation of a re-test under R6 and R-i.
+>   The forced acquisition that follows an organic rule-in is not one. It is the
+>   cell's first membership read, as the forced-membership amendment says.
+> - **The reserve is counted across the family**, not per cell. j counts the
+>   family's extra evaluations, and a cell's first evaluation is j = 0.
+> - **A slot is spent only when R3 evaluates.** A slot is either a cell's own
+>   α/m or a reserve slot α/(m·2ʲ). An acquisition whose outcome is **mixed**
+>   passes its slot unspent to the cell's next acquisition. So a mixed first
+>   acquisition is re-tested at α/m, and a mixed re-test passes its α/(m·2ʲ) to
+>   the one after it. The unit of spending is an evaluation, not an acquisition
+>   and not a cell.
+> - **j is fixed when the re-test's R2 n is declared**, before its first call.
+>   It is assigned in commit order of the recorded causes within the family, and
+>   it is never reused by another cell. Only a mixed outcome's pass to the same
+>   cell carries a slot forward.
+> - **A new family**, from R-e or R-h, starts at j = 0 with its own m.
+> - **Rule-out is not corrected.** It stays at 2 consecutive failures, for a
+>   re-test as for a first evaluation.
+
+Every input to j is a commit order, so the rule can be checked without seeing a
+rate.
+
+**The binding rule** now reads:
+
+> R2's n follows from m, and for an extra evaluation from j. **The binding rule
+> is the smallest n with (1 − t)ⁿ ≤ 0.05 / (m·2ʲ)**, where t is whichever
+> branch of §1's tolerance holds at acquisition and j = 0 at a cell's first
+> evaluation. Each cell is evaluated once, as R3 requires, as soon as it
+> reaches that n. Nothing waits for the acquisition window to close.
+
+**§2's rule-in bullet** now reads:
+
+> - **Rule-in:** the one-sided upper bound at α/(m·2ʲ) below tolerance → **n
+>   clean observations, n the smallest with (1 − t)ⁿ ≤ 0.05 / (m·2ʲ)**, where
+>   j = 0 at a cell's first evaluation, so its level is α/m, and j is the
+>   reserve slot at an extra evaluation.
+
+The table is illustrative. The formula binds.
+
+| j | t = 10%, m = 1 | t = 10%, m = 29 | t = 5%, m = 1 | t = 5%, m = 29 |
+|---:|---:|---:|---:|---:|
+| 0 (first test) | 29 | 61 | 59 | 125 |
+| 1 | 36 | 67 | 72 | 138 |
+| 2 | 42 | 74 | 86 | 152 |
+| 3 | 49 | 81 | 99 | 165 |
+
+Recomputed for this amendment in exact rational arithmetic, on CPython 3.13.15
+under `uv run`, and every entry matches #397's table. The j = 0 row is the Bonferroni amendment's m = 1 and
+m = 29 rows. Each re-test costs about 7 more cases than the last at t = 10%,
+and about 14 more at t = 5%: n grows by log 2 / −log(1 − t) per slot, which is
+6.58 and 13.51.
+
+The *≤* and §2's *"below"* still pick the same n. Zero failures in n has the
+upper bound 1 − (α/(m·2ʲ))^(1/n), which is below t exactly when
+(1 − t)ⁿ < α/(m·2ʲ). Equality would need 3 to divide 10ⁿ at t = 10%, or 19 to
+divide 20ⁿ⁻¹ at t = 5%, as in the Bonferroni amendment. The factor 2ʲ adds
+neither. Checked for m in 1..60 and j in 0..29, with no equality.
+
+**The stop rule, for re-tests.** The case-list amendment's stop rule stands as
+written. One sentence is added beside it:
+
+> The same check runs before a re-test's first call, with n computed from
+> α/(m·2ʲ), and a re-test whose n exceeds the list receives no call.
+
+**Re-tests against the list's capacity, on record.** At t = 5% and m = 29, the
+433 cases supply re-tests up to j = 22, where n is 422. j = 23 needs 435. At
+t = 10% and m = 29 they supply j up to 56. At m = 1 the limits are j = 27 at 5%
+and j = 61 at 10%.
+
+**The case list's sentence**, in the Bonferroni amendment and in the case-list
+amendment alike, now reads:
+
+> **Every cell in a family uses the list's first n cases**, n being the n §2
+> declares for that acquisition: the family's n at a cell's first evaluation,
+> and the re-test's own n at an extra evaluation. A re-test's first n cases
+> begin with the family's, so the pairing holds within each pin decision over
+> the family's n.
+
+**The share-timing amendment's sentences** now read:
+
+> R2's n is the smallest n with (1 − t)ⁿ ≤ 0.05 / (m·2ʲ), with j = 0 at a
+> cell's first evaluation, and equality never occurs at either tolerance. So at
+> R2's n, (1 − t)ⁿ < 0.05 / (m·2ʲ) ≤ 0.05 / m ≤ 0.05, and a forced share with no
+> non-served attempt clears at 95%, at α/m and at α/(m·2ʲ) alike.
+
+The forced n is therefore R2's n whatever level the share is read at, a
+re-test's included.
+
+**The share-level amendment's *clears* bullet** keeps its first three sentences.
+Its last sentence now reads *"That is the same bound and the same reading as
+§2's rule-in, applied to a different quantity, and at a cell's first evaluation
+the same level."* The bullet after it now reads:
+
+> - At a cell's first evaluation, rule-in and the share are each read at α/m.
+>   **α is not split** between them. At an extra evaluation, rule-in is read at
+>   α/(m·2ʲ). The share's level there is held by [#422](https://github.com/bgunyel/clause-and-effect/issues/422),
+>   and until it is decided the bullet above, α/m, is the text in force.
+
+**The forced-membership amendment's sentence** now reads *"Both are read once
+under the pin. At a cell's first membership read, that is at the family's R2 n,
+each at α/m. At a re-test it is at the re-test's own R2 n, with rule-in at
+α/(m·2ʲ) and the share at the level the share-level amendment states."*
+
+**The trade, recorded.** The family-wise bound on a false rule-in is
+**α(1 + 1/m)**, not α. The family's m first evaluations spend m × α/m = α, and
+the reserve adds at most α/(2m) + α/(4m) + … = α/m, however many re-tests
+happen. That is **1.034α at m = 29**, and **2α at m = 1**, R-d's one-provider
+families, where the reserve is as loose as counting it per cell. The bound is
+on rule-in. The share at a re-test is under *Not decided here*.
+
+## The reason
+
+**Why the extra chance is not accepted.** The case for accepting it was that an
+R6 cause is external and recorded, so a re-test is a new measurement and not a
+second look at the same one. That case fails for one of R6's three causes. A
+**config change** is our own commit, made after the failure has been seen.
+Recording it dates the lever, but it does not remove it: change a config,
+re-test, and repeat. Bonferroni counts the tests actually run, whatever caused
+them. Accepting would put the family-wise error at (m + R)·α/m, where R is the
+number of re-tests and nothing bounds it. That is the permitting direction,
+which §2's asymmetry is built against.
+
+**Why the reserve is counted across the family.** Counted per cell, the bound
+is 2α. Counted across the family, it is α(1 + 1/m). First evaluations are
+untouched, so no n already registered moves.
+
+**Why j is fixed at declaration, in commit order.** R2 needs n before the first
+call, and n needs j. A commit order is fixed before any rate exists, so the
+slot a re-test spends cannot be chosen after its rows are seen.
+
+**Why rule-out stays uncorrected.** A false rule-out corrects itself when the
+pool rotates, and a false rule-in seals itself as a pin. That is the
+revisability asymmetry §3 grounds peeking on, and the Bonferroni amendment's
+reason.
+
+Three alternatives are not taken. #397 rejected each:
+
+- **Accept.** The error grows with R, and R is chosen after failures are seen.
+- **Reserve K slots at R1, so that m = named + K.** The error stays at α
+  exactly, but every first test's n rises, from 125 to 128 at t = 5% with
+  K = 5. It rewrites first-test n values that are already registered, and it
+  ends re-testing once K slots are used.
+- **The reserve counted per cell.** The bound is 2α, against α(1 + 1/m) when the
+  reserve is counted across the family.
+
+**`CONTEXT.md`** gains **Re-test**, worded as in #397's resolution.
+
+**Not decided here.**
+
+- **A re-test's share level.** As the text stands, a re-test's no-response share
+  is read at α/m, because the share-level amendment states α/m and this
+  amendment amends rule-in only. Membership is an intersection-union test, so a
+  cell whose rate is fine but whose share is at or above t is falsely admitted
+  by its share read alone. R re-tests give that cell R share reads at α/m, so
+  the bound in *The trade* does not reach the share direction. Whether the share
+  is read at α/(m·2ʲ) too is held by [#422 — Is a re-test's no-response share
+  read at its rule-in level α/(m·2ʲ), or at
+  α/m?](https://github.com/bgunyel/clause-and-effect/issues/422). The forced n
+  does not wait on it, as the share-timing sentence above shows.
+- **A forced re-test that stops early.** It does not evaluate R3, as the
+  share-timing amendment derived, so its slot is not spent. #397 passes an
+  unspent slot forward only from a mixed outcome, so as written the cell's next
+  re-test takes the next j. Whether the pass extends to an early stop is the
+  second question of #422.
+- **A cause recorded after a pass.** Whether it revokes the pin the pass
+  licensed was decided in [#414](https://github.com/bgunyel/clause-and-effect/issues/414),
+  and [#416](https://github.com/bgunyel/clause-and-effect/issues/416) writes it.
+  It re-uses the reserve written here.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.

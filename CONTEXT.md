@@ -178,6 +178,13 @@ An empirical measurement whose answer is not known until it runs. Each
 `docs/eval-reports/`.
 _Avoid_: check
 
+**Re-test**:
+A new acquisition of an existing acceptance cell after a recorded R6 cause,
+counting only the rows that descend from the cause (R-i). It spends a reserve
+slot, α/(m·2ʲ) with j counted across the `(model, channel)`, only when R3
+actually evaluates it, and a mixed outcome passes the slot on unspent (#397).
+_Avoid_: retry (an attempt within one call), re-run
+
 **Reserved act**:
 An act that belongs to Bertan and not to an agent: advancing the active dev
 branch on the remote — or moving that same remote ref any way other than
