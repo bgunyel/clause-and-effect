@@ -186,9 +186,11 @@ _Avoid_: check
 
 **Re-test**:
 A new acquisition of an existing acceptance cell after a recorded R6 cause,
-counting only the rows that descend from the cause (R-i). It spends a reserve
-slot, α/(m·2ʲ) with j counted across the `(model, channel)`, only when R3
-actually evaluates it, and a mixed outcome passes the slot on unspent (#397).
+counting only the rows that descend from the cause (R-i). Its rule-in and its
+no-response share are both read on one reserve slot, α/(m·2ʲ) with j counted
+across the `(model, channel)`. The slot is spent when the membership read is
+decided, by R3 evaluating or by an early stop fixing the share; a mixed outcome
+or an acquisition a cause ended passes it on unspent (#397, #414, #422).
 _Avoid_: retry (an attempt within one call), re-run
 
 **Reserved act**:
