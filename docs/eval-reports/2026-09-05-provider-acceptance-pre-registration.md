@@ -2102,3 +2102,262 @@ before the numbers.
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Amendment — the no-response share is read once, where rule-in is read, and a forced acquisition decides membership alone
+
+| | |
+|---|---|
+| amended | 2026-11-25 |
+| branch | `dev-06` |
+| commit at amendment | `5b6290ffe2d7` |
+| decided in | [#392 — When is the no-response share read, and what n does a forced clearing acquisition declare?](https://github.com/bgunyel/clause-and-effect/issues/392) |
+| written by | [#405](https://github.com/bgunyel/clause-and-effect/issues/405), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | two bullets of the [acceptable-set amendment](#amendment--acceptable-set-membership-needs-a-cleared-no-response-share-not-rule-in-alone): its last bullet, and its read bullet as the [dilution amendment](#amendment--an-organic-cells-no-response-share-charges-every-unattributed-attempt-to-the-candidate) left it |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). The acceptable-set amendment's last bullet
+says that a config pin on a cell whose share does not clear *"needs a **forced
+acquisition** whose per-cell share clears"*. Under that sentence the forced run
+settles the share and nothing else, so the organic rule-in keeps licensing the
+pin. After this amendment the forced run's own rule-in decides as well, so the
+sentence would have meant something different, and it owes an old value. The
+read bullet owes one too. It counts *"all its attempts under the pin"* and
+*"every attempt on X's `(model, channel)`"*, with no point at which the count
+stops, and this amendment gives the count an end.
+
+R-g left open when the share is read and what n a forced acquisition declares,
+and named #392 for both. The acceptable-set and dilution amendments say what the
+share is and per what it is read. Neither says when it is read or over which
+attempts. This amendment writes #392's answer.
+
+**What stands unamended**, each with its reason:
+
+- **§2's rule-in, and R3 as amended.** The share is now read where rule-in is
+  read. Neither the bar nor the point at which rule-in is evaluated moves.
+- **R4.** A forced rule-in that fails is failed under R4 as written. §2 counts a
+  cell's n within a regime, never across, so the failure is the forced regime's.
+- **R5.** Rule-out peeks stay unrestricted, the forced rows included. The early
+  stop below is not a rule-out. It is recorded the way R5 records one, and it
+  says that the share cannot clear, not that the rate is bad.
+- **R6 and R-i.** R6 says what re-testing a **failed** cell requires. An
+  unresolved forced share is not a failed cell. The finality clause below
+  requires the same of it on R6's terms, so no sentence of R6 changes meaning.
+  R-i says which rows a re-test counts, and a further forced acquisition counts
+  those.
+- **R-g**, including its three buckets, its deadline clause and its *"read only
+  once enrichment has finished"*. `served_provider` and `http_status` are
+  phase 1, so the values counted at the rule-in point are the values the log
+  holds once enrichment has finished.
+- **The share's definition, as the dilution amendment leaves it.** That is the
+  ratio bullet, its numerator sentence, the *clears* bullet and the reason given
+  for the level. The ratio bullet already counts the share *"as the read bullet
+  below says for each regime"*, and the read bullet is where the window goes.
+- **The dilution amendment's** *"A cell whose share does not clear reads
+  "rule-in, no-response unresolved" and needs a forced acquisition, as the last
+  bullet already says."* It reads through to the last bullet, which is amended
+  below.
+- **The Bonferroni amendment's** *"Nothing waits for the acquisition window to
+  close"*, and its *"m no longer needs a close. R-d's pin and acceptable-set
+  reads still do."* The share now waits on no close either. R-d's acceptable-set
+  read reports the headroom the observed pools offer, not membership, so it is
+  still taken over the whole window.
+
+§1 and §2 as amended, R1, R2, R3 as amended, R4–R6, §4 as amended, §5 to §9,
+R4's pressure point as amended, R-a, R-b as amended, R-c as amended twice, R-d
+to R-i, the mixed-cell amendment and the dilution amendment all stand.
+
+## The old value
+
+From the acceptable-set amendment, verbatim, two bullets. Each is quoted whole,
+with its own markup, so that it can be found.
+
+**The read bullet**, as the dilution amendment left it:
+
+> - It is read **per cell** under both regimes. Forced and organic never pool.
+>   - **Forced acquisition.** The cell's non-served attempts under the pin, over
+>     all its attempts under the pin, as before.
+>   - **Organic acquisition.** Cell X's share is **A / (s_X + A)**. **A** is
+>     every attempt on X's `(model, channel)` whose `served_provider` is null,
+>     in all three of R-g's buckets. **s_X** is the attempts X's provider served
+>     under organic routing, clean or not, counted per attempt and not per call.
+
+The words that change are *"all its attempts under the pin"*, *"every attempt on
+X's `(model, channel)`"* and *"the attempts X's provider served under organic
+routing"*. Read as written, each takes in attempts made after the cell reached
+its n.
+
+**The last bullet:**
+
+> - A cell that rules in and whose share does not clear is reported as
+>   **"rule-in, no-response unresolved"**. It is not a member. A config pin on
+>   it needs a **forced acquisition** whose per-cell share clears.
+
+The words that change are *"A config pin on it needs a **forced acquisition**
+whose per-cell share clears"*. The first two sentences stand.
+
+#405's checklist named the last bullet. The assistant, writing this under #405,
+read the rest of the acceptable-set amendment under the guard and found the read
+bullet's three phrases as well.
+
+## The new value
+
+**The read bullet** now reads:
+
+> - It is read **per cell** under both regimes, **once**, at the cell's
+>   **rule-in point**: the attempt that brings the cell to its declared n. It is
+>   counted over the rows rule-in reads there, under one condition: the channel
+>   (R-e), the `ModelNames` value (R-h) and the deadline in force (R-g), and for
+>   a re-test only R-i's rows. Forced and organic never pool.
+>   - **Forced acquisition.** The cell's non-served attempts under the pin, over
+>     all its attempts under the pin, from the forced acquisition's first call
+>     to its rule-in point.
+>   - **Organic acquisition.** Cell X's share is **A / (s_X + A)**. **A** is
+>     every attempt on X's `(model, channel)` whose `served_provider` is null,
+>     in all three of R-g's buckets. **s_X** is the attempts X's provider served
+>     under organic routing, clean or not, counted per attempt and not per call.
+>     Both are counted from the first organic acquisition call on the
+>     `(model, channel)` to X's rule-in point.
+>   - The share is never read again on later rows. An organic share that does
+>     not clear at the rule-in point stays unresolved for the organic regime.
+>   - A **mixed** cell reads no share, because R3 is not evaluated on it.
+
+**The last bullet** now reads:
+
+> - A cell that rules in and whose share does not clear is reported as
+>   **"rule-in, no-response unresolved"**. It is not a member. A config pin on
+>   it needs a **forced acquisition**, and **membership is then read from the
+>   forced acquisition alone**: its rule-in and its share, both read once, at
+>   its rule-in point, on its rows.
+>   - The forced acquisition is an ordinary measurement pin. It declares the
+>     family's R2 n before its first call, uses the case list's first n cases,
+>     as every cell of the family does, and runs to n served calls.
+>   - The organic result is reported beside the forced one. Once its share was
+>     unresolved, it licenses nothing on its own.
+>   - A forced rule-in that fails is failed under R4, for the forced regime.
+>   - **An unresolved forced share is final.** It is not extended. Another
+>     forced acquisition needs a cause recorded before it under R6. It counts
+>     only R-i's rows, under its own R2 n.
+>   - **The early stop.** Let A be the forced acquisition's non-served
+>     attempts so far. The run stops at the non-served attempt that brings A to
+>     **k\***, the smallest k for which the share's upper bound on k non-served
+>     attempts of n + k, at the level the share is read at, is at or above the
+>     §1 tolerance t. The cell reads *"rule-in, no-response unresolved"*. The
+>     stop is recorded with the attempt count, the served count and the A at
+>     which it was taken. Rule-out peeks on the forced rows stay unrestricted
+>     under R5.
+
+A cell measured under a measurement pin from the start is read under the forced
+regime throughout. Its own reads are the forced reads, and it needs no second
+run. So the share has one rule in both regimes: it is read where rule-in is read.
+
+**k\* at the level the acceptable-set amendment states**, 95% one-sided.
+Recomputed for this amendment with `scipy.stats.beta.ppf(0.95, k + 1, n)` for k
+non-served attempts of n + k, at the m = 29 row of the Bonferroni amendment's
+table of n:
+
+| A | n = 61, t = 10% | clears | n = 125, t = 5% | clears |
+|---:|---:|---|---:|---|
+| 2 | 9.66% | yes | 4.87% | yes |
+| 3 | 11.67% | no | 5.95% | no |
+
+So k\* is 3 in both columns: the run stops at its 3rd non-served attempt. The
+table is illustrative. The formula binds, so a change in the level the share is
+read at carries through it.
+
+**Two cases that follow from the definitions above.** Each is written down here
+so that it is not settled after the rows exist:
+
+- **Every unresolved forced share is an early stop.** At the rule-in point the
+  served count is n, and at fixed s the bound rises with A. The dilution
+  amendment checked that for s in 1..400 and k in 0..199, and it was checked
+  again for this amendment over the same grid, with no exception. A forced run
+  that reaches its rule-in point has A below k\*, so its share clears. The early
+  stop is the only way a forced share is unresolved.
+- **A forced run that stops early does not evaluate its rule-in.** It never
+  reaches its declared n, so R3 is not evaluated on it and R4 does not fire, as
+  with a mix found before n. A cell that ruled in organically keeps that
+  organic rule-in, which licenses nothing on its own. A cell measured under a
+  pin from the start has no rule-in to report, and reads *"no-response
+  unresolved"*.
+
+## The reason
+
+**Why once, and why at the rule-in point.** A share that can be read again
+later is stopping on good news, because waiting lets clean traffic grow s while
+A stands still. At the 95% level the acceptable-set amendment states, a provider
+at s = 125 with A = 3 has a bound of 5.95% and does not clear 5%. The same
+provider at s = 250 with A = 4 has 3.57%, and clears. The argument does not
+depend on the level. Reading the share where rule-in is read ties the stopping
+point to X's served count, which the share does not decide. A no-response
+attempt can only move the point later, and it adds to A on the way, which is the
+safe direction.
+
+**Why the forced acquisition decides membership alone.** A run that reads only
+the share and keeps the organic rule-in costs the same number of calls. It would
+see a structure failure under the pin and ignore it for membership, unless the
+failures came two in a row and R5 ruled the cell out. Read under the pin, the
+rule-in and the share describe the same condition.
+
+**Why the forced n is R2's n, whatever the share's level.** With no non-served
+attempt, the share's upper bound at a level 1 − α′ is below t exactly when
+(1 − t)ⁿ < α′. R2's n is the smallest n with (1 − t)ⁿ ≤ 0.05 / m, and the
+Bonferroni amendment shows that equality never occurs at either tolerance. So
+at R2's n,
+(1 − t)ⁿ < 0.05 / m ≤ 0.05, and a forced share with no non-served attempt
+clears at 95% and at α/m alike. The share's zero-failure threshold is 29 at 10%
+and 59 at 5% under 95%, and 61 and 125 under α/29. R2's n for m = 29 is 61 and
+125. The forced n does not wait on #400.
+
+**Why an unresolved forced share is final.** It is R4's mirror for the share:
+*"we just need a few more attempts"* is the same comfortable thing to say. A
+different deadline is already a different condition under R-g, and is never
+pooled with this one.
+
+**Why the early stop is not a peek.** Once A reaches k\*, the outcome is fixed.
+The served count at the read point is n, and A can only grow. Stopping changes
+no outcome, as with a mix found before n, and running on would spend calls on a
+read whose answer is known.
+
+Two alternatives are not taken. #392 rejected each:
+
+- **Read the share at the acquisition window's close.** The window is still
+  fog, and #377 removed every dependence on its close except R-d's.
+- **A share-only clearing run that keeps the organic rule-in.** It costs the
+  same number of calls, and it would ignore a forced structure failure short of
+  R5's two in a row.
+
+**Not decided here.**
+
+- **The share's level.** [#400 — Does the no-response share's bound take R-c's
+  Bonferroni correction, or stay at 95%?](https://github.com/bgunyel/clause-and-effect/issues/400)
+  decided that it moves to α/m, and [#407 — Append the share-level amendment:
+  the no-response share is read at α/m over the named
+  set](https://github.com/bgunyel/clause-and-effect/issues/407) writes it. Every
+  bound above is at the level the acceptable-set amendment states.
+- **Whether an organic read can admit a member at all.** [#408 — Does clearing
+  the no-response share by organic read, then by forced run, buy a second chance
+  at α/m?](https://github.com/bgunyel/clause-and-effect/issues/408) decided that
+  only a forced acquisition admits one, and [#411 — Append the forced-membership
+  amendment: only a forced acquisition admits a member, and the organic share is
+  report-only](https://github.com/bgunyel/clause-and-effect/issues/411) writes
+  it. This amendment reads membership from the forced acquisition for the cells
+  #392 named: an organic rule-in whose share does not clear, and a cell pinned
+  from the start.
+- **What level a further forced acquisition is read at.** It is a re-test, and
+  [#397 — Does an R6 re-test add to R-c's m, or does each re-test buy a free
+  chance at rule-in?](https://github.com/bgunyel/clause-and-effect/issues/397)
+  decided how re-tests spend α. [#413 — Append the re-test reserve
+  amendment](https://github.com/bgunyel/clause-and-effect/issues/413) writes it.
+- **The case list's length.** [#401 — What n does a cell get when R1 names more
+  providers than the 125-case draw supports?](https://github.com/bgunyel/clause-and-effect/issues/401)
+  decided to extend it to all 433 Tier-1 cases, and [#409 — Append the
+  case-list amendment](https://github.com/bgunyel/clause-and-effect/issues/409)
+  writes it. Positions 1–125 do not move, so *"the case list's first n cases"*
+  names the same cases for every n the 125 supply.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
