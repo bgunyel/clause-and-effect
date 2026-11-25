@@ -3015,3 +3015,410 @@ any rate exists.
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Amendment — only a forced acquisition admits a member, and the organic share is report-only
+
+| | |
+|---|---|
+| amended | 2026-11-25 |
+| branch | `dev-06` |
+| commit at amendment | `0a80d6882a41` |
+| decided in | [#408 — Does clearing the no-response share by organic read, then by forced run, buy a second chance at α/m?](https://github.com/bgunyel/clause-and-effect/issues/408) |
+| written by | [#411](https://github.com/bgunyel/clause-and-effect/issues/411), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | the [acceptable-set amendment](#amendment--acceptable-set-membership-needs-a-cleared-no-response-share-not-rule-in-alone)'s membership sentence, and its last bullet as the [share-timing amendment](#amendment--the-no-response-share-is-read-once-where-rule-in-is-read-and-a-forced-acquisition-decides-membership-alone) left it; and every passage of the [dilution amendment](#amendment--an-organic-cells-no-response-share-charges-every-unattributed-attempt-to-the-candidate), the share-timing amendment and the [share-level amendment](#amendment--the-no-response-share-is-read-at-αm-over-the-named-set-the-level-rule-in-is-read-at) that gives the organic share a clearing or routing role |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). The acceptable-set amendment's last bullet
+first said that a config pin on a cell whose share does not clear *"needs a
+**forced acquisition** whose per-cell share clears"*. The share-timing amendment
+rewrote it, and both versions send only a cell whose share does **not** clear to
+a forced acquisition. Both imply that a cell whose organic share clears is a
+member with no forced run. After this amendment no organic read admits a member,
+so those sentences would mean something different, and they owe old values. So
+do the later passages that let an organic share clear a cell or route one.
+
+[#408](https://github.com/bgunyel/clause-and-effect/issues/408) found that the
+organic route was a second chance at the share, and that it could be a test of
+the wrong quantity. It decided that only a forced acquisition admits a member,
+and that the organic share is printed and decides nothing. This amendment writes
+that decision.
+
+**What stands unamended**, each with its reason:
+
+- **§2's rule-in, R3 as amended, and R4.** Neither the bar nor the point at which
+  rule-in is read moves. An organic rule-in is still evaluated once, at the
+  declared n. It now decides only who gets a forced acquisition.
+- **R5.** Rule-out peeks stay unrestricted in both regimes. An organic rule-out
+  is still a rule-out, and the cell gets no forced acquisition without an R6
+  cause.
+- **R6 and R-i.** A further membership read needs a cause recorded under R6, as
+  a re-test always did. R-i says which rows it counts.
+- **R-g**, including its three-bucket count printed beside every cell of the
+  `(model, channel)`. The organic share is now printed beside the cell in the
+  same way.
+- **The share's definition, its timing and its level.** That is the dilution
+  amendment's A / (s_X + A), the share-timing amendment's read bullet except the
+  one sentence owed below, the forced read, and the share-level amendment's α/m
+  under both regimes. The organic share is computed and read exactly as they
+  say. Only what it decides changes, and after this amendment it decides
+  nothing. It is still read once, so that a number which decides nothing cannot
+  be chosen by when it is read.
+- **R4's pressure point as amended.** *"Membership is the rule-in test plus a
+  cleared no-response share"* and *"Every member clears rule-in, and its
+  no-response share, individually"* name no regime. They read through to the
+  membership sentence below.
+- **The share-timing amendment's forced-acquisition sub-bullets**, except the
+  two owed below: the ordinary measurement pin at the family's R2 n on the case
+  list's first n cases, *"A forced rule-in that fails is failed under R4"*, and
+  *"An unresolved forced share is final"*. Its early stop also stands, except its
+  label sentence. Its *Why the forced acquisition decides membership alone* now
+  holds of every member. Both of its derived cases stand. The second, *A forced
+  run that stops early does not evaluate its rule-in*, is what settles the labels
+  below.
+- **The share-level amendment's** *"The level is the same under both regimes"*.
+  It is about the level, and the organic share is still read at α/m. Its *Why α
+  is not split* holds of the forced reads, which are now the only reads that
+  admit. Its *"a family has m share reads, as it has m rule-in reads"* still
+  holds of the reads that admit: at most one forced read per cell, so at most m.
+  Its bounds, its A = 1 sentence and its k\* table are statements about bounds,
+  and they stand.
+- **The dilution amendment's** *Dilution, closed by construction*, its bound
+  sentence as the share-level amendment left it, and its quoted *A ignores
+  attribution*. They describe the number that is printed. Its *What stands*
+  bullet on the last bullet reads through to the last bullet as amended below.
+- **The dilution amendment's rejected alternative** *"A forced acquisition for
+  every candidate. It is never safer than the read above, and it always costs
+  more."* It records what #391 rejected, and it is still true as history. This
+  amendment does not take that alternative, because a cell that failed organic
+  rule-in gets no forced acquisition. Its premise, that a forced run is never
+  safer than the organic read, is what #408's first decision denies, because
+  the two reads bound different quantities. It is recorded here, so that the
+  sentence is not read as standing against this amendment.
+- **The forced n.** It is 61 at 10% and 125 at 5%, for m = 29. The share-timing
+  amendment's *Why the forced n is R2's n, whatever the share's level* is
+  unchanged.
+- **The case list and its stop rule**, as the case-list amendment wrote them.
+
+§1 and §2 as amended, R1, R2, R3 as amended, R4–R6, §4 as amended, §5 to §9,
+R4's pressure point as amended, R-a, R-b as amended, R-c as amended twice, R-d
+to R-i, and the mixed-cell and case-list amendments all stand. So do the
+dilution, share-timing and share-level amendments, except for the passages
+quoted below.
+
+## The old value
+
+Each passage verbatim, with its own markup, so that it can be found.
+
+**From the acceptable-set amendment**, two passages.
+
+Its membership sentence:
+
+> A cell is a member of an acceptable set only if it **rules in** under §2 and
+> its **no-response share also clears**.
+
+Read with the organic share's per-cell read, an organic rule-in whose organic
+share clears satisfies it with no forced run.
+
+Its last bullet as the share-timing amendment left it, with two of its
+sub-bullets:
+
+> - A cell that rules in and whose share does not clear is reported as
+>   **"rule-in, no-response unresolved"**. It is not a member. A config pin on
+>   it needs a **forced acquisition**, and **membership is then read from the
+>   forced acquisition alone**: its rule-in and its share, both read once, at
+>   its rule-in point, on its rows.
+
+>   - The organic result is reported beside the forced one. Once its share was
+>     unresolved, it licenses nothing on its own.
+
+>   - **The early stop.** Let A be the forced acquisition's non-served
+>     attempts so far. The run stops at the non-served attempt that brings A to
+>     **k\***, the smallest k for which the share's upper bound on k non-served
+>     attempts of n + k, at the level the share is read at, is at or above the
+>     §1 tolerance t. The cell reads *"rule-in, no-response unresolved"*. The
+>     stop is recorded with the attempt count, the served count and the A at
+>     which it was taken. Rule-out peeks on the forced rows stay unrestricted
+>     under R5.
+
+In the bullet, the whole first sentence changes, and so does the scope of the
+third: *"A config pin on it"* names only a cell whose share did not clear. In
+the first sub-bullet, *"Once its share was unresolved"* and *"on its own"*
+change. In the early stop, only *"The cell reads "rule-in, no-response
+unresolved""* changes.
+
+**From the dilution amendment**, three passages.
+
+The sentence after its level bullet:
+
+> A cell whose share does not clear reads *"rule-in, no-response unresolved"* and
+> needs a forced acquisition, as the last bullet already says.
+
+From its *Why this is not the worst-case attribution #371 rejected*:
+
+> Under the acceptable-set amendment a share that does not
+> clear is never a rule-out. It is only *"rule-in, no-response unresolved"*, so
+> the same arithmetic now costs a forced run and nothing more.
+
+From its *The trade, recorded*, after the quoted block:
+
+> Precision is given up so that the gate never depends on enrichment being right.
+> A candidate can be sent to a forced acquisition by a timeout the log could have
+> placed on another provider. That costs calls and never makes a false rule-in,
+> which is the direction §2's asymmetry prefers.
+
+Its *"In practice the organic read clears only on a `(model, channel)` that is
+nearly free of no-response attempts. Otherwise it routes the candidate to a
+forced acquisition."* is not quoted again. The share-level amendment replaced
+it, and its replacement is quoted below.
+
+**From the share-timing amendment**, two passages.
+
+The last-but-one sub-bullet of its read bullet:
+
+>   - The share is never read again on later rows. An organic share that does
+>     not clear at the rule-in point stays unresolved for the organic regime.
+
+The first sentence stands.
+
+From its *Not decided here*, the last sentence of the bullet on whether an
+organic read can admit a member:
+
+> This amendment reads membership from the forced acquisition for the cells
+> #392 named: an organic rule-in whose share does not clear, and a cell pinned
+> from the start.
+
+**From the share-level amendment**, three passages.
+
+The sentence after its bounds table:
+
+> **As this amendment leaves the share, an organic share read at s_X equal to
+> the declared n clears only at A = 0**, that is, on a `(model, channel)` with no
+> non-served attempt at all up to X's rule-in point. Otherwise it routes the
+> candidate to a forced acquisition.
+
+The *clears* columns of that table, at s = 61 and s = 125. Under the
+share-level amendment they read the organic gate as well as the forced one. The
+numbers are not quoted again and do not change.
+
+Its *The cost, on record*:
+
+> **The cost, on record.** As this amendment leaves the share, an organic share at
+> s_X equal to the declared n clears only at A = 0. The dilution amendment's *one
+> timeout still clears* is given up. One non-served attempt anywhere on a
+> `(model, channel)` before X's rule-in point sends X to a forced acquisition. A
+> forced acquisition's share clears on 0 non-served attempts in 61 or 125, and the
+> run stops at its first non-served attempt. The cost falls on calls, and it never
+> makes a false rule-in, which is the direction §2's asymmetry prefers.
+
+The words that change are the first sentence's *"clears"* and the whole of
+*"One non-served attempt anywhere on a `(model, channel)` before X's rule-in
+point sends X to a forced acquisition."* The rest stands.
+
+#408's checklist named the acceptable-set amendment's last bullet, and the
+dilution amendment's two sentences, *"A cell whose share does not clear …"* and
+*"In practice the organic read clears only …"*. It also named the share-timing
+amendment's scoping of the forced read, and the share-level amendment's *"clears
+only at A = 0"*. A comment on #411 from #405 named the share-timing amendment's
+read sub-bullet, its organic-result sub-bullet, its *Not decided here* sentence,
+and the early-stop label. A comment from #407 named the share-level amendment's
+sentence after the table, its *clears* columns and its *The cost, on record*. The
+assistant, writing this under #411, read all four amendments and `CONTEXT.md`
+under the guard. It found three more passages: the acceptable-set amendment's
+membership sentence, the dilution amendment's worst-case sentence, and its trade
+sentence. Its rejected alternative *A forced acquisition for every candidate*
+is taken up under *What stands*.
+
+## The new value
+
+**Membership.** The acceptable-set amendment's membership sentence now reads:
+
+> A cell is a member of an acceptable set only if **one forced acquisition** of
+> it rules in under §2 and its no-response share also clears. Both are read once
+> under the pin, at the family's R2 n, each at α/m. The share membership needs
+> is the **pinned-condition share**, which is X's share under the condition a
+> config pin `{only: [X, Y], allow_fallbacks: True}` sends X traffic under. **No
+> organic read admits a member.** The organic share is evidence about a
+> different quantity. It is not a test of this one.
+
+**The last bullet** now reads:
+
+> - A cell that rules in under organic acquisition is reported as **"organic
+>   rule-in, not a member"**, whatever its organic share. A config pin on it
+>   needs a **forced acquisition**, and **membership is then read from the
+>   forced acquisition alone**: its rule-in and its share, both read once, at
+>   its rule-in point, on its rows.
+
+Its sub-bullets stand as the share-timing amendment wrote them, except two.
+
+The organic-result sub-bullet now reads:
+
+>   - The organic result is reported beside the forced one, with its share and
+>     that share's bound. It licenses nothing.
+
+The early stop's label sentence now reads *"The cell reads "rule-in,
+no-response unresolved" if it ruled in under organic acquisition, and
+"no-response unresolved" if it was measured under a pin from the start."* The
+rest of the early stop stands.
+
+**Who gets a forced acquisition.** Every organic rule-in, and every cell
+measured under a measurement pin from the start, whose own reads are already
+the forced reads. A cell that failed organic rule-in gets none without a cause
+recorded under R6. So does a cell that was ruled out organically.
+
+**The organic share is report-only.** It is computed as the dilution amendment
+defines it, A / (s_X + A). It is read once, at X's organic rule-in point, as the
+share-timing amendment times it, and at α/m, the share-level amendment's level.
+It is printed with its bound beside the cell, like R-g's three-bucket count. It
+neither clears a cell nor routes one. Where an amendment before this one says
+that an organic share clears, or does not, that now says only whether its
+printed bound is below t.
+
+**Labels.**
+
+| outcome | reads |
+|---|---|
+| an organic rule-in, whatever its organic share | **"organic rule-in, not a member"** |
+| a forced acquisition that reaches n and rules in | a member; its share clears, because every unresolved forced share is an early stop |
+| a forced acquisition that reaches n and fails rule-in | failed under R4, for the forced regime |
+| a forced acquisition that stops early, after an organic rule-in | **"rule-in, no-response unresolved"** |
+| a forced acquisition that stops early, for a cell pinned from the start | **"no-response unresolved"** |
+
+*"Rule-in, no-response unresolved"* is reserved for a forced run whose share
+fails. Every forced share that fails is an early stop, and an early stop does
+not evaluate the forced rule-in, as the share-timing amendment derived. So the
+*rule-in* that label names is always the organic one. A cell pinned from the
+start has no organic rule-in, and it reads *"no-response unresolved"*, as the
+share-timing amendment already said. A rule-out under R5, in either regime, is
+recorded as R5 says.
+
+**The invariant.** A cell gets at most one membership read per condition. A
+further one needs a cause recorded under R6, before it, and counts only R-i's
+rows. The forced acquisition that follows an organic rule-in is the cell's
+**first** membership read, because the organic rule-in is no longer one. It is
+read at α/m, as #408 decided, and it spends no slot of the re-test reserve.
+
+**The dilution amendment's** sentence after its level bullet now reads *"An
+organic share decides nothing. Every organic rule-in reads "organic rule-in, not
+a member" and needs a forced acquisition, as the last bullet says."*
+
+Its worst-case sentence now reads *"After the forced-membership amendment the
+organic share decides nothing, so the same arithmetic changes a printed number
+and no outcome. A share that does not clear is never a rule-out."*
+
+Its trade sentence now reads *"Precision is given up so that the printed share
+never depends on enrichment being right. A candidate's printed share can be
+raised by a timeout the log could have placed on another provider. That changes
+no decision, because every organic rule-in gets a forced acquisition whatever
+its share."*
+
+**The share-timing amendment's** read sub-bullet now reads *"The share is never
+read again on later rows. An organic share is report-only, and is never
+unresolved. It is printed with its bound at the rule-in point."*
+
+Its *Not decided here* sentence now reads *"The forced-membership amendment
+reads membership from the forced acquisition for every cell: every organic
+rule-in, whatever its share, and a cell pinned from the start."*
+
+**The share-level amendment's** sentence after its bounds table now reads *"As
+this amendment leaves the share, an organic share read at s_X equal to the
+declared n has a bound below t only at A = 0, that is, on a `(model, channel)`
+with no non-served attempt at all up to X's rule-in point. It is printed, and it
+routes nothing. Every organic rule-in goes to a forced acquisition, whatever A
+is."*
+
+Its *clears* columns at s = 61 and s = 125 read the gate for a forced share,
+with n = s served calls. For an organic share at s_X = s they say only whether
+the printed bound is below t, and they admit no one.
+
+In its *The cost, on record*, the first sentence now reads *"… an organic share
+at s_X equal to the declared n has a bound below t only at A = 0."* The routing
+sentence now reads *"Every organic rule-in goes to a forced acquisition, whatever
+A is."*
+
+## The reason
+
+**The organic route was a second chance.** Under the old text a cell had two
+routes to membership on the share: the organic read, and then a forced run.
+Each was read at α/m. Rule-in had no second chance, because the forced route
+opened only after an organic rule-in, so a cell with a bad structure rate had to
+pass both rule-in reads. Only the share direction had two routes.
+
+Recomputed for this amendment at m = 29, with `scipy.stats.beta.ppf(1 − α/m,
+k + 1, n − k)` for the bound and `(1 − t)ˢ` for the chance of no non-served
+attempt in s served calls. At α/29 an organic share at s = n clears only at
+A = 0. The bound there is 9.91% at s = 61 and 4.96% at s = 125. Take a cell whose
+share is exactly t, and which is the only source of nulls on its
+`(model, channel)`. It falsely clears organically with probability **0.00162**
+at 61 / 10% and **0.00164** at 125 / 5%. If the forced share is the same
+quantity, the forced read clears falsely with the same probability. Across both
+routes that is 1 − (1 − p)², **0.00323** and **0.00328**. α/m is 0.00172 and
+2α/m is 0.00345. The union bound is nearly reached, so the family bound on the
+share direction was 2α, not α.
+
+**Two quantities, and why it does not matter which.** The share a pin needs is
+X's share under the pin. The organic read bounds X's share under organic
+routing. Nothing shows the two are equal, and nothing shows that the organic one
+bounds the pinned one. A plausible mechanism, **not observed**: under organic
+routing OpenRouter can fall back away from a slow X inside one client request,
+so X's slowness never appears as a null. If the two quantities are the same, the
+organic route was a second chance. If they differ, it was a test of the wrong
+quantity, with no bound at all on the one a pin needs. Dropping the organic
+route closes both cases. The per-cell bound returns to α/m, and, with the
+share-level amendment's *Why α is not split*, the family bound returns to α.
+
+**Why a cell that failed organic rule-in gets no forced acquisition.** This is
+not about α, since membership reads only the one forced run either way. It
+follows R4's anticipated pressure point: pinning a cell that failed organically
+is *"un-fail the marginal member"*. So the organic rule-in stays as a screen in
+front of the forced read. A screen that must also pass adds a condition to
+admission and spends no α.
+
+**Why the organic share is still computed and read once.** It is still
+evidence, and it is printed. A number that decides nothing could still be chosen
+by when it is read, if it could be read at any point. The share-timing
+amendment's read-once rule closes that, so it is kept.
+
+Three alternatives are not taken. #408 rejected each:
+
+- **Accept 2α/m.** The family bound on the silent error would be 2α, which is
+  10%.
+- **Split α to α/2m per route.** It is dominated. Recomputed: at A = 0 the
+  organic share's bound at the declared n is 10.92% at 61 / 10% and 5.49% at
+  125 / 5%, so it fails, and the organic route is dead anyway. The forced
+  zero-failure n rises from 61 to 67 and from 125 to 138.
+- **Count forced runs into m.** Counted as they occur, m depends on the data,
+  which is #377's reason. Fixed at 2m in advance, it is the α/2m split.
+
+**The trade, recorded.** Every organic rule-in now costs a forced run at the
+family's R2 n, 61 or 125 served calls for m = 29. That includes one with A = 0,
+which would have cleared before. Since #400 that case was already rare, because
+A = 0 means not one null anywhere on the `(model, channel)` up to the rule-in
+point. #391's and #392's organic machinery now governs a printed number, not a
+decision. The cost falls on calls, and it never makes a false rule-in, which is
+the direction §2's asymmetry prefers.
+
+**`CONTEXT.md`.** No new term. **No-response attempt** was read under the guard.
+It says how a no-response attempt is counted and that the share is read per
+cell under both regimes. It gives the organic share no clearing or routing role,
+so it is not amended.
+
+**Not decided here.**
+
+- **What level a further membership read is read at.** It is a re-test.
+  [#397 — Does an R6 re-test add to R-c's m, or does each re-test buy a free
+  chance at rule-in?](https://github.com/bgunyel/clause-and-effect/issues/397)
+  decided that re-tests spend a reserve at α/(m·2ʲ), and [#413 — Append the
+  re-test reserve amendment: the j-th extra evaluation in a family is read at
+  α/(m·2ʲ)](https://github.com/bgunyel/clause-and-effect/issues/413) writes it.
+  This amendment says only that the forced acquisition after an organic rule-in
+  is not one.
+- **A re-test's share level.** Whether a re-test's share is read at its rule-in
+  level, α/(m·2ʲ), or stays at α/m was raised on #408 from #397. Neither ticket
+  decided it, and this amendment does not.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
