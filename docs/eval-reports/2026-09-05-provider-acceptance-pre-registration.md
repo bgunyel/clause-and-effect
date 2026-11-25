@@ -3422,3 +3422,217 @@ so it is not amended.
 **Written before the first acquisition call**, with zero provider-attributed rows
 in hand. This file is carried by a commit, and that commit can be ordered
 against the commit of any acquisition row, as with the rest of this document.
+
+---
+
+# Amendment — acquisition reads the cases at tree 6348d8f7, never the working copy
+
+| | |
+|---|---|
+| amended | 2026-11-25 |
+| branch | `dev-06` |
+| commit at amendment | `396946bbbd45` |
+| decided in | [#406 — What happens to the frozen case list if a Tier-1 case is edited or removed before acquisition?](https://github.com/bgunyel/clause-and-effect/issues/406) |
+| written by | [#412](https://github.com/bgunyel/clause-and-effect/issues/412), under map [#6](https://github.com/bgunyel/clause-and-effect/issues/6) |
+| amends | §4's `population:` line and its *"computable from the corpus"*; and the `population:` line of the [Bonferroni amendment](#amendment--the-multiplicity-correction-is-bonferroni-over-the-named-set-and-the-draw-grows-to-125-cases)'s frozen block |
+| status of the data | none — written before the first acquisition call; `record_attempt` still has no caller in `src/`, so `llm_attempt` has never held a row |
+
+**This is an amendment, not a registration**, under the guard in [§The two kinds
+of append](#the-two-kinds-of-append). §4 names its population as
+`src.eval.dataset.load_tier1`, and `load_tier1` reads `data/tier-1` from the
+working copy by default. So the old lines did not say which version of the cases
+they meant: the cases as registered, or the cases as they stand when acquisition
+runs. This amendment fixes them to the first. That changes what the lines would
+have meant under the second reading, so they owe old values.
+
+[#406](https://github.com/bgunyel/clause-and-effect/issues/406) asked what
+happens to the frozen case list if a Tier-1 case is edited or removed before
+acquisition. It decided that **acquisition reads its case text from one pinned
+version of the cases, `data/tier-1` at git tree `6348d8f7…`, by hash and never
+from the working copy**, and that golden-set edits and removals carry on and
+never reach it. This amendment writes that decision.
+
+**What stands unamended**, each with its reason:
+
+- **The case-list amendment's `population:` line.** #406 listed it as the fourth
+  old value, on the assumption that it would name only `load_tier1`, as §4's
+  and the Bonferroni amendment's do. As written under
+  [#409](https://github.com/bgunyel/clause-and-effect/issues/409), it already
+  names the pinned tree, because #406 required #409 to draw from it:
+
+  ```
+  population: 433 (src.eval.dataset.load_tier1, over data/tier-1 at git tree
+              6348d8f7b452816f88beab7c5a9e18660e3977f7, commit 3c936c3f9418)
+              asserted before drawing
+  ```
+
+  It already agrees with the new value below, so it owes no change. It is quoted
+  here so that a reader of #406's list can see where the fourth item went.
+- **Every frozen digest and every printed list.** `26cdec8e…`, `32547f20…`,
+  `4802ad29…`, `7962ad6b…` and `0020415d…` are over case ids, and all five
+  reproduce from the pinned tree, as recorded under *Verified against* below.
+  The 29, the 125 and the 433 name the same cases as before.
+- **§4's *"Reproduced and verified against the corpus while writing this
+  entry"*, and the *Verified against* paragraph before the first registration.**
+  They record what was done at the registration commit, `3c936c3f9418`, whose
+  `data/tier-1` is the pinned tree by definition. They are true as history.
+- **The case-list amendment's account of its draw**, *"The population was read
+  from `data/tier-1` at tree `6348d8f7…` … and not from the working copy"*. It
+  records what was done, and it is what this amendment now requires of
+  acquisition.
+- **The case-list amendment's *Not decided here* bullet** on which version of
+  the cases acquisition reads. It points at #406 and #412. It is still true as
+  history, and this amendment writes what #406 decided.
+- **The case list's stop rule.** It reads only n and the list's length. The
+  list's length is the population at the pinned tree, which is 433.
+
+§1 and §2 as amended, R1, R2, R3 as amended, R4–R6, §4 as amended, §5 to §9,
+R4's pressure point as amended, R-a, R-b as amended, R-c as amended twice, R-d
+to R-i, and the mixed-cell, dilution, share-timing, share-level, case-list and
+forced-membership amendments all stand. So does the Bonferroni amendment, except
+for the line quoted below.
+
+## The old value
+
+Each passage verbatim, with its own markup.
+
+The `population:` line of §4's frozen block:
+
+```
+population: 433 (src.eval.dataset.load_tier1)
+```
+
+§4's paragraph defining difficulty:
+
+> **Difficulty is defined operationally, before the draw, as quote token count** —
+> mechanism-plausible, since longer quotes produce the timeouts and truncation, and
+> computable from the corpus without running anything. This is the difficulty
+> variable for the pooled failure-rate-against-difficulty read; it is fixed here so
+> it cannot be chosen later to suit a gradient.
+
+The words that change are *"computable from the corpus"*. The rest stands.
+
+The `population:` line of the Bonferroni amendment's frozen block:
+
+```
+population: 433 (src.eval.dataset.load_tier1)
+```
+
+#406 named these three, and the case-list amendment's `population:` line, which
+is taken up under *What stands*. The assistant, writing this under #412, read
+the whole file for `load_tier1`, `data/tier-1`, *working copy*, *corpus*,
+*prompt*, *golden set*, *difficulty* and *quote token count* under the guard. It
+found no further passage whose meaning changes.
+
+## The new value
+
+**The case text.** The question, gold answer and supporting quote of every
+Tier-1 case, as this pre-registration uses them, are read from `data/tier-1` at
+git tree **`6348d8f7b452816f88beab7c5a9e18660e3977f7`**. That is the directory's
+tree at the registration commit, `3c936c3f9418`. They are read **by hash, never
+from the working copy**. The case text, the population and quote token count all
+come from that tree.
+
+**"433" is the population at that tree.** §4's `population:` line now reads:
+
+```
+population: 433 (src.eval.dataset.load_tier1, over data/tier-1 at git tree
+            6348d8f7b452816f88beab7c5a9e18660e3977f7, commit 3c936c3f9418)
+```
+
+The Bonferroni amendment's `population:` line now reads the same.
+
+**§4's difficulty sentence** now reads *"… and computable from the case text,
+`data/tier-1` at tree `6348d8f7…`, without running anything."* Quote token count
+is measured on the pinned tree's supporting quotes, never on a quote as the
+golden set has since corrected it.
+
+**The tree never moves within this pre-registration.** Re-tests under R6 and
+R-i, and new models under R-h, read the same tree. A newer tree means a new
+pre-registration.
+
+**Two requirements on the acquisition reads**, for whoever builds acquisition:
+
+> Acquisition reads every case's question, gold answer and supporting quote from
+> `data/tier-1` at tree `6348d8f7…`, by hash, never from the working copy.
+> `llm_call.case_id` is resolved only against that tree.
+
+**No new column.** `llm_run.commit_sha` is non-nullable and pins the code that
+loads the tree by hash. Git addresses content by its hash, so a different text
+cannot load under that hash. Which text a row used is therefore reconstructable
+from the commit alone, the standard §5 applies to R1's rule. A `case_tree`
+column would carry one constant value on every acquisition row.
+
+## The reason
+
+**The old lines did not say which cases they meant.** `load_tier1` takes its
+directory as an argument and defaults to `data/tier-1` in the working copy
+(`src/eval/dataset.py`). A line that names `load_tier1` and nothing else names
+whatever the working copy holds when it is read.
+
+**The golden set is expected to change.** It is the sufficiency judge's work
+list, and `docs/todo.md` records that *"findings produce edits, edited cases
+need re-running"*, with 58 quotes already needing a rewrite. An edit after the
+first acquisition call would give two cells of one family different prompts for
+the same case id, which breaks the pairing §4 rests on.
+
+**A removal is a rename, not a hole.** `load_tier1` builds `case_id` from the
+case's position in its article's file, `f"gdpr_art{article_number}_case{i}"`,
+with `i` from `enumerate`. Removing case 2 of an article turns its case 3 into
+`case2`. `llm_call.case_id` stores the same string, and every frozen digest is
+over ids, so every digest keeps reproducing while naming different text. That
+is filed as [#410 — Tier-1 case ids are positional: removing a case silently
+renames every later case in its article](https://github.com/bgunyel/clause-and-effect/issues/410),
+and is out of scope for map #6.
+
+**The premise, recorded.** **A defect in a case's content does not affect the
+acceptance rate.** A quote that fails to answer its question still makes a
+well-formed call, and the acceptance rate measures whether the response is
+structurally clean, not whether it is right. So acquisition gains nothing from
+corrected text, and pinning the old text costs it nothing. If this premise is
+wrong, the pinned tree is still the one this pre-registration measures, and a
+corrected tree means a new pre-registration.
+
+**Why the tree cannot move.** Ids are positional, so moving the tree after a
+removal re-keys an article, and the case list would have to be re-drawn around
+it. Re-drawing after earlier families have been read is forbidden by the timing
+rule in [§The two kinds of append](#the-two-kinds-of-append). Under the premise
+it is never needed.
+
+Three alternatives are not taken. #406 rejected each:
+
+- **Freeze golden-set edits until acquisition ends.** That blocks the judge's
+  work list for an unknown time, and nothing enforces it.
+- **Read the working copy, and amend per edit.** One removal re-keys an
+  article, which means re-drawing around it, and #401 ruled that out. Edits after
+  the first call would also break the pairing.
+- **Skip a removed case and take the next position.** There is no hole to skip,
+  because ids are positional.
+
+**Verified against.** Before this amendment was written,
+`git rev-parse 3c936c3f9418:data/tier-1` printed
+`6348d8f7b452816f88beab7c5a9e18660e3977f7`, and so did `origin/dev-06:data/tier-1`
+at `396946bbbd45`. The last commits to touch `data/tier-1` are `54c1df9`,
+`c966290` and `b3e3fdb`, of 2026-08-02/03, before §4's draw. The tree was
+extracted with `git archive` into a temporary directory and `load_tier1` was
+pointed at the extraction. It returned **433** cases with 433 distinct ids, and
+all five frozen digests reproduced: §4's sorted 29 `26cdec8e…`, the 96-case
+extension `32547f20…`, the 125 in list order `4802ad29…`, the 308-case tail
+`7962ad6b…` and the 433 in list order `0020415d…`. The working copy's question,
+gold answer and supporting quote of every case were identical to the
+extraction's at that commit. Reproduced on CPython 3.13.15 under `uv run`.
+
+**`CONTEXT.md`** gains **Case text**, which separates acquisition's frozen input
+from the golden set that goes on being corrected.
+
+**Not decided here.**
+
+- **Content-stable case ids.** They are the real fix for positional ids, but
+  they touch the judge and `golden_qa`, which is past map #6's destination. #410
+  holds it.
+- **How acquisition loads by hash.** This amendment states the requirement. The
+  loader is built with acquisition.
+
+**Written before the first acquisition call**, with zero provider-attributed rows
+in hand. This file is carried by a commit, and that commit can be ordered
+against the commit of any acquisition row, as with the rest of this document.
